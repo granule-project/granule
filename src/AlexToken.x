@@ -16,6 +16,8 @@ tokens :-
   $eol+                         { \s -> TokenNL }
   $white+                       ;
   "#".*                         ;
+  Int                           { \s -> TokenInt }
+  Bool                          { \s -> TokenBool }
   let                           { \s -> TokenLet }
   in                            { \s -> TokenIn }
   $digit+                       { \s -> TokenNum (read s) }
@@ -27,6 +29,7 @@ tokens :-
   [\*]                          { \s -> TokenMul }
   \(                            { \s -> TokenLParen }
   \)                            { \s -> TokenRParen }
+  \:                            { \s -> TokenSig }
   $alpha [$alpha $digit \_ \']* { \s -> TokenSym s }
 
 {
@@ -44,6 +47,9 @@ data Token = TokenLet
            | TokenLParen
            | TokenRParen
 	   | TokenNL
+	   | TokenInt
+	   | TokenBool
+	   | TokenSig
            deriving (Eq,Show)
 
 scanTokens = trim . alexScanTokens

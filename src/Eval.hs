@@ -45,7 +45,7 @@ evalIn env (Binop op e1 e2) =
 
 evalDefs :: Env Val -> [Def] -> Env Val
 evalDefs env [] = env
-evalDefs env ((Def var e):defs) =
+evalDefs env ((Def var e _):defs) =
   evalDefs (extend env var (evalIn env e)) defs
 
 eval :: [Def] -> Val

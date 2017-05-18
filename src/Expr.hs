@@ -3,7 +3,6 @@ module Expr where
 import Data.List
 
 type Id = String
-
 data Op = Add | Sub | Mul deriving (Eq, Show)
 
 data Expr = Abs Id Expr
@@ -13,11 +12,22 @@ data Expr = Abs Id Expr
           | Binop Op Expr Expr
           deriving (Eq, Show)
 
-data Def = Def Id Expr
+data Def = Def Id Expr Type
           deriving (Eq, Show)
 
+-- Types
+
+data TyCon = TyInt | TyBool
+    deriving (Eq, Show)
+
+data Type = FunTy Type Type | ConT TyCon
+    deriving (Eq, Show)
+
+{- Pretty printers -}
+
 pretty :: [Def] -> String
-pretty = intercalate "\n" . map (\(Def v e) -> v ++ " = " ++ source e)
+pretty = intercalate "\n"
+       . map (\(Def v e t) -> v ++ " : " ++ show t ++ "\n" ++ v ++ " = " ++ source e)
 
 source :: Expr -> String
 source expr = case expr of
@@ -30,6 +40,8 @@ source expr = case expr of
         sourceOp Sub = " - "
         sourceOp Mul = " * "
         parens s = "(" ++ s ++ ")"
+
+{- Smart constructors -}
 
 addExpr :: Expr -> Expr -> Expr
 addExpr = Binop Add
