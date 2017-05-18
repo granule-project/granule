@@ -15,7 +15,7 @@ extend :: Env a -> Id -> a -> Env a
 extend e x v = \y -> if x == y then v else e y
 
 empty :: Env a
-empty = \_ -> error "Not found!"
+empty = \v -> error $ "No variable called: " ++ v
 
 evalOp :: Op -> (Int -> Int -> Int)
 evalOp Add = (+)
@@ -40,5 +40,15 @@ evalIn env (Binop op e1 e2) =
     (NumVal n1,NumVal n2) -> NumVal (n1 `x` n2)
     _ -> error "Not a number"
 
-eval :: Expr -> Val
-eval = evalIn empty
+--eval :: Expr -> Val
+--eval = evalIn empty
+
+evalDefs :: Env Val -> [Def] -> Env Val
+evalDefs env [] = env
+evalDefs env ((Def var e):defs) =
+  evalDefs (extend env var (evalIn env e)) defs
+
+eval :: [Def] -> Val
+eval defs = bindings "main"
+  where
+    bindings = evalDefs empty defs

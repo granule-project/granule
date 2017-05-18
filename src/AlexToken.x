@@ -2,6 +2,7 @@
 {-# OPTIONS_GHC -w #-}
 module AlexToken (Token(..),scanTokens) where
 import Expr
+import Debug.Trace
 }
 
 %wrapper "basic"
@@ -12,7 +13,7 @@ $eol   = [\n]
 
 tokens :-
 
-  $eol                          ;
+  $eol+                         { \s -> TokenNL }
   $white+                       ;
   "#".*                         ;
   let                           { \s -> TokenLet }
@@ -42,8 +43,19 @@ data Token = TokenLet
            | TokenMul
            | TokenLParen
            | TokenRParen
+	   | TokenNL
            deriving (Eq,Show)
 
-scanTokens = alexScanTokens
+scanTokens = trim . alexScanTokens
+
+trim :: [Token] -> [Token]
+trim = reverse . trimNL . reverse . trimNL
+
+trimNL :: [Token] -> [Token]
+trimNL [] = []
+trimNL (TokenNL : ts) = trimNL ts
+trimNL ts = ts 
+
+
 
 }

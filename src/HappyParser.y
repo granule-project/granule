@@ -5,11 +5,12 @@ import AlexToken
 import Expr
 }
 
-%name expr
+%name defs
 %tokentype { Token }
 %error { parseError }
 
 %token
+    nl    { TokenNL }
     let   { TokenLet }
     in    { TokenIn }
     NUM   { TokenNum $$ }
@@ -26,6 +27,11 @@ import Expr
 %left '+' '-'
 %left '*'
 %%
+
+Defs : Def                         { [$1] }
+     | Defs nl Def                 { $1 ++ [$3] }
+
+Def : VAR '=' Expr                 { Def $1 $3 }
 
 Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
      | '\\' VAR '->' Expr          { Abs $2 $4 }
@@ -45,8 +51,8 @@ Atom : '(' Expr ')'                { $2 }
 
 {
 parseError :: [Token] -> a
-parseError _ = error "Parse error"
+parseError t = error $ "Parse error, at token " ++ show t
 
-parseExpr :: String -> Expr
-parseExpr = expr . scanTokens
+parseDefs :: String -> [Def]
+parseDefs = defs . scanTokens
 }

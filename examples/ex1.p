@@ -1,2 +1,2 @@
 # Example expression
-(\x -> \y -> x * y) 3 5
+main = (\x -> \y -> x * y) 3 5

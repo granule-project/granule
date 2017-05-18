@@ -1,18 +1,18 @@
 import qualified HappyParser
 import Eval
 import Expr
+import System.Environment
 
-runEvalWith :: (String -> Expr) -> String -> IO ()
-runEvalWith parseExpr input = do
-  let ast = parseExpr input
+runEval :: String -> IO ()
+runEval input = do
+  let ast = HappyParser.parseDefs input
   putStrLn $ "AST: " ++ (show ast)
-  putStrLn $ "Source: " ++ (source ast)
-  putStrLn $ "Eval: " ++ (show (eval ast))
-  
+  putStrLn $ "Source: " ++ (pretty ast)
+  putStrLn $ "Eval (main): " ++ (show (eval ast))
+--  putStrLn $ "Type: " ++
+
 main :: IO ()
 main = do
-  input <- getContents
-  putStrLn "Input:"
-  putStrLn input
-  putStrLn "\nEval:"
-  runEvalWith HappyParser.parseExpr input
+  args <- getArgs
+  input <- readFile (head args)
+  runEval input
