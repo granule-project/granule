@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Expr where
 
 import Data.List
@@ -17,7 +19,7 @@ data Def = Def Id Expr Type
 
 -- Types
 
-data TyCon = TyInt | TyBool
+data TyCon = TyInt | TyBool | TyVarInternal String
     deriving (Eq, Show)
 
 data Type = FunTy Type Type | ConT TyCon
@@ -25,9 +27,21 @@ data Type = FunTy Type Type | ConT TyCon
 
 {- Pretty printers -}
 
-pretty :: [Def] -> String
-pretty = intercalate "\n"
-       . map (\(Def v e t) -> v ++ " : " ++ show t ++ "\n" ++ v ++ " = " ++ source e)
+class Pretty t where
+   pretty :: t -> String
+
+instance Pretty Type where
+   pretty (ConT TyInt)  = "Int"
+   pretty (ConT TyBool) = "Bool"
+   pretty (FunTy t1 t2) = pretty t1 ++ " -> " ++ pretty t2
+
+instance Pretty [Def] where
+   pretty = intercalate "\n"
+    . map (\(Def v e t) -> v ++ " : " ++ show t ++ "\n" ++ v ++ " = " ++ source e)
+
+instance Pretty t => Pretty (Maybe t) where
+   pretty Nothing = "unknown"
+   pretty (Just x) = pretty x
 
 source :: Expr -> String
 source expr = case expr of

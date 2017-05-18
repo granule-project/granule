@@ -1,4 +1,4 @@
-module Eval (Val(..),eval) where
+module Eval (Val(..), eval, Env, extend, empty) where
 
 import Expr
 
@@ -15,7 +15,7 @@ extend :: Env a -> Id -> a -> Env a
 extend e x v = \y -> if x == y then v else e y
 
 empty :: Env a
-empty = \v -> error $ "No variable called: " ++ v
+empty = \v -> error $ "No variable named " ++ v
 
 evalOp :: Op -> (Int -> Int -> Int)
 evalOp Add = (+)
