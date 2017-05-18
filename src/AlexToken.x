@@ -24,6 +24,8 @@ tokens :-
   "->"                          { \s -> TokenArrow }
   \=                            { \s -> TokenEq }
   \\                            { \s -> TokenLambda }
+  \[                            { \s -> TokenBoxLeft }
+  \]                            { \s -> TokenBoxRight }
   [\+]                          { \s -> TokenAdd }
   [\-]                          { \s -> TokenSub }
   [\*]                          { \s -> TokenMul }
@@ -37,6 +39,8 @@ tokens :-
 data Token = TokenLet
            | TokenIn
            | TokenLambda
+	   | TokenLetBox
+	   | TokenBox
            | TokenNum Int
            | TokenSym String
            | TokenArrow
@@ -50,6 +54,8 @@ data Token = TokenLet
 	   | TokenInt
 	   | TokenBool
 	   | TokenSig
+	   | TokenBoxLeft
+	   | TokenBoxRight
            deriving (Eq,Show)
 
 scanTokens = trim . alexScanTokens

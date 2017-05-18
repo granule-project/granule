@@ -26,6 +26,8 @@ import Expr
     '('   { TokenLParen }
     ')'   { TokenRParen }
     ':'   { TokenSig }
+    '['   { TokenBoxLeft }
+    ']'   { TokenBoxRight }
 
 %left '+' '-'
 %left '*'
@@ -47,7 +49,10 @@ Type : Int                         { ConT TyInt }
      | Type '->' Type              { FunTy $1 $3 }
 
 Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
+     | let '[' VAR ']' '=' Expr in Expr
+                                   { LetBox $3 $6 $8 }
      | '\\' VAR '->' Expr          { Abs $2 $4 }
+     | '[' Expr ']'                { Promote $2 }
      | Form                        { $1 }
 
 Form : Form '+' Form               { Binop Add $1 $3 }
