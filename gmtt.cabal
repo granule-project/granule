@@ -1,0 +1,22 @@
+name:           gmtt
+version:        0.01
+cabal-bersion:  >= 1.2
+License:        BSD3
+Author:         Dominic Orchard
+Synopsis:       The GMTT compiler
+Build-Type:     Simple
+  
+Executable gmtt
+  Main-Is:        Main.hs
+  Other-modules:  AlexToken,HappyParser
+  Hs-Source-Dirs: src
+  Build-Depends:  base >= 4,parsec >= 3,array
+  GHC-Options:    -Wall
+
+-- Executable lambda-happy-alex
+--   Main-Is:        Main.hs
+
+--   Hs-Source-Dirs: src
+--   Build-Depends:  base >= 4, array, containers, mtl, regex-compat
+--   Build-Tools:    alex, happy
+--   GHC-Options:    -Wall
