@@ -2,11 +2,11 @@ module Eval (Val(..), eval, Env, extend, empty) where
 
 import Expr
 
-data Val = FunVal (Env Val) Id Expr
-         | NumVal Int
-         | BoxVal Expr
+data Val c = FunVal (Env (Val c)) Id (Expr c)
+           | NumVal Int
+           | BoxVal (Expr c)
 
-instance Show Val where
+instance Show (Val c) where
   show (FunVal _ _ _) = "<fun>"
   show (NumVal n) = show n
 
@@ -24,7 +24,7 @@ evalOp Sub = (-)
 evalOp Mul = (*)
 
 -- Call by value big step semantics
-evalIn :: Env Val -> Expr -> Val
+evalIn :: Env (Val c) -> Expr c -> Val c
 evalIn env (Abs x e) = FunVal env x e
 evalIn env (App e1 e2) =
   case evalIn env e1 of
@@ -44,7 +44,7 @@ evalIn env (Binop op e1 e2) =
 
 -- GMTT big step semantics (CBN)
 
-evalIn env (LetBox var e1 e2) =
+evalIn env (LetBox var _ e1 e2) =
    case evalIn env e1 of
       BoxVal e1' ->
         evalIn env (subst e1' var e2)
@@ -52,12 +52,12 @@ evalIn env (LetBox var e1 e2) =
 evalIn env (Promote e) = BoxVal e
 
 
-evalDefs :: Env Val -> [Def] -> Env Val
+evalDefs :: Env (Val c) -> [Def c] -> Env (Val c)
 evalDefs env [] = env
 evalDefs env ((Def var e _):defs) =
   evalDefs (extend env var (evalIn env e)) defs
 
-eval :: [Def] -> Val
+eval :: [Def c] -> Val c
 eval defs = bindings "main"
   where
     bindings = evalDefs empty defs

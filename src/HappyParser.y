@@ -47,10 +47,11 @@ Binding : VAR '=' Expr             { ($1, $3) }
 Type : Int                         { ConT TyInt }
      | Bool                        { ConT TyBool }
      | Type '->' Type              { FunTy $1 $3 }
+     | '[' Type ']' NUM            { Box $4 $2 }
 
 Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
-     | let '[' VAR ']' '=' Expr in Expr
-                                   { LetBox $3 $6 $8 }
+     | let '[' VAR ':' Type ']' '=' Expr in Expr
+                                   { LetBox $3 $5 $8 $10 }
      | '\\' VAR '->' Expr          { Abs $2 $4 }
      | '[' Expr ']'                { Promote $2 }
      | Form                        { $1 }
@@ -71,6 +72,6 @@ Atom : '(' Expr ')'                { $2 }
 parseError :: [Token] -> a
 parseError t = error $ "Parse error, at token " ++ show t
 
-parseDefs :: String -> [Def]
+parseDefs :: String -> [Def Int]
 parseDefs = defs . scanTokens
 }
