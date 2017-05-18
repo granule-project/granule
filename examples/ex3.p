@@ -1,0 +1,5 @@
+id : Int -> Int
+id = \x -> x
+
+main : Int
+main = id 3 * id 4 + id 5

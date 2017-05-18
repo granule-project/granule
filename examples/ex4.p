@@ -1,0 +1,5 @@
+f : Int -> Int
+f = \x -> x + 1
+
+main : Int
+main = f 3 + f 4 * f 5
