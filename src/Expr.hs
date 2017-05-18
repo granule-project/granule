@@ -26,7 +26,7 @@ subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
 subst es v (Var w) | v == w = es
 subst es v e = e
 
-data Def c = Def Id (Expr c) (Type Int)
+data Def c = Def Id (Expr c) (Type c)
           deriving (Eq, Show)
 
 -- Types
@@ -55,6 +55,11 @@ instance Show c => Pretty [Def c] where
 instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
     pretty (Just x) = pretty x
+
+{-
+instance Pretty t => Pretty [t] where
+    pretty ts = "[" ++ (intercalate "," $ map pretty ts) ++ "]"
+-}
 
 instance Show c => Pretty (Expr c) where
     pretty expr =

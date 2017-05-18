@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 module Type where
 
 import Expr
@@ -8,9 +10,15 @@ type TyOrDisc c = Either (Type c) (c, Type c)
 
 class Semiring c where
   plus  :: c -> c -> c
-  times :: c -> c -> c
+  mult  :: c -> c -> c
   one   :: c
   zero  :: c
+
+instance Semiring Int where
+  plus = (+)
+  mult = (*)
+  one = 1
+  zero = 0
 
 empty = []
 type Env t = [(Id, t)]
@@ -21,17 +29,17 @@ replace [] id v
   = [(id, v)]
 replace ((id', _):env) id v | id == id'
   = (id', v) : env
-replace (x, env) id v
+replace (x : env) id v
   = x : replace env id v
 
 -- Extend the environment
-extend :: Semiring c => Env (TyOrDisc c) -> Id -> TyOrDisc c -> Env (TyOrDisc c)
+extend :: (Eq c, Semiring c) => Env (TyOrDisc c) -> Id -> TyOrDisc c -> Env (TyOrDisc c)
 extend env id (Left t)  = (id, Left t) : env
 extend env id (Right (c, t)) =
-  case (lookup env id) of
+  case (lookup id env) of
     Just (Right (c', t')) ->
         if t == t'
-        then replace (Right (c `plus` c', t')) env
+        then replace env id (Right (c `plus` c', t'))
         else error $ "Type clash for discharged variable"
     Just (Left _) -> error $ "Type clash for discharged variable"
     Nothing -> (id, Right (c, t)) : env
@@ -39,24 +47,30 @@ extend env id (Right (c, t)) =
 -- Given an environment, derelict and discharge all variables which are not discharged
 derelictAndMultAll :: Semiring c => c -> Env (TyOrDisc c) -> Env (TyOrDisc c)
 derelictAndMultAll _ [] = []
-derelictAndMultAll c ((id, Left t) : env) = (id, Right (c, t)) : derelictAndMultAll env
-derelictAndMultAll c ((id, Right c' t) : env) = (id, Right (c `mult` c', t)) : derelictAndMultAll env
+derelictAndMultAll c ((id, Left t) : env)
+    = (id, Right (c, t)) : derelictAndMultAll c env
+derelictAndMultAll c ((id, Right (c', t)) : env)
+    = (id, Right (c `mult` c', t)) : derelictAndMultAll c env
 
 derelictAll :: Semiring c => Env (TyOrDisc c) -> Env (TyOrDisc c)
-derelictAll _ [] = []
-derelictAll c ((id, Left t) : env) = (id, Right (zero, t)) : derelictAll env
-derelictAll c (e : env) = e : derelictAll env
+derelictAll [] = []
+derelictAll ((id, Left t) : env) = (id, Right (zero, t)) : derelictAll env
+derelictAll (e : env) = e : derelictAll env
 
 
-ctxPlus :: Semiring c => Env (TyOrDisc c) -> Env (TyOrDisc c) -> Env (TyOrDisc c)
+ctxPlus :: (Eq c, Semiring c)
+        => Env (TyOrDisc c) -> Env (TyOrDisc c) -> Env (TyOrDisc c)
 ctxPlus [] env2 = env2
 ctxPlus ((i, v) : env1) env2 =
   ctxPlus env1 (extend env2 i v)
 
+instance (Show c) => Pretty (Type c, Env (TyOrDisc c)) where
+  pretty (t, env) = pretty t
+
 -- Checking (top-level)
-check :: Semiring c => [Def c] -> Either String Bool
+check :: (Eq c, Semiring c, Show c) => [Def c] -> Either String Bool
 check defs =
-    if (and . map (\(_, _, _, flag) -> flag) $ results)
+    if (and . map (\(_, _, _, check) -> case check of Just _ -> True; Nothing -> False) $ results)
     then Right True
     else Left $ intercalate "\n" (map mkReport results)
   where
@@ -65,8 +79,11 @@ check defs =
       ((var, ty, synthExpr env expr, checkExpr env ty expr) : results, extend env var (Left ty))
 
 -- Make type error report
-mkReport (var, ty, _, Nothing) =
-    var ++ " does not type check, expected: " ++ pretty ty -- ++ ", got: " ++ pretty tyInferred
+mkReport :: Show c
+         => (Id, Type c, Maybe (Type c, Env (TyOrDisc c)), Maybe (Env (TyOrDisc c)))
+         -> String
+mkReport (var, ty, tyInferred, Nothing) =
+    var ++ " does not type check, expected: " ++ pretty ty ++ ", got: " ++ pretty tyInferred
         ++ ". Try annotating the types of functions"
 -- mkReport (var, ty, tyInference,
 mkReport _ = ""
