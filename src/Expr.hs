@@ -16,6 +16,16 @@ data Expr = Abs Id Expr
           | LetBox Id Expr Expr
           deriving (Eq, Show)
 
+-- Syntactic substitution (assuming variables are all unique)
+subst :: Expr -> Id -> Expr -> Expr
+subst es v (Abs w e)        = Abs w (subst es v e)
+subst es v (App e1 e2)      = App (subst es v e1) (subst es v e2)
+subst es v (Binop op e1 e2) = Binop op (subst es v e1) (subst es v e2)
+subst es v (Promote e)      = Promote (subst es v e)
+subst es v (LetBox w e1 e2) = LetBox w (subst es v e1) (subst es v e2)
+subst es v (Var w) | v == w = es
+subst es v e = e
+
 data Def = Def Id Expr Type
           deriving (Eq, Show)
 

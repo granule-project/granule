@@ -4,6 +4,7 @@ import Expr
 
 data Val = FunVal (Env Val) Id Expr
          | NumVal Int
+         | BoxVal Expr
 
 instance Show Val where
   show (FunVal _ _ _) = "<fun>"
@@ -22,6 +23,7 @@ evalOp Add = (+)
 evalOp Sub = (-)
 evalOp Mul = (*)
 
+-- Call by value big step semantics
 evalIn :: Env Val -> Expr -> Val
 evalIn env (Abs x e) = FunVal env x e
 evalIn env (App e1 e2) =
@@ -40,8 +42,15 @@ evalIn env (Binop op e1 e2) =
     (NumVal n1,NumVal n2) -> NumVal (n1 `x` n2)
     _ -> error "Not a number"
 
---eval :: Expr -> Val
---eval = evalIn empty
+-- GMTT big step semantics (CBN)
+
+evalIn env (LetBox var e1 e2) =
+   case evalIn env e1 of
+      BoxVal e1' ->
+        evalIn env (subst e1' var e2)
+
+evalIn env (Promote e) = BoxVal e
+
 
 evalDefs :: Env Val -> [Def] -> Env Val
 evalDefs env [] = env
