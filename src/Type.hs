@@ -127,7 +127,8 @@ synthExpr gam (App e e') = do
 
 -- Promotion
 synthExpr gam (Promote e) = do
-   synthExpr (derelictAll gam) e
+   (t, env) <- synthExpr (derelictAll gam) e
+   return (Box one t, env) -- Wrong
 
 -- Letbox
 synthExpr gam (LetBox var t e1 e2) = do

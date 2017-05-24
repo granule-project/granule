@@ -6,8 +6,12 @@ data Val c = FunVal (Env (Val c)) Id (Expr c)
            | NumVal Int
            | BoxVal (Expr c)
 
-instance Show (Val c) where
+instance Pretty Int where
+  pretty = show
+
+instance (Show c, Pretty c) => Show (Val c) where
   show (FunVal _ _ _) = "<fun>"
+  show (BoxVal e) = pretty e
   show (NumVal n) = show n
 
 type Env a = Id -> a
