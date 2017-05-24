@@ -5,8 +5,9 @@ module Type where
 import Expr
 import Eval hiding (Env, empty, extend)
 import Data.List
+import Debug.Trace
 
-type TyOrDisc c = Either (Type c) (c, Type c)
+type TyOrDisc = Either Type (Coeffect, Type)
 
 class Semiring c where
   plus  :: c -> c -> c
@@ -14,11 +15,11 @@ class Semiring c where
   one   :: c
   zero  :: c
 
-instance Semiring Int where
-  plus = (+)
-  mult = (*)
-  one = 1
-  zero = 0
+instance Semiring Coeffect where
+  plus (Nat n) (Nat m) = Nat (n + m)
+  mult (Nat n) (Nat m) = Nat (n * m)
+  one = Nat 1
+  zero = Nat 0
 
 empty = []
 type Env t = [(Id, t)]
@@ -33,42 +34,41 @@ replace (x : env) id v
   = x : replace env id v
 
 -- Extend the environment
-extend :: (Eq c, Semiring c) => Env (TyOrDisc c) -> Id -> TyOrDisc c -> Env (TyOrDisc c)
+extend :: Env TyOrDisc -> Id -> TyOrDisc -> Env TyOrDisc
 extend env id (Left t)  = (id, Left t) : env
 extend env id (Right (c, t)) =
   case (lookup id env) of
     Just (Right (c', t')) ->
         if t == t'
         then replace env id (Right (c `plus` c', t'))
-        else error $ "Type clash for discharged variable"
-    Just (Left _) -> error $ "Type clash for discharged variable"
+        else error $ "Typelash for discharged variable"
+    Just (Left _) -> error $ "Typelash for discharged variable"
     Nothing -> (id, Right (c, t)) : env
 
 -- Given an environment, derelict and discharge all variables which are not discharged
-derelictAndMultAll :: Semiring c => c -> Env (TyOrDisc c) -> Env (TyOrDisc c)
+derelictAndMultAll :: Coeffect -> Env TyOrDisc -> Env TyOrDisc
 derelictAndMultAll _ [] = []
 derelictAndMultAll c ((id, Left t) : env)
     = (id, Right (c, t)) : derelictAndMultAll c env
 derelictAndMultAll c ((id, Right (c', t)) : env)
     = (id, Right (c `mult` c', t)) : derelictAndMultAll c env
 
-derelictAll :: Semiring c => Env (TyOrDisc c) -> Env (TyOrDisc c)
+derelictAll :: Env TyOrDisc -> Env TyOrDisc
 derelictAll [] = []
 derelictAll ((id, Left t) : env) = (id, Right (zero, t)) : derelictAll env
 derelictAll (e : env) = e : derelictAll env
 
 
-ctxPlus :: (Eq c, Semiring c)
-        => Env (TyOrDisc c) -> Env (TyOrDisc c) -> Env (TyOrDisc c)
+ctxPlus :: Env TyOrDisc -> Env TyOrDisc -> Env TyOrDisc
 ctxPlus [] env2 = env2
 ctxPlus ((i, v) : env1) env2 =
   ctxPlus env1 (extend env2 i v)
 
-instance (Show c) => Pretty (Type c, Env (TyOrDisc c)) where
+instance Pretty (Type, Env TyOrDisc) where
   pretty (t, env) = pretty t
 
 -- Checking (top-level)
-check :: (Eq c, Semiring c, Show c) => [Def c] -> Either String Bool
+check :: [Def] -> Either String Bool
 check defs =
     if (and . map (\(_, _, _, check) -> case check of Just _ -> True; Nothing -> False) $ results)
     then Right True
@@ -79,8 +79,7 @@ check defs =
       ((var, ty, synthExpr env expr, checkExpr env ty expr) : results, extend env var (Left ty))
 
 -- Make type error report
-mkReport :: Show c
-         => (Id, Type c, Maybe (Type c, Env (TyOrDisc c)), Maybe (Env (TyOrDisc c)))
+mkReport :: (Id, Type, Maybe (Type, Env TyOrDisc), Maybe (Env TyOrDisc))
          -> String
 mkReport (var, ty, tyInferred, Nothing) =
     var ++ " does not type check, expected: " ++ pretty ty ++ ", got: " ++ pretty tyInferred
@@ -89,22 +88,23 @@ mkReport (var, ty, tyInferred, Nothing) =
 mkReport _ = ""
 
 -- Checking on expressions
-checkExpr :: (Semiring c, Eq c) =>
-             Env (TyOrDisc c) -> Type c -> Expr c -> Maybe (Env (TyOrDisc c))
+checkExpr :: Env TyOrDisc -> Type -> Expr -> Maybe (Env TyOrDisc)
 checkExpr gam (FunTy sig tau) (Abs x e) = checkExpr (extend gam x (Left sig)) tau e
+
+--checkExpr gam (Box demand tau) (Promotion e) = do
+--    (sig, gam) <- checkExpr (
+
 checkExpr gam tau (App e1 e2) = do
     (sig, gam1) <- synthExpr gam e2
     gam2 <- checkExpr gam (FunTy sig tau) e1
     return (gam1 `ctxPlus` gam2)
-
 checkExpr gam tau (Abs x e)             = Nothing
 checkExpr gam tau e = do
   (tau', gam') <- synthExpr gam e
   if tau == tau' then return $ gam' else Nothing
 
 -- Synthesise on expressions
-synthExpr :: (Eq c, Semiring c) =>
-             Env (TyOrDisc c) -> Expr c -> Maybe (Type c, Env (TyOrDisc c))
+synthExpr :: Env TyOrDisc -> Expr -> Maybe (Type, Env TyOrDisc)
 
 -- Variables
 synthExpr gam (Var x) = do
@@ -119,7 +119,7 @@ synthExpr gam (Num _) = return (ConT TyInt, gam)
 -- Application
 synthExpr gam (App e e') = do
     (f, gam1) <- synthExpr gam e
-    case f of
+    show f `trace` case f of
       (FunTy sig tau) -> do
          gam2 <- checkExpr gam sig e'
          return (tau, ctxPlus gam1 gam2)
@@ -148,29 +148,3 @@ synthExpr gam (Binop op e e') = do
         _                        -> Nothing
 
 synthExpr gam _ = Nothing
-
-
-{-
-checkAlt :: Env Type -> Expr -> Type -> Maybe (Env Type)
-checkAlt env e tau = do
-  (tau', env') <- synthAlt env e
-  if tau == tau'
-    then Just env'
-    else Nothing
-
-synthAlt :: Env Type -> Expr -> Maybe (Type, Env Type)
-synthAlt env (Var x) = Just (env x, env)
-synthAlt env (Num _) = Just (ConT TyInt, env)
-synthAlt env (App e1 e2) = do
-    (t, env1) <- synthAlt env e2
-    case t of
-      (FunTy sig tau) ->
-          case checkAlt env1 e2 sig of
-             Just env2 -> Just (tau, env2)
-             Nothing   -> Nothing
-synthAlt env (Binop op e1 e2) = do
-    env1 <- checkAlt env e1 (ConT TyInt)
-    env2 <- checkAlt env1 e2 (ConT TyInt)
-    return $ (ConT TyInt, env2)
-synthAlt env (Abs x e) = do
-   -}
