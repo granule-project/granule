@@ -10,7 +10,8 @@ runEval input = do
   putStrLn $ "AST:          " ++ (show ast)
   putStrLn $ "Source:       " ++ (pretty ast)
   putStrLn $ "Eval (main):  " ++ (show $ eval ast)
-  putStrLn $ "Type checker: " ++ (show' $ check ast)
+  checked <- check ast
+  putStrLn $ "Type checker: " ++ (show' checked)
 --  putStrLn $ "Type: " ++
 
 main :: IO ()

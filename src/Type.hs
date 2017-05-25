@@ -5,7 +5,11 @@ module Type where
 import Expr
 import Eval hiding (Env, empty, extend)
 import Data.List
+import Data.Maybe
 import Debug.Trace
+import Control.Monad.State
+import Control.Monad.Trans.Maybe
+import Control.Monad
 
 type TyOrDisc = Either Type (Coeffect, Type)
 
@@ -68,15 +72,17 @@ instance Pretty (Type, Env TyOrDisc) where
   pretty (t, env) = pretty t
 
 -- Checking (top-level)
-check :: [Def] -> Either String Bool
-check defs =
-    if (and . map (\(_, _, _, check) -> case check of Just _ -> True; Nothing -> False) $ results)
-    then Right True
-    else Left $ intercalate "\n" (map mkReport results)
+check :: [Def] -> IO (Either String Bool)
+check defs = do
+    (results, _) <- foldM checkDef ([], empty) defs
+    if (and . map (\(_, _, _, check) -> isJust check) $ results)
+      then return . Right $ True
+      else return . Left  $ intercalate "\n" (map mkReport results)
   where
-    (results, _) = foldl checkDef ([], empty) defs
-    checkDef (results, env) (Def var expr ty) =
-      ((var, ty, synthExpr env expr, checkExpr env ty expr) : results, extend env var (Left ty))
+    checkDef (results, env) (Def var expr ty) = do
+      env' <- flip evalStateT 0 . unwrap . runMaybeT $ checkExpr env ty expr
+      tau' <- flip evalStateT 0 . unwrap . runMaybeT $ synthExpr env expr
+      return ((var, ty, tau', env') : results, extend env var (Left ty))
 
 -- Make type error report
 mkReport :: (Id, Type, Maybe (Type, Env TyOrDisc), Maybe (Env TyOrDisc))
@@ -88,30 +94,42 @@ mkReport (var, ty, tyInferred, Nothing) =
 mkReport _ = ""
 
 -- Checking on expressions
-checkExpr :: Env TyOrDisc -> Type -> Expr -> Maybe (Env TyOrDisc)
+checkExpr :: Env TyOrDisc -> Type -> Expr -> MaybeT TypeState (Env TyOrDisc)
 checkExpr gam (FunTy sig tau) (Abs x e) = checkExpr (extend gam x (Left sig)) tau e
 
---checkExpr gam (Box demand tau) (Promotion e) = do
---    (sig, gam) <- checkExpr (
+checkExpr gam (Box demand tau) (Promote e) = do
+    gamF        <- discToFreshVars gam
+    gam'        <- checkExpr gamF tau e
+    solveConstraints
+    return gam'
+
+{-    (sig, gam') <- synthExpr gamF e
+    if (sig == tau)
+      then do solveConstraints; return gam'
+      else illTyped -}
 
 checkExpr gam tau (App e1 e2) = do
     (sig, gam1) <- synthExpr gam e2
     gam2 <- checkExpr gam (FunTy sig tau) e1
     return (gam1 `ctxPlus` gam2)
-checkExpr gam tau (Abs x e)             = Nothing
+checkExpr gam tau (Abs x e)             = illTyped
 checkExpr gam tau e = do
   (tau', gam') <- synthExpr gam e
-  if tau == tau' then return $ gam' else Nothing
+  if tau == tau' then return $ gam' else illTyped
+
+
+liftm :: Maybe a -> MaybeT TypeState a
+liftm = MaybeT . return
 
 -- Synthesise on expressions
-synthExpr :: Env TyOrDisc -> Expr -> Maybe (Type, Env TyOrDisc)
+synthExpr :: Env TyOrDisc -> Expr -> MaybeT TypeState (Type, Env TyOrDisc)
 
 -- Variables
 synthExpr gam (Var x) = do
-   t <- lookup x gam
-   return $ case t of
-    Left ty       -> (ty, gam)
-    Right (c, ty) -> (ty, replace gam x (Right (one, ty)))
+   t <- liftm $ lookup x gam
+   case t of
+    Left ty       -> return (ty, gam)
+    Right (c, ty) -> return (ty, replace gam x (Right (one, ty)))
 
 -- Constants (numbers)
 synthExpr gam (Num _) = return (ConT TyInt, gam)
@@ -119,11 +137,11 @@ synthExpr gam (Num _) = return (ConT TyInt, gam)
 -- Application
 synthExpr gam (App e e') = do
     (f, gam1) <- synthExpr gam e
-    show f `trace` case f of
+    case f of
       (FunTy sig tau) -> do
          gam2 <- checkExpr gam sig e'
          return (tau, ctxPlus gam1 gam2)
-      _ -> Nothing
+      _ -> illTyped
 
 -- Promotion
 synthExpr gam (Promote e) = do
@@ -137,14 +155,50 @@ synthExpr gam (LetBox var t e1 e2) = do
        Just (Right (demand, t')) | t == t' -> do
             gam2 <- checkExpr gam1 (Box demand t) e1
             return (tau, ctxPlus gam1 gam2)
-       _ -> Nothing
+       _ -> illTyped
 
 -- BinOp
 synthExpr gam (Binop op e e') = do
     (t, gam1)  <- synthExpr gam e
     (t', gam2) <- synthExpr gam e'
     case (t, t') of
-        (ConT TyInt, ConT TyInt) -> Just $ (ConT TyInt, ctxPlus gam1 gam2)
-        _                        -> Nothing
+        (ConT TyInt, ConT TyInt) -> return (ConT TyInt, ctxPlus gam1 gam2)
+        _                        -> illTyped
 
-synthExpr gam _ = Nothing
+synthExpr gam _ = illTyped
+
+illTyped :: MaybeT TypeState a
+illTyped = MaybeT (return Nothing)
+
+type VarCounter  = Int
+data TypeState a = TS { unwrap :: StateT VarCounter IO a }
+
+instance Monad TypeState where
+  return = TS . return
+  (TS x) >>= f = TS (x >>= (unwrap . f))
+
+instance Functor TypeState where
+  fmap f (TS x) = TS (fmap f x)
+
+instance Applicative TypeState where
+  pure    = return
+  f <*> x = f >>= \f' -> x >>= \x' -> return (f' x')
+
+solveConstraints = return ()
+
+-- Generate a fresh alphanumeric variable name
+freshVar :: TypeState String
+freshVar = TS $ do
+  v <- get
+  put (v+1)
+  let prefix = ["a", "b", "c", "d"] !! (v `mod` 4)
+  return $ prefix ++ show v
+
+-- Replace all top-level discharged coeffects
+discToFreshVars :: Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
+discToFreshVars env = MaybeT $ mapM toFreshVar env >>= (return . Just)
+  where
+    toFreshVar (id, Right (c, t)) = do
+      v <- freshVar
+      return $ (id, Right (CVar v, t))
+    toFreshVar c = return c
