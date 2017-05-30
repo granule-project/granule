@@ -37,7 +37,10 @@ data TyCon = TyInt | TyBool | TyVar String -- TyVar not used yet
 data Type = FunTy Type Type | ConT TyCon | Box Coeffect Type
     deriving (Eq, Show)
 
-data Coeffect = Nat Int | CVar String
+data Coeffect = Nat Int
+              | CVar String
+              | CPlus Coeffect Coeffect
+              | CTimes Coeffect Coeffect
     deriving (Eq, Show)
 
 {- Pretty printers -}

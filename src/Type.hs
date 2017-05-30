@@ -1,4 +1,4 @@
-{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleInstances, ScopedTypeVariables, FlexibleContexts #-}
 
 module Type where
 
@@ -6,10 +6,12 @@ import Expr
 import Eval hiding (Env, empty, extend)
 import Data.List
 import Data.Maybe
+import Data.Either
 import Debug.Trace
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import Control.Monad
+import Data.SBV
 
 type TyOrDisc = Either Type (Coeffect, Type)
 
@@ -37,10 +39,10 @@ replace ((id', _):env) id v | id == id'
 replace (x : env) id v
   = x : replace env id v
 
--- Extend the environment
-extend :: Env TyOrDisc -> Id -> TyOrDisc -> Env TyOrDisc
-extend env id (Left t)  = (id, Left t) : env
-extend env id (Right (c, t)) =
+-- ExtCtxt the environment
+extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> Env TyOrDisc
+extCtxt env id (Left t)  = (id, Left t) : env
+extCtxt env id (Right (c, t)) =
   case (lookup id env) of
     Just (Right (c', t')) ->
         if t == t'
@@ -66,10 +68,13 @@ derelictAll (e : env) = e : derelictAll env
 ctxPlus :: Env TyOrDisc -> Env TyOrDisc -> Env TyOrDisc
 ctxPlus [] env2 = env2
 ctxPlus ((i, v) : env1) env2 =
-  ctxPlus env1 (extend env2 i v)
+  ctxPlus env1 (extCtxt env2 i v)
 
 instance Pretty (Type, Env TyOrDisc) where
   pretty (t, env) = pretty t
+
+ground = forAll_ $ \(x :: SInt64) -> true :: SBool
+falsity = forAll_ $ \(x :: SInt64) -> false :: SBool
 
 -- Checking (top-level)
 check :: [Def] -> IO (Either String Bool)
@@ -80,9 +85,9 @@ check defs = do
       else return . Left  $ intercalate "\n" (map mkReport results)
   where
     checkDef (results, env) (Def var expr ty) = do
-      env' <- flip evalStateT 0 . unwrap . runMaybeT $ checkExpr env ty expr
-      tau' <- flip evalStateT 0 . unwrap . runMaybeT $ synthExpr env expr
-      return ((var, ty, tau', env') : results, extend env var (Left ty))
+      env' <- flip evalStateT (0, ground) . unwrap . runMaybeT $ checkExpr env ty expr
+      tau' <- flip evalStateT (0, ground) . unwrap . runMaybeT $ synthExpr env expr
+      return ((var, ty, tau', env') : results, extCtxt env var (Left ty))
 
 -- Make type error report
 mkReport :: (Id, Type, Maybe (Type, Env TyOrDisc), Maybe (Env TyOrDisc))
@@ -95,12 +100,22 @@ mkReport _ = ""
 
 -- Checking on expressions
 checkExpr :: Env TyOrDisc -> Type -> Expr -> MaybeT TypeState (Env TyOrDisc)
-checkExpr gam (FunTy sig tau) (Abs x e) = checkExpr (extend gam x (Left sig)) tau e
+checkExpr gam (FunTy sig tau) (Abs x e) = checkExpr (extCtxt gam x (Left sig)) tau e
+
+{-
+
+[G] |- e : t
+---------------------
+[G]*r |- [e] : []_r t
+
+-}
 
 checkExpr gam (Box demand tau) (Promote e) = do
     gamF        <- discToFreshVars gam
     gam'        <- checkExpr gamF tau e
-    solveConstraints
+    traceShowM $ gam ++ gam'
+    gam `equalCtxts` gam'
+    --solveConstraints
     return gam'
 
 {-    (sig, gam') <- synthExpr gamF e
@@ -150,9 +165,10 @@ synthExpr gam (Promote e) = do
 
 -- Letbox
 synthExpr gam (LetBox var t e1 e2) = do
-   (tau, gam1) <- synthExpr (extend gam var (Right (zero, t))) e2
+   (tau, gam1) <- synthExpr (extCtxt gam var (Right (zero, t))) e2
    case lookup var gam1 of
        Just (Right (demand, t')) | t == t' -> do
+            traceShowM gam1
             gam2 <- checkExpr gam1 (Box demand t) e1
             return (tau, ctxPlus gam1 gam2)
        _ -> illTyped
@@ -167,11 +183,68 @@ synthExpr gam (Binop op e e') = do
 
 synthExpr gam _ = illTyped
 
+equalCtxts :: Env TyOrDisc -> Env TyOrDisc -> MaybeT TypeState Bool
+equalCtxts env env' =
+  if length env == length env' && map fst env == map fst env'
+                               && (lefts . map snd $ env) == (lefts . map snd $ env')
+                               && (rights . map snd $ env) == (rights . map snd $ env')
+    then liftio $ do
+           let freeVarNames = concatMap extractVars (env ++ env')
+           traceShowM freeVarNames
+           let pred = do
+                freeVars <- mkFreeVarsMap freeVarNames
+                return $ foldr (&&&) true $ zipWith (makeEqual freeVars) env env'
+           thmRes <- prove pred
+           case thmRes of
+                 -- Tell the user if there was a hard proof error (e.g., if
+                 -- z3 is not installed/accessible).
+                 -- TODO: give more information
+                 ThmResult (ProofError _ msgs) -> fail $ unlines msgs
+                 _ -> if modelExists thmRes
+                      then
+                        case getModel thmRes of
+                          Right (False, ce :: [ Int64 ]) -> do
+                            putStrLn $ show $ zip freeVarNames ce
+                            return False
+                          Right (True, _) -> fail "Returned probable model."
+                          Left str -> fail str
+                      else (show thmRes) `trace` return True
+    else illTyped
+
+--makeEqual :: (Id, TyOrDisc) -> (Id, TyOrDisc) -> Symbolic SBool
+makeEqual freeVars (_, Left _) (_, Left _) = true
+makeEqual freeVars (_, Right (c1, _)) (_, Right (c2, _)) = do
+  compile c1 freeVars .== compile c2 freeVars
+  --forAll (vars c1 ++ vars c2) (compile c1 .== compile c2)
+makeEqual _ _ _ = false
+
+mkFreeVarsMap vs = do
+  fvars <- mkFreeVars (length vs) -- (mkFreeVars vs :: Symbolic [ SInt64 ])
+  return $ zip vs fvars
+
+extractVars (_, Left _) = []
+extractVars (_, Right (c, _)) = vars c
+
+vars :: Coeffect -> [String]
+vars (CVar v) = [v]
+vars (CPlus n m) = vars n ++ vars m
+vars (CTimes n m) = vars n ++ vars m
+vars _ = []
+
+compile :: Coeffect -> [(String, SInteger)] -> SInteger
+compile (Nat n) _ = (fromInteger . toInteger $ n) :: SInteger
+compile (CVar v) vars = fromJust $ lookup v vars -- sInteger v
+compile (CPlus n m) vars = compile n vars + compile m vars
+compile (CTimes n m) vars = compile n vars * compile m vars
+
 illTyped :: MaybeT TypeState a
 illTyped = MaybeT (return Nothing)
 
 type VarCounter  = Int
-data TypeState a = TS { unwrap :: StateT VarCounter IO a }
+data TypeState a = TS { unwrap :: StateT (VarCounter, Predicate) IO a }
+
+liftio :: forall a . IO a -> MaybeT TypeState a
+liftio m = MaybeT (TS ((lift (m >>= (return . Just))) :: StateT (VarCounter, Predicate) IO (Maybe a)))
 
 instance Monad TypeState where
   return = TS . return
@@ -184,13 +257,13 @@ instance Applicative TypeState where
   pure    = return
   f <*> x = f >>= \f' -> x >>= \x' -> return (f' x')
 
-solveConstraints = return ()
+--solveConstraints = return ()
 
 -- Generate a fresh alphanumeric variable name
 freshVar :: TypeState String
 freshVar = TS $ do
-  v <- get
-  put (v+1)
+  (v, pred) <- get
+  put (v+1, pred)
   let prefix = ["a", "b", "c", "d"] !! (v `mod` 4)
   return $ prefix ++ show v
 
