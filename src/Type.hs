@@ -114,9 +114,11 @@ checkExpr gam (Box demand tau) (Promote e) = do
     gamF        <- discToFreshVars gam
     gam'        <- checkExpr gamF tau e
     traceShowM $ gam ++ gam'
-    gam `equalCtxts` gam'
-    --solveConstraints
-    return gam'
+    state <- gam `equalCtxts` gam'
+    if state
+     then return gam'
+     else illTyped $ "Checking typed of a promote as [" ++ show tau
+                     ++ "] " ++ show demand
 
 {-    (sig, gam') <- synthExpr gamF e
     if (sig == tau)
@@ -127,10 +129,11 @@ checkExpr gam tau (App e1 e2) = do
     (sig, gam1) <- synthExpr gam e2
     gam2 <- checkExpr gam (FunTy sig tau) e1
     return (gam1 `ctxPlus` gam2)
-checkExpr gam tau (Abs x e)             = illTyped
+checkExpr gam tau (Abs x e)             = illTyped "Checking abs"
 checkExpr gam tau e = do
   (tau', gam') <- synthExpr gam e
-  if tau == tau' then return $ gam' else illTyped
+  if tau == tau' then return $ gam' else illTyped $ "Checking: (" ++ pretty e ++ "), "
+                                           ++ show tau ++ " != " ++ show tau'
 
 
 liftm :: Maybe a -> MaybeT TypeState a
@@ -156,12 +159,17 @@ synthExpr gam (App e e') = do
       (FunTy sig tau) -> do
          gam2 <- checkExpr gam sig e'
          return (tau, ctxPlus gam1 gam2)
-      _ -> illTyped
+      _ -> illTyped "Left-hand side of app is not a function type"
 
 -- Promotion
 synthExpr gam (Promote e) = do
-   (t, env) <- synthExpr (derelictAll gam) e
-   return (Box one t, env) -- Wrong
+   gamF <- discToFreshVars gam
+   (t, gam') <- synthExpr gamF e
+   state <- gam `equalCtxts` gam'
+   var <- liftTS freshVar
+   if state
+    then return (Box (CVar var) t, gam')
+    else illTyped $ "Equality fail on contexts in type synth for promotion"
 
 -- Letbox
 synthExpr gam (LetBox var t e1 e2) = do
@@ -171,7 +179,7 @@ synthExpr gam (LetBox var t e1 e2) = do
             traceShowM gam1
             gam2 <- checkExpr gam1 (Box demand t) e1
             return (tau, ctxPlus gam1 gam2)
-       _ -> illTyped
+       _ -> illTyped $ "Context of letbox does not have " ++ var ++ " discharged"
 
 -- BinOp
 synthExpr gam (Binop op e e') = do
@@ -179,9 +187,9 @@ synthExpr gam (Binop op e e') = do
     (t', gam2) <- synthExpr gam e'
     case (t, t') of
         (ConT TyInt, ConT TyInt) -> return (ConT TyInt, ctxPlus gam1 gam2)
-        _                        -> illTyped
+        _                        -> illTyped "Binary op does not have two int expressions"
 
-synthExpr gam _ = illTyped
+synthExpr gam _ = illTyped "General synth fail"
 
 equalCtxts :: Env TyOrDisc -> Env TyOrDisc -> MaybeT TypeState Bool
 equalCtxts env env' =
@@ -209,7 +217,7 @@ equalCtxts env env' =
                           Right (True, _) -> fail "Returned probable model."
                           Left str -> fail str
                       else (show thmRes) `trace` return True
-    else illTyped
+    else illTyped "Environments do not match in size of types"
 
 --makeEqual :: (Id, TyOrDisc) -> (Id, TyOrDisc) -> Symbolic SBool
 makeEqual freeVars (_, Left _) (_, Left _) = true
@@ -237,8 +245,8 @@ compile (CVar v) vars = fromJust $ lookup v vars -- sInteger v
 compile (CPlus n m) vars = compile n vars + compile m vars
 compile (CTimes n m) vars = compile n vars * compile m vars
 
-illTyped :: MaybeT TypeState a
-illTyped = MaybeT (return Nothing)
+illTyped :: String -> MaybeT TypeState a
+illTyped s = liftio (putStrLn s) >> MaybeT (return Nothing)
 
 type VarCounter  = Int
 data TypeState a = TS { unwrap :: StateT (VarCounter, Predicate) IO a }
@@ -266,6 +274,9 @@ freshVar = TS $ do
   put (v+1, pred)
   let prefix = ["a", "b", "c", "d"] !! (v `mod` 4)
   return $ prefix ++ show v
+
+liftTS :: TypeState a -> MaybeT TypeState a
+liftTS t = MaybeT $ t >>= (return . Just)
 
 -- Replace all top-level discharged coeffects
 discToFreshVars :: Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
