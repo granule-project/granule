@@ -10,7 +10,7 @@ Executable gmtt
   Main-Is:        Main.hs
   Other-modules:  AlexToken,HappyParser
   Hs-Source-Dirs: src
-  Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 5
+  Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 6
   GHC-Options:    -Wall
 
 -- Executable lambda-happy-alex

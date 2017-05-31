@@ -8,11 +8,11 @@ runEval :: String -> IO ()
 runEval input = do
   let ast = HappyParser.parseDefs input
   putStrLn $ "AST:          " ++ (show ast)
-  putStrLn $ "Source:       " ++ (pretty ast)
-  putStrLn $ "Eval (main):  " ++ (show $ eval ast)
+  putStrLn $ "\nSource:\n"    ++ (pretty ast)
+  putStrLn $ "\nEval (main):  " ++ (show $ eval ast)
   checked <- check ast
-  putStrLn $ "Type checker: " ++ (show' checked)
---  putStrLn $ "Type: " ++
+  putStrLn $ "\nType checker: " ++ (show' checked)
+
 
 main :: IO ()
 main = do
