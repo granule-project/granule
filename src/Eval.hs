@@ -67,15 +67,15 @@ evalIn env (Binop op e1 e2) = do
    let x = evalOp op
    case (v1,v2) of
      (NumVal n1, NumVal n2) -> return $ NumVal (n1 `x` n2)
-     _ -> error "Not a number"
+     _ -> error $ "Not a number: " ++ show v1 ++ " or " ++ show v2
 
 -- GMTT big step semantics (CBN)
 
 evalIn env (LetBox var _ e1 e2) = do
    v1 <- evalIn env e1
    case v1 of
-      BoxVal val ->
-        evalIn env (subst e1 var e2)
+      BoxVal e1' ->
+        evalIn env (subst e1' var e2)
 
 evalIn env (LetDiamond var _ e1 e2) = do
    v1 <- evalIn env e1
