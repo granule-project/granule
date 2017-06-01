@@ -9,7 +9,7 @@ import Data.List
 import Data.Maybe
 import Data.Either
 import Debug.Trace
-import Control.Monad.State
+import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.SBV
@@ -44,15 +44,43 @@ replace (x : env) id v
 
 -- ExtCtxt the environment
 extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> Env TyOrDisc
-extCtxt env id (Left t)  = (id, Left t) : env
+extCtxt env id (Left t) =
+  case (lookup id env) of
+    Just (Left t') ->
+       if t == t'
+        then replace env id (Left t)
+        else error $ "Type clash for variable " ++ id
+    Just (Right (c, t')) ->
+       if t == t'
+         then replace env id (Right (c `plus` one, t))
+         else error $ "Type clash for variable " ++ id
+    Nothing -> (id, Left t) : env
 extCtxt env id (Right (c, t)) =
   case (lookup id env) of
     Just (Right (c', t')) ->
         if t == t'
         then replace env id (Right (c `plus` c', t'))
-        else error $ "Typeclash for discharged variable"
-    Just (Left _) -> error $ "Typeclash for discharged variable"
+        else error $ "Type clash for variable " ++ id
+    Just (Left t') ->
+        if t == t'
+        then replace env id (Right (c `plus` one, t))
+        else error $ "Type clash for variable " ++ id
     Nothing -> (id, Right (c, t)) : env
+
+-- Given an environment, derelict and discharge all variables which are not discharged
+multAll :: [Id] -> Coeffect -> Env TyOrDisc -> Env TyOrDisc
+
+multAll _ _ []
+    = []
+
+multAll vars c ((id, Left t) : env) | id `elem` vars
+    = (id, Right (c, t)) : multAll vars c env
+
+multAll vars c ((id, Right (c', t)) : env) | id `elem` vars
+    = (id, Right (c `mult` c', t)) : multAll vars c env
+
+multAll vars c ((id, Left t) : env) = multAll vars c env
+multAll vars c ((id, Right (_, t)) : env) = multAll vars c env
 
 {-
 -- Given an environment, derelict and discharge all variables which are not discharged
@@ -85,23 +113,21 @@ falsity = forAll_ $ \(x :: SInt64) -> false :: SBool
 -- Checking (top-level)
 check :: [Def] -> IO (Either String Bool)
 check defs = do
-    (results, _) <- foldM checkDef ([], empty) defs
+    (results, _) <- flip evalStateT (0, ground') (unwrap $ foldM checkDef ([], empty) defs)
     if (and . map (\(_, _, check) -> isJust check) $ results)
       then return . Right $ True
       else return . Left  $ intercalate "\n" (map mkReport results)
   where
-    checkDef (results, env) (Def var expr ty) = do
-      env' <- flip evalStateT (0, ground') . unwrap . runMaybeT
-                                 $ do
-                                     env' <- checkExpr env ty expr
-                                     solved <- solveConstraints
-                                     if solved
-                                        then return ()
-                                        else illTyped "Constraints violated"
-                                     return env'
-
-      --tau' <- flip evalStateT (0, ground') . unwrap . runMaybeT $ synthExpr env expr
-      return ((var, ty, env') : results, extCtxt env var (Left ty))
+    checkDef (results, def_env) (Def var expr ty) = do
+      addAnyUniversalsTy ty
+      env' <- runMaybeT $ do
+               env' <- checkExpr def_env [] ty expr
+               solved <- solveConstraints
+               if solved
+                 then return ()
+                 else illTyped "Constraints violated"
+               return env'
+      return ((var, ty, env') : results, (var, ty) : def_env)
 
 -- Make type error report
 mkReport :: (Id, Type, Maybe (Env TyOrDisc))
@@ -112,8 +138,9 @@ mkReport (var, ty, Nothing) =
 mkReport _ = ""
 
 -- Checking on expressions
-checkExpr :: Env TyOrDisc -> Type -> Expr -> MaybeT TypeState (Env TyOrDisc)
-checkExpr gam (FunTy sig tau) (Abs x e) = checkExpr (extCtxt gam x (Left sig)) tau e
+checkExpr :: Env Type -> Env TyOrDisc -> Type -> Expr -> MaybeT TypeState (Env TyOrDisc)
+checkExpr bgam gam (FunTy sig tau) (Abs x e) =
+  checkExpr bgam (extCtxt gam x (Left sig)) tau e
 
 {-
 
@@ -123,23 +150,26 @@ checkExpr gam (FunTy sig tau) (Abs x e) = checkExpr (extCtxt gam x (Left sig)) t
 
 -}
 
-checkExpr gam (Box demand tau) (Promote e) = do
-    gamF        <- discToFreshVars gam
-    gam'        <- checkExpr gamF tau e
-    gam `equalCtxts` gam'
-    return gam'
+checkExpr bgam gam (Box demand tau) (Promote e) = do
+    gamF        <- discToFreshVarsIn (fvs e) gam
+    gam'        <- checkExpr bgam gamF tau e
+    gam `equalCtxts` (multAll (fvs e) demand gam')
+    return gam
 
-checkExpr gam tau (App e1 e2) = do
-    (sig, gam1) <- synthExpr gam e2
-    gam2 <- checkExpr gam (FunTy sig tau) e1
-    return (gam1 `ctxPlus` gam2)
+checkExpr bgam gam tau (App e1 e2) = do
+    (sig, gam1) <- synthExpr bgam gam e2
+    gam2 <- checkExpr bgam gam1 (FunTy sig tau) e1
+    return gam
 
-checkExpr gam tau (Abs x e)             = illTyped "Checking abs"
-checkExpr gam tau e = do
-  (tau', gam') <- synthExpr gam e
+checkExpr bgam gam tau (Abs x e) =
+    illTyped "Checking abs"
+
+checkExpr bgam gam tau e = do
+  (tau', gam') <- synthExpr bgam gam e
   tyEq <- tau `typesEq` tau'
-  if tyEq then return $ gam' else illTyped $ "Checking: (" ++ pretty e ++ "), "
-                               ++ show tau ++ " != " ++ show tau'
+  if tyEq then return $ gam'
+          else illTyped $ "Checking: (" ++ pretty e ++ "), "
+                        ++ show tau ++ " != " ++ show tau'
 
 typesEq :: Type -> Type -> MaybeT TypeState Bool
 typesEq (FunTy t1 t2) (FunTy t1' t2') = do
@@ -149,7 +179,7 @@ typesEq (FunTy t1 t2) (FunTy t1' t2') = do
 typesEq (ConT t) (ConT t') = do
   return (t == t')
 typesEq (Box c t) (Box c' t') = do
-  (fvCount, symbolic) <- get
+  (fvCount, symbolic) <- (pretty c ++ " = " ++ pretty c') `trace` get
   let symbolic' = do
         (pred, fVars) <- symbolic
         return ((compile c fVars .== compile c' fVars) &&& pred, fVars)
@@ -162,73 +192,104 @@ liftm :: Maybe a -> MaybeT TypeState a
 liftm = MaybeT . return
 
 -- Synthesise on expressions
-synthExpr :: Env TyOrDisc -> Expr -> MaybeT TypeState (Type, Env TyOrDisc)
+synthExpr :: Env Type -> Env TyOrDisc -> Expr -> MaybeT TypeState (Type, Env TyOrDisc)
 
 -- Variables
-synthExpr gam (Var x) = do
+synthExpr bgam gam (Var x) = do
    case lookup x gam of
-     Nothing              -> illTyped $ "I don't know the type for " ++ show x
+     Nothing ->
+       case lookup x bgam of
+         Just ty  -> return (ty, gam)
+         Nothing  -> illTyped $ "I don't know the type for " ++ show x
      Just (Left ty)       -> return (ty, gam)
-     Just (Right (c, ty)) -> return (ty, replace gam x (Right (CPlus c one, ty)))
+     Just (Right (c, ty)) -> return (ty, replace gam x (Right (one, ty)))
 
 -- Constants (numbers)
-synthExpr gam (Num _) = return (ConT TyInt, gam)
+synthExpr bgam gam (Num _) = return (ConT TyInt, gam)
 
 -- Application
-synthExpr gam (App e e') = do
-    (f, gam1) <- synthExpr gam e
+synthExpr bgam gam (App e e') = do
+    (f, gam1) <- synthExpr bgam gam e
     case f of
       (FunTy sig tau) -> do
-         gam2 <- checkExpr gam sig e'
-         return (tau, ctxPlus gam1 gam2)
+         checkExpr bgam gam sig e'
+         return (tau, gam1)
       _ -> illTyped "Left-hand side of app is not a function type"
 
 -- Promotion
-synthExpr gam (Promote e) = do
-   gamF <- discToFreshVars gam
-   (t, gam') <- synthExpr gamF e
-   gam `equalCtxts` gam'
-   var <- liftTS freshVar
-   return (Box (CVar var) t, gam')
+synthExpr bgam gam (Promote e) = do
+   gamF <- discToFreshVarsIn (fvs e) gam
+   (t, gam') <- synthExpr bgam gamF e
+   var <- liftTS . freshVar $ "prom_" ++ [head (pretty e)]
+   return (Box (CVar var) t, (multAll (fvs e) (CVar var) gam'))
 
 -- Letbox
-synthExpr gam (LetBox var t e1 e2) = do
-   (tau, gam1) <- synthExpr (extCtxt gam var (Right (zero, t))) e2
+synthExpr bgam gam (LetBox var t e1 e2) = do
+   cvar <- liftTS $ freshVar ("binder_" ++ var)
+   (tau, gam1) <- synthExpr bgam (extCtxt gam var (Right (CVar cvar, t))) e2
    case lookup var gam1 of
        Just (Right (demand, t')) | t == t' -> do
-            gam2 <- checkExpr gam1 (Box demand t) e1
-            return (tau, ctxPlus gam1 gam2)
+            gam2 <- --("demand for " ++ var ++ " = " ++ pretty demand) `trace`
+                    checkExpr bgam gam (Box demand t) e1
+            return (tau, gam1)
        _ -> illTyped $ "Context of letbox does not have " ++ var ++ " discharged"
 
 -- BinOp
-synthExpr gam (Binop op e e') = do
-    (t, gam1)  <- synthExpr gam e
-    (t', gam2) <- synthExpr gam e'
+synthExpr bgam gam (Binop op e e') = do
+    (t, gam1)  <- synthExpr bgam gam e
+    (t', gam2) <- synthExpr bgam gam e'
     case (t, t') of
-        (ConT TyInt, ConT TyInt) -> return (ConT TyInt, ctxPlus gam1 gam2)
+        (ConT TyInt, ConT TyInt) -> return (ConT TyInt, gam1 `ctxPlus` gam2)
         _                        -> illTyped "Binary op does not have two int expressions"
 
-synthExpr gam e = illTyped $ "General synth fail " ++ show e
+synthExpr bgam gam e = illTyped $ "General synth fail " ++ show e
+
+keyIntersect :: Env a -> Env a -> Env a
+keyIntersect a b = sortBy (\a b -> fst a `compare` fst b) $ filter (appearsIn a) b
+  where appearsIn a (id, _) = isJust $ lookup id a
 
 equalCtxts :: Env TyOrDisc -> Env TyOrDisc -> MaybeT TypeState ()
-equalCtxts env env' =
-  if length env == length env'
-  && map fst env == map fst env'
-  && (lefts . map snd $ env) == (lefts . map snd $ env')
-  && (rights . map snd $ env) == (rights . map snd $ env')
-    then do
-      (fv, symbolic) <- get
-      let symbolic' = do
-            (pred, vars) <- symbolic
-            eqs <- return . foldr (&&&) true $ zipWith (makeEqual vars) env env'
-            return (eqs &&& pred, vars)
-      put (fv, symbolic')
-    else illTyped "Environments do not match in size of types"
+equalCtxts env1 env2 =
+  let env  = env1 `keyIntersect` env2
+      env' = env2 `keyIntersect` env1
+  in
+    if length env == length env'
+    && map fst env == map fst env'
+      then do
+        (fv, symbolic) <- get
+        let symbolic' = do
+              (pred, vars) <- symbolic
+              eqs <- return . foldr (&&&) true $ zipWith (makeEqual vars) env env'
+              return (eqs &&& pred, vars)
+        put (fv, symbolic')
+      else illTyped $ "Environments do not match in size or types: " ++ show env ++ " - " ++ show env'
 
 makeEqual freeVars (_, Left _) (_, Left _) = true
 makeEqual freeVars (_, Right (c1, _)) (_, Right (c2, _)) = do
-  compile c1 freeVars .== compile c2 freeVars
-makeEqual _ _ _ = false
+   (pretty c1) ++ " == " ++ (pretty c2)
+  `trace`
+    compile c1 freeVars .== compile c2 freeVars
+makeEqual _ _ _ = true
+
+
+addAnyUniversalsTy (FunTy t1 t2) = do
+  addAnyUniversalsTy t1
+  addAnyUniversalsTy t2
+addAnyUniversalsTy (Box c t) = do
+  addAnyUniversals c
+  addAnyUniversalsTy t
+addAnyUniversalsTy _ = return ()
+
+addAnyUniversals (CVar v) = do
+  freshUniversalVar v
+  return ()
+addAnyUniversals (CPlus c d) = do
+ addAnyUniversals c
+ addAnyUniversals d
+addAnyUniversals (CTimes c d) = do
+ addAnyUniversals c
+ addAnyUniversals d
+addAnyUniversals _ = return ()
 
 extractVars (_, Left _) = []
 extractVars (_, Right (c, _)) = vars c
@@ -241,7 +302,10 @@ vars _ = []
 
 compile :: Coeffect -> SolverVars -> SInteger
 compile (Nat n) _ = (fromInteger . toInteger $ n) :: SInteger
-compile (CVar v) vars = fromJust $ lookup v vars -- sInteger v
+compile (CVar v) vars =
+  case lookup v vars of
+   Just cvar -> cvar
+   Nothing   -> error $ "Looking up a variable '" ++ v ++ "' in " ++ show vars
 compile (CPlus n m) vars = compile n vars + compile m vars
 compile (CTimes n m) vars = compile n vars * compile m vars
 
@@ -273,9 +337,8 @@ instance Applicative TypeState where
 solveConstraints :: MaybeT TypeState Bool
 solveConstraints = do
   (_, symbolic) <- get
-  thmRes <- liftio . prove $ do
-                (pred, vars) <- symbolic
-                return pred
+  let predicate = do { (pred, vars) <- symbolic; return pred }
+  thmRes <- liftio . prove $ predicate
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
      -- z3 is not installed/accessible).
@@ -285,22 +348,37 @@ solveConstraints = do
            then
              case getModel thmRes of
                Right (False, ce :: [ Integer ] ) -> do
-                                  illTyped $ "Returned model " ++ show ce ++ " - " ++ show thmRes
+                   satRes <- liftio . sat $ predicate
+                   illTyped $ "Returned model " ++ show ce ++ " - " ++ show thmRes
+                            ++ "\nSAT result: \n" ++ show satRes
                Right (True, _) -> illTyped $ "Returned probable model."
                Left str        -> illTyped $ "Solver fail: " ++ str
            else return True
 
 -- Generate a fresh alphanumeric variable name
-freshVar :: TypeState String
-freshVar = TS $ do
+freshVar :: String -> TypeState String
+freshVar s = TS $ do
   (v, symbolic) <- get
-  let prefix = ["a", "b", "c", "d"] !! (v `mod` 4)
+  let prefix = s ++ "_" ++ ["a", "b", "c", "d"] !! (v `mod` 4)
   let cvar = prefix ++ show v
   let symbolic' = do
       (pred, vars) <- symbolic
       solverVar    <- exists cvar
-      return (pred, (cvar, solverVar) : vars)
+      return (pred &&& solverVar .>= (literal 0), (cvar, solverVar) : vars)
   put (v+1, symbolic')
+  return cvar
+
+-- Generate a fresh alphanumeric variable name
+freshUniversalVar :: String -> TypeState String
+freshUniversalVar cvar = TS $ do
+  (v, symbolic) <- get
+  let symbolic' = do
+      (pred, vars) <- symbolic
+      case lookup cvar vars of
+        Nothing -> do solverVar    <- forall cvar
+                      return (pred &&& solverVar .>= (literal 0), (cvar, solverVar) : vars)
+        _ -> return (pred, vars)
+  put (v, symbolic')
   return cvar
 
 liftTS :: TypeState a -> MaybeT TypeState a
@@ -315,6 +393,25 @@ discToFreshVars :: Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
 discToFreshVars env = MaybeT $ mapM toFreshVar env >>= (return . Just)
   where
     toFreshVar (id, Right (c, t)) = do
-      v <- freshVar
+      v <- freshVar id
       return $ (id, Right (CVar v, t))
-    toFreshVar c = return c
+    toFreshVar (id, Left t) = return (id, Left t)
+
+discToFreshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
+discToFreshVarsIn vars env = MaybeT $ mapM toFreshVar relevantSubEnv
+                                      >>= (return . Just)
+  where
+    relevantSubEnv = filter relevant env
+    relevant (id, _) = id `elem` vars
+
+    toFreshVar (id, Right (c, t)) = do
+      v <- freshVar id
+      return $ (id, Right (CVar v, t))
+    toFreshVar (id, Left t) = do
+      v <- freshVar id
+      return (id, Right (CVar v, t))
+
+deleteVar :: Eq a => a -> [(a, b)] -> [(a, b)]
+deleteVar x [] = []
+deleteVar x ((y, b) : m) | x == y = deleteVar x m
+                      | otherwise = (y, b) : deleteVar x m

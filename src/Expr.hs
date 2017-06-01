@@ -3,6 +3,7 @@
 module Expr where
 
 import Data.List
+import Control.Monad.State.Strict
 
 type Id = String
 data Op = Add | Sub | Mul deriving (Eq, Show)
@@ -15,6 +16,15 @@ data Expr = Abs Id Expr
           | Promote Expr
           | LetBox Id Type Expr Expr
           deriving (Eq, Show)
+
+fvs :: Expr -> [Id]
+fvs (Abs x e) = (fvs e) \\ [x]
+fvs (App e1 e2) = fvs e1 ++ fvs e2
+fvs (Var x)   = [x]
+fvs (Binop _ e1 e2) = fvs e1 ++ fvs e2
+fvs (Promote e) = fvs e
+fvs (LetBox x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
+fvs _ = []
 
 -- Syntactic substitution (assuming variables are all unique)
 subst :: Expr -> Id -> Expr -> Expr
@@ -50,17 +60,19 @@ class Pretty t where
 
 instance Pretty Coeffect where
     pretty (Nat n) = show n
-    pretty (CVar c) = show c
+    pretty (CVar c) = c
+    pretty (CPlus c d) = pretty c ++ " + " ++ pretty d
+    pretty (CTimes c d) = pretty c ++ " * " ++ pretty d
 
 instance Pretty Type where
     pretty (ConT TyInt)  = "Int"
     pretty (ConT TyBool) = "Bool"
-    pretty (FunTy t1 t2) = pretty t1 ++ " -> " ++ pretty t2
+    pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
     pretty (Box c t) = "[" ++ pretty t ++ "] " ++ pretty c
 
 instance Pretty [Def] where
     pretty = intercalate "\n"
-     . map (\(Def v e t) -> v ++ " : " ++ show t ++ "\n" ++ v ++ " = " ++ pretty e)
+     . map (\(Def v e t) -> v ++ " : " ++ pretty t ++ "\n" ++ v ++ " = " ++ pretty e)
 
 instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
@@ -97,3 +109,41 @@ subExpr = Binop Sub
 
 mulExpr :: Expr -> Expr -> Expr
 mulExpr = Binop Mul
+
+uniqueNames :: [Def] -> [Def]
+uniqueNames = flip evalState (0 :: Int) . mapM uniqueNameDef
+  where
+    uniqueNameDef (Def id e t) = do
+      e' <- uniqueNameExpr e
+      return $ (Def id e' t)
+
+    uniqueNameExpr (Abs id e) = do
+      v <- get
+      let id' = id ++ show v
+      put (v+1)
+      e' <- uniqueNameExpr (subst (Var id') id e)
+      return $ Abs id' e'
+
+    uniqueNameExpr (LetBox id t e1 e2) = do
+      v <- get
+      let id' = id ++ show v
+      put (v+1)
+      e1' <- uniqueNameExpr e1
+      e2' <- uniqueNameExpr (subst (Var id') id e2)
+      return $ LetBox id' t e1' e2'
+
+    uniqueNameExpr (App e1 e2) = do
+      e1' <- uniqueNameExpr e1
+      e2' <- uniqueNameExpr e2
+      return $ App e1' e2'
+
+    uniqueNameExpr (Binop op e1 e2) = do
+      e1' <- uniqueNameExpr e1
+      e2' <- uniqueNameExpr e2
+      return $ Binop op e1' e2'
+
+    uniqueNameExpr (Promote e) = do
+      e' <- uniqueNameExpr e
+      return $ Promote e'
+
+    uniqueNameExpr c = return c
