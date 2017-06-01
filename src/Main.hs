@@ -17,9 +17,12 @@ run input debug = do
     else return ()
   checked <- check ast debug
   putStrLn $ "\nType checking:    " ++ (showCheckerResult checked)
-  val <- eval ast
-  putStrLn $ "Evaluating main:  " ++ (show val)
-  putStrLn ""
+  case checked of
+    Right True -> do
+      val <- eval ast
+      putStrLn $ "Evaluating main:  " ++ (show val)
+      putStrLn ""
+    _ -> return ()
 
 main :: IO ()
 main = do
