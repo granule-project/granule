@@ -82,13 +82,19 @@ evalIn env (LetDiamond var _ e1 e2) = do
    case v1 of
       DiamondVal e -> do
         val <- evalIn env e
-        evalIn (extend env var val) e2
+        evalIn env (subst (toExpr val) var e2)
 
 
 evalIn env (Promote e) = return $ BoxVal e
 
 evalIn env (Pure e) = return $ DiamondVal e
 
+
+
+toExpr (FunVal _ i e) = Abs i e
+toExpr (NumVal i) = Num i
+toExpr (DiamondVal e) = Promote e
+toExpr (BoxVal e) = Pure e
 
 evalDefs :: Env Val -> [Def] -> IO (Env Val)
 evalDefs env [] = return env
@@ -101,4 +107,6 @@ eval defs = do
   bindings <- evalDefs empty defs
   case lookup "main" bindings of
     Nothing -> fail "Missing a definition called 'main'"
+    Just (DiamondVal e) -> evalIn bindings e
+    Just (BoxVal e)     -> evalIn bindings e
     Just val -> return val
