@@ -34,7 +34,10 @@ import Expr
 %%
 
 Defs : Def                         { [$1] }
-     | Defs nl Def                 { $1 ++ [$3] }
+     | Defs NLS Def                 { $1 ++ [$3] }
+
+NLS : nl {}
+| nl NLS {}
 
 Def : Sig nl Binding               { if (fst $1 == fst $3)
 	                              then Def (fst $3) (snd $3) (snd $1)
@@ -48,10 +51,14 @@ Type : Int                         { ConT TyInt }
      | Bool                        { ConT TyBool }
      | Type '->' Type              { FunTy $1 $3 }
      | '[' Type ']' Coeffect       { Box $4 $2 }
+     | '(' Type ')'                { $2 } 
 
 Coeffect :
        NUM                     { Nat $1 }
      | VAR                     { CVar $1 }
+     | Coeffect '+' Coeffect   { CPlus $1 $3 }
+     | Coeffect '*' Coeffect   { CTimes $1 $3 }
+     | '(' Coeffect ')'        { $2 }
 
 Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
      | let '[' VAR ':' Type ']' '=' Expr in Expr
@@ -77,5 +84,5 @@ parseError :: [Token] -> a
 parseError t = error $ "Parse error, at token " ++ show t
 
 parseDefs :: String -> [Def]
-parseDefs = defs . scanTokens
+parseDefs = uniqueNames . defs . scanTokens
 }
