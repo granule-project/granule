@@ -1,0 +1,19 @@
+# (* Effectful example in gram *)
+
+# (* Similar to Haskell *)
+# (* main :: IO a       *)
+# (* main = readLn      *)
+
+echo : (Int -> <Int> {}) -> Int -> <Int> {W}
+echo = \f -> \x -> let <a : Int> = write x in f x
+
+dub : Int -> <Int> {}
+dub = \x -> <x * 2>
+
+foo : [Int] 2 -> [Int] 4 -> [Int] 2
+foo = \xBox -> \yBox -> let [x : Int] = xBox in 
+                        let [y : Int] = yBox in
+                        [x + y + y]
+
+main : <Int> {W}
+main = echo dub 42
