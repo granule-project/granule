@@ -49,7 +49,7 @@ extCtxt env id (Left t) =
   case (lookup id env) of
     Just (Left t') ->
        if t == t'
-        then replace env id (Left t)
+        then error $ "'" ++ id ++ "' used more than once" -- env
         else error $ "Type clash for variable " ++ id
     Just (Right (c, t')) ->
        if t == t'

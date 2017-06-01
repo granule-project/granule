@@ -178,8 +178,8 @@ synthExpr dbg defs gam (LetBox var t e1 e2) = do
 
 -- BinOp
 synthExpr dbg defs gam (Binop op e e') = do
-    (t, gam1)  <- synthExpr dbg defs gam e
-    (t', gam2) <- synthExpr dbg defs gam e'
+    (t, gam1)  <- synthExpr dbg defs (relevantSubEnv (fvs e) gam) e
+    (t', gam2) <- synthExpr dbg defs (relevantSubEnv (fvs e') gam) e'
     case (t, t') of
         (ConT TyInt, ConT TyInt) -> return (ConT TyInt, gam1 `ctxPlus` gam2)
         _                        -> illTyped "Binary op does not have two int expressions"
@@ -340,14 +340,14 @@ compile (CPlus n m) vars = compile n vars + compile m vars
 compile (CTimes n m) vars = compile n vars * compile m vars
 
 
+relevantSubEnv vars env = filter relevant env
+ where relevant (id, _) = id `elem` vars
+
 -- Replace all top-level discharged coeffects
 discToFreshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
-discToFreshVarsIn vars env = MaybeT $ mapM toFreshVar relevantSubEnv
+discToFreshVarsIn vars env = MaybeT $ mapM toFreshVar (relevantSubEnv vars env)
                                       >>= (return . Just)
   where
-    relevantSubEnv = filter relevant env
-    relevant (id, _) = id `elem` vars
-
     toFreshVar (id, Right (c, t)) = do
       v <- freshVar id
       return $ (id, Right (CVar v, t))

@@ -9,7 +9,7 @@ threePlus = \z -> let [x : Int] = z in x + x + x
 
 twice : [[Int] 2 -> Int] 2 -> [Int] 4 -> Int
 twice = \f -> \x -> let [g : [Int] 2 -> Int] = f in
-                   let [z : Int]            = x
+                   let [z : Int]             = x
                    in g [z] + g [z]
 
 dub : [[Int] c -> Int] 2 -> [Int] (2 * c) -> Int
