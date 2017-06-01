@@ -9,4 +9,4 @@ A statically typed functional language with graded modal types.
      
 ##  Examples
 
-See the `samples` directory here.
+Gram files have file extension 'gr'. See the `examples` directory here.
