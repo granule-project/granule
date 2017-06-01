@@ -1,12 +1,12 @@
-name:           gmtt
+name:           gram
 version:        0.1.0.0
 cabal-bersion:  >= 1.2
 License:        BSD3
 Author:         Dominic Orchard
-Synopsis:       The GMTT compiler
+Synopsis:       The Gram type checker and interpreter
 Build-Type:     Simple
   
-Executable gmtt
+Executable gram
   Main-Is:        Main.hs
   Other-modules:  AlexToken,HappyParser
   Hs-Source-Dirs: src

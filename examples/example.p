@@ -1,3 +1,5 @@
+# (* doubling function *)
+
 dub : [Int] 2 -> Int
 dub = \x -> let [y : Int] = x in y + y
 
