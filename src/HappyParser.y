@@ -68,6 +68,7 @@ Coeffect :
 
 Effect :
      '{' Effs '}'            { $2 }
+   | '{' '}'                  { [] }
 
 Effs :
      Eff ',' Effs            { $1 : $3 }

@@ -111,12 +111,12 @@ typesEq dbg (FunTy t1 t2) (FunTy t1' t2') = do
 typesEq _ (ConT t) (ConT t') = do
   return (t == t')
 
-typesEq dbg (Diamond e t) (Diamond e' t') = do
+typesEq dbg (Diamond ef t) (Diamond ef' t') = do
   eq <- typesEq dbg t t'
-  if (e == e')
+  if (ef == ef')
     then return eq
-    else illTyped $ "Effect mismatch: {" ++ intercalate "," e
-                     ++ "} != {" ++ intercalate "," e' ++ "}"
+    else illTyped $ "Effect mismatch: {" ++ intercalate "," ef
+                     ++ "} != {" ++ intercalate "," ef' ++ "}"
 
 typesEq dbg (Box c t) (Box c' t') = do
   -- Dbgging

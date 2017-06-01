@@ -36,7 +36,7 @@ evalIn :: Env Val -> Expr -> IO Val
 evalIn env (App (Var "write") e) = do
   v <- evalIn env e
   putStrLn $ show v
-  return $ v
+  return $ DiamondVal (toExpr v)
 
 evalIn env (Var "read") = do
   val <- readLn
@@ -50,7 +50,7 @@ evalIn env (App e1 e2) = do
   case v1 of
     FunVal env' x e3 -> do
       v2 <- evalIn env e2
-      evalIn (extend (env ++ env') x v2) e3
+      evalIn (env ++ env') (subst (toExpr v2) x e3)
     _ -> error "Cannot apply value"
 
 evalIn env (Var x) =
@@ -83,7 +83,6 @@ evalIn env (LetDiamond var _ e1 e2) = do
       DiamondVal e -> do
         val <- evalIn env e
         evalIn env (subst (toExpr val) var e2)
-
 
 evalIn env (Promote e) = return $ BoxVal e
 
