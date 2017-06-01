@@ -115,7 +115,8 @@ typesEq dbg (Diamond e t) (Diamond e' t') = do
   eq <- typesEq dbg t t'
   if (e == e')
     then return eq
-    else illTyped $ "Effect error: " ++ show e ++ " != " ++ show e'
+    else illTyped $ "Effect mismatch: {" ++ intercalate "," e
+                     ++ "} != {" ++ intercalate "," e' ++ "}"
 
 typesEq dbg (Box c t) (Box c' t') = do
   -- Dbgging

@@ -14,6 +14,7 @@ instance Pretty Int where
 instance Show Val where
   show (FunVal _ _ _) = "<fun>"
   show (BoxVal e) = "[" ++ pretty e ++ "]"
+  show (DiamondVal e) = "<" ++ pretty e ++ ">"
   show (NumVal n) = show n
 
 type Env a = [(Id, a)]
