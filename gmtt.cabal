@@ -1,5 +1,5 @@
 name:           gmtt
-version:        0.01
+version:        0.1.0.0
 cabal-bersion:  >= 1.2
 License:        BSD3
 Author:         Dominic Orchard

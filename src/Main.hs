@@ -7,6 +7,8 @@ import System.Environment
 
 run :: String -> Bool -> IO ()
 run input debug = do
+  putStrLn "\nGMTT v0.1.0.0"
+  putStrLn "----------------------------------"
   let ast = HappyParser.parseDefs input
   if debug
     then do
@@ -14,8 +16,9 @@ run input debug = do
       putStrLn $ "\nSource:\n"    ++ (pretty ast)
     else return ()
   checked <- check ast debug
-  putStrLn $ "\nType checking:\t" ++ (showCheckerResult checked)
-  putStrLn $ "\nEvaluating main:\t" ++ (show $ eval ast)
+  putStrLn $ "\nType checking:    " ++ (showCheckerResult checked)
+  putStrLn $ "Evaluating main:  " ++ (show $ eval ast)
+  putStrLn ""
 
 main :: IO ()
 main = do
