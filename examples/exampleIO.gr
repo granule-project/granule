@@ -1,0 +1,5 @@
+foo : <Int> {R, W}
+foo = let <x : Int> = read in write (x * 2)
+
+main : <Int> {R, W}
+main = foo

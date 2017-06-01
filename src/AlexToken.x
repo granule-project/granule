@@ -31,6 +31,11 @@ tokens :-
   [\*]                          { \s -> TokenMul }
   \(                            { \s -> TokenLParen }
   \)                            { \s -> TokenRParen }
+  \{                            { \s -> TokenLBrace }
+  \}                            { \s -> TokenRBrace }
+  \<                            { \s -> TokenLangle }
+  \>                            { \s -> TokenRangle }
+  \,                            { \s -> TokenComma }
   \:                            { \s -> TokenSig }
   $alpha [$alpha $digit \_ \']* { \s -> TokenSym s }
 
@@ -56,6 +61,11 @@ data Token = TokenLet
 	   | TokenSig
 	   | TokenBoxLeft
 	   | TokenBoxRight
+	   | TokenLBrace
+	   | TokenRBrace
+	   | TokenLangle
+	   | TokenRangle
+	   | TokenComma
            deriving (Eq,Show)
 
 scanTokens = trim . alexScanTokens

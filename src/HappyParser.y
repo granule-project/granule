@@ -19,6 +19,7 @@ import Expr
     Bool  { TokenBool }
     '\\'  { TokenLambda }
     '->'  { TokenArrow }
+    ','   { TokenComma }
     '='   { TokenEq }
     '+'   { TokenAdd }
     '-'   { TokenSub }
@@ -27,7 +28,11 @@ import Expr
     ')'   { TokenRParen }
     ':'   { TokenSig }
     '['   { TokenBoxLeft }
+    '{'   { TokenLBrace }
+    '}'   { TokenRBrace }
     ']'   { TokenBoxRight }
+    '<'   { TokenLangle }
+    '>'   { TokenRangle }
 
 %left '+' '-'
 %left '*'
@@ -51,7 +56,8 @@ Type : Int                         { ConT TyInt }
      | Bool                        { ConT TyBool }
      | Type '->' Type              { FunTy $1 $3 }
      | '[' Type ']' Coeffect       { Box $4 $2 }
-     | '(' Type ')'                { $2 } 
+     | '(' Type ')'                { $2 }
+     | '<' Type '>' Effect         { Diamond $4 $2 }
 
 Coeffect :
        NUM                     { Nat $1 }
@@ -60,10 +66,23 @@ Coeffect :
      | Coeffect '*' Coeffect   { CTimes $1 $3 }
      | '(' Coeffect ')'        { $2 }
 
+Effect :
+     '{' Effs '}'            { $2 }
+
+Effs :
+     Eff ',' Effs            { $1 : $3 }
+   | Eff                     { [$1] }
+
+Eff :
+     VAR                     { $1 }
+
 Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
      | let '[' VAR ':' Type ']' '=' Expr in Expr
                                    { LetBox $3 $5 $8 $10 }
      | '\\' VAR '->' Expr          { Abs $2 $4 }
+     | let '<' VAR ':' Type '>' '=' Expr in Expr
+                                   { LetDiamond $3 $5 $8 $10 }
+     | '<' Expr '>'                { Pure $2 }
      | Form                        { $1 }
 
 Form : Form '+' Form               { Binop Add $1 $3 }

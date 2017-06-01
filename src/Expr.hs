@@ -15,7 +15,10 @@ data Expr = Abs Id Expr
           | Binop Op Expr Expr
           | Promote Expr
           | LetBox Id Type Expr Expr
+          | Pure Expr
+          | LetDiamond Id Type Expr Expr
           deriving (Eq, Show)
+
 
 fvs :: Expr -> [Id]
 fvs (Abs x e) = (fvs e) \\ [x]
@@ -24,6 +27,8 @@ fvs (Var x)   = [x]
 fvs (Binop _ e1 e2) = fvs e1 ++ fvs e2
 fvs (Promote e) = fvs e
 fvs (LetBox x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
+fvs (Pure e) = fvs e
+fvs (LetDiamond x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
 fvs _ = []
 
 -- Syntactic substitution (assuming variables are all unique)
@@ -33,6 +38,8 @@ subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
 subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
 subst es v (Promote e)        = Promote (subst es v e)
 subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
+subst es v (Pure e)           = Pure (subst es v e)
+subst es v (LetDiamond w t e1 e2) = LetDiamond w t (subst es v e1) (subst es v e2)
 subst es v (Var w) | v == w = es
 subst es v e = e
 
@@ -44,8 +51,10 @@ data Def = Def Id Expr Type
 data TyCon = TyInt | TyBool | TyVar String -- TyVar not used yet
     deriving (Eq, Show)
 
-data Type = FunTy Type Type | ConT TyCon | Box Coeffect Type
+data Type = FunTy Type Type | ConT TyCon | Box Coeffect Type | Diamond Effect Type
     deriving (Eq, Show)
+
+type Effect = [String]
 
 data Coeffect = Nat Int
               | CVar String
@@ -69,6 +78,7 @@ instance Pretty Type where
     pretty (ConT TyBool) = "Bool"
     pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
     pretty (Box c t) = "[" ++ pretty t ++ "] " ++ pretty c
+    pretty (Diamond e t) = "<" ++ pretty t ++ "> {" ++ (intercalate "," e) ++ "}"
 
 instance Pretty [Def] where
     pretty = intercalate "\n"
@@ -92,6 +102,9 @@ instance Pretty Expr where
         (LetBox v t e1 e2) -> parens $ "let [" ++ v ++ ":" ++ pretty t ++ "] = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
         (Promote e)      -> "[ " ++ pretty e ++ " ]"
+        (Pure e)         -> "<" ++ pretty e ++ ">"
+        (LetDiamond v t e1 e2) -> parens $ "let <" ++ v ++ ":" ++ pretty t ++ "> = "
+                                     ++ pretty e1 ++ " in " ++ pretty e2
         (Var x) -> x
         (Num n) -> show n
      where prettyOp Add = " + "
@@ -136,6 +149,18 @@ uniqueNames = flip evalState (0 :: Int) . mapM uniqueNameDef
       e1' <- uniqueNameExpr e1
       e2' <- uniqueNameExpr e2
       return $ App e1' e2'
+
+    uniqueNameExpr (LetDiamond id t e1 e2) = do
+      v <- get
+      let id' = id ++ show v
+      put (v+1)
+      e1' <- uniqueNameExpr e1
+      e2' <- uniqueNameExpr (subst (Var id') id e2)
+      return $ LetDiamond id' t e1' e2'
+
+    uniqueNameExpr (Pure e) = do
+      e' <- uniqueNameExpr e
+      return $ Pure e'
 
     uniqueNameExpr (Binop op e1 e2) = do
       e1' <- uniqueNameExpr e1

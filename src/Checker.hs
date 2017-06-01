@@ -111,6 +111,12 @@ typesEq dbg (FunTy t1 t2) (FunTy t1' t2') = do
 typesEq _ (ConT t) (ConT t') = do
   return (t == t')
 
+typesEq dbg (Diamond e t) (Diamond e' t') = do
+  eq <- typesEq dbg t t'
+  if (e == e')
+    then return eq
+    else illTyped $ "Effect error: " ++ show e ++ " != " ++ show e'
+
 typesEq dbg (Box c t) (Box c' t') = do
   -- Dbgging
   when dbg $ liftio $ putStrLn (pretty c ++ " == " ++ pretty c')
@@ -134,6 +140,26 @@ synthExpr :: Bool
           -> MaybeT TypeState (Type, Env TyOrDisc)
 
 -- Variables
+synthExpr dbg defs gam (Var "read") = do
+  return (Diamond ["R"] (ConT TyInt), gam)
+
+synthExpr dbg defs gam (Var "write") = do
+  return (FunTy (ConT TyInt) (Diamond ["W"] (ConT TyInt)), gam)
+
+synthExpr dbg defs gam (Pure e) = do
+  (ty, gam') <- synthExpr dbg defs gam e
+  return (Diamond [] ty, gam')
+
+synthExpr dbg defs gam (LetDiamond id ty e1 e2) = do
+  (tau, gam1) <- synthExpr dbg defs (extCtxt gam id (Left ty)) e2
+  case tau of
+    Diamond ef2 tau' -> do
+       (sig, gam2) <- synthExpr dbg defs gam1 e1
+       case sig of
+         Diamond ef1 ty' | ty == ty' -> return (Diamond (ef1 ++ ef2) ty', gam2)
+         _ -> illTyped $ "Expected a diamond type"
+    _ -> illTyped $ "Expected a diamond type"
+
 synthExpr dbg defs gam (Var x) = do
    case lookup x gam of
      Nothing ->
