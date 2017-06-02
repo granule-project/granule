@@ -33,6 +33,7 @@ import Expr
     ']'   { TokenBoxRight }
     '<'   { TokenLangle }
     '>'   { TokenRangle }
+    '|'   { TokenPipe }
 
 %left '+' '-'
 %left '*'
@@ -55,7 +56,7 @@ Binding : VAR '=' Expr             { ($1, $3) }
 Type : Int                         { ConT TyInt }
      | Bool                        { ConT TyBool }
      | Type '->' Type              { FunTy $1 $3 }
-     | '[' Type ']' Coeffect       { Box $4 $2 }
+     | '|' Type '|' Coeffect       { Box $4 $2 }
      | '(' Type ')'                { $2 }
      | '<' Type '>' Effect         { Diamond $4 $2 }
 
@@ -67,7 +68,7 @@ Coeffect :
      | '(' Coeffect ')'        { $2 }
 
 Effect :
-     '{' Effs '}'            { $2 }
+     '{' Effs '}'             { $2 }
    | '{' '}'                  { [] }
 
 Effs :
@@ -78,7 +79,7 @@ Eff :
      VAR                     { $1 }
 
 Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
-     | let '[' VAR ':' Type ']' '=' Expr in Expr
+     | let '|' VAR ':' Type '|' '=' Expr in Expr
                                    { LetBox $3 $5 $8 $10 }
      | '\\' VAR '->' Expr          { Abs $2 $4 }
      | let '<' VAR ':' Type '>' '=' Expr in Expr
@@ -97,7 +98,7 @@ Juxt : Juxt Atom                   { App $1 $2 }
 Atom : '(' Expr ')'                { $2 }
      | NUM                         { Num $1 }
      | VAR                         { Var $1 }
-     | '[' Expr ']'                { Promote $2 }
+     | '|' Expr '|'                { Promote $2 }
 
 {
 parseError :: [Token] -> a
