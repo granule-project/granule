@@ -35,15 +35,17 @@ import Expr
     '>'   { TokenRangle }
     '|'   { TokenPipe }
 
+
+%right in
+%right '->'
 %left '+' '-'
 %left '*'
+%left '|'
+%left '.'
 %%
 
-Defs : Def                         { [$1] }
-     | Defs NLS Def                 { $1 ++ [$3] }
-
-NLS : nl {}
-| nl NLS {}
+Defs : Def                      { [$1] }
+     | Def nl Defs              { $1 : $3 }
 
 Def : Sig nl Binding               { if (fst $1 == fst $3)
 	                              then Def (fst $3) (snd $3) (snd $1)
@@ -98,7 +100,8 @@ Juxt : Juxt Atom                   { App $1 $2 }
 Atom : '(' Expr ')'                { $2 }
      | NUM                         { Num $1 }
      | VAR                         { Var $1 }
-     | '|' Expr '|'                { Promote $2 }
+     | '|' Atom '|'                { Promote $2 }
+
 
 {
 parseError :: [Token] -> a
