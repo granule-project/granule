@@ -38,6 +38,7 @@ tokens :-
   \,                            { \s -> TokenComma }
   \:                            { \s -> TokenSig }
   $alpha [$alpha $digit \_ \']* { \s -> TokenSym s }
+  \|                            { \s -> TokenPipe }
 
 {
 
@@ -66,6 +67,7 @@ data Token = TokenLet
 	   | TokenLangle
 	   | TokenRangle
 	   | TokenComma
+	   | TokenPipe
            deriving (Eq,Show)
 
 scanTokens = trim . alexScanTokens
