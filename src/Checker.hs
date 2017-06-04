@@ -59,7 +59,14 @@ mkReport (var, ty, Nothing) =
         ++ ".\n Try annotating the types of functions or fixing a signature."
 mkReport _ = ""
 
--- Checking on expressions
+-- Type check an expression
+
+--  `checkExpr dbg defs gam t expr` computes `Just delta`
+--  if the expression type checks to `t` in environment `gam`:
+--  where `delta` gives the post-computation context for expr
+--  (which explains the exact coeffect demands)
+--  or `Nothing` if the typing does not match.
+
 checkExpr :: Bool         -- turn on dbgging
           -> Env Type     -- environment of top-level definitions
           -> Env TyOrDisc -- local typing context
@@ -70,10 +77,13 @@ checkExpr :: Bool         -- turn on dbgging
 checkExpr dbg defs gam (FunTy sig tau) (Abs x e) =
   checkExpr dbg defs (extCtxt gam x (Left sig)) tau e
 
+checkExpr dbg defs gam tau (Abs x e) =
+    illTyped $ "Expected a function type"
+
 {-
 
 [G] |- e : t
----------------------
+ ---------------------
 [G]*r |- [e] : []_r t
 
 -}
@@ -82,21 +92,19 @@ checkExpr dbg defs gam (Box demand tau) (Promote e) = do
     gamF        <- discToFreshVarsIn (fvs e) gam
     gam'        <- checkExpr dbg defs gamF tau e
     equalCtxts dbg gam (multAll (fvs e) demand gam')
-    return gam
+    return (multAll (fvs e) demand gam') -- gam
 
 checkExpr dbg defs gam tau (App e1 e2) = do
     (sig, gam1) <- synthExpr dbg defs gam e2
-    gam2 <- checkExpr dbg defs gam1 (FunTy sig tau) e1
-    return gam
+    gam2 <- checkExpr dbg defs gam (FunTy sig tau) e1
+    return (gam1 `ctxPlus` gam2)
 
-checkExpr dbg defs gam tau (Abs x e) =
-    illTyped "Checking abs"
 
 checkExpr dbg defs gam tau e = do
   (tau', gam') <- synthExpr dbg defs gam e
   tyEq <- (typesEq dbg) tau tau'
   equalCtxts dbg gam gam'
-  if tyEq then return gam
+  if tyEq then return gam'
           else illTyped $ "Checking: (" ++ pretty e ++ "), "
                         ++ show tau ++ " != " ++ show tau'
 
@@ -142,10 +150,10 @@ synthExpr :: Bool
 
 -- Variables
 synthExpr dbg defs gam (Var "read") = do
-  return (Diamond ["R"] (ConT TyInt), gam)
+  return (Diamond ["R"] (ConT TyInt), [])
 
 synthExpr dbg defs gam (Var "write") = do
-  return (FunTy (ConT TyInt) (Diamond ["W"] (ConT TyInt)), gam)
+  return (FunTy (ConT TyInt) (Diamond ["W"] (ConT TyInt)), [])
 
 synthExpr dbg defs gam (Pure e) = do
   (ty, gam') <- synthExpr dbg defs gam e
@@ -155,9 +163,9 @@ synthExpr dbg defs gam (LetDiamond id ty e1 e2) = do
   (tau, gam1) <- synthExpr dbg defs (extCtxt gam id (Left ty)) e2
   case tau of
     Diamond ef2 tau' -> do
-       (sig, gam2) <- synthExpr dbg defs gam1 e1
+       (sig, gam2) <- synthExpr dbg defs gam e1
        case sig of
-         Diamond ef1 ty' | ty == ty' -> return (Diamond (ef1 ++ ef2) ty', gam2)
+         Diamond ef1 ty' | ty == ty' -> return (Diamond (ef1 ++ ef2) ty', gam1 `ctxPlus` gam2)
          _ -> illTyped $ "Expected a diamond type"
     _ -> illTyped $ "Expected a diamond type"
 
@@ -167,22 +175,23 @@ synthExpr dbg defs gam (Var x) = do
        case lookup x defs of
          Just ty  -> do
            ty' <- liftTS $ freshPolymorphicInstance ty
-           return (ty', gam)
+           return (ty', [])
          Nothing  -> illTyped $ "I don't know the type for " ++ show x
+                              ++ " in environment " ++ show gam
 
-     Just (Left ty)       -> return (ty, gam)
-     Just (Right (c, ty)) -> return (ty, replace gam x (Right (one, ty)))
+     Just (Left ty)       -> return (ty, [(x, Left ty)])
+     Just (Right (c, ty)) -> return (ty, [(x, Right (one, ty))])
 
 -- Constants (numbers)
-synthExpr dbg defs gam (Num _) = return (ConT TyInt, gam)
+synthExpr dbg defs gam (Num _) = return (ConT TyInt, [])
 
 -- Application
 synthExpr dbg defs gam (App e e') = do
     (f, gam1) <- synthExpr dbg defs gam e
     case f of
       (FunTy sig tau) -> do
-         checkExpr dbg defs gam sig e'
-         return (tau, gam1)
+         gam2 <- checkExpr dbg defs gam sig e'
+         return (tau, gam1 `ctxPlus` gam2)
       _ -> illTyped "Left-hand side of app is not a function type"
 
 -- Promotion
@@ -199,14 +208,14 @@ synthExpr dbg defs gam (LetBox var t e1 e2) = do
    case lookup var gam1 of
        Just (Right (demand, t')) | t == t' -> do
             when dbg $ liftio . putStrLn $ "Demand for " ++ var ++ " = " ++ pretty demand
-            checkExpr dbg defs gam (Box demand t) e1
-            return (tau, gam1)
+            gam2 <- checkExpr dbg defs gam (Box demand t) e1
+            return (tau, gam1 `ctxPlus` gam2)
        _ -> illTyped $ "Context of letbox does not have " ++ var
 
 -- BinOp
 synthExpr dbg defs gam (Binop op e e') = do
-    (t, gam1)  <- synthExpr dbg defs (relevantSubEnv (fvs e) gam) e
-    (t', gam2) <- synthExpr dbg defs (relevantSubEnv (fvs e') gam) e'
+    (t, gam1)  <- synthExpr dbg defs gam e
+    (t', gam2) <- synthExpr dbg defs gam e'
     case (t, t') of
         (ConT TyInt, ConT TyInt) -> return (ConT TyInt, gam1 `ctxPlus` gam2)
         _                        -> illTyped "Binary op does not have two int expressions"
