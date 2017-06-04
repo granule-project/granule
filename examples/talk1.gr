@@ -1,0 +1,22 @@
+dub : |Int| 2 -> Int
+dub = \xBox -> let |x : Int| = xBox in x + x
+
+foo : |Int| 2 -> |Int| 4 -> |Int| 2
+foo =  \xBox -> \yBox -> let |x : Int| = xBox in
+                         let |y : Int| = yBox in
+                         |(x + y + y)|
+
+twice : ||Int| c -> Int| 2 -> |Int| (c * 2) -> Int
+twice = \gBox -> \xBox -> let |g : |Int| c -> Int| = gBox in
+                          let |x : Int| = xBox in
+                          g |x| + g |x|
+
+doTwice : |(Int -> <Int> {R})| 2 -> |Int| 2 -> <Int> {R,R}
+doTwice = \fBox -> \xBox -> let |f : (Int -> <Int> {R})| = fBox in
+                            let |x : Int| = xBox in
+                            let <a : Int> = f x in
+                            let <b : Int> = f x in
+                            <a + b>
+
+main : Int
+main = twice |dub| |42|
