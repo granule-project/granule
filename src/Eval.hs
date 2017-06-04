@@ -67,7 +67,7 @@ evalIn env (Binop op e1 e2) = do
    let x = evalOp op
    case (v1,v2) of
      (NumVal n1, NumVal n2) -> return $ NumVal (n1 `x` n2)
-     _ -> error $ "Not a number: " ++ show v1 ++ " or " ++ show v2
+     _ -> fail $ "Runtime exception: Not a number: " ++ show v1 ++ " or " ++ show v2
 
 -- GMTT big step semantics (CBN)
 
@@ -76,6 +76,8 @@ evalIn env (LetBox var _ e1 e2) = do
    case v1 of
       BoxVal e1' ->
         evalIn env (subst e1' var e2)
+      other -> fail $
+            "Runtime exception: Expecting a box valued but got: " ++ show other
 
 evalIn env (LetDiamond var _ e1 e2) = do
    v1 <- evalIn env e1
@@ -92,8 +94,8 @@ evalIn env (Pure e) = return $ DiamondVal e
 
 toExpr (FunVal _ i e) = Abs i e
 toExpr (NumVal i) = Num i
-toExpr (DiamondVal e) = Promote e
-toExpr (BoxVal e) = Pure e
+toExpr (BoxVal e) = Promote e
+toExpr (DiamondVal e) = Pure e
 
 evalDefs :: Env Val -> [Def] -> IO (Env Val)
 evalDefs env [] = return env
