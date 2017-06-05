@@ -7,7 +7,7 @@ import System.Environment
 
 run :: String -> Bool -> IO ()
 run input debug = do
-  putStrLn "\n Gram v0.1.0.0"
+  putStrLn "\n Gram v0.1.1.0"
   putStrLn "----------------------------------"
   let ast = HappyParser.parseDefs input
   if debug

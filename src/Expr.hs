@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Expr where
 
@@ -43,16 +44,49 @@ subst es v (LetDiamond w t e1 e2) = LetDiamond w t (subst es v e1) (subst es v e
 subst es v (Var w) | v == w = es
 subst es v e = e
 
-data Def = Def Id Expr Type
+--------- Definitions5
+
+type Pattern = Either String String
+
+data Def = Def Id Expr [Pattern] Type
           deriving (Eq, Show)
 
--- Types
+desugar :: Def -> Def
+desugar (Def id e pats ty) =
+  Def id (evalState (desguarPats e pats ty []) 0) [] ty
+  where
+    unfoldBoxes [] e = e
+    unfoldBoxes ((v, v', t) : binds) e =
+      LetBox v t (Var v') (unfoldBoxes binds e)
+
+    desguarPats e [] _ boxed =
+      return $ unfoldBoxes boxed e
+
+    desguarPats e (Left v : pats) (FunTy _ t2) boxed = do
+      e' <- desguarPats e pats t2 boxed
+      return $ Abs v e'
+
+    desguarPats e (Right v : pats) (FunTy (Box _ t) t2) boxed = do
+      n <- get
+      let v' = v ++ show n
+      put (n + 1)
+      e' <- desguarPats e pats t2 (boxed ++ [(v, v', t)])
+      return $ Abs v' e'
+
+    desguarPats e _ _ _ = error $ "Definition of " ++ id ++ "expects at least " ++
+                      show (length pats) ++ " arguments, but signature " ++
+                      " specifies: " ++ show (arity ty)
+
+----------- Types
 
 data TyCon = TyInt | TyBool | TyVar String -- TyVar not used yet
     deriving (Eq, Show)
 
 data Type = FunTy Type Type | ConT TyCon | Box Coeffect Type | Diamond Effect Type
     deriving (Eq, Show)
+
+arity (FunTy _ t) = 1 + arity t
+arity _           = 0
 
 type Effect = [String]
 
@@ -82,7 +116,14 @@ instance Pretty Type where
 
 instance Pretty [Def] where
     pretty = intercalate "\n"
-     . map (\(Def v e t) -> v ++ " : " ++ pretty t ++ "\n" ++ v ++ " = " ++ pretty e)
+     . map (\(Def v e ps t) -> v ++ " : " ++ pretty t ++ "\n"
+                                ++ v ++ pretty ps ++ " = " ++ pretty e)
+
+instance Pretty [Either String String] where
+    pretty ps = intercalate " " (map pretty' ps)
+      where
+        pretty' (Left v) = v
+        pretty' (Right v) = "|" ++ v ++ "|"
 
 instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
@@ -126,21 +167,32 @@ mulExpr = Binop Mul
 uniqueNames :: [Def] -> [Def]
 uniqueNames = flip evalState (0 :: Int) . mapM uniqueNameDef
   where
-    uniqueNameDef (Def id e t) = do
+    uniqueNameDef (Def id e ps t) = do
       e' <- uniqueNameExpr e
-      return $ (Def id e' t)
+      ps' <- mapM uniqueNamePat ps
+      return $ (Def id e' ps' t)
 
-    uniqueNameExpr (Abs id e) = do
+    freshen id = do
       v <- get
       let id' = id ++ show v
       put (v+1)
+      return id'
+
+    uniqueNamePat (Left id) = do
+      id' <- freshen id
+      return $ Left id'
+
+    uniqueNamePat (Right id) = do
+      id' <- freshen id
+      return $ Right id'
+
+    uniqueNameExpr (Abs id e) = do
+      id' <- freshen id
       e' <- uniqueNameExpr (subst (Var id') id e)
       return $ Abs id' e'
 
     uniqueNameExpr (LetBox id t e1 e2) = do
-      v <- get
-      let id' = id ++ show v
-      put (v+1)
+      id' <- freshen id
       e1' <- uniqueNameExpr e1
       e2' <- uniqueNameExpr (subst (Var id') id e2)
       return $ LetBox id' t e1' e2'
@@ -151,9 +203,7 @@ uniqueNames = flip evalState (0 :: Int) . mapM uniqueNameDef
       return $ App e1' e2'
 
     uniqueNameExpr (LetDiamond id t e1 e2) = do
-      v <- get
-      let id' = id ++ show v
-      put (v+1)
+      id' <- freshen id
       e1' <- uniqueNameExpr e1
       e2' <- uniqueNameExpr (subst (Var id') id e2)
       return $ LetDiamond id' t e1' e2'
@@ -172,3 +222,7 @@ uniqueNames = flip evalState (0 :: Int) . mapM uniqueNameDef
       return $ Promote e'
 
     uniqueNameExpr c = return c
+
+fst3 (a, b, c) = a
+snd3 (a, b, c) = b
+thd3 (a, b, c) = c

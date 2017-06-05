@@ -40,7 +40,7 @@ check defs dbg = do
   where
     ground = return (true, [])
 
-    checkDef (results, def_env) (Def var expr ty) = do
+    checkDef (results, def_env) (Def var expr _ ty) = do
       addAnyUniversalsTy ty
       env' <- runMaybeT $ do
                env' <- checkExpr dbg def_env [] ty expr

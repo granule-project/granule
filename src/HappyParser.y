@@ -44,17 +44,31 @@ import Expr
 %left '.'
 %%
 
+Defs :: { [Def] }
 Defs : Def                      { [$1] }
      | Def nl Defs              { $1 : $3 }
 
-Def : Sig nl Binding               { if (fst $1 == fst $3)
-	                              then Def (fst $3) (snd $3) (snd $1)
- 	                              else error $ "Signature for " ++ fst $3 ++ " does not match the signature head" }
+Def :: { Def }
+Def : Sig nl Binding            { if (fst $1 == fst3 $3)
+	                           then Def (fst3 $3) (snd3 $3) (thd3 $3) (snd $1)
+ 	                           else error $ "Signature for " ++ fst3 $3 ++ " does not match the signature head" }
 
+Sig ::  { (String, Type) }
 Sig : VAR ':' Type                 { ($1, $3) }
 
-Binding : VAR '=' Expr             { ($1, $3) }
+Binding :: { (String, Expr, [Either String String]) }
+Binding : VAR '=' Expr             { ($1, $3, []) }
+        | VAR Pats '=' Expr        { ($1, $4, $2) }
 
+Pats :: { [Either String String] }
+Pats : Pat                         { [$1] }
+     | Pat Pats                    { $1 : $2 }
+
+Pat :: { Either String String }
+Pat : VAR                          { Left $1 }
+    | '|' VAR '|'                  { Right $2 }
+
+Type :: { Type }
 Type : Int                         { ConT TyInt }
      | Bool                        { ConT TyBool }
      | Type '->' Type              { FunTy $1 $3 }
@@ -62,6 +76,7 @@ Type : Int                         { ConT TyInt }
      | '(' Type ')'                { $2 }
      | '<' Type '>' Effect         { Diamond $4 $2 }
 
+Coeffect :: { Coeffect }
 Coeffect :
        NUM                     { Nat $1 }
      | VAR                     { CVar $1 }
@@ -69,17 +84,21 @@ Coeffect :
      | Coeffect '*' Coeffect   { CTimes $1 $3 }
      | '(' Coeffect ')'        { $2 }
 
+Effect :: { Effect }
 Effect :
      '{' Effs '}'             { $2 }
    | '{' '}'                  { [] }
 
+Effs :: { [String] }
 Effs :
      Eff ',' Effs            { $1 : $3 }
    | Eff                     { [$1] }
 
+Eff :: { String }
 Eff :
      VAR                     { $1 }
 
+Expr :: { Expr }
 Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
      | let '|' VAR ':' Type '|' '=' Expr in Expr
                                    { LetBox $3 $5 $8 $10 }
@@ -89,14 +108,17 @@ Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
      | '<' Expr '>'                { Pure $2 }
      | Form                        { $1 }
 
+Form :: { Expr }
 Form : Form '+' Form               { Binop Add $1 $3 }
      | Form '-' Form               { Binop Sub $1 $3 }
      | Form '*' Form               { Binop Mul $1 $3 }
      | Juxt                        { $1 }
 
+Juxt :: { Expr }
 Juxt : Juxt Atom                   { App $1 $2 }
      | Atom                        { $1 }
 
+Atom :: { Expr }
 Atom : '(' Expr ')'                { $2 }
      | NUM                         { Num $1 }
      | VAR                         { Var $1 }
@@ -108,5 +130,5 @@ parseError :: [Token] -> a
 parseError t = error $ "Parse error, at token " ++ show t
 
 parseDefs :: String -> [Def]
-parseDefs = uniqueNames . defs . scanTokens
+parseDefs = uniqueNames . map desugar . defs . scanTokens
 }

@@ -99,9 +99,11 @@ toExpr (DiamondVal e) = Pure e
 
 evalDefs :: Env Val -> [Def] -> IO (Env Val)
 evalDefs env [] = return env
-evalDefs env ((Def var e _):defs) = do
+evalDefs env ((Def var e [] _):defs) = do
   val <- evalIn env e
   evalDefs (extend env var val) defs
+evalDefs env (d : ds) =
+  error $ "Desugaring must be broken for " ++ show d
 
 eval :: [Def] -> IO Val
 eval defs = do
