@@ -20,8 +20,8 @@ run input debug = do
   case checked of
     Right True -> do
       val <- eval ast
-      putStrLn $ "Evaluating main:  " ++ (show val)
-      putStrLn ""
+      putStr   $ "Evaluating main:\n\n"
+      putStrLn $ show val
     _ -> return ()
 
 main :: IO ()
@@ -32,5 +32,5 @@ main = do
 
 showCheckerResult :: Either String Bool -> String
 showCheckerResult (Left s) = s
-showCheckerResult (Right True) = "Ok!"
-showCheckerResult (Right False) = "Failed!"
+showCheckerResult (Right True) = "Ok."
+showCheckerResult (Right False) = "Failed."
