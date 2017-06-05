@@ -15,7 +15,7 @@ tokens :-
 
   $eol+                         { \s -> TokenNL }
   $white+                       ;
-  "#".*                         ;
+  "--".*                         ;
   Int                           { \s -> TokenInt }
   Bool                          { \s -> TokenBool }
   let                           { \s -> TokenLet }
