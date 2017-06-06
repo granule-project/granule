@@ -46,7 +46,10 @@ import Expr
 
 Defs :: { [Def] }
 Defs : Def                      { [$1] }
-     | Def nl Defs              { $1 : $3 }
+     | Def NL Defs              { $1 : $3 }
+
+NL : nl NL {}
+   | nl    {}
 
 Def :: { Def }
 Def : Sig nl Binding            { if (fst $1 == fst3 $3)

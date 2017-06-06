@@ -32,6 +32,13 @@ instance Semiring Coeffect where
   one = Nat 1
   zero = Nat 0
 
+oneKind :: CKind -> Coeffect
+oneKind CPoly = Nat 1
+oneKind CNat = Nat 1
+oneKind CLevel = Level 1
+
+
+
 empty = []
 type Env t = [(Id, t)]
 

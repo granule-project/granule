@@ -29,16 +29,17 @@ type SolverInfo  = Symbolic (SBool, SolverVars)
 -- State of the check/synth functions
 data TypeState a = TS { unwrap ::
     ReaderT [(Id, Id)]                   -- renamerMap
-    (StateT (VarCounter, SolverInfo) IO) -- nextFreshVariable, predicate
+    (StateT (VarCounter, SolverInfo, CKind) IO) -- nextFreshVariable, predicate
     a
   }
 
 -- Checking (top-level)
 check :: [Def] -> Bool -> [(Id, Id)] -> IO (Either String Bool)
 check defs dbg nameMap = do
-    (results, _) <- flip evalStateT (0, ground) . flip runReaderT nameMap . unwrap
+    let globalCKind = foldr kindJoin CPoly (map (\(Def _ _ _ ty) -> tyCoeffectKind ty) defs)
+    (results, _) <- flip evalStateT (0, ground, globalCKind) . flip runReaderT nameMap . unwrap
                       $ foldM checkDef ([], empty) defs
-    if (and . map (\(_, _, check) -> isJust check) $ results)
+    if (and . map (\(_, _, _, check) -> isJust check) $ results)
       then return . Right $ True
       else return . Left  $ intercalate "\n" (map mkReport results)
   where
@@ -47,19 +48,35 @@ check defs dbg nameMap = do
     checkDef (results, def_env) (Def var expr _ ty) = do
       addAnyUniversalsTy ty
       env' <- runMaybeT $ do
+               -- (v, pred, k) <- get
+               -- put (v, pred, tyCoeffectKind ty)
                env' <- checkExpr dbg def_env [] ty expr
                solved <- solveConstraints
                if solved
                  then return ()
                  else illTyped "Constraints violated"
                return env'
-      return ((var, ty, env') : results, (var, ty) : def_env)
+      -- synth attempt to get better error messages
+      {-let synthAttempt = do
+           (ty, _) <- synthExpr dbg def_env [] expr
+           solved <- solveConstraints
+           if solved
+             then return ty
+             else fail "No synth possible"
+      synthTy <-    runMaybeT
+                  . liftio
+                  . flip evalStateT (0, ground, CPoly)
+                  . flip runReaderT nameMap
+                  . unwrap . runMaybeT $ synthAttempt -}
+
+      return ((var, ty, Nothing, env') : results, (var, ty) : def_env)
 
 -- Make type error report
-mkReport :: (Id, Type, Maybe (Env TyOrDisc))
+mkReport :: (Id, Type, Maybe Type, Maybe (Env TyOrDisc))
          -> String
-mkReport (var, ty, Nothing) =
-    "'" ++ var ++ "' does not type check, expected: " ++ pretty ty
+mkReport (var, ty, synthTy, Nothing) =
+    "'" ++ var ++ "' does not type check, signature was: " ++ pretty ty
+        ++ (case synthTy of { Nothing -> ""; Just ty' -> "\n but infered: " ++ pretty ty' })
         ++ ".\n Try annotating the types of functions or fixing a signature."
 mkReport _ = ""
 
@@ -107,7 +124,7 @@ checkExpr dbg defs gam tau (App e1 e2) = do
 
 checkExpr dbg defs gam tau e = do
   (tau', gam') <- synthExpr dbg defs gam e
-  tyEq <- (typesEq dbg) tau tau'
+  tyEq <- (equalTypes dbg) tau tau'
   equalCtxts dbg gam gam'
   if tyEq then return gam'
           else illTyped $ "Checking: (" ++ pretty e ++ "), "
@@ -115,36 +132,36 @@ checkExpr dbg defs gam tau e = do
 
 -- Check whether two types are equal, and at the same time
 -- generate coeffec equality constraints
-typesEq :: Bool -> Type -> Type -> MaybeT TypeState Bool
-typesEq dbg (FunTy t1 t2) (FunTy t1' t2') = do
-  eq1 <- typesEq dbg t1 t1'
-  eq2 <- typesEq dbg t2 t2'
+equalTypes :: Bool -> Type -> Type -> MaybeT TypeState Bool
+equalTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
+  eq1 <- equalTypes dbg t1 t1'
+  eq2 <- equalTypes dbg t2 t2'
   return (eq1 && eq2)
 
-typesEq _ (ConT t) (ConT t') = do
+equalTypes _ (ConT t) (ConT t') = do
   return (t == t')
 
-typesEq dbg (Diamond ef t) (Diamond ef' t') = do
-  eq <- typesEq dbg t t'
+equalTypes dbg (Diamond ef t) (Diamond ef' t') = do
+  eq <- equalTypes dbg t t'
   if (ef == ef')
     then return eq
     else illTyped $ "Effect mismatch: {" ++ intercalate "," ef
                      ++ "} != {" ++ intercalate "," ef' ++ "}"
 
-typesEq dbg (Box c t) (Box c' t') = do
+equalTypes dbg (Box c t) (Box c' t') = do
   -- Dbgging
   when dbg $ liftio $ putStrLn (pretty c ++ " == " ++ pretty c')
 
-  (fvCount, symbolic) <- get
+  (fvCount, symbolic, kind) <- get
   let symbolic' = do
         (pred, fVars) <- symbolic
-        return ((compile c fVars .== compile c' fVars) &&& pred, fVars)
+        return ((compile c fVars kind .== compile c' fVars kind) &&& pred, fVars)
 
-  put (fvCount, symbolic')
-  eq <- typesEq dbg t t'
+  put (fvCount, symbolic', kind)
+  eq <- equalTypes dbg t t'
   return eq
 
-typesEq _ t1 t2 = illTyped $ "Type " ++ pretty t1 ++ " != " ++ pretty t2
+equalTypes _ t1 t2 = illTyped $ "Type " ++ pretty t1 ++ " != " ++ pretty t2
 
 -- Synthesise types on expressions
 synthExpr :: Bool
@@ -191,7 +208,7 @@ synthExpr dbg defs gam (Var x) = do
                               ++ " or definitions " ++ pretty defs
 
      Just (Left ty)       -> return (ty, [(x, Left ty)])
-     Just (Right (c, ty)) -> return (ty, [(x, Right (one, ty))])
+     Just (Right (c, ty)) -> return (ty, [(x, Right (oneKind (kind c), ty))])
 
 -- Constants (numbers)
 synthExpr dbg defs gam (Num _) = return (ConT TyInt, [])
@@ -239,12 +256,12 @@ synthExpr dbg defs gam (Binop op e e') = do
         _ ->
             illTyped "Binary op does not have two int expressions"
 
-synthExpr _ defs gam e = illTyped $ "General synth fail " ++ show e
+synthExpr _ defs gam e = illTyped $ "General synth fail " ++ pretty e
 
 
 solveConstraints :: MaybeT TypeState Bool
 solveConstraints = do
-  (_, symbolic) <- get
+  (_, symbolic, _) <- get
   let predicate = do { (pred, vars) <- symbolic; return pred }
   thmRes <- liftio . prove $ predicate
   case thmRes of
@@ -272,27 +289,27 @@ solveConstraints = do
 -- Generate a fresh alphanumeric variable name
 freshVar :: String -> TypeState String
 freshVar s = TS $ do
-  (v, symbolic) <- get
+  (v, symbolic, kind) <- get
   let prefix = s ++ "_" ++ ["a", "b", "c", "d"] !! (v `mod` 4)
   let cvar = prefix ++ show v
   let symbolic' = do
       (pred, vars) <- symbolic
       solverVar    <- exists cvar
       return (pred &&& solverVar .>= (literal 0), (cvar, solverVar) : vars)
-  put (v+1, symbolic')
+  put (v+1, symbolic', kind)
   return cvar
 
 -- Generate a fresh alphanumeric variable name
 freshUniversalVar :: String -> TypeState String
 freshUniversalVar cvar = TS $ do
-  (v, symbolic) <- get
+  (v, symbolic, kind) <- get
   let symbolic' = do
       (pred, vars) <- symbolic
       case lookup cvar vars of
         Nothing -> do solverVar    <- exists cvar
                       return (pred &&& solverVar .>= (literal 0), (cvar, solverVar) : vars)
         _ -> return (pred, vars)
-  put (v, symbolic')
+  put (v, symbolic', kind)
   return cvar
 
 liftm :: Maybe a -> MaybeT TypeState a
@@ -306,20 +323,20 @@ equalCtxts dbg env1 env2 =
     if length env == length env'
     && map fst env == map fst env'
       then do
-        (fv, symbolic) <- get
+        (fv, symbolic, kind) <- get
         let symbolic' = do
               (pred, vars) <- symbolic
-              eqs <- return . foldr (&&&) true $ zipWith (makeEqual dbg vars) env env'
+              eqs <- return . foldr (&&&) true $ zipWith (makeEqual dbg kind vars) env env'
               return (eqs &&& pred, vars)
-        put (fv, symbolic')
+        put (fv, symbolic', kind)
       else illTyped $ "Environments do not match in size or types: "
             ++ show env ++ " - " ++ show env'
 
-makeEqual dbg freeVars (_, Left _) (_, Left _) = true
-makeEqual dbg freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
+makeEqual dbg _ freeVars (_, Left _) (_, Left _) = true
+makeEqual dbg k freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
    (if dbg then ((pretty c1) ++ " == " ++ (pretty c2)) `trace` () else ()) `seq`
-   compile c1 freeVars .== compile c2 freeVars
-makeEqual _ _ _ _ = true
+   compile c1 freeVars k .== compile c2 freeVars k
+makeEqual _ _ _ _ _ = true
 
 
 addAnyUniversalsTy (FunTy t1 t2) = do
@@ -346,8 +363,8 @@ illTyped s = liftio (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
 
 liftio :: forall a . IO a -> MaybeT TypeState a
 liftio m = MaybeT (TS ((lift ((lift (m >>= (return . Just)))
-                   :: StateT (VarCounter, SolverInfo) IO (Maybe a)))
-                   :: ReaderT [(Id, Id)] (StateT (VarCounter, SolverInfo) IO) (Maybe a)))
+                   :: StateT (VarCounter, SolverInfo, CKind) IO (Maybe a)))
+                   :: ReaderT [(Id, Id)] (StateT (VarCounter, SolverInfo, CKind) IO) (Maybe a)))
 
 instance Monad TypeState where
   return = TS . return
@@ -371,9 +388,9 @@ freshPolymorphicInstance (Box c t) = do
 freshPolymorphicInstance t = return t
 
 freshPolyCoeffect (CVar cvar) = do
-  (v, s) <- get
+  (v, s, kind) <- get
   let cvar' = cvar ++ show v
-  put (v+1, s)
+  put (v+1, s, kind)
   freshUniversalVar cvar'
   return $ CVar cvar'
 freshPolyCoeffect (CPlus c1 c2) = do
@@ -389,20 +406,29 @@ freshPolyCoeffect c = return c
 liftTS :: TypeState a -> MaybeT TypeState a
 liftTS t = MaybeT $ t >>= (return . Just)
 
-instance MonadState (VarCounter, SolverInfo) TypeState where
+instance MonadState (VarCounter, SolverInfo, CKind) TypeState where
   get = TS get
   put s = TS (put s)
 
-compile :: Coeffect -> SolverVars -> SInteger
-compile (Level n) _ = (fromInteger . toInteger $ n) :: SInteger
-compile (Nat n) _ = (fromInteger . toInteger $ n) :: SInteger
-compile (CVar v) vars =
+compile :: Coeffect -> SolverVars -> CKind -> SInteger
+compile (Level n) _ _ = (fromInteger . toInteger $ n) :: SInteger
+compile (Nat n) _ _ = (fromInteger . toInteger $ n) :: SInteger
+compile (CVar v) vars _ =
   case lookup v vars of
    Just cvar -> cvar
    Nothing   -> error $ "Looking up a variable '" ++ v ++ "' in " ++ show vars
-compile (CPlus n m) vars = compile n vars + compile m vars
-compile (CTimes n m) vars = compile n vars * compile m vars
 
+compile (CPlus n m) vars CLevel =
+    compile n vars CLevel `smax` compile m vars CLevel
+
+compile (CPlus n m) vars k =
+    compile n vars k + compile m vars k
+
+compile (CTimes n m) vars CLevel =
+    compile n vars CLevel `smin` compile m vars CLevel
+
+compile (CTimes n m) vars k =
+    compile n vars k * compile m vars k
 
 relevantSubEnv vars env = filter relevant env
  where relevant (id, _) = id `elem` vars
@@ -441,7 +467,7 @@ extCtxt env id (Left t) = do
         else illTyped $ "Type clash for variable " ++ id'
     Just (Right (c, t')) ->
        if t == t'
-         then return $ replace env id (Right (c `plus` one, t))
+         then return $ replace env id (Right (c `plus` (oneKind (kind c)), t))
          else illTyped $ "Type clash for variable " ++ id'
     Nothing -> return $ (id, Left t) : env
 
@@ -455,6 +481,6 @@ extCtxt env id (Right (c, t)) = do
         else illTyped $ "Type clash for variable " ++ id'
     Just (Left t') ->
         if t == t'
-        then return $ replace env id (Right (c `plus` one, t))
+        then return $ replace env id (Right (c `plus` (oneKind (kind c)), t))
         else illTyped $ "Type clash for variable " ++ id'
     Nothing -> return $ (id, Right (c, t)) : env

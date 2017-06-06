@@ -85,17 +85,42 @@ data TyCon = TyInt | TyBool | TyVar String -- TyVar not used yet
 data Type = FunTy Type Type | ConT TyCon | Box Coeffect Type | Diamond Effect Type
     deriving (Eq, Show)
 
+
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 
 type Effect = [String]
 
+-- TODO: split Coeffect type properly into kinds
 data Coeffect = Nat Int
               | CVar String
               | CPlus Coeffect Coeffect
               | CTimes Coeffect Coeffect
               | Level Int
     deriving (Eq, Show)
+
+data CKind = CNat | CLevel | CPoly
+    deriving (Eq, Show)
+
+-- What is the coeffect kind in this type?
+tyCoeffectKind (FunTy t1 t2) = tyCoeffectKind t1 `kindJoin` tyCoeffectKind t2
+tyCoeffectKind (Diamond _ t) = tyCoeffectKind t
+tyCoeffectKind (Box c t) = kind c `kindJoin` (tyCoeffectKind t)
+tyCoeffectKind (ConT _) = CPoly
+
+kind (Level _)    = CLevel
+kind (Nat _)      = CNat
+kind (CPlus n m)  = kind n `kindJoin` kind m
+kind (CTimes n m) = kind n `kindJoin` kind m
+kind (CVar c)  = CPoly
+
+kindJoin CPoly c       = c
+kindJoin c CPoly       = c
+kindJoin CLevel CLevel = CLevel
+kindJoin CNat CNat     = CNat
+kindJoin CLevel _      = CLevel
+kindJoin _ CLevel      = CLevel
+kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
 
 {- Pretty printers -}
 
@@ -107,8 +132,14 @@ instance Pretty Coeffect where
     pretty (Level 0) = "Lo"
     pretty (Level n) = "Hi"
     pretty (CVar c) = c
-    pretty (CPlus c d) = pretty c ++ " + " ++ pretty d
-    pretty (CTimes c d) = pretty c ++ " * " ++ pretty d
+    pretty (CPlus c d) =
+      case (kind c `kindJoin` kind d) of
+        CLevel -> pretty c ++ " \\/ " ++ pretty d
+        _      -> pretty c ++ " + " ++ pretty d
+    pretty (CTimes c d) =
+      case (kind c `kindJoin` kind d) of
+        CLevel -> pretty c ++ " /\\ " ++ pretty d
+        _      -> pretty c ++ " * " ++ pretty d
 
 instance Pretty Type where
     pretty (ConT TyInt)  = "Int"
