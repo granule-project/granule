@@ -1,11 +1,11 @@
 name:           gram
 version:        0.1.1.0
-cabal-bersion:  >= 1.2
+cabal-version:  >= 1.2
 License:        BSD3
 Author:         Dominic Orchard
 Synopsis:       The Gram type checker and interpreter
 Build-Type:     Simple
-  
+
 Executable gram
   Main-Is:        Main.hs
   Other-modules:  AlexToken,HappyParser
