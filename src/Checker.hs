@@ -187,8 +187,8 @@ synthExpr dbg defs gam (Var x) = do
            return (ty', [])
          Nothing  -> illTyped $ "I don't know the type for "
                               ++ show (unrename nameMap x)
-                              ++ " in environment " ++ show gam
-                              ++ " or definitions " ++ show defs
+                              ++ " in environment " ++ pretty gam
+                              ++ " or definitions " ++ pretty defs
 
      Just (Left ty)       -> return (ty, [(x, Left ty)])
      Just (Right (c, ty)) -> return (ty, [(x, Right (one, ty))])
@@ -257,8 +257,14 @@ solveConstraints = do
              case getModel thmRes of
                Right (False, ce :: [ Integer ] ) -> do
                    satRes <- liftio . sat $ predicate
-                   illTyped $ "Returned model " ++ show ce ++ " - " ++ show thmRes
-                            ++ "\nSAT result: \n" ++ show satRes
+                   let maybeModel = case ce of
+                                     [] -> ""
+                                     _ -> "Falsifying model: " ++ show ce ++ " - "
+                   let satModel = case satRes of
+                                    (SatResult (Unsatisfiable {})) -> ""
+                                    _ -> "\nSAT result: \n" ++ show satRes
+                   illTyped $ show thmRes ++ maybeModel ++ satModel
+
                Right (True, _) -> illTyped $ "Returned probable model."
                Left str        -> illTyped $ "Solver fail: " ++ str
            else return True
@@ -388,6 +394,7 @@ instance MonadState (VarCounter, SolverInfo) TypeState where
   put s = TS (put s)
 
 compile :: Coeffect -> SolverVars -> SInteger
+compile (Level n) _ = (fromInteger . toInteger $ n) :: SInteger
 compile (Nat n) _ = (fromInteger . toInteger $ n) :: SInteger
 compile (CVar v) vars =
   case lookup v vars of

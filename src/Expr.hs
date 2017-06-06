@@ -94,6 +94,7 @@ data Coeffect = Nat Int
               | CVar String
               | CPlus Coeffect Coeffect
               | CTimes Coeffect Coeffect
+              | Level Int
     deriving (Eq, Show)
 
 {- Pretty printers -}
@@ -103,6 +104,8 @@ class Pretty t where
 
 instance Pretty Coeffect where
     pretty (Nat n) = show n
+    pretty (Level 0) = "Lo"
+    pretty (Level n) = "Hi"
     pretty (CVar c) = c
     pretty (CPlus c d) = pretty c ++ " + " ++ pretty d
     pretty (CTimes c d) = pretty c ++ " * " ++ pretty d

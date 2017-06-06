@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 
 module Type where
 
@@ -84,3 +85,12 @@ unrename nameMap id =
   case lookup id nameMap of
     Just id' -> id'
     Nothing  -> id
+
+instance Pretty (Env Type) where
+   pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
+     where pp (id, t) = id ++ " : " ++ pretty t
+
+instance Pretty (Env TyOrDisc) where
+   pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
+     where pp (id, Left t) = id ++ " : " ++ pretty t
+           pp (id, Right (c, t)) = id ++ " : .[" ++ pretty t ++ "]. " ++ pretty c

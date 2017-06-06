@@ -79,7 +79,10 @@ Type : Int                         { ConT TyInt }
 Coeffect :: { Coeffect }
 Coeffect :
        NUM                     { Nat $1 }
-     | VAR                     { CVar $1 }
+     | VAR                     { case $1 of
+                                   "Lo" -> Level 0
+                                   "Hi" -> Level 1
+                                   c    -> CVar c }
      | Coeffect '+' Coeffect   { CPlus $1 $3 }
      | Coeffect '*' Coeffect   { CTimes $1 $3 }
      | '(' Coeffect ')'        { $2 }
