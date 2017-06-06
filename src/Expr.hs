@@ -111,7 +111,7 @@ instance Pretty Type where
     pretty (ConT TyInt)  = "Int"
     pretty (ConT TyBool) = "Bool"
     pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
-    pretty (Box c t) = "[" ++ pretty t ++ "] " ++ pretty c
+    pretty (Box c t) = "|" ++ pretty t ++ "| " ++ pretty c
     pretty (Diamond e t) = "<" ++ pretty t ++ "> {" ++ (intercalate "," e) ++ "}"
 
 instance Pretty [Def] where
@@ -131,7 +131,7 @@ instance Pretty t => Pretty (Maybe t) where
 
 {-
 instance Pretty t => Pretty [t] where
-    pretty ts = "[" ++ (intercalate "," $ map pretty ts) ++ "]"
+    pretty ts = "|" ++ (intercalate "," $ map pretty ts) ++ "|"
 -}
 
 instance Pretty Expr where
