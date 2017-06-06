@@ -463,7 +463,7 @@ extCtxt env id (Left t) = do
   case (lookup id env) of
     Just (Left t') ->
        if t == t'
-        then illTyped $ "'" ++ id' ++ "' used more than once" -- env
+        then illTyped $ "'" ++ id' ++ "' used more than once\n"
         else illTyped $ "Type clash for variable " ++ id'
     Just (Right (c, t')) ->
        if t == t'
