@@ -1,0 +1,5 @@
+for f in examples/*.gr
+do
+ echo "Running $f"
+ gram $f
+done
