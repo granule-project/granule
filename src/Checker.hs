@@ -224,7 +224,9 @@ synthExpr dbg defs gam (LetBox var t e1 e2) = do
             gam2 <- checkExpr dbg defs gam (Box demand t) e1
             gamNew <- gam1 `ctxPlus` gam2
             return (tau, gamNew)
-       _ -> illTyped $ "Context of letbox does not have " ++ var
+       _ -> do
+         nm <- getNameMap
+         illTyped $ "Context of letbox does not have " ++ (unrename nm var)
 
 -- BinOp
 synthExpr dbg defs gam (Binop op e e') = do
@@ -304,7 +306,8 @@ equalCtxts dbg env1 env2 =
               eqs <- return . foldr (&&&) true $ zipWith (makeEqual dbg vars) env env'
               return (eqs &&& pred, vars)
         put (fv, symbolic')
-      else illTyped $ "Environments do not match in size or types: " ++ show env ++ " - " ++ show env'
+      else illTyped $ "Environments do not match in size or types: "
+            ++ show env ++ " - " ++ show env'
 
 makeEqual dbg freeVars (_, Left _) (_, Left _) = true
 makeEqual dbg freeVars (_, Right (c1, _)) (_, Right (c2, _)) =

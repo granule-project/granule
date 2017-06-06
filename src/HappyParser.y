@@ -86,8 +86,8 @@ Coeffect :
 
 Effect :: { Effect }
 Effect :
-     '{' Effs '}'             { $2 }
-   | '{' '}'                  { [] }
+     '[' Effs ']'             { $2 }
+   | '[' ']'                  { [] }
 
 Effs :: { [String] }
 Effs :
