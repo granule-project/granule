@@ -11,6 +11,7 @@ import Data.List
 import Data.Maybe
 import Data.Either
 import Control.Monad.State.Strict
+import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.SBV
@@ -27,13 +28,16 @@ type SolverInfo  = Symbolic (SBool, SolverVars)
 
 -- State of the check/synth functions
 data TypeState a = TS { unwrap ::
-    StateT (VarCounter, SolverInfo) IO a
+    ReaderT [(Id, Id)]                   -- renamerMap
+    (StateT (VarCounter, SolverInfo) IO) -- nextFreshVariable, predicate
+    a
   }
 
 -- Checking (top-level)
-check :: [Def] -> Bool -> IO (Either String Bool)
-check defs dbg = do
-    (results, _) <- flip evalStateT (0, ground) (unwrap $ foldM checkDef ([], empty) defs)
+check :: [Def] -> Bool -> [(Id, Id)] -> IO (Either String Bool)
+check defs dbg nameMap = do
+    (results, _) <- flip evalStateT (0, ground) . flip runReaderT nameMap . unwrap
+                      $ foldM checkDef ([], empty) defs
     if (and . map (\(_, _, check) -> isJust check) $ results)
       then return . Right $ True
       else return . Left  $ intercalate "\n" (map mkReport results)
@@ -74,8 +78,9 @@ checkExpr :: Bool         -- turn on dbgging
           -> Expr         -- expression
           -> MaybeT TypeState (Env TyOrDisc)
 
-checkExpr dbg defs gam (FunTy sig tau) (Abs x e) =
-  checkExpr dbg defs (extCtxt gam x (Left sig)) tau e
+checkExpr dbg defs gam (FunTy sig tau) (Abs x e) = do
+  gam' <- extCtxt gam x (Left sig)
+  checkExpr dbg defs gam' tau e
 
 checkExpr dbg defs gam tau (Abs x e) =
     illTyped $ "Expected a function type"
@@ -97,7 +102,7 @@ checkExpr dbg defs gam (Box demand tau) (Promote e) = do
 checkExpr dbg defs gam tau (App e1 e2) = do
     (sig, gam1) <- synthExpr dbg defs gam e2
     gam2 <- checkExpr dbg defs gam (FunTy sig tau) e1
-    return (gam1 `ctxPlus` gam2)
+    gam1 `ctxPlus` gam2
 
 
 checkExpr dbg defs gam tau e = do
@@ -160,24 +165,30 @@ synthExpr dbg defs gam (Pure e) = do
   return (Diamond [] ty, gam')
 
 synthExpr dbg defs gam (LetDiamond id ty e1 e2) = do
-  (tau, gam1) <- synthExpr dbg defs (extCtxt gam id (Left ty)) e2
+  gam'        <- extCtxt gam id (Left ty)
+  (tau, gam1) <- synthExpr dbg defs gam' e2
   case tau of
     Diamond ef2 tau' -> do
        (sig, gam2) <- synthExpr dbg defs gam e1
        case sig of
-         Diamond ef1 ty' | ty == ty' -> return (Diamond (ef1 ++ ef2) ty', gam1 `ctxPlus` gam2)
+         Diamond ef1 ty' | ty == ty' -> do
+             gamNew <- gam1 `ctxPlus` gam2
+             return (Diamond (ef1 ++ ef2) ty', gamNew)
          _ -> illTyped $ "Expected a diamond type"
     _ -> illTyped $ "Expected a diamond type"
 
 synthExpr dbg defs gam (Var x) = do
+   nameMap <- getNameMap
    case lookup x gam of
      Nothing ->
        case lookup x defs of
          Just ty  -> do
            ty' <- liftTS $ freshPolymorphicInstance ty
            return (ty', [])
-         Nothing  -> illTyped $ "I don't know the type for " ++ show x
+         Nothing  -> illTyped $ "I don't know the type for "
+                              ++ show (unrename nameMap x)
                               ++ " in environment " ++ show gam
+                              ++ " or definitions " ++ show defs
 
      Just (Left ty)       -> return (ty, [(x, Left ty)])
      Just (Right (c, ty)) -> return (ty, [(x, Right (one, ty))])
@@ -191,7 +202,8 @@ synthExpr dbg defs gam (App e e') = do
     case f of
       (FunTy sig tau) -> do
          gam2 <- checkExpr dbg defs gam sig e'
-         return (tau, gam1 `ctxPlus` gam2)
+         gamNew <- gam1 `ctxPlus` gam2
+         return (tau, gamNew)
       _ -> illTyped "Left-hand side of app is not a function type"
 
 -- Promotion
@@ -204,12 +216,14 @@ synthExpr dbg defs gam (Promote e) = do
 -- Letbox
 synthExpr dbg defs gam (LetBox var t e1 e2) = do
    cvar <- liftTS $ freshVar ("binder_" ++ var)
-   (tau, gam1) <- synthExpr dbg defs (extCtxt gam var (Right (CVar cvar, t))) e2
+   gam' <- extCtxt gam var (Right (CVar cvar, t))
+   (tau, gam1) <- synthExpr dbg defs gam' e2
    case lookup var gam1 of
        Just (Right (demand, t')) | t == t' -> do
             when dbg $ liftio . putStrLn $ "Demand for " ++ var ++ " = " ++ pretty demand
             gam2 <- checkExpr dbg defs gam (Box demand t) e1
-            return (tau, gam1 `ctxPlus` gam2)
+            gamNew <- gam1 `ctxPlus` gam2
+            return (tau, gamNew)
        _ -> illTyped $ "Context of letbox does not have " ++ var
 
 -- BinOp
@@ -217,8 +231,11 @@ synthExpr dbg defs gam (Binop op e e') = do
     (t, gam1)  <- synthExpr dbg defs gam e
     (t', gam2) <- synthExpr dbg defs gam e'
     case (t, t') of
-        (ConT TyInt, ConT TyInt) -> return (ConT TyInt, gam1 `ctxPlus` gam2)
-        _                        -> illTyped "Binary op does not have two int expressions"
+        (ConT TyInt, ConT TyInt) -> do
+            gamNew <- gam1 `ctxPlus` gam2
+            return (ConT TyInt, gamNew)
+        _ ->
+            illTyped "Binary op does not have two int expressions"
 
 synthExpr _ defs gam e = illTyped $ "General synth fail " ++ show e
 
@@ -316,11 +333,12 @@ addAnyUniversals (CTimes c d) = do
 addAnyUniversals _ = return ()
 
 illTyped :: String -> MaybeT TypeState a
-illTyped s = liftio (putStrLn s) >> MaybeT (return Nothing)
+illTyped s = liftio (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
 
 liftio :: forall a . IO a -> MaybeT TypeState a
-liftio m = MaybeT (TS ((lift (m >>= (return . Just)))
+liftio m = MaybeT (TS ((lift ((lift (m >>= (return . Just)))
                    :: StateT (VarCounter, SolverInfo) IO (Maybe a)))
+                   :: ReaderT [(Id, Id)] (StateT (VarCounter, SolverInfo) IO) (Maybe a)))
 
 instance Monad TypeState where
   return = TS . return
@@ -390,3 +408,43 @@ discToFreshVarsIn vars env = MaybeT $ mapM toFreshVar (relevantSubEnv vars env)
     toFreshVar (id, Left t) = do
       v <- freshVar id
       return (id, Right (CVar v, t))
+
+-- Combine two contexts
+ctxPlus :: Env TyOrDisc -> Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
+ctxPlus [] env2 = return env2
+ctxPlus ((i, v) : env1) env2 = do
+  env' <- extCtxt env2 i v
+  ctxPlus env1 env'
+
+liftReader m = MaybeT . TS $ m >>= (return . Just)
+getNameMap = liftReader ask
+
+-- ExtCtxt the environment
+extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
+extCtxt env id (Left t) = do
+  nameMap <- getNameMap
+  id'     <- return $ unrename nameMap id
+  case (lookup id env) of
+    Just (Left t') ->
+       if t == t'
+        then illTyped $ "'" ++ id' ++ "' used more than once" -- env
+        else illTyped $ "Type clash for variable " ++ id'
+    Just (Right (c, t')) ->
+       if t == t'
+         then return $ replace env id (Right (c `plus` one, t))
+         else illTyped $ "Type clash for variable " ++ id'
+    Nothing -> return $ (id, Left t) : env
+
+extCtxt env id (Right (c, t)) = do
+  nameMap <- getNameMap
+  id'     <- return $ unrename nameMap id
+  case (lookup id env) of
+    Just (Right (c', t')) ->
+        if t == t'
+        then return $ replace env id (Right (c `plus` c', t'))
+        else illTyped $ "Type clash for variable " ++ id'
+    Just (Left t') ->
+        if t == t'
+        then return $ replace env id (Right (c `plus` one, t))
+        else illTyped $ "Type clash for variable " ++ id'
+    Nothing -> return $ (id, Right (c, t)) : env

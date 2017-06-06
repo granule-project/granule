@@ -43,30 +43,6 @@ replace ((id', _):env) id v | id == id'
 replace (x : env) id v
   = x : replace env id v
 
--- ExtCtxt the environment
-extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> Env TyOrDisc
-extCtxt env id (Left t) =
-  case (lookup id env) of
-    Just (Left t') ->
-       if t == t'
-        then error $ "'" ++ id ++ "' used more than once" -- env
-        else error $ "Type clash for variable " ++ id
-    Just (Right (c, t')) ->
-       if t == t'
-         then replace env id (Right (c `plus` one, t))
-         else error $ "Type clash for variable " ++ id
-    Nothing -> (id, Left t) : env
-extCtxt env id (Right (c, t)) =
-  case (lookup id env) of
-    Just (Right (c', t')) ->
-        if t == t'
-        then replace env id (Right (c `plus` c', t'))
-        else error $ "Type clash for variable " ++ id
-    Just (Left t') ->
-        if t == t'
-        then replace env id (Right (c `plus` one, t))
-        else error $ "Type clash for variable " ++ id
-    Nothing -> (id, Right (c, t)) : env
 
 -- Given an environment, derelict and discharge all variables which are not discharged
 multAll :: [Id] -> Coeffect -> Env TyOrDisc -> Env TyOrDisc
@@ -83,14 +59,8 @@ multAll vars c ((id, Right (c', t)) : env) | id `elem` vars
 multAll vars c ((id, Left t) : env) = multAll vars c env
 multAll vars c ((id, Right (_, t)) : env) = multAll vars c env
 
--- Combine two contexts
-ctxPlus :: Env TyOrDisc -> Env TyOrDisc -> Env TyOrDisc
-ctxPlus [] env2 = env2
-ctxPlus ((i, v) : env1) env2 =
-  ctxPlus env1 (extCtxt env2 i v)
-
 instance Pretty (Type, Env TyOrDisc) where
-  pretty (t, env) = pretty t
+    pretty (t, env) = pretty t
 
 
 keyIntersect :: Env a -> Env a -> Env a
@@ -107,4 +77,10 @@ vars _ = []
 deleteVar :: Eq a => a -> [(a, b)] -> [(a, b)]
 deleteVar x [] = []
 deleteVar x ((y, b) : m) | x == y = deleteVar x m
-                      | otherwise = (y, b) : deleteVar x m
+                         | otherwise = (y, b) : deleteVar x m
+
+unrename :: [(Id, Id)] -> Id -> Id
+unrename nameMap id =
+  case lookup id nameMap of
+    Just id' -> id'
+    Nothing  -> id

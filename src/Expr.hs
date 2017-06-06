@@ -164,13 +164,19 @@ subExpr = Binop Sub
 mulExpr :: Expr -> Expr -> Expr
 mulExpr = Binop Mul
 
-uniqueNames :: [Def] -> [Def]
-uniqueNames = flip evalState (0 :: Int) . mapM uniqueNameDef
+uniqueNames :: [Def] -> ([Def], [(Id, Id)])
+uniqueNames = flip evalState (0 :: Int) . mapFoldMSnd uniqueNameDef
   where
+    mapFoldMSnd :: Monad m => (a -> m (b, [c])) -> [a] -> m ([b], [c])
+    mapFoldMSnd f xs = foldM (composer f) ([], []) xs
+      where composer f (bs, cs) a = do
+              (b, cs') <- f a
+              return (bs ++ [b], cs ++ cs')
+
     uniqueNameDef (Def id e ps t) = do
-      e' <- uniqueNameExpr e
-      ps' <- mapM uniqueNamePat ps
-      return $ (Def id e' ps' t)
+      (e', rs)   <- uniqueNameExpr e
+      (ps', rs') <- mapFoldMSnd uniqueNamePat ps
+      return $ (Def id e' ps' t, rs ++ rs')
 
     freshen id = do
       v <- get
@@ -178,50 +184,51 @@ uniqueNames = flip evalState (0 :: Int) . mapM uniqueNameDef
       put (v+1)
       return id'
 
+    -- TODO: convert renaming map to be build in the WriterT monad
     uniqueNamePat (Left id) = do
       id' <- freshen id
-      return $ Left id'
+      return $ (Left id', [(id', id)])
 
     uniqueNamePat (Right id) = do
       id' <- freshen id
-      return $ Right id'
+      return $ (Right id', [(id',  id)])
 
     uniqueNameExpr (Abs id e) = do
       id' <- freshen id
-      e' <- uniqueNameExpr (subst (Var id') id e)
-      return $ Abs id' e'
+      (e', rs) <- uniqueNameExpr (subst (Var id') id e)
+      return $ (Abs id' e', (id', id) : rs)
 
     uniqueNameExpr (LetBox id t e1 e2) = do
       id' <- freshen id
-      e1' <- uniqueNameExpr e1
-      e2' <- uniqueNameExpr (subst (Var id') id e2)
-      return $ LetBox id' t e1' e2'
+      (e1', rs1) <- uniqueNameExpr e1
+      (e2', rs2) <- uniqueNameExpr (subst (Var id') id e2)
+      return $ (LetBox id' t e1' e2', (id', id) : (rs1 ++ rs2))
 
     uniqueNameExpr (App e1 e2) = do
-      e1' <- uniqueNameExpr e1
-      e2' <- uniqueNameExpr e2
-      return $ App e1' e2'
+      (e1', rs1) <- uniqueNameExpr e1
+      (e2', rs2) <- uniqueNameExpr e2
+      return $ (App e1' e2', rs1 ++ rs2)
 
     uniqueNameExpr (LetDiamond id t e1 e2) = do
       id' <- freshen id
-      e1' <- uniqueNameExpr e1
-      e2' <- uniqueNameExpr (subst (Var id') id e2)
-      return $ LetDiamond id' t e1' e2'
+      (e1', rs1) <- uniqueNameExpr e1
+      (e2', rs2) <- uniqueNameExpr (subst (Var id') id e2)
+      return $ (LetDiamond id' t e1' e2', (id', id) : rs1 ++ rs2)
 
     uniqueNameExpr (Pure e) = do
-      e' <- uniqueNameExpr e
-      return $ Pure e'
+      (e', rs) <- uniqueNameExpr e
+      return $ (Pure e', rs)
 
     uniqueNameExpr (Binop op e1 e2) = do
-      e1' <- uniqueNameExpr e1
-      e2' <- uniqueNameExpr e2
-      return $ Binop op e1' e2'
+      (e1', rs1) <- uniqueNameExpr e1
+      (e2', rs2) <- uniqueNameExpr e2
+      return $ (Binop op e1' e2', rs1 ++ rs2)
 
     uniqueNameExpr (Promote e) = do
-      e' <- uniqueNameExpr e
-      return $ Promote e'
+      (e', rs) <- uniqueNameExpr e
+      return $ (Promote e', rs)
 
-    uniqueNameExpr c = return c
+    uniqueNameExpr c = return (c, [])
 
 fst3 (a, b, c) = a
 snd3 (a, b, c) = b

@@ -129,6 +129,6 @@ Atom : '(' Expr ')'                { $2 }
 parseError :: [Token] -> a
 parseError t = error $ "Parse error, at token " ++ show t
 
-parseDefs :: String -> [Def]
+parseDefs :: String -> ([Def], [(Id, Id)])
 parseDefs = uniqueNames . map desugar . defs . scanTokens
 }
