@@ -49,10 +49,11 @@ freshVar var = do
    return var'
 
 instance Term Value where
-    fvs (Abs x e) = (fvs e) \\ [x]
-    fvs (Var x)   = [x]
-    fvs (Pure e) = fvs e
+    fvs (Abs x e)   = (fvs e) \\ [x]
+    fvs (Var x)     = [x]
+    fvs (Pure e)    = fvs e
     fvs (Promote e) = fvs e
+    fvs _           = []
 
     subst es v (Abs w e)        = Val $ Abs w (subst es v e)
     subst es v (Pure e)         = Val $ Pure (subst es v e)
