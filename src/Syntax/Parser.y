@@ -1,8 +1,8 @@
 {
-module HappyParser where
+module Syntax.Parser where
 
-import AlexToken
-import Expr
+import Syntax.Lexer
+import Syntax.Expr
 }
 
 %name defs

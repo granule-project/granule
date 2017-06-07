@@ -1,7 +1,7 @@
 {
 {-# OPTIONS_GHC -w #-}
-module AlexToken (Token(..),scanTokens) where
-import Expr
+module Syntax.Lexer (Token(..),scanTokens) where
+import Syntax.Expr
 import Debug.Trace
 }
 
