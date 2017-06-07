@@ -39,10 +39,13 @@ oneKind CPoly = Nat 1
 oneKind CNat = Nat 1
 oneKind CLevel = Level 1
 
-
-
-empty = []
 type Env t = [(Id, t)]
+
+extend :: Env a -> Id -> a -> Env a
+extend env x v = (x, v) : env
+
+empty :: Env a
+empty = []
 
 -- replace an item in an environment
 replace :: Env a -> Id -> a -> Env a

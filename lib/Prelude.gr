@@ -1,0 +1,10 @@
+-- Prelude library for Gram
+
+-- Coeffectful composition
+comp : (|Int| c -> Int) -> (|Int| d -> Int) -> |Int| (c * d) -> Int
+comp f g |x| = g |(f |x|)|
+
+-- Coeffectful application
+app : (|Int| c -> Int) -> |Int| c -> Int
+app f x = f x
+

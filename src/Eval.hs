@@ -1,17 +1,10 @@
 -- Gram interpreter
 
-module Eval (eval, Env, extend, empty) where
+module Eval (eval) where
 
 import Syntax.Expr
 import Syntax.Pretty
-
-type Env a = [(Id, a)]
-
-extend :: Env a -> Id -> a -> Env a
-extend env x v = (x, v) : env
-
-empty :: Env a
-empty = []
+import Checker.Types
 
 evalOp :: Op -> (Int -> Int -> Int)
 evalOp Add = (+)
