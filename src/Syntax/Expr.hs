@@ -1,48 +1,121 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Syntax.Expr where
+module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TyCon(..), Def(..), Op(..),
+                   CKind(..), Coeffect(..), Effect,
+                   uniqueNames, arity, fvs, subst,
+                   kind, kindJoin, tyCoeffectKind) where
 
 import Data.List
-import Control.Monad.State.Strict
+import Control.Monad.Writer
+import Control.Monad.Trans.State
 
 type Id = String
 data Op = Add | Sub | Mul deriving (Eq, Show)
 
-data Expr = Abs Id Expr
-          | App Expr Expr
-          | Var Id
-          | Num Int
-          | Binop Op Expr Expr
-          | Promote Expr
-          | LetBox Id Type Expr Expr
-          | Pure Expr
-          | LetDiamond Id Type Expr Expr
+-- Values in Gram
+data Value = Abs Id Expr
+           | Num Int
+           | Promote Expr
+           | Pure Expr
+           | Var Id
           deriving (Eq, Show)
 
--- Compute the free variables in an expression
-fvs :: Expr -> [Id]
-fvs (Abs x e) = (fvs e) \\ [x]
-fvs (App e1 e2) = fvs e1 ++ fvs e2
-fvs (Var x)   = [x]
-fvs (Binop _ e1 e2) = fvs e1 ++ fvs e2
-fvs (Promote e) = fvs e
-fvs (LetBox x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
-fvs (Pure e) = fvs e
-fvs (LetDiamond x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
-fvs _ = []
+-- Expressions (computations) in Gram
+data Expr = App Expr Expr
+          | Binop Op Expr Expr
+          | LetBox Id Type Expr Expr
+          | LetDiamond Id Type Expr Expr
+          | Val Value
+          deriving (Eq, Show)
 
--- Syntactic substitution (assuming variables are all unique)
-subst :: Expr -> Id -> Expr -> Expr
-subst es v (Abs w e)          = Abs w (subst es v e)
-subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
-subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
-subst es v (Promote e)        = Promote (subst es v e)
-subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
-subst es v (Pure e)           = Pure (subst es v e)
-subst es v (LetDiamond w t e1 e2) = LetDiamond w t (subst es v e1) (subst es v e2)
-subst es v (Var w) | v == w = es
-subst es v e = e
+type Freshener t = StateT Int (Writer [(Id, Id)]) t
+
+class Term t where
+  -- Compute the free variables in a term
+  fvs :: t -> [Id]
+  -- Syntactic substitution of an expression into a term
+  -- (assuming variables are all unique to avoid capture)
+  subst :: Expr -> Id -> t -> Expr
+  -- Freshen
+  freshen :: t -> Freshener t
+
+freshVar :: Id -> Freshener Id
+freshVar var = do
+   v <- get
+   let var' = var ++ show v
+   put (v+1)
+   tell [(var, var')]
+   return var'
+
+instance Term Value where
+    fvs (Abs x e) = (fvs e) \\ [x]
+    fvs (Var x)   = [x]
+    fvs (Pure e) = fvs e
+    fvs (Promote e) = fvs e
+
+    subst es v (Abs w e)        = Val $ Abs w (subst es v e)
+    subst es v (Pure e)         = Val $ Pure (subst es v e)
+    subst es v (Promote e)      = Val $ Promote (subst es v e)
+    subst es v (Var w) | v == w = es
+    subst es v val              = Val val
+
+    freshen (Abs var e) = do
+      var' <- freshVar var
+      e'   <- freshen (subst (Val (Var var')) var e)
+      return $ Abs var' e'
+
+    freshen (Pure e) = do
+      e' <- freshen e
+      return $ Pure e'
+
+    freshen (Promote e) = do
+      e' <- freshen e
+      return $ Promote e'
+
+    freshen v = return v
+
+
+instance Term Expr where
+   fvs (App e1 e2)            = fvs e1 ++ fvs e2
+   fvs (Binop _ e1 e2)        = fvs e1 ++ fvs e2
+   fvs (LetBox x _ e1 e2)     = fvs e1 ++ ((fvs e2) \\ [x])
+   fvs (LetDiamond x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
+   fvs (Val e)                = fvs e
+
+   subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
+   subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
+   subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
+   subst es v (LetDiamond w t e1 e2) = LetDiamond w t (subst es v e1) (subst es v e2)
+   subst es v (Val val)          = subst es v val
+
+   freshen (LetBox var t e1 e2) = do
+      var' <- freshVar var
+      e1'  <- freshen e1
+      e2'  <- freshen (subst (Val (Var var')) var e2)
+      return $ LetBox var' t e1' e2'
+
+   freshen (App e1 e2) = do
+      e1' <- freshen e1
+      e2' <- freshen e2
+      return $ App e1' e2'
+
+   freshen (LetDiamond var t e1 e2) = do
+      var' <- freshVar var
+      e1'  <- freshen e1
+      e2'  <- freshen (subst (Val (Var var')) var e2)
+      return $ LetDiamond var' t e1' e2'
+
+   freshen (Binop op e1 e2) = do
+      e1' <- freshen e1
+      e2' <- freshen e2
+      return $ Binop op e1' e2'
+
+   freshen (Val v) = do
+     v' <- freshen v
+     return (Val v')
+
+   freshen c = return c
 
 --------- Definitions
 
@@ -104,84 +177,21 @@ kindJoin CLevel _      = CLevel
 kindJoin _ CLevel      = CLevel
 kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
 
-
-{- Smart constructors -}
-
-addExpr :: Expr -> Expr -> Expr
-addExpr = Binop Add
-
-subExpr :: Expr -> Expr -> Expr
-subExpr = Binop Sub
-
-mulExpr :: Expr -> Expr -> Expr
-mulExpr = Binop Mul
+-- Alpha-convert all bound variables
 
 uniqueNames :: [Def] -> ([Def], [(Id, Id)])
-uniqueNames = flip evalState (0 :: Int) . mapFoldMSnd uniqueNameDef
+uniqueNames = runWriter . flip evalStateT (0 :: Int) . mapM uniqueNameDef
   where
-    mapFoldMSnd :: Monad m => (a -> m (b, [c])) -> [a] -> m ([b], [c])
-    mapFoldMSnd f xs = foldM (composer f) ([], []) xs
-      where composer f (bs, cs) a = do
-              (b, cs') <- f a
-              return (bs ++ [b], cs ++ cs')
-
-    uniqueNameDef (Def id e ps t) = do
-      (e', rs)   <- uniqueNameExpr e
-      (ps', rs') <- mapFoldMSnd uniqueNamePat ps
-      return $ (Def id e' ps' t, rs ++ rs')
-
-    freshen id = do
-      v <- get
-      let id' = id ++ show v
-      put (v+1)
-      return id'
+    uniqueNameDef (Def var e ps t) = do
+      e'  <- freshen e
+      ps' <- mapM uniqueNamePat ps
+      return $ Def var e' ps' t
 
     -- TODO: convert renaming map to be build in the WriterT monad
-    uniqueNamePat (Left id) = do
-      id' <- freshen id
-      return $ (Left id', [(id', id)])
+    uniqueNamePat (Left var) = do
+      var' <- freshVar var
+      return $ Left var'
 
-    uniqueNamePat (Right id) = do
-      id' <- freshen id
-      return $ (Right id', [(id',  id)])
-
-    uniqueNameExpr (Abs id e) = do
-      id' <- freshen id
-      (e', rs) <- uniqueNameExpr (subst (Var id') id e)
-      return $ (Abs id' e', (id', id) : rs)
-
-    uniqueNameExpr (LetBox id t e1 e2) = do
-      id' <- freshen id
-      (e1', rs1) <- uniqueNameExpr e1
-      (e2', rs2) <- uniqueNameExpr (subst (Var id') id e2)
-      return $ (LetBox id' t e1' e2', (id', id) : (rs1 ++ rs2))
-
-    uniqueNameExpr (App e1 e2) = do
-      (e1', rs1) <- uniqueNameExpr e1
-      (e2', rs2) <- uniqueNameExpr e2
-      return $ (App e1' e2', rs1 ++ rs2)
-
-    uniqueNameExpr (LetDiamond id t e1 e2) = do
-      id' <- freshen id
-      (e1', rs1) <- uniqueNameExpr e1
-      (e2', rs2) <- uniqueNameExpr (subst (Var id') id e2)
-      return $ (LetDiamond id' t e1' e2', (id', id) : rs1 ++ rs2)
-
-    uniqueNameExpr (Pure e) = do
-      (e', rs) <- uniqueNameExpr e
-      return $ (Pure e', rs)
-
-    uniqueNameExpr (Binop op e1 e2) = do
-      (e1', rs1) <- uniqueNameExpr e1
-      (e2', rs2) <- uniqueNameExpr e2
-      return $ (Binop op e1' e2', rs1 ++ rs2)
-
-    uniqueNameExpr (Promote e) = do
-      (e', rs) <- uniqueNameExpr e
-      return $ (Promote e', rs)
-
-    uniqueNameExpr c = return (c, [])
-
-fst3 (a, b, c) = a
-snd3 (a, b, c) = b
-thd3 (a, b, c) = c
+    uniqueNamePat (Right var) = do
+      var' <- freshVar var
+      return $ Right var'

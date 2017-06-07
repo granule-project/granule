@@ -107,13 +107,13 @@ Eff :
      VAR                     { $1 }
 
 Expr :: { Expr }
-Expr : let VAR '=' Expr in Expr    { App (Abs $2 $6) $4 }
+Expr : let VAR '=' Expr in Expr    { App (Val (Abs $2 $6)) $4 }
      | let '|' VAR ':' Type '|' '=' Expr in Expr
                                    { LetBox $3 $5 $8 $10 }
-     | '\\' VAR '->' Expr          { Abs $2 $4 }
+     | '\\' VAR '->' Expr          { Val (Abs $2 $4) }
      | let '<' VAR ':' Type '>' '=' Expr in Expr
                                    { LetDiamond $3 $5 $8 $10 }
-     | '<' Expr '>'                { Pure $2 }
+     | '<' Expr '>'                { Val (Pure $2) }
      | Form                        { $1 }
 
 Form :: { Expr }
@@ -128,9 +128,9 @@ Juxt : Juxt Atom                   { App $1 $2 }
 
 Atom :: { Expr }
 Atom : '(' Expr ')'                { $2 }
-     | NUM                         { Num $1 }
-     | VAR                         { Var $1 }
-     | '|' Atom '|'                { Promote $2 }
+     | NUM                         { Val $ Num $1 }
+     | VAR                         { Val $ Var $1 }
+     | '|' Atom '|'                { Val $ Promote $2 }
 
 
 {
@@ -139,4 +139,8 @@ parseError t = error $ "Parse error, at token " ++ show t
 
 parseDefs :: String -> ([Def], [(Id, Id)])
 parseDefs = uniqueNames . map desugar . defs . scanTokens
+
+fst3 (a, b, c) = a
+snd3 (a, b, c) = b
+thd3 (a, b, c) = c
 }

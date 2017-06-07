@@ -1,24 +1,10 @@
 -- Gram interpreter
 
-module Eval (Val(..), eval, Env, extend, empty) where
+module Eval (eval, Env, extend, empty) where
 
 import Syntax.Expr
 import Syntax.Pretty
 import Debug.Trace
-
-data Val = FunVal (Env Val) Id Expr
-         | NumVal Int
-         | BoxVal Expr
-         | DiamondVal Expr
-
-instance Pretty Int where
-  pretty = show
-
-instance Show Val where
-  show (FunVal _ _ _) = "<fun>"
-  show (BoxVal e) = "[" ++ pretty e ++ "]"
-  show (DiamondVal e) = "<" ++ pretty e ++ ">"
-  show (NumVal n) = show n
 
 type Env a = [(Id, a)]
 
@@ -34,50 +20,44 @@ evalOp Sub = (-)
 evalOp Mul = (*)
 
 -- Call by value big step semantics
-evalIn :: Env Val -> Expr -> IO Val
+evalIn :: Env Value -> Expr -> IO Value
 
-evalIn env (App (Var "write") e) = do
+evalIn env (App (Val (Var "write")) e) = do
   v <- evalIn env e
   putStrLn $ show v
-  return $ DiamondVal (toExpr v)
+  return $ Pure (Val v)
 
-evalIn env (Var "read") = do
+evalIn env (Val (Var "read")) = do
   val <- readLn
-  return $ DiamondVal (Num val)
+  return $ Pure (Val (Num val))
 
-evalIn env (Abs x e) =
-  return $ FunVal env x e
+evalIn env (Val (Abs x e)) =
+  return $ Abs x e
 
 evalIn env (App e1 e2) = do
   v1 <- evalIn env e1
   case v1 of
-    FunVal env' x e3 -> do
+    Abs x e3 -> do
       v2 <- evalIn env e2
-      evalIn (env ++ env') (subst (toExpr v2) x e3)
+      evalIn env (subst (Val v2) x e3)
     _ -> error "Cannot apply value"
 
-evalIn env (Var x) =
-  case (lookup x env) of
-    Just val -> return val
-    Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: " ++ show env
-
-evalIn _ (Num n) =
-  return $ NumVal n
 
 evalIn env (Binop op e1 e2) = do
    v1 <- evalIn env e1
    v2 <- evalIn env e2
    let x = evalOp op
-   case (v1,v2) of
-     (NumVal n1, NumVal n2) -> return $ NumVal (n1 `x` n2)
-     _ -> fail $ "Runtime exception: Not a number: " ++ show v1 ++ " or " ++ show v2
+   case (v1, v2) of
+     (Num n1, Num n2) -> return $ Num (n1 `x` n2)
+     _ -> fail $ "Runtime exception: Not a number: "
+               ++ pretty v1 ++ " or " ++ pretty v2
 
 -- GMTT big step semantics (CBN)
 
 evalIn env (LetBox var _ e1 e2) = do
    v1 <- evalIn env e1
    case v1 of
-      BoxVal e1' ->
+      Promote e1' ->
         evalIn env (subst e1' var e2)
       other -> fail $
             "Runtime exception: Expecting a box valued but got: " ++ show other
@@ -85,22 +65,19 @@ evalIn env (LetBox var _ e1 e2) = do
 evalIn env (LetDiamond var _ e1 e2) = do
    v1 <- evalIn env e1
    case v1 of
-      DiamondVal e -> do
+      Pure e -> do
         val <- evalIn env e
-        evalIn env (subst (toExpr val) var e2)
+        evalIn env (subst (Val val) var e2)
 
-evalIn env (Promote e) = return $ BoxVal e
+evalIn env (Val (Var x)) =
+  case (lookup x env) of
+    Just val -> return val
+    Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: " ++ show env
 
-evalIn env (Pure e) = return $ DiamondVal e
+evalIn env (Val v) = return v
 
 
-
-toExpr (FunVal _ i e) = Abs i e
-toExpr (NumVal i) = Num i
-toExpr (BoxVal e) = Promote e
-toExpr (DiamondVal e) = Pure e
-
-evalDefs :: Env Val -> [Def] -> IO (Env Val)
+evalDefs :: Env Value -> [Def] -> IO (Env Value)
 evalDefs env [] = return env
 evalDefs env ((Def var e [] _):defs) = do
   val <- evalIn env e
@@ -108,11 +85,11 @@ evalDefs env ((Def var e [] _):defs) = do
 evalDefs env (d : ds) =
   error $ "Desugaring must be broken for " ++ show d
 
-eval :: [Def] -> IO Val
+eval :: [Def] -> IO Value
 eval defs = do
   bindings <- evalDefs empty defs
   case lookup "main" bindings of
     Nothing -> fail "Missing a definition called 'main'"
-    Just (DiamondVal e) -> evalIn bindings e
-    Just (BoxVal e)     -> evalIn bindings e
+    Just (Pure e)    -> evalIn bindings e
+    Just (Promote e) -> evalIn bindings e
     Just val -> return val

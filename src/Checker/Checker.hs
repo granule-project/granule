@@ -93,11 +93,11 @@ checkExpr :: Bool         -- turn on dbgging
           -> Expr         -- expression
           -> MaybeT Checker (Env TyOrDisc)
 
-checkExpr dbg defs gam (FunTy sig tau) (Abs x e) = do
+checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
   gam' <- extCtxt gam x (Left sig)
   checkExpr dbg defs gam' tau e
 
-checkExpr dbg defs gam tau (Abs x e) =
+checkExpr dbg defs gam tau (Val (Abs x e)) =
     illTyped $ "Expected a function type"
 
 {-
@@ -108,7 +108,7 @@ checkExpr dbg defs gam tau (Abs x e) =
 
 -}
 
-checkExpr dbg defs gam (Box demand tau) (Promote e) = do
+checkExpr dbg defs gam (Box demand tau) (Val (Promote e)) = do
     gamF        <- discToFreshVarsIn (fvs e) gam
     gam'        <- checkExpr dbg defs gamF tau e
     let gam'' = multAll (fvs e) demand gam'
@@ -170,13 +170,13 @@ synthExpr :: Bool
           -> MaybeT Checker (Type, Env TyOrDisc)
 
 -- Variables
-synthExpr dbg defs gam (Var "read") = do
+synthExpr dbg defs gam (Val (Var "read")) = do
   return (Diamond ["R"] (ConT TyInt), [])
 
-synthExpr dbg defs gam (Var "write") = do
+synthExpr dbg defs gam (Val (Var "write")) = do
   return (FunTy (ConT TyInt) (Diamond ["W"] (ConT TyInt)), [])
 
-synthExpr dbg defs gam (Pure e) = do
+synthExpr dbg defs gam (Val (Pure e)) = do
   (ty, gam') <- synthExpr dbg defs gam e
   return (Diamond [] ty, gam')
 
@@ -193,7 +193,7 @@ synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
          _ -> illTyped $ "Expected a diamond type"
     _ -> illTyped $ "Expected a diamond type"
 
-synthExpr dbg defs gam (Var x) = do
+synthExpr dbg defs gam (Val (Var x)) = do
    nameMap <- ask
    case lookup x gam of
      Nothing ->
@@ -210,7 +210,7 @@ synthExpr dbg defs gam (Var x) = do
      Just (Right (c, ty)) -> return (ty, [(x, Right (oneKind (kind c), ty))])
 
 -- Constants (numbers)
-synthExpr dbg defs gam (Num _) = return (ConT TyInt, [])
+synthExpr dbg defs gam (Val (Num _)) = return (ConT TyInt, [])
 
 -- Application
 synthExpr dbg defs gam (App e e') = do
@@ -223,7 +223,7 @@ synthExpr dbg defs gam (App e e') = do
       _ -> illTyped "Left-hand side of app is not a function type"
 
 -- Promotion
-synthExpr dbg defs gam (Promote e) = do
+synthExpr dbg defs gam (Val (Promote e)) = do
    gamF <- discToFreshVarsIn (fvs e) gam
    (t, gam') <- synthExpr dbg defs gamF e
    var <- lift . freshVar $ "prom_" ++ [head (pretty e)]

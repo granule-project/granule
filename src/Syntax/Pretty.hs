@@ -53,21 +53,29 @@ instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
     pretty (Just x) = pretty x
 
+instance Pretty Value where
+    pretty (Abs x e)   = parens $ "\\" ++ x ++ " -> " ++ pretty e
+    pretty (Promote e) = "[ " ++ pretty e ++ " ]"
+    pretty (Pure e)    = "<" ++ pretty e ++ ">"
+    pretty (Var x)     = x
+    pretty (Num n)     = show n
+
+
 instance Pretty Expr where
     pretty expr =
       case expr of
-        (Abs x e) -> parens $ "\\" ++ x ++ " -> " ++ pretty e
         (App e1 e2) -> parens $ pretty e1 ++ " " ++ pretty e2
         (Binop op e1 e2) -> parens $ pretty e1 ++ prettyOp op ++ pretty e2
         (LetBox v t e1 e2) -> parens $ "let [" ++ v ++ ":" ++ pretty t ++ "] = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
-        (Promote e)      -> "[ " ++ pretty e ++ " ]"
-        (Pure e)         -> "<" ++ pretty e ++ ">"
         (LetDiamond v t e1 e2) -> parens $ "let <" ++ v ++ ":" ++ pretty t ++ "> = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
-        (Var x) -> x
-        (Num n) -> show n
+        (Val v) -> pretty v
      where prettyOp Add = " + "
            prettyOp Sub = " - "
            prettyOp Mul = " * "
-           parens s = "(" ++ s ++ ")"
+
+parens s = "(" ++ s ++ ")"
+
+instance Pretty Int where
+  pretty = show
