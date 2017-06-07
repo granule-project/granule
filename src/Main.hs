@@ -1,5 +1,4 @@
 import Eval
-import Syntax.Expr
 import Syntax.Parser
 import Syntax.Pretty
 import Checker.Checker
@@ -28,7 +27,7 @@ run input debug = do
     Right True -> do
       val <- eval ast
       putStr   $ "Evaluating main:\n\n"
-      putStrLn $ show val
+      putStrLn $ pretty val
     _ -> return ()
 
 showCheckerResult :: Either String Bool -> String

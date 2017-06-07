@@ -7,15 +7,14 @@ import Syntax.Expr
 import Syntax.Pretty
 import Checker.Types
 import Checker.Environment
+import Prelude hiding (pred)
 
 import Data.List
 import Data.Maybe
-import Data.Either
 import Control.Monad.State.Strict
 import Control.Monad.Reader.Class
 import Control.Monad.Trans.Maybe
-import Control.Monad
-import Data.SBV
+import Data.SBV hiding (kindOf)
 import Debug.Trace
 
 -- Checking (top-level)
@@ -36,7 +35,7 @@ check defs dbg nameMap = do
     (results, _) <- evalChecker initialState nameMap checkedDefs
 
     -- If all definitions type checkerd, then the whole file type checkers
-    if (and . map (\(_, _, _, check) -> isJust check) $ results)
+    if (and . map (\(_, _, _, checked) -> isJust checked) $ results)
       then return . Right $ True
       -- Otherwise, show the checking reports
       else return . Left  $ intercalate "\n" (map mkReport results)
@@ -97,8 +96,8 @@ checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
   gam' <- extCtxt gam x (Left sig)
   checkExpr dbg defs gam' tau e
 
-checkExpr dbg defs gam tau (Val (Abs x e)) =
-    illTyped $ "Expected a function type"
+checkExpr _ _ _ tau (Val (Abs _ _)) =
+    illTyped $ "Expected a function type, but got " ++ pretty tau
 
 {-
 
@@ -170,10 +169,10 @@ synthExpr :: Bool
           -> MaybeT Checker (Type, Env TyOrDisc)
 
 -- Variables
-synthExpr dbg defs gam (Val (Var "read")) = do
+synthExpr _ _ _ (Val (Var "read")) = do
   return (Diamond ["R"] (ConT TyInt), [])
 
-synthExpr dbg defs gam (Val (Var "write")) = do
+synthExpr _ _ _ (Val (Var "write")) = do
   return (FunTy (ConT TyInt) (Diamond ["W"] (ConT TyInt)), [])
 
 synthExpr dbg defs gam (Val (Pure e)) = do
@@ -189,11 +188,11 @@ synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
        case sig of
          Diamond ef1 ty' | ty == ty' -> do
              gamNew <- gam1 `ctxPlus` gam2
-             return (Diamond (ef1 ++ ef2) ty', gamNew)
+             return (Diamond (ef1 ++ ef2) tau', gamNew)
          _ -> illTyped $ "Expected a diamond type"
     _ -> illTyped $ "Expected a diamond type"
 
-synthExpr dbg defs gam (Val (Var x)) = do
+synthExpr _ defs gam (Val (Var x)) = do
    nameMap <- ask
    case lookup x gam of
      Nothing ->
@@ -207,10 +206,10 @@ synthExpr dbg defs gam (Val (Var x)) = do
                               ++ " or definitions " ++ pretty defs
 
      Just (Left ty)       -> return (ty, [(x, Left ty)])
-     Just (Right (c, ty)) -> return (ty, [(x, Right (oneKind (kind c), ty))])
+     Just (Right (c, ty)) -> return (ty, [(x, Right (oneKind (kindOf c), ty))])
 
 -- Constants (numbers)
-synthExpr dbg defs gam (Val (Num _)) = return (ConT TyInt, [])
+synthExpr _ _ _ (Val (Num _)) = return (ConT TyInt, [])
 
 -- Application
 synthExpr dbg defs gam (App e e') = do
@@ -255,13 +254,13 @@ synthExpr dbg defs gam (Binop op e e') = do
         _ ->
             illTyped "Binary op does not have two int expressions"
 
-synthExpr _ defs gam e = illTyped $ "General synth fail " ++ pretty e
+synthExpr _ _ _ e = illTyped $ "General synth fail " ++ pretty e
 
 
 solveConstraints :: MaybeT Checker Bool
 solveConstraints = do
   checkerState <- get
-  let pred = do { (pred, _) <- predicate checkerState; return pred }
+  let pred = do { (p, _) <- predicate checkerState; return p }
   thmRes <- liftIO . prove $ pred
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
@@ -300,7 +299,7 @@ freshVar s = Checker $ do
   return cvar
 
 -- Generate a fresh alphanumeric variable name
-freshUniversalVar :: String -> Checker String
+freshUniversalVar :: String -> Checker ()
 freshUniversalVar cvar = Checker $ do
   checkerState <- get
   let predicate' = do
@@ -310,7 +309,7 @@ freshUniversalVar cvar = Checker $ do
                       return (pred &&& solverVar .>= (literal 0), (cvar, solverVar) : vars)
         _ -> return (pred, vars)
   put $ checkerState { predicate = predicate' }
-  return cvar
+  return ()
 
 
 -- Wrappers to make it clear the provneance of arguments
@@ -339,13 +338,20 @@ equalCtxts dbg env1 env2 =
       else illTyped $ "Environments do not match in size or types: "
             ++ show env ++ " - " ++ show env'
 
-makeEquality dbg _ freeVars (_, Left _) (_, Left _) = true
+makeEquality :: Bool
+             -> CKind
+             -> SolverVars
+             -> (Id, TyOrDisc)
+             -> (Id, TyOrDisc)
+             -> SBool
+makeEquality _ _ _ (_, Left _) (_, Left _) = true
 makeEquality dbg k freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
    (if dbg then ((pretty c1) ++ " == " ++ (pretty c2)) `trace` () else ()) `seq`
    compile c1 freeVars k .== compile c2 freeVars k
 makeEquality _ _ _ _ _ = true
 
 
+addAnyUniversalsTy :: Type -> Checker ()
 addAnyUniversalsTy (FunTy t1 t2) = do
   addAnyUniversalsTy t1
   addAnyUniversalsTy t2
@@ -354,6 +360,7 @@ addAnyUniversalsTy (Box c t) = do
   addAnyUniversalsTy t
 addAnyUniversalsTy _ = return ()
 
+addAnyUniversals :: Coeffect -> Checker ()
 addAnyUniversals (CVar v) = do
   freshUniversalVar v
   return ()
@@ -368,6 +375,7 @@ addAnyUniversals _ = return ()
 illTyped :: String -> MaybeT Checker a
 illTyped s = liftIO (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
 
+freshPolymorphicInstance :: Type -> Checker Type
 freshPolymorphicInstance (FunTy t1 t2) = do
   t1' <- freshPolymorphicInstance t1
   t2' <- freshPolymorphicInstance t2
@@ -378,6 +386,7 @@ freshPolymorphicInstance (Box c t) = do
   return $ Box c' t'
 freshPolymorphicInstance t = return t
 
+freshPolyCoeffect :: Coeffect -> Checker Coeffect
 freshPolyCoeffect (CVar cvar) = do
   checkerState <- get
   let v = uniqueVarId checkerState
@@ -416,6 +425,7 @@ compile (CTimes n m) vars CLevel =
 compile (CTimes n m) vars k =
     compile n vars k * compile m vars k
 
+relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubEnv vars env = filter relevant env
  where relevant (var, _) = var `elem` vars
 
@@ -450,7 +460,7 @@ extCtxt env var (Left t) = do
         else illTyped $ "Type clash for variable " ++ var'
     Just (Right (c, t')) ->
        if t == t'
-         then return $ replace env var (Right (c `plus` (oneKind (kind c)), t))
+         then return $ replace env var (Right (c `plus` (oneKind (kindOf c)), t))
          else illTyped $ "Type clash for variable " ++ var'
     Nothing -> return $ (var, Left t) : env
 
@@ -465,7 +475,7 @@ extCtxt env var (Right (c, t)) = do
           illTyped $ "Type clash for variable " ++ var'
     Just (Left t') ->
         if t == t'
-        then return $ replace env var (Right (c `plus` (oneKind (kind c)), t))
+        then return $ replace env var (Right (c `plus` (oneKind (kindOf c)), t))
         else do
           var' <- return $ unrename nameMap var
           illTyped $ "Type clash for variable " ++ var'

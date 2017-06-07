@@ -23,11 +23,11 @@ instance Pretty Coeffect where
     pretty (Level n) = "Hi"
     pretty (CVar c) = c
     pretty (CPlus c d) =
-      case (kind c `kindJoin` kind d) of
+      case (kindOf c `kindJoin` kindOf d) of
         CLevel -> pretty c ++ " \\/ " ++ pretty d
         _      -> pretty c ++ " + " ++ pretty d
     pretty (CTimes c d) =
-      case (kind c `kindJoin` kind d) of
+      case (kindOf c `kindJoin` kindOf d) of
         CLevel -> pretty c ++ " /\\ " ++ pretty d
         _      -> pretty c ++ " * " ++ pretty d
 

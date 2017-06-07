@@ -9,9 +9,7 @@ module Checker.Environment where
 import Data.SBV
 import Control.Monad.State.Strict
 import qualified Control.Monad.Trans.Reader as MR
-import Control.Monad.Trans.Maybe
 import Control.Monad.Reader.Class
-import Control.Monad
 
 import Syntax.Expr (Id, CKind)
 

@@ -77,29 +77,30 @@ keyIntersect :: Env a -> Env a -> Env a
 keyIntersect a b = sortBy (\a b -> fst a `compare` fst b) $ filter (appearsIn a) b
   where appearsIn a (id, _) = isJust $ lookup id a
 
-
+{-
 vars :: Coeffect -> [String]
 vars (CVar v) = [v]
 vars (CPlus n m) = vars n ++ vars m
 vars (CTimes n m) = vars n ++ vars m
 vars _ = []
+-}
 
 deleteVar :: Eq a => a -> [(a, b)] -> [(a, b)]
-deleteVar x [] = []
+deleteVar _ [] = []
 deleteVar x ((y, b) : m) | x == y = deleteVar x m
                          | otherwise = (y, b) : deleteVar x m
 
 unrename :: [(Id, Id)] -> Id -> Id
-unrename nameMap id =
-  case lookup id nameMap of
-    Just id' -> id'
-    Nothing  -> id
+unrename nameMap var =
+  case lookup var nameMap of
+    Just var' -> var'
+    Nothing  -> var
 
 instance Pretty (Env Type) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
-     where pp (id, t) = id ++ " : " ++ pretty t
+     where pp (var, t) = var ++ " : " ++ pretty t
 
 instance Pretty (Env TyOrDisc) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
-     where pp (id, Left t) = id ++ " : " ++ pretty t
-           pp (id, Right (c, t)) = id ++ " : .[" ++ pretty t ++ "]. " ++ pretty c
+     where pp (var, Left t) = var ++ " : " ++ pretty t
+           pp (var, Right (c, t)) = var ++ " : .[" ++ pretty t ++ "]. " ++ pretty c

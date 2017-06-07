@@ -4,7 +4,7 @@
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TyCon(..), Def(..), Op(..),
                    CKind(..), Coeffect(..), Effect,
                    uniqueNames, arity, fvs, subst,
-                   kind, kindJoin, tyCoeffectKind) where
+                   kindOf, kindJoin, tyCoeffectKind) where
 
 import Data.List
 import Control.Monad.Writer
@@ -59,7 +59,7 @@ instance Term Value where
     subst es v (Pure e)         = Val $ Pure (subst es v e)
     subst es v (Promote e)      = Val $ Promote (subst es v e)
     subst es v (Var w) | v == w = es
-    subst es v val              = Val val
+    subst _ _ val               = Val val
 
     freshen (Abs var e) = do
       var' <- freshVar var
@@ -116,7 +116,6 @@ instance Term Expr where
      v' <- freshen v
      return (Val v')
 
-   freshen c = return c
 
 --------- Definitions
 
@@ -160,23 +159,24 @@ data CKind = CNat | CLevel | CPoly
 tyCoeffectKind :: Type -> CKind
 tyCoeffectKind (FunTy t1 t2) = tyCoeffectKind t1 `kindJoin` tyCoeffectKind t2
 tyCoeffectKind (Diamond _ t) = tyCoeffectKind t
-tyCoeffectKind (Box c t) = kind c `kindJoin` (tyCoeffectKind t)
+tyCoeffectKind (Box c t) = kindOf c `kindJoin` (tyCoeffectKind t)
 tyCoeffectKind (ConT _) = CPoly
 
-kind :: Coeffect -> CKind
-kind (Level _)    = CLevel
-kind (Nat _)      = CNat
-kind (CPlus n m)  = kind n `kindJoin` kind m
-kind (CTimes n m) = kind n `kindJoin` kind m
-kind (CVar c)  = CPoly
+kindOf :: Coeffect -> CKind
+kindOf (Level _)    = CLevel
+kindOf (Nat _)      = CNat
+kindOf (CPlus n m)  = kindOf n `kindJoin` kindOf m
+kindOf (CTimes n m) = kindOf n `kindJoin` kindOf m
+kindOf (CVar _)     = CPoly
 
+kindJoin :: CKind -> CKind -> CKind
 kindJoin CPoly c       = c
 kindJoin c CPoly       = c
 kindJoin CLevel CLevel = CLevel
 kindJoin CNat CNat     = CNat
 kindJoin CLevel _      = CLevel
 kindJoin _ CLevel      = CLevel
-kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
+-- kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
 
 -- Alpha-convert all bound variables
 

@@ -4,7 +4,6 @@ module Eval (eval, Env, extend, empty) where
 
 import Syntax.Expr
 import Syntax.Pretty
-import Debug.Trace
 
 type Env a = [(Id, a)]
 
@@ -27,11 +26,11 @@ evalIn env (App (Val (Var "write")) e) = do
   putStrLn $ show v
   return $ Pure (Val v)
 
-evalIn env (Val (Var "read")) = do
+evalIn _ (Val (Var "read")) = do
   val <- readLn
   return $ Pure (Val (Num val))
 
-evalIn env (Val (Abs x e)) =
+evalIn _ (Val (Abs x e)) =
   return $ Abs x e
 
 evalIn env (App e1 e2) = do
@@ -59,8 +58,8 @@ evalIn env (LetBox var _ e1 e2) = do
    case v1 of
       Promote e1' ->
         evalIn env (subst e1' var e2)
-      other -> fail $
-            "Runtime exception: Expecting a box valued but got: " ++ show other
+      other -> fail $ "Runtime exception: Expecting a box value but got: "
+            ++ pretty other
 
 evalIn env (LetDiamond var _ e1 e2) = do
    v1 <- evalIn env e1
@@ -68,13 +67,16 @@ evalIn env (LetDiamond var _ e1 e2) = do
       Pure e -> do
         val <- evalIn env e
         evalIn env (subst (Val val) var e2)
+      other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
+                    ++ pretty other
 
 evalIn env (Val (Var x)) =
   case (lookup x env) of
     Just val -> return val
-    Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: " ++ show env
+    Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: "
+             ++ show env
 
-evalIn env (Val v) = return v
+evalIn _ (Val v) = return v
 
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)
@@ -82,7 +84,7 @@ evalDefs env [] = return env
 evalDefs env ((Def var e [] _):defs) = do
   val <- evalIn env e
   evalDefs (extend env var val) defs
-evalDefs env (d : ds) =
+evalDefs _ (d : _) =
   error $ "Desugaring must be broken for " ++ show d
 
 eval :: [Def] -> IO Value
