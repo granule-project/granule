@@ -127,6 +127,9 @@ kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
 class Pretty t where
     pretty :: t -> String
 
+instance Pretty Effect where
+   pretty es = "[" ++ intercalate "," es ++ "]"
+
 instance Pretty Coeffect where
     pretty (Nat n) = show n
     pretty (Level 0) = "Lo"

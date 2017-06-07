@@ -23,24 +23,43 @@ type VarCounter  = Int
 -- Map from Ids to symbolic integer variables in the solver
 type SolverVars  = [(Id, SInteger)]
 
--- Pair of a predicate and the solver variables
+-- Pair of a predicate and the id<->solver-variables map
 type SolverInfo  = Symbolic (SBool, SolverVars)
+
+data CheckerState = CS
+            { uniqueVarId  :: VarCounter
+            , predicate    :: SolverInfo
+            , coeffectKind :: CKind
+            }
 
 -- State of the check/synth functions
 data TypeState a = TS { unwrap ::
-    ReaderT [(Id, Id)]                   -- renamerMap
-    (StateT (VarCounter, SolverInfo, CKind) IO) -- nextFreshVariable, predicate
-    a
+    ReaderT [(Id, Id)] (StateT CheckerState IO) a
   }
 
 -- Checking (top-level)
-check :: [Def] -> Bool -> [(Id, Id)] -> IO (Either String Bool)
+check :: [Def]        -- List of definitions
+      -> Bool         -- Debugging flag
+      -> [(Id, Id)]   -- Name map
+      -> IO (Either String Bool)
 check defs dbg nameMap = do
-    let globalCKind = foldr kindJoin CPoly (map (\(Def _ _ _ ty) -> tyCoeffectKind ty) defs)
-    (results, _) <- flip evalStateT (0, ground, globalCKind) . flip runReaderT nameMap . unwrap
-                      $ foldM checkDef ([], empty) defs
+    -- Compute the common coeffect used in the program
+    -- TODO: get rid of this and allow mixing of coeffects in one file
+    let globalCKind  = foldr kindJoin CPoly (map (\(Def _ _ _ ty) -> tyCoeffectKind ty) defs)
+
+    -- Initial state for the checker
+    let initialState = CS 0 ground globalCKind
+    -- Build the computation to check all the defs (in order)...
+    let checkedDefs = foldM checkDef ([], empty) defs
+    -- ... and evaluate the computation with initial state
+    (results, _) <- flip evalStateT initialState
+                  . flip runReaderT nameMap
+                  . unwrap $ checkedDefs
+
+    -- If all definitions type checkerd, then the whole file type checkers
     if (and . map (\(_, _, _, check) -> isJust check) $ results)
       then return . Right $ True
+      -- Otherwise, show the checking reports
       else return . Left  $ intercalate "\n" (map mkReport results)
   where
     ground = return (true, [])
@@ -114,7 +133,7 @@ checkExpr dbg defs gam (Box demand tau) (Promote e) = do
     gamF        <- discToFreshVarsIn (fvs e) gam
     gam'        <- checkExpr dbg defs gamF tau e
     equalCtxts dbg gam (multAll (fvs e) demand gam')
-    return (multAll (fvs e) demand gam') -- gam
+    return (multAll (fvs e) demand gam')
 
 checkExpr dbg defs gam tau (App e1 e2) = do
     (sig, gam1) <- synthExpr dbg defs gam e2
@@ -131,7 +150,7 @@ checkExpr dbg defs gam tau e = do
                         ++ show tau ++ " != " ++ show tau'
 
 -- Check whether two types are equal, and at the same time
--- generate coeffec equality constraints
+-- generate coeffect equality constraints
 equalTypes :: Bool -> Type -> Type -> MaybeT TypeState Bool
 equalTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
   eq1 <- equalTypes dbg t1 t1'
@@ -145,19 +164,19 @@ equalTypes dbg (Diamond ef t) (Diamond ef' t') = do
   eq <- equalTypes dbg t t'
   if (ef == ef')
     then return eq
-    else illTyped $ "Effect mismatch: {" ++ intercalate "," ef
-                     ++ "} != {" ++ intercalate "," ef' ++ "}"
+    else illTyped $ "Effect mismatch: " ++ pretty ef ++ "!=" ++ pretty ef'
 
 equalTypes dbg (Box c t) (Box c' t') = do
-  -- Dbgging
+  -- Debugging
   when dbg $ liftio $ putStrLn (pretty c ++ " == " ++ pretty c')
 
-  (fvCount, symbolic, kind) <- get
-  let symbolic' = do
-        (pred, fVars) <- symbolic
+  checkerState <- get
+  let kind = coeffectKind checkerState
+  let predicate' = do
+        (pred, fVars) <- predicate checkerState
         return ((compile c fVars kind .== compile c' fVars kind) &&& pred, fVars)
 
-  put (fvCount, symbolic', kind)
+  put $ checkerState { predicate = predicate' }
   eq <- equalTypes dbg t t'
   return eq
 
@@ -261,9 +280,9 @@ synthExpr _ defs gam e = illTyped $ "General synth fail " ++ pretty e
 
 solveConstraints :: MaybeT TypeState Bool
 solveConstraints = do
-  (_, symbolic, _) <- get
-  let predicate = do { (pred, vars) <- symbolic; return pred }
-  thmRes <- liftio . prove $ predicate
+  checkerState <- get
+  let pred = do { (pred, _) <- predicate checkerState; return pred }
+  thmRes <- liftio . prove $ pred
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
      -- z3 is not installed/accessible).
@@ -273,7 +292,7 @@ solveConstraints = do
            then
              case getModel thmRes of
                Right (False, ce :: [ Integer ] ) -> do
-                   satRes <- liftio . sat $ predicate
+                   satRes <- liftio . sat $ pred
                    let maybeModel = case ce of
                                      [] -> ""
                                      _ -> "Falsifying model: " ++ show ce ++ " - "
@@ -289,27 +308,28 @@ solveConstraints = do
 -- Generate a fresh alphanumeric variable name
 freshVar :: String -> TypeState String
 freshVar s = TS $ do
-  (v, symbolic, kind) <- get
+  checkerState <- get
+  let v = uniqueVarId checkerState
   let prefix = s ++ "_" ++ ["a", "b", "c", "d"] !! (v `mod` 4)
   let cvar = prefix ++ show v
-  let symbolic' = do
-      (pred, vars) <- symbolic
+  let predicate' = do
+      (pred, vars) <- predicate checkerState
       solverVar    <- exists cvar
       return (pred &&& solverVar .>= (literal 0), (cvar, solverVar) : vars)
-  put (v+1, symbolic', kind)
+  put $ checkerState { uniqueVarId = v + 1, predicate = predicate' }
   return cvar
 
 -- Generate a fresh alphanumeric variable name
 freshUniversalVar :: String -> TypeState String
 freshUniversalVar cvar = TS $ do
-  (v, symbolic, kind) <- get
-  let symbolic' = do
-      (pred, vars) <- symbolic
+  checkerState <- get
+  let predicate' = do
+      (pred, vars) <- predicate checkerState
       case lookup cvar vars of
         Nothing -> do solverVar    <- exists cvar
                       return (pred &&& solverVar .>= (literal 0), (cvar, solverVar) : vars)
         _ -> return (pred, vars)
-  put (v, symbolic', kind)
+  put $ checkerState { predicate = predicate' }
   return cvar
 
 liftm :: Maybe a -> MaybeT TypeState a
@@ -323,12 +343,13 @@ equalCtxts dbg env1 env2 =
     if length env == length env'
     && map fst env == map fst env'
       then do
-        (fv, symbolic, kind) <- get
-        let symbolic' = do
-              (pred, vars) <- symbolic
+        checkerState <- get
+        let kind = coeffectKind checkerState
+        let predicate' = do
+              (pred, vars) <- predicate checkerState
               eqs <- return . foldr (&&&) true $ zipWith (makeEqual dbg kind vars) env env'
               return (eqs &&& pred, vars)
-        put (fv, symbolic', kind)
+        put $ checkerState { predicate = predicate' }
       else illTyped $ "Environments do not match in size or types: "
             ++ show env ++ " - " ++ show env'
 
@@ -363,8 +384,9 @@ illTyped s = liftio (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
 
 liftio :: forall a . IO a -> MaybeT TypeState a
 liftio m = MaybeT (TS ((lift ((lift (m >>= (return . Just)))
-                   :: StateT (VarCounter, SolverInfo, CKind) IO (Maybe a)))
-                   :: ReaderT [(Id, Id)] (StateT (VarCounter, SolverInfo, CKind) IO) (Maybe a)))
+                   -- :: StateT CheckerState IO (Maybe a)))
+                   ))
+                   :: ReaderT [(Id, Id)] (StateT CheckerState IO) (Maybe a)))
 
 instance Monad TypeState where
   return = TS . return
@@ -377,6 +399,7 @@ instance Applicative TypeState where
   pure    = return
   f <*> x = f >>= \f' -> x >>= \x' -> return (f' x')
 
+
 freshPolymorphicInstance (FunTy t1 t2) = do
   t1' <- freshPolymorphicInstance t1
   t2' <- freshPolymorphicInstance t2
@@ -388,11 +411,13 @@ freshPolymorphicInstance (Box c t) = do
 freshPolymorphicInstance t = return t
 
 freshPolyCoeffect (CVar cvar) = do
-  (v, s, kind) <- get
+  checkerState <- get
+  let v = uniqueVarId checkerState
   let cvar' = cvar ++ show v
-  put (v+1, s, kind)
+  put $ checkerState { uniqueVarId = v + 1 }
   freshUniversalVar cvar'
   return $ CVar cvar'
+
 freshPolyCoeffect (CPlus c1 c2) = do
   c1' <- freshPolyCoeffect c1
   c2' <- freshPolyCoeffect c2
@@ -406,7 +431,7 @@ freshPolyCoeffect c = return c
 liftTS :: TypeState a -> MaybeT TypeState a
 liftTS t = MaybeT $ t >>= (return . Just)
 
-instance MonadState (VarCounter, SolverInfo, CKind) TypeState where
+instance MonadState CheckerState TypeState where
   get = TS get
   put s = TS (put s)
 

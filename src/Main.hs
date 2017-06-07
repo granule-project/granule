@@ -1,7 +1,6 @@
 import qualified HappyParser
 import Eval
 import Expr
-import Type
 import Checker
 import System.Environment
 
