@@ -1,10 +1,16 @@
 -- Pretty printer for Gram
+--  It is not especially pretty.
 -- Useful in debugging and error messages
+
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Syntax.Pretty where
 
+import Data.List
 import Syntax.Expr
 
+-- The pretty printer class
 class Pretty t where
     pretty :: t -> String
 

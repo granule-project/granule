@@ -1,6 +1,9 @@
+-- Gram interpreter
+
 module Eval (Val(..), eval, Env, extend, empty) where
 
-import Expr
+import Syntax.Expr
+import Syntax.Pretty
 import Debug.Trace
 
 data Val = FunVal (Env Val) Id Expr

@@ -1,14 +1,21 @@
-import qualified HappyParser
 import Eval
-import Expr
+import Syntax.Expr
+import Syntax.Parser
+import Syntax.Pretty
 import Checker.Checker
 import System.Environment
 
+main :: IO ()
+main = do
+  args <- getArgs
+  input <- readFile (head args)
+  run input (if length args >= 2 then args !! 1 == "-d" else False)
+
 run :: String -> Bool -> IO ()
 run input debug = do
-  putStrLn "\n Gram v0.1.1.0"
+  putStrLn "\n Gram v0.1.2.0"
   putStrLn "----------------------------------"
-  let (ast, nameMap) = HappyParser.parseDefs input
+  let (ast, nameMap) = parseDefs input
   if debug
     then do
       putStrLn $ "AST:          " ++ (show ast)
@@ -23,12 +30,6 @@ run input debug = do
       putStr   $ "Evaluating main:\n\n"
       putStrLn $ show val
     _ -> return ()
-
-main :: IO ()
-main = do
-  args <- getArgs
-  input <- readFile (head args)
-  run input (if length args >= 2 then args !! 1 == "-d" else False)
 
 showCheckerResult :: Either String Bool -> String
 showCheckerResult (Left s) = s

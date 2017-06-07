@@ -3,6 +3,8 @@ module Syntax.Parser where
 
 import Syntax.Lexer
 import Syntax.Expr
+import Syntax.Desugar
+
 }
 
 %name defs

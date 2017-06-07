@@ -1,10 +1,11 @@
-{-# LANGUAGE FlexibleInstances, FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 
-module Type where
+module Checker.Types where
 
-import Expr
-import Eval hiding (Env, empty, extend)
+import Syntax.Expr
+import Syntax.Pretty
 import Data.List
 import Data.Maybe
 import Data.Either
@@ -13,17 +14,18 @@ import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.SBV
 
-{- Provides coeffects, and helpers for manipulating types and type
-environments -}
 
 type TyOrDisc = Either Type (Coeffect, Type)
 
+-- The resource semiring class
 class Semiring c where
   plus  :: c -> c -> c
   mult  :: c -> c -> c
   one   :: c
   zero  :: c
 
+-- Coeffects are a semiring
+-- TODO: Coeffect will get statified later
 instance Semiring Coeffect where
   plus (Nat n) (Nat m) = Nat (n + m)
   plus c d = CPlus c d

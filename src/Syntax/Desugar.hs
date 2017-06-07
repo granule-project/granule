@@ -3,6 +3,8 @@
 module Syntax.Desugar where
 
 import Syntax.Expr
+import Data.List
+import Control.Monad.State.Strict
 
 desugar :: Def -> Def
 desugar (Def id e pats ty) =

@@ -13,7 +13,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.Reader.Class
 import Control.Monad
 
-import Expr (Id, CKind)
+import Syntax.Expr (Id, CKind)
 
 -- State of the check/synth functions
 data Checker a =

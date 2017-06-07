@@ -3,9 +3,9 @@
 
 module Checker.Checker where
 
-import Expr
-import Eval hiding (Env, empty, extend)
-import Type
+import Syntax.Expr
+import Syntax.Pretty
+import Checker.Types
 import Checker.Environment
 
 import Data.List

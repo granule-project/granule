@@ -1,5 +1,5 @@
 name:           gram
-version:        0.1.1.0
+version:        0.1.2.0
 cabal-version:  >= 1.2
 License:        BSD3
 Author:         Dominic Orchard
@@ -8,7 +8,7 @@ Build-Type:     Simple
 
 Executable gram
   Main-Is:        Main.hs
-  Other-modules:  AlexToken,HappyParser
+  Other-modules:  Syntax.Lexer, Syntax.Parser
   Hs-Source-Dirs: src
   Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 6
   GHC-Options:    -Wall
