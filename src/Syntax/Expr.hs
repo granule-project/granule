@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TyCon(..), Def(..), Op(..),
-                   CKind(..), Coeffect(..), Effect,
+                   Pattern, CKind(..), Coeffect(..), Effect,
                    uniqueNames, arity, fvs, subst,
                    kindOf, kindJoin, tyCoeffectKind) where
 
@@ -27,6 +27,7 @@ data Expr = App Expr Expr
           | LetBox Id Type Expr Expr
           | LetDiamond Id Type Expr Expr
           | Val Value
+          | Case Expr [(Pattern, Expr)]
           deriving (Eq, Show)
 
 type Freshener t = StateT Int (Writer [(Id, Id)]) t

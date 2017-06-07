@@ -20,6 +20,8 @@ tokens :-
   Bool                          { \s -> TokenBool }
   let                           { \s -> TokenLet }
   in                            { \s -> TokenIn }
+  case                          { \s -> TokenCase }
+  of                            { \s -> TokenOf }
   $digit+                       { \s -> TokenNum (read s) }
   "->"                          { \s -> TokenArrow }
   \=                            { \s -> TokenEq }
@@ -45,6 +47,8 @@ tokens :-
 
 data Token = TokenLet
            | TokenIn
+	   | TokenCase
+	   | TokenOf
            | TokenLambda
 	   | TokenLetBox
 	   | TokenBox

@@ -15,6 +15,8 @@ import Syntax.Desugar
     nl    { TokenNL }
     let   { TokenLet }
     in    { TokenIn }
+    case  { TokenCase }
+    of    { TokenOf }
     NUM   { TokenNum $$ }
     VAR   { TokenSym $$ }
     Int   { TokenInt }
@@ -66,11 +68,11 @@ Binding :: { (String, Expr, [Either String String]) }
 Binding : VAR '=' Expr             { ($1, $3, []) }
         | VAR Pats '=' Expr        { ($1, $4, $2) }
 
-Pats :: { [Either String String] }
+Pats :: { [Pattern] }
 Pats : Pat                         { [$1] }
      | Pat Pats                    { $1 : $2 }
 
-Pat :: { Either String String }
+Pat :: { Pattern }
 Pat : VAR                          { Left $1 }
     | '_'                          { Left "_" }
     | '|' VAR '|'                  { Right $2 }
@@ -117,6 +119,11 @@ Expr : let VAR '=' Expr in Expr    { App (Val (Abs $2 $6)) $4 }
                                    { LetDiamond $3 $5 $8 $10 }
      | '<' Expr '>'                { Val (Pure $2) }
      | Form                        { $1 }
+     | case Expr of Cases          { Case $2 $4 }
+
+Cases :: { [(Pattern, Expr)] }
+Cases : Pat '->' Expr NL Cases     { ($1, $3) : $5 }
+      | {- empty -}                { [] }
 
 Form :: { Expr }
 Form : Form '+' Form               { Binop Add $1 $3 }
