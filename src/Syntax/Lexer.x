@@ -38,6 +38,7 @@ tokens :-
   \,                            { \s -> TokenComma }
   \:                            { \s -> TokenSig }
   $alpha [$alpha $digit \_ \']* { \s -> TokenSym s }
+  \_                            { \_ -> TokenUnderscore }
   \|                            { \s -> TokenPipe }
 
 {
@@ -68,6 +69,7 @@ data Token = TokenLet
 	   | TokenRangle
 	   | TokenComma
 	   | TokenPipe
+	   | TokenUnderscore
            deriving (Eq,Show)
 
 scanTokens = trim . alexScanTokens

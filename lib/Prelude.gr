@@ -8,3 +8,5 @@ comp f g |x| = g |(f |x|)|
 app : (|Int| c -> Int) -> |Int| c -> Int
 app f x = f x
 
+const : Int -> |Int| 0 -> Int
+const x _ = x

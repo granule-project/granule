@@ -36,6 +36,7 @@ import Syntax.Desugar
     '<'   { TokenLangle }
     '>'   { TokenRangle }
     '|'   { TokenPipe }
+    '_'   { TokenUnderscore }
 
 
 %right in
@@ -71,6 +72,7 @@ Pats : Pat                         { [$1] }
 
 Pat :: { Either String String }
 Pat : VAR                          { Left $1 }
+    | '_'                          { Left "_" }
     | '|' VAR '|'                  { Right $2 }
 
 Type :: { Type }
