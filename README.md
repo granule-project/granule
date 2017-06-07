@@ -1,5 +1,5 @@
 # Gram
-A statically typed functional language with graded modal types.
+A statically typed functional language with graded modal types, including for coeffects and effects.
 
 ## Installation
 
