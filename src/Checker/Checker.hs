@@ -1,41 +1,22 @@
 {-# LANGUAGE FlexibleInstances, ScopedTypeVariables, FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Checker where
+module Checker.Checker where
 
 import Expr
 import Eval hiding (Env, empty, extend)
 import Type
+import Checker.Environment
 
 import Data.List
 import Data.Maybe
 import Data.Either
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Reader
+import Control.Monad.Reader.Class
 import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.SBV
 import Debug.Trace
-
--- For fresh name generation
-type VarCounter  = Int
-
--- Map from Ids to symbolic integer variables in the solver
-type SolverVars  = [(Id, SInteger)]
-
--- Pair of a predicate and the id<->solver-variables map
-type SolverInfo  = Symbolic (SBool, SolverVars)
-
-data CheckerState = CS
-            { uniqueVarId  :: VarCounter
-            , predicate    :: SolverInfo
-            , coeffectKind :: CKind
-            }
-
--- State of the check/synth functions
-data TypeState a = TS { unwrap ::
-    ReaderT [(Id, Id)] (StateT CheckerState IO) a
-  }
 
 -- Checking (top-level)
 check :: [Def]        -- List of definitions
@@ -52,9 +33,7 @@ check defs dbg nameMap = do
     -- Build the computation to check all the defs (in order)...
     let checkedDefs = foldM checkDef ([], empty) defs
     -- ... and evaluate the computation with initial state
-    (results, _) <- flip evalStateT initialState
-                  . flip runReaderT nameMap
-                  . unwrap $ checkedDefs
+    (results, _) <- evalChecker initialState nameMap checkedDefs
 
     -- If all definitions type checkerd, then the whole file type checkers
     if (and . map (\(_, _, _, check) -> isJust check) $ results)
@@ -83,7 +62,7 @@ check defs dbg nameMap = do
              then return ty
              else fail "No synth possible"
       synthTy <-    runMaybeT
-                  . liftio
+                  . liftIO
                   . flip evalStateT (0, ground, CPoly)
                   . flip runReaderT nameMap
                   . unwrap . runMaybeT $ synthAttempt -}
@@ -112,7 +91,7 @@ checkExpr :: Bool         -- turn on dbgging
           -> Env TyOrDisc -- local typing context
           -> Type         -- type
           -> Expr         -- expression
-          -> MaybeT TypeState (Env TyOrDisc)
+          -> MaybeT Checker (Env TyOrDisc)
 
 checkExpr dbg defs gam (FunTy sig tau) (Abs x e) = do
   gam' <- extCtxt gam x (Left sig)
@@ -132,8 +111,9 @@ checkExpr dbg defs gam tau (Abs x e) =
 checkExpr dbg defs gam (Box demand tau) (Promote e) = do
     gamF        <- discToFreshVarsIn (fvs e) gam
     gam'        <- checkExpr dbg defs gamF tau e
-    equalCtxts dbg gam (multAll (fvs e) demand gam')
-    return (multAll (fvs e) demand gam')
+    let gam'' = multAll (fvs e) demand gam'
+    equalCtxts dbg gam gam''
+    return gam''
 
 checkExpr dbg defs gam tau (App e1 e2) = do
     (sig, gam1) <- synthExpr dbg defs gam e2
@@ -151,7 +131,7 @@ checkExpr dbg defs gam tau e = do
 
 -- Check whether two types are equal, and at the same time
 -- generate coeffect equality constraints
-equalTypes :: Bool -> Type -> Type -> MaybeT TypeState Bool
+equalTypes :: Bool -> Type -> Type -> MaybeT Checker Bool
 equalTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
   eq1 <- equalTypes dbg t1 t1'
   eq2 <- equalTypes dbg t2 t2'
@@ -168,7 +148,7 @@ equalTypes dbg (Diamond ef t) (Diamond ef' t') = do
 
 equalTypes dbg (Box c t) (Box c' t') = do
   -- Debugging
-  when dbg $ liftio $ putStrLn (pretty c ++ " == " ++ pretty c')
+  when dbg $ liftIO $ putStrLn (pretty c ++ " == " ++ pretty c')
 
   checkerState <- get
   let kind = coeffectKind checkerState
@@ -187,7 +167,7 @@ synthExpr :: Bool
           -> Env Type
           -> Env TyOrDisc
           -> Expr
-          -> MaybeT TypeState (Type, Env TyOrDisc)
+          -> MaybeT Checker (Type, Env TyOrDisc)
 
 -- Variables
 synthExpr dbg defs gam (Var "read") = do
@@ -200,8 +180,8 @@ synthExpr dbg defs gam (Pure e) = do
   (ty, gam') <- synthExpr dbg defs gam e
   return (Diamond [] ty, gam')
 
-synthExpr dbg defs gam (LetDiamond id ty e1 e2) = do
-  gam'        <- extCtxt gam id (Left ty)
+synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
+  gam'        <- extCtxt gam var (Left ty)
   (tau, gam1) <- synthExpr dbg defs gam' e2
   case tau of
     Diamond ef2 tau' -> do
@@ -214,12 +194,12 @@ synthExpr dbg defs gam (LetDiamond id ty e1 e2) = do
     _ -> illTyped $ "Expected a diamond type"
 
 synthExpr dbg defs gam (Var x) = do
-   nameMap <- getNameMap
+   nameMap <- ask
    case lookup x gam of
      Nothing ->
        case lookup x defs of
          Just ty  -> do
-           ty' <- liftTS $ freshPolymorphicInstance ty
+           ty' <- lift $ freshPolymorphicInstance ty
            return (ty', [])
          Nothing  -> illTyped $ "I don't know the type for "
                               ++ show (unrename nameMap x)
@@ -246,22 +226,22 @@ synthExpr dbg defs gam (App e e') = do
 synthExpr dbg defs gam (Promote e) = do
    gamF <- discToFreshVarsIn (fvs e) gam
    (t, gam') <- synthExpr dbg defs gamF e
-   var <- liftTS . freshVar $ "prom_" ++ [head (pretty e)]
+   var <- lift . freshVar $ "prom_" ++ [head (pretty e)]
    return (Box (CVar var) t, (multAll (fvs e) (CVar var) gam'))
 
 -- Letbox
 synthExpr dbg defs gam (LetBox var t e1 e2) = do
-   cvar <- liftTS $ freshVar ("binder_" ++ var)
+   cvar <- lift $ freshVar ("binder_" ++ var)
    gam' <- extCtxt gam var (Right (CVar cvar, t))
    (tau, gam1) <- synthExpr dbg defs gam' e2
    case lookup var gam1 of
        Just (Right (demand, t')) | t == t' -> do
-            when dbg $ liftio . putStrLn $ "Demand for " ++ var ++ " = " ++ pretty demand
+            when dbg $ liftIO . putStrLn $ "Demand for " ++ var ++ " = " ++ pretty demand
             gam2 <- checkExpr dbg defs gam (Box demand t) e1
             gamNew <- gam1 `ctxPlus` gam2
             return (tau, gamNew)
        _ -> do
-         nm <- getNameMap
+         nm <- ask
          illTyped $ "Context of letbox does not have " ++ (unrename nm var)
 
 -- BinOp
@@ -278,11 +258,11 @@ synthExpr dbg defs gam (Binop op e e') = do
 synthExpr _ defs gam e = illTyped $ "General synth fail " ++ pretty e
 
 
-solveConstraints :: MaybeT TypeState Bool
+solveConstraints :: MaybeT Checker Bool
 solveConstraints = do
   checkerState <- get
   let pred = do { (pred, _) <- predicate checkerState; return pred }
-  thmRes <- liftio . prove $ pred
+  thmRes <- liftIO . prove $ pred
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
      -- z3 is not installed/accessible).
@@ -292,7 +272,7 @@ solveConstraints = do
            then
              case getModel thmRes of
                Right (False, ce :: [ Integer ] ) -> do
-                   satRes <- liftio . sat $ pred
+                   satRes <- liftIO . sat $ pred
                    let maybeModel = case ce of
                                      [] -> ""
                                      _ -> "Falsifying model: " ++ show ce ++ " - "
@@ -306,8 +286,8 @@ solveConstraints = do
            else return True
 
 -- Generate a fresh alphanumeric variable name
-freshVar :: String -> TypeState String
-freshVar s = TS $ do
+freshVar :: String -> Checker String
+freshVar s = Checker $ do
   checkerState <- get
   let v = uniqueVarId checkerState
   let prefix = s ++ "_" ++ ["a", "b", "c", "d"] !! (v `mod` 4)
@@ -320,8 +300,8 @@ freshVar s = TS $ do
   return cvar
 
 -- Generate a fresh alphanumeric variable name
-freshUniversalVar :: String -> TypeState String
-freshUniversalVar cvar = TS $ do
+freshUniversalVar :: String -> Checker String
+freshUniversalVar cvar = Checker $ do
   checkerState <- get
   let predicate' = do
       (pred, vars) <- predicate checkerState
@@ -332,10 +312,16 @@ freshUniversalVar cvar = TS $ do
   put $ checkerState { predicate = predicate' }
   return cvar
 
-liftm :: Maybe a -> MaybeT TypeState a
-liftm = MaybeT . return
 
-equalCtxts :: Bool -> Env TyOrDisc -> Env TyOrDisc -> MaybeT TypeState ()
+-- Wrappers to make it clear the provneance of arguments
+-- to equality, since equality is not actually symmetric
+-- due to allowing over-approximating in the checker
+-- output.
+
+newtype CheckerInput a = CheckerInput a
+newtype CheckerOutput a = CheckerOutput a
+
+equalCtxts :: Bool -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker ()
 equalCtxts dbg env1 env2 =
   let env  = env1 `keyIntersect` env2
       env' = env2 `keyIntersect` env1
@@ -347,17 +333,17 @@ equalCtxts dbg env1 env2 =
         let kind = coeffectKind checkerState
         let predicate' = do
               (pred, vars) <- predicate checkerState
-              eqs <- return . foldr (&&&) true $ zipWith (makeEqual dbg kind vars) env env'
+              eqs <- return . foldr (&&&) true $ zipWith (makeEquality dbg kind vars) env env'
               return (eqs &&& pred, vars)
         put $ checkerState { predicate = predicate' }
       else illTyped $ "Environments do not match in size or types: "
             ++ show env ++ " - " ++ show env'
 
-makeEqual dbg _ freeVars (_, Left _) (_, Left _) = true
-makeEqual dbg k freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
+makeEquality dbg _ freeVars (_, Left _) (_, Left _) = true
+makeEquality dbg k freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
    (if dbg then ((pretty c1) ++ " == " ++ (pretty c2)) `trace` () else ()) `seq`
    compile c1 freeVars k .== compile c2 freeVars k
-makeEqual _ _ _ _ _ = true
+makeEquality _ _ _ _ _ = true
 
 
 addAnyUniversalsTy (FunTy t1 t2) = do
@@ -379,26 +365,8 @@ addAnyUniversals (CTimes c d) = do
  addAnyUniversals d
 addAnyUniversals _ = return ()
 
-illTyped :: String -> MaybeT TypeState a
-illTyped s = liftio (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
-
-liftio :: forall a . IO a -> MaybeT TypeState a
-liftio m = MaybeT (TS ((lift ((lift (m >>= (return . Just)))
-                   -- :: StateT CheckerState IO (Maybe a)))
-                   ))
-                   :: ReaderT [(Id, Id)] (StateT CheckerState IO) (Maybe a)))
-
-instance Monad TypeState where
-  return = TS . return
-  (TS x) >>= f = TS (x >>= (unwrap . f))
-
-instance Functor TypeState where
-  fmap f (TS x) = TS (fmap f x)
-
-instance Applicative TypeState where
-  pure    = return
-  f <*> x = f >>= \f' -> x >>= \x' -> return (f' x')
-
+illTyped :: String -> MaybeT Checker a
+illTyped s = liftIO (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
 
 freshPolymorphicInstance (FunTy t1 t2) = do
   t1' <- freshPolymorphicInstance t1
@@ -428,13 +396,6 @@ freshPolyCoeffect (CTimes c1 c2) = do
   return $ CTimes c1' c2'
 freshPolyCoeffect c = return c
 
-liftTS :: TypeState a -> MaybeT TypeState a
-liftTS t = MaybeT $ t >>= (return . Just)
-
-instance MonadState CheckerState TypeState where
-  get = TS get
-  put s = TS (put s)
-
 compile :: Coeffect -> SolverVars -> CKind -> SInteger
 compile (Level n) _ _ = (fromInteger . toInteger $ n) :: SInteger
 compile (Nat n) _ _ = (fromInteger . toInteger $ n) :: SInteger
@@ -456,56 +417,56 @@ compile (CTimes n m) vars k =
     compile n vars k * compile m vars k
 
 relevantSubEnv vars env = filter relevant env
- where relevant (id, _) = id `elem` vars
+ where relevant (var, _) = var `elem` vars
 
 -- Replace all top-level discharged coeffects
-discToFreshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
+discToFreshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
 discToFreshVarsIn vars env = MaybeT $ mapM toFreshVar (relevantSubEnv vars env)
                                       >>= (return . Just)
   where
-    toFreshVar (id, Right (c, t)) = do
-      v <- freshVar id
-      return $ (id, Right (CVar v, t))
-    toFreshVar (id, Left t) = do
-      v <- freshVar id
-      return (id, Right (CVar v, t))
+    toFreshVar (var, Right (_, t)) = do
+      v <- freshVar var
+      return $ (var, Right (CVar v, t))
+    toFreshVar (var, Left t) = do
+      v <- freshVar var
+      return (var, Right (CVar v, t))
 
 -- Combine two contexts
-ctxPlus :: Env TyOrDisc -> Env TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
+ctxPlus :: Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
 ctxPlus [] env2 = return env2
 ctxPlus ((i, v) : env1) env2 = do
   env' <- extCtxt env2 i v
   ctxPlus env1 env'
 
-liftReader m = MaybeT . TS $ m >>= (return . Just)
-getNameMap = liftReader ask
-
 -- ExtCtxt the environment
-extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> MaybeT TypeState (Env TyOrDisc)
-extCtxt env id (Left t) = do
-  nameMap <- getNameMap
-  id'     <- return $ unrename nameMap id
-  case (lookup id env) of
+extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> MaybeT Checker (Env TyOrDisc)
+extCtxt env var (Left t) = do
+  nameMap <- ask
+  var'     <- return $ unrename nameMap var
+  case (lookup var env) of
     Just (Left t') ->
        if t == t'
-        then illTyped $ "'" ++ id' ++ "' used more than once\n"
-        else illTyped $ "Type clash for variable " ++ id'
+        then illTyped $ "'" ++ var' ++ "' used more than once\n"
+        else illTyped $ "Type clash for variable " ++ var'
     Just (Right (c, t')) ->
        if t == t'
-         then return $ replace env id (Right (c `plus` (oneKind (kind c)), t))
-         else illTyped $ "Type clash for variable " ++ id'
-    Nothing -> return $ (id, Left t) : env
+         then return $ replace env var (Right (c `plus` (oneKind (kind c)), t))
+         else illTyped $ "Type clash for variable " ++ var'
+    Nothing -> return $ (var, Left t) : env
 
-extCtxt env id (Right (c, t)) = do
-  nameMap <- getNameMap
-  id'     <- return $ unrename nameMap id
-  case (lookup id env) of
+extCtxt env var (Right (c, t)) = do
+  nameMap <- ask
+  case (lookup var env) of
     Just (Right (c', t')) ->
         if t == t'
-        then return $ replace env id (Right (c `plus` c', t'))
-        else illTyped $ "Type clash for variable " ++ id'
+        then return $ replace env var (Right (c `plus` c', t'))
+        else do
+          var' <- return $ unrename nameMap var
+          illTyped $ "Type clash for variable " ++ var'
     Just (Left t') ->
         if t == t'
-        then return $ replace env id (Right (c `plus` (oneKind (kind c)), t))
-        else illTyped $ "Type clash for variable " ++ id'
-    Nothing -> return $ (id, Right (c, t)) : env
+        then return $ replace env var (Right (c `plus` (oneKind (kind c)), t))
+        else do
+          var' <- return $ unrename nameMap var
+          illTyped $ "Type clash for variable " ++ var'
+    Nothing -> return $ (var, Right (c, t)) : env

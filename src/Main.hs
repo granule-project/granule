@@ -1,7 +1,7 @@
 import qualified HappyParser
 import Eval
 import Expr
-import Checker
+import Checker.Checker
 import System.Environment
 
 run :: String -> Bool -> IO ()
