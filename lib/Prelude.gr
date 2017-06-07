@@ -1,5 +1,11 @@
 -- Prelude library for Gram
 
+id : Int -> Int
+id x = x
+
+const : Int -> |Int| 0 -> Int
+const x _ = x
+
 -- Coeffectful composition
 comp : (|Int| c -> Int) -> (|Int| d -> Int) -> |Int| (c * d) -> Int
 comp f g |x| = g |(f |x|)|
@@ -8,5 +14,5 @@ comp f g |x| = g |(f |x|)|
 app : (|Int| c -> Int) -> |Int| c -> Int
 app f x = f x
 
-const : Int -> |Int| 0 -> Int
-const x _ = x
+flip : (Int -> Int -> Int) -> Int -> Int -> Int
+flip f x y = f y x
