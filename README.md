@@ -1,5 +1,6 @@
 # Gram
-A statically typed functional language with graded modal types.
+A statically typed functional language with graded modal types, including for coeffects and effects.
+The type system is partly based on the one in ["Combining effects and coeffects via grading" (Gaboardi et al. 2016)](https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf).
 
 ## Installation
 
