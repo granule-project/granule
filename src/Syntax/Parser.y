@@ -64,7 +64,7 @@ Def : Sig nl Binding            { if (fst $1 == fst3 $3)
 Sig ::  { (String, Type) }
 Sig : VAR ':' Type                 { ($1, $3) }
 
-Binding :: { (String, Expr, [Either String String]) }
+Binding :: { (String, Expr, [Pattern]) }
 Binding : VAR '=' Expr             { ($1, $3, []) }
         | VAR Pats '=' Expr        { ($1, $4, $2) }
 
@@ -73,9 +73,9 @@ Pats : Pat                         { [$1] }
      | Pat Pats                    { $1 : $2 }
 
 Pat :: { Pattern }
-Pat : VAR                          { Left $1 }
-    | '_'                          { Left "_" }
-    | '|' VAR '|'                  { Right $2 }
+Pat : VAR                          { PVar $1 }
+    | '_'                          { PWild }
+    | '|' VAR '|'                  { PBoxVar $2 }
 
 Type :: { Type }
 Type : Int                         { ConT TyInt }

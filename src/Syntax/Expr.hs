@@ -2,7 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TyCon(..), Def(..), Op(..),
-                   Pattern, CKind(..), Coeffect(..), Effect,
+                   Pattern(..), CKind(..), Coeffect(..), Effect,
                    uniqueNames, arity, fvs, subst,
                    kindOf, kindJoin, tyCoeffectKind) where
 
@@ -30,6 +30,31 @@ data Expr = App Expr Expr
           | Case Expr [(Pattern, Expr)]
           deriving (Eq, Show)
 
+-- Pattern matchings
+data Pattern = PVar Id    -- Variable patterns
+             | PWild      -- Wildcard (underscore) pattern
+             | PBoxVar Id -- Box patterns (with a variable pattern inside)
+          deriving (Eq, Show)
+
+class Binder t where
+  bvs :: t -> [Id]
+  freshenBinder :: t -> Freshener t
+
+instance Binder Pattern where
+  bvs (PVar v)    = [v]
+  bvs (PBoxVar v) = [v]
+  bvs PWild       = []
+
+  freshenBinder PWild = return PWild
+
+  freshenBinder (PVar var) = do
+      var' <- freshVar var
+      return $ PVar var'
+
+  freshenBinder (PBoxVar var) = do
+      var' <- freshVar var
+      return $ PBoxVar var'
+
 type Freshener t = StateT Int (Writer [(Id, Id)]) t
 
 class Term t where
@@ -41,6 +66,8 @@ class Term t where
   -- Freshen
   freshen :: t -> Freshener t
 
+-- Helper in the Freshener monad, creates a fresh id (and
+-- remembers the mapping).
 freshVar :: Id -> Freshener Id
 freshVar var = do
    v <- get
@@ -84,6 +111,8 @@ instance Term Expr where
    fvs (LetBox x _ e1 e2)     = fvs e1 ++ ((fvs e2) \\ [x])
    fvs (LetDiamond x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
    fvs (Val e)                = fvs e
+   fvs (Case e cases)         = fvs e ++ (concatMap (fvs . snd) cases
+                                      \\ concatMap (bvs . fst) cases)
 
    subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
    subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
@@ -123,7 +152,14 @@ instance Term Expr where
 data Def = Def Id Expr [Pattern] Type
           deriving (Eq, Show)
 
-type Pattern = Either String String
+-- Alpha-convert all bound variables
+uniqueNames :: [Def] -> ([Def], [(Id, Id)])
+uniqueNames = runWriter . flip evalStateT (0 :: Int) . mapM freshenDef
+  where
+    freshenDef (Def var e ps t) = do
+      e'  <- freshen e
+      ps' <- mapM freshenBinder ps
+      return $ Def var e' ps' t
 
 ----------- Types
 
@@ -137,7 +173,6 @@ data Type = FunTy Type Type
           | Box Coeffect Type
           | Diamond Effect Type
     deriving (Eq, Show)
-
 
 arity :: Type -> Int
 arity (FunTy _ t) = 1 + arity t
@@ -178,22 +213,3 @@ kindJoin CNat CNat     = CNat
 kindJoin CLevel _      = CLevel
 kindJoin _ CLevel      = CLevel
 -- kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
-
--- Alpha-convert all bound variables
-
-uniqueNames :: [Def] -> ([Def], [(Id, Id)])
-uniqueNames = runWriter . flip evalStateT (0 :: Int) . mapM uniqueNameDef
-  where
-    uniqueNameDef (Def var e ps t) = do
-      e'  <- freshen e
-      ps' <- mapM uniqueNamePat ps
-      return $ Def var e' ps' t
-
-    -- TODO: convert renaming map to be build in the WriterT monad
-    uniqueNamePat (Left var) = do
-      var' <- freshVar var
-      return $ Left var'
-
-    uniqueNamePat (Right var) = do
-      var' <- freshVar var
-      return $ Right var'

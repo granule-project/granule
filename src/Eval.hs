@@ -34,7 +34,6 @@ evalIn env (App e1 e2) = do
       evalIn env (subst (Val v2) x e3)
     _ -> error "Cannot apply value"
 
-
 evalIn env (Binop op e1 e2) = do
    v1 <- evalIn env e1
    v2 <- evalIn env e2
@@ -70,6 +69,9 @@ evalIn env (Val (Var x)) =
              ++ show env
 
 evalIn _ (Val v) = return v
+
+evalIn env (Case e cases) =
+   error "Case not implemented yet"
 
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)

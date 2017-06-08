@@ -43,11 +43,12 @@ instance Pretty [Def] where
      . map (\(Def v e ps t) -> v ++ " : " ++ pretty t ++ "\n"
                                 ++ v ++ pretty ps ++ " = " ++ pretty e)
 
-instance Pretty [Either String String] where
+instance Pretty [Pattern] where
     pretty ps = intercalate " " (map pretty' ps)
       where
-        pretty' (Left v) = v
-        pretty' (Right v) = "|" ++ v ++ "|"
+        pretty' (PVar v)    = v
+        pretty' (PBoxVar v) = "|" ++ v ++ "|"
+        pretty' PWild       = "_"
 
 instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"

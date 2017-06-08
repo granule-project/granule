@@ -16,11 +16,20 @@ desugar (Def var expr pats ty) =
     desguarPats e [] _ boxed =
       return $ unfoldBoxes boxed e
 
-    desguarPats e (Left v : ps) (FunTy _ t2) boxed = do
+    desguarPats e (PWild : ps) (FunTy _ t2) boxed = do
+      -- Create a fresh variable to use in the lambda
+      -- since lambda doesn't support pattern matches
+      n <- get
+      let v' = show n
+      put (n + 1)
+      e' <- desguarPats e ps t2 boxed
+      return $ Val $ Abs v' e'
+
+    desguarPats e (PVar v : ps) (FunTy _ t2) boxed = do
       e' <- desguarPats e ps t2 boxed
       return $ Val $ Abs v e'
 
-    desguarPats e (Right v : ps) (FunTy (Box _ t) t2) boxed = do
+    desguarPats e (PBoxVar v : ps) (FunTy (Box _ t) t2) boxed = do
       n <- get
       let v' = v ++ show n
       put (n + 1)
