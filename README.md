@@ -4,13 +4,17 @@ The type system is partly based on the one in ["Combining effects and coeffects 
 
 ## Installation
 
-To install using Stack:
+Gram requires you Z3 to be installed, for which you can find instructions [here](https://github.com/Z3Prover/z3). An easy way to install is via Homebrew, e.g.,
+
+    brew install z3
+    
+To install Gram using Stack:
 
     git clone https://github.com/dorchard/gram-language
     cd gram-language
     stack install
 
-To install using only Cabal:
+To install Gram using only Cabal:
 
     git clone https://github.com/dorchard/gram-language
     cd gram-language
@@ -22,7 +26,7 @@ Gram program files have file extension `.gr`—use the `gram` command to execute
 
     $ gram examples/ex1.gr
 
-     Gram v0.1.1.0
+     Gram v0.1.2.0
     ----------------------------------
 
     Type checking:    Ok.
