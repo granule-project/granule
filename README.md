@@ -6,7 +6,7 @@ The type system is partly based on the one in ["Combining effects and coeffects 
 
 Gram requires you Z3 to be installed, for which you can find instructions [here](https://github.com/Z3Prover/z3). An easy way to install is via Homebrew, e.g.,
 
-    brew install z3.
+    brew install z3
     
 To install Gram using Stack:
 
