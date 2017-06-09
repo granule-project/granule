@@ -34,6 +34,7 @@ data Expr = App Expr Expr
 data Pattern = PVar Id    -- Variable patterns
              | PWild      -- Wildcard (underscore) pattern
              | PBoxVar Id -- Box patterns (with a variable pattern inside)
+             | PInt Int   -- Integer pattern
           deriving (Eq, Show)
 
 class Binder t where

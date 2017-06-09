@@ -76,6 +76,7 @@ Pat :: { Pattern }
 Pat : VAR                          { PVar $1 }
     | '_'                          { PWild }
     | '|' VAR '|'                  { PBoxVar $2 }
+    | NUM                          { PInt $1 }
 
 Type :: { Type }
 Type : Int                         { ConT TyInt }

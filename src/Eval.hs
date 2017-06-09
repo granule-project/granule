@@ -72,13 +72,14 @@ evalIn _ (Val v) = return v
 
 evalIn env (Case gExpr cases) = do
     val <- evalIn env gExpr
-    evalCase cases val
+    pmatch cases val
   where
-    evalCase [] _                              = error "Incomplete pattern match"
-    evalCase ((PWild, e):_) _                  = evalIn env e
-    evalCase ((PVar var, e):_) val             = evalIn env (subst (Val val) var e)
-    evalCase ((PBoxVar var, e):_) (Promote e') = evalIn env (subst e' var e)
-    evalCase (_:ps) val                        = evalCase ps val
+    pmatch []                _                = error "Incomplete pattern match"
+    pmatch ((PWild, e):_)    _                = evalIn env e
+    pmatch ((PVar var, e):_) val            = evalIn env (subst (Val val) var e)
+    pmatch ((PBoxVar var, e):_) (Promote e')  = evalIn env (subst e' var e)
+    pmatch ((PInt n, e):_)   (Num m) | n == m = evalIn env e
+    pmatch (_:ps)            val              = pmatch ps val
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)
 evalDefs env [] = return env
