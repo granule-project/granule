@@ -1,10 +1,10 @@
 # Gram
-A statically typed functional language with graded modal types, including for coeffects and effects.
+A statically typed functional language with graded modal types, including fine-grained coeffect and effect types.
 The type system is partly based on the one in ["Combining effects and coeffects via grading" (Gaboardi et al. 2016)](https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf).
 
 ## Installation
 
-Gram requires you Z3 to be installed, for which you can find instructions [here](https://github.com/Z3Prover/z3). An easy way to install is via Homebrew, e.g.,
+Gram requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). An easy way to install Z3 is via Homebrew, e.g.,
 
     brew install z3
     
