@@ -20,19 +20,19 @@ evalIn env (App (Val (Var "write")) e) = do
   return $ Pure (Val v)
 
 evalIn _ (Val (Var "read")) = do
-  val <- readLn
-  return $ Pure (Val (Num val))
+    val <- readLn
+    return $ Pure (Val (Num val))
 
 evalIn _ (Val (Abs x e)) =
-  return $ Abs x e
+    return $ Abs x e
 
 evalIn env (App e1 e2) = do
-  v1 <- evalIn env e1
-  case v1 of
-    Abs x e3 -> do
-      v2 <- evalIn env e2
-      evalIn env (subst (Val v2) x e3)
-    _ -> error "Cannot apply value"
+    v1 <- evalIn env e1
+    case v1 of
+      Abs x e3 -> do
+        v2 <- evalIn env e2
+        evalIn env (subst (Val v2) x e3)
+      _ -> error "Cannot apply value"
 
 evalIn env (Binop op e1 e2) = do
    v1 <- evalIn env e1
@@ -70,9 +70,15 @@ evalIn env (Val (Var x)) =
 
 evalIn _ (Val v) = return v
 
-evalIn env (Case e cases) =
-   error "Case not implemented yet"
-
+evalIn env (Case gExpr cases) = do
+    val <- evalIn env gExpr
+    evalCase cases val
+  where
+    evalCase [] _                              = error "Incomplete pattern match"
+    evalCase ((PWild, e):_) _                  = evalIn env e
+    evalCase ((PVar var, e):_) val             = evalIn env (subst (Val val) var e)
+    evalCase ((PBoxVar var, e):_) (Promote e') = evalIn env (subst e' var e)
+    evalCase (_:ps) val                        = evalCase ps val
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)
 evalDefs env [] = return env
