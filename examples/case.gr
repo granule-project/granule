@@ -1,0 +1,10 @@
+-- Small example of case expressions in Gram
+
+if0 : Int -> Int -> Int -> Int
+if0 g x y =
+  case g of
+    0 -> x
+    n -> y
+
+main : Int
+main = (if0 0 1 2) + (if0 1 1 2)
