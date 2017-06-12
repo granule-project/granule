@@ -107,3 +107,10 @@ instance Pretty (Env TyOrDisc) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
      where pp (var, Left t) = var ++ " : " ++ pretty t
            pp (var, Right (c, t)) = var ++ " : .[" ++ pretty t ++ "]. " ++ pretty c
+
+ctxtFromTypedPattern :: Type -> Pattern -> Maybe [(Id, TyOrDisc)]
+ctxtFromTypedPattern t             PWild        = Just []
+ctxtFromTypedPattern t             (PVar v)     = Just [(v, Left t)]
+ctxtFromTypedPattern (ConT TyInt)  (PInt n)     = Just []
+ctxtFromTypedPattern (Box c t)     (PBoxVar v)  = Just [(v, Right (c, t))]
+ctxtFromTypedPattern _             _            = Nothing

@@ -179,6 +179,21 @@ synthExpr dbg defs gam (Val (Pure e)) = do
   (ty, gam') <- synthExpr dbg defs gam e
   return (Diamond [] ty, gam')
 
+synthExpr dbg defs gam (Case e cases) = do
+  (ty, gam') <- synthExpr dbg defs gam e
+  branchTysAndCtxts <-
+    forM cases $ \(pi, ei) ->
+      case ctxtFromTypedPattern ty pi of
+        Just gamLocal -> synthExpr dbg defs (gam' ++ gamLocal) ei
+        Nothing       -> illTyped $ "Type of the guard expression " ++ pretty ei
+                                ++ " does not match the type of the pattern "
+                               ++ pretty pi
+  let (branchTys, branchCtxts) = unzip branchTysAndCtxts
+  eqTypes <- foldM (\a r -> equalTypes dbg a r >>=
+                             (\b -> if b then return r else illTyped $ "Types of branches don't match in case")) (head branchTys) (tail branchTys)
+  eqResultGam <- foldM (\a r -> joinCtxts dbg a r) empty branchCtxts
+  return (eqTypes, eqResultGam)
+
 synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
   gam'        <- extCtxt gam var (Left ty)
   (tau, gam1) <- synthExpr dbg defs gam' e2
@@ -349,6 +364,26 @@ makeEquality dbg k freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
    (if dbg then ((pretty c1) ++ " == " ++ (pretty c2)) `trace` () else ()) `seq`
    compile c1 freeVars k .== compile c2 freeVars k
 makeEquality _ _ _ _ _ = true
+
+joinCtxts :: Bool -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
+joinCtxts dbg env1 env2 =
+  let env  = env1 `keyIntersect` env2
+      env' = env2 `keyIntersect` env1
+  in
+    if length env == length env'
+    && map fst env == map fst env'
+      then do
+        error "Least-upper bound of contexts not implemented yet"
+        {-
+        checkerState <- get
+        let kind = coeffectKind checkerState
+        let predicate' = do
+              (pred, vars) <- predicate checkerState
+              eqs <- return . foldr (&&&) true $ zipWith (makeEquality dbg kind vars) env env'
+              return (eqs &&& pred, vars)
+        put $ checkerState { predicate = predicate' } -}
+      else illTyped $ "Environments do not match in size or types: "
+            ++ show env ++ " - " ++ show env'
 
 
 addAnyUniversalsTy :: Type -> Checker ()
