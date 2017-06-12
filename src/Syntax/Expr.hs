@@ -44,9 +44,7 @@ class Binder t where
 instance Binder Pattern where
   bvs (PVar v)    = [v]
   bvs (PBoxVar v) = [v]
-  bvs PWild       = []
-
-  freshenBinder PWild = return PWild
+  bvs _           = []
 
   freshenBinder (PVar var) = do
       var' <- freshVar var
@@ -55,6 +53,8 @@ instance Binder Pattern where
   freshenBinder (PBoxVar var) = do
       var' <- freshVar var
       return $ PBoxVar var'
+
+  freshenBinder p = return p
 
 type Freshener t = StateT Int (Writer [(Id, Id)]) t
 
