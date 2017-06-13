@@ -7,8 +7,7 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TyCon(..), Def(..), Op(..
                    kindOf, kindJoin, tyCoeffectKind) where
 
 import Data.List
-import Control.Monad.Writer
-import Control.Monad.Trans.State
+import Control.Monad.State
 
 type Id = String
 data Op = Add | Sub | Mul deriving (Eq, Show)
@@ -56,7 +55,7 @@ instance Binder Pattern where
 
   freshenBinder p = return p
 
-type Freshener t = StateT Int (Writer [(Id, Id)]) t
+type Freshener t = State (Int, [(Id, Id)]) t
 
 class Term t where
   -- Compute the free variables in a term
@@ -71,10 +70,9 @@ class Term t where
 -- remembers the mapping).
 freshVar :: Id -> Freshener Id
 freshVar var = do
-   v <- get
+   (v, nmap) <- get
    let var' = var ++ show v
-   put (v+1)
-   tell [(var, var')]
+   put (v+1, (var, var') : nmap)
    return var'
 
 instance Term Value where
@@ -92,7 +90,7 @@ instance Term Value where
 
     freshen (Abs var e) = do
       var' <- freshVar var
-      e'   <- freshen (subst (Val (Var var')) var e)
+      e'   <- freshen e
       return $ Abs var' e'
 
     freshen (Pure e) = do
@@ -103,8 +101,15 @@ instance Term Value where
       e' <- freshen e
       return $ Promote e'
 
-    freshen v = return v
+    freshen (Var v) = do
+      (_, nmap) <- get
+      case lookup v nmap of
+         Just v' -> return (Var v')
+         -- This case happens if we are referring to a defined
+         -- function which does not get its name freshened
+         Nothing -> return (Var v)
 
+    freshen v = return v
 
 instance Term Expr where
    fvs (App e1 e2)            = fvs e1 ++ fvs e2
@@ -118,13 +123,17 @@ instance Term Expr where
    subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
    subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
    subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
-   subst es v (LetDiamond w t e1 e2) = LetDiamond w t (subst es v e1) (subst es v e2)
+   subst es v (LetDiamond w t e1 e2) =
+                                   LetDiamond w t (subst es v e1) (subst es v e2)
    subst es v (Val val)          = subst es v val
+   subst es v (Case e cases)     = Case
+                                     (subst es v e)
+                                     (map (\(p, e) -> (p, subst es v e)) cases)
 
    freshen (LetBox var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
-      e2'  <- freshen (subst (Val (Var var')) var e2)
+      e2'  <- freshen e2
       return $ LetBox var' t e1' e2'
 
    freshen (App e1 e2) = do
@@ -135,13 +144,21 @@ instance Term Expr where
    freshen (LetDiamond var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
-      e2'  <- freshen (subst (Val (Var var')) var e2)
+      e2'  <- freshen e2
       return $ LetDiamond var' t e1' e2'
 
    freshen (Binop op e1 e2) = do
       e1' <- freshen e1
       e2' <- freshen e2
       return $ Binop op e1' e2'
+
+   freshen (Case e cases) = do
+      e'     <- freshen e
+      cases' <- forM cases $ \(p, e) -> do
+                  p' <- freshenBinder p
+                  e' <- freshen e
+                  return (p, e)
+      return (Case e' cases')
 
    freshen (Val v) = do
      v' <- freshen v
@@ -155,7 +172,9 @@ data Def = Def Id Expr [Pattern] Type
 
 -- Alpha-convert all bound variables
 uniqueNames :: [Def] -> ([Def], [(Id, Id)])
-uniqueNames = runWriter . flip evalStateT (0 :: Int) . mapM freshenDef
+uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
+            . flip runState (0 :: Int, [])
+            . mapM freshenDef
   where
     freshenDef (Def var e ps t) = do
       e'  <- freshen e
