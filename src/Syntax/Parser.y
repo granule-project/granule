@@ -39,6 +39,7 @@ import Syntax.Desugar
     '>'   { TokenRangle }
     '|'   { TokenPipe }
     '_'   { TokenUnderscore }
+    ';'   { TokenSemicolon }
 
 
 %right in
@@ -123,8 +124,8 @@ Expr : let VAR '=' Expr in Expr    { App (Val (Abs $2 $6)) $4 }
      | case Expr of Cases          { Case $2 $4 }
 
 Cases :: { [(Pattern, Expr)] }
-Cases : Pat '->' Expr NL Cases     { ($1, $3) : $5 }
-      | {- empty -}                { [] }
+Cases : Pat '->' Expr              { [($1, $3)] }
+      | Pat '->' Expr ';' Cases    { ($1, $3) : $5 }
 
 Form :: { Expr }
 Form : Form '+' Form               { Binop Add $1 $3 }

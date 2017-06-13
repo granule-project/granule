@@ -24,6 +24,7 @@ tokens :-
   of                            { \s -> TokenOf }
   $digit+                       { \s -> TokenNum (read s) }
   "->"                          { \s -> TokenArrow }
+  \;                            { \s -> TokenSemicolon }
   \=                            { \s -> TokenEq }
   \\                            { \s -> TokenLambda }
   \[                            { \s -> TokenBoxLeft }
@@ -74,6 +75,7 @@ data Token = TokenLet
 	   | TokenComma
 	   | TokenPipe
 	   | TokenUnderscore
+	   | TokenSemicolon
            deriving (Eq,Show)
 
 scanTokens = trim . alexScanTokens
