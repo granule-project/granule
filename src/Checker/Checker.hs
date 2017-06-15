@@ -93,8 +93,14 @@ checkExpr :: Bool         -- turn on dbgging
           -> MaybeT Checker (Env TyOrDisc)
 
 checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
-  gam' <- extCtxt gam x (Left sig)
-  checkExpr dbg defs gam' tau e
+  gamE <- extCtxt gam x (Left sig)
+  gam' <- checkExpr dbg defs gamE tau e
+  -- Linearity check, variables must be used exactly once
+  case lookup x gam' of
+    Nothing -> do
+      nameMap <- ask
+      illTyped $ "Variable " ++ unrename nameMap x ++ " was never used."
+    Just _  -> return gam'
 
 checkExpr _ _ _ tau (Val (Abs _ _)) =
     illTyped $ "Expected a function type, but got " ++ pretty tau
