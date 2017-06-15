@@ -95,9 +95,10 @@ deleteVar x ((y, b) : m) | x == y = deleteVar x m
 
 unrename :: [(Id, Id)] -> Id -> Id
 unrename nameMap var =
-  case lookup var nameMap of
-    Just var' -> var'
-    Nothing  -> var
+    case lookup var (map swap nameMap) of
+      Just var' -> var'
+      Nothing  -> var
+  where swap (a, b) = (b, a)
 
 instance Pretty (Env Type) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
