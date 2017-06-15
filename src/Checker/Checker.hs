@@ -253,11 +253,11 @@ synthExpr dbg defs gam (Val (Promote e)) = do
 synthExpr dbg defs gam (LetBox var t e1 e2) = do
    cvar <- lift $ freshVar ("binder_" ++ var)
    gam' <- extCtxt gam var (Right (CVar cvar, t))
-   (tau, gam1) <- synthExpr dbg defs gam' e2
-   case lookup var gam1 of
+   (tau, gam2) <- synthExpr dbg defs gam' e2
+   case lookup var gam2 of
        Just (Right (demand, t')) | t == t' -> do
             when dbg $ liftIO . putStrLn $ "Demand for " ++ var ++ " = " ++ pretty demand
-            gam2 <- checkExpr dbg defs gam (Box demand t) e1
+            gam1 <- checkExpr dbg defs gam (Box demand t) e1
             gamNew <- gam1 `ctxPlus` gam2
             return (tau, gamNew)
        _ -> do
