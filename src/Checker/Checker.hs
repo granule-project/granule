@@ -251,30 +251,39 @@ synthExpr dbg defs gam (Val (Promote e)) = do
 
 -- Letbox
 synthExpr dbg defs gam (LetBox var t e1 e2) = do
-   cvar <- lift $ freshVar ("binder_" ++ var)
-   gam' <- extCtxt gam var (Right (CVar cvar, t))
-   (tau, gam2) <- synthExpr dbg defs gam' e2
-   case lookup var gam2 of
-       Just (Right (demand, t')) | t == t' -> do
-            when dbg $ liftIO . putStrLn $ "Demand for " ++ var ++ " = " ++ pretty demand
-            gam1 <- checkExpr dbg defs gam (Box demand t) e1
-            gamNew <- gam1 `ctxPlus` gam2
-            return (tau, gamNew)
-       _ -> do
-         -- If there is no explicit demand for the variable
-         -- then this means it is not used
-         -- Therefore c ~ 0
-         checkerState <- get
-         let kind = coeffectKind checkerState
-         let predicate' = do
-             (pred, fVars)   <- predicate checkerState
-             let coeffectVar  = compile (CVar cvar) fVars kind
-             let coeffectZero = compile zero fVars kind
-             return ((coeffectVar .== coeffectZero) &&& pred, fVars)
-         put $ checkerState { predicate = predicate' }
-         gam1 <- checkExpr dbg defs gam (Box zero t) e1
-         gamNew <- gam1 `ctxPlus` gam2
-         return (tau, gamNew)
+    cvar <- lift $ freshVar ("binder_" ++ var)
+    gam' <- extCtxt gam var (Right (CVar cvar, t))
+    (tau, gam2) <- synthExpr dbg defs gam' e2
+    (demand, t) <-
+      case lookup var gam2 of
+        Just (Right (demand, t')) -> do
+             eqT <- equalTypes dbg t t'
+             if eqT then do
+                when dbg $ liftIO . putStrLn $
+                     "Demand for " ++ var ++ " = " ++ pretty demand
+                return (demand, t)
+              else do
+                nameMap <- ask
+                illTyped $ "An explicit signature is given "
+                         ++ unrename nameMap var
+                         ++ " : " ++ pretty t
+                         ++ " but the actual type was " ++ pretty t'
+        _ -> do
+          -- If there is no explicit demand for the variable
+          -- then this means it is not used
+          -- Therefore c ~ 0
+          checkerState <- get
+          let kind = coeffectKind checkerState
+          let predicate' = do
+              (pred, fVars)   <- predicate checkerState
+              let coeffectVar  = compile (CVar cvar) fVars kind
+              let coeffectZero = compile zero fVars kind
+              return ((coeffectVar .== coeffectZero) &&& pred, fVars)
+          put $ checkerState { predicate = predicate' }
+          return (zero, t)
+    gam1 <- checkExpr dbg defs gam (Box demand t) e1
+    gamNew <- gam1 `ctxPlus` gam2
+    return (tau, gamNew)
 
 
 -- BinOp
