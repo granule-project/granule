@@ -2,8 +2,8 @@
 -- leak : |Int| Hi -> |Int| Lo
 -- leak |x| = |x|
 
-notALeak : |Int| Hi -> |Int| Lo
-notALeak x = |0|
+notALeak : ||Int| Hi| 0 -> |Int| Lo
+notALeak |x| = |0|
 
 try : |Int| Hi -> |Int| Hi
 try |x| = |x|

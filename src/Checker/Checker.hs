@@ -99,7 +99,7 @@ checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
   case lookup x gam' of
     Nothing -> do
       nameMap <- ask
-      illTyped $ "Variable " ++ unrename nameMap x ++ " was never used."
+      illTyped $ unusedVariable (unrename nameMap x)
     Just _  -> return gam'
 
 checkExpr _ _ _ tau (Val (Abs _ _)) =
@@ -261,8 +261,21 @@ synthExpr dbg defs gam (LetBox var t e1 e2) = do
             gamNew <- gam1 `ctxPlus` gam2
             return (tau, gamNew)
        _ -> do
-         nm <- ask
-         illTyped $ "Context of letbox does not have " ++ (unrename nm var)
+         -- If there is no explicit demand for the variable
+         -- then this means it is not used
+         -- Therefore c ~ 0
+         checkerState <- get
+         let kind = coeffectKind checkerState
+         let predicate' = do
+             (pred, fVars)   <- predicate checkerState
+             let coeffectVar  = compile (CVar cvar) fVars kind
+             let coeffectZero = compile zero fVars kind
+             return ((coeffectVar .== coeffectZero) &&& pred, fVars)
+         put $ checkerState { predicate = predicate' }
+         gam1 <- checkExpr dbg defs gam (Box zero t) e1
+         gamNew <- gam1 `ctxPlus` gam2
+         return (tau, gamNew)
+
 
 -- BinOp
 synthExpr dbg defs gam (Binop op e e') = do
@@ -521,3 +534,7 @@ extCtxt env var (Right (c, t)) = do
           var' <- return $ unrename nameMap var
           illTyped $ "Type clash for variable " ++ var'
     Nothing -> return $ (var, Right (c, t)) : env
+
+{- Helpers for error messages -}
+
+unusedVariable var = "Linear variable " ++ var ++ " was never used."
