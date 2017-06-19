@@ -190,7 +190,7 @@ synthExpr dbg defs gam (Case e cases) = do
   branchTysAndCtxts <-
     forM cases $ \(pi, ei) ->
       case ctxtFromTypedPattern ty pi of
-        Just gamLocal -> synthExpr dbg defs (gam' ++ gamLocal) ei
+        Just gamLocal -> synthExpr dbg defs (gam ++ gamLocal) ei
         Nothing       -> illTyped $ "Type of the guard expression " ++ pretty ei
                                 ++ " does not match the type of the pattern "
                                ++ pretty pi

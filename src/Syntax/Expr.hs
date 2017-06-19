@@ -157,7 +157,7 @@ instance Term Expr where
       cases' <- forM cases $ \(p, e) -> do
                   p' <- freshenBinder p
                   e' <- freshen e
-                  return (p, e)
+                  return (p', e')
       return (Case e' cases')
 
    freshen (Val v) = do
