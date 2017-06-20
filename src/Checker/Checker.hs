@@ -193,12 +193,16 @@ synthExpr dbg defs gam (Case e cases) = do
         Just gamLocal -> synthExpr dbg defs (gam ++ gamLocal) ei
         Nothing       -> illTyped $ "Type of the guard expression " ++ pretty ei
                                 ++ " does not match the type of the pattern "
-                               ++ pretty pi
+                                ++ pretty pi
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
-  eqTypes <- foldM (\a r -> equalTypes dbg a r >>=
-                             (\b -> if b then return r else illTyped $ "Types of branches don't match in case")) (head branchTys) (tail branchTys)
+  eqTypes <- foldM (\a r -> do
+                     eq <- equalTypes dbg a r
+                     if eq then return r
+                           else illTyped $ "Types of branches don't match in case")
+                   (head branchTys) (tail branchTys)
   eqResultGam <- foldM (\a r -> joinCtxts dbg a r) empty branchCtxts
-  return (eqTypes, eqResultGam)
+  gamNew <- eqResultGam `ctxPlus` gam'
+  return (eqTypes, gamNew)
 
 synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
   gam'        <- extCtxt gam var (Left ty)
@@ -364,22 +368,17 @@ newtype CheckerInput a = CheckerInput a
 newtype CheckerOutput a = CheckerOutput a
 
 equalCtxts :: Bool -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker ()
-equalCtxts dbg env1 env2 =
-  let env  = env1 `keyIntersect` env2
-      env' = env2 `keyIntersect` env1
-  in
-    if length env == length env'
-    && map fst env == map fst env'
-      then do
-        checkerState <- get
-        let kind = coeffectKind checkerState
-        let predicate' = do
-              (pred, vars) <- predicate checkerState
-              eqs <- return . foldr (&&&) true $ zipWith (makeEquality dbg kind vars) env env'
-              return (eqs &&& pred, vars)
-        put $ checkerState { predicate = predicate' }
-      else illTyped $ "Environments do not match in size or types: "
-            ++ show env ++ " - " ++ show env'
+equalCtxts dbg env1 env2 = do
+    let env  = env1 `keyIntersect` env2
+        env' = env2 `keyIntersect` env1
+    -- Postcondition: env and env' have the same length, same keys, same order
+    checkerState <- get
+    let kind = coeffectKind checkerState
+    let predicate' = do
+          (pred, vars) <- predicate checkerState
+          let eqs = zipWith (makeEquality dbg kind vars) env env'
+          return (foldr (&&&) pred eqs, vars)
+    put $ checkerState { predicate = predicate' }
 
 makeEquality :: Bool
              -> CKind
@@ -391,28 +390,45 @@ makeEquality _ _ _ (_, Left _) (_, Left _) = true
 makeEquality dbg k freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
    (if dbg then ((pretty c1) ++ " == " ++ (pretty c2)) `trace` () else ()) `seq`
    compile c1 freeVars k .== compile c2 freeVars k
-makeEquality _ _ _ _ _ = true
+makeEquality _ _ _ _ _ = false
 
 joinCtxts :: Bool -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
-joinCtxts dbg env1 env2 =
-  let env  = env1 `keyIntersect` env2
-      env' = env2 `keyIntersect` env1
-  in
-    if length env == length env'
-    && map fst env == map fst env'
-      then do
-        error "Least-upper bound of contexts not implemented yet"
-        {-
-        checkerState <- get
-        let kind = coeffectKind checkerState
-        let predicate' = do
-              (pred, vars) <- predicate checkerState
-              eqs <- return . foldr (&&&) true $ zipWith (makeEquality dbg kind vars) env env'
-              return (eqs &&& pred, vars)
-        put $ checkerState { predicate = predicate' } -}
-      else illTyped $ "Environments do not match in size or types: "
-            ++ show env ++ " - " ++ show env'
+joinCtxts dbg env1 env2 = do
+    let env  = env1 `keyIntersect` env2
+        env' = env2 `keyIntersect` env1
+    -- Postcondition: env and env' have the same length, same keys, same order
+    varEnv <- freshVarsEnv env
 
+    checkerState <- get
+    let kind = coeffectKind checkerState
+    let predicate' = do
+        (pred, vars) <- predicate checkerState
+        let eqs1 = zipWith (isUpperBound dbg vars kind) varEnv env
+        let eqs2 = zipWith (isUpperBound dbg vars kind) varEnv env'
+        return (foldr (&&&) pred (eqs1 ++ eqs2), vars)
+    put $ checkerState { predicate = predicate' }
+    return $ varEnv ++ (env1 \\ env) ++ (env2 \\ env')
+
+-- Replace all top-level discharged coeffects
+freshVarsEnv :: Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
+freshVarsEnv = lift . mapM toFreshVar
+  where
+    toFreshVar (var, Right (_, t)) = do
+      v <- freshVar var
+      return $ (var, Right (CVar v, t))
+    toFreshVar x = return x
+
+isUpperBound :: Bool
+             -> SolverVars
+             -> CKind
+             -> (Id, TyOrDisc) -- precondition: is a dischared variable coeffect
+             -> (Id, TyOrDisc) -- precondition: is a discharged coeffect
+             -> SBool
+isUpperBound dbg vars k (id, Right (CVar var, t1)) (_, Right (c, t2)) = do
+    case lookup var vars of
+      Just upperVar -> compile c vars k .<= upperVar
+      Nothing       -> error $ "Gram bug"
+isUpperBound _ _ _ _ _ = error $ "Gram bug"
 
 addAnyUniversalsTy :: Type -> Checker ()
 addAnyUniversalsTy (FunTy t1 t2) = do
@@ -492,16 +508,18 @@ relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubEnv vars env = filter relevant env
  where relevant (var, _) = var `elem` vars
 
--- Replace all top-level discharged coeffects
+-- Replace all top-level discharged coeffects and derelict anything else
+-- but add a var
 discToFreshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
-discToFreshVarsIn vars env = MaybeT $ mapM toFreshVar (relevantSubEnv vars env)
-                                      >>= (return . Just)
+discToFreshVarsIn vars env = lift $ mapM toFreshVar (relevantSubEnv vars env)
   where
     toFreshVar (var, Right (_, t)) = do
       v <- freshVar var
       return $ (var, Right (CVar v, t))
+
     toFreshVar (var, Left t) = do
       v <- freshVar var
+      -- TODO: check this
       return (var, Right (CVar v, t))
 
 -- Combine two contexts

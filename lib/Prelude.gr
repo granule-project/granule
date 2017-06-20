@@ -6,6 +6,11 @@ id x = x
 const : Int -> |Int| 0 -> Int
 const x _ = x
 
+if0 : Int -> Int -> Int -> Int
+if0 g x y = case g of
+                0 -> x;
+                n -> y
+
 -- Coeffectful composition
 comp : (|Int| c -> Int) -> (|Int| d -> Int) -> |Int| (c * d) -> Int
 comp f g |x| = g |(f |x|)|
