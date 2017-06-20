@@ -1,12 +1,13 @@
 -- The following is not typeable
+
 -- leak : |Int| Hi -> |Int| Lo
 -- leak |x| = |x|
 
 notALeak : ||Int| Hi| 0 -> |Int| Lo
 notALeak |x| = |0|
 
-try : |Int| Hi -> |Int| Hi
-try |x| = |x|
+try : |Int| l -> |Int| l
+try |x| = |(x + x)|
 
 go : |Int| Hi -> |Int| Hi
 go |x| = |(x + (let |z : Int| = try |x| in z))|

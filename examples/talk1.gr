@@ -12,5 +12,8 @@ doTwice |f| |x| = let <a : Int> = f x in
                   let <b : Int> = f x in
                   <a + b>
 
+echo : <Int> [R, W]
+echo = let <x : Int> = read in write x
+
 main : Int
-main = twice |dub| |42|
+main = 42
