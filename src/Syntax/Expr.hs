@@ -185,13 +185,13 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
 
 data TyCon = TyInt
            | TyBool
-           | TyVar String -- TyVar not used yet
     deriving (Eq, Show)
 
 data Type = FunTy Type Type
           | ConT TyCon
           | Box Coeffect Type
           | Diamond Effect Type
+          | TyVar String
     deriving (Eq, Show)
 
 arity :: Type -> Int

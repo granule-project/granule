@@ -37,6 +37,7 @@ instance Pretty Type where
     pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
     pretty (Box c t) = "|" ++ pretty t ++ "| " ++ pretty c
     pretty (Diamond e t) = "<" ++ pretty t ++ "> [" ++ (intercalate "," e) ++ "]"
+    pretty (TyVar v) = v
 
 instance Pretty [Def] where
     pretty = intercalate "\n"

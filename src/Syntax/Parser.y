@@ -86,6 +86,7 @@ Type : Int                         { ConT TyInt }
      | '|' Type '|' Coeffect       { Box $4 $2 }
      | '(' Type ')'                { $2 }
      | '<' Type '>' Effect         { Diamond $4 $2 }
+     | VAR                         { TyVar $1 }
 
 Coeffect :: { Coeffect }
 Coeffect :
