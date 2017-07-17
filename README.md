@@ -18,6 +18,7 @@ To install Gram using only Cabal:
 
     git clone https://github.com/dorchard/gram-language
     cd gram-language
+    cabal configure
     cabal install
 
 ## Executing Gram Programs
