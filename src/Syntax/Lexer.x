@@ -7,17 +7,21 @@ import Debug.Trace
 
 %wrapper "basic"
 
-$digit = 0-9
-$alpha = [a-zA-Z]
-$eol   = [\n]
+$digit  = 0-9
+$alpha  = [a-zA-Z]
+$lower  = [a-z]
+$upper  = [A-Z]
+$eol    = [\n]
+$alphanum  = [$alpha $digit \_ \']
+@sym    = $lower $alphanum*
+@constr = $upper $alphanum*
 
 tokens :-
 
   $eol+                         { \s -> TokenNL }
   $white+                       ;
   "--".*                         ;
-  Int                           { \s -> TokenInt }
-  Bool                          { \s -> TokenBool }
+  @constr                       { \s -> TokenConstr s }
   let                           { \s -> TokenLet }
   in                            { \s -> TokenIn }
   case                          { \s -> TokenCase }
@@ -40,7 +44,7 @@ tokens :-
   \>                            { \s -> TokenRangle }
   \,                            { \s -> TokenComma }
   \:                            { \s -> TokenSig }
-  $alpha [$alpha $digit \_ \']* { \s -> TokenSym s }
+  @sym				{ \s -> TokenSym s }
   \_                            { \_ -> TokenUnderscore }
   \|                            { \s -> TokenPipe }
 
@@ -63,8 +67,7 @@ data Token = TokenLet
            | TokenLParen
            | TokenRParen
 	   | TokenNL
-	   | TokenInt
-	   | TokenBool
+	   | TokenConstr String
 	   | TokenSig
 	   | TokenBoxLeft
 	   | TokenBoxRight

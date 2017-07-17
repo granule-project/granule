@@ -112,6 +112,6 @@ instance Pretty (Env TyOrDisc) where
 ctxtFromTypedPattern :: Type -> Pattern -> Maybe [(Id, TyOrDisc)]
 ctxtFromTypedPattern t             PWild        = Just []
 ctxtFromTypedPattern t             (PVar v)     = Just [(v, Left t)]
-ctxtFromTypedPattern (ConT TyInt)  (PInt n)     = Just []
+ctxtFromTypedPattern (ConT "Int")  (PInt n)     = Just []
 ctxtFromTypedPattern (Box c t)     (PBoxVar v)  = Just [(v, Right (c, t))]
 ctxtFromTypedPattern _             _            = Nothing

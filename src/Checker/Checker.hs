@@ -176,10 +176,10 @@ synthExpr :: Bool
 
 -- Variables
 synthExpr _ _ _ (Val (Var "read")) = do
-  return (Diamond ["R"] (ConT TyInt), [])
+  return (Diamond ["R"] (ConT "Int"), [])
 
 synthExpr _ _ _ (Val (Var "write")) = do
-  return (FunTy (ConT TyInt) (Diamond ["W"] (ConT TyInt)), [])
+  return (FunTy (ConT "Int") (Diamond ["W"] (ConT "Int")), [])
 
 synthExpr dbg defs gam (Val (Pure e)) = do
   (ty, gam') <- synthExpr dbg defs gam e
@@ -234,7 +234,7 @@ synthExpr _ defs gam (Val (Var x)) = do
      Just (Right (c, ty)) -> return (ty, [(x, Right (oneKind (kindOf c), ty))])
 
 -- Constants (numbers)
-synthExpr _ _ _ (Val (Num _)) = return (ConT TyInt, [])
+synthExpr _ _ _ (Val (Num _)) = return (ConT "Int", [])
 
 -- Application
 synthExpr dbg defs gam (App e e') = do
@@ -295,9 +295,9 @@ synthExpr dbg defs gam (Binop op e e') = do
     (t, gam1)  <- synthExpr dbg defs gam e
     (t', gam2) <- synthExpr dbg defs gam e'
     case (t, t') of
-        (ConT TyInt, ConT TyInt) -> do
+        (ConT "Int", ConT "Int") -> do
             gamNew <- gam1 `ctxPlus` gam2
-            return (ConT TyInt, gamNew)
+            return (ConT "Int", gamNew)
         _ ->
             illTyped "Binary op does not have two int expressions"
 

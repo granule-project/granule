@@ -19,8 +19,7 @@ import Syntax.Desugar
     of    { TokenOf }
     NUM   { TokenNum $$ }
     VAR   { TokenSym $$ }
-    Int   { TokenInt }
-    Bool  { TokenBool }
+    CONSTR { TokenConstr $$ }
     '\\'  { TokenLambda }
     '->'  { TokenArrow }
     ','   { TokenComma }
@@ -80,8 +79,7 @@ Pat : VAR                          { PVar $1 }
     | NUM                          { PInt $1 }
 
 Type :: { Type }
-Type : Int                         { ConT TyInt }
-     | Bool                        { ConT TyBool }
+Type : CONSTR                      { ConT $1 }
      | Type '->' Type              { FunTy $1 $3 }
      | '|' Type '|' Coeffect       { Box $4 $2 }
      | '(' Type ')'                { $2 }
@@ -91,10 +89,10 @@ Type : Int                         { ConT TyInt }
 Coeffect :: { Coeffect }
 Coeffect :
        NUM                     { Nat $1 }
-     | VAR                     { case $1 of
+     | CONSTR                  { case $1 of
                                    "Lo" -> Level 0
-                                   "Hi" -> Level 1
-                                   c    -> CVar c }
+                                   "Hi" -> Level 1 }
+     | VAR                     { CVar $1 }
      | Coeffect '+' Coeffect   { CPlus $1 $3 }
      | Coeffect '*' Coeffect   { CTimes $1 $3 }
      | '(' Coeffect ')'        { $2 }
@@ -111,7 +109,7 @@ Effs :
 
 Eff :: { String }
 Eff :
-     VAR                     { $1 }
+     CONSTR                     { $1 }
 
 Expr :: { Expr }
 Expr : let VAR '=' Expr in Expr    { App (Val (Abs $2 $6)) $4 }
@@ -125,8 +123,14 @@ Expr : let VAR '=' Expr in Expr    { App (Val (Abs $2 $6)) $4 }
      | case Expr of Cases          { Case $2 $4 }
 
 Cases :: { [(Pattern, Expr)] }
-Cases : Pat '->' Expr              { [($1, $3)] }
-      | Pat '->' Expr ';' Cases    { ($1, $3) : $5 }
+Cases : Case CasesNext { $1 : $2 }
+
+CasesNext :: { [(Pattern, Expr)] }
+CasesNext : ';' Cases    { $2 }
+          | {- empty -}  { [] }
+
+Case :: { (Pattern, Expr) }
+Case : Pat '->' Expr { ($1, $3) }
 
 Form :: { Expr }
 Form : Form '+' Form               { Binop Add $1 $3 }

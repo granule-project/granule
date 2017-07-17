@@ -32,8 +32,7 @@ instance Pretty Coeffect where
         _      -> pretty c ++ " * " ++ pretty d
 
 instance Pretty Type where
-    pretty (ConT TyInt)  = "Int"
-    pretty (ConT TyBool) = "Bool"
+    pretty (ConT s)  = s
     pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
     pretty (Box c t) = "|" ++ pretty t ++ "| " ++ pretty c
     pretty (Diamond e t) = "<" ++ pretty t ++ "> [" ++ (intercalate "," e) ++ "]"

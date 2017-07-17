@@ -1,7 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TyCon(..), Def(..), Op(..),
+module Syntax.Expr (Id, Value(..), Expr(..), Type(..), Def(..), Op(..),
                    Pattern(..), CKind(..), Coeffect(..), Effect,
                    uniqueNames, arity, fvs, subst,
                    kindOf, kindJoin, tyCoeffectKind) where
@@ -183,12 +183,8 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
 
 ----------- Types
 
-data TyCon = TyInt
-           | TyBool
-    deriving (Eq, Show)
-
 data Type = FunTy Type Type
-          | ConT TyCon
+          | ConT String
           | Box Coeffect Type
           | Diamond Effect Type
           | TyVar String
