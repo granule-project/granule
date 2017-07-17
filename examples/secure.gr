@@ -1,7 +1,11 @@
 -- The following is not typeable
 
--- leak : |Int| Hi -> |Int| Lo
--- leak |x| = |x|
+--leak : |Int| Hi -> |Int| Lo
+--leak |x| = |x|
+
+cond : |Bool| Hi -> |Bool| Lo
+cond |x| = case x of False -> |False|;
+                     True -> |True|
 
 notALeak : ||Int| Hi| 0 -> |Int| Lo
 notALeak |x| = |0|

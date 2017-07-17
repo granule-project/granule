@@ -114,4 +114,6 @@ ctxtFromTypedPattern t             PWild        = Just []
 ctxtFromTypedPattern t             (PVar v)     = Just [(v, Left t)]
 ctxtFromTypedPattern (ConT "Int")  (PInt n)     = Just []
 ctxtFromTypedPattern (Box c t)     (PBoxVar v)  = Just [(v, Right (c, t))]
+ctxtFromTypedPattern (ConT "Bool") (PConstr "True")  = Just []
+ctxtFromTypedPattern (ConT "Bool") (PConstr "False") = Just []
 ctxtFromTypedPattern _             _            = Nothing

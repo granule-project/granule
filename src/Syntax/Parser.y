@@ -148,6 +148,7 @@ Atom : '(' Expr ')'                { $2 }
      | NUM                         { Val $ Num $1 }
      | VAR                         { Val $ Var $1 }
      | '|' Atom '|'                { Val $ Promote $2 }
+     | CONSTR                      { Val $ Constr $1 }
 
 
 {

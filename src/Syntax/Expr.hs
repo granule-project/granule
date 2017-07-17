@@ -18,6 +18,7 @@ data Value = Abs Id Expr
            | Promote Expr
            | Pure Expr
            | Var Id
+           | Constr String
           deriving (Eq, Show)
 
 -- Expressions (computations) in Gram

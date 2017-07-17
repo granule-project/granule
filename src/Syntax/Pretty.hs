@@ -48,6 +48,8 @@ instance Pretty Pattern where
     pretty PWild       = "_"
     pretty (PBoxVar v) = "|" ++ v ++ "|"
     pretty (PInt n)    = show n
+    pretty (PApp p1 p2) = show p1 ++ " " ++ show p2
+    pretty (PConstr s)  = s
 
 instance Pretty [Pattern] where
     pretty ps = intercalate " " (map pretty ps)
@@ -62,6 +64,7 @@ instance Pretty Value where
     pretty (Pure e)    = "<" ++ pretty e ++ ">"
     pretty (Var x)     = x
     pretty (Num n)     = show n
+    pretty (Constr s)  = s
 
 
 instance Pretty Expr where

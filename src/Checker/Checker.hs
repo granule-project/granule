@@ -181,6 +181,11 @@ synthExpr _ _ _ (Val (Var "read")) = do
 synthExpr _ _ _ (Val (Var "write")) = do
   return (FunTy (ConT "Int") (Diamond ["W"] (ConT "Int")), [])
 
+synthExpr _ _ _ (Val (Constr s)) | s == "False" || s == "True" =
+  return (ConT "Bool", [])
+
+
+
 synthExpr dbg defs gam (Val (Pure e)) = do
   (ty, gam') <- synthExpr dbg defs gam e
   return (Diamond [] ty, gam')
