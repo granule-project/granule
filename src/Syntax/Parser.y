@@ -77,6 +77,7 @@ Pat : VAR                          { PVar $1 }
     | '_'                          { PWild }
     | '|' VAR '|'                  { PBoxVar $2 }
     | NUM                          { PInt $1 }
+    | CONSTR                       { PConstr $1 }
 
 Type :: { Type }
 Type : CONSTR                      { ConT $1 }

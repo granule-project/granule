@@ -34,6 +34,8 @@ data Pattern = PVar Id    -- Variable patterns
              | PWild      -- Wildcard (underscore) pattern
              | PBoxVar Id -- Box patterns (with a variable pattern inside)
              | PInt Int   -- Integer pattern
+             | PConstr String -- Constructor pattern
+             | PApp Pattern Pattern -- Apply pattern
           deriving (Eq, Show)
 
 class Binder t where
@@ -43,6 +45,7 @@ class Binder t where
 instance Binder Pattern where
   bvs (PVar v)    = [v]
   bvs (PBoxVar v) = [v]
+  bvs (PApp p1 p2) = bvs p1 ++ bvs p2
   bvs _           = []
 
   freshenBinder (PVar var) = do
@@ -52,6 +55,11 @@ instance Binder Pattern where
   freshenBinder (PBoxVar var) = do
       var' <- freshVar var
       return $ PBoxVar var'
+
+  freshenBinder (PApp p1 p2) = do
+      p1' <- freshenBinder p1
+      p2' <- freshenBinder p2
+      return $ PApp p1' p2'
 
   freshenBinder p = return p
 
