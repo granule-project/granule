@@ -1,0 +1,5 @@
+dub : |Real| 2 -> Real
+dub |x| = x + x
+
+main : Real
+main = dub |1.0|

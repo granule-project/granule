@@ -85,12 +85,19 @@ mkReport _ = ""
 --  (which explains the exact coeffect demands)
 --  or `Nothing` if the typing does not match.
 
-checkExpr :: Bool         -- turn on dbgging
+checkExpr :: Bool         -- turn on debgging
           -> Env Type     -- environment of top-level definitions
           -> Env TyOrDisc -- local typing context
           -> Type         -- type
           -> Expr         -- expression
           -> MaybeT Checker (Env TyOrDisc)
+
+checkExpr dbg defs gam (ConT "Int") (Val (NumInt i)) = return []
+
+-- Automatically upcase integers to reals
+checkExpr dbg defs gam (ConT "Real") (Val (NumInt i)) = return []
+
+checkExpr dbg defs gam (ConT "Real") (Val (NumReal i)) = return []
 
 checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
   gamE <- extCtxt gam x (Left sig)
@@ -174,18 +181,22 @@ synthExpr :: Bool
           -> Expr
           -> MaybeT Checker (Type, Env TyOrDisc)
 
--- Variables
+-- Constants (built-in effect primitives)
 synthExpr _ _ _ (Val (Var "read")) = do
   return (Diamond ["R"] (ConT "Int"), [])
 
 synthExpr _ _ _ (Val (Var "write")) = do
   return (FunTy (ConT "Int") (Diamond ["W"] (ConT "Int")), [])
 
+-- Constants (booleans)
 synthExpr _ _ _ (Val (Constr s)) | s == "False" || s == "True" =
   return (ConT "Bool", [])
 
+-- Constants (numbers)
+synthExpr _ _ _ (Val (NumInt i))  = return (ConT "Int", [])
+synthExpr _ _ _ (Val (NumReal i)) = return (ConT "Real", [])
 
-
+-- Variables
 synthExpr dbg defs gam (Val (Pure e)) = do
   (ty, gam') <- synthExpr dbg defs gam e
   return (Diamond [] ty, gam')
@@ -237,9 +248,6 @@ synthExpr _ defs gam (Val (Var x)) = do
 
      Just (Left ty)       -> return (ty, [(x, Left ty)])
      Just (Right (c, ty)) -> return (ty, [(x, Right (oneKind (kindOf c), ty))])
-
--- Constants (numbers)
-synthExpr _ _ _ (Val (Num _)) = return (ConT "Int", [])
 
 -- Application
 synthExpr dbg defs gam (App e e') = do
@@ -300,11 +308,17 @@ synthExpr dbg defs gam (Binop op e e') = do
     (t, gam1)  <- synthExpr dbg defs gam e
     (t', gam2) <- synthExpr dbg defs gam e'
     case (t, t') of
-        (ConT "Int", ConT "Int") -> do
+        (ConT n, ConT m) | isNum n && isNum m -> do
             gamNew <- gam1 `ctxPlus` gam2
-            return (ConT "Int", gamNew)
+            return (ConT $ joinNum n m, gamNew)
         _ ->
             illTyped "Binary op does not have two int expressions"
+  where isNum "Int" = True
+        isNum "Real" = True
+        isNum _      = False
+        joinNum "Int" "Int" = "Int"
+        joinNum x "Real" = x
+        joinNum "Real" x = x
 
 synthExpr _ _ _ e = illTyped $ "General synth fail " ++ pretty e
 

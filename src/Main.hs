@@ -12,7 +12,7 @@ main = do
 
 run :: String -> Bool -> IO ()
 run input debug = do
-  putStrLn "\n Gram v0.1.2.0"
+  putStrLn "\n Gram v0.1.3.0"
   putStrLn "----------------------------------"
   let (ast, nameMap) = parseDefs input
   if debug

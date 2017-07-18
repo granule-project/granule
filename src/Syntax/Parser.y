@@ -17,7 +17,8 @@ import Syntax.Desugar
     in    { TokenIn }
     case  { TokenCase }
     of    { TokenOf }
-    NUM   { TokenNum $$ }
+    INT   { TokenInt $$ }
+    REAL  { TokenReal $$ }
     VAR   { TokenSym $$ }
     CONSTR { TokenConstr $$ }
     '\\'  { TokenLambda }
@@ -76,7 +77,8 @@ Pat :: { Pattern }
 Pat : VAR                          { PVar $1 }
     | '_'                          { PWild }
     | '|' VAR '|'                  { PBoxVar $2 }
-    | NUM                          { PInt $1 }
+    | INT                          { PInt $1 }
+    | REAL                         { PReal $1 }
     | CONSTR                       { PConstr $1 }
 
 Type :: { Type }
@@ -89,7 +91,7 @@ Type : CONSTR                      { ConT $1 }
 
 Coeffect :: { Coeffect }
 Coeffect :
-       NUM                     { Nat $1 }
+       INT                     { Nat $1 }
      | CONSTR                  { case $1 of
                                    "Lo" -> Level 0
                                    "Hi" -> Level 1 }
@@ -145,13 +147,15 @@ Juxt : Juxt Atom                   { App $1 $2 }
 
 Atom :: { Expr }
 Atom : '(' Expr ')'                { $2 }
-     | NUM                         { Val $ Num $1 }
+     | INT                         { Val $ NumInt $1 }
+     | REAL                        { Val $ NumReal $1 }
      | VAR                         { Val $ Var $1 }
      | '|' Atom '|'                { Val $ Promote $2 }
      | CONSTR                      { Val $ Constr $1 }
 
 
 {
+  
 parseError :: [Token] -> a
 parseError t = error $ "Parse error, at token " ++ show t
 

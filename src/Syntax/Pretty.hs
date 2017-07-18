@@ -48,6 +48,7 @@ instance Pretty Pattern where
     pretty PWild       = "_"
     pretty (PBoxVar v) = "|" ++ v ++ "|"
     pretty (PInt n)    = show n
+    pretty (PReal n)    = show n
     pretty (PApp p1 p2) = show p1 ++ " " ++ show p2
     pretty (PConstr s)  = s
 
@@ -63,7 +64,8 @@ instance Pretty Value where
     pretty (Promote e) = "[ " ++ pretty e ++ " ]"
     pretty (Pure e)    = "<" ++ pretty e ++ ">"
     pretty (Var x)     = x
-    pretty (Num n)     = show n
+    pretty (NumInt n)  = show n
+    pretty (NumReal n) = show n
     pretty (Constr s)  = s
 
 

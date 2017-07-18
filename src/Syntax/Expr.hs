@@ -14,7 +14,8 @@ data Op = Add | Sub | Mul deriving (Eq, Show)
 
 -- Values in Gram
 data Value = Abs Id Expr
-           | Num Int
+           | NumInt Int
+           | NumReal Double
            | Promote Expr
            | Pure Expr
            | Var Id
@@ -31,10 +32,11 @@ data Expr = App Expr Expr
           deriving (Eq, Show)
 
 -- Pattern matchings
-data Pattern = PVar Id    -- Variable patterns
-             | PWild      -- Wildcard (underscore) pattern
-             | PBoxVar Id -- Box patterns (with a variable pattern inside)
-             | PInt Int   -- Integer pattern
+data Pattern = PVar Id        -- Variable patterns
+             | PWild          -- Wildcard (underscore) pattern
+             | PBoxVar Id     -- Box patterns (with a variable pattern inside)
+             | PInt Int       -- Numeric patterns
+             | PReal Double
              | PConstr String -- Constructor pattern
              | PApp Pattern Pattern -- Apply pattern
           deriving (Eq, Show)

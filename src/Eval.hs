@@ -6,7 +6,7 @@ import Syntax.Expr
 import Syntax.Pretty
 import Checker.Types
 
-evalOp :: Op -> (Int -> Int -> Int)
+evalOp :: Num a => Op -> (a -> a -> a)
 evalOp Add = (+)
 evalOp Sub = (-)
 evalOp Mul = (*)
@@ -21,7 +21,7 @@ evalIn env (App (Val (Var "write")) e) = do
 
 evalIn _ (Val (Var "read")) = do
     val <- readLn
-    return $ Pure (Val (Num val))
+    return $ Pure (Val (NumInt val))
 
 evalIn _ (Val (Abs x e)) =
     return $ Abs x e
@@ -37,11 +37,16 @@ evalIn env (App e1 e2) = do
 evalIn env (Binop op e1 e2) = do
      v1 <- evalIn env e1
      v2 <- evalIn env e2
-     let x = evalOp op
      case (v1, v2) of
-       (Num n1, Num n2) -> return $ Num (n1 `x` n2)
+       (NumInt n1, NumInt n2)   -> return $ NumInt  (evalOp op n1 n2)
+       (NumInt n1, NumReal n2)  -> return $ NumReal (evalOp op (cast n1) n2)
+       (NumReal n1, NumInt n2)  -> return $ NumReal (evalOp op n1 (cast n2))
+       (NumReal n1, NumReal n2) -> return $ NumReal (evalOp op n1 n2)
        _ -> fail $ "Runtime exception: Not a number: "
                  ++ pretty v1 ++ " or " ++ pretty v2
+  where
+    cast :: Int -> Double
+    cast = fromInteger . toInteger
 
 -- GMTT big step semantics (CBN)
 
@@ -79,7 +84,8 @@ evalIn env (Case gExpr cases) = do
     pmatch ((PConstr s, e):_) (Constr s') | s == s' = evalIn env e
     pmatch ((PVar var, e):_) val              = evalIn env (subst (Val val) var e)
     pmatch ((PBoxVar var, e):_) (Promote e')  = evalIn env (subst e' var e)
-    pmatch ((PInt n, e):_)   (Num m) | n == m = evalIn env e
+    pmatch ((PInt n, e):_)  (NumInt m)  | n == m = evalIn env e
+    pmatch ((PReal n, e):_) (NumReal m) | n == m = evalIn env e
     pmatch (_:ps)            val              = pmatch ps val
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)

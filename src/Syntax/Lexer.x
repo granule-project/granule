@@ -14,7 +14,9 @@ $upper  = [A-Z]
 $eol    = [\n]
 $alphanum  = [$alpha $digit \_ \']
 @sym    = $lower $alphanum*
-@constr = $upper $alphanum*
+@constr = $upper $alpha*
+@real   = \-? $digit+ \. $digit+
+@int    = \-? $digit+
 
 tokens :-
 
@@ -26,7 +28,8 @@ tokens :-
   in                            { \s -> TokenIn }
   case                          { \s -> TokenCase }
   of                            { \s -> TokenOf }
-  $digit+                       { \s -> TokenNum (read s) }
+  @real                         { \s -> TokenReal $ read s }
+  @int                          { \s -> TokenInt  $ read s }  
   "->"                          { \s -> TokenArrow }
   \;                            { \s -> TokenSemicolon }
   \=                            { \s -> TokenEq }
@@ -57,7 +60,8 @@ data Token = TokenLet
            | TokenLambda
 	   | TokenLetBox
 	   | TokenBox
-           | TokenNum Int
+           | TokenInt Int
+	   | TokenReal Double
            | TokenSym String
            | TokenArrow
            | TokenEq
