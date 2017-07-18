@@ -100,7 +100,7 @@ checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
     Nothing -> do
       nameMap <- ask
       illTyped $ unusedVariable (unrename nameMap x)
-    Just _  -> return gam'
+    Just _  -> return (eraseVar gam' x)
 
 checkExpr _ _ _ tau (Val (Abs _ _)) =
     illTyped $ "Expected a function type, but got " ++ pretty tau
@@ -533,6 +533,12 @@ ctxPlus [] env2 = return env2
 ctxPlus ((i, v) : env1) env2 = do
   env' <- extCtxt env2 i v
   ctxPlus env1 env'
+
+-- Erase a variable from the environment
+eraseVar :: Env TyOrDisc -> Id -> Env TyOrDisc
+eraseVar [] _ = []
+eraseVar ((id, t):env) id' | id == id' = env
+                           | otherwise = (id, t) : eraseVar env id'
 
 -- ExtCtxt the environment
 extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> MaybeT Checker (Env TyOrDisc)
