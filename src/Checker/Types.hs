@@ -17,28 +17,6 @@ import Data.SBV
 
 type TyOrDisc = Either Type (Coeffect, Type)
 
--- The resource semiring class
-class Semiring c where
-  plus  :: c -> c -> c
-  mult  :: c -> c -> c
-  one   :: c
-  zero  :: c
-
--- Coeffects are a semiring
--- TODO: Coeffect will get statified later
-instance Semiring Coeffect where
-  plus (Nat n) (Nat m) = Nat (n + m)
-  plus c d = CPlus c d
-  mult (Nat n) (Nat m) = Nat (n * m)
-  mult c d = CTimes c d
-  one = Nat 1
-  zero = Nat 0
-
-oneKind :: CKind -> Coeffect
-oneKind CPoly = Nat 1
-oneKind CNat = Nat 1
-oneKind CLevel = Level 1
-
 type Env t = [(Id, t)]
 
 extend :: Env a -> Id -> a -> Env a
@@ -55,22 +33,6 @@ replace ((id', _):env) id v | id == id'
   = (id', v) : env
 replace (x : env) id v
   = x : replace env id v
-
-
--- Given an environment, derelict and discharge all variables which are not discharged
-multAll :: [Id] -> Coeffect -> Env TyOrDisc -> Env TyOrDisc
-
-multAll _ _ []
-    = []
-
-multAll vars c ((id, Left t) : env) | id `elem` vars
-    = (id, Right (c, t)) : multAll vars c env
-
-multAll vars c ((id, Right (c', t)) : env) | id `elem` vars
-    = (id, Right (c `mult` c', t)) : multAll vars c env
-
-multAll vars c ((id, Left t) : env) = multAll vars c env
-multAll vars c ((id, Right (_, t)) : env) = multAll vars c env
 
 instance Pretty (Type, Env TyOrDisc) where
     pretty (t, env) = pretty t
@@ -100,7 +62,7 @@ unrename nameMap var =
       Nothing  -> var
   where swap (a, b) = (b, a)
 
-instance Pretty (Env Type) where
+instance Pretty (Env TypeScheme) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
      where pp (var, t) = var ++ " : " ++ pretty t
 

@@ -6,6 +6,7 @@
 
 module Checker.Environment where
 
+import Checker.Coeffects
 import Data.SBV
 import Control.Monad.State.Strict
 import qualified Control.Monad.Trans.Reader as MR
@@ -24,14 +25,13 @@ evalChecker initialState nameMap =
 data CheckerState = CS
             { uniqueVarId  :: VarCounter
             , predicate    :: SolverInfo
-            , coeffectKind :: CKind
             }
 
 -- For fresh name generation
 type VarCounter  = Int
 
 -- Map from Ids to symbolic integer variables in the solver
-type SolverVars  = [(Id, SInteger)]
+type SolverVars  = [(Id, SCoeffect)]
 
 -- Pair of a predicate and the id<->solver-variables map
 type SolverInfo  = Symbolic (SBool, SolverVars)
