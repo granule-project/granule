@@ -419,10 +419,10 @@ makeEquality dbg ckinds freeVars (_, Right (c1, _)) (_, Right (c2, _)) =
   -- Debugging message
   (if dbg then ((pretty c1) ++ " == " ++ (pretty c2)) `trace` () else ()) `seq`
   -- Check that the coeffect kinds match
-  if kindOf c1 ckinds == kindOf c2 ckinds
-    then eqConstraint (compile c1 (kindOf c1 ckinds) freeVars)
-                      (compile c2 (kindOf c2 ckinds) freeVars)
-    else false
+  case mguCoeffectKinds (kindOf c1 ckinds) (kindOf c2 ckinds) of
+    Just kind -> eqConstraint (compile c1 kind freeVars)
+                               (compile c2 kind freeVars)
+    Nothing   -> false
 
 makeEquality _ _ _ _ _ = false
 
