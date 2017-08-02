@@ -1,0 +1,14 @@
+secret : |Int| Hi                   -- specified as Hi security
+secret = |42|
+
+dub : |Int| l -> |Int| l            -- at any level...
+dub |x| = |(x + x)|                 -- ...double an int
+
+main : |Int| Hi                     -- double the secret
+main = dub secret
+
+-- leak : |Int| Hi -> |Int| Lo -- fails to type check
+-- leak |x| = |x|
+
+notALeak : ||Int| Hi| 0 -> |Int| Lo
+notALeak x = |0|

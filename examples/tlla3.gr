@@ -1,0 +1,12 @@
+echo : <Int> [R, W]
+echo = let <x : Int> = read in write x
+
+doTwice : |(Int -> <Int> [R])| 2 -> |Int| 2 -> <Int> [R, R]
+doTwice |f| |x| = let <a : Int> = f x in
+                  let <b : Int> = f x in <a + b>
+
+readPlus : Int -> <Int> [R]
+readPlus x = let <y : Int> = read in <x + y>
+
+main : <Int> [R, R]
+main = doTwice |readPlus| |2|
