@@ -13,6 +13,10 @@ cond |x| = case x of False -> |False|;
 -- try : forall (l : Level) . |Int| l -> |Int| l
 -- try |x| = |(x + x)|
 
+
+-- try' : forall (l : k) . |Int| (l * (1 + 1)) -> |Int| l
+-- try' |x| = |x + x|
+
 -- go : |Int| Hi -> |Int| Hi
 -- go |x| = let |z : Int| Hi = try |x| in |(x + z)|
 
