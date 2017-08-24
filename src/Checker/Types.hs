@@ -14,6 +14,13 @@ import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.SBV
 
+-- Symbolic coeffects
+data SCoeffect =
+     SNat   SInteger
+   | SReal  SReal
+   | SLevel SInteger
+   | SAny
+  deriving (Show, Eq)
 
 type TyOrDisc = Either Type (Coeffect, Type)
 

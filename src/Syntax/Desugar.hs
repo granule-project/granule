@@ -3,8 +3,9 @@
 module Syntax.Desugar where
 
 import Syntax.Expr
-import Checker.Coeffects
+import Checker.Coeffects (kindOfFromScheme)
 import Control.Monad.State.Strict
+import qualified System.IO.Unsafe as Unsafe (unsafePerformIO)
 
 desugar :: Def -> Def
 desugar (Def var expr pats tys@(Forall ckinds ty)) =
@@ -34,7 +35,7 @@ desugar (Def var expr pats tys@(Forall ckinds ty)) =
       n <- get
       let v' = v ++ show n
       put (n + 1)
-      e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, kindOf c ckinds)])
+      e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, Unsafe.unsafePerformIO $ kindOfFromScheme c ckinds)])
       return $ Val $ Abs v' e'
 
     desguarPats _ _ _ _ = error $ "Definition of " ++ var ++ "expects at least " ++

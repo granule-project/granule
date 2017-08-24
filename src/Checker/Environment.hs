@@ -6,9 +6,11 @@
 
 module Checker.Environment where
 
-import Checker.Coeffects
 import Data.SBV
+import Checker.Types
 import Control.Monad.State.Strict
+
+import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
 
@@ -18,6 +20,9 @@ import Syntax.Expr (Id, CKind)
 data Checker a =
   Checker { unwrap :: MR.ReaderT [(Id, Id)] (StateT CheckerState IO) a }
 
+illTyped :: String -> MaybeT Checker a
+illTyped s = liftIO (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
+
 evalChecker :: CheckerState -> [(Id, Id)] -> Checker a -> IO a
 evalChecker initialState nameMap =
   flip evalStateT initialState . flip MR.runReaderT nameMap . unwrap
@@ -25,7 +30,14 @@ evalChecker initialState nameMap =
 data CheckerState = CS
             { uniqueVarId  :: VarCounter
             , predicate    :: SolverInfo
+            -- Coeffect environment, map coeffect vars to their kinds
+            , ckenv         :: Env CKind
+            -- Coeffect kind envinronemt, map coeffect kind vars to coeffect kinds
+            , ckkenv        :: Env CKind
             }
+
+initState = CS 0 ground [] []
+  where ground = return (true, [])
 
 -- For fresh name generation
 type VarCounter  = Int

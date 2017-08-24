@@ -2,10 +2,13 @@
 
 module Checker.Coeffects where
 
+import Checker.Environment
 import Checker.Types
 import Syntax.Expr
 import Syntax.Pretty
 
+import Control.Monad.State.Strict
+import Control.Monad.Trans.Maybe
 import Data.Maybe (fromJust)
 import Data.SBV hiding (kindOf)
 
@@ -30,14 +33,6 @@ oneKind CNat = Nat 1
 oneKind CLevel = Level 1
 -}
 
-
-data SCoeffect =
-     SNat   SInteger
-   | SReal  SReal
-   | SLevel SInteger
-   | SAny
-  deriving (Show, Eq)
-
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
 freshCVar :: Id -> CKind -> Symbolic (SBool, SCoeffect)
@@ -61,6 +56,7 @@ eqConstraint (SReal n) (SReal m)   = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint SAny s = true
 eqConstraint s SAny = true
+eqConstraint x y = error $ "Trying to make equal an " ++ show x ++ " with " ++ show y
 
 lteConstraint :: SCoeffect -> SCoeffect -> SBool
 lteConstraint (SNat n) (SNat m)     = n .<= m
@@ -90,6 +86,8 @@ compile (CPlus n m) k vars =
 compile (CTimes n m) k@(CConstr "Level") vars =
   case (compile n k vars, compile m k vars) of
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
+    (c, SAny)        -> c
+    (SAny, c)        -> c
 
 compile (CTimes n m) k vars =
   case (compile n k vars, compile m k vars) of
@@ -116,33 +114,92 @@ tyCoeffectKind (Box c t) = kindOf c `kindJoin` (tyCoeffectKind t)
 tyCoeffectKind (ConT _) = CPoly ""
 -}
 
-kindOf :: Coeffect -> [(Id, CKind)] -> CKind
-kindOf (Level _)    _ = CConstr "Level"
-kindOf (CNat _)     _ = CConstr "Nat"
-kindOf (CReal _)    _ = CConstr "Real"
-kindOf (CPlus n m)  env = kindOf n env `kindJoin` kindOf m env
-kindOf (CTimes n m) env = kindOf n env `kindJoin` kindOf m env
-kindOf (CVar c)     env =
-  case lookup c env of
-     Nothing -> CPoly "" -- error $ "Kind unknown for coeffect variable: " ++ c
-     Just k  -> k
-kindOf CZero _ = CPoly ""
-kindOf COne  _ = CPoly ""
+
+
+kindOfFromScheme :: Coeffect -> [(Id, CKind)] -> IO CKind
+kindOfFromScheme c env = do
+  result <- evalChecker (initState { ckenv = env }) [] (runMaybeT (kindOf c))
+  case result of
+    Just ckind -> return ckind
+    Nothing    -> error $ "Error: Can't deduce kind for coeffect " ++ pretty c
+
+-- What is the kind of a particular coeffect?
+kindOf :: Coeffect -> MaybeT Checker CKind
+
+-- Coeffect constants have an obvious kind
+kindOf (Level _)    = return $ CConstr "Level"
+kindOf (CNat _)     = return $ CConstr "Nat"
+kindOf (CReal _)    = return $ CConstr "Real"
+
+-- Take the join for compound coeffect epxressions
+kindOf (CPlus c c')  = do
+  mguCoeffectKinds c c'
+
+kindOf (CTimes c c') = do
+  mguCoeffectKinds c c'
+
+-- Coeffect variables should have a kind in the cvar->kind environment
+kindOf (CVar cvar) = do
+  state <- get
+  case lookup cvar (ckenv state) of
+     Nothing -> do
+       state <- get
+       let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
+       -- We don't know what it is yet though, so don't update the coeffect kind env
+       put (state { uniqueVarId = uniqueVarId state + 1 })
+       return newCKind
+
+-- illTyped $ "Kind unknown for coeffect variable: " ++ cvar ++ " with " ++ (show (ckenv state)) -- CPoly ""
+
+     Just (CPoly k) ->
+       case lookup k (ckkenv state) of
+         Just kind -> return kind
+         Nothing   -> return $ CPoly k
+     Just k -> return k
+
+-- Generic 0 and 1 get given a fresh poly kind
+kindOf c | c == CZero || c == COne = do
+  -- Generate a fresh coeffect kind variable
+  state <- get
+  let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
+  -- We don't know what it is yet though, so don't update the coeffect kind env
+  put (state { uniqueVarId = uniqueVarId state + 1 })
+  return newCKind
 
 
 -- This will be refined later, but for now join is the same as mgu
-kindJoin c1 c2 = fromJust $ mguCoeffectKinds c1 c2
+kindJoin c1 c2 = mguCoeffectKinds c1 c2
 
-mguCoeffectKinds :: CKind -> CKind -> Maybe CKind
-mguCoeffectKinds (CPoly "") c       = Just c
-mguCoeffectKinds c (CPoly "")       = Just c
-mguCoeffectKinds (CConstr k1) (CConstr k2) | k1 == k2 = Just $ CConstr k1
-mguCoeffectKinds (CConstr "Nat") (CConstr "Real") = Just $ CConstr "Real"
-mguCoeffectKinds (CConstr "Real") (CConstr "Nat") = Just $ CConstr "Real"
--- todo, not sure whether we really need this anymore
-mguCoeffectKinds (CConstr "Level") _      = Just $ CConstr "Level"
-mguCoeffectKinds _ (CConstr "Level")      = Just $ CConstr "Level"
-mguCoeffectKinds _ _ = Nothing
+updateCoeffectVarKind :: Id -> CKind -> MaybeT Checker ()
+updateCoeffectVarKind c k = do
+  state <- get
+  put (state { ckenv = replace (ckenv state) c k })
+
+updateCoeffectKindVarKind :: Id -> CKind -> MaybeT Checker ()
+updateCoeffectKindVarKind c k = do
+  state <- get
+  put (state { ckkenv = replace (ckkenv state) c k })
+
+mguCoeffectKinds :: Coeffect -> Coeffect -> MaybeT Checker CKind
+mguCoeffectKinds c1 c2 = do
+  ck1 <- kindOf c1
+  ck2 <- kindOf c2
+  case (ck1, ck2) of
+    (CPoly kv1, ck2) -> do
+      updateCoeffectKindVarKind kv1 ck2
+      return ck2
+--      case c1 of
+--        CVar cv1 -> updateCoeffectVarKind cv1 ck2
+--        _        -> return ()
+      return ck2
+    (ck1, CPoly kv2) -> do
+      updateCoeffectKindVarKind kv2 ck1
+      return ck1
+    (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1
+    (CConstr "Nat", CConstr "Real")     -> return $ CConstr "Real"
+    (CConstr "Real", CConstr "Nat")     -> return $ CConstr "Real"
+    (k1, k2) -> illTyped $ "Cannot unify coeffect kinds of " ++ show k1 ++ " and " ++ show k2
+       ++ "\n for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 
 -- kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
 
