@@ -32,11 +32,9 @@ data CheckerState = CS
             , predicate    :: SolverInfo
             -- Coeffect environment, map coeffect vars to their kinds
             , ckenv         :: Env CKind
-            -- Coeffect kind envinronemt, map coeffect kind vars to coeffect kinds
-            , ckkenv        :: Env CKind
             }
 
-initState = CS 0 ground [] []
+initState = CS 0 ground []
   where ground = return (true, [])
 
 -- For fresh name generation

@@ -38,11 +38,13 @@ eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint x y =
    error $ "Kind error trying to generate equality " ++ show x ++ " = " ++ show y
 
+-- | Generate less-than-equal constraints for two symbolic coeffects
 lteConstraint :: SCoeffect -> SCoeffect -> SBool
 lteConstraint (SNat n) (SNat m)     = n .<= m
 lteConstraint (SReal n) (SReal m)   = n .<= m
 lteConstraint (SLevel l) (SLevel k) = l .<= k
 
+-- Compile a coeffect term into its symbolic representation
 compile :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
 compile (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
 compile (CNat n)  (CConstr "Nat")   _ = SNat   . fromInteger . toInteger $ n
@@ -84,28 +86,11 @@ compile (COne (CConstr "Level")) (CConstr "Level") _ = SLevel 1
 compile (COne (CConstr "Nat")) (CConstr "Nat")     _ = SNat 1
 compile (COne (CConstr "Q")) (CConstr "Q")         _ = SReal (fromRational 1)
 
-{-
-compile (COne (CPoly _)) (CConstr "Level") _ = SLevel 1
-compile (COne (CPoly _)) (CConstr "Nat")   _ = SNat 1
-compile (COne (CPoly _)) (CConstr "Q")     _ = SReal (fromRational 1)
-
-compile (CZero (CPoly _)) (CConstr "Level") _ = SLevel 0
-compile (CZero (CPoly _)) (CConstr "Nat")   _ = SNat 0
-compile (CZero (CPoly _)) (CConstr "Q")     _ = SReal (fromRational 0)
--}
-
-compile c (CPoly _)           _ = error $ "Trying to compile a polymorphically kinded " ++ pretty c
-compile coeff ckind _ = error $ "Can't compile a coeffect: " ++ pretty coeff ++ " of kind " ++ show ckind
-
-{-
--- What is the coeffect kind in this type?
-tyCoeffectKind :: Type -> CKind
-tyCoeffectKind (FunTy t1 t2) = tyCoeffectKind t1 `kindJoin` tyCoeffectKind t2
-tyCoeffectKind (Diamond _ t) = tyCoeffectKind t
-tyCoeffectKind (Box c t) = kindOf c `kindJoin` (tyCoeffectKind t)
-tyCoeffectKind (ConT _) = CPoly ""
--}
-
+compile c (CPoly _) _ =
+   error $ "Trying to compile a polymorphically kinded " ++ pretty c
+compile coeff ckind _ =
+   error $ "Can't compile a coeffect: " ++ pretty coeff
+        ++ " of kind " ++ show ckind
 
 
 kindOfFromScheme :: Coeffect -> [(Id, CKind)] -> IO CKind
@@ -142,29 +127,10 @@ kindOf (CVar cvar) = do
        put (state { uniqueVarId = uniqueVarId state + 1 })
        return newCKind
 
--- illTyped $ "Kind unknown for coeffect variable: " ++ cvar ++ " with " ++ (show (ckenv state)) -- CPoly ""
-
-{- del
-     Just (CPoly k) ->
-       case lookup k (ckkenv state) of
-         Just kind -> return kind
-         Nothing   -> return $ CPoly k
--}
      Just k -> return k
 
 kindOf (CZero k) = return k
 kindOf (COne k)  = return k
-
-{-
--- Generic 0 and 1 get given a fresh poly kind
-kindOf c | c == CZero || c == COne = do
-  -- Generate a fresh coeffect kind variable
-  state <- get
-  let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
-  -- We don't know what it is yet though, so don't update the coeffect kind env
-  put (state { uniqueVarId = uniqueVarId state + 1 })
-  return newCKind
--}
 
 -- This will be refined later, but for now join is the same as mgu
 kindJoin c1 c2 = mguCoeffectKinds c1 c2
@@ -233,8 +199,6 @@ mguCoeffectKinds c1 c2 = do
     (CConstr "Real", CConstr "Nat")     -> return $ CConstr "Real"
     (k1, k2) -> illTyped $ "Cannot unify coeffect kinds of " ++ show k1 ++ " and " ++ show k2
        ++ "\n for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
-
--- kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d
 
 -- | Multiply an environment by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th

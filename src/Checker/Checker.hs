@@ -86,7 +86,7 @@ checkExprTS :: Bool          -- turn on debgging
 checkExprTS dbg defs gam (Forall ckinds ty) e = do
   -- Coeffect kinds only need a local resolution; set kind environment to scheme
   state <- get
-  put (state { ckenv = ckinds, ckkenv = [] })
+  put (state { ckenv = ckinds })
   -- check expression against type
   checkExpr dbg defs gam ty e
 
@@ -147,7 +147,7 @@ checkExpr dbg defs gam tau (App e1 e2) = do
 -- all other rules, go to synthesis
 checkExpr dbg defs gam tau e = do
   (tau', gam') <- synthExpr dbg defs gam e
-  liftIO $ putStrLn $ "I will now compare for equality " ++ show tau ++ " = " ++ show tau'
+  when dbg $ liftIO $ putStrLn $ "I will now compare for equality " ++ show tau ++ " = " ++ show tau'
   tyEq <- equalTypes dbg tau' tau
   equalCtxts dbg gam gam'
   if tyEq then return gam'
@@ -265,7 +265,6 @@ synthExpr dbg defs gam (Case e cases) = do
         Nothing       -> illTyped $ "Type of the guard expression " ++ pretty ei
                                 ++ " does not match the type of the pattern "
                                 ++ pretty pi
-  liftIO $ putStrLn $ "Completed synth on case branches"
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
   eqTypes <- foldM (\a r -> joinTypes dbg a r)
                    (head branchTys) (tail branchTys)
@@ -331,7 +330,6 @@ synthExpr dbg defs gam (Val (Promote e)) = do
    gamF <- discToFreshVarsIn (fvs e) gam (CVar var)
    state <- get
 
-   liftIO $ putStrLn $ "Coeffect env: " ++ (show $ ckenv state)
    (t, gam') <- synthExpr dbg defs gamF e
 
    return (Box (CVar var) t, (multAll (fvs e) (CVar var) gam'))
@@ -374,10 +372,8 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
               return ((coeffectVar `eqConstraint` coeffectZero) &&& pred, fVars)
           put $ checkerState { predicate = predicate' }
           return (CZero k, t)
-    liftIO $ putStrLn $ "Synthed demand in letbox was " ++ show demand
     gam1 <- checkExpr dbg defs gam (Box demand t) e1
     gamNew <- gam1 `ctxPlus` gam2
-    liftIO $ putStrLn $ "Synthesised the type " ++ show tau
     return (tau, gamNew)
 
 
@@ -564,14 +560,11 @@ discToFreshVarsIn vars env coeffect = do
     mapM toFreshVar (relevantSubEnv vars env)
   where
     toFreshVar (var, Right (c, t)) = do
-      liftIO $ putStrLn $ "Disc/Fresh " ++ show (c, coeffect)
       state <- get
-      liftIO $ putStrLn $ "ckenv " ++ show (ckenv state)
       kind <- mguCoeffectKinds c coeffect
       -- Create a fresh variable
       cvar  <- lift $ freshVar var
       -- Create a matching fresh solver variable (of the right kind)
-      liftIO $ putStrLn $ "(fscv) Disc/Fresh for kind " ++ show kind
       lift $ freshSolverCoeffectVar (cvar, kind)
       -- Update the coeffect kind environment
       modify (\s -> s { ckenv = (cvar, kind) : ckenv s })
