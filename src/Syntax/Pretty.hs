@@ -22,8 +22,8 @@ instance Pretty Coeffect where
     pretty (CNatOmega (Left ())) = "*"
     pretty (CNatOmega (Right x)) = show x
     pretty (CReal n) = show n
-    pretty (COne)    = "_1"
-    pretty (CZero)   = "_0"
+    pretty (COne k)  = "_1 : " ++ pretty k
+    pretty (CZero k) = "_0 : " ++ pretty k
     pretty (Level 0) = "Lo"
     pretty (Level n) = "Hi"
     pretty (CVar c) = c
@@ -92,6 +92,11 @@ instance Pretty Expr where
         (LetDiamond v t e1 e2) -> parens $ "let <" ++ v ++ ":" ++ pretty t ++ "> = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
         (Val v) -> pretty v
+        (Case e ps) -> "case " ++ pretty e ++ " of " ++
+                         (intercalate ";"
+                           $ map (\(p, e) -> pretty p
+                                          ++ " -> "
+                                          ++ pretty e) ps)
      where prettyOp Add = " + "
            prettyOp Sub = " - "
            prettyOp Mul = " * "

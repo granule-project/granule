@@ -212,16 +212,16 @@ arity _           = 0
 type Effect = [String]
 
 -- TODO: split Coeffect type properly into kinds
-data Coeffect = CNat Int
-              | CReal Rational
+data Coeffect = CNat   Int
+              | CReal  Rational
               | CNatOmega (Either () Int)
-              | CVar String
-              | CPlus Coeffect Coeffect
+              | CVar   String
+              | CPlus  Coeffect Coeffect
               | CTimes Coeffect Coeffect
-              | CZero
-              | COne
+              | CZero  CKind
+              | COne   CKind
               | Level Int
     deriving (Eq, Show)
 
-data CKind = CConstr String | CPoly String
+data CKind = CConstr Id | CPoly Id
     deriving (Eq, Show)

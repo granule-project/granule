@@ -86,7 +86,7 @@ checkExprTS :: Bool          -- turn on debgging
 checkExprTS dbg defs gam (Forall ckinds ty) e = do
   -- Coeffect kinds only need a local resolution; set kind environment to scheme
   state <- get
-  put (state { ckenv = ckinds, ckkenv = [("BleH", CPoly "")] })
+  put (state { ckenv = ckinds, ckkenv = [] })
   -- check expression against type
   checkExpr dbg defs gam ty e
 
@@ -105,8 +105,11 @@ checkExpr _ _ _ (ConT "Real") (Val (NumInt i)) = return []
 checkExpr _ _ _ (ConT "Real") (Val (NumReal i)) = return []
 
 checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
+  liftIO $ putStrLn $ "Checking a fun (fv = " ++ x ++ ") for " ++ show sig ++ " -> " ++ show tau
   gamE <- extCtxt gam x (Left sig)
+  liftIO $ putStrLn $ "Extended context " ++ show gamE
   gam' <- checkExpr dbg defs gamE tau e
+  liftIO $ putStrLn $ "Checked the body " ++ show gam'
   -- Linearity check, variables must be used exactly once
   case lookup x gam' of
     Nothing -> do
@@ -127,9 +130,10 @@ checkExpr _ _ _ tau (Val (Abs _ _)) =
 
 -- Promotion
 checkExpr dbg defs gam (Box demand tau) (Val (Promote e)) = do
-    state       <- get
-    gamF        <- discToFreshVarsIn (fvs e) gam
-    gam'        <- checkExpr dbg defs gamF tau e
+    liftIO $ putStrLn $ "Checking a promote for " ++ show demand
+    state   <- get
+    gamF    <- discToFreshVarsIn (fvs e) gam demand
+    gam'    <- checkExpr dbg defs gamF tau e
     let gam'' = multAll (fvs e) demand gam'
     equalCtxts dbg gam gam''
     return gam''
@@ -143,7 +147,8 @@ checkExpr dbg defs gam tau (App e1 e2) = do
 -- all other rules, go to synthesis
 checkExpr dbg defs gam tau e = do
   (tau', gam') <- synthExpr dbg defs gam e
-  tyEq <- equalTypes dbg tau tau'
+  liftIO $ putStrLn $ "I will now compare for equality " ++ show tau ++ " = " ++ show tau'
+  tyEq <- equalTypes dbg tau' tau
   equalCtxts dbg gam gam'
   if tyEq then return gam'
           else illTyped $ "Checking: (" ++ pretty e ++ "), "
@@ -151,9 +156,13 @@ checkExpr dbg defs gam tau e = do
 
 -- Check whether two types are equal, and at the same time
 -- generate coeffect equality constraints
+
+-- The first argument is taken to be possibly approximated by the second
+-- e.g., the first argument is inferred, the second is a specification
+-- being checked against
 equalTypes :: Bool -> Type -> Type -> MaybeT Checker Bool
 equalTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
-  eq1 <- equalTypes dbg t1 t1'
+  eq1 <- equalTypes dbg t1' t1 -- contravariance
   eq2 <- equalTypes dbg t2 t2'
   return (eq1 && eq2)
 
@@ -168,17 +177,56 @@ equalTypes dbg (Diamond ef t) (Diamond ef' t') = do
 
 equalTypes dbg ty@(Box c t) ty'@(Box c' t') = do
   -- Debugging
-  when dbg $ liftIO $ putStrLn (pretty c ++ " == " ++ pretty c')
+  when dbg $ liftIO $ putStrLn (pretty c ++ " == " ++ pretty c' ++ " [ " ++ show c ++ " , " ++ show c' ++ "]")
   kind <- mguCoeffectKinds c c'
   checkerState <- get
   let predicate' = do
         (pred, fVars) <- predicate checkerState
-        let pred' = eqConstraint (compile c kind fVars) (compile c' kind fVars)
+        let pred' = lteConstraint
+                        (compile c kind fVars)
+                        (compile c' kind fVars)
         return (pred &&& pred', fVars)
   put $ checkerState { predicate = predicate' }
   equalTypes dbg t t'
 
 equalTypes _ t1 t2 = illTyped $ "Type " ++ pretty t1 ++ " != " ++ pretty t2
+
+
+-- Essentially equality on types but join on any coeffects
+joinTypes :: Bool -> Type -> Type -> MaybeT Checker Type
+joinTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
+  t1j <- joinTypes dbg t1' t1 -- contravariance
+  t2j <- joinTypes dbg t2 t2'
+  return (FunTy t1j t2j)
+
+joinTypes _ (ConT t) (ConT t') | t == t' = do
+  return (ConT t)
+
+joinTypes dbg (Diamond ef t) (Diamond ef' t') = do
+  tj <- joinTypes dbg t t'
+  if (ef == ef')
+    then return (Diamond ef tj)
+    else illTyped $ "Effect mismatch: " ++ pretty ef ++ "!=" ++ pretty ef'
+
+joinTypes dbg ty@(Box c t) ty'@(Box c' t') = do
+  kind <- mguCoeffectKinds c c'
+  state <- get
+  topVar <- lift $ freshVar ""
+  put (state { ckenv = (topVar, kind) : ckenv state })
+  state <- get
+  lift $ freshSolverCoeffectVar (topVar, kind)
+  let predicate' = do
+        (pred, fVars) <- predicate state
+        let pred' = lteConstraint (compile c kind fVars) (compile (CVar topVar) kind fVars)
+                &&& lteConstraint (compile c' kind fVars) (compile (CVar topVar) kind fVars)
+        return (pred &&& pred', fVars)
+  put $ state { predicate = predicate' }
+  tj <- joinTypes dbg t t'
+  return $ Box (CVar topVar) tj
+
+joinTypes _ t1 t2 = illTyped $ "Type " ++ pretty t1 ++ " and "
+                             ++ pretty t2 ++ " have no upper bound"
+
 
 -- Synthesise types on expressions
 synthExpr :: Bool
@@ -202,11 +250,12 @@ synthExpr _ _ _ (Val (Constr s)) | s == "False" || s == "True" =
 synthExpr _ _ _ (Val (NumInt i))  = return (ConT "Int", [])
 synthExpr _ _ _ (Val (NumReal i)) = return (ConT "Real", [])
 
--- Variables
+-- Effectful lifting
 synthExpr dbg defs gam (Val (Pure e)) = do
   (ty, gam') <- synthExpr dbg defs gam e
   return (Diamond [] ty, gam')
 
+-- Case
 synthExpr dbg defs gam (Case e cases) = do
   (ty, gam') <- synthExpr dbg defs gam e
   branchTysAndCtxts <-
@@ -216,16 +265,15 @@ synthExpr dbg defs gam (Case e cases) = do
         Nothing       -> illTyped $ "Type of the guard expression " ++ pretty ei
                                 ++ " does not match the type of the pattern "
                                 ++ pretty pi
+  liftIO $ putStrLn $ "Completed synth on case branches"
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
-  eqTypes <- foldM (\a r -> do
-                     eq <- equalTypes dbg a r
-                     if eq then return r
-                           else illTyped $ "Types of branches don't match in case")
+  eqTypes <- foldM (\a r -> joinTypes dbg a r)
                    (head branchTys) (tail branchTys)
   eqResultGam <- foldM (\a r -> joinCtxts dbg a r) empty branchCtxts
   gamNew <- eqResultGam `ctxPlus` gam'
   return (eqTypes, gamNew)
 
+-- Diamond cut
 synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
   gam'        <- extCtxt gam var (Left ty)
   (tau, gam1) <- synthExpr dbg defs gam' e2
@@ -239,6 +287,7 @@ synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
          _ -> illTyped $ "Expected a diamond type"
     _ -> illTyped $ "Expected a diamond type"
 
+-- Variables
 synthExpr _ defs gam (Val (Var x)) = do
    nameMap <- ask
    case lookup x gam of
@@ -253,7 +302,9 @@ synthExpr _ defs gam (Val (Var x)) = do
                               ++ " or definitions " ++ pretty defs
 
      Just (Left ty)       -> return (ty, [(x, Left ty)])
-     Just (Right (c, ty)) -> return (ty, [(x, Right (one, ty))])
+     Just (Right (c, ty)) -> do
+       k <- kindOf c
+       return (ty, [(x, Right (COne k, ty))])
 
 -- Application
 synthExpr dbg defs gam (App e e') = do
@@ -267,15 +318,32 @@ synthExpr dbg defs gam (App e e') = do
 
 -- Promotion
 synthExpr dbg defs gam (Val (Promote e)) = do
-   gamF <- discToFreshVarsIn (fvs e) gam
-   (t, gam') <- synthExpr dbg defs gamF e
+   when dbg $ liftIO $ putStrLn $ "Synthing a promotion of " ++ pretty e
+   -- Create a fresh coeffect variable for the coeffect of the promoting thing
    var <- lift . freshVar $ "prom_" ++ [head (pretty e)]
+
+   -- Create a fresh kind variable for this coeffect
+   vark <- lift  . freshVar $ "kprom_" ++ [head (pretty e)]
+   -- Update coeffect-kind environment
+   state <- get
+   put (state { ckenv = (var, CPoly vark) : (ckenv state) })
+
+   gamF <- discToFreshVarsIn (fvs e) gam (CVar var)
+   state <- get
+
+   liftIO $ putStrLn $ "Coeffect env: " ++ (show $ ckenv state)
+   (t, gam') <- synthExpr dbg defs gamF e
+
    return (Box (CVar var) t, (multAll (fvs e) (CVar var) gam'))
 
 -- Letbox
 synthExpr dbg defs gam (LetBox var t k e1 e2) = do
 
     cvar <- lift $ freshVar ("binder_" ++ var)
+    -- Update coeffect-kind environment
+    state <- get
+    put (state { ckenv = (cvar, k) : (ckenv state) })
+
     lift $ freshSolverCoeffectVar (cvar, k)
     gam' <- extCtxt gam var (Right (CVar cvar, t))
 
@@ -283,7 +351,7 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
     (demand, t) <-
       case lookup var gam2 of
         Just (Right (demand, t')) -> do
-             eqT <- equalTypes dbg t t'
+             eqT <- equalTypes dbg t' t
              if eqT then do
                 when dbg $ liftIO . putStrLn $
                      "Demand for " ++ var ++ " = " ++ pretty demand
@@ -302,12 +370,14 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
           let predicate' = do
               (pred, fVars)   <- predicate checkerState
               let coeffectVar  = compile (CVar cvar) k fVars
-              let coeffectZero = compile zero k fVars
+              let coeffectZero = compile (CZero k)   k fVars
               return ((coeffectVar `eqConstraint` coeffectZero) &&& pred, fVars)
           put $ checkerState { predicate = predicate' }
-          return (zero, t)
+          return (CZero k, t)
+    liftIO $ putStrLn $ "Synthed demand in letbox was " ++ show demand
     gam1 <- checkExpr dbg defs gam (Box demand t) e1
     gamNew <- gam1 `ctxPlus` gam2
+    liftIO $ putStrLn $ "Synthesised the type " ++ show tau
     return (tau, gamNew)
 
 
@@ -368,18 +438,6 @@ freshVar s = Checker $ do
   put $ checkerState { uniqueVarId = v + 1 }
   return cvar
 
--- Generate a fresh coeffect variable in the solver environment
-freshSolverCoeffectVar :: (Id, CKind) -> Checker ()
-freshSolverCoeffectVar (cvar, kind) = Checker $ do
-  checkerState <- get
-  let predicate' = do
-      (pred, vars) <- predicate checkerState
-      case lookup cvar vars of
-        Nothing -> do (refinement, solverVar) <- freshCVar cvar kind
-                      return (pred &&& refinement, (cvar, solverVar) : vars)
-        _ -> return (pred, vars)
-  put $ checkerState { predicate = predicate' }
-  return ()
 
 
 -- Wrappers to make it clear the provneance of arguments
@@ -408,6 +466,8 @@ unifyContextKinds x@(_, Left _) y@(_, Left _) = return (x, y, Nothing)
 unifyContextKinds x@(_, Right (c1, _)) y@(_, Right (c2, _)) = do
   kind <- mguCoeffectKinds c1 c2
   return (x, y, Just kind)
+unifyContextKinds x y = illTyped $ "Can't unify free-variable types: "
+                     ++ show x ++ " - " ++ show y
 
 makeEquality :: Bool
              -> SolverVars
@@ -417,7 +477,7 @@ makeEquality _ _ ((_, Left _), (_, Left _), _) = true
 makeEquality dbg freeVars ((_, Right (c1, _)), (_, Right (c2, _)), Just kind) =
   -- Debugging message
   (if dbg then ((pretty c1) ++ " == " ++ (pretty c2)) `trace` () else ()) `seq`
-  eqConstraint (compile c1 kind freeVars) (compile c2 kind freeVars)
+  lteConstraint (compile c1 kind freeVars) (compile c2 kind freeVars)
 
 makeEquality _ _ _ = false
 
@@ -426,7 +486,7 @@ joinCtxts dbg env1 env2 = do
     let env  = env1 `keyIntersect` env2
         env' = env2 `keyIntersect` env1
     -- Postcondition: env and env' have the same length, same keys, same order
-    varEnv <- discToFreshVarsIn (map fst env) env
+    varEnv <- freshVarsIn (map fst env) env
 
     checkerState <- get
     envUnif <- zipWithM unifyContextKinds env varEnv
@@ -480,16 +540,15 @@ freshPolymorphicInstance (Forall ckinds ty) = do
 
     renameC rmap (CVar v) =
       case (lookup v rmap) of
-        Just v' -> return $ CVar v
+        Just v' -> return $ CVar v'
         Nothing -> illTyped $ "Coeffect variable " ++ v ++ " is unbound"
 
     renameC _ c = return c
 
     freshCoeffectVar (cvar, kind) = do
       checkerState <- get
-      let v = uniqueVarId checkerState
-      let cvar' = cvar ++ show v
-      put $ checkerState { uniqueVarId = v + 1 }
+      cvar' <- freshVar cvar
+      put $ checkerState { ckenv = (cvar', kind) : ckenv checkerState }
       freshSolverCoeffectVar (cvar', kind)
       return $ (cvar, cvar')
 
@@ -497,16 +556,41 @@ relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubEnv vars env = filter relevant env
  where relevant (var, _) = var `elem` vars
 
--- Replace all top-level discharged coeffects with a variable and derelict anything else
+-- Replace all top-level discharged coeffects with a variable
+-- and derelict anything else
 -- but add a var
-discToFreshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
-discToFreshVarsIn vars env = do
+discToFreshVarsIn :: [Id] -> Env TyOrDisc -> Coeffect -> MaybeT Checker (Env TyOrDisc)
+discToFreshVarsIn vars env coeffect = do
     mapM toFreshVar (relevantSubEnv vars env)
   where
     toFreshVar (var, Right (c, t)) = do
+      liftIO $ putStrLn $ "Disc/Fresh " ++ show (c, coeffect)
+      state <- get
+      liftIO $ putStrLn $ "ckenv " ++ show (ckenv state)
+      kind <- mguCoeffectKinds c coeffect
       -- Create a fresh variable
       cvar  <- lift $ freshVar var
+      -- Create a matching fresh solver variable (of the right kind)
+      liftIO $ putStrLn $ "(fscv) Disc/Fresh for kind " ++ show kind
+      lift $ freshSolverCoeffectVar (cvar, kind)
+      -- Update the coeffect kind environment
+      modify (\s -> s { ckenv = (cvar, kind) : ckenv s })
+      -- Return the freshened var-type mapping
+      return $ (var, Right (CVar cvar, t))
+
+    toFreshVar (var, Left t) = do
+      kind <- kindOf coeffect
+      return (var, Right (COne kind, t))
+
+
+freshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
+freshVarsIn vars env = do
+    mapM toFreshVar (relevantSubEnv vars env)
+  where
+    toFreshVar (var, Right (c, t)) = do
       ckind <- kindOf c
+      -- Create a fresh variable
+      cvar  <- lift $ freshVar var
       -- Create a matching fresh solver variable (of the right kind)
       lift $ freshSolverCoeffectVar (cvar, ckind)
       -- Update the coeffect kind environment
@@ -515,10 +599,16 @@ discToFreshVarsIn vars env = do
       return $ (var, Right (CVar cvar, t))
 
     toFreshVar (var, Left t) = do
-{-      v <- freshVar var
-      -- TODO: check this
-      return (var, Right (CVar var, t)) -}
-      return (var, Right (COne, t))
+      -- Create a fresh coeffect variable
+      cvar  <- lift $ freshVar var
+      -- Create a fresh kindvariable
+      ckind  <- lift $ freshVar var
+      -- Create a matching fresh solver variable (of the right kind)
+      lift $ freshSolverCoeffectVar (cvar, CPoly ckind)
+      -- Update the coeffect kind environment
+      modify (\s -> s { ckenv = (cvar, CPoly ckind) : ckenv s })
+      return (var, Right (COne (CPoly ckind), t))
+
 
 -- Combine two contexts
 ctxPlus :: Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
@@ -545,7 +635,9 @@ extCtxt env var (Left t) = do
         else illTyped $ "Type clash for variable " ++ var'
     Just (Right (c, t')) ->
        if t == t'
-         then return $ replace env var (Right (c `plus` one, t))
+         then do
+           k <- kindOf c
+           return $ replace env var (Right (c `CPlus` (COne k), t))
          else illTyped $ "Type clash for variable " ++ var'
     Nothing -> return $ (var, Left t) : env
 
@@ -554,13 +646,15 @@ extCtxt env var (Right (c, t)) = do
   case (lookup var env) of
     Just (Right (c', t')) ->
         if t == t'
-        then return $ replace env var (Right (c `plus` c', t'))
+        then return $ replace env var (Right (c `CPlus` c', t'))
         else do
           var' <- return $ unrename nameMap var
           illTyped $ "Type clash for variable " ++ var'
     Just (Left t') ->
         if t == t'
-        then return $ replace env var (Right (c `plus` one, t))
+        then do
+           k <- kindOf c
+           return $ replace env var (Right (c `CPlus` (COne k), t))
         else do
           var' <- return $ unrename nameMap var
           illTyped $ "Type clash for variable " ++ var'

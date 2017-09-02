@@ -38,6 +38,6 @@ desugar (Def var expr pats tys@(Forall ckinds ty)) =
       e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, Unsafe.unsafePerformIO $ kindOfFromScheme c ckinds)])
       return $ Val $ Abs v' e'
 
-    desguarPats _ _ _ _ = error $ "Definition of " ++ var ++ "expects at least " ++
+    desguarPats _ _ _ _ = error $ "Definition of " ++ var ++ " expects at least " ++
                       show (length pats) ++ " arguments, but signature " ++
                       " specifies: " ++ show (arity ty)
