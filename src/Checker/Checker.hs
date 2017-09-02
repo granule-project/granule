@@ -105,11 +105,8 @@ checkExpr _ _ _ (ConT "Real") (Val (NumInt i)) = return []
 checkExpr _ _ _ (ConT "Real") (Val (NumReal i)) = return []
 
 checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
-  liftIO $ putStrLn $ "Checking a fun (fv = " ++ x ++ ") for " ++ show sig ++ " -> " ++ show tau
   gamE <- extCtxt gam x (Left sig)
-  liftIO $ putStrLn $ "Extended context " ++ show gamE
   gam' <- checkExpr dbg defs gamE tau e
-  liftIO $ putStrLn $ "Checked the body " ++ show gam'
   -- Linearity check, variables must be used exactly once
   case lookup x gam' of
     Nothing -> do
@@ -130,7 +127,6 @@ checkExpr _ _ _ tau (Val (Abs _ _)) =
 
 -- Promotion
 checkExpr dbg defs gam (Box demand tau) (Val (Promote e)) = do
-    liftIO $ putStrLn $ "Checking a promote for " ++ show demand
     state   <- get
     gamF    <- discToFreshVarsIn (fvs e) gam demand
     gam'    <- checkExpr dbg defs gamF tau e

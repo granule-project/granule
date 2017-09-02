@@ -138,13 +138,12 @@ kindJoin c1 c2 = mguCoeffectKinds c1 c2
 -- Generate a fresh coeffect variable in the solver environment
 freshSolverCoeffectVar :: (Id, CKind) -> Checker ()
 freshSolverCoeffectVar (cvar, kind) = Checker $ do
-  liftIO $ putStrLn $ "Trying to make a fresh coeffect var " ++ cvar ++ " of kind " ++ show kind
   checkerState <- get
   let predicate' = do
       (pred, vars) <- predicate checkerState
       case lookup cvar vars of
         Nothing -> do (refinement, solverVar) <- freshCVar cvar kind
-                      ("OK: " ++ (show $ (cvar, solverVar) : vars)) `trace` return (pred &&& refinement, (cvar, solverVar) : vars)
+                      return (pred &&& refinement, (cvar, solverVar) : vars)
         _ -> return (pred, vars)
   put $ checkerState { predicate = predicate' }
   return ()
