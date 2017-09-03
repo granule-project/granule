@@ -293,8 +293,8 @@ synthExpr dbg defs gam (LetDiamond var ty e1 e2) = do
          Diamond ef1 ty' | ty == ty' -> do
              gamNew <- gam1 `ctxPlus` gam2
              return (Diamond (ef1 ++ ef2) tau', gamNew)
-         _ -> illTyped $ "Expected a diamond type"
-    _ -> illTyped $ "Expected a diamond type"
+         t -> illTyped $ "Expected a type " ++ pretty ty ++  "but in result of let<>, but inferred " ++ pretty t
+    t -> illTyped $ "Expected a diamond type in subjet of let<>, but inferred " ++ pretty t
 
 -- Variables
 synthExpr _ defs gam (Val (Var x)) = do
@@ -473,8 +473,8 @@ unifyContextKinds x@(_, Left _) y@(_, Left _) = return (x, y, Nothing)
 unifyContextKinds x@(_, Right (c1, _)) y@(_, Right (c2, _)) = do
   kind <- mguCoeffectKinds c1 c2
   return (x, y, Just kind)
-unifyContextKinds x y = illTyped $ "Can't unify free-variable types: "
-                     ++ show x ++ " - " ++ show y
+unifyContextKinds x y = illTyped $ "Can't unify free-variable types:\n\t"
+                     ++ pretty x ++ "\nwith\n\t" ++ pretty y
 
 makeEquality :: Bool
              -> SolverVars

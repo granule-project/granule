@@ -43,6 +43,12 @@ replace (x : env) id v
 instance Pretty (Type, Env TyOrDisc) where
     pretty (t, env) = pretty t
 
+instance Pretty (Id, TyOrDisc) where
+    pretty (v, ty) = v ++ " : " ++ pretty ty
+
+instance Pretty TyOrDisc where
+    pretty (Left ty) = pretty ty
+    pretty (Right (c, ty)) = "|" ++ pretty ty ++ "|." ++ pretty c
 
 keyIntersect :: Env a -> Env a -> Env a
 keyIntersect a b = sortBy (\a b -> fst a `compare` fst b) $ filter (appearsIn a) b
