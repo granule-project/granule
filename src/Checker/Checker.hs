@@ -172,7 +172,7 @@ checkExpr dbg defs gam pol tau e = do
 -- being checked against
 equalTypes :: Bool -> Type -> Type -> MaybeT Checker Bool
 equalTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
-  eq1 <- equalTypes dbg t1 t1 -- contravariance
+  eq1 <- equalTypes dbg t1' t1 -- contravariance
   eq2 <- equalTypes dbg t2 t2'
   return (eq1 && eq2)
 
@@ -382,6 +382,7 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
               return ((coeffectVar `eqConstraint` coeffectZero) &&& pred, fVars)
           put $ checkerState { predicate = predicate' }
           return (CZero k, t)
+
     gam1 <- checkExpr dbg defs gam Negative (Box demand t) e1
     gamNew <- gam1 `ctxPlus` gam2
     return (tau, gamNew)
