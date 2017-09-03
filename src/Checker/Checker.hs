@@ -44,6 +44,8 @@ check defs dbg nameMap = do
                  then return ()
                  else illTyped "Constraints violated"
                return env'
+      state <- get
+      put (state { predicate = return (true, []) })
       -- synth attempt to get better error messages
       {-let synthAttempt = do
            (ty, _) <- synthExpr dbg def_env [] expr

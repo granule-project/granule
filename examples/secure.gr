@@ -1,7 +1,6 @@
 -- The following is not typeable
-
--- leak : |Int| Hi -> |Int| Lo
--- leak |x| = |x|
+--leak : |Int| Hi -> |Int| Lo
+--leak |x| = |x|
 
 notALeak : ||Int| Hi| 0 -> |Int| Lo
 notALeak |x| = |0|
