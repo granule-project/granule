@@ -90,25 +90,31 @@ checkExprTS dbg defs gam (Forall ckinds ty) e = do
   state <- get
   put (state { ckenv = ckinds })
   -- check expression against type
-  checkExpr dbg defs gam ty e
+  checkExpr dbg defs gam Positive ty e
+
+data Polarity = Positive | Negative deriving Show
+
+flipPol Positive = Negative
+flipPol Negative = Positive
 
 checkExpr :: Bool             -- turn on debgging
           -> Env TypeScheme   -- environment of top-level definitions
           -> Env TyOrDisc     -- local typing context
+          -> Polarity         -- polarity of <= constraints
           -> Type             -- type
           -> Expr             -- expression
           -> MaybeT Checker (Env TyOrDisc)
 
 -- Checking of constants
 
-checkExpr _ _ _ (ConT "Int") (Val (NumInt i)) = return []
+checkExpr _ _ _ _ (ConT "Int") (Val (NumInt i)) = return []
   -- Automatically upcast integers to reals
-checkExpr _ _ _ (ConT "Real") (Val (NumInt i)) = return []
-checkExpr _ _ _ (ConT "Real") (Val (NumReal i)) = return []
+checkExpr _ _ _ _ (ConT "Real") (Val (NumInt i)) = return []
+checkExpr _ _ _ _ (ConT "Real") (Val (NumReal i)) = return []
 
-checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
+checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x e)) = do
   gamE <- extCtxt gam x (Left sig)
-  gam' <- checkExpr dbg defs gamE tau e
+  gam' <- checkExpr dbg defs gamE pol tau e
   -- Linearity check, variables must be used exactly once
   case lookup x gam' of
     Nothing -> do
@@ -116,7 +122,7 @@ checkExpr dbg defs gam (FunTy sig tau) (Val (Abs x e)) = do
       illTyped $ unusedVariable (unrename nameMap x)
     Just _  -> return (eraseVar gam' x)
 
-checkExpr _ _ _ tau (Val (Abs _ _)) =
+checkExpr _ _ _ _ tau (Val (Abs _ _)) =
     illTyped $ "Expected a function type, but got " ++ pretty tau
 
 {-
@@ -128,26 +134,32 @@ checkExpr _ _ _ tau (Val (Abs _ _)) =
 -}
 
 -- Promotion
-checkExpr dbg defs gam (Box demand tau) (Val (Promote e)) = do
+checkExpr dbg defs gam pol (Box demand tau) (Val (Promote e)) = do
     state   <- get
     gamF    <- discToFreshVarsIn (fvs e) gam demand
-    gam'    <- checkExpr dbg defs gamF tau e
+    gam'    <- checkExpr dbg defs gamF pol tau e
     let gam'' = multAll (fvs e) demand gam'
     equalCtxts dbg gam gam''
     return gam''
 
 -- Application
-checkExpr dbg defs gam tau (App e1 e2) = do
+checkExpr dbg defs gam pol tau (App e1 e2) = do
     (sig, gam1) <- synthExpr dbg defs gam e2
-    gam2 <- checkExpr dbg defs gam (FunTy sig tau) e1
+    gam2 <- checkExpr dbg defs gam pol (FunTy sig tau) e1
     gam1 `ctxPlus` gam2
 
 -- all other rules, go to synthesis
-checkExpr dbg defs gam tau e = do
+checkExpr dbg defs gam pol tau e = do
   (tau', gam') <- synthExpr dbg defs gam e
-  when dbg $ liftIO $ putStrLn $ "I will now compare for equality " ++ show tau ++ " = " ++ show tau'
-  tyEq <- equalTypes dbg tau' tau
-  equalCtxts dbg gam gam'
+  tyEq <- case pol of
+            Positive -> do
+              when dbg $ liftIO $ putStrLn $ "+ Compare for equality " ++ show tau' ++ " = " ++ show tau
+              equalTypes dbg tau' tau
+            -- i.e., this check is from a synth
+            Negative -> do
+              when dbg $ liftIO $ putStrLn $ "- Compare for equality " ++ show tau ++ " = " ++ show tau'
+              equalTypes dbg tau tau'
+  equalCtxts dbg gam' gam
   if tyEq then return gam'
           else illTyped $ "Checking: (" ++ pretty e ++ "), "
                         ++ show tau ++ " != " ++ show tau'
@@ -160,7 +172,7 @@ checkExpr dbg defs gam tau e = do
 -- being checked against
 equalTypes :: Bool -> Type -> Type -> MaybeT Checker Bool
 equalTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
-  eq1 <- equalTypes dbg t1' t1 -- contravariance
+  eq1 <- equalTypes dbg t1 t1 -- contravariance
   eq2 <- equalTypes dbg t2 t2'
   return (eq1 && eq2)
 
@@ -308,7 +320,7 @@ synthExpr dbg defs gam (App e e') = do
     (f, gam1) <- synthExpr dbg defs gam e
     case f of
       (FunTy sig tau) -> do
-         gam2 <- checkExpr dbg defs gam sig e'
+         gam2 <- checkExpr dbg defs gam Negative sig e'
          gamNew <- gam1 `ctxPlus` gam2
          return (tau, gamNew)
       _ -> illTyped "Left-hand side of app is not a function type"
@@ -370,7 +382,7 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
               return ((coeffectVar `eqConstraint` coeffectZero) &&& pred, fVars)
           put $ checkerState { predicate = predicate' }
           return (CZero k, t)
-    gam1 <- checkExpr dbg defs gam (Box demand t) e1
+    gam1 <- checkExpr dbg defs gam Negative (Box demand t) e1
     gamNew <- gam1 `ctxPlus` gam2
     return (tau, gamNew)
 

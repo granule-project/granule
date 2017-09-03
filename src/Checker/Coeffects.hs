@@ -42,7 +42,7 @@ eqConstraint x y =
 lteConstraint :: SCoeffect -> SCoeffect -> SBool
 lteConstraint (SNat n) (SNat m)     = n .<= m
 lteConstraint (SReal n) (SReal m)   = n .<= m
-lteConstraint (SLevel l) (SLevel k) = l .<= k
+lteConstraint (SLevel l) (SLevel k) = l .== k
 
 -- Compile a coeffect term into its symbolic representation
 compile :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
