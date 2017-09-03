@@ -1,10 +1,11 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Syntax.Expr (Id, Value(..), Expr(..), Type(..), Def(..), Op(..),
+module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
+                   Def(..), Op(..),
                    Pattern(..), CKind(..), Coeffect(..), Effect,
-                   uniqueNames, arity, fvs, subst,
-                   kindOf, kindJoin, tyCoeffectKind) where
+                   uniqueNames, arity, fvs, subst
+                   ) where
 
 import Data.List
 import Control.Monad.State
@@ -25,7 +26,7 @@ data Value = Abs Id Expr
 -- Expressions (computations) in Gram
 data Expr = App Expr Expr
           | Binop Op Expr Expr
-          | LetBox Id Type Expr Expr
+          | LetBox Id Type CKind Expr Expr
           | LetDiamond Id Type Expr Expr
           | Val Value
           | Case Expr [(Pattern, Expr)]
@@ -125,7 +126,7 @@ instance Term Value where
 instance Term Expr where
    fvs (App e1 e2)            = fvs e1 ++ fvs e2
    fvs (Binop _ e1 e2)        = fvs e1 ++ fvs e2
-   fvs (LetBox x _ e1 e2)     = fvs e1 ++ ((fvs e2) \\ [x])
+   fvs (LetBox x _ _ e1 e2)   = fvs e1 ++ ((fvs e2) \\ [x])
    fvs (LetDiamond x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
    fvs (Val e)                = fvs e
    fvs (Case e cases)         = fvs e ++ (concatMap (fvs . snd) cases
@@ -133,19 +134,19 @@ instance Term Expr where
 
    subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
    subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
-   subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
+   subst es v (LetBox w t k e1 e2) = LetBox w t k (subst es v e1) (subst es v e2)
    subst es v (LetDiamond w t e1 e2) =
                                    LetDiamond w t (subst es v e1) (subst es v e2)
    subst es v (Val val)          = subst es v val
-   subst es v (Case e cases)     = Case
-                                     (subst es v e)
+   subst es v (Case expr cases)  = Case
+                                     (subst es v expr)
                                      (map (\(p, e) -> (p, subst es v e)) cases)
 
-   freshen (LetBox var t e1 e2) = do
+   freshen (LetBox var t k e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
-      return $ LetBox var' t e1' e2'
+      return $ LetBox var' t k e1' e2'
 
    freshen (App e1 e2) = do
       e1' <- freshen e1
@@ -163,13 +164,13 @@ instance Term Expr where
       e2' <- freshen e2
       return $ Binop op e1' e2'
 
-   freshen (Case e cases) = do
-      e'     <- freshen e
+   freshen (Case expr cases) = do
+      expr'     <- freshen expr
       cases' <- forM cases $ \(p, e) -> do
                   p' <- freshenBinder p
                   e' <- freshen e
                   return (p', e')
-      return (Case e' cases')
+      return (Case expr' cases')
 
    freshen (Val v) = do
      v' <- freshen v
@@ -178,7 +179,7 @@ instance Term Expr where
 
 --------- Definitions
 
-data Def = Def Id Expr [Pattern] Type
+data Def = Def Id Expr [Pattern] TypeScheme
           deriving (Eq, Show)
 
 -- Alpha-convert all bound variables
@@ -194,6 +195,9 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
 
 ----------- Types
 
+data TypeScheme = Forall [(String, CKind)] Type
+    deriving (Eq, Show)
+
 data Type = FunTy Type Type
           | ConT String
           | Box Coeffect Type
@@ -208,35 +212,16 @@ arity _           = 0
 type Effect = [String]
 
 -- TODO: split Coeffect type properly into kinds
-data Coeffect = Nat Int
-              | CVar String
-              | CPlus Coeffect Coeffect
+data Coeffect = CNat   Int
+              | CReal  Rational
+              | CNatOmega (Either () Int)
+              | CVar   String
+              | CPlus  Coeffect Coeffect
               | CTimes Coeffect Coeffect
+              | CZero  CKind
+              | COne   CKind
               | Level Int
     deriving (Eq, Show)
 
-data CKind = CNat | CLevel | CPoly
+data CKind = CConstr Id | CPoly Id
     deriving (Eq, Show)
-
--- What is the coeffect kind in this type?
-tyCoeffectKind :: Type -> CKind
-tyCoeffectKind (FunTy t1 t2) = tyCoeffectKind t1 `kindJoin` tyCoeffectKind t2
-tyCoeffectKind (Diamond _ t) = tyCoeffectKind t
-tyCoeffectKind (Box c t) = kindOf c `kindJoin` (tyCoeffectKind t)
-tyCoeffectKind (ConT _) = CPoly
-
-kindOf :: Coeffect -> CKind
-kindOf (Level _)    = CLevel
-kindOf (Nat _)      = CNat
-kindOf (CPlus n m)  = kindOf n `kindJoin` kindOf m
-kindOf (CTimes n m) = kindOf n `kindJoin` kindOf m
-kindOf (CVar _)     = CPoly
-
-kindJoin :: CKind -> CKind -> CKind
-kindJoin CPoly c       = c
-kindJoin c CPoly       = c
-kindJoin CLevel CLevel = CLevel
-kindJoin CNat CNat     = CNat
-kindJoin CLevel _      = CLevel
-kindJoin _ CLevel      = CLevel
--- kindJoin c d = error $ "Coeffect kind mismatch " ++ show c ++ " != " ++ show d

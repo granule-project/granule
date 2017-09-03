@@ -4,6 +4,7 @@ module Syntax.Parser where
 import Syntax.Lexer
 import Syntax.Expr
 import Syntax.Desugar
+import Numeric
 
 }
 
@@ -21,6 +22,7 @@ import Syntax.Desugar
     REAL  { TokenReal $$ }
     VAR   { TokenSym $$ }
     CONSTR { TokenConstr $$ }
+    forall { TokenForall }
     '\\'  { TokenLambda }
     '->'  { TokenArrow }
     ','   { TokenComma }
@@ -40,6 +42,7 @@ import Syntax.Desugar
     '|'   { TokenPipe }
     '_'   { TokenUnderscore }
     ';'   { TokenSemicolon }
+    '.'   { TokenPeriod }
 
 
 %right in
@@ -62,8 +65,8 @@ Def : Sig nl Binding            { if (fst $1 == fst3 $3)
 	                           then Def (fst3 $3) (snd3 $3) (thd3 $3) (snd $1)
  	                           else error $ "Signature for " ++ fst3 $3 ++ " does not match the signature head" }
 
-Sig ::  { (String, Type) }
-Sig : VAR ':' Type                 { ($1, $3) }
+Sig ::  { (String, TypeScheme) }
+Sig : VAR ':' TypeScheme           { ($1, $3) }
 
 Binding :: { (String, Expr, [Pattern]) }
 Binding : VAR '=' Expr             { ($1, $3, []) }
@@ -78,11 +81,35 @@ Pat : VAR                          { PVar $1 }
     | '_'                          { PWild }
     | '|' VAR '|'                  { PBoxVar $2 }
     | INT                          { PInt $1 }
-    | REAL                         { PReal $1 }
+    | REAL                         { PReal $ read $1 }
     | CONSTR                       { PConstr $1 }
 
+TypeScheme :: { TypeScheme }
+TypeScheme :
+    Type                             { Forall [] $1 }
+  | forall '(' CKinds ')' '.' Type   { Forall $3 $6 }
+  | forall CKinds '.' Type           { Forall $2 $4 }
+
+
+CKinds :: { [(String, CKind)] }
+CKinds :
+   CKindSig ',' CKinds { $1 : $3 }
+ | CKindSig            { [$1] }
+
+CKindSig :: { (String, CKind) }
+CKindSig :
+    VAR ':' CKind { ($1, $3) }
+  | VAR           { ($1, CPoly "") }
+
+CKind :: { CKind }
+CKind :
+    VAR     { CPoly $1 }
+  | CONSTR  { CConstr $1 }
+
+
 Type :: { Type }
-Type : CONSTR                      { ConT $1 }
+Type :
+       CONSTR                      { ConT $1 }
      | Type '->' Type              { FunTy $1 $3 }
      | '|' Type '|' Coeffect       { Box $4 $2 }
      | '(' Type ')'                { $2 }
@@ -91,7 +118,8 @@ Type : CONSTR                      { ConT $1 }
 
 Coeffect :: { Coeffect }
 Coeffect :
-       INT                     { Nat $1 }
+       INT                     { CNat $1 }
+     | REAL                    { CReal $ myReadFloat $1 }
      | CONSTR                  { case $1 of
                                    "Lo" -> Level 0
                                    "Hi" -> Level 1 }
@@ -116,8 +144,8 @@ Eff :
 
 Expr :: { Expr }
 Expr : let VAR '=' Expr in Expr    { App (Val (Abs $2 $6)) $4 }
-     | let '|' VAR ':' Type '|' '=' Expr in Expr
-                                   { LetBox $3 $5 $8 $10 }
+     | let '|' VAR ':' Type '|' CKind '=' Expr in Expr
+                                   { LetBox $3 $5 $7 $9 $11 }
      | '\\' VAR '->' Expr          { Val (Abs $2 $4) }
      | let '<' VAR ':' Type '>' '=' Expr in Expr
                                    { LetDiamond $3 $5 $8 $10 }
@@ -148,7 +176,7 @@ Juxt : Juxt Atom                   { App $1 $2 }
 Atom :: { Expr }
 Atom : '(' Expr ')'                { $2 }
      | INT                         { Val $ NumInt $1 }
-     | REAL                        { Val $ NumReal $1 }
+     | REAL                        { Val $ NumReal $ read $1 }
      | VAR                         { Val $ Var $1 }
      | '|' Atom '|'                { Val $ Promote $2 }
      | CONSTR                      { Val $ Constr $1 }
@@ -161,6 +189,12 @@ parseError t = error $ "Parse error, at token " ++ show t
 
 parseDefs :: String -> ([Def], [(Id, Id)])
 parseDefs = uniqueNames . map desugar . defs . scanTokens
+
+myReadFloat :: String -> Rational
+myReadFloat str =
+    case readFloat str of
+      ((n, []):_) -> n
+      _ -> error "Invalid number"
 
 fst3 (a, b, c) = a
 snd3 (a, b, c) = b

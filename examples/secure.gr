@@ -1,20 +1,15 @@
 -- The following is not typeable
-
 --leak : |Int| Hi -> |Int| Lo
 --leak |x| = |x|
-
-cond : |Bool| Hi -> |Bool| Lo
-cond |x| = case x of False -> |False|;
-                     True -> |True|
 
 notALeak : ||Int| Hi| 0 -> |Int| Lo
 notALeak |x| = |0|
 
-try : |Int| l -> |Int| l
+try : forall (l : Level) . |Int| l -> |Int| l
 try |x| = |(x + x)|
 
 go : |Int| Hi -> |Int| Hi
-go |x| = |(x + (let |z : Int| = try |x| in z))|
+go |x| = let |z : Int| Level = try |x| in |(x + z)|
 
 main : |Int| Hi
-main = go |1|
+main = |1|

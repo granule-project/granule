@@ -18,18 +18,31 @@ instance Pretty Effect where
    pretty es = "[" ++ intercalate "," es ++ "]"
 
 instance Pretty Coeffect where
-    pretty (Nat n) = show n
+    pretty (CNat n) = show n
+    pretty (CNatOmega (Left ())) = "*"
+    pretty (CNatOmega (Right x)) = show x
+    pretty (CReal n) = show n
+    pretty (COne k)  = "_1 : " ++ pretty k
+    pretty (CZero k) = "_0 : " ++ pretty k
     pretty (Level 0) = "Lo"
     pretty (Level n) = "Hi"
     pretty (CVar c) = c
     pretty (CPlus c d) =
-      case (kindOf c `kindJoin` kindOf d) of
-        CLevel -> pretty c ++ " \\/ " ++ pretty d
-        _      -> pretty c ++ " + " ++ pretty d
+      pretty c ++ " + " ++ pretty d
     pretty (CTimes c d) =
-      case (kindOf c `kindJoin` kindOf d) of
-        CLevel -> pretty c ++ " /\\ " ++ pretty d
-        _      -> pretty c ++ " * " ++ pretty d
+      pretty c ++ " * " ++ pretty d
+
+instance Pretty TypeScheme where
+    pretty (Forall cvs t) =
+      "forall " ++ intercalate "," (map prettyKindSignatures cvs)
+                ++ " . " ++ pretty t
+      where
+       prettyKindSignatures (var, CPoly "") = var
+       prettyKindSignatures (var, ckind)    = var ++ " : " ++ pretty ckind
+
+instance Pretty CKind where
+    pretty (CConstr c) = c
+    pretty (CPoly   v) = v
 
 instance Pretty Type where
     pretty (ConT s)  = s
@@ -74,11 +87,16 @@ instance Pretty Expr where
       case expr of
         (App e1 e2) -> parens $ pretty e1 ++ " " ++ pretty e2
         (Binop op e1 e2) -> parens $ pretty e1 ++ prettyOp op ++ pretty e2
-        (LetBox v t e1 e2) -> parens $ "let [" ++ v ++ ":" ++ pretty t ++ "] = "
+        (LetBox v t k e1 e2) -> parens $ "let [" ++ v ++ ":" ++ pretty t ++ "]" ++ pretty k ++ " = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
         (LetDiamond v t e1 e2) -> parens $ "let <" ++ v ++ ":" ++ pretty t ++ "> = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
         (Val v) -> pretty v
+        (Case e ps) -> "case " ++ pretty e ++ " of " ++
+                         (intercalate ";"
+                           $ map (\(p, e) -> pretty p
+                                          ++ " -> "
+                                          ++ pretty e) ps)
      where prettyOp Add = " + "
            prettyOp Sub = " - "
            prettyOp Mul = " * "
