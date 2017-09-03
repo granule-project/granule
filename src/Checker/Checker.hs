@@ -33,7 +33,7 @@ check defs dbg nameMap = do
     if (and . map (\(_, _, _, checked) -> isJust checked) $ results)
       then return . Right $ True
       -- Otherwise, show the checking reports
-      else return . Left  $ intercalate "\n" (map mkReport results)
+      else return . Left  $ intercalate "\n" (filter (/= "") $ map mkReport results)
   where
     checkDef (results, def_env) (Def var expr _ tys@(Forall ckinds ty)) = do
       mapM freshSolverCoeffectVar ckinds
@@ -67,7 +67,7 @@ mkReport :: (Id, TypeScheme, Maybe TypeScheme, Maybe (Env TyOrDisc))
 mkReport (var, ty, synthTy, Nothing) =
     "'" ++ var ++ "' does not type check, signature was: " ++ pretty ty
         ++ (case synthTy of { Nothing -> ""; Just ty' -> "\n but infered: " ++ pretty ty' })
-        ++ ".\n Try annotating the types of functions or fixing a signature."
+
 mkReport _ = ""
 
 -- Type check an expression
