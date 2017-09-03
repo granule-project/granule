@@ -196,8 +196,8 @@ mguCoeffectKinds c1 c2 = do
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1
     (CConstr "Nat", CConstr "Real")     -> return $ CConstr "Real"
     (CConstr "Real", CConstr "Nat")     -> return $ CConstr "Real"
-    (k1, k2) -> illTyped $ "Cannot unify coeffect kinds of " ++ show k1 ++ " and " ++ show k2
-       ++ "\n for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
+    (k1, k2) -> illTyped $ "Cannot unify coeffect kinds of " ++ pretty k1 ++ " and " ++ pretty k2
+       ++ "for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 
 -- | Multiply an environment by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
