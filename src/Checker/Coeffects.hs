@@ -30,6 +30,8 @@ freshCVar name (CConstr "Real") = do
 freshCVar name (CConstr "Level") = do
   solverVar <- exists name
   return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
+freshCVar name (CConstr "Set") = do
+  return (true, SSet S.empty)
 freshCVar name k = do
   error $ "Trying to make a fresh solver variable for a "
        ++ "coeffect of kind: " ++ show k ++ " but I don't know how"
@@ -44,57 +46,12 @@ eqConstraint x y =
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
 lteConstraint :: SCoeffect -> SCoeffect -> SBool
-lteConstraint (SNat n) (SNat m)     = n .<= m
+lteConstraint (SNat Ordered n) (SNat Ordered m)   = n .<= m
+lteConstraint (SNat Discrete n) (SNat Discrete m) = n .== m
 lteConstraint (SReal n) (SReal m)   = n .<= m
 lteConstraint (SLevel l) (SLevel k) = l .== k
-
--- Compile a coeffect term into its symbolic representation
-compile :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
-compile (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
-compile (CNat n)  (CConstr "Nat")   _ = SNat   . fromInteger . toInteger $ n
-compile (CReal r) (CConstr "Real")  _ = SReal  . fromRational $ r
-compile (CVar v) k vars =
-  case lookup v vars of
-   Just cvar -> cvar
-   Nothing   ->
-    error $ "Looking up a variable '" ++ v ++ "' in " ++ show vars
-
-compile (CPlus n m) k@(CConstr "Level") vars =
-  case (compile n k vars, compile m k vars) of
-    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
-    (n, m) -> error $ "Trying to compile: " ++ show n ++ " + " ++ show m
-
-compile (CPlus n m) k vars =
-  case (compile n k vars, compile m k vars) of
-    (SNat n1, SNat n2) -> SNat $ n1 + n2
-    (SReal n1, SReal n2) -> SReal $ n1 + n2
-    (n, m) -> error $ "Trying to compile: " ++ show n ++ " + " ++ show m
-
-compile (CTimes n m) k@(CConstr "Level") vars =
-  case (compile n k vars, compile m k vars) of
-    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
-    (n, m) -> error $ "Trying to compile: " ++ show n ++ " * " ++ show m
-
-compile (CTimes n m) k vars =
-  case (compile n k vars, compile m k vars) of
-    (SNat n1, SNat n2) -> SNat $ n1 * n2
-    (SReal n1, SReal n2) -> SReal $ n1 * n2
-    (m, n) -> error $ "Trying to compile solver contraints for: "
-                      ++ show m ++ " * " ++ show n
-
-compile (CZero (CConstr "Level")) (CConstr "Level") _ = SLevel 0
-compile (CZero (CConstr "Nat")) (CConstr "Nat")     _ = SNat 0
-compile (CZero (CConstr "Q"))  (CConstr "Q")        _ = SReal (fromRational 0)
-
-compile (COne (CConstr "Level")) (CConstr "Level") _ = SLevel 1
-compile (COne (CConstr "Nat")) (CConstr "Nat")     _ = SNat 1
-compile (COne (CConstr "Q")) (CConstr "Q")         _ = SReal (fromRational 1)
-
-compile c (CPoly _) _ =
-   error $ "Trying to compile a polymorphically kinded " ++ pretty c
-compile coeff ckind _ =
-   error $ "Can't compile a coeffect: " ++ pretty coeff
-        ++ " of kind " ++ show ckind
+lteConstraint (SSet s) (SSet t) =
+  if s == t then true else false
 
 
 kindOfFromScheme :: Coeffect -> [(Id, CKind)] -> IO CKind
@@ -112,6 +69,7 @@ kindOf (Level _)    = return $ CConstr "Level"
 kindOf (CNat Ordered _) = return $ CConstr "Nat"
 kindOf (CNat Discrete _) = return $ CConstr "Nat="
 kindOf (CReal _)    = return $ CConstr "Real"
+kindOf (CSet _)     = return $ CConstr "Set"
 
 -- Take the join for compound coeffect epxressions
 kindOf (CPlus c c')  = do

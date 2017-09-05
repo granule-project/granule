@@ -32,6 +32,8 @@ instance Pretty Coeffect where
       pretty c ++ " + " ++ pretty d
     pretty (CTimes c d) =
       pretty c ++ " * " ++ pretty d
+    pretty (CSet xs) =
+      "{" ++ intercalate "," (map (\(id, t) -> id ++ " : " ++ pretty t) xs) ++ "}"
 
 instance Pretty TypeScheme where
     pretty (Forall cvs t) =
