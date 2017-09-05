@@ -1,0 +1,19 @@
+-- Thanks to Jennifer Hackett and Neel Krishnaswami for prompting
+-- this interesting example during a discussion at ICFP 2017.
+
+flatten : forall (d : Nat) . ||Int| 2| d -> |Int| (2 * d)
+flatten |xbox| = let |x : Int| Nat = xbox in |x|
+
+expand : forall (c : Nat) . |Int| (c * 7) -> ||Int| c| 7
+expand |x| = |(|x|)|
+
+-- A signature of 13 will fail to type check because
+-- the constrains imposed by 'expaned' and 'flatten'
+-- mean that its usage bound must be <= 2 * 7.
+
+-- someConst : |Int| 13  -- Will fail to type check
+someConst : |Int| 14
+someConst = |10|
+
+main : Int
+main = let |x : Int| Nat = flatten (expand someConst) in x
