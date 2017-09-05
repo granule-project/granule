@@ -118,7 +118,7 @@ Type :
 
 Coeffect :: { Coeffect }
 Coeffect :
-       INT                     { CNat $1 }
+       NatCoeff                { $1 }
      | REAL                    { CReal $ myReadFloat $1 }
      | CONSTR                  { case $1 of
                                    "Lo" -> Level 0
@@ -127,6 +127,19 @@ Coeffect :
      | Coeffect '+' Coeffect   { CPlus $1 $3 }
      | Coeffect '*' Coeffect   { CTimes $1 $3 }
      | '(' Coeffect ')'        { $2 }
+     | '{' Set '}'             { CSet $2 }
+
+NatCoeff :: { Coeffect }
+NatCoeff : INT NatModifier              { CNat $2 $1 }
+
+NatModifier :: { NatModifier }
+NatModifier : {- empty -}    { Ordered }
+             | '='           { Discrete }
+
+Set :: { [(String, Type)] }
+Set :
+    VAR ':' Type ',' Set   { ($1, $3) : $5 }
+  | VAR ':' Type           { [($1, $3)] }
 
 Effect :: { Effect }
 Effect :

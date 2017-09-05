@@ -3,7 +3,7 @@
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Op(..),
-                   Pattern(..), CKind(..), Coeffect(..), Effect,
+                   Pattern(..), CKind(..), Coeffect(..), NatModifier(..), Effect,
                    uniqueNames, arity, fvs, subst
                    ) where
 
@@ -203,7 +203,7 @@ data Type = FunTy Type Type
           | Box Coeffect Type
           | Diamond Effect Type
           | TyVar String
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)
 
 arity :: Type -> Int
 arity (FunTy _ t) = 1 + arity t
@@ -211,8 +211,7 @@ arity _           = 0
 
 type Effect = [String]
 
--- TODO: split Coeffect type properly into kinds
-data Coeffect = CNat   Int
+data Coeffect = CNat   NatModifier Int
               | CReal  Rational
               | CNatOmega (Either () Int)
               | CVar   String
@@ -221,7 +220,11 @@ data Coeffect = CNat   Int
               | CZero  CKind
               | COne   CKind
               | Level Int
-    deriving (Eq, Show)
+              | CSet [(String, Type)]
+    deriving (Eq, Ord, Show)
+
+data NatModifier = Ordered | Discrete
+  deriving (Show, Ord, Eq)
 
 data CKind = CConstr Id | CPoly Id
-    deriving (Eq, Show)
+    deriving (Eq, Ord, Show)

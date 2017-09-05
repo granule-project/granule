@@ -9,7 +9,7 @@ import Debug.Trace
 %wrapper "basic"
 
 $digit  = 0-9
-$alpha  = [a-zA-Z]
+$alpha  = [a-zA-Z\-\=]
 $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]

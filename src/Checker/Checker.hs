@@ -7,6 +7,7 @@ import Syntax.Expr
 import Syntax.Pretty
 import Checker.Types
 import Checker.Coeffects
+import Checker.Compile
 import Checker.Environment
 import Prelude hiding (pred)
 

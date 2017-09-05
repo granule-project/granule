@@ -1,0 +1,10 @@
+
+-- A function with an exact bound of 2
+-- The following alternate signature would be a type error
+-- dub : |Int| 3= -> Int
+
+dub : |Int| 2= -> Int
+dub |x| = x + x
+
+main : Int
+main = dub |42|

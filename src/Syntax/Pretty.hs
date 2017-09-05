@@ -18,7 +18,8 @@ instance Pretty Effect where
    pretty es = "[" ++ intercalate "," es ++ "]"
 
 instance Pretty Coeffect where
-    pretty (CNat n) = show n
+    pretty (CNat Ordered n) = show n
+    pretty (CNat Discrete n) = show n ++ "="
     pretty (CNatOmega (Left ())) = "*"
     pretty (CNatOmega (Right x)) = show x
     pretty (CReal n) = show n

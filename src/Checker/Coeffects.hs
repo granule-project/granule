@@ -11,6 +11,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Maybe (fromJust)
 import Data.SBV hiding (kindOf)
+import qualified Data.Set as S
 
 import Debug.Trace
 
@@ -19,7 +20,10 @@ import Debug.Trace
 freshCVar :: Id -> CKind -> Symbolic (SBool, SCoeffect)
 freshCVar name (CConstr "Nat") = do
   solverVar <- exists name
-  return (solverVar .>= literal 0, SNat solverVar)
+  return (solverVar .>= literal 0, SNat Ordered solverVar)
+freshCVar name (CConstr "Nat=") = do
+  solverVar <- exists name
+  return (solverVar .>= literal 0, SNat Discrete solverVar)
 freshCVar name (CConstr "Real") = do
   solverVar <- exists name
   return (true, SReal solverVar)
@@ -32,7 +36,7 @@ freshCVar name k = do
 
 -- | Generate equality constraints for two symbolic coeffects
 eqConstraint :: SCoeffect -> SCoeffect -> SBool
-eqConstraint (SNat n) (SNat m)     = n .== m
+eqConstraint (SNat _ n) (SNat _ m) = n .== m
 eqConstraint (SReal n) (SReal m)   = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint x y =
@@ -105,7 +109,8 @@ kindOf :: Coeffect -> MaybeT Checker CKind
 
 -- Coeffect constants have an obvious kind
 kindOf (Level _)    = return $ CConstr "Level"
-kindOf (CNat _)     = return $ CConstr "Nat"
+kindOf (CNat Ordered _) = return $ CConstr "Nat"
+kindOf (CNat Discrete _) = return $ CConstr "Nat="
 kindOf (CReal _)    = return $ CConstr "Real"
 
 -- Take the join for compound coeffect epxressions
@@ -194,6 +199,10 @@ mguCoeffectKinds c1 c2 = do
       return ck1
 
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1
+
+    (CConstr "Nat=", CConstr "Nat")     -> return $ CConstr "Nat"
+    (CConstr "Nat", CConstr "Nat=")     -> return $ CConstr "Nat"
+
     (CConstr "Nat", CConstr "Real")     -> return $ CConstr "Real"
     (CConstr "Real", CConstr "Nat")     -> return $ CConstr "Real"
     (k1, k2) -> illTyped $ "Cannot unify coeffect kinds of " ++ pretty k1 ++ " and " ++ pretty k2

@@ -16,7 +16,7 @@ import Data.SBV
 
 -- Symbolic coeffects
 data SCoeffect =
-     SNat   SInteger
+     SNat   NatModifier SInteger
    | SReal  SReal
    | SLevel SInteger
   deriving (Show, Eq)
