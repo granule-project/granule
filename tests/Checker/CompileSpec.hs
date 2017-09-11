@@ -1,7 +1,8 @@
 module Checker.CompileSpec where
 
-import Test.HSpec hiding (Spec)
+import Test.Hspec hiding (Spec)
 import qualified Test.HSpec as Test
+import Test.QuickCheck
 
 instance Arbitrary
 

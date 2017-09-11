@@ -1,8 +1,12 @@
 module Syntax.ExprSpec where
 
-import Test.HSpec hiding (Spec)
-import qualified Test.HSpec as Test
+import Test.Hspec hiding (Spec)
+import qualified Test.Hspec as Test
+
+import Syntax.Expr
 
 spec :: Test.Spec
 spec = do
-  describe ""
+  describe "Expression helpers" $
+    it "free variable test" $
+      fvs (Abs "x" (Abs "y" (Var "z"))) `shouldBe` ["z"]

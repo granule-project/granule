@@ -1,8 +1,7 @@
 module Checker.TypeSpec where
 
-import Test.HSpec hiding (Spec)
-import qualified Test.HSpec as Test
+import Test.Hspec
 
-spec :: Test.Spec
+spec :: Spec
 spec = do
   describe ""
