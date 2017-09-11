@@ -3,12 +3,13 @@
 module Syntax.Lexer (Token(..),scanTokens) where
 import Syntax.Expr
 import Debug.Trace
+
 }
 
 %wrapper "basic"
 
 $digit  = 0-9
-$alpha  = [a-zA-Z]
+$alpha  = [a-zA-Z\-\=]
 $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
@@ -24,11 +25,12 @@ tokens :-
   $white+                       ;
   "--".*                         ;
   @constr                       { \s -> TokenConstr s }
+  forall                        { \s -> TokenForall }
   let                           { \s -> TokenLet }
   in                            { \s -> TokenIn }
   case                          { \s -> TokenCase }
   of                            { \s -> TokenOf }
-  @real                         { \s -> TokenReal $ read s }
+  @real                         { \s -> TokenReal $ s }
   @int                          { \s -> TokenInt  $ read s }  
   "->"                          { \s -> TokenArrow }
   \;                            { \s -> TokenSemicolon }
@@ -46,6 +48,7 @@ tokens :-
   \<                            { \s -> TokenLangle }
   \>                            { \s -> TokenRangle }
   \,                            { \s -> TokenComma }
+  \.                            { \s -> TokenPeriod }
   \:                            { \s -> TokenSig }
   @sym				{ \s -> TokenSym s }
   \_                            { \_ -> TokenUnderscore }
@@ -61,9 +64,10 @@ data Token = TokenLet
 	   | TokenLetBox
 	   | TokenBox
            | TokenInt Int
-	   | TokenReal Double
+	   | TokenReal String
            | TokenSym String
            | TokenArrow
+	   | TokenForall
            | TokenEq
            | TokenAdd
            | TokenSub
@@ -80,6 +84,7 @@ data Token = TokenLet
 	   | TokenLangle
 	   | TokenRangle
 	   | TokenComma
+	   | TokenPeriod
 	   | TokenPipe
 	   | TokenUnderscore
 	   | TokenSemicolon
@@ -94,7 +99,5 @@ trimNL :: [Token] -> [Token]
 trimNL [] = []
 trimNL (TokenNL : ts) = trimNL ts
 trimNL ts = ts 
-
-
 
 }

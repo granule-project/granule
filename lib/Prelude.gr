@@ -4,20 +4,24 @@ id : Int -> Int
 id x = x
 
 const : Int -> |Int| 0 -> Int
-const x _ = x
+const x |y| = x
 
-if0 : Int -> Int -> Int -> Int
-if0 g x y = case g of
-                0 -> x;
-                n -> y
+-- Currently broken in 'master'
+-- if0 : Int -> Int -> Int -> Int
+-- if0 g x y = case g of
+--                0 -> x;
+--                n -> y
 
 -- Coeffectful composition
-comp : (|Int| c -> Int) -> (|Int| d -> Int) -> |Int| (c * d) -> Int
+comp : forall (c : Nat, d : Nat) . (|Int| c -> Int) -> (|Int| d -> Int) -> |Int| (c * d) -> Int
 comp f g |x| = g |(f |x|)|
 
 -- Coeffectful application
-app : (|Int| c -> Int) -> |Int| c -> Int
+app : forall c : Nat . (|Int| c -> Int) -> |Int| c -> Int
 app f x = f x
+
+flatten : forall (c : Nat, d : Nat) . ||Int| c| d -> |Int| (c * d)
+flatten |xbox| = let |x : Int| Nat = xbox in |x|
 
 flip : (Int -> Int -> Int) -> Int -> Int -> Int
 flip f x y = f y x

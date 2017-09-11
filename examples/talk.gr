@@ -1,12 +1,12 @@
--- (* Effectful example in gram *)
+-- Effectful example in gram
 
--- (* Similar to Haskell *)
--- (* main :: IO a       *)
--- (* main = readLn      *)
+-- Similar to Haskell
+-- main :: IO a
+-- main = readLn
 
 echo : (Int -> <Int> []) -> |Int| 2 -> <Int> [W]
 echo = \f -> \xBox ->
-        let |x : Int| = xBox in
+        let |x : Int| Nat = xBox in
 	let <a : Int> = write x
 	in f x
 

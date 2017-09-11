@@ -10,7 +10,7 @@ Executable gram
   Main-Is:        Main.hs
   Other-modules:  Syntax.Lexer, Syntax.Parser
   Hs-Source-Dirs: src
-  Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 6
+  Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 6, containers
   Build-Tools:    alex, happy
   GHC-Options:    -Wall
 

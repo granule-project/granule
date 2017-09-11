@@ -13,31 +13,17 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad
 import Data.SBV
+import qualified Data.Set as S
 
+-- Symbolic coeffects
+data SCoeffect =
+     SNat   NatModifier SInteger
+   | SReal  SReal
+   | SLevel SInteger
+   | SSet   (S.Set (Id, Type))
+  deriving (Show, Eq)
 
 type TyOrDisc = Either Type (Coeffect, Type)
-
--- The resource semiring class
-class Semiring c where
-  plus  :: c -> c -> c
-  mult  :: c -> c -> c
-  one   :: c
-  zero  :: c
-
--- Coeffects are a semiring
--- TODO: Coeffect will get statified later
-instance Semiring Coeffect where
-  plus (Nat n) (Nat m) = Nat (n + m)
-  plus c d = CPlus c d
-  mult (Nat n) (Nat m) = Nat (n * m)
-  mult c d = CTimes c d
-  one = Nat 1
-  zero = Nat 0
-
-oneKind :: CKind -> Coeffect
-oneKind CPoly = Nat 1
-oneKind CNat = Nat 1
-oneKind CLevel = Level 1
 
 type Env t = [(Id, t)]
 
@@ -56,25 +42,15 @@ replace ((id', _):env) id v | id == id'
 replace (x : env) id v
   = x : replace env id v
 
-
--- Given an environment, derelict and discharge all variables which are not discharged
-multAll :: [Id] -> Coeffect -> Env TyOrDisc -> Env TyOrDisc
-
-multAll _ _ []
-    = []
-
-multAll vars c ((id, Left t) : env) | id `elem` vars
-    = (id, Right (c, t)) : multAll vars c env
-
-multAll vars c ((id, Right (c', t)) : env) | id `elem` vars
-    = (id, Right (c `mult` c', t)) : multAll vars c env
-
-multAll vars c ((id, Left t) : env) = multAll vars c env
-multAll vars c ((id, Right (_, t)) : env) = multAll vars c env
-
 instance Pretty (Type, Env TyOrDisc) where
     pretty (t, env) = pretty t
 
+instance Pretty (Id, TyOrDisc) where
+    pretty (v, ty) = v ++ " : " ++ pretty ty
+
+instance Pretty TyOrDisc where
+    pretty (Left ty) = pretty ty
+    pretty (Right (c, ty)) = "|" ++ pretty ty ++ "|." ++ pretty c
 
 keyIntersect :: Env a -> Env a -> Env a
 keyIntersect a b = sortBy (\a b -> fst a `compare` fst b) $ filter (appearsIn a) b
@@ -100,7 +76,7 @@ unrename nameMap var =
       Nothing  -> var
   where swap (a, b) = (b, a)
 
-instance Pretty (Env Type) where
+instance Pretty (Env TypeScheme) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
      where pp (var, t) = var ++ " : " ++ pretty t
 

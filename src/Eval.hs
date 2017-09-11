@@ -48,9 +48,7 @@ evalIn env (Binop op e1 e2) = do
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
--- GMTT big step semantics (CBN)
-
-evalIn env (LetBox var _ e1 e2) = do
+evalIn env (LetBox var _ _ e1 e2) = do
     v1 <- evalIn env e1
     case v1 of
        Promote e1' ->

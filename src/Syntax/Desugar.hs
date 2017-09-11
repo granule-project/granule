@@ -3,15 +3,17 @@
 module Syntax.Desugar where
 
 import Syntax.Expr
+import Checker.Coeffects (kindOfFromScheme)
 import Control.Monad.State.Strict
+import qualified System.IO.Unsafe as Unsafe (unsafePerformIO)
 
 desugar :: Def -> Def
-desugar (Def var expr pats ty) =
-  Def var (evalState (desguarPats expr pats ty []) (0 :: Int)) [] ty
+desugar (Def var expr pats tys@(Forall ckinds ty)) =
+  Def var (evalState (desguarPats expr pats ty []) (0 :: Int)) [] tys
   where
     unfoldBoxes [] e = e
-    unfoldBoxes ((v, v', t) : binds) e =
-      LetBox v t (Val $ Var v') (unfoldBoxes binds e)
+    unfoldBoxes ((v, v', t, k) : binds) e =
+      LetBox v t k (Val $ Var v') (unfoldBoxes binds e)
 
     desguarPats e [] _ boxed =
       return $ unfoldBoxes boxed e
@@ -29,13 +31,13 @@ desugar (Def var expr pats ty) =
       e' <- desguarPats e ps t2 boxed
       return $ Val $ Abs v e'
 
-    desguarPats e (PBoxVar v : ps) (FunTy (Box _ t) t2) boxed = do
+    desguarPats e (PBoxVar v : ps) (FunTy (Box c t) t2) boxed = do
       n <- get
       let v' = v ++ show n
       put (n + 1)
-      e' <- desguarPats e ps t2 (boxed ++ [(v, v', t)])
+      e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, Unsafe.unsafePerformIO $ kindOfFromScheme c ckinds)])
       return $ Val $ Abs v' e'
 
-    desguarPats _ _ _ _ = error $ "Definition of " ++ var ++ "expects at least " ++
+    desguarPats _ _ _ _ = error $ "Definition of " ++ var ++ " expects at least " ++
                       show (length pats) ++ " arguments, but signature " ++
                       " specifies: " ++ show (arity ty)
