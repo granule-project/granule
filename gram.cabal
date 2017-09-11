@@ -8,16 +8,26 @@ Build-Type:     Simple
 
 Executable gram
   Main-Is:        Main.hs
-  Other-modules:  Syntax.Lexer, Syntax.Parser
+  Other-modules:  Syntax.Lexer
+                  Syntax.Parser
+                  Checker.Checker
+                  Checker.Coeffects
+                  Checker.Compile
+                  Checker.Environment
+                  Checker.Types
+                  Eval
+                  Syntax.Desugar
+                  Syntax.Expr
+                  Syntax.Pretty
   Hs-Source-Dirs: src
   Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 6, containers
   Build-Tools:    alex, happy
   GHC-Options:    -Wall
 
--- Executable lambda-happy-alex
---   Main-Is:        Main.hs
-
---   Hs-Source-Dirs: src
---   Build-Depends:  base >= 4, array, containers, mtl, regex-compat
---   Build-Tools:    alex, happy
---   GHC-Options:    -Wall
+test-suite spec
+  type:                 exitcode-stdio-1.0
+  main-is:              Spec.hs
+  hs-source-dirs:       tests
+  other-modules:        Syntax.ExprSpec
+                        Checker.TypeSpec
+                        Checker.EnvironmentSpec
