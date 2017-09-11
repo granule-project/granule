@@ -10,7 +10,7 @@ import qualified System.IO.Unsafe as Unsafe (unsafePerformIO)
 -- 'desugar' erases pattern matches in function definitions
 -- with coeffect binders.
 -- e.g., for a definition 'd' in code as:
---       f :: |Int| -> ...
+--       f :: |Int| 1 -> ...
 --       f |x| = e
 --
 --  then desguar d produces
@@ -19,7 +19,9 @@ import qualified System.IO.Unsafe as Unsafe (unsafePerformIO)
 --
 -- Note that the explicit typing from the type signature is pushed
 -- inside of the definition to give an explicit typing on the coeffect-let
--- binding.
+-- binding. Note that this also means inferring the kind of coeffect
+-- information. This will likely change in the future with better
+-- bidirectional inference.
 desugar :: Def -> Def
 desugar (Def var expr pats tys@(Forall ckinds ty)) =
   Def var (evalState (desguarPats expr pats ty []) (0 :: Int)) [] tys
