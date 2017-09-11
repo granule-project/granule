@@ -1,19 +1,11 @@
-{-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+-- Provide general environments (contexts) used in the both the
+-- checker and the interpreter
 
 module Context where
 
-import Syntax.Expr
-import Syntax.Pretty
-import Data.List
-import Data.Maybe
-import Data.Either
-import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
-import Control.Monad
-import Data.SBV
-import qualified Data.Set as S
+import Data.Maybe  (isJust)
+import Data.List   (sortBy)
+import Syntax.Expr (Id)
 
 -- Environments
 type Env t = [(Id, t)]
