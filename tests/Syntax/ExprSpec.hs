@@ -9,4 +9,4 @@ spec :: Test.Spec
 spec = do
   describe "Expression helpers" $
     it "free variable test" $
-      fvs (Abs "x" (Abs "y" (Var "z"))) `shouldBe` ["z"]
+      fvs (Val (Abs "x" (Val (Abs "y" (Val (Var "z")))))) `shouldBe` ["z"]

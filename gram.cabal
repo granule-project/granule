@@ -15,10 +15,10 @@ Executable gram
                   Checker.Compile
                   Checker.Environment
                   Checker.Types
-                  Eval
                   Syntax.Desugar
                   Syntax.Expr
                   Syntax.Pretty
+                  Eval
   Hs-Source-Dirs: src
   Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 6, containers
   Build-Tools:    alex, happy
@@ -27,9 +27,9 @@ Executable gram
 test-suite spec
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
-  hs-source-dirs:       tests
-  other-modules:        Syntax.Expr, Syntax.ExprSpec
-                        Checker.TypeSpec
+  hs-source-dirs:       tests, src
+  other-modules:        Syntax.ExprSpec
+                        Checker.TypesSpec
                         Checker.EnvironmentSpec
   build-depends:        base >= 4.6 && < 5,
                         array,
@@ -37,4 +37,5 @@ test-suite spec
                         transformers>=0.5,
                         sbv > 6,
                         containers,
-                        hspec >= 2.4.3
+                        hspec >= 2.4.3,
+                        QuickCheck >= 2.8 && < 3
