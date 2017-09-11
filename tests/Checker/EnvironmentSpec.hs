@@ -1,4 +1,4 @@
-module Syntax.EnvironmentSpec where
+module Checker.EnvironmentSpec where
 
 import Test.HSpec hiding (Spec)
 import qualified Test.HSpec as Test

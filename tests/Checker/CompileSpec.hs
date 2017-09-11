@@ -1,4 +1,4 @@
-module Syntax.CompileSpec where
+module Checker.CompileSpec where
 
 import Test.HSpec hiding (Spec)
 import qualified Test.HSpec as Test

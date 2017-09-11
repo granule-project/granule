@@ -31,3 +31,10 @@ test-suite spec
   other-modules:        Syntax.ExprSpec
                         Checker.TypeSpec
                         Checker.EnvironmentSpec
+  build-depends:        base >= 4.6 && < 5,
+                        array,
+                        mtl>=2.2.1,
+                        transformers>=0.5,
+                        sbv > 6,
+                        containers,
+                        hspec >= 2.4.3
