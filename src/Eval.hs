@@ -4,14 +4,15 @@ module Eval (eval) where
 
 import Syntax.Expr
 import Syntax.Pretty
-import Checker.Types
+import Context
 
+-- Evaluate operators
 evalOp :: Num a => Op -> (a -> a -> a)
 evalOp Add = (+)
 evalOp Sub = (-)
 evalOp Mul = (*)
 
--- Call by value big step semantics
+-- Call-by-value big step semantics
 evalIn :: Env Value -> Expr -> IO Value
 
 evalIn env (App (Val (Var "write")) e) = do

@@ -9,6 +9,7 @@ import Checker.Types
 import Checker.Coeffects
 import Checker.Compile
 import Checker.Environment
+import Context
 import Prelude hiding (pred)
 
 import Data.List

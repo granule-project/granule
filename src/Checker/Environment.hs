@@ -14,6 +14,7 @@ import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
 
+import Context
 import Syntax.Expr (Id, CKind)
 
 -- State of the check/synth functions
