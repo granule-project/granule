@@ -48,19 +48,6 @@ check defs dbg nameMap = do
                return env'
       state <- get
       put (state { predicate = return (true, []) })
-      -- synth attempt to get better error messages
-      {-let synthAttempt = do
-           (ty, _) <- synthExpr dbg def_env [] expr
-           solved <- solveConstraints
-           if solved
-             then return ty
-             else fail "No synth possible"
-      synthTy <-    runMaybeT
-                  . liftIO
-                  . flip evalStateT (0, ground, CPoly)
-                  . flip runReaderT nameMap
-                  . unwrap . runMaybeT $ synthAttempt -}
-
       return ((var, tys, Nothing, env') : results, (var, tys) : def_env)
 
 -- Make type error report
@@ -668,4 +655,5 @@ extCtxt env var (Right (c, t)) = do
 
 {- Helpers for error messages -}
 
+unusedVariable :: String -> String
 unusedVariable var = "Linear variable " ++ var ++ " was never used."
