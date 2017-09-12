@@ -52,7 +52,7 @@ freshCVar name (CConstr "Nat") = do
 freshCVar name (CConstr "Nat=") = do
   solverVar <- exists name
   return (solverVar .>= literal 0, SNat Discrete solverVar)
-freshCVar name (CConstr "Real") = do
+freshCVar name (CConstr "Q") = do
   solverVar <- exists name
   return (true, SReal solverVar)
 freshCVar name (CConstr "Level") = do
@@ -84,7 +84,7 @@ compileCoeffect (CNat Ordered n)  (CConstr "Nat") _
   = SNat Ordered  . fromInteger . toInteger $ n
 compileCoeffect (CNat Discrete n)  (CConstr "Nat=") _
   = SNat Discrete  . fromInteger . toInteger $ n
-compileCoeffect (CReal r) (CConstr "Real")  _ = SReal  . fromRational $ r
+compileCoeffect (CReal r) (CConstr "Q")     _ = SReal  . fromRational $ r
 compileCoeffect (CSet xs) (CConstr "Set")   _ = SSet   . S.fromList $ xs
 compileCoeffect (CVar v) k vars =
   case lookup v vars of

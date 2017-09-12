@@ -29,11 +29,11 @@ kindOfFromScheme c env = do
 kindOf :: Coeffect -> MaybeT Checker CKind
 
 -- Coeffect constants have an obvious kind
-kindOf (Level _)    = return $ CConstr "Level"
-kindOf (CNat Ordered _) = return $ CConstr "Nat"
+kindOf (Level _)         = return $ CConstr "Level"
+kindOf (CNat Ordered _)  = return $ CConstr "Nat"
 kindOf (CNat Discrete _) = return $ CConstr "Nat="
-kindOf (CReal _)    = return $ CConstr "Real"
-kindOf (CSet _)     = return $ CConstr "Set"
+kindOf (CReal _)         = return $ CConstr "Q"
+kindOf (CSet _)          = return $ CConstr "Set"
 
 -- Take the join for compound coeffect epxressions
 kindOf (CPlus c c')  = do
