@@ -1,5 +1,8 @@
 -- Hello TLLA
 dub : |Int| 2 -> Int
+dub |x| = x + x
+
+trip : |Int| 3 -> Int
 trip |x| = x + x + x
 
 flatten : forall (c : Nat, d : Nat) . ||Int| c| d -> |Int| (c * d)
@@ -12,8 +15,6 @@ secret : |Int| Hi
 secret = |0309|
 
 hash : forall (l : Level) . |Int| l -> |Int| l
-
-hash : forall (c : Nat) . |Int| (2 * c) -> |Int| c
 hash |x| = |(x + x)|
 
 hello : <Int> [R, W]
