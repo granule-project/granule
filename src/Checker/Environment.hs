@@ -6,7 +6,6 @@
 
 module Checker.Environment where
 
-import Data.SBV
 import Checker.Types
 import Control.Monad.State.Strict
 

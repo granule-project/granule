@@ -375,7 +375,7 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
 
 
 -- BinOp
-synthExpr dbg defs gam (Binop op e e') = do
+synthExpr dbg defs gam (Binop _ e e') = do
     (t, gam1)  <- synthExpr dbg defs gam e
     (t', gam2) <- synthExpr dbg defs gam e'
     case (t, t') of
@@ -403,9 +403,9 @@ synthExpr _ _ _ e = illTyped $ "General synth fail " ++ pretty e
 solveConstraints :: MaybeT Checker Bool
 solveConstraints = do
   -- Get the coeffect kind environment and constraints
-  state <- get
-  let env   = ckenv state
-  let pred  = predicate state
+  checkerState <- get
+  let env   = ckenv checkerState
+  let pred  = predicate checkerState
   --
   let sbvTheorem = compileToSBV pred env
   thmRes <- liftIO . prove $ sbvTheorem
@@ -458,8 +458,8 @@ joinCtxts nameMap env1 env2 = do
 
     varEnv <- freshVarsIn (map fst env) env
 
-    zipWithM leqAssumption env varEnv
-    zipWithM leqAssumption env' varEnv
+    zipWithM_ leqAssumption env varEnv
+    zipWithM_ leqAssumption env' varEnv
     return $ varEnv ++ (env1 \\ env) ++ (env2 \\ env')
 
 remainingUndischarged env subEnv =
@@ -471,10 +471,15 @@ remainingUndischarged env subEnv =
 
 leqAssumption ::
     (Id, TyOrDisc) -> (Id, TyOrDisc) -> MaybeT Checker ()
-leqAssumption x@(_, Left _) y@(_, Left _) = return ()
-leqAssumption x@(_, Right (c1, _)) y@(_, Right (c2, _)) = do
+
+-- Linear assumptions ignored
+leqAssumption (_, Left _)        (_, Left _) = return ()
+
+-- Discharged coeffect assumptions
+leqAssumption (_, Right (c1, _)) (_, Right (c2, _)) = do
   kind <- mguCoeffectKinds c1 c2
   addConstraint (Leq c1 c2 kind)
+
 leqAssumption x y =
   illTyped $ "Can't unify free-variable types:\n\t"
            ++ pretty x ++ "\nwith\n\t" ++ pretty y
@@ -531,7 +536,6 @@ discToFreshVarsIn vars env coeffect = do
     mapM toFreshVar (relevantSubEnv vars env)
   where
     toFreshVar (var, Right (c, t)) = do
-      state <- get
       kind <- mguCoeffectKinds c coeffect
       -- Create a fresh variable
       cvar  <- freshVar var
@@ -578,8 +582,8 @@ ctxPlus ((i, v) : env1) env2 = do
 -- Erase a variable from the environment
 eraseVar :: Env TyOrDisc -> Id -> Env TyOrDisc
 eraseVar [] _ = []
-eraseVar ((id, t):env) id' | id == id' = env
-                           | otherwise = (id, t) : eraseVar env id'
+eraseVar ((var, t):env) var' | var == var' = env
+                             | otherwise = (var, t) : eraseVar env var'
 
 -- ExtCtxt the environment
 extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> MaybeT Checker (Env TyOrDisc)
