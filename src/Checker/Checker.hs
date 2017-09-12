@@ -261,7 +261,8 @@ synthExpr dbg defs gam (Case e cases) = do
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
   eqTypes <- foldM (\a r -> joinTypes dbg a r)
                    (head branchTys) (tail branchTys)
-  eqResultGam <- foldM (\a r -> joinCtxts a r) empty branchCtxts
+  nameMap     <- ask
+  eqResultGam <- foldM (\a r -> joinCtxts nameMap a r) empty branchCtxts
   gamNew <- eqResultGam `ctxPlus` gam'
   return (eqTypes, gamNew)
 
@@ -434,15 +435,27 @@ leqCtxt env1 env2 = do
         env' = env2 `keyIntersect` env1
     zipWithM_ leqAssumption env env'
 
-joinCtxts :: Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
-joinCtxts env1 env2 = do
+joinCtxts :: [(Id, Id)] -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
+joinCtxts nameMap env1 env2 = do
     let env  = env1 `keyIntersect` env2
         env' = env2 `keyIntersect` env1
+
+    case (remainingUndischarged env1 env ++ remainingUndischarged env2 env') of
+      [] -> return ()
+      xs -> illTyped $ intercalate "\n" (map (unusedVariable . (unrename nameMap) . fst) xs)
+
     varEnv <- freshVarsIn (map fst env) env
 
     zipWithM leqAssumption env varEnv
     zipWithM leqAssumption env' varEnv
     return $ varEnv ++ (env1 \\ env) ++ (env2 \\ env')
+
+remainingUndischarged env subEnv =
+  (lefts' env) \\ (lefts' subEnv)
+    where
+      lefts' = filter isLeftPair
+      isLeftPair (_, Left _) = True
+      isLeftPair (_, _)      = False
 
 leqAssumption ::
     (Id, TyOrDisc) -> (Id, TyOrDisc) -> MaybeT Checker ()
