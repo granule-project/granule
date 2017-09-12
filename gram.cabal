@@ -12,7 +12,7 @@ Executable gram
                   Syntax.Parser
                   Checker.Checker
                   Checker.Coeffects
-                  Checker.Compile
+                  Checker.Constraints
                   Checker.Environment
                   Checker.Types
                   Syntax.Desugar

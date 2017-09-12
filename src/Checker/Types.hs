@@ -8,21 +8,8 @@ import Syntax.Expr
 import Syntax.Pretty
 import Context
 import Data.List
-import Data.Maybe
-import Data.Either
-import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
-import Control.Monad
 import Data.SBV
 import qualified Data.Set as S
-
--- Symbolic coeffects
-data SCoeffect =
-     SNat   NatModifier SInteger
-   | SReal  SReal
-   | SLevel SInteger
-   | SSet   (S.Set (Id, Type))
-  deriving (Show, Eq)
 
 type TyOrDisc = Either Type (Coeffect, Type)
 
