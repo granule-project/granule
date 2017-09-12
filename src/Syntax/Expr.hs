@@ -14,7 +14,7 @@ type Id = String
 data Op = Add | Sub | Mul deriving (Eq, Show)
 
 -- Values in Gram
-data Value = Abs Id Expr
+data Value = Abs Id Type Expr
            | NumInt Int
            | NumReal Double
            | Promote Expr
@@ -88,22 +88,22 @@ freshVar var = do
    return var'
 
 instance Term Value where
-    fvs (Abs x e)   = (fvs e) \\ [x]
+    fvs (Abs x _ e) = (fvs e) \\ [x]
     fvs (Var x)     = [x]
     fvs (Pure e)    = fvs e
     fvs (Promote e) = fvs e
     fvs _           = []
 
-    subst es v (Abs w e)        = Val $ Abs w (subst es v e)
+    subst es v (Abs w t e)      = Val $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val $ Pure (subst es v e)
     subst es v (Promote e)      = Val $ Promote (subst es v e)
     subst es v (Var w) | v == w = es
     subst _ _ val               = Val val
 
-    freshen (Abs var e) = do
+    freshen (Abs var t e) = do
       var' <- freshVar var
       e'   <- freshen e
-      return $ Abs var' e'
+      return $ Abs var' t e'
 
     freshen (Pure e) = do
       e' <- freshen e

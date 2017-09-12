@@ -14,6 +14,7 @@ import Prelude hiding (pred)
 
 import Data.List
 import Data.Maybe
+import Data.Either (lefts)
 import Control.Monad.State.Strict
 import Control.Monad.Reader.Class
 import Control.Monad.Trans.Maybe
@@ -101,7 +102,8 @@ checkExpr _ _ _ _ (ConT "Int") (Val (NumInt i)) = return []
 checkExpr _ _ _ _ (ConT "Real") (Val (NumInt i)) = return []
 checkExpr _ _ _ _ (ConT "Real") (Val (NumReal i)) = return []
 
-checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x e)) = do
+checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x t e)) = do
+  equalTypes dbg sig t
   gamE <- extCtxt gam x (Left sig)
   gam' <- checkExpr dbg defs gamE pol tau e
   -- Linearity check, variables must be used exactly once
@@ -111,7 +113,7 @@ checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x e)) = do
       illTyped $ unusedVariable (unrename nameMap x)
     Just _  -> return (eraseVar gam' x)
 
-checkExpr _ _ _ _ tau (Val (Abs _ _)) =
+checkExpr _ _ _ _ tau (Val (Abs _ _ _)) =
     illTyped $ "Expected a function type, but got " ++ pretty tau
 
 {-
@@ -376,6 +378,11 @@ synthExpr dbg defs gam (Binop op e e') = do
         joinNum "Int" "Int" = "Int"
         joinNum x "Real" = x
         joinNum "Real" x = x
+
+-- Abstraction
+synthExpr dbg defs gam (Val (Abs x t e)) = do
+  gam' <- extCtxt gam x (Left t)
+  synthExpr dbg defs gam' e
 
 synthExpr _ _ _ e = illTyped $ "General synth fail " ++ pretty e
 

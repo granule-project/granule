@@ -24,13 +24,13 @@ evalIn _ (Val (Var "read")) = do
     val <- readLn
     return $ Pure (Val (NumInt val))
 
-evalIn _ (Val (Abs x e)) =
-    return $ Abs x e
+evalIn _ (Val (Abs x t e)) =
+    return $ Abs x t e
 
 evalIn env (App e1 e2) = do
     v1 <- evalIn env e1
     case v1 of
-      Abs x e3 -> do
+      Abs x _ e3 -> do
         v2 <- evalIn env e2
         evalIn env (subst (Val v2) x e3)
       _ -> error "Cannot apply value"
