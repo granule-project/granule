@@ -38,7 +38,7 @@ check defs dbg nameMap = do
       -- Otherwise, show the checking reports
       else return . Left  $ intercalate "\n" (filter (/= "") $ map mkReport results)
   where
-    checkDef (results, def_env) (Def var expr _ tys@(Forall ckinds ty)) = do
+    checkDef (results, def_env) (Def var expr _ tys) = do
       env' <- runMaybeT $ do
                env' <- checkExprTS dbg def_env [] tys expr
                solved <- solveConstraints

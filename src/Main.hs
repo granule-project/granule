@@ -8,6 +8,7 @@ import Syntax.Pretty
 import Checker.Checker
 import System.Environment
 
+version :: String
 version = "Gram v0.1.3.0"
 
 main :: IO ()
@@ -21,7 +22,7 @@ main = do
 run :: String -> Bool -> IO ()
 run input debug = do
   -- Welcome message
-  putStrLn $ "\n" ++ version
+  putStrLn version
 
   -- Parse
   let (ast, nameMap) = parseDefs input
@@ -41,7 +42,9 @@ run input debug = do
     -- If type checking succeeds then evaluate the program...
     Right True -> do
       val <- eval ast
-      putStrLn $ pretty val
+      case val of
+        Just val' -> putStrLn $ pretty val'
+        Nothing   -> return ()
     _ -> return ()
 
 showCheckerResult :: Either String Bool -> String

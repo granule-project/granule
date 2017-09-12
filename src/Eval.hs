@@ -95,11 +95,11 @@ evalDefs env ((Def var e [] _):defs) = do
 evalDefs _ (d : _) =
     error $ "Desugaring must be broken for " ++ show d
 
-eval :: [Def] -> IO Value
+eval :: [Def] -> IO (Maybe Value)
 eval defs = do
     bindings <- evalDefs empty defs
     case lookup "main" bindings of
-      Nothing -> fail "Missing a definition called 'main'"
-      Just (Pure e)    -> evalIn bindings e
-      Just (Promote e) -> evalIn bindings e
-      Just val -> return val
+      Nothing -> return Nothing
+      Just (Pure e)    -> evalIn bindings e >>= (return . Just)
+      Just (Promote e) -> evalIn bindings e >>= (return . Just)
+      Just val -> return $ Just val
