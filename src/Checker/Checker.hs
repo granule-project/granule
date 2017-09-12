@@ -103,8 +103,19 @@ checkExpr _ _ _ _ (ConT "Real") (Val (NumInt i)) = return []
 checkExpr _ _ _ _ (ConT "Real") (Val (NumReal i)) = return []
 
 checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x t e)) = do
-  equalTypes dbg sig t
+  -- If an explicit signature on the lambda was given, then check
+  -- it confirms with the type being checked here
+  case t of
+    Nothing -> return ()
+    Just t' -> do
+      eqT <- equalTypes dbg sig t'
+      if eqT
+        then return ()
+        else illTyped $ "Type mismatch: " ++ pretty sig ++ " != " ++ pretty t'
+
+  -- Extend the context with the variable 'x' and its type
   gamE <- extCtxt gam x (Left sig)
+  -- Check the body in the extended context
   gam' <- checkExpr dbg defs gamE pol tau e
   -- Linearity check, variables must be used exactly once
   case lookup x gam' of
@@ -380,8 +391,9 @@ synthExpr dbg defs gam (Binop op e e') = do
         joinNum x "Real" = x
         joinNum "Real" x = x
 
--- Abstraction
-synthExpr dbg defs gam (Val (Abs x t e)) = do
+-- Abstraction, can only synthesise the types of
+-- lambda in Church style (explicit type)
+synthExpr dbg defs gam (Val (Abs x (Just t) e)) = do
   gam' <- extCtxt gam x (Left t)
   synthExpr dbg defs gam' e
 

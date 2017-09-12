@@ -14,7 +14,7 @@ type Id = String
 data Op = Add | Sub | Mul deriving (Eq, Show)
 
 -- Values in Gram
-data Value = Abs Id Type Expr
+data Value = Abs Id (Maybe Type) Expr
            | NumInt Int
            | NumReal Double
            | Promote Expr

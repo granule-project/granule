@@ -156,11 +156,19 @@ Eff :
      CONSTR                     { $1 }
 
 Expr :: { Expr }
-Expr : let VAR ':' Type '=' Expr in Expr    { App (Val (Abs $2 $4 $8)) $6 }
+Expr : let VAR ':' Type '=' Expr in Expr
+                                   { App (Val (Abs $2 (Just $4) $8)) $6 }
+     | let VAR '=' Expr in Expr
+                                   { App (Val (Abs $2 Nothing $6)) $4 }
+
      | let '|' VAR ':' Type '|' CKind '=' Expr in Expr
                                    { LetBox $3 $5 $7 $9 $11 }
      | '\\' '(' VAR ':' Type ')' '->' Expr
-                                   { Val (Abs $3 $5 $8) }
+                                   { Val (Abs $3 (Just $5) $8) }
+
+     | '\\' VAR '->' Expr          { Val (Abs $2 Nothing $4) }
+
+
      | let '<' VAR ':' Type '>' '=' Expr in Expr
                                    { LetDiamond $3 $5 $8 $10 }
      | '<' Expr '>'                { Val (Pure $2) }

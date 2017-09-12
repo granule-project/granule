@@ -40,18 +40,18 @@ desugar (Def var expr pats tys@(Forall ckinds ty)) =
       let v' = show n
       put (n + 1)
       e' <- desguarPats e ps t2 boxed
-      return $ Val $ Abs v' t1 e'
+      return $ Val $ Abs v' (Just t1) e'
 
     desguarPats e (PVar v : ps) (FunTy t1 t2) boxed = do
       e' <- desguarPats e ps t2 boxed
-      return $ Val $ Abs v t1 e'
+      return $ Val $ Abs v (Just t1) e'
 
     desguarPats e (PBoxVar v : ps) (FunTy (Box c t) t2) boxed = do
       n <- get
       let v' = v ++ show n
       put (n + 1)
       e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, Unsafe.unsafePerformIO $ kindOfFromScheme c ckinds)])
-      return $ Val $ Abs v' (Box c t) e'
+      return $ Val $ Abs v' (Just (Box c t)) e'
 
     desguarPats _ _ _ _ = error $ "Definition of " ++ var ++ " expects at least " ++
                       show (length pats) ++ " arguments, but signature " ++
