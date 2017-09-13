@@ -29,7 +29,8 @@ test-suite spec
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
   hs-source-dirs:       tests, src
-  other-modules:        Syntax.ExprSpec
+  other-modules:        ContextSpec
+                        Syntax.ExprSpec
                         Checker.TypesSpec
                         Checker.EnvironmentSpec
   build-depends:        base >= 4.6 && < 5,

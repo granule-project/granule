@@ -13,6 +13,8 @@ import qualified Data.Set as S
 
 type TyOrDisc = Either Type (Coeffect, Type)
 
+-- Given a pattern and its type, construct the binding environment
+-- for that pattern
 ctxtFromTypedPattern :: Type -> Pattern -> Maybe [(Id, TyOrDisc)]
 ctxtFromTypedPattern t             PWild        = Just []
 ctxtFromTypedPattern t             (PVar v)     = Just [(v, Left t)]

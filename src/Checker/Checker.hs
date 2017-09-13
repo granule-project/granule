@@ -260,21 +260,37 @@ synthExpr dbg defs gam (Val (Pure e)) = do
   return (Diamond [] ty, gam')
 
 -- Case
-synthExpr dbg defs gam (Case e cases) = do
-  (ty, gam') <- synthExpr dbg defs gam e
+synthExpr dbg defs gam (Case guardExpr cases) = do
+  -- Synthesise the type of the guardExpr
+  (ty, guardGam) <- synthExpr dbg defs gam guardExpr
+  -- then synthesise the types of the branches
   branchTysAndCtxts <-
-    forM cases $ \(pi, ei) ->
-      case ctxtFromTypedPattern ty pi of
-        Just gamLocal -> synthExpr dbg defs (gam ++ gamLocal) ei
+    forM cases $ \(pati, ei) ->
+      -- Build the binding environment for the branch pattern
+      case ctxtFromTypedPattern ty pati of
+        Just localGam -> do
+          (ty, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
+          -- Check linear use in anything left
+          nameMap  <- ask
+          case remainingUndischarged localGam localGam' of
+            [] -> return (ty, localGam')
+            xs -> illTyped $ intercalate "\n" (map (unusedVariable . (unrename nameMap) . fst) xs)
+
         Nothing       -> illTyped $ "Type of the guard expression " ++ pretty ei
                                 ++ " does not match the type of the pattern "
-                                ++ pretty pi
+                                ++ pretty pati
+
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
-  eqTypes <- foldM (\a r -> joinTypes dbg a r)
-                   (head branchTys) (tail branchTys)
+
+  -- Finds the upper-bound return type between all branches
+  eqTypes <- foldM (joinTypes dbg) (head branchTys) (tail branchTys)
+
+  -- Find the upper-bound type on the return contexts
   nameMap     <- ask
-  eqResultGam <- foldM (\a r -> joinCtxts nameMap a r) empty branchCtxts
-  gamNew <- eqResultGam `ctxPlus` gam'
+  branchesGam <- foldM (joinCtxts nameMap) empty branchCtxts
+
+  -- Contract the outgoing context of the gurad and the branches (joined)
+  gamNew <- branchesGam `ctxPlus` guardGam
   return (eqTypes, gamNew)
 
 -- Diamond cut
@@ -449,18 +465,49 @@ leqCtxt env1 env2 = do
 
 joinCtxts :: [(Id, Id)] -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
 joinCtxts nameMap env1 env2 = do
-    let env  = env1 `keyIntersect` env2
-        env' = env2 `keyIntersect` env1
+    -- All the type assumptions from env1 whose variables appear in env2
+    -- and weaken all others
+    env  <- env1 `keyIntersectWithWeaken` env2
+    -- All the type assumptions from env2 whose variables appear in env1
+    -- and weaken all others
+    env' <- env2 `keyIntersectWithWeaken` env1
 
+    -- Check any variables that are not used across branches, e.g.
+    -- if `x` is used in one branch but not another
     case (remainingUndischarged env1 env ++ remainingUndischarged env2 env') of
       [] -> return ()
       xs -> illTyped $ intercalate "\n" (map (unusedVariable . (unrename nameMap) . fst) xs)
 
+    -- Make an environment with fresh coeffect variables for all
+    -- the variables which are in both env1 and env2...
     varEnv <- freshVarsIn (map fst env) env
-
+    -- ... and make these fresh coeffects the upper-bound of the coeffects
+    -- in env and env'
     zipWithM_ leqAssumption env varEnv
     zipWithM_ leqAssumption env' varEnv
-    return $ varEnv ++ (env1 \\ env) ++ (env2 \\ env')
+    -- Return the common upper-bound environment with the disjoint parts
+    -- of env1 and env2
+    return $ varEnv ++ (env1 `keyDelete` varEnv) ++ (env2 `keyDelete` varEnv)
+
+keyIntersectWithWeaken ::
+  Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
+keyIntersectWithWeaken a b = do
+    let intersected = keyIntersect a b
+    let remaining   = a `keyDelete` intersected
+    weakenedRemaining <- mapM weaken remaining
+    let newCtxt = intersected ++ filter isNonLinearAssumption weakenedRemaining
+    return $ sortBy (\a b -> fst a `compare` fst b) newCtxt
+
+isNonLinearAssumption :: (Id, TyOrDisc) -> Bool
+isNonLinearAssumption (_, Right _) = True
+isNonLinearAssumption _            = False
+
+weaken :: (Id, TyOrDisc) -> MaybeT Checker (Id, TyOrDisc)
+weaken (var, Left t) =
+  return (var, Left t)
+weaken (var, Right (c, t)) = do
+  kind <- kindOf c
+  return (var, Right (CZero kind, t))
 
 remainingUndischarged env subEnv =
   (lefts' env) \\ (lefts' subEnv)
@@ -549,6 +596,18 @@ discToFreshVarsIn vars env coeffect = do
       return (var, Right (COne kind, t))
 
 
+-- `freshVarsIn names env` creates a new environment with
+-- all the variables names in `env` that appear in the list
+-- `names` turned into discharged coeffect assumptions annotated
+-- with a fresh coeffect variable (and all variables not in
+-- `names` get deleted).
+-- e.g.
+--  `freshVarsIn ["x", "y"] [("x", Right (2, Int),
+--                           ("y", Left Int),
+--                           ("z", Right (3, Int)]
+--  -> [("x", Right (c5 :: Nat, Int),
+--      ("y", Right (1, Int))]
+--
 freshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
 freshVarsIn vars env = do
     mapM toFreshVar (relevantSubEnv vars env)
