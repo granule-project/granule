@@ -8,25 +8,23 @@ import Syntax.Expr
 import Syntax.Pretty
 import Context
 import Data.List
-import Data.SBV
-import qualified Data.Set as S
 
 type TyOrDisc = Either Type (Coeffect, Type)
 
 -- Given a pattern and its type, construct the binding environment
 -- for that pattern
 ctxtFromTypedPattern :: Type -> Pattern -> Maybe [(Id, TyOrDisc)]
-ctxtFromTypedPattern t             PWild        = Just []
+ctxtFromTypedPattern _             PWild        = Just []
 ctxtFromTypedPattern t             (PVar v)     = Just [(v, Left t)]
-ctxtFromTypedPattern (ConT "Int")  (PInt n)     = Just []
-ctxtFromTypedPattern (ConT "Real") (PReal n)    = Just []
+ctxtFromTypedPattern (ConT "Int")  (PInt _)     = Just []
+ctxtFromTypedPattern (ConT "Real") (PReal _)    = Just []
 ctxtFromTypedPattern (Box c t)     (PBoxVar v)  = Just [(v, Right (c, t))]
 ctxtFromTypedPattern (ConT "Bool") (PConstr "True")  = Just []
 ctxtFromTypedPattern (ConT "Bool") (PConstr "False") = Just []
 ctxtFromTypedPattern _             _            = Nothing
 
 instance Pretty (Type, Env TyOrDisc) where
-    pretty (t, env) = pretty t
+    pretty (t, _) = pretty t
 
 instance Pretty (Id, TyOrDisc) where
     pretty (v, ty) = v ++ " : " ++ pretty ty

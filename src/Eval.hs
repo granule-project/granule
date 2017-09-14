@@ -17,7 +17,7 @@ evalIn :: Env Value -> Expr -> IO Value
 
 evalIn env (App (Val (Var "write")) e) = do
     v <- evalIn env e
-    putStrLn $ show v
+    print v
     return $ Pure (Val v)
 
 evalIn _ (Val (Var "read")) = do
@@ -67,7 +67,7 @@ evalIn env (LetDiamond var _ e1 e2) = do
                       ++ pretty other
 
 evalIn env (Val (Var x)) =
-    case (lookup x env) of
+    case lookup x env of
       Just val -> return val
       Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: "
                ++ show env
@@ -89,7 +89,7 @@ evalIn env (Case gExpr cases) = do
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)
 evalDefs env [] = return env
-evalDefs env ((Def var e [] _):defs) = do
+evalDefs env (Def var e [] _ : defs) = do
     val <- evalIn env e
     evalDefs (extend env var val) defs
 evalDefs _ (d : _) =
@@ -100,6 +100,6 @@ eval defs = do
     bindings <- evalDefs empty defs
     case lookup "main" bindings of
       Nothing -> return Nothing
-      Just (Pure e)    -> evalIn bindings e >>= (return . Just)
-      Just (Promote e) -> evalIn bindings e >>= (return . Just)
+      Just (Pure e)    -> fmap Just (evalIn bindings e)
+      Just (Promote e) -> fmap Just (evalIn bindings e)
       Just val -> return $ Just val

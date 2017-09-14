@@ -30,8 +30,8 @@ run input debug = do
   -- Debugging mode produces the AST and the pretty printer
   if debug
     then do
-      putStrLn $ "AST:          " ++ (show ast)
-      putStrLn $ "\nSource:\n"    ++ (pretty ast)
+      putStrLn $ "AST:          " ++ show ast
+      putStrLn $ "\nSource:\n"    ++ pretty ast
     else return ()
 
   -- Type check

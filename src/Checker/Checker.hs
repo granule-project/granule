@@ -14,12 +14,10 @@ import Prelude hiding (pred)
 
 import Data.List
 import Data.Maybe
-import Data.Either (lefts)
 import Control.Monad.State.Strict
 import Control.Monad.Reader.Class
 import Control.Monad.Trans.Maybe
 import Data.SBV hiding (kindOf)
-import Debug.Trace
 
 -- Checking (top-level)
 check :: [Def]        -- List of definitions
@@ -33,7 +31,7 @@ check defs dbg nameMap = do
     (results, _) <- evalChecker initState nameMap checkedDefs
 
     -- If all definitions type checked, then the whole file type checkers
-    if (and . map (\(_, _, _, checked) -> isJust checked) $ results)
+    if all (\(_, _, _, checked) -> isJust checked) $ results
       then return . Right $ True
       -- Otherwise, show the checking reports
       else return . Left  $ intercalate "\n" (filter (/= "") $ map mkReport results)
@@ -47,8 +45,8 @@ check defs dbg nameMap = do
                  else illTyped "Constraints violated"
                return env'
       -- Erase the solver predicate between definitions
-      state <- get
-      put (state { predicate = [], ckenv = [] })
+      checkerState <- get
+      put $ checkerState { predicate = [], ckenv = [] }
       return ((var, tys, Nothing, env') : results, (var, tys) : def_env)
 
 -- Make type error report
@@ -77,13 +75,15 @@ checkExprTS :: Bool          -- turn on debgging
 
 checkExprTS dbg defs gam (Forall ckinds ty) e = do
   -- Coeffect kinds only need a local resolution; set kind environment to scheme
-  state <- get
-  put (state { ckenv = ckinds })
+  checkerState <- get
+  put checkerState { ckenv = ckinds }
   -- check expression against type
   checkExpr dbg defs gam Positive ty e
 
 data Polarity = Positive | Negative deriving Show
 
+
+flipPol :: Polarity -> Polarity
 flipPol Positive = Negative
 flipPol Negative = Positive
 
@@ -97,10 +97,10 @@ checkExpr :: Bool             -- turn on debgging
 
 -- Checking of constants
 
-checkExpr _ _ _ _ (ConT "Int") (Val (NumInt i)) = return []
+checkExpr _ _ _ _ (ConT "Int") (Val (NumInt _)) = return []
   -- Automatically upcast integers to reals
-checkExpr _ _ _ _ (ConT "Real") (Val (NumInt i)) = return []
-checkExpr _ _ _ _ (ConT "Real") (Val (NumReal i)) = return []
+checkExpr _ _ _ _ (ConT "Real") (Val (NumInt _)) = return []
+checkExpr _ _ _ _ (ConT "Real") (Val (NumReal _)) = return []
 
 checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x t e)) = do
   -- If an explicit signature on the lambda was given, then check
@@ -124,7 +124,7 @@ checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x t e)) = do
       illTyped $ unusedVariable (unrename nameMap x)
     Just _  -> return (eraseVar gam' x)
 
-checkExpr _ _ _ _ tau (Val (Abs _ _ _)) =
+checkExpr _ _ _ _ tau (Val Abs {}) =
     illTyped $ "Expected a function type, but got " ++ pretty tau
 
 {-
@@ -137,7 +137,6 @@ checkExpr _ _ _ _ tau (Val (Abs _ _ _)) =
 
 -- Promotion
 checkExpr dbg defs gam pol (Box demand tau) (Val (Promote e)) = do
-    state   <- get
     gamF    <- discToFreshVarsIn (fvs e) gam demand
     gam'    <- checkExpr dbg defs gamF pol tau e
     let gam'' = multAll (fvs e) demand gam'
@@ -178,16 +177,15 @@ equalTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
   eq2 <- equalTypes dbg t2 t2' -- covariance
   return (eq1 && eq2)
 
-equalTypes _ (ConT con) (ConT con') = do
-  return (con == con')
+equalTypes _ (ConT con) (ConT con') = return (con == con')
 
 equalTypes dbg (Diamond ef t) (Diamond ef' t') = do
   eq <- equalTypes dbg t t'
-  if (ef == ef')
+  if ef == ef'
     then return eq
     else illTyped $ "Effect mismatch: " ++ pretty ef ++ "!=" ++ pretty ef'
 
-equalTypes dbg ty@(Box c t) ty'@(Box c' t') = do
+equalTypes dbg (Box c t) (Box c' t') = do
   -- Debugging
   when dbg $ liftIO $ putStrLn $ pretty c ++ " == " ++ pretty c'
   when dbg $ liftIO $ putStrLn $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
@@ -206,21 +204,20 @@ joinTypes dbg (FunTy t1 t2) (FunTy t1' t2') = do
   t2j <- joinTypes dbg t2 t2'
   return (FunTy t1j t2j)
 
-joinTypes _ (ConT t) (ConT t') | t == t' = do
-  return (ConT t)
+joinTypes _ (ConT t) (ConT t') | t == t' = return (ConT t)
 
 joinTypes dbg (Diamond ef t) (Diamond ef' t') = do
   tj <- joinTypes dbg t t'
-  if (ef == ef')
+  if ef == ef'
     then return (Diamond ef tj)
     else illTyped $ "Effect mismatch: " ++ pretty ef ++ "!=" ++ pretty ef'
 
-joinTypes dbg ty@(Box c t) ty'@(Box c' t') = do
+joinTypes dbg (Box c t) (Box c' t') = do
   kind <- mguCoeffectKinds c c'
   -- Create a fresh coeffect variable
   topVar <- freshVar ""
-  state <- get
-  put (state { ckenv = (topVar, kind) : ckenv state })
+  checkerState <- get
+  put $ checkerState { ckenv = (topVar, kind) : ckenv checkerState }
   -- Unify the two coeffects into one
   addConstraint (Leq c  (CVar topVar) kind)
   addConstraint (Leq c' (CVar topVar) kind)
@@ -240,10 +237,9 @@ synthExpr :: Bool
           -> MaybeT Checker (Type, Env TyOrDisc)
 
 -- Constants (built-in effect primitives)
-synthExpr _ _ _ (Val (Var "read")) = do
-  return (Diamond ["R"] (ConT "Int"), [])
+synthExpr _ _ _ (Val (Var "read")) = return (Diamond ["R"] (ConT "Int"), [])
 
-synthExpr _ _ _ (Val (Var "write")) = do
+synthExpr _ _ _ (Val (Var "write")) =
   return (FunTy (ConT "Int") (Diamond ["W"] (ConT "Int")), [])
 
 -- Constants (booleans)
@@ -251,8 +247,8 @@ synthExpr _ _ _ (Val (Constr s)) | s == "False" || s == "True" =
   return (ConT "Bool", [])
 
 -- Constants (numbers)
-synthExpr _ _ _ (Val (NumInt i))  = return (ConT "Int", [])
-synthExpr _ _ _ (Val (NumReal i)) = return (ConT "Real", [])
+synthExpr _ _ _ (Val (NumInt _))  = return (ConT "Int", [])
+synthExpr _ _ _ (Val (NumReal _)) = return (ConT "Real", [])
 
 -- Effectful lifting
 synthExpr dbg defs gam (Val (Pure e)) = do
@@ -269,12 +265,12 @@ synthExpr dbg defs gam (Case guardExpr cases) = do
       -- Build the binding environment for the branch pattern
       case ctxtFromTypedPattern ty pati of
         Just localGam -> do
-          (ty, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
+          (_, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
           -- Check linear use in anything left
           nameMap  <- ask
           case remainingUndischarged localGam localGam' of
             [] -> return (ty, localGam')
-            xs -> illTyped $ intercalate "\n" (map (unusedVariable . (unrename nameMap) . fst) xs)
+            xs -> illTyped $ intercalate "\n" $ map (unusedVariable . unrename nameMap . fst) xs
 
         Nothing       -> illTyped $ "Type of the guard expression " ++ pretty ei
                                 ++ " does not match the type of the pattern "
@@ -345,26 +341,26 @@ synthExpr dbg defs gam (Val (Promote e)) = do
    -- Create a fresh kind variable for this coeffect
    vark <- freshVar $ "kprom_" ++ [head (pretty e)]
    -- Update coeffect-kind environment
-   state <- get
-   put (state { ckenv = (var, CPoly vark) : (ckenv state) })
+   checkerState <- get
+   put $ checkerState { ckenv = (var, CPoly vark) : ckenv checkerState }
 
    gamF <- discToFreshVarsIn (fvs e) gam (CVar var)
 
    (t, gam') <- synthExpr dbg defs gamF e
-   return (Box (CVar var) t, (multAll (fvs e) (CVar var) gam'))
+   return (Box (CVar var) t, multAll (fvs e) (CVar var) gam')
 
 -- Letbox
 synthExpr dbg defs gam (LetBox var t k e1 e2) = do
 
     cvar <- freshVar ("binder_" ++ var)
     -- Update coeffect-kind environment
-    state <- get
-    put (state { ckenv = (cvar, k) : (ckenv state) })
+    checkerState <- get
+    put $ checkerState { ckenv = (cvar, k) : ckenv checkerState }
 
     gam' <- extCtxt gam var (Right (CVar cvar, t))
 
     (tau, gam2) <- synthExpr dbg defs gam' e2
-    (demand, t) <-
+    (demand, t'') <-
       case lookup var gam2 of
         Just (Right (demand, t')) -> do
              eqT <- equalTypes dbg t' t
@@ -385,7 +381,7 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
           addConstraint (Eq (CVar cvar) (CZero k) k)
           return (CZero k, t)
 
-    gam1 <- checkExpr dbg defs gam Negative (Box demand t) e1
+    gam1 <- checkExpr dbg defs gam Negative (Box demand t'') e1
     gamNew <- gam1 `ctxPlus` gam2
     return (tau, gamNew)
 
@@ -406,6 +402,8 @@ synthExpr dbg defs gam (Binop _ e e') = do
         joinNum "Int" "Int" = "Int"
         joinNum x "Real" = x
         joinNum "Real" x = x
+        joinNum _ _ = error "joinNum is intentionally partial. Please \
+                            \create an issue on GitHub!"
 
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
@@ -439,11 +437,11 @@ solveConstraints = do
                                      [] -> ""
                                      _ -> "Falsifying model: " ++ show ce ++ " - "
                    let satModel = case satRes of
-                                    (SatResult (Unsatisfiable {})) -> ""
+                                    SatResult Unsatisfiable {} -> ""
                                     _ -> "\nSAT result: \n" ++ show satRes
                    illTyped $ show thmRes ++ maybeModel ++ satModel
 
-               Right (True, _) -> illTyped $ "Returned probable model."
+               Right (True, _) -> illTyped "Returned probable model."
                Left str        -> illTyped $ "Solver fail: " ++ str
            else return True
 
@@ -474,9 +472,9 @@ joinCtxts nameMap env1 env2 = do
 
     -- Check any variables that are not used across branches, e.g.
     -- if `x` is used in one branch but not another
-    case (remainingUndischarged env1 env ++ remainingUndischarged env2 env') of
+    case remainingUndischarged env1 env ++ remainingUndischarged env2 env' of
       [] -> return ()
-      xs -> illTyped $ intercalate "\n" (map (unusedVariable . (unrename nameMap) . fst) xs)
+      xs -> illTyped $ intercalate "\n" (map (unusedVariable . unrename nameMap . fst) xs)
 
     -- Make an environment with fresh coeffect variables for all
     -- the variables which are in both env1 and env2...
@@ -496,7 +494,7 @@ keyIntersectWithWeaken a b = do
     let remaining   = a `keyDelete` intersected
     weakenedRemaining <- mapM weaken remaining
     let newCtxt = intersected ++ filter isNonLinearAssumption weakenedRemaining
-    return $ sortBy (\a b -> fst a `compare` fst b) newCtxt
+    return $ sortBy (\x y -> fst x `compare` fst y) newCtxt
 
 isNonLinearAssumption :: (Id, TyOrDisc) -> Bool
 isNonLinearAssumption (_, Right _) = True
@@ -509,8 +507,9 @@ weaken (var, Right (c, t)) = do
   kind <- kindOf c
   return (var, Right (CZero kind, t))
 
+remainingUndischarged :: Env TyOrDisc -> Env TyOrDisc -> Env TyOrDisc
 remainingUndischarged env subEnv =
-  (lefts' env) \\ (lefts' subEnv)
+  lefts' env \\ lefts' subEnv
     where
       lefts' = filter isLeftPair
       isLeftPair (_, Left _) = True
@@ -559,7 +558,7 @@ freshPolymorphicInstance (Forall ckinds ty) = do
       return $ CTimes c1' c2'
 
     renameC rmap (CVar v) =
-      case (lookup v rmap) of
+      case lookup v rmap of
         Just v' -> return $ CVar v'
         Nothing -> illTyped $ "Coeffect variable " ++ v ++ " is unbound"
 
@@ -569,7 +568,7 @@ freshPolymorphicInstance (Forall ckinds ty) = do
       cvar' <- freshVar cvar
       checkerState <- get
       put $ checkerState { ckenv = (cvar', kind) : ckenv checkerState }
-      return $ (cvar, cvar')
+      return (cvar, cvar')
 
 relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubEnv vars env = filter relevant env
@@ -579,8 +578,7 @@ relevantSubEnv vars env = filter relevant env
 -- and derelict anything else
 -- but add a var
 discToFreshVarsIn :: [Id] -> Env TyOrDisc -> Coeffect -> MaybeT Checker (Env TyOrDisc)
-discToFreshVarsIn vars env coeffect = do
-    mapM toFreshVar (relevantSubEnv vars env)
+discToFreshVarsIn vars env coeffect = mapM toFreshVar (relevantSubEnv vars env)
   where
     toFreshVar (var, Right (c, t)) = do
       kind <- mguCoeffectKinds c coeffect
@@ -589,7 +587,7 @@ discToFreshVarsIn vars env coeffect = do
       -- Update the coeffect kind environment
       modify (\s -> s { ckenv = (cvar, kind) : ckenv s })
       -- Return the freshened var-type mapping
-      return $ (var, Right (CVar cvar, t))
+      return (var, Right (CVar cvar, t))
 
     toFreshVar (var, Left t) = do
       kind <- kindOf coeffect
@@ -609,8 +607,7 @@ discToFreshVarsIn vars env coeffect = do
 --      ("y", Right (1, Int))]
 --
 freshVarsIn :: [Id] -> Env TyOrDisc -> MaybeT Checker (Env TyOrDisc)
-freshVarsIn vars env = do
-    mapM toFreshVar (relevantSubEnv vars env)
+freshVarsIn vars env = mapM toFreshVar (relevantSubEnv vars env)
   where
     toFreshVar (var, Right (c, t)) = do
       ckind <- kindOf c
@@ -619,7 +616,7 @@ freshVarsIn vars env = do
       -- Update the coeffect kind environment
       modify (\s -> s { ckenv = (cvar, ckind) : ckenv s })
       -- Return the freshened var-type mapping
-      return $ (var, Right (CVar cvar, t))
+      return (var, Right (CVar cvar, t))
 
     toFreshVar (var, Left t) = do
       -- Create a fresh coeffect variable
@@ -648,8 +645,8 @@ eraseVar ((var, t):env) var' | var == var' = env
 extCtxt :: Env TyOrDisc -> Id -> TyOrDisc -> MaybeT Checker (Env TyOrDisc)
 extCtxt env var (Left t) = do
   nameMap <- ask
-  var'     <- return $ unrename nameMap var
-  case (lookup var env) of
+  let var' = unrename nameMap var
+  case lookup var env of
     Just (Left t') ->
        if t == t'
         then illTyped $ "'" ++ var' ++ "' used more than once\n"
@@ -658,26 +655,26 @@ extCtxt env var (Left t) = do
        if t == t'
          then do
            k <- kindOf c
-           return $ replace env var (Right (c `CPlus` (COne k), t))
+           return $ replace env var (Right (c `CPlus` COne k, t))
          else illTyped $ "Type clash for variable " ++ var'
     Nothing -> return $ (var, Left t) : env
 
 extCtxt env var (Right (c, t)) = do
   nameMap <- ask
-  case (lookup var env) of
+  case lookup var env of
     Just (Right (c', t')) ->
         if t == t'
         then return $ replace env var (Right (c `CPlus` c', t'))
         else do
-          var' <- return $ unrename nameMap var
+          let var' = unrename nameMap var
           illTyped $ "Type clash for variable " ++ var'
     Just (Left t') ->
         if t == t'
         then do
            k <- kindOf c
-           return $ replace env var (Right (c `CPlus` (COne k), t))
+           return $ replace env var (Right (c `CPlus` COne k, t))
         else do
-          var' <- return $ unrename nameMap var
+          let var' = unrename nameMap var
           illTyped $ "Type clash for variable " ++ var'
     Nothing -> return $ (var, Right (c, t)) : env
 

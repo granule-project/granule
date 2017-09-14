@@ -20,25 +20,25 @@ empty = []
 
 -- Replace the first occurence of an item in an environment
 replace :: Env a -> Id -> a -> Env a
-replace [] id v
-  = [(id, v)]
-replace ((id', _):env) id v | id == id'
-  = (id', v) : env
-replace (x : env) id v
-  = x : replace env id v
+replace [] name v
+  = [(name, v)]
+replace ((name', _):env) name v | name == name'
+  = (name', v) : env
+replace (x : env) name v
+  = x : replace env name v
 
 -- Take the intersection of two environments based on keys
 -- NOTE: this is not a commutative action, consider.
 -- keyIntersect [("x", 1)] [("x", 2)] = [("x", 1)]
 keyIntersect :: Env a -> Env a -> Env a
-keyIntersect a b = sortBy (\a b -> fst a `compare` fst b) $ filter (appearsIn a) b
-  where appearsIn a (id, _) = isJust $ lookup id a
+keyIntersect a b = sortBy (\x y -> fst x `compare` fst y) $ filter (appearsIn a) b
+  where appearsIn x (name, _) = isJust $ lookup name x
 
 -- `keyDelete a b` removes all the key-value pairs from
 -- `a` that have keys in `b`
 keyDelete :: Env a -> Env a -> Env a
 keyDelete a b = filter (not . appearsIn b) a
-  where appearsIn x (id, _) = isJust $ lookup id x
+  where appearsIn x (name, _) = isJust $ lookup name x
 
 -- Delete an entry from an environment
 deleteVar :: Id -> Env t -> Env t

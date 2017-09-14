@@ -6,7 +6,6 @@
 
 module Checker.Environment where
 
-import Checker.Types
 import Control.Monad.State.Strict
 
 import Control.Monad.Trans.Maybe
@@ -18,7 +17,7 @@ import Context
 import Syntax.Expr (Id, CKind)
 
 -- State of the check/synth functions
-data Checker a =
+newtype Checker a =
   Checker { unwrap :: MR.ReaderT [(Id, Id)] (StateT CheckerState IO) a }
 
 evalChecker :: CheckerState -> [(Id, Id)] -> Checker a -> IO a
@@ -38,6 +37,7 @@ data CheckerState = CS
             }
   deriving Show -- for debugging
 
+initState :: CheckerState
 initState = CS 0 ground emptyEnv
   where
     ground   = []
@@ -46,8 +46,8 @@ initState = CS 0 ground emptyEnv
 -- | A helper for adding a constraint to the environment
 addConstraint :: Constraint -> MaybeT Checker ()
 addConstraint p = do
-  state <- get
-  put $ state { predicate = p : predicate state }
+  checkerState <- get
+  put $ checkerState { predicate = p : predicate checkerState }
 
 -- | A helper for raising a type error
 illTyped :: String -> MaybeT Checker a
@@ -74,4 +74,4 @@ instance MonadIO Checker where
   liftIO = Checker . lift . lift
 
 instance MonadReader [(Id, Id)] Checker where
-  ask = Checker $ MR.ask
+  ask = Checker MR.ask

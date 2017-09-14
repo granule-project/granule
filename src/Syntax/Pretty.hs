@@ -26,14 +26,14 @@ instance Pretty Coeffect where
     pretty (COne k)  = "_1 : " ++ pretty k
     pretty (CZero k) = "_0 : " ++ pretty k
     pretty (Level 0) = "Lo"
-    pretty (Level n) = "Hi"
+    pretty (Level _) = "Hi"
     pretty (CVar c) = c
     pretty (CPlus c d) =
       pretty c ++ " + " ++ pretty d
     pretty (CTimes c d) =
       pretty c ++ " * " ++ pretty d
     pretty (CSet xs) =
-      "{" ++ intercalate "," (map (\(id, t) -> id ++ " : " ++ pretty t) xs) ++ "}"
+      "{" ++ intercalate "," (map (\(name, t) -> name ++ " : " ++ pretty t) xs) ++ "}"
 
 instance Pretty TypeScheme where
     pretty (Forall cvs t) =
@@ -51,7 +51,7 @@ instance Pretty Type where
     pretty (ConT s)  = s
     pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
     pretty (Box c t) = "|" ++ pretty t ++ "| " ++ pretty c
-    pretty (Diamond e t) = "<" ++ pretty t ++ "> [" ++ (intercalate "," e) ++ "]"
+    pretty (Diamond e t) = "<" ++ pretty t ++ "> [" ++ intercalate "," e ++ "]"
     pretty (TyVar v) = v
 
 instance Pretty [Def] where
@@ -69,7 +69,7 @@ instance Pretty Pattern where
     pretty (PConstr s)  = s
 
 instance Pretty [Pattern] where
-    pretty ps = intercalate " " (map pretty ps)
+    pretty ps = unwords (map pretty ps)
 
 instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
@@ -98,13 +98,14 @@ instance Pretty Expr where
         (Val v) -> pretty v
         (Case e ps) -> "case " ++ pretty e ++ " of " ++
                          (intercalate ";"
-                           $ map (\(p, e) -> pretty p
+                           $ map (\(p, e') -> pretty p
                                           ++ " -> "
-                                          ++ pretty e) ps)
+                                          ++ pretty e') ps)
      where prettyOp Add = " + "
            prettyOp Sub = " - "
            prettyOp Mul = " * "
 
+parens :: String -> String
 parens s = "(" ++ s ++ ")"
 
 instance Pretty Int where

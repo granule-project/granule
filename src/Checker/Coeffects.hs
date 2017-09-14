@@ -10,11 +10,6 @@ import Syntax.Pretty
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import Data.Maybe (fromJust)
-import Data.SBV hiding (kindOf)
-import qualified Data.Set as S
-
-import Debug.Trace
 
 
 
@@ -34,18 +29,17 @@ kindOf (CNat Ordered _)  = return $ CConstr "Nat"
 kindOf (CNat Discrete _) = return $ CConstr "Nat="
 kindOf (CReal _)         = return $ CConstr "Q"
 kindOf (CSet _)          = return $ CConstr "Set"
+kindOf (CNatOmega _)     = undefined
 
 -- Take the join for compound coeffect epxressions
-kindOf (CPlus c c')  = do
-  mguCoeffectKinds c c'
+kindOf (CPlus c c')  = mguCoeffectKinds c c'
 
-kindOf (CTimes c c') = do
-  mguCoeffectKinds c c'
+kindOf (CTimes c c') = mguCoeffectKinds c c'
 
 -- Coeffect variables should have a kind in the cvar->kind environment
 kindOf (CVar cvar) = do
-  state <- get
-  case lookup cvar (ckenv state) of
+  checkerState <- get
+  case lookup cvar (ckenv checkerState) of
      Nothing -> do
        error $ "Tried to lookup kind of " ++ cvar
 --       state <- get
@@ -60,7 +54,8 @@ kindOf (CZero k) = return k
 kindOf (COne k)  = return k
 
 -- This will be refined later, but for now join is the same as mgu
-kindJoin c1 c2 = mguCoeffectKinds c1 c2
+kindJoin :: Coeffect -> Coeffect -> MaybeT Checker CKind
+kindJoin = mguCoeffectKinds
 
 
 
@@ -68,13 +63,13 @@ kindJoin c1 c2 = mguCoeffectKinds c1 c2
 -- replace any occurence of that variable in an environment
 updateCoeffectKindEnv :: Id -> CKind -> MaybeT Checker ()
 updateCoeffectKindEnv ckindVar ckind = do
-    state <- get
-    put (state { ckenv = replacer (ckenv state) })
+    checkerState <- get
+    put $ checkerState { ckenv = replacer (ckenv checkerState) }
   where
     replacer :: Env CKind -> Env CKind
     replacer [] = []
-    replacer ((id, CPoly ckindVar') : env)
-     | ckindVar == ckindVar' = (id, ckind) : replacer env
+    replacer ((name, CPoly ckindVar') : env)
+     | ckindVar == ckindVar' = (name, ckind) : replacer env
     replacer (x : env) = x : replacer env
 
 -- Find the most general unifier of two coeffects
@@ -91,14 +86,14 @@ mguCoeffectKinds c1 c2 = do
       return (CPoly kv2)
 
    -- Left-hand side is a poly variable, but right is concrete
-    (CPoly kv1, ck2) -> do
-      updateCoeffectKindEnv kv1 ck2
-      return ck2
+    (CPoly kv1, ck2') -> do
+      updateCoeffectKindEnv kv1 ck2'
+      return ck2'
 
     -- Right-hand side is a poly variable, but left is concrete
-    (ck1, CPoly kv2) -> do
-      updateCoeffectKindEnv kv2 ck1
-      return ck1
+    (ck1', CPoly kv2) -> do
+      updateCoeffectKindEnv kv2 ck1'
+      return ck1'
 
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1
 
@@ -117,11 +112,11 @@ multAll :: [Id] -> Coeffect -> Env TyOrDisc -> Env TyOrDisc
 
 multAll _ _ [] = []
 
-multAll vars c ((id, Left t) : env) | id `elem` vars
-    = (id, Right (c, t)) : multAll vars c env
+multAll vars c ((name, Left t) : env) | name `elem` vars
+    = (name, Right (c, t)) : multAll vars c env
 
-multAll vars c ((id, Right (c', t)) : env) | id `elem` vars
-    = (id, Right (c `CTimes` c', t)) : multAll vars c env
+multAll vars c ((name, Right (c', t)) : env) | name `elem` vars
+    = (name, Right (c `CTimes` c', t)) : multAll vars c env
 
-multAll vars c ((id, Left t) : env) = multAll vars c env
-multAll vars c ((id, Right (_, t)) : env) = multAll vars c env
+multAll vars c ((_, Left _) : env) = multAll vars c env
+multAll vars c ((_, Right (_, _)) : env) = multAll vars c env
