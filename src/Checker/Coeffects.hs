@@ -29,7 +29,7 @@ kindOf (CNat Ordered _)  = return $ CConstr "Nat"
 kindOf (CNat Discrete _) = return $ CConstr "Nat="
 kindOf (CReal _)         = return $ CConstr "Q"
 kindOf (CSet _)          = return $ CConstr "Set"
-kindOf (CNatOmega _)     = undefined
+kindOf (CNatOmega _)     = return $ CConstr "Nat*"
 
 -- Take the join for compound coeffect epxressions
 kindOf (CPlus c c')  = mguCoeffectKinds c c'
