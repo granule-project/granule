@@ -29,12 +29,12 @@ test-suite spec
   type:                 exitcode-stdio-1.0
   main-is:              Spec.hs
   hs-source-dirs:       tests, src
-  other-modules:        ContextSpec
-                        Syntax.ExprSpec
+  other-modules:        Syntax.ExprSpec
                         Checker.TypesSpec
                         Checker.EnvironmentSpec
   build-depends:        base >= 4.6 && < 5,
                         array,
+                        directory,
                         mtl>=2.2.1,
                         transformers>=0.5,
                         sbv > 6,
