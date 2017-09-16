@@ -1,0 +1,8 @@
+fact : |Int| * -> Int
+fact |n| =
+  case n of
+    0 -> 1;
+    m -> m * (fact |(m - 1)|)
+
+main : Int
+main = fact |7|
