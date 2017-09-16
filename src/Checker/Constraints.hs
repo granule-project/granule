@@ -36,6 +36,7 @@ compileToSBV constraints cenv = do
 -- Symbolic coeffects
 data SCoeffect =
      SNat   NatModifier SInteger
+   | SNatOmega SInteger
    | SReal  SReal
    | SLevel SInteger
    | SSet   (S.Set (Id, Type))
@@ -44,6 +45,11 @@ data SCoeffect =
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
 freshCVar :: Id -> CKind -> Symbolic (SBool, SCoeffect)
+
+freshCVar name (CConstr "Nat*") = do
+  solverVar <- exists name
+  return (solverVar .>= literal 0, SNatOmega solverVar)
+
 freshCVar name (CConstr "Nat") = do
   solverVar <- exists name
   return (solverVar .>= literal 0, SNat Ordered solverVar)
@@ -75,11 +81,22 @@ compile vars (Leq c1 c2 k) =
 
 -- Compile a coeffect term into its symbolic representation
 compileCoeffect :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
+
 compileCoeffect (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
+
 compileCoeffect (CNat Ordered n)  (CConstr "Nat") _
   = SNat Ordered  . fromInteger . toInteger $ n
 compileCoeffect (CNat Discrete n)  (CConstr "Nat=") _
   = SNat Discrete  . fromInteger . toInteger $ n
+
+compileCoeffect (CNatOmega (Left ())) (CConstr "Nat*") _
+  = error "TODO: Recursion not yet supported"
+  -- SNatOmega . fromInteger .
+  --   allElse <- forall_
+
+compileCoeffect (CNatOmega (Right n)) (CConstr "Nat*") _
+  = SNatOmega . fromInteger . toInteger $ n
+
 compileCoeffect (CReal r) (CConstr "Q")     _ = SReal  . fromRational $ r
 compileCoeffect (CSet xs) (CConstr "Set")   _ = SSet   . S.fromList $ xs
 compileCoeffect (CVar v) _ vars =

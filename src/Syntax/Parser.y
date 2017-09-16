@@ -119,6 +119,7 @@ Type :
 Coeffect :: { Coeffect }
 Coeffect :
        NatCoeff                { $1 }
+     | '*'                     { CNatOmega (Left ()) }
      | REAL                    { CReal $ myReadFloat $1 }
      | CONSTR                  { case $1 of
                                    "Lo" -> Level 0

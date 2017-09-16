@@ -23,6 +23,7 @@ kindOf :: Coeffect -> MaybeT Checker CKind
 
 -- Coeffect constants have an obvious kind
 kindOf (Level _)         = return $ CConstr "Level"
+kindOf (CNatOmega    _)  = return $ CConstr "Nat*"
 kindOf (CNat Ordered _)  = return $ CConstr "Nat"
 kindOf (CNat Discrete _) = return $ CConstr "Nat="
 kindOf (CReal _)         = return $ CConstr "Q"
@@ -95,6 +96,8 @@ mguCoeffectKinds c1 c2 = do
 
     (CConstr "Nat=", CConstr "Nat")     -> return $ CConstr "Nat"
     (CConstr "Nat", CConstr "Nat=")     -> return $ CConstr "Nat"
+    (CConstr "Nat*", CConstr "Nat")     -> return $ CConstr "Nat*"
+    (CConstr "Nat", CConstr "Nat*")     -> return $ CConstr "Nat*"
 
     (CConstr "Nat", CConstr "Real")     -> return $ CConstr "Real"
     (CConstr "Real", CConstr "Nat")     -> return $ CConstr "Real"
