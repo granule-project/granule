@@ -8,8 +8,11 @@ import Syntax.Pretty
 import Checker.Checker
 import System.Environment
 
-version :: String
-version = "Gram v0.1.3.0"
+version :: IO String
+version = do
+  cabalFile <- readFile "gram.cabal"
+  return $ "Gram v" ++ version'
+    where version' = dropWhile (/= "version:") (words cabalFile) !! 1
 
 main :: IO ()
 main = do
@@ -22,7 +25,8 @@ main = do
 run :: String -> Bool -> IO ()
 run input debug = do
   -- Welcome message
-  putStrLn version
+  msg <- version
+  putStrLn msg
 
   -- Parse
   let (ast, nameMap) = parseDefs input
