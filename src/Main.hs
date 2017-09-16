@@ -11,8 +11,7 @@ import System.Environment
 version :: IO String
 version = do
   cabalFile <- readFile "gram.cabal"
-  return $ "Gram v" ++ version'
-    where version' = dropWhile (/= "version:") (words cabalFile) !! 1
+  return $ "Gram v" ++ dropWhile (/= "version:") (words cabalFile) !! 1
 
 main :: IO ()
 main = do
