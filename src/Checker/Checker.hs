@@ -25,10 +25,14 @@ check :: [Def]        -- List of definitions
       -> [(Id, Id)]   -- Name map
       -> IO (Either String Bool)
 check defs dbg nameMap = do
-    -- Build the computation to check all the defs (in order)...
-    let checkedDefs = foldM checkDef ([], empty) defs
+    -- Get the types of all definitions (assume that they are correct for
+    -- the purposes of (mutually)recursive calls).
+    let defEnv = map (\(Def var _ _ tys) -> (var, tys)) defs
+
+    -- Build a computation which checks all the defs (in order)...
+    let checkedDefs = mapM (checkDef defEnv) defs
     -- ... and evaluate the computation with initial state
-    (results, _) <- evalChecker initState nameMap checkedDefs
+    results <- evalChecker initState nameMap checkedDefs
 
     -- If all definitions type checked, then the whole file type checkers
     if all (\(_, _, _, checked) -> isJust checked) $ results
@@ -36,9 +40,9 @@ check defs dbg nameMap = do
       -- Otherwise, show the checking reports
       else return . Left  $ intercalate "\n" (filter (/= "") $ map mkReport results)
   where
-    checkDef (results, def_env) (Def var expr _ tys) = do
+    checkDef defEnv (Def var expr _ tys) = do
       env' <- runMaybeT $ do
-               env' <- checkExprTS dbg def_env [] tys expr
+               env' <- checkExprTS dbg defEnv [] tys expr
                solved <- solveConstraints
                if solved
                  then return ()
@@ -46,8 +50,8 @@ check defs dbg nameMap = do
                return env'
       -- Erase the solver predicate between definitions
       checkerState <- get
-      put $ checkerState { predicate = [], ckenv = [] }
-      return ((var, tys, Nothing, env') : results, (var, tys) : def_env)
+      put (checkerState { predicate = [], ckenv = [] })
+      return (var, tys, Nothing, env')
 
 -- Make type error report
 mkReport :: (Id, TypeScheme, Maybe TypeScheme, Maybe (Env TyOrDisc))
