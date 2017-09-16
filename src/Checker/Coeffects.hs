@@ -11,8 +11,6 @@ import Syntax.Pretty
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
-
-
 kindOfFromScheme :: Coeffect -> [(Id, CKind)] -> IO CKind
 kindOfFromScheme c env = do
   result <- evalChecker (initState { ckenv = env }) [] (runMaybeT (kindOf c))
@@ -56,8 +54,6 @@ kindOf (COne k)  = return k
 -- This will be refined later, but for now join is the same as mgu
 kindJoin :: Coeffect -> Coeffect -> MaybeT Checker CKind
 kindJoin = mguCoeffectKinds
-
-
 
 -- Given a coeffect kind variable and a coeffect kind,
 -- replace any occurence of that variable in an environment
