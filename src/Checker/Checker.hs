@@ -530,9 +530,11 @@ leqAssumption (_, Right (c1, _)) (_, Right (c2, _)) = do
   kind <- mguCoeffectKinds c1 c2
   addConstraint (Leq c1 c2 kind)
 
-leqAssumption x y =
+leqAssumption (x, t) (x', t') = do
+  nameMap <- ask
   illTyped $ "Can't unify free-variable types:\n\t"
-           ++ pretty x ++ "\nwith\n\t" ++ pretty y
+           ++ pretty (unrename nameMap x, t)
+           ++ "\nwith\n\t" ++ pretty (unrename nameMap x', t')
 
 
 freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
