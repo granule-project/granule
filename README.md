@@ -4,7 +4,7 @@ The type system is partly based on the one in ["Combining effects and coeffects 
 
 ## Installation
 
-Gram requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). An easy way to install Z3 is via Homebrew, e.g.,
+Gram requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). An easy way to install Z3 on mac is via Homebrew, e.g.,
 
     brew install z3
     
