@@ -47,6 +47,7 @@ test-suite spec
   build-depends:        base >= 4.6 && < 5,
                         array,
                         directory,
+                        filepath,
                         mtl>=2.2.1,
                         transformers>=0.5,
                         sbv > 6,
