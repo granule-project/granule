@@ -1,8 +1,7 @@
 module Checker.CheckerSpec where
 
 import Control.Monad (forM_)
-import Data.List ((\\), isPrefixOf)
-import Debug.Trace (trace)
+import Data.List ((\\))
 import System.Directory
 
 import Test.Hspec
