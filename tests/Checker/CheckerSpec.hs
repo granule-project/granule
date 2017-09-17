@@ -16,8 +16,8 @@ import Syntax.Parser
 pathToExamples :: FilePath
 pathToExamples = "examples"
 
-brokenExamples :: FilePath -- these don't get run
-brokenExamples = "broken"
+exclude :: FilePath -- these don't get run
+exclude = "broken"
 
 fileExtension :: String
 fileExtension = ".gr"
@@ -41,6 +41,6 @@ exampleFiles path = do
   files' <- withCurrentDirectory path $ forM files $ \f -> do
     f' <- makeAbsolute f
     isDir <- doesDirectoryExist f'
-    if isDir && not (brokenExamples `isSuffixOf` f') then exampleFiles f'
+    if isDir && not (exclude `isSuffixOf` f') then exampleFiles f'
     else return [f' | fileExtension `isSuffixOf` f']
   return $ concat files'
