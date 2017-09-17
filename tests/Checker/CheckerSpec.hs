@@ -19,8 +19,8 @@ fileExtension = ".gr"
 
 spec :: Spec
 spec = parallel $ do
-  exFiles <- runIO exampleFiles
-  forM_ exFiles $ \file -> do
+  srcFiles <- runIO exampleFiles
+  forM_ srcFiles $ \file -> do
     src <- runIO $ readFile file
     let (ast, nameMap) = parseDefs src
     checked <- runIO $ check ast False nameMap
