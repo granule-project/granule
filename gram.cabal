@@ -21,7 +21,7 @@ Executable gram
                   Eval
                   Context
   Hs-Source-Dirs: src
-  Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv > 6, containers
+  Build-Depends:  base >= 4, array, mtl>=2.2.1, transformers>=0.5, sbv >= 7.3, containers
   Build-Tools:    alex, happy
   GHC-Options:    -Wall
 
@@ -49,7 +49,7 @@ test-suite spec
                         filemanip,
                         mtl>=2.2.1,
                         transformers>=0.5,
-                        sbv > 6,
+                        sbv >= 7.3,
                         containers,
                         hspec >= 2.4.3,
                         QuickCheck >= 2.8 && < 3

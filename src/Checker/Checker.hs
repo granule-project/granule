@@ -434,7 +434,7 @@ solveConstraints = do
      ThmResult (ProofError _ msgs) -> illTyped $ "Prover error:" ++ unlines msgs
      _ -> if modelExists thmRes
            then
-             case getModel thmRes of
+             case getModelAssignment thmRes of
                Right (False, ce :: [ Integer ] ) -> do
                    satRes <- liftIO . sat $ sbvTheorem
                    let maybeModel = case ce of
