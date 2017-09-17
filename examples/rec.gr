@@ -1,4 +1,4 @@
-fact : |Int| * -> Int
+fact : Int |*| -> Int
 fact |n| =
   case n of
     0 -> 1;

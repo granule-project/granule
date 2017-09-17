@@ -1,7 +1,7 @@
-test : |Int| 2 -> Int
+test : Int |2| -> Int
 test = \x -> let |y : Int| Nat = x in y + y
 
-test' : |Int| 2 -> Int
+test' : Int |2| -> Int
 test' |y| = y + y
 
 main : Int

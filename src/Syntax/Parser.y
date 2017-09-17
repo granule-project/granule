@@ -111,7 +111,7 @@ Type :: { Type }
 Type :
        CONSTR                      { ConT $1 }
      | Type '->' Type              { FunTy $1 $3 }
-     | '|' Type '|' Coeffect       { Box $4 $2 }
+     | Type '|' Coeffect '|'       { Box $3 $1 }
      | '(' Type ')'                { $2 }
      | '<' Type '>' Effect         { Diamond $4 $2 }
      | VAR                         { TyVar $1 }
@@ -206,7 +206,7 @@ Atom : '(' Expr ')'                { $2 }
 
 
 {
-  
+
 parseError :: [Token] -> a
 parseError t = error $ "Parse error, at token " ++ show t
 

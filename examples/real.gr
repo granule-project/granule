@@ -1,4 +1,4 @@
-dub : |Real| 2 -> Real
+dub : Real |2| -> Real
 dub |x| = x + x
 
 main : Real
