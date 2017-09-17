@@ -18,7 +18,7 @@ fileExtension :: String
 fileExtension = ".gr"
 
 spec :: Spec
-spec = parallel $ do
+spec = {-parallel $-} do -- no apparent speedup from `parallel` at the moment
   srcFiles <- runIO exampleFiles
   forM_ srcFiles $ \file -> do
     src <- runIO $ readFile file
