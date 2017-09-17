@@ -32,6 +32,18 @@ test-suite spec
   other-modules:        Syntax.ExprSpec
                         Checker.TypesSpec
                         Checker.EnvironmentSpec
+                        Checker.CheckerSpec
+                        Syntax.Parser
+                        Checker.Checker
+                        Checker.Coeffects
+                        Checker.Constraints
+                        Checker.Environment
+                        Checker.Types
+                        Context
+                        Syntax.Expr
+                        Syntax.Pretty
+                        Syntax.Lexer
+                        Syntax.Desugar
   build-depends:        base >= 4.6 && < 5,
                         array,
                         directory,
@@ -41,3 +53,4 @@ test-suite spec
                         containers,
                         hspec >= 2.4.3,
                         QuickCheck >= 2.8 && < 3
+  Build-Tools:          alex, happy
