@@ -18,7 +18,7 @@ fileExtension :: String
 fileExtension = ".gr"
 
 spec :: Spec
-spec = do
+spec = parallel $ do
   exFiles <- runIO exampleFiles
   forM_ exFiles $ \file -> do
     src <- runIO $ readFile file
