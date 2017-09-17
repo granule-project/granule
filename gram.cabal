@@ -46,8 +46,7 @@ test-suite spec
                         Syntax.Desugar
   build-depends:        base >= 4.6 && < 5,
                         array,
-                        directory,
-                        filepath,
+                        filemanip,
                         mtl>=2.2.1,
                         transformers>=0.5,
                         sbv > 6,
@@ -55,3 +54,4 @@ test-suite spec
                         hspec >= 2.4.3,
                         QuickCheck >= 2.8 && < 3
   Build-Tools:          alex, happy
+  GHC-Options:          -Wall

@@ -1,17 +1,12 @@
-{-# LANGUAGE DoAndIfThenElse #-}
-
 module Checker.CheckerSpec where
 
-import Control.Monad (forM, forM_)
-import Data.List ((\\), isSuffixOf)
-import System.Directory (doesDirectoryExist, listDirectory, makeAbsolute, withCurrentDirectory)
-import System.FilePath (splitDirectories)
+import Control.Monad (forM_)
 
+import System.FilePath.Find
 import Test.Hspec
 
 import Checker.Checker
 import Syntax.Parser
-
 
 pathToExamples :: FilePath
 pathToExamples = "examples"
@@ -24,23 +19,14 @@ fileExtension = ".gr"
 
 spec :: Spec
 spec = do
-  exFiles <- runIO $ exampleFiles pathToExamples
+  exFiles <- runIO exampleFiles
   forM_ exFiles $ \file -> do
     src <- runIO $ readFile file
     let (ast, nameMap) = parseDefs src
     checked <- runIO $ check ast False nameMap
-    describe (short file) $
+    describe file $
       it "typechecks" $
         checked `shouldBe` Right True
   where
-    short = last . splitDirectories -- remove everything but the filename
-
-exampleFiles :: FilePath -> IO [FilePath]
-exampleFiles path = do
-  files <- listDirectory path
-  files' <- withCurrentDirectory path $ forM files $ \f -> do
-    f' <- makeAbsolute f
-    isDir <- doesDirectoryExist f'
-    if isDir && not (exclude `isSuffixOf` f') then exampleFiles f'
-    else return [f' | fileExtension `isSuffixOf` f']
-  return $ concat files'
+    exampleFiles =
+      find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
