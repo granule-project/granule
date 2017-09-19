@@ -40,9 +40,9 @@ evalIn env (Binop op e1 e2) = do
      v2 <- evalIn env e2
      case (v1, v2) of
        (NumInt n1, NumInt n2)   -> return $ NumInt  (evalOp op n1 n2)
-       (NumInt n1, NumReal n2)  -> return $ NumReal (evalOp op (cast n1) n2)
-       (NumReal n1, NumInt n2)  -> return $ NumReal (evalOp op n1 (cast n2))
-       (NumReal n1, NumReal n2) -> return $ NumReal (evalOp op n1 n2)
+       (NumInt n1, NumFloat n2)  -> return $ NumFloat (evalOp op (cast n1) n2)
+       (NumFloat n1, NumInt n2)  -> return $ NumFloat (evalOp op n1 (cast n2))
+       (NumFloat n1, NumFloat n2) -> return $ NumFloat (evalOp op n1 n2)
        _ -> fail $ "Runtime exception: Not a number: "
                  ++ pretty v1 ++ " or " ++ pretty v2
   where
@@ -84,7 +84,7 @@ evalIn env (Case gExpr cases) = do
     pmatch ((PVar var, e):_) val              = evalIn env (subst (Val val) var e)
     pmatch ((PBoxVar var, e):_) (Promote e')  = evalIn env (subst e' var e)
     pmatch ((PInt n, e):_)  (NumInt m)  | n == m = evalIn env e
-    pmatch ((PReal n, e):_) (NumReal m) | n == m = evalIn env e
+    pmatch ((PFloat n, e):_) (NumFloat m) | n == m = evalIn env e
     pmatch (_:ps)            val              = pmatch ps val
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)

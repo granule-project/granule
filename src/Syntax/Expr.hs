@@ -16,7 +16,7 @@ data Op = Add | Sub | Mul deriving (Eq, Show)
 -- Values in Gram
 data Value = Abs Id (Maybe Type) Expr
            | NumInt Int
-           | NumReal Double
+           | NumFloat Double
            | Promote Expr
            | Pure Expr
            | Var Id
@@ -37,7 +37,7 @@ data Pattern = PVar Id        -- Variable patterns
              | PWild          -- Wildcard (underscore) pattern
              | PBoxVar Id     -- Box patterns (with a variable pattern inside)
              | PInt Int       -- Numeric patterns
-             | PReal Double
+             | PFloat Double
              | PConstr String -- Constructor pattern
              | PApp Pattern Pattern -- Apply pattern
           deriving (Eq, Show)
@@ -212,7 +212,7 @@ arity _           = 0
 type Effect = [String]
 
 data Coeffect = CNat   NatModifier Int
-              | CReal  Rational
+              | CFloat  Rational
               | CNatOmega (Either () Int)
               | CVar   String
               | CPlus  Coeffect Coeffect

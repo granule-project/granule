@@ -22,7 +22,7 @@ instance Pretty Coeffect where
     pretty (CNat Discrete n) = show n ++ "="
     pretty (CNatOmega (Left ())) = "*"
     pretty (CNatOmega (Right x)) = show x
-    pretty (CReal n) = show n
+    pretty (CFloat n) = show n
     pretty (COne k)  = "_1 : " ++ pretty k
     pretty (CZero k) = "_0 : " ++ pretty k
     pretty (Level 0) = "Lo"
@@ -64,7 +64,7 @@ instance Pretty Pattern where
     pretty PWild       = "_"
     pretty (PBoxVar v) = "|" ++ v ++ "|"
     pretty (PInt n)    = show n
-    pretty (PReal n)    = show n
+    pretty (PFloat n)    = show n
     pretty (PApp p1 p2) = show p1 ++ " " ++ show p2
     pretty (PConstr s)  = s
 
@@ -82,7 +82,7 @@ instance Pretty Value where
     pretty (Pure e)    = "<" ++ pretty e ++ ">"
     pretty (Var x)     = x
     pretty (NumInt n)  = show n
-    pretty (NumReal n) = show n
+    pretty (NumFloat n) = show n
     pretty (Constr s)  = s
 
 

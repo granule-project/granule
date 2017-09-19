@@ -1,5 +1,5 @@
-dub : Real |2| -> Real
+dub : Float |2| -> Float
 dub |x| = x + x
 
-main : Real
+main : Float
 main = dub |1.0|

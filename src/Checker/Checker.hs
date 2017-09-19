@@ -102,9 +102,9 @@ checkExpr :: Bool             -- turn on debgging
 -- Checking of constants
 
 checkExpr _ _ _ _ (ConT "Int") (Val (NumInt _)) = return []
-  -- Automatically upcast integers to reals
-checkExpr _ _ _ _ (ConT "Real") (Val (NumInt _)) = return []
-checkExpr _ _ _ _ (ConT "Real") (Val (NumReal _)) = return []
+  -- Automatically upcast integers to floats
+checkExpr _ _ _ _ (ConT "Float") (Val (NumInt _)) = return []
+checkExpr _ _ _ _ (ConT "Float") (Val (NumFloat _)) = return []
 
 checkExpr dbg defs gam pol (FunTy sig tau) (Val (Abs x t e)) = do
   -- If an explicit signature on the lambda was given, then check
@@ -252,7 +252,7 @@ synthExpr _ _ _ (Val (Constr s)) | s == "False" || s == "True" =
 
 -- Constants (numbers)
 synthExpr _ _ _ (Val (NumInt _))  = return (ConT "Int", [])
-synthExpr _ _ _ (Val (NumReal _)) = return (ConT "Real", [])
+synthExpr _ _ _ (Val (NumFloat _)) = return (ConT "Float", [])
 
 -- Effectful lifting
 synthExpr dbg defs gam (Val (Pure e)) = do
@@ -401,11 +401,11 @@ synthExpr dbg defs gam (Binop _ e e') = do
         _ ->
             illTyped "Binary op does not have two int expressions"
   where isNum "Int" = True
-        isNum "Real" = True
+        isNum "Float" = True
         isNum _      = False
         joinNum "Int" "Int" = "Int"
-        joinNum x "Real" = x
-        joinNum "Real" x = x
+        joinNum x "Float" = x
+        joinNum "Float" x = x
         joinNum _ _ = error "joinNum is intentionally partial. Please \
                             \create an issue on GitHub!"
 

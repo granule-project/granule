@@ -25,7 +25,7 @@ kindOf :: Coeffect -> MaybeT Checker CKind
 kindOf (Level _)         = return $ CConstr "Level"
 kindOf (CNat Ordered _)  = return $ CConstr "Nat"
 kindOf (CNat Discrete _) = return $ CConstr "Nat="
-kindOf (CReal _)         = return $ CConstr "Q"
+kindOf (CFloat _)         = return $ CConstr "Q"
 kindOf (CSet _)          = return $ CConstr "Set"
 kindOf (CNatOmega _)     = return $ CConstr "Nat*"
 
@@ -98,8 +98,8 @@ mguCoeffectKinds c1 c2 = do
     (CConstr "Nat*", CConstr "Nat")     -> return $ CConstr "Nat*"
     (CConstr "Nat", CConstr "Nat*")     -> return $ CConstr "Nat*"
 
-    (CConstr "Nat", CConstr "Real")     -> return $ CConstr "Real"
-    (CConstr "Real", CConstr "Nat")     -> return $ CConstr "Real"
+    (CConstr "Nat", CConstr "Float")     -> return $ CConstr "Float"
+    (CConstr "Float", CConstr "Nat")     -> return $ CConstr "Float"
     (k1, k2) -> illTyped $ "Cannot unify coeffect kinds of " ++ pretty k1 ++ " and " ++ pretty k2
        ++ "for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 

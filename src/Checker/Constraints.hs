@@ -37,7 +37,7 @@ compileToSBV constraints cenv = do
 data SCoeffect =
      SNat   NatModifier SInteger
    | SNatOmega SInteger
-   | SReal  SReal
+   | SFloat  SFloat
    | SLevel SInteger
    | SSet   (S.Set (Id, Type))
   deriving (Show, Eq)
@@ -58,7 +58,7 @@ freshCVar name (CConstr "Nat=") = do
   return (solverVar .>= literal 0, SNat Discrete solverVar)
 freshCVar name (CConstr "Q") = do
   solverVar <- exists name
-  return (true, SReal solverVar)
+  return (true, SFloat solverVar)
 freshCVar name (CConstr "Level") = do
   solverVar <- exists name
   return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
@@ -97,7 +97,7 @@ compileCoeffect (CNatOmega (Left ())) (CConstr "Nat*") _
 compileCoeffect (CNatOmega (Right n)) (CConstr "Nat*") _
   = SNatOmega . fromInteger . toInteger $ n
 
-compileCoeffect (CReal r) (CConstr "Q")     _ = SReal  . fromRational $ r
+compileCoeffect (CFloat r) (CConstr "Q")     _ = SFloat  . fromRational $ r
 compileCoeffect (CSet xs) (CConstr "Set")   _ = SSet   . S.fromList $ xs
 compileCoeffect (CVar v) _ vars =
   case lookup v vars of
@@ -118,7 +118,7 @@ compileCoeffect (CPlus n m) k@(CConstr "Level") vars =
 compileCoeffect (CPlus n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 + n2)
-    (SReal n1, SReal n2) -> SReal $ n1 + n2
+    (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
     (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " + " ++ show m'
 
 compileCoeffect (CTimes n m) k@(CConstr "Set") vars =
@@ -134,20 +134,20 @@ compileCoeffect (CTimes n m) k@(CConstr "Level") vars =
 compileCoeffect (CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 * n2)
-    (SReal n1, SReal n2) -> SReal $ n1 * n2
+    (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
     (m', n') -> error $ "Trying to compileCoeffect solver contraints for: "
                       ++ show m' ++ " * " ++ show n'
 
 compileCoeffect (CZero (CConstr "Level")) (CConstr "Level") _ = SLevel 0
 compileCoeffect (CZero (CConstr "Nat")) (CConstr "Nat")     _ = SNat Ordered 0
 compileCoeffect (CZero (CConstr "Nat=")) (CConstr "Nat=")   _ = SNat Discrete 0
-compileCoeffect (CZero (CConstr "Q"))  (CConstr "Q")        _ = SReal (fromRational 0)
+compileCoeffect (CZero (CConstr "Q"))  (CConstr "Q")        _ = SFloat (fromRational 0)
 compileCoeffect (CZero (CConstr "Set")) (CConstr "Set")     _ = SSet (S.fromList [])
 
 compileCoeffect (COne (CConstr "Level")) (CConstr "Level") _ = SLevel 1
 compileCoeffect (COne (CConstr "Nat")) (CConstr "Nat")     _ = SNat Ordered 1
 compileCoeffect (COne (CConstr "Nat=")) (CConstr "Nat=")   _ = SNat Discrete 1
-compileCoeffect (COne (CConstr "Q")) (CConstr "Q")         _ = SReal (fromRational 1)
+compileCoeffect (COne (CConstr "Q")) (CConstr "Q")         _ = SFloat (fromRational 1)
 compileCoeffect (COne (CConstr "Set")) (CConstr "Set")     _ = SSet (S.fromList [])
 
 compileCoeffect c (CPoly _) _ =
@@ -160,7 +160,7 @@ compileCoeffect coeff ckind _ =
 -- | Generate equality constraints for two symbolic coeffects
 eqConstraint :: SCoeffect -> SCoeffect -> SBool
 eqConstraint (SNat _ n) (SNat _ m) = n .== m
-eqConstraint (SReal n) (SReal m)   = n .== m
+eqConstraint (SFloat n) (SFloat m)   = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint x y =
    error $ "Kind error trying to generate equality " ++ show x ++ " = " ++ show y
@@ -169,7 +169,7 @@ eqConstraint x y =
 lteConstraint :: SCoeffect -> SCoeffect -> SBool
 lteConstraint (SNat Ordered n) (SNat Ordered m)   = n .<= m
 lteConstraint (SNat Discrete n) (SNat Discrete m) = n .== m
-lteConstraint (SReal n) (SReal m)   = n .<= m
+lteConstraint (SFloat n) (SFloat m)   = n .<= m
 lteConstraint (SLevel l) (SLevel k) = l .== k
 lteConstraint (SSet s) (SSet t) =
   if s == t then true else false

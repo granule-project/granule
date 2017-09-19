@@ -16,7 +16,7 @@ $eol    = [\n]
 $alphanum  = [$alpha $digit \_ \']
 @sym    = $lower $alphanum*
 @constr = $upper $alpha*
-@real   = \-? $digit+ \. $digit+
+@float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
 
 tokens :-
@@ -30,7 +30,7 @@ tokens :-
   in                            { \s -> TokenIn }
   case                          { \s -> TokenCase }
   of                            { \s -> TokenOf }
-  @real                         { \s -> TokenReal $ s }
+  @float                         { \s -> TokenFloat $ s }
   @int                          { \s -> TokenInt  $ read s }  
   "->"                          { \s -> TokenArrow }
   \;                            { \s -> TokenSemicolon }
@@ -64,7 +64,7 @@ data Token = TokenLet
 	   | TokenLetBox
 	   | TokenBox
            | TokenInt Int
-	   | TokenReal String
+	   | TokenFloat String
            | TokenSym String
            | TokenArrow
 	   | TokenForall
