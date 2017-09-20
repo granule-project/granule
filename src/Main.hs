@@ -14,10 +14,13 @@ version = "Gram v0.2.0.0"
 main :: IO ()
 main = do
   args <- getArgs
-  -- Get the filename
-  input <- readFile (head args)
-  -- Flag '-d' turns on debug mode
-  run input (if length args >= 2 then args !! 1 == "-d" else False)
+  case args of
+    []      -> putStrLn "Usage: gram <SOURCE_FILE>"
+    (src:_)  -> do
+      -- Get the filename
+      input <- readFile src
+      -- Flag '-d' turns on debug mode
+      run input (if length args >= 2 then args !! 1 == "-d" else False)
 
 run :: String -> Bool -> IO ()
 run input debug = do
