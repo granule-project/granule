@@ -1,4 +1,4 @@
--- Effectful example in gram
+-- Effectful example in Granule
 
 -- Similar to Haskell
 -- main :: IO a

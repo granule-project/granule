@@ -1,5 +1,5 @@
 ------------------
------- Gram ------
+------ Granule ------
 ------------------
 
 import Eval
@@ -9,13 +9,13 @@ import Checker.Checker
 import System.Environment
 
 version :: String
-version = "Gram v0.2.0.0"
+version = "Granule v0.2.0.0"
 
 main :: IO ()
 main = do
   args <- getArgs
   case args of
-    []      -> putStrLn "Usage: gram <SOURCE_FILE>"
+    []      -> putStrLn "Usage: gran <SOURCE_FILE>"
     (src:_)  -> do
       -- Get the filename
       input <- readFile src

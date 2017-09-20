@@ -1,4 +1,4 @@
--- Small example of case expressions in Gram
+-- Small example of case expressions in Granule
 
 if0 : Int -> Int |1| -> Int |1| -> Int
 if0 g |x| |y| = case g of

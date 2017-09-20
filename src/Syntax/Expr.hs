@@ -13,7 +13,7 @@ import Control.Monad.State
 type Id = String
 data Op = Add | Sub | Mul deriving (Eq, Show)
 
--- Values in Gram
+-- Values in Granule
 data Value = Abs Id (Maybe Type) Expr
            | NumInt Int
            | NumFloat Double
@@ -23,7 +23,7 @@ data Value = Abs Id (Maybe Type) Expr
            | Constr String
           deriving (Eq, Show)
 
--- Expressions (computations) in Gram
+-- Expressions (computations) in Granule
 data Expr = App Expr Expr
           | Binop Op Expr Expr
           | LetBox Id Type CKind Expr Expr

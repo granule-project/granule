@@ -1,4 +1,4 @@
--- Prelude library for Gram
+-- Prelude library for Granule
 
 -- Standard functional components
 id : Int -> Int
