@@ -19,14 +19,14 @@ fileExtension = ".gr"
 
 spec :: Spec
 spec = {-parallel $-} do -- no apparent speedup from `parallel` at the moment
-  srcFiles <- runIO exampleFiles
-  forM_ srcFiles $ \file -> do
-    src <- runIO $ readFile file
-    let (ast, nameMap) = parseDefs src
-    checked <- runIO $ check ast False nameMap
-    describe file $
-      it "typechecks" $
-        checked `shouldBe` Right True
+    srcFiles <- runIO exampleFiles
+    forM_ srcFiles $ \file -> do
+      src <- runIO $ readFile file
+      let (ast, nameMap) = parseDefs src
+      checked <- runIO $ check ast False nameMap
+      describe file $
+        it "typechecks" $
+          checked `shouldBe` Right True
   where
     exampleFiles =
       find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
