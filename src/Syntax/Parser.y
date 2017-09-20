@@ -19,7 +19,7 @@ import Numeric
     case  { TokenCase }
     of    { TokenOf }
     INT   { TokenInt $$ }
-    REAL  { TokenFloat $$ }
+    FLOAT  { TokenFloat $$ }
     VAR   { TokenSym $$ }
     CONSTR { TokenConstr $$ }
     forall { TokenForall }
@@ -81,7 +81,7 @@ Pat : VAR                          { PVar $1 }
     | '_'                          { PWild }
     | '|' VAR '|'                  { PBoxVar $2 }
     | INT                          { PInt $1 }
-    | REAL                         { PFloat $ read $1 }
+    | FLOAT                         { PFloat $ read $1 }
     | CONSTR                       { PConstr $1 }
 
 TypeScheme :: { TypeScheme }
@@ -120,7 +120,7 @@ Coeffect :: { Coeffect }
 Coeffect :
        NatCoeff                { $1 }
      | '*'                     { CNatOmega (Left ()) }
-     | REAL                    { CFloat $ myReadFloat $1 }
+     | FLOAT                    { CFloat $ myReadFloat $1 }
      | CONSTR                  { case $1 of
                                    "Lo" -> Level 0
                                    "Hi" -> Level 1 }
@@ -199,7 +199,7 @@ Juxt : Juxt Atom                   { App $1 $2 }
 Atom :: { Expr }
 Atom : '(' Expr ')'                { $2 }
      | INT                         { Val $ NumInt $1 }
-     | REAL                        { Val $ NumFloat $ read $1 }
+     | FLOAT                        { Val $ NumFloat $ read $1 }
      | VAR                         { Val $ Var $1 }
      | '|' Atom '|'                { Val $ Promote $2 }
      | CONSTR                      { Val $ Constr $1 }
