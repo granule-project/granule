@@ -10,18 +10,9 @@ Granule requires Z3, for which installation instructions can be found [here](htt
 
     brew install z3
 
-To install Granule using Stack:
+To install Granule, we recommend you use [Stack](https://docs.haskellstack.org/en/stable/README/):
 
-    git clone https://github.com/dorchard/granule
-    cd granule
-    stack install
-
-To install Granule using only Cabal:
-
-    git clone https://github.com/dorchard/granule
-    cd granule
-    cabal configure
-    cabal install
+    git clone https://github.com/dorchard/granule && cd granule && stack setup && stack install
 
 ## Executing Granule Programs
 
@@ -29,7 +20,7 @@ Granule program files have file extension `.gr`. Use the `gran` command to execu
 
     $ gran examples/ex1.gr
 
-     Granule v0.1.2.0
+     Granule v0.2.0.0
     ----------------------------------
 
     Type checking:    Ok.
