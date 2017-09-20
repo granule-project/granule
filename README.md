@@ -25,7 +25,7 @@ To install Granule using only Cabal:
 
 ## Executing Granule Programs
 
-Granule program files have file extension `.gr`—use the `gran` command to execute them:
+Granule program files have file extension `.gr`. Use the `gran` command to execute them:
 
     $ gran examples/ex1.gr
 
