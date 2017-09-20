@@ -113,7 +113,7 @@ Type :
      | Type '->' Type              { FunTy $1 $3 }
      | Type '|' Coeffect '|'       { Box $3 $1 }
      | '(' Type ')'                { $2 }
-     | '<' Type '>' Effect         { Diamond $4 $2 }
+     | Type '<' Effect '>'         { Diamond $3 $1 }
      | VAR                         { TyVar $1 }
 
 Coeffect :: { Coeffect }
