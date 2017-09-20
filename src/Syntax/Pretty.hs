@@ -1,4 +1,4 @@
--- Pretty printer for Gram
+-- Pretty printer for Granule
 --  It is not especially pretty.
 -- Useful in debugging and error messages
 

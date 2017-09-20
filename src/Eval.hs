@@ -1,4 +1,4 @@
--- Gram interpreter
+-- Granule interpreter
 
 module Eval (eval) where
 
