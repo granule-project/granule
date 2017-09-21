@@ -8,6 +8,7 @@ import Context
 import Syntax.Expr
 import Syntax.Pretty
 
+import Control.Monad.Reader.Class
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
@@ -103,8 +104,11 @@ mguCoeffectKinds s c1 c2 = do
 
     (CConstr "Nat", CConstr "Float")     -> return $ CConstr "Float"
     (CConstr "Float", CConstr "Nat")     -> return $ CConstr "Float"
-    (k1, k2) -> illTyped s $ "Cannot unify coeffect kinds of " ++ pretty k1 ++ " and " ++ pretty k2
-       ++ "for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
+    (k1, k2) -> do
+      -- c2' <- renameC s (map (\(a, b) -> (b, a)) nameMap) c2
+      -- c1' <- renameC s (map (\(a, b) -> (b, a)) nameMap) c1
+      illTyped s $ "Cannot unify coeffect types of '" ++ pretty k1 ++ "' and '" ++ pretty k2
+       ++ "' for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 
 -- | Multiply an environment by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
@@ -121,3 +125,22 @@ multAll vars c ((name, Right (c', t)) : env) | name `elem` vars
 
 multAll vars c ((_, Left _) : env) = multAll vars c env
 multAll vars c ((_, Right (_, _)) : env) = multAll vars c env
+
+-- | Perform a renaming on a coeffect
+renameC :: Span -> Env Id -> Coeffect -> MaybeT Checker Coeffect
+renameC s rmap (CPlus c1 c2) = do
+      c1' <- renameC s rmap c1
+      c2' <- renameC s rmap c2
+      return $ CPlus c1' c2'
+
+renameC s rmap (CTimes c1 c2) = do
+      c1' <- renameC s rmap c1
+      c2' <- renameC s rmap c2
+      return $ CTimes c1' c2'
+
+renameC s rmap (CVar v) =
+      case lookup v rmap of
+        Just v' -> return $ CVar v'
+        Nothing -> illTyped s $ "Coeffect variable " ++ v ++ " is unbound"
+
+renameC _ _ c = return c

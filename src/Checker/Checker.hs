@@ -556,27 +556,10 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
       t2' <- rename renameMap t2
       return $ FunTy t1' t2'
     rename renameMap (Box c t) = do
-      c' <- renameC renameMap c
+      c' <- renameC s renameMap c
       t' <- rename renameMap t
       return $ Box c' t'
     rename _ t = return t
-
-    renameC rmap (CPlus c1 c2) = do
-      c1' <- renameC rmap c1
-      c2' <- renameC rmap c2
-      return $ CPlus c1' c2'
-
-    renameC rmap (CTimes c1 c2) = do
-      c1' <- renameC rmap c1
-      c2' <- renameC rmap c2
-      return $ CTimes c1' c2'
-
-    renameC rmap (CVar v) =
-      case lookup v rmap of
-        Just v' -> return $ CVar v'
-        Nothing -> illTyped s $ "Coeffect variable " ++ v ++ " is unbound"
-
-    renameC _ c = return c
 
     freshCoeffectVar (cvar, kind) = do
       cvar' <- freshVar cvar
