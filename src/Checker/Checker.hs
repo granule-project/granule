@@ -37,13 +37,12 @@ check defs dbg nameMap = do
     -- If all definitions type checked, then the whole file type checkers
     if all (\(_, _, _, checked) -> isJust checked) $ results
       then return . Right $ True
-      -- Otherwise, show the checking reports
-      else return . Left  $ intercalate "\n" (filter (/= "") $ map mkReport results)
+      else return . Left  $ ""
   where
     checkDef defEnv (Def s var expr _ tys) = do
       env' <- runMaybeT $ do
                env' <- checkExprTS dbg defEnv [] tys expr
-               solved <- solveConstraints
+               solved <- solveConstraints s var
                if solved
                  then return ()
                  else illTyped s "Constraints violated"
@@ -52,16 +51,6 @@ check defs dbg nameMap = do
       checkerState <- get
       put (checkerState { predicate = [], ckenv = [], cVarEnv = [] })
       return (var, tys, Nothing, env')
-
--- Make type error report
-mkReport :: (Id, TypeScheme, Maybe TypeScheme, Maybe (Env TyOrDisc))
-         -> String
-mkReport (var, _, synthTy, Nothing) =
-    "'" ++ var ++ "' failed to type check"
-        -- Stub for showing inferred types at the top-level
-        ++ (case synthTy of { Nothing -> ""; Just ty' -> "\n but infered: " ++ pretty ty' })
-
-mkReport _ = ""
 
 -- Type check an expression
 
@@ -159,16 +148,15 @@ checkExpr dbg defs gam pol tau e = do
   (tau', gam') <- synthExpr dbg defs gam e
   tyEq <- case pol of
             Positive -> do
-              when dbg $ liftIO $ putStrLn $ "+ Compare for equality " ++ show tau' ++ " = " ++ show tau
+              when dbg $ liftIO $ putStrLn $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
               equalTypes dbg (getSpan e) tau' tau
             -- i.e., this check is from a synth
             Negative -> do
-              when dbg $ liftIO $ putStrLn $ "- Compare for equality " ++ show tau ++ " = " ++ show tau'
+              when dbg $ liftIO $ putStrLn $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
               equalTypes dbg (getSpan e) tau tau'
   leqCtxt (getSpan e) gam' gam
   if tyEq then return gam'
-          else illTyped (getSpan e) $ "Checking: (" ++ pretty e ++ "), "
-                        ++ show tau ++ " not equal to " ++ show tau'
+          else illTyped (getSpan e) $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
 
 -- Check whether two types are equal, and at the same time
 -- generate coeffect equality constraints
@@ -430,8 +418,8 @@ synthExpr dbg defs gam (Val s (Abs x (Just t) e)) = do
 synthExpr _ _ _ e = illTyped (getSpan e) $ "I can't work out the type here, try adding more type signatures"
 
 
-solveConstraints :: MaybeT Checker Bool
-solveConstraints = do
+solveConstraints :: Span -> String -> MaybeT Checker Bool
+solveConstraints s defName = do
   -- Get the coeffect kind environment and constraints
   checkerState <- get
   let env  = ckenv checkerState
@@ -449,20 +437,19 @@ solveConstraints = do
      _ -> if modelExists thmRes
            then
              case getModelAssignment thmRes of
-               Right (False, ce :: [ Integer ] ) -> do
-                   satRes <- liftIO . sat $ sbvTheorem
-                   let maybeModel = case ce of
-                                     [] -> ""
-                                     _ -> "Falsifying model: " ++ show ce ++ " - "
-                   let satModel = case satRes of
-                                    SatResult Unsatisfiable {} -> ""
-                                    _ -> "\nSAT result: \n" ++ show satRes
+               -- Main 'Falsifiable' result
+               Right (False, _ :: [ Integer ] ) -> do
                    -- Show any trivial inequalities
                    mapM_ (\c -> illGraded (getSpan c) (pretty . Neg $ c)) unsats
-                   illTyped nullSpan $ show thmRes ++ maybeModel ++ satModel
+                   -- Show fatal error, with prover result
+                   illTyped s $ "'" ++ defName ++ "' is shown to be " ++ show thmRes
 
-               Right (True, _) -> illTyped nullSpan "Returned probable model."
-               Left str        -> illTyped nullSpan $ "Solver fail: " ++ str
+               Right (True, _) ->
+                   illTyped s $ "'" ++ defName ++ "' returned probable model."
+
+               Left str        ->
+                   illTyped s $ "'" ++ defName ++ " had a solver fail: " ++ str
+
            else return True
 
 
