@@ -14,13 +14,13 @@ type TyOrDisc = Either Type (Coeffect, Type)
 -- Given a pattern and its type, construct the binding environment
 -- for that pattern
 ctxtFromTypedPattern :: Type -> Pattern -> Maybe [(Id, TyOrDisc)]
-ctxtFromTypedPattern _             PWild        = Just []
-ctxtFromTypedPattern t             (PVar v)     = Just [(v, Left t)]
-ctxtFromTypedPattern (ConT "Int")  (PInt _)     = Just []
-ctxtFromTypedPattern (ConT "Float") (PFloat _)    = Just []
-ctxtFromTypedPattern (Box c t)     (PBoxVar v)  = Just [(v, Right (c, t))]
-ctxtFromTypedPattern (ConT "Bool") (PConstr "True")  = Just []
-ctxtFromTypedPattern (ConT "Bool") (PConstr "False") = Just []
+ctxtFromTypedPattern _             (PWild _)      = Just []
+ctxtFromTypedPattern t             (PVar _ v)     = Just [(v, Left t)]
+ctxtFromTypedPattern (ConT "Int")  (PInt _ _)     = Just []
+ctxtFromTypedPattern (ConT "Float") (PFloat _ _)  = Just []
+ctxtFromTypedPattern (Box c t)     (PBoxVar _ v)  = Just [(v, Right (c, t))]
+ctxtFromTypedPattern (ConT "Bool") (PConstr _ "True")  = Just []
+ctxtFromTypedPattern (ConT "Bool") (PConstr _ "False") = Just []
 ctxtFromTypedPattern _             _            = Nothing
 
 instance Pretty (Type, Env TyOrDisc) where

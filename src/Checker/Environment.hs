@@ -14,7 +14,7 @@ import Control.Monad.Reader.Class
 
 import Checker.Constraints (Constraint)
 import Context
-import Syntax.Expr (Id, CKind)
+import Syntax.Expr (Id, CKind, Span)
 
 -- State of the check/synth functions
 newtype Checker a =
@@ -53,9 +53,29 @@ addConstraint p = do
   checkerState <- get
   put $ checkerState { predicate = p : predicate checkerState }
 
+-- | Stops the checker
+halt :: MaybeT Checker a
+halt = MaybeT (return Nothing)
+
 -- | A helper for raising a type error
-illTyped :: String -> MaybeT Checker a
-illTyped s = liftIO (putStrLn $ "Type error: " ++ s) >> MaybeT (return Nothing)
+illTyped :: Span -> String -> MaybeT Checker a
+illTyped = visibleError "type" halt
+
+illLinearity :: Span -> String -> MaybeT Checker a
+illLinearity = visibleError "linearity" halt
+
+illGraded :: Span -> String -> MaybeT Checker ()
+illGraded = visibleError "grading" (return ())
+
+-- | Helper for constructing error handlers
+visibleError :: String -> (MaybeT Checker a) -> Span -> String -> MaybeT Checker a
+visibleError kind next ((0, 0), (0, 0)) s =
+  liftIO (putStrLn $ kind ++ " error: " ++ s) >> next
+
+visibleError kind next ((sl, sc), (_, _)) s =
+  liftIO (putStrLn $ show sl ++ ":" ++ show sc ++ ": " ++ kind ++ " error:\n\t"
+                   ++ s) >> next
+
 
 -- Various interfaces for the checker
 

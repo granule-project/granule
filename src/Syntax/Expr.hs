@@ -1,18 +1,38 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Op(..),
                    Pattern(..), CKind(..), Coeffect(..), NatModifier(..), Effect,
                    uniqueNames, arity, fvs, subst,
-                   normalise
+                   normalise,
+                   nullSpan, getSpan, getEnd, getStart, Pos, Span
                    ) where
 
 import Data.List
 import Control.Monad.State
+import GHC.Generics (Generic)
+
+import Syntax.FirstParameter
 
 type Id = String
 data Op = Add | Sub | Mul deriving (Eq, Show)
+
+type Pos = (Int, Int) -- (line, column)
+type Span = (Pos, Pos)
+nullSpan :: Span
+nullSpan = ((0, 0), (0, 0))
+
+getSpan :: FirstParameter t Span => t -> Span
+getSpan = getFirstParameter
+
+getEnd ::  FirstParameter t Span => t -> Pos
+getEnd = snd . getSpan
+
+getStart ::  FirstParameter t Span => t -> Pos
+getStart = fst . getSpan
 
 -- Values in Granule
 data Value = Abs Id (Maybe Type) Expr
@@ -25,46 +45,50 @@ data Value = Abs Id (Maybe Type) Expr
           deriving (Eq, Show)
 
 -- Expressions (computations) in Granule
-data Expr = App Expr Expr
-          | Binop Op Expr Expr
-          | LetBox Id Type Expr Expr
-          | LetDiamond Id Type Expr Expr
-          | Val Value
-          | Case Expr [(Pattern, Expr)]
-          deriving (Eq, Show)
+data Expr = App Span Expr Expr
+          | Binop Span Op Expr Expr
+          | LetBox Span Id Type Expr Expr
+          | LetDiamond Span Id Type Expr Expr
+          | Val Span Value
+          | Case Span Expr [(Pattern, Expr)]
+          deriving (Eq, Show, Generic)
+
+instance FirstParameter Expr Span
 
 -- Pattern matchings
-data Pattern = PVar Id        -- Variable patterns
-             | PWild          -- Wildcard (underscore) pattern
-             | PBoxVar Id     -- Box patterns (with a variable pattern inside)
-             | PInt Int       -- Numeric patterns
-             | PFloat Double
-             | PConstr String -- Constructor pattern
-             | PApp Pattern Pattern -- Apply pattern
-          deriving (Eq, Show)
+data Pattern = PVar Span Id        -- Variable patterns
+             | PWild Span          -- Wildcard (underscore) pattern
+             | PBoxVar Span Id     -- Box patterns (with a variable pattern inside)
+             | PInt Span Int       -- Numeric patterns
+             | PFloat Span Double
+             | PConstr Span String -- Constructor pattern
+             | PApp Span Pattern Pattern -- Apply pattern
+          deriving (Eq, Show, Generic)
+
+instance FirstParameter Pattern Span
 
 class Binder t where
   bvs :: t -> [Id]
   freshenBinder :: t -> Freshener t
 
 instance Binder Pattern where
-  bvs (PVar v)    = [v]
-  bvs (PBoxVar v) = [v]
-  bvs (PApp p1 p2) = bvs p1 ++ bvs p2
+  bvs (PVar _ v)     = [v]
+  bvs (PBoxVar _ v)  = [v]
+  bvs (PApp _ p1 p2) = bvs p1 ++ bvs p2
   bvs _           = []
 
-  freshenBinder (PVar var) = do
+  freshenBinder (PVar s var) = do
       var' <- freshVar var
-      return $ PVar var'
+      return $ PVar s var'
 
-  freshenBinder (PBoxVar var) = do
+  freshenBinder (PBoxVar s var) = do
       var' <- freshVar var
-      return $ PBoxVar var'
+      return $ PBoxVar s var'
 
-  freshenBinder (PApp p1 p2) = do
+  freshenBinder (PApp s p1 p2) = do
       p1' <- freshenBinder p1
       p2' <- freshenBinder p2
-      return $ PApp p1' p2'
+      return $ PApp s p1' p2'
 
   freshenBinder p = return p
 
@@ -93,13 +117,13 @@ instance Term Value where
     fvs (Var x)     = [x]
     fvs (Pure e)    = fvs e
     fvs (Promote e) = fvs e
-    fvs _           = []
+    fvs _             = []
 
-    subst es v (Abs w t e)      = Val $ Abs w t (subst es v e)
-    subst es v (Pure e)         = Val $ Pure (subst es v e)
-    subst es v (Promote e)      = Val $ Promote (subst es v e)
+    subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
+    subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
+    subst es v (Promote e)      = Val nullSpan $ Promote (subst es v e)
     subst es v (Var w) | v == w = es
-    subst _ _ val               = Val val
+    subst _ _ val               = Val nullSpan val
 
     freshen (Abs var t e) = do
       var' <- freshVar var
@@ -125,63 +149,65 @@ instance Term Value where
     freshen v = return v
 
 instance Term Expr where
-   fvs (App e1 e2)            = fvs e1 ++ fvs e2
-   fvs (Binop _ e1 e2)        = fvs e1 ++ fvs e2
-   fvs (LetBox x _ e1 e2)     = fvs e1 ++ ((fvs e2) \\ [x])
-   fvs (LetDiamond x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
-   fvs (Val e)                = fvs e
-   fvs (Case e cases)         = fvs e ++ (concatMap (fvs . snd) cases
+   fvs (App _ e1 e2)            = fvs e1 ++ fvs e2
+   fvs (Binop _ _ e1 e2)        = fvs e1 ++ fvs e2
+   fvs (LetBox _ x _ e1 e2)     = fvs e1 ++ ((fvs e2) \\ [x])
+   fvs (LetDiamond _ x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
+   fvs (Val _ e)                = fvs e
+   fvs (Case _ e cases)         = fvs e ++ (concatMap (fvs . snd) cases
                                       \\ concatMap (bvs . fst) cases)
 
-   subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
-   subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
-   subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
-   subst es v (LetDiamond w t e1 e2) =
-                                   LetDiamond w t (subst es v e1) (subst es v e2)
-   subst es v (Val val)          = subst es v val
-   subst es v (Case expr cases)  = Case
+   subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
+   subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
+   subst es v (LetBox s w t e1 e2) = LetBox s w t (subst es v e1) (subst es v e2)
+   subst es v (LetDiamond s w t e1 e2) =
+                                   LetDiamond s w t (subst es v e1) (subst es v e2)
+   subst es v (Val _ val)          = subst es v val
+   subst es v (Case s expr cases)  = Case s
                                      (subst es v expr)
                                      (map (\(p, e) -> (p, subst es v e)) cases)
 
-   freshen (LetBox var t e1 e2) = do
+   freshen (LetBox s var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
-      return $ LetBox var' t e1' e2'
+      return $ LetBox s var' t e1' e2'
 
-   freshen (App e1 e2) = do
+   freshen (App s e1 e2) = do
       e1' <- freshen e1
       e2' <- freshen e2
-      return $ App e1' e2'
+      return $ App s e1' e2'
 
-   freshen (LetDiamond var t e1 e2) = do
+   freshen (LetDiamond s var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
-      return $ LetDiamond var' t e1' e2'
+      return $ LetDiamond s var' t e1' e2'
 
-   freshen (Binop op e1 e2) = do
+   freshen (Binop s op e1 e2) = do
       e1' <- freshen e1
       e2' <- freshen e2
-      return $ Binop op e1' e2'
+      return $ Binop s op e1' e2'
 
-   freshen (Case expr cases) = do
+   freshen (Case s expr cases) = do
       expr'     <- freshen expr
       cases' <- forM cases $ \(p, e) -> do
                   p' <- freshenBinder p
                   e' <- freshen e
                   return (p', e')
-      return (Case expr' cases')
+      return (Case s expr' cases')
 
-   freshen (Val v) = do
+   freshen (Val s v) = do
      v' <- freshen v
-     return (Val v')
+     return (Val s v')
 
 
 --------- Definitions
 
-data Def = Def Id Expr [Pattern] TypeScheme
-          deriving (Eq, Show)
+data Def = Def Span Id Expr [Pattern] TypeScheme
+          deriving (Eq, Show, Generic)
+
+instance FirstParameter Def Span
 
 -- Alpha-convert all bound variables
 uniqueNames :: [Def] -> ([Def], [(Id, Id)])
@@ -189,15 +215,17 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
             . flip runState (0 :: Int, [])
             . mapM freshenDef
   where
-    freshenDef (Def var e ps t) = do
+    freshenDef (Def s var e ps t) = do
       e'  <- freshen e
       ps' <- mapM freshenBinder ps
-      return $ Def var e' ps' t
+      return $ Def s var e' ps' t
 
 ----------- Types
 
-data TypeScheme = Forall [(String, CKind)] Type
-    deriving (Eq, Show)
+data TypeScheme = Forall Span [(String, CKind)] Type
+    deriving (Eq, Show, Generic)
+
+instance FirstParameter TypeScheme Span
 
 data Type = FunTy Type Type
           | ConT String

@@ -30,9 +30,9 @@ kindOf (CSet _)          = return $ CConstr "Set"
 kindOf (CNatOmega _)     = return $ CConstr "Nat*"
 
 -- Take the join for compound coeffect epxressions
-kindOf (CPlus c c')  = mguCoeffectKinds c c'
+kindOf (CPlus c c')  = mguCoeffectKinds nullSpan c c'
 
-kindOf (CTimes c c') = mguCoeffectKinds c c'
+kindOf (CTimes c c') = mguCoeffectKinds nullSpan c c'
 
 -- Coeffect variables should have a kind in the cvar->kind environment
 kindOf (CVar cvar) = do
@@ -53,7 +53,7 @@ kindOf (COne k)  = return k
 
 -- This will be refined later, but for now join is the same as mgu
 kindJoin :: Coeffect -> Coeffect -> MaybeT Checker CKind
-kindJoin = mguCoeffectKinds
+kindJoin = mguCoeffectKinds nullSpan
 
 -- Given a coeffect kind variable and a coeffect kind,
 -- replace any occurence of that variable in an environment
@@ -74,8 +74,8 @@ updateCoeffectKind ckindVar ckind = do
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- environments if a unification resolves a variable
-mguCoeffectKinds :: Coeffect -> Coeffect -> MaybeT Checker CKind
-mguCoeffectKinds c1 c2 = do
+mguCoeffectKinds :: Span -> Coeffect -> Coeffect -> MaybeT Checker CKind
+mguCoeffectKinds s c1 c2 = do
   ck1 <- kindOf c1
   ck2 <- kindOf c2
   case (ck1, ck2) of
@@ -103,7 +103,7 @@ mguCoeffectKinds c1 c2 = do
 
     (CConstr "Nat", CConstr "Float")     -> return $ CConstr "Float"
     (CConstr "Float", CConstr "Nat")     -> return $ CConstr "Float"
-    (k1, k2) -> illTyped $ "Cannot unify coeffect kinds of " ++ pretty k1 ++ " and " ++ pretty k2
+    (k1, k2) -> illTyped s $ "Cannot unify coeffect kinds of " ++ pretty k1 ++ " and " ++ pretty k2
        ++ "for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 
 -- | Multiply an environment by a coeffect

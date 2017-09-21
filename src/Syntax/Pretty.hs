@@ -36,7 +36,7 @@ instance Pretty Coeffect where
       "{" ++ intercalate "," (map (\(name, t) -> name ++ " : " ++ pretty t) xs) ++ "}"
 
 instance Pretty TypeScheme where
-    pretty (Forall cvs t) =
+    pretty (Forall _ cvs t) =
       "forall " ++ intercalate "," (map prettyKindSignatures cvs)
                 ++ " . " ++ pretty t
       where
@@ -50,23 +50,23 @@ instance Pretty CKind where
 instance Pretty Type where
     pretty (ConT s)  = s
     pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
-    pretty (Box c t) = "|" ++ pretty t ++ "| " ++ pretty c
-    pretty (Diamond e t) = "<" ++ pretty t ++ "> [" ++ intercalate "," e ++ "]"
+    pretty (Box c t) = pretty t ++ " |" ++ pretty c ++ "|"
+    pretty (Diamond e t) = pretty t ++ "<[" ++ intercalate "," e ++ "]>"
     pretty (TyVar v) = v
 
 instance Pretty [Def] where
     pretty = intercalate "\n"
-     . map (\(Def v e ps t) -> v ++ " : " ++ pretty t ++ "\n"
+     . map (\(Def _ v e ps t) -> v ++ " : " ++ pretty t ++ "\n"
                                 ++ v ++ pretty ps ++ " = " ++ pretty e)
 
 instance Pretty Pattern where
-    pretty (PVar v)    = v
-    pretty PWild       = "_"
-    pretty (PBoxVar v) = "|" ++ v ++ "|"
-    pretty (PInt n)    = show n
-    pretty (PFloat n)    = show n
-    pretty (PApp p1 p2) = show p1 ++ " " ++ show p2
-    pretty (PConstr s)  = s
+    pretty (PVar _ v)    = v
+    pretty (PWild _)      = "_"
+    pretty (PBoxVar _ v) = "|" ++ v ++ "|"
+    pretty (PInt _ n)    = show n
+    pretty (PFloat _ n)    = show n
+    pretty (PApp _ p1 p2) = show p1 ++ " " ++ show p2
+    pretty (PConstr _ s)  = s
 
 instance Pretty [Pattern] where
     pretty ps = unwords (map pretty ps)
@@ -76,27 +76,27 @@ instance Pretty t => Pretty (Maybe t) where
     pretty (Just x) = pretty x
 
 instance Pretty Value where
-    pretty (Abs x t e) = parens $ "\\" ++ x ++ " : " ++ pretty t
+    pretty (Abs x t e)  = parens $ "\\" ++ x ++ " : " ++ pretty t
                                ++ " -> " ++ pretty e
-    pretty (Promote e) = "[ " ++ pretty e ++ " ]"
-    pretty (Pure e)    = "<" ++ pretty e ++ ">"
-    pretty (Var x)     = x
-    pretty (NumInt n)  = show n
+    pretty (Promote e)  = "[ " ++ pretty e ++ " ]"
+    pretty (Pure e)     = "<" ++ pretty e ++ ">"
+    pretty (Var x)      = x
+    pretty (NumInt n)   = show n
     pretty (NumFloat n) = show n
-    pretty (Constr s)  = s
+    pretty (Constr s)   = s
 
 
 instance Pretty Expr where
     pretty expr =
       case expr of
-        (App e1 e2) -> parens $ pretty e1 ++ " " ++ pretty e2
-        (Binop op e1 e2) -> parens $ pretty e1 ++ prettyOp op ++ pretty e2
-        (LetBox v t e1 e2) -> parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
+        (App _ e1 e2) -> parens $ pretty e1 ++ " " ++ pretty e2
+        (Binop _ op e1 e2) -> parens $ pretty e1 ++ prettyOp op ++ pretty e2
+        (LetBox _ v t e1 e2) -> parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
-        (LetDiamond v t e1 e2) -> parens $ "let <" ++ v ++ "> :" ++ pretty t ++ " = "
+        (LetDiamond _ v t e1 e2) -> parens $ "let <" ++ v ++ "> :" ++ pretty t ++ " = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
-        (Val v) -> pretty v
-        (Case e ps) -> "case " ++ pretty e ++ " of " ++
+        (Val _ v) -> pretty v
+        (Case _ e ps) -> "case " ++ pretty e ++ " of " ++
                          (intercalate ";"
                            $ map (\(p, e') -> pretty p
                                           ++ " -> "

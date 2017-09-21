@@ -1,12 +1,19 @@
 {
 {-# OPTIONS_GHC -w #-}
-module Syntax.Lexer (Token(..),scanTokens) where
+
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE MultiParamTypeClasses #-}
+
+module Syntax.Lexer (Token(..),scanTokens,getPos,
+                     getPosToSpan,symString,constrString) where
 import Syntax.Expr
+import Syntax.FirstParameter
 import Debug.Trace
+import GHC.Generics (Generic)
 
 }
 
-%wrapper "basic"
+%wrapper "posn"
 
 $digit  = 0-9
 $alpha  = [a-zA-Z\-\=]
@@ -21,83 +28,100 @@ $alphanum  = [$alpha $digit \_ \']
 
 tokens :-
 
-  $eol+                         { \s -> TokenNL }
+  $eol+                         { \p s -> TokenNL p }
   $white+                       ;
-  "--".*                         ;
-  @constr                       { \s -> TokenConstr s }
-  forall                        { \s -> TokenForall }
-  let                           { \s -> TokenLet }
-  in                            { \s -> TokenIn }
-  case                          { \s -> TokenCase }
-  of                            { \s -> TokenOf }
-  @float                         { \s -> TokenFloat $ s }
-  @int                          { \s -> TokenInt  $ read s }  
-  "->"                          { \s -> TokenArrow }
-  \;                            { \s -> TokenSemicolon }
-  \=                            { \s -> TokenEq }
-  \\                            { \s -> TokenLambda }
-  \[                            { \s -> TokenBoxLeft }
-  \]                            { \s -> TokenBoxRight }
-  [\+]                          { \s -> TokenAdd }
-  [\-]                          { \s -> TokenSub }
-  [\*]                          { \s -> TokenMul }
-  \(                            { \s -> TokenLParen }
-  \)                            { \s -> TokenRParen }
-  \{                            { \s -> TokenLBrace }
-  \}                            { \s -> TokenRBrace }
-  \<                            { \s -> TokenLangle }
-  \>                            { \s -> TokenRangle }
-  \,                            { \s -> TokenComma }
-  \.                            { \s -> TokenPeriod }
-  \:                            { \s -> TokenSig }
-  @sym				{ \s -> TokenSym s }
-  \_                            { \_ -> TokenUnderscore }
-  \|                            { \s -> TokenPipe }
+  "--".*                        ;
+  @constr                       { \p s -> TokenConstr p s }
+  forall                        { \p s -> TokenForall p }
+  let                           { \p s -> TokenLet p }
+  in                            { \p s -> TokenIn p }
+  case                          { \p s -> TokenCase p }
+  of                            { \p s -> TokenOf p }
+  @float                        { \p s -> TokenFloat p s }
+  @int                          { \p s -> TokenInt p $ read s }  
+  "->"                          { \p s -> TokenArrow p }
+  \;                            { \p s -> TokenSemicolon p }
+  \=                            { \p s -> TokenEq p }
+  \\                            { \p s -> TokenLambda p }
+  \[                            { \p s -> TokenBoxLeft p }
+  \]                            { \p s -> TokenBoxRight p }
+  [\+]                          { \p s -> TokenAdd p }
+  [\-]                          { \p s -> TokenSub p }
+  [\*]                          { \p s -> TokenMul p }
+  \(                            { \p s -> TokenLParen p }
+  \)                            { \p s -> TokenRParen p }
+  \{                            { \p s -> TokenLBrace p }
+  \}                            { \p s -> TokenRBrace p }
+  \<                            { \p s -> TokenLangle p }
+  \>                            { \p s -> TokenRangle p }
+  \,                            { \p s -> TokenComma p }
+  \.                            { \p s -> TokenPeriod p }
+  \:                            { \p s -> TokenSig p }
+  @sym				{ \p s -> TokenSym p s }
+  \_                            { \p _ -> TokenUnderscore p }
+  \|                            { \p s -> TokenPipe p }
 
 {
 
-data Token = TokenLet
-           | TokenIn
-	   | TokenCase
-	   | TokenOf
-           | TokenLambda
-	   | TokenLetBox
-	   | TokenBox
-           | TokenInt Int
-	   | TokenFloat String
-           | TokenSym String
-           | TokenArrow
-	   | TokenForall
-           | TokenEq
-           | TokenAdd
-           | TokenSub
-           | TokenMul
-           | TokenLParen
-           | TokenRParen
-	   | TokenNL
-	   | TokenConstr String
-	   | TokenSig
-	   | TokenBoxLeft
-	   | TokenBoxRight
-	   | TokenLBrace
-	   | TokenRBrace
-	   | TokenLangle
-	   | TokenRangle
-	   | TokenComma
-	   | TokenPeriod
-	   | TokenPipe
-	   | TokenUnderscore
-	   | TokenSemicolon
-           deriving (Eq,Show)
+data Token = TokenLet  AlexPosn
+           | TokenIn   AlexPosn
+	   | TokenCase AlexPosn
+	   | TokenOf   AlexPosn
+           | TokenLambda AlexPosn
+	   | TokenLetBox AlexPosn
+	   | TokenBox    AlexPosn
+           | TokenInt    AlexPosn Int 
+	   | TokenFloat  AlexPosn String
+           | TokenSym    AlexPosn String
+           | TokenArrow  AlexPosn
+	   | TokenForall AlexPosn
+           | TokenEq     AlexPosn
+           | TokenAdd    AlexPosn
+           | TokenSub    AlexPosn
+           | TokenMul    AlexPosn
+           | TokenLParen AlexPosn
+           | TokenRParen AlexPosn
+	   | TokenNL     AlexPosn
+	   | TokenConstr AlexPosn String
+	   | TokenSig    AlexPosn
+	   | TokenBoxLeft AlexPosn
+	   | TokenBoxRight AlexPosn
+	   | TokenLBrace   AlexPosn
+	   | TokenRBrace   AlexPosn
+	   | TokenLangle   AlexPosn
+	   | TokenRangle   AlexPosn
+	   | TokenComma    AlexPosn
+	   | TokenPeriod   AlexPosn
+	   | TokenPipe     AlexPosn
+	   | TokenUnderscore AlexPosn
+	   | TokenSemicolon  AlexPosn
+           deriving (Eq, Show, Generic)
 
-scanTokens = trim . alexScanTokens
+symString :: Token -> String
+symString (TokenSym _ x) = x
+
+constrString :: Token -> String
+constrString (TokenConstr _ x) = x
+
+scanTokens = alexScanTokens >>= (return . trim)
 
 trim :: [Token] -> [Token]
 trim = reverse . trimNL . reverse . trimNL
 
 trimNL :: [Token] -> [Token]
 trimNL [] = []
-trimNL (TokenNL : ts) = trimNL ts
-trimNL ts = ts 
+trimNL (TokenNL _ : ts) = trimNL ts
+trimNL ts = ts
+
+instance FirstParameter Token AlexPosn
+
+getPos :: Token -> (Int, Int)
+getPos t = (l, c)
+  where (AlexPn _ l c) = getFirstParameter t
+
+getPosToSpan :: Token -> ((Int, Int), (Int, Int))
+getPosToSpan t = (getPos t, getPos t)
 
 }
+
+

@@ -3,9 +3,7 @@
 module Syntax.Desugar where
 
 import Syntax.Expr
-import Checker.Coeffects (kindOfFromScheme)
 import Control.Monad.State.Strict
-import qualified System.IO.Unsafe as Unsafe (unsafePerformIO)
 
 -- 'desugar' erases pattern matches in function definitions
 -- with coeffect binders.
@@ -23,36 +21,39 @@ import qualified System.IO.Unsafe as Unsafe (unsafePerformIO)
 -- information. This will likely change in the future with better
 -- bidirectional inference.
 desugar :: Def -> Def
-desugar (Def var expr pats tys@(Forall ckinds ty)) =
-  Def var (evalState (desguarPats expr pats ty []) (0 :: Int)) [] tys
+desugar (Def s var expr pats tys@(Forall _ _ ty)) =
+  Def s var (evalState (desguarPats expr pats ty []) (0 :: Int)) [] tys
   where
     unfoldBoxes [] e = e
-    unfoldBoxes ((v, v', t, _) : binds) e =
-      LetBox v t (Val $ Var v') (unfoldBoxes binds e)
+    unfoldBoxes ((v, v', t, sp) : binds) e =
+      LetBox (getSpan e) v t (Val sp $ Var v') (unfoldBoxes binds e)
 
     desguarPats e [] _ boxed =
       return $ unfoldBoxes boxed e
 
-    desguarPats e (PWild : ps) (FunTy t1 t2) boxed = do
+    desguarPats e (PWild _ : ps) (FunTy t1 t2) boxed = do
       -- Create a fresh variable to use in the lambda
       -- since lambda doesn't support pattern matches
       n <- get
       let v' = show n
       put (n + 1)
       e' <- desguarPats e ps t2 boxed
-      return $ Val $ Abs v' (Just t1) e'
+      return $ Val (getSpan e) $ Abs v' (Just t1) e'
 
-    desguarPats e (PVar v : ps) (FunTy t1 t2) boxed = do
+    desguarPats e (PVar _ v : ps) (FunTy t1 t2) boxed = do
       e' <- desguarPats e ps t2 boxed
-      return $ Val $ Abs v (Just t1) e'
+      return $ Val (getSpan e) $ Abs v (Just t1) e'
 
-    desguarPats e (PBoxVar v : ps) (FunTy (Box c t) t2) boxed = do
+    desguarPats e (PBoxVar _ v : ps) (FunTy (Box c t) t2) boxed = do
       n <- get
       let v' = v ++ show n
       put (n + 1)
-      e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, Unsafe.unsafePerformIO $ kindOfFromScheme c ckinds)])
-      return $ Val $ Abs v' (Just (Box c t)) e'
+      e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, s)])
+      return $ Val (getSpan e) $ Abs v' (Just (Box c t)) e'
 
-    desguarPats _ _ _ _ = error $ "Definition of " ++ var ++ " expects at least " ++
-                      show (length pats) ++ " arguments, but signature " ++
-                      " specifies: " ++ show (arity ty)
+    desguarPats e _ _ _ =
+      error $ "Type error at line " ++ show sl ++ ", column " ++ show sc
+           ++ ": Definition of " ++ var ++ " expects at least "
+           ++ show (length pats) ++ " arguments, but signature "
+           ++ " specifies: " ++ show (arity ty)
+      where ((sl, sc), _) = getSpan e

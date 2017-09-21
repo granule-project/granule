@@ -20,6 +20,7 @@ executable gran
                   Syntax.Parser
                   Syntax.Pretty
                   Syntax.Lexer
+                  Syntax.FirstParameter
   hs-source-dirs: src
   build-depends:  base >= 4
                 , array
@@ -48,6 +49,7 @@ test-suite spec
                   Syntax.Expr
                   Syntax.Pretty
                   Syntax.Lexer
+                  Syntax.FirstParameter
                   Syntax.Desugar
   build-depends:  base >= 4.6 && < 5
                 , array
