@@ -79,3 +79,4 @@ instance MonadIO Checker where
 
 instance MonadReader [(Id, Id)] Checker where
   ask = Checker MR.ask
+  local r (Checker x) = Checker (MR.local r x)

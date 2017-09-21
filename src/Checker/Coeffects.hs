@@ -2,7 +2,6 @@
 
 module Checker.Coeffects where
 
-import Checker.Constraints
 import Checker.Environment
 import Checker.Types
 import Context
