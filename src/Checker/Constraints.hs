@@ -219,7 +219,7 @@ compileCoeffect c (CPoly _) _ =
 
 compileCoeffect coeff ckind _ =
    error $ "Can't compile a coeffect: " ++ pretty coeff
-        ++ " of kind " ++ show ckind
+        ++ " of kind " ++ pretty ckind
 
 -- | Generate equality constraints for two symbolic coeffects
 eqConstraint :: SCoeffect -> SCoeffect -> SBool
