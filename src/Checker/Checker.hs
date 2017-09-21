@@ -442,13 +442,13 @@ solveConstraints s defName = do
                    -- Show any trivial inequalities
                    mapM_ (\c -> illGraded (getSpan c) (pretty . Neg $ c)) unsats
                    -- Show fatal error, with prover result
-                   illTyped s $ "'" ++ defName ++ "' is shown to be " ++ show thmRes
+                   illTyped s $ "Definition '" ++ defName ++ "' is shown to be " ++ show thmRes
 
                Right (True, _) ->
-                   illTyped s $ "'" ++ defName ++ "' returned probable model."
+                   illTyped s $ "Definition '" ++ defName ++ "' returned probable model."
 
                Left str        ->
-                   illTyped s $ "'" ++ defName ++ " had a solver fail: " ++ str
+                   illTyped s $ "Definition '" ++ defName ++ " had a solver fail: " ++ str
 
            else return True
 
