@@ -395,11 +395,14 @@ synthExpr dbg defs gam (Binop s _ e e') = do
     (t, gam1)  <- synthExpr dbg defs gam e
     (t', gam2) <- synthExpr dbg defs gam e'
     case (t, t') of
+        -- Well typed
         (ConT n, ConT m) | isNum n && isNum m -> do
-            gamNew <- ctxPlus s gam1 gam2
-            return (ConT $ joinNum n m, gamNew)
-        _ ->
-            illTyped s "Binary operator expects two 'Int' expressions"
+             gamNew <- ctxPlus s gam1 gam2
+             return (ConT $ joinNum n m, gamNew)
+
+        -- Or ill-typed
+        _ -> illTyped s $ "Binary operator expects two 'Int' expressions "
+                     ++ "but got '" ++ pretty t ++ "' and '" ++ pretty t' ++ "'"
   where isNum "Int" = True
         isNum "Float" = True
         isNum _      = False

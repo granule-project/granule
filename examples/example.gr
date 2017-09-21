@@ -1,7 +1,7 @@
 -- doubling function
 
 dub : Int |2| -> Int
-dub |x| = x + x
+dub x = x + x
 
 trip : Int |3| -> Int
 trip |x| = x + x + x
