@@ -27,8 +27,8 @@ desugar (Def var expr pats tys@(Forall ckinds ty)) =
   Def var (evalState (desguarPats expr pats ty []) (0 :: Int)) [] tys
   where
     unfoldBoxes [] e = e
-    unfoldBoxes ((v, v', t, k) : binds) e =
-      LetBox v t k (Val $ Var v') (unfoldBoxes binds e)
+    unfoldBoxes ((v, v', t, _) : binds) e =
+      LetBox v t (Val $ Var v') (unfoldBoxes binds e)
 
     desguarPats e [] _ boxed =
       return $ unfoldBoxes boxed e

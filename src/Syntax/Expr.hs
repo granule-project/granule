@@ -26,7 +26,7 @@ data Value = Abs Id (Maybe Type) Expr
 -- Expressions (computations) in Granule
 data Expr = App Expr Expr
           | Binop Op Expr Expr
-          | LetBox Id Type CKind Expr Expr
+          | LetBox Id Type Expr Expr
           | LetDiamond Id Type Expr Expr
           | Val Value
           | Case Expr [(Pattern, Expr)]
@@ -126,7 +126,7 @@ instance Term Value where
 instance Term Expr where
    fvs (App e1 e2)            = fvs e1 ++ fvs e2
    fvs (Binop _ e1 e2)        = fvs e1 ++ fvs e2
-   fvs (LetBox x _ _ e1 e2)   = fvs e1 ++ ((fvs e2) \\ [x])
+   fvs (LetBox x _ e1 e2)     = fvs e1 ++ ((fvs e2) \\ [x])
    fvs (LetDiamond x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
    fvs (Val e)                = fvs e
    fvs (Case e cases)         = fvs e ++ (concatMap (fvs . snd) cases
@@ -134,7 +134,7 @@ instance Term Expr where
 
    subst es v (App e1 e2)        = App (subst es v e1) (subst es v e2)
    subst es v (Binop op e1 e2)   = Binop op (subst es v e1) (subst es v e2)
-   subst es v (LetBox w t k e1 e2) = LetBox w t k (subst es v e1) (subst es v e2)
+   subst es v (LetBox w t e1 e2) = LetBox w t (subst es v e1) (subst es v e2)
    subst es v (LetDiamond w t e1 e2) =
                                    LetDiamond w t (subst es v e1) (subst es v e2)
    subst es v (Val val)          = subst es v val
@@ -142,11 +142,11 @@ instance Term Expr where
                                      (subst es v expr)
                                      (map (\(p, e) -> (p, subst es v e)) cases)
 
-   freshen (LetBox var t k e1 e2) = do
+   freshen (LetBox var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
-      return $ LetBox var' t k e1' e2'
+      return $ LetBox var' t e1' e2'
 
    freshen (App e1 e2) = do
       e1' <- freshen e1

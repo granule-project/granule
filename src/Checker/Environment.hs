@@ -34,11 +34,15 @@ data CheckerState = CS
             , predicate    :: [Constraint]
             -- Coeffect environment, map coeffect vars to their kinds
             , ckenv        :: Env CKind
+            -- Environment of resoled coeffect type variables
+            -- (used just before solver, to resolve any type
+            -- variables that appear in constraints)
+            , cVarEnv   :: Env CKind
             }
   deriving Show -- for debugging
 
 initState :: CheckerState
-initState = CS 0 ground emptyEnv
+initState = CS 0 ground emptyEnv emptyEnv
   where
     ground   = []
     emptyEnv = []

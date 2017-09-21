@@ -50,7 +50,7 @@ check defs dbg nameMap = do
                return env'
       -- Erase the solver predicate between definitions
       checkerState <- get
-      put (checkerState { predicate = [], ckenv = [] })
+      put (checkerState { predicate = [], ckenv = [], cVarEnv = [] })
       return (var, tys, Nothing, env')
 
 -- Make type error report
@@ -354,13 +354,16 @@ synthExpr dbg defs gam (Val (Promote e)) = do
    return (Box (CVar var) t, multAll (fvs e) (CVar var) gam')
 
 -- Letbox
-synthExpr dbg defs gam (LetBox var t k e1 e2) = do
+synthExpr dbg defs gam (LetBox var t e1 e2) = do
 
     cvar <- freshVar ("binder_" ++ var)
+    ckvar <- freshVar ("binderk_" ++ var)
+    let kind = CPoly ckvar
     -- Update coeffect-kind environment
     checkerState <- get
-    put $ checkerState { ckenv = (cvar, k) : ckenv checkerState }
+    put $ checkerState { ckenv = (cvar, kind) : ckenv checkerState }
 
+    -- Extend the context with cvar
     gam' <- extCtxt gam var (Right (CVar cvar, t))
 
     (tau, gam2) <- synthExpr dbg defs gam' e2
@@ -382,8 +385,8 @@ synthExpr dbg defs gam (LetBox var t k e1 e2) = do
           -- If there is no explicit demand for the variable
           -- then this means it is not used
           -- Therefore c ~ 0
-          addConstraint (Eq (CVar cvar) (CZero k) k)
-          return (CZero k, t)
+          addConstraint (Eq (CVar cvar) (CZero kind) kind)
+          return (CZero kind, t)
 
     gam1 <- checkExpr dbg defs gam Negative (Box demand t'') e1
     gamNew <- gam1 `ctxPlus` gam2
@@ -422,10 +425,11 @@ solveConstraints :: MaybeT Checker Bool
 solveConstraints = do
   -- Get the coeffect kind environment and constraints
   checkerState <- get
-  let env   = ckenv checkerState
-  let pred  = predicate checkerState
+  let env  = ckenv checkerState
+  let cenv = cVarEnv checkerState
+  let pred = predicate checkerState
   --
-  let sbvTheorem = compileToSBV pred env
+  let sbvTheorem = compileToSBV pred env cenv
   thmRes <- liftIO . prove $ sbvTheorem
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if

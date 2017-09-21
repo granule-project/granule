@@ -1,7 +1,6 @@
 module Checker.TypesSpec where
 
 import Test.Hspec
-import Checker.Types
 import Context
 
 spec :: Spec

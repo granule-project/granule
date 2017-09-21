@@ -2,6 +2,7 @@
 
 module Checker.Coeffects where
 
+import Checker.Constraints
 import Checker.Environment
 import Checker.Types
 import Context
@@ -57,16 +58,19 @@ kindJoin = mguCoeffectKinds
 
 -- Given a coeffect kind variable and a coeffect kind,
 -- replace any occurence of that variable in an environment
-updateCoeffectKindEnv :: Id -> CKind -> MaybeT Checker ()
-updateCoeffectKindEnv ckindVar ckind = do
+-- and update the current solver predicate as well
+updateCoeffectKind :: Id -> CKind -> MaybeT Checker ()
+updateCoeffectKind ckindVar ckind = do
     checkerState <- get
-    put $ checkerState { ckenv = replacer (ckenv checkerState) }
+    put $ checkerState
+      { ckenv = rewriteEnv (ckenv checkerState),
+        cVarEnv = replace (cVarEnv checkerState) ckindVar ckind }
   where
-    replacer :: Env CKind -> Env CKind
-    replacer [] = []
-    replacer ((name, CPoly ckindVar') : env)
-     | ckindVar == ckindVar' = (name, ckind) : replacer env
-    replacer (x : env) = x : replacer env
+    rewriteEnv :: Env CKind -> Env CKind
+    rewriteEnv [] = []
+    rewriteEnv ((name, CPoly ckindVar') : env)
+     | ckindVar == ckindVar' = (name, ckind) : rewriteEnv env
+    rewriteEnv (x : env) = x : rewriteEnv env
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
@@ -78,17 +82,17 @@ mguCoeffectKinds c1 c2 = do
   case (ck1, ck2) of
     -- Both are poly
     (CPoly kv1, CPoly kv2) -> do
-      updateCoeffectKindEnv kv1 (CPoly kv2)
+      updateCoeffectKind kv1 (CPoly kv2)
       return (CPoly kv2)
 
    -- Left-hand side is a poly variable, but right is concrete
     (CPoly kv1, ck2') -> do
-      updateCoeffectKindEnv kv1 ck2'
+      updateCoeffectKind kv1 ck2'
       return ck2'
 
     -- Right-hand side is a poly variable, but left is concrete
     (ck1', CPoly kv2) -> do
-      updateCoeffectKindEnv kv2 ck1'
+      updateCoeffectKind kv2 ck1'
       return ck1'
 
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1

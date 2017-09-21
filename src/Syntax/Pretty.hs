@@ -91,9 +91,9 @@ instance Pretty Expr where
       case expr of
         (App e1 e2) -> parens $ pretty e1 ++ " " ++ pretty e2
         (Binop op e1 e2) -> parens $ pretty e1 ++ prettyOp op ++ pretty e2
-        (LetBox v t k e1 e2) -> parens $ "let [" ++ v ++ ":" ++ pretty t ++ "]" ++ pretty k ++ " = "
+        (LetBox v t e1 e2) -> parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
-        (LetDiamond v t e1 e2) -> parens $ "let <" ++ v ++ ":" ++ pretty t ++ "> = "
+        (LetDiamond v t e1 e2) -> parens $ "let <" ++ v ++ "> :" ++ pretty t ++ " = "
                                      ++ pretty e1 ++ " in " ++ pretty e2
         (Val v) -> pretty v
         (Case e ps) -> "case " ++ pretty e ++ " of " ++

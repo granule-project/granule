@@ -6,8 +6,8 @@
 
 echo : (Int -> Int <[]>) -> Int |2| -> Int <[W]>
 echo = \f -> \xBox ->
-        let |x : Int| Nat = xBox in
-	let <a : Int> = write x
+        let |x| : Int = xBox in
+	let <a> : Int = write x
 	in f x
 
 dub : Int -> Int <[]>

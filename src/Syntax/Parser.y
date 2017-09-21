@@ -162,16 +162,16 @@ Expr : let VAR ':' Type '=' Expr in Expr
      | let VAR '=' Expr in Expr
                                    { App (Val (Abs $2 Nothing $6)) $4 }
 
-     | let '|' VAR ':' Type '|' CKind '=' Expr in Expr
-                                   { LetBox $3 $5 $7 $9 $11 }
+     | let '|' VAR '|' ':' Type '=' Expr in Expr
+                                   { LetBox $3 $6 $8 $10 }
      | '\\' '(' VAR ':' Type ')' '->' Expr
                                    { Val (Abs $3 (Just $5) $8) }
 
      | '\\' VAR '->' Expr          { Val (Abs $2 Nothing $4) }
 
 
-     | let '<' VAR ':' Type '>' '=' Expr in Expr
-                                   { LetDiamond $3 $5 $8 $10 }
+     | let '<' VAR '>' ':' Type '=' Expr in Expr
+                                   { LetDiamond $3 $6 $8 $10 }
      | '<' Expr '>'                { Val (Pure $2) }
      | Form                        { $1 }
      | case Expr of Cases          { Case $2 $4 }

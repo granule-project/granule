@@ -6,7 +6,7 @@ trip : Int |3| -> Int
 trip |x| = x + x + x
 
 flatten : forall (c : Nat, d : Nat) . Int |c| |d| -> Int |c * d|
-flatten |xbox| = let |x : Int| Nat = xbox in |x|
+flatten |xbox| = let |x| : Int = xbox in |x|
 
 twice : forall (n : Nat) . (Int |n| -> Int) |2| -> Int |2 * n| -> Int
 twice |f| |x| = f |x| + f |x|
@@ -18,10 +18,10 @@ hash : forall (l : Level) . Int |l| -> Int |l|
 hash |x| = |(x + x)|
 
 hello : Int <[R, W]>
-hello = let <x : Int> = read
+hello = let <x> : Int = read
         in write x
 
 main : Int |Hi|
 main =
-   let |pin : Int| Level = hash secret
+   let |pin| : Int = hash secret
    in |(twice |dub| |42| + twice |trip| |52| + pin)|

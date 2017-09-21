@@ -19,10 +19,11 @@ data Constraint =
 -- Map from Ids to symbolic integer variables in the solver
 type SolverVars  = [(Id, SCoeffect)]
 
-compileToSBV :: [Constraint] -> Env CKind -> Symbolic SBool
-compileToSBV constraints cenv = do
+compileToSBV :: [Constraint] -> Env CKind -> Env CKind -> Symbolic SBool
+compileToSBV constraints cenv cVarEnv = do
+    let constraints' = rewriteConstraints cVarEnv constraints
     (preds, solverVars) <- foldrM createFreshVar (true, []) cenv
-    let preds' = foldr ((&&&) . compile solverVars) true constraints
+    let preds' = foldr ((&&&) . compile solverVars) true constraints'
     return (preds &&& preds')
   where
     -- Create a fresh solver variable of the right kind and
@@ -32,6 +33,40 @@ compileToSBV constraints cenv = do
     createFreshVar (var, kind) (preds, env) = do
       (pre, symbolic) <- freshCVar var kind
       return (pre &&& preds, (var, symbolic) : env)
+
+-- given an environment mapping coeffect type variables to coeffect typ,
+-- then rewrite a set of constraints so that any occruences of the kind variable
+-- are replaced with the coeffect type
+rewriteConstraints :: Env CKind -> [Constraint] -> [Constraint]
+rewriteConstraints env =
+    map (\c -> foldr (\(var, kind) -> updateConstraint var kind) c env)
+  where
+    -- `updateConstraint v k c` rewrites any occurence of the kind variable
+    -- `v` in the constraint `c` with the kind `k`
+    updateConstraint :: Id -> CKind -> Constraint -> Constraint
+    updateConstraint ckindVar ckind (Eq c1 c2 k) =
+      Eq (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+        (case k of
+          CPoly ckindVar' | ckindVar == ckindVar' -> ckind
+          _ -> k)
+    updateConstraint ckindVar ckind (Leq c1 c2 k) =
+      Leq (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+        (case k of
+          CPoly ckindVar' | ckindVar == ckindVar' -> ckind
+          _  -> k)
+
+    -- `updateCoeffect v k c` rewrites any occurence of the kind variable
+    -- `v` in the coeffect `c` with the kind `k`
+    updateCoeffect :: Id -> CKind -> Coeffect -> Coeffect
+    updateCoeffect ckindVar ckind (CZero (CPoly ckindVar'))
+      | ckindVar == ckindVar' = CZero ckind
+    updateCoeffect ckindVar ckind (COne (CPoly ckindVar'))
+      | ckindVar == ckindVar' = COne ckind
+    updateCoeffect ckindVar ckind (CPlus c1 c2) =
+      CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CTimes c1 c2) =
+      CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect _ _ c = c
 
 -- Symbolic coeffects
 data SCoeffect =
