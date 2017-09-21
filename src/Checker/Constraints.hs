@@ -1,3 +1,5 @@
+{-# LANGUAGE FlexibleInstances #-}
+
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
 module Checker.Constraints where
@@ -16,16 +18,36 @@ data Constraint =
   | Leq Coeffect Coeffect CKind
   deriving Show
 
+-- Used to negate constraints
+data Neg a = Neg a
+  deriving Show
+
+instance Pretty (Neg Constraint) where
+    pretty (Neg (Eq c1 c2 _))  = pretty c1 ++ " != " ++ pretty c2
+    pretty (Neg (Leq c1 c2 _)) = pretty c1 ++ " > " ++ pretty c2
+
+instance Pretty Constraint where
+    pretty (Eq c1 c2 _)  = pretty c1 ++ " == " ++ pretty c2
+    pretty (Leq c1 c2 _) = pretty c1 ++ " <= " ++ pretty c2
+
+
+normaliseConstraint :: Constraint -> Constraint
+normaliseConstraint (Eq c1 c2 k)   = Eq (normalise c1) (normalise c2) k
+normaliseConstraint (Leq c1 c2 k) = Leq (normalise c1) (normalise c2) k
+
 -- Map from Ids to symbolic integer variables in the solver
 type SolverVars  = [(Id, SCoeffect)]
 
-compileToSBV :: [Constraint] -> Env CKind -> Env CKind -> Symbolic SBool
-compileToSBV constraints cenv cVarEnv = do
-    let constraints' = rewriteConstraints cVarEnv constraints
+-- Compile constraint into an SBV symbolic bool, along with a list of
+-- constraints which are trivially unsatisfiable (e.g., things like 1=0).
+compileToSBV :: [Constraint] -> Env CKind -> Env CKind
+             -> (Symbolic SBool, [Constraint])
+compileToSBV constraints cenv cVarEnv = (do
     (preds, solverVars) <- foldrM createFreshVar (true, []) cenv
     let preds' = foldr ((&&&) . compile solverVars) true constraints'
-    return (preds &&& preds')
+    return (preds &&& preds'), trivialUnsatisfiableConstraints constraints')
   where
+    constraints' = rewriteConstraints cVarEnv constraints
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
@@ -210,3 +232,19 @@ lteConstraint (SSet s) (SSet t) =
   if s == t then true else false
 lteConstraint x y =
    error $ "Kind error trying to generate " ++ show x ++ " <= " ++ show y
+
+
+trivialUnsatisfiableConstraints :: [Constraint] -> [Constraint]
+trivialUnsatisfiableConstraints cs = filter unsat (map normaliseConstraint cs)
+  where
+    unsat :: Constraint -> Bool
+    unsat (Eq c1 c2 _)  = c1 /= c2
+    unsat (Leq c1 c2 _) = not (c1 `leqC` c2)
+
+    -- Attempt to see if one coeffect is trivially less than the other
+    leqC :: Coeffect -> Coeffect -> Bool
+    leqC (CNat Ordered n)  (CNat Ordered m)  = n <= m
+    leqC (CNat Discrete n) (CNat Discrete m) = n == m
+    leqC (Level n) (Level m)   = n <= m
+    leqC (CFloat n) (CFloat m) = n <= m
+    leqC _ _                   = True

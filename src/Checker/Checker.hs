@@ -429,7 +429,7 @@ solveConstraints = do
   let cenv = cVarEnv checkerState
   let pred = predicate checkerState
   --
-  let sbvTheorem = compileToSBV pred env cenv
+  let (sbvTheorem, unsats) = compileToSBV pred env cenv
   thmRes <- liftIO . prove $ sbvTheorem
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
@@ -447,11 +447,16 @@ solveConstraints = do
                    let satModel = case satRes of
                                     SatResult Unsatisfiable {} -> ""
                                     _ -> "\nSAT result: \n" ++ show satRes
-                   illTyped $ show thmRes ++ maybeModel ++ satModel
+                   let ineqs = intercalate "\n" (map (("\t" ++) . pretty . Neg) unsats)
+                   illTyped $ show thmRes ++ (if null ineqs then "" else "\n" ++ ineqs)
+                                          ++ maybeModel
+                                          ++ satModel
 
                Right (True, _) -> illTyped "Returned probable model."
                Left str        -> illTyped $ "Solver fail: " ++ str
            else return True
+
+
 
 -- Generate a fresh alphanumeric variable name
 freshVar :: String -> MaybeT Checker String

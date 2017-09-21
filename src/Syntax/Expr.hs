@@ -4,7 +4,8 @@
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Op(..),
                    Pattern(..), CKind(..), Coeffect(..), NatModifier(..), Effect,
-                   uniqueNames, arity, fvs, subst
+                   uniqueNames, arity, fvs, subst,
+                   normalise
                    ) where
 
 import Data.List
@@ -228,3 +229,41 @@ data NatModifier = Ordered | Discrete
 
 data CKind = CConstr Id | CPoly Id
     deriving (Eq, Ord, Show)
+
+-- | Normalise a coeffect using the semiring laws and some
+--   local evaluation of natural numbers
+--   There is plenty more scope to make this more comprehensive
+normalise :: Coeffect -> Coeffect
+normalise (CPlus (CZero _) n) = n
+normalise (CPlus n (CZero _)) = n
+normalise (CTimes (COne _) n) = n
+normalise (CTimes n (COne _)) = n
+normalise (COne (CConstr "Nat")) = CNat Ordered 1
+normalise (CZero (CConstr "Nat")) = CNat Ordered 0
+normalise (COne (CConstr "Nat=")) = CNat Discrete 1
+normalise (CZero (CConstr "Nat=")) = CNat Discrete 0
+normalise (COne (CConstr "Level")) = Level 1
+normalise (CZero (CConstr "Level")) = Level 0
+normalise (COne (CConstr "Q")) = CFloat 1
+normalise (CZero (CConstr "Q")) = CFloat 0
+normalise (CPlus (Level n) (Level m)) = Level (n `max` m)
+normalise (CTimes (Level n) (Level m)) = Level (n `min` m)
+normalise (CPlus (CFloat n) (CFloat m)) = CFloat (n + m)
+normalise (CTimes (CFloat n) (CFloat m)) = CFloat (n * m)
+normalise (CPlus (CNat k n) (CNat k' m)) | k == k' = CNat k (n + m)
+normalise (CTimes (CNat k n) (CNat k' m)) | k == k' = CNat k (n * m)
+normalise (CPlus n m) =
+    if (n == n') && (m == m')
+    then CPlus n m
+    else normalise (CPlus n' m')
+  where
+    n' = normalise n
+    m' = normalise m
+normalise (CTimes n m) =
+    if (n == n') && (m == m')
+    then CTimes n m
+    else normalise (CTimes n' m')
+  where
+    n' = normalise n
+    m' = normalise m
+normalise c = c
