@@ -1,6 +1,6 @@
 -- doubling function
 
-dub : Int |2| -> Int
+dub : Int |1| -> Int
 dub |x| = x + x
 
 trip : Int |3| -> Int
@@ -9,5 +9,5 @@ trip |x| = x + x + x
 twice : forall (c : Nat) . (Int |c| -> Int) |2| -> Int |2 * c| -> Int
 twice |g| |x| = g |x| + g |x|
 
-main : Int
+main : Bool
 main = twice |dub| |2| + twice |trip| |1|
