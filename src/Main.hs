@@ -28,7 +28,7 @@ run input debug = do
   putStrLn version
 
   -- Parse
-  let (ast, nameMap) = parseDefs input
+  (ast, nameMap) <- parseDefs input
 
   -- Debugging mode produces the AST and the pretty printer
   if debug

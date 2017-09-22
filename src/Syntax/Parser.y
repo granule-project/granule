@@ -5,12 +5,14 @@ import Syntax.Lexer
 import Syntax.Expr
 import Syntax.Desugar
 import Numeric
+import System.Exit (die)
 
 }
 
 %name defs
 %tokentype { Token }
 %error { parseError }
+%monad { IO }
 
 %token
     nl    { TokenNL  _ }
@@ -229,13 +231,15 @@ Atom : '(' Expr ')'                { $2 }
 
 {
 
-parseError :: [Token] -> a
-parseError [] = error $ "Premature end of file"
-parseError t = error $ show l ++ ":" ++ show c ++ ": parse error"
+parseError :: [Token] -> IO a
+parseError [] = do
+    die "Premature end of file"
+parseError t = do
+    die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: String -> ([Def], [(Id, Id)])
-parseDefs = uniqueNames . map desugar . defs . scanTokens
+parseDefs :: String -> IO ([Def], [(Id, Id)])
+parseDefs = fmap (uniqueNames . map desugar) . defs . scanTokens
 
 myReadFloat :: String -> Rational
 myReadFloat str =
