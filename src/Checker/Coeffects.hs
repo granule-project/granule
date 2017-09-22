@@ -8,7 +8,6 @@ import Context
 import Syntax.Expr
 import Syntax.Pretty
 
-import Control.Monad.Reader.Class
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
