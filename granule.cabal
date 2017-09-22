@@ -1,12 +1,12 @@
 name:             granule
-version:          0.2.0.0
+version:          0.2.1.0
 cabal-version:    >= 1.2
 license:          BSD3
 author:           Dominic Orchard
 synopsis:         The Granule type checker and interpreter
 build-type:       Simple
 
-executable gran
+executable gr
   main-is:        Main.hs
   other-modules:  Checker.Checker
                   Checker.Coeffects
