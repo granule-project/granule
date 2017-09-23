@@ -2,5 +2,5 @@
 for f in examples/*.gr
 do
  echo "Running $f"
- gran $f
+ gr $f
 done

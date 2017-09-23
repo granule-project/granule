@@ -15,7 +15,7 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    []      -> putStrLn "Usage: gran <SOURCE_FILE>"
+    []      -> putStrLn "Usage: gr <SOURCE_FILE>"
     (src:_)  -> do
       -- Get the filename
       input <- readFile src
