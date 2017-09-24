@@ -1,5 +1,4 @@
 {-# LANGUAGE PartialTypeSignatures #-}
-{-# LANGUAGE ScopedTypeVariables #-}
 
 module Checker.CheckerSpec where
 
@@ -24,16 +23,16 @@ fileExtension = ".gr"
 spec :: Spec
 spec = do
     srcFiles <- runIO exampleFiles
-    forM_ srcFiles $ \file -> do
-      parsed <- runIO (try $ readFile file >>= parseDefs :: IO (Either SomeException _))
-      case parsed of
-        Left ex -> describe file $ it "typechecks" $ expectationFailure (show ex)
-        Right (ast, nameMap) -> do
-          result <- runIO (try (check ast False nameMap) :: IO (Either SomeException _))
-          describe file $ it "typechecks" $
+    forM_ srcFiles $ \file ->
+      describe file $ it "typechecks" $ do
+        parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
+        case parsed of
+          Left ex -> expectationFailure (show ex) -- parse error
+          Right (ast, nameMap) -> do
+            result <- try (check ast False nameMap) :: IO (Either SomeException _)
             case result of
-              Right checked -> checked `shouldBe` Right True -- no exception thrown
-              Left ex -> expectationFailure (show ex) -- an exception was thrown
+                Left ex -> expectationFailure (show ex) -- an exception was thrown
+                Right checked -> checked `shouldBe` Right True
   where
     exampleFiles =
       find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
