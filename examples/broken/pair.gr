@@ -1,0 +1,11 @@
+pair : (Int, Int)
+pair = (3, 4)
+
+fst : (Int, Int |0|) -> Int
+fst (a, |_|) = a
+
+snd : (Int |0|, Int) -> Int
+snd (|_|, b) = b
+
+trip : Int |3| -> (Int, (Int, Int))
+trip |x| = (x, (x, x))
