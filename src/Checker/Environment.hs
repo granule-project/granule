@@ -59,16 +59,16 @@ halt = MaybeT (return Nothing)
 
 -- | A helper for raising a type error
 illTyped :: Span -> String -> MaybeT Checker a
-illTyped = visibleError "type" halt
+illTyped = visibleError "Type" halt
 
 illLinearity :: Span -> String -> MaybeT Checker a
-illLinearity = visibleError "linearity" halt
+illLinearity = visibleError "Linearity" halt
 
 illGraded :: Span -> String -> MaybeT Checker ()
-illGraded = visibleError "grading" (return ())
+illGraded = visibleError "Grading" (return ())
 
 -- | Helper for constructing error handlers
-visibleError :: String -> (MaybeT Checker a) -> Span -> String -> MaybeT Checker a
+visibleError :: String -> MaybeT Checker a -> Span -> String -> MaybeT Checker a
 visibleError kind next ((0, 0), (0, 0)) s =
   liftIO (putStrLn $ kind ++ " error: " ++ s) >> next
 
