@@ -50,18 +50,18 @@ type SolverVars  = [(Id, SCoeffect)]
 compileToSBV :: [Constraint] -> Env CKind -> Env CKind
              -> (Symbolic SBool, [Constraint])
 compileToSBV constraints cenv cVarEnv = (do
-    (preds, solverVars) <- foldrM createFreshVar (true, []) cenv
-    let preds' = foldr ((&&&) . compile solverVars) true constraints'
-    return (preds &&& preds'), trivialUnsatisfiableConstraints constraints')
+    (pres, solverVars) <- foldrM createFreshVar (true, []) cenv
+    let preds = foldr ((&&&) . compile solverVars) true constraints'
+    return (pres ==> preds), trivialUnsatisfiableConstraints constraints')
   where
     constraints' = rewriteConstraints cVarEnv constraints
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
       :: (Id, CKind) -> (SBool, SolverVars) -> Symbolic (SBool, SolverVars)
-    createFreshVar (var, kind) (preds, env) = do
+    createFreshVar (var, kind) (pres, env) = do
       (pre, symbolic) <- freshCVar var kind
-      return (pre &&& preds, (var, symbolic) : env)
+      return (pre &&& pres, (var, symbolic) : env)
 
 -- given an environment mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
