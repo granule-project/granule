@@ -227,11 +227,12 @@ joinTypes _ s t1 t2 =
                        ++ pretty t2 ++ "' have no upper bound"
 
 
--- Synthesise types on expressions
-synthExpr :: Bool
-          -> Env TypeScheme
-          -> Env TyOrDisc
-          -> Expr
+-- | Synthesise the 'Type' of expressions.
+-- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>
+synthExpr :: Bool           -- ^ Whether in debug mode
+          -> Env TypeScheme -- ^ Environment of top-level definitions
+          -> Env TyOrDisc   -- ^ Local typing context
+          -> Expr           -- ^ Expression
           -> MaybeT Checker (Type, Env TyOrDisc)
 
 -- Constants (built-in effect primitives)
@@ -564,7 +565,8 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
     freshCoeffectVar (cvar, kind) = do
       cvar' <- freshVar cvar
       checkerState <- get
-      put $ checkerState { ckenv = (cvar', (kind, ForallQ)) : ckenv checkerState }
+      -- Universal becomes an existential since we are instantiating a polymorphic type
+      put $ checkerState { ckenv = (cvar', (kind, ExistsQ)) : ckenv checkerState }
       return (cvar, cvar')
 
 relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
@@ -646,14 +648,14 @@ extCtxt s env var (Left t) = do
   case lookup var env of
     Just (Left t') ->
        if t == t'
-        then illLinearity s $ "'" ++ var' ++ "' used more than once\n"
-        else illTyped s $ "Type clash for variable " ++ var'
+        then illLinearity s $ "Linear variable `" ++ var' ++ "` is used more than once.\n"
+        else illTyped s $ "Type clash for variable `" ++ var' ++ "`"
     Just (Right (c, t')) ->
        if t == t'
          then do
            k <- kindOf c
            return $ replace env var (Right (c `CPlus` COne k, t))
-         else illTyped s $ "Type clash for variable " ++ var'
+         else illTyped s $ "Type clash for variable " ++ var' ++ "`"
     Nothing -> return $ (var, Left t) : env
 
 extCtxt s env var (Right (c, t)) = do
@@ -664,7 +666,7 @@ extCtxt s env var (Right (c, t)) = do
         then return $ replace env var (Right (c `CPlus` c', t'))
         else do
           let var' = unrename nameMap var
-          illTyped s $ "Type clash for variable " ++ var'
+          illTyped s $ "Type clash for variable `" ++ var' ++ "`"
     Just (Left t') ->
         if t == t'
         then do
@@ -672,10 +674,10 @@ extCtxt s env var (Right (c, t)) = do
            return $ replace env var (Right (c `CPlus` COne k, t))
         else do
           let var' = unrename nameMap var
-          illTyped s $ "Type clash for variable " ++ var'
+          illTyped s $ "Type clash for variable " ++ var' ++ "`"
     Nothing -> return $ (var, Right (c, t)) : env
 
 {- Helpers for error messages -}
 
 unusedVariable :: String -> String
-unusedVariable var = "Linear variable " ++ var ++ " was never used."
+unusedVariable var = "Linear variable `" ++ var ++ "` is never used."

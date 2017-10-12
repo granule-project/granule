@@ -57,20 +57,25 @@ type SolverVars  = [(Id, SCoeffect)]
 compileToSBV :: [Constraint] -> Env (CKind, Quantifier) -> Env CKind
              -> (Symbolic SBool, [Constraint])
 compileToSBV constraints cenv cVarEnv = (do
-    (preds, solverVars) <- foldrM createFreshVar (true, []) cenv
-    let preds' = foldr ((&&&) . compile solverVars) true constraints'
-    return (preds &&& preds'), trivialUnsatisfiableConstraints constraints')
+    (pres, constraints, solverVars) <- foldrM createFreshVar (true, true, []) cenv
+    let preds = foldr ((&&&) . compile solverVars) true constraints'
+    return (pres ==> (constraints &&& preds)), trivialUnsatisfiableConstraints constraints')
   where
     constraints' = rewriteConstraints cVarEnv constraints
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
       :: (Id, (CKind, Quantifier))
-      -> (SBool, SolverVars)
-      -> Symbolic (SBool, SolverVars)
-    createFreshVar (var, (kind, quantifierType)) (preds, env) = do
+      -> (SBool, SBool, SolverVars)
+      -> Symbolic (SBool, SBool, SolverVars)
+    createFreshVar (var, (kind, quantifierType))
+                   (universalConstraints, existentialConstraints, env) = do
       (pre, symbolic) <- freshCVar var kind quantifierType
-      return (pre &&& preds, (var, symbolic) : env)
+      let (universalConstraints', existentialConstraints') =
+            case quantifierType of
+              ForallQ -> (pre &&& universalConstraints, existentialConstraints)
+              ExistsQ -> (universalConstraints, pre &&& existentialConstraints)
+      return (universalConstraints', existentialConstraints', (var, symbolic) : env)
 
 -- given an environment mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable

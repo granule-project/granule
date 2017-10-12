@@ -1,0 +1,2 @@
+foo : forall (n : Nat) . Int |n| -> Int
+foo |x| = x + x
