@@ -12,7 +12,7 @@ import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
 
-import Checker.Constraints (Constraint)
+import Checker.Constraints (Constraint, Quantifier)
 import Context
 import Syntax.Expr (Id, CKind, Span)
 
@@ -33,7 +33,7 @@ data CheckerState = CS
             -- Conjunction of constraints
             , predicate    :: [Constraint]
             -- Coeffect environment, map coeffect vars to their kinds
-            , ckenv        :: Env CKind
+            , ckenv        :: Env (CKind, Quantifier)
             -- Environment of resoled coeffect type variables
             -- (used just before solver, to resolve any type
             -- variables that appear in constraints)

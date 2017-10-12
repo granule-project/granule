@@ -8,15 +8,9 @@ import Context
 import Syntax.Expr
 import Syntax.Pretty
 
+import Checker.Constraints (Quantifier)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-
-kindOfFromScheme :: Coeffect -> [(Id, CKind)] -> IO CKind
-kindOfFromScheme c env = do
-  result <- evalChecker (initState { ckenv = env }) [] (runMaybeT (kindOf c))
-  case result of
-    Just ckind -> return ckind
-    Nothing    -> error $ "Error: Can't deduce kind for coeffect " ++ pretty c
 
 -- What is the kind of a particular coeffect?
 kindOf :: Coeffect -> MaybeT Checker CKind
@@ -46,7 +40,7 @@ kindOf (CVar cvar) = do
 --       put (state { uniqueVarId = uniqueVarId state + 1 })
 --       return newCKind
 
-     Just k -> return k
+     Just (k, _) -> return k
 
 kindOf (CZero k) = return k
 kindOf (COne k)  = return k
@@ -65,10 +59,10 @@ updateCoeffectKind ckindVar ckind = do
       { ckenv = rewriteEnv (ckenv checkerState),
         cVarEnv = replace (cVarEnv checkerState) ckindVar ckind }
   where
-    rewriteEnv :: Env CKind -> Env CKind
+    rewriteEnv :: Env (CKind, Quantifier) -> Env (CKind, Quantifier)
     rewriteEnv [] = []
-    rewriteEnv ((name, CPoly ckindVar') : env)
-     | ckindVar == ckindVar' = (name, ckind) : rewriteEnv env
+    rewriteEnv ((name, (CPoly ckindVar', q)) : env)
+     | ckindVar == ckindVar' = (name, (ckind, q)) : rewriteEnv env
     rewriteEnv (x : env) = x : rewriteEnv env
 
 -- Find the most general unifier of two coeffects

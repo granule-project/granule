@@ -38,6 +38,13 @@ instance Pretty Constraint where
     pretty (Leq _ c1 c2 _) = pretty c1 ++ " <= " ++ pretty c2
 
 
+data Quantifier = ForallQ | ExistsQ deriving Show
+
+quant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
+quant ForallQ = forall
+quant ExistsQ = exists
+
+
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 k)   = Eq s (normalise c1) (normalise c2) k
 normaliseConstraint (Leq s c1 c2 k) = Leq s (normalise c1) (normalise c2) k
@@ -47,7 +54,7 @@ type SolverVars  = [(Id, SCoeffect)]
 
 -- Compile constraint into an SBV symbolic bool, along with a list of
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
-compileToSBV :: [Constraint] -> Env CKind -> Env CKind
+compileToSBV :: [Constraint] -> Env (CKind, Quantifier) -> Env CKind
              -> (Symbolic SBool, [Constraint])
 compileToSBV constraints cenv cVarEnv = (do
     (preds, solverVars) <- foldrM createFreshVar (true, []) cenv
@@ -58,9 +65,11 @@ compileToSBV constraints cenv cVarEnv = (do
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
-      :: (Id, CKind) -> (SBool, SolverVars) -> Symbolic (SBool, SolverVars)
-    createFreshVar (var, kind) (preds, env) = do
-      (pre, symbolic) <- freshCVar var kind
+      :: (Id, (CKind, Quantifier))
+      -> (SBool, SolverVars)
+      -> Symbolic (SBool, SolverVars)
+    createFreshVar (var, (kind, quantifierType)) (preds, env) = do
+      (pre, symbolic) <- freshCVar var kind quantifierType
       return (pre &&& preds, (var, symbolic) : env)
 
 -- given an environment mapping coeffect type variables to coeffect typ,
@@ -108,26 +117,26 @@ data SCoeffect =
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
-freshCVar :: Id -> CKind -> Symbolic (SBool, SCoeffect)
+freshCVar :: Id -> CKind -> Quantifier -> Symbolic (SBool, SCoeffect)
 
-freshCVar name (CConstr "Nat*") = do
-  solverVar <- exists name
+freshCVar name (CConstr "Nat*") q = do
+  solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNatOmega solverVar)
 
-freshCVar name (CConstr "Nat") = do
-  solverVar <- exists name
+freshCVar name (CConstr "Nat") q = do
+  solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNat Ordered solverVar)
-freshCVar name (CConstr "Nat=") = do
-  solverVar <- exists name
+freshCVar name (CConstr "Nat=") q = do
+  solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNat Discrete solverVar)
-freshCVar name (CConstr "Q") = do
-  solverVar <- exists name
+freshCVar name (CConstr "Q") q = do
+  solverVar <- (quant q) name
   return (true, SFloat solverVar)
-freshCVar name (CConstr "Level") = do
-  solverVar <- exists name
+freshCVar name (CConstr "Level") q = do
+  solverVar <- (quant q) name
   return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
-freshCVar _ (CConstr "Set") = return (true, SSet S.empty)
-freshCVar _ k =
+freshCVar _ (CConstr "Set") _ = return (true, SSet S.empty)
+freshCVar _ k _ =
   error $ "Trying to make a fresh solver variable for a coeffect of kind: " ++ show k ++ " but I don't know how."
 
 -- Compile a constraint into a symbolic bool (SBV predicate)

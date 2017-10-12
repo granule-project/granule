@@ -70,7 +70,7 @@ checkExprTS :: Bool          -- turn on debgging
 checkExprTS dbg defs gam (Forall _ ckinds ty) e = do
   -- Coeffect kinds only need a local resolution; set kind environment to scheme
   checkerState <- get
-  put checkerState { ckenv = ckinds }
+  put checkerState { ckenv = map (\(n, c) -> (n, (c, ForallQ))) ckinds }
   -- check expression against type
   checkExpr dbg defs gam Positive ty e
 
@@ -215,7 +215,7 @@ joinTypes dbg s (Box c t) (Box c' t') = do
   -- Create a fresh coeffect variable
   topVar <- freshVar ""
   checkerState <- get
-  put $ checkerState { ckenv = (topVar, kind) : ckenv checkerState }
+  put $ checkerState { ckenv = (topVar, (kind, ExistsQ)) : ckenv checkerState }
   -- Unify the two coeffects into one
   addConstraint (Leq s c  (CVar topVar) kind)
   addConstraint (Leq s c' (CVar topVar) kind)
@@ -343,7 +343,7 @@ synthExpr dbg defs gam (Val s (Promote e)) = do
    vark <- freshVar $ "kprom_" ++ [head (pretty e)]
    -- Update coeffect-kind environment
    checkerState <- get
-   put $ checkerState { ckenv = (var, CPoly vark) : ckenv checkerState }
+   put $ checkerState { ckenv = (var, (CPoly vark, ExistsQ)) : ckenv checkerState }
 
    gamF <- discToFreshVarsIn s (fvs e) gam (CVar var)
 
@@ -358,7 +358,7 @@ synthExpr dbg defs gam (LetBox s var t e1 e2) = do
     let kind = CPoly ckvar
     -- Update coeffect-kind environment
     checkerState <- get
-    put $ checkerState { ckenv = (cvar, kind) : ckenv checkerState }
+    put $ checkerState { ckenv = (cvar, (kind, ExistsQ)) : ckenv checkerState }
 
     -- Extend the context with cvar
     gam' <- extCtxt s gam var (Right (CVar cvar, t))
@@ -425,11 +425,11 @@ solveConstraints :: Span -> String -> MaybeT Checker Bool
 solveConstraints s defName = do
   -- Get the coeffect kind environment and constraints
   checkerState <- get
-  let env  = ckenv checkerState
-  let cenv = cVarEnv checkerState
+  let envCk  = ckenv checkerState
+  let envCkVar = cVarEnv checkerState
   let pred = predicate checkerState
   --
-  let (sbvTheorem, unsats) = compileToSBV pred env cenv
+  let (sbvTheorem, unsats) = compileToSBV pred envCk envCkVar
   thmRes <- liftIO . prove $ sbvTheorem
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
@@ -564,7 +564,7 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
     freshCoeffectVar (cvar, kind) = do
       cvar' <- freshVar cvar
       checkerState <- get
-      put $ checkerState { ckenv = (cvar', kind) : ckenv checkerState }
+      put $ checkerState { ckenv = (cvar', (kind, ForallQ)) : ckenv checkerState }
       return (cvar, cvar')
 
 relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
@@ -582,7 +582,7 @@ discToFreshVarsIn s vars env coeffect = mapM toFreshVar (relevantSubEnv vars env
       -- Create a fresh variable
       cvar  <- freshVar var
       -- Update the coeffect kind environment
-      modify (\st -> st { ckenv = (cvar, kind) : ckenv st })
+      modify (\st -> st { ckenv = (cvar, (kind, ExistsQ)) : ckenv st })
       -- Return the freshened var-type mapping
       return (var, Right (CVar cvar, t))
 
@@ -611,7 +611,7 @@ freshVarsIn vars env = mapM toFreshVar (relevantSubEnv vars env)
       -- Create a fresh variable
       cvar  <- freshVar var
       -- Update the coeffect kind environment
-      modify (\s -> s { ckenv = (cvar, ckind) : ckenv s })
+      modify (\s -> s { ckenv = (cvar, (ckind, ExistsQ)) : ckenv s })
       -- Return the freshened var-type mapping
       return (var, Right (CVar cvar, t))
 
@@ -621,7 +621,7 @@ freshVarsIn vars env = mapM toFreshVar (relevantSubEnv vars env)
       -- Create a fresh kindvariable
       ckind <- freshVar var
       -- Update the coeffect kind environment
-      modify (\s -> s { ckenv = (cvar, CPoly ckind) : ckenv s })
+      modify (\s -> s { ckenv = (cvar, (CPoly ckind, ExistsQ)) : ckenv s })
       return (var, Right (COne (CPoly ckind), t))
 
 
