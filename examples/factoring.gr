@@ -1,7 +1,7 @@
 -- Thanks to Jennifer Hackett and Neel Krishnaswami for prompting
 -- this interesting example during a discussion at ICFP 2017.
 
-flatten : forall (d : Nat) . Int |2| |d| -> Int |2 * d|
+flatten : forall (d : Nat) . Int |2| |(d + 1)| -> Int |2 * (d + 1)|
 flatten |xbox| = let |x| : Int = xbox in |x|
 
 expand : forall (c : Nat) . Int |c * 7| -> Int |c| |7|
