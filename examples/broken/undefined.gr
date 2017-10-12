@@ -1,0 +1,5 @@
+undefined : Int
+undefined = undefined
+
+main : Int
+main = undefined
