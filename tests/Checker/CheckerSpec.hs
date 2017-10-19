@@ -14,8 +14,12 @@ import Syntax.Parser
 pathToExamples :: FilePath
 pathToExamples = "examples"
 
-exclude :: FilePath -- files in this directory don't get checked
-exclude = "broken"
+ -- files in these directories don't get checked
+exclude1 :: FilePath
+exclude1 = "broken"
+
+exclude2 :: FilePath
+exclude2 = "illtyped"
 
 fileExtension :: String
 fileExtension = ".gr"
@@ -35,4 +39,4 @@ spec = do
                 Right checked -> checked `shouldBe` Right True
   where
     exampleFiles =
-      find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
+      find (fileName /=? exclude1 &&? fileName /=? exclude2) (extension ==? fileExtension) pathToExamples
