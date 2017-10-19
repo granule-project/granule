@@ -134,7 +134,7 @@ checkExpr dbg defs gam pol (Box demand tau) (Val s (Promote e)) = do
     gamF    <- discToFreshVarsIn s (fvs e) gam demand
     gam'    <- checkExpr dbg defs gamF pol tau e
     let gam'' = multAll (fvs e) demand gam'
-    leqCtxt s gam gam''
+    leqCtxt s gam'' gam
     return gam''
 
 -- Application
