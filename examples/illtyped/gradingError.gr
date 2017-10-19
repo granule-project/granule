@@ -1,0 +1,2 @@
+foo : Int |2| -> Int |4|
+foo |x| = |(x + x)|
