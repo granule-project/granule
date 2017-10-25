@@ -1,64 +1,79 @@
-name:             granule
-version:          0.2.1.0
-cabal-version:    >= 1.2
-license:          BSD3
-author:           Dominic Orchard
-synopsis:         The Granule type checker and interpreter
-build-type:       Simple
+-- This file has been generated from package.yaml by hpack version 0.17.1.
+--
+-- see: https://github.com/sol/hpack
+
+name:           granule
+version:        0.2.1.0
+synopsis:       The Granule type checker and interpreter
+homepage:       https://github.com/dorchard/granule#readme
+bug-reports:    https://github.com/dorchard/granule/issues
+author:         Dominic Orchard
+copyright:      2017 authors
+license:        BSD3
+license-file:   LICENSE
+build-type:     Simple
+cabal-version:  >= 1.10
+
+extra-source-files:
+    README.md
+
+source-repository head
+  type: git
+  location: https://github.com/dorchard/granule
+
+library
+  hs-source-dirs:
+      src
+  ghc-options: -Wall
+  build-depends:
+      base >=4.7 && <5
+    , containers
+    , mtl >=2.2.1
+    , sbv >=7.3
+    , transformers >=0.5
+  build-tools:
+      alex
+    , happy
+  exposed-modules:
+      Checker.Checker
+      Checker.Coeffects
+      Checker.Constraints
+      Checker.Environment
+      Checker.Types
+      Context
+      Eval
+      Syntax.Desugar
+      Syntax.Expr
+      Syntax.Parser
+      Syntax.Pretty
+      Syntax.Lexer
+      Syntax.FirstParameter
+  other-modules:
+      Paths_granule
+  default-language: Haskell2010
 
 executable gr
-  main-is:        Main.hs
-  other-modules:  Checker.Checker
-                  Checker.Coeffects
-                  Checker.Constraints
-                  Checker.Environment
-                  Checker.Types
-                  Context
-                  Eval
-                  Syntax.Desugar
-                  Syntax.Expr
-                  Syntax.Parser
-                  Syntax.Pretty
-                  Syntax.Lexer
-                  Syntax.FirstParameter
-  hs-source-dirs: src
-  build-depends:  base >= 4
-                , array
-                , containers
-                , mtl >= 2.2.1
-                , sbv >= 7.3
-                , transformers >= 0.5
-  build-tools:    alex, happy
-  ghc-options:    -Wall
+  main-is: Main.hs
+  hs-source-dirs:
+      app
+  build-depends:
+      base
+    , granule
+  default-language: Haskell2010
 
 test-suite spec
-  type:           exitcode-stdio-1.0
-  main-is:        Spec.hs
-  hs-source-dirs: tests, src
-  other-modules:  Syntax.ExprSpec
-                  Checker.TypesSpec
-                  Checker.EnvironmentSpec
-                  Checker.CheckerSpec
-                  Syntax.Parser
-                  Checker.Checker
-                  Checker.Coeffects
-                  Checker.Constraints
-                  Checker.Environment
-                  Checker.Types
-                  Context
-                  Syntax.Expr
-                  Syntax.Pretty
-                  Syntax.Lexer
-                  Syntax.FirstParameter
-                  Syntax.Desugar
-  build-depends:  base >= 4.6 && < 5
-                , array
-                , filemanip
-                , mtl >= 2.2.1
-                , transformers >= 0.5
-                , sbv >= 7.3
-                , containers
-                , hspec >= 2.4.3
-                , QuickCheck >= 2.8 && < 3
-  build-tools:    alex, happy
-  ghc-options:    -Wall
+  type: exitcode-stdio-1.0
+  main-is: Spec.hs
+  hs-source-dirs:
+      tests
+  ghc-options: -Wall
+  build-depends:
+      base
+    , granule
+  other-modules:
+      Checker.CheckerSpec
+      Checker.EnvironmentSpec
+      Checker.TypesSpec
+      DocTestDiscover
+      Syntax.ExprSpec
+  default-language: Haskell2010

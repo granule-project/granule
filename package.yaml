@@ -1,0 +1,52 @@
+name: granule
+version: '0.2.1.0'
+synopsis: The Granule type checker and interpreter
+author: Dominic Orchard
+copyright: 2017 authors
+license: BSD3
+github: dorchard/granule
+extra-source-files:
+- README.md
+- LICENSE
+library:
+  source-dirs: src
+  ghc-options: -Wall
+  build-tools:
+  - alex
+  - happy
+  exposed-modules:
+  - Checker.Checker
+  - Checker.Coeffects
+  - Checker.Constraints
+  - Checker.Environment
+  - Checker.Types
+  - Context
+  - Eval
+  - Syntax.Desugar
+  - Syntax.Expr
+  - Syntax.Parser
+  - Syntax.Pretty
+  - Syntax.Lexer
+  - Syntax.FirstParameter
+  dependencies:
+  - base >=4.7 && <5
+  - array
+  - containers
+  - mtl >=2.2.1
+  - sbv >=7.3
+  - transformers >=0.5
+executables:
+  gr:
+    main: Main.hs
+    source-dirs: app
+    dependencies:
+    - base
+    - granule
+tests:
+  spec:
+    main: Spec.hs
+    source-dirs: tests
+    ghc-options: -Wall
+    dependencies:
+    - base
+    - granule
