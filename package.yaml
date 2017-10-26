@@ -49,4 +49,7 @@ tests:
     ghc-options: -Wall
     dependencies:
     - base
+    - filemanip
     - granule
+    - hspec
+    - QuickCheck

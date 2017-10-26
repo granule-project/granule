@@ -15,6 +15,7 @@ build-type:     Simple
 cabal-version:  >= 1.10
 
 extra-source-files:
+    LICENSE
     README.md
 
 source-repository head
@@ -27,6 +28,7 @@ library
   ghc-options: -Wall
   build-depends:
       base >=4.7 && <5
+    , array
     , containers
     , mtl >=2.2.1
     , sbv >=7.3
@@ -69,11 +71,13 @@ test-suite spec
   ghc-options: -Wall
   build-depends:
       base
+    , filemanip
     , granule
+    , hspec
+    , QuickCheck
   other-modules:
       Checker.CheckerSpec
       Checker.EnvironmentSpec
       Checker.TypesSpec
-      DocTestDiscover
       Syntax.ExprSpec
   default-language: Haskell2010
