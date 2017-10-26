@@ -8,6 +8,9 @@ github: dorchard/granule
 extra-source-files:
 - README.md
 - LICENSE
+dependencies:
+- base >=4.10 && <5
+
 library:
   source-dirs: src
   ghc-options: -Wall
@@ -29,27 +32,31 @@ library:
   - Syntax.Lexer
   - Syntax.FirstParameter
   dependencies:
-  - base >=4.7 && <5
   - array
   - containers
   - mtl >=2.2.1
   - sbv >=7.3
   - transformers >=0.5
+
 executables:
   gr:
     main: Main.hs
     source-dirs: app
     dependencies:
-    - base
     - granule
+
 tests:
   spec:
     main: Spec.hs
-    source-dirs: tests
+    source-dirs: tests/hspec
     ghc-options: -Wall
     dependencies:
-    - base
     - filemanip
     - granule
     - hspec
     - QuickCheck
+  doctest:
+    main: doctest.hs
+    source-dirs: tests
+    dependencies:
+    - doctest
