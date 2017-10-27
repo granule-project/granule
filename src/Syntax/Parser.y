@@ -127,7 +127,7 @@ Type :
 Coeffect :: { Coeffect }
 Coeffect :
        NatCoeff                { $1 }
-     | '*'                     { CNatOmega (Left ()) }
+     | '*'                     { CStar (CPoly "") }
      | FLOAT                   { let TokenFloat _ x = $1
                                  in CFloat $ myReadFloat x }
      | CONSTR                  { case (constrString $1) of
@@ -138,6 +138,7 @@ Coeffect :
      | Coeffect '*' Coeffect   { CTimes $1 $3 }
      | '(' Coeffect ')'        { $2 }
      | '{' Set '}'             { CSet $2 }
+     | Coeffect ':' CKind      { normalise (CSig $1 $3) }
 
 NatCoeff :: { Coeffect }
 NatCoeff : INT NatModifier              { let TokenInt _ x = $1

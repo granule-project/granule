@@ -41,7 +41,8 @@ check defs dbg nameMap = do
   where
     checkDef defEnv (Def s var expr _ tys) = do
       env' <- runMaybeT $ do
-               env' <- checkExprTS dbg defEnv [] tys expr
+               tys' <- freshenBlankPolyVars tys
+               env' <- checkExprTS dbg defEnv [] tys' expr
                solved <- solveConstraints s var
                if solved
                  then return ()
@@ -456,17 +457,13 @@ solveConstraints s defName = do
 
            else return True
 
-
-
--- Generate a fresh alphanumeric variable name
-freshVar :: String -> MaybeT Checker String
-freshVar s = do
-  checkerState <- get
-  let v = uniqueVarId checkerState
-  let prefix = s ++ "_" ++ ["a", "b", "c", "d"] !! (v `mod` 4)
-  let cvar = prefix ++ show v
-  put $ checkerState { uniqueVarId = v + 1 }
-  return cvar
+freshCoeffectVar :: (Id, CKind) -> MaybeT Checker Id
+freshCoeffectVar (cvar, kind) = do
+    cvar' <- freshVar cvar
+    checkerState <- get
+    put $ checkerState { ckenv = (cvar', (kind, ExistsQ))
+                               : ckenv checkerState }
+    return cvar'
 
 leqCtxt :: Span -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker ()
 leqCtxt s env1 env2 = do
@@ -548,7 +545,9 @@ leqAssumption s (x, t) (x', t') = do
 
 freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
 freshPolymorphicInstance (Forall s ckinds ty) = do
-    renameMap <- mapM freshCoeffectVar ckinds
+    -- Universal becomes an existential (via freshCoeffeVar)
+    -- since we are instantiating a polymorphic type
+    renameMap <- mapM (\(c, k) -> fmap (\c' -> (c, c')) (freshCoeffectVar (c, k))) ckinds
     rename renameMap ty
 
   where
@@ -561,13 +560,6 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
       t' <- rename renameMap t
       return $ Box c' t'
     rename _ t = return t
-
-    freshCoeffectVar (cvar, kind) = do
-      cvar' <- freshVar cvar
-      checkerState <- get
-      -- Universal becomes an existential since we are instantiating a polymorphic type
-      put $ checkerState { ckenv = (cvar', (kind, ExistsQ)) : ckenv checkerState }
-      return (cvar, cvar')
 
 relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubEnv vars env = filter relevant env

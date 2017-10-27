@@ -34,6 +34,8 @@ instance Pretty Coeffect where
       pretty c ++ " * " ++ pretty d
     pretty (CSet xs) =
       "{" ++ intercalate "," (map (\(name, t) -> name ++ " : " ++ pretty t) xs) ++ "}"
+    pretty (CSig c t) = "(" ++ pretty c ++ " : " ++ pretty t ++ ")"
+    pretty (CStar k) = "* : " ++ pretty k
 
 instance Pretty TypeScheme where
     pretty (Forall _ cvs t) =

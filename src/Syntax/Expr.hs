@@ -241,8 +241,9 @@ arity _           = 0
 type Effect = [String]
 
 data Coeffect = CNat   NatModifier Int
-              | CFloat  Rational
               | CNatOmega (Either () Int)
+              | CFloat  Rational
+              | CStar  CKind
               | CVar   String
               | CPlus  Coeffect Coeffect
               | CTimes Coeffect Coeffect
@@ -250,6 +251,7 @@ data Coeffect = CNat   NatModifier Int
               | COne   CKind
               | Level Int
               | CSet [(String, Type)]
+              | CSig Coeffect CKind
     deriving (Eq, Ord, Show)
 
 data NatModifier = Ordered | Discrete
@@ -294,4 +296,9 @@ normalise (CTimes n m) =
   where
     n' = normalise n
     m' = normalise m
+normalise (CSig (CNat _ 0) k) = CZero k
+normalise (CSig (CZero _)  k) = CZero k
+normalise (CSig (CNat _ 1) k) = COne k
+normalise (CSig (COne _)   k) = CZero k
+normalise (CSig (CStar _)  k) = CStar k
 normalise c = c

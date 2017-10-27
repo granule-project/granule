@@ -1,0 +1,11 @@
+dub : Int |* : One| -> Int
+dub |x| = x + x
+
+trip : Int |* : One| -> Int
+trip |x| = x + x + x
+
+twice : (Int |* : One| -> Int) |* : One| -> Int |* : One| -> Int
+twice |f| |x| = f |x| + f |x|
+
+main : Int
+main = twice |trip| |42| + twice |dub| |2|

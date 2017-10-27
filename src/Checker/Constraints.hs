@@ -131,6 +131,12 @@ freshCVar name (CConstr "Nat*") q = do
 freshCVar name (CConstr "Nat") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNat Ordered solverVar)
+
+-- Singleton coeffect type
+freshCVar name (CConstr "One") q = do
+  solverVar <- (quant q) name
+  return (solverVar .== literal 1, SNat Discrete solverVar)
+
 freshCVar name (CConstr "Nat=") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNat Discrete solverVar)
@@ -159,6 +165,11 @@ compile vars (Leq _ c1 c2 k) =
 
 -- Compile a coeffect term into its symbolic representation
 compileCoeffect :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
+
+compileCoeffect (CSig c k) _ env = compileCoeffect c k env
+
+compileCoeffect _ (CConstr "One") _
+  = SNat Ordered $ 1
 
 compileCoeffect (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
 

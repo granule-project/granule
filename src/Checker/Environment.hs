@@ -41,6 +41,16 @@ data CheckerState = CS
             }
   deriving Show -- for debugging
 
+-- Generate a fresh alphanumeric variable name
+freshVar :: String -> MaybeT Checker String
+freshVar s = do
+  checkerState <- get
+  let v = uniqueVarId checkerState
+  let prefix = s ++ "_" ++ ["a", "b", "c", "d"] !! (v `mod` 4)
+  let cvar = prefix ++ show v
+  put $ checkerState { uniqueVarId = v + 1 }
+  return cvar
+
 initState :: CheckerState
 initState = CS 0 ground emptyEnv emptyEnv
   where

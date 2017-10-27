@@ -44,6 +44,8 @@ kindOf (CVar cvar) = do
 
 kindOf (CZero k) = return k
 kindOf (COne k)  = return k
+kindOf (CStar k)  = return k
+kindOf (CSig _ k) = return k
 
 -- This will be refined later, but for now join is the same as mgu
 kindJoin :: Coeffect -> Coeffect -> MaybeT Checker CKind
@@ -137,3 +139,39 @@ renameC s rmap (CVar v) =
         Nothing -> illTyped s $ "Coeffect variable " ++ v ++ " is unbound"
 
 renameC _ _ c = return c
+
+freshenBlankPolyVars :: TypeScheme -> MaybeT Checker TypeScheme
+freshenBlankPolyVars (Forall s binds ty) = do
+    ty' <- go ty
+    return $ Forall s binds ty'
+  where
+    go (FunTy t1 t2) = do
+      t1' <- go t1
+      t2' <- go t2
+      return $ FunTy t1' t2'
+    go (Box c t)     = do
+      c' <- go' c
+      t' <- go t
+      return $ Box c' t'
+    go (Diamond e t) = do
+      t' <- go t
+      return $ Diamond e t'
+    go t             = return t
+    go' (CStar (CPoly "")) = do
+      t <- freshVar ""
+      return $ CStar (CPoly t)
+    go' (CPlus c1 c2) = do
+      c1' <- go' c1
+      c2' <- go' c2
+      return $ CPlus c1' c2'
+    go' (CTimes c1 c2) = do
+      c1' <- go' c1
+      c2' <- go' c2
+      return $ CTimes c1' c2'
+    go' (CSet cs) = do
+      cs' <- mapM (\(s, t) -> go t >>= (\t' -> return (s, t'))) cs
+      return $ CSet cs'
+    go' (CSig c k) = do
+      c' <- go' c
+      return $ CSig c' k
+    go' c = return c
