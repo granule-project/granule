@@ -4,7 +4,7 @@ dub |x| = x + x
 trip : Int |* : One| -> Int
 trip |x| = x + x + x
 
-twice : (Int |* : One| -> Int) |* : One| -> Int |* : One| -> Int
+twice : (Int |*| -> Int) |*| -> Int |*| -> Int
 twice |f| |x| = f |x| + f |x|
 
 main : Int

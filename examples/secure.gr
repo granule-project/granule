@@ -5,11 +5,14 @@
 notALeak : Int |Hi| |0| -> Int |Lo|
 notALeak |x| = |0|
 
-try : forall (l : Level) . Int |l| -> Int |l|
-try |x| = |(x + x)|
+secret : Int |Hi|
+secret = |1234|
 
-go : Int |Hi| -> Int |Hi|
-go |x| = let |z| : Int = try |x| in |(x + z)|
+hash : forall (l : Level) . Int |l| -> Int |l|
+hash |x| = |(x + x)|
+
+-- Can't type 'main' in this way
+-- main : Int |Lo|
 
 main : Int |Hi|
-main = |1|
+main = hash secret

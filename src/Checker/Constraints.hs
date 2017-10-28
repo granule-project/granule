@@ -9,6 +9,7 @@ module Checker.Constraints where
 import Data.Foldable (foldrM)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
+import Data.List (isPrefixOf)
 import GHC.Generics (Generic)
 
 import Context             (Env)
@@ -135,7 +136,7 @@ freshCVar name (CConstr "Nat") q = do
 -- Singleton coeffect type
 freshCVar name (CConstr "One") q = do
   solverVar <- (quant q) name
-  return (solverVar .== literal 1, SNat Discrete solverVar)
+  return (solverVar .== literal 1, SNat Ordered solverVar)
 
 freshCVar name (CConstr "Nat=") q = do
   solverVar <- (quant q) name
@@ -147,6 +148,13 @@ freshCVar name (CConstr "Level") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
 freshCVar _ (CConstr "Set") _ = return (true, SSet S.empty)
+
+-- A poly typed coeffect variable whose element is 'star' gets
+-- compiled into the One type (since this satisfies all the same properties)
+freshCVar name (CPoly v) q | " star" `isPrefixOf` v = do
+  solverVar <- (quant q) name
+  return (solverVar .== literal 1, SNat Ordered solverVar)
+
 freshCVar _ k _ =
   error $ "Trying to make a fresh solver variable for a coeffect of kind: " ++ show k ++ " but I don't know how."
 
@@ -169,7 +177,10 @@ compileCoeffect :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
 compileCoeffect (CSig c k) _ env = compileCoeffect c k env
 
 compileCoeffect _ (CConstr "One") _
-  = SNat Ordered $ 1
+  = SNat Ordered 1
+
+-- Any polymorphic * get's compiled to the * : One coeffec
+compileCoeffect (CStar (CPoly _)) _ env = SNat Ordered 1
 
 compileCoeffect (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
 
@@ -204,6 +215,14 @@ compileCoeffect (CPlus n m) k@(CConstr "Level") vars =
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
     (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " + " ++ show m'
 
+compileCoeffect (CPlus n m) k@(CConstr "One") vars =
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat _ _, SNat _ _) -> SNat Ordered 1
+
+compileCoeffect (CPlus n m) k@(CPoly v) vars | " star" `isPrefixOf` v =
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat _ _, SNat _ _) -> SNat Ordered 1
+
 compileCoeffect (CPlus n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 + n2)
@@ -219,6 +238,14 @@ compileCoeffect (CTimes n m) k@(CConstr "Level") vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
     (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " * " ++ show m'
+
+compileCoeffect (CTimes n m) k@(CConstr "One") vars =
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat _ _, SNat _ _) -> SNat Ordered 1
+
+compileCoeffect (CTimes n m) k@(CPoly v) vars | " star" `isPrefixOf` v =
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat _ _, SNat _ _) -> SNat Ordered 1
 
 compileCoeffect (CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
@@ -238,6 +265,8 @@ compileCoeffect (COne (CConstr "Nat")) (CConstr "Nat")     _ = SNat Ordered 1
 compileCoeffect (COne (CConstr "Nat=")) (CConstr "Nat=")   _ = SNat Discrete 1
 compileCoeffect (COne (CConstr "Q")) (CConstr "Q")         _ = SFloat (fromRational 1)
 compileCoeffect (COne (CConstr "Set")) (CConstr "Set")     _ = SSet (S.fromList [])
+
+compileCoeffect c (CPoly v) _ | " star" `isPrefixOf` v = SNat Ordered 1
 
 compileCoeffect c (CPoly _) _ =
    error $ "Trying to compile a polymorphically kinded " ++ pretty c

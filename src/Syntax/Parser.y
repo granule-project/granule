@@ -127,7 +127,7 @@ Type :
 Coeffect :: { Coeffect }
 Coeffect :
        NatCoeff                { $1 }
-     | '*'                     { CStar (CPoly "") }
+     | '*'                     { CStar (CPoly " star") }
      | FLOAT                   { let TokenFloat _ x = $1
                                  in CFloat $ myReadFloat x }
      | CONSTR                  { case (constrString $1) of
@@ -240,7 +240,7 @@ parseError t = do
   where (l, c) = getPos (head t)
 
 parseDefs :: String -> IO ([Def], [(Id, Id)])
-parseDefs = fmap (uniqueNames . map desugar) . defs . scanTokens
+parseDefs = fmap (uniqueNames . map desugar . freshenBlankPolyVars) . defs . scanTokens
 
 myReadFloat :: String -> Rational
 myReadFloat str =

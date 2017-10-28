@@ -24,6 +24,10 @@ evalChecker :: CheckerState -> [(Id, Id)] -> Checker a -> IO a
 evalChecker initialState nameMap =
   flip evalStateT initialState . flip MR.runReaderT nameMap . unwrap
 
+runChecker :: CheckerState -> [(Id, Id)] -> Checker a -> IO (a, CheckerState)
+runChecker initialState nameMap =
+  flip runStateT initialState . flip MR.runReaderT nameMap . unwrap
+
 -- For fresh name generation
 type VarCounter  = Int
 

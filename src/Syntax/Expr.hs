@@ -8,7 +8,8 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Pattern(..), CKind(..), Coeffect(..), NatModifier(..), Effect,
                    uniqueNames, arity, fvs, subst,
                    normalise,
-                   nullSpan, getSpan, getEnd, getStart, Pos, Span
+                   nullSpan, getSpan, getEnd, getStart, Pos, Span,
+                   freshenBlankPolyVars
                    ) where
 
 import Data.List
@@ -111,6 +112,53 @@ freshVar var = do
    let var' = var ++ show v
    put (v+1, (var, var') : nmap)
    return var'
+
+freshenBlankPolyVars :: [Def] -> [Def]
+freshenBlankPolyVars defs =
+    evalState (mapM freshenDef defs) (0 :: Int, [])
+  where
+    freshenDef (Def span id expr pats tys) = do
+      tys' <- freshenTys tys
+      return $ Def span id expr pats tys'
+
+    freshenTys (Forall s binds ty) = do
+      ty' <- freshenTy ty
+      return $ Forall s binds ty'
+
+    freshenTy (FunTy t1 t2) = do
+      t1' <- freshenTy t1
+      t2' <- freshenTy t2
+      return $ FunTy t1' t2'
+    freshenTy (Box c t)     = do
+      c' <- freshenCoeff c
+      t' <- freshenTy t
+      return $ Box c' t'
+    freshenTy (Diamond e t) = do
+      t' <- freshenTy t
+      return $ Diamond e t'
+    freshenTy t = return t
+
+    freshenCoeff (CStar (CPoly "")) = do
+      t <- freshVar "d"
+      return $ CStar (CPoly t)
+    freshenCoeff (CStar (CPoly " star")) = do
+      t <- freshVar " star"
+      return $ CStar (CPoly t)
+    freshenCoeff (CPlus c1 c2) = do
+      c1' <- freshenCoeff c1
+      c2' <- freshenCoeff c2
+      return $ CPlus c1' c2'
+    freshenCoeff (CTimes c1 c2) = do
+      c1' <- freshenCoeff c1
+      c2' <- freshenCoeff c2
+      return $ CTimes c1' c2'
+    freshenCoeff (CSet cs) = do
+      cs' <- mapM (\(s, t) -> freshenTy t >>= (\t' -> return (s, t'))) cs
+      return $ CSet cs'
+    freshenCoeff (CSig c k) = do
+      c' <- freshenCoeff c
+      return $ CSig c' k
+    freshenCoeff c = return c
 
 instance Term Value where
     fvs (Abs x _ e) = (fvs e) \\ [x]

@@ -27,9 +27,9 @@ check :: [Def]        -- List of definitions
 check defs dbg nameMap = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
-    let defEnv = map (\(Def _ var _ _ tys) -> (var, tys)) defs
 
     -- Build a computation which checks all the defs (in order)...
+    let defEnv = map (\(Def _ var _ _ tys) -> (var, tys)) defs
     let checkedDefs = mapM (checkDef defEnv) defs
     -- ... and evaluate the computation with initial state
     results <- evalChecker initState nameMap checkedDefs
@@ -41,8 +41,7 @@ check defs dbg nameMap = do
   where
     checkDef defEnv (Def s var expr _ tys) = do
       env' <- runMaybeT $ do
-               tys' <- freshenBlankPolyVars tys
-               env' <- checkExprTS dbg defEnv [] tys' expr
+               env' <- checkExprTS dbg defEnv [] tys expr
                solved <- solveConstraints s var
                if solved
                  then return ()
