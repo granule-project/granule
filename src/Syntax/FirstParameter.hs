@@ -25,7 +25,7 @@ class GFirstParameter f e where
 
 instance {-# OVERLAPPING #-} GFirstParameter (K1 i e) e where
   getFirstParameter' (K1 a) = a
-  setFirstParameter' e (K1 a)  = K1 e
+  setFirstParameter' e (K1 _)  = K1 e
 
 instance {-# OVERLAPPABLE #-} GFirstParameter (K1 i a) e where
   getFirstParameter' _ = undefined
