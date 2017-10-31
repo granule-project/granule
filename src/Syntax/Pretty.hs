@@ -59,14 +59,14 @@ instance Pretty Type where
 instance Pretty [Def] where
     pretty = intercalate "\n"
      . map (\(Def _ v e ps t) -> v ++ " : " ++ pretty t ++ "\n"
-                                ++ v ++ pretty ps ++ " = " ++ pretty e)
+                                ++ v ++ " " ++ pretty ps ++ " = " ++ pretty e)
 
 instance Pretty Pattern where
-    pretty (PVar _ v)    = v
+    pretty (PVar _ v)     = v
     pretty (PWild _)      = "_"
-    pretty (PBoxVar _ v) = "|" ++ v ++ "|"
-    pretty (PInt _ n)    = show n
-    pretty (PFloat _ n)    = show n
+    pretty (PBox _ p)     = "|" ++ pretty p ++ "|"
+    pretty (PInt _ n)     = show n
+    pretty (PFloat _ n)   = show n
     pretty (PApp _ p1 p2) = show p1 ++ " " ++ show p2
     pretty (PConstr _ s)  = s
 

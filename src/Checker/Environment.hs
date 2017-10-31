@@ -14,7 +14,8 @@ import Control.Monad.Reader.Class
 
 import Checker.Constraints (Constraint, Quantifier)
 import Context
-import Syntax.Expr (Id, CKind, Span)
+import Syntax.Expr (Id, CKind, Span, Type, Pattern)
+import Syntax.Pretty
 
 -- State of the check/synth functions
 newtype Checker a =
@@ -80,6 +81,11 @@ illLinearity = visibleError "Linearity" halt
 
 illGraded :: Span -> String -> MaybeT Checker ()
 illGraded = visibleError "Grading" (return ())
+
+illTypedPattern :: Span -> Type -> Pattern -> MaybeT Checker a
+illTypedPattern s ty pat =
+  visibleError "Pattern typing" halt s
+    (pretty pat ++ " does not have type " ++ pretty ty)
 
 -- | Helper for constructing error handlers
 visibleError :: String -> MaybeT Checker a -> Span -> String -> MaybeT Checker a

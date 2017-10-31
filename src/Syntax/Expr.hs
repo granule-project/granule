@@ -57,12 +57,12 @@ data Expr = App Span Expr Expr
 instance FirstParameter Expr Span
 
 -- Pattern matchings
-data Pattern = PVar Span Id        -- Variable patterns
-             | PWild Span          -- Wildcard (underscore) pattern
-             | PBoxVar Span Id     -- Box patterns (with a variable pattern inside)
-             | PInt Span Int       -- Numeric patterns
+data Pattern = PVar Span Id         -- Variable patterns
+             | PWild Span           -- Wildcard (underscore) pattern
+             | PBox Span Pattern -- Box patterns
+             | PInt Span Int        -- Numeric patterns
              | PFloat Span Double
-             | PConstr Span String -- Constructor pattern
+             | PConstr Span String  -- Constructor pattern
              | PApp Span Pattern Pattern -- Apply pattern
           deriving (Eq, Show, Generic)
 
@@ -74,7 +74,7 @@ class Binder t where
 
 instance Binder Pattern where
   bvs (PVar _ v)     = [v]
-  bvs (PBoxVar _ v)  = [v]
+  bvs (PBox _ p)     = bvs p
   bvs (PApp _ p1 p2) = bvs p1 ++ bvs p2
   bvs _           = []
 
@@ -82,9 +82,9 @@ instance Binder Pattern where
       var' <- freshVar var
       return $ PVar s var'
 
-  freshenBinder (PBoxVar s var) = do
-      var' <- freshVar var
-      return $ PBoxVar s var'
+  freshenBinder (PBox s p) = do
+      p' <- freshenBinder p
+      return $ PBox s p'
 
   freshenBinder (PApp s p1 p2) = do
       p1' <- freshenBinder p1
@@ -264,8 +264,8 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
             . mapM freshenDef
   where
     freshenDef (Def s var e ps t) = do
-      e'  <- freshen e
       ps' <- mapM freshenBinder ps
+      e'  <- freshen e
       return $ Def s var e' ps' t
 
 ----------- Types

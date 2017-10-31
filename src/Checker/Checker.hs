@@ -18,6 +18,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Reader.Class
 import Control.Monad.Trans.Maybe
 import Data.SBV hiding (kindOf)
+import Debug.Trace
 
 -- Checking (top-level)
 check :: [Def]        -- List of definitions
@@ -30,27 +31,67 @@ check defs dbg nameMap = do
 
     -- Build a computation which checks all the defs (in order)...
     let defEnv = map (\(Def _ var _ _ tys) -> (var, tys)) defs
-    let checkedDefs = mapM (checkDef defEnv) defs
+    let checkedDefs = mapM (checkDef dbg defEnv) defs
     -- ... and evaluate the computation with initial state
     results <- evalChecker initState nameMap checkedDefs
 
     -- If all definitions type checked, then the whole file type checkers
-    if all (\(_, _, _, checked) -> isJust checked) $ results
+    if all isJust results
       then return . Right $ True
       else return . Left  $ ""
-  where
-    checkDef defEnv (Def s var expr _ tys) = do
-      env' <- runMaybeT $ do
-               env' <- checkExprTS dbg defEnv [] tys expr
-               solved <- solveConstraints s var
-               if solved
-                 then return ()
-                 else illTyped s "Constraints violated"
-               return env'
-      -- Erase the solver predicate between definitions
+
+checkDef :: Bool           -- turn on debgging
+        -> Env TypeScheme  -- environment of top-level definitions
+        -> Def             -- definition
+        -> Checker (Maybe (Env TyOrDisc))
+checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
+    env <- runMaybeT $ do
       checkerState <- get
-      put (checkerState { predicate = [], ckenv = [], cVarEnv = [] })
-      return (var, tys, Nothing, env')
+      put checkerState { ckenv = map (\(n, c) -> (n, (c, ForallQ))) ckinds }
+      -- check expression against type
+      env <- case (ty, pats) of
+        (FunTy _ _, pats@(_:_)) -> do
+
+          (localGam, ty') <- ctxtFromTypedPatterns s ty pats
+          -- Check the body in the extended context
+          (show localGam) `trace` return ()
+          localGam' <- checkExpr dbg defEnv localGam Positive ty' expr
+
+          -- Check linear use
+          case remainingUndischarged localGam localGam' of
+                [] -> (show localGam') `trace` return localGam'
+                xs -> do
+                   nameMap  <- ask
+                   illLinearity s
+                    . intercalate "\n"
+                    . map (unusedVariable . unrename nameMap . fst) $ xs
+        (tau, []) -> checkExpr dbg defEnv [] Positive tau expr
+        _         -> illTyped s "Expecting a function type"
+      solved <- solveConstraints s name
+      if solved
+        then return env
+        else illTyped s "Constraints violated"
+    -- Erase the solver predicate between definitions
+    checkerState <- get
+    put (checkerState { predicate = [], ckenv = [], cVarEnv = [] })
+    return env
+
+-- ctxtFromTypedPatterns ::
+ctxtFromTypedPatterns s ty [] =
+  return ([], ty)
+ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) =
+  case ctxtFromTypedPattern t1 pat of
+    Just localGam -> do
+      (localGam', ty) <- ctxtFromTypedPatterns s t2 pats
+      return (localGam ++ localGam', ty)
+    Nothing -> illTypedPattern s t1 pat
+
+data Polarity = Positive | Negative deriving Show
+
+
+flipPol :: Polarity -> Polarity
+flipPol Positive = Negative
+flipPol Negative = Positive
 
 -- Type check an expression
 
@@ -59,27 +100,6 @@ check defs dbg nameMap = do
 --  where `delta` gives the post-computation context for expr
 --  (which explains the exact coeffect demands)
 --  or `Nothing` if the typing does not match.
-
-checkExprTS :: Bool          -- turn on debgging
-          -> Env TypeScheme  -- environment of top-level definitions
-          -> Env TyOrDisc    -- local typing context
-          -> TypeScheme      -- typeScheme
-          -> Expr            -- expression
-          -> MaybeT Checker (Env TyOrDisc)
-
-checkExprTS dbg defs gam (Forall _ ckinds ty) e = do
-  -- Coeffect kinds only need a local resolution; set kind environment to scheme
-  checkerState <- get
-  put checkerState { ckenv = map (\(n, c) -> (n, (c, ForallQ))) ckinds }
-  -- check expression against type
-  checkExpr dbg defs gam Positive ty e
-
-data Polarity = Positive | Negative deriving Show
-
-
-flipPol :: Polarity -> Polarity
-flipPol Positive = Negative
-flipPol Negative = Positive
 
 checkExpr :: Bool             -- turn on debgging
           -> Env TypeScheme   -- environment of top-level definitions
@@ -265,7 +285,7 @@ synthExpr dbg defs gam (Case s guardExpr cases) = do
       case ctxtFromTypedPattern ty pati of
         Just localGam -> do
           (_, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
-          -- Check linear use in anything left
+          -- Check linear use
           nameMap  <- ask
           case remainingUndischarged localGam localGam' of
             [] -> return (ty, localGam')
@@ -315,8 +335,9 @@ synthExpr _ defs gam (Val s (Var x)) = do
            return (ty', [])
          Nothing  -> illTyped s $ "I don't know the type for "
                               ++ show (unrename nameMap x)
-                              -- ++ " in environment " ++ pretty gam
-                              -- ++ " or definitions " ++ pretty defs
+                              ++ "{ looking for " ++ x
+                              ++ " in environment " ++ pretty gam
+                              ++ " or definitions " ++ pretty defs ++ "}"
 
      Just (Left ty)       -> return (ty, [(x, Left ty)])
      Just (Right (c, ty)) -> do
@@ -395,6 +416,8 @@ synthExpr dbg defs gam (LetBox s var t e1 e2) = do
 synthExpr dbg defs gam (Binop s _ e e') = do
     (t, gam1)  <- synthExpr dbg defs gam e
     (t', gam2) <- synthExpr dbg defs gam e'
+    checkerState <- get
+    (pretty (predicate checkerState)) `trace` return ()
     case (t, t') of
         -- Well typed
         (ConT n, ConT m) | isNum n && isNum m -> do
@@ -431,7 +454,7 @@ solveConstraints s defName = do
   let pred = predicate checkerState
   --
   let (sbvTheorem, unsats) = compileToSBV pred envCk envCkVar
-  thmRes <- liftIO . prove $ sbvTheorem
+  thmRes <- (intercalate "\n" $ map pretty pred) `trace` (liftIO . prove $ sbvTheorem)
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
      -- z3 is not installed/accessible).

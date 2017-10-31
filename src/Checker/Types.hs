@@ -18,10 +18,16 @@ ctxtFromTypedPattern _             (PWild _)      = Just []
 ctxtFromTypedPattern t             (PVar _ v)     = Just [(v, Left t)]
 ctxtFromTypedPattern (ConT "Int")  (PInt _ _)     = Just []
 ctxtFromTypedPattern (ConT "Float") (PFloat _ _)  = Just []
-ctxtFromTypedPattern (Box c t)     (PBoxVar _ v)  = Just [(v, Right (c, t))]
+ctxtFromTypedPattern (Box c t)     (PBox _ p)     =
+    toDischarged $ ctxtFromTypedPattern t p
+  where
+    toDischarged = fmap (map discharge)
+    discharge (id, Left t)        = (id, Right (c, t))
+    discharge (id, Right (c', t)) = (id, Right (CTimes c c', t))
+
 ctxtFromTypedPattern (ConT "Bool") (PConstr _ "True")  = Just []
 ctxtFromTypedPattern (ConT "Bool") (PConstr _ "False") = Just []
-ctxtFromTypedPattern _             _            = Nothing
+ctxtFromTypedPattern _             _                   = Nothing
 
 instance Pretty (Type, Env TyOrDisc) where
     pretty (t, _) = pretty t

@@ -79,12 +79,12 @@ evalIn env (Case _ gExpr cases) = do
     pmatch cases val
   where
     pmatch []                _                = error "Incomplete pattern match"
-    pmatch ((PWild _, e):_)    _                = evalIn env e
+    pmatch ((PWild _, e):_)    _              = evalIn env e
     pmatch ((PConstr _ s, e):_) (Constr s') | s == s' = evalIn env e
-    pmatch ((PVar _ var, e):_) val              = evalIn env (subst (Val nullSpan val) var e)
-    pmatch ((PBoxVar _ var, e):_) (Promote e')  = evalIn env (subst e' var e)
-    pmatch ((PInt _ n, e):_)      (NumInt m)  | n == m = evalIn env e
-    pmatch ((PFloat _ n, e):_)   (NumFloat m) | n == m = evalIn env e
+    pmatch ((PVar _ var, e):_) val            = evalIn env (subst (Val nullSpan val) var e)
+    pmatch ((PBox _ p, e):_) (Promote (Val _ v)) = pmatch [(p, e)] v
+    pmatch ((PInt _ n, e):_)    (NumInt m)   | n == m = evalIn env e
+    pmatch ((PFloat _ n, e):_)  (NumFloat m) | n == m = evalIn env e
     pmatch (_:ps)            val              = pmatch ps val
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)

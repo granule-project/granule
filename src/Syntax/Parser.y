@@ -3,7 +3,6 @@ module Syntax.Parser where
 
 import Syntax.Lexer
 import Syntax.Expr
-import Syntax.Desugar
 import Numeric
 import System.Exit (die)
 
@@ -84,7 +83,7 @@ Pats : Pat                         { [$1] }
 Pat :: { Pattern }
 Pat : VAR                          { PVar (getPosToSpan $1) (symString $1) }
     | '_'                          { PWild (getPosToSpan $1) }
-    | '|' VAR '|'                  { PBoxVar (getPosToSpan $1) (symString $2) }
+    | '|' Pat '|'                  { PBox (getPosToSpan $1) $2 }
     | INT                          { let TokenInt _ x = $1
 	                             in PInt (getPosToSpan $1) x }
     | FLOAT                        { let TokenFloat _ x = $1
@@ -240,7 +239,7 @@ parseError t = do
   where (l, c) = getPos (head t)
 
 parseDefs :: String -> IO ([Def], [(Id, Id)])
-parseDefs = fmap (uniqueNames . map desugar . freshenBlankPolyVars) . defs . scanTokens
+parseDefs = fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
 
 myReadFloat :: String -> Rational
 myReadFloat str =

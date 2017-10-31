@@ -9,7 +9,7 @@ module Checker.Constraints where
 import Data.Foldable (foldrM)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, intercalate)
 import GHC.Generics (Generic)
 
 import Context             (Env)
@@ -34,9 +34,12 @@ instance Pretty (Neg Constraint) where
     pretty (Neg (Leq _ c1 c2 (CConstr "Nat="))) = pretty c1 ++ " is not equal to " ++ pretty c2
     pretty (Neg (Leq _ c1 c2 _)) = pretty c1 ++ " > " ++ pretty c2
 
+instance Pretty [Constraint] where
+    pretty constr = "---\n" ++ (intercalate "\n" . map pretty $ constr)
+
 instance Pretty Constraint where
-    pretty (Eq _ c1 c2 _)  = pretty c1 ++ " == " ++ pretty c2
-    pretty (Leq _ c1 c2 _) = pretty c1 ++ " <= " ++ pretty c2
+    pretty (Eq s c1 c2 _)  = "@" ++ show s ++ pretty c1 ++ " == " ++ pretty c2
+    pretty (Leq s c1 c2 _) = "@" ++ show s ++ pretty c1 ++ " <= " ++ pretty c2
 
 
 data Quantifier = ForallQ | ExistsQ deriving Show
