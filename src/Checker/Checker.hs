@@ -148,11 +148,11 @@ checkExpr dbg defs gam pol tau e = do
   (tau', gam') <- synthExpr dbg defs gam e
   tyEq <- case pol of
             Positive -> do
-              when dbg $ liftIO $ putStrLn $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
+              dbgMsg dbg $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
               equalTypes dbg (getSpan e) tau' tau
             -- i.e., this check is from a synth
             Negative -> do
-              when dbg $ liftIO $ putStrLn $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
+              dbgMsg dbg $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
               equalTypes dbg (getSpan e) tau tau'
   leqCtxt (getSpan e) gam' gam
   if tyEq then return gam'
@@ -183,8 +183,8 @@ equalTypes dbg s (Diamond ef t) (Diamond ef' t') = do
 
 equalTypes dbg s (Box c t) (Box c' t') = do
   -- Debugging
-  when dbg $ liftIO $ putStrLn $ pretty c ++ " == " ++ pretty c'
-  when dbg $ liftIO $ putStrLn $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
+  dbgMsg dbg $ pretty c ++ " == " ++ pretty c'
+  dbgMsg dbg $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectKinds s c c'
   addConstraint (Leq s c c' kind)
@@ -206,7 +206,6 @@ equalTypes dbg s (TyVar n) (TyInt m) = do
 equalTypes dbg s (TyVar n) (TyVar m) = do
   addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
   return True
-
 
 equalTypes dbg s (TyInt n) (TyInt m) = do
   return (n == m)
@@ -409,7 +408,7 @@ synthExpr dbg defs gam (App s e e') = do
 
 -- Promotion
 synthExpr dbg defs gam (Val s (Promote e)) = do
-   when dbg $ liftIO $ putStrLn $ "Synthing a promotion of " ++ pretty e
+   dbgMsg dbg $ "Synthing a promotion of " ++ pretty e
    -- Create a fresh coeffect variable for the coeffect of the promoting thing
    var <- freshVar $ "prom_" ++ [head (pretty e)]
 
@@ -443,8 +442,7 @@ synthExpr dbg defs gam (LetBox s var t e1 e2) = do
         Just (Right (demand, t')) -> do
              eqT <- equalTypes dbg s t' t
              if eqT then do
-                when dbg $ liftIO . putStrLn $
-                     "Demand for " ++ var ++ " = " ++ pretty demand
+                dbgMsg dbg $ "Demand for " ++ var ++ " = " ++ pretty demand
                 return (demand, t)
               else do
                 nameMap <- ask
@@ -753,3 +751,6 @@ extCtxt s env var (Right (c, t)) = do
 
 unusedVariable :: String -> String
 unusedVariable var = "Linear variable `" ++ var ++ "` is never used."
+
+dbgMsg :: Bool -> String -> MaybeT Checker ()
+dbgMsg dbg = (when dbg) . liftIO . putStrLn
