@@ -14,14 +14,20 @@ type TyOrDisc = Either Type (Coeffect, Type)
 -- Given a pattern and its type, construct the binding environment
 -- for that pattern
 ctxtFromTypedPattern :: Type -> Pattern -> Maybe [(Id, TyOrDisc)]
-ctxtFromTypedPattern _             (PWild _)      = Just []
-ctxtFromTypedPattern t             (PVar _ v)     = Just [(v, Left t)]
-ctxtFromTypedPattern (ConT "Int")  (PInt _ _)     = Just []
+ctxtFromTypedPattern _              (PWild _)      = Just []
+ctxtFromTypedPattern t              (PVar _ v)     = Just [(v, Left t)]
+ctxtFromTypedPattern (ConT "Int")   (PInt _ _)     = Just []
 ctxtFromTypedPattern (ConT "Float") (PFloat _ _)  = Just []
-ctxtFromTypedPattern (Box c t)     (PBoxVar _ v)  = Just [(v, Right (c, t))]
-ctxtFromTypedPattern (ConT "Bool") (PConstr _ "True")  = Just []
-ctxtFromTypedPattern (ConT "Bool") (PConstr _ "False") = Just []
-ctxtFromTypedPattern _             _            = Nothing
+ctxtFromTypedPattern (Box c t)      (PBoxVar _ v)  = Just [(v, Right (c, t))]
+ctxtFromTypedPattern (ConT "Bool")  (PConstr _ "True")  = Just []
+ctxtFromTypedPattern (ConT "Bool")  (PConstr _ "False") = Just []
+ctxtFromTypedPattern (ConT "List")  (PConstr _ "Cons")  = Just []
+ctxtFromTypedPattern (TyApp (TyApp (ConT "List") _) _) (PConstr _ "Nil")   = Just []
+ctxtFromTypedPattern (TyApp (TyApp (ConT "List") _) t) (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
+  bs1 <- ctxtFromTypedPattern t p1
+  bs2 <- ctxtFromTypedPattern t p2
+  return (bs1 ++ bs2)
+ctxtFromTypedPattern t p = Nothing
 
 instance Pretty (Type, Env TyOrDisc) where
     pretty (t, _) = pretty t

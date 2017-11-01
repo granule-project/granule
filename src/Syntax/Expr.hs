@@ -42,7 +42,7 @@ data Value = Abs Id (Maybe Type) Expr
            | Promote Expr
            | Pure Expr
            | Var Id
-           | Constr String
+           | Constr String [Value]
           deriving (Eq, Show)
 
 -- Expressions (computations) in Granule
@@ -280,6 +280,8 @@ data Type = FunTy Type Type
           | Box Coeffect Type
           | Diamond Effect Type
           | TyVar String
+          | TyApp Type Type
+          | TyInt Int
     deriving (Eq, Ord, Show)
 
 arity :: Type -> Int

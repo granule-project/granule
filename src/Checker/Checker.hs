@@ -190,6 +190,27 @@ equalTypes dbg s (Box c t) (Box c' t') = do
   addConstraint (Leq s c c' kind)
   equalTypes dbg s t t'
 
+equalTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
+  one <- equalTypes dbg s t1 t1'
+  two <- equalTypes dbg s t2 t2'
+  return (one && two)
+
+equalTypes dbg s (TyInt n) (TyVar m) = do
+  addConstraint (Eq s (CNat Discrete n) (CVar m) (CConstr "Nat="))
+  return True
+
+equalTypes dbg s (TyVar n) (TyInt m) = do
+  addConstraint (Eq s (CVar n) (CNat Discrete m) (CConstr "Nat="))
+  return True
+
+equalTypes dbg s (TyVar n) (TyVar m) = do
+  addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
+  return True
+
+
+equalTypes dbg s (TyInt n) (TyInt m) = do
+  return (n == m)
+
 equalTypes _ s t1 t2 =
   illTyped s $ "Expected '" ++ pretty t2 ++ "' but got '" ++ pretty t1 ++ "'"
 
@@ -222,6 +243,39 @@ joinTypes dbg s (Box c t) (Box c' t') = do
   tu <- joinTypes dbg s t t'
   return $ Box (CVar topVar) tu
 
+joinTypes dbg s (TyInt n) (TyInt m) = do
+  return $ TyInt (max n m)
+
+joinTypes dbg s (TyInt n) (TyVar m) = do
+ -- Create a fresh coeffect variable
+  topVar <- freshVar ""
+  checkerState <- get
+  let kind = CConstr "Nat="
+  put $ checkerState { ckenv = (topVar, (kind, ExistsQ)) : ckenv checkerState }
+  -- Unify the two coeffects into one
+  addConstraint (Leq s (CNat Ordered n) (CVar topVar) kind)
+  addConstraint (Leq s (CVar m) (CVar topVar) kind)
+  return $ TyVar topVar
+
+joinTypes dbg s (TyVar n) (TyInt m) = do
+  joinTypes dbg s (TyInt m) (TyVar n)
+
+joinTypes dbg s (TyVar n) (TyVar m) = do
+ -- Create a fresh coeffect variable
+  topVar <- freshVar ""
+  checkerState <- get
+  let kind = CConstr "Nat="
+  put $ checkerState { ckenv = (topVar, (kind, ExistsQ)) : ckenv checkerState }
+  -- Unify the two coeffects into one
+  addConstraint (Leq s (CVar n) (CVar topVar) kind)
+  addConstraint (Leq s (CVar m) (CVar topVar) kind)
+  return $ TyVar topVar
+
+joinTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
+  t1'' <- joinTypes dbg s t1 t1'
+  t2'' <- joinTypes dbg s t2 t2'
+  return (TyApp t1'' t2'')
+
 joinTypes _ s t1 t2 =
   illTyped s $ "Type '" ++ pretty t1 ++ "' and '"
                        ++ pretty t2 ++ "' have no upper bound"
@@ -242,12 +296,31 @@ synthExpr _ _ _ (Val _ (Var "write")) =
   return (FunTy (ConT "Int") (Diamond ["W"] (ConT "Int")), [])
 
 -- Constants (booleans)
-synthExpr _ _ _ (Val _ (Constr s)) | s == "False" || s == "True" =
+synthExpr _ _ _ (Val _ (Constr s [])) | s == "False" || s == "True" =
   return (ConT "Bool", [])
 
 -- Constants (numbers)
-synthExpr _ _ _ (Val _ (NumInt _))  = return (ConT "Int", [])
+synthExpr _ _ _ (Val _ (NumInt _))   = return (ConT "Int", [])
 synthExpr _ _ _ (Val _ (NumFloat _)) = return (ConT "Float", [])
+
+-- List constructors
+synthExpr _ _ _ (Val _ (Constr "Nil" [])) =
+  return (TyApp (TyApp (ConT "List") (TyInt 0)) (ConT "Int"), [])
+
+synthExpr _ _ _ (Val s (Constr "Cons" [])) = do
+    -- Cons : a -> List n a -> List (n + 1) a
+    sizeVar <- freshVar "n"
+    sizeVar' <- freshVar "m"
+    checkerState <- get
+    addConstraint (Eq s (CVar sizeVar) (CVar sizeVar') (CConstr "Nat="))
+    put $ checkerState { ckenv = (sizeVar, (CConstr "Nat=", ExistsQ))
+                               : (sizeVar', (CConstr "Nat=", ExistsQ))
+                               : ckenv checkerState }
+    return (FunTy (ConT "Int")
+             (FunTy (list (TyVar sizeVar)) (list (TyVar sizeVar'))), [])
+  where
+    list n = TyApp (TyApp (ConT "List") n) (ConT "Int")
+
 
 -- Effectful lifting
 synthExpr dbg defs gam (Val _ (Pure e)) = do
@@ -264,11 +337,11 @@ synthExpr dbg defs gam (Case s guardExpr cases) = do
       -- Build the binding environment for the branch pattern
       case ctxtFromTypedPattern ty pati of
         Just localGam -> do
-          (_, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
+          (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
           -- Check linear use in anything left
           nameMap  <- ask
           case remainingUndischarged localGam localGam' of
-            [] -> return (ty, localGam')
+            [] -> return (tyCase, localGam')
             xs -> illLinearity s $ intercalate "\n" $ map (unusedVariable . unrename nameMap . fst) xs
 
         Nothing  -> illTyped (getSpan guardExpr)
@@ -558,6 +631,14 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
       c' <- renameC s renameMap c
       t' <- rename renameMap t
       return $ Box c' t'
+    rename renameMap (TyApp t1 t2) = do
+      t1' <- rename renameMap t1
+      t2' <- rename renameMap t2
+      return $ TyApp t1' t2'
+    rename renameMap (TyVar v) = do
+      case lookup v renameMap of
+        Just v' -> return $ TyVar v'
+        Nothing -> illTyped s $ "Type variable " ++ v ++ " is unbound"
     rename _ t = return t
 
 relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]

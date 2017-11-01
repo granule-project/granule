@@ -50,11 +50,13 @@ instance Pretty CKind where
     pretty (CPoly   v) = v
 
 instance Pretty Type where
-    pretty (ConT s)  = s
+    pretty (ConT s)      = s
     pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
-    pretty (Box c t) = pretty t ++ " |" ++ pretty c ++ "|"
+    pretty (Box c t)     = pretty t ++ " |" ++ pretty c ++ "|"
     pretty (Diamond e t) = pretty t ++ "<[" ++ intercalate "," e ++ "]>"
-    pretty (TyVar v) = v
+    pretty (TyVar v)     = v
+    pretty (TyApp t1 t2) = pretty t1 ++ " " ++ pretty t2
+    pretty (TyInt n)     = show n
 
 instance Pretty [Def] where
     pretty = intercalate "\n"
@@ -85,8 +87,13 @@ instance Pretty Value where
     pretty (Var x)      = x
     pretty (NumInt n)   = show n
     pretty (NumFloat n) = show n
-    pretty (Constr s)   = s
-
+    pretty (Constr s vs) = intercalate " " (s : map (parensOn (not . valueAtom)) vs)
+      where
+        -- Syntactically atomic values
+        valueAtom (NumInt _)    = True
+        valueAtom (NumFloat _)  = True
+        valueAtom (Constr s []) = True
+        valueAtom _             = False
 
 instance Pretty Expr where
     pretty expr =
@@ -109,6 +116,12 @@ instance Pretty Expr where
 
 parens :: String -> String
 parens s = "(" ++ s ++ ")"
+
+parensOn :: Pretty a => (a -> Bool) -> a -> String
+parensOn p t =
+  if p t
+    then "(" ++ pretty t ++ ")"
+    else pretty t
 
 instance Pretty Int where
   pretty = show

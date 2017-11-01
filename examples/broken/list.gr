@@ -1,0 +1,11 @@
+foo : List 3 Int
+foo = Cons 1 (Cons 2 (Cons 3 Nil))
+
+isEmpty : forall (n : Nat) . List n Int -> Bool
+isEmpty xs =
+  case xs of
+    (Nil)      -> True;
+    (Cons _ _) -> False
+
+main : Int
+main = isEmpty foo
