@@ -254,15 +254,16 @@ synthExpr _ _ _ (Val _ (Constr "Nil" [])) =
 
 synthExpr _ _ _ (Val s (Constr "Cons" [])) = do
     -- Cons : a -> List n a -> List (n + 1) a
-    sizeVar <- freshVar "n"
-    sizeVar' <- freshVar "m"
+    sizeVarArg <- freshVar "n"
+    sizeVarRes <- freshVar "m"
+    let kind = CConstr "Nat="
     checkerState <- get
-    addConstraint (Eq s (CVar sizeVar) (CVar sizeVar') (CConstr "Nat="))
-    put $ checkerState { ckenv = (sizeVar, (CConstr "Nat=", ExistsQ))
-                               : (sizeVar', (CConstr "Nat=", ExistsQ))
+    put $ checkerState { ckenv = (sizeVarArg, (kind, ExistsQ))
+                               : (sizeVarRes, (kind, ExistsQ))
                                : ckenv checkerState }
+    addConstraint $ Eq s (CVar sizeVarRes) (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
     return (FunTy (ConT "Int")
-             (FunTy (list (TyVar sizeVar)) (list (TyVar sizeVar'))), [])
+             (FunTy (list (TyVar sizeVarArg)) (list (TyVar sizeVarRes))), [])
   where
     list n = TyApp (TyApp (ConT "List") n) (ConT "Int")
 
@@ -278,9 +279,10 @@ synthExpr dbg defs gam (Case s guardExpr cases) = do
   (ty, guardGam) <- synthExpr dbg defs gam guardExpr
   -- then synthesise the types of the branches
   branchTysAndCtxts <-
-    forM cases $ \(pati, ei) ->
+    forM cases $ \(pati, ei) -> do
       -- Build the binding environment for the branch pattern
-      case ctxtFromTypedPattern ty pati of
+      localGamMaybe <- ctxtFromTypedPattern dbg s ty pati
+      case localGamMaybe of
         Just localGam -> do
           (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
           -- Check linear use in anything left
