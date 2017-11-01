@@ -7,14 +7,13 @@
 module Checker.Environment where
 
 import Control.Monad.State.Strict
-
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
 
 import Checker.Constraints (Constraint, Quantifier)
 import Context
-import Syntax.Expr (Id, CKind, Span)
+import Syntax.Expr (Id, CKind, Span, Type, Coeffect)
 
 -- State of the check/synth functions
 newtype Checker a =
@@ -30,6 +29,9 @@ runChecker initialState nameMap =
 
 -- For fresh name generation
 type VarCounter  = Int
+
+-- Types or discharged coeffects
+type TyOrDisc = Either Type (Coeffect, Type)
 
 data CheckerState = CS
             { -- Fresh variable id
@@ -90,6 +92,8 @@ visibleError kind next ((sl, sc), (_, _)) s =
   liftIO (putStrLn $ show sl ++ ":" ++ show sc ++ ": " ++ kind ++ " error:\n\t"
                    ++ s) >> next
 
+dbgMsg :: Bool -> String -> MaybeT Checker ()
+dbgMsg dbg = (when dbg) . liftIO . putStrLn
 
 -- Various interfaces for the checker
 

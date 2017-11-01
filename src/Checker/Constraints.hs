@@ -38,6 +38,8 @@ instance Pretty Constraint where
     pretty (Eq _ c1 c2 _)  = pretty c1 ++ " == " ++ pretty c2
     pretty (Leq _ c1 c2 _) = pretty c1 ++ " <= " ++ pretty c2
 
+--instance Pretty CNF where
+--    pretty cnf = intercalate "&" (intercalate "|" (map pretty cnf))
 
 data Quantifier = ForallQ | ExistsQ deriving Show
 

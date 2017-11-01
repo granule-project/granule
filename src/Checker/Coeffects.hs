@@ -3,7 +3,6 @@
 module Checker.Coeffects where
 
 import Checker.Environment
-import Checker.Types
 import Context
 import Syntax.Expr
 import Syntax.Pretty
