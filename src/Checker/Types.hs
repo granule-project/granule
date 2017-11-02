@@ -28,7 +28,12 @@ ctxtFromTypedPattern _ _ (Box c t)      (PBoxVar _ v)  = return $  Just [(v, Rig
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "True")  = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "False") = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "List")  (PConstr _ "Cons")  = return $ Just []
-ctxtFromTypedPattern _ _ (TyApp (TyApp (ConT "List") _) _) (PConstr _ "Nil") = return $ Just []
+ctxtFromTypedPattern _ s (TyApp (TyApp (ConT "List") n) _) (PConstr _ "Nil") = do
+  let kind       = CConstr "Nat="
+  case n of
+    TyVar v -> addConstraint $ Eq s (CVar v) (CNat Discrete 0) kind
+    TyInt n -> addConstraint $ Eq s (CNat Discrete n) (CNat Discrete 0) kind
+  return $ Just []
 ctxtFromTypedPattern dbg s (TyApp (TyApp (ConT "List") n) t) (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
   bs1 <- ctxtFromTypedPattern dbg s t p1
   sizeVar <- freshVar "in"

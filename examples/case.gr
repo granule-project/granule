@@ -5,5 +5,9 @@ if0 g |x| |y| = case g of
                   0 -> x;
                   _ -> y
 
+constIf : Int -> Int
+constIf x = case 0 of 0 -> x;
+      	       	  _ -> x
+
 main : Int
 main = (if0 0 |1| |2|) + (if0 1 |1| |2|)

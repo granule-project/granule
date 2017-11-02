@@ -13,5 +13,11 @@ incList xs =
     Nil -> Nil;
     (Cons x ys) -> Cons (x + 1) (incList ys)
 
-main : Bool
-main = isEmpty foo
+fmapl : forall (n : Nat) . (Int -> Int) |n| -> List n Int -> List n Int
+fmapl |f| ys =
+  case ys of
+    Nil -> Nil;
+    (Cons x xs) -> Cons (f x) (fmapl |f| xs)
+
+main : List 3 Int
+main = incList foo
