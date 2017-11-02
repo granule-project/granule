@@ -59,11 +59,18 @@ initState = CS 0 ground [] emptyEnv emptyEnv
     ground   = Conj []
     emptyEnv = []
 
+-- | Helper for creating a few (existential) coeffect variable of a particular
+--   coeffect type.
+freshCoeffectVar :: Id -> CKind -> MaybeT Checker Id
+freshCoeffectVar cvar kind = do
+    cvar' <- freshVar cvar
+    registerCoeffectVar cvar' kind ExistsQ
+    return cvar'
+
 -- | Helper for registering a new coeffect variable in the checker
-newCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
-newCoeffectVar v k q = do
-    checkerState <- get
-    put $ checkerState { ckenv = (v, (k, q)) : ckenv checkerState }
+registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
+registerCoeffectVar v k q = do
+    modify (\st -> st { ckenv = (v, (k, q)) : ckenv st })
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()

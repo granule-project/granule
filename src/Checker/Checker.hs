@@ -154,14 +154,14 @@ checkExpr _ _ _ _ tau (Val s (Abs {})) =
 
 -- Promotion
 checkExpr dbg defs gam pol (Box demand tau) (Val s (Promote e)) = do
-    gamF    <- discToFreshVarsIn s (fvs e) gam demand
-    gam'    <- checkExpr dbg defs gamF pol tau e
+  gamF    <- discToFreshVarsIn s (fvs e) gam demand
+  gam'    <- checkExpr dbg defs gamF pol tau e
 
-    let gam'' = multAll (fvs e) demand gam'
-    case pol of
-     Positive -> leqCtxt s gam'' gam
-     Negative -> leqCtxt s gam gam''
-    return gam''
+  let gam'' = multAll (fvs e) demand gam'
+  case pol of
+      Positive -> leqCtxt s gam'' gam
+      Negative -> leqCtxt s gam gam''
+  return gam''
 
 -- Application
 checkExpr dbg defs gam pol tau (App s e1 e2) = do
@@ -243,9 +243,7 @@ joinTypes dbg s (Diamond ef t) (Diamond ef' t') = do
 joinTypes dbg s (Box c t) (Box c' t') = do
   kind <- mguCoeffectKinds s c c'
   -- Create a fresh coeffect variable
-  topVar <- freshVar ""
-  checkerState <- get
-  put $ checkerState { ckenv = (topVar, (kind, ExistsQ)) : ckenv checkerState }
+  topVar <- freshCoeffectVar "" kind
   -- Unify the two coeffects into one
   addConstraint (Leq s c  (CVar topVar) kind)
   addConstraint (Leq s c' (CVar topVar) kind)
@@ -253,36 +251,28 @@ joinTypes dbg s (Box c t) (Box c' t') = do
   return $ Box (CVar topVar) tu
 
 
-joinTypes dbg s (TyInt n) (TyInt m) = do
-  return $ TyInt n -- return $ TyInt (max n m)
+joinTypes dbg s (TyInt n) (TyInt m) | n == m = do
+  return $ TyInt n
 
-joinTypes dbg s (TyInt n) (TyVar m) = {- do
- -- Create a fresh coeffect variable
-  topVar <- freshVar ""
-  checkerState <- get
+joinTypes dbg s (TyInt n) (TyVar m) = do
+  -- Create a fresh coeffect variable
   let kind = CConstr "Nat="
-  put $ checkerState { ckenv = (topVar, (kind, ExistsQ)) : ckenv checkerState }
+  var <- freshCoeffectVar m kind
   -- Unify the two coeffects into one
-  addConstraint (Leq s (CNat Discrete n) (CVar topVar) kind)
-  addConstraint (Leq s (CVar m) (CVar topVar) kind)
-  return $ TyVar topVar -}
-  return $ TyVar m
+  addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
+  return $ TyInt n
 
 joinTypes dbg s (TyVar n) (TyInt m) = do
   joinTypes dbg s (TyInt m) (TyVar n)
 
-joinTypes dbg s (TyVar n) (TyVar m) = do {-
- -- Create a fresh coeffect variable
-  topVar <- freshVar ""
-  checkerState <- get
+joinTypes dbg s (TyVar n) (TyVar m) = do
+  -- Create fresh variables for the two tyint variables
   let kind = CConstr "Nat="
-  put $ checkerState { ckenv = (topVar, (kind, ExistsQ)) : ckenv checkerState }
-  -- Unify the two coeffects into one
-  addConstraint (Leq s (CVar n) (CVar topVar) kind)
-  addConstraint (Leq s (CVar m) (CVar topVar) kind)
-  return $ TyVar topVar -}
-  return $ TyVar m
-
+  nvar <- freshCoeffectVar n kind
+  mvar <- freshCoeffectVar m kind
+  -- Unify the two variables into one
+  addConstraint (Leq s (CVar nvar) (CVar mvar) kind)
+  return $ TyVar n
 
 joinTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
   t1'' <- joinTypes dbg s t1 t1'
@@ -290,8 +280,9 @@ joinTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
   return (TyApp t1'' t2'')
 
 joinTypes _ s t1 t2 =
-  illTyped s $ "Type '" ++ pretty t1 ++ "' and '"
-                       ++ pretty t2 ++ "' have no upper bound"
+  illTyped s
+    $ "Type '" ++ pretty t1 ++ "' and '"
+               ++ pretty t2 ++ "' have no upper bound"
 
 
 -- | Synthesise the 'Type' of expressions.
@@ -323,14 +314,12 @@ synthExpr _ _ _ _ (Val _ (Constr "Nil" [])) =
 
 synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
     -- Cons : a -> List n a -> List (n + 1) a
-    sizeVarArg <- freshVar "n"
-    sizeVarRes <- freshVar "m"
     let kind = CConstr "Nat="
-    checkerState <- get
-    put $ checkerState { ckenv = (sizeVarArg, (kind, ExistsQ))
-                               : (sizeVarRes, (kind, ExistsQ))
-                               : ckenv checkerState }
-    addConstraint $ Eq s (CVar sizeVarRes) (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
+    sizeVarArg <- freshCoeffectVar "n" kind
+    sizeVarRes <- freshCoeffectVar "m" kind
+    -- Add a constraint
+    addConstraint $ Eq s (CVar sizeVarRes)
+                         (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
     return (FunTy (ConT "Int")
              (FunTy (list (TyVar sizeVarArg)) (list (TyVar sizeVarRes))), [])
   where
@@ -358,10 +347,6 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
         Just localGam -> do
           (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) pol ei
           concludeImplication
-          -- addToConjunct
-          state <- get
-          dbgMsg dbg $ "____" ++ pretty (Conj $ predicateStack state)
-          dbgMsg dbg $ "_--_" ++ pretty (predicate state)
           -- Check linear use in anything left
           nameMap  <- ask
           case remainingUndischarged localGam localGam' of
@@ -436,14 +421,12 @@ synthExpr dbg defs gam pol (App s e e') = do
 -- Promotion
 synthExpr dbg defs gam pol (Val s (Promote e)) = do
    dbgMsg dbg $ "Synthing a promotion of " ++ pretty e
-   -- Create a fresh coeffect variable for the coeffect of the promoting thing
-   var <- freshVar $ "prom_" ++ [head (pretty e)]
 
    -- Create a fresh kind variable for this coeffect
    vark <- freshVar $ "kprom_" ++ [head (pretty e)]
-   -- Update coeffect-kind environment
-   checkerState <- get
-   put $ checkerState { ckenv = (var, (CPoly vark, ExistsQ)) : ckenv checkerState }
+
+   -- Create a fresh coeffect variable for the coeffect of the promoted expression
+   var <- freshCoeffectVar ("prom_" ++ [head (pretty e)]) (CPoly vark)
 
    gamF <- discToFreshVarsIn s (fvs e) gam (CVar var)
 
@@ -453,12 +436,11 @@ synthExpr dbg defs gam pol (Val s (Promote e)) = do
 -- Letbox
 synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
 
-    cvar <- freshVar ("binder_" ++ var)
+    -- Create a fresh kind variable for this coeffect
     ckvar <- freshVar ("binderk_" ++ var)
     let kind = CPoly ckvar
     -- Update coeffect-kind environment
-    checkerState <- get
-    put $ checkerState { ckenv = (cvar, (kind, ExistsQ)) : ckenv checkerState }
+    cvar <- freshCoeffectVar ("binder_" ++ var) kind
 
     -- Extend the context with cvar
     gam' <- extCtxt s gam var (Right (CVar cvar, t))
@@ -488,7 +470,6 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
     gam1 <- checkExpr dbg defs gam (flipPol pol) (Box demand t'') e1
     gamNew <- ctxPlus s gam1 gam2
     return (tau, gamNew)
-
 
 -- BinOp
 synthExpr dbg defs gam pol (Binop s _ e e') = do
@@ -555,14 +536,6 @@ solveConstraints pred s defName = do
                    illTyped s $ "Definition '" ++ defName ++ " had a solver fail: " ++ str
 
            else return True
-
-freshCoeffectVar :: (Id, CKind) -> MaybeT Checker Id
-freshCoeffectVar (cvar, kind) = do
-    cvar' <- freshVar cvar
-    checkerState <- get
-    put $ checkerState { ckenv = (cvar', (kind, ExistsQ))
-                               : ckenv checkerState }
-    return cvar'
 
 leqCtxt :: Span -> Env TyOrDisc -> Env TyOrDisc -> MaybeT Checker ()
 leqCtxt s env1 env2 = do
@@ -645,7 +618,7 @@ freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
 freshPolymorphicInstance (Forall s ckinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    renameMap <- mapM (\(c, k) -> fmap (\c' -> (c, c')) (freshCoeffectVar (c, k))) ckinds
+    renameMap <- mapM (\(c, k) -> fmap (\c' -> (c, c')) (freshCoeffectVar c k)) ckinds
     rename renameMap ty
 
   where
@@ -680,9 +653,7 @@ discToFreshVarsIn s vars env coeffect = mapM toFreshVar (relevantSubEnv vars env
     toFreshVar (var, Right (c, t)) = do
       kind <- mguCoeffectKinds s c coeffect
       -- Create a fresh variable
-      cvar  <- freshVar var
-      -- Update the coeffect kind environment
-      modify (\st -> st { ckenv = (cvar, (kind, ExistsQ)) : ckenv st })
+      cvar  <- freshCoeffectVar var kind
       -- Return the freshened var-type mapping
       return (var, Right (CVar cvar, t))
 
