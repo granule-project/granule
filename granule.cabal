@@ -1,5 +1,5 @@
 name:             granule
-version:          0.2.1.0
+version:          0.3.0.0
 cabal-version:    >= 1.2
 license:          BSD3
 author:           Dominic Orchard
