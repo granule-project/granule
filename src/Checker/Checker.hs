@@ -56,7 +56,7 @@ checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
           -- Check the body in the extended context
           liftIO $ putStrLn $ "Local gam = " ++ show localGam
           liftIO $ putStrLn $ show ty'
-          localGam' <- checkExpr dbg defEnv localGam Positive ty' expr
+          localGam' <- checkExpr dbg defEnv localGam Negative ty' expr
           liftIO $ putStrLn $ "Local gam out = " ++ show localGam'
           -- Check linear use
           case remainingUndischarged localGam localGam' of
@@ -154,8 +154,15 @@ checkExpr _ _ _ _ tau (Val s (Abs {})) =
 
 -- Promotion
 checkExpr dbg defs gam pol (Box demand tau) (Val s (Promote e)) = do
+    state <- get
+    liftIO $ putStrLn $ "Predicate P0 = " ++ pretty (predicate state)
+
     gamF    <- discToFreshVarsIn s (fvs e) gam demand
     gam'    <- checkExpr dbg defs gamF pol tau e
+
+    state <- get
+    liftIO $ putStrLn $ "Predicate P1 = " ++ pretty (predicate state)
+
     let gam'' = multAll (fvs e) demand gam'
     case pol of
      Positive -> leqCtxt s gam'' gam
@@ -164,25 +171,57 @@ checkExpr dbg defs gam pol (Box demand tau) (Val s (Promote e)) = do
 
 -- Application
 checkExpr dbg defs gam pol tau (App s e1 e2) = do
-    (sig, gam1) <- synthExpr dbg defs gam e2
+    (sig, gam1) <- synthExpr dbg defs gam pol e2
     gam2 <- checkExpr dbg defs gam pol (FunTy sig tau) e1
     ctxPlus s gam1 gam2
 
 -- all other rules, go to synthesis
 checkExpr dbg defs gam pol tau e = do
-  (tau', gam') <- synthExpr dbg defs gam e
-  tyEq <- case pol of
-            Positive -> do
-              when dbg $ liftIO $ putStrLn $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
-              equalTypes dbg (getSpan e) tau' tau
-            -- i.e., this check is from a synth
-            Negative -> do
-              when dbg $ liftIO $ putStrLn $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
-              equalTypes dbg (getSpan e) tau tau'
+  (tau', gam') <- synthExpr dbg defs gam (flipPol pol) e
+  tyEq <-
+    case pol of
+      Positive -> do
+        when dbg $ liftIO $ putStrLn $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
 
-  leqCtxt (getSpan e) gam' gam
-  if tyEq then return gam'
-          else illTyped (getSpan e) $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
+        state <- get
+        liftIO $ putStrLn $ "Predicate D0 = " ++ pretty (predicate state)
+
+
+        leqCtxt (getSpan e) gam gam'
+
+        state <- get
+        liftIO $ putStrLn $ "Predicate D1 = " ++ pretty (predicate state)
+
+        a <- equalTypes dbg (getSpan e) tau' tau
+
+        state <- get
+        liftIO $ putStrLn $ "Predicate D2 = " ++ pretty (predicate state)
+
+        return a
+
+      -- i.e., this check is from a synth
+      Negative -> do
+        when dbg $ liftIO $ putStrLn $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
+
+        state <- get
+        liftIO $ putStrLn $ "Predicate D0 = " ++ pretty (predicate state)
+
+        leqCtxt (getSpan e) gam gam'
+
+        state <- get
+        liftIO $ putStrLn $ "Predicate D1 = " ++ pretty (predicate state)
+
+        a <- equalTypes dbg (getSpan e) tau' tau
+
+        state <- get
+        liftIO $ putStrLn $ "Predicate D2 = " ++ pretty (predicate state)
+
+        return a
+
+  if tyEq
+    then return gam'
+    else illTyped (getSpan e)
+            $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
 
 -- Check whether two types are equal, and at the same time
 -- generate coeffect equality constraints
@@ -258,39 +297,40 @@ joinTypes _ s t1 t2 =
 synthExpr :: Bool           -- ^ Whether in debug mode
           -> Env TypeScheme -- ^ Environment of top-level definitions
           -> Env TyOrDisc   -- ^ Local typing context
+          -> Polarity       -- ^ Polarity of subgrading
           -> Expr           -- ^ Expression
           -> MaybeT Checker (Type, Env TyOrDisc)
 
 -- Constants (built-in effect primitives)
-synthExpr _ _ _ (Val _ (Var "read")) = return (Diamond ["R"] (ConT "Int"), [])
+synthExpr _ _ _ _ (Val _ (Var "read")) = return (Diamond ["R"] (ConT "Int"), [])
 
-synthExpr _ _ _ (Val _ (Var "write")) =
+synthExpr _ _ _ _ (Val _ (Var "write")) =
   return (FunTy (ConT "Int") (Diamond ["W"] (ConT "Int")), [])
 
 -- Constants (booleans)
-synthExpr _ _ _ (Val _ (Constr s)) | s == "False" || s == "True" =
+synthExpr _ _ _ _ (Val _ (Constr s)) | s == "False" || s == "True" =
   return (ConT "Bool", [])
 
 -- Constants (numbers)
-synthExpr _ _ _ (Val _ (NumInt _))  = return (ConT "Int", [])
-synthExpr _ _ _ (Val _ (NumFloat _)) = return (ConT "Float", [])
+synthExpr _ _ _ _ (Val _ (NumInt _))  = return (ConT "Int", [])
+synthExpr _ _ _ _ (Val _ (NumFloat _)) = return (ConT "Float", [])
 
 -- Effectful lifting
-synthExpr dbg defs gam (Val _ (Pure e)) = do
-  (ty, gam') <- synthExpr dbg defs gam e
+synthExpr dbg defs gam pol (Val _ (Pure e)) = do
+  (ty, gam') <- synthExpr dbg defs gam pol e
   return (Diamond [] ty, gam')
 
 -- Case
-synthExpr dbg defs gam (Case s guardExpr cases) = do
+synthExpr dbg defs gam pol (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
-  (ty, guardGam) <- synthExpr dbg defs gam guardExpr
+  (ty, guardGam) <- synthExpr dbg defs gam pol guardExpr
   -- then synthesise the types of the branches
   branchTysAndCtxts <-
     forM cases $ \(pati, ei) ->
       -- Build the binding environment for the branch pattern
       case ctxtFromTypedPattern ty pati of
         Just localGam -> do
-          (_, localGam') <- synthExpr dbg defs (gam ++ localGam) ei
+          (_, localGam') <- synthExpr dbg defs (gam ++ localGam) pol ei
           -- Check linear use
           nameMap  <- ask
           case remainingUndischarged localGam localGam' of
@@ -317,12 +357,12 @@ synthExpr dbg defs gam (Case s guardExpr cases) = do
   return (eqTypes, gamNew)
 
 -- Diamond cut
-synthExpr dbg defs gam (LetDiamond s var ty e1 e2) = do
+synthExpr dbg defs gam pol (LetDiamond s var ty e1 e2) = do
   gam'        <- extCtxt s gam var (Left ty)
-  (tau, gam1) <- synthExpr dbg defs gam' e2
+  (tau, gam1) <- synthExpr dbg defs gam' pol e2
   case tau of
     Diamond ef2 tau' -> do
-       (sig, gam2) <- synthExpr dbg defs gam e1
+       (sig, gam2) <- synthExpr dbg defs gam pol e1
        case sig of
          Diamond ef1 ty' | ty == ty' -> do
              gamNew <- ctxPlus s gam1 gam2
@@ -331,7 +371,7 @@ synthExpr dbg defs gam (LetDiamond s var ty e1 e2) = do
     t -> illTyped s $ "Expected '" ++ pretty ty ++ "' in subjet of let<>, but inferred '" ++ pretty t ++ "'"
 
 -- Variables
-synthExpr _ defs gam (Val s (Var x)) = do
+synthExpr _ defs gam pol (Val s (Var x)) = do
    nameMap <- ask
    case lookup x gam of
      Nothing ->
@@ -351,12 +391,12 @@ synthExpr _ defs gam (Val s (Var x)) = do
        return (ty, [(x, Right (COne k, ty))])
 
 -- Application
-synthExpr dbg defs gam (App s e e') = do
+synthExpr dbg defs gam pol (App s e e') = do
     state <- get
     liftIO $ putStrLn $ pretty (App s e e')
     liftIO $ putStrLn $ "Predicate A = " ++ pretty (predicate state)
 
-    (f, gam1) <- synthExpr dbg defs gam e
+    (f, gam1) <- synthExpr dbg defs gam pol e
 
 
     state <- get
@@ -375,7 +415,7 @@ synthExpr dbg defs gam (App s e e') = do
                    ++ " but has type '" ++ pretty t ++ "'"
 
 -- Promotion
-synthExpr dbg defs gam (Val s (Promote e)) = do
+synthExpr dbg defs gam pol (Val s (Promote e)) = do
    when dbg $ liftIO $ putStrLn $ "Synthing a promotion of " ++ pretty e
    -- Create a fresh coeffect variable for the coeffect of the promoting thing
    var <- freshVar $ "prom_" ++ [head (pretty e)]
@@ -388,11 +428,11 @@ synthExpr dbg defs gam (Val s (Promote e)) = do
 
    gamF <- discToFreshVarsIn s (fvs e) gam (CVar var)
 
-   (t, gam') <- synthExpr dbg defs gamF e
+   (t, gam') <- synthExpr dbg defs gamF pol e
    return (Box (CVar var) t, multAll (fvs e) (CVar var) gam')
 
 -- Letbox
-synthExpr dbg defs gam (LetBox s var t e1 e2) = do
+synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
 
     cvar <- freshVar ("binder_" ++ var)
     ckvar <- freshVar ("binderk_" ++ var)
@@ -401,10 +441,18 @@ synthExpr dbg defs gam (LetBox s var t e1 e2) = do
     checkerState <- get
     put $ checkerState { ckenv = (cvar, (kind, ExistsQ)) : ckenv checkerState }
 
+    state <- get
+    liftIO $ putStrLn $ "Predicate L0 = " ++ pretty (predicate state)
+
     -- Extend the context with cvar
     gam' <- extCtxt s gam var (Right (CVar cvar, t))
 
-    (tau, gam2) <- synthExpr dbg defs gam' e2
+    (tau, gam2) <- synthExpr dbg defs gam' pol e2
+
+    state <- get
+    liftIO $ putStrLn $ "Predicate L1 = " ++ pretty (predicate state)
+
+
     (demand, t'') <-
       case lookup var gam2 of
         Just (Right (demand, t')) -> do
@@ -426,15 +474,29 @@ synthExpr dbg defs gam (LetBox s var t e1 e2) = do
           addConstraint (Eq s (CVar cvar) (CZero kind) kind)
           return (CZero kind, t)
 
-    gam1 <- checkExpr dbg defs gam Negative (Box demand t'') e1
+    state <- get
+    liftIO $ putStrLn $ "Predicate L3 = " ++ pretty (predicate state)
+    liftIO $ putStrLn $ pretty e1 ++ " :check " ++ pretty (Box demand t'')
+
+    gam1 <- checkExpr dbg defs gam (flipPol pol) (Box demand t'') e1
+
+    state <- get
+    liftIO $ putStrLn $ "Gam 1 = " ++ show gam1
+    liftIO $ putStrLn $ "Predicate L4 = " ++ pretty (predicate state)
+
     gamNew <- ctxPlus s gam1 gam2
+
+    state <- get
+    liftIO $ putStrLn $ "GamNew = " ++ show gamNew
+    liftIO $ putStrLn $ "Predicate L5 = " ++ pretty (predicate state)
+
     return (tau, gamNew)
 
 
 -- BinOp
-synthExpr dbg defs gam (Binop s _ e e') = do
-    (t, gam1)  <- synthExpr dbg defs gam e
-    (t', gam2) <- synthExpr dbg defs gam e'
+synthExpr dbg defs gam pol (Binop s _ e e') = do
+    (t, gam1)  <- synthExpr dbg defs gam pol e
+    (t', gam2) <- synthExpr dbg defs gam pol e'
     checkerState <- get
     (pretty (predicate checkerState)) `trace` return ()
     case (t, t') of
@@ -457,11 +519,11 @@ synthExpr dbg defs gam (Binop s _ e e') = do
 
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
-synthExpr dbg defs gam (Val s (Abs x (Just t) e)) = do
+synthExpr dbg defs gam pol (Val s (Abs x (Just t) e)) = do
   gam' <- extCtxt s gam x (Left t)
-  synthExpr dbg defs gam' e
+  synthExpr dbg defs gam' pol e
 
-synthExpr _ _ _ e = illTyped (getSpan e) $ "I can't work out the type here, try adding more type signatures"
+synthExpr _ _ _ _ e = illTyped (getSpan e) $ "I can't work out the type here, try adding more type signatures"
 
 
 solveConstraints :: Span -> String -> MaybeT Checker Bool
