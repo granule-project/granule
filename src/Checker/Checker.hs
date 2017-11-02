@@ -767,8 +767,3 @@ extCtxt s env var (Right (c, t)) = do
           let var' = unrename nameMap var
           illTyped s $ "Type clash for variable " ++ var' ++ "`"
     Nothing -> return $ (var, Right (c, t)) : env
-
-{- Helpers for error messages -}
-
-unusedVariable :: String -> String
-unusedVariable var = "Linear variable `" ++ var ++ "` is never used."

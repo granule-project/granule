@@ -90,7 +90,7 @@ addConstraint p = do
     stack ->
       put (state { predicateStack = Conj [Con p] : stack })
 
--- Generate a fresh alphanumeric variable name
+-- | Generate a fresh alphanumeric variable name
 freshVar :: String -> MaybeT Checker String
 freshVar s = do
   checkerState <- get
@@ -100,11 +100,10 @@ freshVar s = do
   put $ checkerState { uniqueVarId = v + 1 }
   return cvar
 
-initState :: CheckerState
-initState = CS 0 ground [] emptyEnv emptyEnv
-  where
-    ground   = Conj []
-    emptyEnv = []
+{- Helpers for error messages and checker control flow -}
+
+unusedVariable :: String -> String
+unusedVariable var = "Linear variable `" ++ var ++ "` is never used."
 
 -- | Stops the checker
 halt :: MaybeT Checker a
@@ -114,12 +113,15 @@ halt = MaybeT (return Nothing)
 illTyped :: Span -> String -> MaybeT Checker a
 illTyped = visibleError "Type" halt
 
+-- | A helper for raising a linearity error
 illLinearity :: Span -> String -> MaybeT Checker a
 illLinearity = visibleError "Linearity" halt
 
+-- | A helper for raising a grading error
 illGraded :: Span -> String -> MaybeT Checker ()
 illGraded = visibleError "Grading" (return ())
 
+-- | A helper for raising an illtyped pattern (does pretty printing for you)
 illTypedPattern :: Span -> Type -> Pattern -> MaybeT Checker a
 illTypedPattern s ty pat =
   visibleError "Pattern typing" halt s
@@ -134,6 +136,7 @@ visibleError kind next ((sl, sc), (_, _)) s =
   liftIO (putStrLn $ show sl ++ ":" ++ show sc ++ ": " ++ kind ++ " error:\n\t"
                    ++ s) >> next
 
+-- | Helper for displaying debugging messages for '-d' mode
 dbgMsg :: Bool -> String -> MaybeT Checker ()
 dbgMsg dbg = (when dbg) . liftIO . putStrLn
 
