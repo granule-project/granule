@@ -34,7 +34,12 @@ evalIn env (App _ e1 e2) = do
       Abs x _ e3 -> do
         v2 <- evalIn env e2
         evalIn env (subst (Val nullSpan v2) x e3)
-      _ -> error "Cannot apply value"
+
+      Constr c vs -> do
+        v2 <- evalIn env e2
+        return $ Constr c (vs ++ [v2])
+
+      -- _ -> error "Cannot apply value"
 
 evalIn env (Binop _ op e1 e2) = do
      v1 <- evalIn env e1
@@ -77,16 +82,28 @@ evalIn _ (Val _ v) = return v
 
 evalIn env (Case _ gExpr cases) = do
     val <- evalIn env gExpr
-    pmatch cases val
+    case pmatch cases val of
+      Just (ei, bindings) -> evalIn env (applyBindings bindings ei)
+      Nothing             -> error "Incomplete pattern match"
   where
-    pmatch []                _                = error "Incomplete pattern match"
-    pmatch ((PWild _, e):_)    _              = evalIn env e
-    pmatch ((PConstr _ s, e):_) (Constr s') | s == s' = evalIn env e
-    pmatch ((PVar _ var, e):_) val            = evalIn env (subst (Val nullSpan val) var e)
-    pmatch ((PBox _ p, e):_) (Promote (Val _ v)) = pmatch [(p, e)] v
-    pmatch ((PInt _ n, e):_)    (NumInt m)   | n == m = evalIn env e
-    pmatch ((PFloat _ n, e):_)  (NumFloat m) | n == m = evalIn env e
-    pmatch (_:ps)            val              = pmatch ps val
+    applyBindings [] e = e
+    applyBindings ((e', var):bs) e = applyBindings bs (subst e' var e)
+
+    pmatch []                _                           = Nothing
+    pmatch ((PWild _, e):_)  _                           = Just (e, [])
+    pmatch ((PConstr _ s, e):_) (Constr s' []) | s == s' = Just (e, [])
+    pmatch ((PVar _ var, e):_) val                       = Just (e, [(Val nullSpan val, var)])
+    pmatch ((PBox _ (PVar _ var), e):_) (Promote e')      = Just (e, [(e', var)])
+    pmatch ((PInt _ n, e):_)      (NumInt m)   | n == m   = Just (e, [])
+    pmatch ((PFloat _ n, e):_)    (NumFloat m) | n == m   = Just (e, [])
+    pmatch ((PApp _ p1 p2, e):ps) val@(Constr s vs) =
+      case (pmatch [(p2, e)] (last vs)) of
+        Just (_, bindings) ->
+          case (pmatch [(p1, e)] (Constr s (reverse . tail . reverse $ vs))) of
+            Just (_, bindings') -> Just (e, bindings ++ bindings')
+            _                   -> pmatch ps val
+        _                  -> pmatch ps val
+    pmatch (_:ps) val = pmatch ps val
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)
 evalDefs env [] = return env

@@ -81,7 +81,18 @@ Pats : Pat                         { [$1] }
      | Pat Pats                    { $1 : $2 }
 
 Pat :: { Pattern }
-Pat : VAR                          { PVar (getPosToSpan $1) (symString $1) }
+Pat :
+    PAtom          { $1 }
+  | '(' PJuxt ')'  { $2 }
+
+PJuxt :: { Pattern }
+PJuxt :
+    PJuxt PAtom                 { PApp (getStart $1, getEnd $2) $1 $2 }
+  | PAtom                       { $1 }
+
+
+PAtom :: { Pattern }
+PAtom : VAR                          { PVar (getPosToSpan $1) (symString $1) }
     | '_'                          { PWild (getPosToSpan $1) }
     | '|' Pat '|'                  { PBox (getPosToSpan $1) $2 }
     | INT                          { let TokenInt _ x = $1
@@ -116,12 +127,23 @@ CKind :
 
 Type :: { Type }
 Type :
-       CONSTR                      { ConT $ constrString $1 }
-     | Type '->' Type              { FunTy $1 $3 }
-     | Type '|' Coeffect '|'       { Box $3 $1 }
-     | '(' Type ')'                { $2 }
-     | Type '<' Effect '>'         { Diamond $3 $1 }
-     | VAR                         { TyVar (symString $1) }
+    TyJuxt                       { $1 }
+  | Type '->' Type               { FunTy $1 $3 }
+  | Type '|' Coeffect '|'        { Box $3 $1 }
+  | Type '<' Effect '>'          { Diamond $3 $1 }
+  | '(' Type ')'                 { $2 }
+
+TyJuxt :: { Type }
+TyJuxt :
+    TyJuxt TyAtom               { TyApp $1 $2 }
+  | TyAtom                      { $1 }
+
+TyAtom :: { Type }
+TyAtom :
+    CONSTR                      { ConT $ constrString $1 }
+  | VAR                         { TyVar (symString $1) }
+  | INT                         { let TokenInt _ x = $1 in TyInt x }
+
 
 Coeffect :: { Coeffect }
 Coeffect :
@@ -226,7 +248,7 @@ Atom : '(' Expr ')'                { $2 }
 
      | '|' Atom '|'
                { Val (getPos $1, getPos $3) $ Promote $2 }
-     | CONSTR  { Val (getPosToSpan $1) $ Constr (constrString $1) }
+     | CONSTR  { Val (getPosToSpan $1) $ Constr (constrString $1) [] }
 
 
 {

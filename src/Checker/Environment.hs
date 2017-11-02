@@ -7,14 +7,13 @@
 module Checker.Environment where
 
 import Control.Monad.State.Strict
-
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
 
-import Checker.Constraints (Constraint, Quantifier)
+import Checker.Constraints
 import Context
-import Syntax.Expr (Id, CKind, Span, Type, Pattern)
+import Syntax.Expr (Id, CKind, Span, Type, Coeffect, Pattern)
 import Syntax.Pretty
 
 -- State of the check/synth functions
@@ -32,11 +31,15 @@ runChecker initialState nameMap =
 -- For fresh name generation
 type VarCounter  = Int
 
+-- Types or discharged coeffects
+type TyOrDisc = Either Type (Coeffect, Type)
+
 data CheckerState = CS
             { -- Fresh variable id
               uniqueVarId  :: VarCounter
-            -- Conjunction of constraints
-            , predicate    :: [Constraint]
+            -- Predicate giving constraints
+            , predicate      :: Pred
+            , predicateStack :: [Pred]
             -- Coeffect environment, map coeffect vars to their kinds
             , ckenv        :: Env (CKind, Quantifier)
             -- Environment of resoled coeffect type variables
@@ -45,6 +48,47 @@ data CheckerState = CS
             , cVarEnv   :: Env CKind
             }
   deriving Show -- for debugging
+
+startConjunction :: MaybeT Checker ()
+startConjunction = do
+  state <- get
+  put (state { predicateStack = Conj [] : predicateStack state })
+
+introduceImplication :: MaybeT Checker ()
+introduceImplication = do
+  state <- get
+  case (predicateStack state) of
+    [] -> error "Predicate: Empty stack"
+    stack ->
+      put (state { predicateStack = Conj [] : stack })
+
+concludeImplication :: MaybeT Checker ()
+concludeImplication = do
+  state <- get
+  case (predicateStack state) of
+    [] -> error "Predicate: Empty stack"
+    (p' : p : stack) ->
+      put (state { predicateStack = (Impl p p') : stack })
+    cs -> error $ "Predicate: ended an implication arg in the wrong place: " ++ show cs
+
+addToConjunct :: MaybeT Checker ()
+addToConjunct = do
+  state <- get
+  case (predicateStack state) of
+    [] -> error "Predicate: Empty stack"
+    (p : Conj ps : stack) ->
+      put (state { predicateStack = (Conj (p : ps)) : stack })
+    cs -> error $ "Predicate: add to conjunct in wrong place" ++ show cs
+
+-- | A helper for adding a constraint to the environment
+addConstraint :: Constraint -> MaybeT Checker ()
+addConstraint p = do
+  state <- get
+  case (predicateStack state) of
+    [] -> error "Predicate: Empty stack"
+    (Conj ps : stack) ->
+      put (state { predicateStack = Conj ((Con p) : ps) : stack })
+    _ -> error $ "Predicate: not in conj state"
 
 -- Generate a fresh alphanumeric variable name
 freshVar :: String -> MaybeT Checker String
@@ -57,16 +101,10 @@ freshVar s = do
   return cvar
 
 initState :: CheckerState
-initState = CS 0 ground emptyEnv emptyEnv
+initState = CS 0 ground [] emptyEnv emptyEnv
   where
-    ground   = []
+    ground   = Conj []
     emptyEnv = []
-
--- | A helper for adding a constraint to the environment
-addConstraint :: Constraint -> MaybeT Checker ()
-addConstraint p = do
-  checkerState <- get
-  put $ checkerState { predicate = p : predicate checkerState }
 
 -- | Stops the checker
 halt :: MaybeT Checker a
@@ -96,6 +134,8 @@ visibleError kind next ((sl, sc), (_, _)) s =
   liftIO (putStrLn $ show sl ++ ":" ++ show sc ++ ": " ++ kind ++ " error:\n\t"
                    ++ s) >> next
 
+dbgMsg :: Bool -> String -> MaybeT Checker ()
+dbgMsg dbg = (when dbg) . liftIO . putStrLn
 
 -- Various interfaces for the checker
 
