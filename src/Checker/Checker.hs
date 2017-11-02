@@ -128,7 +128,7 @@ checkExpr dbg defs gam pol (FunTy sig tau) (Val s (Abs x t e)) = do
       eqT <- equalTypes dbg s sig t'
       if eqT
         then return ()
-        else illTyped s $ "Type mismatch: " ++ pretty sig ++ " not equal to " ++ pretty t'
+        else illTyped s $ pretty t' ++ " not equal to " ++ pretty t'
 
   -- Extend the context with the variable 'x' and its type
   gamE <- extCtxt s gam x (Left sig)
@@ -518,9 +518,10 @@ synthExpr dbg defs gam pol (Binop s _ e e') = do
 
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
-synthExpr dbg defs gam pol (Val s (Abs x (Just t) e)) = do
-  gam' <- extCtxt s gam x (Left t)
-  synthExpr dbg defs gam' pol e
+synthExpr dbg defs gam pol (Val s (Abs x (Just sig) e)) = do
+  gam' <- extCtxt s gam x (Left sig)
+  (tau, gam'') <- synthExpr dbg defs gam' pol e
+  return (FunTy sig tau, gam'')
 
 synthExpr _ _ _ _ e = illTyped (getSpan e) $ "I can't work out the type here, try adding more type signatures"
 
