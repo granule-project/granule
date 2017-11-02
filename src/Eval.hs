@@ -4,6 +4,7 @@ module Eval (eval) where
 
 import Syntax.Expr
 import Syntax.Pretty
+import Syntax.Desugar
 import Context
 
 -- Evaluate operators
@@ -92,8 +93,8 @@ evalDefs env [] = return env
 evalDefs env (Def _ var e [] _ : defs) = do
     val <- evalIn env e
     evalDefs (extend env var val) defs
-evalDefs _ (d : _) =
-    error $ "Desugaring must be broken for " ++ show d
+evalDefs env (d : defs) = do
+    evalDefs env (desugar d : defs)
 
 eval :: [Def] -> IO (Maybe Value)
 eval defs = do

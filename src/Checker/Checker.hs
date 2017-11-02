@@ -54,9 +54,10 @@ checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
 
           (localGam, ty') <- ctxtFromTypedPatterns s ty pats
           -- Check the body in the extended context
-          (show localGam) `trace` return ()
+          liftIO $ putStrLn $ "Local gam = " ++ show localGam
+          liftIO $ putStrLn $ show ty'
           localGam' <- checkExpr dbg defEnv localGam Positive ty' expr
-
+          liftIO $ putStrLn $ "Local gam out = " ++ show localGam'
           -- Check linear use
           case remainingUndischarged localGam localGam' of
                 [] -> (show localGam') `trace` return localGam'
@@ -67,6 +68,8 @@ checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
                     . map (unusedVariable . unrename nameMap . fst) $ xs
         (tau, []) -> checkExpr dbg defEnv [] Positive tau expr
         _         -> illTyped s "Expecting a function type"
+      state <- get
+      liftIO $ putStrLn $ "Predicate = " ++ pretty (predicate state)
       solved <- solveConstraints s name
       if solved
         then return env
@@ -154,7 +157,9 @@ checkExpr dbg defs gam pol (Box demand tau) (Val s (Promote e)) = do
     gamF    <- discToFreshVarsIn s (fvs e) gam demand
     gam'    <- checkExpr dbg defs gamF pol tau e
     let gam'' = multAll (fvs e) demand gam'
-    leqCtxt s gam'' gam
+    case pol of
+     Positive -> leqCtxt s gam'' gam
+     Negative -> leqCtxt s gam gam''
     return gam''
 
 -- Application
@@ -174,6 +179,7 @@ checkExpr dbg defs gam pol tau e = do
             Negative -> do
               when dbg $ liftIO $ putStrLn $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
               equalTypes dbg (getSpan e) tau tau'
+
   leqCtxt (getSpan e) gam' gam
   if tyEq then return gam'
           else illTyped (getSpan e) $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
@@ -346,10 +352,23 @@ synthExpr _ defs gam (Val s (Var x)) = do
 
 -- Application
 synthExpr dbg defs gam (App s e e') = do
+    state <- get
+    liftIO $ putStrLn $ pretty (App s e e')
+    liftIO $ putStrLn $ "Predicate A = " ++ pretty (predicate state)
+
     (f, gam1) <- synthExpr dbg defs gam e
+
+
+    state <- get
+    liftIO $ putStrLn $ "Type = " ++ show f ++ " Gam = " ++ show gam1
+    liftIO $ putStrLn $ "Predicate B = " ++ pretty (predicate state)
+
     case f of
       (FunTy sig tau) -> do
          gam2 <- checkExpr dbg defs gam Negative sig e'
+         state <- get
+         liftIO $ putStrLn $ "Predicate C = " ++ pretty (predicate state)
+
          gamNew <- ctxPlus s gam1 gam2
          return (tau, gamNew)
       t -> illTyped s $ "Left-hand side of application is not a function"
