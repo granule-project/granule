@@ -39,6 +39,7 @@ data CheckerState = CS
               uniqueVarId  :: VarCounter
             -- Predicate giving constraints
             , predicate      :: Pred
+            -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
             -- Coeffect environment, map coeffect vars to their kinds
             , ckenv        :: Env (CKind, Quantifier)
@@ -49,46 +50,45 @@ data CheckerState = CS
             }
   deriving Show -- for debugging
 
-startConjunction :: MaybeT Checker ()
-startConjunction = do
+-- *** Various helpers for manipulating the environment
+
+-- | Initial checker environment state
+initState :: CheckerState
+initState = CS 0 ground [] emptyEnv emptyEnv
+  where
+    ground   = Conj []
+    emptyEnv = []
+
+-- | Helper for registering a new coeffect variable in the checker
+newCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
+newCoeffectVar v k q = do
+    checkerState <- get
+    put $ checkerState { ckenv = (v, (k, q)) : ckenv checkerState }
+
+-- | Start a new conjunction frame on the predicate stack
+newConjunct :: MaybeT Checker ()
+newConjunct = do
   state <- get
   put (state { predicateStack = Conj [] : predicateStack state })
 
-introduceImplication :: MaybeT Checker ()
-introduceImplication = do
-  state <- get
-  case (predicateStack state) of
-    [] -> error "Predicate: Empty stack"
-    stack ->
-      put (state { predicateStack = Conj [] : stack })
-
+-- | Takes the top two conjunction frames and turns them into an impliciation
 concludeImplication :: MaybeT Checker ()
 concludeImplication = do
   state <- get
   case (predicateStack state) of
-    [] -> error "Predicate: Empty stack"
     (p' : p : stack) ->
       put (state { predicateStack = (Impl p p') : stack })
-    cs -> error $ "Predicate: ended an implication arg in the wrong place: " ++ show cs
-
-addToConjunct :: MaybeT Checker ()
-addToConjunct = do
-  state <- get
-  case (predicateStack state) of
-    [] -> error "Predicate: Empty stack"
-    (p : Conj ps : stack) ->
-      put (state { predicateStack = (Conj (p : ps)) : stack })
-    cs -> error $ "Predicate: add to conjunct in wrong place" ++ show cs
+    cs -> error $ "Predicate: not enough conjunctions on the stack"
 
 -- | A helper for adding a constraint to the environment
 addConstraint :: Constraint -> MaybeT Checker ()
 addConstraint p = do
   state <- get
   case (predicateStack state) of
-    [] -> error "Predicate: Empty stack"
     (Conj ps : stack) ->
       put (state { predicateStack = Conj ((Con p) : ps) : stack })
-    _ -> error $ "Predicate: not in conj state"
+    stack ->
+      put (state { predicateStack = Conj [Con p] : stack })
 
 -- Generate a fresh alphanumeric variable name
 freshVar :: String -> MaybeT Checker String

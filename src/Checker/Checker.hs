@@ -48,7 +48,7 @@ checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
     env <- runMaybeT $ do
       checkerState <- get
       put checkerState { ckenv = map (\(n, c) -> (n, (c, ForallQ))) ckinds }
-      startConjunction
+      newConjunct
       -- check expression against type
       env <- case (ty, pats) of
         (FunTy _ _, pats@(_:_)) -> do
@@ -173,19 +173,17 @@ checkExpr dbg defs gam pol tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (ty, guardGam) <- synthExpr dbg defs gam pol guardExpr
   -- then synthesise the types of the branches
-  startConjunction
   branchCtxts <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding environment for the branch pattern
-      startConjunction
+      newConjunct
       localGamMaybe <- ctxtFromTypedPattern dbg s ty pati
-      introduceImplication
+      newConjunct
       ---
       case localGamMaybe of
         Just localGam -> do
           localGam' <- checkExpr dbg defs (gam ++ localGam) pol tau ei
           concludeImplication
-          addToConjunct
           -- Check linear use in anything left
           nameMap  <- ask
           case remainingUndischarged localGam localGam' of
@@ -349,19 +347,18 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (ty, guardGam) <- synthExpr dbg defs gam pol guardExpr
   -- then synthesise the types of the branches
-  startConjunction
   branchTysAndCtxts <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding environment for the branch pattern
-      startConjunction
+      newConjunct
       localGamMaybe <- ctxtFromTypedPattern dbg s ty pati
-      introduceImplication
+      newConjunct
       ---
       case localGamMaybe of
         Just localGam -> do
           (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) pol ei
           concludeImplication
-          addToConjunct
+          -- addToConjunct
           state <- get
           dbgMsg dbg $ "____" ++ pretty (Conj $ predicateStack state)
           dbgMsg dbg $ "_--_" ++ pretty (predicate state)
