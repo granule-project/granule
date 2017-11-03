@@ -44,6 +44,13 @@ desugar (Def s var expr pats tys@(Forall _ _ ty)) =
       e' <- desguarPats e ps t2 boxed
       return $ Val (getSpan e) $ Abs v (Just t1) e'
 
+    desguarPats e (PBox _ (PWild _) : ps) (FunTy (Box c t) t2) boxed = do
+      n <- get
+      let v' = show n
+      put (n + 1)
+      e' <- desguarPats e ps t2 (boxed ++ [("", v', t, s)])
+      return $ Val (getSpan e) $ Abs v' (Just (Box c t)) e'
+
     desguarPats e (PBox _ (PVar _ v) : ps) (FunTy (Box c t) t2) boxed = do
       n <- get
       let v' = v ++ show n

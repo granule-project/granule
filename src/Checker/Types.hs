@@ -20,43 +20,56 @@ import Checker.Environment
 --   for that pattern, or Nothing if the pattern is not well typed
 ctxtFromTypedPattern
    :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe (Env Assumption))
+
+-- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern _ _ _              (PWild _)      = return $ Just []
 ctxtFromTypedPattern _ _ t              (PVar _ v)     = return $ Just [(v, Linear t)]
+
+-- Pattern matching on constarints
 ctxtFromTypedPattern _ _ (ConT "Int")   (PInt _ _)     = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "Float") (PFloat _ _)   = return $ Just []
-ctxtFromTypedPattern _ _ (Box c t)      (PBox _ (PVar _ v)) = return $ Just [(v, Discharged t c)]
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "True")  = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "False") = return $ Just []
-ctxtFromTypedPattern _ _ (ConT "List")  (PConstr _ "Cons")  = return $ Just []
 
--- Nil constructor
+-- Pattern match on a modal box
+ctxtFromTypedPattern dbg s (Box c t) (PBox _ p) = do
+    ctx <- ctxtFromTypedPattern dbg s t p
+    case ctx of
+      -- Dishared all variables bound by the inner pattern
+      Just ctx' -> return . Just $ map (discharge c) ctx'
+      Nothing   -> return Nothing
+  where
+    discharge c (v, Linear t) = (v, Discharged t c)
+    discharge c (v, Discharged t c') = (v, Discharged t (CTimes c c'))
+
+-- Match a Nil constructor
 ctxtFromTypedPattern _ s (TyApp (TyApp (ConT "List") n) _) (PConstr _ "Nil") = do
-  let kind       = CConstr "Nat="
-  case n of
-    TyVar v -> addConstraint $ Eq s (CVar v) (CNat Discrete 0) kind
-    TyInt n -> addConstraint $ Eq s (CNat Discrete n) (CNat Discrete 0) kind
-  return $ Just []
+    let kind       = CConstr "Nat="
+    case n of
+      TyVar v -> addConstraint $ Eq s (CVar v) (CNat Discrete 0) kind
+      TyInt n -> addConstraint $ Eq s (CNat Discrete n) (CNat Discrete 0) kind
+    return $ Just []
 
--- Cons constructor
+-- Match a Cons constructor
 ctxtFromTypedPattern dbg s
-  (TyApp  (TyApp  (ConT "List") n) t)
-  (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
-  -- Create a fresh type variable for the size of the consed list
-  let kind       = CConstr "Nat="
-  sizeVar <- freshCoeffectVar "in" kind
+    (TyApp  (TyApp  (ConT "List") n) t)
+    (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
+    -- Create a fresh type variable for the size of the consed list
+    let kind       = CConstr "Nat="
+    sizeVar <- freshCoeffectVar "in" kind
 
-  -- Recursively construct the binding patterns
-  bs1 <- ctxtFromTypedPattern dbg s t p1
-  bs2 <- ctxtFromTypedPattern dbg s (TyApp (TyApp (ConT "List") (TyVar sizeVar)) t) p2
+    -- Recursively construct the binding patterns
+    bs1 <- ctxtFromTypedPattern dbg s t p1
+    bs2 <- ctxtFromTypedPattern dbg s (TyApp (TyApp (ConT "List") (TyVar sizeVar)) t) p2
 
-  -- Generate equality constraint
-  let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
-  case n of
-    TyVar v -> addConstraint $ Eq s (CVar v) sizeVarInc kind
-    TyInt n -> addConstraint $ Eq s (CNat Discrete n) sizeVarInc kind
+    -- Generate equality constraint
+    let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
+    case n of
+      TyVar v -> addConstraint $ Eq s (CVar v) sizeVarInc kind
+      TyInt n -> addConstraint $ Eq s (CNat Discrete n) sizeVarInc kind
 
-  -- Join the two pattern contexts together
-  return $ bs1 >>= (\bs1' -> bs2 >>= (\bs2' -> Just (bs1' ++ bs2')))
+    -- Join the two pattern contexts together
+    return $ bs1 >>= (\bs1' -> bs2 >>= (\bs2' -> Just (bs1' ++ bs2')))
 
 ctxtFromTypedPattern _ _ t p = return Nothing
 
