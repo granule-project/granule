@@ -59,9 +59,11 @@ instance Pretty Type where
     pretty (TyInt n)     = show n
 
 instance Pretty [Def] where
-    pretty = intercalate "\n"
-     . map (\(Def _ v e ps t) -> v ++ " : " ++ pretty t ++ "\n"
-                                ++ v ++ " " ++ pretty ps ++ " = " ++ pretty e)
+    pretty = intercalate "\n" . map pretty
+
+instance Pretty Def where
+    pretty (Def _ v e ps t) = v ++ " : " ++ pretty t ++ "\n"
+                                ++ v ++ " " ++ pretty ps ++ " = " ++ pretty e
 
 instance Pretty Pattern where
     pretty (PVar _ v)     = v

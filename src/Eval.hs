@@ -45,9 +45,9 @@ evalIn env (Binop _ op e1 e2) = do
      v1 <- evalIn env e1
      v2 <- evalIn env e2
      case (v1, v2) of
-       (NumInt n1, NumInt n2)   -> return $ NumInt  (evalOp op n1 n2)
-       (NumInt n1, NumFloat n2)  -> return $ NumFloat (evalOp op (cast n1) n2)
-       (NumFloat n1, NumInt n2)  -> return $ NumFloat (evalOp op n1 (cast n2))
+       (NumInt n1, NumInt n2)     -> return $ NumInt (evalOp op n1 n2)
+       (NumInt n1, NumFloat n2)   -> return $ NumFloat (evalOp op (cast n1) n2)
+       (NumFloat n1, NumInt n2)   -> return $ NumFloat (evalOp op n1 (cast n2))
        (NumFloat n1, NumFloat n2) -> return $ NumFloat (evalOp op n1 n2)
        _ -> fail $ "Runtime exception: Not a number: "
                  ++ pretty v1 ++ " or " ++ pretty v2
@@ -82,25 +82,35 @@ evalIn _ (Val _ v) = return v
 
 evalIn env (Case _ gExpr cases) = do
     val <- evalIn env gExpr
-    case pmatch cases val of
+    p <- pmatch cases val
+    case p of
       Just (ei, bindings) -> evalIn env (applyBindings bindings ei)
       Nothing             -> error "Incomplete pattern match"
   where
     applyBindings [] e = e
     applyBindings ((e', var):bs) e = applyBindings bs (subst e' var e)
 
-    pmatch []                _                           = Nothing
-    pmatch ((PWild _, e):_)  _                           = Just (e, [])
-    pmatch ((PConstr _ s, e):_) (Constr s' []) | s == s' = Just (e, [])
-    pmatch ((PVar _ var, e):_) val                       = Just (e, [(Val nullSpan val, var)])
-    pmatch ((PBox _ (PVar _ var), e):_) (Promote e')      = Just (e, [(e', var)])
-    pmatch ((PInt _ n, e):_)      (NumInt m)   | n == m   = Just (e, [])
-    pmatch ((PFloat _ n, e):_)    (NumFloat m) | n == m   = Just (e, [])
-    pmatch ((PApp _ p1 p2, e):ps) val@(Constr s vs) =
-      case (pmatch [(p2, e)] (last vs)) of
-        Just (_, bindings) ->
-          case (pmatch [(p1, e)] (Constr s (reverse . tail . reverse $ vs))) of
-            Just (_, bindings') -> Just (e, bindings ++ bindings')
+    pmatch []                _                           = return Nothing
+    pmatch ((PWild _, e):_)  _                           = return $ Just (e, [])
+    pmatch ((PConstr _ s, e):_) (Constr s' []) | s == s' = return $ Just (e, [])
+    pmatch ((PVar _ var, e):_) val                       = return $ Just (e, [(Val nullSpan val, var)])
+    pmatch ((PBox _ p, e):ps) (Promote e')      = do
+      v <- evalIn env e'
+      p <- pmatch [(p, e)] v
+      case p of
+        Just (_, env) -> do
+          return $ Just (e, env)
+        Nothing -> pmatch ps (Promote e')
+
+    pmatch ((PInt _ n, e):_)      (NumInt m)   | n == m   = return $ Just (e, [])
+    pmatch ((PFloat _ n, e):_)    (NumFloat m) | n == m   = return $ Just (e, [])
+    pmatch ((PApp _ p1 p2, e):ps) val@(Constr s vs) = do
+      p <- pmatch [(p2, e)] (last vs)
+      case p of
+        Just (_, bindings) -> do
+          p' <- pmatch [(p1, e)] (Constr s (reverse . tail . reverse $ vs))
+          case p' of
+            Just (_, bindings') -> return $ Just (e, bindings ++ bindings')
             _                   -> pmatch ps val
         _                  -> pmatch ps val
     pmatch (_:ps) val = pmatch ps val
