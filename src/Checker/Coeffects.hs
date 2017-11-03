@@ -18,7 +18,7 @@ kindOf :: Coeffect -> MaybeT Checker CKind
 kindOf (Level _)         = return $ CConstr "Level"
 kindOf (CNat Ordered _)  = return $ CConstr "Nat"
 kindOf (CNat Discrete _) = return $ CConstr "Nat="
-kindOf (CFloat _)         = return $ CConstr "Q"
+kindOf (CFloat _)        = return $ CConstr "Q"
 kindOf (CSet _)          = return $ CConstr "Set"
 kindOf (CNatOmega _)     = return $ CConstr "Nat*"
 
@@ -79,12 +79,12 @@ mguCoeffectKinds s c1 c2 = do
       updateCoeffectKind kv1 (CPoly kv2)
       return (CPoly kv2)
 
-   -- Left-hand side is a poly variable, but right is concrete
+   -- Linear-hand side is a poly variable, but right is concrete
     (CPoly kv1, ck2') -> do
       updateCoeffectKind kv1 ck2'
       return ck2'
 
-    -- Right-hand side is a poly variable, but left is concrete
+    -- Right-hand side is a poly variable, but Linear is concrete
     (ck1', CPoly kv2) -> do
       updateCoeffectKind kv2 ck1'
       return ck1'
@@ -107,18 +107,18 @@ mguCoeffectKinds s c1 c2 = do
 -- | Multiply an environment by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
 --    set of used variables, (first param))
-multAll :: [Id] -> Coeffect -> Env TyOrDisc -> Env TyOrDisc
+multAll :: [Id] -> Coeffect -> Env Assumption -> Env Assumption
 
 multAll _ _ [] = []
 
-multAll vars c ((name, Left t) : env) | name `elem` vars
-    = (name, Right (c, t)) : multAll vars c env
+multAll vars c ((name, Linear t) : env) | name `elem` vars
+    = (name, Discharged t c) : multAll vars c env
 
-multAll vars c ((name, Right (c', t)) : env) | name `elem` vars
-    = (name, Right (c `CTimes` c', t)) : multAll vars c env
+multAll vars c ((name, Discharged t c') : env) | name `elem` vars
+    = (name, Discharged t (c `CTimes` c')) : multAll vars c env
 
-multAll vars c ((_, Left _) : env) = multAll vars c env
-multAll vars c ((_, Right (_, _)) : env) = multAll vars c env
+multAll vars c ((_, Linear _) : env) = multAll vars c env
+multAll vars c ((_, Discharged _ _) : env) = multAll vars c env
 
 -- | Perform a renaming on a coeffect
 renameC :: Span -> Env Id -> Coeffect -> MaybeT Checker Coeffect

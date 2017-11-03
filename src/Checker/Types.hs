@@ -19,12 +19,12 @@ import Checker.Environment
 -- Given a pattern and its type, construct the binding environment
 -- for that pattern
 ctxtFromTypedPattern
-   :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe [(Id, TyOrDisc)])
+   :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe [(Id, Assumption)])
 ctxtFromTypedPattern _ _ _              (PWild _)      = return $ Just []
-ctxtFromTypedPattern _ _ t              (PVar _ v)     = return $ Just [(v, Left t)]
+ctxtFromTypedPattern _ _ t              (PVar _ v)     = return $ Just [(v, Linear t)]
 ctxtFromTypedPattern _ _ (ConT "Int")   (PInt _ _)     = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "Float") (PFloat _ _)   = return $ Just []
-ctxtFromTypedPattern _ _ (Box c t)      (PBox _ (PVar _ v))  = return $  Just [(v, Right (c, t))]
+ctxtFromTypedPattern _ _ (Box c t)      (PBox _ (PVar _ v))  = return $  Just [(v, Discharged t c)]
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "True")  = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "False") = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "List")  (PConstr _ "Cons")  = return $ Just []
@@ -105,21 +105,84 @@ equalTypes dbg s (TyInt n) (TyInt m) = do
 equalTypes _ s t1 t2 =
   illTyped s $ "Expected '" ++ pretty t2 ++ "' but got '" ++ pretty t1 ++ "'"
 
-instance Pretty (Type, Env TyOrDisc) where
+-- Essentially equality on types but join on any coeffects
+joinTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Type
+joinTypes dbg s (FunTy t1 t2) (FunTy t1' t2') = do
+  t1j <- joinTypes dbg s t1' t1 -- contravariance
+  t2j <- joinTypes dbg s t2 t2'
+  return (FunTy t1j t2j)
+
+joinTypes _ _ (ConT t) (ConT t') | t == t' = return (ConT t)
+
+joinTypes dbg s (Diamond ef t) (Diamond ef' t') = do
+  tj <- joinTypes dbg s t t'
+  if ef == ef'
+    then return (Diamond ef tj)
+    else do
+      illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
+      halt
+
+joinTypes dbg s (Box c t) (Box c' t') = do
+  kind <- mguCoeffectKinds s c c'
+  -- Create a fresh coeffect variable
+  topVar <- freshCoeffectVar "" kind
+  -- Unify the two coeffects into one
+  addConstraint (Leq s c  (CVar topVar) kind)
+  addConstraint (Leq s c' (CVar topVar) kind)
+  tu <- joinTypes dbg s t t'
+  return $ Box (CVar topVar) tu
+
+
+joinTypes dbg s (TyInt n) (TyInt m) | n == m = do
+  return $ TyInt n
+
+joinTypes dbg s (TyInt n) (TyVar m) = do
+  -- Create a fresh coeffect variable
+  let kind = CConstr "Nat="
+  var <- freshCoeffectVar m kind
+  -- Unify the two coeffects into one
+  addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
+  return $ TyInt n
+
+joinTypes dbg s (TyVar n) (TyInt m) = do
+  joinTypes dbg s (TyInt m) (TyVar n)
+
+joinTypes dbg s (TyVar n) (TyVar m) = do
+  -- Create fresh variables for the two tyint variables
+  let kind = CConstr "Nat="
+  nvar <- freshCoeffectVar n kind
+  mvar <- freshCoeffectVar m kind
+  -- Unify the two variables into one
+  addConstraint (Leq s (CVar nvar) (CVar mvar) kind)
+  return $ TyVar n
+
+joinTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
+  t1'' <- joinTypes dbg s t1 t1'
+  t2'' <- joinTypes dbg s t2 t2'
+  return (TyApp t1'' t2'')
+
+joinTypes _ s t1 t2 =
+  illTyped s
+    $ "Type '" ++ pretty t1 ++ "' and '"
+               ++ pretty t2 ++ "' have no upper bound"
+
+
+
+instance Pretty (Type, Env Assumption) where
     pretty (t, _) = pretty t
 
-instance Pretty (Id, TyOrDisc) where
+instance Pretty (Id, Assumption) where
     pretty (v, ty) = v ++ " : " ++ pretty ty
 
-instance Pretty TyOrDisc where
-    pretty (Left ty) = pretty ty
-    pretty (Right (c, ty)) = "|" ++ pretty ty ++ "|." ++ pretty c
+instance Pretty Assumption where
+    pretty (Linear ty) = pretty ty
+    pretty (Discharged ty c) = "|" ++ pretty ty ++ "|." ++ pretty c
 
 instance Pretty (Env TypeScheme) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
      where pp (var, t) = var ++ " : " ++ pretty t
 
-instance Pretty (Env TyOrDisc) where
+instance Pretty (Env Assumption) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
-     where pp (var, Left t) = var ++ " : " ++ pretty t
-           pp (var, Right (c, t)) = var ++ " : .[" ++ pretty t ++ "]. " ++ pretty c
+     where pp (var, Linear t) = var ++ " : " ++ pretty t
+           pp (var, Discharged t c) = var ++ " : .[" ++ pretty t ++ "]. " ++ pretty c

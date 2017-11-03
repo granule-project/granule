@@ -32,7 +32,9 @@ runChecker initialState nameMap =
 type VarCounter  = Int
 
 -- Types or discharged coeffects
-type TyOrDisc = Either Type (Coeffect, Type)
+data Assumption =
+    Linear Type
+  | Discharged Type Coeffect
 
 data CheckerState = CS
             { -- Fresh variable id
