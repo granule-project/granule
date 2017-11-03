@@ -7,20 +7,11 @@ isEmpty xs =
     Nil        -> True;
     (Cons _ _) -> False
 
-incList : forall (n : Nat) . List n Int -> List n Int
-incList xs =
-  case xs of
-    Nil -> Nil;
-    (Cons x ys) -> Cons (x + 1) (incList ys)
-
-fmapl : forall (n : Nat) . (Int -> Int) |n| -> List n Int -> List n Int
-fmapl |f| ys =
+map : forall (n : Nat) . (Int -> Int) |n| -> List n Int -> List n Int
+map |f| ys =
   case ys of
     Nil -> Nil;
-    (Cons x xs) -> Cons (f x) (fmapl |f| xs)
-
-inc : Int -> Int
-inc x = x * 2
+    (Cons x xs) -> Cons (f x) (map |f| xs)
 
 main : List 3 Int
-main = fmapl |inc| foo
+main = map |(\(x : Int) -> x * 2)| foo
