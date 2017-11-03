@@ -1,0 +1,8 @@
+pow : Int |*| -> Int -> Int
+pow |n| e =
+  case e of
+    0 -> 1;
+    e -> n * pow |n| (e - 1)
+
+main : Int
+main = pow |2| 8
