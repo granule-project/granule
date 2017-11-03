@@ -16,39 +16,66 @@ import Checker.Coeffects
 import Checker.Constraints
 import Checker.Environment
 
--- Given a pattern and its type, construct the binding environment
--- for that pattern
+-- | Given a pattern and its type, construct Just of the binding environment
+--   for that pattern, or Nothing if the pattern is not well typed
 ctxtFromTypedPattern
-   :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe [(Id, Assumption)])
+   :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe (Env Assumption))
 ctxtFromTypedPattern _ _ _              (PWild _)      = return $ Just []
 ctxtFromTypedPattern _ _ t              (PVar _ v)     = return $ Just [(v, Linear t)]
 ctxtFromTypedPattern _ _ (ConT "Int")   (PInt _ _)     = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "Float") (PFloat _ _)   = return $ Just []
-ctxtFromTypedPattern _ _ (Box c t)      (PBox _ (PVar _ v))  = return $  Just [(v, Discharged t c)]
+ctxtFromTypedPattern _ _ (Box c t)      (PBox _ (PVar _ v)) = return $ Just [(v, Discharged t c)]
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "True")  = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "False") = return $ Just []
 ctxtFromTypedPattern _ _ (ConT "List")  (PConstr _ "Cons")  = return $ Just []
+
+-- Nil constructor
 ctxtFromTypedPattern _ s (TyApp (TyApp (ConT "List") n) _) (PConstr _ "Nil") = do
   let kind       = CConstr "Nat="
   case n of
     TyVar v -> addConstraint $ Eq s (CVar v) (CNat Discrete 0) kind
     TyInt n -> addConstraint $ Eq s (CNat Discrete n) (CNat Discrete 0) kind
   return $ Just []
-ctxtFromTypedPattern dbg s (TyApp (TyApp (ConT "List") n) t) (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
-  bs1 <- ctxtFromTypedPattern dbg s t p1
-  sizeVar <- freshVar "in"
-  let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
+
+-- Cons constructor
+ctxtFromTypedPattern dbg s
+  (TyApp  (TyApp  (ConT "List") n) t)
+  (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
+  -- Create a fresh type variable for the size of the consed list
   let kind       = CConstr "Nat="
-  -- Update coeffect-kind environment
-  checkerState <- get
-  put $ checkerState { ckenv = (sizeVar, (kind, ExistsQ)) : ckenv checkerState }
+  sizeVar <- freshCoeffectVar "in" kind
+
+  -- Recursively construct the binding patterns
+  bs1 <- ctxtFromTypedPattern dbg s t p1
+  bs2 <- ctxtFromTypedPattern dbg s (TyApp (TyApp (ConT "List") (TyVar sizeVar)) t) p2
+
   -- Generate equality constraint
+  let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
   case n of
     TyVar v -> addConstraint $ Eq s (CVar v) sizeVarInc kind
     TyInt n -> addConstraint $ Eq s (CNat Discrete n) sizeVarInc kind
-  bs2 <- ctxtFromTypedPattern dbg s (TyApp (TyApp (ConT "List") (TyVar sizeVar)) t) p2
+
+  -- Join the two pattern contexts together
   return $ bs1 >>= (\bs1' -> bs2 >>= (\bs2' -> Just (bs1' ++ bs2')))
+
 ctxtFromTypedPattern _ _ t p = return Nothing
+
+-- | Given a list of patterns and a (possible nested) function type
+--   match the patterns against each argument, returning a binding context
+--   as well as the remaining type.
+--   e.g. given type A -> B -> C and patterns [Constr "A", Constr "B"] then
+--     the remaining type is C.
+ctxtFromTypedPatterns ::
+  Bool -> Span -> Type -> [Pattern] -> MaybeT Checker (Env Assumption, Type)
+ctxtFromTypedPatterns dbg s ty [] =
+  return ([], ty)
+ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
+  ctx <- ctxtFromTypedPattern dbg s t1 pat
+  case ctx of
+    Just localGam -> do
+      (localGam', ty) <- ctxtFromTypedPatterns dbg s t2 pats
+      return (localGam ++ localGam', ty)
+    Nothing -> illTypedPattern s t1 pat
 
 -- Check whether two types are equal, and at the same time
 -- generate coeffect equality constraints

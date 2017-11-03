@@ -44,18 +44,18 @@ checkDef :: Bool           -- turn on debgging
         -> Env TypeScheme  -- environment of top-level definitions
         -> Def             -- definition
         -> Checker (Maybe (Env Assumption))
-checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
+checkDef dbg defEnv (Def s name expr pats (Forall _ foralls ty)) = do
     env <- runMaybeT $ do
-      checkerState <- get
-      put checkerState { ckenv = map (\(n, c) -> (n, (c, ForallQ))) ckinds }
-      newConjunct
-      -- check expression against type
+      -- Add to the type environment all the universally quantified variables
+      modify (\st -> st { ckenv = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+
       env <- case (ty, pats) of
         (FunTy _ _, pats@(_:_)) -> do
 
+          -- Type the pattern matching
           (localGam, ty') <- ctxtFromTypedPatterns dbg s ty pats
-          -- Check the body in the extended context
-          localGam' <- checkExpr dbg defEnv localGam Negative ty' expr
+          -- Check the body in the context given by the pattern matching
+          localGam' <- checkExpr dbg defEnv localGam Positive ty' expr
           -- Check linear use
           case remainingUndischarged localGam localGam' of
                 [] -> return localGam'
@@ -66,6 +66,8 @@ checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
                     . map (unusedVariable . unrename nameMap . fst) $ xs
         (tau, []) -> checkExpr dbg defEnv [] Positive tau expr
         _         -> illTyped s "Expecting a function type"
+
+      -- Use an SMT solver to solve the generated constraints
       state <- get
       let pred = predicate state
       let predStack = predicateStack state
@@ -73,21 +75,10 @@ checkDef dbg defEnv (Def s name expr pats (Forall _ ckinds ty)) = do
       if solved
         then return env
         else illTyped s "Constraints violated"
-    -- Erase the solver predicate between definitions
-    checkerState <- get
-    put (checkerState { predicate = Conj [], predicateStack = [], ckenv = [], cVarEnv = [] })
-    return env
 
--- ctxtFromTypedPatterns ::
-ctxtFromTypedPatterns dbg s ty [] =
-  return ([], ty)
-ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
-  ctx <- ctxtFromTypedPattern dbg s t1 pat
-  case ctx of
-    Just localGam -> do
-      (localGam', ty) <- ctxtFromTypedPatterns dbg s t2 pats
-      return (localGam ++ localGam', ty)
-    Nothing -> illTypedPattern s t1 pat
+    -- Erase the solver predicate between definitions
+    modify (\st -> st { predicate = Conj [], predicateStack = [], ckenv = [], cVarEnv = [] })
+    return env
 
 data Polarity = Positive | Negative deriving Show
 
@@ -201,8 +192,7 @@ checkExpr dbg defs gam pol tau (Case s guardExpr cases) = do
   gamNew <- ctxPlus s branchesGam guardGam
   return gamNew
 
-
--- all other rules, go to synthesis
+-- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol tau e = do
   (tau', gam') <- synthExpr dbg defs gam (flipPol pol) e
   tyEq <-
