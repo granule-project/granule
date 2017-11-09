@@ -87,6 +87,7 @@ instance Pretty Value where
     pretty (Abs x t e)  = parens $ "\\" ++ x ++ " : " ++ pretty t
                                ++ " -> " ++ pretty e
     pretty (Promote e)  = "[ " ++ pretty e ++ " ]"
+    pretty (Promote e)  = "|" ++ pretty e ++ "|"
     pretty (Pure e)     = "<" ++ pretty e ++ ">"
     pretty (Var x)      = x
     pretty (NumInt n)   = show n
