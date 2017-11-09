@@ -6,7 +6,7 @@
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Op(..),
                    Pattern(..), CKind(..), Coeffect(..), NatModifier(..), Effect,
-                   uniqueNames, arity, fvs, subst,
+                   uniqueNames, arity, freeVars, subst,
                    normalise,
                    nullSpan, getSpan, getEnd, getStart, Pos, Span,
                    freshenBlankPolyVars
@@ -52,6 +52,7 @@ data Expr = App Span Expr Expr
           | LetDiamond Span Id Type Expr Expr
           | Val Span Value
           | Case Span Expr [(Pattern, Expr)]
+          | Pair Span Expr Expr
           deriving (Eq, Show, Generic)
 
 instance FirstParameter Expr Span
@@ -64,6 +65,7 @@ data Pattern = PVar Span Id         -- Variable patterns
              | PFloat Span Double
              | PConstr Span String  -- Constructor pattern
              | PApp Span Pattern Pattern -- Apply pattern
+             | PPair Span Pattern Pattern -- ^ Pair patterns
           deriving (Eq, Show, Generic)
 
 instance FirstParameter Pattern Span
@@ -97,7 +99,7 @@ type Freshener t = State (Int, [(Id, Id)]) t
 
 class Term t where
   -- Compute the free variables in a term
-  fvs :: t -> [Id]
+  freeVars :: t -> [Id]
   -- Syntactic substitution of an expression into a term
   -- (assuming variables are all unique to avoid capture)
   subst :: Expr -> Id -> t -> Expr
@@ -161,11 +163,11 @@ freshenBlankPolyVars defs =
     freshenCoeff c = return c
 
 instance Term Value where
-    fvs (Abs x _ e) = (fvs e) \\ [x]
-    fvs (Var x)     = [x]
-    fvs (Pure e)    = fvs e
-    fvs (Promote e) = fvs e
-    fvs _             = []
+    freeVars (Abs x _ e) = (freeVars e) \\ [x]
+    freeVars (Var x)     = [x]
+    freeVars (Pure e)    = freeVars e
+    freeVars (Promote e) = freeVars e
+    freeVars _             = []
 
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
@@ -197,47 +199,47 @@ instance Term Value where
     freshen v = return v
 
 instance Term Expr where
-   fvs (App _ e1 e2)            = fvs e1 ++ fvs e2
-   fvs (Binop _ _ e1 e2)        = fvs e1 ++ fvs e2
-   fvs (LetBox _ x _ e1 e2)     = fvs e1 ++ ((fvs e2) \\ [x])
-   fvs (LetDiamond _ x _ e1 e2) = fvs e1 ++ ((fvs e2) \\ [x])
-   fvs (Val _ e)                = fvs e
-   fvs (Case _ e cases)         = fvs e ++ (concatMap (fvs . snd) cases
+    freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2
+    freeVars (Binop _ _ e1 e2)        = freeVars e1 ++ freeVars e2
+    freeVars (LetBox _ x _ e1 e2)     = freeVars e1 ++ ((freeVars e2) \\ [x])
+    freeVars (LetDiamond _ x _ e1 e2) = freeVars e1 ++ ((freeVars e2) \\ [x])
+    freeVars (Val _ e)                = freeVars e
+    freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
                                       \\ concatMap (bvs . fst) cases)
 
-   subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
-   subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
-   subst es v (LetBox s w t e1 e2) = LetBox s w t (subst es v e1) (subst es v e2)
-   subst es v (LetDiamond s w t e1 e2) =
+    subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
+    subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
+    subst es v (LetBox s w t e1 e2) = LetBox s w t (subst es v e1) (subst es v e2)
+    subst es v (LetDiamond s w t e1 e2) =
                                    LetDiamond s w t (subst es v e1) (subst es v e2)
-   subst es v (Val _ val)          = subst es v val
-   subst es v (Case s expr cases)  = Case s
+    subst es v (Val _ val)          = subst es v val
+    subst es v (Case s expr cases)  = Case s
                                      (subst es v expr)
                                      (map (\(p, e) -> (p, subst es v e)) cases)
 
-   freshen (LetBox s var t e1 e2) = do
+    freshen (LetBox s var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
       return $ LetBox s var' t e1' e2'
 
-   freshen (App s e1 e2) = do
+    freshen (App s e1 e2) = do
       e1' <- freshen e1
       e2' <- freshen e2
       return $ App s e1' e2'
 
-   freshen (LetDiamond s var t e1 e2) = do
+    freshen (LetDiamond s var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
       return $ LetDiamond s var' t e1' e2'
 
-   freshen (Binop s op e1 e2) = do
+    freshen (Binop s op e1 e2) = do
       e1' <- freshen e1
       e2' <- freshen e2
       return $ Binop s op e1' e2'
 
-   freshen (Case s expr cases) = do
+    freshen (Case s expr cases) = do
       expr'     <- freshen expr
       cases' <- forM cases $ \(p, e) -> do
                   p' <- freshenBinder p
@@ -245,9 +247,14 @@ instance Term Expr where
                   return (p', e')
       return (Case s expr' cases')
 
-   freshen (Val s v) = do
+    freshen (Val s v) = do
      v' <- freshen v
      return (Val s v')
+
+    freshen (Pair s e1 e2) = do
+      e1' <- freshen e1
+      e2' <- freshen e2
+      return $ Pair s e1' e2'
 
 
 --------- Definitions
@@ -275,13 +282,17 @@ data TypeScheme = Forall Span [(String, CKind)] Type
 
 instance FirstParameter TypeScheme Span
 
-data Type = FunTy Type Type
-          | ConT String
-          | Box Coeffect Type
-          | Diamond Effect Type
-          | TyVar String
-          | TyApp Type Type
-          | TyInt Int
+{-| Types.
+Example: `List n Int` is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
+-}
+data Type = FunTy Type Type           -- ^ Function type
+          | TyCon String              -- ^ Type constructor
+          | Box Coeffect Type         -- ^ Coeffect type
+          | Diamond Effect Type       -- ^ Effect type
+          | TyVar String              -- ^ Type variable
+          | TyApp Type Type           -- ^ Type application
+          | TyInt Int                 -- ^ Type-level Int
+          | PairTy Type Type          -- ^ Pair/product type
     deriving (Eq, Ord, Show)
 
 arity :: Type -> Int
