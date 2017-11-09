@@ -50,13 +50,14 @@ instance Pretty CKind where
     pretty (CPoly   v) = v
 
 instance Pretty Type where
-    pretty (ConT s)      = s
-    pretty (FunTy t1 t2) = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
-    pretty (Box c t)     = pretty t ++ " |" ++ pretty c ++ "|"
-    pretty (Diamond e t) = pretty t ++ "<[" ++ intercalate "," e ++ "]>"
-    pretty (TyVar v)     = v
-    pretty (TyApp t1 t2) = pretty t1 ++ " " ++ pretty t2
-    pretty (TyInt n)     = show n
+    pretty (TyCon s)       = s
+    pretty (FunTy t1 t2)  = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
+    pretty (Box c t)      = pretty t ++ " |" ++ pretty c ++ "|"
+    pretty (Diamond e t)  = pretty t ++ "<[" ++ intercalate "," e ++ "]>"
+    pretty (TyVar v)      = v
+    pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
+    pretty (TyInt n)      = show n
+    pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ ", " ++ pretty t2 ++ ")"
 
 instance Pretty [Def] where
     pretty = intercalate "\n" . map pretty
@@ -73,6 +74,7 @@ instance Pretty Pattern where
     pretty (PFloat _ n)   = show n
     pretty (PApp _ p1 p2) = show p1 ++ " " ++ show p2
     pretty (PConstr _ s)  = s
+    pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ ", " ++ pretty p2 ++ ")"
 
 instance Pretty [Pattern] where
     pretty ps = unwords (map pretty ps)
@@ -98,23 +100,21 @@ instance Pretty Value where
         valueAtom _             = False
 
 instance Pretty Expr where
-    pretty expr =
-      case expr of
-        (App _ e1 e2) -> parens $ pretty e1 ++ " " ++ pretty e2
-        (Binop _ op e1 e2) -> parens $ pretty e1 ++ prettyOp op ++ pretty e2
-        (LetBox _ v t e1 e2) -> parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
-                                     ++ pretty e1 ++ " in " ++ pretty e2
-        (LetDiamond _ v t e1 e2) -> parens $ "let <" ++ v ++ "> :" ++ pretty t ++ " = "
-                                     ++ pretty e1 ++ " in " ++ pretty e2
-        (Val _ v) -> pretty v
-        (Case _ e ps) -> "case " ++ pretty e ++ " of " ++
-                         (intercalate ";"
-                           $ map (\(p, e') -> pretty p
-                                          ++ " -> "
-                                          ++ pretty e') ps)
-     where prettyOp Add = " + "
-           prettyOp Sub = " - "
-           prettyOp Mul = " * "
+  pretty (App _ e1 e2) = parens $ pretty e1 ++ " " ++ pretty e2
+  pretty (Binop _ op e1 e2) = parens $ pretty e1 ++ " " ++ pretty op ++ " " ++ pretty e2
+  pretty (LetBox _ v t e1 e2) = parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
+                                ++ pretty e1 ++ " in " ++ pretty e2
+  pretty (LetDiamond _ v t e1 e2) = parens $ "let <" ++ v ++ "> :" ++ pretty t ++ " = "
+                                    ++ pretty e1 ++ " in " ++ pretty e2
+  pretty (Val _ v) = pretty v
+  pretty (Case _ e ps) = "case " ++ pretty e ++ " of " ++
+                         intercalate ";" (map (\(p, e') -> pretty p ++ " -> " ++ pretty e') ps)
+  pretty (Pair _ e1 e2) = "(" ++ pretty e1 ++ ", " ++ pretty e2 ++ ")"
+
+instance Pretty Op where
+  pretty Add = "+"
+  pretty Sub = "-"
+  pretty Mul = "*"
 
 parens :: String -> String
 parens s = "(" ++ s ++ ")"

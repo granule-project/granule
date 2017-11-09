@@ -26,10 +26,10 @@ ctxtFromTypedPattern _ _ _              (PWild _)      = return $ Just []
 ctxtFromTypedPattern _ _ t              (PVar _ v)     = return $ Just [(v, Linear t)]
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern _ _ (ConT "Int")   (PInt _ _)     = return $ Just []
-ctxtFromTypedPattern _ _ (ConT "Float") (PFloat _ _)   = return $ Just []
-ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "True")  = return $ Just []
-ctxtFromTypedPattern _ _ (ConT "Bool")  (PConstr _ "False") = return $ Just []
+ctxtFromTypedPattern _ _ (TyCon "Int")   (PInt _ _)     = return $ Just []
+ctxtFromTypedPattern _ _ (TyCon "Float") (PFloat _ _)   = return $ Just []
+ctxtFromTypedPattern _ _ (TyCon "Bool")  (PConstr _ "True")  = return $ Just []
+ctxtFromTypedPattern _ _ (TyCon "Bool")  (PConstr _ "False") = return $ Just []
 
 -- Pattern match on a modal box
 ctxtFromTypedPattern dbg s (Box c t) (PBox _ p) = do
@@ -43,7 +43,7 @@ ctxtFromTypedPattern dbg s (Box c t) (PBox _ p) = do
     discharge c (v, Discharged t c') = (v, Discharged t (CTimes c c'))
 
 -- Match a Nil constructor
-ctxtFromTypedPattern _ s (TyApp (TyApp (ConT "List") n) _) (PConstr _ "Nil") = do
+ctxtFromTypedPattern _ s (TyApp (TyApp (TyCon "List") n) _) (PConstr _ "Nil") = do
     let kind       = CConstr "Nat="
     case n of
       TyVar v -> addConstraint $ Eq s (CVar v) (CNat Discrete 0) kind
@@ -52,7 +52,7 @@ ctxtFromTypedPattern _ s (TyApp (TyApp (ConT "List") n) _) (PConstr _ "Nil") = d
 
 -- Match a Cons constructor
 ctxtFromTypedPattern dbg s
-    (TyApp  (TyApp  (ConT "List") n) t)
+    (TyApp  (TyApp  (TyCon "List") n) t)
     (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
     -- Create a fresh type variable for the size of the consed list
     let kind       = CConstr "Nat="
@@ -60,7 +60,7 @@ ctxtFromTypedPattern dbg s
 
     -- Recursively construct the binding patterns
     bs1 <- ctxtFromTypedPattern dbg s t p1
-    bs2 <- ctxtFromTypedPattern dbg s (TyApp (TyApp (ConT "List") (TyVar sizeVar)) t) p2
+    bs2 <- ctxtFromTypedPattern dbg s (TyApp (TyApp (TyCon "List") (TyVar sizeVar)) t) p2
 
     -- Generate equality constraint
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
@@ -102,7 +102,7 @@ equalTypes dbg s (FunTy t1 t2) (FunTy t1' t2') = do
   eq2 <- equalTypes dbg s t2 t2' -- covariance
   return (eq1 && eq2)
 
-equalTypes _ _ (ConT con) (ConT con') = return (con == con')
+equalTypes _ _ (TyCon con) (TyCon con') = return (con == con')
 
 equalTypes dbg s (Diamond ef t) (Diamond ef' t') = do
   eq <- equalTypes dbg s t t'
@@ -135,15 +135,17 @@ equalTypes dbg s (TyVar n) (TyInt m) = do
   addConstraint (Eq s (CVar n) (CNat Discrete m) (CConstr "Nat="))
   return True
 
-equalTypes dbg s (TyVar n) (TyVar m) = do
+equalTypes _ s (TyVar n) (TyVar m) = do
   addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
   return True
 
-equalTypes dbg s (TyInt n) (TyInt m) = do
-  return (n == m)
+equalTypes dbg s (PairTy t1 t2) (PairTy t1' t2') = do
+  lefts <- equalTypes dbg s t1 t1'
+  rights <- equalTypes dbg s t2 t2'
+  return (lefts && rights)
 
 equalTypes _ s t1 t2 =
-  illTyped s $ "Expected '" ++ pretty t2 ++ "' but got '" ++ pretty t1 ++ "'"
+  illTyped s $ "I don't know how to make '" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Type
@@ -152,7 +154,7 @@ joinTypes dbg s (FunTy t1 t2) (FunTy t1' t2') = do
   t2j <- joinTypes dbg s t2 t2'
   return (FunTy t1j t2j)
 
-joinTypes _ _ (ConT t) (ConT t') | t == t' = return (ConT t)
+joinTypes _ _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
 joinTypes dbg s (Diamond ef t) (Diamond ef' t') = do
   tj <- joinTypes dbg s t t'

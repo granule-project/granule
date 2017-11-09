@@ -105,10 +105,10 @@ checkExpr :: Bool             -- turn on debgging
 
 -- Checking of constants
 
-checkExpr _ _ _ _ (ConT "Int") (Val _ (NumInt _)) = return []
+checkExpr _ _ _ _ (TyCon "Int") (Val _ (NumInt _)) = return []
   -- Automatically upcast integers to floats
-checkExpr _ _ _ _ (ConT "Float") (Val _ (NumInt _)) = return []
-checkExpr _ _ _ _ (ConT "Float") (Val _ (NumFloat _)) = return []
+checkExpr _ _ _ _ (TyCon "Float") (Val _ (NumInt _)) = return []
+checkExpr _ _ _ _ (TyCon "Float") (Val _ (NumFloat _)) = return []
 
 checkExpr dbg defs gam pol (FunTy sig tau) (Val s (Abs x t e)) = do
   -- If an explicit signature on the lambda was given, then check
@@ -145,10 +145,10 @@ checkExpr _ _ _ _ tau (Val s (Abs {})) =
 
 -- Promotion
 checkExpr dbg defs gam pol (Box demand tau) (Val s (Promote e)) = do
-  gamF    <- discToFreshVarsIn s (fvs e) gam demand
+  gamF    <- discToFreshVarsIn s (freeVars e) gam demand
   gam'    <- checkExpr dbg defs gamF pol tau e
 
-  let gam'' = multAll (fvs e) demand gam'
+  let gam'' = multAll (freeVars e) demand gam'
   case pol of
       Positive -> leqCtxt s gam'' gam
       Negative -> leqCtxt s gam gam''
@@ -223,22 +223,22 @@ synthExpr :: Bool           -- ^ Whether in debug mode
           -> MaybeT Checker (Type, Env Assumption)
 
 -- Constants (built-in effect primitives)
-synthExpr _ _ _ _ (Val _ (Var "read")) = return (Diamond ["R"] (ConT "Int"), [])
+synthExpr _ _ _ _ (Val _ (Var "read")) = return (Diamond ["R"] (TyCon "Int"), [])
 
 synthExpr _ _ _ _ (Val _ (Var "write")) =
-  return (FunTy (ConT "Int") (Diamond ["W"] (ConT "Int")), [])
+  return (FunTy (TyCon "Int") (Diamond ["W"] (TyCon "Int")), [])
 
 -- Constants (booleans)
 synthExpr _ _ _ _ (Val _ (Constr s [])) | s == "False" || s == "True" =
-  return (ConT "Bool", [])
+  return (TyCon "Bool", [])
 
 -- Constants (numbers)
-synthExpr _ _ _ _ (Val _ (NumInt _))  = return (ConT "Int", [])
-synthExpr _ _ _ _ (Val _ (NumFloat _)) = return (ConT "Float", [])
+synthExpr _ _ _ _ (Val _ (NumInt _))  = return (TyCon "Int", [])
+synthExpr _ _ _ _ (Val _ (NumFloat _)) = return (TyCon "Float", [])
 
 -- List constructors
 synthExpr _ _ _ _ (Val _ (Constr "Nil" [])) =
-  return (TyApp (TyApp (ConT "List") (TyInt 0)) (ConT "Int"), [])
+  return (TyApp (TyApp (TyCon "List") (TyInt 0)) (TyCon "Int"), [])
 
 synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
     -- Cons : a -> List n a -> List (n + 1) a
@@ -248,10 +248,10 @@ synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
     -- Add a constraint
     addConstraint $ Eq s (CVar sizeVarRes)
                          (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
-    return (FunTy (ConT "Int")
+    return (FunTy (TyCon "Int")
              (FunTy (list (TyVar sizeVarArg)) (list (TyVar sizeVarRes))), [])
   where
-    list n = TyApp (TyApp (ConT "List") n) (ConT "Int")
+    list n = TyApp (TyApp (TyCon "List") n) (TyCon "Int")
 
 
 -- Effectful lifting
@@ -356,10 +356,10 @@ synthExpr dbg defs gam pol (Val s (Promote e)) = do
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
    var <- freshCoeffectVar ("prom_" ++ [head (pretty e)]) (CPoly vark)
 
-   gamF <- discToFreshVarsIn s (fvs e) gam (CVar var)
+   gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
    (t, gam') <- synthExpr dbg defs gamF pol e
-   return (Box (CVar var) t, multAll (fvs e) (CVar var) gam')
+   return (Box (CVar var) t, multAll (freeVars e) (CVar var) gam')
 
 -- Letbox
 synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
@@ -406,9 +406,9 @@ synthExpr dbg defs gam pol (Binop s _ e e') = do
     checkerState <- get
     case (t, t') of
         -- Well typed
-        (ConT n, ConT m) | isNum n && isNum m -> do
+        (TyCon n, TyCon m) | isNum n && isNum m -> do
              gamNew <- ctxPlus s gam1 gam2
-             return (ConT $ joinNum n m, gamNew)
+             return (TyCon $ joinNum n m, gamNew)
 
         -- Or ill-typed
         _ -> illTyped s $ "Binary operator expects two 'Int' expressions "
@@ -428,6 +428,13 @@ synthExpr dbg defs gam pol (Val s (Abs x (Just sig) e)) = do
   gam' <- extCtxt s gam x (Linear sig)
   (tau, gam'') <- synthExpr dbg defs gam' pol e
   return (FunTy sig tau, gam'')
+
+-- Pair
+synthExpr dbg defs gam pol (Pair s e1 e2) = do
+  (t1, gam1) <- synthExpr dbg defs gam pol e1
+  (t2, gam2) <- synthExpr dbg defs gam pol e2
+  gam' <- ctxPlus s gam1 gam2
+  return (PairTy t1 t2, gam')
 
 synthExpr _ _ _ _ e = illTyped (getSpan e) $ "I can't work out the type here, try adding more type signatures"
 

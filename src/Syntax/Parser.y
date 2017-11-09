@@ -101,6 +101,7 @@ PAtom : VAR                          { PVar (getPosToSpan $1) (symString $1) }
 	                             in PFloat (getPosToSpan $1) $ read x }
     | CONSTR                       { let TokenConstr _ x = $1
 	                             in PConstr (getPosToSpan $1) x }
+    | '(' Pat ',' Pat ')'          { PPair (getPosToSpan $1) $2 $4 }
 
 TypeScheme :: { TypeScheme }
 TypeScheme :
@@ -132,6 +133,7 @@ Type :
   | Type '|' Coeffect '|'        { Box $3 $1 }
   | Type '<' Effect '>'          { Diamond $3 $1 }
   | '(' Type ')'                 { $2 }
+  | '(' Type ',' Type ')'        { PairTy $2 $4 }
 
 TyJuxt :: { Type }
 TyJuxt :
@@ -140,7 +142,7 @@ TyJuxt :
 
 TyAtom :: { Type }
 TyAtom :
-    CONSTR                      { ConT $ constrString $1 }
+    CONSTR                      { TyCon $ constrString $1 }
   | VAR                         { TyVar (symString $1) }
   | INT                         { let TokenInt _ x = $1 in TyInt x }
 
@@ -215,6 +217,9 @@ Expr : let VAR ':' Type '=' Expr in Expr
 
      | Form
         { $1 }
+    
+     | '(' Expr ',' Expr ')'
+        { Pair (getPos $1, getPos $5) $2 $4 }
 
 Cases :: { [(Pattern, Expr)] }
 Cases : Case CasesNext { $1 : $2 }
