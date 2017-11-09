@@ -20,10 +20,19 @@ main = do
       -- Get the filename
       input <- readFile src
       -- Flag '-d' turns on debug mode
-      run input (if length args >= 2 then args !! 1 == "-d" else False)
+      run input (Debug $ if length args >= 2 then args !! 1 == "-d" else False)
 
-run :: String -> Bool -> IO ()
-run input debug = do
+newtype Debug = Debug Bool
+
+run :: String -> Debug -> IO ()
+{-^ Run the input through the type checker and evaluate.
+
+>>> run "main : Int\nmain = (\\x -> \\y -> x * y) 3 5\n" (Debug False)
+Granule ...
+Ok.
+15
+-}
+run input (Debug debug) = do
   -- Welcome message
   putStrLn version
 
