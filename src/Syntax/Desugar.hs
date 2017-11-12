@@ -22,45 +22,52 @@ import Control.Monad.State.Strict
 -- bidirectional inference.
 desugar :: Def -> Def
 desugar (Def s var expr pats tys@(Forall _ _ ty)) =
-  Def s var (evalState (desguarPats expr pats ty []) (0 :: Int)) [] tys
+  Def s var (evalState (desugarPats expr pats ty []) (0 :: Int)) [] tys
   where
     unfoldBoxes [] e = e
     unfoldBoxes ((v, v', t, sp) : binds) e =
       LetBox (getSpan e) v t (Val sp $ Var v') (unfoldBoxes binds e)
 
-    desguarPats e [] _ boxed =
+    desugarPats e [] _ boxed =
       return $ unfoldBoxes boxed e
 
-    desguarPats e (PWild _ : ps) (FunTy t1 t2) boxed = do
+    desugarPats e (PWild _ : ps) (FunTy t1 t2) boxed = do
       -- Create a fresh variable to use in the lambda
       -- since lambda doesn't support pattern matches
       n <- get
       let v' = show n
       put (n + 1)
-      e' <- desguarPats e ps t2 boxed
+      e' <- desugarPats e ps t2 boxed
       return $ Val (getSpan e) $ Abs v' (Just t1) e'
 
-    desguarPats e (PVar _ v : ps) (FunTy t1 t2) boxed = do
-      e' <- desguarPats e ps t2 boxed
+    desugarPats e (PVar _ v : ps) (FunTy t1 t2) boxed = do
+      e' <- desugarPats e ps t2 boxed
       return $ Val (getSpan e) $ Abs v (Just t1) e'
 
-    desguarPats e (PBox _ (PWild _) : ps) (FunTy (Box c t) t2) boxed = do
+    desugarPats e (PBox _ (PWild _) : ps) (FunTy (Box c t) t2) boxed = do
       n <- get
       let v' = show n
       put (n + 1)
-      e' <- desguarPats e ps t2 (boxed ++ [("", v', t, s)])
+      e' <- desugarPats e ps t2 (boxed ++ [("", v', t, s)])
       return $ Val (getSpan e) $ Abs v' (Just (Box c t)) e'
 
-    desguarPats e (PBox _ (PVar _ v) : ps) (FunTy (Box c t) t2) boxed = do
+    desugarPats e (PBox _ (PVar _ v) : ps) (FunTy (Box c t) t2) boxed = do
       n <- get
       let v' = v ++ show n
       put (n + 1)
-      e' <- desguarPats e ps t2 (boxed ++ [(v, v', t, s)])
+      e' <- desugarPats e ps t2 (boxed ++ [(v, v', t, s)])
       return $ Val (getSpan e) $ Abs v' (Just (Box c t)) e'
 
-    desguarPats e _ _ _ =
+    desugarPats e (PPair _ p1 p2 : ps) (FunTy (PairTy t1 t2) t3) boxed = do
+      n <- get
+      let v' = show n
+      put (n+1)
+      e' <- desugarPats e ps t3 boxed
+      return $ Val (getSpan e) $
+        Abs v' Nothing (Case nullSpan (Val nullSpan (Var v')) [(PPair nullSpan p1 p2, e')])
+
+    desugarPats e _ _ _ =
       error $ "Type error at line " ++ show sl ++ ", column " ++ show sc
-           ++ ": Definition of " ++ var ++ " expects at least "
-           ++ show (length pats) ++ " arguments, but signature "
-           ++ " specifies: " ++ show (arity ty)
+           ++ ": Definition of " ++ var ++ " expects at least " ++ show (length pats)
+           ++ " arguments, but signature specifies: " ++ show (arity ty)
       where ((sl, sc), _) = getSpan e

@@ -7,6 +7,8 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 
+import Debug.Trace
+
 -- Evaluate operators
 evalOp :: Num a => Op -> (a -> a -> a)
 evalOp Add = (+)
@@ -25,8 +27,7 @@ evalIn _ (Val s (Var "read")) = do
     val <- readLn
     return $ Pure (Val s (NumInt val))
 
-evalIn _ (Val _ (Abs x t e)) =
-    return $ Abs x t e
+evalIn _ (Val _ (Abs x t e)) = return $ Abs x t e
 
 evalIn env (App _ e1 e2) = do
     v1 <- evalIn env e1
@@ -78,6 +79,11 @@ evalIn env (Val _ (Var x)) =
       Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: "
                ++ show env
 
+evalIn env (Val s (Pair l r)) = do
+  l' <- evalIn env l
+  r' <- evalIn env r
+  return $ Pair (Val s l') (Val s r')
+
 evalIn _ (Val _ v) = return v
 
 evalIn env (Case _ gExpr cases) = do
@@ -85,7 +91,8 @@ evalIn env (Case _ gExpr cases) = do
     p <- pmatch cases val
     case p of
       Just (ei, bindings) -> evalIn env (applyBindings bindings ei)
-      Nothing             -> error "Incomplete pattern match"
+      Nothing             ->
+        error $ "Incomplete pattern match:\n  cases: " ++ show cases ++ "\n  val: " ++ show val
   where
     applyBindings [] e = e
     applyBindings ((e', var):bs) e = applyBindings bs (subst e' var e)
@@ -98,8 +105,7 @@ evalIn env (Case _ gExpr cases) = do
       v <- evalIn env e'
       p <- pmatch [(p, e)] v
       case p of
-        Just (_, env) -> do
-          return $ Just (e, env)
+        Just (_, env) -> return $ Just (e, env)
         Nothing -> pmatch ps (Promote e')
 
     pmatch ((PInt _ n, e):_)      (NumInt m)   | n == m   = return $ Just (e, [])
@@ -113,6 +119,15 @@ evalIn env (Case _ gExpr cases) = do
             Just (_, bindings') -> return $ Just (e, bindings ++ bindings')
             _                   -> pmatch ps val
         _                  -> pmatch ps val
+    pmatch ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
+      result1 <- pmatch [(p1, e)] v1
+      result2 <- pmatch [(p2, e)] v2
+      case result1 of
+        Nothing -> pmatch ps vals
+        Just (_, bindings1) -> case result2 of
+          Nothing -> pmatch ps vals
+          Just (_, bindings2) -> return (Just (e, bindings1 ++ bindings2))
+
     pmatch (_:ps) val = pmatch ps val
 
 evalDefs :: Env Value -> [Def] -> IO (Env Value)

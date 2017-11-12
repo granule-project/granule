@@ -217,9 +217,6 @@ Expr : let VAR ':' Type '=' Expr in Expr
 
      | Form
         { $1 }
-    
-     | '(' Expr ',' Expr ')'
-        { Pair (getPos $1, getPos $5) $2 $4 }
 
 Cases :: { [(Pattern, Expr)] }
 Cases : Case CasesNext { $1 : $2 }
@@ -255,6 +252,8 @@ Atom : '(' Expr ')'                { $2 }
                { Val (getPos $1, getPos $3) $ Promote $2 }
      | CONSTR  { Val (getPosToSpan $1) $ Constr (constrString $1) [] }
 
+     | '(' Expr ',' Expr ')'
+        { Val (getPos $1, getPos $5) (Pair $2 $4) }
 
 {
 
