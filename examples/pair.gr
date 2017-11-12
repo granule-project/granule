@@ -7,16 +7,5 @@ fst (x, |_|) = x
 snd : (Int |0|, Int) -> Int
 snd (|_|, y) = y
 
-pair : (Int, Int |0|)
-pair = (1, |2|)
-
-main : Int
-main = fst (1, |2|)
-
-
-
--- main : (Int, (Int, Int))
--- main = trip |6|
--- >>>
--- Ok.
--- (6, (6, 6))
+main : ((Int, Int),(Int, (Int, Int)))
+main = ((fst (1, |2|), snd (|1|, 2)), trip |3|)
