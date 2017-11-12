@@ -8,10 +8,8 @@ import Syntax.Expr
 import Syntax.Pretty
 import Context
 import Data.List
-import Data.Maybe (maybeToList)
 
 import Control.Monad.Trans.Maybe
-import Control.Monad.State.Strict
 
 import Checker.Coeffects
 import Checker.Constraints
@@ -33,11 +31,11 @@ ctxtFromTypedPattern _ _ (TyCon "Bool")  (PConstr _ "True")  = return $ Just []
 ctxtFromTypedPattern _ _ (TyCon "Bool")  (PConstr _ "False") = return $ Just []
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern dbg s (Box c t) (PBox _ p) = do
-    ctx <- ctxtFromTypedPattern dbg s t p
+ctxtFromTypedPattern dbg s (Box coeff ty) (PBox _ p) = do
+    ctx <- ctxtFromTypedPattern dbg s ty p
     case ctx of
       -- Dishared all variables bound by the inner pattern
-      Just ctx' -> return . Just $ map (discharge c) ctx'
+      Just ctx' -> return . Just $ map (discharge coeff) ctx'
       Nothing   -> return Nothing
   where
     discharge c (v, Linear t) = (v, Discharged t c)
@@ -48,7 +46,7 @@ ctxtFromTypedPattern _ s (TyApp (TyApp (TyCon "List") n) _) (PConstr _ "Nil") = 
     let kind       = CConstr "Nat="
     case n of
       TyVar v -> addConstraint $ Eq s (CVar v) (CNat Discrete 0) kind
-      TyInt n -> addConstraint $ Eq s (CNat Discrete n) (CNat Discrete 0) kind
+      TyInt m -> addConstraint $ Eq s (CNat Discrete m) (CNat Discrete 0) kind
     return $ Just []
 
 -- Match a Cons constructor
@@ -67,7 +65,7 @@ ctxtFromTypedPattern dbg s
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
     case n of
       TyVar v -> addConstraint $ Eq s (CVar v) sizeVarInc kind
-      TyInt n -> addConstraint $ Eq s (CNat Discrete n) sizeVarInc kind
+      TyInt m -> addConstraint $ Eq s (CNat Discrete m) sizeVarInc kind
 
     -- Join the two pattern contexts together
     return $ bs1 >>= (\bs1' -> bs2 >>= (\bs2' -> Just (bs1' ++ bs2')))
@@ -77,7 +75,7 @@ ctxtFromTypedPattern dbg s (PairTy lty rty) (PPair _ lp rp) = do
   ctxtR <- ctxtFromTypedPattern dbg s rty rp
   return $ ctxtL >>= (\ctxtL' -> ctxtR >>= (\ctxtR' -> Just (ctxtL' ++ ctxtR')))
 
-ctxtFromTypedPattern _ _ t p = return Nothing
+ctxtFromTypedPattern _ _ _ _ = return Nothing -- TODO: Remove cath-all
 
 -- | Given a list of patterns and a (possible nested) function type
 --   match the patterns against each argument, returning a binding context
@@ -86,7 +84,7 @@ ctxtFromTypedPattern _ _ t p = return Nothing
 --     the remaining type is C.
 ctxtFromTypedPatterns ::
   Bool -> Span -> Type -> [Pattern] -> MaybeT Checker (Env Assumption, Type)
-ctxtFromTypedPatterns dbg s ty [] =
+ctxtFromTypedPatterns _ _ ty [] =
   return ([], ty)
 ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
   ctx <- ctxtFromTypedPattern dbg s t1 pat
@@ -133,11 +131,11 @@ equalTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
   two <- equalTypes dbg s t2 t2'
   return (one && two)
 
-equalTypes dbg s (TyInt n) (TyVar m) = do
+equalTypes _ s (TyInt n) (TyVar m) = do
   addConstraint (Eq s (CNat Discrete n) (CVar m) (CConstr "Nat="))
   return True
 
-equalTypes dbg s (TyVar n) (TyInt m) = do
+equalTypes _ s (TyVar n) (TyInt m) = do
   addConstraint (Eq s (CVar n) (CNat Discrete m) (CConstr "Nat="))
   return True
 
@@ -181,10 +179,9 @@ joinTypes dbg s (Box c t) (Box c' t') = do
   return $ Box (CVar topVar) tu
 
 
-joinTypes dbg s (TyInt n) (TyInt m) | n == m = do
-  return $ TyInt n
+joinTypes _ _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
-joinTypes dbg s (TyInt n) (TyVar m) = do
+joinTypes _ s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
   let kind = CConstr "Nat="
   var <- freshCoeffectVar m kind
@@ -195,7 +192,7 @@ joinTypes dbg s (TyInt n) (TyVar m) = do
 joinTypes dbg s (TyVar n) (TyInt m) = do
   joinTypes dbg s (TyInt m) (TyVar n)
 
-joinTypes dbg s (TyVar n) (TyVar m) = do
+joinTypes _ s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
   let kind = CConstr "Nat="
   nvar <- freshCoeffectVar n kind

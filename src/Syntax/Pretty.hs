@@ -97,7 +97,7 @@ instance Pretty Value where
         -- Syntactically atomic values
         valueAtom (NumInt _)    = True
         valueAtom (NumFloat _)  = True
-        valueAtom (Constr s []) = True
+        valueAtom (Constr _ []) = True
         valueAtom _             = False
 
 instance Pretty Expr where

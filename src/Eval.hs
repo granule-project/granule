@@ -7,7 +7,6 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 
-import Debug.Trace
 
 -- Evaluate operators
 evalOp :: Num a => Op -> (a -> a -> a)
@@ -103,9 +102,9 @@ evalIn env (Case _ gExpr cases) = do
     pmatch ((PVar _ var, e):_) val                       = return $ Just (e, [(Val nullSpan val, var)])
     pmatch ((PBox _ p, e):ps) (Promote e')      = do
       v <- evalIn env e'
-      p <- pmatch [(p, e)] v
-      case p of
-        Just (_, env) -> return $ Just (e, env)
+      match <- pmatch [(p, e)] v
+      case match of
+        Just (_, bindings) -> return $ Just (e, bindings)
         Nothing -> pmatch ps (Promote e')
 
     pmatch ((PInt _ n, e):_)      (NumInt m)   | n == m   = return $ Just (e, [])
@@ -120,11 +119,11 @@ evalIn env (Case _ gExpr cases) = do
             _                   -> pmatch ps val
         _                  -> pmatch ps val
     pmatch ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
-      result1 <- pmatch [(p1, e)] v1
-      result2 <- pmatch [(p2, e)] v2
-      case result1 of
+      match1 <- pmatch [(p1, e)] v1
+      match2 <- pmatch [(p2, e)] v2
+      case match1 of
         Nothing -> pmatch ps vals
-        Just (_, bindings1) -> case result2 of
+        Just (_, bindings1) -> case match2 of
           Nothing -> pmatch ps vals
           Just (_, bindings2) -> return (Just (e, bindings1 ++ bindings2))
 

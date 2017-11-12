@@ -78,7 +78,6 @@ test-suite spec
   main-is: Spec.hs
   hs-source-dirs:
       tests/hspec
-  ghc-options: -Wall
   build-depends:
       base >=4.10 && <5
     , filemanip

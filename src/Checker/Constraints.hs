@@ -77,14 +77,14 @@ type SolverVars  = [(Id, SCoeffect)]
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
 compileToSBV :: Pred -> Env (CKind, Quantifier) -> Env CKind
              -> (Symbolic SBool, [Constraint])
-compileToSBV pred cenv cVarEnv = (do
+compileToSBV predicate cenv cVarEnv = (do
     (pres, constraints, solverVars) <- foldrM createFreshVar (true, true, []) cenv
     let foldConj cs = foldr (&&&) true cs
     let foldImp c1 c2 = c1 ==> c2
-    let predC = predFold foldConj foldImp (compile solverVars) pred'
-    return (pres ==> (constraints &&& predC)), trivialUnsatisfiableConstraints pred')
+    let predC = predFold foldConj foldImp (compile solverVars) predicate'
+    return (pres ==> (constraints &&& predC)), trivialUnsatisfiableConstraints predicate')
   where
-    pred' = rewriteConstraints cVarEnv pred
+    predicate' = rewriteConstraints cVarEnv predicate
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
@@ -202,7 +202,7 @@ compileCoeffect _ (CConstr "One") _
   = SNat Ordered 1
 
 -- Any polymorphic * get's compiled to the * : One coeffec
-compileCoeffect (CStar (CPoly _)) _ env = SNat Ordered 1
+compileCoeffect (CStar (CPoly _)) _ _ = SNat Ordered 1
 
 compileCoeffect (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
 
@@ -288,7 +288,7 @@ compileCoeffect (COne (CConstr "Nat=")) (CConstr "Nat=")   _ = SNat Discrete 1
 compileCoeffect (COne (CConstr "Q")) (CConstr "Q")         _ = SFloat (fromRational 1)
 compileCoeffect (COne (CConstr "Set")) (CConstr "Set")     _ = SSet (S.fromList [])
 
-compileCoeffect c (CPoly v) _ | " star" `isPrefixOf` v = SNat Ordered 1
+compileCoeffect _ (CPoly v) _ | " star" `isPrefixOf` v = SNat Ordered 1
 
 compileCoeffect c (CPoly _) _ =
    error $ "Trying to compile a polymorphically kinded " ++ pretty c

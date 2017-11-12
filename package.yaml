@@ -49,7 +49,7 @@ tests:
   spec:
     main: Spec.hs
     source-dirs: tests/hspec
-    ghc-options: -Wall
+    # ghc-options: -Wall
     dependencies:
     - filemanip
     - granule

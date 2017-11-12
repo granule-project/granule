@@ -71,33 +71,32 @@ freshCoeffectVar cvar kind = do
 
 -- | Helper for registering a new coeffect variable in the checker
 registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
-registerCoeffectVar v k q = do
-    modify (\st -> st { ckenv = (v, (k, q)) : ckenv st })
+registerCoeffectVar v k q = modify (\st -> st { ckenv = (v, (k, q)) : ckenv st })
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
 newConjunct = do
-  state <- get
-  put (state { predicateStack = Conj [] : predicateStack state })
+  checkerState <- get
+  put (checkerState { predicateStack = Conj [] : predicateStack checkerState })
 
 -- | Takes the top two conjunction frames and turns them into an impliciation
 concludeImplication :: MaybeT Checker ()
 concludeImplication = do
-  state <- get
-  case (predicateStack state) of
+  checkerState <- get
+  case predicateStack checkerState of
     (p' : p : stack) ->
-      put (state { predicateStack = (Impl p p') : stack })
-    cs -> error $ "Predicate: not enough conjunctions on the stack"
+      put (checkerState { predicateStack = Impl p p' : stack })
+    _ -> error "Predicate: not enough conjunctions on the stack"
 
 -- | A helper for adding a constraint to the environment
 addConstraint :: Constraint -> MaybeT Checker ()
 addConstraint p = do
-  state <- get
-  case (predicateStack state) of
+  checkerState <- get
+  case predicateStack checkerState of
     (Conj ps : stack) ->
-      put (state { predicateStack = Conj ((Con p) : ps) : stack })
+      put (checkerState { predicateStack = Conj (Con p : ps) : stack })
     stack ->
-      put (state { predicateStack = Conj [Con p] : stack })
+      put (checkerState { predicateStack = Conj [Con p] : stack })
 
 -- | Generate a fresh alphanumeric variable name
 freshVar :: String -> MaybeT Checker String
@@ -147,7 +146,7 @@ visibleError kind next ((sl, sc), (_, _)) s =
 
 -- | Helper for displaying debugging messages for '-d' mode
 dbgMsg :: Bool -> String -> MaybeT Checker ()
-dbgMsg dbg = (when dbg) . liftIO . putStrLn
+dbgMsg dbg = when dbg . liftIO . putStrLn
 
 -- Various interfaces for the checker
 

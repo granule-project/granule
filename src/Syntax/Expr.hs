@@ -12,7 +12,7 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    freshenBlankPolyVars
                    ) where
 
-import Data.List
+import Data.List ((\\))
 import Control.Monad.State
 import GHC.Generics (Generic)
 
@@ -124,9 +124,9 @@ freshenBlankPolyVars :: [Def] -> [Def]
 freshenBlankPolyVars defs =
     evalState (mapM freshenDef defs) (0 :: Int, [])
   where
-    freshenDef (Def span id expr pats tys) = do
+    freshenDef (Def span identifier expr pats tys) = do
       tys' <- freshenTys tys
-      return $ Def span id expr pats tys'
+      return $ Def span identifier expr pats tys'
 
     freshenTys (Forall s binds ty) = do
       ty' <- freshenTy ty
@@ -173,9 +173,9 @@ instance Term Value where
     freeVars (Pure e)    = freeVars e
     freeVars (Promote e) = freeVars e
     freeVars (Pair l r)  = freeVars l ++ freeVars r
-    freeVars v@(NumInt _) = []
-    freeVars v@(NumFloat _) = []
-    freeVars v@(Constr _ _) = []
+    freeVars (NumInt _) = []
+    freeVars (NumFloat _) = []
+    freeVars (Constr _ _) = []
 
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
