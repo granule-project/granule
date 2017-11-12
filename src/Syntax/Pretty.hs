@@ -39,8 +39,8 @@ instance Pretty Coeffect where
 
 instance Pretty TypeScheme where
     pretty (Forall _ cvs t) =
-      "forall " ++ intercalate "," (map prettyKindSignatures cvs)
-                ++ " . " ++ pretty t
+      "forall " ++ intercalate ", " (map prettyKindSignatures cvs)
+                ++ ". " ++ pretty t
       where
        prettyKindSignatures (var, CPoly "") = var
        prettyKindSignatures (var, ckind)    = var ++ " : " ++ pretty ckind
@@ -53,11 +53,11 @@ instance Pretty Type where
     pretty (TyCon s)       = s
     pretty (FunTy t1 t2)  = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
     pretty (Box c t)      = pretty t ++ " |" ++ pretty c ++ "|"
-    pretty (Diamond e t)  = pretty t ++ "<[" ++ intercalate "," e ++ "]>"
+    pretty (Diamond e t)  = pretty t ++ " <[" ++ intercalate "," e ++ "]>"
     pretty (TyVar v)      = v
     pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
     pretty (TyInt n)      = show n
-    pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ ", " ++ pretty t2 ++ ")"
+    pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
 
 instance Pretty [Def] where
     pretty = intercalate "\n" . map pretty
@@ -74,7 +74,7 @@ instance Pretty Pattern where
     pretty (PFloat _ n)   = show n
     pretty (PApp _ p1 p2) = pretty p1 ++ " " ++ pretty p2
     pretty (PConstr _ s)  = s
-    pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ ", " ++ pretty p2 ++ ")"
+    pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ "," ++ pretty p2 ++ ")"
 
 instance Pretty [Pattern] where
     pretty ps = unwords (map pretty ps)
@@ -86,12 +86,12 @@ instance Pretty t => Pretty (Maybe t) where
 instance Pretty Value where
     pretty (Abs x t e)  = parens $ "\\" ++ x ++ " : " ++ pretty t
                                ++ " -> " ++ pretty e
-    pretty (Promote e)  = "[ " ++ pretty e ++ " ]"
     pretty (Promote e)  = "|" ++ pretty e ++ "|"
     pretty (Pure e)     = "<" ++ pretty e ++ ">"
     pretty (Var x)      = x
     pretty (NumInt n)   = show n
     pretty (NumFloat n) = show n
+    pretty (Pair e1 e2) = "(" ++ pretty e1 ++ "," ++ pretty e2 ++ ")"
     pretty (Constr s vs) = intercalate " " (s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values
@@ -110,7 +110,6 @@ instance Pretty Expr where
   pretty (Val _ v) = pretty v
   pretty (Case _ e ps) = "case " ++ pretty e ++ " of " ++
                          intercalate ";" (map (\(p, e') -> pretty p ++ " -> " ++ pretty e') ps)
-  pretty (Pair _ e1 e2) = "(" ++ pretty e1 ++ ", " ++ pretty e2 ++ ")"
 
 instance Pretty Op where
   pretty Add = "+"

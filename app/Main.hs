@@ -42,7 +42,7 @@ run input (Debug debug) = do
   -- Debugging mode produces the AST and the pretty printer
   if debug
     then do
-      putStrLn $ "AST:          " ++ show ast
+      putStrLn $ "AST:\n" ++ show ast
       putStrLn $ "\nSource:\n"    ++ pretty ast
     else return ()
 

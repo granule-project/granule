@@ -8,6 +8,7 @@ import Syntax.Expr
 import Syntax.Pretty
 import Context
 import Data.List
+import Data.Maybe (maybeToList)
 
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
@@ -70,6 +71,11 @@ ctxtFromTypedPattern dbg s
 
     -- Join the two pattern contexts together
     return $ bs1 >>= (\bs1' -> bs2 >>= (\bs2' -> Just (bs1' ++ bs2')))
+
+ctxtFromTypedPattern dbg s (PairTy lty rty) (PPair _ lp rp) = do
+  ctxtL <- ctxtFromTypedPattern dbg s lty lp
+  ctxtR <- ctxtFromTypedPattern dbg s rty rp
+  return $ ctxtL >>= (\ctxtL' -> ctxtR >>= (\ctxtR' -> Just (ctxtL' ++ ctxtR')))
 
 ctxtFromTypedPattern _ _ t p = return Nothing
 

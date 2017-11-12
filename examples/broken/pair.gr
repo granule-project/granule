@@ -1,11 +1,22 @@
-pair : (Int, Int)
-pair = (3, 4)
+trip : Int |3| -> (Int, (Int, Int))
+trip |x| = (x, (x, x))
 
--- fst : (Int, Int |0|) -> Int
--- fst (a, |_|) = a
---
--- snd : (Int |0|, Int) -> Int
--- snd (|_|, b) = b
---
--- trip : Int |3| -> (Int, (Int, Int))
--- trip |x| = (x, (x, x))
+fst : (Int, Int |0|) -> Int
+fst (x, |_|) = x
+
+snd : (Int |0|, Int) -> Int
+snd (|_|, y) = y
+
+pair : (Int, Int |0|)
+pair = (1, |2|)
+
+main : Int
+main = fst (1, |2|)
+
+
+
+-- main : (Int, (Int, Int))
+-- main = trip |6|
+-- >>>
+-- Ok.
+-- (6, (6, 6))

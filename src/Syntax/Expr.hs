@@ -43,6 +43,7 @@ data Value = Abs Id (Maybe Type) Expr
            | Pure Expr
            | Var Id
            | Constr String [Value]
+           | Pair Expr Expr
           deriving (Eq, Show)
 
 -- Expressions (computations) in Granule
@@ -52,7 +53,6 @@ data Expr = App Span Expr Expr
           | LetDiamond Span Id Type Expr Expr
           | Val Span Value
           | Case Span Expr [(Pattern, Expr)]
-          | Pair Span Expr Expr
           deriving (Eq, Show, Generic)
 
 instance FirstParameter Expr Span
@@ -78,7 +78,7 @@ instance Binder Pattern where
   bvs (PVar _ v)     = [v]
   bvs (PBox _ p)     = bvs p
   bvs (PApp _ p1 p2) = bvs p1 ++ bvs p2
-  bvs _           = []
+  bvs _           = [] -- TODO: Get rid of catch-alls
 
   freshenBinder (PVar s var) = do
       var' <- freshVar var
@@ -93,7 +93,12 @@ instance Binder Pattern where
       p2' <- freshenBinder p2
       return $ PApp s p1' p2'
 
-  freshenBinder p = return p
+  freshenBinder (PPair s p1 p2) = do
+      p1' <- freshenBinder p1
+      p2' <- freshenBinder p2
+      return $ PPair s p1' p2'
+
+  freshenBinder p = return p -- TODO: Get rid of catch-alls
 
 type Freshener t = State (Int, [(Id, Id)]) t
 
@@ -163,17 +168,24 @@ freshenBlankPolyVars defs =
     freshenCoeff c = return c
 
 instance Term Value where
-    freeVars (Abs x _ e) = (freeVars e) \\ [x]
+    freeVars (Abs x _ e) = freeVars e \\ [x]
     freeVars (Var x)     = [x]
     freeVars (Pure e)    = freeVars e
     freeVars (Promote e) = freeVars e
-    freeVars _             = []
+    freeVars (Pair l r)  = freeVars l ++ freeVars r
+    freeVars v@(NumInt _) = []
+    freeVars v@(NumFloat _) = []
+    freeVars v@(Constr _ _) = []
 
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
     subst es v (Promote e)      = Val nullSpan $ Promote (subst es v e)
+    subst es v (Pair l r)       = Val nullSpan $ Pair (subst es v l) (subst es v r)
     subst es v (Var w) | v == w = es
-    subst _ _ val               = Val nullSpan val
+    subst _ _ v@(NumInt _)        = Val nullSpan v
+    subst _ _ v@(NumFloat _)      = Val nullSpan v
+    subst _ _ v@(Var _)           = Val nullSpan v
+    subst _ _ v@(Constr _ _)      = Val nullSpan v
 
     freshen (Abs var t e) = do
       var' <- freshVar var
@@ -196,13 +208,20 @@ instance Term Value where
          -- function which does not get its name freshened
          Nothing -> return (Var v)
 
-    freshen v = return v
+    freshen (Pair l r) = do
+      l' <- freshen l
+      r' <- freshen r
+      return $ Pair l' r'
+
+    freshen v@(NumInt _)   = return v
+    freshen v@(NumFloat _) = return v
+    freshen v@(Constr _ _) = return v
 
 instance Term Expr where
     freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2
     freeVars (Binop _ _ e1 e2)        = freeVars e1 ++ freeVars e2
-    freeVars (LetBox _ x _ e1 e2)     = freeVars e1 ++ ((freeVars e2) \\ [x])
-    freeVars (LetDiamond _ x _ e1 e2) = freeVars e1 ++ ((freeVars e2) \\ [x])
+    freeVars (LetBox _ x _ e1 e2)     = freeVars e1 ++ (freeVars e2 \\ [x])
+    freeVars (LetDiamond _ x _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ [x])
     freeVars (Val _ e)                = freeVars e
     freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
                                       \\ concatMap (bvs . fst) cases)
@@ -251,10 +270,6 @@ instance Term Expr where
      v' <- freshen v
      return (Val s v')
 
-    freshen (Pair s e1 e2) = do
-      e1' <- freshen e1
-      e2' <- freshen e2
-      return $ Pair s e1' e2'
 
 
 --------- Definitions

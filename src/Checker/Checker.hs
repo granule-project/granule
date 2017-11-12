@@ -430,7 +430,7 @@ synthExpr dbg defs gam pol (Val s (Abs x (Just sig) e)) = do
   return (FunTy sig tau, gam'')
 
 -- Pair
-synthExpr dbg defs gam pol (Pair s e1 e2) = do
+synthExpr dbg defs gam pol (Val s (Pair e1 e2)) = do
   (t1, gam1) <- synthExpr dbg defs gam pol e1
   (t2, gam2) <- synthExpr dbg defs gam pol e2
   gam' <- ctxPlus s gam1 gam2
