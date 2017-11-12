@@ -8,18 +8,16 @@ import Control.Monad.State.Strict
 -- 'desugar' erases pattern matches in function definitions
 -- with coeffect binders.
 -- e.g., for a definition 'd' in code as:
---       f :: |Int| 1 -> ...
+--       f : Int |1| -> ...
 --       f |x| = e
 --
---  then desguar d produces
---       f :: |Int| -> ....
---       f xFresh = let |x : Int| Nat = xFresh in e
+--  then desugar d produces
+--       f : Int |1| -> ...
+--       f xFresh = let |x| : Int = xFresh in e
 --
 -- Note that the explicit typing from the type signature is pushed
 -- inside of the definition to give an explicit typing on the coeffect-let
--- binding. Note that this also means inferring the kind of coeffect
--- information. This will likely change in the future with better
--- bidirectional inference.
+-- binding.
 desugar :: Def -> Def
 desugar (Def s var expr pats tys@(Forall _ _ ty)) =
   Def s var (evalState (desugarPats expr pats ty []) (0 :: Int)) [] tys
