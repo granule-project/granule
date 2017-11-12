@@ -1,8 +1,8 @@
--- Should not be typeable:
+-- This is typeable:
 foo : Int |2| -> Int |4|
 foo |x| = |(x + x)|
 
--- Valid type signatures would be:
+-- Is this really what we want?
 -- foo : forall c : Nat . Int |2*c| -> Int |c|
 -- foo : Int |2| -> Int |1|
 -- foo : Int |8| -> Int |4|
