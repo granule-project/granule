@@ -195,8 +195,7 @@ joinTypes _ s (TyInt n) (TyVar m) = do
   addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
   return $ TyInt n
 
-joinTypes dbg s (TyVar n) (TyInt m) = do
-  joinTypes dbg s (TyInt m) (TyVar n)
+joinTypes dbg s (TyVar n) (TyInt m) = joinTypes dbg s (TyInt m) (TyVar n)
 
 joinTypes _ s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables

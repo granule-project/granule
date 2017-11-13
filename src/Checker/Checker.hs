@@ -44,16 +44,16 @@ checkDef :: Bool           -- turn on debgging
         -> Env TypeScheme  -- environment of top-level definitions
         -> Def             -- definition
         -> Checker (Maybe (Env Assumption))
-checkDef dbg defEnv (Def s name expr pats (Forall _ foralls ty)) = do
+checkDef dbg defEnv (Def s identifier expr pats (Forall _ foralls ty)) = do
     env <- runMaybeT $ do
       -- Add to the type environment all the universally quantified variables
       modify (\st -> st { ckenv = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
       env <- case (ty, pats) of
-        (FunTy _ _, pats@(_:_)) -> do
+        (FunTy _ _, ps@(_:_)) -> do
 
           -- Type the pattern matching
-          (localGam, ty') <- ctxtFromTypedPatterns dbg s ty pats
+          (localGam, ty') <- ctxtFromTypedPatterns dbg s ty ps
           -- Check the body in the context given by the pattern matching
           localGam' <- checkExpr dbg defEnv localGam Positive ty' expr
           -- Check linear use
@@ -68,10 +68,10 @@ checkDef dbg defEnv (Def s name expr pats (Forall _ foralls ty)) = do
         _         -> illTyped s "Expecting a function type"
 
       -- Use an SMT solver to solve the generated constraints
-      state <- get
-      let pred = predicate state
-      let predStack = predicateStack state
-      solved <- solveConstraints (Conj $ pred : predStack) s name
+      checkerState <- get
+      let pred = predicate checkerState
+      let predStack = predicateStack checkerState
+      solved <- solveConstraints (Conj $ pred : predStack) s identifier
       if solved
         then return env
         else illTyped s "Constraints violated"
@@ -316,7 +316,7 @@ synthExpr dbg defs gam pol (LetDiamond s var ty e1 e2) = do
     t -> illTyped s $ "Expected '" ++ pretty ty ++ "' in subjet of let<>, but inferred '" ++ pretty t ++ "'"
 
 -- Variables
-synthExpr _ defs gam pol (Val s (Var x)) = do
+synthExpr _ defs gam _ (Val s (Var x)) = do
    nameMap <- ask
    case lookup x gam of
      Nothing ->
@@ -436,7 +436,7 @@ synthExpr dbg defs gam pol (Val s (Pair e1 e2)) = do
   gam' <- ctxPlus s gam1 gam2
   return (PairTy t1 t2, gam')
 
-synthExpr _ _ _ _ e = illTyped (getSpan e) $ "I can't work out the type here, try adding more type signatures"
+synthExpr _ _ _ _ e = illTyped (getSpan e) "I can't work out the type here, try adding more type signatures"
 
 
 solveConstraints :: Pred -> Span -> String -> MaybeT Checker Bool
@@ -479,7 +479,7 @@ leqCtxt s env1 env2 = do
     zipWithM_ (leqAssumption s) env env'
 
 joinCtxts :: Span -> [(Id, Id)] -> Env Assumption -> Env Assumption -> MaybeT Checker (Env Assumption)
-joinCtxts s nameMap env1 env2 = do
+joinCtxts s _ env1 env2 = do
     -- All the type assumptions from env1 whose variables appear in env2
     -- and weaken all others
     env  <- env1 `keyIntersectWithWeaken` env2
@@ -525,9 +525,9 @@ remainingUndischarged env subEnv =
       linears = filter isLinear
       isLinear (_, Linear _) = True
       isLinear (_, _)        = False
-      linearCancel (v, Linear t) (v', Linear t') = v == v'
-      linearCancel (v, Linear t) (v', Discharged t' (CZero _)) = v == v'
-      linearCancel (v, Discharged t' (CZero _)) (v', Linear t) = v == v'
+      linearCancel (v, Linear _) (v', Linear _) = v == v'
+      linearCancel (v, Linear _) (v', Discharged _ (CZero _)) = v == v'
+      linearCancel (v, Discharged _ (CZero _)) (v', Linear _) = v == v'
       linearCancel (v, Discharged _ _) (v', Discharged _ _)    = v == v'
       linearCancel _ _ = False
 
