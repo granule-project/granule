@@ -403,7 +403,6 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
 synthExpr dbg defs gam pol (Binop s _ e e') = do
     (t, gam1)  <- synthExpr dbg defs gam pol e
     (t', gam2) <- synthExpr dbg defs gam pol e'
-    checkerState <- get
     case (t, t') of
         -- Well typed
         (TyCon n, TyCon m) | isNum n && isNum m -> do
