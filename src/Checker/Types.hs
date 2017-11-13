@@ -21,7 +21,13 @@ ctxtFromTypedPattern
    :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe (Env Assumption))
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern _ _ _              (PWild _)      = return $ Just []
+ctxtFromTypedPattern _ _ t              (PWild _)      = do
+    -- Fresh variable to represent this (linear) value
+    --   Wildcards are allowed, but only inside boxed patterns
+    --   The following binding environment will become discharged
+    wild <- freshVar "wild"
+    return $ Just [(wild, Linear t)]
+
 ctxtFromTypedPattern _ _ t              (PVar _ v)     = return $ Just [(v, Linear t)]
 
 -- Pattern matching on constarints
