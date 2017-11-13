@@ -190,10 +190,9 @@ checkExpr dbg defs gam pol tau (Case s guardExpr cases) = do
 
   -- Find the upper-bound contexts
   nameMap     <- ask
-  branchesGam <- foldM (joinCtxts s nameMap) empty branchCtxts
+  branchesGam <- fold1M (joinCtxts s nameMap) branchCtxts
   -- Contract the outgoing context of the guard and the branches (joined)
-  gamNew <- ctxPlus s branchesGam guardGam
-  return gamNew
+  ctxPlus s branchesGam guardGam
 
 -- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol tau e = do
@@ -299,7 +298,7 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
 
   -- Find the upper-bound type on the return contexts
   nameMap     <- ask
-  branchesGam <- foldM (joinCtxts s nameMap) empty branchCtxts
+  branchesGam <- fold1M (joinCtxts s nameMap) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxPlus s branchesGam guardGam
@@ -679,3 +678,8 @@ extCtxt s env var (Discharged t c) = do
           let var' = unrename nameMap var
           illTyped s $ "Type clash for variable " ++ var' ++ "`"
     Nothing -> return $ (var, Discharged t c) : env
+
+-- Helper, foldM on a list with at least one element
+fold1M :: Monad m => (a -> a -> m a) -> [a] -> m a
+fold1M _ []     = error "Must have at least one case"
+fold1M f (x:xs) = foldM f x xs
