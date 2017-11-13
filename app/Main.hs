@@ -9,7 +9,7 @@ import Checker.Checker
 import System.Environment
 
 version :: String
-version = "Granule v0.3.0.0"
+version = "Granule v0.3.5.0"
 
 main :: IO ()
 main = do
