@@ -13,18 +13,18 @@ import Control.Monad.Trans.Maybe
 
 import Checker.Coeffects
 import Checker.Constraints
-import Checker.Environment
+import Checker.Context
 
--- | Given a pattern and its type, construct Just of the binding environment
+-- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 ctxtFromTypedPattern
-   :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe (Env Assumption))
+   :: Bool -> Span -> Type -> Pattern -> MaybeT Checker (Maybe (Ctxt Assumption))
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern _ _ t              (PWild _)      = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
-    --   The following binding environment will become discharged
+    --   The following binding context will become discharged
     wild <- freshVar "wild"
     return $ Just [(wild, Linear t)]
 
@@ -89,7 +89,7 @@ ctxtFromTypedPattern _ _ _ _ = return Nothing -- TODO: Remove cath-all
 --   e.g. given type A -> B -> C and patterns [Constr "A", Constr "B"] then
 --     the remaining type is C.
 ctxtFromTypedPatterns ::
-  Bool -> Span -> Type -> [Pattern] -> MaybeT Checker (Env Assumption, Type)
+  Bool -> Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
 ctxtFromTypedPatterns _ _ ty [] =
   return ([], ty)
 ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
@@ -218,7 +218,7 @@ joinTypes _ s t1 t2 =
 
 
 
-instance Pretty (Type, Env Assumption) where
+instance Pretty (Type, Ctxt Assumption) where
     pretty (t, _) = pretty t
 
 instance Pretty (Id, Assumption) where
@@ -228,11 +228,11 @@ instance Pretty Assumption where
     pretty (Linear ty) = pretty ty
     pretty (Discharged ty c) = "|" ++ pretty ty ++ "|." ++ pretty c
 
-instance Pretty (Env TypeScheme) where
+instance Pretty (Ctxt TypeScheme) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
      where pp (var, t) = var ++ " : " ++ pretty t
 
-instance Pretty (Env Assumption) where
+instance Pretty (Ctxt Assumption) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
      where pp (var, Linear t) = var ++ " : " ++ pretty t
            pp (var, Discharged t c) = var ++ " : .[" ++ pretty t ++ "]. " ++ pretty c

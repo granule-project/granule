@@ -1,4 +1,4 @@
-module Checker.EnvironmentSpec where
+module Checker.ContextSpec where
 
 import Test.Hspec hiding (Spec)
 import qualified Test.Hspec as Test

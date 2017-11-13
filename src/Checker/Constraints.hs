@@ -12,7 +12,7 @@ import qualified Data.Set as S
 import Data.List (isPrefixOf, intercalate)
 import GHC.Generics (Generic)
 
-import Context             (Env)
+import Context             (Ctxt)
 import Syntax.Expr
 import Syntax.Pretty
 import Syntax.FirstParameter
@@ -75,16 +75,16 @@ type SolverVars  = [(Id, SCoeffect)]
 
 -- Compile constraint into an SBV symbolic bool, along with a list of
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
-compileToSBV :: Pred -> Env (CKind, Quantifier) -> Env CKind
+compileToSBV :: Pred -> Ctxt (CKind, Quantifier) -> Ctxt CKind
              -> (Symbolic SBool, [Constraint])
-compileToSBV predicate cenv cVarEnv = (do
-    (pres, constraints, solverVars) <- foldrM createFreshVar (true, true, []) cenv
+compileToSBV predicate cctxt cVarCtxt = (do
+    (pres, constraints, solverVars) <- foldrM createFreshVar (true, true, []) cctxt
     let foldConj cs = foldr (&&&) true cs
     let foldImp c1 c2 = c1 ==> c2
     let predC = predFold foldConj foldImp (compile solverVars) predicate'
     return (pres ==> (constraints &&& predC)), trivialUnsatisfiableConstraints predicate')
   where
-    predicate' = rewriteConstraints cVarEnv predicate
+    predicate' = rewriteConstraints cVarCtxt predicate
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
@@ -92,20 +92,20 @@ compileToSBV predicate cenv cVarEnv = (do
       -> (SBool, SBool, SolverVars)
       -> Symbolic (SBool, SBool, SolverVars)
     createFreshVar (var, (kind, quantifierType))
-                   (universalConstraints, existentialConstraints, env) = do
+                   (universalConstraints, existentialConstraints, ctxt) = do
       (pre, symbolic) <- freshCVar var kind quantifierType
       let (universalConstraints', existentialConstraints') =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               ExistsQ -> (universalConstraints, pre &&& existentialConstraints)
-      return (universalConstraints', existentialConstraints', (var, symbolic) : env)
+      return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
--- given an environment mapping coeffect type variables to coeffect typ,
+-- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
-rewriteConstraints :: Env CKind -> Pred -> Pred
-rewriteConstraints env =
-    predFold Conj Impl (\c -> Con $ foldr (\(var, kind) -> updateConstraint var kind) c env)
+rewriteConstraints :: Ctxt CKind -> Pred -> Pred
+rewriteConstraints ctxt =
+    predFold Conj Impl (\c -> Con $ foldr (\(var, kind) -> updateConstraint var kind) c ctxt)
   where
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`
@@ -196,7 +196,7 @@ compile vars (Leq _ c1 c2 k) =
 -- Compile a coeffect term into its symbolic representation
 compileCoeffect :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
 
-compileCoeffect (CSig c k) _ env = compileCoeffect c k env
+compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
 compileCoeffect _ (CConstr "One") _
   = SNat Ordered 1

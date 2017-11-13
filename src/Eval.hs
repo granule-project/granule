@@ -15,10 +15,10 @@ evalOp Sub = (-)
 evalOp Mul = (*)
 
 -- Call-by-value big step semantics
-evalIn :: Env Value -> Expr -> IO Value
+evalIn :: Ctxt Value -> Expr -> IO Value
 
-evalIn env (App _ (Val _ (Var "write")) e) = do
-    v <- evalIn env e
+evalIn ctxt (App _ (Val _ (Var "write")) e) = do
+    v <- evalIn ctxt e
     print v
     return $ Pure (Val nullSpan v)
 
@@ -28,22 +28,22 @@ evalIn _ (Val s (Var "read")) = do
 
 evalIn _ (Val _ (Abs x t e)) = return $ Abs x t e
 
-evalIn env (App _ e1 e2) = do
-    v1 <- evalIn env e1
+evalIn ctxt (App _ e1 e2) = do
+    v1 <- evalIn ctxt e1
     case v1 of
       Abs x _ e3 -> do
-        v2 <- evalIn env e2
-        evalIn env (subst (Val nullSpan v2) x e3)
+        v2 <- evalIn ctxt e2
+        evalIn ctxt (subst (Val nullSpan v2) x e3)
 
       Constr c vs -> do
-        v2 <- evalIn env e2
+        v2 <- evalIn ctxt e2
         return $ Constr c (vs ++ [v2])
 
       -- _ -> error "Cannot apply value"
 
-evalIn env (Binop _ op e1 e2) = do
-     v1 <- evalIn env e1
-     v2 <- evalIn env e2
+evalIn ctxt (Binop _ op e1 e2) = do
+     v1 <- evalIn ctxt e1
+     v2 <- evalIn ctxt e2
      case (v1, v2) of
        (NumInt n1, NumInt n2)     -> return $ NumInt (evalOp op n1 n2)
        (NumInt n1, NumFloat n2)   -> return $ NumFloat (evalOp op (cast n1) n2)
@@ -55,41 +55,41 @@ evalIn env (Binop _ op e1 e2) = do
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
-evalIn env (LetBox _ var _ e1 e2) = do
-    v1 <- evalIn env e1
+evalIn ctxt (LetBox _ var _ e1 e2) = do
+    v1 <- evalIn ctxt e1
     case v1 of
        Promote e1' ->
-           evalIn env (subst e1' var e2)
+           evalIn ctxt (subst e1' var e2)
        other -> fail $ "Runtime exception: Expecting a box value but got: "
              ++ pretty other
 
-evalIn env (LetDiamond _ var _ e1 e2) = do
-     v1 <- evalIn env e1
+evalIn ctxt (LetDiamond _ var _ e1 e2) = do
+     v1 <- evalIn ctxt e1
      case v1 of
         Pure e -> do
-          val <- evalIn env e
-          evalIn env (subst (Val nullSpan val) var e2)
+          val <- evalIn ctxt e
+          evalIn ctxt (subst (Val nullSpan val) var e2)
         other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       ++ pretty other
 
-evalIn env (Val _ (Var x)) =
-    case lookup x env of
+evalIn ctxt (Val _ (Var x)) =
+    case lookup x ctxt of
       Just val -> return val
       Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: "
-               ++ show env
+               ++ show ctxt
 
-evalIn env (Val s (Pair l r)) = do
-  l' <- evalIn env l
-  r' <- evalIn env r
+evalIn ctxt (Val s (Pair l r)) = do
+  l' <- evalIn ctxt l
+  r' <- evalIn ctxt r
   return $ Pair (Val s l') (Val s r')
 
 evalIn _ (Val _ v) = return v
 
-evalIn env (Case _ gExpr cases) = do
-    val <- evalIn env gExpr
+evalIn ctxt (Case _ gExpr cases) = do
+    val <- evalIn ctxt gExpr
     p <- pmatch cases val
     case p of
-      Just (ei, bindings) -> evalIn env (applyBindings bindings ei)
+      Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
       Nothing             ->
         error $ "Incomplete pattern match:\n  cases: " ++ show cases ++ "\n  val: " ++ show val
   where
@@ -101,7 +101,7 @@ evalIn env (Case _ gExpr cases) = do
     pmatch ((PConstr _ s, e):_) (Constr s' []) | s == s' = return $ Just (e, [])
     pmatch ((PVar _ var, e):_) val                       = return $ Just (e, [(Val nullSpan val, var)])
     pmatch ((PBox _ p, e):ps) (Promote e')      = do
-      v <- evalIn env e'
+      v <- evalIn ctxt e'
       match <- pmatch [(p, e)] v
       case match of
         Just (_, bindings) -> return $ Just (e, bindings)
@@ -129,13 +129,13 @@ evalIn env (Case _ gExpr cases) = do
 
     pmatch (_:ps) val = pmatch ps val
 
-evalDefs :: Env Value -> [Def] -> IO (Env Value)
-evalDefs env [] = return env
-evalDefs env (Def _ var e [] _ : defs) = do
-    val <- evalIn env e
-    evalDefs (extend env var val) defs
-evalDefs env (d : defs) = do
-    evalDefs env (desugar d : defs)
+evalDefs :: Ctxt Value -> [Def] -> IO (Ctxt Value)
+evalDefs ctxt [] = return ctxt
+evalDefs ctxt (Def _ var e [] _ : defs) = do
+    val <- evalIn ctxt e
+    evalDefs (extend ctxt var val) defs
+evalDefs ctxt (d : defs) = do
+    evalDefs ctxt (desugar d : defs)
 
 eval :: [Def] -> IO (Maybe Value)
 eval defs = do

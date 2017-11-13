@@ -8,7 +8,7 @@ import Syntax.Pretty
 import Checker.Types
 import Checker.Coeffects
 import Checker.Constraints
-import Checker.Environment
+import Checker.Context
 import Context
 import Prelude hiding (pred)
 
@@ -29,8 +29,8 @@ check defs dbg nameMap = do
     -- the purposes of (mutually)recursive calls).
 
     -- Build a computation which checks all the defs (in order)...
-    let defEnv = map (\(Def _ var _ _ tys) -> (var, tys)) defs
-    let checkedDefs = mapM (checkDef dbg defEnv) defs
+    let defCtxt = map (\(Def _ var _ _ tys) -> (var, tys)) defs
+    let checkedDefs = mapM (checkDef dbg defCtxt) defs
     -- ... and evaluate the computation with initial state
     results <- evalChecker initState nameMap checkedDefs
 
@@ -40,21 +40,21 @@ check defs dbg nameMap = do
       else return . Left  $ ""
 
 checkDef :: Bool           -- turn on debgging
-        -> Env TypeScheme  -- environment of top-level definitions
+        -> Ctxt TypeScheme  -- context of top-level definitions
         -> Def             -- definition
-        -> Checker (Maybe (Env Assumption))
-checkDef dbg defEnv (Def s identifier expr pats (Forall _ foralls ty)) = do
-    env <- runMaybeT $ do
-      -- Add to the type environment all the universally quantified variables
-      modify (\st -> st { ckenv = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+        -> Checker (Maybe (Ctxt Assumption))
+checkDef dbg defCtxt (Def s identifier expr pats (Forall _ foralls ty)) = do
+    ctxt <- runMaybeT $ do
+      -- Add to the type context all the universally quantified variables
+      modify (\st -> st { ckctxt = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
-      env <- case (ty, pats) of
+      ctxt <- case (ty, pats) of
         (FunTy _ _, ps@(_:_)) -> do
 
           -- Type the pattern matching
           (localGam, ty') <- ctxtFromTypedPatterns dbg s ty ps
           -- Check the body in the context given by the pattern matching
-          localGam' <- checkExpr dbg defEnv localGam Positive ty' expr
+          localGam' <- checkExpr dbg defCtxt localGam Positive ty' expr
 
           -- Check linear use
           case remainingUndischarged localGam localGam' of
@@ -64,7 +64,7 @@ checkDef dbg defEnv (Def s identifier expr pats (Forall _ foralls ty)) = do
                    illLinearity s
                     . intercalate "\n"
                     . map (unusedVariable . unrename nameMap . fst) $ xs
-        (tau, []) -> checkExpr dbg defEnv [] Positive tau expr
+        (tau, []) -> checkExpr dbg defCtxt [] Positive tau expr
         _         -> illTyped s "Expecting a function type"
 
       -- Use an SMT solver to solve the generated constraints
@@ -73,12 +73,12 @@ checkDef dbg defEnv (Def s identifier expr pats (Forall _ foralls ty)) = do
       let predStack = predicateStack checkerState
       solved <- solveConstraints (Conj $ pred : predStack) s identifier
       if solved
-        then return env
+        then return ctxt
         else illTyped s "Constraints violated"
 
     -- Erase the solver predicate between definitions
-    modify (\st -> st { predicate = Conj [], predicateStack = [], ckenv = [], cVarEnv = [] })
-    return env
+    modify (\st -> st { predicate = Conj [], predicateStack = [], ckctxt = [], cVarCtxt = [] })
+    return ctxt
 
 data Polarity = Positive | Negative deriving Show
 
@@ -90,18 +90,18 @@ flipPol Negative = Positive
 -- Type check an expression
 
 --  `checkExpr dbg defs gam t expr` computes `Just delta`
---  if the expression type checks to `t` in environment `gam`:
+--  if the expression type checks to `t` in context `gam`:
 --  where `delta` gives the post-computation context for expr
 --  (which explains the exact coeffect demands)
 --  or `Nothing` if the typing does not match.
 
 checkExpr :: Bool             -- turn on debgging
-          -> Env TypeScheme   -- environment of top-level definitions
-          -> Env Assumption     -- local typing context
+          -> Ctxt TypeScheme   -- context of top-level definitions
+          -> Ctxt Assumption     -- local typing context
           -> Polarity         -- polarity of <= constraints
           -> Type             -- type
           -> Expr             -- expression
-          -> MaybeT Checker (Env Assumption)
+          -> MaybeT Checker (Ctxt Assumption)
 
 -- Checking of constants
 
@@ -166,7 +166,7 @@ checkExpr dbg defs gam pol tau (Case s guardExpr cases) = do
   -- then synthesise the types of the branches
   branchCtxts <-
     forM cases $ \(pati, ei) -> do
-      -- Build the binding environment for the branch pattern
+      -- Build the binding context for the branch pattern
       newConjunct
       localGamMaybe <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
@@ -218,11 +218,11 @@ checkExpr dbg defs gam pol tau e = do
 -- | Synthesise the 'Type' of expressions.
 -- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>
 synthExpr :: Bool           -- ^ Whether in debug mode
-          -> Env TypeScheme -- ^ Environment of top-level definitions
-          -> Env Assumption   -- ^ Local typing context
+          -> Ctxt TypeScheme -- ^ Context of top-level definitions
+          -> Ctxt Assumption   -- ^ Local typing context
           -> Polarity       -- ^ Polarity of subgrading
           -> Expr           -- ^ Expression
-          -> MaybeT Checker (Type, Env Assumption)
+          -> MaybeT Checker (Type, Ctxt Assumption)
 
 -- Constants (built-in effect primitives)
 synthExpr _ _ _ _ (Val _ (Var "read")) = return (Diamond ["R"] (TyCon "Int"), [])
@@ -268,7 +268,7 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
   -- then synthesise the types of the branches
   branchTysAndCtxts <-
     forM cases $ \(pati, ei) -> do
-      -- Build the binding environment for the branch pattern
+      -- Build the binding context for the branch pattern
       newConjunct
       localGamMaybe <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
@@ -330,7 +330,7 @@ synthExpr _ defs gam _ (Val s (Var x)) = do
          Nothing  -> illTyped s $ "I don't know the type for "
                               ++ show (unrename nameMap x)
                               ++ "{ looking for " ++ x
-                              ++ " in environment " ++ pretty gam
+                              ++ " in context " ++ pretty gam
                               ++ " or definitions " ++ pretty defs ++ "}"
 
      Just (Linear ty)       -> return (ty, [(x, Linear ty)])
@@ -370,7 +370,7 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
     -- Create a fresh kind variable for this coeffect
     ckvar <- freshVar ("binderk_" ++ var)
     let kind = CPoly ckvar
-    -- Update coeffect-kind environment
+    -- Update coeffect-kind context
     cvar <- freshCoeffectVar ("binder_" ++ var) kind
 
     -- Extend the context with cvar
@@ -443,12 +443,12 @@ synthExpr _ _ _ _ e = illTyped (getSpan e) "I can't work out the type here, try 
 
 solveConstraints :: Pred -> Span -> String -> MaybeT Checker Bool
 solveConstraints pred s defName = do
-  -- Get the coeffect kind environment and constraints
+  -- Get the coeffect kind context and constraints
   checkerState <- get
-  let envCk  = ckenv checkerState
-  let envCkVar = cVarEnv checkerState
+  let ctxtCk  = ckctxt checkerState
+  let ctxtCkVar = cVarCtxt checkerState
   --
-  let (sbvTheorem, unsats) = compileToSBV pred envCk envCkVar
+  let (sbvTheorem, unsats) = compileToSBV pred ctxtCk ctxtCkVar
   thmRes <- liftIO . prove $ sbvTheorem
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
@@ -474,37 +474,37 @@ solveConstraints pred s defName = do
 
            else return True
 
-leqCtxt :: Span -> Env Assumption -> Env Assumption -> MaybeT Checker ()
-leqCtxt s env1 env2 = do
-    let env  = env1 `intersectCtxts` env2
-        env' = env2 `intersectCtxts` env1
-    zipWithM_ (leqAssumption s) env env'
+leqCtxt :: Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker ()
+leqCtxt s ctxt1 ctxt2 = do
+    let ctxt  = ctxt1 `intersectCtxts` ctxt2
+        ctxt' = ctxt2 `intersectCtxts` ctxt1
+    zipWithM_ (leqAssumption s) ctxt ctxt'
 
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
     the other, then the resulting context will not have this linear variable -}
-joinCtxts :: Span -> [(Id, Id)] -> Env Assumption -> Env Assumption -> MaybeT Checker (Env Assumption)
-joinCtxts s _ env1 env2 = do
-    -- All the type assumptions from env1 whose variables appear in env2
+joinCtxts :: Span -> [(Id, Id)] -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
+joinCtxts s _ ctxt1 ctxt2 = do
+    -- All the type assumptions from ctxt1 whose variables appear in ctxt2
     -- and weaken all others
-    env  <- env1 `intersectCtxtsWithWeaken` env2
-    -- All the type assumptions from env2 whose variables appear in env1
+    ctxt  <- ctxt1 `intersectCtxtsWithWeaken` ctxt2
+    -- All the type assumptions from ctxt2 whose variables appear in ctxt1
     -- and weaken all others
-    env' <- env2 `intersectCtxtsWithWeaken` env1
+    ctxt' <- ctxt2 `intersectCtxtsWithWeaken` ctxt1
 
-    -- Make an environment with fresh coeffect variables for all
-    -- the variables which are in both env1 and env2...
-    varEnv <- freshVarsIn (map fst env) env
+    -- Make an context with fresh coeffect variables for all
+    -- the variables which are in both ctxt1 and ctxt2...
+    varCtxt <- freshVarsIn (map fst ctxt) ctxt
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
-    -- in env and env'
-    zipWithM_ (leqAssumption s) env varEnv
-    zipWithM_ (leqAssumption s) env' varEnv
-    -- Return the common upper-bound environment of env1 and env2
-    return $ varEnv
+    -- in ctxt and ctxt'
+    zipWithM_ (leqAssumption s) ctxt varCtxt
+    zipWithM_ (leqAssumption s) ctxt' varCtxt
+    -- Return the common upper-bound context of ctxt1 and ctxt2
+    return $ varCtxt
   where
    intersectCtxtsWithWeaken ::
-    Env Assumption -> Env Assumption -> MaybeT Checker (Env Assumption)
+    Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
    intersectCtxtsWithWeaken a b = do
       let intersected = intersectCtxts a b
       let remaining   = a `subtractCtxt` intersected
@@ -523,9 +523,9 @@ joinCtxts s _ env1 env2 = do
        kind <- kindOf c
        return (var, Discharged t (CZero kind))
 
-remainingUndischarged :: Env Assumption -> Env Assumption -> Env Assumption
-remainingUndischarged env subEnv =
-  deleteFirstsBy linearCancel (linears env) (linears subEnv)
+remainingUndischarged :: Ctxt Assumption -> Ctxt Assumption -> Ctxt Assumption
+remainingUndischarged ctxt subCtxt =
+  deleteFirstsBy linearCancel (linears ctxt) (linears subCtxt)
     where
       linears = filter isLinear
       isLinear (_, Linear _) = True
@@ -580,15 +580,15 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
         Nothing -> illTyped s $ "Type variable " ++ v ++ " is unbound"
     rename _ t = return t
 
-relevantSubEnv :: [Id] -> [(Id, t)] -> [(Id, t)]
-relevantSubEnv vars env = filter relevant env
+relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
+relevantSubCtxt vars ctxt = filter relevant ctxt
  where relevant (var, _) = var `elem` vars
 
 -- Replace all top-level discharged coeffects with a variable
 -- and derelict anything else
 -- but add a var
-discToFreshVarsIn :: Span -> [Id] -> Env Assumption -> Coeffect -> MaybeT Checker (Env Assumption)
-discToFreshVarsIn s vars env coeffect = mapM toFreshVar (relevantSubEnv vars env)
+discToFreshVarsIn :: Span -> [Id] -> Ctxt Assumption -> Coeffect -> MaybeT Checker (Ctxt Assumption)
+discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
       kind <- mguCoeffectKinds s c coeffect
@@ -602,8 +602,8 @@ discToFreshVarsIn s vars env coeffect = mapM toFreshVar (relevantSubEnv vars env
       return (var, Discharged t (COne kind))
 
 
--- `freshVarsIn names env` creates a new environment with
--- all the variables names in `env` that appear in the list
+-- `freshVarsIn names ctxt` creates a new context with
+-- all the variables names in `ctxt` that appear in the list
 -- `vars` and are discharged are
 -- turned into discharged coeffect assumptions annotated
 -- with a fresh coeffect variable (and all variables not in
@@ -615,39 +615,39 @@ discToFreshVarsIn s vars env coeffect = mapM toFreshVar (relevantSubEnv vars env
 --  -> [("x", Discharged (c5 :: Nat, Int),
 --      ("y", Linear Int)]
 --
-freshVarsIn :: [Id] -> Env Assumption -> MaybeT Checker (Env Assumption)
-freshVarsIn vars env = mapM toFreshVar (relevantSubEnv vars env)
+freshVarsIn :: [Id] -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
+freshVarsIn vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
       ckind <- kindOf c
       -- Create a fresh variable
       cvar  <- freshVar var
-      -- Update the coeffect kind environment
-      modify (\s -> s { ckenv = (cvar, (ckind, ExistsQ)) : ckenv s })
+      -- Update the coeffect kind context
+      modify (\s -> s { ckctxt = (cvar, (ckind, ExistsQ)) : ckctxt s })
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
     toFreshVar (var, Linear t) = return (var, Linear t)
 
 -- Combine two contexts
-ctxPlus :: Span -> Env Assumption -> Env Assumption -> MaybeT Checker (Env Assumption)
-ctxPlus _ [] env2 = return env2
-ctxPlus s ((i, v) : env1) env2 = do
-  env' <- extCtxt s env2 i v
-  ctxPlus s env1 env'
+ctxPlus :: Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
+ctxPlus _ [] ctxt2 = return ctxt2
+ctxPlus s ((i, v) : ctxt1) ctxt2 = do
+  ctxt' <- extCtxt s ctxt2 i v
+  ctxPlus s ctxt1 ctxt'
 
--- Erase a variable from the environment
-eraseVar :: Env Assumption -> Id -> Env Assumption
+-- Erase a variable from the context
+eraseVar :: Ctxt Assumption -> Id -> Ctxt Assumption
 eraseVar [] _ = []
-eraseVar ((var, t):env) var' | var == var' = env
-                             | otherwise = (var, t) : eraseVar env var'
+eraseVar ((var, t):ctxt) var' | var == var' = ctxt
+                             | otherwise = (var, t) : eraseVar ctxt var'
 
--- ExtCtxt the environment
-extCtxt :: Span -> Env Assumption -> Id -> Assumption -> MaybeT Checker (Env Assumption)
-extCtxt s env var (Linear t) = do
+-- ExtCtxt the context
+extCtxt :: Span -> Ctxt Assumption -> Id -> Assumption -> MaybeT Checker (Ctxt Assumption)
+extCtxt s ctxt var (Linear t) = do
   nameMap <- ask
   let var' = unrename nameMap var
-  case lookup var env of
+  case lookup var ctxt of
     Just (Linear t') ->
        if t == t'
         then illLinearity s $ "Linear variable `" ++ var' ++ "` is used more than once.\n"
@@ -656,16 +656,16 @@ extCtxt s env var (Linear t) = do
        if t == t'
          then do
            k <- kindOf c
-           return $ replace env var (Discharged t (c `CPlus` COne k))
+           return $ replace ctxt var (Discharged t (c `CPlus` COne k))
          else illTyped s $ "Type clash for variable " ++ var' ++ "`"
-    Nothing -> return $ (var, Linear t) : env
+    Nothing -> return $ (var, Linear t) : ctxt
 
-extCtxt s env var (Discharged t c) = do
+extCtxt s ctxt var (Discharged t c) = do
   nameMap <- ask
-  case lookup var env of
+  case lookup var ctxt of
     Just (Discharged t' c') ->
         if t == t'
-        then return $ replace env var (Discharged t' (c `CPlus` c'))
+        then return $ replace ctxt var (Discharged t' (c `CPlus` c'))
         else do
           let var' = unrename nameMap var
           illTyped s $ "Type clash for variable `" ++ var' ++ "`"
@@ -673,11 +673,11 @@ extCtxt s env var (Discharged t c) = do
         if t == t'
         then do
            k <- kindOf c
-           return $ replace env var (Discharged t (c `CPlus` COne k))
+           return $ replace ctxt var (Discharged t (c `CPlus` COne k))
         else do
           let var' = unrename nameMap var
           illTyped s $ "Type clash for variable " ++ var' ++ "`"
-    Nothing -> return $ (var, Discharged t c) : env
+    Nothing -> return $ (var, Discharged t c) : ctxt
 
 -- Helper, foldM on a list with at least one element
 fold1M :: Monad m => (a -> a -> m a) -> [a] -> m a

@@ -2,7 +2,7 @@
 
 module Checker.Coeffects where
 
-import Checker.Environment
+import Checker.Context
 import Context
 import Syntax.Expr
 import Syntax.Pretty
@@ -27,15 +27,15 @@ kindOf (CPlus c c')  = mguCoeffectKinds nullSpan c c'
 
 kindOf (CTimes c c') = mguCoeffectKinds nullSpan c c'
 
--- Coeffect variables should have a kind in the cvar->kind environment
+-- Coeffect variables should have a kind in the cvar->kind context
 kindOf (CVar cvar) = do
   checkerState <- get
-  case lookup cvar (ckenv checkerState) of
+  case lookup cvar (ckctxt checkerState) of
      Nothing -> do
        error $ "Tried to lookup kind of " ++ cvar
 --       state <- get
 --       let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
-       -- We don't know what it is yet though, so don't update the coeffect kind env
+       -- We don't know what it is yet though, so don't update the coeffect kind ctxt
 --       put (state { uniqueVarId = uniqueVarId state + 1 })
 --       return newCKind
 
@@ -51,24 +51,24 @@ kindJoin :: Coeffect -> Coeffect -> MaybeT Checker CKind
 kindJoin = mguCoeffectKinds nullSpan
 
 -- Given a coeffect kind variable and a coeffect kind,
--- replace any occurence of that variable in an environment
+-- replace any occurence of that variable in an context
 -- and update the current solver predicate as well
 updateCoeffectKind :: Id -> CKind -> MaybeT Checker ()
 updateCoeffectKind ckindVar ckind = do
     checkerState <- get
     put $ checkerState
-      { ckenv = rewriteEnv (ckenv checkerState),
-        cVarEnv = replace (cVarEnv checkerState) ckindVar ckind }
+      { ckctxt = rewriteCtxt (ckctxt checkerState),
+        cVarCtxt = replace (cVarCtxt checkerState) ckindVar ckind }
   where
-    rewriteEnv :: Env (CKind, Quantifier) -> Env (CKind, Quantifier)
-    rewriteEnv [] = []
-    rewriteEnv ((name, (CPoly ckindVar', q)) : env)
-     | ckindVar == ckindVar' = (name, (ckind, q)) : rewriteEnv env
-    rewriteEnv (x : env) = x : rewriteEnv env
+    rewriteCtxt :: Ctxt (CKind, Quantifier) -> Ctxt (CKind, Quantifier)
+    rewriteCtxt [] = []
+    rewriteCtxt ((name, (CPoly ckindVar', q)) : ctxt)
+     | ckindVar == ckindVar' = (name, (ckind, q)) : rewriteCtxt ctxt
+    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
--- environments if a unification resolves a variable
+-- contexts if a unification resolves a variable
 mguCoeffectKinds :: Span -> Coeffect -> Coeffect -> MaybeT Checker CKind
 mguCoeffectKinds s c1 c2 = do
   ck1 <- kindOf c1
@@ -104,24 +104,24 @@ mguCoeffectKinds s c1 c2 = do
       illTyped s $ "Cannot unify coeffect types of '" ++ pretty k1 ++ "' and '" ++ pretty k2
        ++ "' for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 
--- | Multiply an environment by a coeffect
+-- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
 --    set of used variables, (first param))
-multAll :: [Id] -> Coeffect -> Env Assumption -> Env Assumption
+multAll :: [Id] -> Coeffect -> Ctxt Assumption -> Ctxt Assumption
 
 multAll _ _ [] = []
 
-multAll vars c ((name, Linear t) : env) | name `elem` vars
-    = (name, Discharged t c) : multAll vars c env
+multAll vars c ((name, Linear t) : ctxt) | name `elem` vars
+    = (name, Discharged t c) : multAll vars c ctxt
 
-multAll vars c ((name, Discharged t c') : env) | name `elem` vars
-    = (name, Discharged t (c `CTimes` c')) : multAll vars c env
+multAll vars c ((name, Discharged t c') : ctxt) | name `elem` vars
+    = (name, Discharged t (c `CTimes` c')) : multAll vars c ctxt
 
-multAll vars c ((_, Linear _) : env) = multAll vars c env
-multAll vars c ((_, Discharged _ _) : env) = multAll vars c env
+multAll vars c ((_, Linear _) : ctxt) = multAll vars c ctxt
+multAll vars c ((_, Discharged _ _) : ctxt) = multAll vars c ctxt
 
 -- | Perform a renaming on a coeffect
-renameC :: Span -> Env Id -> Coeffect -> MaybeT Checker Coeffect
+renameC :: Span -> Ctxt Id -> Coeffect -> MaybeT Checker Coeffect
 renameC s rmap (CPlus c1 c2) = do
       c1' <- renameC s rmap c1
       c2' <- renameC s rmap c2

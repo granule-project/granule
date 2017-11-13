@@ -21,7 +21,7 @@ library:
   - Checker.Checker
   - Checker.Coeffects
   - Checker.Constraints
-  - Checker.Environment
+  - Checker.Context
   - Checker.Types
   - Context
   - Eval

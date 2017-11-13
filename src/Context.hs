@@ -1,4 +1,4 @@
--- Provide general environments (contexts) used in the both the
+-- Provide general contexts (contexts) used in the both the
 -- checker and the interpreter
 
 module Context where
@@ -7,47 +7,47 @@ import Data.Maybe  (isJust)
 import Data.List   (sortBy)
 import Syntax.Expr (Id)
 
--- | Type of environments (contexts)
-type Env t = [(Id, t)]
+-- | Type of contexts (contexts)
+type Ctxt t = [(Id, t)]
 
--- | Extend an environment with a new value
-extend :: Env a -> Id -> a -> Env a
-extend env x v = (x, v) : env
+-- | Extend an context with a new value
+extend :: Ctxt a -> Id -> a -> Ctxt a
+extend ctxt x v = (x, v) : ctxt
 
--- | Empty environment
-empty :: Env a
+-- | Empty context
+empty :: Ctxt a
 empty = []
 
--- | Replace the first occurence of an item in an environment
-replace :: Env a -> Id -> a -> Env a
+-- | Replace the first occurence of an item in an context
+replace :: Ctxt a -> Id -> a -> Ctxt a
 replace [] name v
   = [(name, v)]
-replace ((name', _):env) name v | name == name'
-  = (name', v) : env
-replace (x : env) name v
-  = x : replace env name v
+replace ((name', _):ctxt) name v | name == name'
+  = (name', v) : ctxt
+replace (x : ctxt) name v
+  = x : replace ctxt name v
 
-{- | Take the intersection of two environments based on keys
+{- | Take the intersection of two contexts based on keys
 NOTE: this is not a commutative action, consider:
 >>> intersectCtxts [("x", 1)] [("x", 2)]
 [("x", 1)]
 -}
-intersectCtxts :: Env a -> Env a -> Env a
+intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn a) b
   where appearsIn x (name, _) = isJust $ lookup name x
 
 {- | `subtractCtxt a b` removes all the key-value pairs from
    `a` that have keys in `b` -}
-subtractCtxt :: Env a -> Env a -> Env a
+subtractCtxt :: Ctxt a -> Ctxt a -> Ctxt a
 subtractCtxt a b = filter (not . appearsIn b) a
   where appearsIn x (name, _) = isJust $ lookup name x
 
--- | Normalise an environment by sorting based on the keys
-normaliseCtxt :: Env a -> Env a
+-- | Normalise an context by sorting based on the keys
+normaliseCtxt :: Ctxt a -> Ctxt a
 normaliseCtxt = sortBy (\x y -> fst x `compare` fst y)
 
--- Delete an entry from an environment
-deleteVar :: Id -> Env t -> Env t
+-- Delete an entry from an context
+deleteVar :: Id -> Ctxt t -> Ctxt t
 deleteVar _ [] = []
 deleteVar x ((y, b) : m) | x == y = deleteVar x m
                          | otherwise = (y, b) : deleteVar x m

@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Checker.Environment where
+module Checker.Context where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -43,23 +43,23 @@ data CheckerState = CS
             , predicate      :: Pred
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
-            -- Coeffect environment, map coeffect vars to their kinds
-            , ckenv        :: Env (CKind, Quantifier)
-            -- Environment of resoled coeffect type variables
+            -- Coeffect context, map coeffect vars to their kinds
+            , ckctxt        :: Ctxt (CKind, Quantifier)
+            -- Context of resoled coeffect type variables
             -- (used just before solver, to resolve any type
             -- variables that appear in constraints)
-            , cVarEnv   :: Env CKind
+            , cVarCtxt   :: Ctxt CKind
             }
   deriving Show -- for debugging
 
--- *** Various helpers for manipulating the environment
+-- *** Various helpers for manipulating the context
 
--- | Initial checker environment state
+-- | Initial checker context state
 initState :: CheckerState
-initState = CS 0 ground [] emptyEnv emptyEnv
+initState = CS 0 ground [] emptyCtxt emptyCtxt
   where
     ground   = Conj []
-    emptyEnv = []
+    emptyCtxt = []
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
@@ -71,7 +71,7 @@ freshCoeffectVar cvar kind = do
 
 -- | Helper for registering a new coeffect variable in the checker
 registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
-registerCoeffectVar v k q = modify (\st -> st { ckenv = (v, (k, q)) : ckenv st })
+registerCoeffectVar v k q = modify (\st -> st { ckctxt = (v, (k, q)) : ckctxt st })
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
@@ -88,7 +88,7 @@ concludeImplication = do
       put (checkerState { predicateStack = Impl p p' : stack })
     _ -> error "Predicate: not enough conjunctions on the stack"
 
--- | A helper for adding a constraint to the environment
+-- | A helper for adding a constraint to the context
 addConstraint :: Constraint -> MaybeT Checker ()
 addConstraint p = do
   checkerState <- get
