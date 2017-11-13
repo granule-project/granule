@@ -86,7 +86,7 @@ test-suite spec
     , QuickCheck
   other-modules:
       Checker.CheckerSpec
-      Checker.EnvironmentSpec
+      Checker.ContextSpec
       Checker.TypesSpec
       Syntax.ExprSpec
   default-language: Haskell2010
