@@ -2,5 +2,5 @@ import Test.DocTest
 
 main :: IO ()
 main = do
-  doctest ["src"]
-  doctest ["app"]
+  doctest ["source"]
+  doctest ["command-line-interface"]

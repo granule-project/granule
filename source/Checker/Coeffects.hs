@@ -2,7 +2,7 @@
 
 module Checker.Coeffects where
 
-import Checker.Context
+import Checker.Monad
 import Context
 import Syntax.Expr
 import Syntax.Pretty

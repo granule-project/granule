@@ -1,4 +1,4 @@
--- Provide general contexts (contexts) used in the both the
+-- Provide general contexts used in the both the
 -- checker and the interpreter
 
 module Context where
@@ -7,7 +7,7 @@ import Data.Maybe  (isJust)
 import Data.List   (sortBy)
 import Syntax.Expr (Id)
 
--- | Type of contexts (contexts)
+-- | Type of contexts
 type Ctxt t = [(Id, t)]
 
 -- | Extend an context with a new value

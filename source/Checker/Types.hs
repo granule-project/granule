@@ -13,7 +13,7 @@ import Control.Monad.Trans.Maybe
 
 import Checker.Coeffects
 import Checker.Constraints
-import Checker.Context
+import Checker.Monad
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed

@@ -124,9 +124,9 @@ freshenBlankPolyVars :: [Def] -> [Def]
 freshenBlankPolyVars defs =
     evalState (mapM freshenDef defs) (0 :: Int, [])
   where
-    freshenDef (Def span identifier expr pats tys) = do
+    freshenDef (Def s identifier expr pats tys) = do
       tys' <- freshenTys tys
-      return $ Def span identifier expr pats tys'
+      return $ Def s identifier expr pats tys'
 
     freshenTys (Forall s binds ty) = do
       ty' <- freshenTy ty

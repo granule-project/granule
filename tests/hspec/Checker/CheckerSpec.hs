@@ -3,7 +3,7 @@
 module Checker.CheckerSpec where
 
 import Control.Exception (SomeException, try)
-import Control.Monad (forM_)
+import Control.Monad (forM_, liftM2)
 
 import System.FilePath.Find
 import Test.Hspec
@@ -13,6 +13,9 @@ import Syntax.Parser
 
 pathToExamples :: FilePath
 pathToExamples = "examples"
+
+pathToGranuleBase :: FilePath
+pathToGranuleBase = "granule-base"
 
 pathToNonExamples :: FilePath
 pathToNonExamples = "examples/illtyped"
@@ -54,8 +57,9 @@ spec = do
                 Right checked -> checked `shouldBe` (Left "")
 
   where
-    exampleFiles =
-      find (fileName /=? exclude1 &&? fileName /=? exclude2) (extension ==? fileExtension) pathToExamples
+    exampleFiles = liftM2 (++)
+      (find (fileName /=? exclude1 &&? fileName /=? exclude2) (extension ==? fileExtension) pathToExamples)
+      (find always (extension ==? fileExtension) pathToGranuleBase)
 
     illTypedFiles =
       find always (extension ==? fileExtension) pathToNonExamples

@@ -7,24 +7,24 @@ id x = x
 flip : (Int -> Int -> Int) -> Int -> Int -> Int
 flip f x y = f y x
 
-const : Int -> |Int| 0 -> Int
+const : Int -> Int |0| -> Int
 const x |y| = x
 
 -- Conditional on integers
-if0 : Int -> |Int| 1 -> |Int| 1 -> Int
+if0 : Int |1| -> Int |1| -> Int |1| -> Int
 if0 g |x| |y| =
-  case g of 0 -> x;
-            n -> y
+  case g of |0| -> x;
+            |n| -> y
 
 -- Coeffectful composition
 comp : forall (c : Nat, d : Nat) .
-       (|Int| d -> Int) -> |(|Int| c -> Int)| d -> |Int| (c * d) -> Int
+       (Int |d| -> Int) -> (Int |c| -> Int) |d| -> Int |c * d| -> Int
 comp g |f| |x| = g |(f |x|)|
 
 -- Coeffectful application
-app : forall c : Nat . (|Int| c -> Int) -> |Int| c -> Int
+app : forall c : Nat . (Int |c| -> Int) -> Int |c| -> Int
 app f x = f x
 
 -- Flatten two boxes
-flatten : forall (c : Nat, d : Nat) . ||Int| c| d -> |Int| (c * d)
-flatten |xbox| = let |x : Int| Nat = xbox in |x|
+flatten : forall (c : Nat, d : Nat) . Int |c+1| |d+1| -> Int |c+1 * d+1|
+flatten |xbox| = let |x| : Int = xbox in |x|

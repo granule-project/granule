@@ -8,7 +8,7 @@ import Syntax.Pretty
 import Checker.Types
 import Checker.Coeffects
 import Checker.Constraints
-import Checker.Context
+import Checker.Monad
 import Context
 import Prelude hiding (pred)
 

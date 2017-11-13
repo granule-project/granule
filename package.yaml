@@ -12,7 +12,7 @@ dependencies:
 - base >=4.10 && <5
 
 library:
-  source-dirs: src
+  source-dirs: source
   ghc-options: -Wall
   build-tools:
   - alex
@@ -21,7 +21,7 @@ library:
   - Checker.Checker
   - Checker.Coeffects
   - Checker.Constraints
-  - Checker.Context
+  - Checker.Monad
   - Checker.Types
   - Context
   - Eval
@@ -41,7 +41,7 @@ library:
 executables:
   gr:
     main: Main.hs
-    source-dirs: app
+    source-dirs: command-line-interface
     dependencies:
     - granule
 

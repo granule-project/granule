@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Checker.Context where
+module Checker.Monad where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
