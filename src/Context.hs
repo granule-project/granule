@@ -28,8 +28,10 @@ replace (x : env) name v
   = x : replace env name v
 
 {- | Take the intersection of two environments based on keys
-   NOTE: this is not a commutative action, consider.
-   intersectCtxts [("x", 1)] [("x", 2)] = [("x", 1)] -}
+NOTE: this is not a commutative action, consider:
+>>> intersectCtxts [("x", 1)] [("x", 2)]
+[("x", 1)]
+-}
 intersectCtxts :: Env a -> Env a -> Env a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn a) b
   where appearsIn x (name, _) = isJust $ lookup name x
