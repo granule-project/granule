@@ -49,7 +49,7 @@ ctxtFromTypedPattern dbg s (Box coeff ty) (PBox _ p) = do
 
 -- Match a Nil constructor
 ctxtFromTypedPattern _ s (TyApp (TyApp (TyCon "List") n) _) (PConstr _ "Nil") = do
-    let kind       = CConstr "Nat="
+    let kind = CConstr "Nat="
     case n of
       TyVar v -> addConstraint $ Eq s (CVar v) (CNat Discrete 0) kind
       TyInt m -> addConstraint $ Eq s (CNat Discrete m) (CNat Discrete 0) kind
@@ -60,7 +60,7 @@ ctxtFromTypedPattern dbg s
     (TyApp  (TyApp  (TyCon "List") n) t)
     (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
     -- Create a fresh type variable for the size of the consed list
-    let kind       = CConstr "Nat="
+    let kind = CConstr "Nat="
     sizeVar <- freshCoeffectVar "in" kind
 
     -- Recursively construct the binding patterns

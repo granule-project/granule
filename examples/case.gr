@@ -1,9 +1,15 @@
 -- Small example of case expressions in Granule
 
-if0 : Int -> Int |1| -> Int |1| -> Int
+if0 : Int |1| -> Int |1| -> Int |1| -> Int |1|
 if0 g |x| |y| = case g of
-                  0 -> x;
-                  _ -> y
+                  |0| -> |x|;
+                  |_| -> |y|
+
+constId : Int -> Int
+constId x = case 0 of 0 -> x
+
+add : Int |1| -> Int |1| -> Int
+add |x| |y| = x+y
 
 main : Int
-main = (if0 0 |1| |2|) + (if0 1 |1| |2|)
+main = add (if0 |0| |1| |2|) (if0 |1| |1| |2|)
