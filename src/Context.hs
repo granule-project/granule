@@ -7,18 +7,18 @@ import Data.Maybe  (isJust)
 import Data.List   (sortBy)
 import Syntax.Expr (Id)
 
--- Environments
+-- | Type of environments (contexts)
 type Env t = [(Id, t)]
 
--- Extend a context with a new value
+-- | Extend an environment with a new value
 extend :: Env a -> Id -> a -> Env a
 extend env x v = (x, v) : env
 
--- Empty environment
+-- | Empty environment
 empty :: Env a
 empty = []
 
--- Replace the first occurence of an item in an environment
+-- | Replace the first occurence of an item in an environment
 replace :: Env a -> Id -> a -> Env a
 replace [] name v
   = [(name, v)]
@@ -27,18 +27,22 @@ replace ((name', _):env) name v | name == name'
 replace (x : env) name v
   = x : replace env name v
 
--- Take the intersection of two environments based on keys
--- NOTE: this is not a commutative action, consider.
--- keyIntersect [("x", 1)] [("x", 2)] = [("x", 1)]
-keyIntersect :: Env a -> Env a -> Env a
-keyIntersect a b = sortBy (\x y -> fst x `compare` fst y) $ filter (appearsIn a) b
+{- | Take the intersection of two environments based on keys
+   NOTE: this is not a commutative action, consider.
+   intersectCtxts [("x", 1)] [("x", 2)] = [("x", 1)] -}
+intersectCtxts :: Env a -> Env a -> Env a
+intersectCtxts a b = normaliseCtxt $ filter (appearsIn a) b
   where appearsIn x (name, _) = isJust $ lookup name x
 
--- `keyDelete a b` removes all the key-value pairs from
--- `a` that have keys in `b`
-keyDelete :: Env a -> Env a -> Env a
-keyDelete a b = filter (not . appearsIn b) a
+{- | `subtractCtxt a b` removes all the key-value pairs from
+   `a` that have keys in `b` -}
+subtractCtxt :: Env a -> Env a -> Env a
+subtractCtxt a b = filter (not . appearsIn b) a
   where appearsIn x (name, _) = isJust $ lookup name x
+
+-- | Normalise an environment by sorting based on the keys
+normaliseCtxt :: Env a -> Env a
+normaliseCtxt = sortBy (\x y -> fst x `compare` fst y)
 
 -- Delete an entry from an environment
 deleteVar :: Id -> Env t -> Env t

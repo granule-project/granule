@@ -18,7 +18,6 @@ import Control.Monad.State.Strict
 import Control.Monad.Reader.Class
 import Control.Monad.Trans.Maybe
 import Data.SBV hiding (kindOf)
-import Debug.Trace
 
 -- Checking (top-level)
 check :: [Def]        -- List of definitions
@@ -56,6 +55,7 @@ checkDef dbg defEnv (Def s identifier expr pats (Forall _ foralls ty)) = do
           (localGam, ty') <- ctxtFromTypedPatterns dbg s ty ps
           -- Check the body in the context given by the pattern matching
           localGam' <- checkExpr dbg defEnv localGam Positive ty' expr
+
           -- Check linear use
           case remainingUndischarged localGam localGam' of
                 [] -> return localGam'
@@ -177,8 +177,11 @@ checkExpr dbg defs gam pol tau (Case s guardExpr cases) = do
           concludeImplication
           -- Check linear use in anything Linear
           nameMap  <- ask
+
           case remainingUndischarged localGam localGam' of
-            [] -> return localGam'
+            -- Return the resulting computed context, without any of
+            -- the variable bound in the pattern of this branch
+            [] -> return (localGam' `subtractCtxt` localGam)
             xs -> illLinearity s $ intercalate "\n" $ map (unusedVariable . unrename nameMap . fst) xs
 
         Nothing  -> illTyped (getSpan guardExpr)
@@ -278,7 +281,9 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
           -- Check linear use in anything Linear
           nameMap  <- ask
           case remainingUndischarged localGam localGam' of
-            [] -> return (tyCase, localGam')
+            -- Return the resulting computed context, without any of
+            -- the variable bound in the pattern of this branch
+            [] -> return (tyCase, localGam' `subtractCtxt` localGam)
             xs -> illLinearity s $ intercalate "\n" $ map (unusedVariable . unrename nameMap . fst) xs
 
         Nothing  -> illTyped (getSpan guardExpr)
@@ -298,7 +303,6 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
 
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxPlus s branchesGam guardGam
-  dbgMsg dbg $ " eee " ++ pretty gamNew
   return (eqTypes, gamNew)
 
 -- Diamond cut
@@ -474,49 +478,52 @@ solveConstraints pred s defName = do
 
 leqCtxt :: Span -> Env Assumption -> Env Assumption -> MaybeT Checker ()
 leqCtxt s env1 env2 = do
-    let env  = env1 `keyIntersect` env2
-        env' = env2 `keyIntersect` env1
+    let env  = env1 `intersectCtxts` env2
+        env' = env2 `intersectCtxts` env1
     zipWithM_ (leqAssumption s) env env'
 
+{- | Take the least-upper bound of two contexts.
+     If one context contains a linear variable that is not present in
+    the other, then the resulting context will not have this linear variable -}
 joinCtxts :: Span -> [(Id, Id)] -> Env Assumption -> Env Assumption -> MaybeT Checker (Env Assumption)
 joinCtxts s _ env1 env2 = do
     -- All the type assumptions from env1 whose variables appear in env2
     -- and weaken all others
-    env  <- env1 `keyIntersectWithWeaken` env2
+    env  <- env1 `intersectCtxtsWithWeaken` env2
     -- All the type assumptions from env2 whose variables appear in env1
     -- and weaken all others
-    env' <- env2 `keyIntersectWithWeaken` env1
+    env' <- env2 `intersectCtxtsWithWeaken` env1
 
     -- Make an environment with fresh coeffect variables for all
     -- the variables which are in both env1 and env2...
     varEnv <- freshVarsIn (map fst env) env
+
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in env and env'
     zipWithM_ (leqAssumption s) env varEnv
     zipWithM_ (leqAssumption s) env' varEnv
-    -- Return the common upper-bound environment with the disjoint parts
-    -- of env1 and env2
-    return $ varEnv ++ (env1 `keyDelete` varEnv) ++ (env2 `keyDelete` varEnv)
-
-keyIntersectWithWeaken ::
-  Env Assumption -> Env Assumption -> MaybeT Checker (Env Assumption)
-keyIntersectWithWeaken a b = do
-    let intersected = keyIntersect a b
-    let remaining   = a `keyDelete` intersected
-    weakenedRemaining <- mapM weaken remaining
-    let newCtxt = intersected ++ filter isNonLinearAssumption weakenedRemaining
-    return $ sortBy (\x y -> fst x `compare` fst y) newCtxt
+    -- Return the common upper-bound environment of env1 and env2
+    return $ varEnv
   where
-   isNonLinearAssumption :: (Id, Assumption) -> Bool
-   isNonLinearAssumption (_, Discharged _ _) = True
-   isNonLinearAssumption _            = False
+   intersectCtxtsWithWeaken ::
+    Env Assumption -> Env Assumption -> MaybeT Checker (Env Assumption)
+   intersectCtxtsWithWeaken a b = do
+      let intersected = intersectCtxts a b
+      let remaining   = a `subtractCtxt` intersected
+      weakenedRemaining <- mapM weaken remaining
+      let newCtxt = intersected ++ filter isNonLinearAssumption weakenedRemaining
+      return . normaliseCtxt $ newCtxt
+    where
+     isNonLinearAssumption :: (Id, Assumption) -> Bool
+     isNonLinearAssumption (_, Discharged _ _) = True
+     isNonLinearAssumption _                   = False
 
-   weaken :: (Id, Assumption) -> MaybeT Checker (Id, Assumption)
-   weaken (var, Linear t) = do
-     return (var, Linear t)
-   weaken (var, Discharged t c) = do
-     kind <- kindOf c
-     return (var, Discharged t (CZero kind))
+     weaken :: (Id, Assumption) -> MaybeT Checker (Id, Assumption)
+     weaken (var, Linear t) = do
+       return (var, Linear t)
+     weaken (var, Discharged t c) = do
+       kind <- kindOf c
+       return (var, Discharged t (CZero kind))
 
 remainingUndischarged :: Env Assumption -> Env Assumption -> Env Assumption
 remainingUndischarged env subEnv =

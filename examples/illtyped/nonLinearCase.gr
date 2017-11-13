@@ -1,0 +1,5 @@
+-- Should fail to check, due to linearity violation in the last clause
+-- of the case
+constIf : Int -> Int
+constIf x = case 0 of 0 -> x;
+                      y -> y
