@@ -26,5 +26,5 @@ app : forall c : Nat . (Int |c| -> Int) -> Int |c| -> Int
 app f x = f x
 
 -- Flatten two boxes
-flatten : forall (c : Nat, d : Nat) . Int |c+1| |d+1| -> Int |c+1 * d+1|
+flatten : forall (c : Nat, d : Nat) . Int |c+1| |d+1| -> Int |(c+1) * (d+1)|
 flatten |xbox| = let |x| : Int = xbox in |x|
