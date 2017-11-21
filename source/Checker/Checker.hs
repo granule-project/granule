@@ -202,8 +202,8 @@ checkExpr dbg defs gam pol tau e = do
     case pol of
       Positive -> do
         dbgMsg dbg $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
-        leqCtxt (getSpan e) gam gam'
-        equalTypes dbg (getSpan e) tau' tau
+        leqCtxt (getSpan e) gam' gam
+        equalTypes dbg (getSpan e) tau tau'
 
       -- i.e., this check is from a synth
       Negative -> do

@@ -33,7 +33,7 @@ NOTE: this is not a commutative action, consider:
 [("x", 1)]
 -}
 intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
-intersectCtxts a b = normaliseCtxt $ filter (appearsIn a) b
+intersectCtxts a b = normaliseCtxt $ filter (appearsIn b) a
   where appearsIn x (name, _) = isJust $ lookup name x
 
 {- | `subtractCtxt a b` removes all the key-value pairs from
