@@ -194,19 +194,19 @@ checkExpr dbg defs gam pol tau (Case s guardExpr cases) = do
 
 -- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol tau e = do
-  (tau', gam') <- synthExpr dbg defs gam (flipPol pol) e
+  (tau', gam') <- synthExpr dbg defs gam pol e
   tyEq <-
     case pol of
       Positive -> do
         dbgMsg dbg $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
         leqCtxt (getSpan e) gam' gam
-        equalTypes dbg (getSpan e) tau tau'
+        equalTypes dbg (getSpan e) tau' tau
 
       -- i.e., this check is from a synth
       Negative -> do
         dbgMsg dbg $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
         leqCtxt (getSpan e) gam gam'
-        equalTypes dbg (getSpan e) tau' tau
+        equalTypes dbg (getSpan e) tau tau'
 
   if tyEq
     then return gam'
@@ -342,7 +342,7 @@ synthExpr dbg defs gam pol (App s e e') = do
     (f, gam1) <- synthExpr dbg defs gam pol e
     case f of
       (FunTy sig tau) -> do
-         gam2 <- checkExpr dbg defs gam Negative sig e'
+         gam2 <- checkExpr dbg defs gam pol sig e'
          gamNew <- ctxPlus s gam1 gam2
          return (tau, gamNew)
       t -> illTyped s $ "Linear-hand side of application is not a function"
@@ -397,7 +397,7 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
           addConstraint (Eq s (CVar cvar) (CZero kind) kind)
           return (CZero kind, t)
 
-    gam1 <- checkExpr dbg defs gam (flipPol pol) (Box demand t'') e1
+    gam1 <- checkExpr dbg defs gam pol (Box demand t'') e1
     gamNew <- ctxPlus s gam1 gam2
     return (tau, gamNew)
 
