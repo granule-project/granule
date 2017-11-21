@@ -71,7 +71,8 @@ checkDef dbg defCtxt (Def s identifier expr pats (Forall _ foralls ty)) = do
       checkerState <- get
       let pred = predicate checkerState
       let predStack = predicateStack checkerState
-      solved <- solveConstraints (Conj $ pred : predStack) s identifier
+      dbgMsg dbg $ "Solver prediate is: " ++ pretty (Conj $ pred : predStack)
+      solved <- solveConstraints (Conj $ pred : predStack) s name
       if solved
         then return ctxt
         else illTyped s "Constraints violated"
@@ -243,13 +244,14 @@ synthExpr _ _ _ _ (Val _ (Constr "Nil" [])) =
   return (TyApp (TyApp (TyCon "List") (TyInt 0)) (TyCon "Int"), [])
 
 synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
-    -- Cons : a -> List n a -> List (n + 1) a
     let kind = CConstr "Nat="
     sizeVarArg <- freshCoeffectVar "n" kind
     sizeVarRes <- freshCoeffectVar "m" kind
     -- Add a constraint
+    -- m ~ n + 1
     addConstraint $ Eq s (CVar sizeVarRes)
                          (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
+    -- Cons : a -> List n a -> List m a
     return (FunTy (TyCon "Int")
              (FunTy (list (TyVar sizeVarArg)) (list (TyVar sizeVarRes))), [])
   where
@@ -357,7 +359,7 @@ synthExpr dbg defs gam pol (Val s (Promote e)) = do
    vark <- freshVar $ "kprom_" ++ [head (pretty e)]
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
-   var <- freshCoeffectVar ("prom_" ++ [head (pretty e)]) (CPoly vark)
+   var <- freshCoeffectVar ("prom_" ++ pretty e) (CPoly vark)
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 

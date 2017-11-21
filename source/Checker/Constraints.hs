@@ -53,8 +53,8 @@ instance Pretty [Constraint] where
     pretty constr = "---\n" ++ (intercalate "\n" . map pretty $ constr)
 
 instance Pretty Constraint where
-    pretty (Eq s c1 c2 _)  = "@" ++ show s ++ pretty c1 ++ " == " ++ pretty c2
-    pretty (Leq s c1 c2 _) = "@" ++ show s ++ pretty c1 ++ " <= " ++ pretty c2
+    pretty (Eq s c1 c2 _)  = "(" ++ pretty c1 ++ " == " ++ pretty c2 ++ ")" -- @" ++ show s
+    pretty (Leq s c1 c2 _) = "(" ++ pretty c1 ++ " <= " ++ pretty c2 ++ ")" -- @" ++ show s
 
 --instance Pretty CNF where
 --    pretty cnf = intercalate "&" (intercalate "|" (map pretty cnf))
