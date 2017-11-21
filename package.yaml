@@ -55,6 +55,7 @@ tests:
     - granule
     - hspec
     - QuickCheck
+    - mtl
   doctest:
     main: doctest.hs
     source-dirs: tests

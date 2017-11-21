@@ -84,9 +84,11 @@ test-suite spec
     , granule
     , hspec
     , QuickCheck
+    , mtl
   other-modules:
       Checker.CheckerSpec
       Checker.MonadSpec
       Checker.TypesSpec
+      Syntax.DesugarSpec
       Syntax.ExprSpec
   default-language: Haskell2010
