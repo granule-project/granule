@@ -43,7 +43,7 @@ checkDef :: Bool           -- turn on debgging
         -> Ctxt TypeScheme  -- context of top-level definitions
         -> Def             -- definition
         -> Checker (Maybe (Ctxt Assumption))
-checkDef dbg defCtxt (Def s identifier expr pats (Forall _ foralls ty)) = do
+checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     ctxt <- runMaybeT $ do
       -- Add to the type context all the universally quantified variables
       modify (\st -> st { ckctxt = map (\(n, c) -> (n, (c, ForallQ))) foralls})
@@ -72,7 +72,7 @@ checkDef dbg defCtxt (Def s identifier expr pats (Forall _ foralls ty)) = do
       let pred = predicate checkerState
       let predStack = predicateStack checkerState
       dbgMsg dbg $ "Solver prediate is: " ++ pretty (Conj $ pred : predStack)
-      solved <- solveConstraints (Conj $ pred : predStack) s name
+      solved <- solveConstraints (Conj $ pred : predStack) s defName
       if solved
         then return ctxt
         else illTyped s "Constraints violated"
@@ -118,9 +118,7 @@ checkExpr dbg defs gam pol (FunTy sig tau) (Val s (Abs x t e)) = do
     Nothing -> return ()
     Just t' -> do
       eqT <- equalTypes dbg s sig t'
-      if eqT
-        then return ()
-        else illTyped s $ pretty t' ++ " not equal to " ++ pretty t'
+      unless eqT (illTyped s $ pretty t' ++ " not equal to " ++ pretty t')
 
   -- Extend the context with the variable 'x' and its type
   gamE <- extCtxt s gam x (Linear sig)
@@ -133,7 +131,7 @@ checkExpr dbg defs gam pol (FunTy sig tau) (Val s (Abs x t e)) = do
       illLinearity s $ unusedVariable (unrename nameMap x)
     Just _  -> return (eraseVar gam' x)
 
-checkExpr _ _ _ _ tau (Val s (Abs {})) =
+checkExpr _ _ _ _ tau (Val s Abs{}) =
     illTyped s $ "Expected a function type, but got " ++ pretty tau
 
 {-
@@ -148,7 +146,6 @@ checkExpr _ _ _ _ tau (Val s (Abs {})) =
 checkExpr dbg defs gam pol (Box demand tau) (Val s (Promote e)) = do
   gamF    <- discToFreshVarsIn s (freeVars e) gam demand
   gam'    <- checkExpr dbg defs gamF pol tau e
-
   let gam'' = multAll (freeVars e) demand gam'
   case pol of
       Positive -> leqCtxt s gam'' gam
@@ -503,7 +500,7 @@ joinCtxts s _ ctxt1 ctxt2 = do
     zipWithM_ (leqAssumption s) ctxt varCtxt
     zipWithM_ (leqAssumption s) ctxt' varCtxt
     -- Return the common upper-bound context of ctxt1 and ctxt2
-    return $ varCtxt
+    return varCtxt
   where
    intersectCtxtsWithWeaken ::
     Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
@@ -519,7 +516,7 @@ joinCtxts s _ ctxt1 ctxt2 = do
      isNonLinearAssumption _                   = False
 
      weaken :: (Id, Assumption) -> MaybeT Checker (Id, Assumption)
-     weaken (var, Linear t) = do
+     weaken (var, Linear t) =
        return (var, Linear t)
      weaken (var, Discharged t c) = do
        kind <- kindOf c
@@ -576,14 +573,14 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
       t1' <- rename renameMap t1
       t2' <- rename renameMap t2
       return $ TyApp t1' t2'
-    rename renameMap (TyVar v) = do
+    rename renameMap (TyVar v) =
       case lookup v renameMap of
         Just v' -> return $ TyVar v'
         Nothing -> illTyped s $ "Type variable " ++ v ++ " is unbound"
     rename _ t = return t
 
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
-relevantSubCtxt vars ctxt = filter relevant ctxt
+relevantSubCtxt vars = filter relevant
  where relevant (var, _) = var `elem` vars
 
 -- Replace all top-level discharged coeffects with a variable
