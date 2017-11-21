@@ -5,7 +5,7 @@ dub |x| = x + x
 trip : Int |3| -> Int
 trip |x| = x + x + x
 
-flatten : forall (c : Nat, d : Nat) . Int |(c + 1)| |(d + 1)| -> Int |(c + 1) * (d + 1)|
+flatten : forall (c : Nat, d : Nat) . Int |c+1| |d+1| -> Int |(c+1) * (d+1)|
 flatten |xbox| = let |x| : Int = xbox in |x|
 
 twice : forall (n : Nat) . (Int |n| -> Int) |2| -> Int |2 * n| -> Int
