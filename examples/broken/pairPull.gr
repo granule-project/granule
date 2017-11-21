@@ -1,0 +1,2 @@
+pull : forall (c : Nat, d : Nat) . Int |c| -> Int |d| -> (Int, Int) |c /\ d|
+pull |x| |y| = |(x, y)|
