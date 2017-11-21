@@ -25,6 +25,7 @@ import System.Exit (die)
     CONSTR { TokenConstr _ _ }
     forall { TokenForall _ }
     '\\'  { TokenLambda _ }
+    '/'  { TokenForwardSlash _ }
     '->'  { TokenArrow _ }
     ','   { TokenComma _ }
     '='   { TokenEq _ }
@@ -159,6 +160,8 @@ Coeffect :
      | VAR                     { CVar (symString $1) }
      | Coeffect '+' Coeffect   { CPlus $1 $3 }
      | Coeffect '*' Coeffect   { CTimes $1 $3 }
+     | Coeffect '/' '\\' Coeffect { CMeet $1 $4 }
+     | Coeffect '\\' '/' Coeffect { CJoin $1 $4 }
      | '(' Coeffect ')'        { $2 }
      | '{' Set '}'             { CSet $2 }
      | Coeffect ':' CKind      { normalise (CSig $1 $3) }

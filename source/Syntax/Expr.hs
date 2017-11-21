@@ -159,6 +159,16 @@ freshenBlankPolyVars defs =
       c1' <- freshenCoeff c1
       c2' <- freshenCoeff c2
       return $ CTimes c1' c2'
+
+    freshenCoeff (CMeet c1 c2) = do
+      c1' <- freshenCoeff c1
+      c2' <- freshenCoeff c2
+      return $ CMeet c1' c2'
+    freshenCoeff (CJoin c1 c2) = do
+      c1' <- freshenCoeff c1
+      c2' <- freshenCoeff c2
+      return $ CJoin c1' c2'
+
     freshenCoeff (CSet cs) = do
       cs' <- mapM (\(s, t) -> freshenTy t >>= (\t' -> return (s, t'))) cs
       return $ CSet cs'
@@ -323,6 +333,8 @@ data Coeffect = CNat   NatModifier Int
               | CVar   String
               | CPlus  Coeffect Coeffect
               | CTimes Coeffect Coeffect
+              | CMeet Coeffect Coeffect
+              | CJoin Coeffect Coeffect
               | CZero  CKind
               | COne   CKind
               | Level Int

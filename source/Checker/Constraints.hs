@@ -128,6 +128,10 @@ rewriteConstraints ctxt =
       | ckindVar == ckindVar' = CZero ckind
     updateCoeffect ckindVar ckind (COne (CPoly ckindVar'))
       | ckindVar == ckindVar' = COne ckind
+    updateCoeffect ckindVar ckind (CMeet c1 c2) =
+      CMeet (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CJoin c1 c2) =
+      CJoin (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect ckindVar ckind (CPlus c1 c2) =
       CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect ckindVar ckind (CTimes c1 c2) =
@@ -227,54 +231,49 @@ compileCoeffect (CVar v) _ vars =
    Nothing   ->
     error $ "Looking up a variable '" ++ v ++ "' in " ++ show vars
 
-compileCoeffect (CPlus n m) k@(CConstr "Set") vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SSet s, SSet t) -> SSet $ S.union s t
-    (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " + " ++ show m'
+compileCoeffect c@(CMeet n m) k vars =
+  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
+    (CConstr "Set"  , SSet s, SSet t)      -> SSet $ S.intersection s t
+    (CConstr "Level", SLevel s, SLevel t)  -> SLevel $ s `smin` t
+    (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
+    (CPoly v        , SNat _ _, SNat _ _) | " start" `isPrefixOf` v
+                                           -> SNat Ordered 1
+    (_, SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 `smin` n2)
+    (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smin` n2)
+    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
-compileCoeffect (CPlus n m) k@(CConstr "Level") vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
-    (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " + " ++ show m'
+compileCoeffect c@(CJoin n m) k vars =
+  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
+    (CConstr "Set"  , SSet s, SSet t)      -> SSet $ S.intersection s t
+    (CConstr "Level", SLevel s, SLevel t)  -> SLevel $ s `smax` t
+    (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
+    (CPoly v        , SNat _ _, SNat _ _) | " start" `isPrefixOf` v
+                                           -> SNat Ordered 1
+    (_, SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 `smax` n2)
+    (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smax` n2)
+    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
-compileCoeffect (CPlus n m) k@(CConstr "One") vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat _ _, SNat _ _) -> SNat Ordered 1
+compileCoeffect c@(CPlus n m) k vars =
+  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
+    (CConstr "Set"  , SSet s, SSet t)           -> SSet $ S.union s t
+    (CConstr "Level", SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
+    (CConstr "One"  , SNat _ _, SNat _ _)       -> SNat Ordered 1
+    (CPoly v, SNat _ _, SNat _ _) | " star" `isPrefixOf` v -> SNat Ordered 1
+    (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 + n2)
+    (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 + n2
+    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
-compileCoeffect (CPlus n m) k@(CPoly v) vars | " star" `isPrefixOf` v =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat _ _, SNat _ _) -> SNat Ordered 1
 
-compileCoeffect (CPlus n m) k vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 + n2)
-    (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
-    (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " + " ++ show m'
-
-compileCoeffect (CTimes n m) k@(CConstr "Set") vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SSet s, SSet t) -> SSet $ S.union s t
-    (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " + " ++ show m'
-
-compileCoeffect (CTimes n m) k@(CConstr "Level") vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
-    (n', m') -> error $ "Trying to compileCoeffect: " ++ show n' ++ " * " ++ show m'
-
-compileCoeffect (CTimes n m) k@(CConstr "One") vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat _ _, SNat _ _) -> SNat Ordered 1
-
-compileCoeffect (CTimes n m) k@(CPoly v) vars | " star" `isPrefixOf` v =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat _ _, SNat _ _) -> SNat Ordered 1
-
-compileCoeffect (CTimes n m) k vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 * n2)
-    (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
-    (m', n') -> error $ "Trying to compileCoeffect solver contraints for: "
-                      ++ show m' ++ " * " ++ show n'
+compileCoeffect c@(CTimes n m) k vars =
+  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
+    (CConstr "Set", SSet s, SSet t)             -> SSet $ S.union s t
+    (CConstr "Level", SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
+    (CConstr "One", SNat _ _, SNat _ _)         -> SNat Ordered 1
+    (CPoly v, SNat _ _, SNat _ _) | " star" `isPrefixOf` v
+                                                -> SNat Ordered 1
+    (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 * n2)
+    (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 * n2
+    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
 compileCoeffect (CZero (CConstr "Level")) (CConstr "Level") _ = SLevel 0
 compileCoeffect (CZero (CConstr "Nat")) (CConstr "Nat")     _ = SNat Ordered 0

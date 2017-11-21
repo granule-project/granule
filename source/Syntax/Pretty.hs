@@ -28,6 +28,10 @@ instance Pretty Coeffect where
     pretty (Level 0) = "Lo"
     pretty (Level _) = "Hi"
     pretty (CVar c) = c
+    pretty (CMeet c d) =
+      pretty c ++ " /\\ " ++ pretty d
+    pretty (CJoin c d) =
+      pretty c ++ " \\/ " ++ pretty d
     pretty (CPlus c d) =
       pretty c ++ " + " ++ pretty d
     pretty (CTimes c d) =

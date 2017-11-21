@@ -24,8 +24,9 @@ kindOf (CNatOmega _)     = return $ CConstr "Nat*"
 
 -- Take the join for compound coeffect epxressions
 kindOf (CPlus c c')  = mguCoeffectKinds nullSpan c c'
-
 kindOf (CTimes c c') = mguCoeffectKinds nullSpan c c'
+kindOf (CMeet c c') = mguCoeffectKinds nullSpan c c'
+kindOf (CJoin c c') = mguCoeffectKinds nullSpan c c'
 
 -- Coeffect variables should have a kind in the cvar->kind context
 kindOf (CVar cvar) = do
