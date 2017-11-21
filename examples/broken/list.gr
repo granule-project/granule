@@ -1,0 +1,3 @@
+promote : forall (n : Nat) -> Int |n| -> List n Int
+promote 0 |c| = Nil
+promote n |c| = Cons c (promote (n-1) |c|)
