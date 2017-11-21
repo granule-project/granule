@@ -7,6 +7,7 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 
+import Control.Monad (when)
 
 -- Evaluate operators
 evalOp :: Num a => Op -> (a -> a -> a)
@@ -129,17 +130,20 @@ evalIn ctxt (Case _ gExpr cases) = do
 
     pmatch (_:ps) val = pmatch ps val
 
-evalDefs :: Ctxt Value -> [Def] -> IO (Ctxt Value)
-evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var e [] _ : defs) = do
+evalDefs :: Bool -> Ctxt Value -> [Def] -> IO (Ctxt Value)
+evalDefs dbg ctxt [] = return ctxt
+evalDefs dbg ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
-    evalDefs (extend ctxt var val) defs
-evalDefs ctxt (d : defs) = do
-    evalDefs ctxt (desugar d : defs)
+    evalDefs dbg (extend ctxt var val) defs
+evalDefs dbg ctxt (d : defs) = do
+    let d' = desugar d
+    when dbg $ putStrLn "Desugaring gives: "
+    when dbg $ putStrLn $ pretty d'
+    evalDefs dbg ctxt (d' : defs)
 
-eval :: [Def] -> IO (Maybe Value)
-eval defs = do
-    bindings <- evalDefs empty defs
+eval :: Bool -> [Def] -> IO (Maybe Value)
+eval dbg defs = do
+    bindings <- evalDefs dbg empty defs
     case lookup "main" bindings of
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)

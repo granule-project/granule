@@ -53,7 +53,7 @@ run input (Debug debug) = do
   case checked of
     -- If type checking succeeds then evaluate the program...
     Right True -> do
-      val <- eval ast
+      val <- eval debug ast
       case val of
         Just val' -> putStrLn $ pretty val'
         Nothing   -> return ()
