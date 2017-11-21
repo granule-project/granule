@@ -10,5 +10,8 @@ snd (|_|, y) = y
 push : forall (c : Nat) . (Int, Int) |c| -> (Int |c|, Int |c|)
 push |(x, y)| = (|x|, |y|)
 
+pull : forall (c : Nat, d : Nat) . Int |c| -> Int |d| -> (Int, Int) |c /\ d|
+pull |x| |y| = |(x, y)|
+
 main : ((Int, Int),(Int, (Int, Int)))
 main = ((fst (1, |2|), snd (|1|, 2)), trip |3|)
