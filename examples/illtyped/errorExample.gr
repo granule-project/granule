@@ -9,5 +9,5 @@ trip |x| = x + x + x
 twice : forall (c : Nat) . (Int |c| -> Int) |2| -> Int |2 * c| -> Int
 twice |g| |x| = g |x| + g |x|
 
-main : Bool
+main : Int
 main = twice |dub| |2| + twice |trip| |1|
