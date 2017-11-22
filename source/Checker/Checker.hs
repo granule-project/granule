@@ -124,7 +124,7 @@ checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
       -- If there is a unifier between the types, then one is
       -- more polymorphic than the other
       unless (unifiedType == sig)
-                 (illTyped s $ "Explicit signature ''" ++ pretty sig
+                 (illTyped s $ "Explicit signature '" ++ pretty sig
                                 ++ "' is more/less polymorphic than '"
                                 ++ pretty t' ++ "'")
 
