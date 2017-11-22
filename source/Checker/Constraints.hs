@@ -212,6 +212,12 @@ compileCoeffect (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger
 
 compileCoeffect (CNat Ordered n)  (CConstr "Nat") _
   = SNat Ordered  . fromInteger . toInteger $ n
+
+-- This happens when we use natural number coeffects but with an
+-- explicit signature to make them Nat=
+compileCoeffect (CNat Ordered n)  (CConstr "Nat=") _
+  = SNat Discrete . fromInteger . toInteger $ n
+
 compileCoeffect (CNat Discrete n)  (CConstr "Nat=") _
   = SNat Discrete  . fromInteger . toInteger $ n
 
