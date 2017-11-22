@@ -12,28 +12,28 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
 -- What is the kind of a particular coeffect?
-kindOf :: Coeffect -> MaybeT Checker CKind
+kindOf :: Span -> Coeffect -> MaybeT Checker CKind
 
 -- Coeffect constants have an obvious kind
-kindOf (Level _)         = return $ CConstr "Level"
-kindOf (CNat Ordered _)  = return $ CConstr "Nat"
-kindOf (CNat Discrete _) = return $ CConstr "Nat="
-kindOf (CFloat _)        = return $ CConstr "Q"
-kindOf (CSet _)          = return $ CConstr "Set"
-kindOf (CNatOmega _)     = return $ CConstr "Nat*"
+kindOf _ (Level _)         = return $ CConstr "Level"
+kindOf _ (CNat Ordered _)  = return $ CConstr "Nat"
+kindOf _ (CNat Discrete _) = return $ CConstr "Nat="
+kindOf _ (CFloat _)        = return $ CConstr "Q"
+kindOf _ (CSet _)          = return $ CConstr "Set"
+kindOf _ (CNatOmega _)     = return $ CConstr "Nat*"
 
 -- Take the join for compound coeffect epxressions
-kindOf (CPlus c c')  = mguCoeffectKinds nullSpan c c'
-kindOf (CTimes c c') = mguCoeffectKinds nullSpan c c'
-kindOf (CMeet c c') = mguCoeffectKinds nullSpan c c'
-kindOf (CJoin c c') = mguCoeffectKinds nullSpan c c'
+kindOf s (CPlus c c')  = mguCoeffectKinds s c c'
+kindOf s (CTimes c c') = mguCoeffectKinds s c c'
+kindOf s (CMeet c c')  = mguCoeffectKinds s c c'
+kindOf s (CJoin c c')  = mguCoeffectKinds s c c'
 
 -- Coeffect variables should have a kind in the cvar->kind context
-kindOf (CVar cvar) = do
+kindOf s (CVar cvar) = do
   checkerState <- get
   case lookup cvar (ckctxt checkerState) of
      Nothing -> do
-       error $ "Tried to lookup kind of " ++ cvar
+       unknownName s $ "Tried to lookup kind of " ++ cvar
 --       state <- get
 --       let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
        -- We don't know what it is yet though, so don't update the coeffect kind ctxt
@@ -42,14 +42,10 @@ kindOf (CVar cvar) = do
 
      Just (k, _) -> return k
 
-kindOf (CZero k) = return k
-kindOf (COne k)  = return k
-kindOf (CStar k)  = return k
-kindOf (CSig _ k) = return k
-
--- This will be refined later, but for now join is the same as mgu
-kindJoin :: Coeffect -> Coeffect -> MaybeT Checker CKind
-kindJoin = mguCoeffectKinds nullSpan
+kindOf _ (CZero k) = return k
+kindOf _ (COne k)  = return k
+kindOf _ (CStar k)  = return k
+kindOf _ (CSig _ k) = return k
 
 -- Given a coeffect kind variable and a coeffect kind,
 -- replace any occurence of that variable in an context
@@ -72,8 +68,8 @@ updateCoeffectKind ckindVar ckind = do
 -- contexts if a unification resolves a variable
 mguCoeffectKinds :: Span -> Coeffect -> Coeffect -> MaybeT Checker CKind
 mguCoeffectKinds s c1 c2 = do
-  ck1 <- kindOf c1
-  ck2 <- kindOf c2
+  ck1 <- kindOf s c1
+  ck2 <- kindOf s c2
   case (ck1, ck2) of
     -- Both are poly
     (CPoly kv1, CPoly kv2) -> do

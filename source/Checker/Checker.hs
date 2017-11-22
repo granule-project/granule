@@ -334,7 +334,7 @@ synthExpr _ defs gam _ (Val s (Var x)) = do
 
      Just (Linear ty)       -> return (ty, [(x, Linear ty)])
      Just (Discharged ty c) -> do
-       k <- kindOf c
+       k <- kindOf s c
        return (ty, [(x, Discharged ty (COne k))])
 
 -- Application
@@ -493,7 +493,7 @@ joinCtxts s _ ctxt1 ctxt2 = do
 
     -- Make an context with fresh coeffect variables for all
     -- the variables which are in both ctxt1 and ctxt2...
-    varCtxt <- freshVarsIn (map fst ctxt) ctxt
+    varCtxt <- freshVarsIn s (map fst ctxt) ctxt
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
@@ -519,7 +519,7 @@ joinCtxts s _ ctxt1 ctxt2 = do
      weaken (var, Linear t) =
        return (var, Linear t)
      weaken (var, Discharged t c) = do
-       kind <- kindOf c
+       kind <- kindOf s c
        return (var, Discharged t (CZero kind))
 
 remainingUndischarged :: Ctxt Assumption -> Ctxt Assumption -> Ctxt Assumption
@@ -597,7 +597,7 @@ discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars c
       return (var, Discharged t (CVar cvar))
 
     toFreshVar (var, Linear t) = do
-      kind <- kindOf coeffect
+      kind <- kindOf s coeffect
       return (var, Discharged t (COne kind))
 
 
@@ -614,11 +614,11 @@ discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars c
 --  -> [("x", Discharged (c5 :: Nat, Int),
 --      ("y", Linear Int)]
 --
-freshVarsIn :: [Id] -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
-freshVarsIn vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
+freshVarsIn :: Span -> [Id] -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
+freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      ckind <- kindOf c
+      ckind <- kindOf s c
       -- Create a fresh variable
       cvar  <- freshVar var
       -- Update the coeffect kind context
@@ -654,7 +654,7 @@ extCtxt s ctxt var (Linear t) = do
     Just (Discharged t' c) ->
        if t == t'
          then do
-           k <- kindOf c
+           k <- kindOf s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
          else illTyped s $ "Type clash for variable " ++ var' ++ "`"
     Nothing -> return $ (var, Linear t) : ctxt
@@ -671,7 +671,7 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Linear t') ->
         if t == t'
         then do
-           k <- kindOf c
+           k <- kindOf s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
         else do
           let var' = unrename nameMap var
