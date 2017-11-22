@@ -467,7 +467,7 @@ solveConstraints pred s defName = do
                    -- Show any trivial inequalities
                    mapM_ (\c -> illGraded (getSpan c) (pretty . Neg $ c)) unsats
                    -- Show fatal error, with prover result
-                   illTyped s $ "Definition '" ++ defName ++ "' is shown to be " ++ show thmRes
+                   illTyped s $ "Definition '" ++ defName ++ "' is " ++ show thmRes
 
                Right (True, _) ->
                    illTyped s $ "Definition '" ++ defName ++ "' returned probable model."

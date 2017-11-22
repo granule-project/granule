@@ -7,7 +7,7 @@ import Syntax.Parser
 import Syntax.Pretty
 import Checker.Checker
 import System.Environment
-import System.IO (hPutStrLn, stderr)
+import System.Exit (die)
 
 version :: String
 version = "Granule v0.3.5.0"
@@ -16,27 +16,23 @@ main :: IO ()
 main = do
   args <- getArgs
   case args of
-    []      -> putStrLn "Usage: gr <SOURCE_FILE>"
-    (src:_)  -> do
+    []      -> putStrLn $ version ++ "\nUsage: gr <SOURCE_FILE> [-d]"
+    (src:flags)  -> do
       -- Get the filename
       input <- readFile src
       -- Flag '-d' turns on debug mode
-      run input (Debug $ if length args > 1 then args !! 1 == "-d" else False)
+      run input (Debug $ "-d" `elem` flags)
 
 newtype Debug = Debug Bool
 
 
 {-| Run the input through the type checker and evaluate.
 >>> run "main : Int\nmain = (\\x -> \\y -> x * y) 3 5\n" (Debug False)
-Granule ...
-Ok.
+ok
 15
 -}
 run :: String -> Debug -> IO ()
 run input (Debug debug) = do
-  -- Welcome message
-  putStrLn version
-
   -- Parse
   (ast, nameMap) <- parseDefs input
 
@@ -61,6 +57,6 @@ run input (Debug debug) = do
     _ -> return ()
 
 showCheckerResult :: Either String Bool -> IO ()
-showCheckerResult (Left s) = hPutStrLn stderr s
+showCheckerResult (Left s) = die s
 showCheckerResult (Right True) = putStrLn "ok"
-showCheckerResult (Right False) = hPutStrLn stderr "failed"
+showCheckerResult (Right False) = die "failed"
