@@ -16,7 +16,6 @@ flattenable :: CKind -> Bool
 flattenable (CConstr "Nat")  = True
 flattenable (CConstr "Nat=") = True
 flattenable (CConstr "Nat*") = True
-flattenable (CConstr "Q") = True
 flattenable _                = False
 
 -- What is the kind of a particular coeffect?

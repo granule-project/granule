@@ -111,55 +111,66 @@ ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
 -- The first argument is taken to be possibly approximated by the second
 -- e.g., the first argument is inferred, the second is a specification
 -- being checked against
+
+lEqualTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Bool
+lEqualTypes dbg s = equalTypesRelatedCoeffects dbg s Leq
+
 equalTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Bool
-equalTypes dbg s (FunTy t1 t2) (FunTy t1' t2') = do
-  eq1 <- equalTypes dbg s t1' t1 -- contravariance
-  eq2 <- equalTypes dbg s t2 t2' -- covariance
+equalTypes dbg s = equalTypesRelatedCoeffects dbg s Eq
+
+equalTypesRelatedCoeffects ::
+      Bool
+   -> Span
+   -- Explain how coeffects should be related by a solver constraint
+   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+   -> Type -> Type -> MaybeT Checker Bool
+equalTypesRelatedCoeffects dbg s rel (FunTy t1 t2) (FunTy t1' t2') = do
+  eq1 <- equalTypesRelatedCoeffects dbg s rel t1' t1 -- contravariance
+  eq2 <- equalTypesRelatedCoeffects dbg s rel t2 t2' -- covariance
   return (eq1 && eq2)
 
-equalTypes _ _ (TyCon con) (TyCon con') = return (con == con')
+equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') = return (con == con')
 
-equalTypes dbg s (Diamond ef t) (Diamond ef' t') = do
-  eq <- equalTypes dbg s t t'
+equalTypesRelatedCoeffects dbg s rel (Diamond ef t) (Diamond ef' t') = do
+  eq <- equalTypesRelatedCoeffects dbg s rel t t'
   if ef == ef'
     then return eq
     else do
-      illGraded s $ "Effect mismatch: " ++ pretty ef
-                  ++ " not equal to " ++ pretty ef'
+      illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
       halt
 
-equalTypes dbg s (Box c t) (Box c' t') = do
+equalTypesRelatedCoeffects dbg s rel (Box c t) (Box c' t') = do
   -- Debugging
   dbgMsg dbg $ pretty c ++ " == " ++ pretty c'
   dbgMsg dbg $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectKinds s c c'
-  addConstraint (Leq s c c' kind)
-  equalTypes dbg s t t'
+  addConstraint (rel s c c' kind)
+  equalTypesRelatedCoeffects dbg s rel t t'
 
-equalTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
-  one <- equalTypes dbg s t1 t1'
-  two <- equalTypes dbg s t2 t2'
+equalTypesRelatedCoeffects dbg s rel (TyApp t1 t2) (TyApp t1' t2') = do
+  one <- equalTypesRelatedCoeffects dbg s rel t1 t1'
+  two <- equalTypesRelatedCoeffects dbg s rel t2 t2'
   return (one && two)
 
-equalTypes _ s (TyInt n) (TyVar m) = do
+equalTypesRelatedCoeffects _ s _ (TyInt n) (TyVar m) = do
   addConstraint (Eq s (CNat Discrete n) (CVar m) (CConstr "Nat="))
   return True
 
-equalTypes _ s (TyVar n) (TyInt m) = do
+equalTypesRelatedCoeffects _ s _ (TyVar n) (TyInt m) = do
   addConstraint (Eq s (CVar n) (CNat Discrete m) (CConstr "Nat="))
   return True
 
-equalTypes _ s (TyVar n) (TyVar m) = do
+equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
   addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
   return True
 
-equalTypes dbg s (PairTy t1 t2) (PairTy t1' t2') = do
-  lefts <- equalTypes dbg s t1 t1'
-  rights <- equalTypes dbg s t2 t2'
+equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
+  lefts  <- equalTypesRelatedCoeffects dbg s rel t1 t1'
+  rights <- equalTypesRelatedCoeffects dbg s rel t2 t2'
   return (lefts && rights)
 
-equalTypes _ s t1 t2 =
+equalTypesRelatedCoeffects _ s _ t1 t2 =
   illTyped s $ "I don't know how to make '" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
 -- Essentially equality on types but join on any coeffects
