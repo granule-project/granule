@@ -34,3 +34,21 @@ flatten ||x|| = |x|
 -- Expand two boxes (with Nat grading)
 expand : forall (c : Nat, d : Nat) . Int |c*d| -> Int |c| |d|
 expand |x| = ||x||
+
+-- * Operations on products
+
+-- Extract the left part of a pair
+left : (Int, Int |0|) -> Int
+left (x, |_|) = x
+
+-- Extract the right part of a pair
+right : (Int |0|, Int) -> Int
+right (|_|, y) = y
+
+-- Push coeffects on a pair into the left and right elements
+push : forall (c : Nat) . (Int, Int) |c| -> (Int |c|, Int |c|)
+push |(x, y)| = (|x|, |y|)
+
+-- Pull coeffects of pair elements up to the pair
+pull : forall (c : Nat, d : Nat) . (Int |c|, Int |d|) -> (Int, Int) |c /\ d|
+pull (|x|, |y|) = |(x, y)|
