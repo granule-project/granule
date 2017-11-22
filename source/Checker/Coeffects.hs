@@ -130,6 +130,16 @@ renameC s rmap (CPlus c1 c2) = do
       c2' <- renameC s rmap c2
       return $ CPlus c1' c2'
 
+renameC s rmap (CJoin c1 c2) = do
+      c1' <- renameC s rmap c1
+      c2' <- renameC s rmap c2
+      return $ CJoin c1' c2'
+
+renameC s rmap (CMeet c1 c2) = do
+      c1' <- renameC s rmap c1
+      c2' <- renameC s rmap c2
+      return $ CMeet c1' c2'
+
 renameC s rmap (CTimes c1 c2) = do
       c1' <- renameC s rmap c1
       c2' <- renameC s rmap c2
@@ -140,4 +150,12 @@ renameC s rmap (CVar v) =
         Just v' -> return $ CVar v'
         Nothing -> illTyped s $ "Coeffect variable " ++ v ++ " is unbound"
 
-renameC _ _ c = return c
+renameC _ _ c@CNat{}   = return c
+renameC _ _ c@CNatOmega{} = return c
+renameC _ _ c@CFloat{} = return c
+renameC _ _ c@CStar{}  = return c
+renameC _ _ c@COne{}   = return c
+renameC _ _ c@CZero{}  = return c
+renameC _ _ c@Level{}  = return c
+renameC _ _ c@CSet{}   = return c
+renameC _ _ c@CSig{}   = return c
