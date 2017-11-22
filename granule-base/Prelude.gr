@@ -38,12 +38,12 @@ expand |x| = ||x||
 -- * Operations on products
 
 -- Extract the left part of a pair
-left : (Int, Int |0|) -> Int
-left (x, |_|) = x
+fst : (Int, Int |0|) -> Int
+fst (x, |_|) = x
 
 -- Extract the right part of a pair
-right : (Int |0|, Int) -> Int
-right (|_|, y) = y
+snd : (Int |0|, Int) -> Int
+snd (|_|, y) = y
 
 -- Push coeffects on a pair into the left and right elements
 push : forall (c : Nat) . (Int, Int) |c| -> (Int |c|, Int |c|)
