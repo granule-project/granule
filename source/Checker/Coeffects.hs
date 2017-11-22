@@ -12,11 +12,12 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
 -- Which coeffects can be flattened
-flattenable :: CKind -> Bool
-flattenable (CConstr "Nat")  = True
-flattenable (CConstr "Nat=") = True
-flattenable (CConstr "Nat*") = True
-flattenable _                = False
+flattenable :: CKind -> Maybe (Coeffect -> Coeffect -> Coeffect)
+flattenable (CConstr "Nat")  = Just CTimes
+flattenable (CConstr "Nat=") = Just CTimes
+flattenable (CConstr "Nat*") = Just CTimes
+flattenable (CConstr "Level") = Just CJoin
+flattenable _                 = Nothing
 
 -- What is the kind of a particular coeffect?
 kindOf :: Span -> Coeffect -> MaybeT Checker CKind

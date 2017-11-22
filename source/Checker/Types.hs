@@ -47,10 +47,10 @@ ctxtFromTypedPattern dbg s (Box coeff ty) (PBox _ p) = do
   where
     discharge _ c (v, Linear t) = (v, Discharged t c)
     discharge k c (v, Discharged t c') =
-      if flattenable k
-        -- Implicit flatten operation
-        then (v, Discharged t (CTimes c c'))
-        else (v, Discharged t c')
+      case flattenable k of
+        -- Implicit flatten operation allowed on this coeffect
+        Just flattenOp -> (v, Discharged t (flattenOp c c'))
+        Nothing        -> (v, Discharged t c')
 
 -- Match a Nil constructor
 ctxtFromTypedPattern _ s (TyApp (TyApp (TyCon "List") n) _) (PConstr _ "Nil") = do
