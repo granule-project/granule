@@ -105,36 +105,60 @@ ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
       return (localGam ++ localGam', ty)
     Nothing -> illTypedPattern s t1 pat
 
--- Check whether two types are equal, and at the same time
--- generate coeffect equality constraints
---
--- The first argument is taken to be possibly approximated by the second
--- e.g., the first argument is inferred, the second is a specification
--- being checked against
 
-lEqualTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Bool
-lEqualTypes dbg s = equalTypesRelatedCoeffects dbg s Leq
 
-equalTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Bool
-equalTypes dbg s = equalTypesRelatedCoeffects dbg s Eq
+lEqualTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type)
+lEqualTypes dbg s = equalTypesRelatedCoeffectsAndUnify dbg s Leq
 
+equalTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type)
+equalTypes dbg s = equalTypesRelatedCoeffectsAndUnify dbg s Eq
+
+type Unifier = [(Id, Type)]
+
+{- | Check whether two types are equal, and at the same time
+     generate coeffect equality constraints and unify the
+     two types
+
+     The first argument is taken to be possibly approximated by the second
+     e.g., the first argument is inferred, the second is a specification
+     being checked against
+-}
+equalTypesRelatedCoeffectsAndUnify ::
+      Bool
+   -> Span
+   -- Explain how coeffects should be related by a solver constraint
+   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+   -> Type -> Type -> MaybeT Checker (Bool, Type)
+equalTypesRelatedCoeffectsAndUnify dbg s rel t1 t2 = do
+   (eq, unif) <- equalTypesRelatedCoeffects dbg s rel t1 t2
+   if eq
+     then return (eq, applyUnifier unif t1)
+     else return (eq, t1)
+
+{- | Check whether two types are equal, and at the same time
+     generate coeffect equality constraints and a unifier
+
+     The first argument is taken to be possibly approximated by the second
+     e.g., the first argument is inferred, the second is a specification
+     being checked against -}
 equalTypesRelatedCoeffects ::
       Bool
    -> Span
    -- Explain how coeffects should be related by a solver constraint
    -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
-   -> Type -> Type -> MaybeT Checker Bool
+   -> Type -> Type -> MaybeT Checker (Bool, Unifier)
 equalTypesRelatedCoeffects dbg s rel (FunTy t1 t2) (FunTy t1' t2') = do
-  eq1 <- equalTypesRelatedCoeffects dbg s rel t1' t1 -- contravariance
-  eq2 <- equalTypesRelatedCoeffects dbg s rel t2 t2' -- covariance
-  return (eq1 && eq2)
+  (eq1, u1) <- equalTypesRelatedCoeffects dbg s rel t1' t1 -- contravariance
+  (eq2, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2' -- covariance
+  return (eq1 && eq2, u1 ++ u2)
 
-equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') = return (con == con')
+equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') =
+  return (con == con', [])
 
 equalTypesRelatedCoeffects dbg s rel (Diamond ef t) (Diamond ef' t') = do
-  eq <- equalTypesRelatedCoeffects dbg s rel t t'
+  (eq, unif) <- equalTypesRelatedCoeffects dbg s rel t t'
   if ef == ef'
-    then return eq
+    then return (eq, unif)
     else do
       illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
       halt
@@ -149,29 +173,57 @@ equalTypesRelatedCoeffects dbg s rel (Box c t) (Box c' t') = do
   equalTypesRelatedCoeffects dbg s rel t t'
 
 equalTypesRelatedCoeffects dbg s rel (TyApp t1 t2) (TyApp t1' t2') = do
-  one <- equalTypesRelatedCoeffects dbg s rel t1 t1'
-  two <- equalTypesRelatedCoeffects dbg s rel t2 t2'
-  return (one && two)
+  (one, u1) <- equalTypesRelatedCoeffects dbg s rel t1 t1'
+  (two, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
+  return (one && two, u1 ++ u2)
 
 equalTypesRelatedCoeffects _ s _ (TyInt n) (TyVar m) = do
   addConstraint (Eq s (CNat Discrete n) (CVar m) (CConstr "Nat="))
-  return True
+  return (True, [(m , TyInt n)])
 
 equalTypesRelatedCoeffects _ s _ (TyVar n) (TyInt m) = do
   addConstraint (Eq s (CVar n) (CNat Discrete m) (CConstr "Nat="))
-  return True
+  return (True, [(n, TyInt m)])
+
+equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) | n == m = do
+    return (True, [(n, TyVar m)])
 
 equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
   addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
-  return True
+  return (True, [])
 
 equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
-  lefts  <- equalTypesRelatedCoeffects dbg s rel t1 t1'
-  rights <- equalTypesRelatedCoeffects dbg s rel t2 t2'
-  return (lefts && rights)
+  (lefts, u1)  <- equalTypesRelatedCoeffects dbg s rel t1 t1'
+  (rights, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
+  return (lefts && rights, u1 ++ u2)
+
+equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
+  return (True, [(n, t)])
+
+equalTypesRelatedCoeffects dbg s rel t (TyVar n) = do
+    return (True, [(n, t)])
 
 equalTypesRelatedCoeffects _ s _ t1 t2 =
   illTyped s $ "I don't know how to make '" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
+
+-- | rewrite a type using a unifier (map from type vars to types)
+applyUnifier :: Unifier -> Type -> Type
+applyUnifier unif (TyVar v) = do
+    case lookup v unif of
+      Just t  -> t
+      Nothing -> TyVar v
+applyUnifier unif (FunTy t1 t2) =
+    FunTy (applyUnifier unif t1) (applyUnifier unif t2)
+applyUnifier unif (TyCon t) = TyCon t
+applyUnifier unif (Diamond e t) =
+    Diamond e (applyUnifier unif t)
+applyUnifier unif (Box c t) =
+    Box c (applyUnifier unif t)
+applyUnifier unif (TyApp t1 t2) =
+    TyApp (applyUnifier unif t1) (applyUnifier unif t2)
+applyUnifier unif (TyInt t) = TyInt t
+applyUnifier unif (PairTy t1 t2) =
+    PairTy (applyUnifier unif t1) (applyUnifier unif t2)
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Type

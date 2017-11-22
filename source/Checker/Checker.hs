@@ -45,8 +45,9 @@ checkDef :: Bool           -- turn on debgging
         -> Checker (Maybe (Ctxt Assumption))
 checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     ctxt <- runMaybeT $ do
-      -- Add to the type context all the universally quantified variables
-      modify (\st -> st { ckctxt = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+      -- Add to the coeffect type context all the universally quantified variables
+      let cforalls = filter (not . isType) foralls
+      modify (\st -> st { ckctxt = map (\(n, c) -> (n, (c, ForallQ))) cforalls})
 
       ctxt <- case (ty, pats) of
         (FunTy _ _, ps@(_:_)) -> do
@@ -118,8 +119,14 @@ checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
   case t of
     Nothing -> return ()
     Just t' -> do
-      eqT <- equalTypes dbg s sig t'
+      (eqT, unifiedType) <- equalTypes dbg s sig t'
       unless eqT (illTyped s $ pretty t' ++ " not equal to " ++ pretty t')
+      -- If there is a unifier between the types, then one is
+      -- more polymorphic than the other
+      unless (unifiedType == sig)
+                 (illTyped s $ "Explicit signature ''" ++ pretty sig
+                                ++ "' is more/less polymorphic than '"
+                                ++ pretty t' ++ "'")
 
   -- Extend the context with the variable 'x' and its type
   gamE <- extCtxt s gam x (Linear sig)
@@ -193,7 +200,7 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
 -- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol topLevel tau e = do
   (tau', gam') <- synthExpr dbg defs gam pol e
-  tyEq <-
+  (tyEq, _) <-
     case pol of
       Positive -> do
         dbgMsg dbg $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
@@ -384,10 +391,10 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
     (demand, t'') <-
       case lookup var gam2 of
         Just (Discharged t' demand) -> do
-             eqT <- equalTypes dbg s t' t
+             (eqT, unifiedType) <- equalTypes dbg s t' t
              if eqT then do
                 dbgMsg dbg $ "Demand for " ++ var ++ " = " ++ pretty demand
-                return (demand, t)
+                return (demand, unifiedType)
               else do
                 nameMap <- ask
                 illTyped s $ "An explicit signature is given "
@@ -557,13 +564,20 @@ leqAssumption s (x, t) (x', t') = do
            ++ "\nwith\n\t" ++ pretty (unrename nameMap x', t')
 
 
+isType :: (Id, CKind) -> Bool
+isType (_, CConstr "Type") = True
+isType _                   = False
+
 freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
 freshPolymorphicInstance (Forall s ckinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    renameMap <- mapM (\(c, k) -> fmap (\c' -> (c, c')) (freshCoeffectVar c k)) ckinds
-    rename renameMap ty
-
+    let (tyVars, cVars) = partition isType ckinds
+    renameMapC <- mapM (\(c, k) -> fmap (\c' -> (c, c')) (freshCoeffectVar c k)) cVars
+    -- Create a renaming map for types
+    renameMapT <- mapM (\(c, _) -> fmap (\c' -> (c, c')) (freshVar c)) tyVars
+    t <- rename (renameMapC ++ renameMapT) ty
+    return t
   where
     rename renameMap (FunTy t1 t2) = do
       t1' <- rename renameMap t1
