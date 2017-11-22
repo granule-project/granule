@@ -4,9 +4,11 @@
 id : Int -> Int
 id x = x
 
+-- Flip the order of parameters
 flip : (Int -> Int -> Int) -> Int -> Int -> Int
 flip f x y = f y x
 
+-- Constaint combinator
 const : Int -> Int |0| -> Int
 const x |y| = x
 
@@ -25,6 +27,10 @@ comp g |f| |x| = g |(f |x|)|
 app : forall c : Nat . (Int |c| -> Int) -> Int |c| -> Int
 app f x = f x
 
--- Flatten two boxes
-flatten : forall (c : Nat, d : Nat) . Int |c+1| |d+1| -> Int |(c+1) * (d+1)|
+-- Flatten two boxes (with Nat grading)
+flatten : forall (c : Nat, d : Nat) . Int |c| |d| -> Int |c*d|
 flatten ||x|| = |x|
+
+-- Expand two boxes (with Nat grading)
+expand : forall (c : Nat, d : Nat) . Int |c*d| -> Int |c| |d|
+expand |x| = ||x||
