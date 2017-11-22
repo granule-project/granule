@@ -178,6 +178,7 @@ freshCVar _ (CConstr "Set") _ = return (true, SSet S.empty)
 -- A poly typed coeffect variable whose element is 'star' gets
 -- compiled into the One type (since this satisfies all the same properties)
 freshCVar name (CPoly v) q | " star" `isPrefixOf` v
+-- future TODO: resolve polymorphism to free coeffect (uninterpreted)
                            || "kprom" `isPrefixOf` v = do
   solverVar <- (quant q) name
   return (solverVar .== literal 1, SNat Ordered solverVar)
@@ -298,6 +299,7 @@ compileCoeffect _ (CPoly v) _ | " star" `isPrefixOf` v = SNat Ordered 1
 
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the singleton coeffect
+-- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 compileCoeffect _ (CPoly v) _ | "kprom" `isPrefixOf` v = SNat Ordered 1
 
 compileCoeffect c (CPoly _) _ =
