@@ -29,8 +29,8 @@ replace (x : ctxt) name v
 
 {- | Take the intersection of two contexts based on keys
 NOTE: this is not a commutative action, consider:
->>> intersectCtxts [("x", 1)] [("x", 2)]
-[("x", 1)]
+>>> intersectCtxts [("x",1)] [("x",2)]
+[("x",1)]
 -}
 intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn b) a
