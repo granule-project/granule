@@ -88,8 +88,6 @@ mguCoeffectKinds s c1 c2 = do
 
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1
 
-    (CConstr "Nat=", CConstr "Nat")     -> return $ CConstr "Nat"
-    (CConstr "Nat", CConstr "Nat=")     -> return $ CConstr "Nat"
     (CConstr "Nat*", CConstr "Nat")     -> return $ CConstr "Nat*"
     (CConstr "Nat", CConstr "Nat*")     -> return $ CConstr "Nat*"
 
