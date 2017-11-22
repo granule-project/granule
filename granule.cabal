@@ -89,6 +89,7 @@ test-suite spec
       Checker.CheckerSpec
       Checker.MonadSpec
       Checker.TypesSpec
+      ContextSpec
       Syntax.DesugarSpec
       Syntax.ExprSpec
   default-language: Haskell2010

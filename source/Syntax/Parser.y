@@ -49,6 +49,7 @@ import System.Exit (die)
 
 %right in
 %right '->'
+%left ':'
 %left '+' '-'
 %left '*'
 %left '|'
