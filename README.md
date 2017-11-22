@@ -1,14 +1,16 @@
-                                         ___             
-                                        /\_ \            
-       __   _ __    __      ___   __  __\//\ \      __   
-     /'_ `\/\`'__\/'__`\  /' _ `\/\ \/\ \ \ \ \   /'__`\
-    /\ \L\ \ \ \//\ \L\.\_/\ \/\ \ \ \_\ \ \_\ \_/\  __/
-    \ \____ \ \_\\ \__/.\_\ \_\ \_\ \____/ /\____\ \____\
-     \/___L\ \/_/ \/__/\/_/\/_/\/_/\/___/  \/____/\/____/
-       /\____/                                           
-       \_/__/            
+```
+                                     ___             
+                                    /\_ \            
+   __   _  _    __      ___   __  __\//\ \      __   
+ / _  \/\`'__\/ __ \  /' _ `\/\ \/\ \ \ \ \   /'__`\
+/\ \_\ \ \ \//\ \_\ \_/\ \/\ \ \ \_\ \ \_\ \_/\  __/
+\ \____ \ \_\\ \__/ \_\ \_\ \_\ \____/ /\____\ \____\
+ \/___L\ \/_/ \/__/\/_/\/_/\/_/\/___/  \/____/\/____/
+   /\____/                                           
+   \_/__/
+```
 
-A statically typed functional language with graded modal types, including fine-grained effect and coeffect types.
+A functional programming language with a linear type system and fine-grained effects and coeffects via **graded modal types**.
 
 A brief introduction to the Granule programming language can be found in [this extended abstract](http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf) presented at TLLA'17. The type system is partly based on the one in ["Combining effects and coeffects via grading" (Gaboardi et al. 2016)](https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf).
 
