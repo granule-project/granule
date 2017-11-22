@@ -39,13 +39,18 @@ ctxtFromTypedPattern _ _ (TyCon "Bool")  (PConstr _ "False") = return $ Just []
 -- Pattern match on a modal box
 ctxtFromTypedPattern dbg s (Box coeff ty) (PBox _ p) = do
     ctx <- ctxtFromTypedPattern dbg s ty p
+    k <- kindOf s coeff
     case ctx of
-      -- Dishared all variables bound by the inner pattern
-      Just ctx' -> return . Just $ map (discharge coeff) ctx'
+      -- Discharge all variables bound by the inner pattern
+      Just ctx' -> return . Just $ map (discharge k coeff) ctx'
       Nothing   -> return Nothing
   where
-    discharge c (v, Linear t) = (v, Discharged t c)
-    discharge c (v, Discharged t c') = (v, Discharged t (CTimes c c'))
+    discharge _ c (v, Linear t) = (v, Discharged t c)
+    discharge k c (v, Discharged t c') =
+      if flattenable k
+        -- Implicit flatten operation
+        then (v, Discharged t (CTimes c c'))
+        else (v, Discharged t c')
 
 -- Match a Nil constructor
 ctxtFromTypedPattern _ s (TyApp (TyApp (TyCon "List") n) _) (PConstr _ "Nil") = do
