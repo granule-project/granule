@@ -10,6 +10,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
+import System.IO (hPutStrLn, stderr)
 
 import Checker.Constraints
 import Context
@@ -142,10 +143,10 @@ unknownName = visibleError "Unknown" halt
 -- | Helper for constructing error handlers
 visibleError :: String -> MaybeT Checker a -> Span -> String -> MaybeT Checker a
 visibleError kind next ((0, 0), (0, 0)) s =
-  liftIO (putStrLn $ kind ++ " error: " ++ s) >> next
+  liftIO (hPutStrLn stderr $ kind ++ " error: " ++ s) >> next
 
 visibleError kind next ((sl, sc), (_, _)) s =
-  liftIO (putStrLn $ show sl ++ ":" ++ show sc ++ ": " ++ kind ++ " error:\n\t"
+  liftIO (hPutStrLn stderr $ show sl ++ ":" ++ show sc ++ ": " ++ kind ++ " error:\n\t"
                    ++ s) >> next
 
 -- | Helper for displaying debugging messages for '-d' mode

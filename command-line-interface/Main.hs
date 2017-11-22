@@ -7,6 +7,7 @@ import Syntax.Parser
 import Syntax.Pretty
 import Checker.Checker
 import System.Environment
+import System.IO (hPutStrLn, stderr)
 
 version :: String
 version = "Granule v0.3.5.0"
@@ -48,7 +49,7 @@ run input (Debug debug) = do
 
   -- Type check
   checked <- check ast debug nameMap
-  putStrLn $ showCheckerResult checked
+  showCheckerResult checked
 
   case checked of
     -- If type checking succeeds then evaluate the program...
@@ -59,7 +60,7 @@ run input (Debug debug) = do
         Nothing   -> return ()
     _ -> return ()
 
-showCheckerResult :: Either String Bool -> String
-showCheckerResult (Left s) = s
-showCheckerResult (Right True) = "Ok."
-showCheckerResult (Right False) = "Failed."
+showCheckerResult :: Either String Bool -> IO ()
+showCheckerResult (Left s) = hPutStrLn stderr s
+showCheckerResult (Right True) = putStrLn "ok"
+showCheckerResult (Right False) = hPutStrLn stderr "failed"
