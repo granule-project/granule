@@ -159,9 +159,13 @@ equalTypesRelatedCoeffects dbg s rel (Diamond ef t) (Diamond ef' t') = do
   (eq, unif) <- equalTypesRelatedCoeffects dbg s rel t t'
   if ef == ef'
     then return (eq, unif)
-    else do
-      illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
-      halt
+    else
+      -- Effect approximation
+      if (ef `isPrefixOf` ef')
+      then return (eq, unif)
+      else do
+        illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
+        halt
 
 equalTypesRelatedCoeffects dbg s rel (Box c t) (Box c' t') = do
   -- Debugging
@@ -236,11 +240,14 @@ joinTypes _ _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
 joinTypes dbg s (Diamond ef t) (Diamond ef' t') = do
   tj <- joinTypes dbg s t t'
-  if ef == ef'
-    then return (Diamond ef tj)
-    else do
-      illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
-      halt
+  if ef `isPrefixOf` ef'
+    then return (Diamond ef' tj)
+    else
+      if ef' `isPrefixOf` ef
+      then return (Diamond ef tj)
+      else do
+        illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
+        halt
 
 joinTypes dbg s (Box c t) (Box c' t') = do
   kind <- mguCoeffectKinds s c c'
