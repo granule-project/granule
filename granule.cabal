@@ -51,6 +51,7 @@ library
       Syntax.Lexer
       Syntax.FirstParameter
   other-modules:
+      Checker.LaTeX
       Paths_granule
   default-language: Haskell2010
 

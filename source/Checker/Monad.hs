@@ -12,6 +12,7 @@ import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
 import System.IO (hPutStrLn, stderr)
 
+import Checker.LaTeX
 import Checker.Constraints
 import Context
 import Syntax.Expr (Id, CKind, Span, Type, Coeffect, Pattern)
@@ -50,6 +51,9 @@ data CheckerState = CS
             -- (used just before solver, to resolve any type
             -- variables that appear in constraints)
             , cVarCtxt   :: Ctxt CKind
+            -- LaTeX derivation
+            , deriv      :: Maybe Derivation
+            , derivStack :: [Derivation]
             }
   deriving Show -- for debugging
 
@@ -57,7 +61,7 @@ data CheckerState = CS
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS 0 ground [] emptyCtxt emptyCtxt
+initState = CS 0 ground [] emptyCtxt emptyCtxt Nothing []
   where
     ground   = Conj []
     emptyCtxt = []
