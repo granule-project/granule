@@ -41,6 +41,11 @@ instance Pretty Coeffect where
     pretty (CSig c t) = "(" ++ pretty c ++ " : " ++ pretty t ++ ")"
     pretty (CStar k) = "* : " ++ pretty k
 
+instance Pretty Kind where
+    pretty KType          = "Type"
+    pretty KCoeffect      = "Coeffect"
+    pretty (KTy k1 k2 k3) = pretty k1 ++ " -> " ++ pretty k2 ++ " -> " ++ pretty k3
+
 instance Pretty TypeScheme where
     pretty (Forall _ cvs t) =
       "forall " ++ intercalate ", " (map prettyKindSignatures cvs)

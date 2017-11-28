@@ -5,7 +5,8 @@
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Op(..),
-                   Pattern(..), CKind(..), Coeffect(..), NatModifier(..), Effect,
+                   Pattern(..), CKind(..), Coeffect(..),
+                   NatModifier(..), Effect, Kind(..),
                    uniqueNames, arity, freeVars, subst,
                    normalise,
                    nullSpan, getSpan, getEnd, getStart, Pos, Span,
@@ -380,26 +381,29 @@ arity :: Type -> Int
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 
+data Kind = KType | KCoeffect | KTy Kind Kind Kind
+    deriving (Show, Ord, Eq)
+
 type Effect = [String]
 
-data Coeffect = CNat   NatModifier Int
+data Coeffect = CNat      NatModifier Int
               | CNatOmega (Either () Int)
-              | CFloat  Rational
-              | CStar  CKind
-              | CVar   String
-              | CPlus  Coeffect Coeffect
-              | CTimes Coeffect Coeffect
-              | CMeet Coeffect Coeffect
-              | CJoin Coeffect Coeffect
-              | CZero  CKind
-              | COne   CKind
-              | Level Int
-              | CSet [(String, Type)]
-              | CSig Coeffect CKind
+              | CFloat    Rational
+              | CStar     CKind
+              | CVar      String
+              | CPlus     Coeffect Coeffect
+              | CTimes    Coeffect Coeffect
+              | CMeet     Coeffect Coeffect
+              | CJoin     Coeffect Coeffect
+              | CZero     CKind
+              | COne      CKind
+              | Level     Int
+              | CSet      [(String, Type)]
+              | CSig      Coeffect CKind
     deriving (Eq, Ord, Show)
 
 data NatModifier = Ordered | Discrete
-  deriving (Show, Ord, Eq)
+    deriving (Show, Ord, Eq)
 
 data CKind = CConstr Id | CPoly Id
     deriving (Eq, Ord, Show)

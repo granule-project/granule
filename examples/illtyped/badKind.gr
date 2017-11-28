@@ -1,0 +1,2 @@
+id : forall (a : Nat) . Int -> a
+id x = x

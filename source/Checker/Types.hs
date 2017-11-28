@@ -209,6 +209,15 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
       return (True, [(n, TyVar m)])
 
     -- Trying to unify other (existential) variables
+    (Just (CConstr "Type", _), Just (k, _)) | k /= CConstr "Type" -> do
+      k <- tyKindOf s (TyVar m)
+      illKindedUnifyVar s (TyVar n) KType (TyVar m) k
+
+    (Just (k, _), Just (CConstr "Type", _)) | k /= CConstr "Type" -> do
+      k <- tyKindOf s (TyVar n)
+      illKindedUnifyVar s (TyVar n) k (TyVar m) KType
+
+    -- Otherwise
     x -> do
      addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
      return (True, [])
@@ -221,14 +230,37 @@ equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
 equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
   checkerState <- get
   case lookup n (ckctxt checkerState) of
-    Just _ -> return (True, [(n, t)])
-    Nothing -> unknownName s ("Type variable " ++ n ++ " is unbound.")
+    Just _ -> do
+        k1 <- tyKindOf s (TyVar n)
+        k2 <- tyKindOf s t
+        if k1 == k2
+          then return (True, [(n, t)])
+          else illKindedUnifyVar s (TyVar n) k1 t k2
+    Nothing ->
+      unknownName s ("Type variable " ++ n ++ " is unbound.")
 
 equalTypesRelatedCoeffects dbg s rel t (TyVar n) = do
   equalTypesRelatedCoeffects dbg s rel (TyVar n) t
 
 equalTypesRelatedCoeffects _ s _ t1 t2 =
   illTyped s $ "I don't know how to make '" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
+
+tyKindOf :: Span -> Type -> MaybeT Checker Kind
+tyKindOf s =
+  typeFoldM
+    (\_ _ -> return KType)
+    (\_ -> return KType)
+    (\_ _ -> return KType)
+    (\_ _ -> return KType)
+    (\v -> do
+      checkerState <- get
+      case lookup v (ckctxt checkerState) of
+        Just (CConstr "Type", _) -> return KType
+        Just _                   -> return KCoeffect
+        Nothing                  -> unknownName s ("Type variable " ++ v ++ " is unbound."))
+    (\_ _ -> return KType)
+    (\_ -> return KCoeffect)
+    (\_ _ -> return KType)
 
 -- | rewrite a type using a unifier (map from type vars to types)
 applyUnifier :: Unifier -> Type -> Type

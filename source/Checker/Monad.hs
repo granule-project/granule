@@ -15,7 +15,7 @@ import System.IO (hPutStrLn, stderr)
 import Checker.LaTeX
 import Checker.Constraints
 import Context
-import Syntax.Expr (Id, CKind, Span, Type, Coeffect, Pattern)
+import Syntax.Expr (Id, CKind, Span, Type, Kind, Coeffect, Pattern)
 import Syntax.Pretty
 
 -- State of the check/synth functions
@@ -125,6 +125,14 @@ halt = MaybeT (return Nothing)
 -- | A helper for raising a type error
 illTyped :: Span -> String -> MaybeT Checker a
 illTyped = visibleError "Type" halt
+
+illKindedUnifyVar :: Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
+illKindedUnifyVar s t1 k1 t2 k2 =
+  visibleError "Kind" halt s
+    $ "Trying to unify a type '"
+    ++ pretty t1 ++ "' of kind " ++ pretty k1
+    ++ " with a type '"
+    ++ pretty t2 ++ "' of kind " ++ pretty k2
 
 -- | A helper for raising a linearity error
 illLinearity :: Span -> String -> MaybeT Checker a
