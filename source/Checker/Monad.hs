@@ -142,7 +142,7 @@ illTypedPattern s ty pat =
 
 -- | Errors when a name is used but can't be found
 unknownName :: Span -> String -> MaybeT Checker a
-unknownName = visibleError "Variable unknown" halt
+unknownName = visibleError "Unbound variable" halt
 
 -- | Helper for constructing error handlers
 visibleError :: String -> MaybeT Checker a -> Span -> String -> MaybeT Checker a

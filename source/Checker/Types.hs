@@ -191,7 +191,10 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyInt m) = do
   return (True, [(n, TyInt m)])
 
 equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) | n == m = do
-    return (True, [(n, TyVar m)])
+  checkerState <- get
+  case lookup n (ckctxt checkerState) of
+    Just _ -> return (True, [])
+    Nothing -> unknownName s ("Type variable " ++ n ++ " is unbound.")
 
 equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
   checkerState <- get
@@ -219,8 +222,7 @@ equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
   checkerState <- get
   case lookup n (ckctxt checkerState) of
     Just _ -> return (True, [(n, t)])
-    Nothing ->
-      unknownName s ("Type variable " ++ n ++ " is unbound.")
+    Nothing -> unknownName s ("Type variable " ++ n ++ " is unbound.")
 
 equalTypesRelatedCoeffects dbg s rel t (TyVar n) = do
   equalTypesRelatedCoeffects dbg s rel (TyVar n) t
