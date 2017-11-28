@@ -45,9 +45,7 @@ checkDef :: Bool           -- turn on debgging
         -> Checker (Maybe (Ctxt Assumption))
 checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     ctxt <- runMaybeT $ do
-      -- Add to the coeffect type context all the universally quantified variables
-      let cforalls = filter (not . isType) foralls
-      modify (\st -> st { ckctxt = map (\(n, c) -> (n, (c, ForallQ))) cforalls})
+      modify (\st -> st { ckctxt = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
       ctxt <- case (ty, pats) of
         (FunTy _ _, ps@(_:_)) -> do
@@ -457,8 +455,9 @@ solveConstraints pred s defName = do
   checkerState <- get
   let ctxtCk  = ckctxt checkerState
   let ctxtCkVar = cVarCtxt checkerState
+  let coeffectVariables = filter (not . isType') ctxtCk
   --
-  let (sbvTheorem, unsats) = compileToSBV pred ctxtCk ctxtCkVar
+  let (sbvTheorem, unsats) = compileToSBV pred coeffectVariables ctxtCkVar
   thmRes <- liftIO . prove $ sbvTheorem
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
@@ -483,6 +482,9 @@ solveConstraints pred s defName = do
                    illTyped s $ "Definition '" ++ defName ++ " had a solver fail: " ++ str
 
            else return True
+  where
+    isType' (_, (CConstr "Type", _)) = True
+    isType' _ = False
 
 leqCtxt :: Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker ()
 leqCtxt s ctxt1 ctxt2 = do

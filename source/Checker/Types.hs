@@ -9,6 +9,7 @@ import Syntax.Pretty
 import Context
 import Data.List
 
+import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
 import Checker.Coeffects
@@ -193,8 +194,21 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) | n == m = do
     return (True, [(n, TyVar m)])
 
 equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
-  addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
-  return (True, [])
+  checkerState <- get
+  case (lookup n (ckctxt checkerState), lookup m (ckctxt checkerState)) of
+
+    -- Two universally quantified variables are unequal
+    (Just (_, ForallQ), Just (_, ForallQ)) ->
+      return (False, [])
+
+    -- We can unify two existential type variables
+    (Just (CConstr "Type", ExistsQ), Just (CConstr "Type", ExistsQ)) ->
+      return (True, [(n, TyVar m)])
+
+    -- Trying to unify other (existential) variables
+    x -> do
+     addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
+     return (True, [])
 
 equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
   (lefts, u1)  <- equalTypesRelatedCoeffects dbg s rel t1 t1'
