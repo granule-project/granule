@@ -574,30 +574,33 @@ freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
 freshPolymorphicInstance (Forall s ckinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    let (tyVars, cVars) = partition isType ckinds
-    renameMapC <- mapM (\(c, k) -> fmap (\c' -> (c, c')) (freshCoeffectVar c k)) cVars
-    -- Create a renaming map for types
-    renameMapT <- mapM (\(c, _) -> fmap (\c' -> (c, c')) (freshVar c)) tyVars
-    t <- rename (renameMapC ++ renameMapT) ty
+    renameMap <- mapM instantiateVariable ckinds
+    t <- rename renameMap ty
     return t
   where
-    rename renameMap (FunTy t1 t2) = do
-      t1' <- rename renameMap t1
-      t2' <- rename renameMap t2
-      return $ FunTy t1' t2'
-    rename renameMap (Box c t) = do
+    -- Freshen variables, create existential instantiation
+    instantiateVariable (var, k) = do
+      -- Freshen the variable depending on its kind
+      var' <- case k of
+               (CConstr "Type") -> do
+                 var' <- freshVar var
+                 -- Label fresh variable as an existential
+                 modify (\st -> st { ckctxt = (var', (k, ExistsQ)) : ckctxt st })
+                 return var'
+               _ -> freshCoeffectVar var k
+      -- Return pair of old variable name and instantiated name (for
+      -- name map)
+      return (var, var')
+
+    rename rmap = typeFoldM mFunTy mTyCon (renameBox rmap) mDiamond
+                       (renameTyVar rmap) mTyApp mTyInt mPairTy
+    renameBox renameMap c t = do
       c' <- renameC s renameMap c
-      t' <- rename renameMap t
-      return $ Box c' t'
-    rename renameMap (TyApp t1 t2) = do
-      t1' <- rename renameMap t1
-      t2' <- rename renameMap t2
-      return $ TyApp t1' t2'
-    rename renameMap (TyVar v) =
+      return $ Box c' t
+    renameTyVar renameMap v =
       case lookup v renameMap of
         Just v' -> return $ TyVar v'
         Nothing -> illTyped s $ "Type variable " ++ v ++ " is unbound"
-    rename _ t = return t
 
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant

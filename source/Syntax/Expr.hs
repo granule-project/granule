@@ -9,7 +9,10 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    uniqueNames, arity, freeVars, subst,
                    normalise,
                    nullSpan, getSpan, getEnd, getStart, Pos, Span,
-                   freshenBlankPolyVars
+                   freshenBlankPolyVars,
+                   typeFoldM,
+                   mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
+                   mTyInt, mPairTy
                    ) where
 
 import Data.List ((\\))
@@ -319,6 +322,59 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyInt Int                 -- ^ Type-level Int
           | PairTy Type Type          -- ^ Pair/product type
     deriving (Eq, Ord, Show)
+
+-- Trivially effectful monadic constructors
+mFunTy :: Monad m => Type -> Type -> m Type
+mFunTy x y   = return (FunTy x y)
+mTyCon :: Monad m => String -> m Type
+mTyCon       = return . TyCon
+mBox :: Monad m => Coeffect -> Type -> m Type
+mBox c y     = return (Box c y)
+mDiamond :: Monad m => Effect -> Type -> m Type
+mDiamond e y = return (Diamond e y)
+mTyVar :: Monad m => String -> m Type
+mTyVar       = return . TyVar
+mTyApp :: Monad m => Type -> Type -> m Type
+mTyApp x y   = return (TyApp x y)
+mTyInt :: Monad m => Int -> m Type
+mTyInt       = return . TyInt
+mPairTy :: Monad m => Type -> Type -> m Type
+mPairTy x y  = return (PairTy x y)
+
+-- | Monadic fold on a `Type` value
+typeFoldM :: Monad m =>
+     (a -> a        -> m a) -- Fun
+  -> (String        -> m a) -- TyCon
+  -> (Coeffect -> a -> m a) -- Box
+  -> (Effect   -> a -> m a) -- Diamond
+  -> (String        -> m a) -- Type variable
+  -> (a -> a        -> m a) -- Type application
+  -> (Int           -> m a) -- Type int
+  -> (a -> a        -> m a) -- Pair
+  -> Type -> m a
+typeFoldM fun con box diamond var app int pair = go
+  where
+   go (FunTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     fun t1' t2'
+   go (TyCon s) = con s
+   go (Box c t) = do
+     t' <- go t
+     box c t'
+   go (Diamond c t) = do
+     t' <- go t
+     diamond c t'
+   go (TyVar v) = var v
+   go (TyApp t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     app t1' t2'
+   go (TyInt i) = int i
+   go (PairTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     pair t1' t2'
 
 arity :: Type -> Int
 arity (FunTy _ t) = 1 + arity t
