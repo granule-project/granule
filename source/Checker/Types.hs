@@ -216,10 +216,14 @@ equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
   return (lefts && rights, u1 ++ u2)
 
 equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
-  return (True, [(n, t)])
+  checkerState <- get
+  case lookup n (ckctxt checkerState) of
+    Just _ -> return (True, [(n, t)])
+    Nothing ->
+      unknownName s ("Type variable " ++ n ++ " is unbound.")
 
 equalTypesRelatedCoeffects dbg s rel t (TyVar n) = do
-    return (True, [(n, t)])
+  equalTypesRelatedCoeffects dbg s rel (TyVar n) t
 
 equalTypesRelatedCoeffects _ s _ t1 t2 =
   illTyped s $ "I don't know how to make '" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."

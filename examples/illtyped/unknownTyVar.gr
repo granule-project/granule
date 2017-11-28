@@ -1,0 +1,2 @@
+id : Int -> a
+id x = x
