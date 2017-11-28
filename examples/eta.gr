@@ -1,0 +1,9 @@
+id :  forall (a : Type, b : Type, c : Nat) .
+        (a |c| -> b) -> (a |c| -> b)
+id = \x -> x
+
+etaId : forall (a : Type, b : Type, c : Nat, d : Nat) .
+         (a |c| -> b) -> (a |d| -> b)
+etaId x |y| = x |y|
+--etaId = \x -> \yBox ->
+--          let |y| : a = yBox in x |y|
