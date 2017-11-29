@@ -1,54 +1,67 @@
 -- Prelude library for Granule
 
 -- Standard functional components
-id : Int -> Int
+id : forall a : Type . a -> a
 id x = x
 
 -- Flip the order of parameters
-flip : (Int -> Int -> Int) -> Int -> Int -> Int
+flip : forall a : Type, b : Type, c : Type . (a -> b -> c) -> b -> a -> c
 flip f x y = f y x
 
--- Constaint combinator
-const : Int -> Int |0| -> Int
+-- Constant combinator
+const : forall a : Type, b : Type . a -> b |0| -> a
 const x |y| = x
 
 -- Conditional on integers
-if0 : Int |1| -> Int |1| -> Int |1| -> Int
+if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
 if0 g |x| |y| =
   case g of |0| -> x;
             |n| -> y
 
 -- Coeffectful composition
-comp : forall (c : Nat, d : Nat) .
-       (Int |d| -> Int) -> (Int |c| -> Int) |d| -> Int |c * d| -> Int
+comp : forall (a : Type, n : Nat, m : Nat) .
+       (a |n| -> Int) -> (Int |n| -> Int) |n| -> Int |n * m| -> Int
 comp g |f| |x| = g |(f |x|)|
 
 -- Coeffectful application
-app : forall c : Nat . (Int |c| -> Int) -> Int |c| -> Int
+app : forall a : Type, b : Type, c : Nat . (a |c| -> b) -> a |c| -> b
 app f x = f x
 
 -- Flatten two boxes (with Nat grading)
-flatten : forall (c : Nat, d : Nat) . Int |c| |d| -> Int |c*d|
+flatten : forall (a : Type, n : Nat, m : Nat) . a |n| |m| -> a |n * m|
 flatten ||x|| = |x|
 
 -- Expand two boxes (with Nat grading)
-expand : forall (c : Nat, d : Nat) . Int |c*d| -> Int |c| |d|
-expand |x| = ||x||
+unflatten : forall (c : Nat, d : Nat) . Int |c*d| -> Int |c| |d|
+unflatten |x| = ||x||
 
 -- * Operations on products
 
 -- Extract the left part of a pair
-fst : (Int, Int |0|) -> Int
+fst : forall a : Type, b : Type . (a, b |0|) -> a
 fst (x, |_|) = x
 
 -- Extract the right part of a pair
-snd : (Int |0|, Int) -> Int
+snd : forall a : Type, b : Type . (a |0|, b) -> b
 snd (|_|, y) = y
 
 -- Push coeffects on a pair into the left and right elements
-push : forall (c : Nat) . (Int, Int) |c| -> (Int |c|, Int |c|)
+push : forall (a : Type, b : Type, n : Nat) . (a, b) |n| -> (a |n|, b |n|)
 push |(x, y)| = (|x|, |y|)
 
 -- Pull coeffects of pair elements up to the pair
-pull : forall (c : Nat, d : Nat) . (Int |c|, Int |d|) -> (Int, Int) |c /\ d|
+pull : forall (a : Type, b : Type, n : Nat, m : Nat) . (a |n|, b |m|) -> (a, b) |n /\ m|
 pull (|x|, |y|) = |(x, y)|
+
+-- * Operations on lists
+-- map : forall (a : Type, b : Type, n : Nat) . (a -> b) |n| -> List n a -> List n b
+-- map |f| ys =
+--   case ys of
+--     Nil -> Nil;
+--     (Cons x xs) -> Cons (f x) (map |f| xs)
+
+map : forall (a : Type, b : Type, n : Nat) . (Int -> Int) |n| -> List n Int -> List n Int
+map |f| ys =
+  case ys of
+    Nil -> Nil;
+    (Cons x xs) -> Cons (f x) (map |f| xs)
