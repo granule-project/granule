@@ -6,6 +6,7 @@ import Eval
 import Syntax.Parser
 import Syntax.Pretty
 import Checker.Checker
+
 import System.Environment
 import System.Exit (die)
 

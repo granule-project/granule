@@ -1,11 +1,7 @@
+#include "StdLib/Prelude.gr"
+
 foo : List 3 Int
 foo = Cons 1 (Cons 2 (Cons 3 Nil))
-
-map : forall (n : Nat) . (Int -> Int) |n| -> List n Int -> List n Int
-map |f| ys =
-  case ys of
-    Nil -> Nil;
-    (Cons x xs) -> Cons (f x) (map |f| xs)
 
 main : List 3 Int
 main = map |(\(x : Int) -> x * 2)| foo

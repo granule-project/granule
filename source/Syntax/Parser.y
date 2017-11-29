@@ -3,6 +3,9 @@ module Syntax.Parser where
 
 import Syntax.Lexer
 import Syntax.Expr
+
+import Control.Monad (forM)
+import Data.List (isPrefixOf)
 import Numeric
 import System.Exit (die)
 
@@ -269,7 +272,15 @@ parseError t = do
   where (l, c) = getPos (head t)
 
 parseDefs :: String -> IO ([Def], [(Id, Id)])
-parseDefs = fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
+parseDefs input = preprocess input >>= fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
+
+preprocess :: String -> IO String
+preprocess input = do
+    input <- forM (lines input) $ \line ->
+      if "#include" `isPrefixOf` line then readFile (between '"' line)
+      else return line
+    return $ unlines input
+  where between x = takeWhile (/= x) . tail . dropWhile (/= x)
 
 myReadFloat :: String -> Rational
 myReadFloat str =

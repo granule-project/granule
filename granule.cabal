@@ -40,18 +40,18 @@ library
       Checker.Checker
       Checker.Coeffects
       Checker.Constraints
+      Checker.LaTeX
       Checker.Monad
       Checker.Types
       Context
       Eval
       Syntax.Desugar
       Syntax.Expr
+      Syntax.FirstParameter
+      Syntax.Lexer
       Syntax.Parser
       Syntax.Pretty
-      Syntax.Lexer
-      Syntax.FirstParameter
   other-modules:
-      Checker.LaTeX
       Paths_granule
   default-language: Haskell2010
 

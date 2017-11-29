@@ -1,0 +1,3 @@
+data Maybe a where
+  None : Maybe
+  Some : a -> Maybe

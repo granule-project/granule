@@ -54,13 +54,7 @@ pull : forall (a : Type, b : Type, n : Nat, m : Nat) . (a |n|, b |m|) -> (a, b) 
 pull (|x|, |y|) = |(x, y)|
 
 -- * Operations on lists
--- map : forall (a : Type, b : Type, n : Nat) . (a -> b) |n| -> List n a -> List n b
--- map |f| ys =
---   case ys of
---     Nil -> Nil;
---     (Cons x xs) -> Cons (f x) (map |f| xs)
-
-map : forall (a : Type, b : Type, n : Nat) . (Int -> Int) |n| -> List n Int -> List n Int
+map : forall n : Nat . (Int -> Int) |n| -> List n Int -> List n Int
 map |f| ys =
   case ys of
     Nil -> Nil;

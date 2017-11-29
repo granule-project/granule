@@ -1,0 +1,5 @@
+map : forall (a : Type, b : Type, n : Nat) . (a -> b) |n| -> List n a -> List n b
+map |f| ys =
+  case ys of
+    Nil -> Nil;
+    (Cons x xs) -> Cons (f x) (map |f| xs)

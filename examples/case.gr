@@ -1,9 +1,6 @@
 -- Small example of case expressions in Granule
 
-if0 : Int |1| -> Int |1| -> Int |1| -> Int |1|
-if0 g |x| |y| = case g of
-                  |0| -> |x|;
-                  |_| -> |y|
+#include "StdLib/Prelude.gr"
 
 constId : Int -> Int
 constId x = case 0 of 0 -> x
