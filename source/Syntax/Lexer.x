@@ -31,7 +31,7 @@ tokens :-
   $eol+                         { \p s -> TokenNL p }
   $white+                       ;
   "--".*                        ;
-  "#include".*                  ;
+  "import".*                    ;
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   let                           { \p s -> TokenLet p }

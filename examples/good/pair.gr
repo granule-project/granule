@@ -1,4 +1,4 @@
-#include "StdLib/Prelude.gr"
+import StdLib/Prelude.gr
 
 trip : Int |3| -> (Int, (Int, Int))
 trip |x| = (x, (x, x))

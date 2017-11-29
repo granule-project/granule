@@ -5,7 +5,8 @@ import Syntax.Lexer
 import Syntax.Expr
 
 import Control.Monad (forM)
-import Data.List ((\\), isPrefixOf, intercalate, nub)
+import Data.List ((\\), intercalate, nub, stripPrefix)
+import Data.Maybe (catMaybes)
 import Numeric
 import System.Exit (die)
 
@@ -274,17 +275,14 @@ parseError t = do
 parseDefs :: String -> IO ([Def], [(Id, Id)])
 parseDefs input = do
     defs <- parse input
-    includeDefs <- forM includes $ \path -> do
+    importedDefs <- forM imports $ \path -> do
       src <- readFile path
-      return $ parseDefs src
-    includeDefs <- sequence includeDefs
-    checkNameClashes $ push $ addLast defs includeDefs
+      parseDefs src
+    checkNameClashes $ push $ importedDefs ++ [defs] -- add defs at the end
   where
     parse = fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
-    includes = map (between '"') . filter ("#include" `isPrefixOf`) . lines $ input
+    imports = catMaybes . map (stripPrefix "import ") . lines $ input
     push ps = (concatMap fst ps, concatMap snd ps)
-    between x = takeWhile (/= x) . tail . dropWhile (/= x)
-    addLast x xs = reverse $ (x : reverse xs)
     checkNameClashes ds =
         if null clashes then return ds
         else die $ "Error: Name clash: " ++ intercalate ", " clashes

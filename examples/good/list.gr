@@ -1,4 +1,4 @@
-#include "StdLib/Prelude.gr"
+import StdLib/Prelude.gr
 
 foo : List 3 Int
 foo = Cons 1 (Cons 2 (Cons 3 Nil))

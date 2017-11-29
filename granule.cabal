@@ -3,7 +3,7 @@
 -- see: https://github.com/sol/hpack
 
 name:           granule
-version:        0.3.5.0
+version:        0.3.6.0
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
