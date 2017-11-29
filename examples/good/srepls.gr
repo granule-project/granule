@@ -8,7 +8,7 @@ trip : Int |3| -> Int
 trip |x| = x + x + x
 
 -- main : Int
--- main = twice |dup| |10| + twice |trip| |20| 
+-- main = twice |dup| |10| + twice |trip| |20|
 
 secret : Int |Hi|
 secret = |4253|

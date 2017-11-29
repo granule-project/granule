@@ -41,7 +41,8 @@ run input (Debug debug) = do
   if debug
     then do
       putStrLn $ "AST:\n" ++ show ast
-      putStrLn $ "\nSource:\n"    ++ pretty ast
+      putStrLn $ "\nSource:\n" ++ pretty ast
+      putStrLn $ "\nName map:\n" ++ show nameMap
     else return ()
 
   -- Type check
