@@ -278,7 +278,8 @@ parseDefs input = do
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
       parseDefs src
-    checkNameClashes $ push $ importedDefs ++ [defs] -- add defs at the end
+    checkNameClashes $ push $ importedDefs ++ [defs] -- add defs at the end because definitions
+                                                     -- need to precede use sites
   where
     parse = fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
     imports = catMaybes . map (stripPrefix "import ") . lines $ input
