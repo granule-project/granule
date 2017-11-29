@@ -31,6 +31,7 @@ tokens :-
   $eol+                         { \p s -> TokenNL p }
   $white+                       ;
   "--".*                        ;
+  "#include".*                  ;
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   let                           { \p s -> TokenLet p }
@@ -38,7 +39,7 @@ tokens :-
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
   @float                        { \p s -> TokenFloat p s }
-  @int                          { \p s -> TokenInt p $ read s }  
+  @int                          { \p s -> TokenInt p $ read s }
   "->"                          { \p s -> TokenArrow p }
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
@@ -71,7 +72,7 @@ data Token = TokenLet  AlexPosn
            | TokenLambda AlexPosn
 	   | TokenLetBox AlexPosn
 	   | TokenBox    AlexPosn
-           | TokenInt    AlexPosn Int 
+           | TokenInt    AlexPosn Int
 	   | TokenFloat  AlexPosn String
            | TokenSym    AlexPosn String
            | TokenArrow  AlexPosn
@@ -125,5 +126,3 @@ getPosToSpan :: Token -> ((Int, Int), (Int, Int))
 getPosToSpan t = (getPos t, getPos t)
 
 }
-
-

@@ -5,7 +5,7 @@ import Syntax.Lexer
 import Syntax.Expr
 
 import Control.Monad (forM)
-import Data.List (isPrefixOf)
+import Data.List ((\\), isPrefixOf, intercalate, nub)
 import Numeric
 import System.Exit (die)
 
@@ -272,15 +272,25 @@ parseError t = do
   where (l, c) = getPos (head t)
 
 parseDefs :: String -> IO ([Def], [(Id, Id)])
-parseDefs input = preprocess input >>= fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
-
-preprocess :: String -> IO String
-preprocess input = do
-    input <- forM (lines input) $ \line ->
-      if "#include" `isPrefixOf` line then readFile (between '"' line)
-      else return line
-    return $ unlines input
-  where between x = takeWhile (/= x) . tail . dropWhile (/= x)
+parseDefs input = do
+    defs <- parse input
+    includeDefs <- forM includes $ \path -> do
+      src <- readFile path
+      return $ parseDefs src
+    includeDefs <- sequence includeDefs
+    checkNameClashes $ push $ addLast defs includeDefs
+  where
+    parse = fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
+    includes = map (between '"') . filter ("#include" `isPrefixOf`) . lines $ input
+    push ps = (concatMap fst ps, concatMap snd ps)
+    between x = takeWhile (/= x) . tail . dropWhile (/= x)
+    addLast x xs = reverse $ (x : reverse xs)
+    checkNameClashes ds =
+        if null clashes then return ds
+        else die $ "Error: Name clash: " ++ intercalate ", " clashes
+      where
+        clashes = names \\ nub names
+        names = map (\(Def _ name _ _ _) -> name) (fst ds)
 
 myReadFloat :: String -> Rational
 myReadFloat str =
