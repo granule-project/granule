@@ -1,0 +1,5 @@
+-- The type error is in the included file
+#include "examples/illtyped/approximation.gr"
+
+foo : Int
+foo = 0
