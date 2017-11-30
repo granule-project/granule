@@ -1,5 +1,5 @@
 name: granule
-version: '0.3.6.0'
+version: '0.3.7.0'
 synopsis: The Granule type checker and interpreter
 author: Dominic Orchard
 copyright: 2017 authors
@@ -21,8 +21,10 @@ library:
   - Checker.Checker
   - Checker.Coeffects
   - Checker.Constraints
+  - Checker.Kinds
   - Checker.LaTeX
   - Checker.Monad
+  - Checker.Primitives
   - Checker.Types
   - Context
   - Eval

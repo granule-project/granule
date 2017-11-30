@@ -3,7 +3,7 @@
 -- see: https://github.com/sol/hpack
 
 name:           granule
-version:        0.3.6.0
+version:        0.3.7.0
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
@@ -40,8 +40,10 @@ library
       Checker.Checker
       Checker.Coeffects
       Checker.Constraints
+      Checker.Kinds
       Checker.LaTeX
       Checker.Monad
+      Checker.Primitives
       Checker.Types
       Context
       Eval
@@ -51,8 +53,7 @@ library
       Syntax.Lexer
       Syntax.Parser
       Syntax.Pretty
-      Checker.Kinds
-      Checker.Primitives
+  other-modules:
       Paths_granule
   default-language: Haskell2010
 
