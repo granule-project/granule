@@ -7,6 +7,7 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Op(..),
                    Pattern(..), CKind(..), Coeffect(..),
                    NatModifier(..), Effect, Kind(..),
+                   liftCoeffectType,
                    uniqueNames, arity, freeVars, subst,
                    normalise,
                    nullSpan, getSpan, getEnd, getStart, Pos, Span,
@@ -306,7 +307,7 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
 
 ----------- Types
 
-data TypeScheme = Forall Span [(String, CKind)] Type
+data TypeScheme = Forall Span [(String, Kind)] Type
     deriving (Eq, Show, Generic)
 
 instance FirstParameter TypeScheme Span
@@ -381,8 +382,16 @@ arity :: Type -> Int
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 
-data Kind = KType | KCoeffect | KTy Kind Kind Kind
+data Kind = KType
+          | KCoeffect
+          | KFun Kind Kind
+          | KPoly Id   -- Kind poly variable
+          | KConstr Id -- constructors that have been elevated
     deriving (Show, Ord, Eq)
+
+liftCoeffectType :: CKind -> Kind
+liftCoeffectType (CConstr cid) = KConstr cid
+liftCoeffectType (CPoly var)   = KPoly var
 
 type Effect = [String]
 

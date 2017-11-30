@@ -15,7 +15,7 @@ import System.IO (hPutStrLn, stderr)
 import Checker.LaTeX
 import Checker.Constraints
 import Context
-import Syntax.Expr (Id, CKind, Span, Type, Kind, Coeffect, Pattern)
+import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern)
 import Syntax.Pretty
 
 -- State of the check/synth functions
@@ -46,11 +46,11 @@ data CheckerState = CS
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
             -- Coeffect context, map coeffect vars to their kinds
-            , ckctxt        :: Ctxt (CKind, Quantifier)
+            , ckctxt        :: Ctxt (Kind, Quantifier)
             -- Context of resoled coeffect type variables
             -- (used just before solver, to resolve any type
             -- variables that appear in constraints)
-            , cVarCtxt   :: Ctxt CKind
+            , cVarCtxt   :: Ctxt Kind
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
@@ -58,6 +58,9 @@ data CheckerState = CS
   deriving Show -- for debugging
 
 -- *** Various helpers for manipulating the context
+
+stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
+stripQuantifiers = map (\(var, (k, _)) -> (var, k))
 
 -- | Initial checker context state
 initState :: CheckerState
@@ -76,7 +79,10 @@ freshCoeffectVar cvar kind = do
 
 -- | Helper for registering a new coeffect variable in the checker
 registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
-registerCoeffectVar v k q = modify (\st -> st { ckctxt = (v, (k, q)) : ckctxt st })
+registerCoeffectVar v (CConstr constrId) q =
+  modify (\st -> st { ckctxt = (v, (KConstr constrId, q)) : ckctxt st })
+registerCoeffectVar v (CPoly constrId) q =
+    modify (\st -> st { ckctxt = (v, (KPoly constrId, q)) : ckctxt st })
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
@@ -133,6 +139,11 @@ illKindedUnifyVar s t1 k1 t2 k2 =
     ++ pretty t1 ++ "' of kind " ++ pretty k1
     ++ " with a type '"
     ++ pretty t2 ++ "' of kind " ++ pretty k2
+
+illKindedNEq :: Span -> Kind -> Kind -> MaybeT Checker a
+illKindedNEq s k1 k2 =
+  visibleError "Kind" halt s
+    $ "Expected kind '" ++ pretty k1 ++ "' but got " ++ pretty k2 ++ "''"
 
 -- | A helper for raising a linearity error
 illLinearity :: Span -> String -> MaybeT Checker a

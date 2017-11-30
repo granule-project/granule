@@ -9,6 +9,8 @@ import Checker.Types
 import Checker.Coeffects
 import Checker.Constraints
 import Checker.Monad
+import Checker.Kinds
+import Checker.Primitives
 import Context
 import Prelude hiding (pred)
 
@@ -28,9 +30,12 @@ check defs dbg nameMap = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
 
+    -- Kind check all the type signatures
+    let checkKinds = mapM (\(Def _ _ _ _ tys) -> kindCheck tys) defs
+
     -- Build a computation which checks all the defs (in order)...
     let defCtxt = map (\(Def _ var _ _ tys) -> (var, tys)) defs
-    let checkedDefs = mapM (checkDef dbg defCtxt) defs
+    let checkedDefs = runMaybeT checkKinds >> mapM (checkDef dbg defCtxt) defs
     -- ... and evaluate the computation with initial state
     results <- evalChecker initState nameMap checkedDefs
 
@@ -39,9 +44,9 @@ check defs dbg nameMap = do
       then return . Right $ True
       else return . Left  $ ""
 
-checkDef :: Bool           -- turn on debgging
+checkDef :: Bool            -- turn on debgging
         -> Ctxt TypeScheme  -- context of top-level definitions
-        -> Def             -- definition
+        -> Def              -- definition
         -> Checker (Maybe (Ctxt Assumption))
 checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     ctxt <- runMaybeT $ do
@@ -343,7 +348,7 @@ synthExpr _ defs gam _ (Val s (Var x)) = do
 
      Just (Linear ty)       -> return (ty, [(x, Linear ty)])
      Just (Discharged ty c) -> do
-       k <- kindOf s c
+       k <- inferCoeffectType s c
        return (ty, [(x, Discharged ty (COne k))])
 
 -- Application
@@ -455,9 +460,10 @@ solveConstraints pred s defName = do
   checkerState <- get
   let ctxtCk  = ckctxt checkerState
   let ctxtCkVar = cVarCtxt checkerState
-  let coeffectVariables = filter (not . isType') ctxtCk
+  let coeffectVars = justCoeffectTypesConverted ctxtCk
+  let coeffectKVars = justCoeffectTypesConvertedVars ctxtCkVar
   --
-  let (sbvTheorem, unsats) = compileToSBV pred coeffectVariables ctxtCkVar
+  let (sbvTheorem, unsats) = compileToSBV pred coeffectVars coeffectKVars
   thmRes <- liftIO . prove $ sbvTheorem
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
@@ -483,8 +489,18 @@ solveConstraints pred s defName = do
 
            else return True
   where
-    isType' (_, (CConstr "Type", _)) = True
-    isType' _ = False
+    justCoeffectTypesConverted = mapMaybe convert
+      where
+       convert (var, (KConstr constr, q)) =
+           case lookup constr typeLevelConstructors of
+             Just KCoeffect -> Just (var, (CConstr constr, q))
+             _         -> Nothing
+       -- TODO: currently all poly variables are treated as kind 'Coeffect'
+       -- but this need not be the case, so this can be generalised
+       convert (var, (KPoly constr, q)) = Just (var, (CPoly constr, q))
+       convert _ = Nothing
+    justCoeffectTypesConvertedVars =
+       stripQuantifiers . justCoeffectTypesConverted . map (\(var, k) -> (var, (k, ForallQ)))
 
 leqCtxt :: Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker ()
 leqCtxt s ctxt1 ctxt2 = do
@@ -532,7 +548,7 @@ joinCtxts s _ ctxt1 ctxt2 = do
      weaken (var, Linear t) =
        return (var, Linear t)
      weaken (var, Discharged t c) = do
-       kind <- kindOf s c
+       kind <- inferCoeffectType s c
        return (var, Discharged t (CZero kind))
 
 remainingUndischarged :: Ctxt Assumption -> Ctxt Assumption -> Ctxt Assumption
@@ -556,7 +572,7 @@ leqAssumption _ (_, Linear _)        (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
 leqAssumption s (_, Discharged _ c1) (_, Discharged _ c2) = do
-  kind <- mguCoeffectKinds s c1 c2
+  kind <- mguCoeffectTypes s c1 c2
   addConstraint (Leq s c1 c2 kind)
 
 leqAssumption s (x, t) (x', t') = do
@@ -571,10 +587,10 @@ isType (_, CConstr "Type") = True
 isType _                   = False
 
 freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
-freshPolymorphicInstance (Forall s ckinds ty) = do
+freshPolymorphicInstance (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    renameMap <- mapM instantiateVariable ckinds
+    renameMap <- mapM instantiateVariable kinds
     t <- rename renameMap ty
     return t
   where
@@ -582,12 +598,14 @@ freshPolymorphicInstance (Forall s ckinds ty) = do
     instantiateVariable (var, k) = do
       -- Freshen the variable depending on its kind
       var' <- case k of
-               (CConstr "Type") -> do
+               KType -> do
                  var' <- freshVar var
                  -- Label fresh variable as an existential
                  modify (\st -> st { ckctxt = (var', (k, ExistsQ)) : ckctxt st })
                  return var'
-               _ -> freshCoeffectVar var k
+               KConstr c -> freshCoeffectVar var (CConstr c)
+               KCoeffect ->
+                 error "Coeffect kind variables not yet supported"
       -- Return pair of old variable name and instantiated name (for
       -- name map)
       return (var, var')
@@ -613,14 +631,14 @@ discToFreshVarsIn :: Span -> [Id] -> Ctxt Assumption -> Coeffect -> MaybeT Check
 discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      kind <- mguCoeffectKinds s c coeffect
+      kind <- mguCoeffectTypes s c coeffect
       -- Create a fresh variable
       cvar  <- freshCoeffectVar var kind
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
     toFreshVar (var, Linear t) = do
-      kind <- kindOf s coeffect
+      kind <- inferCoeffectType s coeffect
       return (var, Discharged t (COne kind))
 
 
@@ -641,11 +659,11 @@ freshVarsIn :: Span -> [Id] -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumptio
 freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      ckind <- kindOf s c
+      ctype <- inferCoeffectType s c
       -- Create a fresh variable
       cvar  <- freshVar var
       -- Update the coeffect kind context
-      modify (\s -> s { ckctxt = (cvar, (ckind, ExistsQ)) : ckctxt s })
+      modify (\s -> s { ckctxt = (cvar, (liftCoeffectType ctype, ExistsQ)) : ckctxt s })
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
@@ -677,7 +695,7 @@ extCtxt s ctxt var (Linear t) = do
     Just (Discharged t' c) ->
        if t == t'
          then do
-           k <- kindOf s c
+           k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
          else illTyped s $ "Type clash for variable " ++ var' ++ "`"
     Nothing -> return $ (var, Linear t) : ctxt
@@ -694,7 +712,7 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Linear t') ->
         if t == t'
         then do
-           k <- kindOf s c
+           k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
         else do
           let var' = unrename nameMap var

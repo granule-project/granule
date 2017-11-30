@@ -15,6 +15,7 @@ import Control.Monad.Trans.Maybe
 import Checker.Coeffects
 import Checker.Constraints
 import Checker.Monad
+import Checker.Kinds
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -40,7 +41,7 @@ ctxtFromTypedPattern _ _ (TyCon "Bool")  (PConstr _ "False") = return $ Just []
 -- Pattern match on a modal box
 ctxtFromTypedPattern dbg s (Box coeff ty) (PBox _ p) = do
     ctx <- ctxtFromTypedPattern dbg s ty p
-    k <- kindOf s coeff
+    k <- inferCoeffectType s coeff
     case ctx of
       -- Discharge all variables bound by the inner pattern
       Just ctx' -> return . Just $ map (discharge k coeff) ctx'
@@ -173,7 +174,7 @@ equalTypesRelatedCoeffects dbg s rel (Box c t) (Box c' t') = do
   dbgMsg dbg $ pretty c ++ " == " ++ pretty c'
   dbgMsg dbg $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
   -- Unify the coeffect kinds of the two coeffects
-  kind <- mguCoeffectKinds s c c'
+  kind <- mguCoeffectTypes s c c'
   addConstraint (rel s c c' kind)
   equalTypesRelatedCoeffects dbg s rel t t'
 
@@ -205,16 +206,18 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
       return (False, [])
 
     -- We can unify two existential type variables
-    (Just (CConstr "Type", ExistsQ), Just (CConstr "Type", ExistsQ)) ->
+    (Just (KType, ExistsQ), Just (KType, ExistsQ)) ->
       return (True, [(n, TyVar m)])
 
     -- Trying to unify other (existential) variables
-    (Just (CConstr "Type", _), Just (k, _)) | k /= CConstr "Type" -> do
-      k <- tyKindOf s (TyVar m)
+    (Just (KType, _), Just (k, _)) | k /= KType -> do
+      checkerState <- get
+      k <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) (TyVar m)
       illKindedUnifyVar s (TyVar n) KType (TyVar m) k
 
-    (Just (k, _), Just (CConstr "Type", _)) | k /= CConstr "Type" -> do
-      k <- tyKindOf s (TyVar n)
+    (Just (k, _), Just (KType, _)) | k /= KType -> do
+      checkerState <- get
+      k <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) (TyVar n)
       illKindedUnifyVar s (TyVar n) k (TyVar m) KType
 
     -- Otherwise
@@ -229,38 +232,17 @@ equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
 
 equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
   checkerState <- get
-  case lookup n (ckctxt checkerState) of
-    Just _ -> do
-        k1 <- tyKindOf s (TyVar n)
-        k2 <- tyKindOf s t
-        if k1 == k2
-          then return (True, [(n, t)])
-          else illKindedUnifyVar s (TyVar n) k1 t k2
-    Nothing ->
-      unknownName s ("Type variable " ++ n ++ " is unbound.")
+  k1 <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) (TyVar n)
+  k2 <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) t
+  if k1 == k2
+    then return (True, [(n, t)])
+    else illKindedUnifyVar s (TyVar n) k1 t k2
 
-equalTypesRelatedCoeffects dbg s rel t (TyVar n) = do
+equalTypesRelatedCoeffects dbg s rel t (TyVar n) =
   equalTypesRelatedCoeffects dbg s rel (TyVar n) t
 
 equalTypesRelatedCoeffects _ s _ t1 t2 =
   illTyped s $ "I don't know how to make '" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
-
-tyKindOf :: Span -> Type -> MaybeT Checker Kind
-tyKindOf s =
-  typeFoldM
-    (\_ _ -> return KType)
-    (\_ -> return KType)
-    (\_ _ -> return KType)
-    (\_ _ -> return KType)
-    (\v -> do
-      checkerState <- get
-      case lookup v (ckctxt checkerState) of
-        Just (CConstr "Type", _) -> return KType
-        Just _                   -> return KCoeffect
-        Nothing                  -> unknownName s ("Type variable " ++ v ++ " is unbound."))
-    (\_ _ -> return KType)
-    (\_ -> return KCoeffect)
-    (\_ _ -> return KType)
 
 -- | rewrite a type using a unifier (map from type vars to types)
 applyUnifier :: Unifier -> Type -> Type
@@ -302,7 +284,7 @@ joinTypes dbg s (Diamond ef t) (Diamond ef' t') = do
         halt
 
 joinTypes dbg s (Box c t) (Box c' t') = do
-  kind <- mguCoeffectKinds s c c'
+  kind <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
   topVar <- freshCoeffectVar "" kind
   -- Unify the two coeffects into one

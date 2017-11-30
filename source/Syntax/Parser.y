@@ -112,25 +112,31 @@ PAtom : VAR                          { PVar (getPosToSpan $1) (symString $1) }
 TypeScheme :: { TypeScheme }
 TypeScheme :
    Type                             { Forall nullSpan [] $1 }
- | forall '(' CKinds ')' '.' Type   { Forall (getPos $1, getPos $5) $3 $6 }
- | forall CKinds '.' Type           { Forall (getPos $1, getPos $3) $2 $4 }
+ | forall '(' VarSigs ')' '.' Type   { Forall (getPos $1, getPos $5) $3 $6 }
+ | forall VarSigs '.' Type           { Forall (getPos $1, getPos $3) $2 $4 }
 
 
-CKinds :: { [(String, CKind)] }
-CKinds :
-   CKindSig ',' CKinds { $1 : $3 }
- | CKindSig            { [$1] }
+VarSigs :: { [(String, Kind)] }
+VarSigs :
+   VarSig ',' VarSigs { $1 : $3 }
+ | VarSig             { [$1] }
 
-CKindSig :: { (String, CKind) }
-CKindSig :
-    VAR ':' CKind { (symString $1, $3) }
-  | VAR           { (symString $1, CPoly "") }
+VarSig :: { (String, Kind) }
+VarSig :
+    VAR ':' Kind { (symString $1, $3) }
+
+Kind :: { Kind }
+Kind :
+    VAR     { KPoly (symString $1) }
+  | CONSTR  { case constrString $1 of
+                "Type"     -> KType
+                "Coeffect" -> KCoeffect
+                s          -> KConstr s }
 
 CKind :: { CKind }
 CKind :
-    VAR     { CPoly (symString $1) }
-  | CONSTR  { CConstr (constrString $1) }
-
+   VAR     { CPoly (symString $1) }
+ | CONSTR  { CConstr (constrString $1) }
 
 Type :: { Type }
 Type :
@@ -172,8 +178,8 @@ Coeffect :
      | Coeffect ':' CKind      { normalise (CSig $1 $3) }
 
 NatCoeff :: { Coeffect }
-NatCoeff : INT NatModifier              { let TokenInt _ x = $1
-                                          in CNat $2 x }
+NatCoeff : INT NatModifier     { let TokenInt _ x = $1
+                                 in CNat $2 x }
 
 NatModifier :: { NatModifier }
 NatModifier : {- empty -}    { Ordered }

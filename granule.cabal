@@ -51,7 +51,8 @@ library
       Syntax.Lexer
       Syntax.Parser
       Syntax.Pretty
-  other-modules:
+      Checker.Kinds
+      Checker.Primitives
       Paths_granule
   default-language: Haskell2010
 

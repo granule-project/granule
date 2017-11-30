@@ -3,6 +3,7 @@
 module Checker.Coeffects where
 
 import Checker.Monad
+import Checker.Kinds
 import Context
 import Syntax.Expr
 import Syntax.Pretty
@@ -20,24 +21,24 @@ flattenable (CConstr "Level") = Just CJoin
 flattenable _                 = Nothing
 
 -- What is the kind of a particular coeffect?
-kindOf :: Span -> Coeffect -> MaybeT Checker CKind
+inferCoeffectType :: Span -> Coeffect -> MaybeT Checker CKind
 
 -- Coeffect constants have an obvious kind
-kindOf _ (Level _)         = return $ CConstr "Level"
-kindOf _ (CNat Ordered _)  = return $ CConstr "Nat"
-kindOf _ (CNat Discrete _) = return $ CConstr "Nat="
-kindOf _ (CFloat _)        = return $ CConstr "Q"
-kindOf _ (CSet _)          = return $ CConstr "Set"
-kindOf _ (CNatOmega _)     = return $ CConstr "Nat*"
+inferCoeffectType _ (Level _)         = return $ CConstr "Level"
+inferCoeffectType _ (CNat Ordered _)  = return $ CConstr "Nat"
+inferCoeffectType _ (CNat Discrete _) = return $ CConstr "Nat="
+inferCoeffectType _ (CFloat _)        = return $ CConstr "Q"
+inferCoeffectType _ (CSet _)          = return $ CConstr "Set"
+inferCoeffectType _ (CNatOmega _)     = return $ CConstr "Nat*"
 
 -- Take the join for compound coeffect epxressions
-kindOf s (CPlus c c')  = mguCoeffectKinds s c c'
-kindOf s (CTimes c c') = mguCoeffectKinds s c c'
-kindOf s (CMeet c c')  = mguCoeffectKinds s c c'
-kindOf s (CJoin c c')  = mguCoeffectKinds s c c'
+inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
+inferCoeffectType s (CTimes c c') = mguCoeffectTypes s c c'
+inferCoeffectType s (CMeet c c')  = mguCoeffectTypes s c c'
+inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
 
 -- Coeffect variables should have a kind in the cvar->kind context
-kindOf s (CVar cvar) = do
+inferCoeffectType s (CVar cvar) = do
   checkerState <- get
   case lookup cvar (ckctxt checkerState) of
      Nothing -> do
@@ -48,50 +49,52 @@ kindOf s (CVar cvar) = do
 --       put (state { uniqueVarId = uniqueVarId state + 1 })
 --       return newCKind
 
-     Just (k, _) -> return k
+     Just (KConstr name, _) -> return $ CConstr name
+     Just (KPoly   name, _) -> return $ CPoly name
+     Just (k, _)            -> illKindedNEq s KCoeffect k
 
-kindOf _ (CZero k) = return k
-kindOf _ (COne k)  = return k
-kindOf _ (CStar k)  = return k
-kindOf _ (CSig _ k) = return k
+inferCoeffectType _ (CZero k) = return k
+inferCoeffectType _ (COne k)  = return k
+inferCoeffectType _ (CStar k)  = return k
+inferCoeffectType _ (CSig _ k) = return k
 
--- Given a coeffect kind variable and a coeffect kind,
+-- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in an context
 -- and update the current solver predicate as well
-updateCoeffectKind :: Id -> CKind -> MaybeT Checker ()
-updateCoeffectKind ckindVar ckind = do
+updateCoeffectKind :: Id -> Kind -> MaybeT Checker ()
+updateCoeffectKind tyVar kind = do
     checkerState <- get
     put $ checkerState
       { ckctxt = rewriteCtxt (ckctxt checkerState),
-        cVarCtxt = replace (cVarCtxt checkerState) ckindVar ckind }
+        cVarCtxt = replace (cVarCtxt checkerState) tyVar kind }
   where
-    rewriteCtxt :: Ctxt (CKind, Quantifier) -> Ctxt (CKind, Quantifier)
+    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
     rewriteCtxt [] = []
-    rewriteCtxt ((name, (CPoly ckindVar', q)) : ctxt)
-     | ckindVar == ckindVar' = (name, (ckind, q)) : rewriteCtxt ctxt
+    rewriteCtxt ((name, (KPoly kindVar, q)) : ctxt)
+     | tyVar == kindVar = (name, (kind, q)) : rewriteCtxt ctxt
     rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
-mguCoeffectKinds :: Span -> Coeffect -> Coeffect -> MaybeT Checker CKind
-mguCoeffectKinds s c1 c2 = do
-  ck1 <- kindOf s c1
-  ck2 <- kindOf s c2
+mguCoeffectTypes :: Span -> Coeffect -> Coeffect -> MaybeT Checker CKind
+mguCoeffectTypes s c1 c2 = do
+  ck1 <- inferCoeffectType s c1
+  ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
     -- Both are poly
     (CPoly kv1, CPoly kv2) -> do
-      updateCoeffectKind kv1 (CPoly kv2)
+      updateCoeffectKind kv1 (liftCoeffectType $ CPoly kv2)
       return (CPoly kv2)
 
    -- Linear-hand side is a poly variable, but right is concrete
     (CPoly kv1, ck2') -> do
-      updateCoeffectKind kv1 ck2'
+      updateCoeffectKind kv1 (liftCoeffectType ck2')
       return ck2'
 
     -- Right-hand side is a poly variable, but Linear is concrete
     (ck1', CPoly kv2) -> do
-      updateCoeffectKind kv2 ck1'
+      updateCoeffectKind kv2 (liftCoeffectType ck1')
       return ck1'
 
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1

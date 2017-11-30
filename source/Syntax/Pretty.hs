@@ -44,15 +44,16 @@ instance Pretty Coeffect where
 instance Pretty Kind where
     pretty KType          = "Type"
     pretty KCoeffect      = "Coeffect"
-    pretty (KTy k1 k2 k3) = pretty k1 ++ " -> " ++ pretty k2 ++ " -> " ++ pretty k3
+    pretty (KFun k1 k2)   = pretty k1 ++ " -> " ++ pretty k2
+    pretty (KConstr c)    = c
+    pretty (KPoly v)      = v
 
 instance Pretty TypeScheme where
     pretty (Forall _ cvs t) =
       "forall " ++ intercalate ", " (map prettyKindSignatures cvs)
                 ++ ". " ++ pretty t
       where
-       prettyKindSignatures (var, CPoly "") = var
-       prettyKindSignatures (var, ckind)    = var ++ " : " ++ pretty ckind
+       prettyKindSignatures (var, kind) = var ++ " : " ++ pretty kind
 
 instance Pretty CKind where
     pretty (CConstr c) = c
