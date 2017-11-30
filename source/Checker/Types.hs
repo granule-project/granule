@@ -197,15 +197,19 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
   checkerState <- get
   case (lookup n (ckctxt checkerState), lookup m (ckctxt checkerState)) of
 
+    -- TODO: we might revisit the names here; forallQ in this context is
+    -- really a variable where forall elimination has been applied (i.e., it is
+    -- an arbitrary atom)
+
     -- Two universally quantified variables are unequal
     (Just (_, ForallQ), Just (_, ForallQ)) ->
       return (False, [])
 
-    -- We can unify two existential type variables
+    -- We cannot unify two existential type variables
     (Just (KType, ExistsQ), Just (KType, ExistsQ)) ->
-      return (True, [(n, TyVar m)])
+      return (False, [])
 
-    -- We can unify a forall to an existential
+    -- But we can unify a forall and exists
     (Just (KType, ForallQ), Just (KType, ExistsQ)) ->
         return (True, [(n, TyVar m)])
 
