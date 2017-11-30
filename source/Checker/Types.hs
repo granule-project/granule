@@ -183,10 +183,6 @@ equalTypesRelatedCoeffects dbg s rel (TyApp t1 t2) (TyApp t1' t2') = do
   (two, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
   return (one && two, u1 ++ u2)
 
-equalTypesRelatedCoeffects _ s _ (TyInt n) (TyVar m) = do
-  addConstraint (Eq s (CNat Discrete n) (CVar m) (CConstr "Nat="))
-  return (True, [(m , TyInt n)])
-
 equalTypesRelatedCoeffects _ s _ (TyVar n) (TyInt m) = do
   addConstraint (Eq s (CVar n) (CNat Discrete m) (CConstr "Nat="))
   return (True, [(n, TyInt m)])
@@ -208,6 +204,13 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
     -- We can unify two existential type variables
     (Just (KType, ExistsQ), Just (KType, ExistsQ)) ->
       return (True, [(n, TyVar m)])
+
+    -- We can unify a forall to an existential
+    (Just (KType, ForallQ), Just (KType, ExistsQ)) ->
+        return (True, [(n, TyVar m)])
+
+    (Just (KType, ExistsQ), Just (KType, ForallQ)) ->
+        return (True, [(m, TyVar n)])
 
     -- Trying to unify other (existential) variables
     (Just (KType, _), Just (k, _)) | k /= KType -> do

@@ -462,7 +462,7 @@ solveConstraints pred s defName = do
   let ctxtCkVar = cVarCtxt checkerState
   let coeffectVars = justCoeffectTypesConverted ctxtCk
   let coeffectKVars = justCoeffectTypesConvertedVars ctxtCkVar
-  --
+
   let (sbvTheorem, unsats) = compileToSBV pred coeffectVars coeffectKVars
   thmRes <- liftIO . prove $ sbvTheorem
   case thmRes of
