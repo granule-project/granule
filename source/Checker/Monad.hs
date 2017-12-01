@@ -37,6 +37,7 @@ type VarCounter  = Int
 data Assumption =
     Linear Type
   | Discharged Type Coeffect
+    deriving (Eq, Show)
 
 data CheckerState = CS
             { -- Fresh variable id
