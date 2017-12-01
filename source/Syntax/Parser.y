@@ -288,7 +288,7 @@ parseDefs input = do
                                                      -- need to precede use sites
   where
     parse = fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
-    imports = catMaybes . map (stripPrefix "import ") . lines $ input
+    imports = map (++ ".gr") . catMaybes . map (stripPrefix "import ") . lines $ input
     push ps = (concatMap fst ps, concatMap snd ps)
     checkNameClashes ds =
         if null clashes then return ds

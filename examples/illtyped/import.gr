@@ -1,5 +1,5 @@
 -- The type error is in the included file
-import examples/illtyped/approximation.gr
+import examples/illtyped/approximation
 
 foo : Int
 foo = 0
