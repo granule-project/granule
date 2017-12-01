@@ -19,8 +19,8 @@ if0 g |x| |y| =
             |n| -> y
 
 -- Coeffectful composition
-comp : forall (a : Type, n : Nat, m : Nat) .
-       (a |n| -> Int) -> (Int |n| -> Int) |n| -> Int |n * m| -> Int
+comp : forall (n : Nat, m : Nat) .
+       (Int |n| -> Int) -> (Int |n| -> Int) |n| -> Int |n * m| -> Int
 comp g |f| |x| = g |(f |x|)|
 
 -- Coeffectful application

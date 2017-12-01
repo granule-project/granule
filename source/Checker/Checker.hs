@@ -250,23 +250,29 @@ synthExpr _ _ _ _ (Val _ (Constr s [])) | s == "False" || s == "True" =
 synthExpr _ _ _ _ (Val _ (NumInt _))  = return (TyCon "Int", [])
 synthExpr _ _ _ _ (Val _ (NumFloat _)) = return (TyCon "Float", [])
 
--- List constructors
-synthExpr _ _ _ _ (Val _ (Constr "Nil" [])) =
-  return (TyApp (TyApp (TyCon "List") (TyInt 0)) (TyCon "Int"), [])
+-- Polymorphic list constructors
+synthExpr _ _ _ _ (Val _ (Constr "Nil" [])) = do
+  elementVar <- freshVar "a"
+  modify (\st -> st { ckctxt = (elementVar, (KType, InstanceQ)) : ckctxt st })
+  return (TyApp (TyApp (TyCon "List") (TyInt 0)) (TyVar elementVar), [])
 
 synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
     let kind = CConstr "Nat="
     sizeVarArg <- freshCoeffectVar "n" kind
     sizeVarRes <- freshCoeffectVar "m" kind
+    elementVar <- freshVar "a"
+    modify (\st -> st { ckctxt = (elementVar, (KType, InstanceQ)) : ckctxt st })
     -- Add a constraint
     -- m ~ n + 1
     addConstraint $ Eq s (CVar sizeVarRes)
                          (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
     -- Cons : a -> List n a -> List m a
-    return (FunTy (TyCon "Int")
-             (FunTy (list (TyVar sizeVarArg)) (list (TyVar sizeVarRes))), [])
+    return (FunTy
+             (TyVar elementVar)
+             (FunTy (list elementVar (TyVar sizeVarArg))
+                    (list elementVar (TyVar sizeVarRes))), [])
   where
-    list n = TyApp (TyApp (TyCon "List") n) (TyCon "Int")
+    list elementVar n = TyApp (TyApp (TyCon "List") n) (TyVar elementVar)
 
 
 -- Effectful lifting
@@ -603,7 +609,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
                KType -> do
                  var' <- freshVar var
                  -- Label fresh variable as an existential
-                 modify (\st -> st { ckctxt = (var', (k, ExistsQ)) : ckctxt st })
+                 modify (\st -> st { ckctxt = (var', (k, InstanceQ)) : ckctxt st })
                  return var'
                KConstr c -> freshCoeffectVar var (CConstr c)
                KCoeffect ->
@@ -665,7 +671,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       -- Create a fresh variable
       cvar  <- freshVar var
       -- Update the coeffect kind context
-      modify (\s -> s { ckctxt = (cvar, (liftCoeffectType ctype, ExistsQ)) : ckctxt s })
+      modify (\s -> s { ckctxt = (cvar, (liftCoeffectType ctype, InstanceQ)) : ckctxt s })
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
