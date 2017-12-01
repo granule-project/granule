@@ -1,4 +1,4 @@
-
+-- This code is fine, except that calling the accumulator `u` breaks everything :O
 foldr : forall (a : Type, b : Type, n : Nat)
       . (a -> b -> b) |n| -> b -> List n a -> b
 foldr |h| u xs =
