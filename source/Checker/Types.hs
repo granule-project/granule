@@ -106,7 +106,9 @@ ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
       (localGam', ty) <- ctxtFromTypedPatterns dbg s t2 pats
       return (localGam ++ localGam', ty)
     Nothing -> illTypedPattern s t1 pat
-
+ctxtFromTypedPatterns _ s ty p =
+  error $ "Unhandled case: ctxtFromTypedPatterns called with:\
+          \Span: " ++ show s ++ "\nType: " ++ show ty ++ "\nPatterns: " ++ show p
 
 
 lEqualTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type)
