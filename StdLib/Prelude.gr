@@ -70,3 +70,6 @@ foldr |h| acc xs =
 
 sum : forall n : Nat . List n Int -> Int
 sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
+
+product : forall n : Nat . List n Int -> Int
+product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
