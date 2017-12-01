@@ -1,4 +1,4 @@
-import StdLib/Prelude.gr
+import StdLib/Prelude
 
 map : Int
 map = 0

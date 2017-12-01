@@ -359,7 +359,7 @@ synthExpr dbg defs gam pol (App s e e') = do
          gam2 <- checkExpr dbg defs gam pol False sig e'
          gamNew <- ctxPlus s gam1 gam2
          return (tau, gamNew)
-      t -> illTyped s $ "Linear-hand side of application is not a function"
+      t -> illTyped s $ "Left-hand side of application is not a function"
                    ++ " but has type '" ++ pretty t ++ "'"
 
 -- Promotion

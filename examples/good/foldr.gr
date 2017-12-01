@@ -1,0 +1,4 @@
+import StdLib/Prelude
+
+main : Int
+main = sum (Cons 3 (Cons 2 (Cons 1 Nil)))
