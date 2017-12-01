@@ -515,10 +515,10 @@ joinCtxts :: Span -> [(Id, Id)] -> Ctxt Assumption -> Ctxt Assumption -> MaybeT 
 joinCtxts s _ ctxt1 ctxt2 = do
     -- All the type assumptions from ctxt1 whose variables appear in ctxt2
     -- and weaken all others
-    ctxt  <- ctxt1 `intersectCtxtsWithWeaken` ctxt2
+    ctxt  <- intersectCtxtsWithWeaken s ctxt1 ctxt2
     -- All the type assumptions from ctxt2 whose variables appear in ctxt1
     -- and weaken all others
-    ctxt' <- ctxt2 `intersectCtxtsWithWeaken` ctxt1
+    ctxt' <- intersectCtxtsWithWeaken s ctxt2 ctxt1
 
     -- Make an context with fresh coeffect variables for all
     -- the variables which are in both ctxt1 and ctxt2...
@@ -530,24 +530,26 @@ joinCtxts s _ ctxt1 ctxt2 = do
     zipWithM_ (leqAssumption s) ctxt' varCtxt
     -- Return the common upper-bound context of ctxt1 and ctxt2
     return varCtxt
-  where
-   intersectCtxtsWithWeaken ::
-    Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
-   intersectCtxtsWithWeaken a b = do
-      let intersected = intersectCtxts a b
-      let remaining   = a `subtractCtxt` intersected
-      weakenedRemaining <- mapM weaken remaining
-      let newCtxt = intersected ++ filter isNonLinearAssumption weakenedRemaining
-      return . normaliseCtxt $ newCtxt
-    where
-     isNonLinearAssumption :: (Id, Assumption) -> Bool
-     isNonLinearAssumption (_, Discharged _ _) = True
-     isNonLinearAssumption _                   = False
 
-     weaken :: (Id, Assumption) -> MaybeT Checker (Id, Assumption)
-     weaken (var, Linear t) =
+{- |  intersect contexts and weaken anything not appear in both -}
+intersectCtxtsWithWeaken ::
+    Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
+intersectCtxtsWithWeaken s a b = do
+   let intersected = intersectCtxts a b
+   -- All the things that were not shared
+   let remaining   = a `subtractCtxt` intersected ++ b `subtractCtxt` intersected
+   weakenedRemaining <- mapM weaken remaining
+   let newCtxt = intersected ++ filter isNonLinearAssumption weakenedRemaining
+   return . normaliseCtxt $ newCtxt
+  where
+   isNonLinearAssumption :: (Id, Assumption) -> Bool
+   isNonLinearAssumption (_, Discharged _ _) = True
+   isNonLinearAssumption _                   = False
+
+   weaken :: (Id, Assumption) -> MaybeT Checker (Id, Assumption)
+   weaken (var, Linear t) =
        return (var, Linear t)
-     weaken (var, Discharged t c) = do
+   weaken (var, Discharged t c) = do
        kind <- inferCoeffectType s c
        return (var, Discharged t (CZero kind))
 
