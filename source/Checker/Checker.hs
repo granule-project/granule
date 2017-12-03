@@ -471,8 +471,12 @@ solveConstraints pred s defName = do
   let coeffectVars = justCoeffectTypesConverted ctxtCk
   let coeffectKVars = justCoeffectTypesConvertedVars ctxtCkVar
 
-  let (sbvTheorem, unsats) = compileToSBV pred coeffectVars coeffectKVars
+--  print $ "cvars = " ++ show coeffectVars
+--  print $ "ckvars = " ++ show coeffectKVars
+  let (sbvTheorem, _, unsats) = compileToSBV pred coeffectVars coeffectKVars
+
   thmRes <- liftIO . prove $ sbvTheorem
+
   case thmRes of
      -- Tell the user if there was a hard proof error (e.g., if
      -- z3 is not installed/accessible).
@@ -483,10 +487,18 @@ solveConstraints pred s defName = do
            then
              case getModelAssignment thmRes of
                -- Main 'Falsifiable' result
-               Right (False, _ :: [ Integer ] ) -> do
+               Right (False, assg :: [ Integer ] ) -> do
                    -- Show any trivial inequalities
                    mapM_ (\c -> illGraded (getSpan c) (pretty . Neg $ c)) unsats
                    -- Show fatal error, with prover result
+                   {-
+                   negated <- liftIO . sat $ sbvSatTheorem
+                   print $ show $ getModelDictionary negated
+                   case (getModelAssignment negated) of
+                     Right (_, assg :: [Integer]) -> do
+                       print $ show assg
+                     Left msg -> print $ show msg
+                   -}
                    illTyped s $ "Definition '" ++ defName ++ "' is " ++ show thmRes
 
                Right (True, _) ->

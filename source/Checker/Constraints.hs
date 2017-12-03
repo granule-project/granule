@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RankNTypes #-}
 
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
@@ -77,24 +78,40 @@ type SolverVars  = [(Id, SCoeffect)]
 -- Compile constraint into an SBV symbolic bool, along with a list of
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
 compileToSBV :: Pred -> Ctxt (CKind, Quantifier) -> Ctxt CKind
-             -> (Symbolic SBool, [Constraint])
-compileToSBV predicate cctxt cVarCtxt = (do
-    (pres, constraints, solverVars) <- foldrM createFreshVar (true, true, []) cctxt
-    let foldConj cs = foldr (&&&) true cs
-    let foldImp c1 c2 = c1 ==> c2
-    let predC = predFold foldConj foldImp (compile solverVars) predicate'
-    return (pres ==> (constraints &&& predC)), trivialUnsatisfiableConstraints predicate')
+             -> (Symbolic SBool, Symbolic SBool, [Constraint])
+compileToSBV predicate cctxt cVarCtxt =
+  (buildTheorem id quant
+  , buildTheorem bnot (quant . flipQuant)
+  , trivialUnsatisfiableConstraints predicate')
+
   where
+    flipQuant ForallQ = InstanceQ
+    flipQuant InstanceQ = ForallQ
+
+    buildTheorem ::
+        (SBool -> SBool)
+     -> (forall a. SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
+     -> Symbolic SBool
+    buildTheorem polarity quant = do
+      (pres, constraints, solverVars) <-
+          foldrM (createFreshVar quant) (true, true, []) cctxt
+      let foldConj cs = foldr (&&&) true cs
+      let foldImp c1 c2 = c1 ==> c2
+      let predC = predFold foldConj foldImp (compile solverVars) predicate'
+      return (polarity (pres ==> (constraints &&& predC)))
+
     predicate' = rewriteConstraints cVarCtxt predicate
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
-      :: (Id, (CKind, Quantifier))
+      :: (forall a. SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
+      -> (Id, (CKind, Quantifier))
       -> (SBool, SBool, SolverVars)
       -> Symbolic (SBool, SBool, SolverVars)
-    createFreshVar (var, (kind, quantifierType))
+    createFreshVar quant
+                   (var, (kind, quantifierType))
                    (universalConstraints, existentialConstraints, ctxt) = do
-      (pre, symbolic) <- freshCVar var kind quantifierType
+      (pre, symbolic) <- freshCVar quant var kind quantifierType
       let (universalConstraints', existentialConstraints') =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
@@ -150,41 +167,42 @@ data SCoeffect =
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
-freshCVar :: Id -> CKind -> Quantifier -> Symbolic (SBool, SCoeffect)
+freshCVar :: (forall a . SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
+          -> Id -> CKind -> Quantifier -> Symbolic (SBool, SCoeffect)
 
-freshCVar name (CConstr "Nat*") q = do
+freshCVar quant name (CConstr "Nat*") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNatOmega solverVar)
 
-freshCVar name (CConstr "Nat") q = do
+freshCVar quant name (CConstr "Nat") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNat Ordered solverVar)
 
 -- Singleton coeffect type
-freshCVar name (CConstr "One") q = do
+freshCVar quant name (CConstr "One") q = do
   solverVar <- (quant q) name
   return (solverVar .== literal 1, SNat Ordered solverVar)
 
-freshCVar name (CConstr "Nat=") q = do
+freshCVar quant name (CConstr "Nat=") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNat Discrete solverVar)
-freshCVar name (CConstr "Q") q = do
+freshCVar quant name (CConstr "Q") q = do
   solverVar <- (quant q) name
   return (true, SFloat solverVar)
-freshCVar name (CConstr "Level") q = do
+freshCVar quant name (CConstr "Level") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
-freshCVar _ (CConstr "Set") _ = return (true, SSet S.empty)
+freshCVar quant _ (CConstr "Set") _ = return (true, SSet S.empty)
 
 -- A poly typed coeffect variable whose element is 'star' gets
 -- compiled into the One type (since this satisfies all the same properties)
-freshCVar name (CPoly v) q | " star" `isPrefixOf` v
+freshCVar quant name (CPoly v) q | " star" `isPrefixOf` v
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
                            || "kprom" `isPrefixOf` v = do
   solverVar <- (quant q) name
   return (solverVar .== literal 1, SNat Ordered solverVar)
 
-freshCVar _ k _ =
+freshCVar _ _ k _ =
   error $ "Trying to make a fresh solver variable for a coeffect of kind: " ++ show k ++ " but I don't know how."
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
