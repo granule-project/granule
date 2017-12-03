@@ -16,3 +16,37 @@ typeLevelConstructors =
   , ("Q",    KCoeffect) -- Rationals
   , ("Level", KCoeffect) -- Security level
   , ("Set", KFun (KPoly "k") (KFun (KConstr "k") KCoeffect)) ]
+
+dataConstructors :: [(Id, TypeScheme)]
+dataConstructors =
+  [ ("True", Forall nullSpan [] (TyCon "Bool"))
+  , ("False", Forall nullSpan [] (TyCon "Bool")) ]
+
+builtins :: [(Id, TypeScheme)]
+builtins =
+  [ -- Graded monad unit operation
+    ("pure", Forall nullSpan [("a", KType)]
+       $ (FunTy (TyVar "a") (Diamond [] (TyVar "a"))))
+    -- Effectful primitives
+  , ("read", Forall nullSpan [] $ Diamond ["R"] (TyCon "Int"))
+  , ("write", Forall nullSpan [] $
+       FunTy (TyCon "Int") (Diamond ["W"] (TyCon "Int"))) ]
+
+binaryOperators :: [(Id, Type)]
+binaryOperators =
+  [ ("+", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Int")))
+   ,("+", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Float")))
+   ,("-", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Int")))
+   ,("-", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Float")))
+   ,("*", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Int")))
+   ,("*", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Float")))
+   ,("==", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
+   ,("<=", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
+   ,("<", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
+   ,(">", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
+   ,(">=", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
+   ,("==", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
+   ,("<=", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
+   ,("<", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
+   ,(">", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
+   ,(">=", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool"))) ]

@@ -88,6 +88,7 @@ test-suite spec
     , hspec
     , QuickCheck
     , mtl
+    , transformers >=0.5
   other-modules:
       Checker.CheckerSpec
       Checker.MonadSpec

@@ -112,7 +112,7 @@ instance Pretty Value where
 
 instance Pretty Expr where
   pretty (App _ e1 e2) = parens $ pretty e1 ++ " " ++ pretty e2
-  pretty (Binop _ op e1 e2) = parens $ pretty e1 ++ " " ++ pretty op ++ " " ++ pretty e2
+  pretty (Binop _ op e1 e2) = parens $ pretty e1 ++ " " ++ op ++ " " ++ pretty e2
   pretty (LetBox _ v t e1 e2) = parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
                                 ++ pretty e1 ++ " in " ++ pretty e2
   pretty (LetDiamond _ v t e1 e2) = parens $ "let " ++ v ++ " :" ++ pretty t ++ " <- "
@@ -120,11 +120,6 @@ instance Pretty Expr where
   pretty (Val _ v) = pretty v
   pretty (Case _ e ps) = "case " ++ pretty e ++ " of " ++
                          intercalate ";" (map (\(p, e') -> pretty p ++ " -> " ++ pretty e') ps)
-
-instance Pretty Op where
-  pretty Add = "+"
-  pretty Sub = "-"
-  pretty Mul = "*"
 
 parens :: String -> String
 parens s = "(" ++ s ++ ")"

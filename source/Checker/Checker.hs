@@ -12,7 +12,7 @@ import Checker.Monad
 import Checker.Kinds
 import Checker.Primitives
 import Context
-import Prelude hiding (pred)
+import Prelude hiding (pred, print)
 
 import Data.List
 import Data.Maybe
@@ -422,26 +422,39 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
     return (tau, gamNew)
 
 -- BinOp
-synthExpr dbg defs gam pol (Binop s _ e e') = do
-    (t, gam1)  <- synthExpr dbg defs gam pol e
-    (t', gam2) <- synthExpr dbg defs gam pol e'
-    case (t, t') of
-        -- Well typed
-        (TyCon n, TyCon m) | isNum n && isNum m -> do
-             gamNew <- ctxPlus s gam1 gam2
-             return (TyCon $ joinNum n m, gamNew)
+synthExpr dbg defs gam pol (Binop s op e1 e2) = do
+    print "Synthing for binop"
+    (t1, gam1)  <- synthExpr dbg defs gam pol e1
+    (t2, gam2) <- synthExpr dbg defs gam pol e2
+    -- Look through the list of operators (of which there might be
+    -- multiple matching operators)
+    case lookupMany op binaryOperators of
+      [] -> unknownName s $ "Binary operator " ++ op
+      ops -> do
+        returnType <- selectFirstByType t1 t2 (lookupMany op binaryOperators)
+        gamOut <- ctxPlus s gam1 gam2
+        print $ pretty returnType
+        return (returnType, gamOut)
 
-        -- Or ill-typed
-        _ -> illTyped s $ "Binary operator expects two 'Int' expressions "
-                     ++ "but got '" ++ pretty t ++ "' and '" ++ pretty t' ++ "'"
-  where isNum "Int" = True
-        isNum "Float" = True
-        isNum _      = False
-        joinNum "Int" "Int" = "Int"
-        joinNum x "Float" = x
-        joinNum "Float" x = x
-        joinNum _ _ = error "joinNum is intentionally partial. Please \
-                            \create an issue on GitHub!"
+  where
+    -- No matching type were found (meaning there is a type error)
+    selectFirstByType t1 t2 [] =
+      illTyped s $ "Could not resolve operator " ++ op ++ " at type: "
+         ++ pretty (FunTy t1 (FunTy t2 (TyVar "?")))
+
+    selectFirstByType t1 t2 ((FunTy opt1 (FunTy opt2 resultTy)):ops) = do
+      -- Attempt to use this typing
+      (result, local) <- localChecking $ do
+         (eq1, _) <- equalTypes dbg s t1 opt1
+         (eq2, _) <- equalTypes dbg s t2 opt2
+         return (eq1 && eq2)
+      -- If successful then return this local computation
+      case result of
+        Just True -> local >> return resultTy
+        _         -> selectFirstByType t1 t2 ops
+
+    selectFirstByType t1 t2 (_:ops) = selectFirstByType t1 t2 ops
+
 
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
@@ -731,3 +744,11 @@ extCtxt s ctxt var (Discharged t c) = do
 fold1M :: Monad m => (a -> a -> m a) -> [a] -> m a
 fold1M _ []     = error "Must have at least one case"
 fold1M f (x:xs) = foldM f x xs
+
+print :: String -> MaybeT Checker ()
+print = liftIO . putStrLn
+
+lookupMany :: Eq a => a -> [(a, b)] -> [b]
+lookupMany _ []                     = []
+lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
+lookupMany a' (_:xs)                = lookupMany a' xs

@@ -21,11 +21,11 @@ import Syntax.FirstParameter
 data Constraint =
     Eq  Span Coeffect Coeffect CKind
   | Leq Span Coeffect Coeffect CKind
-  deriving (Show, Generic)
+  deriving (Show, Eq, Generic)
 
 data Pred =
   Conj [Pred] | Impl Pred Pred | Con Constraint
-  deriving Show
+  deriving (Show, Eq)
 
 predFold :: ([a] -> a) -> (a -> a -> a) -> (Constraint -> a) -> Pred -> a
 predFold c i a (Conj ps)   = c (map (predFold c i a) ps)
@@ -53,13 +53,14 @@ instance Pretty [Constraint] where
     pretty constr = "---\n" ++ (intercalate "\n" . map pretty $ constr)
 
 instance Pretty Constraint where
-    pretty (Eq s c1 c2 _)  = "(" ++ pretty c1 ++ " == " ++ pretty c2 ++ ")" -- @" ++ show s
-    pretty (Leq s c1 c2 _) = "(" ++ pretty c1 ++ " <= " ++ pretty c2 ++ ")" -- @" ++ show s
+    pretty (Eq _ c1 c2 _)  = "(" ++ pretty c1 ++ " == " ++ pretty c2 ++ ")" -- @" ++ show s
+    pretty (Leq _ c1 c2 _) = "(" ++ pretty c1 ++ " <= " ++ pretty c2 ++ ")" -- @" ++ show s
 
 --instance Pretty CNF where
 --    pretty cnf = intercalate "&" (intercalate "|" (map pretty cnf))
 
-data Quantifier = ForallQ | InstanceQ deriving Show
+data Quantifier = ForallQ | InstanceQ
+  deriving (Show, Eq)
 
 quant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
 quant ForallQ = forall

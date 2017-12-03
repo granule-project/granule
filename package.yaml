@@ -59,6 +59,7 @@ tests:
     - hspec
     - QuickCheck
     - mtl
+    - transformers >=0.5
   doctest:
     main: doctest.hs
     source-dirs: tests

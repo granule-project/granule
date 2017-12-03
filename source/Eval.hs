@@ -10,10 +10,17 @@ import Context
 import Control.Monad (when)
 
 -- Evaluate operators
-evalOp :: Num a => Op -> (a -> a -> a)
-evalOp Add = (+)
-evalOp Sub = (-)
-evalOp Mul = (*)
+evalOpNum :: Num a => Id -> (a -> a -> a)
+evalOpNum "+" = (+)
+evalOpNum "-" = (-)
+evalOpNum "*" = (*)
+
+evalOpBool :: (Eq a, Ord a, Num a) => Id -> (a -> a -> Bool)
+evalOpBool "==" = (==)
+evalOpBool "<=" = (<=)
+evalOpBool "<"  = (<)
+evalOpBool ">=" = (>=)
+evalOpBool ">"  = (>)
 
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
@@ -44,19 +51,29 @@ evalIn ctxt (App _ e1 e2) = do
         v2 <- evalIn ctxt e2
         return $ Constr c (vs ++ [v2])
 
+      _ -> error $ show v1
       -- _ -> error "Cannot apply value"
 
 evalIn ctxt (Binop _ op e1 e2) = do
      v1 <- evalIn ctxt e1
      v2 <- evalIn ctxt e2
      case (v1, v2) of
-       (NumInt n1, NumInt n2)     -> return $ NumInt (evalOp op n1 n2)
-       (NumInt n1, NumFloat n2)   -> return $ NumFloat (evalOp op (cast n1) n2)
-       (NumFloat n1, NumInt n2)   -> return $ NumFloat (evalOp op n1 (cast n2))
-       (NumFloat n1, NumFloat n2) -> return $ NumFloat (evalOp op n1 n2)
-       _ -> fail $ "Runtime exception: Not a number: "
+       (NumInt n1, NumInt n2)
+          -> return $ NumInt (evalOpNum op n1 n2)
+       (NumInt n1, NumFloat n2)
+          -> return $ NumFloat (evalOpNum op (cast n1) n2)
+       (NumFloat n1, NumInt n2)
+          -> return $ NumFloat (evalOpNum op n1 (cast n2))
+       (NumFloat n1, NumFloat n2)
+          -> return $ NumFloat (evalOpNum op n1 n2)
+       (Constr b1 [], Constr b2 []) | isBool b1 && isBool b2
+          -> return $ Constr (show $ evalOpBool op (read b1) (read b2)) []
+       _ -> fail $ "Runtime exception: Not a number or bool: "
                  ++ pretty v1 ++ " or " ++ pretty v2
   where
+    isBool "True"  = True
+    isBool "False" = True
+    isBool _       = False
     cast :: Int -> Double
     cast = fromInteger . toInteger
 

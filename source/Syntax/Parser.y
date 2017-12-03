@@ -50,6 +50,7 @@ import System.Exit (die)
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
+    OP    { TokenOp _ _ }
 
 
 %right in
@@ -241,9 +242,12 @@ Case :: { (Pattern, Expr) }
 Case : Pat '->' Expr { ($1, $3) }
 
 Form :: { Expr }
-Form : Form '+' Form               { Binop (getStart $1, getEnd $3) Add $1 $3 }
-     | Form '-' Form               { Binop (getStart $1, getEnd $3) Sub $1 $3 }
-     | Form '*' Form               { Binop (getStart $1, getEnd $3) Mul $1 $3 }
+Form : Form '+' Form               { Binop (getPosToSpan $2) "+" $1 $3 }
+     | Form '-' Form               { Binop (getPosToSpan $2) "-" $1 $3 }
+     | Form '*' Form               { Binop (getPosToSpan $2) "*" $1 $3 }
+     | Form '<' Form               { Binop (getPosToSpan $2) "<" $1 $3 }
+     | Form '>' Form               { Binop (getPosToSpan $2) ">" $1 $3 }
+     | Form OP  Form               { Binop (getPosToSpan $2) (symString $2) $1 $3 }
      | Juxt                        { $1 }
 
 Juxt :: { Expr }

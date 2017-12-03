@@ -5,6 +5,7 @@ import Data.Monoid
 
 data Derivation =
   Node String [Derivation] | Leaf String
+    deriving Eq
 
 instance Show Derivation where
   show (Leaf s) = s

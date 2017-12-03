@@ -29,6 +29,7 @@ fileExtension = ".gr"
 
 spec :: Spec
 spec = do
+    -- Integration tests based on the fixtures
     srcFiles <- runIO exampleFiles
     forM_ srcFiles $ \file ->
       describe file $ it "typechecks" $ do
@@ -40,7 +41,7 @@ spec = do
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Right True
-
+    -- Negative tests: things which should fail to check
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
       describe file $ it "does not typecheck" $ do

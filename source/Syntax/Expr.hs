@@ -4,8 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
-                   Def(..), Op(..),
-                   Pattern(..), CKind(..), Coeffect(..),
+                   Def(..), Pattern(..), CKind(..), Coeffect(..),
                    NatModifier(..), Effect, Kind(..),
                    liftCoeffectType,
                    uniqueNames, arity, freeVars, subst,
@@ -24,7 +23,6 @@ import GHC.Generics (Generic)
 import Syntax.FirstParameter
 
 type Id = String
-data Op = Add | Sub | Mul deriving (Eq, Show)
 
 type Pos = (Int, Int) -- (line, column)
 type Span = (Pos, Pos)
@@ -53,7 +51,7 @@ data Value = Abs Id (Maybe Type) Expr
 
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
-          | Binop Span Op Expr Expr
+          | Binop Span Id Expr Expr
           | LetBox Span Id Type Expr Expr
           | LetDiamond Span Id Type Expr Expr
           | Val Span Value

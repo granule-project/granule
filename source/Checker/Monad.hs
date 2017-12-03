@@ -56,12 +56,7 @@ data CheckerState = CS
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
             }
-  deriving Show -- for debugging
-
--- *** Various helpers for manipulating the context
-
-stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
-stripQuantifiers = map (\(var, (k, _)) -> (var, k))
+  deriving (Show, Eq) -- for debugging
 
 -- | Initial checker context state
 initState :: CheckerState
@@ -69,6 +64,31 @@ initState = CS 0 ground [] emptyCtxt emptyCtxt Nothing []
   where
     ground   = Conj []
     emptyCtxt = []
+
+-- *** Various helpers for manipulating the context
+
+
+{- | Useful if a checking procedure is needed which
+     may get discarded within a wider checking, e.g., for
+     resolving overloaded types via type equality.
+     The returned result is stateful but contains no
+     updates to the environment: it comprises a pair of
+     a pure result (i.e., evaluated and state discarded, and
+     a reification of the full state (with updates) should this
+     local checking be applied -}
+localChecking :: MaybeT Checker b
+              -> MaybeT Checker (Maybe b, MaybeT Checker b)
+localChecking k = do
+  nameMap <- ask
+  checkerState <- get
+  (out, localState) <- liftIO $ runChecker checkerState nameMap (runMaybeT k)
+  let reified = do
+        put localState
+        MaybeT $ return out
+  return (out, reified)
+
+stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
+stripQuantifiers = map (\(var, (k, _)) -> (var, k))
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.

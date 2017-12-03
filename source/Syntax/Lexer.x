@@ -63,6 +63,9 @@ tokens :-
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
+  \<\=                          { \p s -> TokenOp p s }
+  \>\=                          { \p s -> TokenOp p s }
+  \=\=                          { \p s -> TokenOp p s }
 
 {
 
@@ -100,10 +103,12 @@ data Token = TokenLet  AlexPosn
 	   | TokenUnderscore AlexPosn
 	   | TokenSemicolon  AlexPosn
 	   | TokenForwardSlash AlexPosn
+	   | TokenOp AlexPosn String
            deriving (Eq, Show, Generic)
 
 symString :: Token -> String
 symString (TokenSym _ x) = x
+symString (TokenOp _ x)  = x
 
 constrString :: Token -> String
 constrString (TokenConstr _ x) = x
