@@ -28,6 +28,7 @@ builtins =
     ("pure", Forall nullSpan [("a", KType)]
        $ (FunTy (TyVar "a") (Diamond [] (TyVar "a"))))
     -- Effectful primitives
+  , ("toFloat", Forall nullSpan [] $ FunTy (TyCon "Int") (TyCon "Float"))
   , ("read", Forall nullSpan [] $ Diamond ["R"] (TyCon "Int"))
   , ("write", Forall nullSpan [] $
        FunTy (TyCon "Int") (Diamond ["W"] (TyCon "Int"))) ]

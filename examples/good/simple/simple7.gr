@@ -1,0 +1,15 @@
+main : Int
+main =
+  case (42 < 45) of
+    True -> 100*4;
+    False ->
+      case (56 <= 56) of
+        True -> 4+25*4;
+	False ->
+	 case (55 >= 1) of
+	   True -> (30 - 5)*16;
+	   False ->
+	     case (565 > 23) of
+	      True -> 400;
+	      False -> 0
+	    

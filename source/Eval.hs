@@ -9,18 +9,24 @@ import Context
 
 import Control.Monad (when)
 
--- Evaluate operators
-evalOpNum :: Num a => Id -> (a -> a -> a)
-evalOpNum "+" = (+)
-evalOpNum "-" = (-)
-evalOpNum "*" = (*)
-
-evalOpBool :: (Eq a, Ord a, Num a) => Id -> (a -> a -> Bool)
-evalOpBool "==" = (==)
-evalOpBool "<=" = (<=)
-evalOpBool "<"  = (<)
-evalOpBool ">=" = (>=)
-evalOpBool ">"  = (>)
+evalBinOp :: String -> Value -> Value -> Value
+evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
+evalBinOp "*" (NumInt n1) (NumInt n2) = NumInt (n1 * n2)
+evalBinOp "-" (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
+evalBinOp "+" (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
+evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
+evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
+evalBinOp "==" (NumInt n) (NumInt m) = Constr (show (n == m)) []
+evalBinOp "<=" (NumInt n) (NumInt m) = Constr (show (n <= m)) []
+evalBinOp "<" (NumInt n) (NumInt m) = Constr (show (n < m)) []
+evalBinOp ">=" (NumInt n) (NumInt m) = Constr (show (n >= m)) []
+evalBinOp ">" (NumInt n) (NumInt m) = Constr (show (n > m)) []
+evalBinOp "==" (NumFloat n) (NumFloat m) = Constr (show (n == m)) []
+evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (show (n <= m)) []
+evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (show (n < m)) []
+evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (show (n >= m)) []
+evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (show (n > m)) []
+evalBinOp op _ _ = error $ "Unknown operator " ++ op
 
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
@@ -37,6 +43,13 @@ evalIn _ (Val s (Var "read")) = do
 evalIn ctxt (App _ (Val _ (Var "pure")) e) = do
   v <- evalIn ctxt e
   return $ Pure (Val nullSpan v)
+
+evalIn ctxt (App _ (Val _ (Var "toFloat")) (Val _ (NumInt n))) =
+  return $ NumFloat (cast n)
+  where
+    cast :: Int -> Double
+    cast = fromInteger . toInteger
+
 
 evalIn _ (Val _ (Abs x t e)) = return $ Abs x t e
 
@@ -57,25 +70,7 @@ evalIn ctxt (App _ e1 e2) = do
 evalIn ctxt (Binop _ op e1 e2) = do
      v1 <- evalIn ctxt e1
      v2 <- evalIn ctxt e2
-     case (v1, v2) of
-       (NumInt n1, NumInt n2)
-          -> return $ NumInt (evalOpNum op n1 n2)
-       (NumInt n1, NumFloat n2)
-          -> return $ NumFloat (evalOpNum op (cast n1) n2)
-       (NumFloat n1, NumInt n2)
-          -> return $ NumFloat (evalOpNum op n1 (cast n2))
-       (NumFloat n1, NumFloat n2)
-          -> return $ NumFloat (evalOpNum op n1 n2)
-       (Constr b1 [], Constr b2 []) | isBool b1 && isBool b2
-          -> return $ Constr (show $ evalOpBool op (read b1) (read b2)) []
-       _ -> fail $ "Runtime exception: Not a number or bool: "
-                 ++ pretty v1 ++ " or " ++ pretty v2
-  where
-    isBool "True"  = True
-    isBool "False" = True
-    isBool _       = False
-    cast :: Int -> Double
-    cast = fromInteger . toInteger
+     return $ evalBinOp op v1 v2
 
 evalIn ctxt (LetBox _ var _ e1 e2) = do
     v1 <- evalIn ctxt e1
