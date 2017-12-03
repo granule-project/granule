@@ -1,7 +1,11 @@
-foo : forall (a : Type, b : Type)
+secondOrder : forall (a : Type, b : Type)
    . (a |0| -> b) -> a |1| -> b
-foo f xb = let |x| : a = xb in f |x|
+secondOrder f xb = let |x| : a = xb in f |x|
 
-fooAlt : forall (a : Type, b : Type)
+secondOrderAlt : forall (a : Type, b : Type)
    . (a |0| -> b) -> a |1| -> b
-fooAlt f |x| = f |x|r
+secondOrderAlt f |x| = f |x|
+
+thirdOrder : ((Int |2| -> Int) -> Int) -> Int
+thirdOrder f =
+        f (\(yb : Int |1|) -> let |y| : Int = yb in y)
