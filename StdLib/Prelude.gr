@@ -20,7 +20,7 @@ if0 g |x| |y| =
 
 -- Coeffectful composition
 comp : forall (n : Nat, m : Nat) .
-       (Int |n| -> Int) -> (Int |n| -> Int) |n| -> Int |n * m| -> Int
+       (Int |n| -> Int) -> (Int |m| -> Int) |n| -> Int |n * m| -> Int
 comp g |f| |x| = g |(f |x|)|
 
 -- Coeffectful application

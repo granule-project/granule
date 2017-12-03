@@ -1,0 +1,3 @@
+thirdOrder : ((Int |0| -> Int) -> Int) -> Int
+thirdOrder f =
+        f (\(yb : Int |1|) -> let |y| : Int = yb in y)
