@@ -59,6 +59,8 @@ checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
           (localGam, ty') <- ctxtFromTypedPatterns dbg s ty ps
           -- Check the body in the context given by the pattern matching
           localGam' <- checkExpr dbg defCtxt localGam Positive True ty' expr
+          -- Check that the outgoing context is a subgrading of the incoming
+          leqCtxt s localGam' localGam
 
           -- Check linear use
           case remainingUndischarged localGam localGam' of
@@ -124,12 +126,6 @@ checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
     Just t' -> do
       (eqT, unifiedType) <- equalTypes dbg s sig t'
       unless eqT (illTyped s $ pretty t' ++ " not equal to " ++ pretty t')
-      -- If there is a unifier between the types, then one is
-      -- more polymorphic than the other
-      unless (unifiedType == sig)
-                 (illTyped s $ "Explicit signature '" ++ pretty sig
-                                ++ "' is more/less polymorphic than '"
-                                ++ pretty t' ++ "'")
 
   -- Extend the context with the variable 'x' and its type
   gamE <- extCtxt s gam x (Linear sig)
@@ -141,6 +137,12 @@ checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
       nameMap <- ask
       illLinearity s $ unusedVariable (unrename nameMap x)
     Just _  -> return (eraseVar gam' x)
+
+-- Application
+checkExpr dbg defs gam pol _ tau (App s e1 e2) = do
+    (argTy, gam2) <- synthExpr dbg defs gam pol e2
+    gam1          <- checkExpr dbg defs gam (flipPol pol) False (FunTy argTy tau) e1
+    ctxPlus s gam1 gam2
 
 {-
 
@@ -159,12 +161,6 @@ checkExpr dbg defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
       Positive -> leqCtxt s gam'' gam
       Negative -> leqCtxt s gam gam''
   return gam''
-
--- Application
-checkExpr dbg defs gam pol _ tau (App s e1 e2) = do
-    (sig, gam1) <- synthExpr dbg defs gam pol e2
-    gam2 <- checkExpr dbg defs gam pol False (FunTy sig tau) e1
-    ctxPlus s gam1 gam2
 
 checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
@@ -219,8 +215,8 @@ checkExpr dbg defs gam pol topLevel tau e = do
         leqCtxt (getSpan e) gam gam'
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypes dbg (getSpan e) tau' tau
-          else lEqualTypes dbg (getSpan e) tau' tau
+          then equalTypes dbg (getSpan e) tau tau'
+          else lEqualTypes dbg (getSpan e) tau tau'
 
   if tyEq
     then return gam'
@@ -411,13 +407,12 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
           addConstraint (Eq s (CVar cvar) (CZero kind) kind)
           return (CZero kind, t)
 
-    gam1 <- checkExpr dbg defs gam pol False (Box demand t'') e1
+    gam1 <- checkExpr dbg defs gam (flipPol pol) False (Box demand t'') e1
     gamNew <- ctxPlus s gam1 gam2
     return (tau, gamNew)
 
 -- BinOp
 synthExpr dbg defs gam pol (Binop s op e1 e2) = do
-    print "Synthing for binop"
     (t1, gam1)  <- synthExpr dbg defs gam pol e1
     (t2, gam2) <- synthExpr dbg defs gam pol e2
     -- Look through the list of operators (of which there might be
@@ -425,9 +420,8 @@ synthExpr dbg defs gam pol (Binop s op e1 e2) = do
     case lookupMany op binaryOperators of
       [] -> unknownName s $ "Binary operator " ++ op
       ops -> do
-        returnType <- selectFirstByType t1 t2 (lookupMany op binaryOperators)
+        returnType <- selectFirstByType t1 t2 ops
         gamOut <- ctxPlus s gam1 gam2
-        print $ pretty returnType
         return (returnType, gamOut)
 
   where

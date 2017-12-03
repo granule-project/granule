@@ -1,0 +1,7 @@
+foo : forall (a : Type, b : Type)
+   . (a |1| -> b) -> a |0| -> b
+foo f xb = let |x| : a = xb in f |x|
+
+fooAlt : forall (a : Type, b : Type)
+   . (a |1| -> b) -> a |0| -> b
+fooAlt f |x| = f |x|
