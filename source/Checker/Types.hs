@@ -152,8 +152,10 @@ equalTypesRelatedCoeffects ::
    -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
    -> Type -> Type -> MaybeT Checker (Bool, Unifier)
 equalTypesRelatedCoeffects dbg s rel (FunTy t1 t2) (FunTy t1' t2') = do
-  (eq1, u1) <- equalTypesRelatedCoeffects dbg s rel t1' t1 -- contravariance
-  (eq2, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2' -- covariance
+  -- contravariant position (always approximate)
+  (eq1, u1) <- equalTypesRelatedCoeffects dbg s Leq t1' t1
+   -- covariant position (depends is not always over approximated)
+  (eq2, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
   return (eq1 && eq2, u1 ++ u2)
 
 equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') =

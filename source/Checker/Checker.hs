@@ -139,9 +139,9 @@ checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
     Just _  -> return (eraseVar gam' x)
 
 -- Application
-checkExpr dbg defs gam pol _ tau (App s e1 e2) = do
+checkExpr dbg defs gam pol topLevel tau (App s e1 e2) = do
     (argTy, gam2) <- synthExpr dbg defs gam pol e2
-    gam1          <- checkExpr dbg defs gam (flipPol pol) False (FunTy argTy tau) e1
+    gam1          <- checkExpr dbg defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
     ctxPlus s gam1 gam2
 
 {-
