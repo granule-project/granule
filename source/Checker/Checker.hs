@@ -236,16 +236,6 @@ synthExpr :: Bool           -- ^ Whether in debug mode
           -> Expr           -- ^ Expression
           -> MaybeT Checker (Type, Ctxt Assumption)
 
--- Constants (built-in effect primitives)
-synthExpr _ _ _ _ (Val _ (Var "read")) = return (Diamond ["R"] (TyCon "Int"), [])
-
-synthExpr _ _ _ _ (Val _ (Var "write")) =
-  return (FunTy (TyCon "Int") (Diamond ["W"] (TyCon "Int")), [])
-
--- Constants (booleans)
-synthExpr _ _ _ _ (Val _ (Constr s [])) | s == "False" || s == "True" =
-  return (TyCon "Bool", [])
-
 -- Constants (numbers)
 synthExpr _ _ _ _ (Val _ (NumInt _))  = return (TyCon "Int", [])
 synthExpr _ _ _ _ (Val _ (NumFloat _)) = return (TyCon "Float", [])
@@ -274,11 +264,11 @@ synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
   where
     list elementVar n = TyApp (TyApp (TyCon "List") n) (TyVar elementVar)
 
-
--- Effectful lifting
-synthExpr dbg defs gam pol (Val _ (Pure e)) = do
-  (ty, gam') <- synthExpr dbg defs gam pol e
-  return (Diamond [] ty, gam')
+-- Constructors (only supports nullary constructors)
+synthExpr _ _ _ _ (Val s (Constr name [])) = do
+  case lookup name dataConstructors of
+    Just (Forall _ [] t) -> return (t, [])
+    _ -> unknownName s $ "Data constructor " ++ name
 
 -- Case
 synthExpr dbg defs gam pol (Case s guardExpr cases) = do
@@ -335,23 +325,26 @@ synthExpr dbg defs gam pol (LetDiamond s var ty e1 e2) = do
              gamNew <- ctxPlus s gam1 gam2
              return (Diamond (ef1 ++ ef2) tau', gamNew)
          t -> illTyped s $ "Expected '" ++ pretty ty ++ "' but inferred '" ++ pretty t ++ "' in body of let<>"
-    t -> illTyped s $ "Expected '" ++ pretty ty ++ "' in subjet of let<>, but inferred '" ++ pretty t ++ "'"
+    t -> illTyped s $ "Expected '" ++ pretty ty ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
 
 -- Variables
 synthExpr _ defs gam _ (Val s (Var x)) = do
    nameMap <- ask
+   -- Try the local context
    case lookup x gam of
      Nothing ->
-       case lookup x defs of
+       -- Try definitions in scope
+       case lookup x (defs ++ builtins) of
          Just tyScheme  -> do
            ty' <- freshPolymorphicInstance tyScheme
            return (ty', [])
+         -- Couldn't find it
          Nothing  -> illTyped s $ "I don't know the type for "
                               ++ show (unrename nameMap x)
                               ++ "{ looking for " ++ x
                               ++ " in context " ++ pretty gam
                               ++ " or definitions " ++ pretty defs ++ "}"
-
+     -- In the local context
      Just (Linear ty)       -> return (ty, [(x, Linear ty)])
      Just (Discharged ty c) -> do
        k <- inferCoeffectType s c
@@ -381,6 +374,7 @@ synthExpr dbg defs gam pol (Val s (Promote e)) = do
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
    (t, gam') <- synthExpr dbg defs gamF pol e
+
    return (Box (CVar var) t, multAll (freeVars e) (CVar var) gam')
 
 -- Letbox
@@ -470,7 +464,8 @@ synthExpr dbg defs gam pol (Val s (Pair e1 e2)) = do
   gam' <- ctxPlus s gam1 gam2
   return (PairTy t1 t2, gam')
 
-synthExpr _ _ _ _ e = illTyped (getSpan e) "I can't work out the type here, try adding more type signatures"
+synthExpr _ _ _ _ e =
+  illTyped (getSpan e) "Type cannot be calculated here; try adding more type signatures."
 
 
 solveConstraints :: Pred -> Span -> String -> MaybeT Checker Bool
