@@ -199,23 +199,19 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
   checkerState <- get
   case (lookup n (ckctxt checkerState), lookup m (ckctxt checkerState)) of
 
-    -- TODO: we might revisit the names here; forallQ in this context is
-    -- really a variable where forall elimination has been applied (i.e., it is
-    -- an arbitrary atom)
-
     -- Two universally quantified variables are unequal
     (Just (_, ForallQ), Just (_, ForallQ)) ->
       return (False, [])
 
-    -- We cannot unify two existential type variables
-    (Just (KType, ExistsQ), Just (KType, ExistsQ)) ->
-      return (False, [])
+    -- We can unify two instance type variables
+    (Just (KType, InstanceQ), Just (KType, InstanceQ)) ->
+      return (True, [(n, TyVar m)])
 
-    -- But we can unify a forall and exists
-    (Just (KType, ForallQ), Just (KType, ExistsQ)) ->
+    -- But we can unify a forall and an instance
+    (Just (KType, ForallQ), Just (KType, InstanceQ)) ->
         return (True, [(n, TyVar m)])
 
-    (Just (KType, ExistsQ), Just (KType, ForallQ)) ->
+    (Just (KType, InstanceQ), Just (KType, ForallQ)) ->
         return (True, [(m, TyVar n)])
 
     -- Trying to unify other (existential) variables
@@ -241,11 +237,18 @@ equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
 
 equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
   checkerState <- get
-  k1 <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) (TyVar n)
-  k2 <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) t
-  if k1 == k2
-    then return (True, [(n, t)])
-    else illKindedUnifyVar s (TyVar n) k1 t k2
+  case lookup n (ckctxt checkerState) of
+    -- We can unify an instance with a concrete type
+    (Just (k1, InstanceQ)) -> do
+      k2 <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) t
+      if k1 == k2
+       then return (True, [(n, t)])
+       else illKindedUnifyVar s (TyVar n) k1 t k2
+    -- But we can't unify an universal with a concrete type
+    (Just (k1, ForallQ)) -> do
+      illTyped s $ "Trying to unifying a polymorphic type '" ++ n
+       ++ "' with monomorphic " ++ pretty t
+    Nothing -> unknownName s n
 
 equalTypesRelatedCoeffects dbg s rel t (TyVar n) =
   equalTypesRelatedCoeffects dbg s rel (TyVar n) t

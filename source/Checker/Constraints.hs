@@ -59,11 +59,11 @@ instance Pretty Constraint where
 --instance Pretty CNF where
 --    pretty cnf = intercalate "&" (intercalate "|" (map pretty cnf))
 
-data Quantifier = ForallQ | ExistsQ deriving Show
+data Quantifier = ForallQ | InstanceQ deriving Show
 
 quant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
 quant ForallQ = forall
-quant ExistsQ = exists
+quant InstanceQ = exists
 
 
 normaliseConstraint :: Constraint -> Constraint
@@ -97,7 +97,7 @@ compileToSBV predicate cctxt cVarCtxt = (do
       let (universalConstraints', existentialConstraints') =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
-              ExistsQ -> (universalConstraints, pre &&& existentialConstraints)
+              InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- given an context mapping coeffect type variables to coeffect typ,

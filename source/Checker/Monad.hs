@@ -75,7 +75,7 @@ initState = CS 0 ground [] emptyCtxt emptyCtxt Nothing []
 freshCoeffectVar :: Id -> CKind -> MaybeT Checker Id
 freshCoeffectVar cvar kind = do
     cvar' <- freshVar cvar
-    registerCoeffectVar cvar' kind ExistsQ
+    registerCoeffectVar cvar' kind InstanceQ
     return cvar'
 
 -- | Helper for registering a new coeffect variable in the checker
