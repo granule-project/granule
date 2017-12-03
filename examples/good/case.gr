@@ -1,6 +1,6 @@
 -- Small example of case expressions in Granule
 
-import StdLib/Prelude
+import StdLib.Prelude
 
 constId : Int -> Int
 constId x = case 0 of 0 -> x
