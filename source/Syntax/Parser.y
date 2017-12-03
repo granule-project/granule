@@ -68,7 +68,7 @@ NL : nl NL {}
    | nl    {}
 
 Def :: { Def }
-Def : Sig nl Binding
+Def : Sig NL Binding
   { if (fst3 $1 == fst3 $3)
     then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
     else error $ "Signature for "
