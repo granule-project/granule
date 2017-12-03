@@ -1,0 +1,5 @@
+dub : Float -> Float
+dub x = x * 2
+
+main : Float
+main = dub 1.0
