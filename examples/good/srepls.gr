@@ -23,8 +23,8 @@ notAleak |x| = |42|
 -- main = hash secret
 
 doTwice : (Int <[R]>) |2| -> Int <[R, R]>
-doTwice |f| = let <a> : Int = f in
-              let <b> : Int = f in <a + b>
+doTwice |f| = let a : Int <- f in
+              let b : Int <- f in pure (a + b)
 
 main : Int <[R, R]>
 main = doTwice |read|

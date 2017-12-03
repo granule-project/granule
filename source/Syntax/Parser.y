@@ -31,6 +31,7 @@ import System.Exit (die)
     '\\'  { TokenLambda _ }
     '/'  { TokenForwardSlash _ }
     '->'  { TokenArrow _ }
+    '<-'  { TokenBind _ }
     ','   { TokenComma _ }
     '='   { TokenEq _ }
     '+'   { TokenAdd _ }
@@ -220,11 +221,8 @@ Expr : let VAR ':' Type '=' Expr in Expr
      | '\\' VAR '->' Expr
          { Val (getPos $1, getEnd $4) (Abs (symString $2) Nothing $4) }
 
-     | let '<' VAR '>' ':' Type '=' Expr in Expr
-         { LetDiamond (getPos $1, getEnd $10) (symString $3) $6 $8 $10 }
-
-     | '<' Expr '>'
-        { Val (getPos $1, getPos $3) (Pure $2) }
+     | let VAR ':' Type '<-' Expr in Expr
+         { LetDiamond (getPos $1, getEnd $8) (symString $2) $4 $6 $8 }
 
      | case Expr of Cases
         { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
@@ -264,6 +262,7 @@ Atom : '(' Expr ')'                { $2 }
 
      | '|' Atom '|'
                { Val (getPos $1, getPos $3) $ Promote $2 }
+
      | CONSTR  { Val (getPosToSpan $1) $ Constr (constrString $1) [] }
 
      | '(' Expr ',' Expr ')'

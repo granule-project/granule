@@ -1,5 +1,5 @@
 dubInput : Int <[R, W]>
-dubInput = let <x> : Int = read in write (x * 2)
+dubInput = let x : Int <- read in write (x * 2)
 
 main : Int <[R, W]>
 main = dubInput

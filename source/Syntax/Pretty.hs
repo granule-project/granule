@@ -115,7 +115,7 @@ instance Pretty Expr where
   pretty (Binop _ op e1 e2) = parens $ pretty e1 ++ " " ++ pretty op ++ " " ++ pretty e2
   pretty (LetBox _ v t e1 e2) = parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
                                 ++ pretty e1 ++ " in " ++ pretty e2
-  pretty (LetDiamond _ v t e1 e2) = parens $ "let <" ++ v ++ "> :" ++ pretty t ++ " = "
+  pretty (LetDiamond _ v t e1 e2) = parens $ "let " ++ v ++ " :" ++ pretty t ++ " <- "
                                     ++ pretty e1 ++ " in " ++ pretty e2
   pretty (Val _ v) = pretty v
   pretty (Case _ e ps) = "case " ++ pretty e ++ " of " ++

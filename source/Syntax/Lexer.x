@@ -41,6 +41,7 @@ tokens :-
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
   "->"                          { \p s -> TokenArrow p }
+  "<-"                          { \p s -> TokenBind p }
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
   \\                            { \p s -> TokenLambda p }
@@ -71,6 +72,7 @@ data Token = TokenLet  AlexPosn
 	   | TokenOf   AlexPosn
            | TokenLambda AlexPosn
 	   | TokenLetBox AlexPosn
+	   | TokenBind AlexPosn
 	   | TokenBox    AlexPosn
            | TokenInt    AlexPosn Int
 	   | TokenFloat  AlexPosn String

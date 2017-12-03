@@ -7,11 +7,11 @@
 echo : (Int -> Int <[]>) -> Int |2| -> Int <[W]>
 echo = \f -> \xBox ->
         let |x| : Int = xBox in
-	let <a> : Int = write x
+	let a : Int <- write x
 	in f x
 
 dub : Int -> Int <[]>
-dub = \x -> <x * 2>
+dub = \x -> pure (x * 2)
 
 foo : Int |2| -> Int |4| -> Int |2|
 foo |x| |y| = |(x + y + y)|

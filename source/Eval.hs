@@ -27,6 +27,10 @@ evalIn _ (Val s (Var "read")) = do
     val <- readLn
     return $ Pure (Val s (NumInt val))
 
+evalIn ctxt (App _ (Val _ (Var "pure")) e) = do
+  v <- evalIn ctxt e
+  return $ Pure (Val nullSpan v)
+
 evalIn _ (Val _ (Abs x t e)) = return $ Abs x t e
 
 evalIn ctxt (App _ e1 e2) = do
@@ -148,4 +152,4 @@ eval dbg defs = do
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)
       Just (Promote e) -> fmap Just (evalIn bindings e)
-      Just val -> return $ Just val
+      Just val         -> return $ Just val
