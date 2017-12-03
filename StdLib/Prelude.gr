@@ -32,7 +32,7 @@ flatten : forall (a : Type, n : Nat, m : Nat) . a |n| |m| -> a |n * m|
 flatten ||x|| = |x|
 
 -- Expand two boxes (with Nat grading)
-unflatten : forall (c : Nat, d : Nat) . Int |c*d| -> Int |c| |d|
+unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
 unflatten |x| = ||x||
 
 -- * Operations on products
@@ -50,7 +50,8 @@ push : forall (a : Type, b : Type, n : Nat) . (a, b) |n| -> (a |n|, b |n|)
 push |(x, y)| = (|x|, |y|)
 
 -- Pull coeffects of pair elements up to the pair
-pull : forall (a : Type, b : Type, n : Nat, m : Nat) . (a |n|, b |m|) -> (a, b) |n /\ m|
+pull : forall (a : Type, b : Type, n : Nat, m : Nat)
+     . (a |n|, b |m|) -> (a, b) |n /\ m|
 pull (|x|, |y|) = |(x, y)|
 
 -- * Operations on lists
