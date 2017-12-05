@@ -31,11 +31,17 @@ check defs dbg nameMap = do
     -- the purposes of (mutually)recursive calls).
 
     -- Kind check all the type signatures
-    let checkKinds = mapM (\(Def _ _ _ _ tys) -> kindCheck tys) defs
+    let checkKinds = mapM (\(Def s _ _ _ tys) -> kindCheck s tys) defs
 
     -- Build a computation which checks all the defs (in order)...
     let defCtxt = map (\(Def _ var _ _ tys) -> (var, tys)) defs
-    let checkedDefs = runMaybeT checkKinds >> mapM (checkDef dbg defCtxt) defs
+    let checkedDefs = do
+          status <- runMaybeT checkKinds
+          case status of
+            Nothing -> return [Nothing]
+            Just _  -> -- Now check the definition
+               mapM (checkDef dbg defCtxt) defs
+
     -- ... and evaluate the computation with initial state
     results <- evalChecker initState nameMap checkedDefs
 

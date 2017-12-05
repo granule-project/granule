@@ -9,8 +9,8 @@ import Syntax.Expr
 import Context
 
 -- Currently we expect that a type scheme has kind KType
-kindCheck :: TypeScheme -> MaybeT Checker ()
-kindCheck (Forall s quantifiedVariables ty) = do
+kindCheck :: Span -> TypeScheme -> MaybeT Checker ()
+kindCheck s (Forall _ quantifiedVariables ty) = do
   kind <- inferKindOfType s quantifiedVariables ty
   case kind of
     KType -> return ()
