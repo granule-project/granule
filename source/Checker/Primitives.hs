@@ -7,6 +7,7 @@ import Syntax.Expr
 typeLevelConstructors :: [(Id, Kind)]
 typeLevelConstructors =
   [ ("Int",  KType)
+  , ("Float", KType)
   , ("Bool", KType)
   , ("List", KFun (KConstr "Nat") (KFun KType KType))
   , ("One", KCoeffect)   -- Singleton coeffect
