@@ -5,12 +5,13 @@ module Checker.Checker where
 
 import Syntax.Expr
 import Syntax.Pretty
-import Checker.Types
 import Checker.Coeffects
 import Checker.Constraints
-import Checker.Monad
 import Checker.Kinds
+import Checker.Monad
+import Checker.Predicates
 import Checker.Primitives
+import Checker.Types
 import Context
 import Prelude hiding (pred, print)
 
@@ -172,35 +173,41 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (ty, guardGam) <- synthExpr dbg defs gam pol guardExpr
   -- then synthesise the types of the branches
+  sharedCtxt <- freshVarsIn s (concatMap freeVars (map snd cases)) gam
+  sharedCtxt <- return $ filter isNonLinearAssumption sharedCtxt
+
+
   branchCtxts <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      localGamMaybe <- ctxtFromTypedPattern dbg s ty pati
+      (localGam, eVars) <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
       ---
-      case localGamMaybe of
-        Just localGam -> do
-          localGam' <- checkExpr dbg defs (gam ++ localGam) pol False tau ei
-          concludeImplication
-          -- Check linear use in anything Linear
-          nameMap  <- ask
-
-          case remainingUndischarged localGam localGam' of
-            -- Return the resulting computed context, without any of
-            -- the variable bound in the pattern of this branch
-            [] -> return (localGam' `subtractCtxt` localGam)
-            xs -> illLinearity s $ intercalate "\n" $ map (unusedVariable . unrename nameMap . fst) xs
-
-        Nothing  -> illTyped (getSpan guardExpr)
-                          $ "Type of guard does not match type of the pattern "
-                         ++ pretty pati
+      localGam' <- checkExpr dbg defs (gam ++ localGam) pol False tau ei
+      -- Check linear use in anything Linear
+      nameMap  <- ask
+      case remainingUndischarged localGam localGam' of
+        -- Return the resulting computed context, without any of
+        -- the variable bound in the pattern of this branch
+        [] -> do
+           -- The current local environment should be subsumed by the
+           -- shared context
+           leqCtxt s (localGam' `subtractCtxt` localGam) sharedCtxt
+           --gee' <- ctxPlus s guardGam sharedCtxt
+           --leqCtxt s gee' gam
+           concludeImplication eVars
+           -- The resulting context has the shared part removed
+           return ((localGam' `subtractCtxt` localGam) `subtractCtxt` sharedCtxt)
+        xs -> illLinearity s $ intercalate "\n a" $ map (unusedVariable . unrename nameMap . fst) xs
 
   -- Find the upper-bound contexts
   nameMap     <- ask
   branchesGam <- fold1M (joinCtxts s nameMap) branchCtxts
+
   -- Contract the outgoing context of the guard and the branches (joined)
-  ctxPlus s branchesGam guardGam
+  g <- ctxPlus s branchesGam guardGam
+  ctxPlus s g sharedCtxt
 
 -- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol topLevel tau e = do
@@ -281,24 +288,19 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      localGamMaybe <- ctxtFromTypedPattern dbg s ty pati
+      (localGam, eVars) <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
       ---
-      case localGamMaybe of
-        Just localGam -> do
-          (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) pol ei
-          concludeImplication
-          -- Check linear use in anything Linear
-          nameMap  <- ask
-          case remainingUndischarged localGam localGam' of
-            -- Return the resulting computed context, without any of
-            -- the variable bound in the pattern of this branch
-            [] -> return (tyCase, localGam' `subtractCtxt` localGam)
-            xs -> illLinearity s $ intercalate "\n" $ map (unusedVariable . unrename nameMap . fst) xs
-
-        Nothing  -> illTyped (getSpan guardExpr)
-                          $ "Type of guard does not match type of the pattern "
-                         ++ pretty pati
+      (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) pol ei
+      concludeImplication eVars
+      -- Check linear use in anything Linear
+      nameMap  <- ask
+      case remainingUndischarged localGam localGam' of
+         -- Return the resulting computed context, without any of
+         -- the variable bound in the pattern of this branch
+         [] -> return (tyCase, localGam' `subtractCtxt` localGam)
+         xs -> illLinearity s $ intercalate "\n"
+                              $ map (unusedVariable . unrename nameMap . fst) xs
 
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
@@ -557,15 +559,17 @@ joinCtxts s _ ctxt1 ctxt2 = do
     -- Return the common upper-bound context of ctxt1 and ctxt2
     return varCtxt
 
-{- |  intersect contexts and weaken anything not appear in both -}
+{- |  intersect contexts and weaken anything not appear in both
+        relative to the left context (this is not commutative) -}
 intersectCtxtsWithWeaken ::
     Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption)
 intersectCtxtsWithWeaken s a b = do
    let intersected = intersectCtxts a b
    -- All the things that were not shared
-   let remaining   = a `subtractCtxt` intersected ++ b `subtractCtxt` intersected
+   let remaining   = b `subtractCtxt` intersected
+   let leftRemaining = a `subtractCtxt` intersected
    weakenedRemaining <- mapM weaken remaining
-   let newCtxt = intersected ++ filter isNonLinearAssumption weakenedRemaining
+   let newCtxt = intersected ++ filter isNonLinearAssumption (weakenedRemaining ++ leftRemaining)
    return . normaliseCtxt $ newCtxt
   where
    isNonLinearAssumption :: (Id, Assumption) -> Bool
@@ -641,7 +645,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
     rename rmap = typeFoldM mFunTy mTyCon (renameBox rmap) mDiamond
                        (renameTyVar rmap) mTyApp mTyInt mPairTy
     renameBox renameMap c t = do
-      c' <- renameC s renameMap c
+      let c' = substCoeffect (map (\(v, var) -> (v, CVar var)) renameMap) c
       return $ Box c' t
     renameTyVar renameMap v =
       case lookup v renameMap of
@@ -651,6 +655,11 @@ freshPolymorphicInstance (Forall s kinds ty) = do
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant
  where relevant (var, _) = var `elem` vars
+
+
+isNonLinearAssumption :: (Id, Assumption) -> Bool
+isNonLinearAssumption (_, Discharged _ _) = True
+isNonLinearAssumption _                   = False
 
 -- Replace all top-level discharged coeffects with a variable
 -- and derelict anything else

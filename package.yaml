@@ -25,6 +25,7 @@ library:
   - Checker.LaTeX
   - Checker.Monad
   - Checker.Primitives
+  - Checker.Predicates
   - Checker.Types
   - Context
   - Eval

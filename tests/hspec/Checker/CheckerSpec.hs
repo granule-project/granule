@@ -9,7 +9,14 @@ import System.FilePath.Find
 import Test.Hspec
 
 import Checker.Checker
+import Checker.Constraints
+import Checker.Predicates
+import Checker.Monad
+import Control.Monad.Trans.Maybe
 import Syntax.Parser
+import Syntax.Expr
+
+import Data.Maybe (fromJust)
 
 pathToExamples :: FilePath
 pathToExamples = "examples/good"
@@ -54,7 +61,62 @@ spec = do
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Left ""
 
+    -- Unit tests
+    describe "joinCtxts" $ do
+     it "join ctxts with discharged assumption in both" $ do
+       (c, pred) <- runCtxts (flip joinCtxts [])
+              [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+              [("a", Discharged (TyVar "k") (CNat Ordered 10))]
+       c `shouldBe` [("a", Discharged (TyVar "k") (CVar "a_a0"))]
+       pred `shouldBe`
+         [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar "a_a0") (CConstr "Nat"))
+              , Con (Leq nullSpan (CNat Ordered 5) (CVar "a_a0") (CConstr "Nat"))]]
+
+     it "join ctxts with discharged assumption in one" $ do
+       (c, pred) <- runCtxts (flip joinCtxts [])
+              [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+              []
+       c `shouldBe` [("a", Discharged (TyVar "k") (CVar "a_a0"))]
+       pred `shouldBe`
+         [Conj [Con (Leq nullSpan (CZero (CConstr "Nat")) (CVar "a_a0") (CConstr "Nat"))
+               ,Con (Leq nullSpan (CNat Ordered 5) (CVar "a_a0") (CConstr "Nat"))]]
+
+
+    describe "intersectCtxtsWithWeaken" $ do
+      it "contexts with matching discharged variables" $ do
+         (c, _) <- (runCtxts intersectCtxtsWithWeaken)
+                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+                 [("a", Discharged (TyVar "k") (CNat Ordered 10))]
+         c `shouldBe`
+                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+
+      it "contexts with matching discharged variables" $ do
+         (c, _) <- (runCtxts intersectCtxtsWithWeaken)
+                 [("a", Discharged (TyVar "k") (CNat Ordered 10))]
+                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+         c `shouldBe`
+                 [("a", Discharged (TyVar "k") (CNat Ordered 10))]
+
+      it "contexts with matching discharged variables" $ do
+         (c, preds) <- (runCtxts intersectCtxtsWithWeaken)
+                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+                 []
+         c `shouldBe`
+                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+
+      it "contexts with matching discharged variables (symm)" $ do
+         (c, _) <- (runCtxts intersectCtxtsWithWeaken)
+                 []
+                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+         c `shouldBe`
+                 [("a", Discharged (TyVar "k") (CZero (CConstr "Nat")))]
+
+
+
   where
+    runCtxts f a b =
+       runChecker initState [] (runMaybeT (f nullSpan a b))
+          >>= (\(x, state) -> return (fromJust x, predicateStack state))
     exampleFiles = liftM2 (++)
       (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
       (find always (extension ==? fileExtension) pathToGranuleBase)

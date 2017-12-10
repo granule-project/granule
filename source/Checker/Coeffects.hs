@@ -2,13 +2,14 @@
 
 module Checker.Coeffects where
 
-import Checker.Monad
-import Checker.Kinds
 import Context
 import Syntax.Expr
 import Syntax.Pretty
 
-import Checker.Constraints (Quantifier)
+import Checker.Kinds
+import Checker.Monad
+import Checker.Predicates
+
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
@@ -126,39 +127,40 @@ multAll vars c ((name, Discharged t c') : ctxt) | name `elem` vars
 multAll vars c ((_, Linear _) : ctxt) = multAll vars c ctxt
 multAll vars c ((_, Discharged _ _) : ctxt) = multAll vars c ctxt
 
--- | Perform a renaming on a coeffect
-renameC :: Span -> Ctxt Id -> Coeffect -> MaybeT Checker Coeffect
-renameC s rmap (CPlus c1 c2) = do
-      c1' <- renameC s rmap c1
-      c2' <- renameC s rmap c2
-      return $ CPlus c1' c2'
+{- | Perform a substitution on a coeffect based on a context mapping
+     variables to coeffects -}
+substCoeffect :: Ctxt Coeffect -> Coeffect -> Coeffect
+substCoeffect rmap (CPlus c1 c2) = let
+    c1' = substCoeffect rmap c1
+    c2' = substCoeffect rmap c2
+    in CPlus c1' c2'
 
-renameC s rmap (CJoin c1 c2) = do
-      c1' <- renameC s rmap c1
-      c2' <- renameC s rmap c2
-      return $ CJoin c1' c2'
+substCoeffect rmap (CJoin c1 c2) = let
+    c1' = substCoeffect rmap c1
+    c2' = substCoeffect rmap c2
+    in CJoin c1' c2'
 
-renameC s rmap (CMeet c1 c2) = do
-      c1' <- renameC s rmap c1
-      c2' <- renameC s rmap c2
-      return $ CMeet c1' c2'
+substCoeffect rmap (CMeet c1 c2) = let
+    c1' = substCoeffect rmap c1
+    c2' = substCoeffect rmap c2
+    in CMeet c1' c2'
 
-renameC s rmap (CTimes c1 c2) = do
-      c1' <- renameC s rmap c1
-      c2' <- renameC s rmap c2
-      return $ CTimes c1' c2'
+substCoeffect rmap (CTimes c1 c2) = let
+    c1' = substCoeffect rmap c1
+    c2' = substCoeffect rmap c2
+    in CTimes c1' c2'
 
-renameC s rmap (CVar v) =
-      case lookup v rmap of
-        Just v' -> return $ CVar v'
-        Nothing -> illTyped s $ "Coeffect variable " ++ v ++ " is unbound"
+substCoeffect rmap (CVar v) =
+    case lookup v rmap of
+      Just c  -> c
+      Nothing -> CVar v
 
-renameC _ _ c@CNat{}   = return c
-renameC _ _ c@CNatOmega{} = return c
-renameC _ _ c@CFloat{} = return c
-renameC _ _ c@CStar{}  = return c
-renameC _ _ c@COne{}   = return c
-renameC _ _ c@CZero{}  = return c
-renameC _ _ c@Level{}  = return c
-renameC _ _ c@CSet{}   = return c
-renameC _ _ c@CSig{}   = return c
+substCoeffect _ c@CNat{}   = c
+substCoeffect _ c@CNatOmega{} = c
+substCoeffect _ c@CFloat{} = c
+substCoeffect _ c@CStar{}  = c
+substCoeffect _ c@COne{}   = c
+substCoeffect _ c@CZero{}  = c
+substCoeffect _ c@Level{}  = c
+substCoeffect _ c@CSet{}   = c
+substCoeffect _ c@CSig{}   = c

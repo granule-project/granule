@@ -13,7 +13,7 @@ import Control.Monad.Reader.Class
 import System.IO (hPutStrLn, stderr)
 
 import Checker.LaTeX
-import Checker.Constraints
+import Checker.Predicates
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern)
 import Syntax.Pretty
@@ -87,15 +87,18 @@ localChecking k = do
         MaybeT $ return out
   return (out, reified)
 
-stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
-stripQuantifiers = map (\(var, (k, _)) -> (var, k))
-
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
 freshCoeffectVar :: Id -> CKind -> MaybeT Checker Id
-freshCoeffectVar cvar kind = do
+freshCoeffectVar cvar kind =
+    freshCoeffectVarWithBinding cvar kind InstanceQ
+
+-- | Helper for creating a few (existential) coeffect variable of a particular
+--   coeffect type.
+freshCoeffectVarWithBinding :: Id -> CKind -> Quantifier -> MaybeT Checker Id
+freshCoeffectVarWithBinding cvar kind q = do
     cvar' <- freshVar cvar
-    registerCoeffectVar cvar' kind InstanceQ
+    registerCoeffectVar cvar' kind q
     return cvar'
 
 -- | Helper for registering a new coeffect variable in the checker
@@ -111,13 +114,16 @@ newConjunct = do
   checkerState <- get
   put (checkerState { predicateStack = Conj [] : predicateStack checkerState })
 
--- | Takes the top two conjunction frames and turns them into an impliciation
-concludeImplication :: MaybeT Checker ()
-concludeImplication = do
+-- | Takes the top two conjunction frames and turns them into an
+-- impliciation
+-- The first parameter is a list of any
+-- existential variables being introduced in this implication
+concludeImplication :: [Id] -> MaybeT Checker ()
+concludeImplication eVar = do
   checkerState <- get
   case predicateStack checkerState of
     (p' : p : stack) ->
-      put (checkerState { predicateStack = Impl p p' : stack })
+      put (checkerState { predicateStack = Impl eVar p p' : stack })
     _ -> error "Predicate: not enough conjunctions on the stack"
 
 -- | A helper for adding a constraint to the context

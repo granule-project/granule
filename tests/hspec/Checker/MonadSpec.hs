@@ -8,6 +8,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Reader.Class
 import Checker.Constraints
+import Checker.Predicates
 import Checker.LaTeX
 
 spec :: Spec
