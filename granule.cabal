@@ -55,6 +55,7 @@ library
       Syntax.Parser
       Syntax.Pretty
   other-modules:
+      Checker.Patterns
       Paths_granule
   default-language: Haskell2010
 

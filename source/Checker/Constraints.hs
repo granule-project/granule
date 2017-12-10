@@ -145,11 +145,11 @@ rewriteConstraints ctxt =
 
 -- Symbolic coeffects
 data SCoeffect =
-     SNat   NatModifier SInteger
+     SNat      NatModifier SInteger
    | SNatOmega SInteger
-   | SFloat  SFloat
-   | SLevel SInteger
-   | SSet   (S.Set (Id, Type))
+   | SFloat    SFloat
+   | SLevel    SInteger
+   | SSet      (S.Set (Id, Type))
   deriving (Show, Eq)
 
 -- | Generate a solver variable of a particular kind, along with
@@ -318,7 +318,7 @@ compileCoeffect coeff ckind _ =
 -- | Generate equality constraints for two symbolic coeffects
 eqConstraint :: SCoeffect -> SCoeffect -> SBool
 eqConstraint (SNat _ n) (SNat _ m) = n .== m
-eqConstraint (SFloat n) (SFloat m)   = n .== m
+eqConstraint (SFloat n) (SFloat m) = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint x y =
    error $ "Kind error trying to generate equality " ++ show x ++ " = " ++ show y
@@ -340,9 +340,9 @@ trivialUnsatisfiableConstraints cs =
     (filter unsat) . (map normaliseConstraint) . positiveConstraints $ cs
   where
     -- Only check trivial constraints in positive positions
-    -- This means we can't ever have a branch concluding false trivially
-    -- TODO: do we want this really?
-    positiveConstraints = predFold concat (\_ q -> q) (\x -> [x])
+    -- This means we don't report a branch concluding false trivially
+    -- TODO: may check trivial constraints everywhere?
+    positiveConstraints = predFold concat (\_ _ q -> q) (\x -> [x])
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `eqC` c2

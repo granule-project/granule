@@ -164,6 +164,7 @@ checkExpr dbg defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
   gamF    <- discToFreshVarsIn s (freeVars e) gam demand
   gam'    <- checkExpr dbg defs gamF pol False tau e
   let gam'' = multAll (freeVars e) demand gam'
+
   case pol of
       Positive -> leqCtxt s gam'' gam
       Negative -> leqCtxt s gam gam''
@@ -315,6 +316,7 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
 
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxPlus s branchesGam guardGam
+
   return (eqTypes, gamNew)
 
 -- Diamond cut
@@ -357,6 +359,7 @@ synthExpr _ defs gam _ (Val s (Var x)) = do
 -- Application
 synthExpr dbg defs gam pol (App s e e') = do
     (f, gam1) <- synthExpr dbg defs gam pol e
+
     case f of
       (FunTy sig tau) -> do
          gam2 <- checkExpr dbg defs gam pol False sig e'
@@ -479,8 +482,6 @@ solveConstraints pred s defName = do
   let coeffectVars = justCoeffectTypesConverted ctxtCk
   let coeffectKVars = justCoeffectTypesConvertedVars ctxtCkVar
 
---  print $ "cvars = " ++ show coeffectVars
---  print $ "ckvars = " ++ show coeffectKVars
   let (sbvTheorem, _, unsats) = compileToSBV pred coeffectVars coeffectKVars
 
   thmRes <- liftIO . prove $ sbvTheorem
@@ -632,6 +633,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       var' <- case k of
                KType -> do
                  var' <- freshVar var
+
                  -- Label fresh variable as an existential
                  modify (\st -> st { ckctxt = (var', (k, InstanceQ)) : ckctxt st })
                  return var'
@@ -763,6 +765,7 @@ fold1M f (x:xs) = foldM f x xs
 
 print :: String -> MaybeT Checker ()
 print = liftIO . putStrLn
+  -- (\_ -> return ())
 
 lookupMany :: Eq a => a -> [(a, b)] -> [b]
 lookupMany _ []                     = []
