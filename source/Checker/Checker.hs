@@ -9,6 +9,7 @@ import Checker.Coeffects
 import Checker.Constraints
 import Checker.Kinds
 import Checker.Monad
+import Checker.Patterns
 import Checker.Predicates
 import Checker.Primitives
 import Checker.Types

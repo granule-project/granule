@@ -11,7 +11,7 @@ import System.Environment
 import System.Exit (die)
 
 version :: String
-version = "Granule v0.3.7.0"
+version = "Granule v0.3.8.0"
 
 main :: IO ()
 main = do

@@ -72,8 +72,8 @@ compileToSBV predicate cctxt cVarCtxt =
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
       forAll [v] (\vSolver -> do
-         p <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
-         return ((vSolver .>= literal 0) ==> p))
+         impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
+         return $ (vSolver .>= literal 0) ==> impl)
 
     buildTheorem' solverVars (Con cons) =
       return $ compile solverVars cons
