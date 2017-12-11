@@ -79,4 +79,5 @@ joinCoeffectConstr "Nat" n | "Nat" `isPrefixOf` n = Just n
 joinCoeffectConstr n "Nat" | "Nat" `isPrefixOf` n = Just n
 joinCoeffectConstr "Float" "Nat" = Just "Float"
 joinCoeffectConstr "Nat" "Float" = Just "Float"
+joinCoeffectConstr k k' | k == k' = Just k
 joinCoeffectConstr _ _ = Nothing
