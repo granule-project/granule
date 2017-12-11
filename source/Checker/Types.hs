@@ -177,6 +177,8 @@ equalTypesRelatedCoeffects _ s _ t1 t2 = do
        c2 <- compileNatKindedTypeToCoeffect s t2
        addConstraint $ Eq s c1 c2 (CConstr "Nat=")
        return (True, [])
+    (KType, KType) ->
+         illTyped s $ pretty t1 ++ " is not equal to " ++ pretty t2
 
     _ -> illTyped s $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2

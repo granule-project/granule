@@ -89,6 +89,13 @@ evalIn ctxt (LetDiamond _ var _ e1 e2) = do
         other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       ++ pretty other
 
+evalIn _ (Val _ (Var "scale")) = return
+  (Abs " x" Nothing (Val nullSpan
+    (Abs " y" Nothing (
+      LetBox nullSpan " ye" (TyCon "Float")
+         (Val nullSpan (Var " y"))
+         (Binop nullSpan
+           "*" (Val nullSpan (Var " x")) (Val nullSpan (Var " ye")))))))
 evalIn ctxt (Val _ (Var x)) =
     case lookup x ctxt of
       Just val -> return val
