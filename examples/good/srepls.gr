@@ -1,6 +1,9 @@
 dup : Int |2| -> Int
 dup |n| = n + n
 
+dup' : Int -> Int
+dup' n = n * 2
+
 twice : forall (c : Nat) . (Int |c| -> Int) |2| -> Int |2*c| -> Int
 twice |f| |n| = f |n| + f |n|
 
