@@ -274,7 +274,7 @@ compileCoeffect c@(CPlus n m) k vars =
     (CConstr "One"  , SNat _ _, SNat _ _)       -> SNat Ordered 1
     (CPoly v, SNat _ _, SNat _ _) | " star" `isPrefixOf` v -> SNat Ordered 1
     (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 + n2)
-    (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 `smax` n2
+    (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 + n2
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
 
