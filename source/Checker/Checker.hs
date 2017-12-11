@@ -146,6 +146,12 @@ checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
       illLinearity s $ unusedVariable (unrename nameMap x)
     Just _  -> return (eraseVar gam' x)
 
+-- Application special case for built-in 'scale'
+checkExpr dbg defs gam pol topLevel tau
+          (App s (App _ (Val _ (Var "scale")) (Val _ (NumFloat x))) e) = do
+    equalTypes dbg s (TyCon "Float") tau
+    checkExpr dbg defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon "Float")) e
+
 -- Application
 checkExpr dbg defs gam pol topLevel tau (App s e1 e2) = do
     (argTy, gam2) <- synthExpr dbg defs gam pol e2
@@ -358,6 +364,12 @@ synthExpr _ defs gam _ (Val s (Var x)) = do
      Just (Discharged ty c) -> do
        k <- inferCoeffectType s c
        return (ty, [(x, Discharged ty (COne k))])
+
+-- Specialised application for scale
+synthExpr dbg defs gam pol
+      (App s (Val _ (Var "scale")) (Val _ (NumFloat r))) = do
+  let float = (TyCon "Float")
+  return $ (FunTy (Box (CFloat (toRational r)) float) float, [])
 
 -- Application
 synthExpr dbg defs gam pol (App s e e') = do
