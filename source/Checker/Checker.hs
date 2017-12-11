@@ -66,7 +66,7 @@ checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
           -- Type the pattern matching
           (localGam, ty') <- ctxtFromTypedPatterns dbg s ty ps
           -- Check the body in the context given by the pattern matching
-          localGam' <- checkExpr dbg defCtxt localGam Positive True ty' expr
+          (localGam', _) <- checkExpr dbg defCtxt localGam Positive True ty' expr
           -- Check that the outgoing context is a subgrading of the incoming
           leqCtxt s localGam' localGam
 
@@ -78,7 +78,7 @@ checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
                    illLinearity s
                     . intercalate "\n"
                     . map (unusedVariable . unrename nameMap . fst) $ xs
-        (tau, []) -> checkExpr dbg defCtxt [] Positive True tau expr
+        (tau, []) -> checkExpr dbg defCtxt [] Positive True tau expr >>= (return . fst)
         _         -> illTyped s "Expecting a function type"
 
       -- Use an SMT solver to solve the generated constraints
@@ -117,34 +117,35 @@ checkExpr :: Bool             -- turn on debgging
           -> Bool             -- whether we are top-level or not
           -> Type             -- type
           -> Expr             -- expression
-          -> MaybeT Checker (Ctxt Assumption)
+          -> MaybeT Checker (Ctxt Assumption, Ctxt Type)
 
 -- Checking of constants
 
-checkExpr _ _ _ _ _ (TyCon "Int") (Val _ (NumInt _)) = return []
+checkExpr _ _ _ _ _ (TyCon "Int") (Val _ (NumInt _)) = return ([], [])
   -- Automatically upcast integers to floats
-checkExpr _ _ _ _ _ (TyCon "Float") (Val _ (NumInt _)) = return []
-checkExpr _ _ _ _ _ (TyCon "Float") (Val _ (NumFloat _)) = return []
+checkExpr _ _ _ _ _ (TyCon "Float") (Val _ (NumInt _)) = return ([], [])
+checkExpr _ _ _ _ _ (TyCon "Float") (Val _ (NumFloat _)) = return ([], [])
 
 checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
-  case t of
-    Nothing -> return ()
+  tau' <- case t of
+    Nothing -> return tau
     Just t' -> do
       (eqT, unifiedType) <- equalTypes dbg s sig t'
       unless eqT (illTyped s $ pretty t' ++ " not equal to " ++ pretty t')
+      return tau
 
   -- Extend the context with the variable 'x' and its type
   gamE <- extCtxt s gam x (Linear sig)
   -- Check the body in the extended context
-  gam' <- checkExpr dbg defs gamE pol False tau e
+  (gam', subst) <- checkExpr dbg defs gamE pol False tau' e
   -- Linearity check, variables must be used exactly once
   case lookup x gam' of
     Nothing -> do
       nameMap <- ask
       illLinearity s $ unusedVariable (unrename nameMap x)
-    Just _  -> return (eraseVar gam' x)
+    Just _  -> return (eraseVar gam' x, subst)
 
 -- Application special case for built-in 'scale'
 checkExpr dbg defs gam pol topLevel tau
@@ -155,8 +156,9 @@ checkExpr dbg defs gam pol topLevel tau
 -- Application
 checkExpr dbg defs gam pol topLevel tau (App s e1 e2) = do
     (argTy, gam2) <- synthExpr dbg defs gam pol e2
-    gam1          <- checkExpr dbg defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
-    ctxPlus s gam1 gam2
+    (gam1, subst) <- checkExpr dbg defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
+    gam' <- ctxPlus s gam1 gam2
+    return (gam', subst)
 
 {-
 
@@ -169,13 +171,13 @@ checkExpr dbg defs gam pol topLevel tau (App s e1 e2) = do
 -- Promotion
 checkExpr dbg defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
   gamF    <- discToFreshVarsIn s (freeVars e) gam demand
-  gam'    <- checkExpr dbg defs gamF pol False tau e
+  (gam', subst) <- checkExpr dbg defs gamF pol False tau e
   let gam'' = multAll (freeVars e) demand gam'
 
   case pol of
       Positive -> leqCtxt s gam'' gam
       Negative -> leqCtxt s gam gam''
-  return gam''
+  return (gam'', subst)
 
 checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
@@ -193,7 +195,7 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
       newConjunct
       tau' <- substType subst tau
       ---
-      localGam' <- checkExpr dbg defs (gam ++ localGam) pol False tau' ei
+      (localGam', subst') <- checkExpr dbg defs (gam ++ localGam) pol False tau' ei
       -- Check linear use in anything Linear
       nameMap  <- ask
       case remainingUndischarged localGam localGam' of
@@ -216,7 +218,8 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxPlus s branchesGam guardGam
-  ctxPlus s g sharedCtxt
+  g' <- ctxPlus s g sharedCtxt
+  return (g', [])
 
 -- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol topLevel tau e = do
@@ -241,7 +244,7 @@ checkExpr dbg defs gam pol topLevel tau e = do
           else lEqualTypes dbg (getSpan e) tau tau'
 
   if tyEq
-    then return gam'
+    then return (gam', [])
     else illTyped (getSpan e)
             $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
 
@@ -396,7 +399,7 @@ synthExpr dbg defs gam pol (App s e e') = do
 
     case f of
       (FunTy sig tau) -> do
-         gam2 <- checkExpr dbg defs gam pol False sig e'
+         (gam2, subst) <- checkExpr dbg defs gam pol False sig e'
          gamNew <- ctxPlus s gam1 gam2
          return (tau, gamNew)
       t -> illTyped s $ "Left-hand side of application is not a function"
@@ -452,7 +455,7 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
           addConstraint (Eq s (CVar cvar) (CZero kind) kind)
           return (CZero kind, t)
 
-    gam1 <- checkExpr dbg defs gam (flipPol pol) False (Box demand t'') e1
+    (gam1, subst) <- checkExpr dbg defs gam (flipPol pol) False (Box demand t'') e1
     gamNew <- ctxPlus s gam1 gam2
     return (tau, gamNew)
 
