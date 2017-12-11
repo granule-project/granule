@@ -1,0 +1,2 @@
+notAleak : (Int |Hi|) |1=| -> Int |Lo|
+notAleak |x| = |42|
