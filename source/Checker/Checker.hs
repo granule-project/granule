@@ -195,7 +195,8 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
       newConjunct
       let tau' = substType subst tau
       ---
-      (localGam', subst') <- checkExpr dbg defs (gam ++ localGam) pol False tau' ei
+      let gamSpecialised = map (\(v, t) -> (v, substAssumption subst t)) gam
+      (localGam', subst') <- checkExpr dbg defs (gamSpecialised ++ localGam) pol False tau' ei
       -- Check linear use in anything Linear
       nameMap  <- ask
       case remainingUndischarged localGam localGam' of

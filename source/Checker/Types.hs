@@ -299,3 +299,7 @@ substType ctx = runIdentity .
        case lookup v ctx of
          Just t -> return t
          Nothing -> mTyVar v
+
+substAssumption :: Ctxt Type -> Assumption -> Assumption
+substAssumption ctx (Linear t) = Linear (substType ctx t)
+substAssumption ctx (Discharged t c) = Discharged (substType ctx t) c
