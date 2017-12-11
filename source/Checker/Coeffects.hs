@@ -2,6 +2,8 @@
 
 module Checker.Coeffects where
 
+import Data.List (isPrefixOf)
+
 import Context
 import Syntax.Expr
 import Syntax.Pretty
@@ -100,16 +102,13 @@ mguCoeffectTypes s c1 c2 = do
 
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1
 
-    (CConstr "Nat*", CConstr "Nat")     -> return $ CConstr "Nat*"
-    (CConstr "Nat", CConstr "Nat*")     -> return $ CConstr "Nat*"
+    (CConstr k1, CConstr k2) | Just ck <- joinCoeffectConstr k1 k2 ->
+      return $ CConstr ck
 
-    (CConstr "Nat", CConstr "Float")     -> return $ CConstr "Float"
-    (CConstr "Float", CConstr "Nat")     -> return $ CConstr "Float"
     (k1, k2) -> do
-      -- c2' <- renameC s (map (\(a, b) -> (b, a)) nameMap) c2
-      -- c1' <- renameC s (map (\(a, b) -> (b, a)) nameMap) c1
-      illTyped s $ "Cannot unify coeffect types of '" ++ pretty k1 ++ "' and '" ++ pretty k2
-       ++ "' for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
+      illTyped s $ "Cannot unify coeffect types '"
+               ++ pretty k1 ++ "' and '" ++ pretty k2
+               ++ "' for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 
 -- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th

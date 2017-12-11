@@ -112,8 +112,14 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
     (Just (_, ForallQ), Just (_, ForallQ)) ->
       return (False, [])
 
+    -- We can unift a universal a dependently bound universal
+    (Just (_, ForallQ), Just (_, BoundQ)) ->
+      return (True, [(n, TyVar m)])
+    (Just (_, BoundQ), Just (_, ForallQ)) ->
+      return (True, [(n, TyVar m)])
+
     -- We can unify two instance type variables
-    (Just (KType, InstanceQ), Just (KType, InstanceQ)) ->
+    (Just (_, InstanceQ), Just (_, InstanceQ)) ->
       return (True, [(n, TyVar m)])
 
     -- But we can unify a forall and an instance
@@ -125,19 +131,21 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
 
     -- Trying to unify other (existential) variables
     (Just (KType, _), Just (k, _)) | k /= KType -> do
-      checkerState <- get
-      k <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) (TyVar m)
+      k <- inferKindOfType s (TyVar m)
       illKindedUnifyVar s (TyVar n) KType (TyVar m) k
 
     (Just (k, _), Just (KType, _)) | k /= KType -> do
-      checkerState <- get
-      k <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) (TyVar n)
+      k <- inferKindOfType s (TyVar n)
       illKindedUnifyVar s (TyVar n) k (TyVar m) KType
 
     -- Otherwise
-    x -> do
-     addConstraint (Eq s (CVar n) (CVar m) (CConstr "Nat="))
-     return (True, [])
+    (Just (KConstr kc, _), Just (KConstr kc', _))
+      | Just kcU <- joinCoeffectConstr kc kc' -> do
+     addConstraint (Eq s (CVar n) (CVar m) (CConstr kcU))
+     return (True, [(n, TyVar m)])
+
+
+    (t1, t2) -> error $ show t1 ++ "\n" ++ show t2
 
 equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
   (lefts, u1)  <- equalTypesRelatedCoeffects dbg s rel t1 t1'

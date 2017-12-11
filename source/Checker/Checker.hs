@@ -183,10 +183,11 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (localGam, eVars) <- ctxtFromTypedPattern dbg s ty pati
+      (localGam, eVars, subst) <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
+      tau' <- substType subst tau
       ---
-      localGam' <- checkExpr dbg defs (gam ++ localGam) pol False tau ei
+      localGam' <- checkExpr dbg defs (gam ++ localGam) pol False tau' ei
       -- Check linear use in anything Linear
       nameMap  <- ask
       case remainingUndischarged localGam localGam' of
@@ -271,7 +272,8 @@ synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
     return (FunTy
              (TyVar elementVar)
              (FunTy (list elementVar (TyVar sizeVarArg))
-                    (list elementVar (TyVar sizeVarRes))), [])
+                    (list elementVar (TyVar sizeVarRes))),
+                    [])
   where
     list elementVar n = TyApp (TyApp (TyCon "List") n) (TyVar elementVar)
 
@@ -290,7 +292,7 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (localGam, eVars) <- ctxtFromTypedPattern dbg s ty pati
+      (localGam, eVars, _) <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
       ---
       (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) pol ei
@@ -625,8 +627,8 @@ freshPolymorphicInstance (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
-    t <- rename renameMap ty
-    return t
+    rename renameMap ty
+
   where
     -- Freshen variables, create existential instantiation
     instantiateVariable (var, k) = do
