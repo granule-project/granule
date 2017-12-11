@@ -63,8 +63,8 @@ inferKindOfType' s quantifiedVariables =
            if k1 `hasLub` k1'
             then if k2 `hasLub` k2'
                  then return kr
-                 else illKindedNEq s k2 k2'
-            else illKindedNEq s k1 k1'
+                 else illKindedNEq s k2' k2
+            else illKindedNEq s k1' k1
          Nothing   -> unknownName s (op ++ " operator.")
 
 hasLub :: Kind -> Kind -> Bool

@@ -73,7 +73,7 @@ ctxtFromTypedPattern _ s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil")
 
 -- Match a Cons constructor
 ctxtFromTypedPattern dbg s
-    t@(TyApp  (TyApp  (TyCon "List") n) ty)
+    (TyApp  (TyApp  (TyCon "List") n) ty)
     (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
     -- Create a fresh type variable for the size of the consed list
     let kind = CConstr "Nat="
