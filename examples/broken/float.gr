@@ -1,5 +1,0 @@
-dub : Float -> Float
-dub x = x * 2.0
-
-main : Float
-main = dub 1.0
