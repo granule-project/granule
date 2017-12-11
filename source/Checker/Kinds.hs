@@ -73,6 +73,7 @@ hasLub (KConstr kc1) (KConstr kc2) =
   case joinCoeffectConstr kc1 kc2 of
     Nothing -> False
     Just _  -> True
+hasLub _ _ = False
 
 joinCoeffectConstr :: String -> String -> Maybe String
 joinCoeffectConstr "Nat" n | "Nat" `isPrefixOf` n = Just n

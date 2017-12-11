@@ -170,7 +170,7 @@ illKindedUnifyVar s t1 k1 t2 k2 =
 illKindedNEq :: Span -> Kind -> Kind -> MaybeT Checker a
 illKindedNEq s k1 k2 =
   visibleError "Kind" halt s
-    $ "Expected kind '" ++ pretty k1 ++ "' but got " ++ pretty k2 ++ "''"
+    $ "Expected kind '" ++ pretty k1 ++ "' but got '" ++ pretty k2 ++ "'"
 
 -- | A helper for raising a linearity error
 illLinearity :: Span -> String -> MaybeT Checker a
