@@ -3,3 +3,9 @@ zero = Z
 
 succ : forall (n : Nat) . N n -> N (n+1)
 succ x = S x
+
+test : N 3 -> Float |6.0| -> Float
+test n |f| =
+  case n of
+    Z -> f;
+    (S m) -> scale 2.0 |(test m |f|)|

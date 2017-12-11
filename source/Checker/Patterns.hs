@@ -95,7 +95,7 @@ ctxtFromTypedPattern dbg s
     -- Join the two pattern contexts together
     return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, subst)
 
--- Match a Nil constructor
+-- Match a Z constructor
 ctxtFromTypedPattern _ s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
     let kind = CConstr "Nat="
     -- Create a fresh type variable for the size of the consed list
@@ -109,14 +109,14 @@ ctxtFromTypedPattern _ s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
         addConstraint $ Eq s (CNat Discrete m) (CNat Discrete 0) kind
         return ([], [], [])
 
--- Match a Cons constructor
+-- Match a S constructor
 ctxtFromTypedPattern dbg s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = do
     -- Create a fresh type variable for the size of the consed list
     let kind = CConstr "Nat="
     sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
 
     -- Recursively construct the binding patterns
-    (bs2, eVars2, _) <- ctxtFromTypedPattern dbg s (TyApp (TyCon "Nat") (TyVar sizeVar)) p
+    (bs2, eVars2, _) <- ctxtFromTypedPattern dbg s (TyApp (TyCon "N") (TyVar sizeVar)) p
 
     -- Generate equality constraint
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
