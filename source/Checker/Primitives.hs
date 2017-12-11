@@ -9,8 +9,8 @@ typeLevelConstructors =
   [ ("Int",  KType)
   , ("Float", KType)
   , ("Bool", KType)
-  , ("List", KFun (KConstr "Nat") (KFun KType KType))
-  , ("N", KFun (KConstr "Nat") KType)
+  , ("List", KFun (KConstr "Nat=") (KFun KType KType))
+  , ("N", KFun (KConstr "Nat=") KType)
   , ("One", KCoeffect)   -- Singleton coeffect
   , ("Nat",  KCoeffect)
   , ("Nat=", KCoeffect)
