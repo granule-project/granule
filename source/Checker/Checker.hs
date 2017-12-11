@@ -129,23 +129,23 @@ checkExpr _ _ _ _ _ (TyCon "Float") (Val _ (NumFloat _)) = return ([], [])
 checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
-  tau' <- case t of
-    Nothing -> return tau
+  (tau', subst1) <- case t of
+    Nothing -> return (tau, [])
     Just t' -> do
-      (eqT, unifiedType) <- equalTypes dbg s sig t'
+      (eqT, unifiedType, subst) <- equalTypes dbg s sig t'
       unless eqT (illTyped s $ pretty t' ++ " not equal to " ++ pretty t')
-      return tau
+      return (tau, subst)
 
   -- Extend the context with the variable 'x' and its type
   gamE <- extCtxt s gam x (Linear sig)
   -- Check the body in the extended context
-  (gam', subst) <- checkExpr dbg defs gamE pol False tau' e
+  (gam', subst2) <- checkExpr dbg defs gamE pol False tau' e
   -- Linearity check, variables must be used exactly once
   case lookup x gam' of
     Nothing -> do
       nameMap <- ask
       illLinearity s $ unusedVariable (unrename nameMap x)
-    Just _  -> return (eraseVar gam' x, subst)
+    Just _  -> return (eraseVar gam' x, subst1 ++ subst2)
 
 -- Application special case for built-in 'scale'
 checkExpr dbg defs gam pol topLevel tau
@@ -187,13 +187,13 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
   sharedCtxt <- return $ filter isNonLinearAssumption sharedCtxt
 
 
-  branchCtxts <-
+  branchCtxtsAndSubst <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
       (localGam, eVars, subst) <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
-      tau' <- substType subst tau
+      let tau' = substType subst tau
       ---
       (localGam', subst') <- checkExpr dbg defs (gam ++ localGam) pol False tau' ei
       -- Check linear use in anything Linear
@@ -209,22 +209,24 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
            --leqCtxt s gee' gam
            concludeImplication eVars
            -- The resulting context has the shared part removed
-           return ((localGam' `subtractCtxt` localGam) `subtractCtxt` sharedCtxt)
+           let branchCtxt = (localGam' `subtractCtxt` localGam) `subtractCtxt` sharedCtxt
+           return (branchCtxt, subst')
         xs -> illLinearity s $ intercalate "\n a" $ map (unusedVariable . unrename nameMap . fst) xs
 
   -- Find the upper-bound contexts
+  let (branchCtxts, substs) = unzip branchCtxtsAndSubst
   nameMap     <- ask
   branchesGam <- fold1M (joinCtxts s nameMap) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxPlus s branchesGam guardGam
   g' <- ctxPlus s g sharedCtxt
-  return (g', [])
+  return (g', concat substs)
 
 -- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol topLevel tau e = do
   (tau', gam') <- synthExpr dbg defs gam pol e
-  (tyEq, _) <-
+  (tyEq, _, subst) <-
     case pol of
       Positive -> do
         dbgMsg dbg $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
@@ -244,7 +246,7 @@ checkExpr dbg defs gam pol topLevel tau e = do
           else lEqualTypes dbg (getSpan e) tau tau'
 
   if tyEq
-    then return (gam', [])
+    then return (gam', subst)
     else illTyped (getSpan e)
             $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
 
@@ -395,13 +397,16 @@ synthExpr dbg defs gam pol
 
 -- Application
 synthExpr dbg defs gam pol (App s e e') = do
-    (f, gam1) <- synthExpr dbg defs gam pol e
+    (fTy, gam1) <- synthExpr dbg defs gam pol e
 
-    case f of
+    case fTy of
+      -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
          (gam2, subst) <- checkExpr dbg defs gam pol False sig e'
          gamNew <- ctxPlus s gam1 gam2
-         return (tau, gamNew)
+         return (substType subst tau, gamNew)
+
+      -- Not a function type
       t -> illTyped s $ "Left-hand side of application is not a function"
                    ++ " but has type '" ++ pretty t ++ "'"
 
@@ -438,7 +443,7 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
     (demand, t'') <-
       case lookup var gam2 of
         Just (Discharged t' demand) -> do
-             (eqT, unifiedType) <- equalTypes dbg s t' t
+             (eqT, unifiedType, _) <- equalTypes dbg s t' t
              if eqT then do
                 dbgMsg dbg $ "Demand for " ++ var ++ " = " ++ pretty demand
                 return (demand, unifiedType)
@@ -455,13 +460,13 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
           addConstraint (Eq s (CVar cvar) (CZero kind) kind)
           return (CZero kind, t)
 
-    (gam1, subst) <- checkExpr dbg defs gam (flipPol pol) False (Box demand t'') e1
+    (gam1, _) <- checkExpr dbg defs gam (flipPol pol) False (Box demand t'') e1
     gamNew <- ctxPlus s gam1 gam2
     return (tau, gamNew)
 
 -- BinOp
 synthExpr dbg defs gam pol (Binop s op e1 e2) = do
-    (t1, gam1)  <- synthExpr dbg defs gam pol e1
+    (t1, gam1) <- synthExpr dbg defs gam pol e1
     (t2, gam2) <- synthExpr dbg defs gam pol e2
     -- Look through the list of operators (of which there might be
     -- multiple matching operators)
@@ -481,8 +486,8 @@ synthExpr dbg defs gam pol (Binop s op e1 e2) = do
     selectFirstByType t1 t2 ((FunTy opt1 (FunTy opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- localChecking $ do
-         (eq1, _) <- equalTypes dbg s t1 opt1
-         (eq2, _) <- equalTypes dbg s t2 opt2
+         (eq1, _, _) <- equalTypes dbg s t1 opt1
+         (eq2, _, _) <- equalTypes dbg s t2 opt2
          return (eq1 && eq2)
       -- If successful then return this local computation
       case result of
@@ -681,8 +686,8 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       -- name map)
       return (var, var')
 
-    rename rmap = typeFoldM mFunTy mTyCon (renameBox rmap) mDiamond
-                       (renameTyVar rmap) mTyApp mTyInt mPairTy mTyInfix
+    rename rmap = typeFoldM (baseTypeFold { tfBox = renameBox rmap
+                                          , tfTyVar = renameTyVar rmap })
     renameBox renameMap c t = do
       let c' = substCoeffect (map (\(v, var) -> (v, CVar var)) renameMap) c
       return $ Box c' t

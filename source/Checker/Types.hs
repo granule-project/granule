@@ -8,6 +8,7 @@ import Syntax.Expr
 import Syntax.Pretty
 import Context
 import Data.List
+import Data.Functor.Identity
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -18,10 +19,12 @@ import Checker.Monad
 import Checker.Kinds
 import Checker.Predicates
 
-lEqualTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type)
+lEqualTypes ::
+    Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
 lEqualTypes dbg s = equalTypesRelatedCoeffectsAndUnify dbg s Leq
 
-equalTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type)
+equalTypes ::
+    Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
 equalTypes dbg s = equalTypesRelatedCoeffectsAndUnify dbg s Eq
 
 type Unifier = [(Id, Type)]
@@ -39,12 +42,12 @@ equalTypesRelatedCoeffectsAndUnify ::
    -> Span
    -- Explain how coeffects should be related by a solver constraint
    -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
-   -> Type -> Type -> MaybeT Checker (Bool, Type)
+   -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
 equalTypesRelatedCoeffectsAndUnify dbg s rel t1 t2 = do
    (eq, unif) <- equalTypesRelatedCoeffects dbg s rel t1 t2
    if eq
-     then return (eq, applyUnifier unif t1)
-     else return (eq, t1)
+     then return (eq, substType unif t1, unif)
+     else return (eq, t1, [])
 
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and a unifier
@@ -185,24 +188,6 @@ equalTypesRelatedCoeffects _ s _ t1 t2 = do
                  ++ "\t\n from equality "
                  ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
--- | rewrite a type using a unifier (map from type vars to types)
-applyUnifier :: Unifier -> Type -> Type
-applyUnifier unif (TyVar v) = do
-    case lookup v unif of
-      Just t  -> t
-      Nothing -> TyVar v
-applyUnifier unif (FunTy t1 t2) =
-    FunTy (applyUnifier unif t1) (applyUnifier unif t2)
-applyUnifier unif (TyCon t) = TyCon t
-applyUnifier unif (Diamond e t) =
-    Diamond e (applyUnifier unif t)
-applyUnifier unif (Box c t) =
-    Box c (applyUnifier unif t)
-applyUnifier unif (TyApp t1 t2) =
-    TyApp (applyUnifier unif t1) (applyUnifier unif t2)
-applyUnifier unif (TyInt t) = TyInt t
-applyUnifier unif (PairTy t1 t2) =
-    PairTy (applyUnifier unif t1) (applyUnifier unif t2)
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Type
@@ -305,18 +290,12 @@ compileNatKindedTypeToCoeffect s t =
   illTyped s $ "Type " ++ pretty t ++ " does not have kind "
                        ++ pretty (CConstr "Nat=")
 
-substType :: Monad m => Ctxt Type -> Type -> m Type
-substType ctx =
-  typeFoldM
-    mFunTy
-    mTyCon
-    mBox
-    mDiamond
-    (\v ->
+-- | rewrite a type using a unifier (map from type vars to types)
+substType :: Ctxt Type -> Type -> Type
+substType ctx = runIdentity .
+    typeFoldM (baseTypeFold { tfTyVar = varSubst })
+  where
+    varSubst v =
        case lookup v ctx of
          Just t -> return t
-         Nothing -> mTyVar v)
-    mTyApp
-    mTyInt
-    mPairTy
-    mTyInfix
+         Nothing -> mTyVar v

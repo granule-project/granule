@@ -11,9 +11,10 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    normalise,
                    nullSpan, getSpan, getEnd, getStart, Pos, Span,
                    freshenBlankPolyVars,
-                   typeFoldM,
+                   typeFoldM, TypeFold(..),
                    mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
-                   mTyInt, mPairTy, mTyInfix
+                   mTyInt, mPairTy, mTyInfix,
+                   baseTypeFold
                    ) where
 
 import Data.List ((\\))
@@ -344,46 +345,50 @@ mPairTy x y  = return (PairTy x y)
 mTyInfix :: Monad m => String -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 
+baseTypeFold :: Monad m => TypeFold m Type
+baseTypeFold =
+  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mPairTy mTyInfix
+
+data TypeFold m a = TypeFold
+  { tfFunTy   :: a -> a        -> m a
+  , tfTyCon   :: String        -> m a
+  , tfBox     :: Coeffect -> a -> m a
+  , tfDiamond :: Effect -> a   -> m a
+  , tfTyVar   :: String        -> m a
+  , tfTyApp   :: a -> a        -> m a
+  , tfTyInt   :: Int           -> m a
+  , tfPairTy  :: a -> a        -> m a
+  , tfTyInfix :: String -> a -> a -> m a }
 
 -- | Monadic fold on a `Type` value
-typeFoldM :: Monad m =>
-     (a -> a        -> m a) -- Fun
-  -> (String        -> m a) -- TyCon
-  -> (Coeffect -> a -> m a) -- Box
-  -> (Effect   -> a -> m a) -- Diamond
-  -> (String        -> m a) -- Type variable
-  -> (a -> a        -> m a) -- Type application
-  -> (Int           -> m a) -- Type int
-  -> (a -> a        -> m a) -- Pair
-  -> (String -> a -> a -> m a) -- Infix
-  -> Type -> m a
-typeFoldM fun con box diamond var app int pair inf = go
+typeFoldM :: Monad m => TypeFold m a -> Type -> m a
+typeFoldM algebra = go
   where
    go (FunTy t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     fun t1' t2'
-   go (TyCon s) = con s
+     (tfFunTy algebra) t1' t2'
+   go (TyCon s) = (tfTyCon algebra) s
    go (Box c t) = do
      t' <- go t
-     box c t'
+     (tfBox algebra) c t'
    go (Diamond c t) = do
      t' <- go t
-     diamond c t'
-   go (TyVar v) = var v
+     (tfDiamond algebra) c t'
+   go (TyVar v) = (tfTyVar algebra) v
    go (TyApp t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     app t1' t2'
-   go (TyInt i) = int i
+     (tfTyApp algebra) t1' t2'
+   go (TyInt i) = (tfTyInt algebra) i
    go (PairTy t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     pair t1' t2'
+     (tfPairTy algebra) t1' t2'
    go (TyInfix op t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     inf op t1' t2'
+     (tfTyInfix algebra) op t1' t2'
 
 arity :: Type -> Int
 arity (FunTy _ t) = 1 + arity t

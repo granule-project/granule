@@ -30,7 +30,7 @@ inferKindOfType s t = do
 
 inferKindOfType' :: Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
 inferKindOfType' s quantifiedVariables =
-    typeFoldM kFunOrPair kCon kBox kDiamond kVar kApp kInt kFunOrPair kInfix
+    typeFoldM (TypeFold kFunOrPair kCon kBox kDiamond kVar kApp kInt kFunOrPair kInfix)
   where
      kFunOrPair KType KType = return KType
      kFunOrPair KType y = illKindedNEq s KType y

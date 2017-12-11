@@ -13,6 +13,7 @@ import Control.Monad.Trans.Maybe
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also a list of any variables bound by the pattern
 --   (e.g. for dependent matching) and a substitution for variables
+--   caused by pattern matching (e.g., from unification).
 ctxtFromTypedPattern
    :: Bool
    -> Span
