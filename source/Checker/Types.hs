@@ -94,10 +94,6 @@ equalTypesRelatedCoeffects dbg s rel (TyApp t1 t2) (TyApp t1' t2') = do
   (two, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
   return (one && two, u1 ++ u2)
 
-equalTypesRelatedCoeffects _ s _ (TyVar n) (TyInt m) = do
-  addConstraint (Eq s (CVar n) (CNat Discrete m) (CConstr "Nat="))
-  return (True, [(n, TyInt m)])
-
 equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get
   case lookup n (ckctxt checkerState) of
@@ -156,22 +152,36 @@ equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
   checkerState <- get
   case lookup n (ckctxt checkerState) of
     -- We can unify an instance with a concrete type
-    (Just (k1, InstanceQ)) -> do
-      k2 <- inferKindOfType s (stripQuantifiers $ ckctxt checkerState) t
-      if k1 == k2
+    (Just (k1, q)) | q == InstanceQ || q == BoundQ -> do
+      k2 <- inferKindOfType s t
+      if k1 `hasLub` k2
        then return (True, [(n, t)])
        else illKindedUnifyVar s (TyVar n) k1 t k2
+
     -- But we can't unify an universal with a concrete type
     (Just (k1, ForallQ)) -> do
-      illTyped s $ "Trying to unifying a polymorphic type '" ++ n
+      illTyped s $ "Trying to unify a polymorphic type '" ++ n
        ++ "' with monomorphic " ++ pretty t
+
     Nothing -> unknownName s n
 
 equalTypesRelatedCoeffects dbg s rel t (TyVar n) =
   equalTypesRelatedCoeffects dbg s rel (TyVar n) t
 
-equalTypesRelatedCoeffects _ s _ t1 t2 =
-  illTyped s $ "I don't know how to make '" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
+equalTypesRelatedCoeffects _ s _ t1 t2 = do
+  k1 <- inferKindOfType s t1
+  k2 <- inferKindOfType s t2
+  case (k1, k2) of
+    (KConstr n, KConstr n') | "Nat" `isPrefixOf` n && "Nat" `isPrefixOf` n' -> do
+       c1 <- compileNatKindedTypeToCoeffect s t1
+       c2 <- compileNatKindedTypeToCoeffect s t2
+       addConstraint $ Eq s c1 c2 (CConstr "Nat=")
+       return (True, [])
+
+    _ -> illTyped s $ "Equality is not defined between kinds "
+                 ++ pretty k1 ++ " and " ++ pretty k2
+                 ++ "\t\n from equality "
+                 ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
 -- | rewrite a type using a unifier (map from type vars to types)
 applyUnifier :: Unifier -> Type -> Type
@@ -274,3 +284,37 @@ instance Pretty (Ctxt Assumption) where
    pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
      where pp (var, Linear t) = var ++ " : " ++ pretty t
            pp (var, Discharged t c) = var ++ " : .[" ++ pretty t ++ "]. " ++ pretty c
+
+compileNatKindedTypeToCoeffect :: Span -> Type -> MaybeT Checker Coeffect
+compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
+  t1' <- compileNatKindedTypeToCoeffect s t1
+  t2' <- compileNatKindedTypeToCoeffect s t2
+  case op of
+    "+"   -> return $ CPlus t1' t2'
+    "*"   -> return $ CTimes t1' t2'
+    "\\/" -> return $ CJoin t1' t2'
+    "/\\" -> return $ CMeet t1' t2'
+    _     -> unknownName s $ "Type-level operator " ++ op
+compileNatKindedTypeToCoeffect _ (TyInt n) =
+  return $ CNat Discrete n
+compileNatKindedTypeToCoeffect _ (TyVar v) =
+  return $ CVar v
+compileNatKindedTypeToCoeffect s t =
+  illTyped s $ "Type " ++ pretty t ++ " does not have kind "
+                       ++ pretty (CConstr "Nat=")
+
+substType :: Monad m => Ctxt Type -> Type -> m Type
+substType ctx =
+  typeFoldM
+    mFunTy
+    mTyCon
+    mBox
+    mDiamond
+    (\v ->
+       case lookup v ctx of
+         Just t -> return t
+         Nothing -> mTyVar v)
+    mTyApp
+    mTyInt
+    mPairTy
+    mTyInfix

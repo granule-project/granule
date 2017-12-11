@@ -68,6 +68,7 @@ instance Pretty Type where
     pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
     pretty (TyInt n)      = show n
     pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
+    pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
 
 instance Pretty [Def] where
     pretty = intercalate "\n" . map pretty

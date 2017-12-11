@@ -16,7 +16,11 @@ typeLevelConstructors =
   , ("Nat*", KCoeffect)
   , ("Q",    KCoeffect) -- Rationals
   , ("Level", KCoeffect) -- Security level
-  , ("Set", KFun (KPoly "k") (KFun (KConstr "k") KCoeffect)) ]
+  , ("Set", KFun (KPoly "k") (KFun (KConstr "k") KCoeffect))
+  , ("+",   KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
+  , ("*",   KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
+  , ("/\\", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
+  , ("\\/", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))]
 
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
@@ -32,7 +36,7 @@ builtins =
   , ("toFloat", Forall nullSpan [] $ FunTy (TyCon "Int") (TyCon "Float"))
   , ("read", Forall nullSpan [] $ Diamond ["R"] (TyCon "Int"))
   , ("write", Forall nullSpan [] $
-       FunTy (TyCon "Int") (Diamond ["W"] (TyCon "Int"))) ]
+       FunTy (TyCon "Int") (Diamond ["W"] (TyCon "Int")))]
 
 binaryOperators :: [(Id, Type)]
 binaryOperators =

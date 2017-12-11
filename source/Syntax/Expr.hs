@@ -13,7 +13,7 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    freshenBlankPolyVars,
                    typeFoldM,
                    mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
-                   mTyInt, mPairTy
+                   mTyInt, mPairTy, mTyInfix
                    ) where
 
 import Data.List ((\\))
@@ -321,6 +321,7 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
           | PairTy Type Type          -- ^ Pair/product type
+          | TyInfix String Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
 -- Trivially effectful monadic constructors
@@ -340,6 +341,9 @@ mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
 mPairTy :: Monad m => Type -> Type -> m Type
 mPairTy x y  = return (PairTy x y)
+mTyInfix :: Monad m => String -> Type -> Type -> m Type
+mTyInfix op x y  = return (TyInfix op x y)
+
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: Monad m =>
@@ -351,8 +355,9 @@ typeFoldM :: Monad m =>
   -> (a -> a        -> m a) -- Type application
   -> (Int           -> m a) -- Type int
   -> (a -> a        -> m a) -- Pair
+  -> (String -> a -> a -> m a) -- Infix
   -> Type -> m a
-typeFoldM fun con box diamond var app int pair = go
+typeFoldM fun con box diamond var app int pair inf = go
   where
    go (FunTy t1 t2) = do
      t1' <- go t1
@@ -375,6 +380,10 @@ typeFoldM fun con box diamond var app int pair = go
      t1' <- go t1
      t2' <- go t2
      pair t1' t2'
+   go (TyInfix op t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     inf op t1' t2'
 
 arity :: Type -> Int
 arity (FunTy _ t) = 1 + arity t

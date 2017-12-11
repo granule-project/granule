@@ -660,7 +660,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       return (var, var')
 
     rename rmap = typeFoldM mFunTy mTyCon (renameBox rmap) mDiamond
-                       (renameTyVar rmap) mTyApp mTyInt mPairTy
+                       (renameTyVar rmap) mTyApp mTyInt mPairTy mTyInfix
     renameBox renameMap c t = do
       let c' = substCoeffect (map (\(v, var) -> (v, CVar var)) renameMap) c
       return $ Box c' t

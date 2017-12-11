@@ -159,7 +159,11 @@ TyAtom :
     CONSTR                      { TyCon $ constrString $1 }
   | VAR                         { TyVar (symString $1) }
   | INT                         { let TokenInt _ x = $1 in TyInt x }
-
+  | TyAtom '+' TyAtom           { TyInfix ("+") $1 $3 }
+  | TyAtom '*' TyAtom           { TyInfix ("*") $1 $3 }
+  | TyAtom '/' '\\' TyAtom      { TyInfix ("/\\") $1 $4 }
+  | TyAtom '\\' '/' TyAtom      { TyInfix ("\\/") $1 $4 }
+  | '(' TyAtom ')'              { $2 }
 
 Coeffect :: { Coeffect }
 Coeffect :
