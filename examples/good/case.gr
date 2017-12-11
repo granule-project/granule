@@ -15,4 +15,4 @@ add : Int |1| -> Int |1| -> Int
 add |x| |y| = x+y
 
 main : Int
-main = add (if0 |0| |1| |2|) (if0 |1| |1| |2|)
+main = add |(if0 |0| |1| |2|)| |(if0 |1| |1| |2|)|

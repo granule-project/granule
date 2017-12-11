@@ -164,6 +164,7 @@ TyAtom :
   | TyAtom '/' '\\' TyAtom      { TyInfix ("/\\") $1 $4 }
   | TyAtom '\\' '/' TyAtom      { TyInfix ("\\/") $1 $4 }
   | '(' Type '|' Coeffect '|' ')' { Box $4 $2 }
+  | '(' TyAtom ')' { $2 }
 
 Coeffect :: { Coeffect }
 Coeffect :
