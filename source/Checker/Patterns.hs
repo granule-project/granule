@@ -81,7 +81,7 @@ ctxtFromTypedPattern dbg s
 
     -- Recursively construct the binding patterns
     (bs1, eVars1, ty') <- ctxtFromTypedPattern dbg s ty p1
-    (bs2, eVars2, _) <- ctxtFromTypedPattern dbg s (TyApp (TyApp (TyCon "List") (TyVar sizeVar)) t) p2
+    (bs2, eVars2, _) <- ctxtFromTypedPattern dbg s (TyApp (TyApp (TyCon "List") (TyVar sizeVar)) ty) p2
 
     -- Generate equality constraint
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
