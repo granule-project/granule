@@ -283,6 +283,25 @@ synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
   where
     list elementVar n = TyApp (TyApp (TyCon "List") n) (TyVar elementVar)
 
+-- Nat constructors
+synthExpr _ _ _ _ (Val _ (Constr "Z" [])) = do
+  return (TyApp (TyCon "N") (TyInt 0), [])
+
+synthExpr _ _ _ _ (Val s (Constr "S" [])) = do
+    let kind = CConstr "Nat="
+    sizeVarArg <- freshCoeffectVar "n" kind
+    sizeVarRes <- freshCoeffectVar "m" kind
+    -- Add a constraint
+    -- m ~ n + 1
+    addConstraint $ Eq s (CVar sizeVarRes)
+                         (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
+    -- S : Nat n -> Nat (n + 1)
+    return (FunTy (nat (TyVar sizeVarArg))
+                  (nat (TyVar sizeVarRes)), [])
+  where
+    nat n = TyApp (TyCon "N") n
+
+
 -- Constructors (only supports nullary constructors)
 synthExpr _ _ _ _ (Val s (Constr name [])) = do
   case lookup name dataConstructors of

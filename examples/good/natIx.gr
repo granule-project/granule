@@ -1,0 +1,5 @@
+zero : N 0
+zero = Z
+
+succ : forall (n : Nat) . N n -> N (n+1)
+succ x = S x
