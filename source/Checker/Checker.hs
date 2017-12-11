@@ -211,7 +211,7 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
            -- The resulting context has the shared part removed
            let branchCtxt = (localGam' `subtractCtxt` localGam) `subtractCtxt` sharedCtxt
            return (branchCtxt, subst')
-        xs -> illLinearity s $ intercalate "\n a" $ map (unusedVariable . unrename nameMap . fst) xs
+        xs -> illLinearity s $ intercalate "\n\t" $ map (unusedVariable . unrename nameMap . fst) xs
 
   -- Find the upper-bound contexts
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
@@ -367,7 +367,7 @@ synthExpr dbg defs gam pol (LetDiamond s var ty e1 e2) = do
     t -> illTyped s $ "Expected '" ++ pretty ty ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
 
 -- Variables
-synthExpr _ defs gam _ (Val s (Var x)) = do
+synthExpr dbg defs gam _ (Val s (Var x)) = do
    nameMap <- ask
    -- Try the local context
    case lookup x gam of
@@ -378,11 +378,13 @@ synthExpr _ defs gam _ (Val s (Var x)) = do
            ty' <- freshPolymorphicInstance tyScheme
            return (ty', [])
          -- Couldn't find it
-         Nothing  -> illTyped s $ "I don't know the type for "
-                              ++ show (unrename nameMap x)
-                              ++ "{ looking for " ++ x
-                              ++ " in context " ++ pretty gam
-                              ++ " or definitions " ++ pretty defs ++ "}"
+         Nothing  -> unknownName s $ show (unrename nameMap x)
+                              ++ (if dbg then
+                                  (" { looking for " ++ x
+                                  ++ " in context " ++ pretty gam
+                                  ++ " or definitions " ++ pretty defs
+                                  ++ "}")
+                                 else "")
      -- In the local context
      Just (Linear ty)       -> return (ty, [(x, Linear ty)])
      Just (Discharged ty c) -> do
