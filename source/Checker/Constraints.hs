@@ -181,7 +181,7 @@ freshCVar quant name (CConstr "Level") q = do
   return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
 freshCVar quant _ (CConstr "Set") _ = return (true, SSet S.empty)
 
--- A poly typed coeffect variable whose element is 'star' gets
+-- A poly typed coeffect variable whose element is 'infinity' gets
 -- compiled into the One type (since this satisfies all the same properties)
 freshCVar quant name (CPoly v) q | " infinity" `isPrefixOf` v
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
@@ -250,7 +250,7 @@ compileCoeffect c@(CMeet n m) k vars =
     (CConstr "Set"  , SSet s, SSet t)      -> SSet $ S.intersection s t
     (CConstr "Level", SLevel s, SLevel t)  -> SLevel $ s `smin` t
     (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
-    (CPoly v        , SNat _ _, SNat _ _) | " start" `isPrefixOf` v
+    (CPoly v        , SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
                                            -> SNat Ordered 1
     (_, SNat o1 n1, SNat _ n2)              -> SNat o1 (n1 `smin` n2)
     (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smin` n2)
@@ -261,7 +261,7 @@ compileCoeffect c@(CJoin n m) k vars =
     (CConstr "Set"  , SSet s, SSet t)      -> SSet $ S.intersection s t
     (CConstr "Level", SLevel s, SLevel t)  -> SLevel $ s `smax` t
     (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
-    (CPoly v        , SNat _ _, SNat _ _) | " start" `isPrefixOf` v
+    (CPoly v        , SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
                                            -> SNat Ordered 1
     (_, SNat o1 n1, SNat _ n2)              -> SNat o1 (n1 `smax` n2)
     (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smax` n2)
