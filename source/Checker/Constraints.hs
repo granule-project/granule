@@ -251,7 +251,7 @@ compileCoeffect c@(CMeet n m) k vars =
     (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
     (CPoly v        , SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
                                            -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 `smin` n2)
+    (_, SNat o1 n1, SNat _ n2)              -> SNat o1 (n1 `smin` n2)
     (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smin` n2)
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
@@ -262,7 +262,7 @@ compileCoeffect c@(CJoin n m) k vars =
     (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
     (CPoly v        , SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
                                            -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 `smax` n2)
+    (_, SNat o1 n1, SNat _ n2)              -> SNat o1 (n1 `smax` n2)
     (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smax` n2)
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
@@ -272,7 +272,7 @@ compileCoeffect c@(CPlus n m) k vars =
     (CConstr "Level", SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
     (CConstr "One"  , SNat _ _, SNat _ _)       -> SNat Ordered 1
     (CPoly v, SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 + n2)
+    (_, SNat o1 n1, SNat _ n2)                  -> SNat o1 (n1 + n2)
     (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 + n2
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
@@ -284,7 +284,7 @@ compileCoeffect c@(CTimes n m) k vars =
     (CConstr "One", SNat _ _, SNat _ _)         -> SNat Ordered 1
     (CPoly v, SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
                                                 -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 * n2)
+    (_, SNat o1 n1, SNat _ n2)                  -> SNat o1 (n1 * n2)
     (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 * n2
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 

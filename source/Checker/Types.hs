@@ -103,7 +103,7 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) | n == m = do
 equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) = do
   checkerState <- get
 
-  case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
+  case (lookup n (ckctxt checkerState), lookup m (ckctxt checkerState)) of
 
     -- Two universally quantified variables are unequal
     (Just (_, ForallQ), Just (_, ForallQ)) ->
@@ -179,7 +179,7 @@ equalTypesRelatedCoeffects s rel (TyVar n) t = do
       halt $ GenericError (Just s) $ "Trying to unify a polymorphic type '" ++ n
         ++ "' with monomorphic " ++ pretty ut
     (Just (_, InstanceQ)) -> unhandled
-    (Just (_, BoundQ)) -> unhandled 
+    (Just (_, BoundQ)) -> unhandled
     Nothing -> halt $ UnboundVariableError (Just s) n
 
 equalTypesRelatedCoeffects s rel t (TyVar n) =
