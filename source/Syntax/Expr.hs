@@ -2,10 +2,11 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DuplicateRecordFields #-} -- OverloadedRecordFields in 8.4
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
-                   NatModifier(..), Effect, Kind(..),
+                   NatModifier(..), Effect, Kind(..), DataConstr(..), TypeConstr(..),
                    liftCoeffectType,
                    uniqueNames, arity, freeVars, subst,
                    normalise,
@@ -289,7 +290,18 @@ instance Term Expr where
 --------- Definitions
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
+         | ADT Span TypeConstr [DataConstr]
           deriving (Eq, Show, Generic)
+
+data DataConstr = DataConstr { _span :: Span
+                             , _name :: Id
+                             , _signature :: TypeScheme
+                             } deriving (Eq, Show, Generic)
+
+data TypeConstr = TypeConstr { _span :: Span
+                             , _name :: Id
+                             , _tyVars :: [(Span,Id)]
+                             } deriving (Eq, Show, Generic)
 
 instance FirstParameter Def Span
 

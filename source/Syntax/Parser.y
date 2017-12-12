@@ -21,6 +21,8 @@ import System.Exit (die)
 
 %token
     nl    { TokenNL  _ }
+    data  { TokenData _ }
+    where { TokenWhere _ }
     let   { TokenLet _ }
     in    { TokenIn  _  }
     case  { TokenCase _ }
@@ -73,19 +75,39 @@ NL : nl NL {}
    | nl    {}
 
 Def :: { Def }
-Def : Sig NL Binding
-  { if (fst3 $1 == fst3 $3)
-    then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
-    else error $ "Signature for "
-	            ++ fst3 $3
-	            ++ " does not match the signature head" }
+Def : Sig NL Binding {
+      if (fst3 $1 == fst3 $3) -- check that function name is the same in the sig and the decl
+      then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
+      else error $ "Signature for " ++ fst3 $3 ++ " does not match the signature head"
+    }
+    | data TypeConstr where DataConstrs {
+      ADT (getPos $1, snd $ _span (last $4 :: DataConstr)) $2 $4
+    }
 
-Sig ::  { (String, TypeScheme, Pos) }
+Sig ::  { (Id, TypeScheme, Pos) }
 Sig : VAR ':' TypeScheme           { (symString $1, $3, getPos $1) }
 
-Binding :: { (String, Expr, [Pattern]) }
+Binding :: { (Id, Expr, [Pattern]) }
 Binding : VAR '=' Expr             { (symString $1, $3, []) }
         | VAR Pats '=' Expr        { (symString $1, $4, $2) }
+
+TypeConstr ::  { TypeConstr }
+TypeConstr : CONSTR        { TypeConstr (getPosToSpan $1) (constrString $1) [] }
+           | CONSTR TyVars { TypeConstr ((getPos $1),(fst $ fst (last $2))) (constrString $1) $2 }
+
+DataConstrs :: { [DataConstr] }
+DataConstrs : DataConstr DataConstrNext { $1 : $2 }
+
+DataConstr :: { DataConstr }
+DataConstr : CONSTR ':' TypeScheme { DataConstr (getPos $1, getEnd $3) (constrString $1) $3 }
+
+DataConstrNext :: { [DataConstr] }
+DataConstrNext : ';' DataConstrs { $2 }
+               | {- empty -}     { [] }
+
+TyVars :: { [(Span, Id)] }
+TyVars : VAR TyVars { ((getPosToSpan $1),(symString $1)) : $2 }
+       | VAR        { [((getPosToSpan $1),(symString $1))] }
 
 Pats :: { [Pattern] }
 Pats : Pat                         { [$1] }
@@ -310,7 +332,9 @@ parseDefs input = do
         else die $ "Error: Name clash: " ++ intercalate ", " clashes
       where
         clashes = names \\ nub names
-        names = map (\(Def _ name _ _ _) -> name) (fst ds)
+        names = map (\d -> case d of (Def _ name _ _ _) -> name
+                                     (ADT _ tyC _) -> _name (tyC :: TypeConstr))
+                    (fst ds)
 
 myReadFloat :: String -> Rational
 myReadFloat str =

@@ -1,3 +1,7 @@
 data Maybe a where
-  None : Maybe
+  None : Maybe;
   Some : a -> Maybe
+
+data Either a b where
+  Left : a -> Either a b;
+  Right : b -> Either a b
