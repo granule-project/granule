@@ -2,7 +2,8 @@
 module Checker.Kinds (kindCheck
                     , inferKindOfType
                     , joinCoeffectConstr
-                    , hasLub) where
+                    , hasLub
+                    , joinKind) where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -67,13 +68,19 @@ inferKindOfType' s quantifiedVariables =
             else illKindedNEq s k1' k1
          Nothing   -> unknownName s (op ++ " operator.")
 
-hasLub :: Kind -> Kind -> Bool
-hasLub k1 k2 | k1 == k2 = True
-hasLub (KConstr kc1) (KConstr kc2) =
+joinKind :: Kind -> Kind -> Maybe Kind
+joinKind k1 k2 | k1 == k2 = Just k1
+joinKind (KConstr kc1) (KConstr kc2) =
   case joinCoeffectConstr kc1 kc2 of
+    Nothing -> Nothing
+    Just kc -> Just $ KConstr kc
+joinKind _ _ = Nothing
+
+hasLub :: Kind -> Kind -> Bool
+hasLub k1 k2 =
+  case joinKind k1 k2 of
     Nothing -> False
     Just _  -> True
-hasLub _ _ = False
 
 joinCoeffectConstr :: String -> String -> Maybe String
 joinCoeffectConstr "Nat" n | "Nat" `isPrefixOf` n = Just n
