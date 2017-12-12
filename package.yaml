@@ -13,7 +13,7 @@ dependencies:
 
 library:
   source-dirs: source
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-name-shadowing
   build-tools:
   - alex
   - happy
@@ -54,7 +54,7 @@ tests:
   spec:
     main: Spec.hs
     source-dirs: tests/hspec
-    # ghc-options: -Wall
+    ghc-options: -fno-warn-partial-type-signatures
     dependencies:
     - filemanip
     - granule

@@ -28,6 +28,7 @@ import System.Exit (die)
     VAR    { TokenSym _ _ }
     CONSTR { TokenConstr _ _ }
     forall { TokenForall _ }
+    '∞'   { TokenInfinity _ }
     '\\'  { TokenLambda _ }
     '/'  { TokenForwardSlash _ }
     '->'  { TokenArrow _ }
@@ -169,12 +170,14 @@ TyAtom :
 Coeffect :: { Coeffect }
 Coeffect :
        NatCoeff                { $1 }
-     | '*'                     { CStar (CPoly " star") }
+     | '∞'                     { CInfinity (CPoly " infinity") }
      | FLOAT                   { let TokenFloat _ x = $1
                                  in CFloat $ myReadFloat x }
      | CONSTR                  { case (constrString $1) of
                                    "Lo" -> Level 0
-                                   "Hi" -> Level 1 }
+                                   "Hi" -> Level 1
+                                   "Inf" -> CInfinity (CPoly " infinity")
+                               }
      | VAR                     { CVar (symString $1) }
      | Coeffect '+' Coeffect   { CPlus $1 $3 }
      | Coeffect '*' Coeffect   { CTimes $1 $3 }

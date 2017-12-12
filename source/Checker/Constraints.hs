@@ -183,7 +183,7 @@ freshCVar quant _ (CConstr "Set") _ = return (true, SSet S.empty)
 
 -- A poly typed coeffect variable whose element is 'star' gets
 -- compiled into the One type (since this satisfies all the same properties)
-freshCVar quant name (CPoly v) q | " star" `isPrefixOf` v
+freshCVar quant name (CPoly v) q | " infinity" `isPrefixOf` v
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
                            || "kprom" `isPrefixOf` v = do
   solverVar <- (quant q) name
@@ -214,7 +214,7 @@ compileCoeffect _ (CConstr "One") _
   = SNat Ordered 1
 
 -- Any polymorphic * get's compiled to the * : One coeffec
-compileCoeffect (CStar (CPoly _)) _ _ = SNat Ordered 1
+compileCoeffect (CInfinity (CPoly _)) _ _ = SNat Ordered 1
 
 compileCoeffect (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
 
@@ -272,7 +272,7 @@ compileCoeffect c@(CPlus n m) k vars =
     (CConstr "Set"  , SSet s, SSet t)           -> SSet $ S.union s t
     (CConstr "Level", SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
     (CConstr "One"  , SNat _ _, SNat _ _)       -> SNat Ordered 1
-    (CPoly v, SNat _ _, SNat _ _) | " star" `isPrefixOf` v -> SNat Ordered 1
+    (CPoly v, SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v -> SNat Ordered 1
     (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 + n2)
     (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 + n2
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
@@ -283,7 +283,7 @@ compileCoeffect c@(CTimes n m) k vars =
     (CConstr "Set", SSet s, SSet t)             -> SSet $ S.union s t
     (CConstr "Level", SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
     (CConstr "One", SNat _ _, SNat _ _)         -> SNat Ordered 1
-    (CPoly v, SNat _ _, SNat _ _) | " star" `isPrefixOf` v
+    (CPoly v, SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
                                                 -> SNat Ordered 1
     (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 * n2)
     (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 * n2
@@ -301,7 +301,7 @@ compileCoeffect (COne (CConstr "Nat=")) (CConstr "Nat=")   _ = SNat Discrete 1
 compileCoeffect (COne (CConstr "Q")) (CConstr "Q")         _ = SFloat (fromRational 1)
 compileCoeffect (COne (CConstr "Set")) (CConstr "Set")     _ = SSet (S.fromList [])
 
-compileCoeffect _ (CPoly v) _ | " star" `isPrefixOf` v = SNat Ordered 1
+compileCoeffect _ (CPoly v) _ | " infinity" `isPrefixOf` v = SNat Ordered 1
 
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the singleton coeffect

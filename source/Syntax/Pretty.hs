@@ -20,7 +20,7 @@ instance Pretty Effect where
 instance Pretty Coeffect where
     pretty (CNat Ordered n) = show n
     pretty (CNat Discrete n) = show n ++ "="
-    pretty (CNatOmega (Left ())) = "*"
+    pretty (CNatOmega (Left ())) = "∞"
     pretty (CNatOmega (Right x)) = show x
     pretty (CFloat n) = show n
     pretty (COne k)  = "_1 : " ++ pretty k
@@ -39,7 +39,7 @@ instance Pretty Coeffect where
     pretty (CSet xs) =
       "{" ++ intercalate "," (map (\(name, t) -> name ++ " : " ++ pretty t) xs) ++ "}"
     pretty (CSig c t) = "(" ++ pretty c ++ " : " ++ pretty t ++ ")"
-    pretty (CStar k) = "* : " ++ pretty k
+    pretty (CInfinity k) = "∞ : " ++ pretty k
 
 instance Pretty Kind where
     pretty KType          = "Type"

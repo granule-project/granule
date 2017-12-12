@@ -58,7 +58,7 @@ inferCoeffectType s (CVar cvar) = do
 
 inferCoeffectType _ (CZero k) = return k
 inferCoeffectType _ (COne k)  = return k
-inferCoeffectType _ (CStar k)  = return k
+inferCoeffectType _ (CInfinity k)  = return k
 inferCoeffectType _ (CSig _ k) = return k
 
 -- Given a coeffect type variable and a coeffect kind,
@@ -157,7 +157,7 @@ substCoeffect rmap (CVar v) =
 substCoeffect _ c@CNat{}   = c
 substCoeffect _ c@CNatOmega{} = c
 substCoeffect _ c@CFloat{} = c
-substCoeffect _ c@CStar{}  = c
+substCoeffect _ c@CInfinity{}  = c
 substCoeffect _ c@COne{}   = c
 substCoeffect _ c@CZero{}  = c
 substCoeffect _ c@Level{}  = c

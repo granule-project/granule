@@ -38,6 +38,7 @@ tokens :-
   in                            { \p s -> TokenIn p }
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
+  ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
   "->"                          { \p s -> TokenArrow p }
@@ -73,6 +74,7 @@ data Token = TokenLet  AlexPosn
            | TokenIn   AlexPosn
 	   | TokenCase AlexPosn
 	   | TokenOf   AlexPosn
+     | TokenInfinity AlexPosn
            | TokenLambda AlexPosn
 	   | TokenLetBox AlexPosn
 	   | TokenBind AlexPosn

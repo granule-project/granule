@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 7aef7f32dbe02c545224891b3079cc70e758ef77e6fb93d85a07d34d1c17064c
+-- hash: 203024fd204e1f72bc3d1273561460c1b70bcca657da5cd6abd9fd0d75a00544
 
 name:           granule
 version:        0.3.8.0
@@ -27,7 +27,7 @@ source-repository head
 library
   hs-source-dirs:
       source
-  ghc-options: -Wall
+  ghc-options: -Wall -fno-warn-name-shadowing
   build-depends:
       array
     , base >=4.10 && <5
@@ -89,6 +89,7 @@ test-suite spec
   main-is: Spec.hs
   hs-source-dirs:
       tests/hspec
+  ghc-options: -fno-warn-partial-type-signatures
   build-depends:
       QuickCheck
     , base >=4.10 && <5

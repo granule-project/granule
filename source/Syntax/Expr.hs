@@ -149,12 +149,12 @@ freshenBlankPolyVars defs =
       return $ Diamond e t'
     freshenTy t = return t
 
-    freshenCoeff (CStar (CPoly "")) = do
+    freshenCoeff (CInfinity (CPoly "")) = do
       t <- freshVar "d"
-      return $ CStar (CPoly t)
-    freshenCoeff (CStar (CPoly " star")) = do
-      t <- freshVar " star"
-      return $ CStar (CPoly t)
+      return $ CInfinity (CPoly t)
+    freshenCoeff (CInfinity (CPoly " infinity")) = do
+      t <- freshVar " infinity"
+      return $ CInfinity (CPoly t)
     freshenCoeff (CPlus c1 c2) = do
       c1' <- freshenCoeff c1
       c2' <- freshenCoeff c2
@@ -410,7 +410,7 @@ type Effect = [String]
 data Coeffect = CNat      NatModifier Int
               | CNatOmega (Either () Int)
               | CFloat    Rational
-              | CStar     CKind
+              | CInfinity CKind
               | CVar      String
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
@@ -469,5 +469,5 @@ normalise (CSig (CNat _ 0) k) = CZero k
 normalise (CSig (CZero _)  k) = CZero k
 normalise (CSig (CNat _ 1) k) = COne k
 normalise (CSig (COne _)   k) = CZero k
-normalise (CSig (CStar _)  k) = CStar k
+normalise (CSig (CInfinity _)  k) = CInfinity k
 normalise c = c
