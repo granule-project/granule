@@ -133,6 +133,12 @@ freshenBlankPolyVars defs =
       tys' <- freshenTys tys
       return $ Def s identifier expr pats tys'
 
+    freshenDef (ADT s tyCon dataCons) = do
+      dataCons <- forM dataCons $ \dC -> do
+        sig <- freshenTys (_signature dC)
+        return dC {_signature = sig}
+      return $ ADT s tyCon dataCons
+
     freshenTys (Forall s binds ty) = do
       ty' <- freshenTy ty
       return $ Forall s binds ty'
@@ -315,6 +321,8 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
       ps' <- mapM freshenBinder ps
       e'  <- freshen e
       return $ Def s var e' ps' t
+
+    freshenDef (ADT s typeC dataCs) = (ADT s typeC dataCs)
 
 ----------- Types
 
