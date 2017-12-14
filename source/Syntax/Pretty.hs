@@ -64,9 +64,9 @@ instance Pretty Kind where
     pretty (KPoly v)      = v
 
 instance Pretty TypeScheme where
+    pretty (Forall _ [] t) = pretty t
     pretty (Forall _ cvs t) =
-      "forall " ++ intercalate ", " (map prettyKindSignatures cvs)
-                ++ ". " ++ pretty t
+        "forall " ++ intercalate ", " (map prettyKindSignatures cvs) ++ ". " ++ pretty t
       where
        prettyKindSignatures (var, kind) = var ++ " : " ++ pretty kind
 
@@ -113,7 +113,8 @@ instance Pretty Pattern where
     pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ "," ++ pretty p2 ++ ")"
 
 instance {-# OVERLAPS #-} Pretty [Pattern] where
-    pretty ps = unwords (map pretty ps)
+    pretty [] = ""
+    pretty ps = unwords (map pretty ps) ++ " "
 
 instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
