@@ -1,4 +1,13 @@
 -- Prelude library for Granule
+-- Data types
+data Bool where
+  False : Bool;
+  True : Bool
+
+not : Bool -> Bool
+not x = case x of
+  True -> False;
+  False -> True
 
 -- Standard functional components
 id : forall a : Type . a -> a

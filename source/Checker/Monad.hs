@@ -7,6 +7,7 @@
 
 module Checker.Monad where
 
+import Data.List (intercalate)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
@@ -14,12 +15,13 @@ import Control.Monad.Reader.Class
 
 import Checker.LaTeX
 import Checker.Predicates
+import qualified Checker.Primitives as Primitives
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, TypeScheme(..), Kind(..), Coeffect, Pattern)
 import Syntax.Pretty
 import Utils
 
-import Data.List (intercalate)
+
 
 -- State of the check/synth functions
 newtype Checker a =
@@ -72,7 +74,15 @@ data CheckerState = CS
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS 0 [] emptyCtxt emptyCtxt Nothing [] emptyCtxt emptyCtxt
+initState = CS { uniqueVarId = 0
+               , predicateStack = []
+               , ckctxt = emptyCtxt
+               , cVarCtxt = emptyCtxt
+               , deriv = Nothing
+               , derivStack = []
+               , typeConstructors = Primitives.typeLevelConstructors
+               , dataConstructors = Primitives.dataConstructors
+               }
   where
     emptyCtxt = []
 

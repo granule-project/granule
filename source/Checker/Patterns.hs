@@ -11,6 +11,9 @@ import Checker.Coeffects
 import Utils
 
 import Control.Monad.Trans.Maybe
+import Control.Monad.State.Strict
+
+import Debug.Trace
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -40,10 +43,27 @@ ctxtFromTypedPattern _ t@(TyCon "Int")   (PInt _ _) =
     return ([], [], [])
 ctxtFromTypedPattern _ t@(TyCon "Float") (PFloat _ _) =
     return ([], [], [])
-ctxtFromTypedPattern _ t@(TyCon "Bool")  (PConstr _ "True") =
-    return ([], [], [])
-ctxtFromTypedPattern _ t@(TyCon "Bool")  (PConstr _ "False") =
-    return ([], [], [])
+-- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "True") =
+--     return ([], [], [])
+-- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
+--     return ([], [], [])
+ctxtFromTypedPattern _ (TyCon typeC) (PConstr s dataC) = do
+  st <- get
+  let dataC' = lookup dataC (dataConstructors st)
+
+  case dataC' of
+    Nothing -> unknownName s dataC
+    Just (Forall _ [] (TyCon t)) -> if t == typeC then return ([], [], [])
+                                          else illTyped s "Todo"
+
+-- ctxtFromTypedPattern dbg s t (PApp p1 p2) = do
+--    (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
+--  case t1 of
+--    FunTy arg res ->
+--      subst <- unify res t
+--      (binders2, tyvars2, subst2) <- check p2 arg
+--      return (substitue subst (binders1 ++ binders2), tyvars1 ++ tyvars2 , subst1 ++ subst2)
+--    _ ->
 
 -- Pattern match on a modal box
 ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do

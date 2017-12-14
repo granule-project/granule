@@ -1,7 +1,32 @@
+data Bool where
+  False : Bool;
+  True : Bool
+
+not : Bool -> Bool
+not x = case x of True -> False; False -> True
+
+gt : Int -> Int -> Bool
+gt x y = x > y
+
+data Result where
+  Success : Result;
+  Failure : Result
+
 data Maybe a where
   None : Maybe;
   Some : a -> Maybe
+--
+-- unMaybe : Maybe a -> a
+-- unMaybe (Just a) = a
 
-data Either a b where
-  Left : a -> Either a b;
-  Right : b -> Either a b
+main : (Bool, Result)
+main = (True, Success)
+
+-- bar : Int
+-- bar = 5
+--
+
+--
+-- data Either a b where
+--   Left : a -> Either a b;
+--   Right : b -> Either a b

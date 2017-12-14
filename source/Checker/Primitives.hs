@@ -8,7 +8,6 @@ typeLevelConstructors :: [(Id, Kind)]
 typeLevelConstructors =
   [ ("Int",  KType)
   , ("Float", KType)
-  , ("Bool", KType)
   , ("List", KFun (KConstr "Nat=") (KFun KType KType))
   , ("N", KFun (KConstr "Nat=") KType)
   , ("One", KCoeffect)   -- Singleton coeffect
@@ -23,10 +22,8 @@ typeLevelConstructors =
   , ("/\\", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
   , ("\\/", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))]
 
--- dataConstructors :: [(Id, TypeScheme)]
--- dataConstructors =
---   [ ("True", Forall nullSpan [] (TyCon "Bool"))
---   , ("False", Forall nullSpan [] (TyCon "Bool")) ]
+dataConstructors :: [(Id, TypeScheme)]
+dataConstructors = []
 
 builtins :: [(Id, TypeScheme)]
 builtins =
