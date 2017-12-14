@@ -83,8 +83,7 @@ initState = CS { uniqueVarId = 0
                , typeConstructors = Primitives.typeLevelConstructors
                , dataConstructors = Primitives.dataConstructors
                }
-  where
-    emptyCtxt = []
+  where emptyCtxt = []
 
 -- *** Various helpers for manipulating the context
 
