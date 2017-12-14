@@ -1,5 +1,5 @@
 -- Prelude library for Granule
--- Data types
+-- Boolean algebra
 data Bool where
   False : Bool;
   True : Bool
@@ -8,6 +8,32 @@ not : Bool -> Bool
 not x = case x of
   True -> False;
   False -> True
+
+and : Bool -> Bool -> Bool
+and x y = case x of
+  True -> case y of True -> True; False -> False;
+  False -> False
+
+or : Bool -> Bool |1| -> Bool
+or x |y| = case x of
+  True -> True;
+  False -> case y of True -> True; False -> False
+
+or' : Bool -> Bool -> Bool
+or' x y = case x of
+  True -> case y of True -> True; False -> True;
+  False -> case y of True -> True; False -> False
+
+xor : Bool -> Bool -> Bool
+xor x y = case x of
+  True -> case y of True -> False; False -> True;
+  False -> case y of True -> True; False -> False
+
+impl : Bool -> Bool -> Bool
+impl x y = case x of
+  True -> case y of False -> False; True -> True;
+  False -> True
+
 
 -- Standard functional components
 id : forall a : Type . a -> a
