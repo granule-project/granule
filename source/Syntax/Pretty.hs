@@ -94,13 +94,13 @@ instance Pretty Def where
     pretty (ADT _ tC dCs) = "data " ++ pretty tC ++ " where\n  " ++ pretty dCs
 
 instance Pretty TypeConstr where
-    pretty tC = _name (tC :: TypeConstr) ++ " " ++ (unwords $ map snd $ _tyVars tC)
+    pretty tC = _name (tC :: TypeConstr) ++ (unwords $ map snd $ _tyVars tC)
 
 instance Pretty [DataConstr] where
-    pretty = intercalate "\n  " . map pretty
+    pretty = intercalate ";\n  " . map pretty
 
 instance Pretty DataConstr where
-    pretty dC = _name (dC :: DataConstr) ++ " : " ++ pretty (_signature dC)
+    pretty dC = _name (dC :: DataConstr) ++ " : " ++ pretty (_typeScheme dC)
 
 instance Pretty Pattern where
     pretty (PVar _ v)     = v

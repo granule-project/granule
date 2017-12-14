@@ -29,6 +29,8 @@ import Utils
 
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
+data CheckerResult = OK | Failure String deriving Show
+
 -- Checking (top-level)
 check :: (?globals :: Globals )
       => [Def]        -- List of definitions
@@ -39,7 +41,7 @@ check defs nameMap = do
     -- the purposes of (mutually)recursive calls).
 
     -- Kind check all the type signatures
-    let checkKinds = mapM (\(Def s _ _ _ tys) -> kindCheck s tys) defs
+    let checkKinds = mapM kindCheck defs
 
     -- Build a computation which checks all the defs (in order)...
     let defCtxt = map (\(Def _ var _ _ tys) -> (var, tys)) defs
@@ -53,7 +55,7 @@ check defs nameMap = do
     -- ... and evaluate the computation with initial state
     results <- evalChecker initState nameMap checkedDefs
 
-    -- If all definitions type checked, then the whole file type checkers
+    -- If all definitions type checked, then the whole file type checks
     if all isJust results
       then return Ok
       else return Failed
@@ -99,6 +101,12 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     -- Erase the solver predicate between definitions
     modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
     return ctxt
+
+checkDef dbg defCtxt (ADT _ _ dataCs ) = do
+  let dataCs' = map (\dc -> (_name (dc :: DataConstr), _typeScheme dc)) dataCs
+  runMaybeT $ modify (\st -> st { dataConstructors = dataConstructors st ++ dataCs' })
+  return $ Just []
+
 
 data Polarity = Positive | Negative deriving Show
 
@@ -322,7 +330,8 @@ synthExpr _ _ _ (Val s (Constr "S" [])) = do
 
 -- Constructors (only supports nullary constructors)
 synthExpr _ _ _ (Val s (Constr name [])) = do
-  case lookup name dataConstructors of
+  st <- get
+  case lookup name (dataConstructors st) of
     Just (Forall _ [] t) -> return (t, [])
     _ -> halt $ UnboundVariableError (Just s) $ "Data constructor " ++ name
 

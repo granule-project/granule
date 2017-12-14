@@ -15,7 +15,7 @@ import Control.Monad.Reader.Class
 import Checker.LaTeX
 import Checker.Predicates
 import Context
-import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern)
+import Syntax.Expr (Id, CKind(..), Span, Type, TypeScheme(..), Kind(..), Coeffect, Pattern)
 import Syntax.Pretty
 import Utils
 
@@ -65,12 +65,14 @@ data CheckerState = CS
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
+            , typeConstructors :: Ctxt Kind
+            , dataConstructors :: Ctxt TypeScheme
             }
   deriving (Show, Eq) -- for debugging
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS 0 [] emptyCtxt emptyCtxt Nothing []
+initState = CS 0 [] emptyCtxt emptyCtxt Nothing [] emptyCtxt emptyCtxt
   where
     emptyCtxt = []
 

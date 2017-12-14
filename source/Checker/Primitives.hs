@@ -23,10 +23,10 @@ typeLevelConstructors =
   , ("/\\", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
   , ("\\/", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))]
 
-dataConstructors :: [(Id, TypeScheme)]
-dataConstructors =
-  [ ("True", Forall nullSpan [] (TyCon "Bool"))
-  , ("False", Forall nullSpan [] (TyCon "Bool")) ]
+-- dataConstructors :: [(Id, TypeScheme)]
+-- dataConstructors =
+--   [ ("True", Forall nullSpan [] (TyCon "Bool"))
+--   , ("False", Forall nullSpan [] (TyCon "Bool")) ]
 
 builtins :: [(Id, TypeScheme)]
 builtins =

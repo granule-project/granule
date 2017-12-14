@@ -18,13 +18,21 @@ import Context
 import Utils
 
 
+
 -- Currently we expect that a type scheme has kind KType
-kindCheck :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
-kindCheck s (Forall _ quantifiedVariables ty) = do
+kindCheck :: (?globals :: Globals) => Def -> MaybeT Checker ()
+kindCheck (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
     KType -> return ()
     _     -> illKindedNEq s KType kind
+
+
+
+kindCheck (ADT s typeC dataCs)
+  | _tyVars typeC == [] = return () -- nullary typeC is trivially well-kinded
+  | otherwise = do
+      trace "kindCheck not implemented for ADT" (return ())
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do

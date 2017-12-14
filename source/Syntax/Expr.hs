@@ -135,8 +135,8 @@ freshenBlankPolyVars defs =
 
     freshenDef (ADT s tyCon dataCons) = do
       dataCons <- forM dataCons $ \dC -> do
-        sig <- freshenTys (_signature dC)
-        return dC {_signature = sig}
+        sig <- freshenTys (_typeScheme dC)
+        return dC {_typeScheme = sig}
       return $ ADT s tyCon dataCons
 
     freshenTys (Forall s binds ty) = do
@@ -301,7 +301,7 @@ data Def = Def Span Id Expr [Pattern] TypeScheme
 
 data DataConstr = DataConstr { _span :: Span
                              , _name :: Id
-                             , _signature :: TypeScheme
+                             , _typeScheme :: TypeScheme
                              } deriving (Eq, Show, Generic)
 
 data TypeConstr = TypeConstr { _span :: Span
