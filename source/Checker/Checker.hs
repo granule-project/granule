@@ -93,7 +93,6 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
       checkerState <- get
       let predStack = predicateStack checkerState
       debugM "Solver predicate" $ pretty (Conj predStack)
-
       solved <- solveConstraints (Conj predStack) s defName
       if solved
         then return ctxt
