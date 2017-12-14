@@ -130,8 +130,8 @@ freshenBlankPolyVars defs =
     evalState (mapM freshenDef defs) (0 :: Int, [])
   where
     freshenDef (Def s identifier expr pats tys) = do
-      tys' <- freshenTys tys
-      return $ Def s identifier expr pats tys'
+      tys <- freshenTys tys
+      return $ Def s identifier expr pats tys
 
     freshenDef (ADT s tyCon dataCons) = do
       dataCons <- forM dataCons $ \dC -> do
@@ -140,20 +140,20 @@ freshenBlankPolyVars defs =
       return $ ADT s tyCon dataCons
 
     freshenTys (Forall s binds ty) = do
-      ty' <- freshenTy ty
-      return $ Forall s binds ty'
+      ty <- freshenTy ty
+      return $ Forall s binds ty
 
     freshenTy (FunTy t1 t2) = do
-      t1' <- freshenTy t1
-      t2' <- freshenTy t2
-      return $ FunTy t1' t2'
+      t1 <- freshenTy t1
+      t2 <- freshenTy t2
+      return $ FunTy t1 t2
     freshenTy (Box c t)     = do
-      c' <- freshenCoeff c
-      t' <- freshenTy t
-      return $ Box c' t'
+      c <- freshenCoeff c
+      t <- freshenTy t
+      return $ Box c t
     freshenTy (Diamond e t) = do
-      t' <- freshenTy t
-      return $ Diamond e t'
+      t <- freshenTy t
+      return $ Diamond e t
     freshenTy t = return t
 
     freshenCoeff (CInfinity (CPoly "")) = do
