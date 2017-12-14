@@ -322,7 +322,7 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
       e'  <- freshen e
       return $ Def s var e' ps' t
 
-    freshenDef (ADT s typeC dataCs) = (ADT s typeC dataCs)
+    freshenDef (ADT s typeC dataCs) = return (ADT s typeC dataCs)
 
 ----------- Types
 
