@@ -2,9 +2,10 @@ import StdLib.Prelude
 
 fact : Int |∞| -> Int
 fact x =
-  case x of
-    |0| -> 1;
-    |m| -> m * fact |(m - 1)|
+    case x of {
+      |0| -> 1;
+      |m| -> m * fact |(m - 1)|
+    }
 
 factAlt : forall (n : Nat=) . (N n) |n| -> Int
 factAlt x =

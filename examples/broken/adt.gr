@@ -3,7 +3,7 @@ data Bool where
   True : Bool
 
 not : Bool -> Bool
-not x = case x of True -> False; False -> True
+not x = case x of { True -> False; False -> True }
 
 gt : Int -> Int -> Bool
 gt x y = x > y

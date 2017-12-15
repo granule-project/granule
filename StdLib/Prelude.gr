@@ -1,11 +1,13 @@
+------
 --- Description: Prelude library for Granule
 --- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
 --- License: BSD3
 --- Copyright: (c) Authors 2017
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
+------
 
---# Boolean algebra
+--- # Boolean algebra
 
 --- Boolean
 data Bool where
@@ -82,19 +84,23 @@ impl' x y =
       False -> case y of { False -> True; True -> True }
     }
 
---# Standard functional components
+--- # Standard functional components
+
+--- Identitiy function
 id : forall a : Type . a -> a
 id x = x
 
--- Flip the order of parameters
+--- Flip the order of parameters
 flip : forall a : Type, b : Type, c : Type . (a -> b -> c) -> b -> a -> c
 flip f x y = f y x
 
--- Constant combinator
+--- Constant combinator
+--- NB: Throws away its second argument and returns the first
 const : forall a : Type, b : Type . a -> b |0| -> a
 const x |y| = x
 
--- Conditional on integers
+--- Conditional on integers
+--- Returns `x` if `g` is zero, else returns `y`
 if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
 if0 g |x| |y| =
     case g of {
@@ -102,7 +108,7 @@ if0 g |x| |y| =
       |n| -> y
     }
 
---# Coeffectful composition
+--- Coeffectful composition
 comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
        (b |n| -> c) -> (a |m| -> b) |n| -> a |n * m| -> c
 comp g |f| |x| = g |(f |x|)|
@@ -119,7 +125,7 @@ flatten ||x|| = |x|
 unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
 unflatten |x| = ||x||
 
---# Operations on products
+--- # Operations on products
 
 --- Extract the left part of a pair
 fst : forall a : Type, b : Type . (a, b |0|) -> a
