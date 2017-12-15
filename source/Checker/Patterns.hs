@@ -49,9 +49,7 @@ ctxtFromTypedPattern _ t@(TyCon "Float") (PFloat _ _) =
 --     return ([], [], [])
 ctxtFromTypedPattern _ (TyCon typeC) (PConstr s dataC) = do
   st <- get
-  let dataC' = lookup dataC (dataConstructors st)
-
-  case dataC' of
+  case lookup dataC (dataConstructors st) of
     Nothing -> unknownName s dataC
     Just (Forall _ [] (TyCon t)) -> if t == typeC then return ([], [], [])
                                           else illTyped s "Todo"
