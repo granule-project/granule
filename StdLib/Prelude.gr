@@ -1,41 +1,88 @@
--- Prelude library for Granule
--- Boolean algebra
+--- Description: Prelude library for Granule
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2017
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+
+--# Boolean algebra
+
+--- Boolean
 data Bool where
   False : Bool;
   True : Bool
 
+--- Logical negation
 not : Bool -> Bool
-not x = case x of
-  True -> False;
-  False -> True
+not x =
+    case x of {
+      True -> False;
+      False -> True
+    }
 
-and : Bool -> Bool -> Bool
-and x y = case x of
-  True -> case y of True -> True; False -> False;
-  False -> False
+--- Logical and
+--- NB: non-strict in second argument
+and : Bool -> Bool |1| -> Bool
+and x |y| =
+    case x of {
+      True -> case y of { True -> True; False -> False };
+      False -> False
+    }
 
+--- Logical and
+--- NB: strict in both arguments
+and' : Bool -> Bool -> Bool
+and' x y =
+    case x of {
+      True -> case y of { True -> True; False -> False };
+      False -> case y of { True -> False; False -> False }
+    }
+
+--- Inclusive or
+--- NB: non-strict in second argument
 or : Bool -> Bool |1| -> Bool
-or x |y| = case x of
-  True -> True;
-  False -> case y of True -> True; False -> False
+or x |y| =
+    case x of {
+      True -> True;
+      False -> case y of { True -> True; False -> False }
+    }
 
+--- Inclusive or
+--- NB: strict in both arguments
 or' : Bool -> Bool -> Bool
-or' x y = case x of
-  True -> case y of True -> True; False -> True;
-  False -> case y of True -> True; False -> False
+or' x y =
+    case x of {
+      True -> case y of { True -> True; False -> True };
+      False -> case y of {True -> True; False -> False }
+    }
 
+--- Exclusive or
 xor : Bool -> Bool -> Bool
-xor x y = case x of
-  True -> case y of True -> False; False -> True;
-  False -> case y of True -> True; False -> False
+xor x y =
+    case x of {
+      True -> case y of { True -> False; False -> True };
+      False -> case y of { True -> True; False -> False }
+    }
 
-impl : Bool -> Bool -> Bool
-impl x y = case x of
-  True -> case y of False -> False; True -> True;
-  False -> True
+--- Logical implication
+--- NB: non-strict in second argument
+impl : Bool -> Bool |1| -> Bool
+impl x |y| =
+    case x of {
+      True -> case y of { False -> False; True -> True };
+      False -> True
+    }
 
+--- Logical implication
+--- NB: strict in both arguments
+impl' : Bool -> Bool -> Bool
+impl' x y =
+    case x of {
+      True -> case y of { False -> False; True -> True };
+      False -> case y of { False -> True; True -> True }
+    }
 
--- Standard functional components
+--# Standard functional components
 id : forall a : Type . a -> a
 id x = x
 
@@ -50,41 +97,43 @@ const x |y| = x
 -- Conditional on integers
 if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
 if0 g |x| |y| =
-  case g of |0| -> x;
-            |n| -> y
+    case g of {
+      |0| -> x;
+      |n| -> y
+    }
 
--- Coeffectful composition
+--# Coeffectful composition
 comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
        (b |n| -> c) -> (a |m| -> b) |n| -> a |n * m| -> c
 comp g |f| |x| = g |(f |x|)|
 
--- Coeffectful application
+--- Coeffectful application
 app : forall a : Type, b : Type, c : Nat . (a |c| -> b) -> a |c| -> b
 app f x = f x
 
--- Flatten two boxes (with Nat grading)
+--- Flatten two boxes (with Nat grading)
 flatten : forall (a : Type, n : Nat, m : Nat) . a |n| |m| -> a |n * m|
 flatten ||x|| = |x|
 
--- Expand two boxes (with Nat grading)
+--- Expand two boxes (with Nat grading)
 unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
 unflatten |x| = ||x||
 
--- * Operations on products
+--# Operations on products
 
--- Extract the left part of a pair
+--- Extract the left part of a pair
 fst : forall a : Type, b : Type . (a, b |0|) -> a
 fst (x, |_|) = x
 
--- Extract the right part of a pair
+--- Extract the right part of a pair
 snd : forall a : Type, b : Type . (a |0|, b) -> b
 snd (|_|, y) = y
 
--- Push coeffects on a pair into the left and right elements
+--- Push coeffects on a pair into the left and right elements
 push : forall (a : Type, b : Type, n : Nat) . (a, b) |n| -> (a |n|, b |n|)
 push |(x, y)| = (|x|, |y|)
 
--- Pull coeffects of pair elements up to the pair
+--- Pull coeffects of pair elements up to the pair
 pull : forall (a : Type, b : Type, n : Nat, m : Nat)
      . (a |n|, b |m|) -> (a, b) |n /\ m|
 pull (|x|, |y|) = |(x, y)|

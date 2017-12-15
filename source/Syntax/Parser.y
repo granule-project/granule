@@ -257,8 +257,8 @@ Expr : let VAR ':' Type '=' Expr in Expr
      | let VAR ':' Type '<-' Expr in Expr
          { LetDiamond (getPos $1, getEnd $8) (symString $2) $4 $6 $8 }
 
-     | case Expr of Cases
-        { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
+     | case Expr of '{' Cases '}'
+        { Case (getPos $1, getEnd . snd . last $ $5) $2 $5 }
 
      | Form
         { $1 }
