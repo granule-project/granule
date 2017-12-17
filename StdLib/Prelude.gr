@@ -27,7 +27,7 @@ not x =
 and : Bool -> Bool |1| -> Bool
 and x |y| =
     case x of {
-      True -> case y of { True -> True; False -> False };
+      True -> y;
       False -> False
     }
 
@@ -36,7 +36,7 @@ and x |y| =
 and' : Bool -> Bool -> Bool
 and' x y =
     case x of {
-      True -> case y of { True -> True; False -> False };
+      True -> y;
       False -> case y of { True -> False; False -> False }
     }
 
@@ -46,7 +46,7 @@ or : Bool -> Bool |1| -> Bool
 or x |y| =
     case x of {
       True -> True;
-      False -> case y of { True -> True; False -> False }
+      False -> y
     }
 
 --- Inclusive or
@@ -55,15 +55,15 @@ or' : Bool -> Bool -> Bool
 or' x y =
     case x of {
       True -> case y of { True -> True; False -> True };
-      False -> case y of {True -> True; False -> False }
+      False -> y
     }
 
 --- Exclusive or
 xor : Bool -> Bool -> Bool
 xor x y =
     case x of {
-      True -> case y of { True -> False; False -> True };
-      False -> case y of { True -> True; False -> False }
+      True -> not y;
+      False -> y
     }
 
 --- Logical implication
@@ -71,7 +71,7 @@ xor x y =
 impl : Bool -> Bool |1| -> Bool
 impl x |y| =
     case x of {
-      True -> case y of { False -> False; True -> True };
+      True -> y;
       False -> True
     }
 
@@ -80,7 +80,7 @@ impl x |y| =
 impl' : Bool -> Bool -> Bool
 impl' x y =
     case x of {
-      True -> case y of { False -> False; True -> True };
+      True -> y;
       False -> case y of { False -> True; True -> True }
     }
 
