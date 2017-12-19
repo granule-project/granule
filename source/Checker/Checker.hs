@@ -21,6 +21,7 @@ import Checker.Predicates
 import Checker.Primitives as Primitives
 import Checker.Substitutions
 import Checker.Types
+import Checker.Substitutions
 import Context
 import Syntax.Expr
 import Syntax.Pretty
@@ -29,36 +30,22 @@ import Utils
 
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
-import Debug.Trace
-
-data CheckerResult = OK | Failed String deriving Show
+data CheckerResult = OK | Failure String deriving Show
 
 -- Checking (top-level)
 check :: (?globals :: Globals )
       => [Def]        -- List of definitions
       -> [(Id, Id)]   -- Name map
       -> IO CheckerResult
-check ast nameMap = do
+check defs nameMap = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
 
     -- Kind check all the type signatures
-    let adts = filter (\case ADT{} -> True; _ -> False) ast
-    let checkKindsADTs = mapM kindCheck adts
-    let checkedADTs = do
-          status <- runMaybeT checkKindsADTs
-          case status of
-            Nothing -> return [Nothing]
-            Just _  -> -- Now check the definition
-               mapM (checkADT dbg) adts
-
-    -- ... and evaluate the computation with initial state
-    -- results_ADT <- evalChecker initState nameMap checkedADTs
-
-    let defs = filter (\case Def{} -> True; _ -> False) ast
     let checkKinds = mapM kindCheck defs
+
     -- Build a computation which checks all the defs (in order)...
-    let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+    let defCtxt = map (\(Def _ var _ _ tys) -> (var, tys)) defs
     let checkedDefs = do
           status <- runMaybeT checkKinds
           case status of
@@ -67,11 +54,9 @@ check ast nameMap = do
                mapM (checkDef defCtxt) defs
 
     -- ... and evaluate the computation with initial state
-    let checked = (++) <$> checkedADTs <*> checkedDefs
-    results <- evalChecker initState nameMap checked -- TODO: NOT initState
+    results <- evalChecker initState nameMap checkedDefs
 
     -- If all definitions type checked, then the whole file type checks
-    -- let results = (results_ADT ++ results_Def)
     if all isJust results
       then return Ok
       else return Failed
@@ -115,15 +100,12 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
         else halt $ GenericError (Just s) "Constraints violated"
 
     -- Erase the solver predicate between definitions
-    modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
+    modify (\st -> st { predicateStack = [], ckctxt = [], cVarCtxt = [] })
     return ctxt
 
-checkADT dbg (ADT _ typeC dataCs ) = do
+checkDef dbg defCtxt (ADT _ _ dataCs ) = do
   let dataCs' = map (\dc -> (_name (dc :: DataConstr), _typeScheme dc)) dataCs
-  let typeC' = (_name (typeC :: TypeConstr), KType) -- TODO
-  traceM "WARNING: Kinds not getting synthesised properly yet."
-  runMaybeT $ modify (\st -> st { dataConstructors = dataCs' ++ dataConstructors st
-                                , typeConstructors = typeC' : typeConstructors st })
+  runMaybeT $ modify (\st -> st { dataConstructors = dataConstructors st ++ dataCs' })
   return $ Just []
 
 
@@ -420,7 +402,7 @@ synthExpr defs gam _ (Val s (Var x)) = do
    case lookup x gam of
      Nothing ->
        -- Try definitions in scope
-       case lookup x (defs ++ Primitives.builtins) of
+       case lookup x (defs ++ builtins) of
          Just tyScheme  -> do
            ty' <- freshPolymorphicInstance tyScheme
            return (ty', [])
@@ -573,8 +555,8 @@ solveConstraints predicate s defName = do
   checkerState <- get
   let ctxtCk  = ckctxt checkerState
   let ctxtCkVar = cVarCtxt checkerState
-  let coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
-  let coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
+  let coeffectVars = justCoeffectTypesConverted ctxtCk
+  let coeffectKVars = justCoeffectTypesConvertedVars ctxtCkVar
 
   let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
 
@@ -612,18 +594,18 @@ solveConstraints predicate s defName = do
 
            else return True
   where
-    justCoeffectTypesConverted checkerState = mapMaybe convert
+    justCoeffectTypesConverted = mapMaybe convert
       where
        convert (var, (KConstr constr, q)) =
-           case lookup constr (typeConstructors checkerState) of
+           case lookup constr typeLevelConstructors of
              Just KCoeffect -> Just (var, (CConstr constr, q))
              _         -> Nothing
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
        convert (var, (KPoly constr, q)) = Just (var, (CPoly constr, q))
        convert _ = Nothing
-    justCoeffectTypesConvertedVars checkerState =
-       stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
+    justCoeffectTypesConvertedVars =
+       stripQuantifiers . justCoeffectTypesConverted . map (\(var, k) -> (var, (k, ForallQ)))
 
 leqCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker ()
