@@ -76,7 +76,8 @@ inferKindOfType' s quantifiedVariables t = do
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KPoly "a")) k
 
-    kInt _ = return $ KConstr "Nat"
+    kInt _ = return $ KConstr "Nat=" -- TODO
+
 
 joinKind :: Kind -> Kind -> Maybe Kind
 joinKind k1 k2 | k1 == k2 = Just k1
