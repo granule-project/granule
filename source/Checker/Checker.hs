@@ -86,6 +86,7 @@ checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
       let pred = predicate checkerState
       let predStack = predicateStack checkerState
       dbgMsg dbg $ "Solver prediate is: " ++ pretty (Conj $ pred : predStack)
+
       solved <- solveConstraints (Conj $ pred : predStack) s defName
       if solved
         then return ctxt
@@ -193,9 +194,11 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
       newConjunct
       (localGam, eVars, subst) <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
+      -- Specialise the return type and the environment coming in by the
+      -- pattern-match-generated type substitution
       let tau' = substType subst tau
-      ---
       let gamSpecialised = map (\(v, t) -> (v, substAssumption subst t)) gam
+      --
       (localGam', subst') <- checkExpr dbg defs (gamSpecialised ++ localGam) pol False tau' ei
       -- Check linear use in anything Linear
       nameMap  <- ask
@@ -205,12 +208,12 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
         [] -> do
            -- The current local environment should be subsumed by the
            -- shared context
-           leqCtxt s (localGam' `subtractCtxt` localGam) sharedCtxt
+           leqCtxt s ((localGam' `subtractCtxt` localGam) `subtractCtxt` gamSpecialised) sharedCtxt
            --gee' <- ctxPlus s guardGam sharedCtxt
            --leqCtxt s gee' gam
            concludeImplication eVars
            -- The resulting context has the shared part removed
-           let branchCtxt = (localGam' `subtractCtxt` localGam) `subtractCtxt` sharedCtxt
+           let branchCtxt = ((localGam' `subtractCtxt` localGam) `subtractCtxt` gamSpecialised) `subtractCtxt` sharedCtxt
            return (branchCtxt, subst')
         xs -> illLinearity s $ intercalate "\n\t" $ map (unusedVariable . unrename nameMap . fst) xs
 
@@ -222,6 +225,7 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxPlus s branchesGam guardGam
   g' <- ctxPlus s g sharedCtxt
+  print $ pretty g'
   return (g', concat substs)
 
 -- All other expressions must be checked using synthesis
