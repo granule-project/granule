@@ -56,7 +56,7 @@ inferKindOfType' s quantifiedVariables =
      kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
      kApp k kArg = illKindedNEq s (KFun kArg (KPoly "a")) k
 
-     kInt _ = return $ KConstr "Nat"
+     kInt _ = return $ KConstr "Nat="
 
      kInfix op k1 k2 =
        case lookup op typeLevelConstructors of
@@ -83,8 +83,8 @@ hasLub k1 k2 =
     Just _  -> True
 
 joinCoeffectConstr :: String -> String -> Maybe String
-joinCoeffectConstr "Nat" n | "Nat" `isPrefixOf` n = Just n
-joinCoeffectConstr n "Nat" | "Nat" `isPrefixOf` n = Just n
+--joinCoeffectConstr "Nat" n | "Nat" `isPrefixOf` n = Just n
+--joinCoeffectConstr n "Nat" | "Nat" `isPrefixOf` n = Just n
 joinCoeffectConstr "Float" "Nat" = Just "Float"
 joinCoeffectConstr "Nat" "Float" = Just "Float"
 joinCoeffectConstr k k' | k == k' = Just k
