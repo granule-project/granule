@@ -49,15 +49,16 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 
 data CheckerState = CS
             { -- Fresh variable id
-              uniqueVarId  :: VarCounter
+              uniqueVarId    :: VarCounter
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
-            -- Coeffect context, map coeffect vars to their kinds
-            , ckctxt        :: Ctxt (Kind, Quantifier)
-            -- Context of resoled coeffect type variables
-            -- (used just before solver, to resolve any type
+            -- Type variable context, maps type variables to their kinds
+            -- and their quantification
+            , tyVarContext   :: Ctxt (Kind, Quantifier)
+            -- Context of kind variables and their resolved kind
+            -- (used just before solver, to resolve any kind
             -- variables that appear in constraints)
-            , cVarCtxt   :: Ctxt Kind
+            , kVarContext   :: Ctxt Kind
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
@@ -110,9 +111,9 @@ freshCoeffectVarWithBinding cvar kind q = do
 -- | Helper for registering a new coeffect variable in the checker
 registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
 registerCoeffectVar v (CConstr constrId) q =
-  modify (\st -> st { ckctxt = (v, (KConstr constrId, q)) : ckctxt st })
+  modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
 registerCoeffectVar v (CPoly constrId) q =
-    modify (\st -> st { ckctxt = (v, (KPoly constrId, q)) : ckctxt st })
+    modify (\st -> st { tyVarContext = (v, (KPoly constrId, q)) : tyVarContext st })
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()

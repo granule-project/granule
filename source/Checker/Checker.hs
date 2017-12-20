@@ -59,7 +59,7 @@ checkDef :: Bool            -- turn on debgging
         -> Checker (Maybe (Ctxt Assumption))
 checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     ctxt <- runMaybeT $ do
-      modify (\st -> st { ckctxt = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+      modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
       ctxt <- case (ty, pats) of
         (FunTy _ _, ps@(_:_)) -> do
@@ -93,7 +93,7 @@ checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
         else illTyped s "Constraints violated"
 
     -- Erase the solver predicate between definitions
-    modify (\st -> st { predicateStack = [], ckctxt = [], cVarCtxt = [] })
+    modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
     return ctxt
 
 data Polarity = Positive | Negative deriving Show
@@ -269,7 +269,7 @@ synthExpr _ _ _ _ (Val _ (NumFloat _)) = return (TyCon "Float", [])
 -- Polymorphic list constructors
 synthExpr _ _ _ _ (Val _ (Constr "Nil" [])) = do
   elementVar <- freshVar "a"
-  modify (\st -> st { ckctxt = (elementVar, (KType, InstanceQ)) : ckctxt st })
+  modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
   return (TyApp (TyApp (TyCon "List") (TyInt 0)) (TyVar elementVar), [])
 
 synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
@@ -277,7 +277,7 @@ synthExpr _ _ _ _ (Val s (Constr "Cons" [])) = do
     sizeVarArg <- freshCoeffectVar "n" kind
     sizeVarRes <- freshCoeffectVar "m" kind
     elementVar <- freshVar "a"
-    modify (\st -> st { ckctxt = (elementVar, (KType, InstanceQ)) : ckctxt st })
+    modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
     -- Add a constraint
     -- m ~ n + 1
     addConstraint $ Eq s (CVar sizeVarRes)
@@ -523,8 +523,8 @@ solveConstraints :: Pred -> Span -> String -> MaybeT Checker Bool
 solveConstraints pred s defName = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
-  let ctxtCk  = ckctxt checkerState
-  let ctxtCkVar = cVarCtxt checkerState
+  let ctxtCk  = tyVarContext checkerState
+  let ctxtCkVar = kVarContext checkerState
   let coeffectVars = justCoeffectTypesConverted ctxtCk
   let coeffectKVars = justCoeffectTypesConvertedVars ctxtCkVar
 
@@ -681,7 +681,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
                  var' <- freshVar var
 
                  -- Label fresh variable as an existential
-                 modify (\st -> st { ckctxt = (var', (k, InstanceQ)) : ckctxt st })
+                 modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
                  return var'
                KConstr c -> freshCoeffectVar var (CConstr c)
                KCoeffect ->
@@ -748,7 +748,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       -- Create a fresh variable
       cvar  <- freshVar var
       -- Update the coeffect kind context
-      modify (\s -> s { ckctxt = (cvar, (liftCoeffectType ctype, InstanceQ)) : ckctxt s })
+      modify (\s -> s { tyVarContext = (cvar, (liftCoeffectType ctype, InstanceQ)) : tyVarContext s })
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
