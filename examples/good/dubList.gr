@@ -1,4 +1,4 @@
-dubList : forall (n : Nat) . List n Int -> List (2*n) Int
+dubList : forall (n : Nat=) . List n Int -> List (2*n) Int
 dubList xs =
   case xs of
     Nil -> Nil;

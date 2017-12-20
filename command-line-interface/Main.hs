@@ -7,11 +7,12 @@ import Syntax.Parser
 import Syntax.Pretty
 import Checker.Checker
 
+import Data.List (intercalate)
 import System.Environment
 import System.Exit (die)
 
 version :: String
-version = "Granule v0.3.8.0"
+version = "Granule v0.3.9.0"
 
 main :: IO ()
 main = do
@@ -41,7 +42,7 @@ run input (Debug debug) = do
   if debug
     then do
       putStrLn $ "AST:\n" ++ show ast
-      putStrLn $ "\nSource:\n" ++ pretty ast
+      putStrLn $ "\nSource:\n" ++ (intercalate "\n" $ map pretty ast)
       putStrLn $ "\nName map:\n" ++ show nameMap
     else return ()
 

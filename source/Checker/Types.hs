@@ -18,6 +18,7 @@ import Checker.Constraints
 import Checker.Monad
 import Checker.Kinds
 import Checker.Predicates
+import Checker.Substitutions
 
 lEqualTypes ::
     Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
@@ -265,56 +266,3 @@ joinTypes _ s t1 t2 =
   illTyped s
     $ "Type '" ++ pretty t1 ++ "' and '"
                ++ pretty t2 ++ "' have no upper bound"
-
-
-
-instance Pretty (Type, Ctxt Assumption) where
-    pretty (t, _) = pretty t
-
-instance Pretty (Id, Assumption) where
-    pretty (v, ty) = v ++ " : " ++ pretty ty
-
-instance Pretty Assumption where
-    pretty (Linear ty) = pretty ty
-    pretty (Discharged ty c) = "|" ++ pretty ty ++ "|." ++ pretty c
-
-instance Pretty (Ctxt TypeScheme) where
-   pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
-     where pp (var, t) = var ++ " : " ++ pretty t
-
-instance Pretty (Ctxt Assumption) where
-   pretty xs = "{" ++ intercalate "," (map pp xs) ++ "}"
-     where pp (var, Linear t) = var ++ " : " ++ pretty t
-           pp (var, Discharged t c) = var ++ " : .[" ++ pretty t ++ "]. " ++ pretty c
-
-compileNatKindedTypeToCoeffect :: Span -> Type -> MaybeT Checker Coeffect
-compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
-  t1' <- compileNatKindedTypeToCoeffect s t1
-  t2' <- compileNatKindedTypeToCoeffect s t2
-  case op of
-    "+"   -> return $ CPlus t1' t2'
-    "*"   -> return $ CTimes t1' t2'
-    "\\/" -> return $ CJoin t1' t2'
-    "/\\" -> return $ CMeet t1' t2'
-    _     -> unknownName s $ "Type-level operator " ++ op
-compileNatKindedTypeToCoeffect _ (TyInt n) =
-  return $ CNat Discrete n
-compileNatKindedTypeToCoeffect _ (TyVar v) =
-  return $ CVar v
-compileNatKindedTypeToCoeffect s t =
-  illTyped s $ "Type " ++ pretty t ++ " does not have kind "
-                       ++ pretty (CConstr "Nat=")
-
--- | rewrite a type using a unifier (map from type vars to types)
-substType :: Ctxt Type -> Type -> Type
-substType ctx = runIdentity .
-    typeFoldM (baseTypeFold { tfTyVar = varSubst })
-  where
-    varSubst v =
-       case lookup v ctx of
-         Just t -> return t
-         Nothing -> mTyVar v
-
-substAssumption :: Ctxt Type -> Assumption -> Assumption
-substAssumption ctx (Linear t) = Linear (substType ctx t)
-substAssumption ctx (Discharged t c) = Discharged (substType ctx t) c

@@ -13,6 +13,7 @@ import Checker.Patterns
 import Checker.Predicates
 import Checker.Primitives
 import Checker.Types
+import Checker.Substitutions
 import Context
 import Prelude hiding (pred, print)
 
