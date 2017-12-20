@@ -84,17 +84,16 @@ checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
 
       -- Use an SMT solver to solve the generated constraints
       checkerState <- get
-      let pred = predicate checkerState
       let predStack = predicateStack checkerState
-      dbgMsg dbg $ "Solver prediate is: " ++ pretty (Conj $ pred : predStack)
+      dbgMsg dbg $ "Solver prediate is: " ++ pretty (Conj predStack)
 
-      solved <- solveConstraints (Conj $ pred : predStack) s defName
+      solved <- solveConstraints (Conj predStack) s defName
       if solved
         then return ctxt
         else illTyped s "Constraints violated"
 
     -- Erase the solver predicate between definitions
-    modify (\st -> st { predicate = Conj [], predicateStack = [], ckctxt = [], cVarCtxt = [] })
+    modify (\st -> st { predicateStack = [], ckctxt = [], cVarCtxt = [] })
     return ctxt
 
 data Polarity = Positive | Negative deriving Show
@@ -175,48 +174,49 @@ checkExpr dbg defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
   gamF    <- discToFreshVarsIn s (freeVars e) gam demand
   (gam', subst) <- checkExpr dbg defs gamF pol False tau e
   let gam'' = multAll (freeVars e) demand gam'
-
-  case pol of
-      Positive -> leqCtxt s gam'' gam
-      Negative -> leqCtxt s gam gam''
   return (gam'', subst)
 
 checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
-  (ty, guardGam) <- synthExpr dbg defs gam pol guardExpr
-  -- then synthesise the types of the branches
-  sharedCtxt <- freshVarsIn s (concatMap freeVars (map snd cases)) gam
-  sharedCtxt <- return $ filter isNonLinearAssumption sharedCtxt
+  (guardTy, guardGam) <- synthExpr dbg defs gam pol guardExpr
 
-
+  -- Check each of the branches
   branchCtxtsAndSubst <-
-    forM cases $ \(pati, ei) -> do
+    forM cases $ \(pat_i, e_i) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (localGam, eVars, subst) <- ctxtFromTypedPattern dbg s ty pati
+      (patternGam, eVars, subst) <- ctxtFromTypedPattern dbg s guardTy pat_i
+
+      -- Checking the case body
       newConjunct
-      -- Specialise the return type and the environment coming in by the
+      -- Specialise the return type and the incoming environment using the
       -- pattern-match-generated type substitution
       let tau' = substType subst tau
-      let gamSpecialised = map (\(v, t) -> (v, substAssumption subst t)) gam
-      --
-      (localGam', subst') <- checkExpr dbg defs (gamSpecialised ++ localGam) pol False tau' ei
+      (specialisedGam, unspecialisedGam) <- substCtxt subst gam
+
+      let checkGam = specialisedGam ++ unspecialisedGam ++ patternGam
+      (localGam, subst') <- checkExpr dbg defs checkGam pol False tau' e_i
+
       -- Check linear use in anything Linear
       nameMap  <- ask
-      case remainingUndischarged localGam localGam' of
+      case remainingUndischarged patternGam localGam of
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
            -- The current local environment should be subsumed by the
            -- shared context
-           leqCtxt s ((localGam' `subtractCtxt` localGam) `subtractCtxt` gamSpecialised) sharedCtxt
-           --gee' <- ctxPlus s guardGam sharedCtxt
-           --leqCtxt s gee' gam
+           -- Conclude the implication
            concludeImplication eVars
+           state <- get
+
            -- The resulting context has the shared part removed
-           let branchCtxt = ((localGam' `subtractCtxt` localGam) `subtractCtxt` gamSpecialised) `subtractCtxt` sharedCtxt
+           let branchCtxt = (localGam `subtractCtxt` patternGam) `subtractCtxt` specialisedGam
+
            return (branchCtxt, subst')
-        xs -> illLinearity s $ intercalate "\n\t" $ map (unusedVariable . unrename nameMap . fst) xs
+
+        -- Anything that was bound in the pattern but not used
+        xs -> illLinearity s $ intercalate "\n\t"
+                             $ map (unusedVariable . unrename nameMap . fst) xs
 
   -- Find the upper-bound contexts
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
@@ -225,9 +225,8 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxPlus s branchesGam guardGam
-  g' <- ctxPlus s g sharedCtxt
-  print $ pretty g'
-  return (g', concat substs)
+
+  return (g, concat substs)
 
 -- All other expressions must be checked using synthesis
 checkExpr dbg defs gam pol topLevel tau e = do
@@ -236,7 +235,6 @@ checkExpr dbg defs gam pol topLevel tau e = do
     case pol of
       Positive -> do
         dbgMsg dbg $ "+ Compare for equality " ++ pretty tau' ++ " = " ++ pretty tau
-        leqCtxt (getSpan e) gam' gam
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
           then equalTypes dbg (getSpan e) tau' tau
@@ -245,7 +243,6 @@ checkExpr dbg defs gam pol topLevel tau e = do
       -- i.e., this check is from a synth
       Negative -> do
         dbgMsg dbg $ "- Compare for equality " ++ pretty tau ++ " = " ++ pretty tau'
-        leqCtxt (getSpan e) gam gam'
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
           then equalTypes dbg (getSpan e) tau tau'
@@ -388,7 +385,6 @@ synthExpr dbg defs gam _ (Val s (Var x)) = do
                               ++ (if dbg then
                                   (" { looking for " ++ x
                                   ++ " in context " ++ pretty gam
-                                  ++ " or definitions " ++ pretty defs
                                   ++ "}")
                                  else "")
      -- In the local context
@@ -399,14 +395,14 @@ synthExpr dbg defs gam _ (Val s (Var x)) = do
 
 -- Specialised application for scale
 synthExpr dbg defs gam pol
-      (App s (Val _ (Var "scale")) (Val _ (NumFloat r))) = do
+      (App _ (Val _ (Var "scale")) (Val _ (NumFloat r))) = do
   let float = (TyCon "Float")
   return $ (FunTy (Box (CFloat (toRational r)) float) float, [])
 
 -- Application
 synthExpr dbg defs gam pol (App s e e') = do
-    (fTy, gam1) <- synthExpr dbg defs gam pol e
 
+    (fTy, gam1) <- synthExpr dbg defs gam pol e
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do

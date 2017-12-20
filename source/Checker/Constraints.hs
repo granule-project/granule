@@ -17,6 +17,7 @@ import Syntax.Pretty
 
 import Checker.Predicates
 import Checker.Coeffects
+import Checker.Substitutions
 
 import Debug.Trace
 
@@ -173,6 +174,7 @@ freshCVar quant name (CConstr "One") q = do
 freshCVar quant name (CConstr "Nat=") q = do
   solverVar <- (quant q) name
   return (solverVar .>= literal 0, SNat Discrete solverVar)
+
 freshCVar quant name (CConstr "Q") q = do
   solverVar <- (quant q) name
   return (true, SFloat solverVar)
