@@ -9,6 +9,7 @@ module Context where
 import Data.Maybe (isJust)
 import Data.List (sortBy)
 import Syntax.Expr (Id)
+import Syntax.Pretty
 
 -- | Type of contexts
 type Ctxt t = [(Id, t)]
