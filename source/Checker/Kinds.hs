@@ -27,7 +27,7 @@ kindCheck s (Forall _ quantifiedVariables ty) = do
 inferKindOfType :: Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
     checkerState <- get
-    inferKindOfType' s (stripQuantifiers $ ckctxt checkerState) t
+    inferKindOfType' s (stripQuantifiers $ tyVarContext checkerState) t
 
 inferKindOfType' :: Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
 inferKindOfType' s quantifiedVariables =

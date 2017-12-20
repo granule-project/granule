@@ -36,7 +36,7 @@ normaliseConstraint (Leq s c1 c2 k) = Leq s (normalise c1) (normalise c2) k
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
 compileToSBV :: Pred -> Ctxt (CKind, Quantifier) -> Ctxt CKind
              -> (Symbolic SBool, Symbolic SBool, [Constraint])
-compileToSBV predicate cctxt cVarCtxt =
+compileToSBV predicate tyVarContext kVarContext =
   (buildTheorem id compileQuant
   , buildTheorem bnot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
@@ -46,7 +46,7 @@ compileToSBV predicate cctxt cVarCtxt =
     flipQuant InstanceQ = ForallQ
     flipQuant BoundQ    = BoundQ
 
-    predicate' = rewriteConstraints cVarCtxt predicate
+    predicate' = rewriteConstraints kVarContext predicate
 
     buildTheorem ::
         (SBool -> SBool)
@@ -54,7 +54,7 @@ compileToSBV predicate cctxt cVarCtxt =
      -> Symbolic SBool
     buildTheorem polarity quant = do
         (pres, constraints, solverVars) <-
-            foldrM (createFreshVar quant) (true, true, []) cctxt
+            foldrM (createFreshVar quant) (true, true, []) tyVarContext
         predC <- buildTheorem' solverVars predicate'
         return (polarity (pres ==> (constraints &&& predC)))
 

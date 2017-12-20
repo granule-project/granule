@@ -40,8 +40,8 @@ localCheckingSpec = do
         put (transformState state)
         return $ "x" ++ show (uniqueVarId state)
     transformState st =
-      st { uniqueVarId = 1 + uniqueVarId st
-         , ckctxt      = [("inner", (KType, ForallQ))]
-         , cVarCtxt    = [("innerk", KType)]
-         , deriv       = Just $ Leaf "testing"
-         , derivStack  = [Leaf "unit test"] }
+      st { uniqueVarId  = 1 + uniqueVarId st
+         , tyVarContext = [("inner", (KType, ForallQ))]
+         , kVarContext  = [("innerk", KType)]
+         , deriv        = Just $ Leaf "testing"
+         , derivStack   = [Leaf "unit test"] }

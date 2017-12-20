@@ -43,7 +43,7 @@ inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
 -- Coeffect variables should have a kind in the cvar->kind context
 inferCoeffectType s (CVar cvar) = do
   checkerState <- get
-  case lookup cvar (ckctxt checkerState) of
+  case lookup cvar (tyVarContext checkerState) of
      Nothing -> do
        unknownName s $ "Tried to lookup kind of " ++ cvar
 --       state <- get
@@ -68,8 +68,8 @@ updateCoeffectKind :: Id -> Kind -> MaybeT Checker ()
 updateCoeffectKind tyVar kind = do
     checkerState <- get
     put $ checkerState
-      { ckctxt = rewriteCtxt (ckctxt checkerState),
-        cVarCtxt = replace (cVarCtxt checkerState) tyVar kind }
+      { tyVarContext = rewriteCtxt (tyVarContext checkerState),
+        kVarContext = replace (kVarContext checkerState) tyVar kind }
   where
     rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
     rewriteCtxt [] = []
