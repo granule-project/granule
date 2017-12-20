@@ -41,7 +41,6 @@ localCheckingSpec = do
         return $ "x" ++ show (uniqueVarId state)
     transformState st =
       st { uniqueVarId = 1 + uniqueVarId st
-         , predicate   = Conj []
          , ckctxt      = [("inner", (KType, ForallQ))]
          , cVarCtxt    = [("innerk", KType)]
          , deriv       = Just $ Leaf "testing"

@@ -60,7 +60,7 @@ data CheckerState = CS
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS 0 ground [] emptyCtxt emptyCtxt Nothing []
+initState = CS 0 [] emptyCtxt emptyCtxt Nothing []
   where
     ground   = Conj []
     emptyCtxt = []
