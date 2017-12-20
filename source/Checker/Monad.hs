@@ -54,7 +54,7 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 
 data CheckerState = CS
             { -- Fresh variable id
-              uniqueVarId    :: VarCounter
+              uniqueVarId  :: VarCounter
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
             -- Type variable context, maps type variables to their kinds
