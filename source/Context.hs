@@ -1,11 +1,15 @@
 -- Provide general contexts used in the both the
 -- checker and the interpreter
 
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Context where
 
 import Data.Maybe  (isJust)
-import Data.List   (sortBy)
+import Data.List   (sortBy, intercalate)
 import Syntax.Expr (Id)
+import Syntax.Pretty
 
 -- | Type of contexts
 type Ctxt t = [(Id, t)]

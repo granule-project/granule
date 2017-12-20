@@ -32,6 +32,11 @@ data Quantifier =
     | BoundQ
   deriving (Show, Eq)
 
+instance Pretty Quantifier where
+  pretty ForallQ   = "forall"
+  pretty InstanceQ = "exists"
+  pretty BoundQ    = "pi"
+
 stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
 stripQuantifiers = map (\(var, (k, _)) -> (var, k))
 

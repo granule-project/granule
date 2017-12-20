@@ -39,11 +39,17 @@ data Assumption =
   | Discharged Type Coeffect
     deriving (Eq, Show)
 
+instance Pretty Assumption where
+    pretty (Linear ty) = pretty ty
+    pretty (Discharged t c) = ".[" ++ pretty t ++ "]. " ++ pretty c
+
+instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
+   pretty (a, b) = a ++ " : " ++ pretty b
+
+
 data CheckerState = CS
             { -- Fresh variable id
               uniqueVarId  :: VarCounter
-            -- Predicate giving constraints
-            , predicate      :: Pred
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
             -- Coeffect context, map coeffect vars to their kinds

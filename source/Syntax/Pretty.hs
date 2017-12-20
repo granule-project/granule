@@ -14,7 +14,20 @@ import Syntax.Expr
 class Pretty t where
     pretty :: t -> String
 
-instance Pretty Effect where
+-- Mostly for debugging
+
+instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
+   pretty (a, b) = "(" ++ pretty a ++ ", " ++ pretty b ++ ")"
+
+instance {-# OVERLAPS #-} Pretty String where
+   pretty s = s
+
+instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
+   pretty xs = "[" ++ intercalate "," (map pretty xs) ++ "]"
+
+-- Core pretty printers
+
+instance {-# OVERLAPS #-} Pretty Effect where
    pretty es = "[" ++ intercalate "," es ++ "]"
 
 instance Pretty Coeffect where
@@ -70,7 +83,7 @@ instance Pretty Type where
     pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
 
-instance Pretty [Def] where
+instance {-# OVERLAPS #-} Pretty [Def] where
     pretty = intercalate "\n" . map pretty
 
 instance Pretty Def where
@@ -87,7 +100,7 @@ instance Pretty Pattern where
     pretty (PConstr _ s)  = s
     pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ "," ++ pretty p2 ++ ")"
 
-instance Pretty [Pattern] where
+instance {-# OVERLAPS #-} Pretty [Pattern] where
     pretty ps = unwords (map pretty ps)
 
 instance Pretty t => Pretty (Maybe t) where
