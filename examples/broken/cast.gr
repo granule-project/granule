@@ -1,0 +1,6 @@
+castN2Int : forall (n : Nat=) . (N n) |n| -> Int
+castN2Int |x| =
+    case x of {
+      Z -> 0;
+      (S m) -> 1 + castN2Int |m|
+    }
