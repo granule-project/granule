@@ -1,9 +1,14 @@
-import StdLib.Prelude
+-- Convert an indexed natural number to an untyped int
+natToInt : forall (n : Nat=) . (N n) |1=| -> Int
+natToInt x =
+    case x of
+      |Z| -> 0;
+      |(S m)| -> 1 + natToInt |m|
 
 --- Reuse bound on `N n` is `|n|`, but it actually gets used
 --- `|n + n * (n+1) / 2|` times (or something like that)
 fact : forall (n : Nat=) . (N n) |n| -> Int
 fact x =
     case x of
-      |Z| -> 1;
-      |(S m)| -> (natToInt |(S m)|) * factAlt |m|
+       |Z| -> 1;
+       |(S m)| -> (natToInt |(S m)|) * fact |m|
