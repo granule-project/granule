@@ -1,6 +1,8 @@
--- This file has been generated from package.yaml by hpack version 0.17.1.
+-- This file has been generated from package.yaml by hpack version 0.20.0.
 --
 -- see: https://github.com/sol/hpack
+--
+-- hash: 86c72c5e1dd57ed99c5ab1e6bb6e4382f8f066a67ca3300fb600745943c5db28
 
 name:           granule
 version:        0.3.9.0
@@ -27,8 +29,8 @@ library
       source
   ghc-options: -Wall -fno-warn-name-shadowing
   build-depends:
-      base >=4.10 && <5
-    , array
+      array
+    , base >=4.10 && <5
     , containers
     , mtl >=2.2.1
     , sbv >=7.3
@@ -67,6 +69,8 @@ executable gr
   build-depends:
       base >=4.10 && <5
     , granule
+  other-modules:
+      Paths_granule
   default-language: Haskell2010
 
 test-suite doctest
@@ -77,6 +81,8 @@ test-suite doctest
   build-depends:
       base >=4.10 && <5
     , doctest
+  other-modules:
+      Paths_granule
   default-language: Haskell2010
 
 test-suite spec
@@ -86,11 +92,11 @@ test-suite spec
       tests/hspec
   ghc-options: -fno-warn-partial-type-signatures
   build-depends:
-      base >=4.10 && <5
+      QuickCheck
+    , base >=4.10 && <5
     , filemanip
     , granule
     , hspec
-    , QuickCheck
     , mtl
     , transformers >=0.5
   other-modules:
@@ -100,4 +106,5 @@ test-suite spec
       ContextSpec
       Syntax.DesugarSpec
       Syntax.ExprSpec
+      Paths_granule
   default-language: Haskell2010
