@@ -91,9 +91,10 @@ Pats : Pat                         { [$1] }
 
 Pat :: { Pattern }
 Pat :
-    PJuxt                          { $1 }
+    '(' PJuxt ')'                  { $2 }
   | '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
   | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
+  | PAtom                          { $1 }
 
 PJuxt :: { Pattern }
 PJuxt :
