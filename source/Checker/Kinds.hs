@@ -33,32 +33,32 @@ inferKindOfType' :: Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
 inferKindOfType' s quantifiedVariables =
     typeFoldM (TypeFold kFunOrPair kCon kBox kDiamond kVar kApp kInt kFunOrPair kInfix)
   where
-     kFunOrPair KType KType = return KType
-     kFunOrPair KType y = illKindedNEq s KType y
-     kFunOrPair x _     = illKindedNEq s KType x
+    kFunOrPair KType KType = return KType
+    kFunOrPair KType y = illKindedNEq s KType y
+    kFunOrPair x _     = illKindedNEq s KType x
 
-     kCon conId =
+    kCon conId =
       case lookup conId typeLevelConstructors of
         Just kind -> return kind
         Nothing   -> unknownName s (conId ++ " constructor.")
 
-     kBox _ KType = return KType
-     kBox _ x = illKindedNEq s KType x
+    kBox _ KType = return KType
+    kBox _ x = illKindedNEq s KType x
 
-     kDiamond _ KType = return KType
-     kDiamond _ x     = illKindedNEq s KType x
+    kDiamond _ KType = return KType
+    kDiamond _ x     = illKindedNEq s KType x
 
-     kVar tyVar =
+    kVar tyVar =
       case lookup tyVar quantifiedVariables of
         Just kind -> return kind
         Nothing   -> unknownName s $ tyVar ++ " is unbound (not quantified)."
 
-     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
-     kApp k kArg = illKindedNEq s (KFun kArg (KPoly "a")) k
+    kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
+    kApp k kArg = illKindedNEq s (KFun kArg (KPoly "a")) k
 
-     kInt _ = return $ KConstr "Nat="
+    kInt _ = return $ KConstr "Nat="
 
-     kInfix op k1 k2 =
+    kInfix op k1 k2 =
        case lookup op typeLevelConstructors of
          Just (KFun k1' (KFun k2' kr)) ->
            if k1 `hasLub` k1'
