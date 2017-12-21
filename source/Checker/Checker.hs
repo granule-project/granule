@@ -198,6 +198,8 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
       let checkGam = specialisedGam ++ unspecialisedGam ++ patternGam
       (localGam, subst') <- checkExpr dbg defs checkGam pol False tau' e_i
 
+      leqCtxt s localGam checkGam
+
       -- Check linear use in anything Linear
       nameMap  <- ask
       case checkLinearity patternGam localGam of
