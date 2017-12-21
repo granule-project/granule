@@ -16,7 +16,7 @@ import GHC.Generics (Generic)
 %wrapper "posn"
 
 $digit  = 0-9
-$alpha  = [a-zA-Z\-\=]
+$alpha  = [a-zA-Z\_\=]
 $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
@@ -74,7 +74,7 @@ data Token = TokenLet  AlexPosn
            | TokenIn   AlexPosn
 	   | TokenCase AlexPosn
 	   | TokenOf   AlexPosn
-     | TokenInfinity AlexPosn
+           | TokenInfinity AlexPosn
            | TokenLambda AlexPosn
 	   | TokenLetBox AlexPosn
 	   | TokenBind AlexPosn
