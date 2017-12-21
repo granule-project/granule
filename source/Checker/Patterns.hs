@@ -5,6 +5,7 @@ import Syntax.Expr
 import Syntax.Pretty
 import Checker.Monad
 import Checker.Predicates
+import Checker.Substitutions
 import Checker.Coeffects
 
 import Control.Monad.Trans.Maybe
@@ -98,17 +99,15 @@ ctxtFromTypedPattern dbg s
 
 -- Match a Z constructor
 ctxtFromTypedPattern _ s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
-    let kind = CConstr "Nat="
-    -- Create a fresh type variable for the size of the consed list
-    sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
+    c <- compileNatKindedTypeToCoeffect s n
+    addConstraint $ Eq s c (CNat Discrete 0) (CConstr "Nat=")
     case n of
-      TyVar v -> do
-        addConstraint $ Eq s (CVar v) (CVar sizeVar) kind
-        addConstraint $ Eq s (CVar sizeVar) (CNat Discrete 0) kind
-        return ([], [sizeVar], [(v, TyInt 0)])
-      TyInt m -> do
-        addConstraint $ Eq s (CNat Discrete m) (CNat Discrete 0) kind
-        return ([], [], [])
+      TyVar v -> return ([], [], [(v, TyInt 0)])
+      _ -> return ([], [], [])
+        {-do
+        sizeVar <- freshCoeffectVarWithBinding "in" (CConstr "Nat=") BoundQ
+        addConstraint $ Eq s c (CNat Discret 0) sizeVar
+        return ([], [], [(v, sizeVar)])-}
 
 -- Match a S constructor
 ctxtFromTypedPattern dbg s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = do
@@ -161,4 +160,3 @@ ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
 ctxtFromTypedPatterns _ s ty p =
   error $ "Unhandled case: ctxtFromTypedPatterns called with:\
           \Span: " ++ show s ++ "\nType: " ++ show ty ++ "\nPatterns: " ++ show p
-
