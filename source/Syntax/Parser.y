@@ -91,26 +91,26 @@ Pats : Pat                         { [$1] }
 
 Pat :: { Pattern }
 Pat :
-    PAtom          { $1 }
-  | '(' PJuxt ')'  { $2 }
+    PJuxt                          { $1 }
+  | '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
+  | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
 PJuxt :: { Pattern }
 PJuxt :
-    PJuxt PAtom                 { PApp (getStart $1, getEnd $2) $1 $2 }
-  | PAtom                       { $1 }
+    PJuxt PAtom                    { PApp (getStart $1, getEnd $2) $1 $2 }
+  | PAtom                          { $1 }
 
 
 PAtom :: { Pattern }
-PAtom : VAR                          { PVar (getPosToSpan $1) (symString $1) }
+PAtom : VAR                        { PVar (getPosToSpan $1) (symString $1) }
     | '_'                          { PWild (getPosToSpan $1) }
-    | '|' Pat '|'                  { PBox (getPosToSpan $1) $2 }
     | INT                          { let TokenInt _ x = $1
 	                             in PInt (getPosToSpan $1) x }
     | FLOAT                        { let TokenFloat _ x = $1
 	                             in PFloat (getPosToSpan $1) $ read x }
     | CONSTR                       { let TokenConstr _ x = $1
 	                             in PConstr (getPosToSpan $1) x }
-    | '(' Pat ',' Pat ')'          { PPair (getPosToSpan $1) $2 $4 }
+    | '(' PJuxt ')'                  { $2 }
 
 TypeScheme :: { TypeScheme }
 TypeScheme :
