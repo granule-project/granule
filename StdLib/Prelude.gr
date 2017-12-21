@@ -76,11 +76,11 @@ product : forall n : Nat= . List n Int -> Int
 product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
 
 -- Convert an indexed natural number to an untyped int
-natToInt : forall (n : Nat=) . (N n) |n| -> Int
+natToInt : forall (n : Nat=) . N n -> Int
 natToInt x =
     case x of
-      |Z| -> 0;
-      |(S m)| -> 1 + natToInt |m|
+      Z -> 0;
+      (S m) -> 1 + natToInt m
 
 --add : forall (n : Nat=, m : Nat=) . N n -> N m -> N (n + m)
 --add n m =
