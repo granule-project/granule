@@ -18,6 +18,8 @@ import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern)
 import Syntax.Pretty
 
+import Data.List (intercalate)
+
 -- State of the check/synth functions
 newtype Checker a =
   Checker { unwrap :: MR.ReaderT [(Id, Id)] (StateT CheckerState IO) a }
@@ -69,7 +71,6 @@ data CheckerState = CS
 initState :: CheckerState
 initState = CS 0 [] emptyCtxt emptyCtxt Nothing []
   where
-    ground   = Conj []
     emptyCtxt = []
 
 -- *** Various helpers for manipulating the context
@@ -182,6 +183,19 @@ illKindedNEq s k1 k2 =
 -- | A helper for raising a linearity error
 illLinearity :: Span -> String -> MaybeT Checker a
 illLinearity = visibleError "Linearity" halt
+
+data LinearityMismatch =
+   LinearNotUsed Id
+ | LinearUsedNonLinearly Id
+   deriving Show -- for debugging
+
+illLinearityMismatch :: Span -> [(Id, Id)] -> [LinearityMismatch] -> MaybeT Checker a
+illLinearityMismatch s nameMap mismatches =
+  illLinearity s (intercalate "\n\t" $ map mkMsg mismatches)
+  where
+    mkMsg (LinearNotUsed v) = unusedVariable $ unrename nameMap v
+    mkMsg (LinearUsedNonLinearly v) =
+      "Variable '" ++ unrename nameMap v ++ "' is promoted but its binding is linear; its binding should be under a box."
 
 -- | A helper for raising a grading error
 illGraded :: Span -> String -> MaybeT Checker ()

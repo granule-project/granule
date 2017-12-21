@@ -65,20 +65,19 @@ checkDef dbg defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
         (FunTy _ _, ps@(_:_)) -> do
 
           -- Type the pattern matching
-          (localGam, ty') <- ctxtFromTypedPatterns dbg s ty ps
+          (patternGam, ty') <- ctxtFromTypedPatterns dbg s ty ps
           -- Check the body in the context given by the pattern matching
-          (localGam', _) <- checkExpr dbg defCtxt localGam Positive True ty' expr
+          (outGam, _) <- checkExpr dbg defCtxt patternGam Positive True ty' expr
           -- Check that the outgoing context is a subgrading of the incoming
-          leqCtxt s localGam' localGam
+          leqCtxt s outGam patternGam
 
           -- Check linear use
-          case remainingUndischarged localGam localGam' of
-                [] -> return localGam'
+          case checkLinearity patternGam outGam of
+                [] -> return outGam
                 xs -> do
-                   nameMap  <- ask
-                   illLinearity s
-                    . intercalate "\n"
-                    . map (unusedVariable . unrename nameMap . fst) $ xs
+                  nameMap <- ask
+                  illLinearityMismatch s nameMap xs
+
         (tau, []) -> checkExpr dbg defCtxt [] Positive True tau expr >>= (return . fst)
         _         -> illTyped s "Expecting a function type"
 
@@ -199,7 +198,7 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
 
       -- Check linear use in anything Linear
       nameMap  <- ask
-      case remainingUndischarged patternGam localGam of
+      case checkLinearity patternGam localGam of
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
@@ -214,9 +213,8 @@ checkExpr dbg defs gam pol _ tau (Case s guardExpr cases) = do
 
            return (branchCtxt, subst')
 
-        -- Anything that was bound in the pattern but not used
-        xs -> illLinearity s $ intercalate "\n\t"
-                             $ map (unusedVariable . unrename nameMap . fst) xs
+        -- Anything that was bound in the pattern but not used correctly
+        xs -> illLinearityMismatch s nameMap xs
 
   -- Find the upper-bound contexts
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
@@ -325,19 +323,18 @@ synthExpr dbg defs gam pol (Case s guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (localGam, eVars, _) <- ctxtFromTypedPattern dbg s ty pati
+      (patternGam, eVars, _) <- ctxtFromTypedPattern dbg s ty pati
       newConjunct
       ---
-      (tyCase, localGam') <- synthExpr dbg defs (gam ++ localGam) pol ei
+      (tyCase, localGam) <- synthExpr dbg defs (gam ++ patternGam) pol ei
       concludeImplication eVars
       -- Check linear use in anything Linear
       nameMap  <- ask
-      case remainingUndischarged localGam localGam' of
+      case checkLinearity patternGam localGam of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
-         [] -> return (tyCase, localGam' `subtractCtxt` localGam)
-         xs -> illLinearity s $ intercalate "\n"
-                              $ map (unusedVariable . unrename nameMap . fst) xs
+         [] -> return (tyCase, localGam `subtractCtxt` patternGam)
+         xs -> illLinearityMismatch s nameMap xs
 
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
@@ -630,18 +627,25 @@ intersectCtxtsWithWeaken s a b = do
        kind <- inferCoeffectType s c
        return (var, Discharged t (CZero kind))
 
-remainingUndischarged :: Ctxt Assumption -> Ctxt Assumption -> Ctxt Assumption
-remainingUndischarged ctxt subCtxt =
-  deleteFirstsBy linearCancel (linears ctxt) (linears subCtxt)
-    where
-      linears = filter isLinear
-      isLinear (_, Linear _) = True
-      isLinear (_, _)        = False
-      linearCancel (v, Linear _) (v', Linear _) = v == v'
-      linearCancel (v, Linear _) (v', Discharged _ (CZero _)) = v == v'
-      linearCancel (v, Discharged _ (CZero _)) (v', Linear _) = v == v'
-      linearCancel (v, Discharged _ _) (v', Discharged _ _)    = v == v'
-      linearCancel _ _ = False
+{- | Given an input context and output context, check the usage of
+     variables in the output, returning a list of usage mismatch
+     information if, e.g., a variable is bound linearly in the input but is not
+     used in the output, or is discharged in the output -}
+checkLinearity :: Ctxt Assumption -> Ctxt Assumption -> [LinearityMismatch]
+checkLinearity [] _ = []
+checkLinearity ((v, Linear _):inCtxt) outCtxt =
+  case lookup v outCtxt of
+    -- Good: linear variable was used
+    Just Linear{} -> checkLinearity inCtxt outCtxt
+    -- Bad: linear variable was discharged (boxed var but binder not unboxed)
+    Just Discharged{} -> LinearUsedNonLinearly v : checkLinearity inCtxt outCtxt
+    Nothing -> LinearNotUsed v : checkLinearity inCtxt outCtxt
+
+checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
+  -- Discharged things can be discarded, so it doesn't matter what
+  -- happens with them
+  checkLinearity inCtxt outCtxt
+
 
 leqAssumption ::
     Span -> (Id, Assumption) -> (Id, Assumption) -> MaybeT Checker ()
