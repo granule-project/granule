@@ -4,5 +4,17 @@ fact x =
     |0| -> 1;
     |m| -> m * fact |(m - 1)|
 
+castN2Int : forall (n : Nat=) . (N n) |n| -> Int
+castN2Int x =
+    case x of
+      |Z| -> 0;
+      |(S m)| -> 1 + castN2Int |m|
+
+factAlt : forall (n : Nat=) . (N n) |n| -> Int
+factAlt x =
+  case x of
+    |Z| -> 1;
+    |(S m)| -> (castN2Int |(S m)|) * factAlt |m|
+
 main : Int
 main = fact |7|
