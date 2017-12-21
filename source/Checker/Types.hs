@@ -179,8 +179,9 @@ equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
 
     -- But we can't unify an universal with a concrete type
     (Just (k1, ForallQ)) -> do
+      ut <- unrenameType t
       illTyped s $ "Trying to unify a polymorphic type '" ++ n
-       ++ "' with monomorphic " ++ pretty t
+       ++ "' with monomorphic " ++ pretty ut
 
     Nothing -> unknownName s n
 
@@ -196,13 +197,18 @@ equalTypesRelatedCoeffects _ s _ t1 t2 = do
        c2 <- compileNatKindedTypeToCoeffect s t2
        addConstraint $ Eq s c1 c2 (CConstr "Nat=")
        return (True, [])
-    (KType, KType) ->
-         illTyped s $ pretty t1 ++ " is not equal to " ++ pretty t2
+    (KType, KType) -> do
+        ut1 <- unrenameType t1
+        ut2 <- unrenameType t2
+        illTyped s $ pretty ut1 ++ " is not equal to " ++ pretty ut2
 
-    _ -> illTyped s $ "Equality is not defined between kinds "
+    _ -> do
+       ut1 <- unrenameType t1
+       ut2 <- unrenameType t2
+       illTyped s $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2
                  ++ "\t\n from equality "
-                 ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
+                 ++ "'" ++ pretty ut2 ++ "' and '" ++ pretty ut1 ++ "' equal."
 
 
 -- Essentially equality on types but join on any coeffects
@@ -262,7 +268,9 @@ joinTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
   t2'' <- joinTypes dbg s t2 t2'
   return (TyApp t1'' t2'')
 
-joinTypes _ s t1 t2 =
+joinTypes _ s t1 t2 = do
+  ut1 <- unrenameType t1
+  ut2 <- unrenameType t2
   illTyped s
-    $ "Type '" ++ pretty t1 ++ "' and '"
-               ++ pretty t2 ++ "' have no upper bound"
+    $ "Type '" ++ pretty ut1 ++ "' and '"
+               ++ pretty ut2 ++ "' have no upper bound"

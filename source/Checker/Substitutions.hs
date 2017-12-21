@@ -7,6 +7,7 @@ import Checker.Kinds
 import Checker.Monad
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity
+import Control.Monad.Reader.Class
 
 {- | Take a context of 'a' and a subhstitution for 'a's (also a context)
       apply the substitution returning a pair of contexts, one for parts
@@ -117,3 +118,33 @@ substCoeffect _ c@CZero{}  = c
 substCoeffect _ c@Level{}  = c
 substCoeffect _ c@CSet{}   = c
 substCoeffect _ c@CSig{}   = c
+
+-- | Apply a name map to a type to rename the type variables
+renameType :: [(Id, Id)] -> Type -> Type
+renameType rmap t =
+    runIdentity $
+      typeFoldM (baseTypeFold { tfBox   = renameBox rmap
+                              , tfTyVar = renameTyVar rmap }) t
+  where
+    renameBox renameMap c t = do
+      let c' = substCoeffect (map (\(v, var) -> (v, CVar var)) renameMap) c
+      let t' = renameType renameMap t
+      return $ Box c' t'
+    renameTyVar renameMap v =
+      case lookup v renameMap of
+        Just v' -> return $ TyVar v'
+        -- Shouldn't happen
+        Nothing -> return $ TyVar v
+
+unrenameType :: Type -> MaybeT Checker Type
+unrenameType t = do
+  nameMap <- ask
+  return $ renameType nameMap t
+
+unrenameAssumption :: Assumption -> MaybeT Checker Assumption
+unrenameAssumption (Linear t) = do
+  t' <- unrenameType t
+  return (Linear t')
+unrenameAssumption (Discharged t c) = do
+  t' <- unrenameType t
+  return (Discharged t' c)

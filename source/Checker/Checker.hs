@@ -133,7 +133,9 @@ checkExpr dbg defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
     Nothing -> return (tau, [])
     Just t' -> do
       (eqT, unifiedType, subst) <- equalTypes dbg s sig t'
-      unless eqT (illTyped s $ pretty t' ++ " not equal to " ++ pretty t')
+      ut <- unrenameType sig
+      ut' <- unrenameType t'
+      unless eqT (illTyped s $ pretty ut ++ " not equal to " ++ pretty ut')
       return (tau, subst)
 
   -- Extend the context with the variable 'x' and its type
@@ -248,8 +250,11 @@ checkExpr dbg defs gam pol topLevel tau e = do
 
   if tyEq
     then return (gam', subst)
-    else illTyped (getSpan e)
-            $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
+    else do
+      utau <- unrenameType tau
+      utau' <- unrenameType tau'
+      illTyped (getSpan e)
+          $ "Expected '" ++ pretty utau ++ "' but got '" ++ pretty utau' ++ "'"
 
 -- | Synthesise the 'Type' of expressions.
 -- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>
@@ -363,8 +368,15 @@ synthExpr dbg defs gam pol (LetDiamond s var ty e1 e2) = do
          Diamond ef1 ty' | ty == ty' -> do
              gamNew <- ctxPlus s gam1 gam2
              return (Diamond (ef1 ++ ef2) tau', gamNew)
-         t -> illTyped s $ "Expected '" ++ pretty ty ++ "' but inferred '" ++ pretty t ++ "' in body of let<>"
-    t -> illTyped s $ "Expected '" ++ pretty ty ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
+         t -> do
+           uty <- unrenameType ty
+           ut <- unrenameType t
+           illTyped s $ "Expected '" ++ pretty uty ++ "' but inferred '"
+                     ++ pretty ut ++ "' in body of let<>"
+    t -> do
+      uty <- unrenameType ty
+      ut  <- unrenameType t
+      illTyped s $ "Expected '" ++ pretty uty ++ "' in subjet of let <-, but inferred '" ++ pretty ut ++ "'"
 
 -- Variables
 synthExpr dbg defs gam _ (Val s (Var x)) = do
@@ -408,8 +420,10 @@ synthExpr dbg defs gam pol (App s e e') = do
          return (substType subst tau, gamNew)
 
       -- Not a function type
-      t -> illTyped s $ "Left-hand side of application is not a function"
-                   ++ " but has type '" ++ pretty t ++ "'"
+      t -> do
+        ut <- unrenameType t
+        illTyped s $ "Left-hand side of application is not a function"
+                   ++ " but has type '" ++ pretty ut ++ "'"
 
 -- Promotion
 synthExpr dbg defs gam pol (Val s (Promote e)) = do
@@ -450,10 +464,12 @@ synthExpr dbg defs gam pol (LetBox s var t e1 e2) = do
                 return (demand, unifiedType)
               else do
                 nameMap <- ask
+                ut <- unrenameType t
+                ut' <- unrenameType t'
                 illTyped s $ "An explicit signature is given "
                          ++ unrename nameMap var
-                         ++ " : '" ++ pretty t
-                         ++ "' but the actual type was '" ++ pretty t' ++ "'"
+                         ++ " : '" ++ pretty ut
+                         ++ "' but the actual type was '" ++ pretty ut' ++ "'"
         _ -> do
           -- If there is no explicit demand for the variable
           -- then this means it is not used
@@ -660,9 +676,11 @@ leqAssumption s (_, Discharged _ c1) (_, Discharged _ c2) = do
 
 leqAssumption s (x, t) (x', t') = do
   nameMap <- ask
+  ut <- unrenameAssumption t
+  ut' <- unrenameAssumption t'
   illTyped s $ "Can't unify free-variable types:\n\t"
-           ++ pretty (unrename nameMap x, t)
-           ++ "\nwith\n\t" ++ pretty (unrename nameMap x', t')
+           ++ pretty (unrename nameMap x, ut)
+           ++ "\nwith\n\t" ++ pretty (unrename nameMap x', ut')
 
 
 isType :: (Id, CKind) -> Bool
@@ -674,7 +692,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
-    rename renameMap ty
+    return $ renameType renameMap ty
 
   where
     -- Freshen variables, create existential instantiation
@@ -693,16 +711,6 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       -- Return pair of old variable name and instantiated name (for
       -- name map)
       return (var, var')
-
-    rename rmap = typeFoldM (baseTypeFold { tfBox = renameBox rmap
-                                          , tfTyVar = renameTyVar rmap })
-    renameBox renameMap c t = do
-      let c' = substCoeffect (map (\(v, var) -> (v, CVar var)) renameMap) c
-      return $ Box c' t
-    renameTyVar renameMap v =
-      case lookup v renameMap of
-        Just v' -> return $ TyVar v'
-        Nothing -> illTyped s $ "Type variable " ++ v ++ " is unbound"
 
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant
