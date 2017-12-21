@@ -81,3 +81,9 @@ natToInt x =
     case x of
       |Z| -> 0;
       |(S m)| -> 1 + natToInt |m|
+
+--add : forall (n : Nat=, m : Nat=) . N n -> N m -> N (n + m)
+--add n m =
+--  case n of
+--    Z -> m;
+--    (S n') -> S (add n' m)
