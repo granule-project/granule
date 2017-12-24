@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 86c72c5e1dd57ed99c5ab1e6bb6e4382f8f066a67ca3300fb600745943c5db28
+-- hash: 0c354278cb45867ca5173079dc9f2fc456204f49f0fe3c0676139b170efd6e86
 
 name:           granule
 version:        0.3.9.0
@@ -57,6 +57,7 @@ library
       Syntax.Lexer
       Syntax.Parser
       Syntax.Pretty
+      Utils
   other-modules:
       Checker.Substitutions
       Paths_granule
@@ -67,20 +68,10 @@ executable gr
   hs-source-dirs:
       command-line-interface
   build-depends:
-      base >=4.10 && <5
+      Glob
+    , base >=4.10 && <5
     , granule
-  other-modules:
-      Paths_granule
-  default-language: Haskell2010
-
-test-suite doctest
-  type: exitcode-stdio-1.0
-  main-is: doctest.hs
-  hs-source-dirs:
-      tests
-  build-depends:
-      base >=4.10 && <5
-    , doctest
+    , optparse-applicative
   other-modules:
       Paths_granule
   default-language: Haskell2010
@@ -106,5 +97,18 @@ test-suite spec
       ContextSpec
       Syntax.DesugarSpec
       Syntax.ExprSpec
+      Paths_granule
+  default-language: Haskell2010
+
+test-suite zdoctest
+  type: exitcode-stdio-1.0
+  main-is: doctest.hs
+  hs-source-dirs:
+      tests
+  ghc-options: -threaded
+  build-depends:
+      base >=4.10 && <5
+    , doctest
+  other-modules:
       Paths_granule
   default-language: Haskell2010

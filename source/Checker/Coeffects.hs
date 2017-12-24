@@ -1,19 +1,18 @@
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
+{-# LANGUAGE ImplicitParams #-}
 
 module Checker.Coeffects where
 
-import Data.List (isPrefixOf)
-
-import Context
-import Syntax.Expr
-import Syntax.Pretty
+import Control.Monad.State.Strict
+import Control.Monad.Trans.Maybe
 
 import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
-
-import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
+import Context
+import Syntax.Expr
+import Syntax.Pretty
+import Utils
 
 -- Which coeffects can be flattened
 flattenable :: CKind -> Maybe (Coeffect -> Coeffect -> Coeffect)
@@ -24,7 +23,7 @@ flattenable (CConstr "Level") = Just CJoin
 flattenable _                 = Nothing
 
 -- What is the kind of a particular coeffect?
-inferCoeffectType :: Span -> Coeffect -> MaybeT Checker CKind
+inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> MaybeT Checker CKind
 
 -- Coeffect constants have an obvious kind
 inferCoeffectType _ (Level _)         = return $ CConstr "Level"
@@ -45,7 +44,7 @@ inferCoeffectType s (CVar cvar) = do
   checkerState <- get
   case lookup cvar (tyVarContext checkerState) of
      Nothing -> do
-       unknownName s $ "Tried to lookup kind of " ++ cvar
+       halt $ UnboundVariableError (Just s) $ "Tried to lookup kind of " ++ cvar
 --       state <- get
 --       let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
        -- We don't know what it is yet though, so don't update the coeffect kind ctxt
@@ -80,7 +79,7 @@ updateCoeffectKind tyVar kind = do
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
-mguCoeffectTypes :: Span -> Coeffect -> Coeffect -> MaybeT Checker CKind
+mguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> MaybeT Checker CKind
 mguCoeffectTypes s c1 c2 = do
   ck1 <- inferCoeffectType s c1
   ck2 <- inferCoeffectType s c2
@@ -105,8 +104,7 @@ mguCoeffectTypes s c1 c2 = do
     (CConstr k1, CConstr k2) | Just ck <- joinCoeffectConstr k1 k2 ->
       return $ CConstr ck
 
-    (k1, k2) -> do
-      illTyped s $ "Cannot unify coeffect types '"
+    (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
                ++ pretty k1 ++ "' and '" ++ pretty k2
                ++ "' for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
 

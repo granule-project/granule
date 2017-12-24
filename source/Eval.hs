@@ -1,13 +1,15 @@
 -- Granule interpreter
-
+{-# LANGUAGE ImplicitParams #-}
 module Eval (eval) where
 
 import Syntax.Expr
 import Syntax.Pretty
 import Syntax.Desugar
 import Context
+import Utils
 
 import Control.Monad (when)
+import System.IO (hFlush, stdout)
 
 evalBinOp :: String -> Value -> Value -> Value
 evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
@@ -37,6 +39,8 @@ evalIn ctxt (App _ (Val _ (Var "write")) e) = do
     return $ Pure (Val nullSpan v)
 
 evalIn _ (Val s (Var "read")) = do
+    putStr "> "
+    hFlush stdout
     val <- readLn
     return $ Pure (Val s (NumInt val))
 
@@ -153,20 +157,19 @@ evalIn ctxt (Case _ gExpr cases) = do
 
     pmatch (_:ps) val = pmatch ps val
 
-evalDefs :: Bool -> Ctxt Value -> [Def] -> IO (Ctxt Value)
-evalDefs dbg ctxt [] = return ctxt
-evalDefs dbg ctxt (Def _ var e [] _ : defs) = do
+evalDefs :: (?globals :: Globals) => Ctxt Value -> [Def] -> IO (Ctxt Value)
+evalDefs ctxt [] = return ctxt
+evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
-    evalDefs dbg (extend ctxt var val) defs
-evalDefs dbg ctxt (d : defs) = do
+    evalDefs (extend ctxt var val) defs
+evalDefs ctxt (d : defs) = do
     let d' = desugar d
-    when dbg $ putStrLn "Desugaring gives: "
-    when dbg $ putStrLn $ pretty d'
-    evalDefs dbg ctxt (d' : defs)
+    debugM "Desugaring" $ pretty d'
+    evalDefs ctxt (d' : defs)
 
-eval :: Bool -> [Def] -> IO (Maybe Value)
-eval dbg defs = do
-    bindings <- evalDefs dbg empty defs
+eval :: (?globals :: Globals) => [Def] -> IO (Maybe Value)
+eval defs = do
+    bindings <- evalDefs empty defs
     case lookup "main" bindings of
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)

@@ -1,8 +1,10 @@
 {
+{-# LANGUAGE ImplicitParams #-}
 module Syntax.Parser where
 
 import Syntax.Lexer
 import Syntax.Expr
+import Utils
 
 import Control.Monad (forM)
 import Data.List ((\\), intercalate, nub, stripPrefix)
@@ -289,11 +291,12 @@ parseError t = do
     die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: String -> IO ([Def], [(Id, Id)])
+parseDefs :: (?globals :: Globals) => String -> IO ([Def], [(Id, Id)])
 parseDefs input = do
     defs <- parse input
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
+      let ?globals = ?globals { sourceFilePath = path }
       parseDefs src
     checkNameClashes $ push $ importedDefs ++ [defs] -- add defs at the end because definitions
                                                      -- need to precede use sites

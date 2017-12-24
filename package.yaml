@@ -36,6 +36,7 @@ library:
   - Syntax.Lexer
   - Syntax.Parser
   - Syntax.Pretty
+  - Utils
   dependencies:
   - array
   - containers
@@ -48,7 +49,9 @@ executables:
     main: Main.hs
     source-dirs: command-line-interface
     dependencies:
+    - Glob
     - granule
+    - optparse-applicative
 
 tests:
   spec:
@@ -62,8 +65,9 @@ tests:
     - QuickCheck
     - mtl
     - transformers >=0.5
-  doctest:
+  zdoctest: # the "z" is to make them run after hspec
     main: doctest.hs
     source-dirs: tests
     dependencies:
     - doctest
+    ghc-options: -threaded

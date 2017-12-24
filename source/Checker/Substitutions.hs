@@ -1,3 +1,5 @@
+{-# LANGUAGE ImplicitParams #-}
+
 module Checker.Substitutions where
 
 import Context
@@ -8,16 +10,22 @@ import Checker.Monad
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity
 import Control.Monad.Reader.Class
+import Utils
 
-{- | Take a context of 'a' and a subhstitution for 'a's (also a context)
-      apply the substitution returning a pair of contexts, one for parts
-      of the context where a substitution occurred, and one where substitution
-      did not occur
->>> evalChecker initState [] (runMaybeT $ substCtxt  [("y", TyInt 0)] [("x", Linear (TyVar "x")), ("y", Linear (TyVar "y")), ("z", Discharged (TyVar "z") (CVar "b"))])
+-- For doctest:
+-- $setup
+-- >>> :set -XImplicitParams
+
+{-| Take a context of 'a' and a subhstitution for 'a's (also a context)
+  apply the substitution returning a pair of contexts, one for parts
+  of the context where a substitution occurred, and one where substitution
+  did not occur
+>>> let ?globals = defaultGlobals in evalChecker initState [] (runMaybeT $ substCtxt  [("y", TyInt 0)] [("x", Linear (TyVar "x")), ("y", Linear (TyVar "y")), ("z", Discharged (TyVar "z") (CVar "b"))])
 Just ([("y",Linear (TyInt 0))],[("x",Linear (TyVar "x")),("z",Discharged (TyVar "z") (CVar "b"))])
 -}
 
-substCtxt :: Ctxt Type -> Ctxt Assumption -> MaybeT Checker (Ctxt Assumption, Ctxt Assumption)
+substCtxt :: (?globals :: Globals) => Ctxt Type -> Ctxt Assumption
+  -> MaybeT Checker (Ctxt Assumption, Ctxt Assumption)
 substCtxt _ [] = return ([], [])
 substCtxt subst ((v, x):ctxt) = do
   (substituteds, unsubstituteds) <- substCtxt subst ctxt
@@ -36,7 +44,8 @@ substType ctx = runIdentity .
          Just t -> return t
          Nothing -> mTyVar v
 
-substAssumption :: Ctxt Type -> (Id, Assumption) -> MaybeT Checker (Id, Assumption)
+substAssumption :: (?globals :: Globals) => Ctxt Type -> (Id, Assumption)
+  -> MaybeT Checker (Id, Assumption)
 substAssumption subst (v, Linear t) =
     return $ (v, Linear (substType subst t))
 substAssumption subst (v, Discharged t c) = do
@@ -63,7 +72,7 @@ substAssumption subst (v, Discharged t c) = do
         Just y' -> return $ y' : ys
         Nothing -> return $ ys
 
-compileNatKindedTypeToCoeffect :: Span -> Type -> MaybeT Checker Coeffect
+compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Coeffect
 compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
   t1' <- compileNatKindedTypeToCoeffect s t1
   t2' <- compileNatKindedTypeToCoeffect s t2
@@ -72,13 +81,13 @@ compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
     "*"   -> return $ CTimes t1' t2'
     "\\/" -> return $ CJoin t1' t2'
     "/\\" -> return $ CMeet t1' t2'
-    _     -> unknownName s $ "Type-level operator " ++ op
+    _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " ++ op
 compileNatKindedTypeToCoeffect _ (TyInt n) =
   return $ CNat Discrete n
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
 compileNatKindedTypeToCoeffect s t =
-  illTyped s $ "Type " ++ pretty t ++ " does not have kind "
+  halt $ KindError (Just s) $ "Type " ++ pretty t ++ " does not have kind "
                        ++ pretty (CConstr "Nat=")
 
 {- | Perform a substitution on a coeffect based on a context mapping
