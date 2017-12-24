@@ -8,10 +8,12 @@
        /\____/
        \_/__/
 -}
+{-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE NamedFieldPuns #-}
-{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
+import Control.Exception (SomeException, try)
 import Control.Monad (forM)
 import Data.List (intercalate)
 import Data.Semigroup ((<>))
@@ -53,28 +55,43 @@ main = do
 -}
 run :: (?globals :: Globals) => String -> IO ExitCode
 run input = do
-  (ast, nameMap) <- parseDefs input
+  result <- try $ parseDefs input
+  case result of
+    Left (e :: SomeException) -> do
+      printInfo $ "Error during parsing: " <> show e
+      return (ExitFailure 3)
 
-  -- Print to terminal when in debugging mode:
-  debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
-  debugM "Pretty-printed AST:" $ show (intercalate "\n\n" $ map pretty ast)
-  debugM "Name map" $ show nameMap
-
-  -- Check and evaluate
-  checked <- check ast nameMap
-  case checked of
-    Failed -> do
-      printInfo "Failed"
-      return (ExitFailure 1)
-    Ok -> do
-      if noEval ?globals then printInfo $ green "Ok"
-      else do
-        printInfo $ green "Ok, evaluating..."
-        result <- eval ast
-        case result of
-          Nothing -> printInfo "(No output)"
-          Just result -> putStrLn (pretty result)
-      return ExitSuccess
+    Right (ast, nameMap) -> do
+      -- Print to terminal when in debugging mode:
+      debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
+      debugM "Pretty-printed AST:" $ show (intercalate "\n\n" $ map pretty ast)
+      debugM "Name map" $ show nameMap
+      -- Check and evaluate
+      checked <- try $ check ast nameMap
+      case checked of
+        Left (e :: SomeException) -> do
+          printInfo $ "Error during type checking: " <> show e
+          return (ExitFailure 2)
+        Right Failed -> do
+          printInfo "Failed"
+          return (ExitFailure 1)
+        Right Ok -> do
+          if noEval ?globals then do
+            printInfo $ green "Ok"
+            return ExitSuccess
+          else do
+            printInfo $ green "Ok, evaluating..."
+            result <- try $ eval ast
+            case result of
+              Left (e :: SomeException) -> do
+                printInfo $ "Error during evaluation: " <> show e
+                return (ExitFailure 4)
+              Right Nothing -> do
+                printInfo "(No output)"
+                return ExitSuccess
+              Right (Just result) -> do
+                putStrLn (pretty result)
+                return ExitSuccess
 
 
 parseArgs :: ParserInfo ([FilePath],Globals)
