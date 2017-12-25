@@ -76,8 +76,8 @@ data CheckerState = CS
 initState :: CheckerState
 initState = CS { uniqueVarId = 0
                , predicateStack = []
-               , ckctxt = emptyCtxt
-               , cVarCtxt = emptyCtxt
+               , tyVarContext = emptyCtxt
+               , kVarContext = emptyCtxt
                , deriv = Nothing
                , derivStack = []
                , typeConstructors = Primitives.typeLevelConstructors

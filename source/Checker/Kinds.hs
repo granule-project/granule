@@ -12,12 +12,11 @@ import Control.Monad.Trans.Maybe
 
 import Checker.Monad
 import Checker.Predicates
-import qualified Checker.Primitives as Primitives
 import Syntax.Expr
 import Context
 import Utils
 
-
+import Debug.Trace
 
 -- Currently we expect that a type scheme has kind KType
 kindCheck :: (?globals :: Globals) => Def -> MaybeT Checker ()
@@ -27,10 +26,11 @@ kindCheck (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
     KType -> return ()
     _     -> illKindedNEq s KType kind
 
-kindCheck (ADT s typeC dataCs)
-  | _tyVars typeC == [] = return () -- nullary typeC is trivially well-kinded
-  | otherwise = do
-      trace "kindCheck not implemented for ADT" (return ())
+kindCheck (ADT s typeC tyVars dataCs) =
+  case tyVars of
+    [] -> return () -- nullary typeC is trivially well-kinded
+    _  -> do
+      traceM "ERROR: Kinds.kindCheck: not implemented."
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do

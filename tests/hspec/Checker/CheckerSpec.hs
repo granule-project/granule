@@ -128,8 +128,3 @@ spec = do
 
     illTypedFiles =
       find always (extension ==? fileExtension) pathToIlltyped
-
-instance Eq CheckerResult where
-  OK == OK = True
-  (Failed _) == (Failed _) = True
-  _ == _ = False

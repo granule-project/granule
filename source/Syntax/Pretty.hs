@@ -4,7 +4,6 @@
 
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DuplicateRecordFields #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 module Syntax.Pretty where
@@ -91,16 +90,18 @@ instance {-# OVERLAPS #-} Pretty [Def] where
 instance Pretty Def where
     pretty (Def _ v e ps t) = v ++ " : " ++ pretty t ++ "\n"
                                 ++ v ++ " " ++ pretty ps ++ "= " ++ pretty e
-    pretty (ADT _ tC dCs) = "data " ++ pretty tC ++ " where\n  " ++ pretty dCs
+    pretty (ADT _ tC tVs dCs) =
+      let tyVars = case tVs of [] -> ""; _ -> unwords (map snd tVs) ++ " "
+      in "data " ++ pretty tC ++ " " ++ tyVars ++ "where\n  " ++ pretty dCs
 
 instance Pretty TypeConstr where
-    pretty tC = _name (tC :: TypeConstr) ++ (unwords $ map snd $ _tyVars tC)
+    pretty (TypeConstr _ name) = name
 
 instance Pretty [DataConstr] where
     pretty = intercalate ";\n  " . map pretty
 
 instance Pretty DataConstr where
-    pretty dC = _name (dC :: DataConstr) ++ " : " ++ pretty (_typeScheme dC)
+    pretty (DataConstr _ name typeScheme) = name ++ " : " ++ pretty typeScheme
 
 instance Pretty Pattern where
     pretty (PVar _ v)     = v
@@ -145,8 +146,8 @@ instance Pretty Expr where
   pretty (LetDiamond _ v t e1 e2) = parens $ "let " ++ v ++ " :" ++ pretty t ++ " <- "
                                     ++ pretty e1 ++ " in " ++ pretty e2
   pretty (Val _ v) = pretty v
-  pretty (Case _ e ps) = "case " ++ pretty e ++ " of " ++
-                         intercalate ";" (map (\(p, e') -> pretty p ++ " -> " ++ pretty e') ps)
+  pretty (Case _ e ps) = "\n    case " ++ pretty e ++ " of {\n      " ++
+                         intercalate ";\n      " (map (\(p, e') -> pretty p ++ " -> " ++ pretty e') ps) ++ "\n    }"
 
 parens :: String -> String
 parens s = "(" ++ s ++ ")"

@@ -2,11 +2,14 @@
 
 module Checker.Substitutions where
 
+import Control.Monad.State.Strict
+
 import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Checker.Kinds
 import Checker.Monad
+import Checker.Predicates
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity
 import Control.Monad.Reader.Class
@@ -157,3 +160,30 @@ unrenameAssumption (Linear t) = do
 unrenameAssumption (Discharged t c) = do
   t' <- unrenameType t
   return (Discharged t' c)
+
+freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
+freshPolymorphicInstance (Forall s kinds ty) = do
+    -- Universal becomes an existential (via freshCoeffeVar)
+    -- since we are instantiating a polymorphic type
+    renameMap <- mapM instantiateVariable kinds
+    return $ renameType renameMap ty
+
+  where
+    -- Freshen variables, create existential instantiation
+    instantiateVariable (var, k) = do
+      -- Freshen the variable depending on its kind
+      var' <- case k of
+               KType -> do
+                 var' <- freshVar var
+
+                 -- Label fresh variable as an existential
+                 modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
+                 return var'
+               KConstr c -> freshCoeffectVar var (CConstr c)
+               KCoeffect ->
+                 error "Coeffect kind variables not yet supported"
+               KFun _ _ -> unhandled
+               KPoly _ -> unhandled
+      -- Return pair of old variable name and instantiated name (for
+      -- name map)
+      return (var, var')

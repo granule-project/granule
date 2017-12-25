@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE DuplicateRecordFields #-} -- OverloadedRecordFields in 8.4
 
 module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
@@ -21,6 +20,7 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
 import Data.List ((\\))
 import Control.Monad.State
 import GHC.Generics (Generic)
+import Data.Functor.Identity (runIdentity)
 
 import Syntax.FirstParameter
 
@@ -76,14 +76,18 @@ data Pattern = PVar Span Id         -- Variable patterns
 instance FirstParameter Pattern Span
 
 class Binder t where
-  bvs :: t -> [Id]
+  boundVars :: t -> [Id]
   freshenBinder :: t -> Freshener t
 
 instance Binder Pattern where
-  bvs (PVar _ v)     = [v]
-  bvs (PBox _ p)     = bvs p
-  bvs (PApp _ p1 p2) = bvs p1 ++ bvs p2
-  bvs _           = [] -- TODO: Get rid of catch-alls
+  boundVars (PVar _ v)     = [v]
+  boundVars PWild {}       = []
+  boundVars (PBox _ p)     = boundVars p
+  boundVars PInt {}        = []
+  boundVars PFloat {}      = []
+  boundVars PConstr {}     = []
+  boundVars (PApp _ p1 p2) = boundVars p1 ++ boundVars p2
+  boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
 
   freshenBinder (PVar s var) = do
       var' <- freshVar var
@@ -116,6 +120,22 @@ class Term t where
   -- Freshen
   freshen :: t -> Freshener t
 
+instance Term Type where
+  freeVars = runIdentity . typeFoldM TypeFold
+    { tfFunTy   = \x y -> return $ x ++ y
+    , tfTyCon   = \_ -> return [] -- or: const (return [])
+    , tfBox     = \_ x -> return x -- or: uncurry (return . snd)
+    , tfDiamond = \_ x -> return x
+    , tfTyVar   = return . return
+    , tfTyApp   = \x y -> return $ x ++ y
+    , tfTyInt   = \_ -> return []
+    , tfPairTy  = \x y -> return $ x ++ y
+    , tfTyInfix = \_ y z -> return $ y ++ z
+    }
+
+  subst = undefined -- TODO: Term class probably needs breaking up
+  freshen = undefined -- TODO
+
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
 freshVar :: Id -> Freshener Id
@@ -133,11 +153,11 @@ freshenBlankPolyVars defs =
       tys <- freshenTys tys
       return $ Def s identifier expr pats tys
 
-    freshenDef (ADT s tyCon dataCons) = do
-      dataCons <- forM dataCons $ \dC -> do
-        sig <- freshenTys (_typeScheme dC)
-        return dC {_typeScheme = sig}
-      return $ ADT s tyCon dataCons
+    freshenDef (ADT s tyC tyVars dataCs) = do
+      dataCs <- forM dataCs $ \(DataConstr s name tySch) -> do
+        tySch <- freshenTys tySch
+        return $ DataConstr s name tySch
+      return $ ADT s tyC tyVars dataCs
 
     freshenTys (Forall s binds ty) = do
       ty <- freshenTy ty
@@ -245,7 +265,7 @@ instance Term Expr where
     freeVars (LetDiamond _ x _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ [x])
     freeVars (Val _ e)                = freeVars e
     freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
-                                      \\ concatMap (bvs . fst) cases)
+                                      \\ concatMap (boundVars . fst) cases)
 
     subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
     subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
@@ -296,20 +316,20 @@ instance Term Expr where
 --------- Definitions
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
-         | ADT Span TypeConstr [DataConstr]
+         | ADT Span TypeConstr [TyVar] [DataConstr]
           deriving (Eq, Show, Generic)
 
-data DataConstr = DataConstr { _span :: Span
-                             , _name :: Id
-                             , _typeScheme :: TypeScheme
-                             } deriving (Eq, Show, Generic)
-
-data TypeConstr = TypeConstr { _span :: Span
-                             , _name :: Id
-                             , _tyVars :: [(Span,Id)]
-                             } deriving (Eq, Show, Generic)
+type TyVar = (Span,Id)
 
 instance FirstParameter Def Span
+
+data TypeConstr = TypeConstr Span Id deriving (Eq, Show, Generic)
+
+instance FirstParameter TypeConstr Span
+
+data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
+
+instance FirstParameter DataConstr Span
 
 -- Alpha-convert all bound variables
 uniqueNames :: [Def] -> ([Def], [(Id, Id)])
@@ -322,11 +342,11 @@ uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
       e'  <- freshen e
       return $ Def s var e' ps' t
 
-    freshenDef (ADT s typeC dataCs) = return (ADT s typeC dataCs)
+    freshenDef a@(ADT _ _ _ _) = return a
 
 ----------- Types
 
-data TypeScheme = Forall Span [(String, Kind)] Type
+data TypeScheme = Forall Span [(Id, Kind)] Type -- [(Id, Kind)] are the binders
     deriving (Eq, Show, Generic)
 
 instance FirstParameter TypeScheme Span

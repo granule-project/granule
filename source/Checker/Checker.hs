@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -21,25 +22,21 @@ import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Checker.Substitutions
 import Checker.Types
-import Checker.Substitutions
 import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
-
-data CheckerResult = Failed | Ok deriving (Eq, Show)
-
 import Debug.Trace
 
-data CheckerResult = OK | Failed String deriving Show
+data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
 check :: (?globals :: Globals )
       => [Def]        -- List of definitions
       -> [(Id, Id)]   -- Name map
       -> IO CheckerResult
-check defs nameMap = do
+check ast nameMap = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
 
@@ -51,7 +48,7 @@ check defs nameMap = do
           case status of
             Nothing -> return [Nothing]
             Just _  -> -- Now check the definition
-               mapM (checkADT dbg) adts
+               mapM checkADT adts
 
     -- ... and evaluate the computation with initial state
     -- results_ADT <- evalChecker initState nameMap checkedADTs
@@ -115,17 +112,28 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
         else halt $ GenericError (Just s) "Constraints violated"
 
     -- Erase the solver predicate between definitions
-    modify (\st -> st { predicateStack = [], ckctxt = [], cVarCtxt = [] })
+    modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
     return ctxt
 
-checkADT dbg (ADT _ typeC dataCs ) = do
-  let dataCs' = map (\dc -> (_name (dc :: DataConstr), _typeScheme dc)) dataCs
-  let typeC' = (_name (typeC :: TypeConstr), KType) -- TODO
-  traceM "WARNING: Kinds not getting synthesised properly yet."
-  runMaybeT $ modify (\st -> st { dataConstructors = dataCs' ++ dataConstructors st
-                                , typeConstructors = typeC' : typeConstructors st })
-  return $ Just []
+  -- data Kind = KType
+  --           | KCoeffect
+  --           | KFun Kind Kind
+  --           | KPoly Id   -- Kind poly variable
+  --           | KConstr Id -- constructors that have been elevated
+  --     deriving (Show, Ord, Eq)
 
+checkADT :: (?globals :: Globals ) => Def -> Checker (Maybe (Ctxt Assumption))
+checkADT (ADT _ (TypeConstr _ tName) tyVars dataCs) = do
+    let typeC = (tName, mkKind tyVars)
+    traceM "WARNING: checkADT: data constructors not yet checked"
+    let dataCs' = map (\(DataConstr _ name (Forall s _ t)) -> (name, Forall s (mkBinders t) t)) dataCs
+    runMaybeT $ modify (\st -> st { dataConstructors = dataCs' ++ dataConstructors st
+                                  , typeConstructors = typeC : typeConstructors st })
+    return $ Just []
+  where
+    mkKind [] = KType
+    mkKind (_:vs) = KFun KType (mkKind vs)
+    mkBinders t = map ((\v -> (v, KType)) . snd) tyVars
 
 data Polarity = Positive | Negative deriving Show
 
@@ -571,8 +579,8 @@ solveConstraints :: (?globals :: Globals) => Pred -> Span -> String -> MaybeT Ch
 solveConstraints predicate s defName = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
-  let ctxtCk  = ckctxt checkerState
-  let ctxtCkVar = cVarCtxt checkerState
+  let ctxtCk  = tyVarContext checkerState
+  let ctxtCkVar = kVarContext checkerState
   let coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
   let coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
 
@@ -723,33 +731,6 @@ leqAssumption s (x, t) (x', t') = do
 isType :: (Id, CKind) -> Bool
 isType (_, CConstr "Type") = True
 isType _                   = False
-
-freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
-freshPolymorphicInstance (Forall s kinds ty) = do
-    -- Universal becomes an existential (via freshCoeffeVar)
-    -- since we are instantiating a polymorphic type
-    renameMap <- mapM instantiateVariable kinds
-    return $ renameType renameMap ty
-
-  where
-    -- Freshen variables, create existential instantiation
-    instantiateVariable (var, k) = do
-      -- Freshen the variable depending on its kind
-      var' <- case k of
-               KType -> do
-                 var' <- freshVar var
-
-                 -- Label fresh variable as an existential
-                 modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
-                 return var'
-               KConstr c -> freshCoeffectVar var (CConstr c)
-               KCoeffect ->
-                 error "Coeffect kind variables not yet supported"
-               KFun _ _ -> unhandled
-               KPoly _ -> unhandled
-      -- Return pair of old variable name and instantiated name (for
-      -- name map)
-      return (var, var')
 
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant

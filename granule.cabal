@@ -1,15 +1,15 @@
--- This file has been generated from package.yaml by hpack version 0.17.1.
+-- This file has been generated from package.yaml by hpack version 0.20.0.
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 71135a76dae051650da7501941c58b3fba9ca949b1dc15a69ac63a9ed23d18bd
+-- hash: cc9a549a70111da0ba94b354575e4d0a8d03248bba345c5f75d81b4b32b84cc5
 
 name:           granule
 version:        0.4.0.0
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
-author:         Dominic Orchard
+author:         Dominic Orchard, Vilem-Benjamin Liepelt
 copyright:      2017 authors
 license:        BSD3
 license-file:   LICENSE
@@ -27,10 +27,10 @@ source-repository head
 library
   hs-source-dirs:
       source
-  ghc-options: -O0 -W -Werror -Wno-unused-matches
+  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
   build-depends:
-      base >=4.10 && <5
-    , array
+      array
+    , base >=4.10 && <5
     , containers
     , mtl >=2.2.1
     , sbv >=7.3
@@ -85,11 +85,11 @@ test-suite spec
       tests/hspec
   ghc-options: -fno-warn-partial-type-signatures
   build-depends:
-      base >=4.10 && <5
+      QuickCheck
+    , base >=4.10 && <5
     , filemanip
     , granule
     , hspec
-    , QuickCheck
     , mtl
     , transformers >=0.5
   other-modules:
@@ -99,6 +99,7 @@ test-suite spec
       ContextSpec
       Syntax.DesugarSpec
       Syntax.ExprSpec
+      Paths_granule
   default-language: Haskell2010
 
 test-suite zdoctest

@@ -80,8 +80,8 @@ Def : Sig NL Binding {
       then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
       else error $ "Signature for " ++ fst3 $3 ++ " does not match the signature head"
     }
-    | data TypeConstr where DataConstrs {
-      ADT (getPos $1, snd $ _span (last $4 :: DataConstr)) $2 $4
+    | data TypeConstr TyVars where DataConstrs {
+      ADT (getPos $1, snd $ getSpan (last $5)) $2 $3 $5
     }
 
 Sig ::  { (Id, TypeScheme, Pos) }
@@ -92,8 +92,7 @@ Binding : VAR '=' Expr             { (symString $1, $3, []) }
         | VAR Pats '=' Expr        { (symString $1, $4, $2) }
 
 TypeConstr ::  { TypeConstr }
-TypeConstr : CONSTR        { TypeConstr (getPosToSpan $1) (constrString $1) [] }
-           | CONSTR TyVars { TypeConstr ((getPos $1),(fst $ fst (last $2))) (constrString $1) $2 }
+TypeConstr : CONSTR { TypeConstr (getPosToSpan $1) (constrString $1) }
 
 DataConstrs :: { [DataConstr] }
 DataConstrs : DataConstr DataConstrNext { $1 : $2 }
@@ -107,7 +106,7 @@ DataConstrNext : ';' DataConstrs { $2 }
 
 TyVars :: { [(Span, Id)] }
 TyVars : VAR TyVars { ((getPosToSpan $1),(symString $1)) : $2 }
-       | VAR        { [((getPosToSpan $1),(symString $1))] }
+       | {- empty -}{ [] }
 
 Pats :: { [Pattern] }
 Pats : Pat                         { [$1] }
@@ -333,7 +332,7 @@ parseDefs input = do
       where
         clashes = names \\ nub names
         names = map (\d -> case d of (Def _ name _ _ _) -> name
-                                     (ADT _ tyC _) -> _name (tyC :: TypeConstr))
+                                     (ADT _ (TypeConstr _ name) _ _) -> name)
                     (fst ds)
 
 myReadFloat :: String -> Rational

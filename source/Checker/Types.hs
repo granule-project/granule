@@ -103,7 +103,7 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) | n == m = do
 equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) = do
   checkerState <- get
 
-  case (lookup n (ckctxt checkerState), lookup m (ckctxt checkerState)) of
+  case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
     -- Two universally quantified variables are unequal
     (Just (_, ForallQ), Just (_, ForallQ)) ->

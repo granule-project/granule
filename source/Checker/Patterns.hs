@@ -1,5 +1,10 @@
 {-# LANGUAGE ImplicitParams #-}
+
 module Checker.Patterns where
+
+import Control.Monad.Trans.Maybe
+import Control.Monad.State.Strict
+import Data.Monoid ((<>))
 
 import Context
 import Syntax.Expr
@@ -9,11 +14,6 @@ import Checker.Predicates
 import Checker.Substitutions
 import Checker.Coeffects
 import Utils
-
-import Control.Monad.Trans.Maybe
-import Control.Monad.State.Strict
-
-import Debug.Trace
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -43,25 +43,6 @@ ctxtFromTypedPattern _ t@(TyCon "Int")   (PInt _ _) =
     return ([], [], [])
 ctxtFromTypedPattern _ t@(TyCon "Float") (PFloat _ _) =
     return ([], [], [])
--- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "True") =
---     return ([], [], [])
--- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
---     return ([], [], [])
-ctxtFromTypedPattern _ (TyCon typeC) (PConstr s dataC) = do
-  st <- get
-  case lookup dataC (dataConstructors st) of
-    Nothing -> unknownName s dataC
-    Just (Forall _ [] (TyCon t)) -> if t == typeC then return ([], [], [])
-                                          else illTyped s "Todo"
-
--- ctxtFromTypedPattern dbg s t (PApp p1 p2) = do
---    (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
---  case t1 of
---    FunTy arg res ->
---      subst <- unify res t
---      (binders2, tyvars2, subst2) <- check p2 arg
---      return (substitue subst (binders1 ++ binders2), tyvars1 ++ tyvars2 , subst1 ++ subst2)
---    _ ->
 
 -- Pattern match on a modal box
 ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
@@ -160,9 +141,29 @@ ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
   return $ (ctxtL ++ ctxtR, eVars1 ++ eVars2, substl ++ substr)
 
+-- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "True") =
+--     return ([], [], [])
+-- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
+--     return ([], [], [])
+ctxtFromTypedPattern _ (TyCon typeC) (PConstr s dataC) = do
+  st <- get
+  case lookup dataC (dataConstructors st) of
+    Nothing -> halt $ UnboundVariableError (Just s) $ "Data constructor ` " <> pretty dataC <> "`"
+    Just (Forall _ [] (TyCon t)) -> if t == typeC then return ([], [], [])
+                                          else unhandled -- TODO
+
+-- ctxtFromTypedPattern dbg s t (PApp p1 p2) = do
+--    (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
+--  case t1 of
+--    FunTy arg res ->
+--      subst <- unify res t
+--      (binders2, tyvars2, subst2) <- check p2 arg
+--      return (substitue subst (binders1 ++ binders2), tyvars1 ++ tyvars2 , subst1 ++ subst2)
+--    _ ->
+
 ctxtFromTypedPattern s t p =
   halt $ PatternTypingError (Just s)
-    $ "Pattern match " ++ pretty p ++ " does not have type " ++ pretty t
+    $ "Pattern match `" ++ pretty p ++ "` does not have type `" ++ pretty t ++ "`"
 
 -- | Given a list of patterns and a (possible nested) function type
 --   match the patterns against each argument, returning a binding context
