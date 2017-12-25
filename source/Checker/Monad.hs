@@ -16,7 +16,6 @@ import Checker.LaTeX
 import Checker.Predicates
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern)
-import Syntax.FirstParameter
 import Syntax.Pretty
 import Utils
 

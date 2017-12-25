@@ -8,7 +8,6 @@ import Syntax.Desugar
 import Context
 import Utils
 
-import Control.Monad (when)
 import System.IO (hFlush, stdout)
 
 evalBinOp :: String -> Value -> Value -> Value
@@ -48,7 +47,7 @@ evalIn ctxt (App _ (Val _ (Var "pure")) e) = do
   v <- evalIn ctxt e
   return $ Pure (Val nullSpan v)
 
-evalIn ctxt (App _ (Val _ (Var "toFloat")) (Val _ (NumInt n))) =
+evalIn _ctxt (App _ (Val _ (Var "toFloat")) (Val _ (NumInt n))) =
   return $ NumFloat (cast n)
   where
     cast :: Int -> Double

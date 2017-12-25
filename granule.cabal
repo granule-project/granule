@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: b8160747f1fc2525bff3fdebdf5478a0268d3d2cde34b37a35f8816e5a73e72b
+-- hash: 1f971df2140d2a176635e5365e53bc00aed2284ffdd3cfcaf6a851556a0bdb0e
 
 name:           granule
 version:        0.4.0.0
@@ -27,7 +27,7 @@ source-repository head
 library
   hs-source-dirs:
       source
-  ghc-options: -Wall -fno-warn-name-shadowing
+  ghc-options: -O0 -W -Werror -Wno-unused-matches
   build-depends:
       array
     , base >=4.10 && <5
@@ -67,6 +67,7 @@ executable gr
   main-is: Main.hs
   hs-source-dirs:
       command-line-interface
+  ghc-options: -O0 -W -Werror -Wno-unused-matches
   build-depends:
       Glob
     , base >=4.10 && <5

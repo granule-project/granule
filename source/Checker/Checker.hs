@@ -6,8 +6,12 @@
 
 module Checker.Checker where
 
-import Syntax.Expr
-import Syntax.Pretty
+import Control.Monad.Reader.Class
+import Control.Monad.State.Strict
+import Control.Monad.Trans.Maybe
+import Data.Maybe
+import Data.SBV hiding (kindOf)
+
 import Checker.Coeffects
 import Checker.Constraints
 import Checker.Kinds
@@ -15,19 +19,13 @@ import Checker.Monad
 import Checker.Patterns
 import Checker.Predicates
 import Checker.Primitives
-import Checker.Types
 import Checker.Substitutions
+import Checker.Types
 import Context
+import Syntax.Expr
+import Syntax.Pretty
 import Utils
 
-import Prelude hiding (pred, print)
-
-import Data.List
-import Data.Maybe
-import Control.Monad.State.Strict
-import Control.Monad.Reader.Class
-import Control.Monad.Trans.Maybe
-import Data.SBV hiding (kindOf)
 
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
@@ -719,6 +717,8 @@ freshPolymorphicInstance (Forall s kinds ty) = do
                KConstr c -> freshCoeffectVar var (CConstr c)
                KCoeffect ->
                  error "Coeffect kind variables not yet supported"
+               KFun _ _ -> unhandled
+               KPoly _ -> unhandled
       -- Return pair of old variable name and instantiated name (for
       -- name map)
       return (var, var')

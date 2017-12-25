@@ -13,7 +13,13 @@ dependencies:
 
 library:
   source-dirs: source
-  ghc-options: -Wall -fno-warn-name-shadowing
+  ghc-options: -O0 -W -Werror -Wno-unused-matches
+  # when:
+  # - condition: flag(dev)
+  #   then:
+  #     ghc-options: -O0 -W -Werror -Wno-unused-matches
+  #   else:
+  #     ghc-options: -O3 -w
   build-tools:
   - alex
   - happy
@@ -48,10 +54,16 @@ executables:
   gr:
     main: Main.hs
     source-dirs: command-line-interface
+    ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:
     - Glob
     - granule
     - optparse-applicative
+
+# flags:
+#   dev:
+#     default: True
+#     manual: True
 
 tests:
   spec:

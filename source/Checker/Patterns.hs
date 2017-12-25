@@ -73,6 +73,7 @@ ctxtFromTypedPattern s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil") =
       TyInt m -> do
         addConstraint $ Eq s (CNat Discrete m) (CNat Discrete 0) kind
         return ([], [], [])
+      _ -> unhandled
 
 -- Match a Cons constructor
 ctxtFromTypedPattern s
@@ -95,6 +96,7 @@ ctxtFromTypedPattern s
       TyInt m -> do
          addConstraint $ Eq s (CNat Discrete m) sizeVarInc kind
          return []
+      _ -> unhandled
 
     -- Join the two pattern contexts together
     return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, subst)
@@ -129,6 +131,7 @@ ctxtFromTypedPattern s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = do
       TyInt m -> do
          addConstraint $ Eq s (CNat Discrete m) sizeVarInc kind
          return []
+      _ -> unhandled
 
     -- Join the two pattern contexts together
     return (bs2, sizeVar : eVars2, subst)

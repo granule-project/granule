@@ -64,7 +64,7 @@ substAssumption subst (v, Discharged t c) = do
         _ -> return $ Nothing
     -- mapM combined with the filtering behaviour of mapMaybe
     mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
-    mapMaybeM f [] = return []
+    mapMaybeM _ [] = return []
     mapMaybeM f (x:xs) = do
       y <- f x
       ys <- mapMaybeM f xs

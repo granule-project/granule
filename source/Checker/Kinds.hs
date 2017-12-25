@@ -17,7 +17,6 @@ import Syntax.Expr
 import Context
 import Utils
 
-import Data.List (isPrefixOf)
 
 -- Currently we expect that a type scheme has kind KType
 kindCheck :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
@@ -63,14 +62,14 @@ inferKindOfType' s quantifiedVariables =
     kInt _ = return $ KConstr "Nat="
 
     kInfix op k1 k2 =
-       case lookup op typeLevelConstructors of
-         Just (KFun k1' (KFun k2' kr)) ->
-           if k1 `hasLub` k1'
-            then if k2 `hasLub` k2'
-                 then return kr
-                 else illKindedNEq s k2' k2
-            else illKindedNEq s k1' k1
-         Nothing   -> halt $ UnboundVariableError (Just s) (op ++ " operator.")
+      case lookup op typeLevelConstructors of
+        Just (KFun k1' (KFun k2' kr)) ->
+          if k1 `hasLub` k1'
+            then if k2 `hasLub` k2' then return kr
+            else illKindedNEq s k2' k2
+          else illKindedNEq s k1' k1
+        Just _ -> unhandled
+        Nothing   -> halt $ UnboundVariableError (Just s) (op ++ " operator.")
 
 joinKind :: Kind -> Kind -> Maybe Kind
 joinKind k1 k2 | k1 == k2 = Just k1

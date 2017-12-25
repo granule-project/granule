@@ -5,19 +5,16 @@
 
 module Checker.Types where
 
-import Syntax.Expr
-import Syntax.Pretty
 import Context
-import Data.List
-import Data.Functor.Identity
-
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
+import Data.List
+import Syntax.Expr
+import Syntax.Pretty
 
 import Checker.Coeffects
-import Checker.Constraints
-import Checker.Monad
 import Checker.Kinds
+import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
 import Utils
@@ -181,7 +178,8 @@ equalTypesRelatedCoeffects s rel (TyVar n) t = do
       ut <- unrenameType t
       halt $ GenericError (Just s) $ "Trying to unify a polymorphic type '" ++ n
         ++ "' with monomorphic " ++ pretty ut
-
+    (Just (_, InstanceQ)) -> unhandled
+    (Just (_, BoundQ)) -> unhandled 
     Nothing -> halt $ UnboundVariableError (Just s) n
 
 equalTypesRelatedCoeffects s rel t (TyVar n) =

@@ -1,19 +1,14 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Utils
--- (
---   Globals, defaultGlobals
--- )
-where
+module Utils where
 
 import Control.Monad (when)
 import Data.Semigroup ((<>))
 import Debug.Trace (trace, traceM)
 import System.IO (hPutStrLn, stderr)
 
-import Syntax.Expr (Span, Pos, getSpan)
-import Syntax.FirstParameter
+import Syntax.Expr (Span)
 
 data Globals =
   Globals {
@@ -53,6 +48,10 @@ debug x message =
     if debugging ?globals
       then ((bold $ magenta $ "Debug: ") <> message <> "\n") `trace` x
       else x
+
+-- | Use sparingly
+unhandled :: error
+unhandled = error "Please open an issue at https://github.com/dorchard/granule/issues"
 
 printErr :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
 printErr err = when (not $ suppressErrors ?globals) $ hPutStrLn stderr $

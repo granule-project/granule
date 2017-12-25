@@ -8,7 +8,6 @@ module Syntax.Lexer (Token(..),scanTokens,getPos,
                      getPosToSpan,symString,constrString) where
 import Syntax.Expr
 import Syntax.FirstParameter
-import Debug.Trace
 import GHC.Generics (Generic)
 
 }
