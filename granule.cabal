@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1f971df2140d2a176635e5365e53bc00aed2284ffdd3cfcaf6a851556a0bdb0e
+-- hash: 71135a76dae051650da7501941c58b3fba9ca949b1dc15a69ac63a9ed23d18bd
 
 name:           granule
 version:        0.4.0.0
@@ -34,6 +34,7 @@ library
     , containers
     , mtl >=2.2.1
     , sbv >=7.3
+    , time
     , transformers >=0.5
   build-tools:
       alex

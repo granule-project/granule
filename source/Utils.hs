@@ -1,12 +1,17 @@
-{-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Utils where
 
+import Control.Exception (SomeException, catch, try)
 import Control.Monad (when)
 import Data.Semigroup ((<>))
+import Data.Time.Clock (getCurrentTime)
+import Data.Time.LocalTime (getTimeZone, utc, utcToLocalTime)
 import Debug.Trace (trace, traceM)
 import System.IO (hPutStrLn, stderr)
+import System.IO.Unsafe (unsafePerformIO)
 
 import Syntax.Expr (Span)
 
@@ -17,7 +22,8 @@ data Globals =
     noColors :: Bool,
     noEval :: Bool,
     suppressInfos :: Bool,
-    suppressErrors :: Bool
+    suppressErrors :: Bool,
+    timestamp :: Bool
   } deriving Show
 
 defaultGlobals :: Globals
@@ -28,7 +34,8 @@ defaultGlobals =
       noColors = False,
       noEval = False,
       suppressInfos = False,
-      suppressErrors = False
+      suppressErrors = False,
+      timestamp = False
     }
 
 class UserMsg a where
@@ -36,28 +43,42 @@ class UserMsg a where
   location :: a -> Maybe Span
   msg :: a -> String -- short for `message`, not `monosodium glutamate`
 
+  location _ = Nothing
+
 debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM explanation message =
     when (debugging ?globals) $ traceM $
-      (bold $ cyan $ "Debug: " <> explanation <> " \n") <> message <> "\n"
+      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
 -- | Print to terminal when debugging e.g.:
 -- foo x y = x + y `debug` "foo" $ "given " <> show x <> " and " <> show y
 debug :: (?globals :: Globals) => a -> String -> a
 debug x message =
     if debugging ?globals
-      then ((bold $ magenta $ "Debug: ") <> message <> "\n") `trace` x
+      then ((unsafePerformIO getTimeString) <> (bold $ magenta $ "Debug: ") <> message <> "\n")
+           `trace` x
       else x
+
+-- | Append a debug message to a string, which will only get printed when debugging
+(<?>) :: (?globals :: Globals, Show a) => String -> a -> String
+infixr 6 <?>
+str <?> a =
+    if debugging ?globals
+      then str <> (bold $ magenta $ " Debug { ") <> show a <> (bold $ magenta $ " }")
+      else str
 
 -- | Use sparingly
 unhandled :: error
 unhandled = error "Please open an issue at https://github.com/dorchard/granule/issues"
 
 printErr :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
-printErr err = when (not $ suppressErrors ?globals) $ hPutStrLn stderr $
-    (bold $ red $ title err <> ": ")
-    <> sourceFilePath ?globals <> lineCol <> ":\n"
-    <> indent (msg err)
+printErr err = when (not $ suppressErrors ?globals) $ do
+    time <- getTimeString
+    hPutStrLn stderr $
+      time
+      <> (bold $ red $ title err <> ": ")
+      <> sourceFilePath ?globals <> lineCol <> ":\n"
+      <> indent (msg err)
   where
     lineCol =
         case location err of
@@ -65,7 +86,10 @@ printErr err = when (not $ suppressErrors ?globals) $ hPutStrLn stderr $
           Just ((line,col),_) -> ":" <> show line <> ":" <> show col
 
 printInfo :: (?globals :: Globals) => String -> IO ()
-printInfo message =  when (not $ suppressInfos ?globals) $ putStrLn $ message
+printInfo message =
+    when (not $ suppressInfos ?globals) $ do
+      time <- getTimeString
+      putStrLn $ time <> message
 
 -- backgColor colorCode = txtColor (colorCode + 10)
 bold :: (?globals :: Globals) => String -> String
@@ -91,3 +115,22 @@ txtColor colorCode message =
 
 indent :: String -> String
 indent message = "  " <> message
+
+getTimeString :: (?globals :: Globals) => IO String
+getTimeString =
+    if timestamp ?globals == False then return ""
+    else do
+      time <- try getCurrentTime
+      case time of
+        Right time -> do
+          timeZone <-
+            catch
+              (getTimeZone time) $
+              \(e :: SomeException) -> do
+                debugM "getTimeZone failed" (show e)
+                return utc
+          let localTime = utcToLocalTime timeZone time
+          return $ show localTime <> ": "
+        Left (e :: SomeException) -> do
+          debugM "getCurrentTime failed" (show e)
+          return ""

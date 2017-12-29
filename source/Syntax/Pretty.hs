@@ -84,7 +84,7 @@ instance Pretty Type where
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
 
 instance {-# OVERLAPS #-} Pretty [Def] where
-    pretty = intercalate "\n" . map pretty
+    pretty = intercalate "\n\n" . map pretty
 
 instance Pretty Def where
     pretty (Def _ v e ps t) = v ++ " : " ++ pretty t ++ "\n"

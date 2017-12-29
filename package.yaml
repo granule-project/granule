@@ -48,6 +48,7 @@ library:
   - containers
   - mtl >=2.2.1
   - sbv >=7.3
+  - time
   - transformers >=0.5
 
 executables:

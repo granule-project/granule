@@ -34,21 +34,21 @@ import Utils
 main :: IO ()
 main = do
   (globPatterns,globals) <- customExecParser (prefs disambiguate) parseArgs
-  if null globPatterns then do
-    let ?globals = globals { sourceFilePath = "stdin" }
-    printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
-      >> debugM "Globals" (show globals)
-    exitWith =<< run =<< getContents
-  else do
-    let ?globals = globals
-    debugM "Globals" (show globals)
-    results <- forM globPatterns $ \p -> do
-      filePaths <- glob p
-      forM filePaths $ \p -> do
-        let ?globals = globals { sourceFilePath = p }
-        printInfo $ "\nChecking " <> p <> "..."
-        run =<< readFile p
-    if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
+  let ?globals = globals in do
+    if null globPatterns then do
+      let ?globals = globals { sourceFilePath = "stdin" } in do
+        printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
+        debugM "Globals" (show globals)
+        exitWith =<< run =<< getContents
+    else do
+      debugM "Globals" (show globals)
+      results <- forM globPatterns $ \p -> do
+        filePaths <- glob p
+        forM filePaths $ \p -> do
+          let ?globals = globals { sourceFilePath = p }
+          printInfo $ "\nChecking " <> p <> "..."
+          run =<< readFile p
+      if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
 
 {-| Run the input through the type checker and evaluate.
@@ -58,22 +58,22 @@ run input = do
   result <- try $ parseDefs input
   case result of
     Left (e :: SomeException) -> do
-      printInfo $ "Error during parsing: " <> show e
-      return (ExitFailure 3)
+      printErr $ ParseError $ show e
+      return (ExitFailure 1)
 
     Right (ast, nameMap) -> do
       -- Print to terminal when in debugging mode:
       debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
-      debugM "Pretty-printed AST:" $ show (intercalate "\n\n" $ map pretty ast)
+      debugM "Pretty-printed AST:" $ pretty ast
       debugM "Name map" $ show nameMap
       -- Check and evaluate
       checked <- try $ check ast nameMap
       case checked of
         Left (e :: SomeException) -> do
-          printInfo $ "Error during type checking: " <> show e
-          return (ExitFailure 2)
+          printErr $ CheckerError $ show e
+          return (ExitFailure 1)
         Right Failed -> do
-          printInfo "Failed"
+          printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
         Right Ok -> do
           if noEval ?globals then do
@@ -84,8 +84,8 @@ run input = do
             result <- try $ eval ast
             case result of
               Left (e :: SomeException) -> do
-                printInfo $ "Error during evaluation: " <> show e
-                return (ExitFailure 4)
+                printErr $ EvalError $ show e
+                return (ExitFailure 1)
               Right Nothing -> do
                 printInfo "(No output)"
                 return ExitSuccess
@@ -109,4 +109,19 @@ parseArgs = info (go <**> helper) $ fullDesc <> header ("Granule " <> showVersio
           switch $ long "no-colors" <> short 'c' <> help "Turn off (c)olors in terminal output"
         noEval <-
           switch $ long "no-eval" <> short 't' <> help "Don't evaluate, only (t)ype-check"
-        pure (files, defaultGlobals { debugging, noColors, noEval, suppressInfos, suppressErrors })
+        timestamp <-
+          switch $ long "timestamp" <> help "Print timestamp in info and error messages"
+        pure (files, defaultGlobals { debugging, noColors, noEval, suppressInfos, suppressErrors, timestamp })
+
+data RuntimeError
+  = ParseError String
+  | CheckerError String
+  | EvalError String
+
+instance UserMsg RuntimeError where
+  title ParseError {} = "Error during parsing"
+  title CheckerError {} = "Error during type checking"
+  title EvalError {} = "Error during evaluation"
+  msg (ParseError m) = m
+  msg (CheckerError m) = m
+  msg (EvalError m) = m
