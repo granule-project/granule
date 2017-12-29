@@ -125,7 +125,7 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
 checkADT :: (?globals :: Globals ) => Def -> Checker (Maybe (Ctxt Assumption))
 checkADT (ADT _ (TypeConstr _ tName) tyVars dataCs) = do
     let typeC = (tName, mkKind tyVars)
-    traceM "WARNING: checkADT: data constructors not yet checked"
+    traceM $ red "WARNING: Checker.checkADT: data constructors not yet kind-checked"
     let dataCs' = map (\(DataConstr _ name (Forall s _ t)) -> (name, Forall s (mkBinders t) t)) dataCs
     runMaybeT $ modify (\st -> st { dataConstructors = dataCs' ++ dataConstructors st
                                   , typeConstructors = typeC : typeConstructors st })
@@ -360,7 +360,11 @@ synthExpr _ _ _ (Val s (Constr name [])) = do
   st <- get
   case lookup name (dataConstructors st) of
     Just (Forall _ [] t) -> return (t, [])
-    _ -> halt $ UnboundVariableError (Just s) $ "Data constructor " ++ name
+    Just (Forall _ _ t) -> do
+      traceM $ red "WARNING: Checker.synthExpr incomplete"
+      return (t, [])
+    _ -> halt $ UnboundVariableError (Just s) $
+                "Data constructor `" ++ name ++ "`" <?> dataConstructors st
 
 -- Case
 synthExpr defs gam pol (Case s guardExpr cases) = do

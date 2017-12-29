@@ -4,7 +4,6 @@ module Checker.Patterns where
 
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
-import Data.Monoid ((<>))
 
 import Context
 import Syntax.Expr
@@ -145,12 +144,17 @@ ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
 --     return ([], [], [])
 -- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
 --     return ([], [], [])
-ctxtFromTypedPattern _ (TyCon typeC) (PConstr s dataC) = do
+ctxtFromTypedPattern _ ty (PConstr s dataC) = do
   st <- get
   case lookup dataC (dataConstructors st) of
-    Nothing -> halt $ UnboundVariableError (Just s) $ "Data constructor ` " <> pretty dataC <> "`"
-    Just (Forall _ [] (TyCon t)) -> if t == typeC then return ([], [], [])
-                                          else unhandled -- TODO
+    Nothing ->
+      halt $ UnboundVariableError (Just s) $
+             "Data constructor ` " ++ pretty dataC ++ "`" <?> (dataConstructors st)
+
+    Just (Forall _ _ t) ->
+      if t == ty then return ([], [], []) -- THIS IS OBVIOUSLY WRONG!
+      else halt $ PatternTypingError (Just s) $
+                  "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
 
 -- ctxtFromTypedPattern dbg s t (PApp p1 p2) = do
 --    (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
@@ -161,7 +165,10 @@ ctxtFromTypedPattern _ (TyCon typeC) (PConstr s dataC) = do
 --      return (substitue subst (binders1 ++ binders2), tyvars1 ++ tyvars2 , subst1 ++ subst2)
 --    _ ->
 
-ctxtFromTypedPattern s t p =
+ctxtFromTypedPattern s t p = do
+  st <- get
+  debugM "ctxtFromTypedPattern" $ "Type: " ++ show t ++ "\nPat: " ++ show p
+  debugM "dataConstructors in checker state" $ show $ dataConstructors st
   halt $ PatternTypingError (Just s)
     $ "Pattern match `" ++ pretty p ++ "` does not have type `" ++ pretty t ++ "`"
 

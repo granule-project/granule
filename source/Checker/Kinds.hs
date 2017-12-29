@@ -30,7 +30,7 @@ kindCheck (ADT s typeC tyVars dataCs) =
   case tyVars of
     [] -> return () -- nullary typeC is trivially well-kinded
     _  -> do
-      traceM "ERROR: Kinds.kindCheck: not implemented."
+      traceM $ red "WARNING: Kinds.kindCheck: not implemented."
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
