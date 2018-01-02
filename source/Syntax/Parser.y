@@ -113,7 +113,6 @@ PAtom : VAR                        { PVar (getPosToSpan $1) (mkId $ symString $1
     | CONSTR                       { let TokenConstr _ x = $1
 	                             in PConstr (getPosToSpan $1) x }
     | '(' PJuxt ')'                  { $2 }
-    | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
 TypeScheme :: { TypeScheme }
 TypeScheme :
