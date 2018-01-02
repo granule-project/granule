@@ -7,19 +7,15 @@
 module Checker.Constraints where
 
 import Data.Foldable (foldrM)
+import Data.List (isPrefixOf)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
-import Data.List (isPrefixOf, intercalate)
-
-import Context             (Ctxt)
-import Syntax.Expr
-import Syntax.Pretty
 
 import Checker.Predicates
-import Checker.Coeffects
-import Checker.Substitutions
-
-import Debug.Trace
+import Context (Ctxt)
+import Syntax.Expr
+import Syntax.Pretty
+import Utils
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
@@ -80,11 +76,11 @@ compileToSBV predicate tyVarContext kVarContext =
       return $ compile solverVars cons
 
     -- Perform a substitution on a predicate tree
-    substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
-    substConstraint rmap (Eq s' c1 c2 k) =
-        Eq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
-    substConstraint rmap (Leq s' c1 c2 k) =
-        Leq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
+    -- substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
+    -- substConstraint rmap (Eq s' c1 c2 k) =
+    --     Eq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
+    -- substConstraint rmap (Leq s' c1 c2 k) =
+    --     Leq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
@@ -104,6 +100,7 @@ compileToSBV predicate tyVarContext kVarContext =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
+              BoundQ -> unhandled
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- given an context mapping coeffect type variables to coeffect typ,

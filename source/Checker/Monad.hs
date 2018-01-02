@@ -3,6 +3,7 @@
 
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ImplicitParams #-}
 
 module Checker.Monad where
 
@@ -10,13 +11,13 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import qualified Control.Monad.Trans.Reader as MR
 import Control.Monad.Reader.Class
-import System.IO (hPutStrLn, stderr)
 
 import Checker.LaTeX
 import Checker.Predicates
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern)
 import Syntax.Pretty
+import Utils
 
 import Data.List (intercalate)
 
@@ -155,74 +156,77 @@ freshVar s = do
   return cvar
 
 {- Helpers for error messages and checker control flow -}
+data TypeError
+  = CheckerError (Maybe Span) String
+  | GenericError (Maybe Span) String
+  | GradingError (Maybe Span) String
+  | KindError (Maybe Span) String
+  | LinearityError (Maybe Span) String
+  | PatternTypingError (Maybe Span) String
+  | UnboundVariableError (Maybe Span) String
 
-unusedVariable :: String -> String
-unusedVariable var = "Linear variable `" ++ var ++ "` is never used."
+instance UserMsg TypeError where
+  title CheckerError {} = "Checker error"
+  title GenericError {} = "Type error"
+  title GradingError {} = "Grading error"
+  title KindError {} = "Kind error"
+  title LinearityError {} = "Linearity error"
+  title PatternTypingError {} = "Pattern typing error"
+  title UnboundVariableError {} = "Unbound variable error"
+  location (CheckerError sp _) = sp
+  location (GenericError sp _) = sp
+  location (GradingError sp _) = sp
+  location (KindError sp _) = sp
+  location (LinearityError sp _) = sp
+  location (PatternTypingError sp _) = sp
+  location (UnboundVariableError sp _) = sp
+  msg (CheckerError _ m) = m
+  msg (GenericError _ m) = m
+  msg (GradingError _ m) = m
+  msg (KindError _ m) = m
+  msg (LinearityError _ m) = m
+  msg (PatternTypingError _ m) = m
+  msg (UnboundVariableError _ m) = m
 
--- | Stops the checker
-halt :: MaybeT Checker a
-halt = MaybeT (return Nothing)
+illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
+illKindedUnifyVar sp t1 k1 t2 k2 =
+    halt $ KindError (Just sp) $
+      "Trying to unify a type `"
+      ++ pretty t1 ++ "` of kind " ++ pretty k1
+      ++ " with a type `"
+      ++ pretty t2 ++ "` of kind " ++ pretty k2
 
--- | A helper for raising a type error
-illTyped :: Span -> String -> MaybeT Checker a
-illTyped = visibleError "Type" halt
-
-illKindedUnifyVar :: Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
-illKindedUnifyVar s t1 k1 t2 k2 =
-  visibleError "Kind" halt s
-    $ "Trying to unify a type '"
-    ++ pretty t1 ++ "' of kind " ++ pretty k1
-    ++ " with a type '"
-    ++ pretty t2 ++ "' of kind " ++ pretty k2
-
-illKindedNEq :: Span -> Kind -> Kind -> MaybeT Checker a
-illKindedNEq s k1 k2 =
-  visibleError "Kind" halt s
-    $ "Expected kind '" ++ pretty k1 ++ "' but got '" ++ pretty k2 ++ "'"
-
--- | A helper for raising a linearity error
-illLinearity :: Span -> String -> MaybeT Checker a
-illLinearity = visibleError "Linearity" halt
+illKindedNEq :: (?globals :: Globals) => Span -> Kind -> Kind -> MaybeT Checker a
+illKindedNEq sp k1 k2 =
+    halt $ KindError (Just sp) $
+      "Expected kind `" ++ pretty k1 ++ "` but got `" ++ pretty k2 ++ "`"
 
 data LinearityMismatch =
    LinearNotUsed Id
  | LinearUsedNonLinearly Id
    deriving Show -- for debugging
 
-illLinearityMismatch :: Span -> [(Id, Id)] -> [LinearityMismatch] -> MaybeT Checker a
-illLinearityMismatch s nameMap mismatches =
-  illLinearity s (intercalate "\n\t" $ map mkMsg mismatches)
+illLinearityMismatch :: (?globals :: Globals) => Span -> [(Id, Id)] -> [LinearityMismatch] -> MaybeT Checker a
+illLinearityMismatch sp nameMap mismatches =
+  halt $ LinearityError (Just sp) $ intercalate "\n  " $ map mkMsg mismatches
   where
-    mkMsg (LinearNotUsed v) = unusedVariable $ unrename nameMap v
+    mkMsg (LinearNotUsed v) =
+      "Linear variable `" ++ unrename nameMap v ++ "` is never used."
     mkMsg (LinearUsedNonLinearly v) =
-      "Variable '" ++ unrename nameMap v ++ "' is promoted but its binding is linear; its binding should be under a box."
+      "Variable `" ++ unrename nameMap v ++ "` is promoted but its binding is linear; its binding should be under a box."
 
--- | A helper for raising a grading error
-illGraded :: Span -> String -> MaybeT Checker ()
-illGraded = visibleError "Grading" (return ())
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
-illTypedPattern :: Span -> Type -> Pattern -> MaybeT Checker a
-illTypedPattern s ty pat =
-  visibleError "Pattern typing" halt s
-    (pretty pat ++ " does not have type " ++ pretty ty)
+illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern -> MaybeT Checker a
+illTypedPattern sp ty pat =
+    halt $ PatternTypingError (Just sp) $
+      pretty pat ++ " does not have expected type " ++ pretty ty
 
--- | Errors when a name is used but can't be found
-unknownName :: Span -> String -> MaybeT Checker a
-unknownName = visibleError "Unbound variable" halt
 
 -- | Helper for constructing error handlers
-visibleError :: String -> MaybeT Checker a -> Span -> String -> MaybeT Checker a
-visibleError kind next ((0, 0), (0, 0)) s =
-  liftIO (hPutStrLn stderr $ kind ++ " error: " ++ s) >> next
+halt :: (?globals :: Globals) => TypeError -> MaybeT Checker a
+halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 
-visibleError kind next ((sl, sc), (_, _)) s =
-  liftIO (hPutStrLn stderr $ show sl ++ ":" ++ show sc ++ ": " ++ kind ++ " error:\n\t"
-                   ++ s) >> next
-
--- | Helper for displaying debugging messages for '-d' mode
-dbgMsg :: Bool -> String -> MaybeT Checker ()
-dbgMsg dbg = when dbg . liftIO . putStrLn
 
 -- Various interfaces for the checker
 

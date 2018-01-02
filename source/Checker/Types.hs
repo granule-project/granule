@@ -1,32 +1,31 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE ImplicitParams #-}
 
 module Checker.Types where
 
-import Syntax.Expr
-import Syntax.Pretty
 import Context
-import Data.List
-import Data.Functor.Identity
-
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
+import Data.List
+import Syntax.Expr
+import Syntax.Pretty
 
 import Checker.Coeffects
-import Checker.Constraints
-import Checker.Monad
 import Checker.Kinds
+import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
+import Utils
 
-lEqualTypes ::
-    Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
-lEqualTypes dbg s = equalTypesRelatedCoeffectsAndUnify dbg s Leq
+lEqualTypes :: (?globals :: Globals )
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s Leq
 
-equalTypes ::
-    Bool -> Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
-equalTypes dbg s = equalTypesRelatedCoeffectsAndUnify dbg s Eq
+equalTypes :: (?globals :: Globals )
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq
 
 type Unifier = [(Id, Type)]
 
@@ -38,14 +37,13 @@ type Unifier = [(Id, Type)]
      e.g., the first argument is inferred, the second is a specification
      being checked against
 -}
-equalTypesRelatedCoeffectsAndUnify ::
-      Bool
-   -> Span
-   -- Explain how coeffects should be related by a solver constraint
-   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
-   -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
-equalTypesRelatedCoeffectsAndUnify dbg s rel t1 t2 = do
-   (eq, unif) <- equalTypesRelatedCoeffects dbg s rel t1 t2
+equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
+  => Span
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+  -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+equalTypesRelatedCoeffectsAndUnify s rel t1 t2 = do
+   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2
    if eq
      then return (eq, substType unif t1, unif)
      else return (eq, t1, [])
@@ -56,55 +54,53 @@ equalTypesRelatedCoeffectsAndUnify dbg s rel t1 t2 = do
      The first argument is taken to be possibly approximated by the second
      e.g., the first argument is inferred, the second is a specification
      being checked against -}
-equalTypesRelatedCoeffects ::
-      Bool
-   -> Span
-   -- Explain how coeffects should be related by a solver constraint
-   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
-   -> Type -> Type -> MaybeT Checker (Bool, Unifier)
-equalTypesRelatedCoeffects dbg s rel (FunTy t1 t2) (FunTy t1' t2') = do
+equalTypesRelatedCoeffects :: (?globals :: Globals )
+  => Span
+  -- Explain how coeffects should be related by a solver constraint
+  -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+  -> Type -> Type -> MaybeT Checker (Bool, Unifier)
+equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects dbg s Leq t1' t1
+  (eq1, u1) <- equalTypesRelatedCoeffects s Leq t1' t1
    -- covariant position (depends is not always over approximated)
-  (eq2, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
+  (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2'
   return (eq1 && eq2, u1 ++ u2)
 
-equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') =
+equalTypesRelatedCoeffects _ _ (TyCon con) (TyCon con') =
   return (con == con', [])
 
-equalTypesRelatedCoeffects dbg s rel (Diamond ef t) (Diamond ef' t') = do
-  (eq, unif) <- equalTypesRelatedCoeffects dbg s rel t t'
+equalTypesRelatedCoeffects s rel (Diamond ef t) (Diamond ef' t') = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t t'
   if ef == ef'
     then return (eq, unif)
     else
       -- Effect approximation
       if (ef `isPrefixOf` ef')
       then return (eq, unif)
-      else do
-        illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
-        halt
+      else halt $ GradingError (Just s) $
+        "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
 
-equalTypesRelatedCoeffects dbg s rel (Box c t) (Box c' t') = do
+equalTypesRelatedCoeffects s rel (Box c t) (Box c' t') = do
   -- Debugging
-  dbgMsg dbg $ pretty c ++ " == " ++ pretty c'
-  dbgMsg dbg $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
+  debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c ++ " == " ++ pretty c'
+  debugM "equalTypesRelatedCoeffects (show)" $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectTypes s c c'
   addConstraint (rel s c c' kind)
-  equalTypesRelatedCoeffects dbg s rel t t'
+  equalTypesRelatedCoeffects s rel t t'
 
-equalTypesRelatedCoeffects dbg s rel (TyApp t1 t2) (TyApp t1' t2') = do
-  (one, u1) <- equalTypesRelatedCoeffects dbg s rel t1 t1'
-  (two, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
+equalTypesRelatedCoeffects s rel (TyApp t1 t2) (TyApp t1' t2') = do
+  (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1'
+  (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2'
   return (one && two, u1 ++ u2)
 
-equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) | n == m = do
+equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
-    Nothing -> unknownName s ("Type variable " ++ n ++ " is unbound.")
+    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ n)
 
-equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
+equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) = do
   checkerState <- get
 
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
@@ -155,12 +151,12 @@ equalTypesRelatedCoeffects _ s _ (TyVar n) (TyVar m) = do
         Nothing ->
           return (False, [])
 
-equalTypesRelatedCoeffects dbg s rel (PairTy t1 t2) (PairTy t1' t2') = do
-  (lefts, u1)  <- equalTypesRelatedCoeffects dbg s rel t1 t1'
-  (rights, u2) <- equalTypesRelatedCoeffects dbg s rel t2 t2'
+equalTypesRelatedCoeffects s rel (PairTy t1 t2) (PairTy t1' t2') = do
+  (lefts, u1)  <- equalTypesRelatedCoeffects s rel t1 t1'
+  (rights, u2) <- equalTypesRelatedCoeffects s rel t2 t2'
   return (lefts && rights, u1 ++ u2)
 
-equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
+equalTypesRelatedCoeffects s rel (TyVar n) t = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
@@ -180,15 +176,16 @@ equalTypesRelatedCoeffects dbg s rel (TyVar n) t = do
     -- But we can't unify an universal with a concrete type
     (Just (k1, ForallQ)) -> do
       ut <- unrenameType t
-      illTyped s $ "Trying to unify a polymorphic type '" ++ n
-       ++ "' with monomorphic " ++ pretty ut
+      halt $ GenericError (Just s) $ "Trying to unify a polymorphic type '" ++ n
+        ++ "' with monomorphic " ++ pretty ut
+    (Just (_, InstanceQ)) -> unhandled
+    (Just (_, BoundQ)) -> unhandled 
+    Nothing -> halt $ UnboundVariableError (Just s) n
 
-    Nothing -> unknownName s n
+equalTypesRelatedCoeffects s rel t (TyVar n) =
+  equalTypesRelatedCoeffects s rel (TyVar n) t
 
-equalTypesRelatedCoeffects dbg s rel t (TyVar n) =
-  equalTypesRelatedCoeffects dbg s rel (TyVar n) t
-
-equalTypesRelatedCoeffects _ s _ t1 t2 = do
+equalTypesRelatedCoeffects s _ t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
   case (k1, k2) of
@@ -200,51 +197,50 @@ equalTypesRelatedCoeffects _ s _ t1 t2 = do
     (KType, KType) -> do
         ut1 <- unrenameType t1
         ut2 <- unrenameType t2
-        illTyped s $ pretty ut1 ++ " is not equal to " ++ pretty ut2
+        halt $ KindError (Just s) $ pretty ut1 ++ " is not equal to " ++ pretty ut2
 
     _ -> do
        ut1 <- unrenameType t1
        ut2 <- unrenameType t2
-       illTyped s $ "Equality is not defined between kinds "
+       halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2
                  ++ "\t\n from equality "
                  ++ "'" ++ pretty ut2 ++ "' and '" ++ pretty ut1 ++ "' equal."
 
 
 -- Essentially equality on types but join on any coeffects
-joinTypes :: Bool -> Span -> Type -> Type -> MaybeT Checker Type
-joinTypes dbg s (FunTy t1 t2) (FunTy t1' t2') = do
-  t1j <- joinTypes dbg s t1' t1 -- contravariance
-  t2j <- joinTypes dbg s t2 t2'
+joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type
+joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
+  t1j <- joinTypes s t1' t1 -- contravariance
+  t2j <- joinTypes s t2 t2'
   return (FunTy t1j t2j)
 
-joinTypes _ _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
+joinTypes _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
-joinTypes dbg s (Diamond ef t) (Diamond ef' t') = do
-  tj <- joinTypes dbg s t t'
+joinTypes s (Diamond ef t) (Diamond ef' t') = do
+  tj <- joinTypes s t t'
   if ef `isPrefixOf` ef'
     then return (Diamond ef' tj)
     else
       if ef' `isPrefixOf` ef
       then return (Diamond ef tj)
-      else do
-        illGraded s $ "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
-        halt
+      else halt $ GradingError (Just s) $
+        "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
 
-joinTypes dbg s (Box c t) (Box c' t') = do
+joinTypes s (Box c t) (Box c' t') = do
   kind <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
   topVar <- freshCoeffectVar "" kind
   -- Unify the two coeffects into one
   addConstraint (Leq s c  (CVar topVar) kind)
   addConstraint (Leq s c' (CVar topVar) kind)
-  tu <- joinTypes dbg s t t'
+  tu <- joinTypes s t t'
   return $ Box (CVar topVar) tu
 
 
-joinTypes _ _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
+joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
-joinTypes _ s (TyInt n) (TyVar m) = do
+joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
   let kind = CConstr "Nat="
   var <- freshCoeffectVar m kind
@@ -252,9 +248,9 @@ joinTypes _ s (TyInt n) (TyVar m) = do
   addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
   return $ TyInt n
 
-joinTypes dbg s (TyVar n) (TyInt m) = joinTypes dbg s (TyInt m) (TyVar n)
+joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
-joinTypes _ s (TyVar n) (TyVar m) = do
+joinTypes s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
   let kind = CConstr "Nat="
   nvar <- freshCoeffectVar n kind
@@ -263,14 +259,14 @@ joinTypes _ s (TyVar n) (TyVar m) = do
   addConstraint (Leq s (CVar nvar) (CVar mvar) kind)
   return $ TyVar n
 
-joinTypes dbg s (TyApp t1 t2) (TyApp t1' t2') = do
-  t1'' <- joinTypes dbg s t1 t1'
-  t2'' <- joinTypes dbg s t2 t2'
+joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
+  t1'' <- joinTypes s t1 t1'
+  t2'' <- joinTypes s t2 t2'
   return (TyApp t1'' t2'')
 
-joinTypes _ s t1 t2 = do
+joinTypes s t1 t2 = do
   ut1 <- unrenameType t1
   ut2 <- unrenameType t2
-  illTyped s
+  halt $ GenericError (Just s)
     $ "Type '" ++ pretty ut1 ++ "' and '"
                ++ pretty ut2 ++ "' have no upper bound"

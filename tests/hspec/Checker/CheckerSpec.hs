@@ -1,9 +1,11 @@
 {-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE ImplicitParams #-}
 
 module Checker.CheckerSpec where
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM_, liftM2)
+import Data.Maybe (fromJust)
 
 import System.FilePath.Find
 import Test.Hspec
@@ -15,8 +17,8 @@ import Checker.Monad
 import Control.Monad.Trans.Maybe
 import Syntax.Parser
 import Syntax.Expr
+import Utils
 
-import Data.Maybe (fromJust)
 
 pathToExamples :: FilePath
 pathToExamples = "examples/good"
@@ -37,29 +39,32 @@ fileExtension = ".gr"
 spec :: Spec
 spec = do
     -- Integration tests based on the fixtures
+    let ?globals = defaultGlobals { suppressInfos = True, suppressErrors = True }
     srcFiles <- runIO exampleFiles
     forM_ srcFiles $ \file ->
       describe file $ it "typechecks" $ do
+        let ?globals = ?globals { sourceFilePath = file }
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right (ast, nameMap) -> do
-            result <- try (check ast False nameMap) :: IO (Either SomeException _)
+            result <- try (check ast nameMap) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldBe` Right True
+                Right checked -> checked `shouldBe` Ok
     -- Negative tests: things which should fail to check
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
       describe file $ it "does not typecheck" $ do
+        let ?globals = ?globals { sourceFilePath = file }
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right (ast, nameMap) -> do
-            result <- try (check ast False nameMap) :: IO (Either SomeException _)
+            result <- try (check ast nameMap) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldBe` Left ""
+                Right checked -> checked `shouldBe` Failed
 
     -- Unit tests
     describe "joinCtxts" $ do

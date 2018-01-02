@@ -1,65 +1,127 @@
-------------------
------- Granule ------
-------------------
+{-                                       ___
+                                        /\_ \
+       __   _  _    __      ___   __  __\//\ \      __
+     / _  \/\`'__\/ __ \  /' _ `\/\ \/\ \ \ \ \   /'__`\
+    /\ \_\ \ \ \//\ \_\ \_/\ \/\ \ \ \_\ \ \_\ \_/\  __/
+    \ \____ \ \_\\ \__/ \_\ \_\ \_\ \____/ /\____\ \____\
+     \/___L\ \/_/ \/__/\/_/\/_/\/_/\/___/  \/____/\/____/
+       /\____/
+       \_/__/
+-}
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
+import Control.Exception (SomeException, try)
+import Control.Monad (forM)
+import Data.List (intercalate)
+import Data.Semigroup ((<>))
+import Data.Version (showVersion)
+import System.Exit
+
+import System.FilePath.Glob (glob)
+import Options.Applicative
+
+import Checker.Checker
 import Eval
+import Paths_granule (version)
 import Syntax.Parser
 import Syntax.Pretty
-import Checker.Checker
+import Utils
 
-import Data.List (intercalate)
-import System.Environment
-import System.Exit (die)
-
-version :: String
-version = "Granule v0.3.9.0"
 
 main :: IO ()
 main = do
-  args <- getArgs
-  case args of
-    []      -> putStrLn $ version ++ "\nUsage: gr <SOURCE_FILE> [-d]"
-    (src:flags)  -> do
-      -- Get the filename
-      input <- readFile src
-      -- Flag '-d' turns on debug mode
-      run input (Debug $ "-d" `elem` flags)
-
-newtype Debug = Debug Bool
+  (globPatterns,globals) <- customExecParser (prefs disambiguate) parseArgs
+  let ?globals = globals in do
+    if null globPatterns then do
+      let ?globals = globals { sourceFilePath = "stdin" } in do
+        printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
+        debugM "Globals" (show globals)
+        exitWith =<< run =<< getContents
+    else do
+      debugM "Globals" (show globals)
+      results <- forM globPatterns $ \p -> do
+        filePaths <- glob p
+        forM filePaths $ \p -> do
+          let ?globals = globals { sourceFilePath = p }
+          printInfo $ "\nChecking " <> p <> "..."
+          run =<< readFile p
+      if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
 
 {-| Run the input through the type checker and evaluate.
->>> run "main : Int\nmain = (\\x -> \\y -> x * y) 3 5\n" (Debug False)
-ok
-15
 -}
-run :: String -> Debug -> IO ()
-run input (Debug debug) = do
-  -- Parse
-  (ast, nameMap) <- parseDefs input
+run :: (?globals :: Globals) => String -> IO ExitCode
+run input = do
+  result <- try $ parseDefs input
+  case result of
+    Left (e :: SomeException) -> do
+      printErr $ ParseError $ show e
+      return (ExitFailure 1)
 
-  -- Debugging mode produces the AST and the pretty printer
-  if debug
-    then do
-      putStrLn $ "AST:\n" ++ show ast
-      putStrLn $ "\nSource:\n" ++ (intercalate "\n" $ map pretty ast)
-      putStrLn $ "\nName map:\n" ++ show nameMap
-    else return ()
+    Right (ast, nameMap) -> do
+      -- Print to terminal when in debugging mode:
+      debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
+      debugM "Pretty-printed AST:" $ pretty ast
+      debugM "Name map" $ show nameMap
+      -- Check and evaluate
+      checked <- try $ check ast nameMap
+      case checked of
+        Left (e :: SomeException) -> do
+          printErr $ CheckerError $ show e
+          return (ExitFailure 1)
+        Right Failed -> do
+          printInfo "Failed" -- specific errors have already been printed
+          return (ExitFailure 1)
+        Right Ok -> do
+          if noEval ?globals then do
+            printInfo $ green "Ok"
+            return ExitSuccess
+          else do
+            printInfo $ green "Ok, evaluating..."
+            result <- try $ eval ast
+            case result of
+              Left (e :: SomeException) -> do
+                printErr $ EvalError $ show e
+                return (ExitFailure 1)
+              Right Nothing -> do
+                printInfo "(No output)"
+                return ExitSuccess
+              Right (Just result) -> do
+                putStrLn (pretty result)
+                return ExitSuccess
 
-  -- Type check
-  checked <- check ast debug nameMap
-  showCheckerResult checked
 
-  case checked of
-    -- If type checking succeeds then evaluate the program...
-    Right True -> do
-      val <- eval debug ast
-      case val of
-        Just val' -> putStrLn $ pretty val'
-        Nothing   -> return ()
-    _ -> return ()
+parseArgs :: ParserInfo ([FilePath],Globals)
+parseArgs = info (go <**> helper) $ fullDesc <> header ("Granule " <> showVersion version)
+  where
+    go = do
+        files <- many $ argument str $ metavar "SOURCE_FILES..."
+        debugging <-
+          switch $ long "debug" <> short 'd' <> help "(D)ebug mode"
+        suppressInfos <-
+          switch $ long "no-infos" <> short 'i' <> help "Don't output (i)nfo messages"
+        suppressErrors <-
+          switch $ long "no-errors" <> short 'e' <> help "Don't output (e)rror messages"
+        noColors <-
+          switch $ long "no-colors" <> short 'c' <> help "Turn off (c)olors in terminal output"
+        noEval <-
+          switch $ long "no-eval" <> short 't' <> help "Don't evaluate, only (t)ype-check"
+        timestamp <-
+          switch $ long "timestamp" <> help "Print timestamp in info and error messages"
+        pure (files, defaultGlobals { debugging, noColors, noEval, suppressInfos, suppressErrors, timestamp })
 
-showCheckerResult :: Either String Bool -> IO ()
-showCheckerResult (Left s) = die s
-showCheckerResult (Right True) = putStrLn "ok"
-showCheckerResult (Right False) = die "failed"
+data RuntimeError
+  = ParseError String
+  | CheckerError String
+  | EvalError String
+
+instance UserMsg RuntimeError where
+  title ParseError {} = "Error during parsing"
+  title CheckerError {} = "Error during type checking"
+  title EvalError {} = "Error during evaluation"
+  msg (ParseError m) = m
+  msg (CheckerError m) = m
+  msg (EvalError m) = m

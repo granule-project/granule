@@ -1,4 +1,6 @@
 -- Mainly provides a kind checker on types
+{-# LANGUAGE ImplicitParams #-}
+
 module Checker.Kinds (kindCheck
                     , inferKindOfType
                     , joinCoeffectConstr
@@ -13,23 +15,23 @@ import Checker.Predicates
 import Checker.Primitives
 import Syntax.Expr
 import Context
+import Utils
 
-import Data.List (isPrefixOf)
 
 -- Currently we expect that a type scheme has kind KType
-kindCheck :: Span -> TypeScheme -> MaybeT Checker ()
+kindCheck :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
 kindCheck s (Forall _ quantifiedVariables ty) = do
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
     KType -> return ()
     _     -> illKindedNEq s KType kind
 
-inferKindOfType :: Span -> Type -> MaybeT Checker Kind
+inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
     checkerState <- get
     inferKindOfType' s (stripQuantifiers $ tyVarContext checkerState) t
 
-inferKindOfType' :: Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
+inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
 inferKindOfType' s quantifiedVariables =
     typeFoldM (TypeFold kFunOrPair kCon kBox kDiamond kVar kApp kInt kFunOrPair kInfix)
   where
@@ -40,7 +42,7 @@ inferKindOfType' s quantifiedVariables =
     kCon conId =
       case lookup conId typeLevelConstructors of
         Just kind -> return kind
-        Nothing   -> unknownName s (conId ++ " constructor.")
+        Nothing   -> halt $ UnboundVariableError (Just s) (conId ++ " constructor.")
 
     kBox _ KType = return KType
     kBox _ x = illKindedNEq s KType x
@@ -51,7 +53,8 @@ inferKindOfType' s quantifiedVariables =
     kVar tyVar =
       case lookup tyVar quantifiedVariables of
         Just kind -> return kind
-        Nothing   -> unknownName s $ tyVar ++ " is unbound (not quantified)."
+        Nothing   -> halt $ UnboundVariableError (Just s) $
+                       tyVar ++ " is unbound (not quantified)."
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KPoly "a")) k
@@ -59,14 +62,14 @@ inferKindOfType' s quantifiedVariables =
     kInt _ = return $ KConstr "Nat="
 
     kInfix op k1 k2 =
-       case lookup op typeLevelConstructors of
-         Just (KFun k1' (KFun k2' kr)) ->
-           if k1 `hasLub` k1'
-            then if k2 `hasLub` k2'
-                 then return kr
-                 else illKindedNEq s k2' k2
-            else illKindedNEq s k1' k1
-         Nothing   -> unknownName s (op ++ " operator.")
+      case lookup op typeLevelConstructors of
+        Just (KFun k1' (KFun k2' kr)) ->
+          if k1 `hasLub` k1'
+            then if k2 `hasLub` k2' then return kr
+            else illKindedNEq s k2' k2
+          else illKindedNEq s k1' k1
+        Just _ -> unhandled
+        Nothing   -> halt $ UnboundVariableError (Just s) (op ++ " operator.")
 
 joinKind :: Kind -> Kind -> Maybe Kind
 joinKind k1 k2 | k1 == k2 = Just k1

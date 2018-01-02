@@ -1,8 +1,10 @@
 {
+{-# LANGUAGE ImplicitParams #-}
 module Syntax.Parser where
 
 import Syntax.Lexer
 import Syntax.Expr
+import Utils
 
 import Control.Monad (forM)
 import Data.List ((\\), intercalate, nub, stripPrefix)
@@ -91,9 +93,9 @@ Pats : Pat                         { [$1] }
 
 Pat :: { Pattern }
 Pat :
-    '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
+    PAtom                          { $1 }
+  | '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
   | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
-  | PAtom                          { $1 }
 
 PJuxt :: { Pattern }
 PJuxt :
@@ -111,6 +113,7 @@ PAtom : VAR                        { PVar (getPosToSpan $1) (symString $1) }
     | CONSTR                       { let TokenConstr _ x = $1
 	                             in PConstr (getPosToSpan $1) x }
     | '(' PJuxt ')'                  { $2 }
+    | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
 TypeScheme :: { TypeScheme }
 TypeScheme :
@@ -289,11 +292,12 @@ parseError t = do
     die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: String -> IO ([Def], [(Id, Id)])
+parseDefs :: (?globals :: Globals) => String -> IO ([Def], [(Id, Id)])
 parseDefs input = do
     defs <- parse input
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
+      let ?globals = ?globals { sourceFilePath = path }
       parseDefs src
     checkNameClashes $ push $ importedDefs ++ [defs] -- add defs at the end because definitions
                                                      -- need to precede use sites

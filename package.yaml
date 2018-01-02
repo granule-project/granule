@@ -1,5 +1,5 @@
 name: granule
-version: '0.3.9.0'
+version: '0.4.0.0'
 synopsis: The Granule type checker and interpreter
 author: Dominic Orchard
 copyright: 2017 authors
@@ -13,7 +13,13 @@ dependencies:
 
 library:
   source-dirs: source
-  ghc-options: -Wall -fno-warn-name-shadowing
+  ghc-options: -O0 -W -Werror -Wno-unused-matches
+  # when:
+  # - condition: flag(dev)
+  #   then:
+  #     ghc-options: -O0 -W -Werror -Wno-unused-matches
+  #   else:
+  #     ghc-options: -O3 -w
   build-tools:
   - alex
   - happy
@@ -36,19 +42,29 @@ library:
   - Syntax.Lexer
   - Syntax.Parser
   - Syntax.Pretty
+  - Utils
   dependencies:
   - array
   - containers
   - mtl >=2.2.1
   - sbv >=7.3
+  - time
   - transformers >=0.5
 
 executables:
   gr:
     main: Main.hs
     source-dirs: command-line-interface
+    ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:
+    - Glob
     - granule
+    - optparse-applicative
+
+# flags:
+#   dev:
+#     default: True
+#     manual: True
 
 tests:
   spec:
@@ -62,8 +78,9 @@ tests:
     - QuickCheck
     - mtl
     - transformers >=0.5
-  doctest:
+  zdoctest: # the "z" is to make them run after hspec
     main: doctest.hs
     source-dirs: tests
     dependencies:
     - doctest
+    ghc-options: -threaded

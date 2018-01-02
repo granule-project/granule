@@ -1,3 +1,4 @@
+{-# LANGUAGE ImplicitParams #-}
 module Checker.Patterns where
 
 import Context
@@ -7,6 +8,7 @@ import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
 import Checker.Coeffects
+import Utils
 
 import Control.Monad.Trans.Maybe
 
@@ -16,36 +18,36 @@ import Control.Monad.Trans.Maybe
 --   (e.g. for dependent matching) and a substitution for variables
 --   caused by pattern matching (e.g., from unification).
 ctxtFromTypedPattern
-   :: Bool
-   -> Span
+   :: (?globals :: Globals )
+   => Span
    -> Type
    -> Pattern
    -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern _ _ t (PWild _) = do
+ctxtFromTypedPattern _ t (PWild _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
     wild <- freshVar "wild"
     return ([(wild, Linear t)], [], [])
 
-ctxtFromTypedPattern _ _ t (PVar _ v) =
+ctxtFromTypedPattern _ t (PVar _ v) =
     return ([(v, Linear t)], [], [])
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern _ _ t@(TyCon "Int")   (PInt _ _) =
+ctxtFromTypedPattern _ t@(TyCon "Int")   (PInt _ _) =
     return ([], [], [])
-ctxtFromTypedPattern _ _ t@(TyCon "Float") (PFloat _ _) =
+ctxtFromTypedPattern _ t@(TyCon "Float") (PFloat _ _) =
     return ([], [], [])
-ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "True") =
+ctxtFromTypedPattern _ t@(TyCon "Bool")  (PConstr _ "True") =
     return ([], [], [])
-ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
+ctxtFromTypedPattern _ t@(TyCon "Bool")  (PConstr _ "False") =
     return ([], [], [])
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern dbg s (Box coeff ty) (PBox _ p) = do
-    (ctx, eVars, subst) <- ctxtFromTypedPattern dbg s ty p
+ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
+    (ctx, eVars, subst) <- ctxtFromTypedPattern s ty p
     k <- inferCoeffectType s coeff
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
@@ -59,7 +61,7 @@ ctxtFromTypedPattern dbg s (Box coeff ty) (PBox _ p) = do
         Nothing        -> (v, Discharged t c')
 
 -- Match a Nil constructor
-ctxtFromTypedPattern _ s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil") = do
+ctxtFromTypedPattern s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil") = do
     let kind = CConstr "Nat="
     -- Create a fresh type variable for the size of the consed list
     sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
@@ -71,9 +73,10 @@ ctxtFromTypedPattern _ s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil")
       TyInt m -> do
         addConstraint $ Eq s (CNat Discrete m) (CNat Discrete 0) kind
         return ([], [], [])
+      _ -> unhandled
 
 -- Match a Cons constructor
-ctxtFromTypedPattern dbg s
+ctxtFromTypedPattern s
     (TyApp  (TyApp  (TyCon "List") n) ty)
     (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
     -- Create a fresh type variable for the size of the consed list
@@ -81,8 +84,8 @@ ctxtFromTypedPattern dbg s
     sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
 
     -- Recursively construct the binding patterns
-    (bs1, eVars1, ty') <- ctxtFromTypedPattern dbg s ty p1
-    (bs2, eVars2, _) <- ctxtFromTypedPattern dbg s (TyApp (TyApp (TyCon "List") (TyVar sizeVar)) ty) p2
+    (bs1, eVars1, ty') <- ctxtFromTypedPattern s ty p1
+    (bs2, eVars2, _) <- ctxtFromTypedPattern s (TyApp (TyApp (TyCon "List") (TyVar sizeVar)) ty) p2
 
     -- Generate equality constraint
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
@@ -93,12 +96,13 @@ ctxtFromTypedPattern dbg s
       TyInt m -> do
          addConstraint $ Eq s (CNat Discrete m) sizeVarInc kind
          return []
+      _ -> unhandled
 
     -- Join the two pattern contexts together
     return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, subst)
 
 -- Match a Z constructor
-ctxtFromTypedPattern _ s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
+ctxtFromTypedPattern s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
     c <- compileNatKindedTypeToCoeffect s n
     addConstraint $ Eq s c (CNat Discrete 0) (CConstr "Nat=")
     case n of
@@ -110,13 +114,13 @@ ctxtFromTypedPattern _ s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
         return ([], [], [(v, sizeVar)])-}
 
 -- Match a S constructor
-ctxtFromTypedPattern dbg s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = do
+ctxtFromTypedPattern s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = do
     -- Create a fresh type variable for the size of the consed list
     let kind = CConstr "Nat="
     sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
 
     -- Recursively construct the binding patterns
-    (bs2, eVars2, _) <- ctxtFromTypedPattern dbg s (TyApp (TyCon "N") (TyVar sizeVar)) p
+    (bs2, eVars2, _) <- ctxtFromTypedPattern s (TyApp (TyCon "N") (TyVar sizeVar)) p
 
     -- Generate equality constraint
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
@@ -127,18 +131,19 @@ ctxtFromTypedPattern dbg s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = 
       TyInt m -> do
          addConstraint $ Eq s (CNat Discrete m) sizeVarInc kind
          return []
+      _ -> unhandled
 
     -- Join the two pattern contexts together
     return (bs2, sizeVar : eVars2, subst)
 
 
-ctxtFromTypedPattern dbg s (PairTy lty rty) (PPair _ lp rp) = do
-  (ctxtL, eVars1, substl) <- ctxtFromTypedPattern dbg s lty lp
-  (ctxtR, eVars2, substr) <- ctxtFromTypedPattern dbg s rty rp
+ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
+  (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
+  (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
   return $ (ctxtL ++ ctxtR, eVars1 ++ eVars2, substl ++ substr)
 
-ctxtFromTypedPattern _ s t p =
-  illTyped s
+ctxtFromTypedPattern s t p =
+  halt $ PatternTypingError (Just s)
     $ "Pattern match " ++ pretty p ++ " does not have type " ++ pretty t
 
 -- | Given a list of patterns and a (possible nested) function type
@@ -147,16 +152,16 @@ ctxtFromTypedPattern _ s t p =
 --   e.g. given type A -> B -> C and patterns [Constr "A", Constr "B"] then
 --     the remaining type is C.
 ctxtFromTypedPatterns ::
-  Bool -> Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
-ctxtFromTypedPatterns _ _ ty [] =
+  (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
+ctxtFromTypedPatterns _ ty [] =
   return ([], ty)
-ctxtFromTypedPatterns dbg s (FunTy t1 t2) (pat:pats) = do
+ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   -- TODO: when we have dependent matching at the function clause
   -- level, we will need to pay attention to the bound variables here
-  (localGam, _, _) <- ctxtFromTypedPattern dbg s t1 pat
-  (localGam', ty) <- ctxtFromTypedPatterns dbg s t2 pats
+  (localGam, _, _) <- ctxtFromTypedPattern s t1 pat
+  (localGam', ty) <- ctxtFromTypedPatterns s t2 pats
   return (localGam ++ localGam', ty)
 
-ctxtFromTypedPatterns _ s ty p =
+ctxtFromTypedPatterns s ty p =
   error $ "Unhandled case: ctxtFromTypedPatterns called with:\
           \Span: " ++ show s ++ "\nType: " ++ show ty ++ "\nPatterns: " ++ show p
