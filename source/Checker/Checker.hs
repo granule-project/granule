@@ -689,7 +689,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       var' <- case k of
                KType -> do
                  freshName <- freshVar (sourceName var)
-                 let var'  = changeInternalRepr var freshName
+                 let var'  = mkId freshName
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
                  return var'
@@ -751,7 +751,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
       freshName <- freshVar (sourceName var)
-      let cvar = changeInternalRepr var freshName
+      let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (liftCoeffectType ctype, InstanceQ)) : tyVarContext s })
       -- Return the freshened var-type mapping

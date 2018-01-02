@@ -52,6 +52,7 @@ instance Pretty Coeffect where
     pretty (CSet xs) =
       "{" ++ intercalate "," (map (\(name, t) -> name ++ " : " ++ pretty t) xs) ++ "}"
     pretty (CSig c t) = "(" ++ pretty c ++ " : " ++ pretty t ++ ")"
+    pretty (CInfinity (CPoly kv)) | internalName kv == "infinity" = "∞"
     pretty (CInfinity k) = "∞ : " ++ pretty k
 
 instance Pretty Kind where

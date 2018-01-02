@@ -30,10 +30,12 @@ replace ((name', _):ctxt) name v | name == name'
 replace (x : ctxt) name v
   = x : replace ctxt name v
 
+-- $setup
+-- >>> import Syntax.Expr (mkId)
 {- | Take the intersection of two contexts based on keys
 NOTE: this is not a commutative action, consider:
->>> intersectCtxts [("x",1)] [("x",2)]
-[("x",1)]
+>>> intersectCtxts [(mkId "x",1)] [(mkId "x",2)]
+[(Id "x" "x",1)]
 -}
 intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn b) a

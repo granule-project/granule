@@ -73,9 +73,9 @@ spec = do
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
        (c, pred) <- runCtxts joinCtxts
-              [(varA, Discharged (tyvark) (CNat Ordered 5))]
-              [(varA, Discharged (tyvark) (CNat Ordered 10))]
-       c `shouldBe` [(varA, Discharged (tyvark) (CVar (mkId "a_a0")))]
+              [(varA, Discharged tyvark (CNat Ordered 5))]
+              [(varA, Discharged tyvark (CNat Ordered 10))]
+       c `shouldBe` [(varA, Discharged tyvark (CVar (mkId "a_a0")))]
        pred `shouldBe`
          [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar (mkId "a_a0")) (CConstr "Nat"))
               , Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a_a0")) (CConstr "Nat"))]]

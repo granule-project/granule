@@ -6,13 +6,12 @@
 module Syntax.Expr (Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
                    NatModifier(..), Effect, Kind(..),
-                   Id, sourceName, internalName, mkId, mkInternalId, changeInternalRepr,
+                   Id, sourceName, internalName, mkId, mkInternalId,
                    ConstructorId, Operator,
                    liftCoeffectType,
                    uniqueNames, arity, freeVars, subst,
                    normalise,
                    nullSpan, getSpan, getEnd, getStart, Pos, Span,
-                   freshenBlankPolyVars,
                    typeFoldM, TypeFold(..),
                    mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
                    mTyInt, mPairTy, mTyInfix,
@@ -20,7 +19,9 @@ module Syntax.Expr (Value(..), Expr(..), Type(..), TypeScheme(..),
                    ) where
 
 import Data.List ((\\))
+import Data.Functor.Identity
 import Control.Monad.State
+import Control.Arrow
 import GHC.Generics (Generic)
 
 import Syntax.FirstParameter
@@ -30,7 +31,10 @@ import Syntax.FirstParameter
 -- which is useually freshly generate. Error messages should
 -- always use the 'sourceName'
 data Id = Id { sourceName :: String, internalName :: String }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+instance Show Id where
+  show (Id s i) = "Id " ++ show s ++ " " ++ show i
 
 -- Constructors and operators are just strings
 type ConstructorId = String
@@ -41,9 +45,6 @@ mkId x = Id x x
 
 mkInternalId :: String -> String -> Id
 mkInternalId = Id
-
-changeInternalRepr :: Id -> String -> Id
-changeInternalRepr (Id s _) si = Id s si
 
 type Pos = (Int, Int) -- (line, column)
 type Span = (Pos, Pos)
@@ -129,7 +130,7 @@ type Freshener t = State (Int, [(String, String)]) t
 class Term t where
   -- Compute the free variables in a term
   freeVars :: t -> [Id]
-  -- Syntactic substitution of an expression into a term
+  -- Syntactic substitution of a term into an expression
   -- (assuming variables are all unique to avoid capture)
   subst :: Expr -> Id -> t -> Expr
   -- Freshen
@@ -144,64 +145,103 @@ freshVar var = do
    put (v+1, (sourceName var, var') : nmap)
    return $ var { internalName = var' }
 
-freshenBlankPolyVars :: [Def] -> [Def]
-freshenBlankPolyVars defs =
-    evalState (mapM freshenDef defs) (0 :: Int, [])
-  where
-    freshenDef (Def s identifier expr pats tys) = do
-      tys' <- freshenTys tys
-      return $ Def s identifier expr pats tys'
-
-    freshenTys (Forall s binds ty) = do
+freshenTys :: TypeScheme -> Freshener TypeScheme
+freshenTys (Forall s binds ty) = do
       binds' <- mapM (\(v, k) -> do { v' <- freshVar v; return (v', k) }) binds
-      ty' <- freshenTy ty
+      ty' <- freshen ty
       return $ Forall s binds' ty'
 
-    freshenTy = typeFoldM (baseTypeFold { tfTyVar = freshenTyVar, tfBox = freshenTyBox })
+instance Term Type where
+  freeVars = runIdentity .
+    typeFoldM (TypeFold (\x y -> return $ x ++ y)
+                        (const (return []))
+                        (\c t -> return $ freeVars c ++ t)
+                        (\_ t -> return t)
+                        (\v -> return [v])
+                        (\x y -> return $ x ++ y)
+                        (const (return []))
+                        (\x y -> return $ x ++ y)
+                        (\_ x y -> return $ x ++ y))
 
-    freshenTyBox c t = do
-      c' <- freshenCoeff c
-      t' <- freshenTy t
-      return $ Box c' t'
-    freshenTyVar v = do
+  subst e _ t = e
+
+  freshen =
+    typeFoldM (baseTypeFold { tfTyVar = freshenTyVar, tfBox = freshenTyBox })
+    where
+      freshenTyBox c t = do
+        c' <- freshen c
+        t' <- freshen t
+        return $ Box c' t'
+      freshenTyVar v = do
+        (_, nmap) <- get
+        case lookup (sourceName v) nmap of
+           Just v' -> return (TyVar $ Id (sourceName v) v')
+           -- This case happens if we are referring to a defined
+           -- function which does not get its name freshened
+           Nothing -> return (TyVar $ mkId (sourceName v))
+
+instance Term Coeffect where
+    freeVars (CVar v) = [v]
+    freeVars (CPlus c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CTimes c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CMeet c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CJoin c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars CNat{}  = []
+    freeVars CNatOmega{} = []
+    freeVars CFloat{} = []
+    freeVars CInfinity{} = []
+    freeVars CZero{} = []
+    freeVars COne{} = []
+    freeVars Level{} = []
+    freeVars CSet{} = []
+    freeVars (CSig c _) = freeVars c
+
+    subst e _ _ = e
+
+    freshen (CVar v) = do
       (_, nmap) <- get
       case lookup (sourceName v) nmap of
-         Just v' -> return (TyVar $ Id (sourceName v) v')
-         -- This case happens if we are referring to a defined
-         -- function which does not get its name freshened
-         Nothing -> return (TyVar $ Id (sourceName v) (sourceName v))
+        Just v' -> return $ CVar $ Id (sourceName v) v'
+        Nothing -> return $ CVar $ mkId (sourceName v)
+    freshen (CInfinity (CPoly i@(Id _ ""))) = do
+      t <- freshVar i
+      return $ CInfinity (CPoly t)
+    freshen (CInfinity (CPoly i@(Id _ " infinity"))) = do
+      t <- freshVar i
+      return $ CInfinity (CPoly t)
 
-    freshenCoeff (CInfinity (CPoly i@(Id _ ""))) = do
-      t <- freshVar i
-      return $ CInfinity (CPoly t)
-    freshenCoeff (CInfinity (CPoly i@(Id _ " infinity"))) = do
-      t <- freshVar i
-      return $ CInfinity (CPoly t)
-    freshenCoeff (CPlus c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+    freshen (CPlus c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CPlus c1' c2'
-    freshenCoeff (CTimes c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+    freshen (CTimes c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CTimes c1' c2'
 
-    freshenCoeff (CMeet c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+    freshen (CMeet c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CMeet c1' c2'
-    freshenCoeff (CJoin c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+    freshen (CJoin c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CJoin c1' c2'
 
-    freshenCoeff (CSet cs) = do
-       cs' <- mapM (\(s, t) -> freshenTy t >>= (\t' -> return (s, t'))) cs
+    freshen (CSet cs) = do
+       cs' <- mapM (\(s, t) -> freshen t >>= (\t' -> return (s, t'))) cs
        return $ CSet cs'
-    freshenCoeff (CSig c k) = do
-      c' <- freshenCoeff c
+    freshen (CSig c k) = do
+      c' <- freshen c
       return $ CSig c' k
-    freshenCoeff c = return c
+    freshen c@CInfinity{} = return c
+    freshen c@CFloat{} = return c
+    freshen c@CZero{}  = return c
+    freshen c@COne{}   = return c
+    freshen c@Level{}  = return c
+    freshen c@CNat{}   = return c
+    freshen c@CNatOmega{} = return c
+
 
 instance Term Value where
     freeVars (Abs x _ e) = freeVars e \\ [x]
@@ -270,13 +310,14 @@ instance Term Expr where
     subst es v (Val _ val)          = subst es v val
     subst es v (Case s expr cases)  = Case s
                                      (subst es v expr)
-                                     (map (\(p, e) -> (p, subst es v e)) cases)
+                                     (map (second (subst es v)) cases)
 
     freshen (LetBox s var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
-      return $ LetBox s var' t e1' e2'
+      t'   <- freshen t
+      return $ LetBox s var' t' e1' e2'
 
     freshen (App s e1 e2) = do
       e1' <- freshen e1
@@ -306,8 +347,6 @@ instance Term Expr where
      v' <- freshen v
      return (Val s v')
 
-
-
 --------- Definitions
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
@@ -321,8 +360,9 @@ uniqueNames = flip evalState (0 :: Int, []) . mapM freshenDef
   where
     freshenDef (Def s var e ps t) = do
       ps' <- mapM freshenBinder ps
+      t'  <- freshenTys t
       e'  <- freshen e
-      return $ Def s var e' ps' t
+      return $ Def s var e' ps' t'
 
 ----------- Types
 

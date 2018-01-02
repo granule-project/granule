@@ -13,14 +13,15 @@ import Utils
 
 -- For doctest:
 -- $setup
+-- >>> import Syntax.Expr (mkId)
 -- >>> :set -XImplicitParams
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts
   of the context where a substitution occurred, and one where substitution
   did not occur
->>> let ?globals = defaultGlobals in evalChecker initState [] (runMaybeT $ substCtxt  [("y", TyInt 0)] [("x", Linear (TyVar "x")), ("y", Linear (TyVar "y")), ("z", Discharged (TyVar "z") (CVar "b"))])
-Just ([("y",Linear (TyInt 0))],[("x",Linear (TyVar "x")),("z",Discharged (TyVar "z") (CVar "b"))])
+>>> let ?globals = defaultGlobals in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (CVar $ mkId "b"))])
+Just ([(Id "y" "y",Linear (TyInt 0))],[(Id "x" "x",Linear (TyVar Id "x" "x")),(Id "z" "z",Discharged (TyVar Id "z" "z") (CVar Id "b" "b"))])
 -}
 
 substCtxt :: (?globals :: Globals) => Ctxt Type -> Ctxt Assumption

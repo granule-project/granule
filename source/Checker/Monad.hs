@@ -14,7 +14,7 @@ import Checker.LaTeX
 import Checker.Predicates
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern
-                   , changeInternalRepr, sourceName)
+                   , mkId, sourceName)
 import Syntax.Pretty
 import Utils
 
@@ -105,7 +105,7 @@ freshCoeffectVar cvar kind =
 freshCoeffectVarWithBinding :: Id -> CKind -> Quantifier -> MaybeT Checker Id
 freshCoeffectVarWithBinding cvar kind q = do
     freshName <- freshVar (sourceName cvar)
-    let cvar' = changeInternalRepr cvar freshName
+    let cvar' = mkId freshName
     registerCoeffectVar cvar' kind q
     return cvar'
 

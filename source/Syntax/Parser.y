@@ -302,7 +302,7 @@ parseDefs input = do
     checkNameClashes $ (concat importedDefs) ++ defs -- add defs at the end because definitions
                                             -- need to precede use sites
   where
-    parse = fmap (uniqueNames . freshenBlankPolyVars) . defs . scanTokens
+    parse = fmap (uniqueNames) . defs . scanTokens
     imports = map ((++ ".gr") . replace '.' '/') . catMaybes . map (stripPrefix "import ") . lines $ input
     replace from to = map (\c -> if c == from then to else c)
     checkNameClashes ds =
