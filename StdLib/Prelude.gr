@@ -1,16 +1,26 @@
--- Prelude library for Granule
+-- # Prelude library for Granule
 
--- Standard functional components
+-- ## Standard, miscellaneous functional combinators
+
+-- Identity function
 id : forall a : Type . a -> a
 id x = x
+
+-- Constant combinator
+const : forall a : Type, b : Type . a -> b |0| -> a
+const x |y| = x
 
 -- Flip the order of parameters
 flip : forall a : Type, b : Type, c : Type . (a -> b -> c) -> b -> a -> c
 flip f x y = f y x
 
--- Constant combinator
-const : forall a : Type, b : Type . a -> b |0| -> a
-const x |y| = x
+-- until p f yields the result of applying f until p holds.
+until : forall a : Type .
+        (a -> Bool) |∞| -> (a -> a) |∞| -> a |∞| -> a
+until |p| |f| |x| =
+  case p x of
+    False -> x;
+    True  -> until |p| |f| |(f x)|
 
 -- Conditional on integers
 if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
@@ -18,24 +28,7 @@ if0 g |x| |y| =
   case g of |0| -> x;
             |n| -> y
 
--- Coeffectful composition
-comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
-       (b |n| -> c) -> (a |m| -> b) |n| -> a |n * m| -> c
-comp g |f| |x| = g |(f |x|)|
-
--- Coeffectful application
-app : forall a : Type, b : Type, c : Nat . (a |c| -> b) -> a |c| -> b
-app f x = f x
-
--- Flatten two boxes (with Nat grading)
-flatten : forall (a : Type, n : Nat, m : Nat) . a |n| |m| -> a |n * m|
-flatten ||x|| = |x|
-
--- Expand two boxes (with Nat grading)
-unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
-unflatten |x| = ||x||
-
--- * Operations on products
+-- ## Combinators involving products (pairs)
 
 -- Extract the left part of a pair
 fst : forall a : Type, b : Type . (a, b |0|) -> a
@@ -45,6 +38,31 @@ fst (x, |_|) = x
 snd : forall a : Type, b : Type . (a |0|, b) -> b
 snd (|_|, y) = y
 
+-- curry converts an uncurried function to a curried function
+curry : forall a : Type, b : Type, c : Type .
+        ((a, b) -> c) -> a -> b -> c
+curry f x y = f (x, y)
+
+-- uncurry converts a curried function to a function on pairs
+uncurry : forall a : Type, b : Type, c : Type .
+          (a -> b -> c) -> ((a, b) -> c)
+uncurry f (x, y) = f x y
+
+-- ## Coeffect-specifc combinators
+
+-- Coeffectful composition
+comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
+       (b |n| -> c) -> (a |m| -> b) |n| -> a |n * m| -> c
+comp g |f| |x| = g |(f |x|)|
+
+-- Flatten two boxes (with Nat grading)
+flatten : forall (a : Type, n : Nat, m : Nat) . a |n| |m| -> a |n * m|
+flatten ||x|| = |x|
+
+-- Expand two boxes (with Nat grading)
+unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
+unflatten |x| = ||x||
+
 -- Push coeffects on a pair into the left and right elements
 push : forall (a : Type, b : Type, n : Nat) . (a, b) |n| -> (a |n|, b |n|)
 push |(x, y)| = (|x|, |y|)
@@ -53,6 +71,8 @@ push |(x, y)| = (|x|, |y|)
 pull : forall (a : Type, b : Type, n : Nat, m : Nat)
      . (a |n|, b |m|) -> (a, b) |n /\ m|
 pull (|x|, |y|) = |(x, y)|
+
+-- # Indexed list combinators
 
 -- * Operations on lists
 map : forall (a : Type, b : Type, n : Nat=)
@@ -75,15 +95,11 @@ sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
 product : forall n : Nat= . List n Int -> Int
 product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
 
+-- # Indexed natural number combinators
+
 -- Convert an indexed natural number to an untyped int
 natToInt : forall (n : Nat=) . N n -> Int
 natToInt x =
     case x of
       Z -> 0;
       (S m) -> 1 + natToInt m
-
---add : forall (n : Nat=, m : Nat=) . N n -> N m -> N (n + m)
---add n m =
---  case n of
---    Z -> m;
---    (S n') -> S (add n' m)

@@ -9,13 +9,12 @@ module Checker.Monad where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import qualified Control.Monad.Trans.Reader as MR
-import Control.Monad.Reader.Class
 
 import Checker.LaTeX
 import Checker.Predicates
 import Context
-import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern)
+import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern
+                   , changeInternalRepr, sourceName)
 import Syntax.Pretty
 import Utils
 
@@ -23,15 +22,15 @@ import Data.List (intercalate)
 
 -- State of the check/synth functions
 newtype Checker a =
-  Checker { unwrap :: MR.ReaderT [(Id, Id)] (StateT CheckerState IO) a }
+  Checker { unwrap :: StateT CheckerState IO a }
 
-evalChecker :: CheckerState -> [(Id, Id)] -> Checker a -> IO a
-evalChecker initialState nameMap =
-  flip evalStateT initialState . flip MR.runReaderT nameMap . unwrap
+evalChecker :: CheckerState -> Checker a -> IO a
+evalChecker initialState =
+  flip evalStateT initialState . unwrap
 
-runChecker :: CheckerState -> [(Id, Id)] -> Checker a -> IO (a, CheckerState)
-runChecker initialState nameMap =
-  flip runStateT initialState . flip MR.runReaderT nameMap . unwrap
+runChecker :: CheckerState -> Checker a -> IO (a, CheckerState)
+runChecker initialState =
+  flip runStateT initialState . unwrap
 
 -- For fresh name generation
 type VarCounter  = Int
@@ -47,7 +46,7 @@ instance Pretty Assumption where
     pretty (Discharged t c) = ".[" ++ pretty t ++ "]. " ++ pretty c
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   pretty (a, b) = a ++ " : " ++ pretty b
+   pretty (a, b) = pretty a ++ " : " ++ pretty b
 
 
 data CheckerState = CS
@@ -88,9 +87,8 @@ initState = CS 0 [] emptyCtxt emptyCtxt Nothing []
 localChecking :: MaybeT Checker b
               -> MaybeT Checker (Maybe b, MaybeT Checker b)
 localChecking k = do
-  nameMap <- ask
   checkerState <- get
-  (out, localState) <- liftIO $ runChecker checkerState nameMap (runMaybeT k)
+  (out, localState) <- liftIO $ runChecker checkerState (runMaybeT k)
   let reified = do
         put localState
         MaybeT $ return out
@@ -106,7 +104,8 @@ freshCoeffectVar cvar kind =
 --   coeffect type.
 freshCoeffectVarWithBinding :: Id -> CKind -> Quantifier -> MaybeT Checker Id
 freshCoeffectVarWithBinding cvar kind q = do
-    cvar' <- freshVar cvar
+    freshName <- freshVar (sourceName cvar)
+    let cvar' = changeInternalRepr cvar freshName
     registerCoeffectVar cvar' kind q
     return cvar'
 
@@ -206,14 +205,14 @@ data LinearityMismatch =
  | LinearUsedNonLinearly Id
    deriving Show -- for debugging
 
-illLinearityMismatch :: (?globals :: Globals) => Span -> [(Id, Id)] -> [LinearityMismatch] -> MaybeT Checker a
-illLinearityMismatch sp nameMap mismatches =
+illLinearityMismatch :: (?globals :: Globals) => Span -> [LinearityMismatch] -> MaybeT Checker a
+illLinearityMismatch sp mismatches =
   halt $ LinearityError (Just sp) $ intercalate "\n  " $ map mkMsg mismatches
   where
     mkMsg (LinearNotUsed v) =
-      "Linear variable `" ++ unrename nameMap v ++ "` is never used."
+      "Linear variable `" ++ pretty v ++ "` is never used."
     mkMsg (LinearUsedNonLinearly v) =
-      "Variable `" ++ unrename nameMap v ++ "` is promoted but its binding is linear; its binding should be under a box."
+      "Variable `" ++ pretty v ++ "` is promoted but its binding is linear; its binding should be under a box."
 
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
@@ -246,8 +245,4 @@ instance MonadState CheckerState Checker where
   put s = Checker (put s)
 
 instance MonadIO Checker where
-  liftIO = Checker . lift . lift
-
-instance MonadReader [(Id, Id)] Checker where
-  ask = Checker MR.ask
-  local r (Checker x) = Checker (MR.local r x)
+  liftIO = Checker . lift

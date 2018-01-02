@@ -98,7 +98,7 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
-    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ n)
+    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ pretty n)
 
 equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) = do
   checkerState <- get
@@ -175,12 +175,12 @@ equalTypesRelatedCoeffects s rel (TyVar n) t = do
 
     -- But we can't unify an universal with a concrete type
     (Just (k1, ForallQ)) -> do
-      ut <- unrenameType t
-      halt $ GenericError (Just s) $ "Trying to unify a polymorphic type '" ++ n
-        ++ "' with monomorphic " ++ pretty ut
+      halt $ GenericError (Just s)
+           $ "Trying to unify a polymorphic type '" ++ pretty n
+          ++ "' with monomorphic " ++ pretty t
     (Just (_, InstanceQ)) -> unhandled
-    (Just (_, BoundQ)) -> unhandled 
-    Nothing -> halt $ UnboundVariableError (Just s) n
+    (Just (_, BoundQ)) -> unhandled
+    Nothing -> halt $ UnboundVariableError (Just s) (pretty n)
 
 equalTypesRelatedCoeffects s rel t (TyVar n) =
   equalTypesRelatedCoeffects s rel (TyVar n) t
@@ -195,17 +195,13 @@ equalTypesRelatedCoeffects s _ t1 t2 = do
        addConstraint $ Eq s c1 c2 (CConstr "Nat=")
        return (True, [])
     (KType, KType) -> do
-        ut1 <- unrenameType t1
-        ut2 <- unrenameType t2
-        halt $ KindError (Just s) $ pretty ut1 ++ " is not equal to " ++ pretty ut2
+       halt $ KindError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
     _ -> do
-       ut1 <- unrenameType t1
-       ut2 <- unrenameType t2
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2
                  ++ "\t\n from equality "
-                 ++ "'" ++ pretty ut2 ++ "' and '" ++ pretty ut1 ++ "' equal."
+                 ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
 
 -- Essentially equality on types but join on any coeffects
@@ -230,7 +226,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
 joinTypes s (Box c t) (Box c' t') = do
   kind <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
-  topVar <- freshCoeffectVar "" kind
+  topVar <- freshCoeffectVar (mkId "") kind
   -- Unify the two coeffects into one
   addConstraint (Leq s c  (CVar topVar) kind)
   addConstraint (Leq s c' (CVar topVar) kind)
@@ -265,8 +261,6 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   return (TyApp t1'' t2'')
 
 joinTypes s t1 t2 = do
-  ut1 <- unrenameType t1
-  ut2 <- unrenameType t2
   halt $ GenericError (Just s)
-    $ "Type '" ++ pretty ut1 ++ "' and '"
-               ++ pretty ut2 ++ "' have no upper bound"
+    $ "Type '" ++ pretty t1 ++ "' and '"
+               ++ pretty t2 ++ "' have no upper bound"

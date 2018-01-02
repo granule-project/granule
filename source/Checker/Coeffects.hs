@@ -44,7 +44,7 @@ inferCoeffectType s (CVar cvar) = do
   checkerState <- get
   case lookup cvar (tyVarContext checkerState) of
      Nothing -> do
-       halt $ UnboundVariableError (Just s) $ "Tried to lookup kind of " ++ cvar
+       halt $ UnboundVariableError (Just s) $ "Tried to lookup kind of " ++ pretty cvar
 --       state <- get
 --       let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
        -- We don't know what it is yet though, so don't update the coeffect kind ctxt

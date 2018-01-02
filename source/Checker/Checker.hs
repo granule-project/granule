@@ -6,7 +6,6 @@
 
 module Checker.Checker where
 
-import Control.Monad.Reader.Class
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Maybe
@@ -32,9 +31,8 @@ data CheckerResult = Failed | Ok deriving (Eq, Show)
 -- Checking (top-level)
 check :: (?globals :: Globals )
       => [Def]        -- List of definitions
-      -> [(Id, Id)]   -- Name map
       -> IO CheckerResult
-check defs nameMap = do
+check defs = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
 
@@ -51,7 +49,7 @@ check defs nameMap = do
                mapM (checkDef defCtxt) defs
 
     -- ... and evaluate the computation with initial state
-    results <- evalChecker initState nameMap checkedDefs
+    results <- evalChecker initState checkedDefs
 
     -- If all definitions type checked, then the whole file type checkers
     if all isJust results
@@ -79,9 +77,7 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
           -- Check linear use
           case checkLinearity patternGam outGam of
                 [] -> return outGam
-                xs -> do
-                  nameMap <- ask
-                  illLinearityMismatch s nameMap xs
+                xs -> illLinearityMismatch s xs
 
         (tau, []) -> checkExpr defCtxt [] Positive True tau expr >>= (return . fst)
         _         -> halt $ GenericError (Just s) "Expecting a function type"
@@ -138,9 +134,7 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
     Nothing -> return (tau, [])
     Just t' -> do
       (eqT, unifiedType, subst) <- equalTypes s sig t'
-      ut <- unrenameType sig
-      ut' <- unrenameType t'
-      unless eqT (halt $ GenericError (Just s) $ pretty ut ++ " not equal to " ++ pretty ut')
+      unless eqT (halt $ GenericError (Just s) $ pretty sig ++ " not equal to " ++ pretty t')
       return (tau, subst)
 
   -- Extend the context with the variable 'x' and its type
@@ -149,14 +143,12 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
   (gam', subst2) <- checkExpr defs gamE pol False tau' e
   -- Linearity check, variables must be used exactly once
   case lookup x gam' of
-    Nothing -> do
-      nameMap <- ask
-      illLinearityMismatch s nameMap [LinearNotUsed x]
+    Nothing -> illLinearityMismatch s [LinearNotUsed x]
     Just _  -> return (eraseVar gam' x, subst1 ++ subst2)
 
 -- Application special case for built-in 'scale'
 checkExpr defs gam pol topLevel tau
-          (App s (App _ (Val _ (Var "scale")) (Val _ (NumFloat x))) e) = do
+          (App s (App _ (Val _ (Var v)) (Val _ (NumFloat x))) e) | internalName v == "scale" = do
     equalTypes s (TyCon "Float") tau
     checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon "Float")) e
 
@@ -206,7 +198,6 @@ checkExpr defs gam pol _ tau (Case s guardExpr cases) = do
       leqCtxt s localGam checkGam
 
       -- Check linear use in anything Linear
-      nameMap  <- ask
       case checkLinearity patternGam localGam of
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
@@ -223,12 +214,11 @@ checkExpr defs gam pol _ tau (Case s guardExpr cases) = do
            return (branchCtxt, subst')
 
         -- Anything that was bound in the pattern but not used correctly
-        xs -> illLinearityMismatch s nameMap xs
+        xs -> illLinearityMismatch s xs
 
   -- Find the upper-bound contexts
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
-  nameMap     <- ask
-  branchesGam <- fold1M (joinCtxts s nameMap) branchCtxts
+  branchesGam <- fold1M (joinCtxts s) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxPlus s branchesGam guardGam
@@ -258,10 +248,8 @@ checkExpr defs gam pol topLevel tau e = do
   if tyEq
     then return (gam', subst)
     else do
-      utau <- unrenameType tau
-      utau' <- unrenameType tau'
       halt $ GenericError (Just $ getSpan e)
-          $ "Expected '" ++ pretty utau ++ "' but got '" ++ pretty utau' ++ "'"
+          $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
 
 -- | Synthesise the 'Type' of expressions.
 -- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>
@@ -278,15 +266,17 @@ synthExpr _ _ _ (Val _ (NumFloat _)) = return (TyCon "Float", [])
 
 -- Polymorphic list constructors
 synthExpr _ _ _ (Val _ (Constr "Nil" [])) = do
-  elementVar <- freshVar "a"
+  elementVarName <- freshVar "a"
+  let elementVar = mkId elementVarName
   modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
   return (TyApp (TyApp (TyCon "List") (TyInt 0)) (TyVar elementVar), [])
 
 synthExpr _ _ _ (Val s (Constr "Cons" [])) = do
     let kind = CConstr "Nat="
-    sizeVarArg <- freshCoeffectVar "n" kind
-    sizeVarRes <- freshCoeffectVar "m" kind
-    elementVar <- freshVar "a"
+    sizeVarArg <- freshCoeffectVar (mkId "n") kind
+    sizeVarRes <- freshCoeffectVar (mkId "m") kind
+    elementVarName <- freshVar "a"
+    let elementVar = mkId elementVarName
     modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
     -- Add a constraint
     -- m ~ n + 1
@@ -299,7 +289,7 @@ synthExpr _ _ _ (Val s (Constr "Cons" [])) = do
                     (list elementVar (TyVar sizeVarRes))),
                     [])
   where
-    list elementVar n = TyApp (TyApp (TyCon "List") n) (TyVar elementVar)
+    list elementVar n = TyApp (TyApp (TyCon "List") n) (TyVar $ elementVar)
 
 -- Nat constructors
 synthExpr _ _ _ (Val _ (Constr "Z" [])) = do
@@ -307,8 +297,8 @@ synthExpr _ _ _ (Val _ (Constr "Z" [])) = do
 
 synthExpr _ _ _ (Val s (Constr "S" [])) = do
     let kind = CConstr "Nat="
-    sizeVarArg <- freshCoeffectVar "n" kind
-    sizeVarRes <- freshCoeffectVar "m" kind
+    sizeVarArg <- freshCoeffectVar (mkId "n") kind
+    sizeVarRes <- freshCoeffectVar (mkId "m") kind
     -- Add a constraint
     -- m ~ n + 1
     addConstraint $ Eq s (CVar sizeVarRes)
@@ -341,12 +331,11 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
       (tyCase, localGam) <- synthExpr defs (gam ++ patternGam) pol ei
       concludeImplication eVars
       -- Check linear use in anything Linear
-      nameMap  <- ask
       case checkLinearity patternGam localGam of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
          [] -> return (tyCase, localGam `subtractCtxt` patternGam)
-         xs -> illLinearityMismatch s nameMap xs
+         xs -> illLinearityMismatch s xs
 
   let (branchTys, branchCtxts) = unzip branchTysAndCtxts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
@@ -356,8 +345,7 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
                    (tail branchTysAndSpans)
 
   -- Find the upper-bound type on the return contexts
-  nameMap     <- ask
-  branchesGam <- fold1M (joinCtxts s nameMap) branchCtxts
+  branchesGam <- fold1M (joinCtxts s) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxPlus s branchesGam guardGam
@@ -376,18 +364,16 @@ synthExpr defs gam pol (LetDiamond s var ty e1 e2) = do
              gamNew <- ctxPlus s gam1 gam2
              return (Diamond (ef1 ++ ef2) tau', gamNew)
          t -> do
-           uty <- unrenameType ty
-           ut <- unrenameType t
-           halt $ GenericError (Just s) $ "Expected '" ++ pretty uty ++ "' but inferred '"
-                     ++ pretty ut ++ "' in body of let<>"
+          halt $ GenericError (Just s)
+               $ "Expected '" ++ pretty ty ++ "' but inferred '"
+               ++ pretty t ++ "' in body of let<>"
     t -> do
-      uty <- unrenameType ty
-      ut  <- unrenameType t
-      halt $ GenericError (Just s) $ "Expected '" ++ pretty uty ++ "' in subjet of let <-, but inferred '" ++ pretty ut ++ "'"
+      halt $ GenericError (Just s)
+           $ "Expected '" ++ pretty ty
+           ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
 
 -- Variables
 synthExpr defs gam _ (Val s (Var x)) = do
-   nameMap <- ask
    -- Try the local context
    case lookup x gam of
      Nothing ->
@@ -397,9 +383,9 @@ synthExpr defs gam _ (Val s (Var x)) = do
            ty' <- freshPolymorphicInstance tyScheme
            return (ty', [])
          -- Couldn't find it
-         Nothing  -> halt $ UnboundVariableError (Just s) $ show (unrename nameMap x)
+         Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x
                               ++ (if debugging ?globals then
-                                  (" { looking for " ++ x
+                                  (" { looking for " ++ pretty x
                                   ++ " in context " ++ pretty gam
                                   ++ "}")
                                  else "")
@@ -411,7 +397,7 @@ synthExpr defs gam _ (Val s (Var x)) = do
 
 -- Specialised application for scale
 synthExpr defs gam pol
-      (App _ (Val _ (Var "scale")) (Val _ (NumFloat r))) = do
+      (App _ (Val _ (Var v)) (Val _ (NumFloat r))) | internalName v == "scale" = do
   let float = (TyCon "Float")
   return $ (FunTy (Box (CFloat (toRational r)) float) float, [])
 
@@ -428,9 +414,8 @@ synthExpr defs gam pol (App s e e') = do
 
       -- Not a function type
       t -> do
-        ut <- unrenameType t
         halt $ GenericError (Just s) $ "Left-hand side of application is not a function"
-                   ++ " but has type '" ++ pretty ut ++ "'"
+                   ++ " but has type '" ++ pretty t ++ "'"
 
 -- Promotion
 synthExpr defs gam pol (Val s (Promote e)) = do
@@ -440,7 +425,7 @@ synthExpr defs gam pol (Val s (Promote e)) = do
    vark <- freshVar $ "kprom_" ++ [head (pretty e)]
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
-   var <- freshCoeffectVar ("prom_" ++ pretty e) (CPoly vark)
+   var <- freshCoeffectVar (mkId $ "prom_" ++ pretty e) (CPoly $ mkId vark)
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
@@ -452,10 +437,11 @@ synthExpr defs gam pol (Val s (Promote e)) = do
 synthExpr defs gam pol (LetBox s var t e1 e2) = do
 
     -- Create a fresh kind variable for this coeffect
-    ckvar <- freshVar ("binderk_" ++ var)
-    let kind = CPoly ckvar
+    ckvar <- freshVar ("binderk_" ++ sourceName var)
+    let kind = CPoly $ mkId ckvar
+
     -- Update coeffect-kind context
-    cvar <- freshCoeffectVar ("binder_" ++ var) kind
+    cvar <- freshCoeffectVar (mkId $ "binder_" ++ sourceName var) kind
 
     -- Extend the context with cvar
     gam' <- extCtxt s gam var (Discharged t (CVar cvar))
@@ -467,16 +453,13 @@ synthExpr defs gam pol (LetBox s var t e1 e2) = do
         Just (Discharged t' demand) -> do
              (eqT, unifiedType, _) <- equalTypes s t' t
              if eqT then do
-                debugM "synthExpr LetBox" $ "Demand for " ++ var ++ " = " ++ pretty demand
+                debugM "synthExpr LetBox" $ "Demand for " ++ pretty var ++ " = " ++ pretty demand
                 return (demand, unifiedType)
-              else do
-                nameMap <- ask
-                ut <- unrenameType t
-                ut' <- unrenameType t'
+              else
                 halt $ GenericError (Just s) $ "An explicit signature is given "
-                         ++ unrename nameMap var
-                         ++ " : '" ++ pretty ut
-                         ++ "' but the actual type was '" ++ pretty ut' ++ "'"
+                         ++ pretty var
+                         ++ " : '" ++ pretty t
+                         ++ "' but the actual type was '" ++ pretty t' ++ "'"
         _ -> do
           -- If there is no explicit demand for the variable
           -- then this means it is not used
@@ -505,7 +488,7 @@ synthExpr defs gam pol (Binop s op e1 e2) = do
     -- No matching type were found (meaning there is a type error)
     selectFirstByType t1 t2 [] =
       halt $ GenericError (Just s) $ "Could not resolve operator " ++ op ++ " at type: "
-         ++ pretty (FunTy t1 (FunTy t2 (TyVar "?")))
+         ++ pretty (FunTy t1 (FunTy t2 (TyVar $ mkId "...")))
 
     selectFirstByType t1 t2 ((FunTy opt1 (FunTy opt2 resultTy)):ops) = do
       -- Attempt to use this typing
@@ -539,7 +522,7 @@ synthExpr _ _ _ e =
   halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
 
 
-solveConstraints :: (?globals :: Globals) => Pred -> Span -> String -> MaybeT Checker Bool
+solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker Bool
 solveConstraints predicate s defName = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
@@ -574,13 +557,13 @@ solveConstraints predicate s defName = do
                        print $ show assg
                      Left msg -> print $ show msg
                    -}
-                   halt $ GenericError (Just s) $ "Definition '" ++ defName ++ "' is " ++ show thmRes
+                   halt $ GenericError (Just s) $ "Definition '" ++ pretty defName ++ "' is " ++ show thmRes
 
                Right (True, _) ->
-                   halt $ GenericError (Just s) $ "Definition '" ++ defName ++ "' returned probable model."
+                   halt $ GenericError (Just s) $ "Definition '" ++ pretty defName ++ "' returned probable model."
 
                Left str        ->
-                   halt $ GenericError (Just s) $ "Definition '" ++ defName ++ " had a solver fail: " ++ str
+                   halt $ GenericError (Just s) $ "Definition '" ++ pretty defName ++ " had a solver fail: " ++ str
 
            else return True
   where
@@ -607,9 +590,9 @@ leqCtxt s ctxt1 ctxt2 = do
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
     the other, then the resulting context will not have this linear variable -}
-joinCtxts :: (?globals :: Globals) => Span -> [(Id, Id)] -> Ctxt Assumption -> Ctxt Assumption
+joinCtxts :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker (Ctxt Assumption)
-joinCtxts s _ ctxt1 ctxt2 = do
+joinCtxts s ctxt1 ctxt2 = do
     -- All the type assumptions from ctxt1 whose variables appear in ctxt2
     -- and weaken all others
     ctxt  <- intersectCtxtsWithWeaken s ctxt1 ctxt2
@@ -683,13 +666,9 @@ leqAssumption s (_, Discharged _ c1) (_, Discharged _ c2) = do
   kind <- mguCoeffectTypes s c1 c2
   addConstraint (Leq s c1 c2 kind)
 
-leqAssumption s (x, t) (x', t') = do
-  nameMap <- ask
-  ut <- unrenameAssumption t
-  ut' <- unrenameAssumption t'
+leqAssumption s x y =
   halt $ GenericError (Just s) $ "Can't unify free-variable types:\n\t"
-           ++ pretty (unrename nameMap x, ut)
-           ++ "\nwith\n\t" ++ pretty (unrename nameMap x', ut')
+           ++ pretty x ++ "\nwith\n\t" ++ pretty y
 
 
 isType :: (Id, CKind) -> Bool
@@ -709,8 +688,8 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       -- Freshen the variable depending on its kind
       var' <- case k of
                KType -> do
-                 var' <- freshVar var
-
+                 freshName <- freshVar (sourceName var)
+                 let var'  = changeInternalRepr var freshName
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
                  return var'
@@ -771,7 +750,8 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
     toFreshVar (var, Discharged t c) = do
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
-      cvar  <- freshVar var
+      freshName <- freshVar (sourceName var)
+      let cvar = changeInternalRepr var freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (liftCoeffectType ctype, InstanceQ)) : tyVarContext s })
       -- Return the freshened var-type mapping
@@ -797,38 +777,40 @@ eraseVar ((var, t):ctxt) var' | var == var' = ctxt
 extCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Id -> Assumption
   -> MaybeT Checker (Ctxt Assumption)
 extCtxt s ctxt var (Linear t) = do
-  nameMap <- ask
-  let var' = unrename nameMap var
+
   case lookup var ctxt of
     Just (Linear t') ->
        if t == t'
-        then halt $ LinearityError (Just s) $ "Linear variable `" ++ var' ++ "` is used more than once.\n"
-        else halt $ GenericError (Just s) $ "Type clash for variable `" ++ var' ++ "`"
+        then halt $ LinearityError (Just s)
+                  $ "Linear variable `" ++ pretty var ++ "` is used more than once.\n"
+        else halt $ GenericError (Just s)
+                   $ "Type clash for variable `" ++ pretty var ++ "`"
     Just (Discharged t' c) ->
        if t == t'
          then do
            k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
-         else halt $ GenericError (Just s) $ "Type clash for variable " ++ var' ++ "`"
+         else halt $ GenericError (Just s)
+                   $ "Type clash for variable " ++ pretty var ++ "`"
     Nothing -> return $ (var, Linear t) : ctxt
 
 extCtxt s ctxt var (Discharged t c) = do
-  nameMap <- ask
+
   case lookup var ctxt of
     Just (Discharged t' c') ->
         if t == t'
         then return $ replace ctxt var (Discharged t' (c `CPlus` c'))
         else do
-          let var' = unrename nameMap var
-          halt $ GenericError (Just s) $ "Type clash for variable `" ++ var' ++ "`"
+          halt $ GenericError (Just s)
+               $ "Type clash for variable `" ++ pretty var ++ "`"
     Just (Linear t') ->
         if t == t'
         then do
            k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
         else do
-          let var' = unrename nameMap var
-          halt $ GenericError (Just s) $ "Type clash for variable " ++ var' ++ "`"
+          halt $ GenericError (Just s)
+               $ "Type clash for variable " ++ pretty var ++ "`"
     Nothing -> return $ (var, Discharged t c) : ctxt
 
 -- Helper, foldM on a list with at least one element

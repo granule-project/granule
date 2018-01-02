@@ -94,5 +94,5 @@ instance Pretty Pred where
     predFold
      (intercalate " & ")
      (\s p q ->
-         (if null s then "" else "forall " ++ intercalate "," s ++ " . ")
+         (if null s then "" else "forall " ++ intercalate "," (map sourceName s) ++ " . ")
       ++ "(" ++ p ++ " -> " ++ q ++ ")") pretty

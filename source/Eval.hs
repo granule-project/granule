@@ -32,22 +32,22 @@ evalBinOp op _ _ = error $ "Unknown operator " ++ op
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
 
-evalIn ctxt (App _ (Val _ (Var "write")) e) = do
+evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "write" = do
     v <- evalIn ctxt e
     print v
     return $ Pure (Val nullSpan v)
 
-evalIn _ (Val s (Var "read")) = do
+evalIn _ (Val s (Var v)) | internalName v == "read" = do
     putStr "> "
     hFlush stdout
     val <- readLn
     return $ Pure (Val s (NumInt val))
 
-evalIn ctxt (App _ (Val _ (Var "pure")) e) = do
+evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
   v <- evalIn ctxt e
   return $ Pure (Val nullSpan v)
 
-evalIn _ctxt (App _ (Val _ (Var "toFloat")) (Val _ (NumInt n))) =
+evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "cast" =
   return $ NumFloat (cast n)
   where
     cast :: Int -> Double
@@ -92,17 +92,17 @@ evalIn ctxt (LetDiamond _ var _ e1 e2) = do
         other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       ++ pretty other
 
-evalIn _ (Val _ (Var "scale")) = return
-  (Abs " x" Nothing (Val nullSpan
-    (Abs " y" Nothing (
-      LetBox nullSpan " ye" (TyCon "Float")
-         (Val nullSpan (Var " y"))
+evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
+  (Abs (mkId " x") Nothing (Val nullSpan
+    (Abs (mkId " y") Nothing (
+      LetBox nullSpan (mkId " ye") (TyCon "Float")
+         (Val nullSpan (Var (mkId " y")))
          (Binop nullSpan
-           "*" (Val nullSpan (Var " x")) (Val nullSpan (Var " ye")))))))
+           "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
 evalIn ctxt (Val _ (Var x)) =
     case lookup x ctxt of
       Just val -> return val
-      Nothing  -> fail $ "Variable '" ++ x ++ "' is undefined in context: "
+      Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context: "
                ++ show ctxt
 
 evalIn ctxt (Val s (Pair l r)) = do
@@ -169,7 +169,7 @@ evalDefs ctxt (d : defs) = do
 eval :: (?globals :: Globals) => [Def] -> IO (Maybe Value)
 eval defs = do
     bindings <- evalDefs empty defs
-    case lookup "main" bindings of
+    case lookup (mkId "main") bindings of
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)
       Just (Promote e) -> fmap Just (evalIn bindings e)

@@ -30,7 +30,7 @@ ctxtFromTypedPattern _ t (PWild _) = do
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
     wild <- freshVar "wild"
-    return ([(wild, Linear t)], [], [])
+    return ([(mkInternalId "_" wild, Linear t)], [], [])
 
 ctxtFromTypedPattern _ t (PVar _ v) =
     return ([(v, Linear t)], [], [])
@@ -64,7 +64,7 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
 ctxtFromTypedPattern s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil") = do
     let kind = CConstr "Nat="
     -- Create a fresh type variable for the size of the consed list
-    sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
+    sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
     case n of
       TyVar v -> do
         addConstraint $ Eq s (CVar v) (CVar sizeVar) kind
@@ -81,7 +81,7 @@ ctxtFromTypedPattern s
     (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
     -- Create a fresh type variable for the size of the consed list
     let kind = CConstr "Nat="
-    sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
+    sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
 
     -- Recursively construct the binding patterns
     (bs1, eVars1, ty') <- ctxtFromTypedPattern s ty p1
@@ -117,7 +117,7 @@ ctxtFromTypedPattern s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
 ctxtFromTypedPattern s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = do
     -- Create a fresh type variable for the size of the consed list
     let kind = CConstr "Nat="
-    sizeVar <- freshCoeffectVarWithBinding "in" kind BoundQ
+    sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
 
     -- Recursively construct the binding patterns
     (bs2, eVars2, _) <- ctxtFromTypedPattern s (TyApp (TyCon "N") (TyVar sizeVar)) p

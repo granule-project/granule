@@ -27,12 +27,12 @@ localCheckingSpec = do
         -- State hasn't been changed by the local context
         state `shouldBe` endStateExpectation
         out   `shouldBe` (Just "x10")
-        (_, localState) <- runChecker endStateExpectation [] (runMaybeT local)
+        (_, localState) <- runChecker endStateExpectation (runMaybeT local)
         localState `shouldBe` (transformState endStateExpectation)
 
   where
     endStateExpectation = initState { uniqueVarId = 10 }
-    localising = runChecker initState [] $ runMaybeT $ do
+    localising = runChecker initState $ runMaybeT $ do
       state <- get
       put (state { uniqueVarId = 10 })
       localChecking $ do
@@ -41,7 +41,7 @@ localCheckingSpec = do
         return $ "x" ++ show (uniqueVarId state)
     transformState st =
       st { uniqueVarId  = 1 + uniqueVarId st
-         , tyVarContext = [("inner", (KType, ForallQ))]
-         , kVarContext  = [("innerk", KType)]
+         , tyVarContext = [(mkId "inner", (KType, ForallQ))]
+         , kVarContext  = [(mkId "innerk", KType)]
          , deriv        = Just $ Leaf "testing"
          , derivStack   = [Leaf "unit test"] }

@@ -14,6 +14,7 @@ import Checker.Monad
 import Checker.Predicates
 import Checker.Primitives
 import Syntax.Expr
+import Syntax.Pretty
 import Context
 import Utils
 
@@ -42,7 +43,7 @@ inferKindOfType' s quantifiedVariables =
     kCon conId =
       case lookup conId typeLevelConstructors of
         Just kind -> return kind
-        Nothing   -> halt $ UnboundVariableError (Just s) (conId ++ " constructor.")
+        Nothing   -> halt $ UnboundVariableError (Just s) (pretty conId ++ " constructor.")
 
     kBox _ KType = return KType
     kBox _ x = illKindedNEq s KType x
@@ -53,11 +54,11 @@ inferKindOfType' s quantifiedVariables =
     kVar tyVar =
       case lookup tyVar quantifiedVariables of
         Just kind -> return kind
-        Nothing   -> halt $ UnboundVariableError (Just s) $
-                       tyVar ++ " is unbound (not quantified)."
+        Nothing   -> halt $ UnboundVariableError (Just s)
+                          $ pretty tyVar ++ " is unbound (not quantified)."
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
-    kApp k kArg = illKindedNEq s (KFun kArg (KPoly "a")) k
+    kApp k kArg = illKindedNEq s (KFun kArg (KPoly $ mkId "...")) k
 
     kInt _ = return $ KConstr "Nat="
 

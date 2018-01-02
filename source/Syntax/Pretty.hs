@@ -40,7 +40,7 @@ instance Pretty Coeffect where
     pretty (CZero k) = "_0 : " ++ pretty k
     pretty (Level 0) = "Lo"
     pretty (Level _) = "Hi"
-    pretty (CVar c) = c
+    pretty (CVar c) = pretty c
     pretty (CMeet c d) =
       pretty c ++ " /\\ " ++ pretty d
     pretty (CJoin c d) =
@@ -59,25 +59,25 @@ instance Pretty Kind where
     pretty KCoeffect      = "Coeffect"
     pretty (KFun k1 k2)   = pretty k1 ++ " -> " ++ pretty k2
     pretty (KConstr c)    = c
-    pretty (KPoly v)      = v
+    pretty (KPoly v)      = pretty v
 
 instance Pretty TypeScheme where
     pretty (Forall _ cvs t) =
       "forall " ++ intercalate ", " (map prettyKindSignatures cvs)
                 ++ ". " ++ pretty t
       where
-       prettyKindSignatures (var, kind) = var ++ " : " ++ pretty kind
+       prettyKindSignatures (var, kind) = pretty var ++ " : " ++ pretty kind
 
 instance Pretty CKind where
     pretty (CConstr c) = c
-    pretty (CPoly   v) = v
+    pretty (CPoly   v) = pretty v
 
 instance Pretty Type where
     pretty (TyCon s)       = s
     pretty (FunTy t1 t2)  = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
     pretty (Box c t)      = pretty t ++ " |" ++ pretty c ++ "|"
     pretty (Diamond e t)  = pretty t ++ " <[" ++ intercalate "," e ++ "]>"
-    pretty (TyVar v)      = v
+    pretty (TyVar v)      = pretty v
     pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
     pretty (TyInt n)      = show n
     pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
@@ -87,11 +87,11 @@ instance {-# OVERLAPS #-} Pretty [Def] where
     pretty = intercalate "\n\n" . map pretty
 
 instance Pretty Def where
-    pretty (Def _ v e ps t) = v ++ " : " ++ pretty t ++ "\n"
-                                ++ v ++ " " ++ pretty ps ++ " = " ++ pretty e
+    pretty (Def _ v e ps t) = pretty v ++ " : " ++ pretty t ++ "\n"
+                           ++ pretty v ++ " " ++ pretty ps ++ " = " ++ pretty e
 
 instance Pretty Pattern where
-    pretty (PVar _ v)     = v
+    pretty (PVar _ v)     = pretty v
     pretty (PWild _)      = "_"
     pretty (PBox _ p)     = "|" ++ pretty p ++ "|"
     pretty (PInt _ n)     = show n
@@ -108,11 +108,11 @@ instance Pretty t => Pretty (Maybe t) where
     pretty (Just x) = pretty x
 
 instance Pretty Value where
-    pretty (Abs x t e)  = parens $ "\\" ++ x ++ " : " ++ pretty t
+    pretty (Abs x t e)  = parens $ "\\" ++ pretty x ++ " : " ++ pretty t
                                ++ " -> " ++ pretty e
     pretty (Promote e)  = "|" ++ pretty e ++ "|"
     pretty (Pure e)     = "<" ++ pretty e ++ ">"
-    pretty (Var x)      = x
+    pretty (Var x)      = pretty x
     pretty (NumInt n)   = show n
     pretty (NumFloat n) = show n
     pretty (Pair e1 e2) = "(" ++ pretty e1 ++ "," ++ pretty e2 ++ ")"
@@ -124,12 +124,15 @@ instance Pretty Value where
         valueAtom (Constr _ []) = True
         valueAtom _             = False
 
+instance Pretty Id where
+  pretty = sourceName
+
 instance Pretty Expr where
   pretty (App _ e1 e2) = parens $ pretty e1 ++ " " ++ pretty e2
   pretty (Binop _ op e1 e2) = parens $ pretty e1 ++ " " ++ op ++ " " ++ pretty e2
-  pretty (LetBox _ v t e1 e2) = parens $ "let |" ++ v ++ "| :" ++ pretty t ++ " = "
+  pretty (LetBox _ v t e1 e2) = parens $ "let |" ++ pretty v ++ "| :" ++ pretty t ++ " = "
                                 ++ pretty e1 ++ " in " ++ pretty e2
-  pretty (LetDiamond _ v t e1 e2) = parens $ "let " ++ v ++ " :" ++ pretty t ++ " <- "
+  pretty (LetDiamond _ v t e1 e2) = parens $ "let " ++ pretty v ++ " :" ++ pretty t ++ " <- "
                                     ++ pretty e1 ++ " in " ++ pretty e2
   pretty (Val _ v) = pretty v
   pretty (Case _ e ps) = "case " ++ pretty e ++ " of " ++

@@ -9,7 +9,6 @@ import Checker.Kinds
 import Checker.Monad
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity
-import Control.Monad.Reader.Class
 import Utils
 
 -- For doctest:
@@ -144,16 +143,3 @@ renameType rmap t =
         Just v' -> return $ TyVar v'
         -- Shouldn't happen
         Nothing -> return $ TyVar v
-
-unrenameType :: Type -> MaybeT Checker Type
-unrenameType t = do
-  nameMap <- ask
-  return $ renameType nameMap t
-
-unrenameAssumption :: Assumption -> MaybeT Checker Assumption
-unrenameAssumption (Linear t) = do
-  t' <- unrenameType t
-  return (Linear t')
-unrenameAssumption (Discharged t c) = do
-  t' <- unrenameType t
-  return (Discharged t' c)
