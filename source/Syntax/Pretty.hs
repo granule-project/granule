@@ -79,7 +79,7 @@ instance Pretty Type where
     pretty (Box c t)      = pretty t ++ " |" ++ pretty c ++ "|"
     pretty (Diamond e t)  = pretty t ++ " <[" ++ intercalate "," e ++ "]>"
     pretty (TyVar v)      = pretty v
-    pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
+    pretty (TyApp t1 t2)  = "(" ++ pretty t1 ++ " " ++ pretty t2 ++ ")"
     pretty (TyInt n)      = show n
     pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
