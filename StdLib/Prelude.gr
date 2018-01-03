@@ -22,6 +22,16 @@ until |p| |f| |x| =
     False -> x;
     True  -> until |p| |f| |(f x)|
 
+-- standard fixed point
+fix : forall (a : Type) . (a -> a) |Inf| -> a
+fix |f| = f (fix |f|)
+
+-- specialised first-order fixed point
+fixF : forall (a : Type, b : Type)
+     . ((a -> b) |Inf| -> (a -> b)) |Inf| -> (a -> b)
+fixF |f| = f |(fixF |f|)|
+
+
 -- Conditional on integers
 if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
 if0 g |x| |y| =
