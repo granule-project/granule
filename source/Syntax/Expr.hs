@@ -29,7 +29,8 @@ import Syntax.FirstParameter
 -- Internal representation of names (variables)
 -- which pairs their source name string with an internal name
 -- which is useually freshly generate. Error messages should
--- always use the 'sourceName'
+-- always use the 'sourceName', anything involving new name
+-- generation should use 'internalName'
 data Id = Id { sourceName :: String, internalName :: String }
   deriving (Eq, Ord)
 
