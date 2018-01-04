@@ -291,22 +291,28 @@ parseError t = do
     die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO [Def]
+parseDefs :: (?globals :: Globals) => String -> IO ([Def], Int)
 parseDefs input = do
-    defs <- parse input
-    importedDefs <- forM imports $ \path -> do
+    (defs, maxFreshId) <- parse input
+    importedDefsAndFreshIds <- forM imports $ \path -> do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
       parseDefs src
-    checkNameClashes $ (concat importedDefs) ++ defs -- add defs at the end because definitions
-                                            -- need to precede use sites
+    let (importedDefs, maxFreshIds) = unzip importedDefsAndFreshIds
+    -- add defs at the end because definitions
+    -- need to precede use sites
+    let allDefs = (concat importedDefs) ++ defs
+    checkNameClashes allDefs
+    let maxFreshId' = if null maxFreshIds then 0 else maximum maxFreshIds
+    return (allDefs, maxFreshId `max` maxFreshId')
+
   where
     parse = fmap (uniqueNames) . defs . scanTokens
     imports = map ((++ ".gr") . replace '.' '/') . catMaybes . map (stripPrefix "import ") . lines $ input
     replace from to = map (\c -> if c == from then to else c)
     checkNameClashes ds =
         if null clashes
-	  then return $ ds
+	        then return ()
           else die $ "Error: Name clash: " ++ intercalate ", " (map sourceName clashes)
       where
         clashes = names \\ nub names

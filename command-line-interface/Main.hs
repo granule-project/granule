@@ -61,12 +61,12 @@ run input = do
       printErr $ ParseError $ show e
       return (ExitFailure 1)
 
-    Right ast -> do
+    Right (ast, maxFreshId) -> do
       -- Print to terminal when in debugging mode:
       debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
       debugM "Pretty-printed AST:" $ pretty ast
       -- Check and evaluate
-      checked <- try $ check ast
+      checked <- try $ check ast maxFreshId
       case checked of
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e

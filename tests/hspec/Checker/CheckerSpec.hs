@@ -50,8 +50,8 @@ spec = do
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
-          Right ast -> do
-            result <- try (check ast) :: IO (Either SomeException _)
+          Right (ast, maxFreshId) -> do
+            result <- try (check ast maxFreshId) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Ok
@@ -63,8 +63,8 @@ spec = do
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
-          Right ast -> do
-            result <- try (check ast) :: IO (Either SomeException _)
+          Right (ast, maxFreshId) -> do
+            result <- try (check ast maxFreshId) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Failed

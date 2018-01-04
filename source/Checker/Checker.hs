@@ -31,8 +31,9 @@ data CheckerResult = Failed | Ok deriving (Eq, Show)
 -- Checking (top-level)
 check :: (?globals :: Globals )
       => [Def]        -- List of definitions
+      -> Int          -- The current maximum fresh identifier
       -> IO CheckerResult
-check defs = do
+check defs maxFreshId = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
 
@@ -49,7 +50,7 @@ check defs = do
                mapM (checkDef defCtxt) defs
 
     -- ... and evaluate the computation with initial state
-    results <- evalChecker initState checkedDefs
+    results <- evalChecker (initState { uniqueVarId = maxFreshId }) checkedDefs
 
     -- If all definitions type checked, then the whole file type checkers
     if all isJust results

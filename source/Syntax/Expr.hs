@@ -369,8 +369,14 @@ data Def = Def Span Id Expr [Pattern] TypeScheme
 instance FirstParameter Def Span
 
 -- Alpha-convert all bound variables
-uniqueNames :: [Def] -> [Def]
-uniqueNames = map (flip evalState (0 :: Int, [], []) . freshenDef)
+uniqueNames :: [Def] -> ([Def], Int)
+uniqueNames =
+   -- Since the type checker will generate new fresh names as well
+   -- find the maximum fresh id that occured in the renaming stage
+   -- so that there will be no clashes later
+   foldr (\def (freshDefs, maxFresh) ->
+      let (def', (maxFresh', _, _)) = runState (freshenDef def) (0 :: Int, [], [])
+      in (def' : freshDefs, maxFresh `max` maxFresh')) ([], 0)
   where
     freshenDef (Def s var e ps t) = do
       ps' <- mapM freshenBinder ps
