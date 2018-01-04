@@ -21,6 +21,8 @@ import System.Exit (die)
 
 %token
     nl    { TokenNL  _ }
+    data  { TokenData _ }
+    where { TokenWhere _ }
     let   { TokenLet _ }
     in    { TokenIn  _  }
     case  { TokenCase _ }
@@ -79,13 +81,32 @@ Def : Sig NL Binding
     else error $ "Signature for "
   	      ++ sourceName (fst3 $3)
 	      ++ " does not match the signature head" }
-
+    | data TypeConstr TyVars where DataConstrs {
+      ADT (getPos $1, snd $ getSpan (last $5)) $2 $3 $5
+    }
 Sig ::  { (Id, TypeScheme, Pos) }
 Sig : VAR ':' TypeScheme           { (mkId $ symString $1, $3, getPos $1) }
 
 Binding :: { (Id, Expr, [Pattern]) }
 Binding : VAR '=' Expr             { (mkId $ symString $1, $3, []) }
         | VAR Pats '=' Expr        { (mkId $ symString $1, $4, $2) }
+
+TypeConstr ::  { TypeConstr }
+TypeConstr : CONSTR { TypeConstr (getPosToSpan $1) (mkId $ constrString $1) }
+
+DataConstrs :: { [DataConstr] }
+DataConstrs : DataConstr DataConstrNext { $1 : $2 }
+
+DataConstr :: { DataConstr }
+DataConstr : CONSTR ':' TypeScheme { DataConstr (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+
+DataConstrNext :: { [DataConstr] }
+DataConstrNext : ';' DataConstrs { $2 }
+               | {- empty -}     { [] }
+
+TyVars :: { [(Span, Id)] }
+TyVars : VAR TyVars { ((getPosToSpan $1),(mkId $ symString $1)) : $2 }
+       | {- empty -}{ [] }
 
 Pats :: { [Pattern] }
 Pats : Pat                         { [$1] }
@@ -110,7 +131,7 @@ PAtom : VAR                        { PVar (getPosToSpan $1) (mkId $ symString $1
     | FLOAT                        { let TokenFloat _ x = $1
 	                             in PFloat (getPosToSpan $1) $ read x }
     | CONSTR                       { let TokenConstr _ x = $1
-	                             in PConstr (getPosToSpan $1) x }
+	                             in PConstr (getPosToSpan $1) (mkId x) }
     | '(' PJuxt ')'                  { $2 }
     | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
@@ -136,12 +157,12 @@ Kind :
   | CONSTR  { case constrString $1 of
                 "Type"     -> KType
                 "Coeffect" -> KCoeffect
-                s          -> KConstr s }
+                s          -> KConstr $ mkId s }
 
 CKind :: { CKind }
 CKind :
    VAR     { CPoly (mkId $ symString $1) }
- | CONSTR  { CConstr (constrString $1) }
+ | CONSTR  { CConstr (mkId $ constrString $1) }
 
 Type :: { Type }
 Type :
@@ -159,7 +180,7 @@ TyJuxt :
 
 TyAtom :: { Type }
 TyAtom :
-    CONSTR                      { TyCon $ constrString $1 }
+    CONSTR                      { TyCon $ mkId $ constrString $1 }
   | VAR                         { TyVar (mkId $ symString $1) }
   | INT                         { let TokenInt _ x = $1 in TyInt x }
   | TyAtom '+' TyAtom           { TyInfix ("+") $1 $3 }
@@ -277,7 +298,7 @@ Atom : '(' Expr ')'                { $2 }
      | '|' Atom '|'
                { Val (getPos $1, getPos $3) $ Promote $2 }
 
-     | CONSTR  { Val (getPosToSpan $1) $ Constr (constrString $1) [] }
+     | CONSTR  { Val (getPosToSpan $1) $ Constr (mkId $ constrString $1) [] }
 
      | '(' Expr ',' Expr ')'
         { Val (getPos $1, getPos $5) (Pair $2 $4) }
@@ -316,7 +337,9 @@ parseDefs input = do
           else die $ "Error: Name clash: " ++ intercalate ", " (map sourceName clashes)
       where
         clashes = names \\ nub names
-        names = map (\(Def _ name _ _ _) -> name) ds
+        names = map (\d -> case d of (Def _ name _ _ _) -> name
+                                     (ADT _ (TypeConstr _ name) _ _) -> name)
+                    ds
 
 myReadFloat :: String -> Rational
 myReadFloat str =

@@ -77,8 +77,8 @@ spec = do
               [(varA, Discharged tyvark (CNat Ordered 10))]
        c `shouldBe` [(varA, Discharged tyvark (CVar (mkId "a0")))]
        pred `shouldBe`
-         [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar (mkId "a0")) (CConstr "Nat"))
-              , Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr "Nat"))]]
+         [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
+              , Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
@@ -86,8 +86,8 @@ spec = do
               []
        c `shouldBe` [(varA, Discharged (tyvark) (CVar (mkId "a0")))]
        pred `shouldBe`
-         [Conj [Con (Leq nullSpan (CZero (CConstr "Nat")) (CVar (mkId "a0")) (CConstr "Nat"))
-               ,Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr "Nat"))]]
+         [Conj [Con (Leq nullSpan (CZero (CConstr $ mkId "Nat")) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
+               ,Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId"Nat"))]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
@@ -117,7 +117,7 @@ spec = do
                  []
                  [(varA, Discharged (tyvark) (CNat Ordered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyvark) (CZero (CConstr "Nat")))]
+                 [(varA, Discharged (tyvark) (CZero (CConstr $ mkId "Nat")))]
 
 
 

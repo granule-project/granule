@@ -1,0 +1,16 @@
+data Bool where
+  False : Bool;
+  True : Bool
+
+data Result where
+  Success : Result;
+  Failure : Result
+
+isSuccess : Result -> Bool
+isSuccess result =
+    case result of
+      Failure -> False;
+      Success -> True
+
+main : Bool
+main = isSuccess Failure

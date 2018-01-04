@@ -17,16 +17,16 @@ evalBinOp "-" (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
 evalBinOp "+" (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
 evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
 evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
-evalBinOp "==" (NumInt n) (NumInt m) = Constr (show (n == m)) []
-evalBinOp "<=" (NumInt n) (NumInt m) = Constr (show (n <= m)) []
-evalBinOp "<" (NumInt n) (NumInt m) = Constr (show (n < m)) []
-evalBinOp ">=" (NumInt n) (NumInt m) = Constr (show (n >= m)) []
-evalBinOp ">" (NumInt n) (NumInt m) = Constr (show (n > m)) []
-evalBinOp "==" (NumFloat n) (NumFloat m) = Constr (show (n == m)) []
-evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (show (n <= m)) []
-evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (show (n < m)) []
-evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (show (n >= m)) []
-evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (show (n > m)) []
+evalBinOp "==" (NumInt n) (NumInt m) = Constr (mkId . show $ (n == m)) []
+evalBinOp "<=" (NumInt n) (NumInt m) = Constr (mkId . show $ (n <= m)) []
+evalBinOp "<" (NumInt n) (NumInt m) = Constr (mkId . show $ (n < m)) []
+evalBinOp ">=" (NumInt n) (NumInt m) = Constr (mkId . show $ (n >= m)) []
+evalBinOp ">" (NumInt n) (NumInt m) = Constr (mkId . show $ (n > m)) []
+evalBinOp "==" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n == m)) []
+evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n <= m)) []
+evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n < m)) []
+evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n >= m)) []
+evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n > m)) []
 evalBinOp op _ _ = error $ "Unknown operator " ++ op
 
 -- Call-by-value big step semantics
@@ -95,7 +95,7 @@ evalIn ctxt (LetDiamond _ var _ e1 e2) = do
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (mkId " x") Nothing (Val nullSpan
     (Abs (mkId " y") Nothing (
-      LetBox nullSpan (mkId " ye") (TyCon "Float")
+      LetBox nullSpan (mkId " ye") (TyCon $ mkId "Float")
          (Val nullSpan (Var (mkId " y")))
          (Binop nullSpan
            "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))

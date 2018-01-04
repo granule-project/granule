@@ -55,13 +55,12 @@ data Neg a = Neg a
 
 instance Pretty (Neg Constraint) where
     pretty (Neg (Eq _ c1 c2 _)) =
-      pretty c1 ++ " != " ++ pretty c2
+      pretty c1 ++ " /= " ++ pretty c2
 
-    pretty (Neg (Leq _ c1 c2 (CConstr "Nat="))) =
-      pretty c1 ++ " is not equal to " ++ pretty c2
-
-    pretty (Neg (Leq _ c1 c2 _)) =
-      pretty c1 ++ " > " ++ pretty c2
+    pretty (Neg (Leq _ c1 c2 (CConstr k))) =
+      case internalName k of
+        "Nat=" -> pretty c1 ++ " /= " ++ pretty c2
+        _ -> pretty c1 ++ " > " ++ pretty c2
 
 instance Pretty [Constraint] where
     pretty constr =

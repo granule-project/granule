@@ -1,20 +1,87 @@
--- # Prelude library for Granule
+------
+--- Description: Prelude library for Granule
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2017
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
 
--- ## Standard, miscellaneous functional combinators
+--- # Boolean algebra
 
--- Identity function
+--- Boolean
+data Bool where
+  False : Bool;
+  True : Bool
+
+--- Logical negation
+not : Bool -> Bool
+not x = case x of True -> False; False -> True
+
+--- Logical and
+--- NB: non-strict in second argument
+and : Bool -> Bool |1| -> Bool
+and x |y| = case x of True -> y; False -> False
+
+--- Logical nand
+--- NB: non-strict in second argument
+nand : Bool -> Bool |1| -> Bool
+nand x |y| = case x of True -> not y; False -> True
+
+--- Logical and
+--- NB: consumes both arguments
+and' : Bool -> Bool -> Bool
+and' x y =
+    case x of
+      True -> y;
+      False -> (case y of True -> False; False -> False)
+
+--- Inclusive or
+--- NB: non-strict in second argument
+or : Bool -> Bool |1| -> Bool
+or x |y| = case x of True -> True; False -> y
+
+--- Inclusive or
+--- NB: strict in both arguments
+or' : Bool -> Bool -> Bool
+or' x y =
+    case x of
+      True -> (case y of True -> True; False -> True );
+      False -> y
+
+--- Exclusive or
+xor : Bool -> Bool -> Bool
+xor x y = case x of True -> not y; False -> y
+
+--- Logical implication
+--- NB: non-strict in second argument
+impl : Bool -> Bool |1| -> Bool
+impl x |y| = case x of True -> y; False -> True
+
+--- Logical implication
+--- NB: strict in both arguments
+impl' : Bool -> Bool -> Bool
+impl' x y =
+    case x of
+      True -> y;
+      False -> (case y of False -> True; True -> True)
+
+--- # Standard functional components
+
+--- Identitiy function
 id : forall a : Type . a -> a
 id x = x
 
--- Constant combinator
-const : forall a : Type, b : Type . a -> b |0| -> a
-const x |y| = x
-
--- Flip the order of parameters
+--- Flip the order of parameters
 flip : forall a : Type, b : Type, c : Type . (a -> b -> c) -> b -> a -> c
 flip f x y = f y x
 
--- until p f yields the result of applying f until p holds.
+--- Constant combinator
+--- NB: Throws away its second argument and returns the first
+const : forall a : Type, b : Type . a -> b |0| -> a
+const x |y| = x
+
+--- Apply f to x until p holds
 until : forall a : Type .
         (a -> Bool) |∞| -> (a -> a) |∞| -> a |∞| -> a
 until |p| |f| |x| =
@@ -22,62 +89,68 @@ until |p| |f| |x| =
     False -> x;
     True  -> until |p| |f| |(f x)|
 
--- standard fixed point
+--- Standard fixed point
 fix : forall (a : Type) . (a -> a) |Inf| -> a
 fix |f| = f (fix |f|)
 
--- specialised first-order fixed point
+--- Specialised first-order fixed point
 fixF : forall (a : Type, b : Type)
      . ((a -> b) |Inf| -> (a -> b)) |Inf| -> (a -> b)
 fixF |f| = f |(fixF |f|)|
 
 
--- Conditional on integers
+--- Conditional on integers
+--- Returns `x` if `g` is zero, else returns `y`
 if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
 if0 g |x| |y| =
-  case g of |0| -> x;
-            |n| -> y
+    case g of
+      |0| -> x;
+      |n| -> y
 
--- ## Combinators involving products (pairs)
+--- # Combinators involving products (pairs)
 
--- Extract the left part of a pair
+--- Extract the left part of a pair
 fst : forall a : Type, b : Type . (a, b |0|) -> a
 fst (x, |_|) = x
 
--- Extract the right part of a pair
+--- Extract the right part of a pair
 snd : forall a : Type, b : Type . (a |0|, b) -> b
 snd (|_|, y) = y
 
--- curry converts an uncurried function to a curried function
+--- curry converts an uncurried function to a curried function
 curry : forall a : Type, b : Type, c : Type .
         ((a, b) -> c) -> a -> b -> c
 curry f x y = f (x, y)
 
--- uncurry converts a curried function to a function on pairs
+--- uncurry converts a curried function to a function on pairs
 uncurry : forall a : Type, b : Type, c : Type .
           (a -> b -> c) -> ((a, b) -> c)
 uncurry f (x, y) = f x y
 
--- ## Coeffect-specifc combinators
+--- # Coeffect-specifc combinators
 
--- Coeffectful composition
+--- Coeffectful composition
 comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
        (b |n| -> c) -> (a |m| -> b) |n| -> a |n * m| -> c
 comp g |f| |x| = g |(f |x|)|
 
--- Flatten two boxes (with Nat grading)
+--- Coeffectful application
+app : forall a : Type, b : Type, c : Nat . (a |c| -> b) -> a |c| -> b
+app f x = f x
+
+--- Flatten two boxes (with Nat grading)
 flatten : forall (a : Type, n : Nat, m : Nat) . a |n| |m| -> a |n * m|
 flatten ||x|| = |x|
 
--- Expand two boxes (with Nat grading)
+--- Expand two boxes (with Nat grading)
 unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
 unflatten |x| = ||x||
 
--- Push coeffects on a pair into the left and right elements
+--- Push coeffects on a pair into the left and right elements
 push : forall (a : Type, b : Type, n : Nat) . (a, b) |n| -> (a |n|, b |n|)
 push |(x, y)| = (|x|, |y|)
 
--- Pull coeffects of pair elements up to the pair
+--- Pull coeffects of pair elements up to the pair
 pull : forall (a : Type, b : Type, n : Nat, m : Nat)
      . (a |n|, b |m|) -> (a, b) |n /\ m|
 pull (|x|, |y|) = |(x, y)|

@@ -34,6 +34,8 @@ tokens :-
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   let                           { \p s -> TokenLet p }
+  data                          { \p s -> TokenData p }
+  where                         { \p s -> TokenWhere p }
   in                            { \p s -> TokenIn p }
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
@@ -71,6 +73,8 @@ tokens :-
 
 data Token = TokenLet  AlexPosn
            | TokenIn   AlexPosn
+           | TokenData AlexPosn
+           | TokenWhere AlexPosn
 	   | TokenCase AlexPosn
 	   | TokenOf   AlexPosn
            | TokenInfinity AlexPosn

@@ -195,9 +195,9 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
         Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
 
         -- If the kind is Nat=, then create a solver constraint
-        Just (KConstr "Nat=") -> do
+        Just (KConstr k) | internalName k == "Nat=" -> do
           nat <- compileNatKindedTypeToCoeffect s t
-          addConstraint (Eq s (CVar n) nat (CConstr "Nat="))
+          addConstraint (Eq s (CVar n) nat (CConstr $ mkId "Nat="))
           return (True, [(n, t)])
 
         Just _ -> return (True, [(n, t)])
@@ -211,10 +211,10 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
       k1 <- inferKindOfType s (TyVar n)
       k2 <- inferKindOfType s t
       case (k1, k2) of
-        (KConstr "Nat=", KConstr "Nat=") -> do
+        (KConstr k1, KConstr k2) | internalName k1 == "Nat=" && internalName k2 == "Nat=" -> do
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
-          addConstraint $ Eq s c1 c2 (CConstr "Nat=")
+          addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
           return (True, [])
         _ ->
          halt $ GenericError (Just s)
@@ -243,12 +243,12 @@ equalNatKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
   case (k1, k2) of
-    (KConstr n, KConstr n') | "Nat" `isPrefixOf` n && "Nat" `isPrefixOf` n' -> do
-       c1 <- compileNatKindedTypeToCoeffect s t1
-       c2 <- compileNatKindedTypeToCoeffect s t2
-       addConstraint $ Eq s c1 c2 (CConstr "Nat=")
-       return (True, [])
-
+    (KConstr n, KConstr n')
+      | "Nat" `isPrefixOf` (internalName n) && "Nat" `isPrefixOf` (internalName  n') -> do
+        c1 <- compileNatKindedTypeToCoeffect s t1
+        c2 <- compileNatKindedTypeToCoeffect s t2
+        addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
+        return (True, [])
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
@@ -311,7 +311,7 @@ joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
-  let kind = CConstr "Nat="
+  let kind = CConstr $ mkId "Nat="
   var <- freshCoeffectVar m kind
   -- Unify the two coeffects into one
   addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
@@ -321,7 +321,7 @@ joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
-  let kind = CConstr "Nat="
+  let kind = CConstr $ mkId "Nat="
   nvar <- freshCoeffectVar n kind
   mvar <- freshCoeffectVar m kind
   -- Unify the two variables into one

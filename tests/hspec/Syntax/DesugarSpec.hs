@@ -13,22 +13,22 @@ spec = do
 
     it "test nested box variable pattern" $
      (evalState (desugarPattern (mkId "v")
-        (PBox nullSpan (PVar nullSpan (mkId "v1"))) (Box undefined (TyCon "Int"))) 0 $
+        (PBox nullSpan (PVar nullSpan (mkId "v1"))) (Box undefined (TyCon $ mkId "Int"))) 0 $
         (Val nullSpan $ Var $ mkId "v1"))
       `shouldBe`
        -- letBox |evalV0| : Int = v in case (v1, v2) -> v
-        (LetBox nullSpan (mkId "v1") (TyCon "Int")
+        (LetBox nullSpan (mkId "v1") (TyCon $ mkId "Int")
            (Val nullSpan $ Var $ mkId "v")
              (Val nullSpan $ Var $ mkId "v1"))
 
     it "test nested box pair pattern" $
      (evalState (desugarPattern (mkId "v")
         (PBox nullSpan (PPair nullSpan (PVar nullSpan (mkId "v1")) (PVar nullSpan (mkId "v2"))))
-        (Box undefined (PairTy (TyCon "Int") (TyCon "Int")))) 0 $
+        (Box undefined (PairTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))) 0 $
         (Val nullSpan $ Var $ mkId "v1"))
       `shouldBe`
        -- letBox |evalV0| : Int = v in case (v1, v2) -> v
-        (LetBox nullSpan (mkId "eval v0") (PairTy (TyCon "Int") (TyCon "Int"))
+        (LetBox nullSpan (mkId "eval v0") (PairTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
            (Val nullSpan $ Var $ mkId "v")
              (Case nullSpan (Val nullSpan $ Var $ mkId "eval v0")
                [(PPair nullSpan (PVar nullSpan (mkId "v1")) (PVar nullSpan

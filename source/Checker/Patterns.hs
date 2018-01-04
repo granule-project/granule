@@ -1,29 +1,27 @@
 {-# LANGUAGE ImplicitParams #-}
+
 module Checker.Patterns where
 
-import Context
-import Syntax.Expr
-import Syntax.Pretty
+import Control.Monad.Trans.Maybe
+import Control.Monad.State.Strict
+
+import Checker.Types (equalTypes, nonConflictingUnifiers)
+import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
-import Checker.Types
-import Checker.Coeffects
+import Context
+import Syntax.Expr
+import Syntax.Pretty
 import Utils
-
-import Control.Monad.Trans.Maybe
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also a list of any variables bound by the pattern
 --   (e.g. for dependent matching) and a substitution for variables
 --   caused by pattern matching (e.g., from unification).
-ctxtFromTypedPattern
-   :: (?globals :: Globals )
-   => Span
-   -> Type
-   -> Pattern
-   -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type)
+ctxtFromTypedPattern :: (?globals :: Globals ) => Span -> Type -> Pattern
+  -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern _ t (PWild _) = do
@@ -37,14 +35,11 @@ ctxtFromTypedPattern _ t (PVar _ v) =
     return ([(v, Linear t)], [], [])
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern _ t@(TyCon "Int")   (PInt _ _) =
-    return ([], [], [])
-ctxtFromTypedPattern _ t@(TyCon "Float") (PFloat _ _) =
-    return ([], [], [])
-ctxtFromTypedPattern _ t@(TyCon "Bool")  (PConstr _ "True") =
-    return ([], [], [])
-ctxtFromTypedPattern _ t@(TyCon "Bool")  (PConstr _ "False") =
-    return ([], [], [])
+ctxtFromTypedPattern _ t@(TyCon c) (PInt _ _)
+  | internalName c == "Int" = return ([], [], [])
+
+ctxtFromTypedPattern _ t@(TyCon c) (PFloat _ _)
+  | internalName c == "Float" = return ([], [], [])
 
 -- Pattern match on a modal box
 ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
@@ -62,8 +57,9 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
         Nothing        -> (v, Discharged t c')
 
 -- Match a Nil constructor
-ctxtFromTypedPattern s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil") = do
-    let kind = CConstr "Nat="
+ctxtFromTypedPattern s (TyApp (TyApp (TyCon listC) n) ty) (PConstr _ nilC)
+  | internalName listC == "List" && internalName nilC == "Nil" = do
+    let kind = CConstr $ mkId "Nat="
     c <- compileNatKindedTypeToCoeffect s n
     addConstraint $ Eq s c (CNat Discrete 0) kind
     case n of
@@ -71,16 +67,15 @@ ctxtFromTypedPattern s t@(TyApp (TyApp (TyCon "List") n) ty) (PConstr _ "Nil") =
       _       -> return ([], [], [])
 
 -- Match a Cons constructor
-ctxtFromTypedPattern s
-    (TyApp  (TyApp  (TyCon "List") n) ty)
-    (PApp _ (PApp _ (PConstr _ "Cons") p1) p2) = do
+ctxtFromTypedPattern s (TyApp  (TyApp  (TyCon listC) n) ty) (PApp _ (PApp _ (PConstr _ consC) p1) p2)
+  | internalName listC == "List" && internalName consC == "Cons" = do
     -- Create a fresh type variable for the size of the consed list
-    let kind = CConstr "Nat="
+    let kind = CConstr $ mkId "Nat="
     sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
 
     -- Recursively construct the binding patterns
     (bs1, eVars1, u1) <- ctxtFromTypedPattern s ty p1
-    (bs2, eVars2, u2) <- ctxtFromTypedPattern s (TyApp (TyApp (TyCon "List") (TyVar sizeVar)) ty) p2
+    (bs2, eVars2, u2) <- ctxtFromTypedPattern s (TyApp (TyApp (TyCon $ mkId "List") (TyVar sizeVar)) ty) p2
     nonConflictingUnifiers s u1 u2
 
     -- Generate equality constraint
@@ -99,21 +94,23 @@ ctxtFromTypedPattern s
     return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, u0 ++ u1 ++ u2)
 
 -- Match a Z constructor
-ctxtFromTypedPattern s t@(TyApp (TyCon "N") n) (PConstr _ "Z") = do
+ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PConstr _ zC)
+  | internalName nC == "N" && internalName zC == "Z" = do
     c <- compileNatKindedTypeToCoeffect s n
-    addConstraint $ Eq s c (CNat Discrete 0) (CConstr "Nat=")
+    addConstraint $ Eq s c (CNat Discrete 0) (CConstr $ mkId "Nat=")
     case n of
       TyVar v -> return ([], [], [(v, TyInt 0)])
       _       -> return ([], [], [])
 
 -- Match a S constructor
-ctxtFromTypedPattern s t@(TyApp (TyCon "N") n) (PApp _ (PConstr _ "S") p) = do
+ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PApp _ (PConstr _ sC) p)
+  | internalName nC == "N" && internalName sC == "S" = do
     -- Create a fresh type variable for the size of the consed list
-    let kind = CConstr "Nat="
+    let kind = CConstr $ mkId "Nat="
     sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
 
     -- Recursively construct the binding patterns
-    (bs2, eVars2, u) <- ctxtFromTypedPattern s (TyApp (TyCon "N") (TyVar sizeVar)) p
+    (bs2, eVars2, u) <- ctxtFromTypedPattern s (TyApp (TyCon $ mkId "N") (TyVar sizeVar)) p
 
     -- Generate equality constraint
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
@@ -136,15 +133,87 @@ ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   nonConflictingUnifiers s substl substr
   return (ctxtL ++ ctxtR, eVars1 ++ eVars2, substl ++ substr)
 
-ctxtFromTypedPattern s t p =
+-- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "True") =
+--     return ([], [], [])
+-- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
+--     return ([], [], [])
+ctxtFromTypedPattern _ ty (PConstr s dataC) = do
+  st <- get
+  case lookup dataC (dataConstructors st) of
+    Nothing ->
+      halt $ UnboundVariableError (Just s) $
+             "Data constructor `" ++ pretty dataC ++ "`" <?> (dataConstructors st)
+
+    Just tySch -> do
+      t <- freshPolymorphicInstance tySch
+      debugM "Patterns.ctxtFromTypedPattern" $ pretty t ++ pretty ty
+      areEq <- equalTypes s t ty
+      case areEq of
+        (True, _, unifiers) -> return ([], [], unifiers)
+        _ -> halt $ PatternTypingError (Just s) $
+                  "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
+
+ctxtFromTypedPattern _ ty (PApp s p1 p2) = do
+   (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1 -- checking patterns
+   case t1 of
+     FunTy arg res -> do
+       subst <- equalTypes s res ty
+       case subst of
+         (True, _, unifiers) -> do
+           let arg' = substType unifiers arg
+           (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg' p2
+           (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
+           return (binders ++ binders', tyvars1 ++ tyvars2, [])
+
+         _ -> halt $ PatternTypingError (Just s) $
+                    "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty res ++ "`"
+
+
+ctxtFromTypedPattern s t p = do
+  st <- get
+  debugM "ctxtFromTypedPattern" $ "Type: " ++ show t ++ "\nPat: " ++ show p
+  debugM "dataConstructors in checker state" $ show $ dataConstructors st
   halt $ PatternTypingError (Just s)
-    $ "Pattern match " ++ pretty p ++ " does not have type " ++ pretty t
+    $ "Pattern match `" ++ pretty p ++ "` does not have type `" ++ pretty t ++ "`"
 
 -- | Given a list of patterns and a (possible nested) function type
 --   match the patterns against each argument, returning a binding context
 --   as well as the remaining type.
 --   e.g. given type A -> B -> C and patterns [Constr "A", Constr "B"] then
 --     the remaining type is C.
+
+synthTypedPattern :: (?globals :: Globals) => Pattern
+  -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type, Type)
+synthTypedPattern p = do
+  case p of
+    PVar s name -> halt $ PatternTypingError (Just s) $
+                          "Expected a data constructor, but got `" ++ pretty name ++ "`"
+    PWild s -> halt $ PatternTypingError (Just s) $
+                      "Expected a data constructor, but got a wildcard."
+    PInt s _ -> return ([], [], [], TyCon $ mkId "Int")
+    PFloat s _ -> return ([], [], [], TyCon $ mkId "Float")
+    PConstr s name -> do
+      st <- get
+      case lookup name (dataConstructors st) of
+        Nothing -> halt $ UnboundVariableError (Just s) $ "Constructor `" ++ pretty name ++ "`"
+        Just (Forall _ _ t) -> return ([], [], [], t)
+    PApp s p1 p2 -> do
+      (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
+      case t1 of
+        TyApp arg res -> do
+          (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg p2
+          (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
+          debugM "PApp******" $ show $ substType subst2 res
+          return (binders ++ binders', tyvars1 ++ tyvars2, [], substType subst2 res)
+        t -> halt $ PatternTypingError (Just s) $
+                    "Expected function type but got `" ++ pretty t
+                    ++ "` in pattern `" ++ pretty p1 ++ "`"
+      -- need to look at substitutions that come from checking right apply on the return
+    -- PPair _ p1 p2 -> do
+    --   (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
+    --   (binders2, tyvars2, subst2, t2) <- synthTypedPattern p2
+    --   return (binders1 ++ binders2 {-?-}, tyvars1 ++ tyvars2, [{-?-}], PairTy t1 t2)
+
 ctxtFromTypedPatterns ::
   (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
 ctxtFromTypedPatterns _ ty [] =

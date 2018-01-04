@@ -1,5 +1,7 @@
-isEmpty : forall (n : Nat) . List n Int -> Bool
+import StdLib.Prelude
+
+isEmpty : forall (n : Nat=) . List n Int -> Bool
 isEmpty xs =
-  case xs of
-    Nil        -> True;
-    (Cons _ _) -> False
+    case xs of
+      Nil        -> True;
+      (Cons _ _) -> False

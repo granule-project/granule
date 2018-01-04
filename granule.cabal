@@ -2,14 +2,14 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 2885b61506e2fdda5f39b2dc5173e6f64c3d7b69e2ef8c79040fa99cbd36b7f4
+-- hash: 7f65cf3756f86156c0a31353ca978a9c005fa02316dfee07be2548bbb3c07fff
 
 name:           granule
 version:        0.4.0.0
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
-author:         Dominic Orchard
+author:         Dominic Orchard, Vilem-Benjamin Liepelt
 copyright:      2017 authors
 license:        BSD3
 license-file:   LICENSE
@@ -27,7 +27,7 @@ source-repository head
 library
   hs-source-dirs:
       source
-  ghc-options: -O0 -W -Werror -Wno-unused-matches
+  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
   build-depends:
       array
     , base >=4.10 && <5
