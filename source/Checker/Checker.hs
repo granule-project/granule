@@ -152,7 +152,7 @@ checkExpr defs gam pol topLevel tau
     equalTypes s (TyCon "Float") tau
     checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon "Float")) e
 
--- Application
+-- Application synthesis
 checkExpr defs gam pol topLevel tau (App s e1 e2) = do
     (argTy, gam2) <- synthExpr defs gam pol e2
     (gam1, subst) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
@@ -174,6 +174,7 @@ checkExpr defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
   let gam'' = multAll (freeVars e) demand gam'
   return (gam'', subst)
 
+-- Dependent pattern-matching case
 checkExpr defs gam pol _ tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam) <- synthExpr defs gam pol guardExpr

@@ -41,6 +41,10 @@ intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn b) a
   where appearsIn x (name, _) = isJust $ lookup name x
 
+intersectCtxtsAlternatives :: Eq a => Ctxt a -> Ctxt a -> Ctxt [a]
+intersectCtxtsAlternatives a b =
+    [(k1, [v1, v2]) | (k1, v1) <- a, (k2, v2) <- b, k1 == k2, v1 /= v2]
+
 {- | `subtractCtxt a b` removes all the key-value pairs from
    `a` that have keys in `b` -}
 subtractCtxt :: Ctxt a -> Ctxt a -> Ctxt a
