@@ -33,6 +33,7 @@ library:
   - Checker.Patterns
   - Checker.Predicates
   - Checker.Primitives
+  - Checker.Substitutions
   - Checker.Types
   - Context
   - Eval
@@ -83,4 +84,5 @@ tests:
     source-dirs: tests
     dependencies:
     - doctest
+    - granule
     ghc-options: -threaded

@@ -3,14 +3,15 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
+module Syntax.Expr (Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
                    NatModifier(..), Effect, Kind(..), DataConstr(..), TypeConstr(..),
+                   Id, sourceName, internalName, mkId, mkInternalId,
+                   Operator,
                    liftCoeffectType,
                    uniqueNames, arity, freeVars, subst,
                    normalise,
                    nullSpan, getSpan, getEnd, getStart, Pos, Span,
-                   freshenBlankPolyVars,
                    typeFoldM, TypeFold(..),
                    mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
                    mTyInt, mPairTy, mTyInfix,
@@ -19,12 +20,27 @@ module Syntax.Expr (Id, Value(..), Expr(..), Type(..), TypeScheme(..),
 
 import Data.List ((\\))
 import Control.Monad.State
+import Control.Arrow
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
 
 import Syntax.FirstParameter
 
-type Id = String
+-- Internal representation of names (variables)
+-- which pairs their source name string with an internal name
+-- which is useually freshly generate. Error messages should
+-- always use the 'sourceName'
+data Id = Id { sourceName :: String, internalName :: String }
+  deriving (Eq, Ord, Show)
+
+-- Constructors and operators are just strings
+type Operator      = String
+
+mkId :: String -> Id
+mkId x = Id x x
+
+mkInternalId :: String -> String -> Id
+mkInternalId = Id
 
 type Pos = (Int, Int) -- (line, column)
 type Span = (Pos, Pos)
@@ -47,13 +63,13 @@ data Value = Abs Id (Maybe Type) Expr
            | Promote Expr
            | Pure Expr
            | Var Id
-           | Constr String [Value]
+           | Constr Id [Value]
            | Pair Expr Expr
           deriving (Eq, Show)
 
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
-          | Binop Span Id Expr Expr
+          | Binop Span Operator Expr Expr
           | LetBox Span Id Type Expr Expr
           | LetDiamond Span Id Type Expr Expr
           | Val Span Value
@@ -68,7 +84,7 @@ data Pattern = PVar Span Id         -- Variable patterns
              | PBox Span Pattern -- Box patterns
              | PInt Span Int        -- Numeric patterns
              | PFloat Span Double
-             | PConstr Span String  -- Constructor pattern
+             | PConstr Span Id  -- Constructor pattern
              | PApp Span Pattern Pattern -- Apply pattern
              | PPair Span Pattern Pattern -- ^ Pair patterns
           deriving (Eq, Show, Generic)
@@ -109,12 +125,12 @@ instance Binder Pattern where
 
   freshenBinder p = return p -- TODO: Get rid of catch-alls
 
-type Freshener t = State (Int, [(Id, Id)]) t
+type Freshener t = State (Int, [(String, String)]) t
 
 class Term t where
   -- Compute the free variables in a term
   freeVars :: t -> [Id]
-  -- Syntactic substitution of an expression into a term
+  -- Syntactic substitution of a term into an expression
   -- (assuming variables are all unique to avoid capture)
   subst :: Expr -> Id -> t -> Expr
   -- Freshen
@@ -124,89 +140,108 @@ instance Term Type where
   freeVars = runIdentity . typeFoldM TypeFold
     { tfFunTy   = \x y -> return $ x ++ y
     , tfTyCon   = \_ -> return [] -- or: const (return [])
-    , tfBox     = \_ x -> return x -- or: uncurry (return . snd)
+    , tfBox     = \c t -> return $ freeVars c ++ t
     , tfDiamond = \_ x -> return x
-    , tfTyVar   = return . return
+    , tfTyVar   = \v -> return [v] -- or: return . return
     , tfTyApp   = \x y -> return $ x ++ y
     , tfTyInt   = \_ -> return []
     , tfPairTy  = \x y -> return $ x ++ y
     , tfTyInfix = \_ y z -> return $ y ++ z
     }
 
-  subst = undefined -- TODO: Term class probably needs breaking up
-  freshen = undefined -- TODO
+  subst e _ t = e
+  freshen =
+    typeFoldM (baseTypeFold { tfTyVar = freshenTyVar, tfBox = freshenTyBox })
+    where
+      freshenTyBox c t = do
+        c' <- freshen c
+        t' <- freshen t
+        return $ Box c' t'
+      freshenTyVar v = do
+        (_, nmap) <- get
+        case lookup (sourceName v) nmap of
+           Just v' -> return (TyVar $ Id (sourceName v) v')
+           -- This case happens if we are referring to a defined
+           -- function which does not get its name freshened
+           Nothing -> return (TyVar $ mkId (sourceName v))
 
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
 freshVar :: Id -> Freshener Id
 freshVar var = do
    (v, nmap) <- get
-   let var' = var ++ show v
-   put (v+1, (var, var') : nmap)
-   return var'
+   let var' = sourceName var ++ show v
+   put (v+1, (sourceName var, var') : nmap)
+   return $ var { internalName = var' }
 
-freshenBlankPolyVars :: [Def] -> [Def]
-freshenBlankPolyVars defs =
-    evalState (mapM freshenDef defs) (0 :: Int, [])
-  where
-    freshenDef (Def s identifier expr pats tys) = do
-      tys <- freshenTys tys
-      return $ Def s identifier expr pats tys
+freshenTys :: TypeScheme -> Freshener TypeScheme
+freshenTys (Forall s binds ty) = do
+      binds' <- mapM (\(v, k) -> do { v' <- freshVar v; return (v', k) }) binds
+      ty' <- freshen ty
+      return $ Forall s binds' ty'
 
-    freshenDef (ADT s tyC tyVars dataCs) = do
-      dataCs <- forM dataCs $ \(DataConstr s name tySch) -> do
-        tySch <- freshenTys tySch
-        return $ DataConstr s name tySch
-      return $ ADT s tyC tyVars dataCs
+instance Term Coeffect where
+    freeVars (CVar v) = [v]
+    freeVars (CPlus c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CTimes c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CMeet c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CJoin c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars CNat{}  = []
+    freeVars CNatOmega{} = []
+    freeVars CFloat{} = []
+    freeVars CInfinity{} = []
+    freeVars CZero{} = []
+    freeVars COne{} = []
+    freeVars Level{} = []
+    freeVars CSet{} = []
+    freeVars (CSig c _) = freeVars c
 
-    freshenTys (Forall s binds ty) = do
-      ty <- freshenTy ty
-      return $ Forall s binds ty
+    subst e _ _ = e
 
-    freshenTy (FunTy t1 t2) = do
-      t1 <- freshenTy t1
-      t2 <- freshenTy t2
-      return $ FunTy t1 t2
-    freshenTy (Box c t)     = do
-      c <- freshenCoeff c
-      t <- freshenTy t
-      return $ Box c t
-    freshenTy (Diamond e t) = do
-      t <- freshenTy t
-      return $ Diamond e t
-    freshenTy t = return t
-
-    freshenCoeff (CInfinity (CPoly "")) = do
-      t <- freshVar "d"
+    freshen (CVar v) = do
+      (_, nmap) <- get
+      case lookup (sourceName v) nmap of
+        Just v' -> return $ CVar $ Id (sourceName v) v'
+        Nothing -> return $ CVar $ mkId (sourceName v)
+    freshen (CInfinity (CPoly i@(Id _ ""))) = do
+      t <- freshVar i
       return $ CInfinity (CPoly t)
-    freshenCoeff (CInfinity (CPoly " infinity")) = do
-      t <- freshVar " infinity"
+    freshen (CInfinity (CPoly i@(Id _ " infinity"))) = do
+      t <- freshVar i
       return $ CInfinity (CPoly t)
-    freshenCoeff (CPlus c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+
+    freshen (CPlus c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CPlus c1' c2'
-    freshenCoeff (CTimes c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+    freshen (CTimes c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CTimes c1' c2'
 
-    freshenCoeff (CMeet c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+    freshen (CMeet c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CMeet c1' c2'
-    freshenCoeff (CJoin c1 c2) = do
-      c1' <- freshenCoeff c1
-      c2' <- freshenCoeff c2
+    freshen (CJoin c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
       return $ CJoin c1' c2'
 
-    freshenCoeff (CSet cs) = do
-      cs' <- mapM (\(s, t) -> freshenTy t >>= (\t' -> return (s, t'))) cs
-      return $ CSet cs'
-    freshenCoeff (CSig c k) = do
-      c' <- freshenCoeff c
+    freshen (CSet cs) = do
+       cs' <- mapM (\(s, t) -> freshen t >>= (\t' -> return (s, t'))) cs
+       return $ CSet cs'
+    freshen (CSig c k) = do
+      c' <- freshen c
       return $ CSig c' k
-    freshenCoeff c = return c
+    freshen c@CInfinity{} = return c
+    freshen c@CFloat{} = return c
+    freshen c@CZero{}  = return c
+    freshen c@COne{}   = return c
+    freshen c@Level{}  = return c
+    freshen c@CNat{}   = return c
+    freshen c@CNatOmega{} = return c
+
 
 instance Term Value where
     freeVars (Abs x _ e) = freeVars e \\ [x]
@@ -243,11 +278,11 @@ instance Term Value where
 
     freshen (Var v) = do
       (_, nmap) <- get
-      case lookup v nmap of
-         Just v' -> return (Var v')
+      case lookup (sourceName v) nmap of
+         Just v' -> return (Var $ Id (sourceName v) v')
          -- This case happens if we are referring to a defined
          -- function which does not get its name freshened
-         Nothing -> return (Var v)
+         Nothing -> return (Var $ Id (sourceName v) (sourceName v))
 
     freshen (Pair l r) = do
       l' <- freshen l
@@ -275,13 +310,14 @@ instance Term Expr where
     subst es v (Val _ val)          = subst es v val
     subst es v (Case s expr cases)  = Case s
                                      (subst es v expr)
-                                     (map (\(p, e) -> (p, subst es v e)) cases)
+                                     (map (second (subst es v)) cases)
 
     freshen (LetBox s var t e1 e2) = do
       var' <- freshVar var
       e1'  <- freshen e1
       e2'  <- freshen e2
-      return $ LetBox s var' t e1' e2'
+      t'   <- freshen t
+      return $ LetBox s var' t' e1' e2'
 
     freshen (App s e1 e2) = do
       e1' <- freshen e1
@@ -311,8 +347,6 @@ instance Term Expr where
      v' <- freshen v
      return (Val s v')
 
-
-
 --------- Definitions
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
@@ -332,15 +366,14 @@ data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
 instance FirstParameter DataConstr Span
 
 -- Alpha-convert all bound variables
-uniqueNames :: [Def] -> ([Def], [(Id, Id)])
-uniqueNames = (\(defs, (_, nmap)) -> (defs, nmap))
-            . flip runState (0 :: Int, [])
-            . mapM freshenDef
+uniqueNames :: [Def] -> [Def]
+uniqueNames = flip evalState (0 :: Int, []) . mapM freshenDef
   where
     freshenDef (Def s var e ps t) = do
       ps' <- mapM freshenBinder ps
+      t'  <- freshenTys t
       e'  <- freshen e
-      return $ Def s var e' ps' t
+      return $ Def s var e' ps' t'
 
     freshenDef a@(ADT _ _ _ _) = return a
 
@@ -355,26 +388,26 @@ instance FirstParameter TypeScheme Span
 Example: `List n Int` is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
 data Type = FunTy Type Type           -- ^ Function type
-          | TyCon String              -- ^ Type constructor
+          | TyCon Id       -- ^ Type constructor
           | Box Coeffect Type         -- ^ Coeffect type
           | Diamond Effect Type       -- ^ Effect type
-          | TyVar String              -- ^ Type variable
+          | TyVar Id                  -- ^ Type variable
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
           | PairTy Type Type          -- ^ Pair/product type
-          | TyInfix String Type Type  -- ^ Infix type operator
+          | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
 -- Trivially effectful monadic constructors
 mFunTy :: Monad m => Type -> Type -> m Type
 mFunTy x y   = return (FunTy x y)
-mTyCon :: Monad m => String -> m Type
+mTyCon :: Monad m => Id -> m Type
 mTyCon       = return . TyCon
 mBox :: Monad m => Coeffect -> Type -> m Type
 mBox c y     = return (Box c y)
 mDiamond :: Monad m => Effect -> Type -> m Type
 mDiamond e y = return (Diamond e y)
-mTyVar :: Monad m => String -> m Type
+mTyVar :: Monad m => Id -> m Type
 mTyVar       = return . TyVar
 mTyApp :: Monad m => Type -> Type -> m Type
 mTyApp x y   = return (TyApp x y)
@@ -382,7 +415,7 @@ mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
 mPairTy :: Monad m => Type -> Type -> m Type
 mPairTy x y  = return (PairTy x y)
-mTyInfix :: Monad m => String -> Type -> Type -> m Type
+mTyInfix :: Monad m => Operator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 
 baseTypeFold :: Monad m => TypeFold m Type
@@ -391,14 +424,14 @@ baseTypeFold =
 
 data TypeFold m a = TypeFold
   { tfFunTy   :: a -> a        -> m a
-  , tfTyCon   :: String        -> m a
+  , tfTyCon   :: Id -> m a
   , tfBox     :: Coeffect -> a -> m a
   , tfDiamond :: Effect -> a   -> m a
-  , tfTyVar   :: String        -> m a
+  , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
   , tfPairTy  :: a -> a        -> m a
-  , tfTyInfix :: String -> a -> a -> m a }
+  , tfTyInfix :: Operator -> a -> a -> m a }
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: Monad m => TypeFold m a -> Type -> m a
@@ -437,7 +470,7 @@ arity _           = 0
 data Kind = KType
           | KCoeffect
           | KFun Kind Kind
-          | KPoly Id   -- Kind poly variable
+          | KPoly Id              -- Kind poly variable
           | KConstr Id -- constructors that have been elevated
     deriving (Show, Ord, Eq)
 
@@ -451,7 +484,7 @@ data Coeffect = CNat      NatModifier Int
               | CNatOmega (Either () Int)
               | CFloat    Rational
               | CInfinity CKind
-              | CVar      String
+              | CVar      Id
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
@@ -477,14 +510,14 @@ normalise (CPlus (CZero _) n) = n
 normalise (CPlus n (CZero _)) = n
 normalise (CTimes (COne _) n) = n
 normalise (CTimes n (COne _)) = n
-normalise (COne (CConstr "Nat")) = CNat Ordered 1
-normalise (CZero (CConstr "Nat")) = CNat Ordered 0
-normalise (COne (CConstr "Nat=")) = CNat Discrete 1
-normalise (CZero (CConstr "Nat=")) = CNat Discrete 0
-normalise (COne (CConstr "Level")) = Level 1
-normalise (CZero (CConstr "Level")) = Level 0
-normalise (COne (CConstr "Q")) = CFloat 1
-normalise (CZero (CConstr "Q")) = CFloat 0
+normalise (COne (CConstr (Id _ "Nat"))) = CNat Ordered 1
+normalise (CZero (CConstr (Id _ "Nat"))) = CNat Ordered 0
+normalise (COne (CConstr (Id _ "Nat="))) = CNat Discrete 1
+normalise (CZero (CConstr (Id _ "Nat="))) = CNat Discrete 0
+normalise (COne (CConstr (Id _ "Level"))) = Level 1
+normalise (CZero (CConstr (Id _ "Level"))) = Level 0
+normalise (COne (CConstr (Id _ "Q"))) = CFloat 1
+normalise (CZero (CConstr (Id _ "Q"))) = CFloat 0
 normalise (CPlus (Level n) (Level m)) = Level (n `max` m)
 normalise (CTimes (Level n) (Level m)) = Level (n `min` m)
 normalise (CPlus (CFloat n) (CFloat m)) = CFloat (n + m)

@@ -41,36 +41,53 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
-  -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+  -- Left type (usually the inferred)
+  -> Type
+  -- Right type (usually the specified)
+  -> Type
+  -- Result is a effectful, producing:
+  --    * a boolean of the equality
+  --    * the most specialised type (after the unifier is applied)
+  --    * the unifier
+  -> MaybeT Checker (Bool, Type, Ctxt Type)
 equalTypesRelatedCoeffectsAndUnify s rel t1 t2 = do
-   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2
+
+   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 SndIsSpec
    if eq
-     then return (eq, substType unif t1, unif)
+     then return (eq, substType unif t2, unif)
      else return (eq, t1, [])
+
+data SpecIndicator = FstIsSpec | SndIsSpec
+  deriving (Eq, Show)
+
+flipIndicator FstIsSpec = SndIsSpec
+flipIndicator SndIsSpec = FstIsSpec
 
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and a unifier
-
-     The first argument is taken to be possibly approximated by the second
-     e.g., the first argument is inferred, the second is a specification
-     being checked against -}
+      Polarity indicates which -}
 equalTypesRelatedCoeffects :: (?globals :: Globals )
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
-  -> Type -> Type -> MaybeT Checker (Bool, Unifier)
-equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') = do
+  -> Type
+  -> Type
+  -- Indicates whether the first type or second type is a specification
+  -> SpecIndicator
+  -> MaybeT Checker (Bool, Unifier)
+equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s Leq t1' t1
-   -- covariant position (depends is not always over approximated)
-  (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2'
+  (eq1, u1) <- equalTypesRelatedCoeffects s Leq t1' t1 (flipIndicator sp)
+   -- covariant position (depends: is not always over approximated)
+  (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  nonConflictingUnifiers s u1 u2
   return (eq1 && eq2, u1 ++ u2)
 
-equalTypesRelatedCoeffects _ _ (TyCon con) (TyCon con') =
+equalTypesRelatedCoeffects _ _ (TyCon con) (TyCon con') _ =
   return (con == con', [])
 
-equalTypesRelatedCoeffects s rel (Diamond ef t) (Diamond ef' t') = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t t'
+equalTypesRelatedCoeffects s rel (Diamond ef t) (Diamond ef' t') sp = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t t' sp
   if ef == ef'
     then return (eq, unif)
     else
@@ -80,51 +97,62 @@ equalTypesRelatedCoeffects s rel (Diamond ef t) (Diamond ef' t') = do
       else halt $ GradingError (Just s) $
         "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
 
-equalTypesRelatedCoeffects s rel (Box c t) (Box c' t') = do
-  -- Debugging
+equalTypesRelatedCoeffects s rel (Box c t) (Box c' t') sp = do
+  -- Debugging messages
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c ++ " == " ++ pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectTypes s c c'
   addConstraint (rel s c c' kind)
-  equalTypesRelatedCoeffects s rel t t'
+  equalTypesRelatedCoeffects s rel t t' sp
 
-equalTypesRelatedCoeffects s rel (TyApp t1 t2) (TyApp t1' t2') = do
-  (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1'
-  (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2'
+equalTypesRelatedCoeffects s rel (TyApp t1 t2) (TyApp t1' t2') sp = do
+  (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp
+  (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  nonConflictingUnifiers s u1 u2
   return (one && two, u1 ++ u2)
 
-equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) | n == m = do
+equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) _ | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
-    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ n)
+    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ pretty n)
 
-equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) = do
+equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
   checkerState <- get
 
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
     -- Two universally quantified variables are unequal
     (Just (_, ForallQ), Just (_, ForallQ)) ->
-      return (False, [])
+        return (False, [])
 
-    -- We can unift a universal a dependently bound universal
-    (Just (k1, ForallQ), Just (k2, BoundQ)) ->
+    -- We can unify a universal a dependently bound universal
+    (Just (k1, ForallQ), Just (k2, BoundQ)) | sp == FstIsSpec ->
       tyVarConstraint k1 k2 n m
 
-    (Just (k1, BoundQ), Just (k2, ForallQ)) ->
+    (Just (k1, BoundQ), Just (k2, ForallQ)) | sp == SndIsSpec ->
       tyVarConstraint k1 k2 n m
+
+    -- We can unify two instance type variables
+    (Just (k1, InstanceQ), Just (k2, BoundQ)) ->
+        tyVarConstraint k1 k2 n m
+
+    -- We can unify two instance type variables
+    (Just (k1, BoundQ), Just (k2, InstanceQ)) ->
+        tyVarConstraint k1 k2 n m
 
     -- We can unify two instance type variables
     (Just (k1, InstanceQ), Just (k2, InstanceQ)) ->
       tyVarConstraint k1 k2 n m
 
     -- But we can unify a forall and an instance
-    (Just (KType, ForallQ), Just (KType, InstanceQ)) ->
-      return (True, [(n, TyVar m)])
-    (Just (KType, InstanceQ), Just (KType, ForallQ)) ->
-      return (True, [(m, TyVar n)])
+    (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
+      tyVarConstraint k1 k2 n m
+
+    -- But we can unify a forall and an instance
+    (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
+      tyVarConstraint k1 k2 n m
 
     -- Trying to unify other (existential) variables
     (Just (KType, _), Just (k, _)) | k /= KType -> do
@@ -136,10 +164,10 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) = do
       illKindedUnifyVar s (TyVar n) k (TyVar m) KType
 
     -- Otherwise
-    (Just (k1, _), Just (k2, _)) ->
-      tyVarConstraint k1 k2 n m
+    --(Just (k1, _), Just (k2, _)) ->
+    --  tyVarConstraint k1 k2 n m
 
-    (t1, t2) -> error $ show t1 ++ "\n" ++ show t2
+    (t1, t2) -> error $ pretty s ++ "-" ++ show sp ++ "\n" ++ pretty n ++ " : " ++ show t1 ++ "\n" ++ pretty m ++ " : " ++ show t2
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
@@ -151,12 +179,13 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) = do
         Nothing ->
           return (False, [])
 
-equalTypesRelatedCoeffects s rel (PairTy t1 t2) (PairTy t1' t2') = do
-  (lefts, u1)  <- equalTypesRelatedCoeffects s rel t1 t1'
-  (rights, u2) <- equalTypesRelatedCoeffects s rel t2 t2'
+equalTypesRelatedCoeffects s rel (PairTy t1 t2) (PairTy t1' t2') sp = do
+  (lefts, u1)  <- equalTypesRelatedCoeffects s rel t1 t1' sp
+  (rights, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  nonConflictingUnifiers s u1 u2
   return (lefts && rights, u1 ++ u2)
 
-equalTypesRelatedCoeffects s rel (TyVar n) t = do
+equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
@@ -166,47 +195,66 @@ equalTypesRelatedCoeffects s rel (TyVar n) t = do
         Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
 
         -- If the kind is Nat=, then create a solver constraint
-        Just (KConstr "Nat=") -> do
+        Just (KConstr k) | internalName k == "Nat=" -> do
           nat <- compileNatKindedTypeToCoeffect s t
-          addConstraint (Eq s (CVar n) nat (CConstr "Nat="))
+          addConstraint (Eq s (CVar n) nat (CConstr $ mkId "Nat="))
           return (True, [(n, t)])
 
         Just _ -> return (True, [(n, t)])
 
     -- But we can't unify an universal with a concrete type
-    (Just (k1, ForallQ)) -> do
-      ut <- unrenameType t
-      halt $ GenericError (Just s) $ "Trying to unify a polymorphic type '" ++ n
-        ++ "' with monomorphic " ++ pretty ut
+    (Just (k1, ForallQ)) ->
+      halt $ GenericError (Just s)
+       $ case sp of
+        FstIsSpec -> "Trying to match a polymorphic type '" ++ pretty n
+                  ++ "' with monomorphic " ++ pretty t
+        SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
+
     (Just (_, InstanceQ)) -> unhandled
     (Just (_, BoundQ)) -> unhandled
-    Nothing -> halt $ UnboundVariableError (Just s) n
+    Nothing -> halt $ UnboundVariableError (Just s) (pretty n)
 
-equalTypesRelatedCoeffects s rel t (TyVar n) =
-  equalTypesRelatedCoeffects s rel (TyVar n) t
+equalTypesRelatedCoeffects s rel t (TyVar n) sp =
+  equalTypesRelatedCoeffects s rel (TyVar n) t (flipIndicator sp)
 
-equalTypesRelatedCoeffects s _ t1 t2 = do
+equalTypesRelatedCoeffects s _ t1 t2 _ = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
   case (k1, k2) of
-    (KConstr n, KConstr n') | "Nat" `isPrefixOf` n && "Nat" `isPrefixOf` n' -> do
-       c1 <- compileNatKindedTypeToCoeffect s t1
-       c2 <- compileNatKindedTypeToCoeffect s t2
-       addConstraint $ Eq s c1 c2 (CConstr "Nat=")
-       return (True, [])
-    (KType, KType) -> do
-        ut1 <- unrenameType t1
-        ut2 <- unrenameType t2
-        halt $ KindError (Just s) $ pretty ut1 ++ " is not equal to " ++ pretty ut2
+    (KConstr n, KConstr n')
+      | "Nat" `isPrefixOf` (internalName n) && "Nat" `isPrefixOf` (internalName  n') -> do
+        c1 <- compileNatKindedTypeToCoeffect s t1
+        c2 <- compileNatKindedTypeToCoeffect s t2
+        addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
+        return (True, [])
+    (KType, KType) ->
+       halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
-    _ -> do
-       ut1 <- unrenameType t1
-       ut2 <- unrenameType t2
+    _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2
                  ++ "\t\n from equality "
-                 ++ "'" ++ pretty ut2 ++ "' and '" ++ pretty ut1 ++ "' equal."
+                 ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
+nonConflictingUnifiers ::
+  (?globals :: Globals) => Span -> Ctxt Type -> Ctxt Type -> MaybeT Checker ()
+nonConflictingUnifiers s u1 u2 =
+    case intersectCtxtsAlternatives u1 u2 of
+      [] -> return ()
+      clashes ->
+        forM_ clashes $ \(k, vs) ->
+          if nonUnifiable vs
+            then halt $ GenericError (Just s) (msg k vs)
+            else return ()
+  where
+    nonUnifiable [TyVar _, _] = False
+    nonUnifiable [_, TyVar _] = False
+    nonUnifiable _ = True
+
+    msg k vs =
+      "Type variable " ++ sourceName k
+        ++ " cannot be unified to `" ++ intercalate "` and `" (map pretty vs)
+        ++ "` at the same time."
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type
@@ -230,7 +278,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
 joinTypes s (Box c t) (Box c' t') = do
   kind <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
-  topVar <- freshCoeffectVar "" kind
+  topVar <- freshCoeffectVar (mkId "") kind
   -- Unify the two coeffects into one
   addConstraint (Leq s c  (CVar topVar) kind)
   addConstraint (Leq s c' (CVar topVar) kind)
@@ -242,7 +290,7 @@ joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
-  let kind = CConstr "Nat="
+  let kind = CConstr $ mkId "Nat="
   var <- freshCoeffectVar m kind
   -- Unify the two coeffects into one
   addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
@@ -252,7 +300,7 @@ joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
-  let kind = CConstr "Nat="
+  let kind = CConstr $ mkId "Nat="
   nvar <- freshCoeffectVar n kind
   mvar <- freshCoeffectVar m kind
   -- Unify the two variables into one
@@ -265,8 +313,6 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   return (TyApp t1'' t2'')
 
 joinTypes s t1 t2 = do
-  ut1 <- unrenameType t1
-  ut2 <- unrenameType t2
   halt $ GenericError (Just s)
-    $ "Type '" ++ pretty ut1 ++ "' and '"
-               ++ pretty ut2 ++ "' have no upper bound"
+    $ "Type '" ++ pretty t1 ++ "' and '"
+               ++ pretty t2 ++ "' have no upper bound"

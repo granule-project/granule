@@ -34,7 +34,7 @@ desugar (Def s var expr pats tys@(Forall _ _ ty)) =
     -- Error cases
     typeDirectedDesugar (_ : _) t e = do
       error $ "(" ++ show sl ++ "," ++ show sc
-           ++ "): Definition of " ++ var ++ " expects at least " ++ show (length pats)
+           ++ "): Definition of " ++ sourceName var ++ " expects at least " ++ show (length pats)
            ++ " arguments, but signature specifies: " ++ show (arity t)
       where ((sl, sc), _) = getSpan e
 
@@ -74,8 +74,8 @@ desugarPattern v p _ = do
   -- Fall-back case is to replace with a 'case' pattern
   return $ \e -> Case nullSpan (Val nullSpan (Var v)) [(p, e)]
 
-freshVar :: State Int String
+freshVar :: State Int Id
 freshVar = do
   n <- get
   put (n+1)
-  return $"eval v" ++ show n
+  return . mkId $ "eval v" ++ show n

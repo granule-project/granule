@@ -15,7 +15,6 @@ data Maybe a where
 
 isSome : forall a : Type . Maybe (a |0|) -> Bool
 isSome x =
-    case x of {
+    case x of
       None -> False;
       (Some |_|) -> True
-    }

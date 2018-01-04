@@ -30,14 +30,20 @@ replace ((name', _):ctxt) name v | name == name'
 replace (x : ctxt) name v
   = x : replace ctxt name v
 
+-- $setup
+-- >>> import Syntax.Expr (mkId)
 {- | Take the intersection of two contexts based on keys
 NOTE: this is not a commutative action, consider:
->>> intersectCtxts [("x",1)] [("x",2)]
-[("x",1)]
+>>> intersectCtxts [(mkId "x",1)] [(mkId "x",2)]
+[(Id "x" "x",1)]
 -}
 intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn b) a
   where appearsIn x (name, _) = isJust $ lookup name x
+
+intersectCtxtsAlternatives :: Eq a => Ctxt a -> Ctxt a -> Ctxt [a]
+intersectCtxtsAlternatives a b =
+    [(k1, [v1, v2]) | (k1, v1) <- a, (k2, v2) <- b, k1 == k2, v1 /= v2]
 
 {- | `subtractCtxt a b` removes all the key-value pairs from
    `a` that have keys in `b` -}
@@ -54,10 +60,3 @@ deleteVar :: Id -> Ctxt t -> Ctxt t
 deleteVar _ [] = []
 deleteVar x ((y, b) : m) | x == y = deleteVar x m
                          | otherwise = (y, b) : deleteVar x m
-
-unrename :: [(Id, Id)] -> Id -> Id
-unrename nameMap var =
-    case lookup var (map swap nameMap) of
-      Just var' -> var'
-      Nothing  -> var
-  where swap (a, b) = (b, a)

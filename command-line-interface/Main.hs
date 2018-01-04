@@ -61,13 +61,12 @@ run input = do
       printErr $ ParseError $ show e
       return (ExitFailure 1)
 
-    Right (ast, nameMap) -> do
+    Right ast -> do
       -- Print to terminal when in debugging mode:
       debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
       debugM "Pretty-printed AST:" $ pretty ast
-      debugM "Name map" $ show nameMap
       -- Check and evaluate
-      checked <- try $ check ast nameMap
+      checked <- try $ check ast
       case checked of
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e

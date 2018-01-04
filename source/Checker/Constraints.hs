@@ -10,6 +10,7 @@ import Data.Foldable (foldrM)
 import Data.List (isPrefixOf)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
+import Control.Arrow (first)
 
 import Checker.Predicates
 import Context (Ctxt)
@@ -68,7 +69,7 @@ compileToSBV predicate tyVarContext kVarContext =
 
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
-      forAll [v] (\vSolver -> do
+      forAll [internalName v] (\vSolver -> do
          impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
          return $ (vSolver .>= literal 0) ==> impl)
 
@@ -95,7 +96,7 @@ compileToSBV predicate tyVarContext kVarContext =
     createFreshVar quant
                    (var, (kind, quantifierType))
                    (universalConstraints, existentialConstraints, ctxt) = do
-      (pre, symbolic) <- freshCVar quant var kind quantifierType
+      (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
       let (universalConstraints', existentialConstraints') =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
@@ -153,38 +154,27 @@ data SCoeffect =
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
 freshCVar :: (forall a . SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
-          -> Id -> CKind -> Quantifier -> Symbolic (SBool, SCoeffect)
+          -> String -> CKind -> Quantifier -> Symbolic (SBool, SCoeffect)
 
-freshCVar quant name (CConstr "Nat*") q = do
+freshCVar quant name (CConstr k) q
+  | internalName k == "Q" = do
+        solverVar <- (quant q) name
+        return (true, SFloat solverVar)
+  | otherwise  = do
   solverVar <- (quant q) name
-  return (solverVar .>= literal 0, SNatOmega solverVar)
-
-freshCVar quant name (CConstr "Nat") q = do
-  solverVar <- (quant q) name
-  return (solverVar .>= literal 0, SNat Ordered solverVar)
-
--- Singleton coeffect type
-freshCVar quant name (CConstr "One") q = do
-  solverVar <- (quant q) name
-  return (solverVar .== literal 1, SNat Ordered solverVar)
-
-freshCVar quant name (CConstr "Nat=") q = do
-  solverVar <- (quant q) name
-  return (solverVar .>= literal 0, SNat Discrete solverVar)
-
-freshCVar quant name (CConstr "Q") q = do
-  solverVar <- (quant q) name
-  return (true, SFloat solverVar)
-freshCVar quant name (CConstr "Level") q = do
-  solverVar <- (quant q) name
-  return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
-freshCVar quant _ (CConstr "Set") _ = return (true, SSet S.empty)
+  case internalName k of
+    "Nat*" -> return (solverVar .>= literal 0, SNatOmega solverVar)
+    "Nat" -> return (solverVar .>= literal 0, SNat Ordered solverVar)
+    "One" -> return (solverVar .== literal 1, SNat Ordered solverVar)
+    "Nat=" -> return (solverVar .>= literal 0, SNat Discrete solverVar)
+    "Level" -> return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
+    "Set" -> return (true, SSet S.empty)
 
 -- A poly typed coeffect variable whose element is 'infinity' gets
 -- compiled into the One type (since this satisfies all the same properties)
-freshCVar quant name (CPoly v) q | " infinity" `isPrefixOf` v
+freshCVar quant name (CPoly v) q | "infinity" == internalName v
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-                           || "kprom" `isPrefixOf` v = do
+                           || "kprom" `isPrefixOf` internalName v = do
   solverVar <- (quant q) name
   return (solverVar .== literal 1, SNat Ordered solverVar)
 
@@ -209,103 +199,105 @@ compileCoeffect :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
 
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
-compileCoeffect _ (CConstr "One") _
-  = SNat Ordered 1
+compileCoeffect (Level n) (CConstr k) _ | internalName k == "Level" =
+  SLevel . fromInteger . toInteger $ n
 
--- Any polymorphic * get's compiled to the * : One coeffec
+compileCoeffect _ (CConstr k) _ | internalName k == "One" = SNat Ordered 1
+
+-- Any polymorphic `Inf` gets compiled to the `Inf : One` coeffect
 compileCoeffect (CInfinity (CPoly _)) _ _ = SNat Ordered 1
 
-compileCoeffect (Level n) (CConstr "Level") _ = SLevel . fromInteger . toInteger $ n
+compileCoeffect (CNat _ n) (CConstr k) _ =
+  case internalName k of
+    "Nat" -> SNat Ordered  . fromInteger . toInteger $ n
+    "Nat=" -> SNat Discrete . fromInteger . toInteger $ n -- <- This can also happen when we use
+                    -- natural number coeffects but with an explicit signature to make them Nat=
 
-compileCoeffect (CNat Ordered n)  (CConstr "Nat") _
-  = SNat Ordered  . fromInteger . toInteger $ n
+compileCoeffect (CNatOmega (n)) (CConstr k) _ | internalName k == "Nat*" =
+  case n of
+    Left () -> error "TODO: Recursion not yet supported"
+    Right n -> SNatOmega . fromInteger . toInteger $ n
 
--- This happens when we use natural number coeffects but with an
--- explicit signature to make them Nat=
-compileCoeffect (CNat Ordered n)  (CConstr "Nat=") _
-  = SNat Discrete . fromInteger . toInteger $ n
+compileCoeffect (CFloat r) (CConstr k) _ | internalName k == "Q" = SFloat  . fromRational $ r
 
-compileCoeffect (CNat Discrete n)  (CConstr "Nat=") _
-  = SNat Discrete  . fromInteger . toInteger $ n
+compileCoeffect (CSet xs) (CConstr k) _ | internalName k == "Set" =
+  SSet . S.fromList $ (map (first mkId) xs)
 
-compileCoeffect (CNatOmega (Left ())) (CConstr "Nat*") _
-  = error "TODO: Recursion not yet supported"
-  -- SNatOmega . fromInteger .
-  --   allElse <- forall_
-
-compileCoeffect (CNatOmega (Right n)) (CConstr "Nat*") _
-  = SNatOmega . fromInteger . toInteger $ n
-
-compileCoeffect (CFloat r) (CConstr "Q")     _ = SFloat  . fromRational $ r
-compileCoeffect (CSet xs) (CConstr "Set")   _ = SSet   . S.fromList $ xs
 compileCoeffect (CVar v) _ vars =
    case lookup v vars of
     Just cvar -> cvar
-    Nothing   ->
-     error $ "Looking up a variable '" ++ v ++ "' in " ++ show vars
+    _ -> error $ "Looking up a variable '" ++ pretty v ++ "' in " ++ show vars
 
 compileCoeffect c@(CMeet n m) k vars =
-  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
-    (CConstr "Set"  , SSet s, SSet t)      -> SSet $ S.intersection s t
-    (CConstr "Level", SLevel s, SLevel t)  -> SLevel $ s `smin` t
-    (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
-    (CPoly v        , SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
-                                           -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 `smin` n2)
-    (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smin` n2)
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat o1 n1, SNat o2 n2) ->
+      case k of
+        CPoly v | internalName v == "infinity" -> SNat Ordered 1
+        CConstr k | internalName k == "One" -> SNat Ordered 1
+        _ | o1 == o2 -> SNat o1 (n1 `smin` n2)
+    (SSet s, SSet t) -> SSet $ S.intersection s t
+    (SLevel s, SLevel t) -> SLevel $ s `smin` t
+    (SFloat n1, SFloat n2) -> SFloat (n1 `smin` n2)
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
 compileCoeffect c@(CJoin n m) k vars =
-  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
-    (CConstr "Set"  , SSet s, SSet t)      -> SSet $ S.intersection s t
-    (CConstr "Level", SLevel s, SLevel t)  -> SLevel $ s `smax` t
-    (CConstr "One"  , SNat _ _, SNat _ _) -> SNat Ordered 1
-    (CPoly v        , SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
-                                           -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2 -> SNat o1 (n1 `smax` n2)
-    (_, SFloat n1, SFloat n2)              -> SFloat (n1 `smax` n2)
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat o1 n1, SNat o2 n2) ->
+      case k of
+        CPoly v | internalName v == "infinity" -> SNat Ordered 1
+        CConstr k | internalName k == "One" -> SNat Ordered 1
+        _ | o1 == o2 -> SNat o1 (n1 `smax` n2)
+    (SSet s, SSet t) -> SSet $ S.intersection s t
+    (SLevel s, SLevel t) -> SLevel $ s `smax` t
+    (SFloat n1, SFloat n2) -> SFloat (n1 `smax` n2)
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
 compileCoeffect c@(CPlus n m) k vars =
-  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
-    (CConstr "Set"  , SSet s, SSet t)           -> SSet $ S.union s t
-    (CConstr "Level", SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
-    (CConstr "One"  , SNat _ _, SNat _ _)       -> SNat Ordered 1
-    (CPoly v, SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 + n2)
-    (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 + n2
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat o1 n1, SNat o2 n2) ->
+      case k of
+        CPoly v | internalName v == "infinity" -> SNat Ordered 1
+        CConstr k | internalName k == "One" -> SNat Ordered 1
+        _ | o1 == o2 -> SNat o1 (n1 + n2)
+    (SSet s, SSet t) -> SSet $ S.union s t
+    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
+    (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
-
 
 compileCoeffect c@(CTimes n m) k vars =
-  case (k, compileCoeffect n k vars, compileCoeffect m k vars) of
-    (CConstr "Set", SSet s, SSet t)             -> SSet $ S.union s t
-    (CConstr "Level", SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
-    (CConstr "One", SNat _ _, SNat _ _)         -> SNat Ordered 1
-    (CPoly v, SNat _ _, SNat _ _) | " infinity" `isPrefixOf` v
-                                                -> SNat Ordered 1
-    (_, SNat o1 n1, SNat o2 n2) | o1 == o2      -> SNat o1 (n1 * n2)
-    (_, SFloat n1, SFloat n2)                   -> SFloat $ n1 * n2
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat o1 n1, SNat o2 n2) ->
+      case k of
+        CPoly v | internalName v == "infinity" -> SNat Ordered 1
+        CConstr k | internalName k == "One" -> SNat Ordered 1
+        _ | o1 == o2 -> SNat o1 (n1 * n2)
+    (SSet s, SSet t) -> SSet $ S.union s t
+    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
+    (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
-compileCoeffect (CZero (CConstr "Level")) (CConstr "Level") _ = SLevel 0
-compileCoeffect (CZero (CConstr "Nat")) (CConstr "Nat")     _ = SNat Ordered 0
-compileCoeffect (CZero (CConstr "Nat=")) (CConstr "Nat=")   _ = SNat Discrete 0
-compileCoeffect (CZero (CConstr "Q"))  (CConstr "Q")        _ = SFloat (fromRational 0)
-compileCoeffect (CZero (CConstr "Set")) (CConstr "Set")     _ = SSet (S.fromList [])
+compileCoeffect (CZero (CConstr k')) (CConstr k) _ =
+  case internalName k' of
+    "Level" | internalName k == "Level" -> SLevel 0
+    "Nat" | internalName k == "Nat" -> SNat Ordered 0
+    "Nat=" | internalName k == "Nat=" -> SNat Discrete 0
+    "Q" | internalName k == "Q" -> SFloat (fromRational 0)
+    "Set" | internalName k == "Set" -> SSet (S.fromList [])
 
-compileCoeffect (COne (CConstr "Level")) (CConstr "Level") _ = SLevel 1
-compileCoeffect (COne (CConstr "Nat")) (CConstr "Nat")     _ = SNat Ordered 1
-compileCoeffect (COne (CConstr "Nat=")) (CConstr "Nat=")   _ = SNat Discrete 1
-compileCoeffect (COne (CConstr "Q")) (CConstr "Q")         _ = SFloat (fromRational 1)
-compileCoeffect (COne (CConstr "Set")) (CConstr "Set")     _ = SSet (S.fromList [])
+compileCoeffect (COne (CConstr k')) (CConstr k) _ =
+  case internalName k' of
+    "Level" | internalName k == "Level" -> SLevel 1
+    "Nat" | internalName k == "Nat" -> SNat Ordered 1
+    "Nat=" | internalName k == "Nat=" -> SNat Discrete 1
+    "Q" | internalName k == "Q" -> SFloat (fromRational 1)
+    "Set" | internalName k == "Set" -> SSet (S.fromList [])
 
-compileCoeffect _ (CPoly v) _ | " infinity" `isPrefixOf` v = SNat Ordered 1
+compileCoeffect _ (CPoly v) _ | "infinity" == internalName v = SNat Ordered 1
 
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the singleton coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-compileCoeffect _ (CPoly v) _ | "kprom" `isPrefixOf` v = SNat Ordered 1
+compileCoeffect _ (CPoly v) _ | "kprom" `isPrefixOf` internalName v = SNat Ordered 1
 
 compileCoeffect c (CPoly _) _ =
    error $ "Trying to compile a polymorphically kinded " ++ pretty c

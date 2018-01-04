@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 36009b50cd51a1bda97734ed4163b1dd5d4592114dbce53c3bbeafbe2652d2d9
+-- hash: 7f65cf3756f86156c0a31353ca978a9c005fa02316dfee07be2548bbb3c07fff
 
 name:           granule
 version:        0.4.0.0
@@ -49,6 +49,7 @@ library
       Checker.Patterns
       Checker.Predicates
       Checker.Primitives
+      Checker.Substitutions
       Checker.Types
       Context
       Eval
@@ -60,7 +61,6 @@ library
       Syntax.Pretty
       Utils
   other-modules:
-      Checker.Substitutions
       Paths_granule
   default-language: Haskell2010
 
@@ -111,6 +111,7 @@ test-suite zdoctest
   build-depends:
       base >=4.10 && <5
     , doctest
+    , granule
   other-modules:
       Paths_granule
   default-language: Haskell2010

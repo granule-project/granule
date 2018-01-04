@@ -6,51 +6,54 @@ import Syntax.Expr
 
 typeLevelConstructors :: [(Id, Kind)]
 typeLevelConstructors =
-  [ ("Int",  KType)
-  , ("Float", KType)
-  , ("List", KFun (KConstr "Nat=") (KFun KType KType))
-  , ("N", KFun (KConstr "Nat=") KType)
-  , ("One", KCoeffect)   -- Singleton coeffect
-  , ("Nat",  KCoeffect)
-  , ("Nat=", KCoeffect)
-  , ("Nat*", KCoeffect)
-  , ("Q",    KCoeffect) -- Rationals
-  , ("Level", KCoeffect) -- Security level
-  , ("Set", KFun (KPoly "k") (KFun (KConstr "k") KCoeffect))
-  , ("+",   KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
-  , ("*",   KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
-  , ("/\\", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))
-  , ("\\/", KFun (KConstr "Nat=") (KFun (KConstr "Nat=") (KConstr "Nat=")))]
+    map (\(name, kind) -> (mkId name, kind)) tyCs
+  where
+    tyCs =
+        [ ("Int",  KType)
+        , ("Float", KType)
+        , ("List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
+        , ("N", KFun (KConstr $ mkId "Nat=") KType)
+        , ("One", KCoeffect)   -- Singleton coeffect
+        , ("Nat",  KCoeffect)
+        , ("Nat=", KCoeffect)
+        , ("Nat*", KCoeffect)
+        , ("Q",    KCoeffect) -- Rationals
+        , ("Level", KCoeffect) -- Security level
+        , ("Set", KFun (KPoly $ mkId "k") (KFun (KConstr $ mkId "k") KCoeffect))
+        , ("+",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+        , ("*",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+        , ("/\\", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+        , ("\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))]
 
 dataConstructors :: [(Id, TypeScheme)]
-dataConstructors = []
+dataConstructors = map (\(name, kind) -> (mkId name, kind)) []
 
 builtins :: [(Id, TypeScheme)]
 builtins =
   [ -- Graded monad unit operation
-    ("pure", Forall nullSpan [("a", KType)]
-       $ (FunTy (TyVar "a") (Diamond [] (TyVar "a"))))
+    (mkId "pure", Forall nullSpan [(mkId "a", KType)]
+       $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
     -- Effectful primitives
-  , ("toFloat", Forall nullSpan [] $ FunTy (TyCon "Int") (TyCon "Float"))
-  , ("read", Forall nullSpan [] $ Diamond ["R"] (TyCon "Int"))
-  , ("write", Forall nullSpan [] $
-       FunTy (TyCon "Int") (Diamond ["W"] (TyCon "Int")))]
+  , (mkId "toFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Float"))
+  , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "Int"))
+  , (mkId "write", Forall nullSpan [] $
+       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "Int")))]
 
-binaryOperators :: [(Id, Type)]
+binaryOperators :: [(Operator, Type)]
 binaryOperators =
-  [ ("+", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Int")))
-   ,("+", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Float")))
-   ,("-", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Int")))
-   ,("-", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Float")))
-   ,("*", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Int")))
-   ,("*", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Float")))
-   ,("==", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
-   ,("<=", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
-   ,("<", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
-   ,(">", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
-   ,(">=", FunTy (TyCon "Int") (FunTy (TyCon "Int") (TyCon "Bool")))
-   ,("==", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
-   ,("<=", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
-   ,("<", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
-   ,(">", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool")))
-   ,(">=", FunTy (TyCon "Float") (FunTy (TyCon "Float") (TyCon "Bool"))) ]
+  [ ("+", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
+   ,("+", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
+   ,("-", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
+   ,("-", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
+   ,("*", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
+   ,("*", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
+   ,("==", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,("<=", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,("<", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,(">", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,(">=", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,("==", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
+   ,("<=", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
+   ,("<", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
+   ,(">", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
+   ,(">=", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))) ]

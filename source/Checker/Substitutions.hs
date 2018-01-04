@@ -12,19 +12,19 @@ import Checker.Monad
 import Checker.Predicates
 import Control.Monad.Trans.Maybe
 import Data.Functor.Identity
-import Control.Monad.Reader.Class
 import Utils
 
 -- For doctest:
 -- $setup
+-- >>> import Syntax.Expr (mkId)
 -- >>> :set -XImplicitParams
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts
   of the context where a substitution occurred, and one where substitution
   did not occur
->>> let ?globals = defaultGlobals in evalChecker initState [] (runMaybeT $ substCtxt  [("y", TyInt 0)] [("x", Linear (TyVar "x")), ("y", Linear (TyVar "y")), ("z", Discharged (TyVar "z") (CVar "b"))])
-Just ([("y",Linear (TyInt 0))],[("x",Linear (TyVar "x")),("z",Discharged (TyVar "z") (CVar "b"))])
+>>> let ?globals = defaultGlobals in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (CVar $ mkId "b"))])
+Just ([(Id "y" "y",Linear (TyInt 0))],[(Id "x" "x",Linear (TyVar Id "x" "x")),(Id "z" "z",Discharged (TyVar Id "z" "z") (CVar Id "b" "b"))])
 -}
 
 substCtxt :: (?globals :: Globals) => Ctxt Type -> Ctxt Assumption
@@ -61,10 +61,13 @@ substAssumption subst (v, Discharged t c) = do
     convertSubst (v, t) = do
       k <- inferKindOfType nullSpan t
       case k of
-        KConstr "Nat=" -> do
-          c <- compileNatKindedTypeToCoeffect nullSpan t
-          return $ Just (v, c)
-        _ -> return $ Nothing
+        KConstr k ->
+          case internalName k of
+            "Nat=" -> do
+              c <- compileNatKindedTypeToCoeffect nullSpan t
+              return $ Just (v, c)
+            _ -> return Nothing
+        _ -> return Nothing
     -- mapM combined with the filtering behaviour of mapMaybe
     mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
     mapMaybeM _ [] = return []
@@ -90,8 +93,7 @@ compileNatKindedTypeToCoeffect _ (TyInt n) =
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
 compileNatKindedTypeToCoeffect s t =
-  halt $ KindError (Just s) $ "Type " ++ pretty t ++ " does not have kind "
-                       ++ pretty (CConstr "Nat=")
+  halt $ KindError (Just s) $ "Type `" ++ pretty t ++ "` does not have kind `Nat=`"
 
 {- | Perform a substitution on a coeffect based on a context mapping
      variables to coeffects -}
@@ -148,19 +150,6 @@ renameType rmap t =
         -- Shouldn't happen
         Nothing -> return $ TyVar v
 
-unrenameType :: Type -> MaybeT Checker Type
-unrenameType t = do
-  nameMap <- ask
-  return $ renameType nameMap t
-
-unrenameAssumption :: Assumption -> MaybeT Checker Assumption
-unrenameAssumption (Linear t) = do
-  t' <- unrenameType t
-  return (Linear t')
-unrenameAssumption (Discharged t c) = do
-  t' <- unrenameType t
-  return (Discharged t' c)
-
 freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
 freshPolymorphicInstance (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
@@ -174,8 +163,8 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       -- Freshen the variable depending on its kind
       var' <- case k of
                KType -> do
-                 var' <- freshVar var
-
+                 freshName <- freshVar (sourceName var)
+                 let var'  = mkId freshName
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
                  return var'

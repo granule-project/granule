@@ -10,7 +10,7 @@ spec = do
   describe "Expression helpers" $
     it "free variable test" $
       freeVars (Val nullSpan
-            (Abs "x" Nothing
+            (Abs (mkId "x") Nothing
               (Val nullSpan
-                (Abs "y" Nothing
-                  (Val nullSpan (Var "z")))))) `shouldBe` ["z"]
+                (Abs (mkId "y") Nothing
+                  (Val nullSpan (Var $ mkId "z")))))) `shouldBe` [mkId "z"]

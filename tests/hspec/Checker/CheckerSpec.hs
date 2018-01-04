@@ -36,6 +36,9 @@ exclude = ""
 fileExtension :: String
 fileExtension = ".gr"
 
+tyvark = TyVar $ mkId "k"
+varA = mkId "a"
+
 spec :: Spec
 spec = do
     -- Integration tests based on the fixtures
@@ -47,8 +50,8 @@ spec = do
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
-          Right (ast, nameMap) -> do
-            result <- try (check ast nameMap) :: IO (Either SomeException _)
+          Right ast -> do
+            result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Ok
@@ -60,8 +63,8 @@ spec = do
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
-          Right (ast, nameMap) -> do
-            result <- try (check ast nameMap) :: IO (Either SomeException _)
+          Right ast -> do
+            result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Failed
@@ -69,58 +72,58 @@ spec = do
     -- Unit tests
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
-       (c, pred) <- runCtxts (flip joinCtxts [])
-              [("a", Discharged (TyVar "k") (CNat Ordered 5))]
-              [("a", Discharged (TyVar "k") (CNat Ordered 10))]
-       c `shouldBe` [("a", Discharged (TyVar "k") (CVar "a_a0"))]
+       (c, pred) <- runCtxts joinCtxts
+              [(varA, Discharged tyvark (CNat Ordered 5))]
+              [(varA, Discharged tyvark (CNat Ordered 10))]
+       c `shouldBe` [(varA, Discharged tyvark (CVar (mkId "a0")))]
        pred `shouldBe`
-         [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar "a_a0") (CConstr "Nat"))
-              , Con (Leq nullSpan (CNat Ordered 5) (CVar "a_a0") (CConstr "Nat"))]]
+         [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
+              , Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))]]
 
      it "join ctxts with discharged assumption in one" $ do
-       (c, pred) <- runCtxts (flip joinCtxts [])
-              [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+       (c, pred) <- runCtxts joinCtxts
+              [(varA, Discharged (tyvark) (CNat Ordered 5))]
               []
-       c `shouldBe` [("a", Discharged (TyVar "k") (CVar "a_a0"))]
+       c `shouldBe` [(varA, Discharged (tyvark) (CVar (mkId "a0")))]
        pred `shouldBe`
-         [Conj [Con (Leq nullSpan (CZero (CConstr "Nat")) (CVar "a_a0") (CConstr "Nat"))
-               ,Con (Leq nullSpan (CNat Ordered 5) (CVar "a_a0") (CConstr "Nat"))]]
+         [Conj [Con (Leq nullSpan (CZero (CConstr $ mkId "Nat")) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
+               ,Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId"Nat"))]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
       it "contexts with matching discharged variables" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
-                 [("a", Discharged (TyVar "k") (CNat Ordered 10))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 10))]
          c `shouldBe`
-                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
 
       it "contexts with matching discharged variables" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [("a", Discharged (TyVar "k") (CNat Ordered 10))]
-                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 10))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
          c `shouldBe`
-                 [("a", Discharged (TyVar "k") (CNat Ordered 10))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 10))]
 
       it "contexts with matching discharged variables" $ do
          (c, preds) <- (runCtxts intersectCtxtsWithWeaken)
-                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
                  []
          c `shouldBe`
-                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
 
       it "contexts with matching discharged variables (symm)" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
                  []
-                 [("a", Discharged (TyVar "k") (CNat Ordered 5))]
+                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
          c `shouldBe`
-                 [("a", Discharged (TyVar "k") (CZero (CConstr "Nat")))]
+                 [(varA, Discharged (tyvark) (CZero (CConstr $ mkId "Nat")))]
 
 
 
   where
     runCtxts f a b =
-       runChecker initState [] (runMaybeT (f nullSpan a b))
+       runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
     exampleFiles = liftM2 (++)
       (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)

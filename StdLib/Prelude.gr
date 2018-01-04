@@ -99,6 +99,24 @@ flip f x y = f y x
 const : forall a : Type, b : Type . a -> b |0| -> a
 const x |y| = x
 
+--- Apply f to x until p holds
+until : forall a : Type .
+        (a -> Bool) |∞| -> (a -> a) |∞| -> a |∞| -> a
+until |p| |f| |x| =
+  case p x of
+    False -> x;
+    True  -> until |p| |f| |(f x)|
+
+--- Standard fixed point
+fix : forall (a : Type) . (a -> a) |Inf| -> a
+fix |f| = f (fix |f|)
+
+--- Specialised first-order fixed point
+fixF : forall (a : Type, b : Type)
+     . ((a -> b) |Inf| -> (a -> b)) |Inf| -> (a -> b)
+fixF |f| = f |(fixF |f|)|
+
+
 --- Conditional on integers
 --- Returns `x` if `g` is zero, else returns `y`
 if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
@@ -107,6 +125,28 @@ if0 g |x| |y| =
       |0| -> x;
       |n| -> y
     }
+
+--- # Combinators involving products (pairs)
+
+--- Extract the left part of a pair
+fst : forall a : Type, b : Type . (a, b |0|) -> a
+fst (x, |_|) = x
+
+--- Extract the right part of a pair
+snd : forall a : Type, b : Type . (a |0|, b) -> b
+snd (|_|, y) = y
+
+--- curry converts an uncurried function to a curried function
+curry : forall a : Type, b : Type, c : Type .
+        ((a, b) -> c) -> a -> b -> c
+curry f x y = f (x, y)
+
+--- uncurry converts a curried function to a function on pairs
+uncurry : forall a : Type, b : Type, c : Type .
+          (a -> b -> c) -> ((a, b) -> c)
+uncurry f (x, y) = f x y
+
+--- # Coeffect-specifc combinators
 
 --- Coeffectful composition
 comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
@@ -125,16 +165,6 @@ flatten ||x|| = |x|
 unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
 unflatten |x| = ||x||
 
---- # Operations on products
-
---- Extract the left part of a pair
-fst : forall a : Type, b : Type . (a, b |0|) -> a
-fst (x, |_|) = x
-
---- Extract the right part of a pair
-snd : forall a : Type, b : Type . (a |0|, b) -> b
-snd (|_|, y) = y
-
 --- Push coeffects on a pair into the left and right elements
 push : forall (a : Type, b : Type, n : Nat) . (a, b) |n| -> (a |n|, b |n|)
 push |(x, y)| = (|x|, |y|)
@@ -144,7 +174,8 @@ pull : forall (a : Type, b : Type, n : Nat, m : Nat)
      . (a |n|, b |m|) -> (a, b) |n /\ m|
 pull (|x|, |y|) = |(x, y)|
 
---- # Operations on lists
+--- # Indexed list combinators
+
 --- Map a function over each element of a list
 map : forall (a : Type, b : Type, n : Nat=)
     . (a -> b) |n| -> List n a -> List n b
@@ -168,16 +199,11 @@ sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
 product : forall n : Nat= . List n Int -> Int
 product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
 
+-- # Indexed natural number combinators
+
 -- Convert an indexed natural number to an untyped int
 natToInt : forall (n : Nat=) . N n -> Int
 natToInt x =
     case x of {
       Z -> 0;
       (S m) -> 1 + natToInt m
-    }
-
---add : forall (n : Nat=, m : Nat=) . N n -> N m -> N (n + m)
---add n m =
---  case n of
---    Z -> m;
---    (S n') -> S (add n' m)
