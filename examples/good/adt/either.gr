@@ -1,0 +1,3 @@
+data Either a b where
+  Left : a -> Either a b;
+  Right : b -> Either a b

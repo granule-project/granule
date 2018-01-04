@@ -20,7 +20,21 @@ data Maybe a where
   None : Maybe a;
   Some : a -> Maybe a
 
-isSome : forall a : Type . Maybe a |0| -> Bool
+
+
+-- ("Either",KFun KType (KFun KType KType))
+-- (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))
+
+-- maybe : forall a : Type . a -> Maybe
+--
+-- isSome : forall a : Type . Maybe a -> Maybe a
+-- isSome x =
+--     case x of {
+--       None -> None;
+--       (Some a) -> (Some a)
+--     }
+
+isSome : forall a : Type . Maybe (a |0|) -> Bool
 isSome x =
     case x of {
       None -> False;

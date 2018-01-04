@@ -11,7 +11,7 @@ import Control.Monad.Reader.Class
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Maybe
-import Data.SBV hiding (kindOf)
+import Data.SBV hiding (Kind, kindOf)
 
 import Checker.Coeffects
 import Checker.Constraints
@@ -40,18 +40,8 @@ check ast nameMap = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
 
-    -- Kind check all the type signatures
-    let adts = filter (\case ADT{} -> True; _ -> False) ast
-    let checkKindsADTs = mapM kindCheck adts
-    let checkedADTs = do
-          status <- runMaybeT checkKindsADTs
-          case status of
-            Nothing -> return [Nothing]
-            Just _  -> -- Now check the definition
-               mapM checkADT adts
+    let checkedADTs = mapM checkADT (filter (\case ADT{} -> True; _ -> False) ast)
 
-    -- ... and evaluate the computation with initial state
-    -- results_ADT <- evalChecker initState nameMap checkedADTs
 
     let defs = filter (\case Def{} -> True; _ -> False) ast
     let checkKinds = mapM kindCheck defs
@@ -113,6 +103,7 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
 
     -- Erase the solver predicate between definitions
     modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
+    debugM "Checker.checkDef returning ctxt" $ show ctxt
     return ctxt
 
   -- data Kind = KType
@@ -124,16 +115,84 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
 
 checkADT :: (?globals :: Globals ) => Def -> Checker (Maybe (Ctxt Assumption))
 checkADT (ADT _ (TypeConstr _ tName) tyVars dataCs) = do
-    let typeC = (tName, mkKind tyVars)
-    traceM $ red "WARNING: Checker.checkADT: data constructors not yet kind-checked"
-    let dataCs' = map (\(DataConstr _ name (Forall s _ t)) -> (name, Forall s (mkBinders t) t)) dataCs
-    runMaybeT $ modify (\st -> st { dataConstructors = dataCs' ++ dataConstructors st
-                                  , typeConstructors = typeC : typeConstructors st })
+    runMaybeT $ do
+      dataCs <- mapM processD dataCs
+
+      debugM "checkADT.dataCs" $ magenta $ show dataCs
+
+      modify $ \st -> st { dataConstructors = dataCs ++ dataConstructors st
+                         , typeConstructors = (tName, tyConKind) : typeConstructors st
+                         }
     return $ Just []
   where
+    processD (DataConstr _ dName (Forall s _ t)) = do
+        binders <- dataConWellKinded t tyConKind (reverse . map snd $ tyVars)
+        return (dName, Forall s binders t)
+    tyConKind = mkKind tyVars
     mkKind [] = KType
     mkKind (_:vs) = KFun KType (mkKind vs)
-    mkBinders t = map ((\v -> (v, KType)) . snd) tyVars
+
+    -- dataConWellKinded :: Type -> Kind -> [Id] -> MaybeT Checker [(Id, Kind)]
+    dataConWellKinded (FunTy l r) ki vs = do
+        left <- case l of
+          (TyVar x) ->
+            if x `elem` vs then return [(x, KType)] else halt $
+              UnboundVariableError Nothing $ "Type variable `" ++ x ++ "`" <?> vs
+          (TyCon name) -> do
+            st <- get
+            case lookup name (typeConstructors st) of
+              Nothing -> halt $
+                UnboundVariableError Nothing $
+                  "Type constructor `" ++ name ++ "`" <?> (typeConstructors st)
+              _ -> return []
+          x -> error $ show x
+        right <- dataConWellKinded r ki vs
+        return $ left ++ right
+
+    dataConWellKinded (TyApp l r) tyCKind (v:vs) =
+        case tyCKind of
+          KFun KType KType -> do
+            left <- dataConWellKinded l KType vs
+            right <- case r of
+              (TyVar x) ->
+                if x == v then return [(x, KType)]
+                else halt $ KindError Nothing $ "Expected `" ++ v ++ "` but got `" ++ x ++ "`"
+            return $ left ++ right
+          KFun KType k_r -> do
+            left <- dataConWellKinded l KType [v]
+            right <- dataConWellKinded r k_r vs
+            return $ left ++ right
+          x -> halt $ KindError Nothing $ "wtf: " ++ show tyCKind
+
+    dataConWellKinded (TyCon name) KType [] =
+        if name == tName then return []
+        else halt $ KindError Nothing $ "Expected `" ++ tName ++ "` but got `" ++ name ++ "`"
+    dataConWellKinded ty ki vs = error $ show ty ++ show ki ++ show vs
+
+test = do
+  let ?globals = defaultGlobals {debugging = True}
+  check [ ADT ((23,1),(0,0)) (TypeConstr ((23,6),(23,6)) "Either") [(((23,13),(23,13)),"a"),(((23,15),(23,15)),"b")] [DataConstr ((24,3),(0,0)) "Left" (Forall ((0,0),(0,0)) [] (FunTy (TyVar "a") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))),DataConstr ((25,3),(0,0)) "Right" (Forall ((0,0),(0,0)) [] (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b"))))] ] []
+
+-- test = dataConWellKinded (TyCon "Bool") "Bool" (KType) []
+--
+-- test2 =
+--   dataConWellKinded
+--     (FunTy (TyVar "a") (TyApp (TyCon "Maybe") (TyVar "a")))
+--     "Maybe"
+--     (KFun KType KType)
+--     ["a"]
+
+--   -- add
+--   case tyVars of
+--     [] -> return () -- assume tyvars are all : Type
+--     _  -> do
+--       traceM $ red "WARNING: Kinds.kindCheck: not implemented." <?>
+
+    -- ("Maybe",KFun KType KType)
+    -- [("None",Forall ((0,0),(0,0)) [("a",KType)] (TyApp (TyCon "Maybe") (TyVar "a"))),("Some",Forall ((0,0),(0,0)) [("a",KType)] (FunTy (TyVar "a") (TyApp (TyCon "Maybe") (TyVar "a"))))]
+
+    -- ("Either",KFun KType (KFun KType KType))
+    -- (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))
 
 data Polarity = Positive | Negative deriving Show
 
@@ -358,10 +417,10 @@ synthExpr _ _ _ (Val s (Constr "S" [])) = do
 -- Constructors (only supports nullary constructors)
 synthExpr _ _ _ (Val s (Constr name [])) = do
   st <- get
+  traceM $ red "WARNING: Checker.synthExpr incomplete for data constructors"
   case lookup name (dataConstructors st) of
     Just (Forall _ [] t) -> return (t, [])
     Just (Forall _ _ t) -> do
-      traceM $ red "WARNING: Checker.synthExpr incomplete"
       return (t, [])
     _ -> halt $ UnboundVariableError (Just s) $
                 "Data constructor `" ++ name ++ "`" <?> dataConstructors st

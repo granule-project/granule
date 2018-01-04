@@ -1,0 +1,21 @@
+data Bool where
+  False : Bool;
+  True : Bool
+
+data Maybe a where
+  None : Maybe a;
+  Some : a -> Maybe a
+
+-- foo : Int -> Maybe Int |1| -> Int
+-- foo x m =
+--     case x > 0 of {
+--       True -> case m of {None -> 1; (Some n) -> n};
+--       False -> 0
+--     }
+
+isSome : forall a : Type . Maybe (a |0|) -> Bool
+isSome x =
+    case x of {
+      None -> False;
+      (Some |_|) -> True
+    }

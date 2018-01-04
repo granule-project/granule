@@ -16,7 +16,7 @@ import Syntax.Expr
 import Context
 import Utils
 
-import Debug.Trace
+-- import Debug.Trace
 
 -- Currently we expect that a type scheme has kind KType
 kindCheck :: (?globals :: Globals) => Def -> MaybeT Checker ()
@@ -25,12 +25,12 @@ kindCheck (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
   case kind of
     KType -> return ()
     _     -> illKindedNEq s KType kind
-
-kindCheck (ADT s typeC tyVars dataCs) =
-  case tyVars of
-    [] -> return () -- nullary typeC is trivially well-kinded
-    _  -> do
-      traceM $ red "WARNING: Kinds.kindCheck: not implemented."
+--
+-- kindCheck (ADT s typeC tyVars dataCs) =
+--   case tyVars of
+--     [] -> return () -- nullary typeC is trivially well-kinded
+--     _  -> do
+--       traceM $ red "WARNING: Kinds.kindCheck: not implemented."
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
@@ -71,7 +71,7 @@ inferKindOfType' s quantifiedVariables t = do
       case lookup tyVar quantifiedVariables of
         Just kind -> return kind
         Nothing   -> halt $ UnboundVariableError (Just s) $
-                       tyVar ++ " is unbound (not quantified)."
+                       "Type variable `" ++ tyVar ++ "` is unbound (not quantified)." <?> quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KPoly "a")) k
