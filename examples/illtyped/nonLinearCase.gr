@@ -2,7 +2,6 @@
 -- of the case
 constIf : Int -> Int
 constIf x =
-    case 0 of {
+    case 0 of
       0 -> x;
       y -> y
-    }

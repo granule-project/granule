@@ -16,73 +16,55 @@ data Bool where
 
 --- Logical negation
 not : Bool -> Bool
-not x =
-    case x of {
-      True -> False;
-      False -> True
-    }
+not x = case x of True -> False; False -> True
 
 --- Logical and
 --- NB: non-strict in second argument
 and : Bool -> Bool |1| -> Bool
-and x |y| =
-    case x of {
-      True -> y;
-      False -> False
-    }
+and x |y| = case x of True -> y; False -> False
+
+--- Logical nand
+--- NB: non-strict in second argument
+nand : Bool -> Bool |1| -> Bool
+nand x |y| = case x of True -> not y; False -> True
 
 --- Logical and
---- NB: strict in both arguments
+--- NB: consumes both arguments
 and' : Bool -> Bool -> Bool
 and' x y =
-    case x of {
+    case x of
       True -> y;
-      False -> case y of { True -> False; False -> False }
-    }
+      False -> (case y of True -> False; False -> False)
 
 --- Inclusive or
 --- NB: non-strict in second argument
 or : Bool -> Bool |1| -> Bool
-or x |y| =
-    case x of {
-      True -> True;
-      False -> y
-    }
+or x |y| = case x of True -> True; False -> y
 
 --- Inclusive or
 --- NB: strict in both arguments
 or' : Bool -> Bool -> Bool
 or' x y =
-    case x of {
-      True -> case y of { True -> True; False -> True };
+    case x of
+      True -> (case y of True -> True; False -> True );
       False -> y
-    }
 
 --- Exclusive or
 xor : Bool -> Bool -> Bool
-xor x y =
-    case x of {
-      True -> not y;
-      False -> y
-    }
+xor x y = case x of True -> not y; False -> y
 
 --- Logical implication
 --- NB: non-strict in second argument
 impl : Bool -> Bool |1| -> Bool
-impl x |y| =
-    case x of {
-      True -> y;
-      False -> True
-    }
+impl x |y| = case x of True -> y; False -> True
 
 --- Logical implication
 --- NB: strict in both arguments
 impl' : Bool -> Bool -> Bool
 impl' x y =
-    case x of {
+    case x of
       True -> y;
-      False -> case y of { False -> True; True -> True }
-    }
+      False -> (case y of False -> True; True -> True)
 
 --- # Standard functional components
 
@@ -121,10 +103,9 @@ fixF |f| = f |(fixF |f|)|
 --- Returns `x` if `g` is zero, else returns `y`
 if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
 if0 g |x| |y| =
-    case g of {
+    case g of
       |0| -> x;
       |n| -> y
-    }
 
 --- # Combinators involving products (pairs)
 
@@ -180,18 +161,16 @@ pull (|x|, |y|) = |(x, y)|
 map : forall (a : Type, b : Type, n : Nat=)
     . (a -> b) |n| -> List n a -> List n b
 map |f| ys =
-    case ys of {
+    case ys of
       Nil -> Nil;
       (Cons x xs) -> Cons (f x) (map |f| xs)
-    }
 
 foldr : forall (a : Type, b : Type, n : Nat=)
       . (a -> b -> b) |n| -> b -> List n a -> b
 foldr |h| acc xs =
-    case xs of {
+    case xs of
       Nil -> acc;
       (Cons x xs) -> h x (foldr |h| acc xs)
-    }
 
 sum : forall n : Nat= . List n Int -> Int
 sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
@@ -204,6 +183,6 @@ product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
 -- Convert an indexed natural number to an untyped int
 natToInt : forall (n : Nat=) . N n -> Int
 natToInt x =
-    case x of {
+    case x of
       Z -> 0;
       (S m) -> 1 + natToInt m

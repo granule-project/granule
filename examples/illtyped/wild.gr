@@ -1,11 +1,10 @@
 import StdLib.Prelude
 
-isEmpty : forall (n : Nat) . List n Int -> Bool
+isEmpty : forall (n : Nat=) . List n Int -> Bool
 isEmpty xs =
-    case xs of {
+    case xs of
       Nil        -> True;
       (Cons _ _) -> False
-    }
 
 foo : Int -> Int
 foo _ = 0

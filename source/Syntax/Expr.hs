@@ -31,7 +31,10 @@ import Syntax.FirstParameter
 -- which is useually freshly generate. Error messages should
 -- always use the 'sourceName'
 data Id = Id { sourceName :: String, internalName :: String }
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord)
+
+instance Show Id where
+  show (Id s i) = "Id " ++ show s ++ " " ++ show i
 
 -- Constructors and operators are just strings
 type Operator      = String

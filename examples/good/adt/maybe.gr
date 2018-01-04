@@ -8,7 +8,6 @@ data Maybe a where
 
 maybe : forall a : Type . a |1| -> Maybe a -> a
 maybe |default| m =
-    case m of {
+    case m of
       None -> default;
       (Some x) -> x
-    }

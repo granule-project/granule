@@ -1,7 +1,6 @@
-map : forall (n : Nat)
+map : forall (n : Nat=)
     . (Int -> Int) |n| -> List n Int -> List n Int
 map |f| ys =
-    case ys of {
+    case ys of
       Nil -> Nil;
       (Cons x xs) -> Cons (f x) (Cons 5 (map |f| xs))
-    }

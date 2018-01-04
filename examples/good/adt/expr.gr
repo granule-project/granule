@@ -4,7 +4,6 @@ data Expr a where
 
 eval : Expr a -> a
 eval x =
-    case x of {
+    case x of
       (Const n) -> n;
       (Add x y) -> eval x + eval y
-    }

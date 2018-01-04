@@ -1,6 +1,5 @@
 dubList : forall (n : Nat=) . List n Int -> List (2*n) Int
 dubList xs =
-    case xs of {
+    case xs of
       Nil -> Nil;
       (Cons x xs) -> Cons x (Cons 0 (dubList xs))
-    }

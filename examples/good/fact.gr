@@ -2,17 +2,15 @@ import StdLib.Prelude
 
 fact : Int |∞| -> Int
 fact x =
-    case x of {
+    case x of
       |0| -> 1;
       |m| -> m * fact |(m - 1)|
-    }
 
 factAlt : forall (n : Nat=) . (N n) |n| -> Int
 factAlt x =
-    case x of {
+    case x of
       |Z| -> 1;
       |(S m)| -> (natToInt (S m)) * factAlt |m|
-    }
 
 main : Int
 main = fact |7| + factAlt |(S (S (S (S Z))))|
