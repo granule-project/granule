@@ -249,8 +249,15 @@ checkExpr defs gam pol topLevel tau e = do
   if tyEq
     then return (gam', subst)
     else do
-      halt $ GenericError (Just $ getSpan e)
-          $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
+      case pol of
+        Positive -> do
+          halt $ GenericError (Just $ getSpan e)
+               $ "Expected '" ++ pretty tau ++ "' but got '" ++ pretty tau' ++ "'"
+
+        Negative -> do
+          halt $ GenericError (Just $ getSpan e)
+               $ "Expected '" ++ pretty tau' ++ "' but got '" ++ pretty tau ++ "'"
+
 
 -- | Synthesise the 'Type' of expressions.
 -- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>
@@ -409,7 +416,7 @@ synthExpr defs gam pol (App s e e') = do
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
-         (gam2, subst) <- checkExpr defs gam pol False sig e'
+         (gam2, subst) <- checkExpr defs gam  (flipPol pol) False sig e'
          gamNew <- ctxPlus s gam1 gam2
          return (substType subst tau, gamNew)
 

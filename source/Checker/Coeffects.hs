@@ -65,10 +65,10 @@ inferCoeffectType _ (CSig _ k) = return k
 -- and update the current solver predicate as well
 updateCoeffectKind :: Id -> Kind -> MaybeT Checker ()
 updateCoeffectKind tyVar kind = do
-    checkerState <- get
-    put $ checkerState
+    modify (\checkerState ->
+     checkerState
       { tyVarContext = rewriteCtxt (tyVarContext checkerState),
-        kVarContext = replace (kVarContext checkerState) tyVar kind }
+        kVarContext = replace (kVarContext checkerState) tyVar kind })
   where
     rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
     rewriteCtxt [] = []

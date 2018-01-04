@@ -50,7 +50,7 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 
 
 data CheckerState = CS
-            { -- Fresh variable id
+            { -- Fresh variable ids
               uniqueVarId    :: VarCounter
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
@@ -149,7 +149,7 @@ freshVar :: String -> MaybeT Checker String
 freshVar s = do
   checkerState <- get
   let v = uniqueVarId checkerState
-  let prefix = s ++ "_" ++ ["a", "b", "c", "d"] !! (v `mod` 4)
+  let prefix = s
   let cvar = prefix ++ show v
   put $ checkerState { uniqueVarId = v + 1 }
   return cvar
