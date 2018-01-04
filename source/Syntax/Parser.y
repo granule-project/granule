@@ -95,7 +95,6 @@ Pat :: { Pattern }
 Pat :
     PAtom                          { $1 }
   | '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
-  | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
 PJuxt :: { Pattern }
 PJuxt :
@@ -113,6 +112,7 @@ PAtom : VAR                        { PVar (getPosToSpan $1) (mkId $ symString $1
     | CONSTR                       { let TokenConstr _ x = $1
 	                             in PConstr (getPosToSpan $1) x }
     | '(' PJuxt ')'                  { $2 }
+    | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
 TypeScheme :: { TypeScheme }
 TypeScheme :
