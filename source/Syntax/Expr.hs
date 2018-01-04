@@ -107,7 +107,7 @@ instance Binder Pattern where
   bvs _           = [] -- TODO: Get rid of catch-alls
 
   freshenBinder (PVar s var) = do
-      var' <- freshVar var
+      var' <- freshVar Value var
       return $ PVar s var'
 
   freshenBinder (PBox s p) = do
@@ -126,7 +126,7 @@ instance Binder Pattern where
 
   freshenBinder p = return p -- TODO: Get rid of catch-alls
 
-type Freshener t = State (Int, [(String, String)]) t
+type Freshener t = State (Int, [(String, String)], [(String, String)]) t
 
 class Term t where
   -- Compute the free variables in a term
@@ -137,18 +137,30 @@ class Term t where
   -- Freshen
   freshen :: t -> Freshener t
 
+-- Used to distinguish the value-level and type-level variables
+data IdSyntacticCategory = Value | Type
+
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
-freshVar :: Id -> Freshener Id
-freshVar var = do
-   (v, nmap) <- get
+freshVar :: IdSyntacticCategory -> Id -> Freshener Id
+freshVar synCat var = do
+   (v, vmap, tmap) <- get
    let var' = sourceName var ++ show v
-   put (v+1, (sourceName var, var') : nmap)
+   case synCat of
+       Value -> put (v+1, (sourceName var, var') : vmap, tmap)
+       Type  -> put (v+1, vmap, (sourceName var, var') : tmap)
    return $ var { internalName = var' }
+
+lookupVar :: IdSyntacticCategory -> Id -> Freshener (Maybe String)
+lookupVar synCat var = do
+  (_, vmap, tmap) <- get
+  return $ case synCat of
+    Value -> lookup (sourceName var) vmap
+    Type  -> lookup (sourceName var) tmap
 
 freshenTys :: TypeScheme -> Freshener TypeScheme
 freshenTys (Forall s binds ty) = do
-      binds' <- mapM (\(v, k) -> do { v' <- freshVar v; return (v', k) }) binds
+      binds' <- mapM (\(v, k) -> do { v' <- freshVar Type v; return (v', k) }) binds
       ty' <- freshen ty
       return $ Forall s binds' ty'
 
@@ -174,8 +186,8 @@ instance Term Type where
         t' <- freshen t
         return $ Box c' t'
       freshenTyVar v = do
-        (_, nmap) <- get
-        case lookup (sourceName v) nmap of
+        v' <- lookupVar Type v
+        case v' of
            Just v' -> return (TyVar $ Id (sourceName v) v')
            -- This case happens if we are referring to a defined
            -- function which does not get its name freshened
@@ -200,15 +212,15 @@ instance Term Coeffect where
     subst e _ _ = e
 
     freshen (CVar v) = do
-      (_, nmap) <- get
-      case lookup (sourceName v) nmap of
+      v' <- lookupVar Type v
+      case v' of
         Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar $ mkId (sourceName v)
     freshen (CInfinity (CPoly i@(Id _ ""))) = do
-      t <- freshVar i
+      t <- freshVar Type i
       return $ CInfinity (CPoly t)
     freshen (CInfinity (CPoly i@(Id _ " infinity"))) = do
-      t <- freshVar i
+      t <- freshVar Type i
       return $ CInfinity (CPoly t)
 
     freshen (CPlus c1 c2) = do
@@ -265,7 +277,7 @@ instance Term Value where
     subst _ _ v@(Constr _ _)      = Val nullSpan v
 
     freshen (Abs var t e) = do
-      var' <- freshVar var
+      var' <- freshVar Value var
       e'   <- freshen e
       return $ Abs var' t e'
 
@@ -278,8 +290,8 @@ instance Term Value where
       return $ Promote e'
 
     freshen (Var v) = do
-      (_, nmap) <- get
-      case lookup (sourceName v) nmap of
+      v' <- lookupVar Value v
+      case v' of
          Just v' -> return (Var $ Id (sourceName v) v')
          -- This case happens if we are referring to a defined
          -- function which does not get its name freshened
@@ -314,7 +326,7 @@ instance Term Expr where
                                      (map (second (subst es v)) cases)
 
     freshen (LetBox s var t e1 e2) = do
-      var' <- freshVar var
+      var' <- freshVar Value var
       e1'  <- freshen e1
       e2'  <- freshen e2
       t'   <- freshen t
@@ -326,10 +338,11 @@ instance Term Expr where
       return $ App s e1' e2'
 
     freshen (LetDiamond s var t e1 e2) = do
-      var' <- freshVar var
+      var' <- freshVar Value var
       e1'  <- freshen e1
       e2'  <- freshen e2
-      return $ LetDiamond s var' t e1' e2'
+      t'   <- freshen t
+      return $ LetDiamond s var' t' e1' e2'
 
     freshen (Binop s op e1 e2) = do
       e1' <- freshen e1
@@ -357,7 +370,7 @@ instance FirstParameter Def Span
 
 -- Alpha-convert all bound variables
 uniqueNames :: [Def] -> [Def]
-uniqueNames = flip evalState (0 :: Int, []) . mapM freshenDef
+uniqueNames = map (flip evalState (0 :: Int, [], []) . freshenDef)
   where
     freshenDef (Def s var e ps t) = do
       ps' <- mapM freshenBinder ps
