@@ -202,13 +202,26 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
 
         Just _ -> return (True, [(n, t)])
 
-    -- But we can't unify an universal with a concrete type
-    (Just (k1, ForallQ)) ->
-      halt $ GenericError (Just s)
-       $ case sp of
-        FstIsSpec -> "Trying to match a polymorphic type '" ++ pretty n
-                  ++ "' with monomorphic " ++ pretty t
-        SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
+    -- Unifying a forall with a concrete type may only be possible if the concrete
+    -- type is exactly equal to the forall-quantified variable
+    -- This can only happen for nat indexed types at the moment via the
+    -- additional equations so performa an additional check if they
+    -- are both of Nat kind
+    (Just (k1, ForallQ)) -> do
+      k1 <- inferKindOfType s (TyVar n)
+      k2 <- inferKindOfType s t
+      case (k1, k2) of
+        (KConstr "Nat=", KConstr "Nat=") -> do
+          c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
+          c2 <- compileNatKindedTypeToCoeffect s t
+          addConstraint $ Eq s c1 c2 (CConstr "Nat=")
+          return (True, [])
+        _ ->
+         halt $ GenericError (Just s)
+          $ case sp of
+           FstIsSpec -> "Trying to match a polymorphic type '" ++ pretty n
+                     ++ "' with monomorphic " ++ pretty t
+           SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> unhandled
     (Just (_, BoundQ)) -> unhandled
@@ -217,7 +230,16 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
 equalTypesRelatedCoeffects s rel t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel (TyVar n) t (flipIndicator sp)
 
-equalTypesRelatedCoeffects s _ t1 t2 _ = do
+equalTypesRelatedCoeffects s _ t1 t2 _ =
+  equalNatKindedTypesGeneric s t1 t2
+
+{- | Check whether two Nat-kinded types are equal -}
+equalNatKindedTypesGeneric :: (?globals :: Globals )
+    => Span
+    -> Type
+    -> Type
+    -> MaybeT Checker (Bool, Unifier)
+equalNatKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
   case (k1, k2) of
@@ -226,6 +248,7 @@ equalTypesRelatedCoeffects s _ t1 t2 _ = do
        c2 <- compileNatKindedTypeToCoeffect s t2
        addConstraint $ Eq s c1 c2 (CConstr "Nat=")
        return (True, [])
+
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
@@ -283,7 +306,6 @@ joinTypes s (Box c t) (Box c' t') = do
   addConstraint (Leq s c' (CVar topVar) kind)
   tu <- joinTypes s t t'
   return $ Box (CVar topVar) tu
-
 
 joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
