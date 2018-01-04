@@ -1,4 +1,0 @@
-promote : forall (n : Nat) . Int |n| -> List n Int
-promote n |c| = case n of
-    0 -> Nil;
-    n -> Cons c (promote (n-1) |c|)

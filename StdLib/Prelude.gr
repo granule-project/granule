@@ -154,35 +154,3 @@ push |(x, y)| = (|x|, |y|)
 pull : forall (a : Type, b : Type, n : Nat, m : Nat)
      . (a |n|, b |m|) -> (a, b) |n /\ m|
 pull (|x|, |y|) = |(x, y)|
-
---- # Indexed list combinators
-
---- Map a function over each element of a list
-map : forall (a : Type, b : Type, n : Nat=)
-    . (a -> b) |n| -> List n a -> List n b
-map |f| ys =
-    case ys of
-      Nil -> Nil;
-      (Cons x xs) -> Cons (f x) (map |f| xs)
-
-foldr : forall (a : Type, b : Type, n : Nat=)
-      . (a -> b -> b) |n| -> b -> List n a -> b
-foldr |h| acc xs =
-    case xs of
-      Nil -> acc;
-      (Cons x xs) -> h x (foldr |h| acc xs)
-
-sum : forall n : Nat= . List n Int -> Int
-sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
-
-product : forall n : Nat= . List n Int -> Int
-product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
-
--- # Indexed natural number combinators
-
--- Convert an indexed natural number to an untyped int
-natToInt : forall (n : Nat=) . N n -> Int
-natToInt x =
-    case x of
-      Z -> 0;
-      (S m) -> 1 + natToInt m

@@ -538,11 +538,11 @@ synthExpr defs gam pol (Val s (Promote e)) = do
 synthExpr defs gam pol (LetBox s var t e1 e2) = do
 
     -- Create a fresh kind variable for this coeffect
-    ckvar <- freshVar ("binderk_" ++ sourceName var)
+    ckvar <- freshVar ("binderk_" ++ internalName var)
     let kind = CPoly $ mkId ckvar
 
     -- Update coeffect-kind context
-    cvar <- freshCoeffectVar (mkId $ "binder_" ++ sourceName var) kind
+    cvar <- freshCoeffectVar (mkId $ "binder_" ++ internalName var) kind
 
     -- Extend the context with cvar
     gam' <- extCtxt s gam var (Discharged t (CVar cvar))
@@ -771,11 +771,6 @@ leqAssumption s x y =
   halt $ GenericError (Just s) $ "Can't unify free-variable types:\n\t"
            ++ pretty x ++ "\nwith\n\t" ++ pretty y
 
-
-isType :: (Id, CKind) -> Bool
-isType (_, CConstr k) = internalName k == "Type"
-isType _  = False
-
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant
  where relevant (var, _) = var `elem` vars
@@ -824,7 +819,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
     toFreshVar (var, Discharged t c) = do
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
-      freshName <- freshVar (sourceName var)
+      freshName <- freshVar (internalName var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (liftCoeffectType ctype, InstanceQ)) : tyVarContext s })

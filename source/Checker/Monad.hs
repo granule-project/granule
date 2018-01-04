@@ -16,7 +16,7 @@ import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern, TypeScheme(..)
-                   , mkId, sourceName)
+                   , mkId, internalName)
 import Syntax.Pretty
 import Utils
 
@@ -115,7 +115,7 @@ freshCoeffectVar cvar kind =
 --   coeffect type.
 freshCoeffectVarWithBinding :: Id -> CKind -> Quantifier -> MaybeT Checker Id
 freshCoeffectVarWithBinding cvar kind q = do
-    freshName <- freshVar (sourceName cvar)
+    freshName <- freshVar (internalName cvar)
     let cvar' = mkId freshName
     registerCoeffectVar cvar' kind q
     return cvar'

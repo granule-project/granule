@@ -163,7 +163,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
       -- Freshen the variable depending on its kind
       var' <- case k of
                KType -> do
-                 freshName <- freshVar (sourceName var)
+                 freshName <- freshVar (internalName var)
                  let var'  = mkId freshName
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })

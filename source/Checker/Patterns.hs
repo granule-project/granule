@@ -5,7 +5,7 @@ module Checker.Patterns where
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 
-import Checker.Types (equalTypes)
+import Checker.Types (equalTypes, nonConflictingUnifiers)
 import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
@@ -57,90 +57,81 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
         Nothing        -> (v, Discharged t c')
 
 -- Match a Nil constructor
-ctxtFromTypedPattern s t@(TyApp (TyApp (TyCon listConstr) n) ty) (PConstr _ nilConstr)
-  | internalName listConstr == "List" && internalName nilConstr == "Nil" = do
+ctxtFromTypedPattern s (TyApp (TyApp (TyCon listC) n) ty) (PConstr _ nilC)
+  | internalName listC == "List" && internalName nilC == "Nil" = do
     let kind = CConstr $ mkId "Nat="
-    -- Create a fresh type variable for the size of the consed list
-    sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
+    c <- compileNatKindedTypeToCoeffect s n
+    addConstraint $ Eq s c (CNat Discrete 0) kind
     case n of
-      TyVar v -> do
-        addConstraint $ Eq s (CVar v) (CVar sizeVar) kind
-        addConstraint $ Eq s (CVar sizeVar) (CNat Discrete 0) kind
-        return ([], [sizeVar], [(v, TyInt 0)])
-      TyInt m -> do
-        addConstraint $ Eq s (CNat Discrete m) (CNat Discrete 0) kind
-        return ([], [], [])
-      _ -> unhandled
+      TyVar v -> return ([], [], [(v, TyInt 0)])
+      _       -> return ([], [], [])
 
 -- Match a Cons constructor
-ctxtFromTypedPattern s
-    (TyApp  (TyApp  (TyCon listConstr) n) ty)
-    (PApp _ (PApp _ (PConstr _ consConstr) p1) p2)
-      | internalName listConstr == "List" && internalName consConstr == "Cons" = do
-        -- Create a fresh type variable for the size of the consed list
-        let kind = CConstr $ mkId "Nat="
-        sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
+ctxtFromTypedPattern s (TyApp  (TyApp  (TyCon listC) n) ty) (PApp _ (PApp _ (PConstr _ consC) p1) p2)
+  | internalName listC == "List" && internalName consC == "Cons" = do
+    -- Create a fresh type variable for the size of the consed list
+    let kind = CConstr $ mkId "Nat="
+    sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
 
-        -- Recursively construct the binding patterns
-        (bs1, eVars1, ty') <- ctxtFromTypedPattern s ty p1
-        (bs2, eVars2, _) <- ctxtFromTypedPattern s (TyApp (TyApp (TyCon $ mkId "List") (TyVar sizeVar)) ty) p2
+    -- Recursively construct the binding patterns
+    (bs1, eVars1, u1) <- ctxtFromTypedPattern s ty p1
+    (bs2, eVars2, u2) <- ctxtFromTypedPattern s (TyApp (TyApp (TyCon $ mkId "List") (TyVar sizeVar)) ty) p2
+    nonConflictingUnifiers s u1 u2
 
-        -- Generate equality constraint
-        let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
-        subst <- case n of
-          TyVar v -> do
-             addConstraint $ Eq s (CVar v) sizeVarInc kind
-             return $ [(v, TyInfix "+" (TyVar sizeVar) (TyInt 1))]
-          TyInt m -> do
-             addConstraint $ Eq s (CNat Discrete m) sizeVarInc kind
-             return []
-          _ -> unhandled
+    -- Generate equality constraint
+    let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
+    c <- compileNatKindedTypeToCoeffect s n
+    addConstraint $ Eq s c sizeVarInc kind
 
-        -- Join the two pattern contexts together
-        return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, subst)
+    -- Compute additional substitution
+    -- TODO: this should be subsumed/generalised by the rest of
+    -- type equality mechanism but isn't yet for some reason
+    let u0 = case n of
+          TyVar v -> [(v, TyInfix "+" (TyVar sizeVar) (TyInt 1))]
+          _       -> []
+
+    -- Join the two pattern contexts together
+    return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, u0 ++ u1 ++ u2)
 
 -- Match a Z constructor
-ctxtFromTypedPattern s t@(TyApp (TyCon nConstr) n) (PConstr _ zConstr)
-  | internalName nConstr == "N" && internalName zConstr == "Z" = do
-      c <- compileNatKindedTypeToCoeffect s n
-      addConstraint $ Eq s c (CNat Discrete 0) (CConstr $ mkId "Nat=")
-      case n of
-        TyVar v -> return ([], [], [(v, TyInt 0)])
-        _ -> return ([], [], [])
-          {-do
-          sizeVar <- freshCoeffectVarWithBinding "in" (CConstr "Nat=") BoundQ
-          addConstraint $ Eq s c (CNat Discret 0) sizeVar
-          return ([], [], [(v, sizeVar)])-}
+ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PConstr _ zC)
+  | internalName nC == "N" && internalName zC == "Z" = do
+    c <- compileNatKindedTypeToCoeffect s n
+    addConstraint $ Eq s c (CNat Discrete 0) (CConstr $ mkId "Nat=")
+    case n of
+      TyVar v -> return ([], [], [(v, TyInt 0)])
+      _       -> return ([], [], [])
 
 -- Match a S constructor
-ctxtFromTypedPattern s t@(TyApp (TyCon nConstr) n) (PApp _ (PConstr _ sConstr) p)
-  | internalName nConstr == "N" && internalName sConstr == "S" = do
-      -- Create a fresh type variable for the size of the consed list
-      let kind = CConstr $ mkId "Nat="
-      sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
+ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PApp _ (PConstr _ sC) p)
+  | internalName nC == "N" && internalName sC == "S" = do
+    -- Create a fresh type variable for the size of the consed list
+    let kind = CConstr $ mkId "Nat="
+    sizeVar <- freshCoeffectVarWithBinding (mkId "in") kind BoundQ
 
-      -- Recursively construct the binding patterns
-      (bs2, eVars2, _) <- ctxtFromTypedPattern s (TyApp (TyCon $ mkId "N") (TyVar sizeVar)) p
+    -- Recursively construct the binding patterns
+    (bs2, eVars2, u) <- ctxtFromTypedPattern s (TyApp (TyCon $ mkId "N") (TyVar sizeVar)) p
 
-      -- Generate equality constraint
-      let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
-      subst <- case n of
-        TyVar v -> do
-           addConstraint $ Eq s (CVar v) sizeVarInc kind
-           return $ [(v, TyInfix "+" (TyVar sizeVar) (TyInt 1))]
-        TyInt m -> do
-           addConstraint $ Eq s (CNat Discrete m) sizeVarInc kind
-           return []
-        _ -> unhandled
+    -- Generate equality constraint
+    let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
+    c <- compileNatKindedTypeToCoeffect s n
+    addConstraint $ Eq s c sizeVarInc kind
 
-      -- Join the two pattern contexts together
-      return (bs2, sizeVar : eVars2, subst)
+    -- Compute additional substitution
+    -- TODO: this should be subsumed/generalised by the rest of
+    -- type equality mechanism but isn't yet for some reason
+    let u0 = case n of
+          TyVar v -> [(v, TyInfix "+" (TyVar sizeVar) (TyInt 1))]
+          _       -> []
 
+    -- Join the two pattern contexts together
+    return (bs2, sizeVar : eVars2, u ++ u0)
 
 ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
   (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
-  return $ (ctxtL ++ ctxtR, eVars1 ++ eVars2, substl ++ substr)
+  nonConflictingUnifiers s substl substr
+  return (ctxtL ++ ctxtR, eVars1 ++ eVars2, substl ++ substr)
 
 -- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "True") =
 --     return ([], [], [])
