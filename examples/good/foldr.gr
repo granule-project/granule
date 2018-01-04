@@ -1,4 +1,4 @@
-import StdLib.Prelude
+import StdLib.List
 
 main : Int
 main = sum (Cons 3 (Cons 2 (Cons 1 Nil)))
