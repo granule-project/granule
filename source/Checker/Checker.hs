@@ -175,8 +175,8 @@ checkExpr defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
   let gam'' = multAll (freeVars e) demand gam'
   return (gam'', subst)
 
--- Dependent pattern-matching case
-checkExpr defs gam pol _ tau (Case s guardExpr cases) = do
+-- Dependent pattern-matching case (only at the top level)
+checkExpr defs gam pol True tau e@(Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam) <- synthExpr defs gam pol guardExpr
 
