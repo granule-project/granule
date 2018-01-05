@@ -131,7 +131,11 @@ concludeImplication eVar = do
   checkerState <- get
   case predicateStack checkerState of
     (p' : p : stack) ->
-      put (checkerState { predicateStack = Impl eVar p p' : stack })
+      case stack of
+         (Conj ps : stack') ->
+            put (checkerState { predicateStack = Conj (Impl eVar p p' : ps) : stack' })
+         stack' ->
+            put (checkerState { predicateStack = Conj [Impl eVar p p'] : stack' })
     _ -> error "Predicate: not enough conjunctions on the stack"
 
 -- | A helper for adding a constraint to the context
