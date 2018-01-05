@@ -26,46 +26,86 @@ import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
-import Debug.Trace
-
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
 check :: (?globals :: Globals ) => AST -> IO CheckerResult
 check ast = do
-    -- Get the types of all definitions (assume that they are correct for
-    -- the purposes of (mutually)recursive calls).
+      let checkADTs = do { mapM checkTyCon adts; mapM checkDataCons adts }
 
-    let checkedADTs = mapM checkADT (filter (\case ADT{} -> True; _ -> False) ast)
+      -- Get the types of all definitions (assume that they are correct for
+      -- the purposes of (mutually)recursive calls).
+      let checkKinds = mapM kindCheck defs
+      -- Build a computation which checks all the defs (in order)...
+      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+      let checkedDefs = do
+            status <- runMaybeT checkKinds
+            case status of
+              Nothing -> return [Nothing]
+              Just _  -> -- Now check the definition
+                mapM (checkDef defCtxt) defs
 
+      -- ... and evaluate the computation with initial state
+      let thingsToCheck = (++) <$> checkADTs <*> checkedDefs
+      results <- go thingsToCheck
 
-    let defs = filter (\case Def{} -> True; _ -> False) ast
-    let checkKinds = mapM kindCheck defs
-    -- Build a computation which checks all the defs (in order)...
-    let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
-    let checkedDefs = do
-          status <- runMaybeT checkKinds
-          case status of
-            Nothing -> return [Nothing]
-            Just _  -> -- Now check the definition
-               mapM (checkDef defCtxt) defs
+      -- If all definitions type checked, then the whole file type checks
+      -- let results = (results_ADT ++ results_Def)
+      if all isJust results
+        then return Ok
+        else return Failed
+    where
+      adts = filter (\case ADT{} -> True; _ -> False) ast
+      defs = filter (\case Def{} -> True; _ -> False) ast
+      go = evalChecker initState { uniqueVarId = freshIdCounter ?globals }
 
-    -- ... and evaluate the computation with initial state
-    let checked = (++) <$> checkedADTs <*> checkedDefs
-    results <- evalChecker initState { uniqueVarId = freshIdCounter ?globals } checked -- TODO: NOT initState
+checkTyCon :: (?globals :: Globals ) => Def -> Checker (Maybe ())
+checkTyCon (ADT _ tC@(TypeConstr _ tName) tyVars _) =
+    runMaybeT $ do
+      debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty tC ++ "`: `"
+                                    ++ pretty tyConKind ++ "` (Show: `" ++ show tyConKind ++ "`)"
+      modify $ \st -> st { typeConstructors = (tName, tyConKind) : typeConstructors st }
+  where
+    tyConKind = mkKind tyVars
+    mkKind [] = KType
+    mkKind (_:vs) = KFun KType (mkKind vs)
 
-    -- If all definitions type checked, then the whole file type checks
-    -- let results = (results_ADT ++ results_Def)
-    if all isJust results
-      then return Ok
-      else return Failed
+checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
+checkDataCons (ADT _ (TypeConstr _ tName) tyVars dataCs) =
+  runMaybeT $ do
+    st <- get
+    case lookup tName (typeConstructors st) of
+      Just kind -> mapM_ (checkDataCon tName kind) dataCs
+      _ -> unhandled
+
+checkDataCon :: (?globals :: Globals )
+  => Id -- ^ The type constructor and associated type to check against
+  -> Kind -- ^ The kind of the type constructor
+  -> DataConstr -- ^ The data constructor to check
+  -> MaybeT Checker () -- ^ Return @Just@ on success, @Nothing@ on failure
+checkDataCon tName kind (DataConstr _ dName tySch@(Forall s _ ty)) = do
+    debugM "checkDataCons.dataCs" $ "Checking " ++ pretty dName ++ ": " ++ pretty tySch
+    binders <- dataConWellKinded ty kind
+    modify $ \st -> st { dataConstructors = (dName, Forall s binders ty) : dataConstructors st }
+  where
+    dataConWellKinded t k =
+        case t of
+        TyCon tC ->
+          if tC /= tName then halt $ GenericError (Just s)
+                          $ "Expected `" ++ pretty tName ++ "` but got `" ++ pretty tC ++ "`"
+          else
+            case k of
+            KType -> return []
+            _ -> halt $ KindError (Just s) $ "Kind mismatch in constructor `" ++ pretty dName ++ "`"
+        x -> halt $ GenericError (Just s)
+                                 $ "Only nullary constructors supported at the moment: " ++ pretty x
 
 checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def              -- definition
-         -> Checker (Maybe (Ctxt Assumption))
+         -> Checker (Maybe ())
 checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
-    ctxt <- runMaybeT $ do
+    result <- runMaybeT $ do
       modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
       ctxt <- case (ty, pats) of
@@ -92,113 +132,12 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
       debugM "Solver predicate" $ pretty (Conj predStack)
       solved <- solveConstraints (Conj predStack) s defName
       if solved
-        then return ctxt
+        then return ()
         else halt $ GenericError (Just s) "Constraints violated"
 
     -- Erase the solver predicate between definitions
     modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
-    debugM "Checker.checkDef returning ctxt" $ show ctxt
-    return ctxt
-
-  -- data Kind = KType
-  --           | KCoeffect
-  --           | KFun Kind Kind
-  --           | KPoly Id   -- Kind poly variable
-  --           | KConstr Id -- constructors that have been elevated
-  --     deriving (Show, Ord, Eq)
-
-checkADT :: (?globals :: Globals ) => Def -> Checker (Maybe (Ctxt Assumption))
-checkADT (ADT _ (TypeConstr _ tName) tyVars dataCs) = do
-    runMaybeT $ do
-      debugM "checkADT.tyConKind" $ magenta $ show tyConKind ++ "\n\n" ++ pretty tyConKind
-      debugM "checkADT.dataCs" $ magenta $ show dataCs ++ "\n\n" ++ pretty dataCs
-      modify $ \st -> st { typeConstructors = (tName, tyConKind) : typeConstructors st }
-      dataCs <- mapM processD dataCs
-      modify $ \st -> st { dataConstructors = dataCs ++ dataConstructors st }
-    return $ Just []
-  where
-    tyConKind = mkKind tyVars
-    mkKind [] = KType
-    mkKind (_:vs) = KFun KType (mkKind vs)
-    processD (DataConstr _ dName (Forall s _ t)) = do
-        binders <- dataConWellKinded t tyConKind (reverse . map snd $ tyVars)
-        return (dName, Forall s binders t)
-      where
-        -- dataConWellKinded :: Type -> Kind -> [Id] -> MaybeT Checker [(Id, Kind)]
-        dataConWellKinded ty ki vs =
-            case ty of
-              TyCon tC ->
-                if tC /= tName then halt $ GenericError (Just s)
-                                $ "Expected `" ++ pretty tName ++ "` but got `" ++ pretty tC ++ "`"
-                else
-                  case ki of
-                    KType -> return []
-                    _ -> halt $ KindError (Just s) $ "TODO"
-              x -> error $ show x
-              
-    -- dataConWellKinded (FunTy l r) (KFun kl kr) vs = do
-    --     left <- case l of
-    --       (TyVar x) ->
-    --         if x `elem` vs then return [(x, KType)] else halt $
-    --           UnboundVariableError Nothing $ "Type variable `" ++ pretty x ++ "`" <?> vs
-    --       (TyCon name) -> do
-    --         st <- get
-    --         case lookup name (typeConstructors st) of
-    --           Nothing -> halt $
-    --             UnboundVariableError Nothing $
-    --               "Type constructor `" ++ pretty name ++ "`" <?> (typeConstructors st)
-    --           _ -> return []
-    --       x -> error $ show x
-    --     right <- dataConWellKinded r kr vs
-    --     return $ left ++ right
-    --
-    -- dataConWellKinded (TyApp l r) (tyCKind) (v:vs) =
-    --     case tyCKind of
-    --       KFun KType KType -> do
-    --         left <- dataConWellKinded l KType vs
-    --         right <- case r of
-    --           (TyVar x) ->
-    --             if x == v then return [(x, KType)]
-    --             else halt $ KindError Nothing $ "Expected `" ++ pretty v ++ "` but got `" ++ pretty x ++ "`"
-    --         return $ left ++ right
-    --       KFun KType k_r -> do
-    --         left <- dataConWellKinded l KType [v]
-    --         right <- dataConWellKinded r k_r vs
-    --         return $ left ++ right
-    --       x -> halt $ KindError Nothing $ "wtf: " ++ show tyCKind
-    --
-    -- dataConWellKinded (TyCon name) KType [] =
-    --     if name == tName then return []
-    --     else halt $ KindError Nothing $ "Expected `" ++ pretty tName ++ "` but got `" ++ pretty name ++ "`"
-    -- dataConWellKinded ty ki vs = error $ show ty ++ show ki ++ show vs
-    -- ("Either",KFun KType (KFun KType KType))
-    -- (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))
-
-
--- test = do
---   let ?globals = defaultGlobals {debugging = True}
---   check [ ADT ((23,1),(0,0)) (TypeConstr ((23,6),(23,6)) "Either") [(((23,13),(23,13)),"a"),(((23,15),(23,15)),"b")] [DataConstr ((24,3),(0,0)) "Left" (Forall ((0,0),(0,0)) [] (FunTy (TyVar "a") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))),DataConstr ((25,3),(0,0)) "Right" (Forall ((0,0),(0,0)) [] (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b"))))] ] []
-
--- test = dataConWellKinded (TyCon "Bool") "Bool" (KType) []
---
--- test2 =
---   dataConWellKinded
---     (FunTy (TyVar "a") (TyApp (TyCon "Maybe") (TyVar "a")))
---     "Maybe"
---     (KFun KType KType)
---     ["a"]
-
---   -- add
---   case tyVars of
---     [] -> return () -- assume tyvars are all : Type
---     _  -> do
---       traceM $ red "WARNING: Kinds.kindCheck: not implemented." <?>
-
-    -- ("Maybe",KFun KType KType)
-    -- [("None",Forall ((0,0),(0,0)) [("a",KType)] (TyApp (TyCon "Maybe") (TyVar "a"))),("Some",Forall ((0,0),(0,0)) [("a",KType)] (FunTy (TyVar "a") (TyApp (TyCon "Maybe") (TyVar "a"))))]
-
-    -- ("Either",KFun KType (KFun KType KType))
-    -- (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))
+    return result
 
 data Polarity = Positive | Negative deriving Show
 
@@ -419,10 +358,10 @@ synthExpr _ _ _ (Val s (Constr c [])) = do
                     (nat (TyVar sizeVarRes)), [])
     _ -> do
       st <- get
-      traceM $ red "WARNING: Checker.synthExpr incomplete for data constructors"
       case lookup c (dataConstructors st) of
         Just (Forall _ [] t) -> return (t, [])
         Just (Forall _ _ t) -> do
+          error $ red "Checker.synthExpr incomplete for data constructors" -- TODO
           return (t, [])
         _ -> halt $ UnboundVariableError (Just s) $
                     "Data constructor `" ++ pretty c ++ "`" <?> dataConstructors st

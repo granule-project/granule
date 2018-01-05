@@ -51,7 +51,8 @@ spec = do
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right (ast, maxFreshId) -> do
-            result <- try (check ast maxFreshId) :: IO (Either SomeException _)
+            let ?globals = ?globals { freshIdCounter = maxFreshId }
+            result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Ok
@@ -64,7 +65,8 @@ spec = do
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right (ast, maxFreshId) -> do
-            result <- try (check ast maxFreshId) :: IO (Either SomeException _)
+            let ?globals = ?globals { freshIdCounter = maxFreshId }
+            result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Failed

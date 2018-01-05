@@ -1,0 +1,62 @@
+data Bool where
+  False : Bool;
+  True : Bool
+
+-- data Result where
+--   Success : Result;
+--   Failure : Result
+--
+-- isSuccess : Result -> Bool
+-- isSuccess result =
+--     case result of {
+--       Failure -> False;
+--       Success -> True
+--     }
+--
+-- main : Bool
+-- main = isSuccess Failure
+--
+-- data Maybe a where
+--   None : Maybe a;
+--   Some : a -> Maybe a
+-- --
+--
+--
+-- -- ("Either",KFun KType (KFun KType KType))
+-- -- (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))
+--
+-- -- maybe : forall a : Type . a -> Maybe
+-- --
+-- -- isSome : forall a : Type . Maybe a -> Maybe a
+-- -- isSome x =
+-- --     case x of {
+-- --       None -> None;
+-- --       (Some a) -> (Some a)
+-- --     }
+--
+-- isSome : forall a : Type . Maybe (a |0|) -> Bool
+-- isSome x =
+--     case x of {
+--       None -> False;
+--       (Some |a|) -> True
+--     }
+--
+--
+-- --
+-- -- unMaybe : Maybe a -> a
+-- -- unMaybe (Just a) = a
+--
+-- -- nonsense : Bool -> Bool
+-- -- nonsense x = case x of { Success -> True }
+-- --
+-- -- main : (Bool, Result)
+-- -- main = (True, Success)
+-- --
+-- -- -- bar : Int
+-- -- -- bar = 5
+-- -- --
+-- --
+-- -- --
+-- -- -- data Either a b where
+-- -- --   Left : a -> Either a b;
+-- -- --   Right : b -> Either a b
