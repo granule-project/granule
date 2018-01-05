@@ -85,7 +85,7 @@ instance Pretty Type where
     pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
 
-instance {-# OVERLAPS #-} Pretty [Def] where
+instance {-# OVERLAPS #-} Pretty AST where
     pretty = intercalate "\n\n" . map pretty
 
 instance Pretty Def where

@@ -156,7 +156,7 @@ evalIn ctxt (Case _ gExpr cases) = do
 
     pmatch (_:ps) val = pmatch ps val
 
-evalDefs :: (?globals :: Globals) => Ctxt Value -> [Def] -> IO (Ctxt Value)
+evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
@@ -166,7 +166,7 @@ evalDefs ctxt (d : defs) = do
     debugM "Desugaring" $ pretty d'
     evalDefs ctxt (d' : defs)
 
-eval :: (?globals :: Globals) => [Def] -> IO (Maybe Value)
+eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
 eval defs = do
     bindings <- evalDefs empty defs
     case lookup (mkId "main") bindings of

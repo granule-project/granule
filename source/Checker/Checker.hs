@@ -31,11 +31,8 @@ import Debug.Trace
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
-check :: (?globals :: Globals )
-      => [Def]        -- List of definitions
-      -> Int          -- The current maximum fresh identifier
-      -> IO CheckerResult
-check ast maxFreshId = do
+check :: (?globals :: Globals ) => AST -> IO CheckerResult
+check ast = do
     -- Get the types of all definitions (assume that they are correct for
     -- the purposes of (mutually)recursive calls).
 
@@ -55,7 +52,7 @@ check ast maxFreshId = do
 
     -- ... and evaluate the computation with initial state
     let checked = (++) <$> checkedADTs <*> checkedDefs
-    results <- evalChecker initState { uniqueVarId = maxFreshId } checked -- TODO: NOT initState
+    results <- evalChecker initState { uniqueVarId = freshIdCounter ?globals } checked -- TODO: NOT initState
 
     -- If all definitions type checked, then the whole file type checks
     -- let results = (results_ADT ++ results_Def)

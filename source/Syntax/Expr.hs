@@ -3,7 +3,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Syntax.Expr (Value(..), Expr(..), Type(..), TypeScheme(..),
+module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
                    NatModifier(..), Effect, Kind(..), DataConstr(..), TypeConstr(..),
                    Id, sourceName, internalName, mkId, mkInternalId,
@@ -370,6 +370,8 @@ data Def = Def Span Id Expr [Pattern] TypeScheme
          | ADT Span TypeConstr [TyVar] [DataConstr]
           deriving (Eq, Show, Generic)
 
+type AST = [Def]
+
 type TyVar = (Span,Id)
 
 instance FirstParameter Def Span
@@ -383,7 +385,7 @@ data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
 instance FirstParameter DataConstr Span
 
 -- Alpha-convert all bound variables
-uniqueNames :: [Def] -> ([Def], Int)
+uniqueNames :: AST -> (AST, Int)
 uniqueNames =
    -- Since the type checker will generate new fresh names as well
    -- find the maximum fresh id that occured in the renaming stage

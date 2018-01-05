@@ -16,26 +16,28 @@ import System.IO.Unsafe (unsafePerformIO)
 import Syntax.Expr (Span)
 
 data Globals =
-  Globals {
-    debugging :: Bool,
-    sourceFilePath :: String,
-    noColors :: Bool,
-    noEval :: Bool,
-    suppressInfos :: Bool,
-    suppressErrors :: Bool,
-    timestamp :: Bool
+  Globals
+  { debugging :: Bool
+  , sourceFilePath :: String
+  , noColors :: Bool
+  , noEval :: Bool
+  , suppressInfos :: Bool
+  , suppressErrors :: Bool
+  , timestamp :: Bool
+  , freshIdCounter :: Int
   } deriving Show
 
 defaultGlobals :: Globals
 defaultGlobals =
-    Globals {
-      debugging = False,
-      sourceFilePath = "",
-      noColors = False,
-      noEval = False,
-      suppressInfos = False,
-      suppressErrors = False,
-      timestamp = False
+    Globals
+    { debugging = False
+    , sourceFilePath = ""
+    , noColors = False
+    , noEval = False
+    , suppressInfos = False
+    , suppressErrors = False
+    , timestamp = False
+    , freshIdCounter = 0
     }
 
 class UserMsg a where

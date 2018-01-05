@@ -67,7 +67,7 @@ import System.Exit (die)
 %left '.'
 %%
 
-Defs :: { [Def] }
+Defs :: { AST }
 Defs : Def                      { [$1] }
      | Def NL Defs              { $1 : $3 }
 
@@ -312,7 +312,7 @@ parseError t = do
     die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO ([Def], Int)
+parseDefs :: (?globals :: Globals) => String -> IO (AST, Int)
 parseDefs input = do
     (defs, maxFreshId) <- parse input
     importedDefsAndFreshIds <- forM imports $ \path -> do
