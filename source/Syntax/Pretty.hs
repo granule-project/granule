@@ -80,7 +80,7 @@ instance Pretty Type where
     pretty (Box c t)      = pretty t ++ " |" ++ pretty c ++ "|"
     pretty (Diamond e t)  = pretty t ++ " <[" ++ intercalate "," e ++ "]>"
     pretty (TyVar v)      = pretty v
-    pretty (TyApp t1 t2)  = "(" ++ pretty t1 ++ " " ++ pretty t2 ++ ")"
+    pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
     pretty (TyInt n)      = show n
     pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
@@ -150,8 +150,8 @@ instance Pretty Expr where
   pretty (LetDiamond _ v t e1 e2) = parens $ "let " ++ pretty v ++ " :" ++ pretty t ++ " <- "
                                     ++ pretty e1 ++ " in " ++ pretty e2
   pretty (Val _ v) = pretty v
-  pretty (Case _ e ps) = "\n    case " ++ pretty e ++ " of {\n      " ++
-                         intercalate ";\n      " (map (\(p, e') -> pretty p ++ " -> " ++ pretty e') ps) ++ "\n    }"
+  pretty (Case _ e ps) = "\n    (case " ++ pretty e ++ " of\n      " ++
+                         intercalate ";\n      " (map (\(p, e') -> pretty p ++ " -> " ++ pretty e') ps) ++ ")"
 
 parens :: String -> String
 parens s = "(" ++ s ++ ")"

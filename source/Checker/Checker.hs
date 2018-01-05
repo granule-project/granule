@@ -113,58 +113,70 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
 checkADT :: (?globals :: Globals ) => Def -> Checker (Maybe (Ctxt Assumption))
 checkADT (ADT _ (TypeConstr _ tName) tyVars dataCs) = do
     runMaybeT $ do
+      debugM "checkADT.tyConKind" $ magenta $ show tyConKind ++ "\n\n" ++ pretty tyConKind
+      debugM "checkADT.dataCs" $ magenta $ show dataCs ++ "\n\n" ++ pretty dataCs
+      modify $ \st -> st { typeConstructors = (tName, tyConKind) : typeConstructors st }
       dataCs <- mapM processD dataCs
-
-      debugM "checkADT.dataCs" $ magenta $ show dataCs
-
-      modify $ \st -> st { dataConstructors = dataCs ++ dataConstructors st
-                         , typeConstructors = (tName, tyConKind) : typeConstructors st
-                         }
+      modify $ \st -> st { dataConstructors = dataCs ++ dataConstructors st }
     return $ Just []
   where
-    processD (DataConstr _ dName (Forall s _ t)) = do
-        binders <- dataConWellKinded t tyConKind (reverse . map snd $ tyVars)
-        return (dName, Forall s binders t)
     tyConKind = mkKind tyVars
     mkKind [] = KType
     mkKind (_:vs) = KFun KType (mkKind vs)
+    processD (DataConstr _ dName (Forall s _ t)) = do
+        binders <- dataConWellKinded t tyConKind (reverse . map snd $ tyVars)
+        return (dName, Forall s binders t)
+      where
+        -- dataConWellKinded :: Type -> Kind -> [Id] -> MaybeT Checker [(Id, Kind)]
+        dataConWellKinded ty ki vs =
+            case ty of
+              TyCon tC ->
+                if tC /= tName then halt $ GenericError (Just s)
+                                $ "Expected `" ++ pretty tName ++ "` but got `" ++ pretty tC ++ "`"
+                else
+                  case ki of
+                    KType -> return []
+                    _ -> halt $ KindError (Just s) $ "TODO"
+              x -> error $ show x
+              
+    -- dataConWellKinded (FunTy l r) (KFun kl kr) vs = do
+    --     left <- case l of
+    --       (TyVar x) ->
+    --         if x `elem` vs then return [(x, KType)] else halt $
+    --           UnboundVariableError Nothing $ "Type variable `" ++ pretty x ++ "`" <?> vs
+    --       (TyCon name) -> do
+    --         st <- get
+    --         case lookup name (typeConstructors st) of
+    --           Nothing -> halt $
+    --             UnboundVariableError Nothing $
+    --               "Type constructor `" ++ pretty name ++ "`" <?> (typeConstructors st)
+    --           _ -> return []
+    --       x -> error $ show x
+    --     right <- dataConWellKinded r kr vs
+    --     return $ left ++ right
+    --
+    -- dataConWellKinded (TyApp l r) (tyCKind) (v:vs) =
+    --     case tyCKind of
+    --       KFun KType KType -> do
+    --         left <- dataConWellKinded l KType vs
+    --         right <- case r of
+    --           (TyVar x) ->
+    --             if x == v then return [(x, KType)]
+    --             else halt $ KindError Nothing $ "Expected `" ++ pretty v ++ "` but got `" ++ pretty x ++ "`"
+    --         return $ left ++ right
+    --       KFun KType k_r -> do
+    --         left <- dataConWellKinded l KType [v]
+    --         right <- dataConWellKinded r k_r vs
+    --         return $ left ++ right
+    --       x -> halt $ KindError Nothing $ "wtf: " ++ show tyCKind
+    --
+    -- dataConWellKinded (TyCon name) KType [] =
+    --     if name == tName then return []
+    --     else halt $ KindError Nothing $ "Expected `" ++ pretty tName ++ "` but got `" ++ pretty name ++ "`"
+    -- dataConWellKinded ty ki vs = error $ show ty ++ show ki ++ show vs
+    -- ("Either",KFun KType (KFun KType KType))
+    -- (FunTy (TyVar "b") (TyApp (TyApp (TyCon "Either") (TyVar "a")) (TyVar "b")))
 
-    -- dataConWellKinded :: Type -> Kind -> [Id] -> MaybeT Checker [(Id, Kind)]
-    dataConWellKinded (FunTy l r) ki vs = do
-        left <- case l of
-          (TyVar x) ->
-            if x `elem` vs then return [(x, KType)] else halt $
-              UnboundVariableError Nothing $ "Type variable `" ++ pretty x ++ "`" <?> vs
-          (TyCon name) -> do
-            st <- get
-            case lookup name (typeConstructors st) of
-              Nothing -> halt $
-                UnboundVariableError Nothing $
-                  "Type constructor `" ++ pretty name ++ "`" <?> (typeConstructors st)
-              _ -> return []
-          x -> error $ show x
-        right <- dataConWellKinded r ki vs
-        return $ left ++ right
-
-    dataConWellKinded (TyApp l r) tyCKind (v:vs) =
-        case tyCKind of
-          KFun KType KType -> do
-            left <- dataConWellKinded l KType vs
-            right <- case r of
-              (TyVar x) ->
-                if x == v then return [(x, KType)]
-                else halt $ KindError Nothing $ "Expected `" ++ pretty v ++ "` but got `" ++ pretty x ++ "`"
-            return $ left ++ right
-          KFun KType k_r -> do
-            left <- dataConWellKinded l KType [v]
-            right <- dataConWellKinded r k_r vs
-            return $ left ++ right
-          x -> halt $ KindError Nothing $ "wtf: " ++ show tyCKind
-
-    dataConWellKinded (TyCon name) KType [] =
-        if name == tName then return []
-        else halt $ KindError Nothing $ "Expected `" ++ pretty tName ++ "` but got `" ++ pretty name ++ "`"
-    dataConWellKinded ty ki vs = error $ show ty ++ show ki ++ show vs
 
 -- test = do
 --   let ?globals = defaultGlobals {debugging = True}
