@@ -680,10 +680,6 @@ leqAssumption s x y =
            ++ pretty x ++ "\nwith\n\t" ++ pretty y
 
 
-isType :: (Id, CKind) -> Bool
-isType (_, CConstr "Type") = True
-isType _                   = False
-
 freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
 freshPolymorphicInstance (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
@@ -714,11 +710,6 @@ freshPolymorphicInstance (Forall s kinds ty) = do
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant
  where relevant (var, _) = var `elem` vars
-
-
-isNonLinearAssumption :: (Id, Assumption) -> Bool
-isNonLinearAssumption (_, Discharged _ _) = True
-isNonLinearAssumption _                   = False
 
 -- Replace all top-level discharged coeffects with a variable
 -- and derelict anything else
