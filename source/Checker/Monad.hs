@@ -112,7 +112,7 @@ freshCoeffectVarWithBinding cvar kind q = do
 -- | Helper for registering a new coeffect variable in the checker
 registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
 registerCoeffectVar v (CConstr constrId) q =
-  modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
+    modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
 registerCoeffectVar v (CPoly constrId) q =
     modify (\st -> st { tyVarContext = (v, (KPoly constrId, q)) : tyVarContext st })
 

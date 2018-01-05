@@ -176,7 +176,7 @@ checkExpr defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
   return (gam'', subst)
 
 -- Dependent pattern-matching case (only at the top level)
-checkExpr defs gam pol True tau e@(Case s guardExpr cases) = do
+checkExpr defs gam pol True tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam) <- synthExpr defs gam pol guardExpr
 
@@ -204,11 +204,8 @@ checkExpr defs gam pol True tau e@(Case s guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-           -- The current local environment should be subsumed by the
-           -- shared context
            -- Conclude the implication
            concludeImplication eVars
-           state <- get
 
            -- The resulting context has the shared part removed
            let branchCtxt = (localGam `subtractCtxt` patternGam) `subtractCtxt` specialisedGam
@@ -219,6 +216,7 @@ checkExpr defs gam pol True tau e@(Case s guardExpr cases) = do
         xs -> illLinearityMismatch s xs
 
   -- Find the upper-bound contexts
+
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
@@ -407,12 +405,11 @@ synthExpr defs gam _ (Val s (Var x)) = do
 -- Specialised application for scale
 synthExpr defs gam pol
       (App _ (Val _ (Var v)) (Val _ (NumFloat r))) | internalName v == "scale" = do
-  let float = (TyCon "Float")
-  return $ (FunTy (Box (CFloat (toRational r)) float) float, [])
+  let float = TyCon "Float"
+  return (FunTy (Box (CFloat (toRational r)) float) float, [])
 
 -- Application
 synthExpr defs gam pol (App s e e') = do
-
     (fTy, gam1) <- synthExpr defs gam pol e
     case fTy of
       -- Got a function type for the left-hand side of application
@@ -422,7 +419,7 @@ synthExpr defs gam pol (App s e e') = do
          return (substType subst tau, gamNew)
 
       -- Not a function type
-      t -> do
+      t ->
         halt $ GenericError (Just s) $ "Left-hand side of application is not a function"
                    ++ " but has type '" ++ pretty t ++ "'"
 
@@ -581,7 +578,7 @@ solveConstraints predicate s defName = do
        convert (var, (KConstr constr, q)) =
            case lookup constr typeLevelConstructors of
              Just KCoeffect -> Just (var, (CConstr constr, q))
-             _         -> Nothing
+             _              -> Nothing
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
        convert (var, (KPoly constr, q)) = Just (var, (CPoly constr, q))
