@@ -1,0 +1,3 @@
+data Bool where
+  True : Int;
+  False : Int

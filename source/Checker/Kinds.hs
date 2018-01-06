@@ -17,7 +17,6 @@ import Syntax.Pretty
 import Context
 import Utils
 
--- import Debug.Trace
 
 -- Currently we expect that a type scheme has kind KType
 kindCheck :: (?globals :: Globals) => Def -> MaybeT Checker ()
@@ -26,12 +25,9 @@ kindCheck (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
   case kind of
     KType -> return ()
     _     -> illKindedNEq s KType kind
---
--- kindCheck (ADT s typeC tyVars dataCs) =
---   case tyVars of
---     [] -> return () -- nullary typeC is trivially well-kinded
---     _  -> do
---       traceM $ red "WARNING: Kinds.kindCheck: not implemented."
+
+kindCheck (ADT s typeC tyVars dataCs) = unhandled
+
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
