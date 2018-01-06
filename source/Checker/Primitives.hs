@@ -6,27 +6,25 @@ import Syntax.Expr
 
 typeLevelConstructors :: [(Id, Kind)]
 typeLevelConstructors =
-    map (\(name, kind) -> (mkId name, kind)) tyCs
-  where
-    tyCs =
-        [ ("Int",  KType)
-        , ("Float", KType)
-        , ("List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
-        , ("N", KFun (KConstr $ mkId "Nat=") KType)
-        , ("One", KCoeffect)   -- Singleton coeffect
-        , ("Nat",  KCoeffect)
-        , ("Nat=", KCoeffect)
-        , ("Nat*", KCoeffect)
-        , ("Q",    KCoeffect) -- Rationals
-        , ("Level", KCoeffect) -- Security level
-        , ("Set", KFun (KPoly $ mkId "k") (KFun (KConstr $ mkId "k") KCoeffect))
-        , ("+",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
-        , ("*",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
-        , ("/\\", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
-        , ("\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))]
+    [ (mkId $ "Unit", KType)
+    , (mkId $ "Int",  KType)
+    , (mkId $ "Float", KType)
+    , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
+    , (mkId $ "N", KFun (KConstr $ mkId "Nat=") KType)
+    , (mkId $ "One", KCoeffect)   -- Singleton coeffect
+    , (mkId $ "Nat",  KCoeffect)
+    , (mkId $ "Nat=", KCoeffect)
+    , (mkId $ "Nat*", KCoeffect)
+    , (mkId $ "Q",    KCoeffect) -- Rationals
+    , (mkId $ "Level", KCoeffect) -- Security level
+    , (mkId $ "Set", KFun (KPoly $ mkId "k") (KFun (KConstr $ mkId "k") KCoeffect))
+    , (mkId $ "+",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+    , (mkId $ "*",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+    , (mkId $ "/\\", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+    , (mkId $ "\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))]
 
 dataConstructors :: [(Id, TypeScheme)]
-dataConstructors = map (\(name, kind) -> (mkId name, kind)) []
+dataConstructors = [(mkId $ "Unit", Forall nullSpan [] (TyCon $ mkId "Unit"))]
 
 builtins :: [(Id, TypeScheme)]
 builtins =
@@ -37,7 +35,7 @@ builtins =
   , (mkId "toFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Float"))
   , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "Int"))
   , (mkId "write", Forall nullSpan [] $
-       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "Int")))]
+       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "Unit")))]
 
 binaryOperators :: [(Operator, Type)]
 binaryOperators =

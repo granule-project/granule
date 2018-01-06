@@ -1,5 +1,7 @@
-dubInput : Int <[R, W]>
+import Prelude
+
+dubInput : Unit <[R, W]>
 dubInput = let x : Int <- read in write (x * 2)
 
-main : Int <[R, W]>
+main : Unit <[R, W]>
 main = dubInput

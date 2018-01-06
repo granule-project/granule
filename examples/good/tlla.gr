@@ -17,7 +17,7 @@ secret = |0309|
 hash : forall (l : Level) . Int |l| -> Int |l|
 hash |x| = |(x + x)|
 
-hello : Int <[R, W]>
+hello : Unit <[R, W]>
 hello = let x : Int <- read
         in write x
 
