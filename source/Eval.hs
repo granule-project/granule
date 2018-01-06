@@ -161,6 +161,7 @@ evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
     evalDefs (extend ctxt var val) defs
+evalDefs ctxt (ADT {} : defs) = evalDefs ctxt defs
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
     debugM "Desugaring" $ pretty d'
