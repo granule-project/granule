@@ -1,5 +1,6 @@
 ------
---- Description: Prelude library for Granule
+--- Module: Prelude
+--- Description: Common functions for Granule programs
 --- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
 --- License: BSD3
 --- Copyright: (c) Authors 2017
@@ -7,64 +8,12 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
---- # Boolean algebra
+import Bool
 
---- Boolean
-data Bool where
-  False : Bool;
-  True : Bool
-
---- Logical negation
-not : Bool -> Bool
-not x = case x of True -> False; False -> True
-
---- Logical and
---- NB: non-strict in second argument
-and : Bool -> Bool |1| -> Bool
-and x |y| = case x of True -> y; False -> False
-
---- Logical nand
---- NB: non-strict in second argument
-nand : Bool -> Bool |1| -> Bool
-nand x |y| = case x of True -> not y; False -> True
-
---- Logical and
---- NB: consumes both arguments
-and' : Bool -> Bool -> Bool
-and' x y =
-    case x of
-      True -> y;
-      False -> (case y of True -> False; False -> False)
-
---- Inclusive or
---- NB: non-strict in second argument
-or : Bool -> Bool |1| -> Bool
-or x |y| = case x of True -> True; False -> y
-
---- Inclusive or
---- NB: strict in both arguments
-or' : Bool -> Bool -> Bool
-or' x y =
-    case x of
-      True -> (case y of True -> True; False -> True );
-      False -> y
-
---- Exclusive or
-xor : Bool -> Bool -> Bool
-xor x y = case x of True -> not y; False -> y
-
---- Logical implication
---- NB: non-strict in second argument
-impl : Bool -> Bool |1| -> Bool
-impl x |y| = case x of True -> y; False -> True
-
---- Logical implication
---- NB: strict in both arguments
-impl' : Bool -> Bool -> Bool
-impl' x y =
-    case x of
-      True -> y;
-      False -> (case y of False -> True; True -> True)
+-- In builtins for now
+-- --- Unit type; doesn't carry any information, similar to `void` in C
+-- data Unit where
+--   Unit : Unit
 
 --- # Standard functional components
 

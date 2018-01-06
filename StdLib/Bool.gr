@@ -1,0 +1,96 @@
+------
+--- Module: Bool
+--- Description: Booleans and associated functions for Granule
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2017
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+--- # Boolean type
+
+--- Boolean
+data Bool where
+  False : Bool;
+  True : Bool
+
+--- # Boolean algebra
+
+--- Logical negation
+---     > not True
+---     False
+not : Bool -> Bool
+not x = case x of True -> False; False -> True
+
+--- Logical and
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | and x |y|
+---     False
+and : Bool -> Bool |1| -> Bool
+and x |y| = case x of True -> y; False -> False
+
+--- Logical and (linear)
+--- NB: consumes both arguments
+---     > let x = True in
+---     | let y = False in
+---     | and' x y
+---     False
+and' : Bool -> Bool -> Bool
+and' x y =
+    case x of
+      True -> y;
+      False -> (case y of True -> False; False -> False)
+
+--- Inclusive or
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | or x |y|
+---     True
+or : Bool -> Bool |1| -> Bool
+or x |y| = case x of True -> True; False -> y
+
+--- Inclusive or (linear)
+--- NB: strict in both arguments
+---     > let x = True in
+---     | let y = False in
+---     | or' x y
+---     True
+or' : Bool -> Bool -> Bool
+or' x y =
+    case x of
+      True -> (case y of True -> True; False -> True );
+      False -> y
+
+--- Exclusive or
+---     > let x = True in
+---     | let y = False in
+---     | xor x y
+---     True
+xor : Bool -> Bool -> Bool
+xor x y = case x of True -> not y; False -> y
+
+--- Logical implication
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | impl x |y|
+---     False
+impl : Bool -> Bool |1| -> Bool
+impl x |y| = case x of True -> y; False -> True
+
+--- Logical implication (linear)
+--- NB: strict in both arguments
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | impl x y
+---     False
+impl' : Bool -> Bool -> Bool
+impl' x y =
+    case x of
+      True -> y;
+      False -> (case y of False -> True; True -> True)
