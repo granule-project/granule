@@ -79,7 +79,7 @@ equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s Leq t1' t1 (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
-  (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  (eq2, u2) <- equalTypesRelatedCoeffects s rel (substType u1 t2) (substType u1 t2') sp
   nonConflictingUnifiers s u1 u2
   return (eq1 && eq2, u1 ++ u2)
 
@@ -108,7 +108,7 @@ equalTypesRelatedCoeffects s rel (Box c t) (Box c' t') sp = do
 
 equalTypesRelatedCoeffects s rel (TyApp t1 t2) (TyApp t1' t2') sp = do
   (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp
-  (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  (two, u2) <- equalTypesRelatedCoeffects s rel (substType u1 t2) (substType u1 t2') sp
   nonConflictingUnifiers s u1 u2
   return (one && two, u1 ++ u2)
 
@@ -181,7 +181,7 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
 
 equalTypesRelatedCoeffects s rel (PairTy t1 t2) (PairTy t1' t2') sp = do
   (lefts, u1)  <- equalTypesRelatedCoeffects s rel t1 t1' sp
-  (rights, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  (rights, u2) <- equalTypesRelatedCoeffects s rel (substType u1 t2) (substType u1 t2') sp
   nonConflictingUnifiers s u1 u2
   return (lefts && rights, u1 ++ u2)
 
