@@ -85,6 +85,7 @@ printErr err = when (not $ suppressErrors ?globals) $ do
     lineCol =
         case location err of
           Nothing -> ""
+          Just ((0,0),(0,0)) -> ""
           Just ((line,col),_) -> ":" <> show line <> ":" <> show col
 
 printInfo :: (?globals :: Globals) => String -> IO ()
