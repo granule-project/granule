@@ -12,5 +12,5 @@ isSuccess result =
       Failure -> False;
       Success -> True
 
-main : Bool
-main = isSuccess Failure
+main : (Bool, Result)
+main = (isSuccess Failure, Success)

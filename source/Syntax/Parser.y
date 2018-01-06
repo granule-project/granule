@@ -329,7 +329,8 @@ parseDefs input = do
 
   where
     parse = fmap (uniqueNames) . defs . scanTokens
-    imports = map ((++ ".gr") . replace '.' '/') . catMaybes . map (stripPrefix "import ") . lines $ input
+    imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/') . catMaybes
+                  . map (stripPrefix "import ") . lines $ input
     replace from to = map (\c -> if c == from then to else c)
     checkNameClashes ds =
         if null clashes

@@ -1,6 +1,14 @@
--- # Base library for operations on type-indexed lists
+------
+--- Module: List
+--- Description: Base library for operations on type-indexed lists
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2017
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
 
--- ## Operations on lists
+-- # Operations on lists
 
 --- Map function
 map : forall (a : Type, b : Type, n : Nat=)
@@ -10,7 +18,7 @@ map |f| ys =
     Nil -> Nil;
     (Cons x xs) -> Cons (f x) (map |f| xs)
 
--- Standard foldr on lists
+--- Standard foldr on lists
 foldr : forall (a : Type, b : Type, n : Nat=)
       . (a -> b -> b) |n| -> b -> List n a -> b
 foldr |h| acc xs =
@@ -18,27 +26,26 @@ foldr |h| acc xs =
     Nil -> acc;
     (Cons x xs) -> h x (foldr |h| acc xs)
 
---- Safe head (which is non linear in the list)
-
+--- Return the first item (head) of the list
+--- NB: non-linear in the list
 head : forall (a : Type, n : Nat=)
      . (List (n + 1) a) |1| -> a
 head xs = case xs of |(Cons x _)| -> x
 
---- Safe tail (which is non linear in the list)
-
+--- Return the list with the first item removed
+--- NB: non-linear in the list
 tail : forall (a : Type, n : Nat=)
      . (List (n + 1) a) |1| -> List n a
 tail xs = case xs of |(Cons _ xs)| -> xs
 
 --- Simple folds
-
 sum : forall n : Nat= . List n Int -> Int
 sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
 
 product : forall n : Nat= . List n Int -> Int
 product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
 
---- replicate n x is a list of length n with x the value of every element.
+--- replicate n x is a list of length n with x the value of every element
 replicate : forall (n : Nat=, a : Type) . N n -> a |n| -> List n a
 replicate n |c| = case n of
     Z -> Nil;

@@ -1,4 +1,4 @@
-import StdLib.Prelude
+import Prelude
 
 map : Int
 map = 0

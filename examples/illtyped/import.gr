@@ -1,5 +1,0 @@
--- The type error is in the included file
-import examples.illtyped.approximation
-
-foo : Int
-foo = 0

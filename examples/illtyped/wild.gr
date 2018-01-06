@@ -1,4 +1,4 @@
-import StdLib.Prelude
+import Prelude
 
 isEmpty : forall (n : Nat=) . List n Int -> Bool
 isEmpty xs =

@@ -1,13 +1,12 @@
-import StdLib.Prelude
+import List
+import Bool
 
-filter : forall n : Nat, m : Nat
+filter : forall n : Nat=, m : Nat=
        . (Int -> Bool) |n| -> List n Int -> List m Int -- where n >= m
 filter |predicate| list =
-    case list of {
+    case list of
       Nil -> Nil;
       (Cons x xs) ->
-        case predicate x of {
+        (case predicate x of
           True -> Cons x (filter |predicate| xs);
-          False -> filter |predicate| xs
-        }
-    }
+          False -> filter |predicate| xs)

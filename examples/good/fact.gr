@@ -1,4 +1,4 @@
-import StdLib.Nat
+import Nat
 
 fact : Int |∞| -> Int
 fact x =
