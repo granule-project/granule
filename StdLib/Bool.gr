@@ -21,7 +21,7 @@ data Bool where
 ---     > not True
 ---     False
 not : Bool -> Bool
-not x = case x of True -> False; False -> True
+not x = if x then False else True
 
 --- Logical and
 --- NB: non-strict in second argument
@@ -30,7 +30,7 @@ not x = case x of True -> False; False -> True
 ---     | and x |y|
 ---     False
 and : Bool -> Bool |1| -> Bool
-and x |y| = case x of True -> y; False -> False
+and x |y| = if x then y else False
 
 --- Logical and (linear)
 --- NB: consumes both arguments
@@ -39,10 +39,7 @@ and x |y| = case x of True -> y; False -> False
 ---     | and' x y
 ---     False
 and' : Bool -> Bool -> Bool
-and' x y =
-    case x of
-      True -> y;
-      False -> (case y of True -> False; False -> False)
+and' x y = if x then y else if y then True else False
 
 --- Inclusive or
 --- NB: non-strict in second argument
@@ -51,7 +48,7 @@ and' x y =
 ---     | or x |y|
 ---     True
 or : Bool -> Bool |1| -> Bool
-or x |y| = case x of True -> True; False -> y
+or x |y| = if x then True else y
 
 --- Inclusive or (linear)
 --- NB: strict in both arguments
@@ -60,10 +57,7 @@ or x |y| = case x of True -> True; False -> y
 ---     | or' x y
 ---     True
 or' : Bool -> Bool -> Bool
-or' x y =
-    case x of
-      True -> (case y of True -> True; False -> True );
-      False -> y
+or' x y = if x then if y then True else True else y
 
 --- Exclusive or
 ---     > let x = True in
@@ -71,7 +65,7 @@ or' x y =
 ---     | xor x y
 ---     True
 xor : Bool -> Bool -> Bool
-xor x y = case x of True -> not y; False -> y
+xor x y = if x then not y else y
 
 --- Logical implication
 --- NB: non-strict in second argument
@@ -80,7 +74,7 @@ xor x y = case x of True -> not y; False -> y
 ---     | impl x |y|
 ---     False
 impl : Bool -> Bool |1| -> Bool
-impl x |y| = case x of True -> y; False -> True
+impl x |y| = if x then y else True
 
 --- Logical implication (linear)
 --- NB: strict in both arguments
@@ -90,7 +84,4 @@ impl x |y| = case x of True -> y; False -> True
 ---     | impl x y
 ---     False
 impl' : Bool -> Bool -> Bool
-impl' x y =
-    case x of
-      True -> y;
-      False -> (case y of False -> True; True -> True)
+impl' x y = if x then y else if y then True else True

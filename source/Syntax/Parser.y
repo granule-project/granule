@@ -25,6 +25,9 @@ import System.Exit (die)
     where { TokenWhere _ }
     let   { TokenLet _ }
     in    { TokenIn  _  }
+    if    { TokenIf _ }
+    then  { TokenThen _ }
+    else  { TokenElse _ }
     case  { TokenCase _ }
     of    { TokenOf _ }
     INT   { TokenInt _ _ }
@@ -78,9 +81,8 @@ Def :: { Def }
 Def : Sig NL Binding
   { if (fst3 $1 == fst3 $3)
     then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
-    else error $ "Signature for "
-  	      ++ sourceName (fst3 $3)
-	      ++ " does not match the signature head" }
+    else error $ "Signature for `" ++ sourceName (fst3 $3) ++ "` does not match the signature head \
+                  \`" ++ sourceName (fst3 $1) ++ "`"  }
     | data TypeConstr TyVars where DataConstrs {
       ADT (getPos $1, snd $ getSpan (last $5)) $2 $3 $5
     }
@@ -258,6 +260,9 @@ Expr : let VAR ':' Type '=' Expr in Expr
 
      | case Expr of Cases
         { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
+
+     | if Expr then Expr else Expr
+          { Case (getPos $1, getEnd $6) $2 [(PConstr (getPosToSpan $3) (mkId "True"), $4),(PConstr (getPosToSpan $3) (mkId "False"), $6)] }
 
      | Form
         { $1 }

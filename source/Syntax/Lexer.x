@@ -37,6 +37,9 @@ tokens :-
   data                          { \p s -> TokenData p }
   where                         { \p s -> TokenWhere p }
   in                            { \p s -> TokenIn p }
+  if                            { \p s -> TokenIf p }
+  then                          { \p s -> TokenThen p }
+  else                          { \p s -> TokenElse p }
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
   ∞                             { \p s -> TokenInfinity p }
@@ -73,6 +76,9 @@ tokens :-
 
 data Token = TokenLet  AlexPosn
            | TokenIn   AlexPosn
+           | TokenIf AlexPosn
+           | TokenThen AlexPosn
+           | TokenElse AlexPosn
            | TokenData AlexPosn
            | TokenWhere AlexPosn
 	   | TokenCase AlexPosn

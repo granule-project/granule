@@ -123,8 +123,8 @@ instance Pretty t => Pretty (Maybe t) where
     pretty (Just x) = pretty x
 
 instance Pretty Value where
-    pretty (Abs x t e)  = parens $ "\\" ++ pretty x ++ " : " ++ pretty t
-                               ++ " -> " ++ pretty e
+    pretty (Abs x t e)  = parens $ "\\(" ++ pretty x ++ " : " ++ pretty t
+                               ++ ") -> " ++ pretty e
     pretty (Promote e)  = "|" ++ pretty e ++ "|"
     pretty (Pure e)     = "<" ++ pretty e ++ ">"
     pretty (Var x)      = pretty x
