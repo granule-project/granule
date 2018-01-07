@@ -35,7 +35,7 @@ check ast = do
 
       -- Get the types of all definitions (assume that they are correct for
       -- the purposes of (mutually)recursive calls).
-      let checkKinds = mapM kindCheck defs
+      let checkKinds = mapM kindCheckDef defs
       -- Build a computation which checks all the defs (in order)...
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       let checkedDefs = do
@@ -71,33 +71,40 @@ checkTyCon (ADT _ tC@(TypeConstr _ tName) tyVars _) =
     mkKind (_:vs) = KFun KType (mkKind vs)
 
 checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkDataCons (ADT _ (TypeConstr _ tName) tyVars dataCs) =
+checkDataCons (ADT _ (TypeConstr _ tName) tyVars dCs) =
   runMaybeT $ do
     st <- get
     case lookup tName (typeConstructors st) of
-      Just kind -> mapM_ (checkDataCon tName kind) dataCs
+      Just kind ->
+        let vs = (map (\(_,v) -> (v, KType)) tyVars) in
+        let dataCs = map (\(DataConstr sp name (Forall sp' [] ty)) ->
+                            DataConstr sp name (Forall sp' vs ty)) dCs in
+        mapM_ (checkDataCon tName kind) dataCs
       _ -> unhandled
+
 
 checkDataCon :: (?globals :: Globals )
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> DataConstr -- ^ The data constructor to check
-  -> MaybeT Checker () -- ^ Return @Just@ on success, @Nothing@ on failure
-checkDataCon tName kind (DataConstr _ dName tySch@(Forall s _ ty)) = do
-    debugM "checkDataCons.dataCs" $ "Checking " ++ pretty dName ++ ": " ++ pretty tySch
-    binders <- dataConWellKinded ty kind
-    modify $ \st -> st { dataConstructors = (dName, Forall s binders ty) : dataConstructors st }
+  -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
+checkDataCon tName kind (DataConstr _ dName tySch@(Forall sp tyVars ty)) = do
+    debugM "checkDataCons.dataCs" $ "Checking " ++ pretty dName ++ " : " ++ pretty tySch
+    tySchKind <- inferKindOfType' sp tyVars ty
+    case tySchKind of
+      KType -> valid ty
+      _     -> illKindedNEq sp KType kind
   where
-    dataConWellKinded t k =
+    valid t =
         case t of
+          -- TypeFold
         TyCon tC ->
-          if tC /= tName then halt $ GenericError (Just s)
-                          $ "Expected `" ++ pretty tName ++ "` but got `" ++ pretty tC ++ "`"
-          else
-            case k of
-            KType -> return []
-            _ -> halt $ KindError (Just s) $ "Kind mismatch in constructor `" ++ pretty dName ++ "`"
-        x -> halt $ GenericError (Just s)
+          if tC /= tName then halt $ GenericError (Just sp)
+                                   $ "Definition `" ++ pretty dName ++ " : " ++ pretty tySch
+                                   ++ "` does not have type `" ++ pretty tName ++ "`"
+          else let dataConstructor = (dName, Forall sp tyVars ty) in
+               modify $ \st -> st { dataConstructors = dataConstructor : dataConstructors st }
+        x -> halt $ GenericError (Just sp)
                                  $ "Only nullary constructors supported at the moment: " ++ pretty x
 
 checkDef :: (?globals :: Globals )
