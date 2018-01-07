@@ -154,7 +154,7 @@ ctxtFromTypedPattern _ ty (PConstr s dataC) = do
                   "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
 
 ctxtFromTypedPattern _ ty (PApp s p1 p2) = do
-   (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1 -- checking patterns
+   (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1 -- checking patterns
    case t1 of
      FunTy arg res -> do
        subst <- equalTypes s res ty
@@ -182,37 +182,36 @@ ctxtFromTypedPattern s t p = do
 --   e.g. given type A -> B -> C and patterns [Constr "A", Constr "B"] then
 --     the remaining type is C.
 
-synthTypedPattern :: (?globals :: Globals) => Pattern
+synthPatternTypeForPAppLeft :: (?globals :: Globals) => Pattern
   -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type, Type)
-synthTypedPattern p = do
+synthPatternTypeForPAppLeft p = do
   case p of
-    PVar s name -> halt $ PatternTypingError (Just s) $
-                          "Expected a data constructor, but got `" ++ pretty name ++ "`"
-    PWild s -> halt $ PatternTypingError (Just s) $
-                      "Expected a data constructor, but got a wildcard."
-    PInt s _ -> return ([], [], [], TyCon $ mkId "Int")
-    PFloat s _ -> return ([], [], [], TyCon $ mkId "Float")
     PConstr s name -> do
       st <- get
       case lookup name (dataConstructors st) of
         Nothing -> halt $ UnboundVariableError (Just s) $ "Constructor `" ++ pretty name ++ "`"
         Just (Forall _ _ t) -> return ([], [], [], t)
     PApp s p1 p2 -> do
-      (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
+      (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1
       case t1 of
-        TyApp arg res -> do
+        FunTy arg res -> do
           (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg p2
           (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
-          debugM "PApp******" $ show $ substType subst2 res
+          debugM "PApp" $ show $ substType subst2 res
           return (binders ++ binders', tyvars1 ++ tyvars2, [], substType subst2 res)
         t -> halt $ PatternTypingError (Just s) $
                     "Expected function type but got `" ++ pretty t
                     ++ "` in pattern `" ++ pretty p1 ++ "`"
-      -- need to look at substitutions that come from checking right apply on the return
-    -- PPair _ p1 p2 -> do
-    --   (binders1, tyvars1, subst1, t1) <- synthTypedPattern p1
-    --   (binders2, tyvars2, subst2, t2) <- synthTypedPattern p2
-    --   return (binders1 ++ binders2 {-?-}, tyvars1 ++ tyvars2, [{-?-}], PairTy t1 t2)
+    PVar s name -> halt $ PatternTypingError (Just s) $
+                          "Expected a constructor pattern, but got `" ++ pretty name ++ "`"
+    PWild s -> halt $ PatternTypingError (Just s) $
+                      "Expected a constructor pattern, but got a wildcard"
+    PInt s _ -> halt $ PatternTypingError (Just s) $
+                      "Expected a constructor pattern, but got an `Int`"
+    PFloat s _ -> halt $ PatternTypingError (Just s) $
+                      "Expected a constructor pattern, but got a `Float`"
+    pair@(PPair s _ _) -> halt $ PatternTypingError (Just s) $
+                      "Expected a constructor pattern, but got `" ++ pretty pair ++ "`"
 
 ctxtFromTypedPatterns ::
   (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
