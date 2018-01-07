@@ -1,3 +1,3 @@
 data Bool where
-  True : Int;
+  True : Int; -- <- This should be `Bool`
   False : Int
