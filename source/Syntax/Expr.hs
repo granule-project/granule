@@ -400,7 +400,15 @@ uniqueNames =
       e'  <- freshen e
       return $ Def s var e' ps' t'
 
-    freshenDef a@(ADT _ _ _ _) = return a
+    -- in the case of ADTs, also push down the type variables from the data declaration head
+    -- into the data constructors
+    freshenDef (ADT sp tyCon tyVars dataCs) = do
+      let vs = (map (\(_,v) -> (v, KType)) tyVars)
+      dataCs <- mapM (\(DataConstr sp name (Forall sp' [] ty)) -> do
+                        tySch <- freshenTys (Forall sp' vs ty)
+                        return $ DataConstr sp name tySch) dataCs
+      return $ ADT sp tyCon tyVars dataCs
+
 
 ----------- Types
 

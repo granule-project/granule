@@ -1,0 +1,7 @@
+data Expr a where
+  Const : a -> Expr a;
+  Pair : Expr a -> Expr a -> Expr a;
+  Div : Expr Float -> Expr Float -> Expr Float
+
+main : Expr Float
+main = Div (Const 10.0) (Const 5.0)

@@ -187,6 +187,9 @@ equalTypesRelatedCoeffects s rel (PairTy t1 t2) (PairTy t1' t2') sp = do
 
 equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
   checkerState <- get
+  debugM "Types.equalTypesRelatedCoeffects on TyVar"
+          $ "span: " ++ show s -- ++ "\nsolver constraint relationship: " ++ show rel
+          ++ "\nTyVar: " ++ show n ++ "\ntype: " ++ show t ++ "\nspec indicator: " ++ show sp
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | q == InstanceQ || q == BoundQ -> do

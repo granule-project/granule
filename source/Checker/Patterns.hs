@@ -138,6 +138,7 @@ ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
 -- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
 --     return ([], [], [])
 ctxtFromTypedPattern _ ty (PConstr s dataC) = do
+  debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
   st <- get
   case lookup dataC (dataConstructors st) of
     Nothing ->
@@ -190,7 +191,12 @@ synthPatternTypeForPAppLeft p = do
       st <- get
       case lookup name (dataConstructors st) of
         Nothing -> halt $ UnboundVariableError (Just s) $ "Constructor `" ++ pretty name ++ "`"
-        Just (Forall _ _ t) -> return ([], [], [], t)
+        Just (Forall _ [] t) -> return ([], [], [], t)
+        Just tySch -> do
+          (Forall _ quantifiedVars t) <- return tySch -- TODO freshen
+          forM quantifiedVars $ \(n, k) ->
+            modify $ \st -> st { tyVarContext = (n, (k, InstanceQ)) : tyVarContext st }
+          return ([], [], [], t) -- TODO
     PApp s p1 p2 -> do
       (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1
       case t1 of
@@ -215,7 +221,8 @@ synthPatternTypeForPAppLeft p = do
 
 ctxtFromTypedPatterns ::
   (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
-ctxtFromTypedPatterns _ ty [] =
+ctxtFromTypedPatterns sp ty [] = do
+  debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " ++ show sp ++ "\ntype: " ++ show ty
   return ([], ty)
 ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   -- TODO: when we have dependent matching at the function clause

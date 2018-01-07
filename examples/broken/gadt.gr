@@ -1,4 +1,0 @@
-data Expr a where
-  Const : a -> Expr a
-  Add : Expr a -> Expr a -> Expr a;
-  Div : Expr Float -> Expr Float -> Expr Float;

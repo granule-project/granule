@@ -7,6 +7,7 @@
 
 module Checker.Checker where
 
+import Control.Monad (forM_)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Maybe
@@ -71,16 +72,12 @@ checkTyCon (ADT _ tC@(TypeConstr _ tName) tyVars _) =
     mkKind (_:vs) = KFun KType (mkKind vs)
 
 checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkDataCons (ADT _ (TypeConstr _ tName) tyVars dCs) =
+checkDataCons (ADT _ (TypeConstr _ tName) tyVars dataCs) =
   runMaybeT $ do
     st <- get
     case lookup tName (typeConstructors st) of
-      Just kind ->
-        let vs = (map (\(_,v) -> (v, KType)) tyVars) in
-        let dataCs = map (\(DataConstr sp name (Forall sp' [] ty)) ->
-                            DataConstr sp name (Forall sp' vs ty)) dCs in
-        mapM_ (checkDataCon tName kind) dataCs
-      _ -> unhandled
+      Just kind -> mapM_ (checkDataCon tName kind) dataCs
+      _ -> unhandled -- all type constructors have already been put into the checker monad
 
 
 checkDataCon :: (?globals :: Globals )
@@ -88,7 +85,7 @@ checkDataCon :: (?globals :: Globals )
   -> Kind -- ^ The kind of the type constructor
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind (DataConstr _ dName tySch@(Forall sp tyVars ty)) = do
+checkDataCon tName kind (DataConstr sp dName tySch@(Forall _ tyVars ty)) = do
     debugM "checkDataCons.dataCs" $ "Checking " ++ pretty dName ++ " : " ++ pretty tySch
     tySchKind <- inferKindOfType' sp tyVars ty
     case tySchKind of
@@ -97,15 +94,16 @@ checkDataCon tName kind (DataConstr _ dName tySch@(Forall sp tyVars ty)) = do
   where
     valid t =
         case t of
-          -- TypeFold
         TyCon tC ->
           if tC /= tName then halt $ GenericError (Just sp)
-                                   $ "Definition `" ++ pretty dName ++ " : " ++ pretty tySch
-                                   ++ "` does not have type `" ++ pretty tName ++ "`"
+                                   $ "Expected type constructor `" ++ pretty tName ++ "`, but got `"
+                                   ++ pretty tC ++ "` in  `" ++ pretty dName ++ " : "
+                                   ++ pretty tySch ++ "`"
           else let dataConstructor = (dName, Forall sp tyVars ty) in
                modify $ \st -> st { dataConstructors = dataConstructor : dataConstructors st }
-        x -> halt $ GenericError (Just sp)
-                                 $ "Only nullary constructors supported at the moment: " ++ pretty x
+        FunTy arg res -> valid res
+        TyApp fun arg -> valid fun
+        x -> halt $ GenericError (Just sp) $ "Not a valid datatype definition."
 
 checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions

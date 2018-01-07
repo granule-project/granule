@@ -1,0 +1,14 @@
+data Exclamation where
+  Woohoo : Exclamation
+
+data Cartesian a where
+  Cartesian : a |∞| -> Cartesian a
+
+box : Cartesian Exclamation
+box = Cartesian |Woohoo|
+
+explode : forall a : Type . Cartesian a -> List 3 a
+explode c = case c of (Cartesian |x|) -> Cons x (Cons x (Cons x Nil))
+
+main : List 3 Exclamation
+main = explode box
