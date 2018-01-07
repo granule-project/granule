@@ -42,7 +42,7 @@ varA = mkId "a"
 spec :: Spec
 spec = do
     -- Integration tests based on the fixtures
-    let ?globals = defaultGlobals { suppressInfos = True, suppressErrors = True }
+    let ?globals = defaultGlobals { suppressInfos = True }
     srcFiles <- runIO exampleFiles
     forM_ srcFiles $ \file ->
       describe file $ it "typechecks" $ do
@@ -60,7 +60,7 @@ spec = do
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
       describe file $ it "does not typecheck" $ do
-        let ?globals = ?globals { sourceFilePath = file }
+        let ?globals = ?globals { sourceFilePath = file, suppressErrors = True }
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
