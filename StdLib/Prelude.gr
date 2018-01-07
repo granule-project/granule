@@ -26,8 +26,8 @@ const : forall a : Type, b : Type . a -> b |0| -> a
 const x |y| = x
 
 --- Apply f to x until p holds
-until : forall a : Type .
-        (a -> Bool) |∞| -> (a -> a) |∞| -> a |∞| -> a
+until : forall a : Type
+      . (a -> Bool) |∞| -> (a -> a) |∞| -> a |∞| -> a
 until |p| |f| |x| =
   case p x of
     False -> x;
@@ -51,6 +51,25 @@ if0 g |x| |y| =
       |0| -> x;
       |n| -> y
 
+
+--- # Numeric functions and constants
+
+-- Given some n, return
+-- + 1 iff n is positive
+-- + -1 iff n is negative
+-- + 0 otherwise
+sign : Int |2| -> Int
+sign |x| = if x > 0 then 1 else if x < 0 then -1 else 0
+
+--- An approximation of pi
+pi : Float
+pi = 3.141592653589793
+
+-- An approximation of Euler's number
+e : Float
+e = 2.718281828459045
+
+
 --- # Combinators involving products (pairs)
 
 --- Extract the left part of a pair
@@ -70,6 +89,7 @@ curry f x y = f (x, y)
 uncurry : forall a : Type, b : Type, c : Type .
           (a -> b -> c) -> ((a, b) -> c)
 uncurry f (x, y) = f x y
+
 
 --- # Coeffect-specifc combinators
 
