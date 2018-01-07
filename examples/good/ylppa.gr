@@ -1,0 +1,7 @@
+import Prelude
+
+ylppa : forall a : Type, b : Type . a -> (a -> b) -> b
+ylppa x f = f x
+
+main : Int
+main = ylppa (1,|2|) fst
