@@ -371,7 +371,7 @@ synthExpr _ _ _ (Val s (Constr c [])) = do
           error $ red "Checker.synthExpr incomplete for data constructors" -- TODO
           return (t, [])
         _ -> halt $ UnboundVariableError (Just s) $
-                    "Data constructor `" ++ pretty c ++ "`" <?> dataConstructors st
+                    "Data constructor `" ++ pretty c ++ "`" <?> show (dataConstructors st)
 
 -- Case
 synthExpr defs gam pol (Case s guardExpr cases) = do
@@ -440,7 +440,7 @@ synthExpr defs gam _ (Val s (Var x)) = do
            ty' <- freshPolymorphicInstance tyScheme
            return (ty', [])
          -- Couldn't find it
-         Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x
+         Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
                               ++ (if debugging ?globals then
                                   (" { looking for " ++ pretty x
                                   ++ " in context " ++ pretty gam

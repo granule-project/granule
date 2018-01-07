@@ -62,11 +62,11 @@ debug x message =
       else x
 
 -- | Append a debug message to a string, which will only get printed when debugging
-(<?>) :: (?globals :: Globals, Show a) => String -> a -> String
+(<?>) :: (?globals :: Globals) => String -> String -> String
 infixr 6 <?>
-str <?> a =
+str <?> msg =
     if debugging ?globals
-      then str <> (bold $ magenta $ " Debug { ") <> show a <> (bold $ magenta $ " }")
+      then str <> (bold $ magenta $ " Debug { ") <> msg <> (bold $ magenta $ " }")
       else str
 
 -- | Use sparingly

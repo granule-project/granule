@@ -225,7 +225,7 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
 
     (Just (_, InstanceQ)) -> unhandled
     (Just (_, BoundQ)) -> unhandled
-    Nothing -> halt $ UnboundVariableError (Just s) (pretty n)
+    Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " ++ show (tyVarContext checkerState)))
 
 equalTypesRelatedCoeffects s rel t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel (TyVar n) t (flipIndicator sp)

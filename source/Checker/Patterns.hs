@@ -142,7 +142,7 @@ ctxtFromTypedPattern _ ty (PConstr s dataC) = do
   case lookup dataC (dataConstructors st) of
     Nothing ->
       halt $ UnboundVariableError (Just s) $
-             "Data constructor `" ++ pretty dataC ++ "`" <?> (dataConstructors st)
+             "Data constructor `" ++ pretty dataC ++ "`" <?> show (dataConstructors st)
 
     Just tySch -> do
       t <- freshPolymorphicInstance tySch
