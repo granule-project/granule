@@ -3,7 +3,7 @@
 --- Description: Base library for operations on type-indexed lists
 --- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
 --- License: BSD3
---- Copyright: (c) Authors 2017
+--- Copyright: (c) Authors 2018
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
 ------
@@ -45,8 +45,23 @@ sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
 product : forall n : Nat= . List n Int -> Int
 product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
 
---- replicate n x is a list of length n with x the value of every element
+--- Replicate n x is a list of length n with x the value of every element
 replicate : forall (n : Nat=, a : Type) . N n -> a |n| -> List n a
 replicate n |c| = case n of
     Z -> Nil;
     (S n) -> Cons c (replicate n |c|)
+
+--- Make a list of length n with all integers from 0 to n-1
+---     > range (S (S (S (S Z))))
+---     Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
+range : forall n : Nat= . N n -> List n Int
+range n = range' n |0|
+
+--- Make a list of length n with all integers from `start` up until `n + i - 1`
+---     > range' (S (S (S (S Z)))) |-6|
+---     Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))
+range' : forall n : Nat= . N n -> Int |n| -> List n Int
+range' n |i| =
+    case n of
+    Z -> Nil;
+    (S n) -> Cons i (range' n |(i + 1)|)
