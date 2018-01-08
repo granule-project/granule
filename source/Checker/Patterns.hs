@@ -133,10 +133,6 @@ ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   nonConflictingUnifiers s substl substr
   return (ctxtL ++ ctxtR, eVars1 ++ eVars2, substl ++ substr)
 
--- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "True") =
---     return ([], [], [])
--- ctxtFromTypedPattern _ _ t@(TyCon "Bool")  (PConstr _ "False") =
---     return ([], [], [])
 ctxtFromTypedPattern _ ty (PConstr s dataC) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
   st <- get
@@ -191,12 +187,9 @@ synthPatternTypeForPAppLeft p = do
       st <- get
       case lookup name (dataConstructors st) of
         Nothing -> halt $ UnboundVariableError (Just s) $ "Constructor `" ++ pretty name ++ "`"
-        Just (Forall _ [] t) -> return ([], [], [], t)
         Just tySch -> do
-          (Forall _ quantifiedVars t) <- return tySch -- TODO freshen
-          forM quantifiedVars $ \(n, k) ->
-            modify $ \st -> st { tyVarContext = (n, (k, InstanceQ)) : tyVarContext st }
-          return ([], [], [], t) -- TODO
+          t <- freshPolymorphicInstance tySch
+          return ([], [], [], t)
     PApp s p1 p2 -> do
       (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1
       case t1 of
