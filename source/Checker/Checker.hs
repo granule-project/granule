@@ -7,7 +7,6 @@
 
 module Checker.Checker where
 
-import Control.Monad (forM_)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Maybe
