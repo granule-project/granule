@@ -2,7 +2,7 @@ data Expr a where
   Const : Int -> Expr Int;
   Add : Expr a -> Expr a -> Expr a
 
-eval : forall a : Type . Expr a -> a
+eval : Expr Int -> Int
 eval x =
     case x of
       (Const n) -> n;

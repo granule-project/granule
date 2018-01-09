@@ -1,0 +1,11 @@
+data NonEmpty a where
+  Next : a -> (NonEmpty a) |1| -> NonEmpty a;
+  Last : a -> NonEmpty a
+
+head : forall a : Type . NonEmpty a -> a
+head x = case x of
+  (Next y |_|) -> y;
+  (Last y) -> y
+
+main : NonEmpty Int
+main = Next 2 |(Last 1)|
