@@ -157,8 +157,10 @@ ctxtFromTypedPattern _ ty (PApp s p1 p2) = do
        subst <- equalTypesWithUniversalSpecialisation s res ty
        case subst of
          (True, _, unifiers) -> do
+           unifiers <- combineUnifiers s unifiers subst1
            let arg' = substType unifiers arg
            (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg' p2
+           unifiers <- combineUnifiers s unifiers subst2
            (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
            return (binders ++ binders', tyvars1 ++ tyvars2, unifiers)
 
