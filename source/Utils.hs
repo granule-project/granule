@@ -79,14 +79,18 @@ printErr err = when (not $ suppressErrors ?globals) $ do
     hPutStrLn stderr $
       time
       <> (bold $ red $ title err <> ": ")
-      <> sourceFilePath ?globals <> lineCol <> ":\n"
+      <> sourceFile <> lineCol <> "\n"
       <> indent (msg err)
   where
+    sourceFile =
+        case sourceFilePath ?globals of
+          "" -> ""
+          p -> p <> ": "
     lineCol =
         case location err of
           Nothing -> ""
           Just ((0,0),(0,0)) -> ""
-          Just ((line,col),_) -> ":" <> show line <> ":" <> show col
+          Just ((line,col),_) -> ":" <> show line <> ":" <> show col <> ":"
 
 printInfo :: (?globals :: Globals) => String -> IO ()
 printInfo message =
