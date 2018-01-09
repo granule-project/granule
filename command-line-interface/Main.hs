@@ -44,10 +44,14 @@ main = do
       debugM "Globals" (show globals)
       results <- forM globPatterns $ \p -> do
         filePaths <- glob p
-        forM filePaths $ \p -> do
-          let ?globals = globals { sourceFilePath = p }
-          printInfo $ "\nChecking " <> p <> "..."
-          run =<< readFile p
+        case filePaths of
+          [] -> do
+            printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
+            return [(ExitFailure 1)]
+          _ -> forM filePaths $ \p -> do
+            let ?globals = globals { sourceFilePath = p }
+            printInfo $ "\nChecking " <> p <> "..."
+            run =<< readFile p
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
 
@@ -117,11 +121,14 @@ data RuntimeError
   = ParseError String
   | CheckerError String
   | EvalError String
+  | GenericError String
 
 instance UserMsg RuntimeError where
   title ParseError {} = "Error during parsing"
   title CheckerError {} = "Error during type checking"
   title EvalError {} = "Error during evaluation"
+  title GenericError {} = "Error"
   msg (ParseError m) = m
   msg (CheckerError m) = m
   msg (EvalError m) = m
+  msg (GenericError m) = m
