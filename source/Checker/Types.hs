@@ -195,7 +195,8 @@ equalTypesRelatedCoeffects s rel uS (PairTy t1 t2) (PairTy t1' t2') sp = do
 equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
-          $ "span: " ++ show s -- ++ "\nsolver constraint relationship: " ++ show rel
+          $ "span: " ++ show s
+          ++ "\nallowUniversalSpecialisation: " ++ show allowUniversalSpecialisation
           ++ "\nTyVar: " ++ show n ++ "\ntype: " ++ show t ++ "\nspec indicator: " ++ show sp
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
@@ -244,7 +245,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
 
-equalTypesRelatedCoeffects s _ _ t1 t2 _ =
+equalTypesRelatedCoeffects s rel uS t1 t2 t = do
+  debugM "equalTypesRelatedCoeffects" $ "called on: " ++ show t1 ++ "\nand:\n" ++ show t2
   equalNatKindedTypesGeneric s t1 t2
 
 {- | Check whether two Nat-kinded types are equal -}
