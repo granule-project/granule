@@ -21,11 +21,15 @@ import Utils
 
 lEqualTypes :: (?globals :: Globals )
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
-lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s Leq
+lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s Leq False
 
 equalTypes :: (?globals :: Globals )
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
-equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq
+equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False
+
+equalTypesWithUniversalSpecialisation :: (?globals :: Globals )
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True
 
 type Unifier = [(Id, Type)]
 
@@ -41,6 +45,8 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+  -- Whether to allow universal specialisation
+  -> Bool
   -- Left type (usually the inferred)
   -> Type
   -- Right type (usually the specified)
@@ -50,9 +56,9 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier
   -> MaybeT Checker (Bool, Type, Ctxt Type)
-equalTypesRelatedCoeffectsAndUnify s rel t1 t2 = do
+equalTypesRelatedCoeffectsAndUnify s rel allowUniversalSpecialisation t1 t2 = do
 
-   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 SndIsSpec
+   (eq, unif) <- equalTypesRelatedCoeffects s rel allowUniversalSpecialisation t1 t2 SndIsSpec
    if eq
      then return (eq, substType unif t2, unif)
      else return (eq, t1, [])
@@ -70,24 +76,25 @@ equalTypesRelatedCoeffects :: (?globals :: Globals )
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+  -> Bool -- whether to allow universal specialisation
   -> Type
   -> Type
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
   -> MaybeT Checker (Bool, Unifier)
-equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
+equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s Leq t1' t1 (flipIndicator sp)
+  (eq1, u1) <- equalTypesRelatedCoeffects s Leq uS t1' t1 (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
-  (eq2, u2) <- equalTypesRelatedCoeffects s rel (substType u1 t2) (substType u1 t2') sp
-  nonConflictingUnifiers s u1 u2
-  return (eq1 && eq2, u1 ++ u2)
+  (eq2, u2) <- equalTypesRelatedCoeffects s rel uS (substType u1 t2) (substType u1 t2') sp
+  unifiers <- combineUnifiers s u1 u2
+  return (eq1 && eq2, unifiers)
 
-equalTypesRelatedCoeffects _ _ (TyCon con) (TyCon con') _ =
+equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
   return (con == con', [])
 
-equalTypesRelatedCoeffects s rel (Diamond ef t) (Diamond ef' t') sp = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t t' sp
+equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
   if ef == ef'
     then return (eq, unif)
     else
@@ -97,28 +104,28 @@ equalTypesRelatedCoeffects s rel (Diamond ef t) (Diamond ef' t') sp = do
       else halt $ GradingError (Just s) $
         "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
 
-equalTypesRelatedCoeffects s rel (Box c t) (Box c' t') sp = do
+equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c ++ " == " ++ pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectTypes s c c'
   addConstraint (rel s c c' kind)
-  equalTypesRelatedCoeffects s rel t t' sp
+  equalTypesRelatedCoeffects s rel uS t t' sp
 
-equalTypesRelatedCoeffects s rel (TyApp t1 t2) (TyApp t1' t2') sp = do
-  (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp
-  (two, u2) <- equalTypesRelatedCoeffects s rel (substType u1 t2) (substType u1 t2') sp
-  nonConflictingUnifiers s u1 u2
-  return (one && two, u1 ++ u2)
+equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
+  (one, u1) <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
+  (two, u2) <- equalTypesRelatedCoeffects s rel uS (substType u1 t2) (substType u1 t2') sp
+  unifiers <- combineUnifiers s u1 u2
+  return (one && two, unifiers)
 
-equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) _ | n == m = do
+equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
     Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ pretty n)
 
-equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
+equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   checkerState <- get
 
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
@@ -179,13 +186,13 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
         Nothing ->
           return (False, [])
 
-equalTypesRelatedCoeffects s rel (PairTy t1 t2) (PairTy t1' t2') sp = do
-  (lefts, u1)  <- equalTypesRelatedCoeffects s rel t1 t1' sp
-  (rights, u2) <- equalTypesRelatedCoeffects s rel (substType u1 t2) (substType u1 t2') sp
-  nonConflictingUnifiers s u1 u2
-  return (lefts && rights, u1 ++ u2)
+equalTypesRelatedCoeffects s rel uS (PairTy t1 t2) (PairTy t1' t2') sp = do
+  (lefts, u1)  <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
+  (rights, u2) <- equalTypesRelatedCoeffects s rel uS (substType u1 t2) (substType u1 t2') sp
+  unifiers <- combineUnifiers s u1 u2
+  return (lefts && rights, unifiers)
 
-equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
+equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
           $ "span: " ++ show s -- ++ "\nsolver constraint relationship: " ++ show rel
@@ -219,21 +226,25 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
           c2 <- compileNatKindedTypeToCoeffect s t
           addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
           return (True, [])
-        _ ->
-         halt $ GenericError (Just s)
-          $ case sp of
-           FstIsSpec -> "Trying to match a polymorphic type '" ++ pretty n
-                     ++ "' with monomorphic " ++ pretty t
-           SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
+        x ->
+          if allowUniversalSpecialisation
+            then
+              return (True, [(n, t)])
+            else
+            halt $ GenericError (Just s)
+            $ case sp of
+             FstIsSpec -> "Trying to match a polymorphic type '" ++ pretty n
+                       ++ "' with monomorphic " ++ pretty t
+             SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> unhandled
     (Just (_, BoundQ)) -> unhandled
     Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " ++ show (tyVarContext checkerState)))
 
-equalTypesRelatedCoeffects s rel t (TyVar n) sp =
-  equalTypesRelatedCoeffects s rel (TyVar n) t (flipIndicator sp)
+equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
+  equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
 
-equalTypesRelatedCoeffects s _ t1 t2 _ =
+equalTypesRelatedCoeffects s _ _ t1 t2 _ =
   equalNatKindedTypesGeneric s t1 t2
 
 {- | Check whether two Nat-kinded types are equal -}

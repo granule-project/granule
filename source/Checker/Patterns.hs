@@ -5,7 +5,7 @@ module Checker.Patterns where
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 
-import Checker.Types (equalTypes, nonConflictingUnifiers)
+import Checker.Types (equalTypes, equalTypesWithUniversalSpecialisation, combineUnifiers)
 import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
@@ -76,7 +76,7 @@ ctxtFromTypedPattern s (TyApp  (TyApp  (TyCon listC) n) ty) (PApp _ (PApp _ (PCo
     -- Recursively construct the binding patterns
     (bs1, eVars1, u1) <- ctxtFromTypedPattern s ty p1
     (bs2, eVars2, u2) <- ctxtFromTypedPattern s (TyApp (TyApp (TyCon $ mkId "List") (TyVar sizeVar)) ty) p2
-    nonConflictingUnifiers s u1 u2
+    unifiers <- combineUnifiers s u1 u2
 
     -- Generate equality constraint
     let sizeVarInc = CPlus (CVar sizeVar) (CNat Discrete 1)
@@ -89,9 +89,9 @@ ctxtFromTypedPattern s (TyApp  (TyApp  (TyCon listC) n) ty) (PApp _ (PApp _ (PCo
     let u0 = case n of
           TyVar v -> [(v, TyInfix "+" (TyVar sizeVar) (TyInt 1))]
           _       -> []
-
+    unifiers <- combineUnifiers s u0 unifiers
     -- Join the two pattern contexts together
-    return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, u0 ++ u1 ++ u2)
+    return (bs1 ++ bs2, sizeVar : eVars1 ++ eVars2, unifiers)
 
 -- Match a Z constructor
 ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PConstr _ zC)
@@ -130,8 +130,8 @@ ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PApp _ (PConstr _ sC) p)
 ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
   (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
-  nonConflictingUnifiers s substl substr
-  return (ctxtL ++ ctxtR, eVars1 ++ eVars2, substl ++ substr)
+  unifiers <- combineUnifiers s substl substr
+  return (ctxtL ++ ctxtR, eVars1 ++ eVars2, unifiers)
 
 ctxtFromTypedPattern _ ty (PConstr s dataC) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
