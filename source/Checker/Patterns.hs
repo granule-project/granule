@@ -5,7 +5,7 @@ module Checker.Patterns where
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 
-import Checker.Types (equalTypes, equalTypesWithUniversalSpecialisation, combineUnifiers)
+import Checker.Types (equalTypesWithUniversalSpecialisation, combineUnifiers)
 import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
@@ -154,13 +154,13 @@ ctxtFromTypedPattern _ ty (PApp s p1 p2) = do
    (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1 -- checking patterns
    case t1 of
      FunTy arg res -> do
-       subst <- equalTypes s res ty
+       subst <- equalTypesWithUniversalSpecialisation s res ty
        case subst of
          (True, _, unifiers) -> do
            let arg' = substType unifiers arg
            (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg' p2
            (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
-           return (binders ++ binders', tyvars1 ++ tyvars2, [])
+           return (binders ++ binders', tyvars1 ++ tyvars2, unifiers)
 
          _ -> halt $ PatternTypingError (Just s) $
                     "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty res ++ "`"
