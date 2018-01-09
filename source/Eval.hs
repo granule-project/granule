@@ -47,7 +47,7 @@ evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
   v <- evalIn ctxt e
   return $ Pure (Val nullSpan v)
 
-evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "cast" =
+evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "intToFloat" =
   return $ NumFloat (cast n)
   where
     cast :: Int -> Double

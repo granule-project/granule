@@ -31,11 +31,16 @@ builtins =
   [ -- Graded monad unit operation
     (mkId "pure", Forall nullSpan [(mkId "a", KType)]
        $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
+
     -- Effectful primitives
-  , (mkId "toFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Float"))
   , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "Int"))
   , (mkId "write", Forall nullSpan [] $
-       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "Unit")))]
+       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "Unit")))
+
+    -- Other primitives
+  , (mkId "intToFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Float"))
+
+  ]
 
 binaryOperators :: [(Operator, Type)]
 binaryOperators =

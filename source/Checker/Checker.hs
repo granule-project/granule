@@ -170,9 +170,6 @@ checkExpr :: (?globals :: Globals )
 -- Checking of constants
 
 checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _)) | internalName c == "Int" = return ([], [])
-
-  -- Automatically upcast integers to floats
-checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _)) | internalName c == "Float" = return ([], [])
 checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" =  return ([], [])
 
 checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
