@@ -123,9 +123,9 @@ ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PApp _ (PConstr _ sC) p)
     let u0 = case n of
           TyVar v -> [(v, TyInfix "+" (TyVar sizeVar) (TyInt 1))]
           _       -> []
-
+    unifiers <- combineUnifiers s u u0
     -- Join the two pattern contexts together
-    return (bs2, sizeVar : eVars2, u ++ u0)
+    return (bs2, sizeVar : eVars2, unifiers)
 
 ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
