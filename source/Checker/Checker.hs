@@ -361,10 +361,9 @@ synthExpr _ _ _ (Val s (Constr c [])) = do
     _ -> do
       st <- get
       case lookup c (dataConstructors st) of
-        Just (Forall _ [] t) -> return (t, [])
-        Just (Forall _ _ t) -> do
-          error $ red "Checker.synthExpr incomplete for data constructors" -- TODO
-          return (t, [])
+        Just tySch -> do
+          ty <- freshPolymorphicInstance tySch
+          return (ty, [])
         _ -> halt $ UnboundVariableError (Just s) $
                     "Data constructor `" ++ pretty c ++ "`" <?> show (dataConstructors st)
 
