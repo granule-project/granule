@@ -261,16 +261,16 @@ equalNatKindedTypesGeneric s t1 t2 = do
                  ++ "\t\n from equality "
                  ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
-nonConflictingUnifiers ::
-  (?globals :: Globals) => Span -> Ctxt Type -> Ctxt Type -> MaybeT Checker ()
-nonConflictingUnifiers s u1 u2 =
+combineUnifiers ::
+  (?globals :: Globals) => Span -> Ctxt Type -> Ctxt Type -> MaybeT Checker (Ctxt Type)
+combineUnifiers s u1 u2 =
     case intersectCtxtsAlternatives u1 u2 of
-      [] -> return ()
-      clashes ->
+      [] -> return $ u1 ++ u2
+      clashes -> do
         forM_ clashes $ \(k, vs) ->
-          if nonUnifiable vs
-            then halt $ GenericError (Just s) (msg k vs)
-            else return ()
+          when (nonUnifiable vs) $ halt $ GenericError (Just s) (msg k vs)
+        return $ u1 ++ u2
+
   where
     nonUnifiable [TyVar _, _] = False
     nonUnifiable [_, TyVar _] = False

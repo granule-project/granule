@@ -144,7 +144,7 @@ ctxtFromTypedPattern _ ty (PConstr s dataC) = do
     Just tySch -> do
       t <- freshPolymorphicInstance tySch
       debugM "Patterns.ctxtFromTypedPattern" $ pretty t ++ pretty ty
-      areEq <- equalTypes s t ty
+      areEq <- equalTypesWithUniversalSpecialisation s t ty
       case areEq of
         (True, _, unifiers) -> return ([], [], unifiers)
         _ -> halt $ PatternTypingError (Just s) $
