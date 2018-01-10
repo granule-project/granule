@@ -64,13 +64,15 @@ tokens :-
   \,                            { \p s -> TokenComma p }
   \.                            { \p s -> TokenPeriod p }
   \:                            { \p s -> TokenSig p }
-  @sym				{ \p s -> TokenSym p s }
+  @sym				                  { \p s -> TokenSym p s }
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
   \<\=                          { \p s -> TokenOp p s }
   \>\=                          { \p s -> TokenOp p s }
   \=\=                          { \p s -> TokenOp p s }
+  \`                            { \p s -> TokenBackTick p }
+
 
 {
 
@@ -101,6 +103,7 @@ data Token = TokenLet  AlexPosn
            | TokenRParen AlexPosn
 	   | TokenNL     AlexPosn
 	   | TokenConstr AlexPosn String
+     | TokenBackTick AlexPosn
 	   | TokenSig    AlexPosn
 	   | TokenBoxLeft AlexPosn
 	   | TokenBoxRight AlexPosn

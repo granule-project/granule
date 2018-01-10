@@ -58,6 +58,7 @@ import System.Exit (die)
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
+    '`'   { TokenBackTick _ }
     OP    { TokenOp _ _ }
 
 
@@ -120,8 +121,8 @@ Pat :
   | '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
 
 PJuxt :: { Pattern }
-PJuxt :
-    PJuxt PAtom                    { PApp (getStart $1, getEnd $2) $1 $2 }
+  : PJuxt '`' PAtom                { PApp (getStart $1, getEnd $3) $3 $1 }
+  | PJuxt PAtom                    { PApp (getStart $1, getEnd $2) $1 $2 }
   | PAtom                          { $1 }
 
 
@@ -176,8 +177,8 @@ Type :
   | '(' Type ',' Type ')'        { PairTy $2 $4 }
 
 TyJuxt :: { Type }
-TyJuxt :
-    TyJuxt TyAtom               { TyApp $1 $2 }
+  : TyJuxt '`' TyAtom           { TyApp $3 $1 }
+  | TyJuxt TyAtom               { TyApp $1 $2 }
   | TyAtom                      { $1 }
 
 TyAtom :: { Type }
@@ -287,8 +288,9 @@ Form : Form '+' Form               { Binop (getPosToSpan $2) "+" $1 $3 }
      | Juxt                        { $1 }
 
 Juxt :: { Expr }
-Juxt : Juxt Atom                   { App (getStart $1, getEnd $2) $1 $2 }
-     | Atom                        { $1 }
+  : Juxt '`' Atom               { App (getStart $1, getEnd $3) $3 $1 }
+  | Juxt Atom                   { App (getStart $1, getEnd $2) $1 $2 }
+  | Atom                        { $1 }
 
 Atom :: { Expr }
 Atom : '(' Expr ')'                { $2 }
