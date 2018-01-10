@@ -1,4 +1,5 @@
 import Maybe
+import Bool
 
 data BFLevel a where
   N : a -> (BFLevel a) |1| -> BFLevel a;
@@ -30,3 +31,9 @@ last x =
     Empty -> None;
     (Next |x| Empty) -> Some (label x);
     (Next |x| xs)    -> last xs
+
+exLast : Int
+exLast = someOr |42| (last ex0)
+
+main : Unit <[W]>
+main = if True `and |True| then write exLast else write 0
