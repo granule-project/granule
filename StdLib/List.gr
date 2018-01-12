@@ -59,3 +59,21 @@ replicate : forall (n : Nat=, a : Type) . N n -> a |n| -> List n a
 replicate n |c| = case n of
     Z -> Nil;
     (S n) -> Cons c (replicate n |c|)
+
+--- pushList pushes in non linearity of list into the elements
+pushList : forall (k : Nat=, n : Nat=, a : Type)
+         . (List n a) |k| -> List n (a |k|)
+pushList xs =
+    case xs of
+      |Nil|         -> Nil;
+      |(Cons x xs)| -> Cons |x| (pushList |xs|)
+
+--- pullList pulls non linearity in elements into a non linearity on the whole list
+pullList : forall (k : Nat=, n : Nat=, a : Type)
+         . List n (a |k|) -> (List n a) |k|
+pullList xs =
+    case xs of
+       Nil -> |Nil|;
+       (Cons |x| xs) ->
+         case pullList xs of
+          |ys| -> |(Cons x ys)|
