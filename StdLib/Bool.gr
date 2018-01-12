@@ -1,0 +1,87 @@
+------
+--- Module: Bool
+--- Description: Booleans and associated functions for Granule
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+--- # Boolean type
+
+--- Boolean
+data Bool where
+  False : Bool;
+  True : Bool
+
+--- # Boolean algebra
+
+--- Logical negation
+---     > not True
+---     False
+not : Bool -> Bool
+not x = if x then False else True
+
+--- Logical and
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | and x |y|
+---     False
+and : Bool -> Bool |1| -> Bool
+and x |y| = if x then y else False
+
+--- Logical and (linear)
+--- NB: consumes both arguments
+---     > let x = True in
+---     | let y = False in
+---     | and' x y
+---     False
+and' : Bool -> Bool -> Bool
+and' x y = if x then y else if y then True else False
+
+--- Inclusive or
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | or x |y|
+---     True
+or : Bool -> Bool |1| -> Bool
+or x |y| = if x then True else y
+
+--- Inclusive or (linear)
+--- NB: strict in both arguments
+---     > let x = True in
+---     | let y = False in
+---     | or' x y
+---     True
+or' : Bool -> Bool -> Bool
+or' x y = if x then if y then True else True else y
+
+--- Exclusive or
+---     > let x = True in
+---     | let y = False in
+---     | xor x y
+---     True
+xor : Bool -> Bool -> Bool
+xor x y = if x then not y else y
+
+--- Logical implication
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | impl x |y|
+---     False
+impl : Bool -> Bool |1| -> Bool
+impl x |y| = if x then y else True
+
+--- Logical implication (linear)
+--- NB: strict in both arguments
+--- NB: non-strict in second argument
+---     > let x = True in
+---     | let y = False in
+---     | impl x y
+---     False
+impl' : Bool -> Bool -> Bool
+impl' x y = if x then y else if y then True else True

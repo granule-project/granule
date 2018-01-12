@@ -16,22 +16,25 @@ import Utils
 
 -- Which coeffects can be flattened
 flattenable :: CKind -> Maybe (Coeffect -> Coeffect -> Coeffect)
-flattenable (CConstr "Nat")  = Just CTimes
-flattenable (CConstr "Nat=") = Just CTimes
-flattenable (CConstr "Nat*") = Just CTimes
-flattenable (CConstr "Level") = Just CJoin
-flattenable _                 = Nothing
+flattenable (CConstr k) =
+  case internalName k of
+    "Nat" -> Just CTimes
+    "Nat=" -> Just CTimes
+    "Nat*" -> Just CTimes
+    "Level" -> Just CJoin
+    _ -> Nothing
+flattenable _ = Nothing
 
 -- What is the kind of a particular coeffect?
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> MaybeT Checker CKind
 
 -- Coeffect constants have an obvious kind
-inferCoeffectType _ (Level _)         = return $ CConstr "Level"
-inferCoeffectType _ (CNat Ordered _)  = return $ CConstr "Nat"
-inferCoeffectType _ (CNat Discrete _) = return $ CConstr "Nat="
-inferCoeffectType _ (CFloat _)        = return $ CConstr "Q"
-inferCoeffectType _ (CSet _)          = return $ CConstr "Set"
-inferCoeffectType _ (CNatOmega _)     = return $ CConstr "Nat*"
+inferCoeffectType _ (Level _)         = return $ CConstr $ mkId "Level"
+inferCoeffectType _ (CNat Ordered _)  = return $ CConstr $ mkId "Nat"
+inferCoeffectType _ (CNat Discrete _) = return $ CConstr $ mkId "Nat="
+inferCoeffectType _ (CFloat _)        = return $ CConstr $ mkId "Q"
+inferCoeffectType _ (CSet _)          = return $ CConstr $ mkId "Set"
+inferCoeffectType _ (CNatOmega _)     = return $ CConstr $ mkId "Nat*"
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'

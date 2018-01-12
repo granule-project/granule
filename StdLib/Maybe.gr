@@ -1,0 +1,22 @@
+------
+--- Module: Maybe
+--- Description: Library for working with values that may be absent
+--- Authors: Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+--- Type-safe null; wrap a computation that could fail
+data Maybe a where
+  None : Maybe a;
+  Some : a -> Maybe a
+
+--- Unwrap `Some n` or if it is `None`, return `0`
+someOrZero : Maybe Int -> Int
+someOrZero sn = case sn of (Some n) -> n; None -> 0
+
+--- Unwrap `Some x` or if it is `None`, return the provided default value
+someOr : forall a : Type . a |1| -> Maybe a -> a
+someOr |default| m = case m of None -> default; (Some x) -> x

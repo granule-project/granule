@@ -42,7 +42,7 @@ varA = mkId "a"
 spec :: Spec
 spec = do
     -- Integration tests based on the fixtures
-    let ?globals = defaultGlobals { suppressInfos = True, suppressErrors = True }
+    let ?globals = defaultGlobals { suppressInfos = True }
     srcFiles <- runIO exampleFiles
     forM_ srcFiles $ \file ->
       describe file $ it "typechecks" $ do
@@ -51,7 +51,8 @@ spec = do
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right (ast, maxFreshId) -> do
-            result <- try (check ast maxFreshId) :: IO (Either SomeException _)
+            let ?globals = ?globals { freshIdCounter = maxFreshId }
+            result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Ok
@@ -59,12 +60,13 @@ spec = do
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
       describe file $ it "does not typecheck" $ do
-        let ?globals = ?globals { sourceFilePath = file }
+        let ?globals = ?globals { sourceFilePath = file, suppressErrors = True }
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right (ast, maxFreshId) -> do
-            result <- try (check ast maxFreshId) :: IO (Either SomeException _)
+            let ?globals = ?globals { freshIdCounter = maxFreshId }
+            result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Failed
@@ -77,8 +79,8 @@ spec = do
               [(varA, Discharged tyvark (CNat Ordered 10))]
        c `shouldBe` [(varA, Discharged tyvark (CVar (mkId "a0")))]
        pred `shouldBe`
-         [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar (mkId "a0")) (CConstr "Nat"))
-              , Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr "Nat"))]]
+         [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
+              , Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
@@ -86,8 +88,8 @@ spec = do
               []
        c `shouldBe` [(varA, Discharged (tyvark) (CVar (mkId "a0")))]
        pred `shouldBe`
-         [Conj [Con (Leq nullSpan (CZero (CConstr "Nat")) (CVar (mkId "a0")) (CConstr "Nat"))
-               ,Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr "Nat"))]]
+         [Conj [Con (Leq nullSpan (CZero (CConstr $ mkId "Nat")) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
+               ,Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId"Nat"))]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
@@ -117,7 +119,7 @@ spec = do
                  []
                  [(varA, Discharged (tyvark) (CNat Ordered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyvark) (CZero (CConstr "Nat")))]
+                 [(varA, Discharged (tyvark) (CZero (CConstr $ mkId "Nat")))]
 
 
 

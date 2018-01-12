@@ -1,0 +1,8 @@
+import List
+
+four : N 4
+four = S (S (S (S Z)))
+
+main : List 4 Int
+main = range (S (S (S (S Z))))
+-- Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))

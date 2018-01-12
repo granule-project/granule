@@ -7,18 +7,20 @@
 
 module Checker.Monad where
 
+import Data.List (intercalate)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
 import Checker.LaTeX
 import Checker.Predicates
+import qualified Checker.Primitives as Primitives
 import Context
-import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern
+import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern, TypeScheme(..)
                    , mkId, internalName)
 import Syntax.Pretty
 import Utils
 
-import Data.List (intercalate)
+
 
 -- State of the check/synth functions
 newtype Checker a =
@@ -50,8 +52,8 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 
 
 data CheckerState = CS
-            { -- Fresh variable ids
-              uniqueVarId    :: VarCounter
+            { -- Fresh variable id
+              uniqueVarId  :: VarCounter
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
             -- Type variable context, maps type variables to their kinds
@@ -64,14 +66,23 @@ data CheckerState = CS
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
+            , typeConstructors :: Ctxt Kind
+            , dataConstructors :: Ctxt TypeScheme
             }
   deriving (Show, Eq) -- for debugging
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS 0 [] emptyCtxt emptyCtxt Nothing []
-  where
-    emptyCtxt = []
+initState = CS { uniqueVarId = 0
+               , predicateStack = []
+               , tyVarContext = emptyCtxt
+               , kVarContext = emptyCtxt
+               , deriv = Nothing
+               , derivStack = []
+               , typeConstructors = Primitives.typeLevelConstructors
+               , dataConstructors = Primitives.dataConstructors
+               }
+  where emptyCtxt = []
 
 -- *** Various helpers for manipulating the context
 

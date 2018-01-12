@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
@@ -9,7 +10,7 @@ module Checker.Checker where
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.Maybe
-import Data.SBV hiding (kindOf)
+import Data.SBV hiding (Kind, kindOf)
 
 import Checker.Coeffects
 import Checker.Constraints
@@ -17,7 +18,7 @@ import Checker.Kinds
 import Checker.Monad
 import Checker.Patterns
 import Checker.Predicates
-import Checker.Primitives
+import qualified Checker.Primitives as Primitives
 import Checker.Substitutions
 import Checker.Types
 import Context
@@ -25,44 +26,90 @@ import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
-
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
-check :: (?globals :: Globals )
-      => [Def]        -- List of definitions
-      -> Int          -- The current maximum fresh identifier
-      -> IO CheckerResult
-check defs maxFreshId = do
-    -- Get the types of all definitions (assume that they are correct for
-    -- the purposes of (mutually)recursive calls).
+check :: (?globals :: Globals ) => AST -> IO CheckerResult
+check ast = do
+      let checkADTs = do { mapM checkTyCon adts; mapM checkDataCons adts }
 
-    -- Kind check all the type signatures
-    let checkKinds = mapM (\(Def s _ _ _ tys) -> kindCheck s tys) defs
+      -- Get the types of all definitions (assume that they are correct for
+      -- the purposes of (mutually)recursive calls).
+      let checkKinds = mapM kindCheckDef defs
+      -- Build a computation which checks all the defs (in order)...
+      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+      let checkedDefs = do
+            status <- runMaybeT checkKinds
+            case status of
+              Nothing -> return [Nothing]
+              Just _  -> -- Now check the definition
+                mapM (checkDef defCtxt) defs
 
-    -- Build a computation which checks all the defs (in order)...
-    let defCtxt = map (\(Def _ var _ _ tys) -> (var, tys)) defs
-    let checkedDefs = do
-          status <- runMaybeT checkKinds
-          case status of
-            Nothing -> return [Nothing]
-            Just _  -> -- Now check the definition
-               mapM (checkDef defCtxt) defs
+      -- ... and evaluate the computation with initial state
+      let thingsToCheck = (++) <$> checkADTs <*> checkedDefs
+      results <- go thingsToCheck
 
-    -- ... and evaluate the computation with initial state
-    results <- evalChecker (initState { uniqueVarId = maxFreshId }) checkedDefs
+      -- If all definitions type checked, then the whole file type checks
+      -- let results = (results_ADT ++ results_Def)
+      if all isJust results
+        then return Ok
+        else return Failed
+    where
+      adts = filter (\case ADT{} -> True; _ -> False) ast
+      defs = filter (\case Def{} -> True; _ -> False) ast
+      go = evalChecker initState { uniqueVarId = freshIdCounter ?globals }
 
-    -- If all definitions type checked, then the whole file type checkers
-    if all isJust results
-      then return Ok
-      else return Failed
+checkTyCon :: (?globals :: Globals ) => Def -> Checker (Maybe ())
+checkTyCon (ADT _ tC@(TypeConstr _ tName) tyVars _) =
+    runMaybeT $ do
+      debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty tC ++ "`: `"
+                                    ++ pretty tyConKind ++ "` (Show: `" ++ show tyConKind ++ "`)"
+      modify $ \st -> st { typeConstructors = (tName, tyConKind) : typeConstructors st }
+  where
+    tyConKind = mkKind tyVars
+    mkKind [] = KType
+    mkKind (_:vs) = KFun KType (mkKind vs)
+
+checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
+checkDataCons (ADT _ (TypeConstr _ tName) tyVars dataCs) =
+  runMaybeT $ do
+    st <- get
+    case lookup tName (typeConstructors st) of
+      Just kind -> mapM_ (checkDataCon tName kind) dataCs
+      _ -> unhandled -- all type constructors have already been put into the checker monad
+
+
+checkDataCon :: (?globals :: Globals )
+  => Id -- ^ The type constructor and associated type to check against
+  -> Kind -- ^ The kind of the type constructor
+  -> DataConstr -- ^ The data constructor to check
+  -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
+checkDataCon tName kind (DataConstr sp dName tySch@(Forall _ tyVars ty)) = do
+    debugM "checkDataCons.dataCs" $ "Checking " ++ pretty dName ++ " : " ++ pretty tySch
+    tySchKind <- inferKindOfType' sp tyVars ty
+    case tySchKind of
+      KType -> valid ty
+      _     -> illKindedNEq sp KType kind
+  where
+    valid t =
+        case t of
+        TyCon tC ->
+          if tC /= tName then halt $ GenericError (Just sp)
+                                   $ "Expected type constructor `" ++ pretty tName ++ "`, but got `"
+                                   ++ pretty tC ++ "` in  `" ++ pretty dName ++ " : "
+                                   ++ pretty tySch ++ "`"
+          else let dataConstructor = (dName, Forall sp tyVars ty) in
+               modify $ \st -> st { dataConstructors = dataConstructor : dataConstructors st }
+        FunTy arg res -> valid res
+        TyApp fun arg -> valid fun
+        x -> halt $ GenericError (Just sp) $ "Not a valid datatype definition."
 
 checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def              -- definition
-         -> Checker (Maybe (Ctxt Assumption))
+         -> Checker (Maybe ())
 checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
-    ctxt <- runMaybeT $ do
+    result <- runMaybeT $ do
       modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
       ctxt <- case (ty, pats) of
@@ -87,15 +134,14 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
       checkerState <- get
       let predStack = predicateStack checkerState
       debugM "Solver predicate" $ pretty (Conj predStack)
-
       solved <- solveConstraints (Conj predStack) s defName
       if solved
-        then return ctxt
+        then return ()
         else halt $ GenericError (Just s) "Constraints violated"
 
     -- Erase the solver predicate between definitions
     modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
-    return ctxt
+    return result
 
 data Polarity = Positive | Negative deriving Show
 
@@ -123,10 +169,8 @@ checkExpr :: (?globals :: Globals )
 
 -- Checking of constants
 
-checkExpr _ _ _ _ (TyCon "Int") (Val _ (NumInt _)) = return ([], [])
-  -- Automatically upcast integers to floats
-checkExpr _ _ _ _ (TyCon "Float") (Val _ (NumInt _)) = return ([], [])
-checkExpr _ _ _ _ (TyCon "Float") (Val _ (NumFloat _)) = return ([], [])
+checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _)) | internalName c == "Int" = return ([], [])
+checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" =  return ([], [])
 
 checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
   -- If an explicit signature on the lambda was given, then check
@@ -150,8 +194,8 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
 -- Application special case for built-in 'scale'
 checkExpr defs gam pol topLevel tau
           (App s (App _ (Val _ (Var v)) (Val _ (NumFloat x))) e) | internalName v == "scale" = do
-    equalTypes s (TyCon "Float") tau
-    checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon "Float")) e
+    equalTypes s (TyCon $ mkId "Float") tau
+    checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon $ mkId "Float")) e
 
 -- Application synthesis
 checkExpr defs gam pol topLevel tau (App s e1 e2) = do
@@ -268,60 +312,57 @@ synthExpr :: (?globals :: Globals)
           -> MaybeT Checker (Type, Ctxt Assumption)
 
 -- Constants (numbers)
-synthExpr _ _ _ (Val _ (NumInt _))  = return (TyCon "Int", [])
-synthExpr _ _ _ (Val _ (NumFloat _)) = return (TyCon "Float", [])
-
--- Polymorphic list constructors
-synthExpr _ _ _ (Val _ (Constr "Nil" [])) = do
-  elementVarName <- freshVar "a"
-  let elementVar = mkId elementVarName
-  modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
-  return (TyApp (TyApp (TyCon "List") (TyInt 0)) (TyVar elementVar), [])
-
-synthExpr _ _ _ (Val s (Constr "Cons" [])) = do
-    let kind = CConstr "Nat="
-    sizeVarArg <- freshCoeffectVar (mkId "n") kind
-    sizeVarRes <- freshCoeffectVar (mkId "m") kind
-    elementVarName <- freshVar "a"
-    let elementVar = mkId elementVarName
-    modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
-    -- Add a constraint
-    -- m ~ n + 1
-    addConstraint $ Eq s (CVar sizeVarRes)
-                         (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
-    -- Cons : a -> List n a -> List m a
-    return (FunTy
-             (TyVar elementVar)
-             (FunTy (list elementVar (TyVar sizeVarArg))
-                    (list elementVar (TyVar sizeVarRes))),
-                    [])
-  where
-    list elementVar n = TyApp (TyApp (TyCon "List") n) (TyVar $ elementVar)
+synthExpr _ _ _ (Val _ (NumInt _))  = return (TyCon $ mkId "Int", [])
+synthExpr _ _ _ (Val _ (NumFloat _)) = return (TyCon $ mkId "Float", [])
 
 -- Nat constructors
-synthExpr _ _ _ (Val _ (Constr "Z" [])) = do
-  return (TyApp (TyCon "N") (TyInt 0), [])
+synthExpr _ _ _ (Val s (Constr c [])) = do
+  case internalName c of
+    "Nil" -> do
+        elementVarName <- freshVar "a"
+        let elementVar = mkId elementVarName
+        modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
+        return (TyApp (TyApp (TyCon $ mkId "List") (TyInt 0)) (TyVar elementVar), [])
+    "Cons" -> do
+          let kind = CConstr $ mkId "Nat="
+          sizeVarArg <- freshCoeffectVar (mkId "n") kind
+          sizeVarRes <- freshCoeffectVar (mkId "m") kind
+          elementVarName <- freshVar "a"
+          let elementVar = mkId elementVarName
+          modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
+          -- Add a constraint
+          -- m ~ n + 1
+          addConstraint $ Eq s (CVar sizeVarRes)
+                               (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
+          -- Cons : a -> List n a -> List m a
+          let list elementVar n = TyApp (TyApp (TyCon $ mkId "List") n) (TyVar $ elementVar)
+          return (FunTy
+                   (TyVar elementVar)
+                   (FunTy (list elementVar (TyVar sizeVarArg))
+                          (list elementVar (TyVar sizeVarRes))),
+                          [])
 
-synthExpr _ _ _ (Val s (Constr "S" [])) = do
-    let kind = CConstr "Nat="
-    sizeVarArg <- freshCoeffectVar (mkId "n") kind
-    sizeVarRes <- freshCoeffectVar (mkId "m") kind
-    -- Add a constraint
-    -- m ~ n + 1
-    addConstraint $ Eq s (CVar sizeVarRes)
-                         (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
-    -- S : Nat n -> Nat (n + 1)
-    return (FunTy (nat (TyVar sizeVarArg))
-                  (nat (TyVar sizeVarRes)), [])
-  where
-    nat n = TyApp (TyCon "N") n
-
-
--- Constructors (only supports nullary constructors)
-synthExpr _ _ _ (Val s (Constr name [])) = do
-  case lookup name dataConstructors of
-    Just (Forall _ [] t) -> return (t, [])
-    _ -> halt $ UnboundVariableError (Just s) $ "Data constructor " ++ name
+    "Z" -> return (TyApp (TyCon $ mkId "N") (TyInt 0), [])
+    "S" -> do
+      let kind = CConstr $ mkId "Nat="
+      sizeVarArg <- freshCoeffectVar (mkId "n") kind
+      sizeVarRes <- freshCoeffectVar (mkId "m") kind
+      -- Add a constraint
+      -- m ~ n + 1
+      addConstraint $ Eq s (CVar sizeVarRes)
+                           (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
+      -- S : Nat n -> Nat (n + 1)
+      let nat n = TyApp (TyCon $ mkId "N") n
+      return (FunTy (nat (TyVar sizeVarArg))
+                    (nat (TyVar sizeVarRes)), [])
+    _ -> do
+      st <- get
+      case lookup c (dataConstructors st) of
+        Just tySch -> do
+          ty <- freshPolymorphicInstance tySch
+          return (ty, [])
+        _ -> halt $ UnboundVariableError (Just s) $
+                    "Data constructor `" ++ pretty c ++ "`" <?> show (dataConstructors st)
 
 -- Case
 synthExpr defs gam pol (Case s guardExpr cases) = do
@@ -385,12 +426,12 @@ synthExpr defs gam _ (Val s (Var x)) = do
    case lookup x gam of
      Nothing ->
        -- Try definitions in scope
-       case lookup x (defs ++ builtins) of
+       case lookup x (defs ++ Primitives.builtins) of
          Just tyScheme  -> do
            ty' <- freshPolymorphicInstance tyScheme
            return (ty', [])
          -- Couldn't find it
-         Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x
+         Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
                               ++ (if debugging ?globals then
                                   (" { looking for " ++ pretty x
                                   ++ " in context " ++ pretty gam
@@ -405,7 +446,7 @@ synthExpr defs gam _ (Val s (Var x)) = do
 -- Specialised application for scale
 synthExpr defs gam pol
       (App _ (Val _ (Var v)) (Val _ (NumFloat r))) | internalName v == "scale" = do
-  let float = TyCon "Float"
+  let float = TyCon $ mkId "Float"
   return (FunTy (Box (CFloat (toRational r)) float) float, [])
 
 -- Application
@@ -483,7 +524,7 @@ synthExpr defs gam pol (Binop s op e1 e2) = do
     (t2, gam2) <- synthExpr defs gam pol e2
     -- Look through the list of operators (of which there might be
     -- multiple matching operators)
-    case lookupMany op binaryOperators of
+    case lookupMany op Primitives.binaryOperators of
       [] -> halt $ UnboundVariableError (Just s) $ "Binary operator " ++ op
       ops -> do
         returnType <- selectFirstByType t1 t2 ops
@@ -534,8 +575,8 @@ solveConstraints predicate s defName = do
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
   let ctxtCkVar = kVarContext checkerState
-  let coeffectVars = justCoeffectTypesConverted ctxtCk
-  let coeffectKVars = justCoeffectTypesConvertedVars ctxtCkVar
+  let coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
+  let coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
 
   let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
 
@@ -573,18 +614,18 @@ solveConstraints predicate s defName = do
 
            else return True
   where
-    justCoeffectTypesConverted = mapMaybe convert
+    justCoeffectTypesConverted checkerState = mapMaybe convert
       where
        convert (var, (KConstr constr, q)) =
-           case lookup constr typeLevelConstructors of
+           case lookup (constr) (typeConstructors checkerState) of
              Just KCoeffect -> Just (var, (CConstr constr, q))
              _              -> Nothing
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
        convert (var, (KPoly constr, q)) = Just (var, (CPoly constr, q))
        convert _ = Nothing
-    justCoeffectTypesConvertedVars =
-       stripQuantifiers . justCoeffectTypesConverted . map (\(var, k) -> (var, (k, ForallQ)))
+    justCoeffectTypesConvertedVars checkerState =
+       stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
 
 leqCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker ()
@@ -665,7 +706,7 @@ leqAssumption :: (?globals :: Globals) => Span -> (Id, Assumption) -> (Id, Assum
   -> MaybeT Checker ()
 
 -- Linear assumptions ignored
-leqAssumption _ (_, Linear _)        (_, Linear _) = return ()
+leqAssumption _ (_, Linear _) (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
 leqAssumption s (_, Discharged _ c1) (_, Discharged _ c2) = do
@@ -675,34 +716,6 @@ leqAssumption s (_, Discharged _ c1) (_, Discharged _ c2) = do
 leqAssumption s x y =
   halt $ GenericError (Just s) $ "Can't unify free-variable types:\n\t"
            ++ pretty x ++ "\nwith\n\t" ++ pretty y
-
-
-freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
-freshPolymorphicInstance (Forall s kinds ty) = do
-    -- Universal becomes an existential (via freshCoeffeVar)
-    -- since we are instantiating a polymorphic type
-    renameMap <- mapM instantiateVariable kinds
-    return $ renameType renameMap ty
-
-  where
-    -- Freshen variables, create existential instantiation
-    instantiateVariable (var, k) = do
-      -- Freshen the variable depending on its kind
-      var' <- case k of
-               KType -> do
-                 freshName <- freshVar (internalName var)
-                 let var'  = mkId freshName
-                 -- Label fresh variable as an existential
-                 modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
-                 return var'
-               KConstr c -> freshCoeffectVar var (CConstr c)
-               KCoeffect ->
-                 error "Coeffect kind variables not yet supported"
-               KFun _ _ -> unhandled
-               KPoly _ -> unhandled
-      -- Return pair of old variable name and instantiated name (for
-      -- name map)
-      return (var, var')
 
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant

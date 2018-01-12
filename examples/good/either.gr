@@ -1,0 +1,11 @@
+data Maybe a where
+  None : Maybe a;
+  Some : a -> Maybe a
+
+data Either a b where
+  Left : a -> Either a b;
+  Right : b -> Either a b
+
+data Thingy a b c d where
+  Wibble : a -> d -> Thingy a b c d;
+  Shlopp : b -> c -> Thingy a b c d

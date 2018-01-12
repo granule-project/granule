@@ -1,0 +1,30 @@
+import Prelude
+
+data Meat where
+  Chicken : Meat;
+  Beef    : Meat
+
+data Salad where
+  Lettuce : Salad;
+  Slaw    : Salad
+
+data Meal where
+  Wrap : Salad -> Meat -> Meal;
+  Side : Salad -> Meal;
+  Meat : Meat -> Meal
+
+vegetarian : Meal |1| -> Bool
+vegetarian m =
+    case m of
+      |(Side Lettuce)| -> True;
+      |(Side Slaw)| -> True;
+      |_| -> False
+
+vegetarianL : Meal -> (Bool,Meal)
+vegetarianL m =
+    case m of
+      (Side v) -> (True, Side v);
+      m -> (False, m)
+
+main : (Bool,Meal)
+main = vegetarianL (Wrap Slaw Chicken)

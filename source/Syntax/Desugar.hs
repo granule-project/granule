@@ -21,6 +21,7 @@ import Control.Monad.State.Strict
    inside of the definition to give an explicit typing on the coeffect-let
    binding. -}
 desugar :: Def -> Def
+-- desugar adt@ADT{} = adt
 desugar (Def s var expr pats tys@(Forall _ _ ty)) =
   Def s var (evalState (typeDirectedDesugar pats ty expr) (0 :: Int)) [] tys
   where

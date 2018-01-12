@@ -3,11 +3,11 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Syntax.Expr (Value(..), Expr(..), Type(..), TypeScheme(..),
+module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
-                   NatModifier(..), Effect, Kind(..),
+                   NatModifier(..), Effect, Kind(..), DataConstr(..), TypeConstr(..),
                    Id, sourceName, internalName, mkId, mkInternalId,
-                   ConstructorId, Operator,
+                   Operator,
                    liftCoeffectType,
                    uniqueNames, arity, freeVars, subst,
                    normalise,
@@ -19,10 +19,10 @@ module Syntax.Expr (Value(..), Expr(..), Type(..), TypeScheme(..),
                    ) where
 
 import Data.List ((\\))
-import Data.Functor.Identity
 import Control.Monad.State
 import Control.Arrow
 import GHC.Generics (Generic)
+import Data.Functor.Identity (runIdentity)
 
 import Syntax.FirstParameter
 
@@ -38,7 +38,6 @@ instance Show Id where
   show (Id s i) = "Id " ++ show s ++ " " ++ show i
 
 -- Constructors and operators are just strings
-type ConstructorId = String
 type Operator      = String
 
 mkId :: String -> Id
@@ -68,7 +67,7 @@ data Value = Abs Id (Maybe Type) Expr
            | Promote Expr
            | Pure Expr
            | Var Id
-           | Constr ConstructorId [Value]
+           | Constr Id [Value]
            | Pair Expr Expr
           deriving (Eq, Show)
 
@@ -89,7 +88,7 @@ data Pattern = PVar Span Id         -- Variable patterns
              | PBox Span Pattern -- Box patterns
              | PInt Span Int        -- Numeric patterns
              | PFloat Span Double
-             | PConstr Span ConstructorId  -- Constructor pattern
+             | PConstr Span Id  -- Constructor pattern
              | PApp Span Pattern Pattern -- Apply pattern
              | PPair Span Pattern Pattern -- ^ Pair patterns
           deriving (Eq, Show, Generic)
@@ -97,14 +96,18 @@ data Pattern = PVar Span Id         -- Variable patterns
 instance FirstParameter Pattern Span
 
 class Binder t where
-  bvs :: t -> [Id]
+  boundVars :: t -> [Id]
   freshenBinder :: t -> Freshener t
 
 instance Binder Pattern where
-  bvs (PVar _ v)     = [v]
-  bvs (PBox _ p)     = bvs p
-  bvs (PApp _ p1 p2) = bvs p1 ++ bvs p2
-  bvs _           = [] -- TODO: Get rid of catch-alls
+  boundVars (PVar _ v)     = [v]
+  boundVars PWild {}       = []
+  boundVars (PBox _ p)     = boundVars p
+  boundVars PInt {}        = []
+  boundVars PFloat {}      = []
+  boundVars PConstr {}     = []
+  boundVars (PApp _ p1 p2) = boundVars p1 ++ boundVars p2
+  boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
 
   freshenBinder (PVar s var) = do
       var' <- freshVar Value var
@@ -165,19 +168,19 @@ freshenTys (Forall s binds ty) = do
       return $ Forall s binds' ty'
 
 instance Term Type where
-  freeVars = runIdentity .
-    typeFoldM (TypeFold (\x y -> return $ x ++ y)
-                        (const (return []))
-                        (\c t -> return $ freeVars c ++ t)
-                        (\_ t -> return t)
-                        (\v -> return [v])
-                        (\x y -> return $ x ++ y)
-                        (const (return []))
-                        (\x y -> return $ x ++ y)
-                        (\_ x y -> return $ x ++ y))
+  freeVars = runIdentity . typeFoldM TypeFold
+    { tfFunTy   = \x y -> return $ x ++ y
+    , tfTyCon   = \_ -> return [] -- or: const (return [])
+    , tfBox     = \c t -> return $ freeVars c ++ t
+    , tfDiamond = \_ x -> return x
+    , tfTyVar   = \v -> return [v] -- or: return . return
+    , tfTyApp   = \x y -> return $ x ++ y
+    , tfTyInt   = \_ -> return []
+    , tfPairTy  = \x y -> return $ x ++ y
+    , tfTyInfix = \_ y z -> return $ y ++ z
+    }
 
   subst e _ t = e
-
   freshen =
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar, tfBox = freshenTyBox })
     where
@@ -313,7 +316,7 @@ instance Term Expr where
     freeVars (LetDiamond _ x _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ [x])
     freeVars (Val _ e)                = freeVars e
     freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
-                                      \\ concatMap (bvs . fst) cases)
+                                      \\ concatMap (boundVars . fst) cases)
 
     subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
     subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
@@ -364,12 +367,25 @@ instance Term Expr where
 --------- Definitions
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
+         | ADT Span TypeConstr [TyVar] [DataConstr]
           deriving (Eq, Show, Generic)
+
+type AST = [Def]
+
+type TyVar = (Span,Id)
 
 instance FirstParameter Def Span
 
+data TypeConstr = TypeConstr Span Id deriving (Eq, Show, Generic)
+
+instance FirstParameter TypeConstr Span
+
+data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
+
+instance FirstParameter DataConstr Span
+
 -- Alpha-convert all bound variables
-uniqueNames :: [Def] -> ([Def], Int)
+uniqueNames :: AST -> (AST, Int)
 uniqueNames =
    -- Since the type checker will generate new fresh names as well
    -- find the maximum fresh id that occured in the renaming stage
@@ -384,9 +400,19 @@ uniqueNames =
       e'  <- freshen e
       return $ Def s var e' ps' t'
 
+    -- in the case of ADTs, also push down the type variables from the data declaration head
+    -- into the data constructors
+    freshenDef (ADT sp tyCon tyVars dataCs) = do
+      let vs = (map (\(_,v) -> (v, KType)) tyVars)
+      dataCs <- mapM (\(DataConstr sp name (Forall sp' [] ty)) -> do
+                        tySch <- freshenTys (Forall sp' vs ty)
+                        return $ DataConstr sp name tySch) dataCs
+      return $ ADT sp tyCon tyVars dataCs
+
+
 ----------- Types
 
-data TypeScheme = Forall Span [(Id, Kind)] Type
+data TypeScheme = Forall Span [(Id, Kind)] Type -- [(Id, Kind)] are the binders
     deriving (Eq, Show, Generic)
 
 instance FirstParameter TypeScheme Span
@@ -395,7 +421,7 @@ instance FirstParameter TypeScheme Span
 Example: `List n Int` is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
 data Type = FunTy Type Type           -- ^ Function type
-          | TyCon ConstructorId       -- ^ Type constructor
+          | TyCon Id       -- ^ Type constructor
           | Box Coeffect Type         -- ^ Coeffect type
           | Diamond Effect Type       -- ^ Effect type
           | TyVar Id                  -- ^ Type variable
@@ -408,7 +434,7 @@ data Type = FunTy Type Type           -- ^ Function type
 -- Trivially effectful monadic constructors
 mFunTy :: Monad m => Type -> Type -> m Type
 mFunTy x y   = return (FunTy x y)
-mTyCon :: Monad m => ConstructorId -> m Type
+mTyCon :: Monad m => Id -> m Type
 mTyCon       = return . TyCon
 mBox :: Monad m => Coeffect -> Type -> m Type
 mBox c y     = return (Box c y)
@@ -431,7 +457,7 @@ baseTypeFold =
 
 data TypeFold m a = TypeFold
   { tfFunTy   :: a -> a        -> m a
-  , tfTyCon   :: ConstructorId -> m a
+  , tfTyCon   :: Id -> m a
   , tfBox     :: Coeffect -> a -> m a
   , tfDiamond :: Effect -> a   -> m a
   , tfTyVar   :: Id            -> m a
@@ -478,7 +504,7 @@ data Kind = KType
           | KCoeffect
           | KFun Kind Kind
           | KPoly Id              -- Kind poly variable
-          | KConstr ConstructorId -- constructors that have been elevated
+          | KConstr Id -- constructors that have been elevated
     deriving (Show, Ord, Eq)
 
 liftCoeffectType :: CKind -> Kind
@@ -506,7 +532,7 @@ data Coeffect = CNat      NatModifier Int
 data NatModifier = Ordered | Discrete
     deriving (Show, Ord, Eq)
 
-data CKind = CConstr ConstructorId | CPoly Id
+data CKind = CConstr Id | CPoly Id
     deriving (Eq, Ord, Show)
 
 -- | Normalise a coeffect using the semiring laws and some
@@ -517,14 +543,14 @@ normalise (CPlus (CZero _) n) = n
 normalise (CPlus n (CZero _)) = n
 normalise (CTimes (COne _) n) = n
 normalise (CTimes n (COne _)) = n
-normalise (COne (CConstr "Nat")) = CNat Ordered 1
-normalise (CZero (CConstr "Nat")) = CNat Ordered 0
-normalise (COne (CConstr "Nat=")) = CNat Discrete 1
-normalise (CZero (CConstr "Nat=")) = CNat Discrete 0
-normalise (COne (CConstr "Level")) = Level 1
-normalise (CZero (CConstr "Level")) = Level 0
-normalise (COne (CConstr "Q")) = CFloat 1
-normalise (CZero (CConstr "Q")) = CFloat 0
+normalise (COne (CConstr (Id _ "Nat"))) = CNat Ordered 1
+normalise (CZero (CConstr (Id _ "Nat"))) = CNat Ordered 0
+normalise (COne (CConstr (Id _ "Nat="))) = CNat Discrete 1
+normalise (CZero (CConstr (Id _ "Nat="))) = CNat Discrete 0
+normalise (COne (CConstr (Id _ "Level"))) = Level 1
+normalise (CZero (CConstr (Id _ "Level"))) = Level 0
+normalise (COne (CConstr (Id _ "Q"))) = CFloat 1
+normalise (CZero (CConstr (Id _ "Q"))) = CFloat 0
 normalise (CPlus (Level n) (Level m)) = Level (n `max` m)
 normalise (CTimes (Level n) (Level m)) = Level (n `min` m)
 normalise (CPlus (CFloat n) (CFloat m)) = CFloat (n + m)

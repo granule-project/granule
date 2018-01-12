@@ -1,8 +1,16 @@
--- # Base library for operations on type-indexed natural numbers
+------
+--- Module: Nat
+--- Description: Base library for operations on type-indexed natural numbers
+--- Authors: Dominic Orchard
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
 
--- ## Helpers
+-- # Helpers
 
--- ### Constructor wrappers
+-- ## Constructor wrappers
 zero : N 0
 zero = Z
 
@@ -16,7 +24,7 @@ natToInt x =
       Z -> 0;
       (S m) -> 1 + natToInt m
 
--- ## Arithmetic operations
+-- # Arithmetic operations
 
 --- Addition
 add : forall (n : Nat=, m : Nat=) . N n -> N m -> N (n + m)

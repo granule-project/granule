@@ -21,8 +21,13 @@ import System.Exit (die)
 
 %token
     nl    { TokenNL  _ }
+    data  { TokenData _ }
+    where { TokenWhere _ }
     let   { TokenLet _ }
     in    { TokenIn  _  }
+    if    { TokenIf _ }
+    then  { TokenThen _ }
+    else  { TokenElse _ }
     case  { TokenCase _ }
     of    { TokenOf _ }
     INT   { TokenInt _ _ }
@@ -53,6 +58,7 @@ import System.Exit (die)
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
+    '`'   { TokenBackTick _ }
     OP    { TokenOp _ _ }
 
 
@@ -65,7 +71,7 @@ import System.Exit (die)
 %left '.'
 %%
 
-Defs :: { [Def] }
+Defs :: { AST }
 Defs : Def                      { [$1] }
      | Def NL Defs              { $1 : $3 }
 
@@ -76,16 +82,34 @@ Def :: { Def }
 Def : Sig NL Binding
   { if (fst3 $1 == fst3 $3)
     then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
-    else error $ "Signature for "
-  	      ++ sourceName (fst3 $3)
-	      ++ " does not match the signature head" }
-
+    else error $ "Signature for `" ++ sourceName (fst3 $3) ++ "` does not match the signature head \
+                  \`" ++ sourceName (fst3 $1) ++ "`"  }
+    | data TypeConstr TyVars where DataConstrs {
+      ADT (getPos $1, snd $ getSpan (last $5)) $2 $3 $5
+    }
 Sig ::  { (Id, TypeScheme, Pos) }
 Sig : VAR ':' TypeScheme           { (mkId $ symString $1, $3, getPos $1) }
 
 Binding :: { (Id, Expr, [Pattern]) }
 Binding : VAR '=' Expr             { (mkId $ symString $1, $3, []) }
         | VAR Pats '=' Expr        { (mkId $ symString $1, $4, $2) }
+
+TypeConstr ::  { TypeConstr }
+TypeConstr : CONSTR { TypeConstr (getPosToSpan $1) (mkId $ constrString $1) }
+
+DataConstrs :: { [DataConstr] }
+DataConstrs : DataConstr DataConstrNext { $1 : $2 }
+
+DataConstr :: { DataConstr }
+DataConstr : CONSTR ':' TypeScheme { DataConstr (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+
+DataConstrNext :: { [DataConstr] }
+DataConstrNext : ';' DataConstrs { $2 }
+               | {- empty -}     { [] }
+
+TyVars :: { [(Span, Id)] }
+TyVars : VAR TyVars { ((getPosToSpan $1),(mkId $ symString $1)) : $2 }
+       | {- empty -}{ [] }
 
 Pats :: { [Pattern] }
 Pats : Pat                         { [$1] }
@@ -97,8 +121,8 @@ Pat :
   | '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
 
 PJuxt :: { Pattern }
-PJuxt :
-    PJuxt PAtom                    { PApp (getStart $1, getEnd $2) $1 $2 }
+  : PJuxt '`' PAtom                { PApp (getStart $1, getEnd $3) $3 $1 }
+  | PJuxt PAtom                    { PApp (getStart $1, getEnd $2) $1 $2 }
   | PAtom                          { $1 }
 
 
@@ -110,7 +134,7 @@ PAtom : VAR                        { PVar (getPosToSpan $1) (mkId $ symString $1
     | FLOAT                        { let TokenFloat _ x = $1
 	                             in PFloat (getPosToSpan $1) $ read x }
     | CONSTR                       { let TokenConstr _ x = $1
-	                             in PConstr (getPosToSpan $1) x }
+	                             in PConstr (getPosToSpan $1) (mkId x) }
     | '(' PJuxt ')'                  { $2 }
     | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
@@ -136,12 +160,12 @@ Kind :
   | CONSTR  { case constrString $1 of
                 "Type"     -> KType
                 "Coeffect" -> KCoeffect
-                s          -> KConstr s }
+                s          -> KConstr $ mkId s }
 
 CKind :: { CKind }
 CKind :
    VAR     { CPoly (mkId $ symString $1) }
- | CONSTR  { CConstr (constrString $1) }
+ | CONSTR  { CConstr (mkId $ constrString $1) }
 
 Type :: { Type }
 Type :
@@ -153,13 +177,13 @@ Type :
   | '(' Type ',' Type ')'        { PairTy $2 $4 }
 
 TyJuxt :: { Type }
-TyJuxt :
-    TyJuxt TyAtom               { TyApp $1 $2 }
+  : TyJuxt '`' TyAtom           { TyApp $3 $1 }
+  | TyJuxt TyAtom               { TyApp $1 $2 }
   | TyAtom                      { $1 }
 
 TyAtom :: { Type }
 TyAtom :
-    CONSTR                      { TyCon $ constrString $1 }
+    CONSTR                      { TyCon $ mkId $ constrString $1 }
   | VAR                         { TyVar (mkId $ symString $1) }
   | INT                         { let TokenInt _ x = $1 in TyInt x }
   | TyAtom '+' TyAtom           { TyInfix ("+") $1 $3 }
@@ -167,7 +191,7 @@ TyAtom :
   | TyAtom '/' '\\' TyAtom      { TyInfix ("/\\") $1 $4 }
   | TyAtom '\\' '/' TyAtom      { TyInfix ("\\/") $1 $4 }
   | '(' Type '|' Coeffect '|' ')' { Box $4 $2 }
-  | '(' TyAtom ')' { $2 }
+  | '(' TyJuxt ')' { $2 }
 
 Coeffect :: { Coeffect }
 Coeffect :
@@ -238,6 +262,9 @@ Expr : let VAR ':' Type '=' Expr in Expr
      | case Expr of Cases
         { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
 
+     | if Expr then Expr else Expr
+          { Case (getPos $1, getEnd $6) $2 [(PConstr (getPosToSpan $3) (mkId "True"), $4),(PConstr (getPosToSpan $3) (mkId "False"), $6)] }
+
      | Form
         { $1 }
 
@@ -261,8 +288,9 @@ Form : Form '+' Form               { Binop (getPosToSpan $2) "+" $1 $3 }
      | Juxt                        { $1 }
 
 Juxt :: { Expr }
-Juxt : Juxt Atom                   { App (getStart $1, getEnd $2) $1 $2 }
-     | Atom                        { $1 }
+  : Juxt '`' Atom               { App (getStart $1, getEnd $3) $3 $1 }
+  | Juxt Atom                   { App (getStart $1, getEnd $2) $1 $2 }
+  | Atom                        { $1 }
 
 Atom :: { Expr }
 Atom : '(' Expr ')'                { $2 }
@@ -277,7 +305,7 @@ Atom : '(' Expr ')'                { $2 }
      | '|' Atom '|'
                { Val (getPos $1, getPos $3) $ Promote $2 }
 
-     | CONSTR  { Val (getPosToSpan $1) $ Constr (constrString $1) [] }
+     | CONSTR  { Val (getPosToSpan $1) $ Constr (mkId $ constrString $1) [] }
 
      | '(' Expr ',' Expr ')'
         { Val (getPos $1, getPos $5) (Pair $2 $4) }
@@ -291,7 +319,7 @@ parseError t = do
     die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO ([Def], Int)
+parseDefs :: (?globals :: Globals) => String -> IO (AST, Int)
 parseDefs input = do
     (defs, maxFreshId) <- parse input
     importedDefsAndFreshIds <- forM imports $ \path -> do
@@ -308,7 +336,8 @@ parseDefs input = do
 
   where
     parse = fmap (uniqueNames) . defs . scanTokens
-    imports = map ((++ ".gr") . replace '.' '/') . catMaybes . map (stripPrefix "import ") . lines $ input
+    imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/') . catMaybes
+                  . map (stripPrefix "import ") . lines $ input
     replace from to = map (\c -> if c == from then to else c)
     checkNameClashes ds =
         if null clashes
@@ -316,7 +345,9 @@ parseDefs input = do
           else die $ "Error: Name clash: " ++ intercalate ", " (map sourceName clashes)
       where
         clashes = names \\ nub names
-        names = map (\(Def _ name _ _ _) -> name) ds
+        names = map (\d -> case d of (Def _ name _ _ _) -> name
+                                     (ADT _ (TypeConstr _ name) _ _) -> name)
+                    ds
 
 myReadFloat :: String -> Rational
 myReadFloat str =

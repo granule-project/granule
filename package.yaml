@@ -1,8 +1,8 @@
 name: granule
-version: '0.4.0.0'
+version: '0.5.0.0'
 synopsis: The Granule type checker and interpreter
-author: Dominic Orchard
-copyright: 2017 authors
+author: Dominic Orchard, Vilem-Benjamin Liepelt
+copyright: 2018 authors
 license: BSD3
 github: dorchard/granule
 extra-source-files:
@@ -13,7 +13,7 @@ dependencies:
 
 library:
   source-dirs: source
-  ghc-options: -O0 -W -Werror -Wno-unused-matches
+  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
   # when:
   # - condition: flag(dev)
   #   then:

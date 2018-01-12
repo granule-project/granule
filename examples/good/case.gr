@@ -1,15 +1,15 @@
 -- Small example of case expressions in Granule
 
-import StdLib.Prelude
+import Prelude
 
 constId : Int -> Int
 constId x = case 0 of 0 -> x
 
 constId2 : Int -> Int
 constId2 x =
-  case 0 of
-    0 -> x;
-    1 -> x
+    case 0 of
+      0 -> x;
+      1 -> x
 
 add : Int |1| -> Int |1| -> Int
 add |x| |y| = x+y

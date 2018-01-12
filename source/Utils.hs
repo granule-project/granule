@@ -16,26 +16,28 @@ import System.IO.Unsafe (unsafePerformIO)
 import Syntax.Expr (Span)
 
 data Globals =
-  Globals {
-    debugging :: Bool,
-    sourceFilePath :: String,
-    noColors :: Bool,
-    noEval :: Bool,
-    suppressInfos :: Bool,
-    suppressErrors :: Bool,
-    timestamp :: Bool
+  Globals
+  { debugging :: Bool
+  , sourceFilePath :: String
+  , noColors :: Bool
+  , noEval :: Bool
+  , suppressInfos :: Bool
+  , suppressErrors :: Bool
+  , timestamp :: Bool
+  , freshIdCounter :: Int
   } deriving Show
 
 defaultGlobals :: Globals
 defaultGlobals =
-    Globals {
-      debugging = False,
-      sourceFilePath = "",
-      noColors = False,
-      noEval = False,
-      suppressInfos = False,
-      suppressErrors = False,
-      timestamp = False
+    Globals
+    { debugging = False
+    , sourceFilePath = ""
+    , noColors = False
+    , noEval = False
+    , suppressInfos = False
+    , suppressErrors = False
+    , timestamp = False
+    , freshIdCounter = 0
     }
 
 class UserMsg a where
@@ -60,11 +62,11 @@ debug x message =
       else x
 
 -- | Append a debug message to a string, which will only get printed when debugging
-(<?>) :: (?globals :: Globals, Show a) => String -> a -> String
+(<?>) :: (?globals :: Globals) => String -> String -> String
 infixr 6 <?>
-str <?> a =
+str <?> msg =
     if debugging ?globals
-      then str <> (bold $ magenta $ " Debug { ") <> show a <> (bold $ magenta $ " }")
+      then str <> (bold $ magenta $ " Debug { ") <> msg <> (bold $ magenta $ " }")
       else str
 
 -- | Use sparingly
@@ -77,13 +79,18 @@ printErr err = when (not $ suppressErrors ?globals) $ do
     hPutStrLn stderr $
       time
       <> (bold $ red $ title err <> ": ")
-      <> sourceFilePath ?globals <> lineCol <> ":\n"
+      <> sourceFile <> lineCol <> "\n"
       <> indent (msg err)
   where
+    sourceFile =
+        case sourceFilePath ?globals of
+          "" -> ""
+          p -> p <> ": "
     lineCol =
         case location err of
           Nothing -> ""
-          Just ((line,col),_) -> ":" <> show line <> ":" <> show col
+          Just ((0,0),(0,0)) -> ""
+          Just ((line,col),_) -> ":" <> show line <> ":" <> show col <> ":"
 
 printInfo :: (?globals :: Globals) => String -> IO ()
 printInfo message =

@@ -1,0 +1,14 @@
+data Number where
+  Zahl : Int -> Number
+
+n : Number
+n = Zahl 42
+
+check : Number -> Unit <[W]>
+check n =
+    case n of
+      (Zahl 42) -> write 0;
+      (Zahl n) -> write n
+
+main : Unit <[W]>
+main = check n

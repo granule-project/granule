@@ -21,7 +21,7 @@ $upper  = [A-Z]
 $eol    = [\n]
 $alphanum  = [$alpha $digit \_ \']
 @sym    = $lower $alphanum*
-@constr = $upper $alpha*
+@constr = $upper $alphanum*
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
 
@@ -34,7 +34,12 @@ tokens :-
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   let                           { \p s -> TokenLet p }
+  data                          { \p s -> TokenData p }
+  where                         { \p s -> TokenWhere p }
   in                            { \p s -> TokenIn p }
+  if                            { \p s -> TokenIf p }
+  then                          { \p s -> TokenThen p }
+  else                          { \p s -> TokenElse p }
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
   ∞                             { \p s -> TokenInfinity p }
@@ -59,18 +64,25 @@ tokens :-
   \,                            { \p s -> TokenComma p }
   \.                            { \p s -> TokenPeriod p }
   \:                            { \p s -> TokenSig p }
-  @sym				{ \p s -> TokenSym p s }
+  @sym				                  { \p s -> TokenSym p s }
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
   \<\=                          { \p s -> TokenOp p s }
   \>\=                          { \p s -> TokenOp p s }
   \=\=                          { \p s -> TokenOp p s }
+  \`                            { \p s -> TokenBackTick p }
+
 
 {
 
 data Token = TokenLet  AlexPosn
            | TokenIn   AlexPosn
+           | TokenIf AlexPosn
+           | TokenThen AlexPosn
+           | TokenElse AlexPosn
+           | TokenData AlexPosn
+           | TokenWhere AlexPosn
 	   | TokenCase AlexPosn
 	   | TokenOf   AlexPosn
            | TokenInfinity AlexPosn
@@ -91,6 +103,7 @@ data Token = TokenLet  AlexPosn
            | TokenRParen AlexPosn
 	   | TokenNL     AlexPosn
 	   | TokenConstr AlexPosn String
+     | TokenBackTick AlexPosn
 	   | TokenSig    AlexPosn
 	   | TokenBoxLeft AlexPosn
 	   | TokenBoxRight AlexPosn

@@ -1,0 +1,11 @@
+data NonEmpty a where
+  In : a -> NonEmpty a |1| -> NonEmpty a;
+  NonEmpty : a -> NonEmpty a
+
+head : forall a : Type . NonEmpty a -> a
+head x = case x of
+  (In y |_|) -> y;
+  (NonEmpty y) -> y
+
+main : NonEmpty Int
+main = 2 `In |(NonEmpty 1)|

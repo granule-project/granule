@@ -17,16 +17,16 @@ evalBinOp "-" (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
 evalBinOp "+" (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
 evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
 evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
-evalBinOp "==" (NumInt n) (NumInt m) = Constr (show (n == m)) []
-evalBinOp "<=" (NumInt n) (NumInt m) = Constr (show (n <= m)) []
-evalBinOp "<" (NumInt n) (NumInt m) = Constr (show (n < m)) []
-evalBinOp ">=" (NumInt n) (NumInt m) = Constr (show (n >= m)) []
-evalBinOp ">" (NumInt n) (NumInt m) = Constr (show (n > m)) []
-evalBinOp "==" (NumFloat n) (NumFloat m) = Constr (show (n == m)) []
-evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (show (n <= m)) []
-evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (show (n < m)) []
-evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (show (n >= m)) []
-evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (show (n > m)) []
+evalBinOp "==" (NumInt n) (NumInt m) = Constr (mkId . show $ (n == m)) []
+evalBinOp "<=" (NumInt n) (NumInt m) = Constr (mkId . show $ (n <= m)) []
+evalBinOp "<" (NumInt n) (NumInt m) = Constr (mkId . show $ (n < m)) []
+evalBinOp ">=" (NumInt n) (NumInt m) = Constr (mkId . show $ (n >= m)) []
+evalBinOp ">" (NumInt n) (NumInt m) = Constr (mkId . show $ (n > m)) []
+evalBinOp "==" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n == m)) []
+evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n <= m)) []
+evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n < m)) []
+evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n >= m)) []
+evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n > m)) []
 evalBinOp op _ _ = error $ "Unknown operator " ++ op
 
 -- Call-by-value big step semantics
@@ -47,7 +47,7 @@ evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
   v <- evalIn ctxt e
   return $ Pure (Val nullSpan v)
 
-evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "cast" =
+evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "intToFloat" =
   return $ NumFloat (cast n)
   where
     cast :: Int -> Double
@@ -95,7 +95,7 @@ evalIn ctxt (LetDiamond _ var _ e1 e2) = do
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (mkId " x") Nothing (Val nullSpan
     (Abs (mkId " y") Nothing (
-      LetBox nullSpan (mkId " ye") (TyCon "Float")
+      LetBox nullSpan (mkId " ye") (TyCon $ mkId "Float")
          (Val nullSpan (Var (mkId " y")))
          (Binop nullSpan
            "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
@@ -156,17 +156,18 @@ evalIn ctxt (Case _ gExpr cases) = do
 
     pmatch (_:ps) val = pmatch ps val
 
-evalDefs :: (?globals :: Globals) => Ctxt Value -> [Def] -> IO (Ctxt Value)
+evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
     evalDefs (extend ctxt var val) defs
+evalDefs ctxt (ADT {} : defs) = evalDefs ctxt defs
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
     debugM "Desugaring" $ pretty d'
     evalDefs ctxt (d' : defs)
 
-eval :: (?globals :: Globals) => [Def] -> IO (Maybe Value)
+eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
 eval defs = do
     bindings <- evalDefs empty defs
     case lookup (mkId "main") bindings of

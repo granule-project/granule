@@ -1,0 +1,4 @@
+import Maybe
+
+main : (Int, Int)
+main = (someOr |1| (Some 2), someOr |3| None)
