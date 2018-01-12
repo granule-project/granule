@@ -282,7 +282,10 @@ instance Term Value where
     freshen (Abs var t e) = do
       var' <- freshVar Value var
       e'   <- freshen e
-      return $ Abs var' t e'
+      t'   <- case t of
+                Nothing -> return Nothing
+                Just ty -> freshen ty >>= (return . Just)
+      return $ Abs var' t' e'
 
     freshen (Pure e) = do
       e' <- freshen e

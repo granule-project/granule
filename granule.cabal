@@ -5,7 +5,7 @@
 -- hash: 46ccfa27559fd07f24718b37c260ef4243a775d71dddb6e29d22bacefb4675e6
 
 name:           granule
-version:        0.5.0.0
+version:        0.5.0.1
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
