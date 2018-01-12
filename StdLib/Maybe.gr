@@ -1,22 +1,42 @@
 ------
 --- Module: Maybe
 --- Description: Library for working with values that may be absent
---- Authors: Vilem-Benjamin Liepelt
+--- Authors: Vilem-Benjamin Liepelt, Dominic Orchard
 --- License: BSD3
 --- Copyright: (c) Authors 2018
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
 ------
 
+import Bool
+
 --- Type-safe null; wrap a computation that could fail
 data Maybe a where
   None : Maybe a;
   Some : a -> Maybe a
 
---- Unwrap `Some n` or if it is `None`, return `0`
-someOrZero : Maybe Int -> Int
-someOrZero sn = case sn of (Some n) -> n; None -> 0
+--- The maybe function takes a default value, a function, and a Maybe value.
+--- If the Maybe value is None, the function returns the default value.
+--- Otherwise, it applies the function to the value inside the Some and
+-- returns the result.
+maybe : forall a : Type, b : Type
+      . b |1| -> (a -> b) |1| -> Maybe a -> b
+maybe |default| |f| m = case m of None -> default; (Some x) -> f x
 
---- Unwrap `Some x` or if it is `None`, return the provided default value
-someOr : forall a : Type . a |1| -> Maybe a -> a
-someOr |default| m = case m of None -> default; (Some x) -> x
+--- The fromMaybe function takes a default value and and Maybe value. If the
+-- Maybe is None, it returns the default values; otherwise, it returns the value
+-- contained in the Maybe.
+fromMaybe : forall a : Type
+          . a |1| -> Maybe a -> a
+fromMaybe default m = maybe default |(\(x : a) -> x)| m
+
+--- The isSome function returns True iff its argument is of the form Some _.
+isSome : forall a : Type . Maybe (a |0|) -> Bool
+isSome m =
+  case m of
+    (Some |x|) -> True;
+    None       -> False
+
+-- The isNone function returns True iff its argument is None.
+isNone : forall a : Type . Maybe (a |0|) -> Bool
+isNone m = not (isSome m)

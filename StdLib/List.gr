@@ -83,7 +83,7 @@ range' n |i| =
     (S n) -> Cons i (range' n |(i + 1)|)
 
 --- pushList pushes in non linearity of list into the elements
-pushList : forall (k : Nat=, n : Nat=, a : Type)
+pushList : forall (k : Nat, n : Nat=, a : Type)
          . (List n a) |k| -> List n (a |k|)
 pushList xs =
     case xs of
@@ -91,7 +91,7 @@ pushList xs =
       |(Cons x xs)| -> Cons |x| (pushList |xs|)
 
 --- pullList pulls non linearity in elements into a non linearity on the whole list
-pullList : forall (k : Nat=, n : Nat=, a : Type)
+pullList : forall (k : Nat, n : Nat=, a : Type)
          . List n (a |k|) -> (List n a) |k|
 pullList xs =
     case xs of
