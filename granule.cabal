@@ -36,6 +36,7 @@ library
     , sbv >=7.3
     , time
     , transformers >=0.5
+    , haskeline
   build-tools:
       alex
     , happy
@@ -60,6 +61,8 @@ library
       Syntax.Parser
       Syntax.Pretty
       Utils
+      Queue
+      Repl
   other-modules:
       Paths_granule
   default-language: Haskell2010
