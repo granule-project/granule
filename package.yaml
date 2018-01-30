@@ -44,6 +44,8 @@ library:
   - Syntax.Parser
   - Syntax.Pretty
   - Utils
+  - Repl
+  - Queue
   dependencies:
   - array
   - containers
@@ -51,6 +53,7 @@ library:
   - sbv >=7.3
   - time
   - transformers >=0.5
+  - haskeline
 
 executables:
   gr:
