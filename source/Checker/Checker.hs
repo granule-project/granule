@@ -443,8 +443,8 @@ synthExpr defs gam _ (Val s (Var x)) =
          -- Couldn't find it
          Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
                               ++ if debugging ?globals then
-                                  " { looking for " ++ pretty x
-                                  ++ " in context " ++ pretty gam
+                                  " { looking for " ++ show x
+                                  ++ " in context " ++ show gam
                                   ++ "}"
                                  else ""
      -- In the local context

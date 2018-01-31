@@ -247,5 +247,8 @@ isIrrefutable s (Box _ t) (PBox _ p) =
 -- TODO: data types with only one constructor can have
 -- irrefutable patterns... but we need and easier way to index
 -- the data constructors by what type they belong to
--- isIrrefutable s (PConstr s id) t =
+-- isIrrefutable s t (PConstr s id) =
+isIrrefutable s (TyCon con) (PConstr _ pcon)
+   | internalName pcon == "Unit" && internalName con == "Unit" =
+   return True
 isIrrefutable s _ _ = return False
