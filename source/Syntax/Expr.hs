@@ -20,7 +20,7 @@ module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    con, var, (.->), (.@)
                    ) where
 
-import Data.List ((\\))
+import Data.List ((\\), delete)
 import Control.Monad.State
 import Control.Arrow
 import GHC.Generics (Generic)
@@ -167,6 +167,13 @@ lookupVar synCat var = do
     Value -> lookup (sourceName var) vmap
     Type  -> lookup (sourceName var) tmap
 
+removeFreshenings :: [Id] -> Freshener ()
+removeFreshenings [] = return ()
+removeFreshenings (x:xs) = do
+  (v, vmap, tmap) <- get
+  put (v, delete (sourceName x, internalName x) vmap, tmap)
+  removeFreshenings xs
+
 freshenTys :: TypeScheme -> Freshener TypeScheme
 freshenTys (Forall s binds ty) = do
       binds' <- mapM (\(v, k) -> do { v' <- freshVar Type v; return (v', k) }) binds
@@ -291,6 +298,7 @@ instance Term Value where
       t'   <- case t of
                 Nothing -> return Nothing
                 Just ty -> freshen ty >>= (return . Just)
+      removeFreshenings (boundVars p')
       return $ Abs p' t' e'
 
     freshen (Pure e) = do
@@ -336,14 +344,14 @@ instance Term Expr where
                                      (map (second (subst es v)) cases)
 
     freshen (App s e1 e2) = do
-      e2' <- freshen e2
       e1' <- freshen e1
+      e2' <- freshen e2
       return $ App s e1' e2'
 
     freshen (LetDiamond s p t e1 e2) = do
       p'  <- freshenBinder p
-      e2' <- freshen e2
       e1' <- freshen e1
+      e2' <- freshen e2
       t'  <- freshen t
       return $ LetDiamond s p' t' e1' e2'
 
