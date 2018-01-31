@@ -97,7 +97,6 @@ test-suite spec
       Checker.MonadSpec
       Checker.TypesSpec
       ContextSpec
-      Syntax.DesugarSpec
       Syntax.ExprSpec
       Paths_granule
   default-language: Haskell2010
