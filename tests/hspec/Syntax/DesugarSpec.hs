@@ -18,7 +18,6 @@ spec = do
       `shouldBe`
        -- letBox |evalV0| : Int = v in case (v1, v2) -> v
         (letBox nullSpan (PVar nullSpan $ mkId "v1")
-                         (Just $ TyCon $ mkId "Int")
            (Val nullSpan $ Var $ mkId "v")
              (Val nullSpan $ Var $ mkId "v1"))
 
@@ -30,7 +29,6 @@ spec = do
       `shouldBe`
        -- letBox |evalV0| : Int = v in case (v1, v2) -> v
         (letBox nullSpan (PVar nullSpan $ mkId "eval v0")
-                         (Just $ PairTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
            (Val nullSpan $ Var $ mkId "v")
              (Case nullSpan (Val nullSpan $ Var $ mkId "eval v0")
                [(PPair nullSpan (PVar nullSpan (mkId "v1")) (PVar nullSpan

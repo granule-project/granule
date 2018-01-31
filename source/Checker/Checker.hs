@@ -490,52 +490,6 @@ synthExpr defs gam pol (Val s (Promote e)) = do
 
    return (Box (CVar var) t, multAll (freeVars e) (CVar var) gam')
 
-{-
--- Letbox
-synthExpr defs gam pol (LetBox s p t e1 e2) = do
-    -- Create a fresh kind variable for this coeffect
-    ckvar <- freshVar ("binderk_" ++ pretty p)
-    let kind = CPoly $ mkId ckvar
-
-    -- Update coeffect-kind context
-    cvar <- freshCoeffectVar (mkId $ "binder_" ++ pretty p) kind
-
-    -- Extend the context with cvar
-    liftIO $ putStrLn $ show (Box (CVar cvar) t)
-    liftIO $ putStrLn $ show (PBox s p)
-
-    (binding, _, _) <- ctxtFromTypedPattern s (Box (CVar cvar) t) (PBox s p)
-    liftIO $ putStrLn $ show (Box (CVar cvar) t)
-    (tau, gam2) <- synthExpr defs (binding ++ gam) pol e2
-
-{-
-    (demand, t'') <-
-      case lookup var gam2 of
-        Just (Discharged t' demand) -> do
-             (eqT, unifiedType, _) <- equalTypes s t' t
-             if eqT then do
-                debugM "synthExpr LetBox" $ "Demand for " ++ pretty var ++ " = " ++ pretty demand
-                return (demand, unifiedType)
-              else
-                halt $ GenericError (Just s) $ "An explicit signature is given "
-                         ++ pretty var
-                         ++ " : '" ++ pretty t
-                         ++ "' but the actual type was '" ++ pretty t' ++ "'"
-        _ -> do
-          -- If there is no explicit demand for the variable
-          -- then this means it is not used
-          -- Therefore c ~ 0
-          addConstraint (Eq s (CVar cvar) (CZero kind) kind)
-          return (CZero kind, t)
-          -}
-
-    (gam1, _) <- checkExpr defs gam (flipPol pol) False (Box (CVar cvar) t) e1
-    gamNew <- ctxPlus s gam1 (gam2 `subtractCtxt` binding)
-    case checkLinearity binding gam2 of
-      [] -> return (tau, gamNew)
-      xs -> illLinearityMismatch s xs
--}
-
 -- BinOp
 synthExpr defs gam pol (Binop s op e1 e2) = do
     (t1, gam1) <- synthExpr defs gam pol e1

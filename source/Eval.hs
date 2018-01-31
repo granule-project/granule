@@ -79,16 +79,19 @@ evalIn ctxt (Binop _ op e1 e2) = do
 
 evalIn ctxt (LetDiamond _ p _ e1 e2) = do
      v1 <- evalIn ctxt e1
-     p  <- pmatch ctxt [(p, e2)] v1
-     case p of
-        Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
-        other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
+     case v1 of
+       Pure e -> do
+         v1' <- evalIn ctxt e
+         p  <- pmatch ctxt [(p, e2)] v1'
+         case p of
+           Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
+       other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       ++ pretty other
 
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
     (Abs (PVar nullSpan $ mkId " y") Nothing (
-      letBox nullSpan (PVar nullSpan $ mkId " ye") (Just $ TyCon $ mkId "Float")
+      letBox nullSpan (PVar nullSpan $ mkId " ye")
          (Val nullSpan (Var (mkId " y")))
          (Binop nullSpan
            "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))

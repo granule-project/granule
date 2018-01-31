@@ -84,8 +84,8 @@ data Expr = App Span Expr Expr
 instance FirstParameter Expr Span
 
 -- Syntactic sugar constructor
-letBox :: Span -> Pattern -> Maybe Type -> Expr -> Expr -> Expr
-letBox s pat mTy e1 e2 =
+letBox :: Span -> Pattern -> Expr -> Expr -> Expr
+letBox s pat e1 e2 =
   App s (Val s (Abs (PBox s pat) Nothing e2)) e1
 
 -- Pattern matchings
@@ -321,7 +321,6 @@ instance Term Value where
 instance Term Expr where
     freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2
     freeVars (Binop _ _ e1 e2)        = freeVars e1 ++ freeVars e2
-    --freeVars (LetBox _ p _ e1 e2)     = freeVars e1 ++ (freeVars e2 \\ boundVars p)
     freeVars (LetDiamond _ p _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ boundVars p)
     freeVars (Val _ e)                = freeVars e
     freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
@@ -329,20 +328,12 @@ instance Term Expr where
 
     subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
     subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
-    --subst es v (LetBox s w t e1 e2) = LetBox s w t (subst es v e1) (subst es v e2)
     subst es v (LetDiamond s w t e1 e2) =
                                    LetDiamond s w t (subst es v e1) (subst es v e2)
     subst es v (Val _ val)          = subst es v val
     subst es v (Case s expr cases)  = Case s
                                      (subst es v expr)
                                      (map (second (subst es v)) cases)
-
-    {-freshen (LetBox s p t e1 e2) = do
-      p'   <- freshenBinder p
-      e1'  <- freshen e1
-      e2'  <- freshen e2
-      t'   <- freshen t
-      return $ LetBox s p' t' e1' e2'-}
 
     freshen (App s e1 e2) = do
       e1' <- freshen e1
