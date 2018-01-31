@@ -46,6 +46,7 @@ library:
   - Utils
   - Repl.Repl
   - Repl.Queue
+  - Repl.ReplParser
   dependencies:
   - array
   - containers
@@ -54,6 +55,7 @@ library:
   - time
   - transformers >=0.5
   - haskeline
+  - parsec
 
 executables:
   gr:
