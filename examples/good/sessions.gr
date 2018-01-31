@@ -1,0 +1,8 @@
+import Bool
+
+foo : forall (s : Session) . Chan (Send Bool (Recv Int End)) -> Int
+foo c =
+  case send c True of
+    c -> case recv c of
+      (n, c) -> case close c of
+                  Unit -> n

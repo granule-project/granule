@@ -4,6 +4,8 @@ module Checker.Primitives where
 
 import Syntax.Expr
 
+session = KConstr $ mkId "Session"
+
 typeLevelConstructors :: [(Id, Kind)]
 typeLevelConstructors =
     [ (mkId $ "Unit", KType)
@@ -21,10 +23,17 @@ typeLevelConstructors =
     , (mkId $ "+",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
     , (mkId $ "*",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
     , (mkId $ "/\\", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
-    , (mkId $ "\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))]
+    , (mkId $ "\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+    -- Channels and session types
+    , (mkId $ "Send", KFun KType (KFun session session))
+    , (mkId $ "Recv", KFun KType (KFun session session))
+    , (mkId $ "End" , session)
+    , (mkId $ "Chan", KFun session KType)
+    ]
 
 dataConstructors :: [(Id, TypeScheme)]
-dataConstructors = [(mkId $ "Unit", Forall nullSpan [] (TyCon $ mkId "Unit"))]
+dataConstructors =
+    [(mkId $ "Unit", Forall nullSpan [] (TyCon $ mkId "Unit"))]
 
 builtins :: [(Id, TypeScheme)]
 builtins =
@@ -38,8 +47,20 @@ builtins =
        FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "Unit")))
 
     -- Other primitives
-  , (mkId "intToFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Float"))
+  , (mkId "intToFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
+                                                    (TyCon $ mkId "Float"))
 
+    -- Session typed primitives
+  , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
+                  $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
+                      .-> ((var "a")
+                        .-> ((con "Chan") .@ (var "s"))))
+
+  , (mkId "recv", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
+       $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
+         .-> (PairTy (var "a") ((con "Chan") .@ (var "s"))))
+
+  , (mkId "close", Forall nullSpan [] $ ((con "Chan") .@ (con "End")) .-> (con "Unit"))
   ]
 
 binaryOperators :: [(Operator, Type)]
