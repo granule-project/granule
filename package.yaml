@@ -44,8 +44,8 @@ library:
   - Syntax.Parser
   - Syntax.Pretty
   - Utils
-  - Repl
-  - Queue
+  - Repl.Repl
+  - Repl.Queue
   dependencies:
   - array
   - containers

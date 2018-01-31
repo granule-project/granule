@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: f5860aff44cfec307157578e5e1be5b7d1e4eb53ff7fcd3bacbb5294abb915cd
+-- hash: c7a07b85ee38a7e10cb73885f2369b3ac09aaa8b75a797bad94d0592c8f31545
 
 name:           granule
 version:        0.5.0.1
@@ -61,8 +61,8 @@ library
       Syntax.Parser
       Syntax.Pretty
       Utils
-      Repl
-      Queue
+      Repl.Repl
+      Repl.Queue
   other-modules:
       Paths_granule
   default-language: Haskell2010
