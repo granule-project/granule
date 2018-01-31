@@ -15,11 +15,10 @@ import Checker.LaTeX
 import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Context
-import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern, TypeScheme(..)
-                   , mkId, internalName)
+import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern,
+                    TypeScheme(..), mkId, internalName)
 import Syntax.Pretty
 import Utils
-
 
 
 -- State of the check/synth functions
@@ -178,6 +177,7 @@ data TypeError
   | LinearityError (Maybe Span) String
   | PatternTypingError (Maybe Span) String
   | UnboundVariableError (Maybe Span) String
+  | RefutablePatternError (Maybe Span) String
 
 instance UserMsg TypeError where
   title CheckerError {} = "Checker error"
@@ -187,6 +187,7 @@ instance UserMsg TypeError where
   title LinearityError {} = "Linearity error"
   title PatternTypingError {} = "Pattern typing error"
   title UnboundVariableError {} = "Unbound variable error"
+  title RefutablePatternError {} = "Pattern is refutable"
   location (CheckerError sp _) = sp
   location (GenericError sp _) = sp
   location (GradingError sp _) = sp
@@ -194,6 +195,7 @@ instance UserMsg TypeError where
   location (LinearityError sp _) = sp
   location (PatternTypingError sp _) = sp
   location (UnboundVariableError sp _) = sp
+  location (RefutablePatternError sp _) = sp
   msg (CheckerError _ m) = m
   msg (GenericError _ m) = m
   msg (GradingError _ m) = m
@@ -201,6 +203,7 @@ instance UserMsg TypeError where
   msg (LinearityError _ m) = m
   msg (PatternTypingError _ m) = m
   msg (UnboundVariableError _ m) = m
+  msg (RefutablePatternError _ m) = m
 
 illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
 illKindedUnifyVar sp t1 k1 t2 k2 =
@@ -236,14 +239,18 @@ illTypedPattern sp ty pat =
     halt $ PatternTypingError (Just sp) $
       pretty pat ++ " does not have expected type " ++ pretty ty
 
+-- | A helper for refutable pattern errors
+refutablePattern :: (?globals :: Globals) => Span -> Pattern -> MaybeT Checker a
+refutablePattern sp p =
+  halt $ RefutablePatternError (Just sp) $
+        "Pattern match " ++ pretty p ++ " can fail; only \
+        \irrefutable patterns allowed in this context"
 
 -- | Helper for constructing error handlers
 halt :: (?globals :: Globals) => TypeError -> MaybeT Checker a
 halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 
-
 -- Various interfaces for the checker
-
 instance Monad Checker where
   return = Checker . return
   (Checker x) >>= f = Checker (x >>= (unwrap . f))

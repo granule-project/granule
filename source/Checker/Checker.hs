@@ -117,6 +117,7 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
 
           -- Type the pattern matching
           (patternGam, ty') <- ctxtFromTypedPatterns s ty ps
+
           -- Check the body in the context given by the pattern matching
           (outGam, _) <- checkExpr defCtxt patternGam Positive True ty' expr
           -- Check that the outgoing context is a subgrading of the incoming
@@ -183,12 +184,15 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
       return (tau, subst)
 
   (bindings, _, _) <- ctxtFromTypedPattern s sig p
-  -- Check the body in the extended context
-  (gam', subst2) <- checkExpr defs (bindings ++ gam) pol False tau' e
-  -- Check linearity of locally bound variables
-  case checkLinearity bindings gam' of
-     [] -> return (gam' `subtractCtxt` bindings, subst1 ++ subst2)
-     xs -> illLinearityMismatch s xs
+  pIrrefutable <- isIrrefutable s sig p
+  if pIrrefutable then do
+    -- Check the body in the extended context
+    (gam', subst2) <- checkExpr defs (bindings ++ gam) pol False tau' e
+    -- Check linearity of locally bound variables
+    case checkLinearity bindings gam' of
+       [] -> return (gam' `subtractCtxt` bindings, subst1 ++ subst2)
+       xs -> illLinearityMismatch s xs
+  else refutablePattern s p
 
 -- Application special case for built-in 'scale'
 checkExpr defs gam pol topLevel tau
@@ -402,29 +406,32 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
 -- Diamond cut
 synthExpr defs gam pol (LetDiamond s p ty e1 e2) = do
   (binders, _, _)  <- ctxtFromTypedPattern s ty p
-  (tau, gam1) <- synthExpr defs (binders ++ gam) pol e2
-  case tau of
-    Diamond ef2 tau' -> do
-       (sig, gam2) <- synthExpr defs gam pol e1
-       case sig of
-         Diamond ef1 ty' | ty == ty' -> do
-             gamNew <- ctxPlus s (gam1 `subtractCtxt` binders) gam2
-             -- Check linearity of locally bound variables
-             case checkLinearity binders gam1 of
-                [] -> return (Diamond (ef1 ++ ef2) tau', gamNew)
-                xs -> illLinearityMismatch s xs
+  pIrrefutable <- isIrrefutable s ty p
+  if pIrrefutable then do
+    (tau, gam1) <- synthExpr defs (binders ++ gam) pol e2
+    case tau of
+      Diamond ef2 tau' -> do
+         (sig, gam2) <- synthExpr defs gam pol e1
+         case sig of
+           Diamond ef1 ty' | ty == ty' -> do
+               gamNew <- ctxPlus s (gam1 `subtractCtxt` binders) gam2
+               -- Check linearity of locally bound variables
+               case checkLinearity binders gam1 of
+                  [] -> return (Diamond (ef1 ++ ef2) tau', gamNew)
+                  xs -> illLinearityMismatch s xs
 
-         t ->
-          halt $ GenericError (Just s)
-               $ "Expected '" ++ pretty ty ++ "' but inferred '"
-               ++ pretty t ++ "' in body of let<>"
-    t ->
-      halt $ GenericError (Just s)
-           $ "Expected '" ++ pretty ty
-           ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
+           t ->
+            halt $ GenericError (Just s)
+                 $ "Expected '" ++ pretty ty ++ "' but inferred '"
+                 ++ pretty t ++ "' in body of let<>"
+      t ->
+        halt $ GenericError (Just s)
+             $ "Expected '" ++ pretty ty
+             ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
+  else refutablePattern s p
 
 -- Variables
-synthExpr defs gam _ (Val s (Var x)) = do
+synthExpr defs gam _ (Val s (Var x)) =
    -- Try the local context
    case lookup x gam of
      Nothing ->
@@ -435,11 +442,11 @@ synthExpr defs gam _ (Val s (Var x)) = do
            return (ty', [])
          -- Couldn't find it
          Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
-                              ++ (if debugging ?globals then
-                                  (" { looking for " ++ pretty x
+                              ++ if debugging ?globals then
+                                  " { looking for " ++ pretty x
                                   ++ " in context " ++ pretty gam
-                                  ++ "}")
-                                 else "")
+                                  ++ "}"
+                                 else ""
      -- In the local context
      Just (Linear ty)       -> return (ty, [(x, Linear ty)])
      Just (Discharged ty c) -> do
@@ -566,8 +573,11 @@ synthExpr defs gam pol (Binop s op e1 e2) = do
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
   (binding, _, _) <- ctxtFromTypedPattern s sig p
-  (tau, gam'')    <- synthExpr defs (binding ++ gam) pol e
-  return (FunTy sig tau, gam'')
+  pIrrefutable <- isIrrefutable s sig p
+  if pIrrefutable then do
+     (tau, gam'')    <- synthExpr defs (binding ++ gam) pol e
+     return (FunTy sig tau, gam'')
+  else refutablePattern s p
 
 -- Pair
 synthExpr defs gam pol (Val s (Pair e1 e2)) = do

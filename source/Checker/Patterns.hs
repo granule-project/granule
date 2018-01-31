@@ -223,9 +223,29 @@ ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   -- TODO: when we have dependent matching at the function clause
   -- level, we will need to pay attention to the bound variables here
   (localGam, _, _) <- ctxtFromTypedPattern s t1 pat
-  (localGam', ty) <- ctxtFromTypedPatterns s t2 pats
-  return (localGam ++ localGam', ty)
+  pIrrefutable <- isIrrefutable s t1 pat
+  if pIrrefutable then do
+    (localGam', ty) <- ctxtFromTypedPatterns s t2 pats
+    return (localGam ++ localGam', ty)
+  else refutablePattern s pat
 
 ctxtFromTypedPatterns s ty p =
   error $ "Unhandled case: ctxtFromTypedPatterns called with:\
           \Span: " ++ show s ++ "\nType: " ++ show ty ++ "\nPatterns: " ++ show p
+
+-- Calculates whether a given pattern match will always succeed
+isIrrefutable ::
+  (?globals :: Globals ) => Span -> Type -> Pattern -> MaybeT Checker Bool
+isIrrefutable s t (PVar _ _) = return True
+isIrrefutable s t (PWild _)  = return True
+isIrrefutable s (PairTy t1 t2) (PPair _ p1 p2) = do
+    g1 <- isIrrefutable s t1 p1
+    g2 <- isIrrefutable s t2 p2
+    return (g1 && g2)
+isIrrefutable s (Box _ t) (PBox _ p) =
+  isIrrefutable s t p
+-- TODO: data types with only one constructor can have
+-- irrefutable patterns... but we need and easier way to index
+-- the data constructors by what type they belong to
+-- isIrrefutable s (PConstr s id) t =
+isIrrefutable s _ _ = return False
