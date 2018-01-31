@@ -30,7 +30,7 @@ desugar (Def s var expr pats tys@(Forall _ _ ty)) =
       v  <- freshVar
       eT <- desugarPattern v p t1
       e' <- typeDirectedDesugar ps t2 e
-      return $ Val nullSpan $ Abs v (Just t1) (eT e')
+      return $ Val nullSpan $ Abs (PVar nullSpan v) (Just t1) (eT e')
     -- Error cases
     typeDirectedDesugar (_ : _) t e = do
       error $ "(" ++ show sl ++ "," ++ show sc
@@ -52,7 +52,8 @@ desugarPattern _ (PWild _) _ = return id
 desugarPattern v (PVar _ v') _ =
   -- Desugars to: (\v' -> e) v
   return $ \e -> App nullSpan
-                   (Val nullSpan (Abs v' Nothing e)) (Val nullSpan (Var v))
+                   (Val nullSpan (Abs (PVar nullSpan v') Nothing e))
+                     (Val nullSpan (Var v))
 
 desugarPattern v (PPair _ p1 p2) (PairTy _ _) =
   -- Desguars to: case v of (p1, p2) -> e
@@ -61,16 +62,18 @@ desugarPattern v (PPair _ p1 p2) (PairTy _ _) =
 desugarPattern v (PBox _ (PVar _ v')) (Box _ t) =
   -- Speciale case of a box pattern with a variable inside
   -- Desugars to: let |v| : t in e
-  return $ \e -> LetBox nullSpan v' t (Val nullSpan (Var v)) e
+  return $ \e -> letBox nullSpan (PVar nullSpan v') (Just t)
+                                  (Val nullSpan (Var v)) e
 
 desugarPattern v (PBox _ p) (Box _ t) = do
   -- General case of a box pattern
   -- Desugars to: let |v'| : t = v in (desugarPattern v' p t)
   v' <- freshVar
   eT <- desugarPattern v' p t
-  return $ \e -> LetBox nullSpan v' t (Val nullSpan (Var v)) (eT e)
+  return $ \e -> letBox nullSpan (PVar nullSpan v') (Just t)
+                                 (Val nullSpan (Var v)) (eT e)
 
-desugarPattern v p _ = do
+desugarPattern v p _ =
   -- Fall-back case is to replace with a 'case' pattern
   return $ \e -> Case nullSpan (Val nullSpan (Var v)) [(p, e)]
 

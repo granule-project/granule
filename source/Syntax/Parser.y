@@ -242,23 +242,20 @@ Eff :
      CONSTR                     { constrString $1 }
 
 Expr :: { Expr }
-Expr : let VAR ':' Type '=' Expr in Expr
-         { App (getPos $1, getEnd $8) (Val (getSpan $6) (Abs (mkId $ symString $2) (Just $4) $8)) $6 }
+Expr : let Pat ':' Type '=' Expr in Expr
+         { App (getPos $1, getEnd $8) (Val (getSpan $6) (Abs $2 (Just $4) $8)) $6 }
 
-     | let VAR '=' Expr in Expr
-         { App (getPos $1, getEnd $6) (Val (getSpan $6) (Abs (mkId $ symString $2) Nothing $6)) $4 }
+     | let Pat '=' Expr in Expr
+         { App (getPos $1, getEnd $6) (Val (getSpan $6) (Abs $2 Nothing $6)) $4 }
 
-     | let '|' VAR '|' ':' Type '=' Expr in Expr
-         { LetBox (getPos $1, getEnd $10) (mkId $ symString $3) $6 $8 $10 }
+     | '\\' '(' Pat ':' Type ')' '->' Expr
+         { Val (getPos $1, getEnd $8) (Abs $3 (Just $5) $8) }
 
-     | '\\' '(' VAR ':' Type ')' '->' Expr
-         { Val (getPos $1, getEnd $8) (Abs (mkId $ symString $3) (Just $5) $8) }
+     | '\\' Pat '->' Expr
+         { Val (getPos $1, getEnd $4) (Abs $2 Nothing $4) }
 
-     | '\\' VAR '->' Expr
-         { Val (getPos $1, getEnd $4) (Abs (mkId $ symString $2) Nothing $4) }
-
-     | let VAR ':' Type '<-' Expr in Expr
-         { LetDiamond (getPos $1, getEnd $8) (mkId $ symString $2) $4 $6 $8 }
+     | let Pat ':' Type '<-' Expr in Expr
+         { LetDiamond (getPos $1, getEnd $8) $2 $4 $6 $8 }
 
      | case Expr of Cases
         { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }

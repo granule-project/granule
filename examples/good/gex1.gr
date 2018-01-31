@@ -1,5 +1,5 @@
 test : Int |2| -> Int
-test = \x -> let |y| : Int = x in y + y
+test = \x -> let |y| = x in y + y
 
 test' : Int |2| -> Int
 test' |y| = y + y

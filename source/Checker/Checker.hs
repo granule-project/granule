@@ -172,7 +172,7 @@ checkExpr :: (?globals :: Globals )
 checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _)) | internalName c == "Int" = return ([], [])
 checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" =  return ([], [])
 
-checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
+checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
   (tau', subst1) <- case t of
@@ -182,14 +182,13 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs x t e)) = do
       unless eqT (halt $ GenericError (Just s) $ pretty sig ++ " not equal to " ++ pretty t')
       return (tau, subst)
 
-  -- Extend the context with the variable 'x' and its type
-  gamE <- extCtxt s gam x (Linear sig)
+  (bindings, _, _) <- ctxtFromTypedPattern s sig p
   -- Check the body in the extended context
-  (gam', subst2) <- checkExpr defs gamE pol False tau' e
-  -- Linearity check, variables must be used exactly once
-  case lookup x gam' of
-    Nothing -> illLinearityMismatch s [LinearNotUsed x]
-    Just _  -> return (eraseVar gam' x, subst1 ++ subst2)
+  (gam', subst2) <- checkExpr defs (bindings ++ gam) pol False tau' e
+  -- Check linearity of locally bound variables
+  case checkLinearity bindings gam' of
+     [] -> return (gam' `subtractCtxt` bindings, subst1 ++ subst2)
+     xs -> illLinearityMismatch s xs
 
 -- Application special case for built-in 'scale'
 checkExpr defs gam pol topLevel tau
@@ -401,21 +400,25 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
   return (eqTypes, gamNew)
 
 -- Diamond cut
-synthExpr defs gam pol (LetDiamond s var ty e1 e2) = do
-  gam'        <- extCtxt s gam var (Linear ty)
-  (tau, gam1) <- synthExpr defs gam' pol e2
+synthExpr defs gam pol (LetDiamond s p ty e1 e2) = do
+  (binders, _, _)  <- ctxtFromTypedPattern s ty p
+  (tau, gam1) <- synthExpr defs (binders ++ gam) pol e2
   case tau of
     Diamond ef2 tau' -> do
        (sig, gam2) <- synthExpr defs gam pol e1
        case sig of
          Diamond ef1 ty' | ty == ty' -> do
-             gamNew <- ctxPlus s gam1 gam2
-             return (Diamond (ef1 ++ ef2) tau', gamNew)
-         t -> do
+             gamNew <- ctxPlus s (gam1 `subtractCtxt` binders) gam2
+             -- Check linearity of locally bound variables
+             case checkLinearity binders gam1 of
+                [] -> return (Diamond (ef1 ++ ef2) tau', gamNew)
+                xs -> illLinearityMismatch s xs
+
+         t ->
           halt $ GenericError (Just s)
                $ "Expected '" ++ pretty ty ++ "' but inferred '"
                ++ pretty t ++ "' in body of let<>"
-    t -> do
+    t ->
       halt $ GenericError (Just s)
            $ "Expected '" ++ pretty ty
            ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
@@ -480,21 +483,25 @@ synthExpr defs gam pol (Val s (Promote e)) = do
 
    return (Box (CVar var) t, multAll (freeVars e) (CVar var) gam')
 
+{-
 -- Letbox
-synthExpr defs gam pol (LetBox s var t e1 e2) = do
-
+synthExpr defs gam pol (LetBox s p t e1 e2) = do
     -- Create a fresh kind variable for this coeffect
-    ckvar <- freshVar ("binderk_" ++ internalName var)
+    ckvar <- freshVar ("binderk_" ++ pretty p)
     let kind = CPoly $ mkId ckvar
 
     -- Update coeffect-kind context
-    cvar <- freshCoeffectVar (mkId $ "binder_" ++ internalName var) kind
+    cvar <- freshCoeffectVar (mkId $ "binder_" ++ pretty p) kind
 
     -- Extend the context with cvar
-    gam' <- extCtxt s gam var (Discharged t (CVar cvar))
+    liftIO $ putStrLn $ show (Box (CVar cvar) t)
+    liftIO $ putStrLn $ show (PBox s p)
 
-    (tau, gam2) <- synthExpr defs gam' pol e2
+    (binding, _, _) <- ctxtFromTypedPattern s (Box (CVar cvar) t) (PBox s p)
+    liftIO $ putStrLn $ show (Box (CVar cvar) t)
+    (tau, gam2) <- synthExpr defs (binding ++ gam) pol e2
 
+{-
     (demand, t'') <-
       case lookup var gam2 of
         Just (Discharged t' demand) -> do
@@ -513,10 +520,14 @@ synthExpr defs gam pol (LetBox s var t e1 e2) = do
           -- Therefore c ~ 0
           addConstraint (Eq s (CVar cvar) (CZero kind) kind)
           return (CZero kind, t)
+          -}
 
-    (gam1, _) <- checkExpr defs gam (flipPol pol) False (Box demand t'') e1
-    gamNew <- ctxPlus s gam1 gam2
-    return (tau, gamNew)
+    (gam1, _) <- checkExpr defs gam (flipPol pol) False (Box (CVar cvar) t) e1
+    gamNew <- ctxPlus s gam1 (gam2 `subtractCtxt` binding)
+    case checkLinearity binding gam2 of
+      [] -> return (tau, gamNew)
+      xs -> illLinearityMismatch s xs
+-}
 
 -- BinOp
 synthExpr defs gam pol (Binop s op e1 e2) = do
@@ -553,9 +564,9 @@ synthExpr defs gam pol (Binop s op e1 e2) = do
 
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
-synthExpr defs gam pol (Val s (Abs x (Just sig) e)) = do
-  gam' <- extCtxt s gam x (Linear sig)
-  (tau, gam'') <- synthExpr defs gam' pol e
+synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
+  (binding, _, _) <- ctxtFromTypedPattern s sig p
+  (tau, gam'')    <- synthExpr defs (binding ++ gam) pol e
   return (FunTy sig tau, gam'')
 
 -- Pair

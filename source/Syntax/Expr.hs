@@ -4,6 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 
 module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
+                   letBox,
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
                    NatModifier(..), Effect, Kind(..), DataConstr(..), TypeConstr(..),
                    Id, sourceName, internalName, mkId, mkInternalId,
@@ -15,7 +16,8 @@ module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    typeFoldM, TypeFold(..),
                    mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
                    mTyInt, mPairTy, mTyInfix,
-                   baseTypeFold
+                   baseTypeFold,
+                   con, var, (.->), (.@)
                    ) where
 
 import Data.List ((\\))
@@ -61,7 +63,7 @@ getStart ::  FirstParameter t Span => t -> Pos
 getStart = fst . getSpan
 
 -- Values in Granule
-data Value = Abs Id (Maybe Type) Expr
+data Value = Abs Pattern (Maybe Type) Expr
            | NumInt Int
            | NumFloat Double
            | Promote Expr
@@ -74,13 +76,17 @@ data Value = Abs Id (Maybe Type) Expr
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
           | Binop Span Operator Expr Expr
-          | LetBox Span Id Type Expr Expr
-          | LetDiamond Span Id Type Expr Expr
+          | LetDiamond Span Pattern Type Expr Expr
           | Val Span Value
           | Case Span Expr [(Pattern, Expr)]
           deriving (Eq, Show, Generic)
 
 instance FirstParameter Expr Span
+
+-- Syntactic sugar constructor
+letBox :: Span -> Pattern -> Maybe Type -> Expr -> Expr -> Expr
+letBox s pat mTy e1 e2 =
+  App s (Val s (Abs (PBox s pat) Nothing e2)) e1
 
 -- Pattern matchings
 data Pattern = PVar Span Id         -- Variable patterns
@@ -260,7 +266,7 @@ instance Term Coeffect where
 
 
 instance Term Value where
-    freeVars (Abs x _ e) = freeVars e \\ [x]
+    freeVars (Abs p _ e) = freeVars e \\ boundVars p
     freeVars (Var x)     = [x]
     freeVars (Pure e)    = freeVars e
     freeVars (Promote e) = freeVars e
@@ -279,13 +285,13 @@ instance Term Value where
     subst _ _ v@(Var _)           = Val nullSpan v
     subst _ _ v@(Constr _ _)      = Val nullSpan v
 
-    freshen (Abs var t e) = do
-      var' <- freshVar Value var
+    freshen (Abs p t e) = do
+      p'   <- freshenBinder p
       e'   <- freshen e
       t'   <- case t of
                 Nothing -> return Nothing
                 Just ty -> freshen ty >>= (return . Just)
-      return $ Abs var' t' e'
+      return $ Abs p' t' e'
 
     freshen (Pure e) = do
       e' <- freshen e
@@ -315,15 +321,15 @@ instance Term Value where
 instance Term Expr where
     freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2
     freeVars (Binop _ _ e1 e2)        = freeVars e1 ++ freeVars e2
-    freeVars (LetBox _ x _ e1 e2)     = freeVars e1 ++ (freeVars e2 \\ [x])
-    freeVars (LetDiamond _ x _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ [x])
+    --freeVars (LetBox _ p _ e1 e2)     = freeVars e1 ++ (freeVars e2 \\ boundVars p)
+    freeVars (LetDiamond _ p _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ boundVars p)
     freeVars (Val _ e)                = freeVars e
     freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
 
     subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
     subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
-    subst es v (LetBox s w t e1 e2) = LetBox s w t (subst es v e1) (subst es v e2)
+    --subst es v (LetBox s w t e1 e2) = LetBox s w t (subst es v e1) (subst es v e2)
     subst es v (LetDiamond s w t e1 e2) =
                                    LetDiamond s w t (subst es v e1) (subst es v e2)
     subst es v (Val _ val)          = subst es v val
@@ -331,24 +337,24 @@ instance Term Expr where
                                      (subst es v expr)
                                      (map (second (subst es v)) cases)
 
-    freshen (LetBox s var t e1 e2) = do
-      var' <- freshVar Value var
+    {-freshen (LetBox s p t e1 e2) = do
+      p'   <- freshenBinder p
       e1'  <- freshen e1
       e2'  <- freshen e2
       t'   <- freshen t
-      return $ LetBox s var' t' e1' e2'
+      return $ LetBox s p' t' e1' e2'-}
 
     freshen (App s e1 e2) = do
       e1' <- freshen e1
       e2' <- freshen e2
       return $ App s e1' e2'
 
-    freshen (LetDiamond s var t e1 e2) = do
-      var' <- freshVar Value var
+    freshen (LetDiamond s p t e1 e2) = do
+      p' <- freshenBinder p
       e1'  <- freshen e1
       e2'  <- freshen e2
       t'   <- freshen t
-      return $ LetDiamond s var' t' e1' e2'
+      return $ LetDiamond s p' t' e1' e2'
 
     freshen (Binop s op e1 e2) = do
       e1' <- freshen e1
@@ -433,6 +439,19 @@ data Type = FunTy Type Type           -- ^ Function type
           | PairTy Type Type          -- ^ Pair/product type
           | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
+
+-- Smart constructors for types
+con :: String -> Type
+con = TyCon . mkId
+
+var :: String -> Type
+var = TyVar . mkId
+
+(.->) :: Type -> Type -> Type
+s .-> t = FunTy s t
+
+(.@) :: Type -> Type -> Type
+s .@ t = TyApp s t
 
 -- Trivially effectful monadic constructors
 mFunTy :: Monad m => Type -> Type -> m Type
