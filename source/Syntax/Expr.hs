@@ -336,15 +336,15 @@ instance Term Expr where
                                      (map (second (subst es v)) cases)
 
     freshen (App s e1 e2) = do
-      e1' <- freshen e1
       e2' <- freshen e2
+      e1' <- freshen e1
       return $ App s e1' e2'
 
     freshen (LetDiamond s p t e1 e2) = do
-      p' <- freshenBinder p
-      e1'  <- freshen e1
-      e2'  <- freshen e2
-      t'   <- freshen t
+      p'  <- freshenBinder p
+      e2' <- freshen e2
+      e1' <- freshen e1
+      t'  <- freshen t
       return $ LetDiamond s p' t' e1' e2'
 
     freshen (Binop s op e1 e2) = do
