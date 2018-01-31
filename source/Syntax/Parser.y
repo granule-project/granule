@@ -14,7 +14,8 @@ import System.Exit (die)
 
 }
 
-%name defs
+%name defs Defs
+%name expr Expr
 %tokentype { Token }
 %error { parseError }
 %monad { IO }
