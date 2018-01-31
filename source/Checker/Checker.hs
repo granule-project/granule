@@ -530,7 +530,7 @@ synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
      (tau, gam'')    <- synthExpr defs (binding ++ gam) pol e
-     return (FunTy sig tau, gam'')
+     return (FunTy sig tau, gam'' `subtractCtxt` binding)
   else refutablePattern s p
 
 -- Pair
