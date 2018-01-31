@@ -27,7 +27,8 @@ evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n <= m)) []
 evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n < m)) []
 evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n >= m)) []
 evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n > m)) []
-evalBinOp op _ _ = error $ "Unknown operator " ++ op
+evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
+                             ++ " on " ++ show v1 ++ " and " ++ show v2
 
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
