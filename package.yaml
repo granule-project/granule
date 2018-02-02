@@ -56,6 +56,9 @@ library:
   - transformers >=0.5
   - haskeline
   - parsec
+  - text
+  - filepath
+  - directory
 
 executables:
   gr:

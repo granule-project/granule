@@ -5,28 +5,38 @@ LANGUAGE
   TemplateHaskell, 
   FlexibleContexts 
 #-}
+module Repl.ReplParser where
 
-module Repl.ReplParser
 import Prelude
-import Data.List
-import Data.Char 
+--import Data.List
+--import Data.Char 
 import qualified Data.Text as T
 import Text.Parsec 
 import qualified Text.Parsec.Token as Token
-import Data.Functor.Identity
-import System.FilePath
-import System.Directory
-
-
-import Queue
+import Text.Parsec.Language
+--import Data.Functor.Identity
+--import System.FilePath
+--import System.Directory
 import Syntax.Expr
 
+
+
+lexer = haskellStyle {
+    Token.reservedOpNames = [":", "let"]
+}
+tokenizer  = Token.makeTokenParser lexer
+reservedOp = Token.reservedOp tokenizer
+ws         = Token.whiteSpace tokenizer
+symbol     = Token.symbol tokenizer    
+
+
 data REPLExpr = 
-      Let Id Expr
+      Let Id Expr Expr
     | ShowAST Expr
     | DumpState
     | Unfold Expr
     | Eval Expr
+    | LoadFile String
     deriving Show
     
 replTermCmdParser short long c p = do
@@ -47,12 +57,40 @@ replIntCmdParser short long c = do
     then return c
     else fail $ "Command \":"++cmd++"\" is unrecognized."
     
+replFileCmdParser short long c = do
+    symbol ":"
+    cmd <- many lower
+    ws
+    pathUntrimned <- many1 anyChar
+    eof
+    if(cmd == long || cmd == short)
+    then do
+        let path = T.unpack . T.strip . T.pack $ pathUntrimned
+        return $ c path
+    else fail $ "Command \":"++cmd++"\" is unrecognized."
     
     
-showASTParser = replTermCmdParser "s" "show" ShowAST expr    
+-- showASTParser = replTermCmdParser "s" "show" ShowAST     
 
-unfoldTermParser = replTermCmdParser "u" "unfold" Unfold expr
+-- unfoldTermParser = replTermCmdParser "u" "unfold" Unfold 
 
 dumpStateParser = replIntCmdParser "d" "dump" DumpState
 
- 
+loadFileParser = replFileCmdParser "l" "load" LoadFile
+
+
+-- lineParser = 
+          
+lineParser = try dumpStateParser
+          <|> try loadFileParser
+          -- <|> try unfoldTermParser5
+          -- <|> try showASTParser
+          <?> "parse error"
+          
+parseLine :: String ->Either String REPLExpr
+parseLine s = case (parse lineParser "" s) of
+            Left msg -> Left $ show msg
+            Right l -> Right l
+            
+                
+                

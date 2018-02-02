@@ -5,16 +5,17 @@ module Repl.Repl where
 
 import Control.Monad.State
 import System.Console.Haskeline
---import System.Console.Haskeline.MonadException    
+import System.Console.Haskeline.MonadException    
 --import System.Exit
 --import qualified Data.Map.Strict as M
 
 import Repl.Queue
-import Syntax.Parser
-import Syntax.Lexer
+-- import Syntax.Parser
+-- import Syntax.Lexer
 import Syntax.Pretty
 --import Eval
 import Syntax.Expr
+import Repl.ReplParser
 
 
 type Qelm = (Id, Expr)
@@ -96,10 +97,14 @@ containsTerm q v = (containsTerm_Qelm (getQCT q emptyQ) v)
 handleCMD :: String -> REPLStateIO ()
 handleCMD "" = return ()
 handleCMD s =    
-   case (defs $ scanTokens s) of
-    l -> handleLine l
+   case (parseLine s) of
+    Right l -> handleLine l
+    Left msg -> io $ putStrLn msg
   where      
-    handleLine l = undefined
+    handleLine (LoadFile p) =  undefined
+    
+    handleLine DumpState = get >>= io.print.(mapQ prettyDef)
+        
       
 
      
@@ -117,6 +122,7 @@ helpMenu =
       ":show <term>      (:s)  Display the Abstract Syntax Type of a term\n"++
       ":unfold <term>    (:u)  Unfold the expression into one without toplevel definition.\n"++ 
       ":dump             (:d)  Display the context\n"++
+      ":load <filepath>  (:l)  Load an external file into the context\n"++
       "-----------------------------------------------------------------------------------"
           
 repl :: IO ()
