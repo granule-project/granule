@@ -9,5 +9,5 @@ greatSuccess = 141592653589793
 iAmASad : Int
 iAmASad = -127
 
-main : Unit <[W]>
+main : () <[W]>
 main = if thisSuitIsBlack `not then greatSuccess `write else iAmASad `write

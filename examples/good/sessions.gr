@@ -1,10 +1,10 @@
 import Bool
 
-foo : forall (s : Session) . Chan (Send Bool (Recv Int End)) -> Int
+foo : Chan (Send Bool (Recv Int End)) -> Int
 foo c =
   let c      = send c True in
   let (n, c) = recv c      in
-  let Unit   = close c     in
+  let ()     = close c     in
   n
 
 -- Given a one-shot channel for some sending a value of type 'a'
@@ -12,11 +12,11 @@ foo c =
 -- length 'n', then send every element of the list on the
 -- channel
 sendList : forall (n : Nat=, a : Type) .
-   Chan (Send a End) |n| -> List n a -> Unit
+   Chan (Send a End) |n| -> List n a -> ()
 sendList |c| xs =
   case xs of
-    Nil -> Unit;
+    Nil -> ();
     (Cons x xs) ->
        let c'   = send c x in
-       let Unit = close c' in
+       let ()   = close c' in
        sendList |c| xs

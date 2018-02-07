@@ -12,7 +12,7 @@ doTwice |f| |x| = let a : Int <- f x in
                   let b : Int <- f x in
                   pure (a + b)
 
-echo : Unit <[R, W]>
+echo : () <[R, W]>
 echo = let x : Int <- read in write x
 
 main : Int

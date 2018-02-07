@@ -249,6 +249,6 @@ isIrrefutable s (Box _ t) (PBox _ p) =
 -- the data constructors by what type they belong to
 -- isIrrefutable s t (PConstr s id) =
 isIrrefutable s (TyCon con) (PConstr _ pcon)
-   | internalName pcon == "Unit" && internalName con == "Unit" =
+   | internalName pcon == "()" && internalName con == "()" =
    return True
 isIrrefutable s _ _ = return False

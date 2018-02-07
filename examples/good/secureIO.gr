@@ -1,5 +1,5 @@
-dubInput : Unit <[R, W]>
+dubInput : () <[R, W]>
 dubInput = let x : Int <- read in write (x * 2)
 
-main : Unit <[R, W]>
+main : () <[R, W]>
 main = dubInput

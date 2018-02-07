@@ -21,7 +21,7 @@ $upper  = [A-Z]
 $eol    = [\n]
 $alphanum  = [$alpha $digit \_ \']
 @sym    = $lower $alphanum*
-@constr = $upper $alphanum*
+@constr = ($upper $alphanum* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
 

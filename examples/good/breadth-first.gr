@@ -34,5 +34,5 @@ last x =
 exLast : Int
 exLast = fromMaybe |42| (last ex0)
 
-main : Unit <[W]>
+main : () <[W]>
 main = if True `and |True| then write exLast else write 0

@@ -8,7 +8,7 @@ session = KConstr $ mkId "Session"
 
 typeLevelConstructors :: [(Id, Kind)]
 typeLevelConstructors =
-    [ (mkId $ "Unit", KType)
+    [ (mkId $ "()", KType)
     , (mkId $ "Int",  KType)
     , (mkId $ "Float", KType)
     , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
@@ -33,7 +33,7 @@ typeLevelConstructors =
 
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
-    [(mkId $ "Unit", Forall nullSpan [] (TyCon $ mkId "Unit"))]
+    [(mkId $ "()", Forall nullSpan [] (TyCon $ mkId "()"))]
 
 builtins :: [(Id, TypeScheme)]
 builtins =
@@ -44,7 +44,7 @@ builtins =
     -- Effectful primitives
   , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "Int"))
   , (mkId "write", Forall nullSpan [] $
-       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "Unit")))
+       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "()")))
 
     -- Other primitives
   , (mkId "intToFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
@@ -60,7 +60,7 @@ builtins =
        $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
          .-> (PairTy (var "a") ((con "Chan") .@ (var "s"))))
 
-  , (mkId "close", Forall nullSpan [] $ ((con "Chan") .@ (con "End")) .-> (con "Unit"))
+  , (mkId "close", Forall nullSpan [] $ ((con "Chan") .@ (con "End")) .-> (con "()"))
   ]
 
 binaryOperators :: [(Operator, Type)]
