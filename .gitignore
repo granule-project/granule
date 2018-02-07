@@ -51,3 +51,9 @@ Temporary Items
 .apdisk
 
 # End of https://www.gitignore.io/api/macos,haskell
+
+# Backups
+*.bak
+
+# Cabal files, because we are using hpack
+*.cabal
