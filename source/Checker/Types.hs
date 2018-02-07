@@ -19,19 +19,19 @@ import Checker.Predicates
 import Checker.Substitutions
 import Utils
 
+type Unifier = Ctxt Type
+
 lEqualTypes :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s Leq False
 
 equalTypes :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False
 
 equalTypesWithUniversalSpecialisation :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Ctxt Type)
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True
-
-type Unifier = [(Id, Type)]
 
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and unify the
@@ -247,15 +247,15 @@ equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
 
 equalTypesRelatedCoeffects s rel uS t1 t2 t = do
   debugM "equalTypesRelatedCoeffects" $ "called on: " ++ show t1 ++ "\nand:\n" ++ show t2
-  equalNatKindedTypesGeneric s t1 t2
+  equalOtherKindedTypesGeneric s t1 t2
 
 {- | Check whether two Nat-kinded types are equal -}
-equalNatKindedTypesGeneric :: (?globals :: Globals )
+equalOtherKindedTypesGeneric :: (?globals :: Globals )
     => Span
     -> Type
     -> Type
     -> MaybeT Checker (Bool, Unifier)
-equalNatKindedTypesGeneric s t1 t2 = do
+equalOtherKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
   case (k1, k2) of
@@ -268,11 +268,32 @@ equalNatKindedTypesGeneric s t1 t2 = do
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
+    (KConstr n, KConstr n') | internalName n == "Session" && internalName n' == "Session" ->
+       sessionEquality s t1 t2
     _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2
                  ++ "\t\n from equality "
                  ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
+
+sessionEquality :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker (Bool, Unifier)
+sessionEquality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
+  | internalName c == "Send" && internalName c' == "Send" = do
+  (g, _, u) <- equalTypes s t t'
+  return (g, u)
+
+sessionEquality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
+  | internalName c == "Recv" && internalName c' == "Recv" = do
+  (g, _, u) <- equalTypes s t t'
+  return (g, u)
+
+sessionEquality s (TyCon c) (TyCon c')
+  | internalName c == "End" && internalName c' == "End" = do
+  return (True, [])
+
+sessionEquality s t1 t2 = do
+  halt $ GenericError (Just s)
+       $ "Session type '" ++ pretty t1 ++ "' is not equal to '" ++ pretty t2 ++ "'"
 
 combineUnifiers ::
   (?globals :: Globals) => Span -> Ctxt Type -> Ctxt Type -> MaybeT Checker (Ctxt Type)
