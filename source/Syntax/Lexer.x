@@ -76,49 +76,50 @@ tokens :-
 
 {
 
-data Token = TokenLet  AlexPosn
-           | TokenIn   AlexPosn
-           | TokenIf AlexPosn
-           | TokenThen AlexPosn
-           | TokenElse AlexPosn
-           | TokenData AlexPosn
-           | TokenWhere AlexPosn
-	   | TokenCase AlexPosn
-	   | TokenOf   AlexPosn
-           | TokenInfinity AlexPosn
-           | TokenLambda AlexPosn
-	   | TokenLetBox AlexPosn
-	   | TokenBind AlexPosn
-	   | TokenBox    AlexPosn
-           | TokenInt    AlexPosn Int
-	   | TokenFloat  AlexPosn String
-           | TokenSym    AlexPosn String
-           | TokenArrow  AlexPosn
-	   | TokenForall AlexPosn
-           | TokenEq     AlexPosn
-           | TokenAdd    AlexPosn
-           | TokenSub    AlexPosn
-           | TokenMul    AlexPosn
-           | TokenLParen AlexPosn
-           | TokenRParen AlexPosn
-	   | TokenNL     AlexPosn
-	   | TokenConstr AlexPosn String
-     | TokenBackTick AlexPosn
-	   | TokenSig    AlexPosn
-	   | TokenBoxLeft AlexPosn
-	   | TokenBoxRight AlexPosn
-	   | TokenLBrace   AlexPosn
-	   | TokenRBrace   AlexPosn
-	   | TokenLangle   AlexPosn
-	   | TokenRangle   AlexPosn
-	   | TokenComma    AlexPosn
-	   | TokenPeriod   AlexPosn
-	   | TokenPipe     AlexPosn
-	   | TokenUnderscore AlexPosn
-	   | TokenSemicolon  AlexPosn
-	   | TokenForwardSlash AlexPosn
-	   | TokenOp AlexPosn String
-           deriving (Eq, Show, Generic)
+data Token
+  = TokenLet    AlexPosn
+  | TokenIn     AlexPosn
+  | TokenIf     AlexPosn
+  | TokenThen   AlexPosn
+  | TokenElse   AlexPosn
+  | TokenData   AlexPosn
+  | TokenWhere  AlexPosn
+  | TokenCase   AlexPosn
+  | TokenOf     AlexPosn
+  | TokenInfinity AlexPosn
+  | TokenLambda AlexPosn
+  | TokenLetBox AlexPosn
+  | TokenBind   AlexPosn
+  | TokenBox    AlexPosn
+  | TokenInt    AlexPosn Int
+  | TokenFloat  AlexPosn String
+  | TokenSym    AlexPosn String
+  | TokenArrow  AlexPosn
+  | TokenForall AlexPosn
+  | TokenEq     AlexPosn
+  | TokenAdd    AlexPosn
+  | TokenSub    AlexPosn
+  | TokenMul    AlexPosn
+  | TokenLParen AlexPosn
+  | TokenRParen AlexPosn
+  | TokenNL     AlexPosn
+  | TokenConstr AlexPosn String
+  | TokenBackTick AlexPosn
+  | TokenSig    AlexPosn
+  | TokenBoxLeft AlexPosn
+  | TokenBoxRight AlexPosn
+  | TokenLBrace   AlexPosn
+  | TokenRBrace   AlexPosn
+  | TokenLangle   AlexPosn
+  | TokenRangle   AlexPosn
+  | TokenComma    AlexPosn
+  | TokenPeriod   AlexPosn
+  | TokenPipe     AlexPosn
+  | TokenUnderscore AlexPosn
+  | TokenSemicolon  AlexPosn
+  | TokenForwardSlash AlexPosn
+  | TokenOp AlexPosn String
+  deriving (Eq, Show, Generic)
 
 symString :: Token -> String
 symString (TokenSym _ x) = x

@@ -128,20 +128,20 @@ PJuxt :: { Pattern }
 
 
 PAtom :: { Pattern }
-PAtom : VAR                        { PVar (getPosToSpan $1) (mkId $ symString $1) }
-    | '_'                          { PWild (getPosToSpan $1) }
-    | INT                          { let TokenInt _ x = $1
-	                             in PInt (getPosToSpan $1) x }
-    | FLOAT                        { let TokenFloat _ x = $1
-	                             in PFloat (getPosToSpan $1) $ read x }
-    | CONSTR                       { let TokenConstr _ x = $1
-	                             in PConstr (getPosToSpan $1) (mkId x) }
+PAtom : VAR                          { PVar (getPosToSpan $1) (mkId $ symString $1) }
+    | '_'                            { PWild (getPosToSpan $1) }
+    | INT                            { let TokenInt _ x = $1
+	                                     in PInt (getPosToSpan $1) x }
+    | FLOAT                          { let TokenFloat _ x = $1
+	                                     in PFloat (getPosToSpan $1) $ read x }
+    | CONSTR                         { let TokenConstr _ x = $1
+	                                     in PConstr (getPosToSpan $1) (mkId x) }
     | '(' PJuxt ')'                  { $2 }
     | '|' Pat '|'                    { PBox (getPosToSpan $1) $2 }
 
 TypeScheme :: { TypeScheme }
 TypeScheme :
-   Type                             { Forall nullSpan [] $1 }
+   Type                              { Forall nullSpan [] $1 }
  | forall '(' VarSigs ')' '.' Type   { Forall (getPos $1, getPos $5) $3 $6 }
  | forall VarSigs '.' Type           { Forall (getPos $1, getPos $3) $2 $4 }
 
