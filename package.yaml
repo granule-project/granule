@@ -59,6 +59,7 @@ library:
   - text
   - filepath
   - directory
+  - Glob
 
 executables:
   gr:

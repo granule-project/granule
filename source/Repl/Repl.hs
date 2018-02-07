@@ -1,19 +1,24 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ApplicativeDo #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 module Repl.Repl where
 
 import Control.Monad.State
 import System.Console.Haskeline
-import System.Console.Haskeline.MonadException    
---import System.Exit
---import qualified Data.Map.Strict as M
+import System.Console.Haskeline.MonadException
 
+import Control.Monad (forM)
+import System.FilePath.Glob (glob)
+import Data.Semigroup ((<>))    
+import System.Exit
+
+import Utils
 import Repl.Queue
--- import Syntax.Parser
--- import Syntax.Lexer
 import Syntax.Pretty
---import Eval
 import Syntax.Expr
 import Repl.ReplParser
 
@@ -101,13 +106,17 @@ handleCMD s =
     Right l -> handleLine l
     Left msg -> io $ putStrLn msg
   where      
-    handleLine (LoadFile p) =  undefined
-    
     handleLine DumpState = get >>= io.print.(mapQ prettyDef)
+    
+    
+    handleLine (LoadFile pt) =  do
+        filePaths <- return $ glob pt
+        case filePaths of
+            [] -> do
+                io $ printErr $ "The glob pattern `" <> pt <> "` did not match any file."
+                
         
-      
 
-     
    
 -- getFV :: Expr -> [Id Expr]
 -- getFV t = fv t :: [Id Expr]

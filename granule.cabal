@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: ed7e9fc8b9674eff0e9de041833c7abb0deb80dfa24844ba05b9b335efaa8266
+-- hash: 582610f441087e076f8b96af81149a7afe490f4154e5f1c57433fd1bcd4a9859
 
 name:           granule
 version:        0.5.0.1
@@ -29,7 +29,8 @@ library
       source
   ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
   build-depends:
-      array
+      Glob
+    , array
     , base >=4.10 && <5
     , containers
     , directory
