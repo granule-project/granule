@@ -1,0 +1,13 @@
+------
+--- Module: Sequence
+--- Description: Unsized sequences (lists)
+--- Authors: Dominic Orchard
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+data Sequence a where
+  Empty : Sequence a;
+  Next : a -> Sequence a -> Sequence a
