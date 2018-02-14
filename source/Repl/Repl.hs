@@ -7,23 +7,21 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 module Repl.Repl where
 
+-- import Control.Exception (SomeException, try)
 import Control.Monad.State
 import System.Console.Haskeline
-import System.Console.Haskeline.MonadException
-
-import Control.Monad (forM)
-import System.FilePath.Glob (glob)
-import Data.Semigroup ((<>))    
+-- import System.Console.Haskeline.MonadException
 import System.Exit
 
-import Utils
+import Utils 
 import Repl.Queue
 import Syntax.Pretty
 import Syntax.Expr
+import Syntax.Parser
 import Repl.ReplParser
+import Checker.Checker
 
-
-type Qelm = (Id, Expr)
+type Qelm = (Id, Def)
 type REPLStateIO = StateT (Queue (QDefName, QDefDef)) IO
 
 instance MonadException m => MonadException (StateT (Queue (QDefName, QDefDef)) m) where
@@ -31,19 +29,19 @@ instance MonadException m => MonadException (StateT (Queue (QDefName, QDefDef)) 
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'                       
 
-data QDefName = RVar Id  | DefName Id 
+data QDefName = RVar Id  | DefName Id
     deriving (Show, Eq)
-data QDefDef  = DefTerm Expr
+data QDefDef  = DefTerm Def
     deriving Show
 
 
-getQDefM :: (QDefName, QDefDef) -> REPLStateIO (Id, Expr)
+getQDefM :: (QDefName, QDefDef) -> REPLStateIO (Id, Def)
 getQDefM e@(RVar x, DefTerm t) = return (x , t)
-getQDefM e@(x,y) = error $ "Failed to get definition from context. Mismatched variable and type or term in: "++(prettyDef e)
+getQDefM e@(x,y) = error $ "Failed to get definition from context. Mismatched variable and type or term in: "
 
-getQDef :: (QDefName, QDefDef) -> (Id, Expr)
+getQDef :: (QDefName, QDefDef) -> (Id, Def)
 getQDef e@(RVar x, DefTerm t) = (x , t)
-getQDef e@(x,y) = error $ "Failed to get definition from context. Mismatched variable and type or term in: "++(prettyDef e)
+getQDef e@(x,y) = error $ "Failed to get definition from context. Mismatched variable and type or term in: "
 
 -- Extract only closed terms from queue
 getQCTM :: Queue (QDefName,QDefDef) -> Queue Qelm -> REPLStateIO (Queue Qelm)
@@ -63,7 +61,7 @@ io :: IO a -> REPLStateIO a
 io i = liftIO i
 
 prettyDef :: (QDefName, QDefDef) -> String
-prettyDef elem = let (a,t) = getQDef elem in "let "++(sourceName a)++" = "++(pretty t)
+prettyDef elem = let t = getQDef elem in "let "++" = "++(pretty t)
     
 pop :: REPLStateIO (QDefName, QDefDef)
 pop = get >>= return.headQ
@@ -74,14 +72,14 @@ push t = do
   put (q `snoc` t)
 
 -- **** 
-unfoldQueue :: (Queue Qelm) -> (Queue Qelm)
-unfoldQueue q = fixQ q emptyQ step
- where
-   step :: (Id, Expr) -> t -> Queue Qelm -> Queue Qelm
-   step e@(x,t) _ r = (mapQ (substDef t x) r) `snoc` e
-    where
-      substDef :: Expr -> Id -> Qelm -> Qelm
-      substDef x t (y, t') = (y, subst x t t')  
+-- unfoldQueue :: (Queue Qelm) -> (Queue Qelm)
+-- unfoldQueue q = fixQ q emptyQ step
+ -- where
+   -- step :: (Def, Def) -> t -> Queue Qelm -> Queue Qelm
+   -- step e@(x,t) _ r = (mapQ (substDef t x) r) `snoc` e
+    -- where
+      -- substDef :: Def -> Def -> Qelm -> Qelm
+      -- substDef x t (y, t') = (y, subst x t t')  
       
 -- unfoldDefsInTerm :: (Queue Qelm) -> Expr -> Expr
 -- unfoldDefsInTerm q t =
@@ -96,9 +94,55 @@ containsTerm :: Queue (QDefName,QDefDef) -> QDefName -> Bool
 containsTerm (Queue [] []) _ = False
 containsTerm q v = (containsTerm_Qelm (getQCT q emptyQ) v) 
 
+-- processFiles :: [FilePath] -> (FilePath -> IO a) -> (FilePath -> IO a) -> IO [[a]]
+-- processFiles globPatterns e f = forM globPatterns $ (\p -> do
+    -- filePaths <- glob p
+    -- case filePaths of 
+        -- [] -> (e p) >>= (return.(:[]))
+        -- _ -> forM filePaths f)
+
+readToQueue :: (?globals::Globals) => FilePath -> IO ExitCode
+readToQueue pth = do
+    pf <- parseDefs =<< readFile pth
+    case pf of
+        (ast, maxFreshId) -> do
+            let ?globals = ?globals { freshIdCounter = maxFreshId }
+            checked <- check ast
+            case checked of
+                Ok -> do
+                    forM ast $ \idef ->  return $ loadInQueue idef
+                    return ExitSuccess
+                    
+readToQueue' :: (?globals::Globals) => FilePath -> REPLStateIO()
+readToQueue' pth = do
+    pf <- return $ parseDefs =<< readFile pth
+    case pf of
+        (ast, maxFreshId) -> do
+            let ?globals = ?globals { freshIdCounter = maxFreshId }
+            checked <- return $ check ast
+            case checked of
+                Ok -> loadInQueue' ast
+
+loadInQueue' :: [Def] -> REPLStateIO ()
+loadInQueue' [] = return ()
+loadInQueue' (x:xs) = do
+    loadInQueue x
+    loadInQueue' xs
+
+  
+loadInQueue :: Def -> REPLStateIO ()       
+loadInQueue def = let def'@(Def _ id _ _ _) = def in -- Def s id ex [p] ts
+                    push (RVar id, DefTerm def')  
+
+-- noFileAtPath :: FilePath -> IO ExitCode
+-- noFileAtPath pt = do
+    -- print $ "The file path "++pt++" does not exist"
+    -- return (ExitFailure 1)
+                   
 
 
 
+                    
 handleCMD :: String -> REPLStateIO ()
 handleCMD "" = return ()
 handleCMD s =    
@@ -108,12 +152,9 @@ handleCMD s =
   where      
     handleLine DumpState = get >>= io.print.(mapQ prettyDef)
     
-    
-    handleLine (LoadFile pt) =  do
-        filePaths <- return $ glob pt
-        case filePaths of
-            [] -> do
-                io $ printErr $ "The glob pattern `" <> pt <> "` did not match any file."
+    -- handleLine (LoadFile ptr) = processFiles ptr noFileAtPath readToQueue
+        
+        
                 
         
 
