@@ -35,6 +35,7 @@ import System.Exit (die)
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
     CONSTR { TokenConstr _ _ }
+    CHAR   { TokenCharLiteral _ _ }
     forall { TokenForall _ }
     '∞'   { TokenInfinity _ }
     '\\'  { TokenLambda _ }
@@ -307,6 +308,8 @@ Atom : '(' Expr ')'                { $2 }
 
      | '(' Expr ',' Expr ')'
         { Val (getPos $1, getPos $5) (Pair $2 $4) }
+
+     | CHAR { Val (getPosToSpan $1) $ case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
 
 {
 

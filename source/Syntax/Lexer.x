@@ -19,11 +19,12 @@ $alpha  = [a-zA-Z\_\=]
 $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
-$alphanum  = [$alpha $digit \_ \']
-@sym    = $lower $alphanum*
+$alphanum  = [$alpha $digit \_]
+@sym    = $lower $alphanum* [\']*
 @constr = ($upper $alphanum* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
+@charLiteral = \' ([\\.] | . ) \'
 
 tokens :-
 
@@ -45,6 +46,7 @@ tokens :-
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
+  @charLiteral                  { \p s -> TokenCharLiteral p $ read s}
   "->"                          { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
   \;                            { \p s -> TokenSemicolon p }
@@ -100,6 +102,7 @@ data Token
   | TokenAdd    AlexPosn
   | TokenSub    AlexPosn
   | TokenMul    AlexPosn
+  | TokenCharLiteral AlexPosn Char
   | TokenLParen AlexPosn
   | TokenRParen AlexPosn
   | TokenNL     AlexPosn

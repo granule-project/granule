@@ -71,6 +71,7 @@ data Value = Abs Pattern (Maybe Type) Expr
            | Var Id
            | Constr Id [Value]
            | Pair Expr Expr
+           | CharLiteral Char
           deriving (Eq, Show)
 
 -- Expressions (computations) in Granule
@@ -281,6 +282,7 @@ instance Term Value where
     freeVars (NumInt _) = []
     freeVars (NumFloat _) = []
     freeVars (Constr _ _) = []
+    freeVars (CharLiteral _) = []
 
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
@@ -291,6 +293,7 @@ instance Term Value where
     subst _ _ v@(NumFloat _)      = Val nullSpan v
     subst _ _ v@(Var _)           = Val nullSpan v
     subst _ _ v@(Constr _ _)      = Val nullSpan v
+    subst _ _ v@CharLiteral{}     = Val nullSpan v
 
     freshen (Abs p t e) = do
       p'   <- freshenBinder p
@@ -325,6 +328,7 @@ instance Term Value where
     freshen v@(NumInt _)   = return v
     freshen v@(NumFloat _) = return v
     freshen v@(Constr _ _) = return v
+    freshen v@CharLiteral{} = return v
 
 instance Term Expr where
     freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2

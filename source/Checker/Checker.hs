@@ -314,9 +314,10 @@ synthExpr :: (?globals :: Globals)
           -> Expr           -- ^ Expression
           -> MaybeT Checker (Type, Ctxt Assumption)
 
--- Constants (numbers)
+-- Literals
 synthExpr _ _ _ (Val _ (NumInt _))  = return (TyCon $ mkId "Int", [])
 synthExpr _ _ _ (Val _ (NumFloat _)) = return (TyCon $ mkId "Float", [])
+synthExpr _ _ _ (Val _ (CharLiteral _)) = return (TyCon $ mkId "Char", [])
 
 -- Nat constructors
 synthExpr _ _ _ (Val s (Constr c [])) = do
