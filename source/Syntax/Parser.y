@@ -36,6 +36,7 @@ import System.Exit (die)
     VAR    { TokenSym _ _ }
     CONSTR { TokenConstr _ _ }
     CHAR   { TokenCharLiteral _ _ }
+    STRING { TokenStringLiteral _ _ }
     forall { TokenForall _ }
     '∞'   { TokenInfinity _ }
     '\\'  { TokenLambda _ }
@@ -123,7 +124,7 @@ Pat :
   | '(' Pat ',' Pat ')'            { PPair (getPosToSpan $1) $2 $4 }
 
 PJuxt :: { Pattern }
-  : PJuxt '`' PAtom                { PApp (getStart $1, getEnd $3) $3 $1 }
+  : PJuxt '`' PAtom '`'            { PApp (getStart $1, getEnd $3) $3 $1 }
   | PJuxt PAtom                    { PApp (getStart $1, getEnd $2) $1 $2 }
   | PAtom                          { $1 }
 
@@ -179,7 +180,7 @@ Type :
   | '(' Type ',' Type ')'        { PairTy $2 $4 }
 
 TyJuxt :: { Type }
-  : TyJuxt '`' TyAtom           { TyApp $3 $1 }
+  : TyJuxt '`' TyAtom '`'       { TyApp $3 $1 }
   | TyJuxt TyAtom               { TyApp $1 $2 }
   | TyAtom                      { $1 }
 
@@ -287,7 +288,7 @@ Form : Form '+' Form               { Binop (getPosToSpan $2) "+" $1 $3 }
      | Juxt                        { $1 }
 
 Juxt :: { Expr }
-  : Juxt '`' Atom               { App (getStart $1, getEnd $3) $3 $1 }
+  : Juxt '`' Atom '`'           { App (getStart $1, getEnd $3) $3 $1 }
   | Juxt Atom                   { App (getStart $1, getEnd $2) $1 $2 }
   | Atom                        { $1 }
 
@@ -311,6 +312,7 @@ Atom : '(' Expr ')'                { $2 }
 
      | CHAR { Val (getPosToSpan $1) $ case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
 
+     | STRING { Val (getPosToSpan $1) $ case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
 {
 
 parseError :: [Token] -> IO a

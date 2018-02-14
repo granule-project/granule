@@ -7,6 +7,7 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 import Utils
+import Data.Text (pack)
 
 import System.IO (hFlush, stdout)
 
@@ -42,6 +43,12 @@ evalIn _ (Val s (Var v)) | internalName v == "read" = do
     putStr "> "
     hFlush stdout
     val <- readLn
+    return $ Pure (Val s (StringLiteral val))
+
+evalIn _ (Val s (Var v)) | internalName v == "readInt" = do
+    putStr "> "
+    hFlush stdout
+    val <- readLn
     return $ Pure (Val s (NumInt val))
 
 evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
@@ -54,6 +61,8 @@ evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "int
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
+evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "intToString" =
+  return . StringLiteral . pack . show $ n
 
 evalIn _ (Val _ (Abs p t e)) = return $ Abs p t e
 

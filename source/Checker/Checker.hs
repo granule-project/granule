@@ -318,6 +318,7 @@ synthExpr :: (?globals :: Globals)
 synthExpr _ _ _ (Val _ (NumInt _))  = return (TyCon $ mkId "Int", [])
 synthExpr _ _ _ (Val _ (NumFloat _)) = return (TyCon $ mkId "Float", [])
 synthExpr _ _ _ (Val _ (CharLiteral _)) = return (TyCon $ mkId "Char", [])
+synthExpr _ _ _ (Val _ (StringLiteral _)) = return (TyCon $ mkId "String", [])
 
 -- Nat constructors
 synthExpr _ _ _ (Val s (Constr c [])) = do

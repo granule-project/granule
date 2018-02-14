@@ -9,6 +9,7 @@ module Syntax.Lexer (Token(..),scanTokens,getPos,
 import Syntax.Expr
 import Syntax.FirstParameter
 import GHC.Generics (Generic)
+import Data.Text (Text)
 
 }
 
@@ -25,6 +26,7 @@ $alphanum  = [$alpha $digit \_]
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
 @charLiteral = \' ([\\.] | . ) \'
+@stringLiteral = \"(\\.|[^\"]|\n)*\"
 
 tokens :-
 
@@ -46,7 +48,8 @@ tokens :-
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
-  @charLiteral                  { \p s -> TokenCharLiteral p $ read s}
+  @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
+  @stringLiteral                { \p s -> TokenStringLiteral p $ read s }
   "->"                          { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
   \;                            { \p s -> TokenSemicolon p }
@@ -103,6 +106,7 @@ data Token
   | TokenSub    AlexPosn
   | TokenMul    AlexPosn
   | TokenCharLiteral AlexPosn Char
+  | TokenStringLiteral AlexPosn Text
   | TokenLParen AlexPosn
   | TokenRParen AlexPosn
   | TokenNL     AlexPosn

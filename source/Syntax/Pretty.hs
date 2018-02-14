@@ -131,6 +131,7 @@ instance Pretty Value where
     pretty (NumInt n)   = show n
     pretty (NumFloat n) = show n
     pretty (CharLiteral c) = show c
+    pretty (StringLiteral s) = show s
     pretty (Pair e1 e2) = "(" ++ pretty e1 ++ "," ++ pretty e2 ++ ")"
     pretty (Constr s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where

@@ -8,4 +8,4 @@ head x = case x of
   (NonEmpty y) -> y
 
 main : NonEmpty Int
-main = 2 `In |(NonEmpty 1)|
+main = 2 `In` |(NonEmpty 1)|

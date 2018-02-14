@@ -12,6 +12,7 @@ typeLevelConstructors =
     , (mkId $ "Int",  KType)
     , (mkId $ "Float", KType)
     , (mkId $ "Char", KType)
+    , (mkId $ "String", KType)
     , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
     , (mkId $ "N", KFun (KConstr $ mkId "Nat=") KType)
     , (mkId $ "One", KCoeffect)   -- Singleton coeffect
@@ -43,14 +44,16 @@ builtins =
        $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
 
     -- Effectful primitives
-  , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "Int"))
+  , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "String"))
   , (mkId "write", Forall nullSpan [] $
-       FunTy (TyCon $ mkId "Int") (Diamond ["W"] (TyCon $ mkId "()")))
-
+       FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
+  , (mkId "readInt", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "Int"))
     -- Other primitives
   , (mkId "intToFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "Float"))
 
+  , (mkId "intToString", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
+                                                    (TyCon $ mkId "String"))
     -- Session typed primitives
   , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))

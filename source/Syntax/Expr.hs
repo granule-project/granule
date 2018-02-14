@@ -25,6 +25,7 @@ import Control.Monad.State
 import Control.Arrow
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
+import Data.Text (Text)
 
 import Syntax.FirstParameter
 
@@ -72,6 +73,7 @@ data Value = Abs Pattern (Maybe Type) Expr
            | Constr Id [Value]
            | Pair Expr Expr
            | CharLiteral Char
+           | StringLiteral Text
           deriving (Eq, Show)
 
 -- Expressions (computations) in Granule
@@ -283,6 +285,7 @@ instance Term Value where
     freeVars (NumFloat _) = []
     freeVars (Constr _ _) = []
     freeVars (CharLiteral _) = []
+    freeVars (StringLiteral _) = []
 
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
@@ -294,6 +297,7 @@ instance Term Value where
     subst _ _ v@(Var _)           = Val nullSpan v
     subst _ _ v@(Constr _ _)      = Val nullSpan v
     subst _ _ v@CharLiteral{}     = Val nullSpan v
+    subst _ _ v@StringLiteral{}   = Val nullSpan v
 
     freshen (Abs p t e) = do
       p'   <- freshenBinder p
@@ -329,6 +333,7 @@ instance Term Value where
     freshen v@(NumFloat _) = return v
     freshen v@(Constr _ _) = return v
     freshen v@CharLiteral{} = return v
+    freshen v@StringLiteral{} = return v
 
 instance Term Expr where
     freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2

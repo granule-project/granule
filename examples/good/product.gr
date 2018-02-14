@@ -3,5 +3,5 @@ import Bool
 data X a b where
   X : a -> b -> X a b
 
-product : Int `X Float `X Bool
-product = 0 `X 0.0 `X False
+product : Int `X` Float `X` Bool
+product = 0 `X` 0.0 `X` False

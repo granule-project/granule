@@ -35,4 +35,4 @@ exLast : Int
 exLast = fromMaybe |42| (last ex0)
 
 main : () <[W]>
-main = if True `and |True| then write exLast else write 0
+main = write (intToString exLast)

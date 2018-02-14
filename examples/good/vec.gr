@@ -1,0 +1,37 @@
+data Zero where
+  Zero : Zero
+
+data Succ a where
+  Succ : Succ a
+
+data Vec a n where
+  Nil : Vec a Zero;
+  Cons : a -> Vec a n -> Vec a (Succ n)
+
+head : forall a : Type, n : Type . (Vec a (Succ n)) |1| -> a
+head x = case x of |(Cons x _)| -> x
+
+data A where
+  A : A
+data B where
+  B : B
+
+data Foo a where
+  MkA : A -> Foo A;
+  MkB : B -> Foo B
+
+unwrap : forall (a : Type) . Foo a -> a
+unwrap x =
+  case x of
+    (MkA x) -> x;
+    (MkB x) -> x
+
+-- case (MkA v) of (MkA p1) -> e1; (MkB p2) -> e2  : t
+
+-- ~>  e1 (subst p1 v)   : t (specialise p1 (MkA v)
+
+
+
+-- data Vec a : Nat= -> Type where
+--   Nil : Vec a 0;
+--   Cons : forall n : Nat= . a -> Vec a n -> Vec a (n+1)

@@ -51,6 +51,7 @@ library:
   - sbv >=7.3
   - time
   - transformers >=0.5
+  - text
 
 executables:
   gr:

@@ -30,4 +30,4 @@ doTwice |f| = let a : Int <- f in
               let b : Int <- f in pure (a + b)
 
 main : Int <[R, R]>
-main = doTwice |read|
+main = doTwice |readInt|

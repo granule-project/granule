@@ -1,7 +1,7 @@
 import Prelude
 
 dubInput : () <[R, W]>
-dubInput = let x : Int <- read in write (x * 2)
+dubInput = let x : Int <- readInt in write (intToString (x * 2))
 
 main : () <[R, W]>
 main = dubInput
