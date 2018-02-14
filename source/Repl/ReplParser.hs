@@ -36,7 +36,7 @@ data REPLExpr =
     | DumpState
     | Unfold Expr
     | Eval Expr
-    | LoadFile String
+    | LoadFile [FilePath]
     deriving Show
     
 replTermCmdParser short long c p = do
@@ -65,8 +65,9 @@ replFileCmdParser short long c = do
     eof
     if(cmd == long || cmd == short)
     then do
-        let path = T.unpack . T.strip . T.pack $ pathUntrimned
-        return $ c path
+        let tpath = T.words . T.pack $ pathUntrimned
+        let fpath = textToFilePath tpath
+        return $ c fpath
     else fail $ "Command \":"++cmd++"\" is unrecognized."
     
     
@@ -87,10 +88,16 @@ lineParser = try dumpStateParser
           -- <|> try showASTParser
           <?> "parse error"
           
-parseLine :: String ->Either String REPLExpr
+parseLine :: String -> Either String REPLExpr
 parseLine s = case (parse lineParser "" s) of
             Left msg -> Left $ show msg
             Right l -> Right l
             
                 
-                
+textToFilePath :: [T.Text] -> [FilePath]
+textToFilePath [] = []
+textToFilePath (x:xs) = do
+    let spth = T.unpack x
+    spth : textToFilePath xs
+    
+    
