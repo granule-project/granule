@@ -14,13 +14,13 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Exception (SomeException, try)
-import Control.Monad (forM)
+-- import Control.Monad (forM)
 import Data.List (intercalate)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 
-import System.FilePath.Glob (glob)
+-- import System.FilePath.Glob (glob)
 import Options.Applicative
 
 import Checker.Checker
@@ -30,7 +30,19 @@ import Syntax.Parser
 import Syntax.Pretty
 import Utils
 
-
+-- Extracted from "else" in  main to make a generic processFile function 
+badFilePath :: Globals -> FilePath -> IO ExitCode
+badFilePath globals p = do
+            let ?globals = globals { sourceFilePath = p }
+            printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
+            return (ExitFailure 1)
+            
+-- Extracted from "else" in  main to make a generic processFile function
+loadFile :: Globals -> FilePath -> IO ExitCode
+loadFile globals p = do
+            let ?globals = globals { sourceFilePath = p }
+            printInfo $ "\nChecking " <> p <> "..."
+            run =<< readFile p
 main :: IO ()
 main = do
   (globPatterns,globals) <- customExecParser (prefs disambiguate) parseArgs
@@ -42,16 +54,7 @@ main = do
         exitWith =<< run =<< getContents
     else do
       debugM "Globals" (show globals)
-      results <- forM globPatterns $ \p -> do
-        filePaths <- glob p
-        case filePaths of
-          [] -> do
-            printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
-            return [(ExitFailure 1)]
-          _ -> forM filePaths $ \p -> do
-            let ?globals = globals { sourceFilePath = p }
-            printInfo $ "\nChecking " <> p <> "..."
-            run =<< readFile p
+      results <- processFiles globPatterns (badFilePath globals) (loadFile globals)        
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
 

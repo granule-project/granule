@@ -5,13 +5,14 @@
 module Utils where
 
 import Control.Exception (SomeException, catch, try)
-import Control.Monad (when)
+import Control.Monad (when, forM)
 import Data.Semigroup ((<>))
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.LocalTime (getTimeZone, utc, utcToLocalTime)
 import Debug.Trace (trace, traceM)
 import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
+import System.FilePath.Glob (glob)
 
 import Syntax.Expr (Span)
 
@@ -141,3 +142,14 @@ getTimeString =
         Left (e :: SomeException) -> do
           debugM "getCurrentTime failed" (show e)
           return ""
+
+          
+-- Extracted from the else in  main from Main.hs for use as a generic function
+-- where e is some error handler and f is what is done with each file         
+processFiles :: [FilePath] -> (FilePath -> IO a) -> (FilePath -> IO a) -> IO [[a]]
+processFiles globPatterns e f = forM globPatterns $ (\p -> do
+    filePaths <- glob p
+    case filePaths of 
+        [] -> (e p) >>= (return.(:[]))
+        _ -> forM filePaths f)
+
