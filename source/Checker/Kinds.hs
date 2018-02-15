@@ -27,7 +27,7 @@ kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
     KType -> return ()
     _     -> illKindedNEq s KType kind
 
-kindCheckDef (ADT s typeC tyVars dataCs) = unhandled
+kindCheckDef (ADT sp tyCon kind tyVars dataCs) = unhandled
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do

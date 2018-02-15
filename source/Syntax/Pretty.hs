@@ -91,12 +91,10 @@ instance {-# OVERLAPS #-} Pretty AST where
 instance Pretty Def where
     pretty (Def _ v e ps t) = pretty v ++ " : " ++ pretty t ++ "\n" ++
                               pretty v ++ " " ++ pretty ps ++ "= " ++ pretty e
-    pretty (ADT _ tC tVs dCs) =
-      let tyVars = case tVs of [] -> ""; _ -> unwords (map (pretty . snd) tVs) ++ " "
-      in "data " ++ pretty tC ++ " " ++ tyVars ++ "where\n  " ++ pretty dCs
-
-instance Pretty TypeConstr where
-    pretty (TypeConstr _ name) = pretty name
+    pretty (ADT _ tyCon tyVars kind dataConstrs) =
+      let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars ++ " "
+          ki = case kind of Nothing -> ""; Just k -> pretty k ++ " "
+      in "data " ++ pretty tyCon ++ " " ++ tvs ++ ki ++ "where\n  " ++ pretty dataConstrs
 
 instance Pretty [DataConstr] where
     pretty = intercalate ";\n  " . map pretty

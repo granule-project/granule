@@ -90,6 +90,9 @@ Def : Sig NL Binding
     | data TypeConstr TyVars where DataConstrs {
       ADT (getPos $1, snd $ getSpan (last $5)) $2 $3 $5
     }
+  | data CONSTR TyVars KindAnn where DataConstrs
+      { ADT (getPos $1, snd $ getSpan (last $6)) (mkId $ constrString $2) $3 $4 $6 }
+
 Sig ::  { (Id, TypeScheme, Pos) }
 Sig : VAR ':' TypeScheme           { (mkId $ symString $1, $3, getPos $1) }
 
@@ -109,10 +112,14 @@ DataConstr : CONSTR ':' TypeScheme { DataConstr (getPos $1, getEnd $3) (mkId $ c
 DataConstrNext :: { [DataConstr] }
 DataConstrNext : ';' DataConstrs { $2 }
                | {- empty -}     { [] }
+TyVars :: { [(Id,Kind)] }
+  : '(' VAR ':' Kind ')' TyVars { (mkId $ symString $2, $4) : $6 }
+  | VAR TyVars                  { (mkId $ symString $1, KType) : $2 }
+  | {- empty -}                 { [] }
 
-TyVars :: { [(Span, Id)] }
-TyVars : VAR TyVars { ((getPosToSpan $1),(mkId $ symString $1)) : $2 }
-       | {- empty -}{ [] }
+KindAnn :: { Maybe Kind }
+  : ':' Kind                  { Just $2 }
+  | {- empty -}               { Nothing }
 
 Pats :: { [Pattern] }
 Pats : Pat                         { [$1] }
@@ -349,7 +356,7 @@ parseDefs input = do
       where
         clashes = names \\ nub names
         names = map (\d -> case d of (Def _ name _ _ _) -> name
-                                     (ADT _ (TypeConstr _ name) _ _) -> name)
+                                     (ADT _ name _ _ _) -> name)
                     ds
 
 myReadFloat :: String -> Rational

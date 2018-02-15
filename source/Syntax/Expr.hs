@@ -6,7 +6,7 @@
 module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    letBox,
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
-                   NatModifier(..), Effect, Kind(..), DataConstr(..), TypeConstr(..),
+                   NatModifier(..), Effect, Kind(..), DataConstr(..),
                    Id, sourceName, internalName, mkId, mkInternalId,
                    Operator,
                    liftCoeffectType,
@@ -384,18 +384,12 @@ instance Term Expr where
 --------- Definitions
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
-         | ADT Span TypeConstr [TyVar] [DataConstr]
+         | ADT Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
           deriving (Eq, Show, Generic)
 
 type AST = [Def]
 
-type TyVar = (Span,Id)
-
 instance FirstParameter Def Span
-
-data TypeConstr = TypeConstr Span Id deriving (Eq, Show, Generic)
-
-instance FirstParameter TypeConstr Span
 
 data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
 
@@ -419,12 +413,12 @@ uniqueNames =
 
     -- in the case of ADTs, also push down the type variables from the data declaration head
     -- into the data constructors
-    freshenDef (ADT sp tyCon tyVars dataCs) = do
-      let vs = (map (\(_,v) -> (v, KType)) tyVars)
-      dataCs <- mapM (\(DataConstr sp name (Forall sp' [] ty)) -> do
-                        tySch <- freshenTys (Forall sp' vs ty)
-                        return $ DataConstr sp name tySch) dataCs
-      return $ ADT sp tyCon tyVars dataCs
+    freshenDef (ADT sp tyCon tyVars kind dataCs) = do
+      dataCs <-
+        forM dataCs $ (\(DataConstr sp name (Forall sp' vs ty)) -> do
+          tySch <- freshenTys (Forall sp' (tyVars ++ vs) ty)
+          return $ DataConstr sp name tySch)
+      return $ ADT sp tyCon tyVars kind dataCs
 
 
 ----------- Types

@@ -60,22 +60,22 @@ check ast = do
       go = evalChecker initState { uniqueVarId = freshIdCounter ?globals }
 
 checkTyCon :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkTyCon (ADT _ tC@(TypeConstr _ tName) tyVars _) =
+checkTyCon (ADT _ name tyVars kindAnn _) =
     runMaybeT $ do
-      debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty tC ++ "`: `"
+      debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty name ++ "`: `"
                                     ++ pretty tyConKind ++ "` (Show: `" ++ show tyConKind ++ "`)"
-      modify $ \st -> st { typeConstructors = (tName, tyConKind) : typeConstructors st }
+      modify $ \st -> st { typeConstructors = (name, tyConKind) : typeConstructors st }
   where
-    tyConKind = mkKind tyVars
-    mkKind [] = KType
-    mkKind (_:vs) = KFun KType (mkKind vs)
+    tyConKind = mkKind (map snd tyVars)
+    mkKind [] = case kindAnn of Just k -> k; Nothing -> KType
+    mkKind (v:vs) = KFun v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkDataCons (ADT _ (TypeConstr _ tName) tyVars dataCs) =
+checkDataCons (ADT _ name kind tyVars dataConstrs) =
   runMaybeT $ do
     st <- get
-    case lookup tName (typeConstructors st) of
-      Just kind -> mapM_ (checkDataCon tName kind) dataCs
+    case lookup name (typeConstructors st) of
+      Just kind -> mapM_ (checkDataCon name kind) dataConstrs -- TODO add tyVars
       _ -> unhandled -- all type constructors have already been put into the checker monad
 
 
