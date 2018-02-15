@@ -1,13 +1,9 @@
--- data Lam :: * -> * where
---   Lift :: a                     -> Lam a        -- ^ lifted value
---   Pair :: Lam a -> Lam b        -> Lam (a, b)   -- ^ product
---   Lam  :: (Lam a -> Lam b)      -> Lam (a -> b) -- ^ lambda abstraction
---   App  :: Lam (a -> b) -> Lam a -> Lam b        -- ^ beta reduction
---   Fix  :: Lam (a -> a)          -> Lam a        -- ^ fixed point
-
 data Lam : Type -> Type where
-  Lift : forall a : Type . a -> Lam b
+  Lift : forall a : Type           . a -> Lam a;                     --- lifted value
+  Pair : forall a : Type, b : Type . a -> b -> Lam (Prod a b);       --- product
+  Lam  : forall a : Type, b : Type . a -> b -> Lam (a -> b);         --- lambda abstraction
+  App  : forall a : Type, b : Type . Lam (a -> b) -> Lam a -> Lam b; --- beta reduction
+  Fix  : forall a : Type           . Lam (a -> a) -> Lam a           --- fixed point
 
-data Fin : Nat -> Type where
-   Zero : forall (n : Nat) . Fin n
-   Succ : forall (n : Nat) . Fin n -> Fin (n+1)
+data Prod a b where
+  X : a -> b -> Prod a b

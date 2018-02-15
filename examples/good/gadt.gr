@@ -1,0 +1,14 @@
+data A where
+  A : A
+data B where
+  B : B
+
+data Foo a where
+  MkA : A -> Foo A;
+  MkB : B -> Foo B
+
+unwrap : forall (a : Type) . Foo a -> a
+unwrap x =
+  case x of
+    (MkA x) -> x;
+    (MkB x) -> x
