@@ -113,46 +113,48 @@ readToQueue pth = do
                     forM ast $ \idef ->  return $ loadInQueue idef
                     return ExitSuccess
                     
-readToQueue' :: (?globals::Globals) => FilePath -> REPLStateIO()
-readToQueue' pth = do
-    pf <- return $ parseDefs =<< readFile pth
-    case pf of
-        (ast, maxFreshId) -> do
-            let ?globals = ?globals { freshIdCounter = maxFreshId }
-            checked <- return $ check ast
-            case checked of
-                Ok -> loadInQueue' ast
+-- readToQueue' :: (?globals::Globals) => FilePath -> REPLStateIO()
+-- readToQueue' pth = do
+    -- pf <- return $ parseDefs =<< readFile pth
+    -- case pf of
+        -- (ast, maxFreshId) -> do
+            -- let ?globals = ?globals { freshIdCounter = maxFreshId }
+            -- checked <- return $ check ast
+            -- case checked of
+                -- Ok -> loadInQueue' ast
 
-loadInQueue' :: [Def] -> REPLStateIO ()
-loadInQueue' [] = return ()
-loadInQueue' (x:xs) = do
-    loadInQueue x
-    loadInQueue' xs
+-- loadInQueue' :: [Def] -> REPLStateIO ()
+-- loadInQueue' [] = return ()
+-- loadInQueue' (x:xs) = do
+    -- loadInQueue x
+    -- loadInQueue' xs
 
   
 loadInQueue :: Def -> REPLStateIO ()       
-loadInQueue def = let def'@(Def _ id _ _ _) = def in -- Def s id ex [p] ts
-                    push (RVar id, DefTerm def')  
+loadInQueue def@(Def _ id _ _ _) = push (RVar id, DefTerm def)  
 
--- noFileAtPath :: FilePath -> IO ExitCode
--- noFileAtPath pt = do
-    -- print $ "The file path "++pt++" does not exist"
-    -- return (ExitFailure 1)
+noFileAtPath :: FilePath -> IO ExitCode
+noFileAtPath pt = do
+    print $ "The file path "++pt++" does not exist"
+    return (ExitFailure 1)
                    
 
 
 
                     
-handleCMD :: String -> REPLStateIO ()
+handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
 handleCMD "" = return ()
 handleCMD s =    
    case (parseLine s) of
     Right l -> handleLine l
     Left msg -> io $ putStrLn msg
-  where      
+  where    
+    handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = get >>= io.print.(mapQ prettyDef)
     
-    -- handleLine (LoadFile ptr) = processFiles ptr noFileAtPath readToQueue
+    handleLine (LoadFile ptr) = do 
+      foo <- liftIO $ processFiles ptr noFileAtPath (let ?globals = ?globals in readToQueue)
+      undefined
         
         
                 
@@ -189,4 +191,5 @@ repl = do
                               -> liftIO $ putStrLn "Leaving Granule." >> return ()
                           | input == ":h" || input == ":help"
                               -> (liftIO $ putStrLn helpMenu) >> loop                                 
-                          | otherwise -> (lift.handleCMD $ input) >> loop
+                          | otherwise -> let ?globals = defaultGlobals 
+                                          in (lift.handleCMD $ input) >> loop
