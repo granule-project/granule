@@ -5,6 +5,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+
 module Repl.Repl where
 
 -- import Control.Exception (SomeException, try)
@@ -61,7 +62,8 @@ io :: IO a -> REPLStateIO a
 io i = liftIO i
 
 prettyDef :: (QDefName, QDefDef) -> String
-prettyDef elem = let t = getQDef elem in "let "++" = "++(pretty t)
+prettyDef elem = case getQDef elem of
+    (a, t) -> (sourceName a)++":"++(show t)
     
 pop :: REPLStateIO (QDefName, QDefDef)
 pop = get >>= return.headQ
@@ -112,27 +114,18 @@ readToQueue pth = do
                 Ok -> do
                     forM ast $ \idef ->  return $ loadInQueue idef
                     return ExitSuccess
-                    
--- readToQueue' :: (?globals::Globals) => FilePath -> REPLStateIO()
--- readToQueue' pth = do
-    -- pf <- return $ parseDefs =<< readFile pth
-    -- case pf of
-        -- (ast, maxFreshId) -> do
-            -- let ?globals = ?globals { freshIdCounter = maxFreshId }
-            -- checked <- return $ check ast
-            -- case checked of
-                -- Ok -> loadInQueue' ast
 
--- loadInQueue' :: [Def] -> REPLStateIO ()
--- loadInQueue' [] = return ()
--- loadInQueue' (x:xs) = do
-    -- loadInQueue x
-    -- loadInQueue' xs
 
-  
+-- loadInQueue :: Def -> IO ()       
+-- loadInQueue def@(Def _ id _ _ _) =  print $ show id
+ 
+    
 loadInQueue :: Def -> REPLStateIO ()       
-loadInQueue def@(Def _ id _ _ _) = push (RVar id, DefTerm def)  
-
+loadInQueue def@(Def _ id _ _ _) =  do
+                        io $ print (show def)
+                        push (RVar id, DefTerm def) 
+    
+                
 noFileAtPath :: FilePath -> IO ExitCode
 noFileAtPath pt = do
     print $ "The file path "++pt++" does not exist"
@@ -151,10 +144,11 @@ handleCMD s =
   where    
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = get >>= io.print.(mapQ prettyDef)
+        
     
     handleLine (LoadFile ptr) = do 
-      foo <- liftIO $ processFiles ptr noFileAtPath (let ?globals = ?globals in readToQueue)
-      undefined
+      ecs <- liftIO $ processFiles ptr noFileAtPath (let ?globals = ?globals in readToQueue)
+      if all (== ExitSuccess) (concat ecs) then io.putStrLn $ "File(s) loaded" else io.putStrLn $ "Error while loading file(s)" 
         
         
                 
