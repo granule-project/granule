@@ -16,7 +16,7 @@ import System.Exit
 
 import Utils 
 import Repl.Queue
-import Syntax.Pretty
+import Syntax.Pretty()
 import Syntax.Expr
 import Syntax.Parser
 import Repl.ReplParser
@@ -103,27 +103,26 @@ containsTerm q v = (containsTerm_Qelm (getQCT q emptyQ) v)
         -- [] -> (e p) >>= (return.(:[]))
         -- _ -> forM filePaths f)
 
-readToQueue :: (?globals::Globals) => FilePath -> IO ExitCode
+readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ExitCode
 readToQueue pth = do
-    pf <- parseDefs =<< readFile pth
+    pf <- io $ parseDefs =<< readFile pth    
     case pf of
         (ast, maxFreshId) -> do
             let ?globals = ?globals { freshIdCounter = maxFreshId }
-            checked <- check ast
+            checked <- io $ check ast
             case checked of
-                Ok -> do
-                    forM ast $ \idef ->  return $ loadInQueue idef
+                Ok -> do                    
+                    forM ast $ \idef -> loadInQueue idef                               
                     return ExitSuccess
-
 
 -- loadInQueue :: Def -> IO ()       
 -- loadInQueue def@(Def _ id _ _ _) =  print $ show id
  
     
 loadInQueue :: Def -> REPLStateIO ()       
-loadInQueue def@(Def _ id _ _ _) =  do
-                        io $ print (show def)
-                        push (RVar id, DefTerm def) 
+loadInQueue def@(Def _ id _ _ _) = do
+  io $ print (show id)
+  push (RVar id, DefTerm def) 
     
                 
 noFileAtPath :: FilePath -> IO ExitCode
