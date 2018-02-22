@@ -13,10 +13,10 @@ import Control.Monad.State
 import System.Console.Haskeline
 -- import System.Console.Haskeline.MonadException
 import System.Exit
-
+import System.FilePath.Glob (glob)
 import Utils 
 import Repl.Queue
-import Syntax.Pretty()
+import Syntax.Pretty
 import Syntax.Expr
 import Syntax.Parser
 import Repl.ReplParser
@@ -63,7 +63,7 @@ io i = liftIO i
 
 prettyDef :: (QDefName, QDefDef) -> String
 prettyDef elem = case getQDef elem of
-    (a, t) -> (sourceName a)++":"++(show t)
+    (a, t) -> (sourceName a)++":"++pretty t
     
 pop :: REPLStateIO (QDefName, QDefDef)
 pop = get >>= return.headQ
@@ -96,12 +96,12 @@ containsTerm :: Queue (QDefName,QDefDef) -> QDefName -> Bool
 containsTerm (Queue [] []) _ = False
 containsTerm q v = (containsTerm_Qelm (getQCT q emptyQ) v) 
 
--- processFiles :: [FilePath] -> (FilePath -> IO a) -> (FilePath -> IO a) -> IO [[a]]
--- processFiles globPatterns e f = forM globPatterns $ (\p -> do
-    -- filePaths <- glob p
-    -- case filePaths of 
-        -- [] -> (e p) >>= (return.(:[]))
-        -- _ -> forM filePaths f)
+processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
+processFilesREPL globPatterns e f = forM globPatterns $ (\p -> do
+    filePaths <- io $ glob p
+    case filePaths of 
+        [] -> (e p) >>= (return.(:[]))
+        _ -> forM filePaths f)
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ExitCode
 readToQueue pth = do
@@ -121,13 +121,12 @@ readToQueue pth = do
     
 loadInQueue :: Def -> REPLStateIO ()       
 loadInQueue def@(Def _ id _ _ _) = do
-  io $ print (show id)
   push (RVar id, DefTerm def) 
     
                 
-noFileAtPath :: FilePath -> IO ExitCode
+noFileAtPath :: FilePath -> REPLStateIO ExitCode
 noFileAtPath pt = do
-    print $ "The file path "++pt++" does not exist"
+    io $ print $ "The file path "++pt++" does not exist"
     return (ExitFailure 1)
                    
 
@@ -146,7 +145,7 @@ handleCMD s =
         
     
     handleLine (LoadFile ptr) = do 
-      ecs <- liftIO $ processFiles ptr noFileAtPath (let ?globals = ?globals in readToQueue)
+      ecs <- processFilesREPL ptr noFileAtPath (let ?globals = ?globals in readToQueue)
       if all (== ExitSuccess) (concat ecs) then io.putStrLn $ "File(s) loaded" else io.putStrLn $ "Error while loading file(s)" 
         
         
