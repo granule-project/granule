@@ -63,7 +63,7 @@ io i = liftIO i
 
 prettyDef :: (QDefName, QDefDef) -> String
 prettyDef elem = case getQDef elem of
-    (a, t) -> (sourceName a)++":"++pretty t
+    (a, t) -> pretty t
     
 pop :: REPLStateIO (QDefName, QDefDef)
 pop = get >>= return.headQ
@@ -114,15 +114,13 @@ readToQueue pth = do
                 Ok -> do                    
                     forM ast $ \idef -> loadInQueue idef                               
                     return ExitSuccess
+                Failed -> return (ExitFailure 1)
 
--- loadInQueue :: Def -> IO ()       
--- loadInQueue def@(Def _ id _ _ _) =  print $ show id
- 
-    
 loadInQueue :: Def -> REPLStateIO ()       
 loadInQueue def@(Def _ id _ _ _) = do
   push (RVar id, DefTerm def) 
-    
+loadInQueue adt@(ADT _ _ _ _) = do
+        io $ print "ADT"
                 
 noFileAtPath :: FilePath -> REPLStateIO ExitCode
 noFileAtPath pt = do
