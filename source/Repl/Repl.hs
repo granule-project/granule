@@ -63,7 +63,8 @@ io i = liftIO i
 
 prettyDef :: (QDefName, QDefDef) -> String
 prettyDef elem = case getQDef elem of
-    (a, t) -> pretty t
+    (a, t@(Def _ _ _ _ ty)) -> (pretty a)++" : "++(pretty ty)
+
     
 pop :: REPLStateIO (QDefName, QDefDef)
 pop = get >>= return.headQ
@@ -120,7 +121,7 @@ loadInQueue :: Def -> REPLStateIO ()
 loadInQueue def@(Def _ id _ _ _) = do
   push (RVar id, DefTerm def) 
 loadInQueue adt@(ADT _ _ _ _) = do
-        io $ print "ADT"
+        return ()
                 
 noFileAtPath :: FilePath -> REPLStateIO ExitCode
 noFileAtPath pt = do
