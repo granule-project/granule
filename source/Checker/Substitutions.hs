@@ -162,7 +162,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
     instantiateVariable (var, k) = do
       -- Freshen the variable depending on its kind
       var' <- case k of
-               KType -> do
+               k | typeBased k -> do
                  freshName <- freshVar (internalName var)
                  let var'  = mkId freshName
                  -- Label fresh variable as an existential
@@ -171,8 +171,10 @@ freshPolymorphicInstance (Forall s kinds ty) = do
                KConstr c -> freshCoeffectVar var (CConstr c)
                KCoeffect ->
                  error "Coeffect kind variables not yet supported"
-               KFun _ _ -> unhandled
                KPoly _ -> unhandled
       -- Return pair of old variable name and instantiated name (for
       -- name map)
       return (var, var')
+    typeBased KType = True
+    typeBased (KFun k1 k2) = typeBased k1 && typeBased k2
+    typeBased _     = False
