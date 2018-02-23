@@ -16,7 +16,6 @@ import Checker.Predicates
 import Context (Ctxt)
 import Syntax.Expr
 import Syntax.Pretty
-import Utils
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
@@ -101,7 +100,7 @@ compileToSBV predicate tyVarContext kVarContext =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
-              BoundQ -> unhandled
+              BoundQ -> error "Please open an issue at https://github.com/dorchard/granule/issues"
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- given an context mapping coeffect type variables to coeffect typ,

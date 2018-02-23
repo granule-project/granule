@@ -76,7 +76,7 @@ checkDataCons (ADT _ name kind tyVars dataConstrs) =
     st <- get
     case lookup name (typeConstructors st) of
       Just kind -> mapM_ (checkDataCon name kind) dataConstrs -- TODO add tyVars
-      _ -> unhandled -- all type constructors have already been put into the checker monad
+      _ -> error "Please open an issue at https://github.com/dorchard/granule/issues" -- all type constructors have already been put into the checker monad
 
 
 checkDataCon :: (?globals :: Globals )

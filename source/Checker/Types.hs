@@ -238,8 +238,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
                        ++ "' with monomorphic " ++ pretty t
              SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
 
-    (Just (_, InstanceQ)) -> unhandled
-    (Just (_, BoundQ)) -> unhandled
+    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " ++ show (tyVarContext checkerState)))
 
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =

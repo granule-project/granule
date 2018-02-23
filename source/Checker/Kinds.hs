@@ -27,7 +27,7 @@ kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
     KType -> return ()
     _     -> illKindedNEq s KType kind
 
-kindCheckDef (ADT sp tyCon kind tyVars dataCs) = unhandled
+kindCheckDef (ADT sp tyCon kind tyVars dataCs) = error "Please open an issue at https://github.com/dorchard/granule/issues"
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do

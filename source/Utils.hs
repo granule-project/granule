@@ -69,10 +69,6 @@ str <?> msg =
       then str <> (bold $ magenta $ " Debug { ") <> msg <> (bold $ magenta $ " }")
       else str
 
--- | Use sparingly
-unhandled :: error
-unhandled = error "Please open an issue at https://github.com/dorchard/granule/issues"
-
 printErr :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
 printErr err = when (not $ suppressErrors ?globals) $ do
     time <- getTimeString

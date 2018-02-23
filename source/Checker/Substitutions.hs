@@ -171,7 +171,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
                KConstr c -> freshCoeffectVar var (CConstr c)
                KCoeffect ->
                  error "Coeffect kind variables not yet supported"
-               KPoly _ -> unhandled
+               KPoly _ -> error "Please open an issue at https://github.com/dorchard/granule/issues"
       -- Return pair of old variable name and instantiated name (for
       -- name map)
       return (var, var')
