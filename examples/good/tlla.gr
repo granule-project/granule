@@ -11,7 +11,7 @@ flatten ||x|| = |x|
 twice : forall (n : Nat) . (Int |n| -> Int) |2| -> Int |2 * n| -> Int
 twice |f| |x| = f |x| + f |x|
 
-secret : Int |Hi|
+secret : Int |Private|
 secret = |0309|
 
 hash : forall (l : Level) . Int |l| -> Int |l|
@@ -21,7 +21,7 @@ hello : () <[R, W]>
 hello = let x : String <- read
         in write x
 
-main : Int |Hi|
+main : Int |Private|
 main =
    let |pin| = hash secret
    in |(twice |dub| |42| + twice |trip| |52| + pin)|

@@ -194,8 +194,8 @@ Coeffect :: { Coeffect }
   | '∞'                         { CInfinity (CPoly $ mkInternalId "∞" "infinity") }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
-                                    "Lo" -> Level 0
-                                    "Hi" -> Level 1
+                                    "Public" -> Level 0
+                                    "Private" -> Level 1
                                     "Inf" -> CInfinity (CPoly $ mkInternalId "∞" "infinity") }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }

@@ -39,8 +39,8 @@ instance Pretty Coeffect where
     pretty (CFloat n) = show n
     pretty (COne k)  = "_1 : " ++ pretty k
     pretty (CZero k) = "_0 : " ++ pretty k
-    pretty (Level 0) = "Lo"
-    pretty (Level _) = "Hi"
+    pretty (Level 0) = "Public"
+    pretty (Level _) = "Private"
     pretty (CVar c) = pretty c
     pretty (CMeet c d) =
       pretty c ++ " /\\ " ++ pretty d

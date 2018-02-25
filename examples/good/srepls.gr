@@ -13,16 +13,16 @@ trip |x| = x + x + x
 -- main : Int
 -- main = twice |dup| |10| + twice |trip| |20|
 
-secret : Int |Hi|
+secret : Int |Private|
 secret = |4253|
 
 hash : forall (l : Level) . Int |l| -> Int |l|
 hash |x| = |(x*x)|
 
-notAleak : (Int |Hi|) |0| -> Int |Lo|
+notAleak : (Int |Private|) |0| -> Int |Public|
 notAleak |x| = |42|
 
--- main : Int |Hi|
+-- main : Int |Private|
 -- main = hash secret
 
 doTwice : (Int <[R]>) |2| -> Int <[R, R]>
