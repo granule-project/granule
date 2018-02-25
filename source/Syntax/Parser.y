@@ -196,7 +196,8 @@ Coeffect :: { Coeffect }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (CPoly $ mkInternalId "∞" "infinity") }
+                                    "Inf" -> CInfinity (CPoly $ mkInternalId "∞" "infinity")
+                                    x -> error $ "Unknown coeffect constructor `" ++ x ++ "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
