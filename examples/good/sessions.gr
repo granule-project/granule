@@ -17,6 +17,6 @@ sendList |c| xs =
   case xs of
     Nil -> ();
     (Cons x xs) ->
-       let c'   = send c x in
-       let ()   = close c' in
+       let c' = send c x in
+       let () = close c' in
        sendList |c| xs

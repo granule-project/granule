@@ -8,6 +8,7 @@ import Syntax.Desugar
 import Context
 import Utils
 import Data.Text (pack)
+import qualified Data.Text.IO as Text
 
 import System.IO (hFlush, stdout)
 
@@ -35,14 +36,14 @@ evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
 evalIn :: Ctxt Value -> Expr -> IO Value
 
 evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "write" = do
-    v <- evalIn ctxt e
-    print v
-    return $ Pure (Val nullSpan v)
+    StringLiteral s <- evalIn ctxt e
+    Text.putStrLn s
+    return $ Pure (Val nullSpan (Constr (mkId "()") []))
 
 evalIn _ (Val s (Var v)) | internalName v == "read" = do
     putStr "> "
     hFlush stdout
-    val <- readLn
+    val <- Text.getLine
     return $ Pure (Val s (StringLiteral val))
 
 evalIn _ (Val s (Var v)) | internalName v == "readInt" = do
@@ -55,14 +56,18 @@ evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
   v <- evalIn ctxt e
   return $ Pure (Val nullSpan v)
 
-evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "intToFloat" =
+evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "intToFloat" = do
+  NumInt n <- evalIn ctxt e
   return $ NumFloat (cast n)
   where
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
-evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "intToString" =
-  return . StringLiteral . pack . show $ n
+evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "showInt" = do
+  n <- evalIn ctxt e
+  case n of
+    NumInt n -> return . StringLiteral . pack . show $ n
+    n -> error $ show n
 
 evalIn _ (Val _ (Abs p t e)) = return $ Abs p t e
 
@@ -109,8 +114,7 @@ evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
 evalIn ctxt (Val _ (Var x)) =
     case lookup x ctxt of
       Just val -> return val
-      Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context: "
-               ++ show ctxt
+      Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context."
 
 evalIn ctxt (Val s (Pair l r)) = do
   l' <- evalIn ctxt l

@@ -91,15 +91,19 @@ run input = do
                 printErr $ EvalError $ show e
                 return (ExitFailure 1)
               Right Nothing -> do
-                printInfo "(No output)"
+                printInfo "There is no `main` function."
                 return ExitSuccess
               Right (Just result) -> do
+                printInfo "`main` returned:"
                 putStrLn (pretty result)
                 return ExitSuccess
 
 
 parseArgs :: ParserInfo ([FilePath],Globals)
-parseArgs = info (go <**> helper) $ fullDesc <> header ("Granule " <> showVersion version)
+parseArgs = info (go <**> helper) $ briefDesc
+    <> header ("Granule " <> showVersion version)
+    <> footer "\n\nThis software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
+              \ Consult the LICENSE for further information."
   where
     go = do
         files <- many $ argument str $ metavar "SOURCE_FILES..."

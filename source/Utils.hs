@@ -92,7 +92,7 @@ printInfo :: (?globals :: Globals) => String -> IO ()
 printInfo message =
     when (not $ suppressInfos ?globals) $ do
       time <- getTimeString
-      putStrLn $ time <> message
+      putStrLn . blue $ time <> message
 
 -- backgColor colorCode = txtColor (colorCode + 10)
 bold :: (?globals :: Globals) => String -> String

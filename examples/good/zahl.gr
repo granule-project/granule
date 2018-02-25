@@ -8,7 +8,7 @@ check : Number -> () <[W]>
 check n =
     case n of
       (Zahl 42) -> write "0";
-      (Zahl n)  -> write (intToString n)
+      (Zahl n)  -> write (showInt n)
 
 main : () <[W]>
 main = check n

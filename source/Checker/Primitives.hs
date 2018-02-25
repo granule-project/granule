@@ -52,7 +52,7 @@ builtins =
   , (mkId "intToFloat", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "Float"))
 
-  , (mkId "intToString", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
+  , (mkId "showInt", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "String"))
     -- Session typed primitives
   , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
