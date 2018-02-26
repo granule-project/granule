@@ -121,9 +121,13 @@ Pats :: { [Pattern] }
   : Pat                       { [$1] }
   | Pat Pats                  { $1 : $2 }
 
+PAtoms :: { [Pattern] }
+  : PAtom                     { [$1] }
+  | PAtom PAtoms              { $1 : $2 }
+
 Pat :: { Pattern }
   : PAtom                     { $1 }
-  | '(' Pat ',' Pat ')'       { PPair (getPosToSpan $1) $2 $4 }
+  | '(' CONSTR PAtoms ')'      { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
 
 PAtom :: { Pattern }
   : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
@@ -131,9 +135,10 @@ PAtom :: { Pattern }
   | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) x }
   | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) $ read x }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
-  | CONSTR Pats               { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) $2 }
-  | '(' PAtom ')'             { $2 }
-  | '[' Pat ']'               { PBox (getPosToSpan $1) $2 }
+  | '(' Pat ')'             { $2 }
+  | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
+  | '(' Pat ',' Pat ')'       { PPair (getPosToSpan $1) $2 $4 }
+
 
 TypeScheme :: { TypeScheme }
   : Type                              { Forall nullSpan [] $1 }
