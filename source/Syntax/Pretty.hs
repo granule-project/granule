@@ -108,9 +108,8 @@ instance Pretty Pattern where
     pretty (PBox _ p)     = "|" ++ pretty p ++ "|"
     pretty (PInt _ n)     = show n
     pretty (PFloat _ n)   = show n
-    pretty (PApp _ p1 p2) = "(" ++ pretty p1 ++ " " ++ pretty p2 ++ ")"
-    pretty (PConstr _ s)  = pretty s
     pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ "," ++ pretty p2 ++ ")"
+    pretty (PConstr _ name args)  = intercalate " " (pretty name : map pretty args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern] where
     pretty [] = ""

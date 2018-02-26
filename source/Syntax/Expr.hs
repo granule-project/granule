@@ -91,16 +91,16 @@ letBox :: Span -> Pattern -> Expr -> Expr -> Expr
 letBox s pat e1 e2 =
   App s (Val s (Abs (PBox s pat) Nothing e2)) e1
 
--- Pattern matchings
-data Pattern = PVar Span Id         -- Variable patterns
-             | PWild Span           -- Wildcard (underscore) pattern
-             | PBox Span Pattern -- Box patterns
-             | PInt Span Int        -- Numeric patterns
-             | PFloat Span Double
-             | PConstr Span Id  -- Constructor pattern
-             | PApp Span Pattern Pattern -- Apply pattern
-             | PPair Span Pattern Pattern -- ^ Pair patterns
-          deriving (Eq, Show, Generic)
+-- Pattern matches
+data Pattern
+  = PVar Span Id               -- Variable patterns
+  | PWild Span                 -- Wildcard (underscore) pattern
+  | PBox Span Pattern          -- Box patterns
+  | PInt Span Int              -- Numeric patterns
+  | PFloat Span Double         -- Float pattern
+  | PConstr Span Id [Pattern]  -- Constructor pattern
+  | PPair Span Pattern Pattern -- Pair patterns
+  deriving (Eq, Show, Generic)
 
 instance FirstParameter Pattern Span
 
@@ -114,29 +114,24 @@ instance Binder Pattern where
   boundVars (PBox _ p)     = boundVars p
   boundVars PInt {}        = []
   boundVars PFloat {}      = []
-  boundVars PConstr {}     = []
-  boundVars (PApp _ p1 p2) = boundVars p1 ++ boundVars p2
   boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
+  boundVars (PConstr _ _ ps) = concatMap boundVars ps
 
   freshenBinder (PVar s var) = do
       var' <- freshVar Value var
       return $ PVar s var'
-
   freshenBinder (PBox s p) = do
       p' <- freshenBinder p
       return $ PBox s p'
-
-  freshenBinder (PApp s p1 p2) = do
-      p1' <- freshenBinder p1
-      p2' <- freshenBinder p2
-      return $ PApp s p1' p2'
-
   freshenBinder (PPair s p1 p2) = do
       p1' <- freshenBinder p1
       p2' <- freshenBinder p2
       return $ PPair s p1' p2'
-
-  freshenBinder p = return p -- TODO: Get rid of catch-alls
+  freshenBinder (PConstr s name ps) = do
+      ps <- mapM freshenBinder ps
+      return (PConstr s name ps)
+  freshenBinder p@(PWild _) = return p
+  freshenBinder x = error $ show x
 
 type Freshener t = State (Int, [(String, String)], [(String, String)]) t
 

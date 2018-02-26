@@ -8,7 +8,6 @@ import Control.Monad.State.Strict
 import Checker.Types (equalTypesWithUniversalSpecialisation, combineUnifiers)
 import Checker.Coeffects
 import Checker.Monad
-import Checker.Predicates
 import Checker.Substitutions
 import Context
 import Syntax.Expr
@@ -56,6 +55,7 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
         Just flattenOp -> (v, Discharged t (flattenOp c c'))
         Nothing        -> (v, Discharged t c')
 
+{-
 -- Match a Nil constructor
 ctxtFromTypedPattern s (TyApp (TyApp (TyCon listC) n) ty) (PConstr _ nilC)
   | internalName listC == "List" && internalName nilC == "Nil" = do
@@ -126,6 +126,7 @@ ctxtFromTypedPattern s t@(TyApp (TyCon nC) n) (PApp _ (PConstr _ sC) p)
     unifiers <- combineUnifiers s u u0
     -- Join the two pattern contexts together
     return (bs2, sizeVar : eVars2, unifiers)
+-}
 
 ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
@@ -133,39 +134,52 @@ ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   unifiers <- combineUnifiers s substl substr
   return (ctxtL ++ ctxtR, eVars1 ++ eVars2, unifiers)
 
-ctxtFromTypedPattern _ ty (PConstr s dataC) = do
+ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
+
   st <- get
   case lookup dataC (dataConstructors st) of
     Nothing ->
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" ++ pretty dataC ++ "`" <?> show (dataConstructors st)
-
     Just tySch -> do
-      t <- freshPolymorphicInstance tySch
-      debugM "Patterns.ctxtFromTypedPattern" $ pretty t ++ pretty ty
+      (t {- the data constructor's type in the context -},freshTyVars) <- freshPolymorphicInstance tySch
+      debugM "Patterns.ctxtFromTypedPattern" $ pretty t ++ "\n" ++ pretty ty
+      -- each pattern should match the head of an arrow
+      -- combine unifiers with combineUnifiers
+      -- final return type should match ty
+      let unpeel = unpeel' ([],[],[])
+          unpeel' acc [] t = return (t,acc)
+          unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
+              (as',bs',us') <- ctxtFromTypedPattern s t p
+              us <- combineUnifiers s us us'
+              unpeel' (as++as',bs++bs',us) ps t'
+          unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
+                    "Have you applied constructor `" ++ sourceName dataC ++
+                    "` to too many arguments?"
+      (t,(as,bs,us)) <- unpeel ps t
       areEq <- equalTypesWithUniversalSpecialisation s t ty
       case areEq of
-        (True, _, unifiers) -> return ([], [], unifiers)
+        (True, _, unifiers) -> return ([], freshTyVars, unifiers)
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
 
-ctxtFromTypedPattern _ ty (PApp s p1 p2) = do
-   (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1 -- checking patterns
-   case t1 of
-     FunTy arg res -> do
-       subst <- equalTypesWithUniversalSpecialisation s res ty
-       case subst of
-         (True, _, unifiers) -> do
-           unifiers <- combineUnifiers s unifiers subst1
-           let arg' = substType unifiers arg
-           (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg' p2
-           unifiers <- combineUnifiers s unifiers subst2
-           (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
-           return (binders ++ binders', tyvars1 ++ tyvars2, unifiers)
-
-         _ -> halt $ PatternTypingError (Just s) $
-                    "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty res ++ "`"
+-- ctxtFromTypedPattern _ ty (PApp s p1 p2) = do
+--    (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1 -- checking patterns
+--    case t1 of
+--      FunTy arg res -> do
+--        subst <- equalTypesWithUniversalSpecialisation s res ty
+--        case subst of
+--          (True, _, unifiers) -> do
+--            unifiers <- combineUnifiers s unifiers subst1
+--            let arg' = substType unifiers arg
+--            (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg' p2
+--            unifiers <- combineUnifiers s unifiers subst2
+--            (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
+--            return (binders ++ binders', tyvars1 ++ tyvars2, unifiers)
+--
+--          _ -> halt $ PatternTypingError (Just s) $
+--                     "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty res ++ "`"
 
 
 ctxtFromTypedPattern s t p = do
@@ -181,39 +195,39 @@ ctxtFromTypedPattern s t p = do
 --   e.g. given type A -> B -> C and patterns [Constr "A", Constr "B"] then
 --     the remaining type is C.
 
-synthPatternTypeForPAppLeft :: (?globals :: Globals) => Pattern
-  -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type, Type)
-synthPatternTypeForPAppLeft p = do
-  case p of
-    PConstr s name -> do
-      st <- get
-      case lookup name (dataConstructors st) of
-        Nothing -> halt $ UnboundVariableError (Just s) $ "Constructor `" ++ pretty name ++ "`"
-        Just tySch -> do
-          t <- freshPolymorphicInstance tySch
-          return ([], [], [], t)
-    PApp s p1 p2 -> do
-      (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1
-      case t1 of
-        FunTy arg res -> do
-          (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg p2
-          (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
-          debugM "PApp" $ show $ substType subst2 res
-          return (binders ++ binders', tyvars1 ++ tyvars2, [], substType subst2 res)
-        t -> halt $ PatternTypingError (Just s) $
-                    "Expected function type but got `" ++ pretty t
-                    ++ "` in pattern `" ++ pretty p1 ++ "`"
-    PVar s name -> halt $ PatternTypingError (Just s) $
-                          "Expected a constructor pattern, but got `" ++ pretty name ++ "`"
-    PWild s -> halt $ PatternTypingError (Just s) $
-                      "Expected a constructor pattern, but got a wildcard"
-    PInt s _ -> halt $ PatternTypingError (Just s) $
-                      "Expected a constructor pattern, but got an `Int`"
-    PFloat s _ -> halt $ PatternTypingError (Just s) $
-                      "Expected a constructor pattern, but got a `Float`"
-    pair@(PPair s _ _) -> halt $ PatternTypingError (Just s) $
-                      "Expected a constructor pattern, but got `" ++ pretty pair ++ "`"
-
+-- synthPatternTypeForPAppLeft :: (?globals :: Globals) => Pattern
+--   -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type, Type)
+-- synthPatternTypeForPAppLeft p = do
+--   case p of
+--     PConstr s name ps -> do
+--       st <- get
+--       case lookup name (dataConstructors st) of
+--         Nothing -> halt $ UnboundVariableError (Just s) $ "Constructor `" ++ pretty name ++ "`"
+--         Just tySch -> do
+--           t <- freshPolymorphicInstance tySch
+--           return ([], [], [], t)
+--     -- PApp s p1 p2 -> do
+--     --   (binders1, tyvars1, subst1, t1) <- synthPatternTypeForPAppLeft p1
+--     --   case t1 of
+--     --     FunTy arg res -> do
+--     --       (binders2, tyvars2, subst2) <- ctxtFromTypedPattern s arg p2
+--     --       (binders, binders') <- substCtxt subst2 (binders1 ++ binders2)
+--     --       debugM "PApp" $ show $ substType subst2 res
+--     --       return (binders ++ binders', tyvars1 ++ tyvars2, [], substType subst2 res)
+--     --     t -> halt $ PatternTypingError (Just s) $
+--     --                 "Expected function type but got `" ++ pretty t
+--     --                 ++ "` in pattern `" ++ pretty p1 ++ "`"
+--     PVar s name -> halt $ PatternTypingError (Just s) $
+--                           "Expected a constructor pattern, but got `" ++ pretty name ++ "`"
+--     PWild s -> halt $ PatternTypingError (Just s) $
+--                       "Expected a constructor pattern, but got a wildcard"
+--     PInt s _ -> halt $ PatternTypingError (Just s) $
+--                       "Expected a constructor pattern, but got an `Int`"
+--     PFloat s _ -> halt $ PatternTypingError (Just s) $
+--                       "Expected a constructor pattern, but got a `Float`"
+--     pair@(PPair s _ _) -> halt $ PatternTypingError (Just s) $
+--                       "Expected a constructor pattern, but got `" ++ pretty pair ++ "`"
+--
 ctxtFromTypedPatterns ::
   (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
 ctxtFromTypedPatterns sp ty [] = do
@@ -248,7 +262,7 @@ isIrrefutable s (Box _ t) (PBox _ p) =
 -- irrefutable patterns... but we need and easier way to index
 -- the data constructors by what type they belong to
 -- isIrrefutable s t (PConstr s id) =
-isIrrefutable s (TyCon con) (PConstr _ pcon)
+isIrrefutable s (TyCon con) (PConstr _ pcon _ps)
    | internalName pcon == "()" && internalName con == "()" =
    return True
 isIrrefutable s _ _ = return False

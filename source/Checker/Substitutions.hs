@@ -150,12 +150,14 @@ renameType rmap t =
         -- Shouldn't happen
         Nothing -> return $ TyVar v
 
-freshPolymorphicInstance :: TypeScheme -> MaybeT Checker Type
+-- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
+-- and their new names.
+freshPolymorphicInstance :: TypeScheme -> MaybeT Checker (Type, [Id])
 freshPolymorphicInstance (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
-    return $ renameType renameMap ty
+    return $ (renameType renameMap ty, map snd renameMap)
 
   where
     -- Freshen variables, create existential instantiation

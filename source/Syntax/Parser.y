@@ -125,25 +125,20 @@ Pat :: { Pattern }
   : PAtom                     { $1 }
   | '(' Pat ',' Pat ')'       { PPair (getPosToSpan $1) $2 $4 }
 
-PJuxt :: { Pattern }
-  : PJuxt '`' PAtom '`'       { PApp (getStart $1, getEnd $3) $3 $1 }
-  | PJuxt PAtom               { PApp (getStart $1, getEnd $2) $1 $2 }
-  | PAtom                     { $1 }
-
 PAtom :: { Pattern }
   : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
   | '_'                       { PWild (getPosToSpan $1) }
   | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) x }
   | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) $ read x }
-  | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) }
-  | '(' PJuxt ')'             { $2 }
-  | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
+  | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
+  | CONSTR Pats               { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) $2 }
+  | '(' PAtom ')'             { $2 }
+  | '[' Pat ']'               { PBox (getPosToSpan $1) $2 }
 
 TypeScheme :: { TypeScheme }
   : Type                              { Forall nullSpan [] $1 }
   | forall '(' VarSigs ')' '.' Type   { Forall (getPos $1, getPos $5) $3 $6 }
   | forall VarSigs '.' Type           { Forall (getPos $1, getPos $3) $2 $4 }
-
 
 VarSigs :: { [(Id, Kind)] }
   : VarSig ',' VarSigs        { $1 : $3 }
@@ -249,8 +244,8 @@ Expr :: { Expr }
       { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
 
   | if Expr then Expr else Expr
-      { Case (getPos $1, getEnd $6) $2 [(PConstr (getPosToSpan $3) (mkId "True"), $4),
-                                        (PConstr (getPosToSpan $3) (mkId "False"), $6)] }
+      { Case (getPos $1, getEnd $6) $2 [(PConstr (getPosToSpan $3) (mkId "True") [], $4),
+                                        (PConstr (getPosToSpan $3) (mkId "False") [], $6)] }
 
   | Form
     { $1 }

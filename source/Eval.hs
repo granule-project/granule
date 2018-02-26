@@ -142,7 +142,7 @@ pmatch _ [] _ =
 pmatch _ ((PWild _, e):_)  _ =
    return $ Just (e, [])
 
-pmatch _ ((PConstr _ s, e):_) (Constr s' []) | s == s' =
+pmatch _ ((PConstr _ s ps, e):_) (Constr s' []) | s == s' =
    return $ Just (e, [])
 
 pmatch _ ((PVar _ var, e):_) val =
@@ -161,15 +161,15 @@ pmatch _ ((PInt _ n, e):_)      (NumInt m)   | n == m  =
 pmatch _ ((PFloat _ n, e):_)    (NumFloat m) | n == m =
    return $ Just (e, [])
 
-pmatch ctxt ((PApp _ p1 p2, e):ps) val@(Constr s vs) = do
-  p <- pmatch ctxt [(p2, e)] (last vs)
-  case p of
-    Just (_, bindings) -> do
-      p' <- pmatch ctxt [(p1, e)] (Constr s (init $ vs))
-      case p' of
-        Just (_, bindings') -> return $ Just (e, bindings ++ bindings')
-        _                   -> pmatch ctxt ps val
-    _                  -> pmatch ctxt ps val
+-- pmatch ctxt ((PApp _ p1 p2, e):ps) val@(Constr s vs) = do
+--   p <- pmatch ctxt [(p2, e)] (last vs)
+--   case p of
+--     Just (_, bindings) -> do
+--       p' <- pmatch ctxt [(p1, e)] (Constr s (init $ vs))
+--       case p' of
+--         Just (_, bindings') -> return $ Just (e, bindings ++ bindings')
+--         _                   -> pmatch ctxt ps val
+--     _                  -> pmatch ctxt ps val
 
 pmatch ctxt ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
   match1 <- pmatch ctxt [(p1, e)] v1

@@ -91,7 +91,7 @@ run input = do
                 printErr $ EvalError $ show e
                 return (ExitFailure 1)
               Right Nothing -> do
-                printInfo "There is no `main` function."
+                printInfo "There is no `main` definition."
                 return ExitSuccess
               Right (Just result) -> do
                 printInfo "`main` returned:"
