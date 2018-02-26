@@ -1,12 +1,16 @@
 ------
 --- Module: Nat
 --- Description: Base library for operations on type-indexed natural numbers
---- Authors: Dominic Orchard
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
 --- License: BSD3
 --- Copyright: (c) Authors 2018
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
 ------
+
+data N : Nat= -> Type where
+  Z : N 0;
+  S : forall n : Nat= . N n -> N (n+1)
 
 -- # Helpers
 
