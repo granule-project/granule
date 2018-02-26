@@ -160,7 +160,10 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
       (t,(as,bs,us)) <- unpeel ps t
       areEq <- equalTypesWithUniversalSpecialisation s t ty
       case areEq of
-        (True, _, unifiers) -> return ([], freshTyVars, unifiers)
+        (True, _, unifiers) -> do
+          us <- combineUnifiers s unifiers us
+          return (as, freshTyVars++bs, us)
+
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
 
