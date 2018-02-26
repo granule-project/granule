@@ -130,8 +130,9 @@ instance Binder Pattern where
   freshenBinder (PConstr s name ps) = do
       ps <- mapM freshenBinder ps
       return (PConstr s name ps)
-  freshenBinder p@(PWild _) = return p
-  freshenBinder x = error $ show x
+  freshenBinder p @ PWild {} = return p
+  freshenBinder p @ PInt {} = return p
+  freshenBinder p @ PFloat {} = return p
 
 type Freshener t = State (Int, [(String, String)], [(String, String)]) t
 
