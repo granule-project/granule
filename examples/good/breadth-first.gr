@@ -23,6 +23,8 @@ root = R |1|
 
 ex0 : BFTree (Int |1|)
 ex0 = Next |(N |2| |root|)| (Next |(N |3| |root|)| Empty)
+-- ex0 = Next [N [2] [root]] (Next [N [3] [root]] Empty)
+
 
 last : forall (a : Type) . BFTree (a |1|) -> Maybe a
 last x =
@@ -35,4 +37,4 @@ exLast : Int
 exLast = fromMaybe |42| (last ex0)
 
 main : () <[W]>
-main = write (intToString exLast)
+main = write (showInt exLast)
