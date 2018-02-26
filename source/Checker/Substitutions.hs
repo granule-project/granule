@@ -152,8 +152,8 @@ renameType rmap t =
 
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
-freshPolymorphicInstance :: TypeScheme -> MaybeT Checker (Type, [Id])
-freshPolymorphicInstance (Forall s kinds ty) = do
+freshPolymorphicInstance :: Quantifier -> TypeScheme -> MaybeT Checker (Type, [Id])
+freshPolymorphicInstance quantifier (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
@@ -168,7 +168,7 @@ freshPolymorphicInstance (Forall s kinds ty) = do
                  freshName <- freshVar (internalName var)
                  let var'  = mkId freshName
                  -- Label fresh variable as an existential
-                 modify (\st -> st { tyVarContext = (var', (k, InstanceQ)) : tyVarContext st })
+                 modify (\st -> st { tyVarContext = (var', (k, quantifier)) : tyVarContext st })
                  return var'
                KConstr c -> freshCoeffectVar var (CConstr c)
                KCoeffect ->

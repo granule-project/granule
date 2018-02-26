@@ -8,11 +8,13 @@ import Control.Monad.State.Strict
 import Checker.Types (equalTypesWithUniversalSpecialisation, combineUnifiers)
 import Checker.Coeffects
 import Checker.Monad
+import Checker.Predicates
 import Checker.Substitutions
 import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Utils
+
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -143,7 +145,7 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" ++ pretty dataC ++ "`" <?> show (dataConstructors st)
     Just tySch -> do
-      (t {- the data constructor's type in the context -},freshTyVars) <- freshPolymorphicInstance tySch
+      (t {- the data constructor's type in the context -},freshTyVars) <- freshPolymorphicInstance BoundQ tySch
       debugM "Patterns.ctxtFromTypedPattern" $ pretty t ++ "\n" ++ pretty ty
       -- each pattern should match the head of an arrow
       -- combine unifiers with combineUnifiers

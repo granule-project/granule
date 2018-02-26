@@ -15,5 +15,5 @@ data Sequence a where
 length : forall a : Type . (Sequence a) |0| -> Int
 length xs =
   case xs of
-    [Empty]       -> 0;
-    [Next _ xs] -> 1 + length |xs|
+    |Empty|       -> 0;
+    |(Next _ xs)| -> 1 + length |xs|

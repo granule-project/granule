@@ -364,7 +364,7 @@ synthExpr _ _ _ (Val s (Constr c [])) = do
       st <- get
       case lookup c (dataConstructors st) of
         Just tySch -> do
-          (ty,_) <- freshPolymorphicInstance tySch -- discard list of fresh type variables
+          (ty,_) <- freshPolymorphicInstance InstanceQ tySch -- discard list of fresh type variables
           return (ty, [])
         _ -> halt $ UnboundVariableError (Just s) $
                     "Data constructor `" ++ pretty c ++ "`" <?> show (dataConstructors st)
@@ -440,7 +440,7 @@ synthExpr defs gam _ (Val s (Var x)) =
        -- Try definitions in scope
        case lookup x (defs ++ Primitives.builtins) of
          Just tyScheme  -> do
-           (ty',_) <- freshPolymorphicInstance tyScheme -- discard list of fresh type variables
+           (ty',_) <- freshPolymorphicInstance InstanceQ tyScheme -- discard list of fresh type variables
            return (ty', [])
          -- Couldn't find it
          Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
