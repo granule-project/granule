@@ -170,10 +170,10 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, quantifier)) : tyVarContext st })
                  return var'
-               KConstr c -> freshCoeffectVar var (CConstr c)
-               KCoeffect ->
-                 error "Coeffect kind variables not yet supported"
-               KPoly _ -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+               KConstr c -> freshCoeffectVarWithBinding var (CConstr c) quantifier
+               KCoeffect -> error "Coeffect kind variables not yet supported"
+               KPoly _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
+               \ Please open an issue with a snippet of your code at https://github.com/dorchard/granule/issues"
       -- Return pair of old variable name and instantiated name (for
       -- name map)
       return (var, var')
