@@ -135,7 +135,7 @@ PAtom :: { Pattern }
   | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) x }
   | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) $ read x }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
-  | '(' Pat ')'             { $2 }
+  | '(' Pat ')'               { $2 }
   | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
   | '(' Pat ',' Pat ')'       { PPair (getPosToSpan $1) $2 $4 }
 
@@ -328,9 +328,9 @@ parseDefs input = do
           else die $ "Error: Name clash: " ++ intercalate ", " (map sourceName clashes)
       where
         clashes = names \\ nub names
-        names = map (\d -> case d of (Def _ name _ _ _) -> name
-                                     (ADT _ name _ _ _) -> name)
-                    ds
+        names = (`map` ds) (\d -> case d of (Def _ name _ _ _) -> name
+                                            (ADT _ name _ _ _) -> name)
+                    
 
 myReadFloat :: String -> Rational
 myReadFloat str =

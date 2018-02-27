@@ -145,11 +145,10 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" ++ pretty dataC ++ "`" <?> show (dataConstructors st)
     Just tySch -> do
-      (t {- the data constructor's type in the context -},freshTyVars) <- freshPolymorphicInstance BoundQ tySch
+      (t,freshTyVars) <- freshPolymorphicInstance BoundQ tySch
       debugM "Patterns.ctxtFromTypedPattern" $ pretty t ++ "\n" ++ pretty ty
-      -- each pattern should match the head of an arrow
-      -- combine unifiers with combineUnifiers
-      -- final return type should match ty
+
+      -- unpeel `ty` by matching each pattern with the head of an arrow
       let unpeel = unpeel' ([],[],[])
           unpeel' acc [] t = return (t,acc)
           unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
