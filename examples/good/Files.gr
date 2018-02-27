@@ -3,8 +3,8 @@ import Sequence
 
 main : Sequence Char
 main =
-    let h       = openFile "foo" ReadMode in
-    let (h, c)  = hGetChar h              in
-    let (h, c') = hGetChar h              in
-    let ()      = hClose h                in
-    (Next c (Next c' Empty))
+    let h          = openFile "LICENSE" ReadMode
+    in let (h, c)  = hGetChar h
+    in let (h, c') = hGetChar h
+    in let ()      = hClose h
+    in (Next c (Next c' Empty))
