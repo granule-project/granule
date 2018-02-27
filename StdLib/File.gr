@@ -1,0 +1,13 @@
+data IOMode : Type where
+  ReadMode      : IOMode;
+  WriteMode     : IOMode;
+  AppendMode    : IOMode;
+  ReadWriteMode : IOMode
+
+-- Moded handlers
+
+--data MHandle : Type -> Type where
+--  RHandle : Handle  -> MHandle ReadMode;
+--  WHandle : Handle  -> MHandle WriteMode;
+--  AHandle : Handle  -> MHandle AppendMode;
+--  RWHandle : Handle -> MHandle ReadWiteMode

@@ -1,0 +1,9 @@
+import File
+import Sequence
+
+main : Sequence Char
+main =
+    let h       = openFile "foo" ReadMode in
+    let (c, h)  = hGetChar h              in
+    let ()      = hClose h                in
+    (Next c Empty)
