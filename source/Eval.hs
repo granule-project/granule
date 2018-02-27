@@ -9,6 +9,7 @@ import Context
 import Utils
 import Data.Text (pack)
 import qualified Data.Text.IO as Text
+import qualified System.IO as SIO
 
 import System.IO (hFlush, stdout)
 

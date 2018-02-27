@@ -26,6 +26,8 @@ typeLevelConstructors =
     , (mkId $ "*",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
     , (mkId $ "/\\", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
     , (mkId $ "\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+    -- File stuff
+    , (mkId $ "Handle", KType)
     -- Channels and session types
     , (mkId $ "Send", KFun KType (KFun session session))
     , (mkId $ "Recv", KFun KType (KFun session session))
@@ -54,6 +56,23 @@ builtins =
 
   , (mkId "showInt", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "String"))
+
+    -- File stuff
+  , (mkId "openFile", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "String")
+                          (FunTy (TyCon $ mkId "IOMode")
+                                 (TyCon $ mkId "Handle")))
+  , (mkId "hGetChar", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "Handle")
+                                (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "Char")))
+  , (mkId "hPutChar", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "Handle")
+                         (FunTy (TyCon $ mkId "Char")
+                                 (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "()"))))
+  , (mkId "hClose", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "Handle")
+                                (TyCon $ mkId "()"))
+
     -- Session typed primitives
   , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
