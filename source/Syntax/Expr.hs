@@ -2,6 +2,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    letBox,
@@ -74,7 +76,15 @@ data Value = Abs Pattern (Maybe Type) Expr
            | Pair Expr Expr
            | CharLiteral Char
            | StringLiteral Text
-          deriving (Eq, Show)
+           -------------------------
+           -- Used only inside the interpeter
+           | Primitive (Value -> IO Value)
+
+deriving instance Eq (Value -> IO Value) => Eq Value
+deriving instance Show Value
+
+instance Show (Value -> IO Value) where
+  show _ = "Some primitive"
 
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
@@ -82,7 +92,10 @@ data Expr = App Span Expr Expr
           | LetDiamond Span Pattern Type Expr Expr
           | Val Span Value
           | Case Span Expr [(Pattern, Expr)]
-          deriving (Eq, Show, Generic)
+          deriving (Generic)
+
+deriving instance Eq (Value -> IO Value) => Eq Expr
+deriving instance Show Expr
 
 instance FirstParameter Expr Span
 
@@ -385,7 +398,10 @@ instance Term Expr where
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
          | ADT Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
-          deriving (Eq, Show, Generic)
+          deriving (Generic)
+
+deriving instance Eq (Value -> IO Value) => Eq Def
+deriving instance Show Def
 
 type AST = [Def]
 

@@ -36,11 +36,6 @@ evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
 
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "write" = do
-    StringLiteral s <- evalIn ctxt e
-    Text.putStrLn s
-    return $ Pure (Val nullSpan (Constr (mkId "()") []))
-
 evalIn _ (Val s (Var v)) | internalName v == "read" = do
     putStr "> "
     hFlush stdout
@@ -74,15 +69,16 @@ evalIn _ (Val _ (Abs p t e)) = return $ Abs p t e
 
 evalIn ctxt (App _ e1 e2) = do
     v1 <- evalIn ctxt e1
+    v2 <- evalIn ctxt e2
     case v1 of
+      Primitive k -> k v2
+
       Abs p _ e3 -> do
-        v2 <- evalIn ctxt e2
         p <- pmatch ctxt [(p, e3)] v2
         case p of
           Just (e3, bindings) -> evalIn ctxt (applyBindings bindings e3)
 
       Constr c vs -> do
-        v2 <- evalIn ctxt e2
         return $ Constr c (vs ++ [v2])
 
       _ -> error $ show v1
@@ -183,6 +179,22 @@ pmatch ctxt ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
 
 pmatch ctxt (_:ps) val = pmatch ctxt ps val
 
+builtIns :: Ctxt Value
+builtIns =
+  [
+    (mkId "pure",       Primitive $ \v -> return $ Pure (Val nullSpan v))
+  , (mkId "intToFloat", Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
+  , (mkId "showInt", Primitive $ \n -> case n of
+                              NumInt n -> return . StringLiteral . pack . show $ n
+                              n        -> error $ show n)
+  , (mkId "write", Primitive $ \(StringLiteral s) -> do
+                              Text.putStrLn s
+                              return $ Pure (Val nullSpan (Constr (mkId "()") [])))
+  ]
+  where
+    cast :: Int -> Double
+    cast = fromInteger . toInteger
+
 evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
@@ -196,7 +208,7 @@ evalDefs ctxt (d : defs) = do
 
 eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
 eval defs = do
-    bindings <- evalDefs empty defs
+    bindings <- evalDefs builtIns defs
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)
