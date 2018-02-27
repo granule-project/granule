@@ -29,6 +29,8 @@ import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
 import Data.Text (Text)
 
+import qualified System.IO as SIO (Handle)
+
 import Syntax.FirstParameter
 
 -- Internal representation of names (variables)
@@ -79,6 +81,7 @@ data Value = Abs Pattern (Maybe Type) Expr
            -------------------------
            -- Used only inside the interpeter
            | Primitive (Value -> IO Value)
+           | Handle SIO.Handle
 
 deriving instance Eq (Value -> IO Value) => Eq Value
 deriving instance Show Value
@@ -311,6 +314,7 @@ instance Term Value where
     subst _ _ v@(Constr _ _)      = Val nullSpan v
     subst _ _ v@CharLiteral{}     = Val nullSpan v
     subst _ _ v@StringLiteral{}   = Val nullSpan v
+    subst _ _ v@Handle{}          = Val nullSpan v
 
     freshen (Abs p t e) = do
       p'   <- freshenBinder p

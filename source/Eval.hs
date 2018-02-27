@@ -7,11 +7,11 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 import Utils
-import Data.Text (pack)
+import Data.Text (pack, unpack)
 import qualified Data.Text.IO as Text
-import qualified System.IO as SIO
 
 import System.IO (hFlush, stdout)
+import qualified System.IO as SIO
 
 evalBinOp :: String -> Value -> Value -> Value
 evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
@@ -190,10 +190,41 @@ builtIns =
   , (mkId "write", Primitive $ \(StringLiteral s) -> do
                               Text.putStrLn s
                               return $ Pure (Val nullSpan (Constr (mkId "()") [])))
+  , (mkId "openFile", Primitive openFile)
+  , (mkId "hGetChar", Primitive hGetChar)
+  , (mkId "hPutChar", Primitive hPutChar)
+  , (mkId "hClose", Primitive hClose)
   ]
   where
     cast :: Int -> Double
     cast = fromInteger . toInteger
+
+    openFile :: Value -> IO Value
+    openFile (StringLiteral s) = return $
+      Primitive (\(Constr m []) ->
+        let mode = (read (internalName m)) :: SIO.IOMode
+        in do
+             h <- SIO.openFile (unpack s) mode
+             return $ Handle h)
+
+    hPutChar :: Value -> IO Value
+    hPutChar (Handle h) = return $
+      Primitive (\(CharLiteral c) -> do
+         SIO.hPutChar h c
+         return $ Pair (Val nullSpan (Handle h))
+                        (Val nullSpan (Constr (mkId "()") [])))
+
+    hGetChar :: Value -> IO Value
+    hGetChar (Handle h) = do
+          c <- SIO.hGetChar h
+          return $ Pair (Val nullSpan (Handle h))
+                         (Val nullSpan (CharLiteral c))
+
+    hClose :: Value -> IO Value
+    hClose (Handle h) = do
+         SIO.hClose h
+         return $ Constr (mkId "()") []
+
 
 evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
