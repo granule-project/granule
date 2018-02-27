@@ -48,23 +48,6 @@ evalIn _ (Val s (Var v)) | internalName v == "readInt" = do
     val <- readLn
     return $ Pure (Val s (NumInt val))
 
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
-  v <- evalIn ctxt e
-  return $ Pure (Val nullSpan v)
-
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "intToFloat" = do
-  NumInt n <- evalIn ctxt e
-  return $ NumFloat (cast n)
-  where
-    cast :: Int -> Double
-    cast = fromInteger . toInteger
-
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "showInt" = do
-  n <- evalIn ctxt e
-  case n of
-    NumInt n -> return . StringLiteral . pack . show $ n
-    n -> error $ show n
-
 evalIn _ (Val _ (Abs p t e)) = return $ Abs p t e
 
 evalIn ctxt (App _ e1 e2) = do
@@ -184,7 +167,7 @@ builtIns =
   [
     (mkId "pure",       Primitive $ \v -> return $ Pure (Val nullSpan v))
   , (mkId "intToFloat", Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
-  , (mkId "showInt", Primitive $ \n -> case n of
+  , (mkId "showInt",    Primitive $ \n -> case n of
                               NumInt n -> return . StringLiteral . pack . show $ n
                               n        -> error $ show n)
   , (mkId "write", Primitive $ \(StringLiteral s) -> do
@@ -193,7 +176,7 @@ builtIns =
   , (mkId "openFile", Primitive openFile)
   , (mkId "hGetChar", Primitive hGetChar)
   , (mkId "hPutChar", Primitive hPutChar)
-  , (mkId "hClose", Primitive hClose)
+  , (mkId "hClose",   Primitive hClose)
   ]
   where
     cast :: Int -> Double
