@@ -217,15 +217,27 @@ checkExpr defs gam pol topLevel tau (App s e1 e2) = do
 
 -- Promotion
 checkExpr defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
-  gamF    <- discToFreshVarsIn s (freeVars e) gam demand
-  (gam', subst) <- checkExpr defs gamF pol False tau e
-  let gam'' = multAll (freeVars e) demand gam'
-  return (gam'', subst)
+    let vars = freeVars e -- map fst gam
+    gamF    <- discToFreshVarsIn s vars gam demand
+    (gam', subst) <- checkExpr defs gamF pol False tau e
+
+    guardGam <- allGuardContexts
+    guardGam' <- filterM isLevelKinded guardGam
+
+    let gam'' = multAll (vars ++ map fst guardGam') demand (gam' ++ guardGam')
+    return (gam'', subst)
+  where
+    isLevelKinded (_, as) = do
+        ty <- inferCoeffectTypeAssumption s as
+        return $ case ty of
+          Nothing -> False
+          Just (CConstr c) | internalName c == "Level" -> True
 
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam) <- synthExpr defs gam pol guardExpr
+  pushGuardContext guardGam
 
   -- Check each of the branches
   branchCtxtsAndSubst <-
@@ -255,15 +267,18 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
            concludeImplication eVars
 
            -- The resulting context has the shared part removed
-           let branchCtxt = (localGam `subtractCtxt` patternGam) `subtractCtxt` specialisedGam
+           -- 28/02/2018 - We used to have this
+           --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
+           -- But we want promotion to invovlve the guard to avoid leaks
+           let branchCtxt = localGam `subtractCtxt` specialisedGam
 
            return (branchCtxt, subst')
 
         -- Anything that was bound in the pattern but not used correctly
         xs -> illLinearityMismatch s xs
 
+  popGuardContext
   -- Find the upper-bound contexts
-
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
@@ -321,7 +336,7 @@ synthExpr _ _ _ (Val _ (CharLiteral _)) = return (TyCon $ mkId "Char", [])
 synthExpr _ _ _ (Val _ (StringLiteral _)) = return (TyCon $ mkId "String", [])
 
 -- Nat constructors
-synthExpr _ _ _ (Val s (Constr c [])) = do
+synthExpr _ gam _ (Val s (Constr c [])) = do
   case internalName c of
     "Nil" -> do
         elementVarName <- freshVar "a"

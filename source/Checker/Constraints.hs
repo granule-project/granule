@@ -166,7 +166,7 @@ freshCVar quant name (CConstr k) q
     "Nat" -> return (solverVar .>= literal 0, SNat Ordered solverVar)
     "One" -> return (solverVar .== literal 1, SNat Ordered solverVar)
     "Nat=" -> return (solverVar .>= literal 0, SNat Discrete solverVar)
-    "Level" -> return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
+    "Level" -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
     "Set" -> return (true, SSet S.empty)
 
 -- A poly typed coeffect variable whose element is 'infinity' gets
