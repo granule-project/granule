@@ -15,8 +15,8 @@ import Sequence
 
 main : FileIO (Sequence Char)
 main =
-    let h0       <- openFile "LICENSE" ReadMode;
-        (h1, c)  <- hGetChar h0;
-        (h2, c') <- hGetChar h1;
-        ()       <- hClose h2
+    let h       <- openFile "LICENSE" ReadMode;
+        (h, c)  <- hGetChar h;
+        (h, c') <- hGetChar h;
+        ()      <- hClose h
     in pure (Next c (Next c' Empty))
