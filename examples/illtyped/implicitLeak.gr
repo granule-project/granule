@@ -1,0 +1,9 @@
+data Bool where
+  True : Bool;
+  False : Bool
+
+leak : Bool |Private| -> Bool |Public|
+leak |x| =
+  case x of
+    True  ->  |True|;
+    False ->  |False|

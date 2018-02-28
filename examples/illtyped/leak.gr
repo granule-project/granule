@@ -1,0 +1,4 @@
+import Bool
+
+leak : Bool |Private| -> Bool |Public|
+leak |x| = |x|
