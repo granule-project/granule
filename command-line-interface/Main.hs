@@ -15,11 +15,12 @@
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM)
-import Data.List (intercalate)
+import Data.List (intercalate, stripPrefix)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 
+import System.Directory (getCurrentDirectory)
 import System.FilePath.Glob (glob)
 import Options.Applicative
 
@@ -42,6 +43,7 @@ main = do
         exitWith =<< run =<< getContents
     else do
       debugM "Globals" (show globals)
+      currentDir <- getCurrentDirectory
       results <- forM globPatterns $ \p -> do
         filePaths <- glob p
         case filePaths of
@@ -49,8 +51,13 @@ main = do
             printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
             return [(ExitFailure 1)]
           _ -> forM filePaths $ \p -> do
-            let ?globals = globals { sourceFilePath = p }
-            printInfo $ "\nChecking " <> p <> "..."
+            let fileName =
+                 case currentDir `stripPrefix` p of
+                   Just f  -> tail f
+                   Nothing -> p
+
+            let ?globals = globals { sourceFilePath = fileName }
+            printInfo $ "\nChecking " <> fileName <> "..."
             run =<< readFile p
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
