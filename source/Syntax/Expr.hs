@@ -375,8 +375,8 @@ instance Term Expr where
       return $ App s e1' e2'
 
     freshen (LetDiamond s p t e1 e2) = do
-      p'  <- freshenBinder p
       e1' <- freshen e1
+      p'  <- freshenBinder p
       e2' <- freshen e2
       t'   <- case t of
                 Nothing -> return Nothing
