@@ -406,31 +406,32 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
   return (eqTypes, gamNew)
 
 -- Diamond cut
-synthExpr defs gam pol (LetDiamond s p ty e1 e2) = do
-  (binders, _, _)  <- ctxtFromTypedPattern s ty p
-  pIrrefutable <- isIrrefutable s ty p
-  if pIrrefutable then do
-    (tau, gam1) <- synthExpr defs (binders ++ gam) pol e2
-    case tau of
-      Diamond ef2 tau' -> do
-         (sig, gam2) <- synthExpr defs gam pol e1
-         case sig of
-           Diamond ef1 ty' | ty == ty' -> do
-               gamNew <- ctxPlus s (gam1 `subtractCtxt` binders) gam2
+synthExpr defs gam pol (LetDiamond s p optionalTySig e1 e2) = do
+  (sig, gam1) <- synthExpr defs gam pol e1
+  case sig of
+    Diamond ef1 ty1 -> do
+       (binders, _, _)  <- ctxtFromTypedPattern s ty1 p
+       pIrrefutable <- isIrrefutable s ty1 p
+       if not pIrrefutable
+       then refutablePattern s p
+       else do
+          (tau, gam2) <- synthExpr defs (binders ++ gam) pol e2
+          case tau of
+           Diamond ef2 ty2 -> do
+               optionalSigEquality s optionalTySig ty1
+               gamNew <- ctxPlus s (gam2 `subtractCtxt` binders) gam1
                -- Check linearity of locally bound variables
-               case checkLinearity binders gam1 of
-                  [] -> return (Diamond (ef1 ++ ef2) tau', gamNew)
-                  xs -> illLinearityMismatch s xs
+               case checkLinearity binders gam2 of
+                   [] -> return (Diamond (ef1 ++ ef2) ty2, gamNew)
+                   xs -> illLinearityMismatch s xs
 
            t ->
             halt $ GenericError (Just s)
-                 $ "Expected '" ++ pretty ty ++ "' but inferred '"
+                 $ "Expected and effect type but inferred '"
                  ++ pretty t ++ "' in body of let<>"
-      t ->
+    t ->
         halt $ GenericError (Just s)
-             $ "Expected '" ++ pretty ty
-             ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
-  else refutablePattern s p
+             $ "Expected an effect type but got" ++ pretty t ++ "'"
 
 -- Variables
 synthExpr defs gam _ (Val s (Var x)) =
@@ -545,6 +546,12 @@ synthExpr defs gam pol (Val s (Pair e1 e2)) = do
 synthExpr _ _ _ e =
   halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
 
+-- Check an optional type signature for equality against a type
+optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker Bool
+optionalSigEquality _ Nothing _ = return True
+optionalSigEquality s (Just t) t' = do
+    (eq, _, _) <- equalTypes s t' t
+    return eq
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker Bool
 solveConstraints predicate s defName = do

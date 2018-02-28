@@ -92,7 +92,7 @@ instance Show (Value -> IO Value) where
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
           | Binop Span Operator Expr Expr
-          | LetDiamond Span Pattern Type Expr Expr
+          | LetDiamond Span Pattern (Maybe Type) Expr Expr
           | Val Span Value
           | Case Span Expr [(Pattern, Expr)]
           deriving (Generic)
@@ -378,7 +378,9 @@ instance Term Expr where
       p'  <- freshenBinder p
       e1' <- freshen e1
       e2' <- freshen e2
-      t'  <- freshen t
+      t'   <- case t of
+                Nothing -> return Nothing
+                Just ty -> freshen ty >>= (return . Just)
       return $ LetDiamond s p' t' e1' e2'
 
     freshen (Binop s op e1 e2) = do
