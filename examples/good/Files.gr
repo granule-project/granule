@@ -1,16 +1,19 @@
 import File
 import Sequence
 
+-- In Haskell
 -- openFile :: String -> IOMode -> IO Handle
 -- hGetChar :: Handle -> IO Char
+-- hPutChar :: Handle -> Char -> IO Char
 -- hClose :: Handle -> IO ()
 
--- openFile : String -> IOMode -> Handle
--- hGetChar :: Handle -> (Handle, Char)
--- hPutChar :: Handle -> Char -> Handle
--- hClose :: Handle -> ()
+-- In Granule
+-- openFile : String -> IOMode -> FileIO Handle
+-- hGetChar :: Handle -> FileIO (Handle, Char)
+-- hPutChar :: Handle -> Char -> FileIO Handle
+-- hClose :: Handle -> FileIO ()
 
-main : IO (Sequence Char)
+main : FileIO (Sequence Char)
 main =
     let h0       <- openFile "foo" ReadMode;
         (h1, c)  <- hGetChar h0;

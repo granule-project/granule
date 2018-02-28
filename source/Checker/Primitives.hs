@@ -13,7 +13,7 @@ typeLevelConstructors =
     , (mkId $ "Float", KType)
     , (mkId $ "Char", KType)
     , (mkId $ "String", KType)
-    , (mkId $ "IO", KFun KType KType)
+    , (mkId $ "FileIO", KFun KType KType)
     , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
     , (mkId $ "N", KFun (KConstr $ mkId "Nat=") KType)
     , (mkId $ "One", KCoeffect)   -- Singleton coeffect

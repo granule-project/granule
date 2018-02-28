@@ -93,8 +93,9 @@ equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
 equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
   return (con == con', [])
 
+-- Over approximation by 'FileIO' "monad"
 equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
-   | internalName con == "IO" = do
+   | internalName con == "FileIO" = do
     (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
     return (eq, unif)
 
