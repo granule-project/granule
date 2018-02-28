@@ -13,10 +13,20 @@ import Sequence
 -- hPutChar :: Handle -> Char -> FileIO Handle
 -- hClose :: Handle -> FileIO ()
 
+getMany : forall (n : Nat=)
+        . N n -> Handle -> FileIO (Handle, String)
+getMany n h =
+    case n of
+      Z     -> pure (h, "");
+      (S n) ->
+        let (h, c) <- hGetChar h;
+            (h, cs) <- getMany n h
+        in pure (h, stringAppend (showChar c) cs)
+
+
 main : FileIO String
 main =
-    let h0       <- openFile "LICENSE" ReadMode;
-        (h1, c)  <- hGetChar h0;
-        (h2, c') <- hGetChar h1;
-        ()       <- hClose h2
-    in pure (stringAppend (showChar c) (showChar c'))
+    let h       <- openFile "LICENSE" ReadMode;
+        (h, s)  <- getMany (S (S (S (S (S (S (S (S (S Z))))))))) h;
+        ()      <- hClose h
+    in pure s
