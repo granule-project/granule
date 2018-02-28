@@ -7,7 +7,7 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 import Utils
-import Data.Text (pack, unpack)
+import Data.Text (pack, unpack, append)
 import qualified Data.Text.IO as Text
 
 import System.IO (hFlush, stdout)
@@ -177,6 +177,11 @@ builtIns =
   , (mkId "hGetChar", Primitive hGetChar)
   , (mkId "hPutChar", Primitive hPutChar)
   , (mkId "hClose",   Primitive hClose)
+  , (mkId "showChar",
+        Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
+  , (mkId "stringAppend",
+        Primitive $ \(StringLiteral s) -> return $
+          Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `append` t)
   ]
   where
     cast :: Int -> Double

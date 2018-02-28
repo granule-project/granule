@@ -46,6 +46,12 @@ builtins =
     (mkId "pure", Forall nullSpan [(mkId "a", KType)]
        $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
 
+    -- String stuff
+  , (mkId "stringAppend", Forall nullSpan []
+      $ (FunTy (TyCon $ mkId "String") (FunTy (TyCon $ mkId "String") (TyCon $ mkId "String"))))
+  , (mkId "showChar", Forall nullSpan []
+      $ (FunTy (TyCon $ mkId "Char") (TyCon $ mkId "String")))
+
     -- Effectful primitives
   , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "String"))
   , (mkId "write", Forall nullSpan [] $
