@@ -214,8 +214,16 @@ instance Term Type where
 
   subst e _ t = e
   freshen =
-    typeFoldM (baseTypeFold { tfTyVar = freshenTyVar, tfBox = freshenTyBox })
+    typeFoldM (baseTypeFold { tfTyApp = rewriteTyApp,
+                              tfTyVar = freshenTyVar,
+                              tfBox = freshenTyBox })
     where
+      -- Rewrite type aliases of Box
+      rewriteTyApp t1@(TyCon ident) t2
+        | internalName ident == "Box" =
+          return $ Box (CInfinity (CPoly $ mkInternalId "∞" "infinity")) t2
+      rewriteTyApp t1 t2 = return $ TyApp t1 t2
+
       freshenTyBox c t = do
         c' <- freshen c
         t' <- freshen t
