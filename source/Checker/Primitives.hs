@@ -61,17 +61,18 @@ builtins =
   , (mkId "openFile", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "String")
                           (FunTy (TyCon $ mkId "IOMode")
-                                 (TyCon $ mkId "Handle")))
+                                (Diamond ["O"] (TyCon $ mkId "Handle"))))
   , (mkId "hGetChar", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
-                                (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "Char")))
+                               (Diamond ["R"]
+                                (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "Char"))))
   , (mkId "hPutChar", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
                          (FunTy (TyCon $ mkId "Char")
-                                 (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "()"))))
+                           (Diamond ["W"] (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "()")))))
   , (mkId "hClose", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
-                                (TyCon $ mkId "()"))
+                               (Diamond ["C"] (TyCon $ mkId "()")))
 
     -- Session typed primitives
   , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]

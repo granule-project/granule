@@ -1,10 +1,19 @@
 import File
 import Sequence
 
-main : Sequence Char
+-- openFile :: String -> IOMode -> IO Handle
+-- hGetChar :: Handle -> IO Char
+-- hClose :: Handle -> IO ()
+
+-- openFile : String -> IOMode -> Handle
+-- hGetChar :: Handle -> (Handle, Char)
+-- hPutChar :: Handle -> Char -> Handle
+-- hClose :: Handle -> ()
+
+main : (Sequence Char) <[O, R, R, C]>
 main =
-    let h          = openFile "LICENSE" ReadMode
-    in let (h, c)  = hGetChar h
-    in let (h, c') = hGetChar h
-    in let ()      = hClose h
-    in (Next c (Next c' Empty))
+    let h0       <- openFile "foo" ReadMode;
+        (h1, c)  <- hGetChar h0;
+        (h2, c') <- hGetChar h1;
+        ()       <- hClose h2
+    in pure (Next c (Next c' Empty))

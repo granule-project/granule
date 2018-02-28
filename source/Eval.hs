@@ -188,25 +188,27 @@ builtIns =
         let mode = (read (internalName m)) :: SIO.IOMode
         in do
              h <- SIO.openFile (unpack s) mode
-             return $ Handle h)
+             return $ Pure (Val nullSpan (Handle h)))
 
     hPutChar :: Value -> IO Value
     hPutChar (Handle h) = return $
       Primitive (\(CharLiteral c) -> do
          SIO.hPutChar h c
-         return $ Pair (Val nullSpan (Handle h))
-                        (Val nullSpan (Constr (mkId "()") [])))
+         return $ Pure (Val nullSpan
+                    (Pair (Val nullSpan (Handle h))
+                          (Val nullSpan (Constr (mkId "()") [])))))
 
     hGetChar :: Value -> IO Value
     hGetChar (Handle h) = do
           c <- SIO.hGetChar h
-          return $ Pair (Val nullSpan (Handle h))
-                         (Val nullSpan (CharLiteral c))
+          return $ Pure (Val nullSpan
+                    (Pair (Val nullSpan (Handle h))
+                          (Val nullSpan (CharLiteral c))))
 
     hClose :: Value -> IO Value
     hClose (Handle h) = do
          SIO.hClose h
-         return $ Constr (mkId "()") []
+         return $ Pure (Val nullSpan (Constr (mkId "()") []))
 
 
 evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)

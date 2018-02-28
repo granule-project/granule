@@ -2,10 +2,10 @@ import Bool
 
 foo : Chan (Send Bool (Recv Int End)) -> Int
 foo c =
-  let c      = send c True in
-  let (n, c) = recv c      in
-  let ()     = close c     in
-  n
+  let c      = send c True;
+      (n, c) = recv c;
+      ()     = close c
+  in n
 
 -- Given a one-shot channel for some sending a value of type 'a'
 -- but which is able to be reused 'n' times, and a list of
