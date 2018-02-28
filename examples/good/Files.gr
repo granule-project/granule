@@ -10,7 +10,7 @@ import Sequence
 -- hPutChar :: Handle -> Char -> Handle
 -- hClose :: Handle -> ()
 
-main : (Sequence Char) <[O, R, R, C]>
+main : IO (Sequence Char)
 main =
     let h0       <- openFile "foo" ReadMode;
         (h1, c)  <- hGetChar h0;
