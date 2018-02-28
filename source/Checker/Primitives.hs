@@ -71,16 +71,19 @@ builtins =
                                 (Diamond ["O"] (TyCon $ mkId "Handle"))))
   , (mkId "hGetChar", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
-                               (Diamond ["R"]
+                               (Diamond ["RW"]
                                 (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "Char"))))
   , (mkId "hPutChar", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
                          (FunTy (TyCon $ mkId "Char")
                            (Diamond ["W"] (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "()")))))
+  , (mkId "isEOF", Forall nullSpan [] $
+                     FunTy (TyCon $ mkId "Handle")
+                            (Diamond ["R"] (PairTy (TyCon $ mkId "Handle")
+                                                    (TyCon $ mkId "Bool"))))
   , (mkId "hClose", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
                                (Diamond ["C"] (TyCon $ mkId "()")))
-
     -- Session typed primitives
   , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))

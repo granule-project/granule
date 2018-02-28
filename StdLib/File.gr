@@ -1,5 +1,24 @@
+import Bool
+
 data IOMode : Type where
   ReadMode      : IOMode;
   WriteMode     : IOMode;
   AppendMode    : IOMode;
   ReadWriteMode : IOMode
+
+readFile : String -> FileIO String
+readFile filename =
+  let h       <- openFile filename ReadMode;
+      (h, cs) <- getCharsUntilEnd h;
+      ()      <- hClose h
+  in pure cs
+
+getCharsUntilEnd : Handle -> FileIO (Handle, String)
+getCharsUntilEnd h =
+    let (h, b) <- isEOF h
+    in case b of
+        True -> pure (h, "");
+        False ->
+            let (h, c) <- hGetChar h;
+                (h, cs) <- getCharsUntilEnd h
+            in pure (h, stringAppend (showChar c) cs)

@@ -385,6 +385,11 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t2'' <- joinTypes s t2 t2'
   return (TyApp t1'' t2'')
 
+joinTypes s (PairTy t1 t2) (PairTy t1' t2') = do
+  t1'' <- joinTypes s t1 t1'
+  t2'' <- joinTypes s t2 t2'
+  return (PairTy t1'' t2'')
+
 joinTypes s t1 t2 = do
   halt $ GenericError (Just s)
     $ "Type '" ++ pretty t1 ++ "' and '"

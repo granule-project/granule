@@ -182,6 +182,16 @@ builtIns =
   , (mkId "stringAppend",
         Primitive $ \(StringLiteral s) -> return $
           Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `append` t)
+  , (mkId "isEOF", Primitive $ \(Handle h) -> do
+        b <- SIO.isEOF
+        let boolflag =
+             case b of
+               True -> Constr (mkId "True") []
+               False -> Constr (mkId "False") []
+        return $ Pure (Val nullSpan
+                   (Pair (Val nullSpan (Handle h)) (Val nullSpan boolflag)))
+
+        )
   ]
   where
     cast :: Int -> Double
