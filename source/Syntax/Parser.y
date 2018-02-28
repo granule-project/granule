@@ -175,6 +175,7 @@ Type :: { Type }
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
+  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (PairTy $3 $5) }
   | TyJuxt '(' Type ')'       { TyApp $1 $3 }
   | TyAtom                    { $1 }
 
