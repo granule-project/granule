@@ -1,5 +1,4 @@
 import File
-import Sequence
 
 -- In Haskell
 -- openFile :: String -> IOMode -> IO Handle

@@ -107,6 +107,18 @@ equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t') (Diamond ef t) sp
     (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
     return (eq, unif)
 
+-- Over approximation by 'Session' "monad"
+equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
+       | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
+        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
+        return (eq, unif)
+
+-- Under approximation by 'Session' "monad"
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t') (Diamond ef t) sp
+       | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
+        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
+        return (eq, unif)
+
 
 equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp

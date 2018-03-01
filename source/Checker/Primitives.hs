@@ -14,6 +14,7 @@ typeLevelConstructors =
     , (mkId $ "Char", KType)
     , (mkId $ "String", KType)
     , (mkId $ "FileIO", KFun KType KType)
+    , (mkId $ "Session", KFun KType KType)
     , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
     , (mkId $ "N", KFun (KConstr $ mkId "Nat=") KType)
     , (mkId $ "One", KCoeffect)   -- Singleton coeffect
@@ -88,13 +89,14 @@ builtins =
   , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
                       .-> ((var "a")
-                        .-> ((con "Chan") .@ (var "s"))))
+                        .-> (Diamond ["Com"] ((con "Chan") .@ (var "s")))))
 
   , (mkId "recv", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
        $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
-         .-> (PairTy (var "a") ((con "Chan") .@ (var "s"))))
+         .-> (Diamond ["Com"] (PairTy (var "a") ((con "Chan") .@ (var "s")))))
 
-  , (mkId "close", Forall nullSpan [] $ ((con "Chan") .@ (con "End")) .-> (con "()"))
+  , (mkId "close", Forall nullSpan [] $
+                    ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))
   ]
 
 binaryOperators :: [(Operator, Type)]

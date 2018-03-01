@@ -422,20 +422,24 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
 
 -- Diamond cut
 synthExpr defs gam pol (LetDiamond s p optionalTySig e1 e2) = do
+  -- TODO: refactor this once we get a proper mechanism for
+  -- specifying effect over-approximations and type aliases
+
   (sig, gam1) <- synthExpr defs gam pol e1
   case sig of
-    (TyApp (TyCon con) t') | internalName con == "FileIO" ->
-      typeLetBody gam1 [] t'
+    (TyApp (TyCon con) t')
+      | internalName con == "FileIO" || internalName con == "Session" ->
+      typeLetSubject gam1 [] t'
 
     Diamond ef1 ty1 ->
-      typeLetBody gam1 ef1 ty1
+      typeLetSubject gam1 ef1 ty1
 
     t -> halt $ GenericError (Just s)
-              $ "Expected and effect type but inferred '"
+              $ "Expected an effect type but inferred '"
              ++ pretty t ++ "' in body of let<>"
 
    where
-      typeLetBody gam1 ef1 ty1 = do
+      typeLetSubject gam1 ef1 ty1 = do
         (binders, _, _)  <- ctxtFromTypedPattern s ty1 p
         pIrrefutable <- isIrrefutable s ty1 p
         if not pIrrefutable
@@ -443,15 +447,23 @@ synthExpr defs gam pol (LetDiamond s p optionalTySig e1 e2) = do
         else do
            (tau, gam2) <- synthExpr defs (binders ++ gam) pol e2
            case tau of
-            Diamond ef2 ty2 -> do
-                optionalSigEquality s optionalTySig ty1
-                gamNew <- ctxPlus s (gam2 `subtractCtxt` binders) gam1
-                -- Check linearity of locally bound variables
-                case checkLinearity binders gam2 of
-                    [] -> return (Diamond (ef1 ++ ef2) ty2, gamNew)
-                    xs -> illLinearityMismatch s xs
+            Diamond ef2 ty2 ->
+                typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2
+
+            (TyApp (TyCon con) t')
+               | internalName con == "FileIO" || internalName con == "Session" ->
+                 typeLetBody gam1 gam2 ef1 [] binders ty1 t'
+
             t -> halt $ GenericError (Just s)
-                      $ "Expected an effect type but got " ++ pretty t ++ "'"
+                      $ "Expected an effect type but got ''" ++ pretty t ++ "'"
+
+      typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 = do
+        optionalSigEquality s optionalTySig ty1
+        gamNew <- ctxPlus s (gam2 `subtractCtxt` binders) gam1
+        -- Check linearity of locally bound variables
+        case checkLinearity binders gam2 of
+            [] -> return (Diamond (ef1 ++ ef2) ty2, gamNew)
+            xs -> illLinearityMismatch s xs
 -- Variables
 synthExpr defs gam _ (Val s (Var x)) =
    -- Try the local context
