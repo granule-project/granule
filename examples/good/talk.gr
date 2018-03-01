@@ -8,12 +8,13 @@ twice : forall (c : Nat) . (Int |c| -> Int) |2| -> Int |c * 2| -> Int
 twice |g| |x| = g |x| + g |x|
 
 doTwice : (Int -> Int <[R]>) |2| -> Int |2| -> Int <[R, R]>
-doTwice |f| |x| = let a : Int <- f x in
-                  let b : Int <- f x in
-                  pure (a + b)
+doTwice |f| |x| =
+  let a <- f x;
+      b <- f x
+  in pure (a + b)
 
 echo : () <[R, W]>
-echo = let x : String <- read in write x
+echo = let x <- read in write x
 
 main : Int
 main = 42
