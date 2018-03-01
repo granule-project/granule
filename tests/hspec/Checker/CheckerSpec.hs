@@ -21,13 +21,16 @@ import Utils
 
 
 pathToExamples :: FilePath
-pathToExamples = "examples/good"
+pathToExamples = "examples"
 
 pathToGranuleBase :: FilePath
 pathToGranuleBase = "StdLib"
 
+pathToRegressionTests :: FilePath
+pathToRegressionTests = "tests/regression/good"
+
 pathToIlltyped :: FilePath
-pathToIlltyped = "examples/illtyped"
+pathToIlltyped = "tests/regression/illtyped"
 
  -- files in these directories don't get checked
 exclude :: FilePath
@@ -35,9 +38,6 @@ exclude = ""
 
 fileExtension :: String
 fileExtension = ".gr"
-
-tyvark = TyVar $ mkId "k"
-varA = mkId "a"
 
 spec :: Spec
 spec = do
@@ -75,18 +75,18 @@ spec = do
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
        (c, pred) <- runCtxts joinCtxts
-              [(varA, Discharged tyvark (CNat Ordered 5))]
-              [(varA, Discharged tyvark (CNat Ordered 10))]
-       c `shouldBe` [(varA, Discharged tyvark (CVar (mkId "a0")))]
+              [(varA, Discharged tyVarK (CNat Ordered 5))]
+              [(varA, Discharged tyVarK (CNat Ordered 10))]
+       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a0")))]
        pred `shouldBe`
          [Conj [Con (Leq nullSpan (CNat Ordered 10) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
               , Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
-              [(varA, Discharged (tyvark) (CNat Ordered 5))]
+              [(varA, Discharged (tyVarK) (CNat Ordered 5))]
               []
-       c `shouldBe` [(varA, Discharged (tyvark) (CVar (mkId "a0")))]
+       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a0")))]
        pred `shouldBe`
          [Conj [Con (Leq nullSpan (CZero (CConstr $ mkId "Nat")) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
                ,Con (Leq nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId"Nat"))]]
@@ -95,31 +95,31 @@ spec = do
     describe "intersectCtxtsWithWeaken" $ do
       it "contexts with matching discharged variables" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
-                 [(varA, Discharged (tyvark) (CNat Ordered 10))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 10))]
          c `shouldBe`
-                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
 
       it "contexts with matching discharged variables" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyvark) (CNat Ordered 10))]
-                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 10))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyvark) (CNat Ordered 10))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 10))]
 
       it "contexts with matching discharged variables" $ do
          (c, preds) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
                  []
          c `shouldBe`
-                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
 
       it "contexts with matching discharged variables (symm)" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
                  []
-                 [(varA, Discharged (tyvark) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyvark) (CZero (CConstr $ mkId "Nat")))]
+                 [(varA, Discharged (tyVarK) (CZero (CConstr $ mkId "Nat")))]
 
 
 
@@ -127,9 +127,12 @@ spec = do
     runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
-    exampleFiles = liftM2 (++)
-      (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
-      (find always (extension ==? fileExtension) pathToGranuleBase)
+    exampleFiles = liftM2 (++) -- TODO I tried using `liftM concat` but that didn't work
+      (liftM2 (++) (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
+      (find always (extension ==? fileExtension) pathToGranuleBase))
+      (find always (extension ==? fileExtension) pathToRegressionTests)
 
     illTypedFiles =
       find always (extension ==? fileExtension) pathToIlltyped
+    tyVarK = TyVar $ mkId "k"
+    varA = mkId "a"
