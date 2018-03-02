@@ -3,7 +3,7 @@ import File
 -- In Haskell
 -- openFile :: String -> IOMode -> IO Handle
 -- hGetChar :: Handle -> IO Char
--- hPutChar :: Handle -> Char -> IO Char
+-- hPutChar :: Handle -> Char -> IO ()
 -- hClose :: Handle -> IO ()
 
 -- In Granule
