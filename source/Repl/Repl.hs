@@ -8,6 +8,7 @@
 
 module Repl.Repl where
 
+import qualified Data.Map as M
 import Control.Exception (SomeException, try)
 import Control.Monad.State
 import System.Console.Haskeline
@@ -15,87 +16,30 @@ import System.Console.Haskeline
 import System.Exit
 import System.FilePath.Glob (glob)
 import Utils
-import Repl.Queue
-import Syntax.Pretty
+import Syntax.Pretty ()
 import Syntax.Expr
 import Syntax.Parser
 import Repl.ReplParser
 import Checker.Checker
 
-type Qelm = (Id, Def)
-type REPLStateIO = StateT (Queue (QDefName, QDefDef)) IO
 
-instance MonadException m => MonadException (StateT (Queue (QDefName, QDefDef)) m) where
+type REPLStateIO = StateT (M.Map MDefName MDefDef) IO
+instance MonadException m => MonadException (StateT (M.Map MDefName MDefDef) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
 
-data QDefName = RVar Id  | DefName Id
-    deriving (Show, Eq)
-data QDefDef  = DefTerm Def
+data MDefName = RVar Id  | DefName Id
+    deriving (Show, Eq, Ord)
+data MDefDef  = DefTerm Def
     deriving Show
-
-
-getQDefM :: (QDefName, QDefDef) -> REPLStateIO (Id, Def)
-getQDefM e@(RVar x, DefTerm t) = return (x , t)
-getQDefM e@(x,y) = error $ "Failed to get definition from context. Mismatched variable and type or term in: "
-
-getQDef :: (QDefName, QDefDef) -> (Id, Def)
-getQDef e@(RVar x, DefTerm t) = (x , t)
-getQDef e@(x,y) = error $ "Failed to get definition from context. Mismatched variable and type or term in: "
-
--- Extract only closed terms from queue
-getQCTM :: Queue (QDefName,QDefDef) -> Queue Qelm -> REPLStateIO (Queue Qelm)
-getQCTM (Queue [] []) qCV = return $ qCV
-getQCTM q qCV = getQDefM (headQ q) >>= (\x -> case x of
-                 cv -> getQCTM (tailQ q) (enqueue cv qCV))
-
-
--- Extract only closed terms from queue, non-monadic version
-getQCT :: Queue (QDefName,QDefDef) -> Queue Qelm -> (Queue Qelm)
-getQCT (Queue [] []) qCV = qCV
-getQCT q qCV = case getQDef (headQ q) of
-                 cv -> getQCT (tailQ q) (enqueue cv qCV)
-
 
 io :: IO a -> REPLStateIO a
 io i = liftIO i
 
-prettyDef :: (QDefName, QDefDef) -> String
-prettyDef elem = case getQDef elem of
-    (a, t@(Def _ _ _ _ ty)) -> (pretty a)++" : "++(show t)
-
-
-pop :: REPLStateIO (QDefName, QDefDef)
-pop = get >>= return.headQ
-
-push :: (QDefName, QDefDef) -> REPLStateIO ()
-push t = do
-  q <- get
-  put (q `snoc` t)
-
--- ****
--- unfoldQueue :: (Queue Qelm) -> (Queue Qelm)
--- unfoldQueue q = fixQ q emptyQ step
- -- where
-   -- step :: (Def, Def) -> t -> Queue Qelm -> Queue Qelm
-   -- step e@(x,t) _ r = (mapQ (substDef t x) r) `snoc` e
-    -- where
-      -- substDef :: Def -> Def -> Qelm -> Qelm
-      -- substDef x t (y, t') = (y, subst x t t')
-
--- unfoldDefsInTerm :: (Queue Qelm) -> Expr -> Expr
--- unfoldDefsInTerm q t =
-   -- let uq = toListQ $ unfoldQueue q
-    -- in subst uq t
-
-containsTerm_Qelm :: Queue Qelm -> QDefName -> Bool
-containsTerm_Qelm (Queue f r) v@(RVar vnm) = ((foldl (\b (defName, defTerm)-> b || (vnm == defName)) False r) || (foldl (\b (defName, defTerm)-> b || (vnm == defName)) False  f ))
-containsTerm_Qelm (Queue f r) v@(DefName vnm) = ((foldl (\b (defName, defTerm)-> b || (vnm == defName)) False r) || (foldl (\b (defName, defTerm)-> b || (vnm == defName)) False  f ))
-
-containsTerm :: Queue (QDefName,QDefDef) -> QDefName -> Bool
-containsTerm (Queue [] []) _ = False
-containsTerm q v = (containsTerm_Qelm (getQCT q emptyQ) v)
+-- prettyDef :: (QDefName, QDefDef) -> String
+-- prettyDef elem = case getQDef elem of
+--     (a, t@(Def _ _ _ _ ty)) -> (pretty a)++" : "++(show t)
 
 processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
 processFilesREPL globPatterns e f = forM globPatterns $ (\p -> do
@@ -121,7 +65,8 @@ readToQueue pth = do
             return (ExitFailure 1)
 loadInQueue :: Def -> REPLStateIO ()
 loadInQueue def@(Def _ id _ _ _) = do
-  push (RVar id, DefTerm def)
+  m <- get
+  put $ M.insert (RVar id) (DefTerm def) m
 loadInQueue adt@(ADT _ _ _ _) = do
         return ()
 
@@ -129,9 +74,6 @@ noFileAtPath :: FilePath -> REPLStateIO ExitCode
 noFileAtPath pt = do
     io $ print $ "The file path "++pt++" does not exist"
     return (ExitFailure 1)
-
-
-
 
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
@@ -142,20 +84,17 @@ handleCMD s =
     Left msg -> io $ putStrLn msg
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
-    handleLine DumpState = get >>= io.print.(mapQ prettyDef)
+    handleLine DumpState = do
+      dict <- get
+      io $ print $ (show dict)
+
+      -- get >>= io.print.(mapQ prettyDef)
 
 
     handleLine (LoadFile ptr) = do
       ecs <- processFilesREPL ptr noFileAtPath (let ?globals = ?globals in readToQueue)
       if all (== ExitSuccess) (concat ecs) then io.putStrLn $ "File(s) loaded" else io.putStrLn $ "Error while loading file(s)"
 
-
-
-
-
-
--- getFV :: Expr -> [Id Expr]
--- getFV t = fv t :: [Id Expr]
 
 helpMenu :: String
 helpMenu =
@@ -172,7 +111,7 @@ helpMenu =
 
 repl :: IO ()
 repl = do
-  evalStateT (runInputT defaultSettings loop) emptyQ
+  evalStateT (runInputT defaultSettings loop) M.empty
    where
        loop :: InputT REPLStateIO ()
        loop = do
