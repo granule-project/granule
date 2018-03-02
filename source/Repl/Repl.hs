@@ -16,23 +16,19 @@ import System.Console.Haskeline
 import System.Exit
 import System.FilePath.Glob (glob)
 import Utils
-import Syntax.Pretty ()
+import Syntax.Pretty
 import Syntax.Expr
 import Syntax.Parser
 import Repl.ReplParser
 import Checker.Checker
 
 
-type REPLStateIO = StateT (M.Map MDefName MDefDef) IO
-instance MonadException m => MonadException (StateT (M.Map MDefName MDefDef) m) where
+type REPLStateIO = StateT (M.Map String Def) IO
+instance MonadException m => MonadException (StateT (M.Map String Def) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
 
-data MDefName = RVar Id  | DefName Id
-    deriving (Show, Eq, Ord)
-data MDefDef  = DefTerm Def
-    deriving Show
 
 io :: IO a -> REPLStateIO a
 io i = liftIO i
@@ -66,7 +62,7 @@ readToQueue pth = do
 loadInQueue :: Def -> REPLStateIO ()
 loadInQueue def@(Def _ id _ _ _) = do
   m <- get
-  put $ M.insert (RVar id) (DefTerm def) m
+  put $ M.insert (pretty id) def m
 loadInQueue adt@(ADT _ _ _ _) = do
         return ()
 
@@ -74,6 +70,15 @@ noFileAtPath :: FilePath -> REPLStateIO ExitCode
 noFileAtPath pt = do
     io $ print $ "The file path "++pt++" does not exist"
     return (ExitFailure 1)
+
+dumpStateAux ::M.Map String Def -> [String]
+dumpStateAux m = do
+  pDef (M.toList m)
+  where
+    pDef :: [(String, Def)] -> [String]
+    pDef [] = []
+    pDef ((k,v@(Def _ _ _ _ ty)):xs) = ((pretty k)++" : "++(pretty ty)) : pDef xs
+
 
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
@@ -86,9 +91,7 @@ handleCMD s =
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
       dict <- get
-      io $ print $ (show dict)
-
-      -- get >>= io.print.(mapQ prettyDef)
+      io $ print $ dumpStateAux dict
 
 
     handleLine (LoadFile ptr) = do
