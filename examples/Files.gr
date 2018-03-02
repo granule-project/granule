@@ -9,13 +9,13 @@ import File
 -- In Granule
 -- openFile : String -> IOMode -> FileIO Handle
 -- hGetChar : Handle           -> FileIO (Handle, Char)
--- hPutChar : Handle -> Char   -> FileIO Handle
+-- hPutChar : Handle -> Char   -> FileIO ()
 -- hClose   : Handle -> FileIO ()
 
 main : FileIO String
 main =
-    let h0       <- openFile "LICENSE" ReadMode;
-        (h1, c)  <- hGetChar h0;
-        (h2, c') <- hGetChar h1;
-        ()       <- hClose h2
+    let h       <- openFile "LICENSE" ReadMode;
+        (h, c)  <- hGetChar h;
+        (h, c') <- hGetChar h;
+        ()      <- hClose h
     in pure ((showChar c) `stringAppend` (showChar c'))
