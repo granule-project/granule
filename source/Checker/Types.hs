@@ -226,7 +226,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
           addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
-          return (True, [])
+          return (True, [(n, t)])
         x ->
           if allowUniversalSpecialisation
             then
@@ -297,18 +297,54 @@ sessionEquality s t1 t2 = do
 
 combineUnifiers ::
   (?globals :: Globals) => Span -> Ctxt Type -> Ctxt Type -> MaybeT Checker (Ctxt Type)
-combineUnifiers s u1 u2 =
-    case intersectCtxtsAlternatives u1 u2 of
-      [] -> return $ u1 ++ u2
-      clashes -> do
-        forM_ clashes $ \(k, vs) ->
-          when (nonUnifiable vs) $ halt $ GenericError (Just s) (msg k vs)
-        return $ u1 ++ u2
+combineUnifiers s u1 u2 = do
+    -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
+    -- check whether things can be unified, i.e. exactly
+    forM_ (intersectCtxtsAlternatives u1 u2) $ \(k, vs) ->
+      unless (unifiable vs) $ halt $ GenericError (Just s) (msg k vs)
+    return $ u1 ++ u2
 
   where
-    nonUnifiable [TyVar _, _] = False
-    nonUnifiable [_, TyVar _] = False
-    nonUnifiable _ = True
+    -- A type varible unifies with anything, including another type variable
+    unifiable [TyVar _, _] = True
+    unifiable [_, TyVar _] = True
+
+    -- The following cases unpeel constructors to see if we hit unifiables things inside
+    unifiable [Box c t, Box c' t'] =
+      unifiable_Coeff c c' && unifiable [t,t']
+    unifiable [Diamond e t, Diamond e' t'] =
+      e == e' && unifiable [t,t']
+    unifiable [PairTy t1 t2, PairTy t1' t2'] =
+      unifiable [t1,t1'] && unifiable [t2,t2']
+    unifiable [FunTy t1 t2, FunTy t1' t2'] =
+      unifiable [t1,t1'] && unifiable [t2,t2']
+    unifiable [TyInfix op t1 t2, TyInfix op' t1' t2'] =
+      op == op' && unifiable [t1,t1'] && unifiable [t2,t2']
+
+    -- If none of the above hold, there is a mismatch between both contexts
+    -- so we can't unify and throw a type error
+    unifiable _ = False
+
+    -- The same pattern holds for coeffects
+    unifiable_Coeff (CVar _) _ = True
+    unifiable_Coeff _ (CVar _) = True
+    unifiable_Coeff (CPlus c1 c2) (CPlus c1' c2') =
+      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
+    unifiable_Coeff (CTimes c1 c2) (CTimes c1' c2') =
+      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
+    unifiable_Coeff (CMeet c1 c2) (CMeet c1' c2') =
+      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
+    unifiable_Coeff (CJoin c1 c2) (CJoin c1' c2') =
+      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
+    unifiable_Coeff (CZero k) (CZero k')  = unifiable_CKind k k'
+    unifiable_Coeff (COne k) (COne k')  = unifiable_CKind k k'
+    unifiable_Coeff (CInfinity k) (CInfinity k')  = unifiable_CKind k k'
+    unifiable_Coeff _ _     = False
+
+    -- ... and for coeffect kinds
+    unifiable_CKind (CPoly _) _ = True
+    unifiable_CKind _ (CPoly _) = True
+    unifiable_CKind k k'        = k == k'
 
     msg k vs =
       "Type variable " ++ sourceName k

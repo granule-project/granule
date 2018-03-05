@@ -8,6 +8,8 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
+import Nat
+
 data Vec : Nat= -> Type -> Type where
   NilV : forall a : Type . Vec 0 a;
   ConsV : forall n : Nat=, a : Type . a -> Vec n a -> Vec (n + 1) a
@@ -28,37 +30,37 @@ append xs ys = case xs of
     (ConsV x xs) -> (ConsV x (append xs ys))
 
 
--- map : forall (a : Type, b : Type, n : Nat=)
---     . (a -> b) |n| -> Vec n a -> Vec n b
--- map |f| ys =
---   case ys of
---     NilV -> NilV;
---     (ConsV x xs) -> ConsV (f x) (map |f| xs)
+map : forall (a : Type, b : Type, n : Nat=)
+    . (a -> b) |n| -> Vec n a -> Vec n b
+map |f| ys =
+  case ys of
+    NilV -> NilV;
+    (ConsV x xs) -> ConsV (f x) (map |f| xs)
 
 
--- -- Length of an indexed list into an indexed nat
--- length : forall (a : Type, n : Nat=)
---        . Vec n (a |0|) -> N n
--- length xs =
---   case xs of
---     NilV -> Z;
---     (ConsV |_| xs) -> S (length xs)
+-- Length of an indexed list into an indexed nat
+length : forall (a : Type, n : Nat=)
+       . Vec n (a |0|) -> N n
+length xs =
+  case xs of
+    NilV -> Z;
+    (ConsV |_| xs) -> S (length xs)
 
--- -- Standard foldr on lists
--- foldr : forall (a : Type, b : Type, n : Nat=)
---       . (a -> b -> b) |n| -> b -> Vec n a -> b
--- foldr |h| acc xs =
---   case xs of
---     NilV -> acc;
---     (ConsV x xs) -> h x (foldr |h| acc xs)
+-- Standard foldr on lists
+foldr : forall (a : Type, b : Type, n : Nat=)
+      . (a -> b -> b) |n| -> b -> Vec n a -> b
+foldr |h| acc xs =
+  case xs of
+    NilV -> acc;
+    (ConsV x xs) -> h x (foldr |h| acc xs)
 
 
--- --- Simple folds
--- sum : forall n : Nat= . Vec n Int -> Int
--- sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
---
--- product : forall n : Nat= . Vec n Int -> Int
--- product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
+--- Simple folds
+sum : forall n : Nat= . Vec n Int -> Int
+sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
+
+product : forall n : Nat= . Vec n Int -> Int
+product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
 
 --- Replicate n x is a list of length n with x the value of every element
 replicate : forall (n : Nat=, a : Type) . N n -> a |n| -> Vec n a
@@ -89,12 +91,12 @@ pushVec xs =
       |NilV|         -> NilV;
       |(ConsV x xs)| -> ConsV |x| (pushVec |xs|)
 
--- --- pullVec pulls non linearity in elements into a non linearity on the whole list
--- pullVec : forall (k : Nat, n : Nat=, a : Type)
---          . Vec n (a |k|) -> (Vec n a) |k|
--- pullVec xs =
---     case xs of
---        NilV -> |NilV|;
---        (ConsV |x| xs) ->
---          case pullVec xs of
---           |ys| -> |(ConsV x ys)|
+--- pullVec pulls non linearity in elements into a non linearity on the whole list
+pullVec : forall (k : Nat, n : Nat=, a : Type)
+         . Vec n (a |k|) -> (Vec n a) |k|
+pullVec xs =
+    case xs of
+       NilV -> |NilV|;
+       (ConsV |x| xs) ->
+         case pullVec xs of
+          |ys| -> |(ConsV x ys)|

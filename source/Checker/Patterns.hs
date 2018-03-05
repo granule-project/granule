@@ -185,6 +185,17 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
 --          _ -> halt $ PatternTypingError (Just s) $
 --                     "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty res ++ "`"
 
+ctxtFromTypedPattern s t@(TyVar v) p = do
+  case p of
+    PVar _ x -> return ([(x, Linear t)], [], [])
+    PBox _ p' -> do
+      polyName <- freshVar "k"
+      cvar <- freshCoeffectVarWithBinding (mkId "c")  (CPoly $ mkId polyName) InstanceQ
+      let c' = CVar cvar
+      ty <- freshVar "t"
+      let t' = TyVar $ mkId ty
+      (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
+      return (binders, vars, (v, Box c' t') : unifiers)
 
 ctxtFromTypedPattern s t p = do
   st <- get
