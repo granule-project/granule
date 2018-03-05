@@ -25,6 +25,14 @@ flattenable (CConstr k) =
     _ -> Nothing
 flattenable _ = Nothing
 
+inferCoeffectTypeAssumption :: (?globals :: Globals)
+                            => Span -> Assumption -> MaybeT Checker (Maybe CKind)
+inferCoeffectTypeAssumption _ (Linear _) = return Nothing
+inferCoeffectTypeAssumption s (Discharged _ c) = do
+    t <- inferCoeffectType s c
+    return $ Just t
+
+
 -- What is the kind of a particular coeffect?
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> MaybeT Checker CKind
 

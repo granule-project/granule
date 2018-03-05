@@ -7,10 +7,11 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 import Utils
-import Data.Text (pack)
+import Data.Text (pack, unpack, append)
 import qualified Data.Text.IO as Text
 
 import System.IO (hFlush, stdout)
+import qualified System.IO as SIO
 
 evalBinOp :: String -> Value -> Value -> Value
 evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
@@ -35,11 +36,6 @@ evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
 
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "write" = do
-    StringLiteral s <- evalIn ctxt e
-    Text.putStrLn s
-    return $ Pure (Val nullSpan (Constr (mkId "()") []))
-
 evalIn _ (Val s (Var v)) | internalName v == "read" = do
     putStr "> "
     hFlush stdout
@@ -52,36 +48,20 @@ evalIn _ (Val s (Var v)) | internalName v == "readInt" = do
     val <- readLn
     return $ Pure (Val s (NumInt val))
 
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
-  v <- evalIn ctxt e
-  return $ Pure (Val nullSpan v)
-
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "intToFloat" = do
-  NumInt n <- evalIn ctxt e
-  return $ NumFloat (cast n)
-  where
-    cast :: Int -> Double
-    cast = fromInteger . toInteger
-
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "showInt" = do
-  n <- evalIn ctxt e
-  case n of
-    NumInt n -> return . StringLiteral . pack . show $ n
-    n -> error $ show n
-
 evalIn _ (Val _ (Abs p t e)) = return $ Abs p t e
 
 evalIn ctxt (App _ e1 e2) = do
     v1 <- evalIn ctxt e1
+    v2 <- evalIn ctxt e2
     case v1 of
+      Primitive k -> k v2
+
       Abs p _ e3 -> do
-        v2 <- evalIn ctxt e2
         p <- pmatch ctxt [(p, e3)] v2
         case p of
           Just (e3, bindings) -> evalIn ctxt (applyBindings bindings e3)
 
       Constr c vs -> do
-        v2 <- evalIn ctxt e2
         return $ Constr c (vs ++ [v2])
 
       _ -> error $ show v1
@@ -182,6 +162,70 @@ pmatch ctxt ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
 
 pmatch ctxt (_:ps) val = pmatch ctxt ps val
 
+builtIns :: Ctxt Value
+builtIns =
+  [
+    (mkId "pure",       Primitive $ \v -> return $ Pure (Val nullSpan v))
+  , (mkId "intToFloat", Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
+  , (mkId "showInt",    Primitive $ \n -> case n of
+                              NumInt n -> return . StringLiteral . pack . show $ n
+                              n        -> error $ show n)
+  , (mkId "write", Primitive $ \(StringLiteral s) -> do
+                              Text.putStrLn s
+                              return $ Pure (Val nullSpan (Constr (mkId "()") [])))
+  , (mkId "openFile", Primitive openFile)
+  , (mkId "hGetChar", Primitive hGetChar)
+  , (mkId "hPutChar", Primitive hPutChar)
+  , (mkId "hClose",   Primitive hClose)
+  , (mkId "showChar",
+        Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
+  , (mkId "stringAppend",
+        Primitive $ \(StringLiteral s) -> return $
+          Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `append` t)
+  , (mkId "isEOF", Primitive $ \(Handle h) -> do
+        b <- SIO.isEOF
+        let boolflag =
+             case b of
+               True -> Constr (mkId "True") []
+               False -> Constr (mkId "False") []
+        return $ Pure (Val nullSpan
+                   (Pair (Val nullSpan (Handle h)) (Val nullSpan boolflag)))
+
+        )
+  ]
+  where
+    cast :: Int -> Double
+    cast = fromInteger . toInteger
+
+    openFile :: Value -> IO Value
+    openFile (StringLiteral s) = return $
+      Primitive (\(Constr m []) ->
+        let mode = (read (internalName m)) :: SIO.IOMode
+        in do
+             h <- SIO.openFile (unpack s) mode
+             return $ Pure (Val nullSpan (Handle h)))
+
+    hPutChar :: Value -> IO Value
+    hPutChar (Handle h) = return $
+      Primitive (\(CharLiteral c) -> do
+         SIO.hPutChar h c
+         return $ Pure (Val nullSpan
+                    (Pair (Val nullSpan (Handle h))
+                          (Val nullSpan (Constr (mkId "()") [])))))
+
+    hGetChar :: Value -> IO Value
+    hGetChar (Handle h) = do
+          c <- SIO.hGetChar h
+          return $ Pure (Val nullSpan
+                    (Pair (Val nullSpan (Handle h))
+                          (Val nullSpan (CharLiteral c))))
+
+    hClose :: Value -> IO Value
+    hClose (Handle h) = do
+         SIO.hClose h
+         return $ Pure (Val nullSpan (Constr (mkId "()") []))
+
+
 evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
@@ -195,7 +239,7 @@ evalDefs ctxt (d : defs) = do
 
 eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
 eval defs = do
-    bindings <- evalDefs empty defs
+    bindings <- evalDefs builtIns defs
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)

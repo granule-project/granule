@@ -168,13 +168,14 @@ Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
   | Type '|' Coeffect '|'     { Box $3 $1 }
-  | Type '<' Effect '>'       { Diamond $3 $1 }
+  | TyAtom '<' Effect '>'       { Diamond $3 $1 }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { PairTy $2 $4 }
 
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
+  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (PairTy $3 $5) }
   | TyJuxt '(' Type ')'       { TyApp $1 $3 }
   | TyAtom                    { $1 }
 
@@ -230,11 +231,10 @@ Eff :: { String }
   : CONSTR                    { constrString $1 }
 
 Expr :: { Expr }
-  : let Pat ':' Type '=' Expr in Expr
-      { App (getPos $1, getEnd $8) (Val (getSpan $6) (Abs $2 (Just $4) $8)) $6 }
-
-  | let Pat '=' Expr in Expr
-      { App (getPos $1, getEnd $6) (Val (getSpan $6) (Abs $2 Nothing $6)) $4 }
+  : let LetBind MultiLet
+    { let (_, pat, mt, expr) = $2
+      in App (getPos $1, getEnd $3)
+         (Val (getSpan $3) (Abs pat mt $3)) expr }
 
   | '\\' '(' Pat ':' Type ')' '->' Expr
       { Val (getPos $1, getEnd $8) (Abs $3 (Just $5) $8) }
@@ -242,8 +242,9 @@ Expr :: { Expr }
   | '\\' Pat '->' Expr
       { Val (getPos $1, getEnd $4) (Abs $2 Nothing $4) }
 
-  | let Pat ':' Type '<-' Expr in Expr
-      { LetDiamond (getPos $1, getEnd $8) $2 $4 $6 $8 }
+  | let LetBindEff MultiLetEff
+      { let (_, pat, mt, expr) = $2
+        in LetDiamond (getPos $1, getEnd $3) pat mt expr $3 }
 
   | case Expr of Cases
       { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
@@ -254,6 +255,35 @@ Expr :: { Expr }
 
   | Form
     { $1 }
+
+LetBind :: { (Pos, Pattern, Maybe Type, Expr) }
+LetBind
+ : Pat ':' Type '=' Expr
+    { (getStart $1, $1, Just $3, $5) }
+ | Pat '=' Expr
+    { (getStart $1, $1, Nothing, $3) }
+
+MultiLet :: { Expr }
+MultiLet
+  : ';' LetBind MultiLet
+    { let (_, pat, mt, expr) = $2
+      in App (getPos $1, getEnd $3)
+           (Val (getSpan $3) (Abs pat mt $3)) expr }
+  | in Expr
+    { $2 }
+
+LetBindEff :: { (Pos, Pattern, Maybe Type, Expr) }
+LetBindEff :
+   Pat '<-' Expr            { (getStart $1, $1, Nothing, $3) }
+ | Pat ':' Type '<-' Expr   { (getStart $1, $1, Just $3, $5) }
+
+MultiLetEff :: { Expr }
+MultiLetEff
+  : ';' LetBindEff MultiLetEff
+      { let (_, pat, mt, expr) = $2
+        in LetDiamond (getPos $1, getEnd $3) pat mt expr $3 }
+  | in Expr
+      { $2 }
 
 Cases :: { [(Pattern, Expr)] }
  : Case CasesNext             { $1 : $2 }

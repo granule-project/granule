@@ -13,6 +13,8 @@ typeLevelConstructors =
     , (mkId $ "Float", KType)
     , (mkId $ "Char", KType)
     , (mkId $ "String", KType)
+    , (mkId $ "FileIO", KFun KType KType)
+    , (mkId $ "Session", KFun KType KType)
     , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
     , (mkId $ "N", KFun (KConstr $ mkId "Nat=") KType)
     , (mkId $ "One", KCoeffect)   -- Singleton coeffect
@@ -26,6 +28,8 @@ typeLevelConstructors =
     , (mkId $ "*",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
     , (mkId $ "/\\", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
     , (mkId $ "\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+    -- File stuff
+    , (mkId $ "Handle", KType)
     -- Channels and session types
     , (mkId $ "Send", KFun KType (KFun session session))
     , (mkId $ "Recv", KFun KType (KFun session session))
@@ -43,6 +47,12 @@ builtins =
     (mkId "pure", Forall nullSpan [(mkId "a", KType)]
        $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
 
+    -- String stuff
+  , (mkId "stringAppend", Forall nullSpan []
+      $ (FunTy (TyCon $ mkId "String") (FunTy (TyCon $ mkId "String") (TyCon $ mkId "String"))))
+  , (mkId "showChar", Forall nullSpan []
+      $ (FunTy (TyCon $ mkId "Char") (TyCon $ mkId "String")))
+
     -- Effectful primitives
   , (mkId "read", Forall nullSpan [] $ Diamond ["R"] (TyCon $ mkId "String"))
   , (mkId "write", Forall nullSpan [] $
@@ -54,17 +64,39 @@ builtins =
 
   , (mkId "showInt", Forall nullSpan [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "String"))
+
+    -- File stuff
+  , (mkId "openFile", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "String")
+                          (FunTy (TyCon $ mkId "IOMode")
+                                (Diamond ["O"] (TyCon $ mkId "Handle"))))
+  , (mkId "hGetChar", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "Handle")
+                               (Diamond ["RW"]
+                                (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "Char"))))
+  , (mkId "hPutChar", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "Handle")
+                         (FunTy (TyCon $ mkId "Char")
+                           (Diamond ["W"] (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "()")))))
+  , (mkId "isEOF", Forall nullSpan [] $
+                     FunTy (TyCon $ mkId "Handle")
+                            (Diamond ["R"] (PairTy (TyCon $ mkId "Handle")
+                                                    (TyCon $ mkId "Bool"))))
+  , (mkId "hClose", Forall nullSpan [] $
+                        FunTy (TyCon $ mkId "Handle")
+                               (Diamond ["C"] (TyCon $ mkId "()")))
     -- Session typed primitives
   , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
                       .-> ((var "a")
-                        .-> ((con "Chan") .@ (var "s"))))
+                        .-> (Diamond ["Com"] ((con "Chan") .@ (var "s")))))
 
   , (mkId "recv", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
        $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
-         .-> (PairTy (var "a") ((con "Chan") .@ (var "s"))))
+         .-> (Diamond ["Com"] (PairTy (var "a") ((con "Chan") .@ (var "s")))))
 
-  , (mkId "close", Forall nullSpan [] $ ((con "Chan") .@ (con "End")) .-> (con "()"))
+  , (mkId "close", Forall nullSpan [] $
+                    ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))
   ]
 
 binaryOperators :: [(Operator, Type)]

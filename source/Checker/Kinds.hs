@@ -18,7 +18,6 @@ import Syntax.Pretty
 import Context
 import Utils
 
-
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def -> MaybeT Checker ()
 kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do

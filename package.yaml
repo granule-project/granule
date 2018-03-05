@@ -59,6 +59,7 @@ executables:
     source-dirs: command-line-interface
     ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:
+    - directory
     - Glob
     - granule
     - optparse-applicative

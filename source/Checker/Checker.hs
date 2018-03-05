@@ -217,15 +217,27 @@ checkExpr defs gam pol topLevel tau (App s e1 e2) = do
 
 -- Promotion
 checkExpr defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
-  gamF    <- discToFreshVarsIn s (freeVars e) gam demand
-  (gam', subst) <- checkExpr defs gamF pol False tau e
-  let gam'' = multAll (freeVars e) demand gam'
-  return (gam'', subst)
+    let vars = freeVars e -- map fst gam
+    gamF    <- discToFreshVarsIn s vars gam demand
+    (gam', subst) <- checkExpr defs gamF pol False tau e
+
+    guardGam <- allGuardContexts
+    guardGam' <- filterM isLevelKinded guardGam
+
+    let gam'' = multAll (vars ++ map fst guardGam') demand (gam' ++ guardGam')
+    return (gam'', subst)
+  where
+    isLevelKinded (_, as) = do
+        ty <- inferCoeffectTypeAssumption s as
+        return $ case ty of
+          Nothing -> False
+          Just (CConstr c) | internalName c == "Level" -> True
 
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam) <- synthExpr defs gam pol guardExpr
+  pushGuardContext guardGam
 
   -- Check each of the branches
   branchCtxtsAndSubst <-
@@ -255,15 +267,18 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
            concludeImplication eVars
 
            -- The resulting context has the shared part removed
-           let branchCtxt = (localGam `subtractCtxt` patternGam) `subtractCtxt` specialisedGam
+           -- 28/02/2018 - We used to have this
+           --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
+           -- But we want promotion to invovlve the guard to avoid leaks
+           let branchCtxt = localGam `subtractCtxt` specialisedGam
 
            return (branchCtxt, subst')
 
         -- Anything that was bound in the pattern but not used correctly
         xs -> illLinearityMismatch s xs
 
+  popGuardContext
   -- Find the upper-bound contexts
-
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
@@ -321,7 +336,7 @@ synthExpr _ _ _ (Val _ (CharLiteral _)) = return (TyCon $ mkId "Char", [])
 synthExpr _ _ _ (Val _ (StringLiteral _)) = return (TyCon $ mkId "String", [])
 
 -- Nat constructors
-synthExpr _ _ _ (Val s (Constr c [])) = do
+synthExpr _ gam _ (Val s (Constr c [])) = do
   case internalName c of
     "Nil" -> do
         elementVarName <- freshVar "a"
@@ -406,32 +421,49 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
   return (eqTypes, gamNew)
 
 -- Diamond cut
-synthExpr defs gam pol (LetDiamond s p ty e1 e2) = do
-  (binders, _, _)  <- ctxtFromTypedPattern s ty p
-  pIrrefutable <- isIrrefutable s ty p
-  if pIrrefutable then do
-    (tau, gam1) <- synthExpr defs (binders ++ gam) pol e2
-    case tau of
-      Diamond ef2 tau' -> do
-         (sig, gam2) <- synthExpr defs gam pol e1
-         case sig of
-           Diamond ef1 ty' | ty == ty' -> do
-               gamNew <- ctxPlus s (gam1 `subtractCtxt` binders) gam2
-               -- Check linearity of locally bound variables
-               case checkLinearity binders gam1 of
-                  [] -> return (Diamond (ef1 ++ ef2) tau', gamNew)
-                  xs -> illLinearityMismatch s xs
+synthExpr defs gam pol (LetDiamond s p optionalTySig e1 e2) = do
+  -- TODO: refactor this once we get a proper mechanism for
+  -- specifying effect over-approximations and type aliases
 
-           t ->
-            halt $ GenericError (Just s)
-                 $ "Expected '" ++ pretty ty ++ "' but inferred '"
-                 ++ pretty t ++ "' in body of let<>"
-      t ->
-        halt $ GenericError (Just s)
-             $ "Expected '" ++ pretty ty
-             ++ "' in subjet of let <-, but inferred '" ++ pretty t ++ "'"
-  else refutablePattern s p
+  (sig, gam1) <- synthExpr defs gam pol e1
+  case sig of
+    (TyApp (TyCon con) t')
+      | internalName con == "FileIO" || internalName con == "Session" ->
+      typeLetSubject gam1 [] t'
 
+    Diamond ef1 ty1 ->
+      typeLetSubject gam1 ef1 ty1
+
+    t -> halt $ GenericError (Just s)
+              $ "Expected an effect type but inferred '"
+             ++ pretty t ++ "' in body of let<>"
+
+   where
+      typeLetSubject gam1 ef1 ty1 = do
+        (binders, _, _)  <- ctxtFromTypedPattern s ty1 p
+        pIrrefutable <- isIrrefutable s ty1 p
+        if not pIrrefutable
+        then refutablePattern s p
+        else do
+           (tau, gam2) <- synthExpr defs (binders ++ gam) pol e2
+           case tau of
+            Diamond ef2 ty2 ->
+                typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2
+
+            (TyApp (TyCon con) t')
+               | internalName con == "FileIO" || internalName con == "Session" ->
+                 typeLetBody gam1 gam2 ef1 [] binders ty1 t'
+
+            t -> halt $ GenericError (Just s)
+                      $ "Expected an effect type but got ''" ++ pretty t ++ "'"
+
+      typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 = do
+        optionalSigEquality s optionalTySig ty1
+        gamNew <- ctxPlus s (gam2 `subtractCtxt` binders) gam1
+        -- Check linearity of locally bound variables
+        case checkLinearity binders gam2 of
+            [] -> return (Diamond (ef1 ++ ef2) ty2, gamNew)
+            xs -> illLinearityMismatch s xs
 -- Variables
 synthExpr defs gam _ (Val s (Var x)) =
    -- Try the local context
@@ -545,6 +577,12 @@ synthExpr defs gam pol (Val s (Pair e1 e2)) = do
 synthExpr _ _ _ e =
   halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
 
+-- Check an optional type signature for equality against a type
+optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker Bool
+optionalSigEquality _ Nothing _ = return True
+optionalSigEquality s (Just t) t' = do
+    (eq, _, _) <- equalTypes s t' t
+    return eq
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker Bool
 solveConstraints predicate s defName = do

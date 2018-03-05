@@ -2,6 +2,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    letBox,
@@ -26,6 +28,8 @@ import Control.Arrow
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
 import Data.Text (Text)
+
+import qualified System.IO as SIO (Handle)
 
 import Syntax.FirstParameter
 
@@ -74,15 +78,27 @@ data Value = Abs Pattern (Maybe Type) Expr
            | Pair Expr Expr
            | CharLiteral Char
            | StringLiteral Text
-          deriving (Eq, Show)
+           -------------------------
+           -- Used only inside the interpeter
+           | Primitive (Value -> IO Value)
+           | Handle SIO.Handle
+
+deriving instance Eq (Value -> IO Value) => Eq Value
+deriving instance Show Value
+
+instance Show (Value -> IO Value) where
+  show _ = "Some primitive"
 
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
           | Binop Span Operator Expr Expr
-          | LetDiamond Span Pattern Type Expr Expr
+          | LetDiamond Span Pattern (Maybe Type) Expr Expr
           | Val Span Value
           | Case Span Expr [(Pattern, Expr)]
-          deriving (Eq, Show, Generic)
+          deriving (Generic)
+
+deriving instance Eq (Value -> IO Value) => Eq Expr
+deriving instance Show Expr
 
 instance FirstParameter Expr Span
 
@@ -194,8 +210,16 @@ instance Term Type where
 
   subst e _ t = e
   freshen =
-    typeFoldM (baseTypeFold { tfTyVar = freshenTyVar, tfBox = freshenTyBox })
+    typeFoldM (baseTypeFold { tfTyApp = rewriteTyApp,
+                              tfTyVar = freshenTyVar,
+                              tfBox = freshenTyBox })
     where
+      -- Rewrite type aliases of Box
+      rewriteTyApp t1@(TyCon ident) t2
+        | internalName ident == "Box" =
+          return $ Box (CInfinity (CPoly $ mkInternalId "∞" "infinity")) t2
+      rewriteTyApp t1 t2 = return $ TyApp t1 t2
+
       freshenTyBox c t = do
         c' <- freshen c
         t' <- freshen t
@@ -294,6 +318,7 @@ instance Term Value where
     subst _ _ v@(Constr _ _)      = Val nullSpan v
     subst _ _ v@CharLiteral{}     = Val nullSpan v
     subst _ _ v@StringLiteral{}   = Val nullSpan v
+    subst _ _ v@Handle{}          = Val nullSpan v
 
     freshen (Abs p t e) = do
       p'   <- freshenBinder p
@@ -354,10 +379,12 @@ instance Term Expr where
       return $ App s e1' e2'
 
     freshen (LetDiamond s p t e1 e2) = do
-      p'  <- freshenBinder p
       e1' <- freshen e1
+      p'  <- freshenBinder p
       e2' <- freshen e2
-      t'  <- freshen t
+      t'   <- case t of
+                Nothing -> return Nothing
+                Just ty -> freshen ty >>= (return . Just)
       return $ LetDiamond s p' t' e1' e2'
 
     freshen (Binop s op e1 e2) = do
@@ -381,7 +408,10 @@ instance Term Expr where
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
          | ADT Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
-          deriving (Eq, Show, Generic)
+          deriving (Generic)
+
+deriving instance Eq (Value -> IO Value) => Eq Def
+deriving instance Show Def
 
 type AST = [Def]
 

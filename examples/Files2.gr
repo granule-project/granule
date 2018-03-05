@@ -1,0 +1,30 @@
+import File
+import Sequence
+
+-- In Haskell
+-- openFile :: String -> IOMode -> IO Handle
+-- hGetChar :: Handle -> IO Char
+-- hPutChar :: Handle -> Char -> IO Char
+-- hClose :: Handle -> IO ()
+
+-- In Granule
+-- openFile : String -> IOMode -> FileIO Handle
+-- hGetChar :: Handle -> FileIO (Handle, Char)
+-- hPutChar :: Handle -> Char -> FileIO Handle
+-- hClose :: Handle -> FileIO ()
+
+getMany : Int -> Handle -> FileIO (Handle, String)
+getMany n h =
+    case n of
+      0     -> pure (h, "");
+      n ->
+        let (h, c) <- hGetChar h;
+            (h, cs) <- getMany (n - 1) h
+        in pure (h, stringAppend (showChar c) cs)
+
+main : FileIO String
+main =
+    let h       <- openFile "LICENSE" ReadMode;
+        (h, s)  <- getMany 10 h;
+        ()      <- hClose h
+    in pure s
