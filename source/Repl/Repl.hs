@@ -8,6 +8,7 @@
 
 module Repl.Repl where
 
+import System.FilePath
 import qualified Data.Map as M
 import Control.Exception (SomeException, try)
 import Control.Monad.State
@@ -54,6 +55,7 @@ readToQueue pth = do
             case checked of
                 Ok -> do
                     forM ast $ \idef -> loadInQueue idef
+                    io $ putStrLn $ (takeFileName pth)++ " - loaded and checked"
                     return ExitSuccess
                 Failed -> return (ExitFailure 1)
       Left (e :: SomeException) -> do
