@@ -5,19 +5,21 @@
 
 module Checker.Types where
 
-import Context
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List
-import Syntax.Expr
-import Syntax.Pretty
 
 import Checker.Coeffects
 import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
+import Context
+import Syntax.Expr
+import Syntax.Pretty
 import Utils
+
+import Debug.Trace
 
 type Unifier = Ctxt Type
 
@@ -333,24 +335,24 @@ combineUnifiers s u1 u2 = do
 
   where
     -- A type varible unifies with anything, including another type variable
-    unifiable [TyVar _, _] = True
-    unifiable [_, TyVar _] = True
+    unifiable (TyVar _) _ = True
+    unifiable _ (TyVar _) = True
 
     -- The following cases unpeel constructors to see if we hit unifiables things inside
-    unifiable [Box c t, Box c' t'] =
-      unifiable_Coeff c c' && unifiable [t,t']
-    unifiable [Diamond e t, Diamond e' t'] =
-      e == e' && unifiable [t,t']
-    unifiable [PairTy t1 t2, PairTy t1' t2'] =
-      unifiable [t1,t1'] && unifiable [t2,t2']
-    unifiable [FunTy t1 t2, FunTy t1' t2'] =
-      unifiable [t1,t1'] && unifiable [t2,t2']
-    unifiable [TyInfix op t1 t2, TyInfix op' t1' t2'] =
-      op == op' && unifiable [t1,t1'] && unifiable [t2,t2']
+    unifiable (Box c t) (Box c' t') =
+      unifiable_Coeff c c' && unifiable t t'
+    unifiable (Diamond e t) (Diamond e' t') =
+      e == e' && unifiable t t'
+    unifiable (PairTy t1 t2) (PairTy t1' t2') =
+      unifiable t1 t1' && unifiable t2 t2'
+    unifiable (FunTy t1 t2) (FunTy t1' t2') =
+      unifiable t1 t1' && unifiable t2 t2'
+    unifiable (TyInfix op t1 t2) (TyInfix op' t1' t2') =
+      op == op' && unifiable t1 t1' && unifiable t2 t2'
 
     -- If none of the above hold, there is a mismatch between both contexts
     -- so we can't unify and throw a type error
-    unifiable _ = False
+    unifiable _ _ = False
 
     -- The same pattern holds for coeffects
     unifiable_Coeff (CVar _) _ = True
