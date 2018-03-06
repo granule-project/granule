@@ -49,13 +49,6 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
 
-  where
-    discharge _ c (v, Linear t) = (v, Discharged t c)
-    discharge k c (v, Discharged t c') =
-      case flattenable k of
-        -- Implicit flatten operation allowed on this coeffect
-        Just flattenOp -> (v, Discharged t (flattenOp c c'))
-        Nothing        -> (v, Discharged t c')
 
 ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
@@ -100,12 +93,13 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
     PVar _ x -> return ([(x, Linear t)], [], [])
     PBox _ p' -> do
       polyName <- freshVar "k"
-      cvar <- freshCoeffectVarWithBinding (mkId "c")  (CPoly $ mkId polyName) InstanceQ
+      let ckind = CPoly $ mkId polyName
+      cvar <- freshCoeffectVarWithBinding (mkId "c") ckind InstanceQ
       let c' = CVar cvar
       ty <- freshVar "t"
       let t' = TyVar $ mkId ty
       (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
-      return (binders, vars, (v, Box c' t') : unifiers)
+      return (map (discharge ckind c') binders, vars, (v, Box c' t') : unifiers)
 
 ctxtFromTypedPattern s t p = do
   st <- get
@@ -113,6 +107,13 @@ ctxtFromTypedPattern s t p = do
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   halt $ PatternTypingError (Just s)
     $ "Pattern match `" ++ pretty p ++ "` does not have type `" ++ pretty t ++ "`"
+
+discharge _ c (v, Linear t) = (v, Discharged t c)
+discharge k c (v, Discharged t c') =
+  case flattenable k of
+    -- Implicit flatten operation allowed on this coeffect
+    Just flattenOp -> (v, Discharged t (flattenOp c c'))
+    Nothing        -> (v, Discharged t c')
 
 ctxtFromTypedPatterns ::
   (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
