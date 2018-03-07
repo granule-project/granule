@@ -232,6 +232,7 @@ checkExpr defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
         return $ case ty of
           Nothing -> False
           Just (CConstr c) | internalName c == "Level" -> True
+                           | otherwise                 -> False
 
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s guardExpr cases) = do
