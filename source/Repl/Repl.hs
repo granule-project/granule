@@ -34,10 +34,6 @@ instance MonadException m => MonadException (StateT (M.Map String Def) m) where
 io :: IO a -> REPLStateIO a
 io i = liftIO i
 
--- prettyDef :: (QDefName, QDefDef) -> String
--- prettyDef elem = case getQDef elem of
---     (a, t@(Def _ _ _ _ ty)) -> (pretty a)++" : "++(show t)
-
 processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
 processFilesREPL globPatterns e f = forM globPatterns $ (\p -> do
     filePaths <- io $ glob p
@@ -61,12 +57,25 @@ readToQueue pth = do
       Left (e :: SomeException) -> do
             return $ print $ show e
             return (ExitFailure 1)
+
+-- loadInQueue :: Def -> REPLStateIO ()
+-- loadInQueue def@(Def _ id _ _ _) = do
+--   m <- get
+--   if M.notMember (pretty id) m
+--     then put $ M.insert (pretty id) def m
+--     else io $ print $ "error: The term "++(pretty id)++" is already in context."
+
+-- checkMap :: Def -> Bool
+-- checkMap def@(Def _ id _ _ _) = do
+--   m <- get
+--   M.notMember (pretty id) m
+
 loadInQueue :: Def -> REPLStateIO ()
 loadInQueue def@(Def _ id _ _ _) = do
   m <- get
   put $ M.insert (pretty id) def m
 loadInQueue adt@(ADT _ _ _ _) = do
-        return ()
+  return ()
 
 noFileAtPath :: FilePath -> REPLStateIO ExitCode
 noFileAtPath pt = do
@@ -80,7 +89,6 @@ dumpStateAux m = do
     pDef :: [(String, Def)] -> [String]
     pDef [] = []
     pDef ((k,v@(Def _ _ _ _ ty)):xs) = ((pretty k)++" : "++(pretty ty)) : pDef xs
-
 
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
@@ -97,6 +105,7 @@ handleCMD s =
 
 
     handleLine (LoadFile ptr) = do
+      put M.empty
       ecs <- processFilesREPL ptr noFileAtPath (let ?globals = ?globals in readToQueue)
       if all (== ExitSuccess) (concat ecs) then io.putStrLn $ "File(s) loaded" else io.putStrLn $ "Error while loading file(s)"
 
