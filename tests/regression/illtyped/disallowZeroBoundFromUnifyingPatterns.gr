@@ -1,0 +1,9 @@
+data Bool where
+  False : Bool;
+  True : Bool
+
+foo : Bool |0| -> Bool
+foo x =
+  case x of
+    |False| -> False;
+    |True| -> True

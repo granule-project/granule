@@ -26,6 +26,7 @@ compileQuant BoundQ    = error
 
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 k)   = Eq s (normalise c1) (normalise c2) k
+normaliseConstraint (Neq s c1 c2 k)  = Neq s (normalise c1) (normalise c2) k
 normaliseConstraint (ApproximatedBy s c1 c2 k) = ApproximatedBy s (normalise c1) (normalise c2) k
 
 -- Compile constraint into an SBV symbolic bool, along with a list of
@@ -118,6 +119,12 @@ rewriteConstraints ctxt =
         (case k of
           CPoly ckindVar' | ckindVar == ckindVar' -> ckind
           _ -> k)
+    updateConstraint ckindVar ckind (Neq s c1 c2 k) =
+            Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+              (case k of
+                CPoly ckindVar' | ckindVar == ckindVar' -> ckind
+                _ -> k)
+
     updateConstraint ckindVar ckind (ApproximatedBy s c1 c2 k) =
       ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
@@ -187,6 +194,11 @@ compile vars (Eq _ c1 c2 k) =
     where
       c1' = compileCoeffect c1 k vars
       c2' = compileCoeffect c2 k vars
+compile vars (Neq _ c1 c2 k) =
+   bnot (eqConstraint c1' c2')
+  where
+    c1' = compileCoeffect c1 k vars
+    c2' = compileCoeffect c2 k vars
 compile vars (ApproximatedBy _ c1 c2 k) =
   approximatedByOrEqualConstraint c1' c2'
     where
@@ -336,6 +348,7 @@ trivialUnsatisfiableConstraints cs =
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `eqC` c2
+    unsat (Neq _ c1 c2 _) = not (c1 `eqC` c2)
     unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint

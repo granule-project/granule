@@ -45,6 +45,17 @@ ctxtFromTypedPattern _ t@(TyCon c) (PFloat _ _)
 ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     (ctx, eVars, subst) <- ctxtFromTypedPattern s ty p
     k <- inferCoeffectType s coeff
+
+    -- Check whether a unification was caused
+    case p of
+      -- Non-unifying patterns
+      PVar _ _ -> return ()
+      PWild _  -> return ()
+      -- Unifying patterns, so coeffect must be non 0
+      _        -> do
+        liftIO $ print $ "Its happening for " ++ pretty p ++ " with " ++ pretty coeff ++ "/=" ++ pretty (CZero k)
+        addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
+
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
 
