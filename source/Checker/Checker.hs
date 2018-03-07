@@ -731,7 +731,7 @@ approximatedByAssumption s (_, Discharged _ c1) (_, Discharged _ c2) = do
 
 approximatedByAssumption s x y =
   halt $ GenericError (Just s) $ "Can't unify free-variable types:\n\t"
-           ++ pretty x ++ "\nwith\n\t" ++ pretty y
+           ++ "(graded) " ++ pretty x ++ "\n  with\n\t(linear) " ++ pretty y
 
 relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
 relevantSubCtxt vars = filter relevant
