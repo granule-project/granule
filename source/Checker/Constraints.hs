@@ -26,7 +26,7 @@ compileQuant BoundQ    = error
 
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 k)   = Eq s (normalise c1) (normalise c2) k
-normaliseConstraint (Leq s c1 c2 k) = Leq s (normalise c1) (normalise c2) k
+normaliseConstraint (ApproximatedBy s c1 c2 k) = ApproximatedBy s (normalise c1) (normalise c2) k
 
 -- Compile constraint into an SBV symbolic bool, along with a list of
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
@@ -79,8 +79,8 @@ compileToSBV predicate tyVarContext kVarContext =
     -- substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
     -- substConstraint rmap (Eq s' c1 c2 k) =
     --     Eq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
-    -- substConstraint rmap (Leq s' c1 c2 k) =
-    --     Leq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
+    -- substConstraint rmap (ApproximatedBy s' c1 c2 k) =
+    --     ApproximatedBy s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
@@ -118,8 +118,8 @@ rewriteConstraints ctxt =
         (case k of
           CPoly ckindVar' | ckindVar == ckindVar' -> ckind
           _ -> k)
-    updateConstraint ckindVar ckind (Leq s c1 c2 k) =
-      Leq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateConstraint ckindVar ckind (ApproximatedBy s c1 c2 k) =
+      ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           CPoly ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)
@@ -187,8 +187,8 @@ compile vars (Eq _ c1 c2 k) =
     where
       c1' = compileCoeffect c1 k vars
       c2' = compileCoeffect c2 k vars
-compile vars (Leq _ c1 c2 k) =
-  lteConstraint c1' c2'
+compile vars (ApproximatedBy _ c1 c2 k) =
+  approximatedByOrEqualConstraint c1' c2'
     where
       c1' = compileCoeffect c1 k vars
       c2' = compileCoeffect c2 k vars
@@ -314,14 +314,14 @@ eqConstraint x y =
    error $ "Kind error trying to generate equality " ++ show x ++ " = " ++ show y
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
-lteConstraint :: SCoeffect -> SCoeffect -> SBool
-lteConstraint (SNat Ordered n) (SNat Ordered m)   = n .<= m
-lteConstraint (SNat Discrete n) (SNat Discrete m) = n .== m
-lteConstraint (SFloat n) (SFloat m)   = n .<= m
-lteConstraint (SLevel l) (SLevel k) = l .== k
-lteConstraint (SSet s) (SSet t) =
+approximatedByOrEqualConstraint :: SCoeffect -> SCoeffect -> SBool
+approximatedByOrEqualConstraint (SNat Ordered n) (SNat Ordered m)   = n .<= m
+approximatedByOrEqualConstraint (SNat Discrete n) (SNat Discrete m) = n .== m
+approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
+approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
+approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
-lteConstraint x y =
+approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " ++ show x ++ " <= " ++ show y
 
 
@@ -336,15 +336,16 @@ trivialUnsatisfiableConstraints cs =
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `eqC` c2
-    unsat (Leq _ c1 c2 _) = c1 `leqC` c2
+    unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
 
+    -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
-    leqC :: Coeffect -> Coeffect -> Bool
-    leqC (CNat Ordered n)  (CNat Ordered m)  = not $ n <= m
-    leqC (CNat Discrete n) (CNat Discrete m) = not $ n == m
-    leqC (Level n) (Level m)   = not $ n <= m
-    leqC (CFloat n) (CFloat m) = not $ n <= m
-    leqC _ _                   = False
+    approximatedByC :: Coeffect -> Coeffect -> Bool
+    approximatedByC (CNat Ordered n)  (CNat Ordered m)  = not $ n <= m
+    approximatedByC (CNat Discrete n) (CNat Discrete m) = not $ n == m
+    approximatedByC (Level n) (Level m)   = not $ n >= m
+    approximatedByC (CFloat n) (CFloat m) = not $ n <= m
+    approximatedByC _ _                   = False
 
     -- Attempt to see if one coeffect is trivially not equal to the other
     eqC :: Coeffect -> Coeffect -> Bool

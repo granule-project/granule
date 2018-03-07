@@ -23,7 +23,7 @@ type Unifier = Ctxt Type
 
 lEqualTypes :: (?globals :: Globals )
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
-lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s Leq False
+lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False
 
 equalTypes :: (?globals :: Globals )
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
@@ -84,7 +84,7 @@ equalTypesRelatedCoeffects :: (?globals :: Globals )
   -> MaybeT Checker (Bool, Unifier)
 equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s Leq uS t1' t1 (flipIndicator sp)
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1' t1 (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
   (eq2, u2) <- equalTypesRelatedCoeffects s rel uS (substType u1 t2) (substType u1 t2') sp
   unifiers <- combineUnifiers s u1 u2
@@ -366,8 +366,8 @@ joinTypes s (Box c t) (Box c' t') = do
   -- Create a fresh coeffect variable
   topVar <- freshCoeffectVar (mkId "") kind
   -- Unify the two coeffects into one
-  addConstraint (Leq s c  (CVar topVar) kind)
-  addConstraint (Leq s c' (CVar topVar) kind)
+  addConstraint (ApproximatedBy s c  (CVar topVar) kind)
+  addConstraint (ApproximatedBy s c' (CVar topVar) kind)
   tu <- joinTypes s t t'
   return $ Box (CVar topVar) tu
 
@@ -389,7 +389,7 @@ joinTypes s (TyVar n) (TyVar m) = do
   nvar <- freshCoeffectVar n kind
   mvar <- freshCoeffectVar m kind
   -- Unify the two variables into one
-  addConstraint (Leq s (CVar nvar) (CVar mvar) kind)
+  addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
   return $ TyVar n
 
 joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
