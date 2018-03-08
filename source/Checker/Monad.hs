@@ -191,6 +191,8 @@ addConstraintToPreviousFrame p = do
         case predicateStack checkerState of
           (ps : Conj ps' : stack) ->
             put (checkerState { predicateStack = ps : Conj (Con p : ps') : stack })
+          (ps : stack) ->
+            put (checkerState { predicateStack = ps : Conj [Con p] : stack })
           stack ->
             put (checkerState { predicateStack = Conj [Con p] : stack })
 

@@ -56,7 +56,8 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     -- Check whether a unification was caused
     if definitelyUnifying p
       then do
-        liftIO $ print $ "Its happening for " ++ pretty p ++ " with " ++ pretty coeff ++ "/=" ++ pretty (CZero k)
+        -- TODO: delete comment
+        -- liftIO $ print $ "Its happening for " ++ pretty p ++ " with " ++ pretty coeff ++ "/=" ++ pretty (CZero k)
         addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
       else return ()
 

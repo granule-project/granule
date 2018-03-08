@@ -84,7 +84,7 @@ range' n |i| =
 
 --- pushList pushes in non linearity of list into the elements
 pushList : forall (k : Nat, n : Nat=, a : Type)
-         . (List n a) |k| -> List n (a |k|)
+         . (List n a) |k+1| -> List n (a |k+1|)
 pushList xs =
     case xs of
       |Nil|         -> Nil;
