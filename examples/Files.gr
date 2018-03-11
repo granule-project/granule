@@ -9,7 +9,7 @@ import File
 -- In Granule
 -- openFile : String -> IOMode -> FileIO Handle
 -- hGetChar : Handle           -> FileIO (Handle, Char)
--- hPutChar : Handle -> Char   -> FileIO ()
+-- hPutChar : Handle -> Char   -> FileIO (Handle, ())
 -- hClose   : Handle -> FileIO ()
 
 main : FileIO String
