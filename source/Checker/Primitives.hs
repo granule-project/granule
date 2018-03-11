@@ -77,7 +77,7 @@ builtins =
   , (mkId "hPutChar", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
                          (FunTy (TyCon $ mkId "Char")
-                           (Diamond ["W"] (PairTy (TyCon $ mkId "Handle") (TyCon $ mkId "()")))))
+                           (Diamond ["W"] (TyCon $ mkId "Handle"))))
   , (mkId "isEOF", Forall nullSpan [] $
                      FunTy (TyCon $ mkId "Handle")
                             (Diamond ["R"] (PairTy (TyCon $ mkId "Handle")
