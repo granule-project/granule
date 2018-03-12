@@ -19,8 +19,6 @@ import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
-import Debug.Trace
-
 type Unifier = Ctxt Type
 
 lEqualTypes :: (?globals :: Globals )
@@ -329,8 +327,8 @@ combineUnifiers ::
 combineUnifiers s u1 u2 = do
     -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
     -- check whether things can be unified, i.e. exactly
-    forM_ (intersectCtxtsAlternatives u1 u2) $ \(k, vs) ->
-      unless (unifiable vs) $ halt $ GenericError (Just s) (msg k vs)
+    forM_ (intersectCtxtsAlternatives u1 u2) $ \(k, (v1,v2)) ->
+      unless (unifiable v1 v2) $ halt $ GenericError (Just s) (msg k v1 v2)
     return $ u1 ++ u2
 
   where
@@ -375,9 +373,9 @@ combineUnifiers s u1 u2 = do
     unifiable_CKind _ (CPoly _) = True
     unifiable_CKind k k'        = k == k'
 
-    msg k vs =
+    msg k v1 v2 =
       "Type variable " ++ sourceName k
-        ++ " cannot be unified to `" ++ intercalate "` and `" (map pretty vs)
+        ++ " cannot be unified to `" ++ pretty v1 ++ "` and `" ++ pretty v2
         ++ "` at the same time."
 
 -- Essentially equality on types but join on any coeffects
