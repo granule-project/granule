@@ -5,6 +5,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Repl.Repl where
 
@@ -14,6 +15,7 @@ import Control.Exception (SomeException, try)
 import Control.Monad.State
 import System.Console.Haskeline
 -- import System.Console.Haskeline.MonadException
+import Repl.ReplError
 import System.Exit
 import System.FilePath.Glob (glob)
 import Utils
@@ -22,65 +24,50 @@ import Syntax.Expr
 import Syntax.Parser
 import Repl.ReplParser
 import Checker.Checker
+import qualified Control.Monad.Except as Ex
 
-
-type REPLStateIO = StateT (M.Map String Def) IO
+type REPLStateIO a  = StateT (M.Map String Def) IO (Either ReplError a)
 instance MonadException m => MonadException (StateT (M.Map String Def) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
 
 
-io :: IO a -> REPLStateIO a
-io i = liftIO i
 
-processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
+--processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
 processFilesREPL globPatterns e f = forM globPatterns $ (\p -> do
-    filePaths <- io $ glob p
+    filePaths <- liftIO $ glob p
     case filePaths of
         [] -> (e p) >>= (return.(:[]))
-        _ -> forM filePaths f)
+        _ ->  forM filePaths f)
 
-readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ExitCode
+readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
-    pf <- io $ try $ parseDefs =<< readFile pth
+    pf <- liftIO $ try $ parseDefs =<< readFile pth
     case pf of
       Right (ast, maxFreshId) -> do
             let ?globals = ?globals { freshIdCounter = maxFreshId }
-            checked <- io $ check ast
+            checked <-  liftIO $ check ast
             case checked of
                 Ok -> do
                     forM ast $ \idef -> loadInQueue idef
-                    io $ putStrLn $ (takeFileName pth)++ " - loaded and checked"
-                    return ExitSuccess
-                Failed -> return (ExitFailure 1)
-      Left (e :: SomeException) -> do
-            return $ print $ show e
-            return (ExitFailure 1)
+                    return $ Ex.return ()
+                Failed -> return $ Ex.throwError (TypeCheckError pth)
+      Left e -> do
+            return $ Ex.throwError (ParseError e)
 
--- loadInQueue :: Def -> REPLStateIO ()
--- loadInQueue def@(Def _ id _ _ _) = do
---   m <- get
---   if M.notMember (pretty id) m
---     then put $ M.insert (pretty id) def m
---     else io $ print $ "error: The term "++(pretty id)++" is already in context."
-
--- checkMap :: Def -> Bool
--- checkMap def@(Def _ id _ _ _) = do
---   m <- get
---   M.notMember (pretty id) m
 
 loadInQueue :: Def -> REPLStateIO ()
 loadInQueue def@(Def _ id _ _ _) = do
   m <- get
   put $ M.insert (pretty id) def m
+  return (Ex.return())
 loadInQueue adt@(ADT _ _ _ _) = do
-  return ()
+  return (Ex.return ())
 
-noFileAtPath :: FilePath -> REPLStateIO ExitCode
+noFileAtPath :: FilePath -> REPLStateIO ()
 noFileAtPath pt = do
-    io $ print $ "The file path "++pt++" does not exist"
-    return (ExitFailure 1)
+    return $ Ex.throwError (FilePathError pt)
 
 dumpStateAux ::M.Map String Def -> [String]
 dumpStateAux m = do
@@ -92,22 +79,25 @@ dumpStateAux m = do
 
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
-handleCMD "" = return ()
+handleCMD "" = return (Ex.return ())
 handleCMD s =
    case (parseLine s) of
     Right l -> handleLine l
-    Left msg -> io $ putStrLn msg
+    Left msg -> do
+       liftIO $ putStrLn msg
+       return (Ex.return ())
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
       dict <- get
-      io $ print $ dumpStateAux dict
-
+      liftIO $ print $ dumpStateAux dict
+      return (Ex.return ())
 
     handleLine (LoadFile ptr) = do
       put M.empty
       ecs <- processFilesREPL ptr noFileAtPath (let ?globals = ?globals in readToQueue)
-      if all (== ExitSuccess) (concat ecs) then io.putStrLn $ "File(s) loaded" else io.putStrLn $ "Error while loading file(s)"
+      liftIO $ print (concat ecs)
+      return (Ex.return ())
 
 
 helpMenu :: String
@@ -127,7 +117,7 @@ repl :: IO ()
 repl = do
   evalStateT (runInputT defaultSettings loop) M.empty
    where
-       loop :: InputT REPLStateIO ()
+       --loop :: InputT REPLStateIO ()
        loop = do
            minput <- getInputLine "Granule> "
            case minput of

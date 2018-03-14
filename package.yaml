@@ -47,6 +47,7 @@ library:
   - Repl.Repl
   - Repl.Queue
   - Repl.ReplParser
+  - Repl.ReplError
   dependencies:
   - array
   - containers
