@@ -29,8 +29,9 @@ ctxtFromTypedPattern _ t (PWild _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
-    wild <- freshVar "wild"
-    return ([(mkInternalId "_" wild, Linear t)], [], [])
+    --wild <- freshVar "wild"
+    --return ([(mkInternalId "_" wild, Linear t)], [], [])
+    return ([], [], [])
 
 ctxtFromTypedPattern _ t (PVar _ v) =
     return ([(v, Linear t)], [], [])
@@ -83,6 +84,7 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
       case areEq of
         (True, _, unifiers) -> do
           us <- combineUnifiers s unifiers us
+          liftIO $ print us
           return (as, freshTyVars++bs, us)
 
         _ -> halt $ PatternTypingError (Just s) $
@@ -91,15 +93,19 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
 ctxtFromTypedPattern s t@(TyVar v) p = do
   case p of
     PVar _ x -> return ([(x, Linear t)], [], [])
+    -- Trying to match a polymorphic type variable against a box pattern
     PBox _ p' -> do
-      polyName <- freshVar "k"
+      -- Create a fresh type: Box (c' : k) t'
+      polyName <- freshVar "fk"
       let ckind = CPoly $ mkId polyName
-      cvar <- freshCoeffectVarWithBinding (mkId "c") ckind InstanceQ
+      cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
       let c' = CVar cvar
-      ty <- freshVar "t"
+      ty <- freshVar "t'"
       let t' = TyVar $ mkId ty
+      liftIO $ putStrLn $ "Pattern of type " ++ pretty t ++ " unify at " ++ pretty (Box c' t') ++ " kind = " ++ show ckind
       (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
       return (map (discharge ckind c') binders, vars, (v, Box c' t') : unifiers)
+   -- TODO: cases missing
 
 ctxtFromTypedPattern s t p = do
   st <- get

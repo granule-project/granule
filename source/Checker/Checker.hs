@@ -842,8 +842,3 @@ extCtxt s ctxt var (Discharged t c) = do
 fold1M :: Monad m => (a -> a -> m a) -> [a] -> m a
 fold1M _ []     = error "Must have at least one case"
 fold1M f (x:xs) = foldM f x xs
-
-lookupMany :: Eq a => a -> [(a, b)] -> [b]
-lookupMany _ []                     = []
-lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
-lookupMany a' (_:xs)                = lookupMany a' xs

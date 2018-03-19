@@ -327,21 +327,45 @@ combineUnifiers ::
 combineUnifiers s u1 u2 = do
     -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
     -- check whether things can be unified, i.e. exactly
-    forM_ (intersectCtxtsAlternatives u1 u2) $ \(k, (v1,v2)) ->
-      unless (unifiable v1 v2) $ halt $ GenericError (Just s) (msg k v1 v2)
-    return $ u1 ++ u2
+    uss1 <- forM u1 $ \(v, t) ->
+      case lookupMany v u2 of
+        -- Unifier in u1 but not in u2
+        [] -> return [(v, t)]
+        -- Possible unificaitons in each part
+        alts -> do
+            unifs <-
+              forM alts $ \t' -> do
+                 (us, t) <- unifiable v t t' t t'
+                 return $ [(v, substType us t)]
+            return $ concat unifs
+    -- Any remaining unifiers that are in u2 but not u1
+    uss2 <- forM u2 $ \(v, t) ->
+       case lookup v u1 of
+         Nothing -> return [(v, t)]
+         _       -> return []
+    return $ concat uss1 ++ concat uss2
 
   where
     -- A type varible unifies with anything, including another type variable
-    unifiable (TyVar _) _ = True
-    unifiable _ (TyVar _) = True
+    unifiable _ _ _ (TyVar v) t = return ([(v, t)], t)
+    unifiable _ _ _ t (TyVar v) = return ([(v, t)], t)
 
     -- The following cases unpeel constructors to see if we hit unifiables things inside
-    unifiable (Box c t) (Box c' t') =
-      unifiable_Coeff c c' && unifiable t t'
+    unifiable var t1 t2 (Box c t) (Box c' t') = do
+      (usC, c'') <- unifiable_Coeff var t1 t2 c c'
+      (us', t') <- unifiable var t1 t2 t t'
+      return (us', Box (substCoeffect usC c'') t')
+
+    unifiable _ _ __ _ t = return ([], t)
+    -- TODO: re-instate error case when needed
+    --unifiable var t1 t2 _ _ = halt $ GenericError (Just s) (msg var t1 t2)
+
+
+{- TODO: fill in rest along the same lines
     unifiable (Diamond e t) (Diamond e' t') =
       e == e' && unifiable t t'
     unifiable (PairTy t1 t2) (PairTy t1' t2') =
+
       unifiable t1 t1' && unifiable t2 t2'
     unifiable (FunTy t1 t2) (FunTy t1' t2') =
       unifiable t1 t1' && unifiable t2 t2'
@@ -351,27 +375,61 @@ combineUnifiers s u1 u2 = do
     -- If none of the above hold, there is a mismatch between both contexts
     -- so we can't unify and throw a type error
     unifiable _ _ = False
+    -}
 
     -- The same pattern holds for coeffects
-    unifiable_Coeff (CVar _) _ = True
-    unifiable_Coeff _ (CVar _) = True
-    unifiable_Coeff (CPlus c1 c2) (CPlus c1' c2') =
-      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
-    unifiable_Coeff (CTimes c1 c2) (CTimes c1' c2') =
-      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
-    unifiable_Coeff (CMeet c1 c2) (CMeet c1' c2') =
-      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
-    unifiable_Coeff (CJoin c1 c2) (CJoin c1' c2') =
-      unifiable_Coeff c1 c1' && unifiable_Coeff c2 c2'
-    unifiable_Coeff (CZero k) (CZero k')  = unifiable_CKind k k'
-    unifiable_Coeff (COne k) (COne k')  = unifiable_CKind k k'
-    unifiable_Coeff (CInfinity k) (CInfinity k')  = unifiable_CKind k k'
-    unifiable_Coeff _ _     = False
+    unifiable_Coeff _ _ _ (CVar v) c = return ([(v, c)], c)
+
+    unifiable_Coeff _ _ _ c (CVar v) = return ([(v, c)], c)
+
+    unifiable_Coeff var t1 t2 (CPlus c1 c2) (CPlus c1' c2') = do
+      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+      return $ (us1 ++ us2, CPlus c1u c2u)
+
+    unifiable_Coeff var t1 t2 (CTimes c1 c2) (CTimes c1' c2') = do
+      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+      return $ (us1 ++ us2, CTimes c1u c2u)
+
+    unifiable_Coeff var t1 t2 (CMeet c1 c2) (CMeet c1' c2') = do
+      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+      return $ (us1 ++ us2, CMeet c1u c2u)
+
+    unifiable_Coeff var t1 t2 (CJoin c1 c2) (CJoin c1' c2') = do
+      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+      return $ (us1 ++ us2, CJoin c1u c2u)
+
+    unifiable_Coeff var t1 t2 (CZero k) (CZero k') = do
+      us <- unifiable_CKind var t1 t2 k k'
+      return $ ([], CZero (substCKind us k))
+
+    unifiable_Coeff var t1 t2 (COne k) (COne k') = do
+      us <- unifiable_CKind var t1 t2 k k'
+      return $ ([], COne (substCKind us k))
+
+    unifiable_Coeff var t1 t2 (CInfinity k) (CInfinity k') = do
+      us <- unifiable_CKind var t1 t2 k k'
+      return $ ([], CInfinity (substCKind us k))
+
+    unifiable_Coeff var t1 t2 _ _     =
+      halt $ GenericError (Just s) (msg var t1 t2)
 
     -- ... and for coeffect kinds
-    unifiable_CKind (CPoly _) _ = True
-    unifiable_CKind _ (CPoly _) = True
-    unifiable_CKind k k'        = k == k'
+    unifiable_CKind _ _ _ (CPoly v) k = do
+      --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
+      return [(v, k)]
+
+    unifiable_CKind _ _ _ k (CPoly v) = do
+      --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
+      return [(v, k)]
+
+    unifiable_CKind var t1 t2 k k' =
+      if k == k'
+        then return []
+        else halt $ GenericError (Just s) (msg var t1 t2)
 
     msg k v1 v2 =
       "Type variable " ++ sourceName k

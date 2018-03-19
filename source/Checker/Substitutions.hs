@@ -133,6 +133,13 @@ substCoeffect _ c@Level{}  = c
 substCoeffect _ c@CSet{}   = c
 substCoeffect _ c@CSig{}   = c
 
+substCKind :: Ctxt CKind -> CKind -> CKind
+substCKind rmap (CPoly v) =
+  case lookup v rmap of
+    Nothing -> CPoly v
+    Just k  -> k
+substCKind rmap c@CConstr{} = c
+
 -- | Apply a name map to a type to rename the type variables
 renameType :: [(Id, Id)] -> Type -> Type
 renameType rmap t =
