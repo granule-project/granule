@@ -15,6 +15,12 @@ import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
+definitelyUnifying :: Pattern -> Bool
+definitelyUnifying (PConstr _ _) = True
+definitelyUnifying (PInt _ _) = True
+-- TODO: replace with generalised PConstr when its added
+definitelyUnifying (PApp _ _ _) = True
+definitelyUnifying _ = False
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -47,6 +53,15 @@ ctxtFromTypedPattern _ t@(TyCon c) (PFloat _ _)
 ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     (ctx, eVars, subst) <- ctxtFromTypedPattern s ty p
     k <- inferCoeffectType s coeff
+
+    -- Check whether a unification was caused
+    if definitelyUnifying p
+      then do
+        -- TODO: delete comment
+        -- liftIO $ print $ "Its happening for " ++ pretty p ++ " with " ++ pretty coeff ++ "/=" ++ pretty (CZero k)
+        addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
+      else return ()
+
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
 

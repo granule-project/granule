@@ -183,6 +183,19 @@ addConstraint p = do
     stack ->
       put (checkerState { predicateStack = Conj [Con p] : stack })
 
+-- | A helper for adding a constraint to the previous frame (i.e.)
+-- | if I am in a local context, push it to the global
+addConstraintToPreviousFrame :: Constraint -> MaybeT Checker ()
+addConstraintToPreviousFrame p = do
+        checkerState <- get
+        case predicateStack checkerState of
+          (ps : Conj ps' : stack) ->
+            put (checkerState { predicateStack = ps : Conj (Con p : ps') : stack })
+          (ps : stack) ->
+            put (checkerState { predicateStack = ps : Conj [Con p] : stack })
+          stack ->
+            put (checkerState { predicateStack = Conj [Con p] : stack })
+
 -- | Generate a fresh alphanumeric variable name
 freshVar :: String -> MaybeT Checker String
 freshVar s = do

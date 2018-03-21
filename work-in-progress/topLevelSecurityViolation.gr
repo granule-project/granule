@@ -1,0 +1,11 @@
+pin : Int |Private|
+pin = |42|
+
+leak : Int |Private| -> Int
+leak |x| = x
+
+bad : Int
+bad = leak pin
+
+veryBad : Int |Public|
+veryBad = |(leak pin)|
