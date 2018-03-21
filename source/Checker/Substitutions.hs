@@ -6,6 +6,7 @@
 
 module Checker.Substitutions where
 
+import Control.Monad
 import Control.Monad.State.Strict
 
 import Context
@@ -34,14 +35,16 @@ data Substitutors =
   | SubstK  Kind
   | SubstCK CKind
   | SubstE  Effect
-  deriving Show
+  deriving (Eq, Show)
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
   type SubstitutionContext t x
-  substitute :: (?globals :: Globals) => Substitution -> t -> SubstitutionContext t t
+  substitute :: (?globals :: Globals)
+             => Substitution -> t -> SubstitutionContext t t
 
-  unify :: t -> t -> SubstitutionContext t (Maybe Substitution)
+  unify :: (?globals :: Globals)
+        => t -> t -> MaybeT Checker (Maybe Substitution)
 
 -- Instances for the main representation of things in the types
 
@@ -57,8 +60,9 @@ instance Substitutable Substitutors where
         c <- substitute subst c
         return $ SubstC c
 
-      SubstK k ->
-        return $ SubstK (substitute subst k)
+      SubstK k -> do
+        k <- substitute subst k
+        return $ SubstK k
 
       SubstCK k ->
         return $ SubstCK (substitute subst k)
@@ -67,7 +71,7 @@ instance Substitutable Substitutors where
         e <- substitute subst e
         return $ SubstE e
 
-  unify (SubstT t) (SubstT t') = return $ unify t t'
+  unify (SubstT t) (SubstT t') = unify t t'
   unify (SubstT t) (SubstC c') = do
     -- We can unify a type with a coeffect, if the type is actually a Nat=
     k <- inferKindOfType nullSpan t
@@ -81,10 +85,7 @@ instance Substitutable Substitutors where
   unify (SubstK k) (SubstK k') = unify k k'
   unify (SubstCK k) (SubstCK k') = unify k k'
   unify (SubstE e) (SubstE e') = unify e e'
-  unify _ _ = Nothing
-
-<++> :: Maybe [a] -> Maybe [a] -> Maybe [a]
-xs <++> ys = xs >>= (\xs' -> ys >>= (\ys' -> return $ xs' ++ ys'))
+  unify _ _ = return Nothing
 
 instance Substitutable Type where
   type SubstitutionContext Type x = MaybeT Checker x
@@ -108,42 +109,43 @@ instance Substitutable Type where
            Just (SubstT t) -> return t
            _               -> mTyVar v
 
-  unify (TyVar v) t' = return $ Just [(v, SubstT t)]
-  unify t (TyVar v)  = return $ Just [(v, SubstT t)]
+  unify (TyVar v) t = return $ Just [(v, SubstT t)]
+  unify t (TyVar v) = return $ Just [(v, SubstT t)]
   unify (FunTy t1 t2) (FunTy t1' t2') = do
     u1 <- unify t1 t1'
     u2 <- unify t2 t2'
-    return $ u1 <++> u2
+    u1 <++> u2
   unify (TyCon c) (TyCon c') | c == c' = return $ Just []
   unify (Box c t) (Box c' t') = do
     u1 <- unify c c'
     u2 <- unify t t'
-    return $ u1 <++> u2
+    u1 <++> u2
   unify (Diamond e t) (Diamond e' t') = do
     u1 <- unify e e'
     u2 <- unify t t'
-    return $ u1 <++> u2
+    u1 <++> u2
   unify (TyApp t1 t2) (TyApp t1' t2') = do
     u1 <- unify t1 t1'
     u2 <- unify t2 t2'
-    return $ u1 <++> u2
+    u1 <++> u2
   unify (TyInt i) (TyInt j) | i == j = return $ Just []
   unify (PairTy t1 t2) (PairTy t1' t2') = do
     u1 <- unify t1 t1'
     u2 <- unify t2 t2'
-    return $ u1 <++> u2
-  unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1 t2') = do
+    u1 <++> u2
+  unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
     k <- inferKindOfType nullSpan t
     case k of
       KConstr k | internalName k == "Nat=" -> do
-        c <- compileNatKindedTypeToCoeffect nullSpan t
+        c  <- compileNatKindedTypeToCoeffect nullSpan t
         c' <- compileNatKindedTypeToCoeffect nullSpan t'
-        addConstraint $ Eq nullSpan c c'
+        addConstraint $ Eq nullSpan c c' (CConstr $ mkId "Nat=")
         return $ Just []
+
       _ | o == o' -> do
         u1 <- unify t1 t1'
         u2 <- unify t2 t2'
-        return $ u1 <++> u2
+        u1 <++> u2
       -- No unification
       _ -> return $ Nothing
   -- No unification
@@ -210,12 +212,59 @@ instance Substitutable Coeffect where
   substitute _ c@CFloat{}    = return c
   substitute _ c@Level{}     = return c
 
+  unify (CVar v) c = return $ Just [(v, SubstC c)]
+  unify c (CVar v) = return $ Just [(v, SubstC c)]
+  unify (CPlus c1 c2) (CPlus c1' c2') = do
+    u1 <- unify c1 c1'
+    u2 <- unify c2 c2'
+    u1 <++> u2
+
+  unify (CTimes c1 c2) (CTimes c1' c2') = do
+    u1 <- unify c1 c1'
+    u2 <- unify c2 c2'
+    u1 <++> u2
+
+  unify (CMeet c1 c2) (CMeet c1' c2') = do
+    u1 <- unify c1 c1'
+    u2 <- unify c2 c2'
+    u1 <++> u2
+
+  unify (CJoin c1 c2) (CJoin c1' c2') = do
+    u1 <- unify c1 c1'
+    u2 <- unify c2 c2'
+    u1 <++> u2
+
+  unify (CInfinity k) (CInfinity k') = do
+    unify k k'
+
+  unify (CZero k) (CZero k') = do
+    unify k k'
+
+  unify (COne k) (COne k') = do
+    unify k k'
+
+  unify (CSet tys) (CSet tys') = do
+    ums <- zipWithM (\x y -> unify (snd x) (snd y)) tys tys'
+    foldM (<++>) (Just []) ums
+
+
+  unify (CSig c ck) (CSig c' ck') = do
+    u1 <- unify c c'
+    u2 <- unify ck ck'
+    u1 <++> u2
+
+  unify c c' =
+    if c == c' then return $ Just [] else return Nothing
 
 
 instance Substitutable Effect where
   type SubstitutionContext Effect x = MaybeT Checker x
   -- {TODO: Make effects richer}
   substitute subst e = return e
+  unify e e' =
+    if e == e' then return $ Just []
+               else return $ Nothing
+
 
 instance Substitutable CKind where
   type SubstitutionContext CKind x = x
@@ -226,25 +275,181 @@ instance Substitutable CKind where
         _                -> CPoly v
   substitute _ c@CConstr{} = c
 
-instance Substitutable Kind where
-  type SubstitutionContext Kind x = x
+  unify (CPoly v) ck =
+    return $ Just [(v, SubstCK ck)]
+  unify ck (CPoly v) =
+    return $ Just [(v, SubstCK ck)]
+  unify ck ck' =
+    if ck == ck' then return $ Just [] else return $ Nothing
 
-  substitute subst KType = KType
-  substitute subst KCoeffect = KCoeffect
-  substitute subst (KFun c1 c2) =
-    KFun (substitute subst c1) (substitute subst c2)
+instance Substitutable Kind where
+  type SubstitutionContext Kind x = MaybeT Checker x
+
+  substitute subst KType = return KType
+  substitute subst KCoeffect = return KCoeffect
+  substitute subst (KFun c1 c2) = do
+    c1 <- substitute subst c1
+    c2 <- substitute subst c2
+    return $ KFun c1 c2
   substitute subst (KPoly v) =
     case lookup v subst of
-      Just (SubstK k) -> k
-      _               -> KPoly v
-  substitute subst (KConstr c) = KConstr c
+      Just (SubstK k) -> return k
+      _               -> return $ KPoly v
+  substitute subst (KConstr c) = return $ KConstr c
+
+  unify (KPoly v) k =
+    return $ Just [(v, SubstK k)]
+  unify k (KPoly v) =
+    return $ Just [(v, SubstK k)]
+  unify (KFun k1 k2) (KFun k1' k2') = do
+    u1 <- unify k1 k1'
+    u2 <- unify k2 k2'
+    u1 <++> u2
+  unify k k' = return $ if k == k' then Just [] else Nothing
+
+-- | Combine substitutions wrapped in Maybe
+(<++>) :: (?globals :: Globals)
+  => Maybe Substitution -> Maybe Substitution -> MaybeT Checker (Maybe Substitution)
+xs <++> ys =
+  case (xs, ys) of
+    (Just xs', Just ys') ->
+         combineSubstitutions nullSpan xs' ys' >>= (return . Just)
+    _ -> return Nothing
+
+-- | Combines substitutions which may fail if there are conflicting
+-- | substitutions
+combineSubstitutions ::
+    (?globals :: Globals)
+    => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
+combineSubstitutions sp u1 u2 = do
+      -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
+      -- check whether things can be unified, i.e. exactly
+      uss1 <- forM u1 $ \(v, s) ->
+        case lookupMany v u2 of
+          -- Unifier in u1 but not in u2
+          [] -> return [(v, s)]
+          -- Possible unificaitons in each part
+          alts -> do
+              unifs <-
+                forM alts $ \s' -> do
+                   --(us, t) <- unifiable v t t' t t'
+                   us <- unify s s'
+                   case us of
+                     Nothing -> error "Cannot unify"
+                     Just us -> do
+                       sUnified <- substitute us s
+                       combineSubstitutions sp [(v, sUnified)] us
+
+              return $ concat unifs
+      -- Any remaining unifiers that are in u2 but not u1
+      uss2 <- forM u2 $ \(v, s) ->
+         case lookup v u1 of
+           Nothing -> return [(v, s)]
+           _       -> return []
+      return $ concat uss1 ++ concat uss2
+
+  {-
+    where
+      -- A type varible unifies with anything, including another type variable
+      unifiable _ _ _ (SubstT (TyVar v)) t = return ([(v, t)], t)
+      unifiable _ _ _ t (SubstT (TyVar v)) = return ([(v, t)], t)
+
+      -- The following cases unpeel constructors to see if we hit unifiables things inside
+      unifiable var t1 t2 (Box c t) (Box c' t') = do
+        (usC, c'') <- unifiable_Coeff var t1 t2 c c'
+        (us', t') <- unifiable var t1 t2 t t'
+        return (us', Box (substitute usC c'') t')
+
+      unifiable _ _ __ _ t = return ([], t)
+      -- TODO: re-instate error case when needed
+      --unifiable var t1 t2 _ _ = halt $ GenericError (Just s) (msg var t1 t2)
+
+
+  {- TODO: fill in rest along the same lines
+      unifiable (Diamond e t) (Diamond e' t') =
+        e == e' && unifiable t t'
+      unifiable (PairTy t1 t2) (PairTy t1' t2') =
+
+        unifiable t1 t1' && unifiable t2 t2'
+      unifiable (FunTy t1 t2) (FunTy t1' t2') =
+        unifiable t1 t1' && unifiable t2 t2'
+      unifiable (TyInfix op t1 t2) (TyInfix op' t1' t2') =
+        op == op' && unifiable t1 t1' && unifiable t2 t2'
+
+      -- If none of the above hold, there is a mismatch between both contexts
+      -- so we can't unify and throw a type error
+      unifiable _ _ = False
+      -}
+
+      -- The same pattern holds for coeffects
+      unifiable_Coeff _ _ _ (CVar v) c = return ([(v, c)], c)
+
+      unifiable_Coeff _ _ _ c (CVar v) = return ([(v, c)], c)
+
+      unifiable_Coeff var t1 t2 (CPlus c1 c2) (CPlus c1' c2') = do
+        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+        return $ (us1 ++ us2, CPlus c1u c2u)
+
+      unifiable_Coeff var t1 t2 (CTimes c1 c2) (CTimes c1' c2') = do
+        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+        return $ (us1 ++ us2, CTimes c1u c2u)
+
+      unifiable_Coeff var t1 t2 (CMeet c1 c2) (CMeet c1' c2') = do
+        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+        return $ (us1 ++ us2, CMeet c1u c2u)
+
+      unifiable_Coeff var t1 t2 (CJoin c1 c2) (CJoin c1' c2') = do
+        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
+        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
+        return $ (us1 ++ us2, CJoin c1u c2u)
+
+      unifiable_Coeff var t1 t2 (CZero k) (CZero k') = do
+        us <- unifiable_CKind var t1 t2 k k'
+        kind <- substitute us k
+        return $ ([], CZero kind)
+
+      unifiable_Coeff var t1 t2 (COne k) (COne k') = do
+        us <- unifiable_CKind var t1 t2 k k'
+        kind <- substitute us k
+        return $ ([], COne kind)
+
+      unifiable_Coeff var t1 t2 (CInfinity k) (CInfinity k') = do
+        us <- unifiable_CKind var t1 t2 k k'
+        kind <- substitute us k
+        return $ ([], CInfinity kind)
+
+      unifiable_Coeff var t1 t2 _ _     =
+        halt $ GenericError (Just s) (msg var t1 t2)
+
+      -- ... and for coeffect kinds
+      unifiable_CKind _ _ _ (CPoly v) k = do
+        --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
+        return [(v, k)]
+
+      unifiable_CKind _ _ _ k (CPoly v) = do
+        --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
+        return [(v, k)]
+
+      unifiable_CKind var t1 t2 k k' =
+        if k == k'
+          then return []
+          else halt $ GenericError (Just s) (msg var t1 t2)
+
+      msg k v1 v2 =
+        "Type variable " ++ sourceName k
+          ++ " cannot be unified to `" ++ pretty v1 ++ "` and `" ++ pretty v2
+          ++ "` at the same time."
+  -}
 
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts
   of the context where a substitution occurred, and one where substitution
   did not occur
->>> let ?globals = defaultGlobals in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (CVar $ mkId "b"))])
+>>> let ?globals = defaultGlobals in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", SubstT $ TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (CVar $ mkId "b"))])
 Just ([(Id "y" "y",Linear (TyInt 0))],[(Id "x" "x",Linear (TyVar Id "x" "x")),(Id "z" "z",Discharged (TyVar Id "z" "z") (CVar Id "b" "b"))])
 -}
 

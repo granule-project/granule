@@ -183,7 +183,10 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
       unless eqT (halt $ GenericError (Just s) $ pretty sig ++ " not equal to " ++ pretty t')
       return (tau, subst)
 
-  (bindings, _, _) <- ctxtFromTypedPattern s sig p
+  (bindings, _, subst) <- ctxtFromTypedPattern s sig p
+  --applySubstToEnvironment subst
+  --applySubstToEnvironment subst1
+
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
     -- Check the body in the extended context
@@ -561,7 +564,9 @@ synthExpr defs gam pol (Binop s op e1 e2) = do
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
-  (binding, _, _) <- ctxtFromTypedPattern s sig p
+  (binding, _, subst) <- ctxtFromTypedPattern s sig p
+  --applySubstToEnvironment subst
+
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
      (tau, gam'')    <- synthExpr defs (binding ++ gam) pol e

@@ -88,7 +88,7 @@ equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
   (eq2, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
-  unifiers <- combineUnifiers s u1 u2
+  unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
 
 equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
@@ -146,7 +146,7 @@ equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
   (two, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
-  unifiers <- combineUnifiers s u1 u2
+  unifiers <- combineSubstitutions s u1 u2
   return (one && two, unifiers)
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
@@ -221,7 +221,7 @@ equalTypesRelatedCoeffects s rel uS (PairTy t1 t2) (PairTy t1' t2') sp = do
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
   (rights, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
-  unifiers <- combineUnifiers s u1 u2
+  unifiers <- combineSubstitutions s u1 u2
   return (lefts && rights, unifiers)
 
 equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
@@ -328,130 +328,6 @@ sessionEquality s t1 t2 =
   halt $ GenericError (Just s)
        $ "Session type '" ++ pretty t1 ++ "' is not equal to '" ++ pretty t2 ++ "'"
 
-combineUnifiers ::
-  (?globals :: Globals)
-  => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
-combineUnifiers s u1 u2 = do
-    -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
-    -- check whether things can be unified, i.e. exactly
-    uss1 <- forM u1 $ \(v, s) ->
-      case lookupMany v u2 of
-        -- Unifier in u1 but not in u2
-        [] -> return [(v, s)]
-        -- Possible unificaitons in each part
-        alts -> do
-            unifs <-
-              forM alts $ \s' ->
-                 --(us, t) <- unifiable v t t' t t'
-                 case unify s s' of
-                   Nothing -> error "Cannot unify"
-                   Just us -> do
-                     sUnified <- substitute us s
-                     return $ (v, sUnified) : us
-
-            return $ concat unifs
-    -- Any remaining unifiers that are in u2 but not u1
-    uss2 <- forM u2 $ \(v, s) ->
-       case lookup v u1 of
-         Nothing -> return [(v, s)]
-         _       -> return []
-    return $ concat uss1 ++ concat uss2
-
-{-
-  where
-    -- A type varible unifies with anything, including another type variable
-    unifiable _ _ _ (SubstT (TyVar v)) t = return ([(v, t)], t)
-    unifiable _ _ _ t (SubstT (TyVar v)) = return ([(v, t)], t)
-
-    -- The following cases unpeel constructors to see if we hit unifiables things inside
-    unifiable var t1 t2 (Box c t) (Box c' t') = do
-      (usC, c'') <- unifiable_Coeff var t1 t2 c c'
-      (us', t') <- unifiable var t1 t2 t t'
-      return (us', Box (substitute usC c'') t')
-
-    unifiable _ _ __ _ t = return ([], t)
-    -- TODO: re-instate error case when needed
-    --unifiable var t1 t2 _ _ = halt $ GenericError (Just s) (msg var t1 t2)
-
-
-{- TODO: fill in rest along the same lines
-    unifiable (Diamond e t) (Diamond e' t') =
-      e == e' && unifiable t t'
-    unifiable (PairTy t1 t2) (PairTy t1' t2') =
-
-      unifiable t1 t1' && unifiable t2 t2'
-    unifiable (FunTy t1 t2) (FunTy t1' t2') =
-      unifiable t1 t1' && unifiable t2 t2'
-    unifiable (TyInfix op t1 t2) (TyInfix op' t1' t2') =
-      op == op' && unifiable t1 t1' && unifiable t2 t2'
-
-    -- If none of the above hold, there is a mismatch between both contexts
-    -- so we can't unify and throw a type error
-    unifiable _ _ = False
-    -}
-
-    -- The same pattern holds for coeffects
-    unifiable_Coeff _ _ _ (CVar v) c = return ([(v, c)], c)
-
-    unifiable_Coeff _ _ _ c (CVar v) = return ([(v, c)], c)
-
-    unifiable_Coeff var t1 t2 (CPlus c1 c2) (CPlus c1' c2') = do
-      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-      return $ (us1 ++ us2, CPlus c1u c2u)
-
-    unifiable_Coeff var t1 t2 (CTimes c1 c2) (CTimes c1' c2') = do
-      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-      return $ (us1 ++ us2, CTimes c1u c2u)
-
-    unifiable_Coeff var t1 t2 (CMeet c1 c2) (CMeet c1' c2') = do
-      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-      return $ (us1 ++ us2, CMeet c1u c2u)
-
-    unifiable_Coeff var t1 t2 (CJoin c1 c2) (CJoin c1' c2') = do
-      (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-      (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-      return $ (us1 ++ us2, CJoin c1u c2u)
-
-    unifiable_Coeff var t1 t2 (CZero k) (CZero k') = do
-      us <- unifiable_CKind var t1 t2 k k'
-      kind <- substitute us k
-      return $ ([], CZero kind)
-
-    unifiable_Coeff var t1 t2 (COne k) (COne k') = do
-      us <- unifiable_CKind var t1 t2 k k'
-      kind <- substitute us k
-      return $ ([], COne kind)
-
-    unifiable_Coeff var t1 t2 (CInfinity k) (CInfinity k') = do
-      us <- unifiable_CKind var t1 t2 k k'
-      kind <- substitute us k
-      return $ ([], CInfinity kind)
-
-    unifiable_Coeff var t1 t2 _ _     =
-      halt $ GenericError (Just s) (msg var t1 t2)
-
-    -- ... and for coeffect kinds
-    unifiable_CKind _ _ _ (CPoly v) k = do
-      --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
-      return [(v, k)]
-
-    unifiable_CKind _ _ _ k (CPoly v) = do
-      --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
-      return [(v, k)]
-
-    unifiable_CKind var t1 t2 k k' =
-      if k == k'
-        then return []
-        else halt $ GenericError (Just s) (msg var t1 t2)
-
-    msg k v1 v2 =
-      "Type variable " ++ sourceName k
-        ++ " cannot be unified to `" ++ pretty v1 ++ "` and `" ++ pretty v2
-        ++ "` at the same time."
--}
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type

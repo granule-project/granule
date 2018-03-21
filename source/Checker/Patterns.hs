@@ -5,7 +5,7 @@ module Checker.Patterns where
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 
-import Checker.Types (equalTypesWithUniversalSpecialisation, combineUnifiers)
+import Checker.Types (equalTypesWithUniversalSpecialisation)
 import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
@@ -54,7 +54,7 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
 ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
   (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
-  unifiers <- combineUnifiers s substl substr
+  unifiers <- combineSubstitutions s substl substr
   return (ctxtL ++ ctxtR, eVars1 ++ eVars2, unifiers)
 
 ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
@@ -74,7 +74,7 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
           unpeel' acc [] t = return (t,acc)
           unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
               (as',bs',us') <- ctxtFromTypedPattern s t p
-              us <- combineUnifiers s us us'
+              us <- combineSubstitutions s us us'
               unpeel' (as++as',bs++bs',us) ps t'
           unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
                     "Have you applied constructor `" ++ sourceName dataC ++
@@ -83,7 +83,7 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
       areEq <- equalTypesWithUniversalSpecialisation s t ty
       case areEq of
         (True, _, unifiers) -> do
-          us <- combineUnifiers s unifiers us
+          us <- combineSubstitutions s unifiers us
           liftIO $ print us
           return (as, freshTyVars++bs, us)
 
@@ -98,8 +98,9 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
       -- Create a fresh type: Box (c' : k) t'
       polyName <- freshVar "fk"
       let ckind = CPoly $ mkId polyName
-      cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
-      let c' = CVar cvar
+      -- cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
+      cvar <- freshVar "c"
+      let c' = CVar $ mkId cvar
       ty <- freshVar "t'"
       let t' = TyVar $ mkId ty
       liftIO $ putStrLn $ "Pattern of type " ++ pretty t ++ " unify at " ++ pretty (Box c' t') ++ " kind = " ++ show ckind

@@ -10,6 +10,13 @@
 
 -- # Operations on lists
 
+import Nat
+
+data List : Nat= -> Type -> Type where
+  Nil : forall (t : Type) . List 0 t;
+  Cons : forall (t : Type, n : Nat=)
+       . t -> List n t -> List (n+1) t
+
 --- Map function
 map : forall (a : Type, b : Type, n : Nat=)
     . (a -> b) |n| -> List n a -> List n b
