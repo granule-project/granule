@@ -166,7 +166,7 @@ checkExpr :: (?globals :: Globals )
           -> Bool             -- whether we are top-level or not
           -> Type             -- type
           -> Expr             -- expression
-          -> MaybeT Checker (Ctxt Assumption, Ctxt Type)
+          -> MaybeT Checker (Ctxt Assumption, Substitution)
 
 -- Checking of constants
 
@@ -250,7 +250,7 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
       newConjunct
       -- Specialise the return type and the incoming environment using the
       -- pattern-match-generated type substitution
-      let tau' = substType subst tau
+      tau' <- substitute subst tau
       (specialisedGam, unspecialisedGam) <- substCtxt subst gam
 
       let checkGam = specialisedGam ++ unspecialisedGam ++ patternGam
@@ -501,7 +501,8 @@ synthExpr defs gam pol (App s e e') = do
       (FunTy sig tau) -> do
          (gam2, subst) <- checkExpr defs gam  (flipPol pol) False sig e'
          gamNew <- ctxPlus s gam1 gam2
-         return (substType subst tau, gamNew)
+         tau    <- substitute subst tau
+         return (tau, gamNew)
 
       -- Not a function type
       t ->

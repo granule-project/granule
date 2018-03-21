@@ -1,4 +1,8 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE TypeFamilies #-}
+{-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Checker.Substitutions where
 
@@ -11,13 +15,230 @@ import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
 import Control.Monad.Trans.Maybe
-import Data.Functor.Identity
 import Utils
 
 -- For doctest:
 -- $setup
 -- >>> import Syntax.Expr (mkId)
 -- >>> :set -XImplicitParams
+
+{-| Substitutions map from variables to type-level things as defined by
+    substitutors -}
+type Substitution = Ctxt Substitutors
+
+{-| Substitutors are things we want to substitute in... they may be one
+     of several things... -}
+data Substitutors =
+    SubstT  Type
+  | SubstC  Coeffect
+  | SubstK  Kind
+  | SubstCK CKind
+  | SubstE  Effect
+  deriving Show
+
+class Substitutable t where
+  -- | Rewrite a 't' using a substitution
+  type SubstitutionContext t x
+  substitute :: (?globals :: Globals) => Substitution -> t -> SubstitutionContext t t
+
+  unify :: t -> t -> SubstitutionContext t (Maybe Substitution)
+
+-- Instances for the main representation of things in the types
+
+instance Substitutable Substitutors where
+  type SubstitutionContext Substitutors x = MaybeT Checker x
+  substitute subst s =
+    case s of
+      SubstT t -> do
+        t <- substitute subst t
+        return $ SubstT t
+
+      SubstC c -> do
+        c <- substitute subst c
+        return $ SubstC c
+
+      SubstK k ->
+        return $ SubstK (substitute subst k)
+
+      SubstCK k ->
+        return $ SubstCK (substitute subst k)
+
+      SubstE e -> do
+        e <- substitute subst e
+        return $ SubstE e
+
+  unify (SubstT t) (SubstT t') = return $ unify t t'
+  unify (SubstT t) (SubstC c') = do
+    -- We can unify a type with a coeffect, if the type is actually a Nat=
+    k <- inferKindOfType nullSpan t
+    case k of
+      KConstr k | internalName k == "Nat=" -> do
+             c <- compileNatKindedTypeToCoeffect nullSpan t
+             unify c c'
+      _ -> return Nothing
+  unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
+  unify (SubstC c) (SubstC c') = unify c c'
+  unify (SubstK k) (SubstK k') = unify k k'
+  unify (SubstCK k) (SubstCK k') = unify k k'
+  unify (SubstE e) (SubstE e') = unify e e'
+  unify _ _ = Nothing
+
+<++> :: Maybe [a] -> Maybe [a] -> Maybe [a]
+xs <++> ys = xs >>= (\xs' -> ys >>= (\ys' -> return $ xs' ++ ys'))
+
+instance Substitutable Type where
+  type SubstitutionContext Type x = MaybeT Checker x
+  substitute subst = typeFoldM (baseTypeFold
+                              { tfTyVar = varSubst
+                              , tfBox = box
+                              , tfDiamond = dia })
+    where
+      box c t = do
+        c <- substitute subst c
+        t <- substitute subst t
+        mBox c t
+
+      dia e t = do
+        e <- substitute subst e
+        t <- substitute subst t
+        mDiamond e t
+
+      varSubst v =
+         case lookup v subst of
+           Just (SubstT t) -> return t
+           _               -> mTyVar v
+
+  unify (TyVar v) t' = return $ Just [(v, SubstT t)]
+  unify t (TyVar v)  = return $ Just [(v, SubstT t)]
+  unify (FunTy t1 t2) (FunTy t1' t2') = do
+    u1 <- unify t1 t1'
+    u2 <- unify t2 t2'
+    return $ u1 <++> u2
+  unify (TyCon c) (TyCon c') | c == c' = return $ Just []
+  unify (Box c t) (Box c' t') = do
+    u1 <- unify c c'
+    u2 <- unify t t'
+    return $ u1 <++> u2
+  unify (Diamond e t) (Diamond e' t') = do
+    u1 <- unify e e'
+    u2 <- unify t t'
+    return $ u1 <++> u2
+  unify (TyApp t1 t2) (TyApp t1' t2') = do
+    u1 <- unify t1 t1'
+    u2 <- unify t2 t2'
+    return $ u1 <++> u2
+  unify (TyInt i) (TyInt j) | i == j = return $ Just []
+  unify (PairTy t1 t2) (PairTy t1' t2') = do
+    u1 <- unify t1 t1'
+    u2 <- unify t2 t2'
+    return $ u1 <++> u2
+  unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1 t2') = do
+    k <- inferKindOfType nullSpan t
+    case k of
+      KConstr k | internalName k == "Nat=" -> do
+        c <- compileNatKindedTypeToCoeffect nullSpan t
+        c' <- compileNatKindedTypeToCoeffect nullSpan t'
+        addConstraint $ Eq nullSpan c c'
+        return $ Just []
+      _ | o == o' -> do
+        u1 <- unify t1 t1'
+        u2 <- unify t2 t2'
+        return $ u1 <++> u2
+      -- No unification
+      _ -> return $ Nothing
+  -- No unification
+  unify _ _ = return $ Nothing
+
+instance Substitutable Coeffect where
+  type SubstitutionContext Coeffect x = MaybeT Checker x
+
+  substitute subst (CPlus c1 c2) = do
+      c1' <- substitute subst c1
+      c2' <- substitute subst c2
+      return $ CPlus c1' c2'
+
+  substitute subst (CJoin c1 c2) = do
+      c1' <- substitute subst c1
+      c2' <- substitute subst c2
+      return $ CJoin c1' c2'
+
+  substitute subst (CMeet c1 c2) = do
+      c1' <- substitute subst c1
+      c2' <- substitute subst c2
+      return $ CMeet c1' c2'
+
+  substitute subst (CTimes c1 c2) = do
+      c1' <- substitute subst c1
+      c2' <- substitute subst c2
+      return $ CTimes c1' c2'
+
+  substitute subst (CVar v) =
+      case lookup v subst of
+        Just (SubstC c) -> return c
+        -- Convert a single type substitution (type variable, type pair) into a
+        -- coeffect substituion
+        Just (SubstT t) -> do
+          k <- inferKindOfType nullSpan t
+          case k of
+            KConstr k ->
+              case internalName k of
+                "Nat=" -> compileNatKindedTypeToCoeffect nullSpan t
+                _      -> return (CVar v)
+            _ -> return (CVar v)
+
+        _               -> return $ CVar v
+
+  substitute subst (CInfinity k) = return $
+    CInfinity (substitute subst k)
+
+  substitute subst (COne k) = return $
+    COne (substitute subst k)
+
+  substitute subst (CZero k) = return $
+    CZero (substitute subst k)
+
+  substitute subst (CSet tys) = do
+    tys <- mapM (\(v, t) -> substitute subst t >>= (\t' -> return (v, t'))) tys
+    return $ CSet tys
+
+  substitute subst (CSig c k) = do
+    c <- substitute subst c
+    return $ CSig c (substitute subst k)
+
+  substitute _ c@CNat{}      = return c
+  substitute _ c@CNatOmega{} = return c
+  substitute _ c@CFloat{}    = return c
+  substitute _ c@Level{}     = return c
+
+
+
+instance Substitutable Effect where
+  type SubstitutionContext Effect x = MaybeT Checker x
+  -- {TODO: Make effects richer}
+  substitute subst e = return e
+
+instance Substitutable CKind where
+  type SubstitutionContext CKind x = x
+
+  substitute subst (CPoly v) =
+      case lookup v subst of
+        Just (SubstCK k) -> k
+        _                -> CPoly v
+  substitute _ c@CConstr{} = c
+
+instance Substitutable Kind where
+  type SubstitutionContext Kind x = x
+
+  substitute subst KType = KType
+  substitute subst KCoeffect = KCoeffect
+  substitute subst (KFun c1 c2) =
+    KFun (substitute subst c1) (substitute subst c2)
+  substitute subst (KPoly v) =
+    case lookup v subst of
+      Just (SubstK k) -> k
+      _               -> KPoly v
+  substitute subst (KConstr c) = KConstr c
+
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts
@@ -27,7 +248,7 @@ import Utils
 Just ([(Id "y" "y",Linear (TyInt 0))],[(Id "x" "x",Linear (TyVar Id "x" "x")),(Id "z" "z",Discharged (TyVar Id "z" "z") (CVar Id "b" "b"))])
 -}
 
-substCtxt :: (?globals :: Globals) => Ctxt Type -> Ctxt Assumption
+substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
   -> MaybeT Checker (Ctxt Assumption, Ctxt Assumption)
 substCtxt _ [] = return ([], [])
 substCtxt subst ((v, x):ctxt) = do
@@ -37,46 +258,16 @@ substCtxt subst ((v, x):ctxt) = do
     then return (substituteds, (v, x) : unsubstituteds)
     else return ((v, x') : substituteds, unsubstituteds)
 
--- | rewrite a type using a unifier (map from type vars to types)
-substType :: Ctxt Type -> Type -> Type
-substType ctx = runIdentity .
-    typeFoldM (baseTypeFold { tfTyVar = varSubst })
-  where
-    varSubst v =
-       case lookup v ctx of
-         Just t -> return t
-         Nothing -> mTyVar v
 
-substAssumption :: (?globals :: Globals) => Ctxt Type -> (Id, Assumption)
+substAssumption :: (?globals :: Globals) => Substitution -> (Id, Assumption)
   -> MaybeT Checker (Id, Assumption)
-substAssumption subst (v, Linear t) =
-    return $ (v, Linear (substType subst t))
+substAssumption subst (v, Linear t) = do
+    t <- substitute subst t
+    return (v, Linear t)
 substAssumption subst (v, Discharged t c) = do
-    coeffectSubst <- mapMaybeM convertSubst subst
-    return $ (v, Discharged (substType subst t) (substCoeffect coeffectSubst c))
-  where
-    -- Convert a single type substitution (type variable, type pair) into a
-    -- coeffect substitution
-    convertSubst :: (Id, Type) -> MaybeT Checker (Maybe (Id, Coeffect))
-    convertSubst (v, t) = do
-      k <- inferKindOfType nullSpan t
-      case k of
-        KConstr k ->
-          case internalName k of
-            "Nat=" -> do
-              c <- compileNatKindedTypeToCoeffect nullSpan t
-              return $ Just (v, c)
-            _ -> return Nothing
-        _ -> return Nothing
-    -- mapM combined with the filtering behaviour of mapMaybe
-    mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
-    mapMaybeM _ [] = return []
-    mapMaybeM f (x:xs) = do
-      y <- f x
-      ys <- mapMaybeM f xs
-      case y of
-        Just y' -> return $ y' : ys
-        Nothing -> return $ ys
+    t <- substitute subst t
+    c <- substitute subst c
+    return (v, Discharged t c)
 
 compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Coeffect
 compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
@@ -95,61 +286,16 @@ compileNatKindedTypeToCoeffect _ (TyVar v) =
 compileNatKindedTypeToCoeffect s t =
   halt $ KindError (Just s) $ "Type `" ++ pretty t ++ "` does not have kind `Nat=`"
 
-{- | Perform a substitution on a coeffect based on a context mapping
-     variables to coeffects -}
-substCoeffect :: Ctxt Coeffect -> Coeffect -> Coeffect
-substCoeffect rmap (CPlus c1 c2) = let
-    c1' = substCoeffect rmap c1
-    c2' = substCoeffect rmap c2
-    in CPlus c1' c2'
-
-substCoeffect rmap (CJoin c1 c2) = let
-    c1' = substCoeffect rmap c1
-    c2' = substCoeffect rmap c2
-    in CJoin c1' c2'
-
-substCoeffect rmap (CMeet c1 c2) = let
-    c1' = substCoeffect rmap c1
-    c2' = substCoeffect rmap c2
-    in CMeet c1' c2'
-
-substCoeffect rmap (CTimes c1 c2) = let
-    c1' = substCoeffect rmap c1
-    c2' = substCoeffect rmap c2
-    in CTimes c1' c2'
-
-substCoeffect rmap (CVar v) =
-    case lookup v rmap of
-      Just c  -> c
-      Nothing -> CVar v
-
-substCoeffect _ c@CNat{}   = c
-substCoeffect _ c@CNatOmega{} = c
-substCoeffect _ c@CFloat{} = c
-substCoeffect _ c@CInfinity{}  = c
-substCoeffect _ c@COne{}   = c
-substCoeffect _ c@CZero{}  = c
-substCoeffect _ c@Level{}  = c
-substCoeffect _ c@CSet{}   = c
-substCoeffect _ c@CSig{}   = c
-
-substCKind :: Ctxt CKind -> CKind -> CKind
-substCKind rmap (CPoly v) =
-  case lookup v rmap of
-    Nothing -> CPoly v
-    Just k  -> k
-substCKind rmap c@CConstr{} = c
 
 -- | Apply a name map to a type to rename the type variables
-renameType :: [(Id, Id)] -> Type -> Type
-renameType rmap t =
-    runIdentity $
-      typeFoldM (baseTypeFold { tfBox   = renameBox rmap
-                              , tfTyVar = renameTyVar rmap }) t
+renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> MaybeT Checker Type
+renameType subst t =
+      typeFoldM (baseTypeFold { tfBox   = renameBox subst
+                              , tfTyVar = renameTyVar subst }) t
   where
     renameBox renameMap c t = do
-      let c' = substCoeffect (map (\(v, var) -> (v, CVar var)) renameMap) c
-      let t' = renameType renameMap t
+      c' <- substitute (map (\(v, var) -> (v, SubstC $ CVar var)) renameMap) c
+      t' <- renameType renameMap t
       return $ Box c' t'
     renameTyVar renameMap v =
       case lookup v renameMap of
@@ -159,12 +305,14 @@ renameType rmap t =
 
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
-freshPolymorphicInstance :: Quantifier -> TypeScheme -> MaybeT Checker (Type, [Id])
+freshPolymorphicInstance :: (?globals :: Globals)
+  => Quantifier -> TypeScheme -> MaybeT Checker (Type, [Id])
 freshPolymorphicInstance quantifier (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
-    return $ (renameType renameMap ty, map snd renameMap)
+    ty <- renameType renameMap ty
+    return (ty, map snd renameMap)
 
   where
     -- Freshen variables, create existential instantiation
@@ -181,6 +329,8 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
                KCoeffect -> error "Coeffect kind variables not yet supported"
                KPoly _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
                \ Please open an issue with a snippet of your code at https://github.com/dorchard/granule/issues"
+               KType    -> error "Impossible" -- covered by typeBased
+               KFun _ _ -> error "Tried to instantiate a non instantiatable kind"
       -- Return pair of old variable name and instantiated name (for
       -- name map)
       return (var, var')

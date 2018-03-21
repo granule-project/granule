@@ -78,9 +78,9 @@ compileToSBV predicate tyVarContext kVarContext =
     -- Perform a substitution on a predicate tree
     -- substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
     -- substConstraint rmap (Eq s' c1 c2 k) =
-    --     Eq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
+    --     Eq s' (substitute rmap c1) (substitute rmap c2) k
     -- substConstraint rmap (Leq s' c1 c2 k) =
-    --     Leq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
+    --     Leq s' (substitute rmap c1) (substitute rmap c2) k
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate

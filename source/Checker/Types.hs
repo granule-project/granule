@@ -14,23 +14,20 @@ import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
-import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
-type Unifier = Ctxt Type
-
 lEqualTypes :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s Leq False
 
 equalTypes :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False
 
 equalTypesWithUniversalSpecialisation :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True
 
 {- | Check whether two types are equal, and at the same time
@@ -55,12 +52,14 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   --    * a boolean of the equality
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier
-  -> MaybeT Checker (Bool, Type, Ctxt Type)
+  -> MaybeT Checker (Bool, Type, Substitution)
 equalTypesRelatedCoeffectsAndUnify s rel allowUniversalSpecialisation t1 t2 = do
 
    (eq, unif) <- equalTypesRelatedCoeffects s rel allowUniversalSpecialisation t1 t2 SndIsSpec
    if eq
-     then return (eq, substType unif t2, unif)
+     then do
+        t2 <- substitute unif t2
+        return (eq, t2, unif)
      else return (eq, t1, [])
 
 data SpecIndicator = FstIsSpec | SndIsSpec
@@ -81,12 +80,14 @@ equalTypesRelatedCoeffects :: (?globals :: Globals )
   -> Type
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
-  -> MaybeT Checker (Bool, Unifier)
+  -> MaybeT Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s Leq uS t1' t1 (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
-  (eq2, u2) <- equalTypesRelatedCoeffects s rel uS (substType u1 t2) (substType u1 t2') sp
+  t2 <- substitute u1 t2
+  t2' <- substitute u1 t2'
+  (eq2, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
   unifiers <- combineUnifiers s u1 u2
   return (eq1 && eq2, unifiers)
 
@@ -142,7 +143,9 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
 
 equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
   (one, u1) <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
-  (two, u2) <- equalTypesRelatedCoeffects s rel uS (substType u1 t2) (substType u1 t2') sp
+  t2  <- substitute u1 t2
+  t2' <- substitute u1 t2'
+  (two, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
   unifiers <- combineUnifiers s u1 u2
   return (one && two, unifiers)
 
@@ -207,15 +210,17 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
       case k1 `joinKind` k2 of
         Just (KConstr kc) -> do
           addConstraint (Eq s (CVar n) (CVar m) (CConstr kc))
-          return (True, [(n, TyVar m)])
+          return (True, [(n, SubstT $ TyVar m)])
         Just _ ->
-          return (True, [(n, TyVar m)])
+          return (True, [(n, SubstT $ TyVar m)])
         Nothing ->
           return (False, [])
 
 equalTypesRelatedCoeffects s rel uS (PairTy t1 t2) (PairTy t1' t2') sp = do
   (lefts, u1)  <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
-  (rights, u2) <- equalTypesRelatedCoeffects s rel uS (substType u1 t2) (substType u1 t2') sp
+  t2  <- substitute u1 t2
+  t2' <- substitute u1 t2'
+  (rights, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
   unifiers <- combineUnifiers s u1 u2
   return (lefts && rights, unifiers)
 
@@ -236,9 +241,9 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
         Just (KConstr k) | internalName k == "Nat=" -> do
           nat <- compileNatKindedTypeToCoeffect s t
           addConstraint (Eq s (CVar n) nat (CConstr $ mkId "Nat="))
-          return (True, [(n, t)])
+          return (True, [(n, SubstT t)])
 
-        Just _ -> return (True, [(n, t)])
+        Just _ -> return (True, [(n, SubstT t)])
 
     -- Unifying a forall with a concrete type may only be possible if the concrete
     -- type is exactly equal to the forall-quantified variable
@@ -253,11 +258,11 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
           addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
-          return (True, [(n, t)])
+          return (True, [(n, SubstT t)])
         x ->
           if allowUniversalSpecialisation
             then
-              return (True, [(n, t)])
+              return (True, [(n, SubstT t)])
             else
             halt $ GenericError (Just s)
             $ case sp of
@@ -281,7 +286,7 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals )
     => Span
     -> Type
     -> Type
-    -> MaybeT Checker (Bool, Unifier)
+    -> MaybeT Checker (Bool, Substitution)
 equalOtherKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
@@ -303,7 +308,8 @@ equalOtherKindedTypesGeneric s t1 t2 = do
                  ++ "\t\n from equality "
                  ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
-sessionEquality :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker (Bool, Unifier)
+sessionEquality :: (?globals :: Globals)
+    => Span -> Type -> Type -> MaybeT Checker (Bool, Substitution)
 sessionEquality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
   (g, _, u) <- equalTypes s t t'
@@ -315,46 +321,53 @@ sessionEquality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   return (g, u)
 
 sessionEquality s (TyCon c) (TyCon c')
-  | internalName c == "End" && internalName c' == "End" = do
+  | internalName c == "End" && internalName c' == "End" =
   return (True, [])
 
-sessionEquality s t1 t2 = do
+sessionEquality s t1 t2 =
   halt $ GenericError (Just s)
        $ "Session type '" ++ pretty t1 ++ "' is not equal to '" ++ pretty t2 ++ "'"
 
 combineUnifiers ::
-  (?globals :: Globals) => Span -> Ctxt Type -> Ctxt Type -> MaybeT Checker (Ctxt Type)
+  (?globals :: Globals)
+  => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
 combineUnifiers s u1 u2 = do
     -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
     -- check whether things can be unified, i.e. exactly
-    uss1 <- forM u1 $ \(v, t) ->
+    uss1 <- forM u1 $ \(v, s) ->
       case lookupMany v u2 of
         -- Unifier in u1 but not in u2
-        [] -> return [(v, t)]
+        [] -> return [(v, s)]
         -- Possible unificaitons in each part
         alts -> do
             unifs <-
-              forM alts $ \t' -> do
-                 (us, t) <- unifiable v t t' t t'
-                 return $ [(v, substType us t)]
+              forM alts $ \s' ->
+                 --(us, t) <- unifiable v t t' t t'
+                 case unify s s' of
+                   Nothing -> error "Cannot unify"
+                   Just us -> do
+                     sUnified <- substitute us s
+                     return $ (v, sUnified) : us
+
             return $ concat unifs
     -- Any remaining unifiers that are in u2 but not u1
-    uss2 <- forM u2 $ \(v, t) ->
+    uss2 <- forM u2 $ \(v, s) ->
        case lookup v u1 of
-         Nothing -> return [(v, t)]
+         Nothing -> return [(v, s)]
          _       -> return []
     return $ concat uss1 ++ concat uss2
 
+{-
   where
     -- A type varible unifies with anything, including another type variable
-    unifiable _ _ _ (TyVar v) t = return ([(v, t)], t)
-    unifiable _ _ _ t (TyVar v) = return ([(v, t)], t)
+    unifiable _ _ _ (SubstT (TyVar v)) t = return ([(v, t)], t)
+    unifiable _ _ _ t (SubstT (TyVar v)) = return ([(v, t)], t)
 
     -- The following cases unpeel constructors to see if we hit unifiables things inside
     unifiable var t1 t2 (Box c t) (Box c' t') = do
       (usC, c'') <- unifiable_Coeff var t1 t2 c c'
       (us', t') <- unifiable var t1 t2 t t'
-      return (us', Box (substCoeffect usC c'') t')
+      return (us', Box (substitute usC c'') t')
 
     unifiable _ _ __ _ t = return ([], t)
     -- TODO: re-instate error case when needed
@@ -404,15 +417,18 @@ combineUnifiers s u1 u2 = do
 
     unifiable_Coeff var t1 t2 (CZero k) (CZero k') = do
       us <- unifiable_CKind var t1 t2 k k'
-      return $ ([], CZero (substCKind us k))
+      kind <- substitute us k
+      return $ ([], CZero kind)
 
     unifiable_Coeff var t1 t2 (COne k) (COne k') = do
       us <- unifiable_CKind var t1 t2 k k'
-      return $ ([], COne (substCKind us k))
+      kind <- substitute us k
+      return $ ([], COne kind)
 
     unifiable_Coeff var t1 t2 (CInfinity k) (CInfinity k') = do
       us <- unifiable_CKind var t1 t2 k k'
-      return $ ([], CInfinity (substCKind us k))
+      kind <- substitute us k
+      return $ ([], CInfinity kind)
 
     unifiable_Coeff var t1 t2 _ _     =
       halt $ GenericError (Just s) (msg var t1 t2)
@@ -435,6 +451,7 @@ combineUnifiers s u1 u2 = do
       "Type variable " ++ sourceName k
         ++ " cannot be unified to `" ++ pretty v1 ++ "` and `" ++ pretty v2
         ++ "` at the same time."
+-}
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type

@@ -22,7 +22,7 @@ import Utils
 --   (e.g. for dependent matching) and a substitution for variables
 --   caused by pattern matching (e.g., from unification).
 ctxtFromTypedPattern :: (?globals :: Globals ) => Span -> Type -> Pattern
-  -> MaybeT Checker (Ctxt Assumption, [Id], Ctxt Type)
+  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern _ t (PWild _) = do
@@ -104,7 +104,7 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
       let t' = TyVar $ mkId ty
       liftIO $ putStrLn $ "Pattern of type " ++ pretty t ++ " unify at " ++ pretty (Box c' t') ++ " kind = " ++ show ckind
       (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
-      return (map (discharge ckind c') binders, vars, (v, Box c' t') : unifiers)
+      return (map (discharge ckind c') binders, vars, (v, SubstT $ Box c' t') : unifiers)
    -- TODO: cases missing
 
 ctxtFromTypedPattern s t p = do
