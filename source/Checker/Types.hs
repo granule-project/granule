@@ -183,6 +183,11 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
     (Just (k1, InstanceQ), Just (k2, InstanceQ)) ->
       tyVarConstraint k1 k2 n m
 
+    -- We can unify two instance type variables
+    (Just (k1, BoundQ), Just (k2, BoundQ)) ->
+        tyVarConstraint k1 k2 n m
+
+
     -- But we can unify a forall and an instance
     (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
       tyVarConstraint k1 k2 n m
@@ -327,7 +332,6 @@ sessionEquality s (TyCon c) (TyCon c')
 sessionEquality s t1 t2 =
   halt $ GenericError (Just s)
        $ "Session type '" ++ pretty t1 ++ "' is not equal to '" ++ pretty t2 ++ "'"
-
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type
