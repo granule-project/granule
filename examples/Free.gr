@@ -74,4 +74,3 @@ algSum |j| |k| x =
 -- Expressions
 --data Expr a where
 --  Recall : N
-
