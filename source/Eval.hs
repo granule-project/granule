@@ -213,9 +213,7 @@ builtIns =
     hPutChar (Handle h) = return $
       Primitive (\(CharLiteral c) -> do
          SIO.hPutChar h c
-         return $ Pure (Val nullSpan
-                    (Pair (Val nullSpan (Handle h))
-                          (Val nullSpan (Constr (mkId "()") [])))))
+         return $ Pure (Val nullSpan (Handle h)))
 
     hGetChar :: Value -> IO Value
     hGetChar (Handle h) = do

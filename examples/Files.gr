@@ -1,16 +1,22 @@
 import File
 
--- In Haskell
--- openFile :: String -> IOMode -> IO Handle
--- hGetChar :: Handle -> IO Char
--- hPutChar :: Handle -> Char -> IO ()
--- hClose :: Handle -> IO ()
+-- Haskell vs Granule file manipulation
 
--- In Granule
--- openFile : String -> IOMode -> FileIO Handle
--- hGetChar : Handle           -> FileIO (Handle, Char)
--- hPutChar : Handle -> Char   -> FileIO ()
--- hClose   : Handle -> FileIO ()
+-- openFile :: String -> IOMode -> IO Handle
+openFile'    : String -> IOMode -> FileIO Handle
+openFile' = openFile
+
+-- hGetChar :: Handle -> IO Char
+hGetChar'    : Handle -> FileIO (Handle, Char)
+hGetChar' = hGetChar
+
+-- hPutChar :: Handle -> Char  -> IO ()
+hPutChar'    : Handle -> Char  -> FileIO Handle
+hPutChar' = hPutChar
+
+-- hClose :: Handle -> IO ()
+hClose'    : Handle -> FileIO ()
+hClose' = hClose
 
 main : FileIO String
 main =
