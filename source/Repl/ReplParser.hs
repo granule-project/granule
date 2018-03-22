@@ -1,17 +1,17 @@
-{-# 
-LANGUAGE 
-  NoMonomorphismRestriction, 
-  PackageImports, 
-  TemplateHaskell, 
-  FlexibleContexts 
+{-#
+LANGUAGE
+  NoMonomorphismRestriction,
+  PackageImports,
+  TemplateHaskell,
+  FlexibleContexts
 #-}
 module Repl.ReplParser where
 
 import Prelude
 --import Data.List
---import Data.Char 
+--import Data.Char
 import qualified Data.Text as T
-import Text.Parsec 
+import Text.Parsec
 import qualified Text.Parsec.Token as Token
 import Text.Parsec.Language
 --import Data.Functor.Identity
@@ -27,10 +27,10 @@ lexer = haskellStyle {
 tokenizer  = Token.makeTokenParser lexer
 reservedOp = Token.reservedOp tokenizer
 ws         = Token.whiteSpace tokenizer
-symbol     = Token.symbol tokenizer    
+symbol     = Token.symbol tokenizer
 
 
-data REPLExpr = 
+data REPLExpr =
       Let Id Expr Expr
     | ShowAST Expr
     | DumpState
@@ -38,7 +38,7 @@ data REPLExpr =
     | Eval Expr
     | LoadFile [FilePath]
     deriving Show
-    
+
 replTermCmdParser short long c p = do
     symbol ":"
     cmd <- many lower
@@ -46,9 +46,9 @@ replTermCmdParser short long c p = do
     t <- p
     eof
     if (cmd == long || cmd == short)
-    then return $ c t 
+    then return $ c t
     else fail $ "Command \":"++cmd++"\" is unrecognized."
-    
+
 replIntCmdParser short long c = do
     symbol ":"
     cmd <- many lower
@@ -56,7 +56,7 @@ replIntCmdParser short long c = do
     if (cmd == long || cmd == short)
     then return c
     else fail $ "Command \":"++cmd++"\" is unrecognized."
-    
+
 replFileCmdParser short long c = do
     symbol ":"
     cmd <- many lower
@@ -69,35 +69,33 @@ replFileCmdParser short long c = do
         let fpath = textToFilePath tpath
         return $ c fpath
     else fail $ "Command \":"++cmd++"\" is unrecognized."
-    
-    
--- showASTParser = replTermCmdParser "s" "show" ShowAST     
 
--- unfoldTermParser = replTermCmdParser "u" "unfold" Unfold 
+
+-- showASTParser = replTermCmdParser "s" "show" ShowAST
+
+-- unfoldTermParser = replTermCmdParser "u" "unfold" Unfold
 
 dumpStateParser = replIntCmdParser "d" "dump" DumpState
 
 loadFileParser = replFileCmdParser "l" "load" LoadFile
 
 
--- lineParser = 
-          
+-- lineParser =
+
 lineParser = try dumpStateParser
           <|> try loadFileParser
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
           <?> "parse error"
-          
+
 parseLine :: String -> Either String REPLExpr
 parseLine s = case (parse lineParser "" s) of
             Left msg -> Left $ show msg
             Right l -> Right l
-            
-                
+
+
 textToFilePath :: [T.Text] -> [FilePath]
 textToFilePath [] = []
 textToFilePath (x:xs) = do
     let spth = T.unpack x
     spth : textToFilePath xs
-    
-    

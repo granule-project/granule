@@ -14,7 +14,7 @@ import qualified Data.Map as M
 import Control.Exception (SomeException, try)
 import Control.Monad.State
 import System.Console.Haskeline
--- import System.Console.Haskeline.MonadException
+import System.Console.Haskeline.MonadException()
 import Repl.ReplError
 import System.Exit
 import System.FilePath.Glob (glob)
@@ -26,49 +26,57 @@ import Repl.ReplParser
 import Checker.Checker
 import qualified Control.Monad.Except as Ex
 
-type REPLStateIO a  = StateT (M.Map String Def) IO (Either ReplError a)
+type REPLStateIO a  = StateT (M.Map String Def) (Ex.ExceptT ReplError IO) a
+
 instance MonadException m => MonadException (StateT (M.Map String Def) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
 
+instance MonadException m => MonadException (Ex.ExceptT e m) where
+  controlIO f = Ex.ExceptT $ controlIO $ \(RunIO run) -> let
+                  run' = RunIO (fmap Ex.ExceptT . run . Ex.runExceptT)
+                  in fmap Ex.runExceptT $ f run'
 
+liftIO' :: IO a -> REPLStateIO a
+liftIO' = lift.lift
 
---processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
-processFilesREPL globPatterns e f = forM globPatterns $ (\p -> do
+processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
+processFilesREPL globPatterns f = forM globPatterns $ (\p -> do
     filePaths <- liftIO $ glob p
     case filePaths of
-        [] -> (e p) >>= (return.(:[]))
-        _ ->  forM filePaths f)
+        [] -> lift $ Ex.throwError (FilePathError p)
+        _ -> forM filePaths f)
+
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
-    pf <- liftIO $ try $ parseDefs =<< readFile pth
+    pf <- liftIO' $ try $ parseDefs =<< readFile pth
     case pf of
       Right (ast, maxFreshId) -> do
             let ?globals = ?globals { freshIdCounter = maxFreshId }
-            checked <-  liftIO $ check ast
+            checked <-  liftIO' $ check ast
             case checked of
                 Ok -> do
                     forM ast $ \idef -> loadInQueue idef
-                    return $ Ex.return ()
-                Failed -> return $ Ex.throwError (TypeCheckError pth)
+                    Ex.return ()
+                Failed -> Ex.throwError (TypeCheckError pth)
       Left e -> do
-            return $ Ex.throwError (ParseError e)
+            Ex.throwError (ParseError e)
 
 
-loadInQueue :: Def -> REPLStateIO ()
+loadInQueue :: Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id _ _ _) = do
   m <- get
   put $ M.insert (pretty id) def m
-  return (Ex.return())
+  Ex.return()
 loadInQueue adt@(ADT _ _ _ _) = do
-  return (Ex.return ())
+  Ex.return ()
 
-noFileAtPath :: FilePath -> REPLStateIO ()
-noFileAtPath pt = do
-    return $ Ex.throwError (FilePathError pt)
-
+-- noFileAtPath :: FilePath -> REPLStateIO ()
+-- noFileAtPath pt = do
+--     return $ Ex.throwError (FilePathError pt)
+--
 dumpStateAux ::M.Map String Def -> [String]
 dumpStateAux m = do
   pDef (M.toList m)
@@ -79,25 +87,25 @@ dumpStateAux m = do
 
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
-handleCMD "" = return (Ex.return ())
+handleCMD "" = Ex.return ()
 handleCMD s =
    case (parseLine s) of
     Right l -> handleLine l
     Left msg -> do
        liftIO $ putStrLn msg
-       return (Ex.return ())
+
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
       dict <- get
       liftIO $ print $ dumpStateAux dict
-      return (Ex.return ())
+
 
     handleLine (LoadFile ptr) = do
       put M.empty
-      ecs <- processFilesREPL ptr noFileAtPath (let ?globals = ?globals in readToQueue)
-      liftIO $ print (concat ecs)
-      return (Ex.return ())
+      ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
+      --liftIO $ print (concat ecs)
+      return ()
 
 
 helpMenu :: String
@@ -113,11 +121,19 @@ helpMenu =
       ":load <filepath>  (:l)  Load an external file into the context\n"++
       "-----------------------------------------------------------------------------------"
 
+{-  eer <- Ex.runExceptT (evalStateT (runInputT defaultSettings loop) M.empty)
+  case eer of
+    Right l -> return()
+    Left er -> putStrLn $ show er -}
+
 repl :: IO ()
 repl = do
-  evalStateT (runInputT defaultSettings loop) M.empty
+  eer <- Ex.runExceptT (evalStateT (runInputT defaultSettings loop) M.empty)
+  case eer of
+    Right l -> return ()
+    Left er -> print er
    where
-       --loop :: InputT REPLStateIO ()
+       loop :: InputT (StateT (M.Map String Def) (Ex.ExceptT ReplError IO)) ()
        loop = do
            minput <- getInputLine "Granule> "
            case minput of
@@ -128,4 +144,7 @@ repl = do
                           | input == ":h" || input == ":help"
                               -> (liftIO $ putStrLn helpMenu) >> loop
                           | otherwise -> let ?globals = defaultGlobals
-                                          in (lift.handleCMD $ input) >> loop
+                                          in do _ <- lift $ (handleCMD $ input) `Ex.catchError` handleError
+                                                loop
+         where
+           handleError err = liftIO'.putStrLn.show $ err
