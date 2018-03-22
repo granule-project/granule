@@ -1,3 +1,7 @@
+data List : Nat= -> Type -> Type where
+  Nil  : forall (t : Type) . List 0 t;
+  Cons : forall (t : Type, n : Nat=) . t -> List n t -> List (n+1) t
+
 dubList : forall (n : Nat=) . List n Int -> List (2*n) Int
 dubList xs =
     case xs of

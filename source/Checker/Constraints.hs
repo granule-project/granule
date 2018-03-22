@@ -68,15 +68,12 @@ compileToSBV predicate tyVarContext kVarContext =
 
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
-      let binders =
-           if v `elem` (vars p ++ vars p')
-           then [internalName v]
-           -- Optimisation, don't quantify things that actually don't get used
-           else []
-      in forAll binders (\vSolver -> do
-           impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
-           return $ (vSolver .>= literal 0) ==> impl)
-
+      if v `elem` (vars p ++ vars p')
+        then forAll [internalName v] (\vSolver -> do
+             impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
+             return $ (vSolver .>= literal 0) ==> impl)
+        else do
+          buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
       return $ compile solverVars cons
