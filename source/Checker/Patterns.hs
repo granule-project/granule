@@ -113,21 +113,25 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
 
-ctxtFromTypedPattern s t@(TyVar v) p = do
+ctxtFromTypedPattern s t@(TyVar v) p =
   case p of
     PVar _ x -> return ([(x, Linear t)], [], [])
     -- Trying to match a polymorphic type variable against a box pattern
     PBox _ p' -> do
-      -- Create a fresh type: Box (c' : k) t'
-      polyName <- freshVar "fk"
-      let ckind = CPoly $ mkId polyName
+      -- Create a fresh type: Box (c' : k') t' ~ t
+      -- Fresh kind
+      kvar <- freshVar "k'"
+      let ckind = CPoly $ mkId kvar
+      -- Fresh coeffect var
       cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
-      let c' = CVar $ cvar
+      let c' = CVar cvar
+      -- Fresh type
       tyvar <- freshVar "t'"
       let t' = TyVar $ mkId tyvar
       -- Register the type variable
-      modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ)) : tyVarContext state })
-
+      modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ))
+                                 : tyVarContext state })
+      -- Recursive check
       (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
       return (map (discharge ckind c') binders, vars, (v, SubstT $ Box c' t') : unifiers)
    -- TODO: cases missing
