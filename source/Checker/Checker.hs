@@ -193,7 +193,10 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
     (gam', subst2) <- checkExpr defs (bindings ++ gam) pol False tau' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
-       [] -> return (gam' `subtractCtxt` bindings, subst1 ++ subst2)
+       [] -> do
+          subst <- combineSubstitutions s subst1 subst2
+          return (gam' `subtractCtxt` bindings, subst)
+
        xs -> illLinearityMismatch s xs
   else refutablePattern s p
 
@@ -257,7 +260,7 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
       tau' <- substitute subst tau
       (specialisedGam, unspecialisedGam) <- substCtxt subst gam
 
-      let checkGam = specialisedGam ++ unspecialisedGam ++ patternGam
+      let checkGam = patternGam ++ specialisedGam ++ unspecialisedGam
       (localGam, subst') <- checkExpr defs checkGam pol False tau' e_i
 
       approximatedByCtxt s localGam checkGam
@@ -400,7 +403,7 @@ synthExpr defs gam pol (Case s guardExpr cases) = do
       (patternGam, eVars, _) <- ctxtFromTypedPattern s ty pati
       newConjunct
       ---
-      (tyCase, localGam) <- synthExpr defs (gam ++ patternGam) pol ei
+      (tyCase, localGam) <- synthExpr defs (patternGam ++ gam) pol ei
       concludeImplication eVars
       -- Check linear use in anything Linear
       case checkLinearity patternGam localGam of

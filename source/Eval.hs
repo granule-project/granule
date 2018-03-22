@@ -9,6 +9,7 @@ import Context
 import Utils
 import Data.Text (pack, unpack, append)
 import qualified Data.Text.IO as Text
+import Control.Monad (zipWithM)
 
 import System.IO (hFlush, stdout)
 import qualified System.IO as SIO
@@ -122,8 +123,11 @@ pmatch _ [] _ =
 pmatch _ ((PWild _, e):_)  _ =
    return $ Just (e, [])
 
-pmatch _ ((PConstr _ s ps, e):_) (Constr s' []) | s == s' =
-   return $ Just (e, [])
+pmatch ctxt ((PConstr _ s innerPs, e):ps) (Constr s' vs) | s == s' = do
+   matches <- zipWithM (\p v -> pmatch ctxt [(p, e)] v) innerPs vs
+   case sequence matches of
+     Just ebindings -> return $ Just (e, concat $ map snd ebindings)
+     Nothing        -> pmatch ctxt ps (Constr s' vs)
 
 pmatch _ ((PVar _ var, e):_) val =
    return $ Just (e, [(var, Val nullSpan val)])

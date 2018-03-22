@@ -13,7 +13,7 @@ inside the type checker.
 
 -}
 
-import Data.List (intercalate)
+import Data.List (intercalate, (\\))
 import GHC.Generics (Generic)
 
 import Context
@@ -85,6 +85,16 @@ data Pred where
     Conj :: [Pred] -> Pred
     Impl :: [Id] -> Pred -> Pred -> Pred
     Con  :: Constraint -> Pred
+
+vars :: Pred -> [Id]
+vars (Conj ps) = concatMap vars ps
+vars (Impl bounds p1 p2) = (vars p1 ++ vars p2) \\ bounds
+vars (Con c) = varsConstraint c
+
+varsConstraint :: Constraint -> [Id]
+varsConstraint (Eq _ c1 c2 _) = freeVars c1 ++ freeVars c2
+varsConstraint (Neq _ c1 c2 _) = freeVars c1 ++ freeVars c2
+varsConstraint (ApproximatedBy _ c1 c2 _) = freeVars c1 ++ freeVars c2
 
 deriving instance Show Pred
 deriving instance Eq Pred

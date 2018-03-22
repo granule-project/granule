@@ -5,7 +5,7 @@ module Checker.Patterns where
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 
-import Checker.Types (equalTypesWithUniversalSpecialisation)
+import Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
@@ -14,12 +14,11 @@ import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Utils
+--import Data.Maybe (mapMaybe)
 
 definitelyUnifying :: Pattern -> Bool
-definitelyUnifying (PConstr _ _) = True
+definitelyUnifying (PConstr _ _ _) = True
 definitelyUnifying (PInt _ _) = True
--- TODO: replace with generalised PConstr when its added
-definitelyUnifying (PApp _ _ _) = True
 definitelyUnifying _ = False
 
 -- | Given a pattern and its type, construct Just of the binding context
@@ -57,8 +56,6 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     -- Check whether a unification was caused
     if definitelyUnifying p
       then do
-        -- TODO: delete comment
-        -- liftIO $ print $ "Its happening for " ++ pretty p ++ " with " ++ pretty coeff ++ "/=" ++ pretty (CZero k)
         addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
       else return ()
 
@@ -72,7 +69,7 @@ ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
   unifiers <- combineSubstitutions s substl substr
   return (ctxtL ++ ctxtR, eVars1 ++ eVars2, unifiers)
 
-ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
+ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
 
   st <- get
@@ -95,12 +92,23 @@ ctxtFromTypedPattern _ ty (PConstr s dataC ps) = do
                     "Have you applied constructor `" ++ sourceName dataC ++
                     "` to too many arguments?"
       (t,(as,bs,us)) <- unpeel ps t
-      areEq <- equalTypesWithUniversalSpecialisation s t ty
+      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt t ty
       case areEq of
         (True, _, unifiers) -> do
-          us <- combineSubstitutions s unifiers us
-          liftIO $ print us
-          return (as, freshTyVars++bs, us)
+          subst <- combineSubstitutions s unifiers us
+          (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
+          -- Updated type variable context
+          {- state <- get
+          tyVars <- mapM (\(v, (k, q)) -> do
+                      k <- substitute subst k
+                      return (v, (k, q))) (tyVarContext state)
+          let kindSubst = mapMaybe (\(v, s) -> case s of
+                                                SubstK k -> Just (v, k)
+                                                _        -> Nothing) subst
+          put (state { tyVarContext = tyVars
+                    , kVarContext = kindSubst ++ kVarContext state }) -}
+          ---
+          return (ctxtSubbed ++ ctxtUnsubbed, freshTyVars++bs, subst)
 
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
@@ -113,12 +121,13 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
       -- Create a fresh type: Box (c' : k) t'
       polyName <- freshVar "fk"
       let ckind = CPoly $ mkId polyName
-      -- cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
-      cvar <- freshVar "c"
-      let c' = CVar $ mkId cvar
-      ty <- freshVar "t'"
-      let t' = TyVar $ mkId ty
-      liftIO $ putStrLn $ "Pattern of type " ++ pretty t ++ " unify at " ++ pretty (Box c' t') ++ " kind = " ++ show ckind
+      cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
+      -- cvar <- freshVar "c"
+      let c' = CVar $ cvar
+      tyvar <- freshVar "t'"
+      let t' = TyVar $ mkId tyvar
+      modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ)) : tyVarContext state })
+
       (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
       return (map (discharge ckind c') binders, vars, (v, SubstT $ Box c' t') : unifiers)
    -- TODO: cases missing

@@ -13,25 +13,8 @@
 import Nat
 
 data List : Nat= -> Type -> Type where
-  Nil : forall (t : Type) . List 0 t;
-  Cons : forall (t : Type, n : Nat=)
-       . t -> List n t -> List (n+1) t
-
---- Map function
-map : forall (a : Type, b : Type, n : Nat=)
-    . (a -> b) |n| -> List n a -> List n b
-map |f| ys =
-  case ys of
-    Nil -> Nil;
-    (Cons x xs) -> Cons (f x) (map |f| xs)
-
--- Append two lists
-append : forall (a : Type, n : Nat=, m : Nat=)
-       . List n a -> List m a -> List (n + m) a
-append xs ys =
-  case xs of
-    Nil -> ys;
-    (Cons x xs) -> Cons x (append xs ys)
+  Nil  : forall (t : Type) . List 0 t;
+  Cons : forall (t : Type, n : Nat=) . t -> List n t -> List (n+1) t
 
 -- Length of an indexed list into an indexed nat
 length : forall (a : Type, n : Nat=)
@@ -41,6 +24,14 @@ length xs =
     Nil -> Z;
     (Cons |_| xs) -> S (length xs)
 
+--- Map function
+map : forall (a : Type, b : Type, n : Nat=)
+    . (a -> b) |n| -> List n a -> List n b
+map |f| ys =
+  case ys of
+    Nil -> Nil;
+    (Cons x xs) -> Cons (f x) (map |f| xs)
+
 -- Standard foldr on lists
 foldr : forall (a : Type, b : Type, n : Nat=)
       . (a -> b -> b) |n| -> b -> List n a -> b
@@ -48,6 +39,15 @@ foldr |h| acc xs =
   case xs of
     Nil -> acc;
     (Cons x xs) -> h x (foldr |h| acc xs)
+
+
+-- Append two lists
+append : forall (a : Type, n : Nat=, m : Nat=)
+       . List n a -> List m a -> List (n + m) a
+append xs ys =
+  case xs of
+    Nil -> ys;
+    (Cons x xs) -> Cons x (append xs ys)
 
 --- Return the first item (head) of the list
 --- NB: non-linear in the list

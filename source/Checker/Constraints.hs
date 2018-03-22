@@ -21,8 +21,7 @@ import Syntax.Pretty
 compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
 compileQuant ForallQ   = forall
 compileQuant InstanceQ = exists
-compileQuant BoundQ    = error
-  "Internal bug: tried to get SBV representation of a dependent case variable"
+compileQuant BoundQ    = exists
 
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 k)   = Eq s (normalise c1) (normalise c2) k
@@ -69,9 +68,15 @@ compileToSBV predicate tyVarContext kVarContext =
 
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
-      forAll [internalName v] (\vSolver -> do
-         impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
-         return $ (vSolver .>= literal 0) ==> impl)
+      let binders =
+           if v `elem` (vars p ++ vars p')
+           then [internalName v]
+           -- Optimisation, don't quantify things that actually don't get used
+           else []
+      in forAll binders (\vSolver -> do
+           impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
+           return $ (vSolver .>= literal 0) ==> impl)
+
 
     buildTheorem' solverVars (Con cons) =
       return $ compile solverVars cons
@@ -101,7 +106,7 @@ compileToSBV predicate tyVarContext kVarContext =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
-              BoundQ -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+              BoundQ -> (universalConstraints, pre &&& existentialConstraints)
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- given an context mapping coeffect type variables to coeffect typ,

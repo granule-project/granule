@@ -19,16 +19,16 @@ import Syntax.Pretty
 import Utils
 
 lEqualTypes :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Unifier)
-lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False
+  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False SndIsSpec
 
 equalTypes :: (?globals :: Globals )
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
-equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False
+equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False SndIsSpec
 
 equalTypesWithUniversalSpecialisation :: (?globals :: Globals )
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
-equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True
+equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True SndIsSpec
 
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and unify the
@@ -44,6 +44,8 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
   -- Whether to allow universal specialisation
   -> Bool
+  -- Starting spec indication
+  -> SpecIndicator
   -- Left type (usually the inferred)
   -> Type
   -- Right type (usually the specified)
@@ -53,20 +55,21 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier
   -> MaybeT Checker (Bool, Type, Substitution)
-equalTypesRelatedCoeffectsAndUnify s rel allowUniversalSpecialisation t1 t2 = do
+equalTypesRelatedCoeffectsAndUnify s rel allowUniversalSpecialisation spec t1 t2 = do
 
-   (eq, unif) <- equalTypesRelatedCoeffects s rel allowUniversalSpecialisation t1 t2 SndIsSpec
+   (eq, unif) <- equalTypesRelatedCoeffects s rel allowUniversalSpecialisation t1 t2 spec
    if eq
      then do
         t2 <- substitute unif t2
         return (eq, t2, unif)
      else return (eq, t1, [])
 
-data SpecIndicator = FstIsSpec | SndIsSpec
+data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
 
 flipIndicator FstIsSpec = SndIsSpec
 flipIndicator SndIsSpec = FstIsSpec
+flipIndicator PatternCtxt = PatternCtxt
 
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and a unifier
@@ -138,8 +141,15 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectTypes s c c'
+  -- subst <- unify c c'
   addConstraint (rel s c c' kind)
   equalTypesRelatedCoeffects s rel uS t t' sp
+  --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp
+  --case subst of
+  --  Just subst -> do
+--      substFinal <- combineSubstitutions s subst subst'
+--      return (eq, substFinal)
+  --  Nothing -> return (False, [])
 
 equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
   (one, u1) <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
@@ -165,10 +175,10 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
         return (False, [])
 
     -- We can unify a universal a dependently bound universal
-    (Just (k1, ForallQ), Just (k2, BoundQ)) | sp == FstIsSpec ->
-      tyVarConstraint k1 k2 n m
+    (Just (k1, ForallQ), Just (k2, BoundQ)) | sp == FstIsSpec || sp == PatternCtxt ->
+      tyVarConstraint k2 k1 m n
 
-    (Just (k1, BoundQ), Just (k2, ForallQ)) | sp == SndIsSpec ->
+    (Just (k1, BoundQ), Just (k2, ForallQ)) | sp == SndIsSpec || sp == PatternCtxt ->
       tyVarConstraint k1 k2 n m
 
     -- We can unify two instance type variables

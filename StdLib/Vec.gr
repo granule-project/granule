@@ -85,7 +85,7 @@ range' n |i| =
 
 --- pushVec pushes in non linearity of list into the elements
 pushVec : forall (k : Nat, n : Nat=, a : Type)
-         . (Vec n a) |k| -> Vec n (a |k|)
+         . (Vec n a) |k+1| -> Vec n (a |k+1|)
 pushVec xs =
     case xs of
       |NilV|         -> NilV;

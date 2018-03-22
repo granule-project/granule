@@ -13,6 +13,7 @@ import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Checker.Kinds
+import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
 import Control.Monad.Trans.Maybe
@@ -176,7 +177,17 @@ instance Substitutable Coeffect where
 
   substitute subst (CVar v) =
       case lookup v subst of
-        Just (SubstC c) -> return c
+        Just (SubstC c) -> do
+           checkerState <- get
+           case lookup v (tyVarContext checkerState) of
+             -- If the coeffect variable has a poly kind then update it with the
+             -- kind of c
+             Just ((KPoly kv), q) -> do
+                k' <- inferCoeffectType nullSpan c
+                put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
+                                                           v (liftCoeffectType k', q) }
+             _ -> return ()
+           return c
         -- Convert a single type substitution (type variable, type pair) into a
         -- coeffect substituion
         Just (SubstT t) -> do
@@ -212,8 +223,31 @@ instance Substitutable Coeffect where
   substitute _ c@CFloat{}    = return c
   substitute _ c@Level{}     = return c
 
-  unify (CVar v) c = return $ Just [(v, SubstC c)]
-  unify c (CVar v) = return $ Just [(v, SubstC c)]
+  unify (CVar v) c = do
+    checkerState <- get
+    case lookup v (tyVarContext checkerState) of
+      -- If the coeffect variable has a poly kind then update it with the
+      -- kind of c
+      Just ((KPoly kv), q) -> do
+        k' <- inferCoeffectType nullSpan c
+        put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
+                                                    v (liftCoeffectType k', q) }
+      Just (k, q) ->
+        case c of
+          CVar v' -> do
+            case lookup v' (tyVarContext checkerState) of
+              Just (KPoly _, q) ->
+                -- The type of v is known and c is a variable with a poly kind
+                put $ checkerState { tyVarContext =
+                                       replace (tyVarContext checkerState)
+                                               v' (k, q) }
+              _ -> return ()
+          _ -> return ()
+      Nothing -> return ()
+
+    return $ Just [(v, SubstC c)]
+
+  unify c (CVar v) = unify (CVar v) c
   unify (CPlus c1 c2) (CPlus c1' c2') = do
     u1 <- unify c1 c1'
     u2 <- unify c2 c2'
