@@ -184,8 +184,6 @@ checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
       return (tau, subst)
 
   (bindings, _, subst) <- ctxtFromTypedPattern s sig p
-  --applySubstToEnvironment subst
-  --applySubstToEnvironment subst1
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
@@ -569,7 +567,6 @@ synthExpr defs gam pol (Binop s op e1 e2) = do
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
   (binding, _, subst) <- ctxtFromTypedPattern s sig p
-  --applySubstToEnvironment subst
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do

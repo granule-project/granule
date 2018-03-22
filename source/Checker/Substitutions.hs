@@ -244,7 +244,7 @@ instance Substitutable Coeffect where
               _ -> return ()
           _ -> return ()
       Nothing -> return ()
-
+    -- Standard result of unifying with a variable
     return $ Just [(v, SubstC c)]
 
   unify c (CVar v) = unify (CVar v) c
@@ -381,103 +381,6 @@ combineSubstitutions sp u1 u2 = do
            Nothing -> return [(v, s)]
            _       -> return []
       return $ concat uss1 ++ concat uss2
-
-  {-
-    where
-      -- A type varible unifies with anything, including another type variable
-      unifiable _ _ _ (SubstT (TyVar v)) t = return ([(v, t)], t)
-      unifiable _ _ _ t (SubstT (TyVar v)) = return ([(v, t)], t)
-
-      -- The following cases unpeel constructors to see if we hit unifiables things inside
-      unifiable var t1 t2 (Box c t) (Box c' t') = do
-        (usC, c'') <- unifiable_Coeff var t1 t2 c c'
-        (us', t') <- unifiable var t1 t2 t t'
-        return (us', Box (substitute usC c'') t')
-
-      unifiable _ _ __ _ t = return ([], t)
-      -- TODO: re-instate error case when needed
-      --unifiable var t1 t2 _ _ = halt $ GenericError (Just s) (msg var t1 t2)
-
-
-  {- TODO: fill in rest along the same lines
-      unifiable (Diamond e t) (Diamond e' t') =
-        e == e' && unifiable t t'
-      unifiable (PairTy t1 t2) (PairTy t1' t2') =
-
-        unifiable t1 t1' && unifiable t2 t2'
-      unifiable (FunTy t1 t2) (FunTy t1' t2') =
-        unifiable t1 t1' && unifiable t2 t2'
-      unifiable (TyInfix op t1 t2) (TyInfix op' t1' t2') =
-        op == op' && unifiable t1 t1' && unifiable t2 t2'
-
-      -- If none of the above hold, there is a mismatch between both contexts
-      -- so we can't unify and throw a type error
-      unifiable _ _ = False
-      -}
-
-      -- The same pattern holds for coeffects
-      unifiable_Coeff _ _ _ (CVar v) c = return ([(v, c)], c)
-
-      unifiable_Coeff _ _ _ c (CVar v) = return ([(v, c)], c)
-
-      unifiable_Coeff var t1 t2 (CPlus c1 c2) (CPlus c1' c2') = do
-        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-        return $ (us1 ++ us2, CPlus c1u c2u)
-
-      unifiable_Coeff var t1 t2 (CTimes c1 c2) (CTimes c1' c2') = do
-        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-        return $ (us1 ++ us2, CTimes c1u c2u)
-
-      unifiable_Coeff var t1 t2 (CMeet c1 c2) (CMeet c1' c2') = do
-        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-        return $ (us1 ++ us2, CMeet c1u c2u)
-
-      unifiable_Coeff var t1 t2 (CJoin c1 c2) (CJoin c1' c2') = do
-        (us1, c1u) <- unifiable_Coeff var t1 t2 c1 c1'
-        (us2, c2u) <- unifiable_Coeff var t1 t2 c2 c2'
-        return $ (us1 ++ us2, CJoin c1u c2u)
-
-      unifiable_Coeff var t1 t2 (CZero k) (CZero k') = do
-        us <- unifiable_CKind var t1 t2 k k'
-        kind <- substitute us k
-        return $ ([], CZero kind)
-
-      unifiable_Coeff var t1 t2 (COne k) (COne k') = do
-        us <- unifiable_CKind var t1 t2 k k'
-        kind <- substitute us k
-        return $ ([], COne kind)
-
-      unifiable_Coeff var t1 t2 (CInfinity k) (CInfinity k') = do
-        us <- unifiable_CKind var t1 t2 k k'
-        kind <- substitute us k
-        return $ ([], CInfinity kind)
-
-      unifiable_Coeff var t1 t2 _ _     =
-        halt $ GenericError (Just s) (msg var t1 t2)
-
-      -- ... and for coeffect kinds
-      unifiable_CKind _ _ _ (CPoly v) k = do
-        --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
-        return [(v, k)]
-
-      unifiable_CKind _ _ _ k (CPoly v) = do
-        --modify (\st -> st { kVarContext = (v, k) : kVarContext st })
-        return [(v, k)]
-
-      unifiable_CKind var t1 t2 k k' =
-        if k == k'
-          then return []
-          else halt $ GenericError (Just s) (msg var t1 t2)
-
-      msg k v1 v2 =
-        "Type variable " ++ sourceName k
-          ++ " cannot be unified to `" ++ pretty v1 ++ "` and `" ++ pretty v2
-          ++ "` at the same time."
-  -}
-
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts

@@ -21,12 +21,12 @@ data BFTree a where
 root : BFLevel (Int |1|)
 root = R |1|
 
-ex0 : BFTree (Int |1|)
-ex0 = Next |(N |2| |root|)| (Next |(N |3| |root|)| Empty)
--- ex0 = Next [N [2] [root]] (Next [N [3] [root]] Empty)
+ex0 : BFTree Int
+ex0 = Next |(N 2 |root|)| (Next |(N 3 |root|)| Empty)
+-- ex0 = Next [N 2 [root]] (Next [N 3 [root]] Empty)
 
 
-last : forall (a : Type) . BFTree (a |1|) -> Maybe a
+last : forall (a : Type) . BFTree a -> Maybe a
 last x =
   case x of
     Empty -> None;

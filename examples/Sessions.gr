@@ -1,4 +1,5 @@
 import Bool
+import List
 
 foo : Chan (Send Bool (Recv Int End)) -> Session Int
 foo c =

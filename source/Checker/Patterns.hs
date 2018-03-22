@@ -122,10 +122,10 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
       polyName <- freshVar "fk"
       let ckind = CPoly $ mkId polyName
       cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
-      -- cvar <- freshVar "c"
       let c' = CVar $ cvar
       tyvar <- freshVar "t'"
       let t' = TyVar $ mkId tyvar
+      -- Register the type variable
       modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ)) : tyVarContext state })
 
       (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
