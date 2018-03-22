@@ -18,8 +18,8 @@ data BFTree a where
   Empty : BFTree a;
   Next : (BFLevel a) |1| -> BFTree a -> BFTree a
 
-root : BFLevel (Int |1|)
-root = R |1|
+root : BFLevel Int
+root = R 1
 
 ex0 : BFTree Int
 ex0 = Next |(N 2 |root|)| (Next |(N 3 |root|)| Empty)
