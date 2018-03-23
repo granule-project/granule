@@ -40,7 +40,6 @@ foldr |h| acc xs =
     Nil -> acc;
     (Cons x xs) -> h x (foldr |h| acc xs)
 
-
 -- Append two lists
 append : forall (a : Type, n : Nat=, m : Nat=)
        . List n a -> List m a -> List (n + m) a
@@ -60,6 +59,16 @@ head xs = case xs of |(Cons x _)| -> x
 tail : forall (a : Type, n : Nat=)
      . (List (n + 1) a) |1| -> List n a
 tail xs = case xs of |(Cons _ xs)| -> xs
+
+--- Split a list at position 'n'
+split : forall (n : Nat=, m : Nat=, a : Type)
+         . N n -> (List (n + m) a) -> (List n a, List m a)
+split n xs =
+      case (n, xs) of
+        (Z , xs) -> (Nil, xs);
+        ((S n), (Cons x xs)) ->
+           let (xs', ys') = split n xs
+           in (Cons x xs', ys')
 
 --- Simple folds
 sum : forall n : Nat= . List n Int -> Int
