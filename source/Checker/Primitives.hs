@@ -17,7 +17,7 @@ typeLevelConstructors =
     , (mkId $ "Session", KFun KType KType)
     , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
     , (mkId $ "N", KFun (KConstr $ mkId "Nat=") KType)
-    , (mkId $ "One", KCoeffect)   -- Singleton coeffect
+    , (mkId $ "Cartesian", KCoeffect)   -- Singleton coeffect
     , (mkId $ "Nat",  KCoeffect)
     , (mkId $ "Nat=", KCoeffect)
     , (mkId $ "Nat*", KCoeffect)

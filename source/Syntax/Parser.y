@@ -192,12 +192,12 @@ TyAtom :: { Type }
 
 Coeffect :: { Coeffect }
   : NatCoeff                    { $1 }
-  | '∞'                         { CInfinity (CConstr $ mkId "One") }
+  | '∞'                         { CInfinity (CConstr $ mkId "Cartesian") }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (CConstr $ mkId "One")
+                                    "Inf" -> CInfinity (CConstr $ mkId "Cartesian")
                                     x -> error $ "Unknown coeffect constructor `" ++ x ++ "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }

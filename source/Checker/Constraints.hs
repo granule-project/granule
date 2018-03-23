@@ -174,7 +174,7 @@ freshCVar quant name (CConstr k) q
   case internalName k of
     "Nat*" -> return (solverVar .>= literal 0, SNatOmega solverVar)
     "Nat" -> return (solverVar .>= literal 0, SNat Ordered solverVar)
-    "One" -> return (solverVar .== literal 1, SNat Ordered solverVar)
+    "Cartesian" -> return (solverVar .== literal 1 ||| solverVar .== literal 0, SNat Ordered solverVar)
     "Nat=" -> return (solverVar .>= literal 0, SNat Discrete solverVar)
     "Level" -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
     "Set" -> return (true, SSet S.empty)
@@ -216,10 +216,10 @@ compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 compileCoeffect (Level n) (CConstr k) _ | internalName k == "Level" =
   SLevel . fromInteger . toInteger $ n
 
-compileCoeffect _ (CConstr k) _ | internalName k == "One" = SNat Ordered 1
-
 -- Any polymorphic `Inf` gets compiled to the `Inf : One` coeffect
 compileCoeffect (CInfinity (CPoly _)) _ _ = SNat Ordered 1
+compileCoeffect (CInfinity (CConstr k)) _ _ | internalName k == "Cartesian" =
+  SNat Ordered 1
 
 compileCoeffect (CNat _ n) (CConstr k) _ =
   case internalName k of
@@ -247,7 +247,7 @@ compileCoeffect c@(CMeet n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smin` n2)
         _ | o1 == o2 -> SNat o1 (n1 `smin` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smin` t
@@ -259,7 +259,7 @@ compileCoeffect c@(CJoin n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 `smax` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smax` t
@@ -271,7 +271,7 @@ compileCoeffect c@(CPlus n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 + n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
@@ -283,7 +283,7 @@ compileCoeffect c@(CTimes n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 * n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
@@ -297,7 +297,7 @@ compileCoeffect (CZero (CConstr k')) (CConstr k) _ =
     "Nat=" | internalName k == "Nat=" -> SNat Discrete 0
     "Q" | internalName k == "Q" -> SFloat (fromRational 0)
     "Set" | internalName k == "Set" -> SSet (S.fromList [])
-    "One" | internalName k == "One" -> SNat Ordered 1
+    "Cartesian" | internalName k == "Cartesian" -> SNat Ordered 0
 
 compileCoeffect (COne (CConstr k')) (CConstr k) _ =
   case internalName k' of
@@ -306,14 +306,17 @@ compileCoeffect (COne (CConstr k')) (CConstr k) _ =
     "Nat=" | internalName k == "Nat=" -> SNat Discrete 1
     "Q" | internalName k == "Q" -> SFloat (fromRational 1)
     "Set" | internalName k == "Set" -> SSet (S.fromList [])
-    "One" | internalName k == "One" -> SNat Ordered 1
+    "Cartesian" | internalName k == "Cartesian" -> SNat Ordered 1
 
 compileCoeffect _ (CPoly v) _ | "infinity" == internalName v = SNat Ordered 1
 
 -- Trying to compile a coeffect from a promotion that was never
--- constrained further: default to the singleton coeffect
+-- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-compileCoeffect _ (CPoly v) _ | "kprom" `isPrefixOf` internalName v = SNat Ordered 1
+compileCoeffect c (CPoly v) _ | "kprom" `isPrefixOf` internalName v =
+  case c of
+    CZero _ -> SNat Ordered 0
+    _       -> SNat Ordered 1
 
 compileCoeffect c (CPoly _) _ =
    error $ "Trying to compile a polymorphically kinded " ++ pretty c
