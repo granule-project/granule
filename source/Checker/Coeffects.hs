@@ -6,7 +6,6 @@ module Checker.Coeffects where
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
-import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
 import Context
@@ -53,6 +52,7 @@ inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
 -- Coeffect variables should have a kind in the cvar->kind context
 inferCoeffectType s (CVar cvar) = do
   checkerState <- get
+  liftIO $ putStrLn $ "Looking for " ++ show cvar ++ " in  " ++ show (tyVarContext checkerState)
   case lookup cvar (tyVarContext checkerState) of
      Nothing -> do
        halt $ UnboundVariableError (Just s) $ "Tried to lookup kind of " ++ pretty cvar
@@ -62,14 +62,25 @@ inferCoeffectType s (CVar cvar) = do
 --       put (state { uniqueVarId = uniqueVarId state + 1 })
 --       return newCKind
 
-     Just (KConstr name, _) -> return $ CConstr name
+     Just (KConstr name, _) -> checkKind s (CConstr name)
+
+
      Just (KPoly   name, _) -> return $ CPoly name
      Just (k, _)            -> illKindedNEq s KCoeffect k
 
-inferCoeffectType _ (CZero k) = return k
-inferCoeffectType _ (COne k)  = return k
-inferCoeffectType _ (CInfinity k)  = return k
-inferCoeffectType _ (CSig _ k) = return k
+inferCoeffectType s (CZero k) = checkKind s k
+inferCoeffectType s (COne k)  = checkKind s k
+inferCoeffectType s (CInfinity k)  = checkKind s k
+inferCoeffectType s (CSig _ k) = checkKind s k
+
+checkKind s k@(CConstr name) = do
+  st <- get
+  case lookup name (typeConstructors st) of
+    Just KCoeffect -> return $ CConstr name
+    Just _         -> illKindedNEq s KCoeffect (KConstr name)
+    _              ->
+      halt $ UnboundVariableError (Just s) $ "Type `" ++ pretty name ++ "`"
+checkKind _ k = return k
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in an context
@@ -140,3 +151,14 @@ multAll vars c ((name, Discharged t c') : ctxt) | name `elem` vars
 
 multAll vars c ((_, Linear _) : ctxt) = multAll vars c ctxt
 multAll vars c ((_, Discharged _ _) : ctxt) = multAll vars c ctxt
+
+
+joinCoeffectConstr :: Id -> Id -> Maybe Id
+joinCoeffectConstr k1 k2 = fmap mkId $ go (internalName k1) (internalName k2)
+  where
+    --go "Nat" n | "Nat" `isPrefixOf` n = Just n
+    --go n "Nat" | "Nat" `isPrefixOf` n = Just n
+    go "Float" "Nat" = Just "Float"
+    go "Nat" "Float" = Just "Float"
+    go k k' | k == k' = Just k
+    go _ _ = Nothing

@@ -12,7 +12,9 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
 import Checker.Monad
+
 import Checker.Predicates
+import Checker.Coeffects
 import Syntax.Expr
 import Syntax.Pretty
 import Context
@@ -45,7 +47,11 @@ inferKindOfType' s quantifiedVariables t =
         case lookup conId (typeConstructors st) of
           Just kind -> return kind
           Nothing   -> halt $ UnboundVariableError (Just s) (pretty conId ++ " constructor.")
-    kBox _ KType = return KType
+
+    kBox c KType = do
+       -- Infer the coeffect (fails if that is ill typed)
+       _ <- inferCoeffectType s c
+       return KType
     kBox _ x = illKindedNEq s KType x
 
     kDiamond _ KType = return KType
@@ -83,13 +89,3 @@ hasLub k1 k2 =
   case joinKind k1 k2 of
     Nothing -> False
     Just _  -> True
-
-joinCoeffectConstr :: Id -> Id -> Maybe Id
-joinCoeffectConstr k1 k2 = fmap mkId $ go (internalName k1) (internalName k2)
-  where
-    --go "Nat" n | "Nat" `isPrefixOf` n = Just n
-    --go n "Nat" | "Nat" `isPrefixOf` n = Just n
-    go "Float" "Nat" = Just "Float"
-    go "Nat" "Float" = Just "Float"
-    go k k' | k == k' = Just k
-    go _ _ = Nothing

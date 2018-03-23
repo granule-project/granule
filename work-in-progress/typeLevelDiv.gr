@@ -1,3 +1,5 @@
+import Nat
+
 div2 : forall (n : Nat=) . N (2 * n) -> N n
 div2 x =
   case x of

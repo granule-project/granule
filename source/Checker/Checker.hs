@@ -110,7 +110,17 @@ checkDef :: (?globals :: Globals )
          -> Checker (Maybe ())
 checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     result <- runMaybeT $ do
+
+      -- Add explicit type variable quantifiers to the type variable context
       modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+
+      -- Check that the type signature is well kinded and valid
+      tySchKind <- inferKindOfType' s foralls ty
+
+      case tySchKind of
+        KType -> return ()
+        k     -> illKindedNEq s KType k
+
 
       ctxt <- case (ty, pats) of
         (FunTy _ _, ps@(_:_)) -> do
