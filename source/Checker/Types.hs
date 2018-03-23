@@ -268,8 +268,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
     (Just (k1, ForallQ)) -> do
       k1 <- inferKindOfType s (TyVar n)
       k2 <- inferKindOfType s t
-      case (k1, k2) of
-        (KConstr k1, KConstr k2) | internalName k1 == "Nat=" && internalName k2 == "Nat=" -> do
+      case k1 `joinKind` k2 of
+        Just (KConstr k) | internalName k == "Nat=" -> do
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
           addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
@@ -310,7 +310,9 @@ equalOtherKindedTypesGeneric s t1 t2 = do
       | "Nat" `isPrefixOf` (internalName n) && "Nat" `isPrefixOf` (internalName  n') -> do
         c1 <- compileNatKindedTypeToCoeffect s t1
         c2 <- compileNatKindedTypeToCoeffect s t2
-        addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
+        if internalName n == "Nat" && internalName n' == "Nat"
+           then addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
+           else addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
         return (True, [])
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2

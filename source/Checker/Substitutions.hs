@@ -76,8 +76,9 @@ instance Substitutable Substitutors where
   unify (SubstT t) (SubstC c') = do
     -- We can unify a type with a coeffect, if the type is actually a Nat=
     k <- inferKindOfType nullSpan t
-    case k of
-      KConstr k | internalName k == "Nat=" -> do
+    k' <- inferCoeffectType nullSpan c'
+    case joinKind k (liftCoeffectType k') of
+      Just (KConstr k) | internalName k == "Nat=" -> do
              c <- compileNatKindedTypeToCoeffect nullSpan t
              unify c c'
       _ -> return Nothing
@@ -136,8 +137,9 @@ instance Substitutable Type where
     u1 <++> u2
   unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
     k <- inferKindOfType nullSpan t
-    case k of
-      KConstr k | internalName k == "Nat=" -> do
+    k' <- inferKindOfType nullSpan t
+    case joinKind k k' of
+      Just (KConstr k) | internalName k == "Nat=" -> do
         c  <- compileNatKindedTypeToCoeffect nullSpan t
         c' <- compileNatKindedTypeToCoeffect nullSpan t'
         addConstraint $ Eq nullSpan c c' (CConstr $ mkId "Nat=")
@@ -192,8 +194,9 @@ instance Substitutable Coeffect where
         -- coeffect substituion
         Just (SubstT t) -> do
           k <- inferKindOfType nullSpan t
-          case k of
-            KConstr k ->
+          k' <- inferCoeffectType nullSpan (CVar v)
+          case joinKind k (liftCoeffectType k') of
+            Just (KConstr k) ->
               case internalName k of
                 "Nat=" -> compileNatKindedTypeToCoeffect nullSpan t
                 _      -> return (CVar v)

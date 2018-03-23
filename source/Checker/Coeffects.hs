@@ -52,7 +52,6 @@ inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
 -- Coeffect variables should have a kind in the cvar->kind context
 inferCoeffectType s (CVar cvar) = do
   checkerState <- get
-  liftIO $ putStrLn $ "Looking for " ++ show cvar ++ " in  " ++ show (tyVarContext checkerState)
   case lookup cvar (tyVarContext checkerState) of
      Nothing -> do
        halt $ UnboundVariableError (Just s) $ "Tried to lookup kind of " ++ pretty cvar
@@ -73,6 +72,7 @@ inferCoeffectType s (COne k)  = checkKind s k
 inferCoeffectType s (CInfinity k)  = checkKind s k
 inferCoeffectType s (CSig _ k) = checkKind s k
 
+checkKind :: (?globals :: Globals) => Span -> CKind -> MaybeT Checker CKind
 checkKind s k@(CConstr name) = do
   st <- get
   case lookup name (typeConstructors st) of
@@ -160,5 +160,7 @@ joinCoeffectConstr k1 k2 = fmap mkId $ go (internalName k1) (internalName k2)
     --go n "Nat" | "Nat" `isPrefixOf` n = Just n
     go "Float" "Nat" = Just "Float"
     go "Nat" "Float" = Just "Float"
+    go "Nat=" "Nat"  = Just "Nat="
+    go "Nat" "Nat="  = Just "Nat="
     go k k' | k == k' = Just k
     go _ _ = Nothing

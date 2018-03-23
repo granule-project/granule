@@ -67,7 +67,7 @@ compileToSBV predicate tyVarContext kVarContext =
         p2' <- buildTheorem' solverVars p2
         return $ p1' ==> p2'
 
-    -- TODO: generalise this to not just Nat indices
+    -- TODO: generalise this to not just Nat= indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
       if v `elem` (vars p ++ vars p')
         then forAll [internalName v] (\vSolver -> do

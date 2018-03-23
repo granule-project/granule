@@ -65,17 +65,20 @@ checkTyCon (ADT _ name tyVars kindAnn _) =
       debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty name ++ "`: `"
                                     ++ pretty tyConKind ++ "` (Show: `" ++ show tyConKind ++ "`)"
       modify $ \st -> st { typeConstructors = (name, tyConKind) : typeConstructors st }
+
   where
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType
     mkKind (v:vs) = KFun v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkDataCons (ADT _ name kind tyVars dataConstrs) =
+checkDataCons (ADT _ name tyVars _ dataConstrs) =
   runMaybeT $ do
     st <- get
     case lookup name (typeConstructors st) of
-      Just kind -> mapM_ (checkDataCon name kind) dataConstrs -- TODO add tyVars
+      Just kind ->
+        do modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
+           mapM_ (checkDataCon name kind) dataConstrs -- TODO add tyVars
       _ -> error "Please open an issue at https://github.com/dorchard/granule/issues" -- all type constructors have already been put into the checker monad
 
 
@@ -110,17 +113,8 @@ checkDef :: (?globals :: Globals )
          -> Checker (Maybe ())
 checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
     result <- runMaybeT $ do
-
       -- Add explicit type variable quantifiers to the type variable context
       modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
-
-      -- Check that the type signature is well kinded and valid
-      tySchKind <- inferKindOfType' s foralls ty
-
-      case tySchKind of
-        KType -> return ()
-        k     -> illKindedNEq s KType k
-
 
       ctxt <- case (ty, pats) of
         (FunTy _ _, ps@(_:_)) -> do

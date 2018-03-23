@@ -23,9 +23,12 @@ import Utils
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def -> MaybeT Checker ()
 kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
+  -- Set up the quantified variables in the type variable context
+  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
+
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
-    KType -> return ()
+    KType -> modify (\st -> st { tyVarContext = [] })
     _     -> illKindedNEq s KType kind
 
 kindCheckDef (ADT sp tyCon kind tyVars dataCs) = error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -66,7 +69,7 @@ inferKindOfType' s quantifiedVariables t =
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KPoly $ mkId "...")) k
 
-    kInt _ = return $ KConstr $ mkId "Nat="
+    kInt _ = return $ KConstr $ mkId "Nat"
 
     kInfix op k1 k2 = do
       st <- get
