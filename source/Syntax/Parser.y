@@ -192,12 +192,12 @@ TyAtom :: { Type }
 
 Coeffect :: { Coeffect }
   : NatCoeff                    { $1 }
-  | '∞'                         { CInfinity (CPoly $ mkInternalId "∞" "infinity") }
+  | '∞'                         { CInfinity (CConstr $ mkId "One") }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (CPoly $ mkInternalId "∞" "infinity")
+                                    "Inf" -> CInfinity (CConstr $ mkId "One")
                                     x -> error $ "Unknown coeffect constructor `" ++ x ++ "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
@@ -360,7 +360,7 @@ parseDefs input = do
         clashes = names \\ nub names
         names = (`map` ds) (\d -> case d of (Def _ name _ _ _) -> name
                                             (ADT _ name _ _ _) -> name)
-                    
+
 
 myReadFloat :: String -> Rational
 myReadFloat str =

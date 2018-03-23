@@ -275,7 +275,7 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
            -- 28/02/2018 - We used to have this
            --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
            -- But we want promotion to invovlve the guard to avoid leaks
-           let branchCtxt = localGam `subtractCtxt` specialisedGam
+           let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
 
            return (branchCtxt, subst')
 
@@ -283,13 +283,13 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
         xs -> illLinearityMismatch s xs
 
   popGuardContext
+
   -- Find the upper-bound contexts
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxPlus s branchesGam guardGam
-
   return (g, concat substs)
 
 -- All other expressions must be checked using synthesis

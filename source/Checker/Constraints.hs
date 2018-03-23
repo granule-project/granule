@@ -17,6 +17,7 @@ import Context (Ctxt)
 import Syntax.Expr
 import Syntax.Pretty
 
+
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
 compileQuant ForallQ   = forall
@@ -296,6 +297,7 @@ compileCoeffect (CZero (CConstr k')) (CConstr k) _ =
     "Nat=" | internalName k == "Nat=" -> SNat Discrete 0
     "Q" | internalName k == "Q" -> SFloat (fromRational 0)
     "Set" | internalName k == "Set" -> SSet (S.fromList [])
+    "One" | internalName k == "One" -> SNat Ordered 1
 
 compileCoeffect (COne (CConstr k')) (CConstr k) _ =
   case internalName k' of
@@ -304,6 +306,7 @@ compileCoeffect (COne (CConstr k')) (CConstr k) _ =
     "Nat=" | internalName k == "Nat=" -> SNat Discrete 1
     "Q" | internalName k == "Q" -> SFloat (fromRational 1)
     "Set" | internalName k == "Set" -> SSet (S.fromList [])
+    "One" | internalName k == "One" -> SNat Ordered 1
 
 compileCoeffect _ (CPoly v) _ | "infinity" == internalName v = SNat Ordered 1
 
