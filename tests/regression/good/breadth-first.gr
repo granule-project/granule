@@ -1,10 +1,10 @@
 import Maybe
 
-data BFLevel a where
-  N : a -> (BFLevel a) |1| -> BFLevel a;
-  R : a -> BFLevel a
+data BFLevel (c : Nat) a where
+  N : a -> (BFLevel c a) |c| -> BFLevel c a;
+  R : a -> BFLevel c a
 
-label : forall (a : Type) . BFLevel a -> a
+label : forall (a : Type) . BFLevel 1 a -> a
 label x =
   case x of
     (N l |_|) -> l;
@@ -16,9 +16,9 @@ label x =
 
 data BFTree a where
   Empty : BFTree a;
-  Next : (BFLevel a) |1| -> BFTree a -> BFTree a
+  Next : (BFLevel 1 a) |1| -> BFTree a -> BFTree a
 
-root : BFLevel Int
+root : BFLevel 1 Int
 root = R 1
 
 ex0 : BFTree Int

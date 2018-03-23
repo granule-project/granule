@@ -110,6 +110,12 @@ mguCoeffectTypes s c1 c2 = do
       updateCoeffectKind kv2 (liftCoeffectType ck1')
       return ck1'
 
+    (CConstr k1, CConstr k2) | internalName k1 == "Nat=" && internalName k2 == "Nat"
+      -> return $ CConstr $ mkId "Nat="
+
+    (CConstr k1, CConstr k2) | internalName k1 == "Nat" && internalName k2 == "Nat="
+      -> return $ CConstr $ mkId "Nat="
+
     (CConstr k1, CConstr k2) | k1 == k2 -> return $ CConstr k1
 
     (CConstr k1, CConstr k2) | Just ck <- joinCoeffectConstr k1 k2 ->
