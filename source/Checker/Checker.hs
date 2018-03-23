@@ -344,54 +344,15 @@ synthExpr _ _ _ (Val _ (NumFloat _)) = return (TyCon $ mkId "Float", [])
 synthExpr _ _ _ (Val _ (CharLiteral _)) = return (TyCon $ mkId "Char", [])
 synthExpr _ _ _ (Val _ (StringLiteral _)) = return (TyCon $ mkId "String", [])
 
--- Nat constructors
 synthExpr _ gam _ (Val s (Constr c [])) = do
-  case internalName c of
-    "Nil" -> do
-        elementVarName <- freshVar "a"
-        let elementVar = mkId elementVarName
-        modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
-        return (TyApp (TyApp (TyCon $ mkId "List") (TyInt 0)) (TyVar elementVar), [])
-    "Cons" -> do
-          let kind = CConstr $ mkId "Nat="
-          sizeVarArg <- freshCoeffectVar (mkId "n") kind
-          sizeVarRes <- freshCoeffectVar (mkId "m") kind
-          elementVarName <- freshVar "a"
-          let elementVar = mkId elementVarName
-          modify (\st -> st { tyVarContext = (elementVar, (KType, InstanceQ)) : tyVarContext st })
-          -- Add a constraint
-          -- m ~ n + 1
-          addConstraint $ Eq s (CVar sizeVarRes)
-                               (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
-          -- Cons : a -> List n a -> List m a
-          let list elementVar n = TyApp (TyApp (TyCon $ mkId "List") n) (TyVar $ elementVar)
-          return (FunTy
-                   (TyVar elementVar)
-                   (FunTy (list elementVar (TyVar sizeVarArg))
-                          (list elementVar (TyVar sizeVarRes))),
-                          [])
-
-    "Z" -> return (TyApp (TyCon $ mkId "N") (TyInt 0), [])
-    "S" -> do
-      let kind = CConstr $ mkId "Nat="
-      sizeVarArg <- freshCoeffectVar (mkId "n") kind
-      sizeVarRes <- freshCoeffectVar (mkId "m") kind
-      -- Add a constraint
-      -- m ~ n + 1
-      addConstraint $ Eq s (CVar sizeVarRes)
-                           (CPlus (CNat Discrete 1) (CVar sizeVarArg)) kind
-      -- S : Nat n -> Nat (n + 1)
-      let nat n = TyApp (TyCon $ mkId "N") n
-      return (FunTy (nat (TyVar sizeVarArg))
-                    (nat (TyVar sizeVarRes)), [])
-    _ -> do
-      st <- get
-      case lookup c (dataConstructors st) of
-        Just tySch -> do
-          (ty,_) <- freshPolymorphicInstance InstanceQ tySch -- discard list of fresh type variables
-          return (ty, [])
-        _ -> halt $ UnboundVariableError (Just s) $
-                    "Data constructor `" ++ pretty c ++ "`" <?> show (dataConstructors st)
+  st <- get
+  case lookup c (dataConstructors st) of
+    Just tySch -> do
+      (ty,_) <- freshPolymorphicInstance InstanceQ tySch -- discard list of fresh type variables
+      return (ty, [])
+    -----
+    _ -> halt $ UnboundVariableError (Just s) $
+              "Data constructor `" ++ pretty c ++ "`" <?> show (dataConstructors st)
 
 -- Case
 synthExpr defs gam pol (Case s guardExpr cases) = do
