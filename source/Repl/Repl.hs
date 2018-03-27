@@ -9,14 +9,14 @@
 
 module Repl.Repl where
 
-import System.FilePath
+import System.FilePath()
 import qualified Data.Map as M
-import Control.Exception (SomeException, try)
+import Control.Exception (try)
 import Control.Monad.State
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 import Repl.ReplError
-import System.Exit
+import System.Exit()
 import System.FilePath.Glob (glob)
 import Utils
 import Syntax.Pretty
@@ -61,8 +61,7 @@ readToQueue pth = do
                     forM ast $ \idef -> loadInQueue idef
                     Ex.return ()
                 Failed -> Ex.throwError (TypeCheckError pth)
-      Left e -> do
-            Ex.throwError (ParseError e)
+      Left e -> Ex.throwError (ParseError e)
 
 
 loadInQueue :: Def -> REPLStateIO  ()
@@ -73,13 +72,9 @@ loadInQueue def@(Def _ id _ _ _) = do
 loadInQueue adt@(ADT _ _ _ _) = do
   Ex.return ()
 
--- noFileAtPath :: FilePath -> REPLStateIO ()
--- noFileAtPath pt = do
---     return $ Ex.throwError (FilePathError pt)
---
+
 dumpStateAux ::M.Map String Def -> [String]
-dumpStateAux m = do
-  pDef (M.toList m)
+dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, Def)] -> [String]
     pDef [] = []
@@ -100,12 +95,16 @@ handleCMD s =
       dict <- get
       liftIO $ print $ dumpStateAux dict
 
-
     handleLine (LoadFile ptr) = do
       put M.empty
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
       --liftIO $ print (concat ecs)
       return ()
+
+    handleLine (AddModule ptr) = do
+      ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
+      return ()
+
 
 
 helpMenu :: String
@@ -119,12 +118,9 @@ helpMenu =
       ":unfold <term>    (:u)  Unfold the expression into one without toplevel definition.\n"++
       ":dump             (:d)  Display the context\n"++
       ":load <filepath>  (:l)  Load an external file into the context\n"++
+      ":add <filepath>   (:a)  Add file/module to the current context\n"++
       "-----------------------------------------------------------------------------------"
 
-{-  eer <- Ex.runExceptT (evalStateT (runInputT defaultSettings loop) M.empty)
-  case eer of
-    Right l -> return()
-    Left er -> putStrLn $ show er -}
 
 repl :: IO ()
 repl = do
