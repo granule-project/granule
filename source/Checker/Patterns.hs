@@ -7,6 +7,7 @@ import Control.Monad.State.Strict
 
 import Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Checker.Coeffects
+import Checker.Exhaustivity
 import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
@@ -113,25 +114,21 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
 
-ctxtFromTypedPattern s t@(TyVar v) p =
+ctxtFromTypedPattern s t@(TyVar v) p = do
   case p of
     PVar _ x -> return ([(x, Linear t)], [], [])
     -- Trying to match a polymorphic type variable against a box pattern
     PBox _ p' -> do
-      -- Create a fresh type: Box (c' : k') t' ~ t
-      -- Fresh kind
-      kvar <- freshVar "k'"
-      let ckind = CPoly $ mkId kvar
-      -- Fresh coeffect var
+      -- Create a fresh type: Box (c' : k) t'
+      polyName <- freshVar "fk"
+      let ckind = CPoly $ mkId polyName
       cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
-      let c' = CVar cvar
-      -- Fresh type
+      let c' = CVar $ cvar
       tyvar <- freshVar "t'"
       let t' = TyVar $ mkId tyvar
       -- Register the type variable
-      modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ))
-                                 : tyVarContext state })
-      -- Recursive check
+      modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ)) : tyVarContext state })
+
       (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
       return (map (discharge ckind c') binders, vars, (v, SubstT $ Box c' t') : unifiers)
    -- TODO: cases missing
@@ -168,23 +165,3 @@ ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
 ctxtFromTypedPatterns s ty p =
   error $ "Unhandled case: ctxtFromTypedPatterns called with:\
           \Span: " ++ show s ++ "\nType: " ++ show ty ++ "\nPatterns: " ++ show p
-
--- Calculates whether a given pattern match will always succeed
-isIrrefutable ::
-  (?globals :: Globals ) => Span -> Type -> Pattern -> MaybeT Checker Bool
-isIrrefutable s t (PVar _ _) = return True
-isIrrefutable s t (PWild _)  = return True
-isIrrefutable s (PairTy t1 t2) (PPair _ p1 p2) = do
-    g1 <- isIrrefutable s t1 p1
-    g2 <- isIrrefutable s t2 p2
-    return (g1 && g2)
-isIrrefutable s (Box _ t) (PBox _ p) =
-  isIrrefutable s t p
--- TODO: data types with only one constructor can have
--- irrefutable patterns... but we need and easier way to index
--- the data constructors by what type they belong to
--- isIrrefutable s t (PConstr s id) =
-isIrrefutable s (TyCon con) (PConstr _ pcon _ps)
-   | internalName pcon == "()" && internalName con == "()" =
-   return True
-isIrrefutable s _ _ = return False

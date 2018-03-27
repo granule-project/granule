@@ -8,7 +8,7 @@
 module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    letBox,
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
-                   NatModifier(..), Effect, Kind(..), DataConstr(..),
+                   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
                    Id, sourceName, internalName, mkId, mkInternalId,
                    Operator,
                    liftCoeffectType,
@@ -420,6 +420,9 @@ instance FirstParameter Def Span
 data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
 
 instance FirstParameter DataConstr Span
+
+-- | How many data constructors a type has (Nothing -> don't know)
+type Cardinality = Maybe Word
 
 -- Alpha-convert all bound variables
 uniqueNames :: AST -> (AST, Int)

@@ -48,7 +48,7 @@ inferKindOfType' s quantifiedVariables t =
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of
-          Just kind -> return kind
+          Just (kind,_) -> return kind
           Nothing   -> halt $ UnboundVariableError (Just s) (pretty conId ++ " constructor.")
 
     kBox c KType = do
@@ -74,7 +74,7 @@ inferKindOfType' s quantifiedVariables t =
     kInfix op k1 k2 = do
       st <- get
       case lookup (mkId op) (typeConstructors st) of
-       Just (KFun k1' (KFun k2' kr)) ->
+       Just (KFun k1' (KFun k2' kr), _) ->
          if k1 `hasLub` k1'
           then if k2 `hasLub` k2'
                then return kr

@@ -1,0 +1,8 @@
+data Bool where False : Bool; True : Bool
+
+data Pair a b where X : a -> b -> Pair a b
+
+data Unit where U : Unit
+
+quux : Pair () Unit -> Bool
+quux (X () U) = True

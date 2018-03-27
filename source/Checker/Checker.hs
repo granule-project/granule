@@ -9,12 +9,14 @@ module Checker.Checker where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
+import Data.List (genericLength)
 import Data.Maybe
 import Data.SBV hiding (Kind, kindOf)
 
 import Checker.Coeffects
 import Checker.Constraints
 import Checker.Kinds
+import Checker.Exhaustivity
 import Checker.Monad
 import Checker.Patterns
 import Checker.Predicates
@@ -60,15 +62,16 @@ check ast = do
       go = evalChecker initState { uniqueVarId = freshIdCounter ?globals }
 
 checkTyCon :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkTyCon (ADT _ name tyVars kindAnn _) =
+checkTyCon (ADT _ name tyVars kindAnn ds) =
     runMaybeT $ do
       debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty name ++ "`: `"
                                     ++ pretty tyConKind ++ "` (Show: `" ++ show tyConKind ++ "`)"
-      modify $ \st -> st { typeConstructors = (name, tyConKind) : typeConstructors st }
+      modify $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
 
   where
+    cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
-    mkKind [] = case kindAnn of Just k -> k; Nothing -> KType
+    mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
@@ -76,11 +79,11 @@ checkDataCons (ADT _ name tyVars _ dataConstrs) =
   runMaybeT $ do
     st <- get
     case lookup name (typeConstructors st) of
-      Just kind ->
+      Just (kind,_) ->
         do modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-           mapM_ (checkDataCon name kind) dataConstrs -- TODO add tyVars
-      _ -> error "Please open an issue at https://github.com/dorchard/granule/issues" -- all type constructors have already been put into the checker monad
-
+           mapM_ (checkDataCon name kind) dataConstrs
+      -- all type constructors have already been put into the checker monad, so shouldn't fail
+      _ -> error "Please open an issue at https://github.com/dorchard/granule/issues"
 
 checkDataCon :: (?globals :: Globals )
   => Id -- ^ The type constructor and associated type to check against
@@ -94,18 +97,15 @@ checkDataCon tName kind (DataConstr sp dName tySch@(Forall _ tyVars ty)) = do
       KType -> valid ty
       _     -> illKindedNEq sp KType kind
   where
-    valid t =
-        case t of
-        TyCon tC ->
-          if tC /= tName then halt $ GenericError (Just sp)
-                                   $ "Expected type constructor `" ++ pretty tName ++ "`, but got `"
-                                   ++ pretty tC ++ "` in  `" ++ pretty dName ++ " : "
-                                   ++ pretty tySch ++ "`"
-          else let dataConstructor = (dName, Forall sp tyVars ty) in
-               modify $ \st -> st { dataConstructors = dataConstructor : dataConstructors st }
-        FunTy arg res -> valid res
-        TyApp fun arg -> valid fun
-        x -> halt $ GenericError (Just sp) $ "Not a valid datatype definition."
+    valid (TyCon tC) = if tC == tName
+        then do
+          let dataConstructor = (dName, Forall sp tyVars ty)
+          modify $ \st -> st { dataConstructors = dataConstructor : dataConstructors st }
+        else halt $ GenericError (Just sp) $ "Expected type constructor `" ++ pretty tName
+                                             ++ "`, but got `" ++ pretty tC ++ "` in  `"
+    valid (FunTy arg res) = valid res
+    valid (TyApp fun arg) = valid fun
+    valid x = halt $ GenericError (Just sp) $ "`" ++ pretty x ++ "` not valid in a datatype definition."
 
 checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions
@@ -605,8 +605,8 @@ solveConstraints predicate s defName = do
       where
        convert (var, (KConstr constr, q)) =
            case lookup (constr) (typeConstructors checkerState) of
-             Just KCoeffect -> Just (var, (CConstr constr, q))
-             _              -> Nothing
+             Just (KCoeffect,_) -> Just (var, (CConstr constr, q))
+             _                  -> Nothing
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
        convert (var, (KPoly constr, q)) = Just (var, (CPoly constr, q))

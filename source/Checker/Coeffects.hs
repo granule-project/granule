@@ -51,10 +51,11 @@ inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
 
 -- Coeffect variables should have a kind in the cvar->kind context
 inferCoeffectType s (CVar cvar) = do
-  checkerState <- get
-  case lookup cvar (tyVarContext checkerState) of
+  st <- get
+  case lookup cvar (tyVarContext st) of
      Nothing -> do
-       halt $ UnboundVariableError (Just s) $ "Tried to lookup kind of " ++ pretty cvar
+       halt $ UnboundVariableError (Just s) $ "Tried to look up kind of `" ++ pretty cvar ++ "`"
+                                              <?> show (cvar,(tyVarContext st))
 --       state <- get
 --       let newCKind = CPoly $ "ck" ++ show (uniqueVarId state)
        -- We don't know what it is yet though, so don't update the coeffect kind ctxt
@@ -76,9 +77,9 @@ checkKind :: (?globals :: Globals) => Span -> CKind -> MaybeT Checker CKind
 checkKind s k@(CConstr name) = do
   st <- get
   case lookup name (typeConstructors st) of
-    Just KCoeffect -> return $ CConstr name
-    Just _         -> illKindedNEq s KCoeffect (KConstr name)
-    _              ->
+    Just (KCoeffect,_) -> return $ CConstr name
+    Just _             -> illKindedNEq s KCoeffect (KConstr name)
+    _                  ->
       halt $ UnboundVariableError (Just s) $ "Type `" ++ pretty name ++ "`"
 checkKind _ k = return k
 

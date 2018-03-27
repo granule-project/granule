@@ -16,7 +16,7 @@ import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern,
-                    TypeScheme(..), mkId, internalName)
+                    TypeScheme(..), Cardinality, mkId, internalName)
 import Syntax.Pretty
 import Utils
 
@@ -68,7 +68,7 @@ data CheckerState = CS
             , guardContexts :: [Ctxt Assumption]
 
             -- Data type information
-            , typeConstructors :: Ctxt Kind
+            , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
             , dataConstructors :: Ctxt TypeScheme
 
             -- LaTeX derivation

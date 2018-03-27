@@ -6,35 +6,35 @@ import Syntax.Expr
 
 session = KConstr $ mkId "Session"
 
-typeLevelConstructors :: [(Id, Kind)]
+typeLevelConstructors :: [(Id, (Kind, Cardinality))]
 typeLevelConstructors =
-    [ (mkId $ "()", KType)
-    , (mkId $ "Int",  KType)
-    , (mkId $ "Float", KType)
-    , (mkId $ "Char", KType)
-    , (mkId $ "String", KType)
-    , (mkId $ "FileIO", KFun KType KType)
-    , (mkId $ "Session", KFun KType KType)
-    , (mkId $ "List", KFun (KConstr $ mkId "Nat=") (KFun KType KType))
-    , (mkId $ "N", KFun (KConstr $ mkId "Nat=") KType)
-    , (mkId $ "Cartesian", KCoeffect)   -- Singleton coeffect
-    , (mkId $ "Nat",  KCoeffect)
-    , (mkId $ "Nat=", KCoeffect)
-    , (mkId $ "Nat*", KCoeffect)
-    , (mkId $ "Q",    KCoeffect) -- Rationals
-    , (mkId $ "Level", KCoeffect) -- Security level
-    , (mkId $ "Set", KFun (KPoly $ mkId "k") (KFun (KConstr $ mkId "k") KCoeffect))
-    , (mkId $ "+",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
-    , (mkId $ "*",   KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
-    , (mkId $ "/\\", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
-    , (mkId $ "\\/", KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")))
+    [ (mkId $ "()", (KType, Just 1))
+    , (mkId $ "Int",  (KType, Nothing))
+    , (mkId $ "Float", (KType, Nothing))
+    , (mkId $ "Char", (KType, Nothing))
+    , (mkId $ "String", (KType, Nothing))
+    , (mkId $ "FileIO", (KFun KType KType, Nothing))
+    , (mkId $ "Session", (KFun KType KType, Nothing))
+    , (mkId $ "List", (KFun (KConstr $ mkId "Nat=") (KFun KType KType), Just 2))
+    , (mkId $ "N", (KFun (KConstr $ mkId "Nat=") KType, Just 2))
+    , (mkId $ "Cartesian", (KCoeffect, Nothing))   -- Singleton coeffect
+    , (mkId $ "Nat",  (KCoeffect, Nothing))
+    , (mkId $ "Nat=", (KCoeffect, Nothing))
+    , (mkId $ "Nat*", (KCoeffect, Nothing))
+    , (mkId $ "Q",    (KCoeffect, Nothing)) -- Rationals
+    , (mkId $ "Level", (KCoeffect, Nothing)) -- Security level
+    , (mkId $ "Set", (KFun (KPoly $ mkId "k") (KFun (KConstr $ mkId "k") KCoeffect), Nothing))
+    , (mkId $ "+",   (KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")), Nothing))
+    , (mkId $ "*",   (KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")), Nothing))
+    , (mkId $ "/\\", (KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")), Nothing))
+    , (mkId $ "\\/", (KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")), Nothing))
     -- File stuff
-    , (mkId $ "Handle", KType)
+    , (mkId $ "Handle", (KType, Nothing))
     -- Channels and session types
-    , (mkId $ "Send", KFun KType (KFun session session))
-    , (mkId $ "Recv", KFun KType (KFun session session))
-    , (mkId $ "End" , session)
-    , (mkId $ "Chan", KFun session KType)
+    , (mkId $ "Send", (KFun KType (KFun session session), Nothing))
+    , (mkId $ "Recv", (KFun KType (KFun session session), Nothing))
+    , (mkId $ "End" , (session, Nothing))
+    , (mkId $ "Chan", (KFun session KType, Nothing))
     ]
 
 dataConstructors :: [(Id, TypeScheme)]

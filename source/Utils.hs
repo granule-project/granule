@@ -137,7 +137,7 @@ getTimeString =
         Left (e :: SomeException) -> do
           debugM "getCurrentTime failed" (show e)
           return ""
-      
+
 lookupMany :: Eq a => a -> [(a, b)] -> [b]
 lookupMany _ []                     = []
 lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
