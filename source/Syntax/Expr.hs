@@ -441,9 +441,9 @@ uniqueNames =
     -- into the data constructors
     freshenDef (ADT sp tyCon tyVars kind dataCs) = do
       dataCs <-
-        forM dataCs $ (\(DataConstr sp name (Forall sp' vs ty)) -> do
-          tySch <- freshenTys (Forall sp' (tyVars ++ vs) ty)
-          return $ DataConstr sp name tySch)
+        forM dataCs $ \(DataConstr sp name tySch) -> do
+                        (Forall sp' vs ty) <- freshenTys tySch
+                        return $ DataConstr sp name (Forall sp' (tyVars ++ vs) ty)
       return $ ADT sp tyCon tyVars kind dataCs
 
 
