@@ -1,7 +1,0 @@
-import Nat
-
-div2 : forall (n : Nat=) . N (2 * n) -> N n
-div2 x =
-  case x of
-    Z -> Z;
-    (S x) -> (case x of (S x) -> S (div2 x))
