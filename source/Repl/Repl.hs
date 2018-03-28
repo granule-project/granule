@@ -70,7 +70,7 @@ loadInQueue def@(Def _ id exp _ _) = do
   m <- get
   put $ M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m
   Ex.return()
-loadInQueue adt@(ADT _ _ _ _) = Ex.return ()
+loadInQueue adt@(ADT _ _ _ _ _) = Ex.return ()
 
 
 dumpStateAux :: M.Map String (Def, [String]) -> [String]

@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 229091539a0d1e9c63ff8eab6919964992afff117f51608c3e39824a405ef89e
+-- hash: 1c06d751ddb704adb8ffd7800efe82f0592664c1d39857e0350cf7168eda4cb3
 
 name:           granule
-version:        0.5.0.1
+version:        0.5.5.4
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
@@ -71,6 +71,7 @@ library
       Repl.ReplParser
       Repl.ReplError
   other-modules:
+      Checker.Exhaustivity
       Paths_granule
   default-language: Haskell2010
 
@@ -82,6 +83,7 @@ executable gr
   build-depends:
       Glob
     , base >=4.10 && <5
+    , directory
     , granule
     , optparse-applicative
   other-modules:
@@ -105,9 +107,9 @@ test-suite spec
   other-modules:
       Checker.CheckerSpec
       Checker.MonadSpec
+      Checker.SubstitutionsSpec
       Checker.TypesSpec
       ContextSpec
-      Syntax.DesugarSpec
       Syntax.ExprSpec
       Paths_granule
   default-language: Haskell2010
