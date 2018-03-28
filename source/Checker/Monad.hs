@@ -15,11 +15,10 @@ import Checker.LaTeX
 import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Context
-import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern, TypeScheme(..)
-                   , mkId, internalName)
+import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern,
+                    TypeScheme(..), Cardinality, mkId, internalName)
 import Syntax.Pretty
 import Utils
-
 
 
 -- State of the check/synth functions
@@ -63,11 +62,18 @@ data CheckerState = CS
             -- (used just before solver, to resolve any kind
             -- variables that appear in constraints)
             , kVarContext   :: Ctxt Kind
+
+            -- Guard contexts (all the guards in scope)
+            -- which get promoted by branch promotions
+            , guardContexts :: [Ctxt Assumption]
+
+            -- Data type information
+            , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
+            , dataConstructors :: Ctxt TypeScheme
+
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
-            , typeConstructors :: Ctxt Kind
-            , dataConstructors :: Ctxt TypeScheme
             }
   deriving (Show, Eq) -- for debugging
 
@@ -77,10 +83,11 @@ initState = CS { uniqueVarId = 0
                , predicateStack = []
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
-               , deriv = Nothing
-               , derivStack = []
+               , guardContexts = []
                , typeConstructors = Primitives.typeLevelConstructors
                , dataConstructors = Primitives.dataConstructors
+               , deriv = Nothing
+               , derivStack = []
                }
   where emptyCtxt = []
 
@@ -104,6 +111,23 @@ localChecking k = do
         put localState
         MaybeT $ return out
   return (out, reified)
+
+pushGuardContext :: Ctxt Assumption -> MaybeT Checker ()
+pushGuardContext ctxt = do
+  modify (\state ->
+    state { guardContexts = ctxt : guardContexts state })
+
+popGuardContext :: MaybeT Checker (Ctxt Assumption)
+popGuardContext = do
+  state <- get
+  let (c:cs) = guardContexts state
+  put (state { guardContexts = cs })
+  return c
+
+allGuardContexts :: MaybeT Checker (Ctxt Assumption)
+allGuardContexts = do
+  state <- get
+  return $ concat (guardContexts state)
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
@@ -159,6 +183,19 @@ addConstraint p = do
     stack ->
       put (checkerState { predicateStack = Conj [Con p] : stack })
 
+-- | A helper for adding a constraint to the previous frame (i.e.)
+-- | if I am in a local context, push it to the global
+addConstraintToPreviousFrame :: Constraint -> MaybeT Checker ()
+addConstraintToPreviousFrame p = do
+        checkerState <- get
+        case predicateStack checkerState of
+          (ps : Conj ps' : stack) ->
+            put (checkerState { predicateStack = ps : Conj (Con p : ps') : stack })
+          (ps : stack) ->
+            put (checkerState { predicateStack = ps : Conj [Con p] : stack })
+          stack ->
+            put (checkerState { predicateStack = Conj [Con p] : stack })
+
 -- | Generate a fresh alphanumeric variable name
 freshVar :: String -> MaybeT Checker String
 freshVar s = do
@@ -178,6 +215,7 @@ data TypeError
   | LinearityError (Maybe Span) String
   | PatternTypingError (Maybe Span) String
   | UnboundVariableError (Maybe Span) String
+  | RefutablePatternError (Maybe Span) String
 
 instance UserMsg TypeError where
   title CheckerError {} = "Checker error"
@@ -187,6 +225,7 @@ instance UserMsg TypeError where
   title LinearityError {} = "Linearity error"
   title PatternTypingError {} = "Pattern typing error"
   title UnboundVariableError {} = "Unbound variable error"
+  title RefutablePatternError {} = "Pattern is refutable"
   location (CheckerError sp _) = sp
   location (GenericError sp _) = sp
   location (GradingError sp _) = sp
@@ -194,6 +233,7 @@ instance UserMsg TypeError where
   location (LinearityError sp _) = sp
   location (PatternTypingError sp _) = sp
   location (UnboundVariableError sp _) = sp
+  location (RefutablePatternError sp _) = sp
   msg (CheckerError _ m) = m
   msg (GenericError _ m) = m
   msg (GradingError _ m) = m
@@ -201,6 +241,7 @@ instance UserMsg TypeError where
   msg (LinearityError _ m) = m
   msg (PatternTypingError _ m) = m
   msg (UnboundVariableError _ m) = m
+  msg (RefutablePatternError _ m) = m
 
 illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
 illKindedUnifyVar sp t1 k1 t2 k2 =
@@ -236,14 +277,18 @@ illTypedPattern sp ty pat =
     halt $ PatternTypingError (Just sp) $
       pretty pat ++ " does not have expected type " ++ pretty ty
 
+-- | A helper for refutable pattern errors
+refutablePattern :: (?globals :: Globals) => Span -> Pattern -> MaybeT Checker a
+refutablePattern sp p =
+  halt $ RefutablePatternError (Just sp) $
+        "Pattern match " ++ pretty p ++ " can fail; only \
+        \irrefutable patterns allowed in this context"
 
 -- | Helper for constructing error handlers
 halt :: (?globals :: Globals) => TypeError -> MaybeT Checker a
 halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 
-
 -- Various interfaces for the checker
-
 instance Monad Checker where
   return = Checker . return
   (Checker x) >>= f = Checker (x >>= (unwrap . f))

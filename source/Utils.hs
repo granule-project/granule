@@ -70,10 +70,6 @@ str <?> msg =
       then str <> (bold $ magenta $ " Debug { ") <> msg <> (bold $ magenta $ " }")
       else str
 
--- | Use sparingly
-unhandled :: error
-unhandled = error "Please open an issue at https://github.com/dorchard/granule/issues"
-
 printErr :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
 printErr err = when (not $ suppressErrors ?globals) $ do
     time <- getTimeString
@@ -142,7 +138,6 @@ getTimeString =
         Left (e :: SomeException) -> do
           debugM "getCurrentTime failed" (show e)
           return ""
-
           
 -- Extracted from the else in  main from Main.hs for use as a generic function
 -- where e is some error handler and f is what is done with each file         
@@ -152,4 +147,9 @@ processFiles globPatterns e f = forM globPatterns $ (\p -> do
     case filePaths of 
         [] -> (e p) >>= (return.(:[]))
         _ -> forM filePaths f)
+
+lookupMany :: Eq a => a -> [(a, b)] -> [b]
+lookupMany _ []                     = []
+lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
+lookupMany a' (_:xs)                = lookupMany a' xs
 

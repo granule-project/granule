@@ -1,0 +1,23 @@
+import Bool
+import List
+
+foo : Chan (Send Bool (Recv Int End)) -> Session Int
+foo c =
+  let c      <- send c True;
+      (n, c) <- recv c;
+      ()     <- close c
+  in pure n
+
+-- Given a one-shot channel for some sending a value of type 'a'
+-- but which is able to be reused 'n' times, and a list of
+-- length 'n', then send every element of the list on the
+-- channel
+sendList : forall (n : Nat=, a : Type) .
+   Chan (Send a End) |n| -> List n a -> Session ()
+sendList |c| xs =
+  case xs of
+    Nil -> pure ();
+    (Cons x xs) ->
+       let c' <- send c x;
+           () <- close c'
+       in sendList |c| xs

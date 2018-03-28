@@ -1,0 +1,5 @@
+succ : Int -> Int
+succ x = x + 1
+
+main : () <[W]>
+main = (0 `succ` `succ`) `showInt` `write`

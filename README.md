@@ -26,11 +26,9 @@ To install Granule, we recommend you use [Stack](https://docs.haskellstack.org/e
 
 ## Executing Granule Programs
 
-Granule program files have file extension `.gr`. Use the `gr` command to execute them:
+Granule program files have file extension `.gr`. Use the `gr` command to execute them (`-i` mutes info messages):
 
-    $ gr examples/example.gr
-    Granule v0.3.0.0
-    Ok.
+    $ gr -i examples/good/example.gr
     14
 
 See the `examples` directory for more sample programs.

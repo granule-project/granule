@@ -15,12 +15,13 @@
 
 import Control.Exception (SomeException, try)
 -- import Control.Monad (forM)
-import Data.List (intercalate)
+import Data.List (intercalate, stripPrefix)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 
--- import System.FilePath.Glob (glob)
+import System.Directory (getCurrentDirectory)
+--import System.FilePath.Glob (glob)
 import Options.Applicative
 
 import Checker.Checker
@@ -55,6 +56,23 @@ main = do
     else do
       debugM "Globals" (show globals)
       results <- processFiles globPatterns (badFilePath globals) (loadFile globals)        
+      -- TODO: Check the factored out code to see if there are any changes:
+      -- currentDir <- getCurrentDirectory
+      -- results <- forM globPatterns $ \p -> do
+      --   filePaths <- glob p
+      --   case filePaths of
+      --     [] -> do
+      --       printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
+      --       return [(ExitFailure 1)]
+      --     _ -> forM filePaths $ \p -> do
+      --       let fileName =
+      --            case currentDir `stripPrefix` p of
+      --              Just f  -> tail f
+      --              Nothing -> p
+
+      --       let ?globals = globals { sourceFilePath = fileName }
+      --       printInfo $ "\nChecking " <> fileName <> "..."
+      --       run =<< readFile p
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
 
@@ -94,15 +112,19 @@ run input = do
                 printErr $ EvalError $ show e
                 return (ExitFailure 1)
               Right Nothing -> do
-                printInfo "(No output)"
+                printInfo "There is no `main` definition."
                 return ExitSuccess
               Right (Just result) -> do
+                printInfo "`main` returned:"
                 putStrLn (pretty result)
                 return ExitSuccess
 
 
 parseArgs :: ParserInfo ([FilePath],Globals)
-parseArgs = info (go <**> helper) $ fullDesc <> header ("Granule " <> showVersion version)
+parseArgs = info (go <**> helper) $ briefDesc
+    <> header ("Granule " <> showVersion version)
+    <> footer "\n\nThis software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
+              \ Consult the LICENSE for further information."
   where
     go = do
         files <- many $ argument str $ metavar "SOURCE_FILES..."

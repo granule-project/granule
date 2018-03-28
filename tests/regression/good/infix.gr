@@ -1,0 +1,14 @@
+import Prelude
+
+answer : Int
+answer =
+    if True `and'` True
+      then if True `xor` False
+        then 42
+        else 38
+      else if True `and` |True|
+        then 12
+        else -7
+
+main : Bool
+main = case answer of 42 -> True

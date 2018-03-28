@@ -2,10 +2,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
+                   letBox,
                    Def(..), Pattern(..), CKind(..), Coeffect(..),
-                   NatModifier(..), Effect, Kind(..), DataConstr(..), TypeConstr(..),
+                   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
                    Id, sourceName, internalName, mkId, mkInternalId,
                    Operator,
                    liftCoeffectType,
@@ -15,14 +18,18 @@ module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
                    typeFoldM, TypeFold(..),
                    mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
                    mTyInt, mPairTy, mTyInfix,
-                   baseTypeFold
+                   baseTypeFold,
+                   con, var, (.->), (.@)
                    ) where
 
-import Data.List ((\\))
+import Data.List ((\\), delete)
 import Control.Monad.State
 import Control.Arrow
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
+import Data.Text (Text)
+
+import qualified System.IO as SIO (Handle)
 
 import Syntax.FirstParameter
 
@@ -61,7 +68,7 @@ getStart ::  FirstParameter t Span => t -> Pos
 getStart = fst . getSpan
 
 -- Values in Granule
-data Value = Abs Id (Maybe Type) Expr
+data Value = Abs Pattern (Maybe Type) Expr
            | NumInt Int
            | NumFloat Double
            | Promote Expr
@@ -69,29 +76,47 @@ data Value = Abs Id (Maybe Type) Expr
            | Var Id
            | Constr Id [Value]
            | Pair Expr Expr
-          deriving (Eq, Show)
+           | CharLiteral Char
+           | StringLiteral Text
+           -------------------------
+           -- Used only inside the interpeter
+           | Primitive (Value -> IO Value)
+           | Handle SIO.Handle
+
+deriving instance Eq (Value -> IO Value) => Eq Value
+deriving instance Show Value
+
+instance Show (Value -> IO Value) where
+  show _ = "Some primitive"
 
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
           | Binop Span Operator Expr Expr
-          | LetBox Span Id Type Expr Expr
-          | LetDiamond Span Id Type Expr Expr
+          | LetDiamond Span Pattern (Maybe Type) Expr Expr
           | Val Span Value
           | Case Span Expr [(Pattern, Expr)]
-          deriving (Eq, Show, Generic)
+          deriving (Generic)
+
+deriving instance Eq (Value -> IO Value) => Eq Expr
+deriving instance Show Expr
 
 instance FirstParameter Expr Span
 
--- Pattern matchings
-data Pattern = PVar Span Id         -- Variable patterns
-             | PWild Span           -- Wildcard (underscore) pattern
-             | PBox Span Pattern -- Box patterns
-             | PInt Span Int        -- Numeric patterns
-             | PFloat Span Double
-             | PConstr Span Id  -- Constructor pattern
-             | PApp Span Pattern Pattern -- Apply pattern
-             | PPair Span Pattern Pattern -- ^ Pair patterns
-          deriving (Eq, Show, Generic)
+-- Syntactic sugar constructor
+letBox :: Span -> Pattern -> Expr -> Expr -> Expr
+letBox s pat e1 e2 =
+  App s (Val s (Abs (PBox s pat) Nothing e2)) e1
+
+-- Pattern matches
+data Pattern
+  = PVar Span Id               -- Variable patterns
+  | PWild Span                 -- Wildcard (underscore) pattern
+  | PBox Span Pattern          -- Box patterns
+  | PInt Span Int              -- Numeric patterns
+  | PFloat Span Double         -- Float pattern
+  | PConstr Span Id [Pattern]  -- Constructor pattern
+  | PPair Span Pattern Pattern -- Pair patterns
+  deriving (Eq, Show, Generic)
 
 instance FirstParameter Pattern Span
 
@@ -105,29 +130,25 @@ instance Binder Pattern where
   boundVars (PBox _ p)     = boundVars p
   boundVars PInt {}        = []
   boundVars PFloat {}      = []
-  boundVars PConstr {}     = []
-  boundVars (PApp _ p1 p2) = boundVars p1 ++ boundVars p2
   boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
+  boundVars (PConstr _ _ ps) = concatMap boundVars ps
 
   freshenBinder (PVar s var) = do
       var' <- freshVar Value var
       return $ PVar s var'
-
   freshenBinder (PBox s p) = do
       p' <- freshenBinder p
       return $ PBox s p'
-
-  freshenBinder (PApp s p1 p2) = do
-      p1' <- freshenBinder p1
-      p2' <- freshenBinder p2
-      return $ PApp s p1' p2'
-
   freshenBinder (PPair s p1 p2) = do
       p1' <- freshenBinder p1
       p2' <- freshenBinder p2
       return $ PPair s p1' p2'
-
-  freshenBinder p = return p -- TODO: Get rid of catch-alls
+  freshenBinder (PConstr s name ps) = do
+      ps <- mapM freshenBinder ps
+      return (PConstr s name ps)
+  freshenBinder p @ PWild {} = return p
+  freshenBinder p @ PInt {} = return p
+  freshenBinder p @ PFloat {} = return p
 
 type Freshener t = State (Int, [(String, String)], [(String, String)]) t
 
@@ -161,6 +182,13 @@ lookupVar synCat var = do
     Value -> lookup (sourceName var) vmap
     Type  -> lookup (sourceName var) tmap
 
+removeFreshenings :: [Id] -> Freshener ()
+removeFreshenings [] = return ()
+removeFreshenings (x:xs) = do
+  (v, vmap, tmap) <- get
+  put (v, delete (sourceName x, internalName x) vmap, tmap)
+  removeFreshenings xs
+
 freshenTys :: TypeScheme -> Freshener TypeScheme
 freshenTys (Forall s binds ty) = do
       binds' <- mapM (\(v, k) -> do { v' <- freshVar Type v; return (v', k) }) binds
@@ -182,8 +210,16 @@ instance Term Type where
 
   subst e _ t = e
   freshen =
-    typeFoldM (baseTypeFold { tfTyVar = freshenTyVar, tfBox = freshenTyBox })
+    typeFoldM (baseTypeFold { tfTyApp = rewriteTyApp,
+                              tfTyVar = freshenTyVar,
+                              tfBox = freshenTyBox })
     where
+      -- Rewrite type aliases of Box
+      rewriteTyApp t1@(TyCon ident) t2
+        | internalName ident == "Box" =
+          return $ Box (CInfinity (CPoly $ mkInternalId "∞" "infinity")) t2
+      rewriteTyApp t1 t2 = return $ TyApp t1 t2
+
       freshenTyBox c t = do
         c' <- freshen c
         t' <- freshen t
@@ -260,7 +296,7 @@ instance Term Coeffect where
 
 
 instance Term Value where
-    freeVars (Abs x _ e) = freeVars e \\ [x]
+    freeVars (Abs p _ e) = freeVars e \\ boundVars p
     freeVars (Var x)     = [x]
     freeVars (Pure e)    = freeVars e
     freeVars (Promote e) = freeVars e
@@ -268,6 +304,8 @@ instance Term Value where
     freeVars (NumInt _) = []
     freeVars (NumFloat _) = []
     freeVars (Constr _ _) = []
+    freeVars (CharLiteral _) = []
+    freeVars (StringLiteral _) = []
 
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
@@ -278,14 +316,18 @@ instance Term Value where
     subst _ _ v@(NumFloat _)      = Val nullSpan v
     subst _ _ v@(Var _)           = Val nullSpan v
     subst _ _ v@(Constr _ _)      = Val nullSpan v
+    subst _ _ v@CharLiteral{}     = Val nullSpan v
+    subst _ _ v@StringLiteral{}   = Val nullSpan v
+    subst _ _ v@Handle{}          = Val nullSpan v
 
-    freshen (Abs var t e) = do
-      var' <- freshVar Value var
+    freshen (Abs p t e) = do
+      p'   <- freshenBinder p
       e'   <- freshen e
       t'   <- case t of
                 Nothing -> return Nothing
                 Just ty -> freshen ty >>= (return . Just)
-      return $ Abs var' t' e'
+      removeFreshenings (boundVars p')
+      return $ Abs p' t' e'
 
     freshen (Pure e) = do
       e' <- freshen e
@@ -311,19 +353,19 @@ instance Term Value where
     freshen v@(NumInt _)   = return v
     freshen v@(NumFloat _) = return v
     freshen v@(Constr _ _) = return v
+    freshen v@CharLiteral{} = return v
+    freshen v@StringLiteral{} = return v
 
 instance Term Expr where
     freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2
     freeVars (Binop _ _ e1 e2)        = freeVars e1 ++ freeVars e2
-    freeVars (LetBox _ x _ e1 e2)     = freeVars e1 ++ (freeVars e2 \\ [x])
-    freeVars (LetDiamond _ x _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ [x])
+    freeVars (LetDiamond _ p _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ boundVars p)
     freeVars (Val _ e)                = freeVars e
     freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
 
     subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
     subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
-    subst es v (LetBox s w t e1 e2) = LetBox s w t (subst es v e1) (subst es v e2)
     subst es v (LetDiamond s w t e1 e2) =
                                    LetDiamond s w t (subst es v e1) (subst es v e2)
     subst es v (Val _ val)          = subst es v val
@@ -331,24 +373,19 @@ instance Term Expr where
                                      (subst es v expr)
                                      (map (second (subst es v)) cases)
 
-    freshen (LetBox s var t e1 e2) = do
-      var' <- freshVar Value var
-      e1'  <- freshen e1
-      e2'  <- freshen e2
-      t'   <- freshen t
-      return $ LetBox s var' t' e1' e2'
-
     freshen (App s e1 e2) = do
       e1' <- freshen e1
       e2' <- freshen e2
       return $ App s e1' e2'
 
-    freshen (LetDiamond s var t e1 e2) = do
-      var' <- freshVar Value var
-      e1'  <- freshen e1
-      e2'  <- freshen e2
-      t'   <- freshen t
-      return $ LetDiamond s var' t' e1' e2'
+    freshen (LetDiamond s p t e1 e2) = do
+      e1' <- freshen e1
+      p'  <- freshenBinder p
+      e2' <- freshen e2
+      t'   <- case t of
+                Nothing -> return Nothing
+                Just ty -> freshen ty >>= (return . Just)
+      return $ LetDiamond s p' t' e1' e2'
 
     freshen (Binop s op e1 e2) = do
       e1' <- freshen e1
@@ -370,22 +407,22 @@ instance Term Expr where
 --------- Definitions
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
-         | ADT Span TypeConstr [TyVar] [DataConstr]
-          deriving (Eq, Show, Generic)
+         | ADT Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
+          deriving (Generic)
+
+deriving instance Eq (Value -> IO Value) => Eq Def
+deriving instance Show Def
 
 type AST = [Def]
 
-type TyVar = (Span,Id)
-
 instance FirstParameter Def Span
-
-data TypeConstr = TypeConstr Span Id deriving (Eq, Show, Generic)
-
-instance FirstParameter TypeConstr Span
 
 data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
 
 instance FirstParameter DataConstr Span
+
+-- | How many data constructors a type has (Nothing -> don't know)
+type Cardinality = Maybe Word
 
 -- Alpha-convert all bound variables
 uniqueNames :: AST -> (AST, Int)
@@ -405,12 +442,12 @@ uniqueNames =
 
     -- in the case of ADTs, also push down the type variables from the data declaration head
     -- into the data constructors
-    freshenDef (ADT sp tyCon tyVars dataCs) = do
-      let vs = (map (\(_,v) -> (v, KType)) tyVars)
-      dataCs <- mapM (\(DataConstr sp name (Forall sp' [] ty)) -> do
-                        tySch <- freshenTys (Forall sp' vs ty)
-                        return $ DataConstr sp name tySch) dataCs
-      return $ ADT sp tyCon tyVars dataCs
+    freshenDef (ADT sp tyCon tyVars kind dataCs) = do
+      dataCs <-
+        forM dataCs $ \(DataConstr sp name tySch) -> do
+                        (Forall sp' vs ty) <- freshenTys tySch
+                        return $ DataConstr sp name (Forall sp' (tyVars ++ vs) ty)
+      return $ ADT sp tyCon tyVars kind dataCs
 
 
 ----------- Types
@@ -433,6 +470,19 @@ data Type = FunTy Type Type           -- ^ Function type
           | PairTy Type Type          -- ^ Pair/product type
           | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
+
+-- Smart constructors for types
+con :: String -> Type
+con = TyCon . mkId
+
+var :: String -> Type
+var = TyVar . mkId
+
+(.->) :: Type -> Type -> Type
+s .-> t = FunTy s t
+
+(.@) :: Type -> Type -> Type
+s .@ t = TyApp s t
 
 -- Trivially effectful monadic constructors
 mFunTy :: Monad m => Type -> Type -> m Type

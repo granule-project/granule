@@ -1,5 +1,0 @@
-import List
-import Nat
-
-main : List 2 Int
-main = replicate (succ (succ zero)) |5|

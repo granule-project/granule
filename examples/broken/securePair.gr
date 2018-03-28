@@ -1,5 +1,0 @@
-data X a where
-  X : a |Hi| |10| -> X a
-
-go : X Int -> Int |Hi|
-go x = case x of (X ||x||) -> |(x * x * x)|

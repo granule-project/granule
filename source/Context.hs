@@ -21,7 +21,7 @@ extend ctxt x v = (x, v) : ctxt
 empty :: Ctxt a
 empty = []
 
--- | Replace the first occurence of an item in an context
+-- | Replace the first occurence of an item in a context
 replace :: Ctxt a -> Id -> a -> Ctxt a
 replace [] name v
   = [(name, v)]
@@ -41,9 +41,9 @@ intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn b) a
   where appearsIn x (name, _) = isJust $ lookup name x
 
-intersectCtxtsAlternatives :: Eq a => Ctxt a -> Ctxt a -> Ctxt [a]
+intersectCtxtsAlternatives :: Eq a => Ctxt a -> Ctxt a -> Ctxt (a, a)
 intersectCtxtsAlternatives a b =
-    [(k1, [v1, v2]) | (k1, v1) <- a, (k2, v2) <- b, k1 == k2, v1 /= v2]
+    [(k1, (v1, v2)) | (k1, v1) <- a, (k2, v2) <- b, k1 == k2, v1 /= v2]
 
 {- | `subtractCtxt a b` removes all the key-value pairs from
    `a` that have keys in `b` -}

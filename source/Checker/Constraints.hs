@@ -16,18 +16,18 @@ import Checker.Predicates
 import Context (Ctxt)
 import Syntax.Expr
 import Syntax.Pretty
-import Utils
+
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
 compileQuant ForallQ   = forall
 compileQuant InstanceQ = exists
-compileQuant BoundQ    = error
-  "Internal bug: tried to get SBV representation of a dependent case variable"
+compileQuant BoundQ    = exists
 
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 k)   = Eq s (normalise c1) (normalise c2) k
-normaliseConstraint (Leq s c1 c2 k) = Leq s (normalise c1) (normalise c2) k
+normaliseConstraint (Neq s c1 c2 k)  = Neq s (normalise c1) (normalise c2) k
+normaliseConstraint (ApproximatedBy s c1 c2 k) = ApproximatedBy s (normalise c1) (normalise c2) k
 
 -- Compile constraint into an SBV symbolic bool, along with a list of
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
@@ -67,11 +67,14 @@ compileToSBV predicate tyVarContext kVarContext =
         p2' <- buildTheorem' solverVars p2
         return $ p1' ==> p2'
 
-    -- TODO: generalise this to not just Nat indices
+    -- TODO: generalise this to not just Nat= indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
-      forAll [internalName v] (\vSolver -> do
-         impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
-         return $ (vSolver .>= literal 0) ==> impl)
+      if v `elem` (vars p ++ vars p')
+        then forAll [internalName v] (\vSolver -> do
+             impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
+             return $ (vSolver .>= literal 0) ==> impl)
+        else do
+          buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
       return $ compile solverVars cons
@@ -80,8 +83,8 @@ compileToSBV predicate tyVarContext kVarContext =
     -- substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
     -- substConstraint rmap (Eq s' c1 c2 k) =
     --     Eq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
-    -- substConstraint rmap (Leq s' c1 c2 k) =
-    --     Leq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
+    -- substConstraint rmap (ApproximatedBy s' c1 c2 k) =
+    --     ApproximatedBy s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
@@ -101,7 +104,7 @@ compileToSBV predicate tyVarContext kVarContext =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
-              BoundQ -> unhandled
+              BoundQ -> (universalConstraints, pre &&& existentialConstraints)
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- given an context mapping coeffect type variables to coeffect typ,
@@ -119,8 +122,14 @@ rewriteConstraints ctxt =
         (case k of
           CPoly ckindVar' | ckindVar == ckindVar' -> ckind
           _ -> k)
-    updateConstraint ckindVar ckind (Leq s c1 c2 k) =
-      Leq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateConstraint ckindVar ckind (Neq s c1 c2 k) =
+            Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+              (case k of
+                CPoly ckindVar' | ckindVar == ckindVar' -> ckind
+                _ -> k)
+
+    updateConstraint ckindVar ckind (ApproximatedBy s c1 c2 k) =
+      ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           CPoly ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)
@@ -165,9 +174,9 @@ freshCVar quant name (CConstr k) q
   case internalName k of
     "Nat*" -> return (solverVar .>= literal 0, SNatOmega solverVar)
     "Nat" -> return (solverVar .>= literal 0, SNat Ordered solverVar)
-    "One" -> return (solverVar .== literal 1, SNat Ordered solverVar)
+    "Cartesian" -> return (solverVar .== literal 1 ||| solverVar .== literal 0, SNat Ordered solverVar)
     "Nat=" -> return (solverVar .>= literal 0, SNat Discrete solverVar)
-    "Level" -> return (solverVar .>= literal 0 &&& solverVar .<= 1, SLevel solverVar)
+    "Level" -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
     "Set" -> return (true, SSet S.empty)
 
 -- A poly typed coeffect variable whose element is 'infinity' gets
@@ -188,8 +197,13 @@ compile vars (Eq _ c1 c2 k) =
     where
       c1' = compileCoeffect c1 k vars
       c2' = compileCoeffect c2 k vars
-compile vars (Leq _ c1 c2 k) =
-  lteConstraint c1' c2'
+compile vars (Neq _ c1 c2 k) =
+   bnot (eqConstraint c1' c2')
+  where
+    c1' = compileCoeffect c1 k vars
+    c2' = compileCoeffect c2 k vars
+compile vars (ApproximatedBy _ c1 c2 k) =
+  approximatedByOrEqualConstraint c1' c2'
     where
       c1' = compileCoeffect c1 k vars
       c2' = compileCoeffect c2 k vars
@@ -202,10 +216,10 @@ compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 compileCoeffect (Level n) (CConstr k) _ | internalName k == "Level" =
   SLevel . fromInteger . toInteger $ n
 
-compileCoeffect _ (CConstr k) _ | internalName k == "One" = SNat Ordered 1
-
 -- Any polymorphic `Inf` gets compiled to the `Inf : One` coeffect
 compileCoeffect (CInfinity (CPoly _)) _ _ = SNat Ordered 1
+compileCoeffect (CInfinity (CConstr k)) _ _ | internalName k == "Cartesian" =
+  SNat Ordered 1
 
 compileCoeffect (CNat _ n) (CConstr k) _ =
   case internalName k of
@@ -233,7 +247,7 @@ compileCoeffect c@(CMeet n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smin` n2)
         _ | o1 == o2 -> SNat o1 (n1 `smin` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smin` t
@@ -245,7 +259,7 @@ compileCoeffect c@(CJoin n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 `smax` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smax` t
@@ -257,7 +271,7 @@ compileCoeffect c@(CPlus n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 + n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
@@ -269,7 +283,7 @@ compileCoeffect c@(CTimes n m) k vars =
     (SNat o1 n1, SNat o2 n2) ->
       case k of
         CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "One" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 * n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
@@ -283,6 +297,7 @@ compileCoeffect (CZero (CConstr k')) (CConstr k) _ =
     "Nat=" | internalName k == "Nat=" -> SNat Discrete 0
     "Q" | internalName k == "Q" -> SFloat (fromRational 0)
     "Set" | internalName k == "Set" -> SSet (S.fromList [])
+    "Cartesian" | internalName k == "Cartesian" -> SNat Ordered 0
 
 compileCoeffect (COne (CConstr k')) (CConstr k) _ =
   case internalName k' of
@@ -291,13 +306,17 @@ compileCoeffect (COne (CConstr k')) (CConstr k) _ =
     "Nat=" | internalName k == "Nat=" -> SNat Discrete 1
     "Q" | internalName k == "Q" -> SFloat (fromRational 1)
     "Set" | internalName k == "Set" -> SSet (S.fromList [])
+    "Cartesian" | internalName k == "Cartesian" -> SNat Ordered 1
 
 compileCoeffect _ (CPoly v) _ | "infinity" == internalName v = SNat Ordered 1
 
 -- Trying to compile a coeffect from a promotion that was never
--- constrained further: default to the singleton coeffect
+-- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-compileCoeffect _ (CPoly v) _ | "kprom" `isPrefixOf` internalName v = SNat Ordered 1
+compileCoeffect c (CPoly v) _ | "kprom" `isPrefixOf` internalName v =
+  case c of
+    CZero _ -> SNat Ordered 0
+    _       -> SNat Ordered 1
 
 compileCoeffect c (CPoly _) _ =
    error $ "Trying to compile a polymorphically kinded " ++ pretty c
@@ -315,14 +334,14 @@ eqConstraint x y =
    error $ "Kind error trying to generate equality " ++ show x ++ " = " ++ show y
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
-lteConstraint :: SCoeffect -> SCoeffect -> SBool
-lteConstraint (SNat Ordered n) (SNat Ordered m)   = n .<= m
-lteConstraint (SNat Discrete n) (SNat Discrete m) = n .== m
-lteConstraint (SFloat n) (SFloat m)   = n .<= m
-lteConstraint (SLevel l) (SLevel k) = l .== k
-lteConstraint (SSet s) (SSet t) =
+approximatedByOrEqualConstraint :: SCoeffect -> SCoeffect -> SBool
+approximatedByOrEqualConstraint (SNat Ordered n) (SNat Ordered m)   = n .<= m
+approximatedByOrEqualConstraint (SNat Discrete n) (SNat Discrete m) = n .== m
+approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
+approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
+approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
-lteConstraint x y =
+approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " ++ show x ++ " <= " ++ show y
 
 
@@ -337,15 +356,17 @@ trivialUnsatisfiableConstraints cs =
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `eqC` c2
-    unsat (Leq _ c1 c2 _) = c1 `leqC` c2
+    unsat (Neq _ c1 c2 _) = not (c1 `eqC` c2)
+    unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
 
+    -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
-    leqC :: Coeffect -> Coeffect -> Bool
-    leqC (CNat Ordered n)  (CNat Ordered m)  = not $ n <= m
-    leqC (CNat Discrete n) (CNat Discrete m) = not $ n == m
-    leqC (Level n) (Level m)   = not $ n <= m
-    leqC (CFloat n) (CFloat m) = not $ n <= m
-    leqC _ _                   = False
+    approximatedByC :: Coeffect -> Coeffect -> Bool
+    approximatedByC (CNat Ordered n)  (CNat Ordered m)  = not $ n <= m
+    approximatedByC (CNat Discrete n) (CNat Discrete m) = not $ n == m
+    approximatedByC (Level n) (Level m)   = not $ n >= m
+    approximatedByC (CFloat n) (CFloat m) = not $ n <= m
+    approximatedByC _ _                   = False
 
     -- Attempt to see if one coeffect is trivially not equal to the other
     eqC :: Coeffect -> Coeffect -> Bool

@@ -1,16 +1,18 @@
 ------
 --- Module: Nat
 --- Description: Base library for operations on type-indexed natural numbers
---- Authors: Dominic Orchard
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
 --- License: BSD3
 --- Copyright: (c) Authors 2018
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
 ------
 
--- # Helpers
+data N (n : Nat=) where
+  Z : N 0;
+  S : N n -> N (n+1)
 
--- ## Constructor wrappers
+--- # Constructor wrappers
 zero : N 0
 zero = Z
 
@@ -24,7 +26,7 @@ natToInt x =
       Z -> 0;
       (S m) -> 1 + natToInt m
 
--- # Arithmetic operations
+--- # Arithmetic operations
 
 --- Addition
 add : forall (n : Nat=, m : Nat=) . N n -> N m -> N (n + m)
@@ -46,3 +48,10 @@ mult' |n| m =
       case m of
           Z -> Z
         ; (S m') -> add n (mult' |n| m')
+
+--- Divide by two
+div2 : forall (n : Nat=) . N (2 * n) -> N n
+div2 x =
+  case x of
+    Z -> Z;
+    (S x) -> (case x of (S x) -> S (div2 x))

@@ -39,8 +39,8 @@ instance Pretty Coeffect where
     pretty (CFloat n) = show n
     pretty (COne k)  = "_1 : " ++ pretty k
     pretty (CZero k) = "_0 : " ++ pretty k
-    pretty (Level 0) = "Lo"
-    pretty (Level _) = "Hi"
+    pretty (Level 0) = "Public"
+    pretty (Level _) = "Private"
     pretty (CVar c) = pretty c
     pretty (CMeet c d) =
       pretty c ++ " /\\ " ++ pretty d
@@ -91,12 +91,10 @@ instance {-# OVERLAPS #-} Pretty AST where
 instance Pretty Def where
     pretty (Def _ v e ps t) = pretty v ++ " : " ++ pretty t ++ "\n" ++
                               pretty v ++ " " ++ pretty ps ++ "= " ++ pretty e
-    pretty (ADT _ tC tVs dCs) =
-      let tyVars = case tVs of [] -> ""; _ -> unwords (map (pretty . snd) tVs) ++ " "
-      in "data " ++ pretty tC ++ " " ++ tyVars ++ "where\n  " ++ pretty dCs
-
-instance Pretty TypeConstr where
-    pretty (TypeConstr _ name) = pretty name
+    pretty (ADT _ tyCon tyVars kind dataConstrs) =
+      let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars ++ " "
+          ki = case kind of Nothing -> ""; Just k -> pretty k ++ " "
+      in "data " ++ pretty tyCon ++ " " ++ tvs ++ ki ++ "where\n  " ++ pretty dataConstrs
 
 instance Pretty [DataConstr] where
     pretty = intercalate ";\n  " . map pretty
@@ -110,9 +108,8 @@ instance Pretty Pattern where
     pretty (PBox _ p)     = "|" ++ pretty p ++ "|"
     pretty (PInt _ n)     = show n
     pretty (PFloat _ n)   = show n
-    pretty (PApp _ p1 p2) = "(" ++ pretty p1 ++ " " ++ pretty p2 ++ ")"
-    pretty (PConstr _ s)  = pretty s
     pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ "," ++ pretty p2 ++ ")"
+    pretty (PConstr _ name args)  = intercalate " " (pretty name : map pretty args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern] where
     pretty [] = ""
@@ -130,6 +127,8 @@ instance Pretty Value where
     pretty (Var x)      = pretty x
     pretty (NumInt n)   = show n
     pretty (NumFloat n) = show n
+    pretty (CharLiteral c) = show c
+    pretty (StringLiteral s) = show s
     pretty (Pair e1 e2) = "(" ++ pretty e1 ++ "," ++ pretty e2 ++ ")"
     pretty (Constr s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where
@@ -145,8 +144,6 @@ instance Pretty Id where
 instance Pretty Expr where
   pretty (App _ e1 e2) = parens $ pretty e1 ++ " " ++ pretty e2
   pretty (Binop _ op e1 e2) = parens $ pretty e1 ++ " " ++ op ++ " " ++ pretty e2
-  pretty (LetBox _ v t e1 e2) = parens $ "let |" ++ pretty v ++ "| :" ++ pretty t ++ " = "
-                                ++ pretty e1 ++ " in " ++ pretty e2
   pretty (LetDiamond _ v t e1 e2) = parens $ "let " ++ pretty v ++ " :" ++ pretty t ++ " <- "
                                     ++ pretty e1 ++ " in " ++ pretty e2
   pretty (Val _ v) = pretty v

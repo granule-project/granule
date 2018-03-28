@@ -23,6 +23,17 @@ maybe : forall a : Type, b : Type
       . b |1| -> (a -> b) |1| -> Maybe a -> b
 maybe |default| |f| m = case m of None -> default; (Some x) -> f x
 
+-- Monady interface for Maybe
+return : forall a : Type . a -> Maybe a
+return x = Some x
+
+bind : forall a : Type, b : Type
+     . Maybe a -> (a -> Maybe b) |1| -> Maybe b
+bind m |k| =
+  case m of
+    None -> None;
+    (Some x) -> k x
+
 --- The fromMaybe function takes a default value and and Maybe value. If the
 -- Maybe is None, it returns the default values; otherwise, it returns the value
 -- contained in the Maybe.

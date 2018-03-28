@@ -9,6 +9,7 @@ module Syntax.Lexer (Token(..),scanTokens,getPos,
 import Syntax.Expr
 import Syntax.FirstParameter
 import GHC.Generics (Generic)
+import Data.Text (Text)
 
 }
 
@@ -19,11 +20,13 @@ $alpha  = [a-zA-Z\_\=]
 $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
-$alphanum  = [$alpha $digit \_ \']
-@sym    = $lower $alphanum*
-@constr = $upper $alphanum*
+$alphanum  = [$alpha $digit \_]
+@sym    = $lower $alphanum* [\']*
+@constr = ($upper $alphanum* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
+@charLiteral = \' ([\\.] | . ) \'
+@stringLiteral = \"(\\.|[^\"]|\n)*\"
 
 tokens :-
 
@@ -45,6 +48,8 @@ tokens :-
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
+  @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
+  @stringLiteral                { \p s -> TokenStringLiteral p $ read s }
   "->"                          { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
   \;                            { \p s -> TokenSemicolon p }
@@ -76,49 +81,52 @@ tokens :-
 
 {
 
-data Token = TokenLet  AlexPosn
-           | TokenIn   AlexPosn
-           | TokenIf AlexPosn
-           | TokenThen AlexPosn
-           | TokenElse AlexPosn
-           | TokenData AlexPosn
-           | TokenWhere AlexPosn
-	   | TokenCase AlexPosn
-	   | TokenOf   AlexPosn
-           | TokenInfinity AlexPosn
-           | TokenLambda AlexPosn
-	   | TokenLetBox AlexPosn
-	   | TokenBind AlexPosn
-	   | TokenBox    AlexPosn
-           | TokenInt    AlexPosn Int
-	   | TokenFloat  AlexPosn String
-           | TokenSym    AlexPosn String
-           | TokenArrow  AlexPosn
-	   | TokenForall AlexPosn
-           | TokenEq     AlexPosn
-           | TokenAdd    AlexPosn
-           | TokenSub    AlexPosn
-           | TokenMul    AlexPosn
-           | TokenLParen AlexPosn
-           | TokenRParen AlexPosn
-	   | TokenNL     AlexPosn
-	   | TokenConstr AlexPosn String
-     | TokenBackTick AlexPosn
-	   | TokenSig    AlexPosn
-	   | TokenBoxLeft AlexPosn
-	   | TokenBoxRight AlexPosn
-	   | TokenLBrace   AlexPosn
-	   | TokenRBrace   AlexPosn
-	   | TokenLangle   AlexPosn
-	   | TokenRangle   AlexPosn
-	   | TokenComma    AlexPosn
-	   | TokenPeriod   AlexPosn
-	   | TokenPipe     AlexPosn
-	   | TokenUnderscore AlexPosn
-	   | TokenSemicolon  AlexPosn
-	   | TokenForwardSlash AlexPosn
-	   | TokenOp AlexPosn String
-           deriving (Eq, Show, Generic)
+data Token
+  = TokenLet    AlexPosn
+  | TokenIn     AlexPosn
+  | TokenIf     AlexPosn
+  | TokenThen   AlexPosn
+  | TokenElse   AlexPosn
+  | TokenData   AlexPosn
+  | TokenWhere  AlexPosn
+  | TokenCase   AlexPosn
+  | TokenOf     AlexPosn
+  | TokenInfinity AlexPosn
+  | TokenLambda AlexPosn
+  | TokenLetBox AlexPosn
+  | TokenBind   AlexPosn
+  | TokenBox    AlexPosn
+  | TokenInt    AlexPosn Int
+  | TokenFloat  AlexPosn String
+  | TokenSym    AlexPosn String
+  | TokenArrow  AlexPosn
+  | TokenForall AlexPosn
+  | TokenEq     AlexPosn
+  | TokenAdd    AlexPosn
+  | TokenSub    AlexPosn
+  | TokenMul    AlexPosn
+  | TokenCharLiteral AlexPosn Char
+  | TokenStringLiteral AlexPosn Text
+  | TokenLParen AlexPosn
+  | TokenRParen AlexPosn
+  | TokenNL     AlexPosn
+  | TokenConstr AlexPosn String
+  | TokenBackTick AlexPosn
+  | TokenSig    AlexPosn
+  | TokenBoxLeft AlexPosn
+  | TokenBoxRight AlexPosn
+  | TokenLBrace   AlexPosn
+  | TokenRBrace   AlexPosn
+  | TokenLangle   AlexPosn
+  | TokenRangle   AlexPosn
+  | TokenComma    AlexPosn
+  | TokenPeriod   AlexPosn
+  | TokenPipe     AlexPosn
+  | TokenUnderscore AlexPosn
+  | TokenSemicolon  AlexPosn
+  | TokenForwardSlash AlexPosn
+  | TokenOp AlexPosn String
+  deriving (Eq, Show, Generic)
 
 symString :: Token -> String
 symString (TokenSym _ x) = x

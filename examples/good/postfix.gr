@@ -1,5 +1,0 @@
-succ : Int -> Int
-succ x = x + 1
-
-main : Unit <[W]>
-main = (0 `succ `succ) `write

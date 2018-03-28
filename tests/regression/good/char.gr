@@ -1,0 +1,4 @@
+import Sequence
+
+main : Sequence Char
+main = Next 'h' (Next 'i' Empty)

@@ -7,8 +7,12 @@ import Syntax.Pretty
 import Syntax.Desugar
 import Context
 import Utils
+import Data.Text (pack, unpack, append)
+import qualified Data.Text.IO as Text
+import Control.Monad (zipWithM)
 
 import System.IO (hFlush, stdout)
+import qualified System.IO as SIO
 
 evalBinOp :: String -> Value -> Value -> Value
 evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
@@ -27,41 +31,37 @@ evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n <= m)) []
 evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n < m)) []
 evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n >= m)) []
 evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n > m)) []
-evalBinOp op _ _ = error $ "Unknown operator " ++ op
+evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
+                             ++ " on " ++ show v1 ++ " and " ++ show v2
 
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
 
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "write" = do
-    v <- evalIn ctxt e
-    print v
-    return $ Pure (Val nullSpan v)
-
 evalIn _ (Val s (Var v)) | internalName v == "read" = do
+    putStr "> "
+    hFlush stdout
+    val <- Text.getLine
+    return $ Pure (Val s (StringLiteral val))
+
+evalIn _ (Val s (Var v)) | internalName v == "readInt" = do
     putStr "> "
     hFlush stdout
     val <- readLn
     return $ Pure (Val s (NumInt val))
 
-evalIn ctxt (App _ (Val _ (Var v)) e) | internalName v == "pure" = do
-  v <- evalIn ctxt e
-  return $ Pure (Val nullSpan v)
-
-evalIn _ctxt (App _ (Val _ (Var v)) (Val _ (NumInt n))) | internalName v == "intToFloat" =
-  return $ NumFloat (cast n)
-  where
-    cast :: Int -> Double
-    cast = fromInteger . toInteger
-
-
-evalIn _ (Val _ (Abs x t e)) = return $ Abs x t e
+evalIn _ (Val _ (Abs p t e)) = return $ Abs p t e
 
 evalIn ctxt (App _ e1 e2) = do
     v1 <- evalIn ctxt e1
     case v1 of
-      Abs x _ e3 -> do
+      Primitive k -> do
         v2 <- evalIn ctxt e2
-        evalIn ctxt (subst (Val nullSpan v2) x e3)
+        k v2
+
+      Abs p _ e3 -> do
+        p <- pmatchTop ctxt [(p, e3)] e2
+        case p of
+          Just (e3, bindings) -> evalIn ctxt (applyBindings bindings e3)
 
       Constr c vs -> do
         v2 <- evalIn ctxt e2
@@ -75,86 +75,172 @@ evalIn ctxt (Binop _ op e1 e2) = do
      v2 <- evalIn ctxt e2
      return $ evalBinOp op v1 v2
 
-evalIn ctxt (LetBox _ var _ e1 e2) = do
-    v1 <- evalIn ctxt e1
-    case v1 of
-       Promote e1' ->
-           evalIn ctxt (subst e1' var e2)
-       other -> fail $ "Runtime exception: Expecting a box value but got: "
-             ++ pretty other
-
-evalIn ctxt (LetDiamond _ var _ e1 e2) = do
+evalIn ctxt (LetDiamond _ p _ e1 e2) = do
      v1 <- evalIn ctxt e1
      case v1 of
-        Pure e -> do
-          val <- evalIn ctxt e
-          evalIn ctxt (subst (Val nullSpan val) var e2)
-        other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
+       Pure e -> do
+         v1' <- evalIn ctxt e
+         p  <- pmatch ctxt [(p, e2)] v1'
+         case p of
+           Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
+       other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       ++ pretty other
 
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
-  (Abs (mkId " x") Nothing (Val nullSpan
-    (Abs (mkId " y") Nothing (
-      LetBox nullSpan (mkId " ye") (TyCon $ mkId "Float")
+  (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
+    (Abs (PVar nullSpan $ mkId " y") Nothing (
+      letBox nullSpan (PVar nullSpan $ mkId " ye")
          (Val nullSpan (Var (mkId " y")))
          (Binop nullSpan
            "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
+
 evalIn ctxt (Val _ (Var x)) =
     case lookup x ctxt of
       Just val -> return val
-      Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context: "
-               ++ show ctxt
+      Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context."
 
 evalIn ctxt (Val s (Pair l r)) = do
   l' <- evalIn ctxt l
   r' <- evalIn ctxt r
   return $ Pair (Val s l') (Val s r')
 
+evalIn ctxt (Val s (Pure e)) = do
+  v <- evalIn ctxt e
+  return $ Pure (Val s v)
+
 evalIn _ (Val _ v) = return v
 
-evalIn ctxt (Case _ gExpr cases) = do
-    val <- evalIn ctxt gExpr
-    p <- pmatch cases val
+evalIn ctxt (Case _ guardExpr cases) = do
+    p <- pmatchTop ctxt cases guardExpr
     case p of
       Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
       Nothing             ->
-        error $ "Incomplete pattern match:\n  cases: " ++ show cases ++ "\n  val: " ++ show val
+        error $ "Incomplete pattern match:\n  cases: "
+             ++ pretty cases ++ "\n  expr: " ++ pretty guardExpr
+
+applyBindings :: Ctxt Expr -> Expr -> Expr
+applyBindings [] e = e
+applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
+
+{-| Start pattern matching here passing in a context of values
+    a list of cases (pattern-expression pairs) and the guard expression.
+    If there is a matching pattern p_i then return Just of the branch
+    expression e_i and a list of bindings in scope -}
+pmatchTop :: Ctxt Value -> [(Pattern, Expr)] -> Expr -> IO (Maybe (Expr, Ctxt Expr))
+pmatchTop ctxt ((PBox _ (PVar _ var), branchExpr):_) guardExpr = do
+  Promote e <- evalIn ctxt guardExpr
+  return (Just (subst e var branchExpr, []))
+
+pmatchTop ctxt ((PBox _ (PWild _), branchExpr):_) guardExpr = do
+  Promote _ <- evalIn ctxt guardExpr
+  return (Just (branchExpr, []))
+
+pmatchTop ctxt ps guardExpr = do
+  val <- evalIn ctxt guardExpr
+  pmatch ctxt ps val
+
+pmatch :: Ctxt Value -> [(Pattern, Expr)] -> Value -> IO (Maybe (Expr, Ctxt Expr))
+pmatch _ [] _ =
+   return Nothing
+
+pmatch _ ((PWild _, e):_)  _ =
+   return $ Just (e, [])
+
+pmatch ctxt ((PConstr _ s innerPs, e):ps) (Constr s' vs) | s == s' = do
+   matches <- zipWithM (\p v -> pmatch ctxt [(p, e)] v) innerPs vs
+   case sequence matches of
+     Just ebindings -> return $ Just (e, concat $ map snd ebindings)
+     Nothing        -> pmatch ctxt ps (Constr s' vs)
+
+pmatch _ ((PVar _ var, e):_) val =
+   return $ Just (e, [(var, Val nullSpan val)])
+
+pmatch ctxt ((PBox _ p, e):ps) (Promote e') = do
+  v <- evalIn ctxt e'
+  match <- pmatch ctxt [(p, e)] v
+  case match of
+    Just (_, bindings) -> return $ Just (e, bindings)
+    Nothing -> pmatch ctxt ps (Promote e')
+
+pmatch _ ((PInt _ n, e):_)      (NumInt m)   | n == m  =
+   return $ Just (e, [])
+
+pmatch _ ((PFloat _ n, e):_)    (NumFloat m) | n == m =
+   return $ Just (e, [])
+
+
+pmatch ctxt ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
+  match1 <- pmatch ctxt [(p1, e)] v1
+  match2 <- pmatch ctxt [(p2, e)] v2
+  case match1 of
+    Nothing -> pmatch ctxt ps vals
+    Just (_, bindings1) -> case match2 of
+      Nothing -> pmatch ctxt ps vals
+      Just (_, bindings2) -> return (Just (e, bindings1 ++ bindings2))
+
+pmatch ctxt (_:ps) val = pmatch ctxt ps val
+
+builtIns :: Ctxt Value
+builtIns =
+  [
+    (mkId "pure",       Primitive $ \v -> return $ Pure (Val nullSpan v))
+  , (mkId "intToFloat", Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
+  , (mkId "showInt",    Primitive $ \n -> case n of
+                              NumInt n -> return . StringLiteral . pack . show $ n
+                              n        -> error $ show n)
+  , (mkId "write", Primitive $ \(StringLiteral s) -> do
+                              Text.putStrLn s
+                              return $ Pure (Val nullSpan (Constr (mkId "()") [])))
+  , (mkId "openFile", Primitive openFile)
+  , (mkId "hGetChar", Primitive hGetChar)
+  , (mkId "hPutChar", Primitive hPutChar)
+  , (mkId "hClose",   Primitive hClose)
+  , (mkId "showChar",
+        Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
+  , (mkId "stringAppend",
+        Primitive $ \(StringLiteral s) -> return $
+          Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `append` t)
+  , (mkId "isEOF", Primitive $ \(Handle h) -> do
+        b <- SIO.isEOF
+        let boolflag =
+             case b of
+               True -> Constr (mkId "True") []
+               False -> Constr (mkId "False") []
+        return $ Pure (Val nullSpan
+                   (Pair (Val nullSpan (Handle h)) (Val nullSpan boolflag)))
+
+        )
+  ]
   where
-    applyBindings [] e = e
-    applyBindings ((e', var):bs) e = applyBindings bs (subst e' var e)
+    cast :: Int -> Double
+    cast = fromInteger . toInteger
 
-    pmatch []                _                           = return Nothing
-    pmatch ((PWild _, e):_)  _                           = return $ Just (e, [])
-    pmatch ((PConstr _ s, e):_) (Constr s' []) | s == s' = return $ Just (e, [])
-    pmatch ((PVar _ var, e):_) val                       = return $ Just (e, [(Val nullSpan val, var)])
-    pmatch ((PBox _ p, e):ps) (Promote e')      = do
-      v <- evalIn ctxt e'
-      match <- pmatch [(p, e)] v
-      case match of
-        Just (_, bindings) -> return $ Just (e, bindings)
-        Nothing -> pmatch ps (Promote e')
+    openFile :: Value -> IO Value
+    openFile (StringLiteral s) = return $
+      Primitive (\(Constr m []) ->
+        let mode = (read (internalName m)) :: SIO.IOMode
+        in do
+             h <- SIO.openFile (unpack s) mode
+             return $ Pure (Val nullSpan (Handle h)))
 
-    pmatch ((PInt _ n, e):_)      (NumInt m)   | n == m   = return $ Just (e, [])
-    pmatch ((PFloat _ n, e):_)    (NumFloat m) | n == m   = return $ Just (e, [])
-    pmatch ((PApp _ p1 p2, e):ps) val@(Constr s vs) = do
-      p <- pmatch [(p2, e)] (last vs)
-      case p of
-        Just (_, bindings) -> do
-          p' <- pmatch [(p1, e)] (Constr s (reverse . tail . reverse $ vs))
-          case p' of
-            Just (_, bindings') -> return $ Just (e, bindings ++ bindings')
-            _                   -> pmatch ps val
-        _                  -> pmatch ps val
-    pmatch ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
-      match1 <- pmatch [(p1, e)] v1
-      match2 <- pmatch [(p2, e)] v2
-      case match1 of
-        Nothing -> pmatch ps vals
-        Just (_, bindings1) -> case match2 of
-          Nothing -> pmatch ps vals
-          Just (_, bindings2) -> return (Just (e, bindings1 ++ bindings2))
+    hPutChar :: Value -> IO Value
+    hPutChar (Handle h) = return $
+      Primitive (\(CharLiteral c) -> do
+         SIO.hPutChar h c
+         return $ Pure (Val nullSpan (Handle h)))
 
-    pmatch (_:ps) val = pmatch ps val
+    hGetChar :: Value -> IO Value
+    hGetChar (Handle h) = do
+          c <- SIO.hGetChar h
+          return $ Pure (Val nullSpan
+                    (Pair (Val nullSpan (Handle h))
+                          (Val nullSpan (CharLiteral c))))
+
+    hClose :: Value -> IO Value
+    hClose (Handle h) = do
+         SIO.hClose h
+         return $ Pure (Val nullSpan (Constr (mkId "()") []))
+
 
 evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
@@ -169,7 +255,7 @@ evalDefs ctxt (d : defs) = do
 
 eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
 eval defs = do
-    bindings <- evalDefs empty defs
+    bindings <- evalDefs builtIns defs
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)
