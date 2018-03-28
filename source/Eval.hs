@@ -53,16 +53,18 @@ evalIn _ (Val _ (Abs p t e)) = return $ Abs p t e
 
 evalIn ctxt (App _ e1 e2) = do
     v1 <- evalIn ctxt e1
-    v2 <- evalIn ctxt e2
     case v1 of
-      Primitive k -> k v2
+      Primitive k -> do
+        v2 <- evalIn ctxt e2
+        k v2
 
       Abs p _ e3 -> do
-        p <- pmatch ctxt [(p, e3)] v2
+        p <- pmatchTop ctxt [(p, e3)] e2
         case p of
           Just (e3, bindings) -> evalIn ctxt (applyBindings bindings e3)
 
       Constr c vs -> do
+        v2 <- evalIn ctxt e2
         return $ Constr c (vs ++ [v2])
 
       _ -> error $ show v1
@@ -102,19 +104,40 @@ evalIn ctxt (Val s (Pair l r)) = do
   r' <- evalIn ctxt r
   return $ Pair (Val s l') (Val s r')
 
+evalIn ctxt (Val s (Pure e)) = do
+  v <- evalIn ctxt e
+  return $ Pure (Val s v)
+
 evalIn _ (Val _ v) = return v
 
-evalIn ctxt (Case _ gExpr cases) = do
-    val <- evalIn ctxt gExpr
-    p <- pmatch ctxt cases val
+evalIn ctxt (Case _ guardExpr cases) = do
+    p <- pmatchTop ctxt cases guardExpr
     case p of
       Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
       Nothing             ->
-        error $ "Incomplete pattern match:\n  cases: " ++ show cases ++ "\n  val: " ++ show val
+        error $ "Incomplete pattern match:\n  cases: "
+             ++ pretty cases ++ "\n  expr: " ++ pretty guardExpr
 
 applyBindings :: Ctxt Expr -> Expr -> Expr
 applyBindings [] e = e
 applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
+
+{-| Start pattern matching here passing in a context of values
+    a list of cases (pattern-expression pairs) and the guard expression.
+    If there is a matching pattern p_i then return Just of the branch
+    expression e_i and a list of bindings in scope -}
+pmatchTop :: Ctxt Value -> [(Pattern, Expr)] -> Expr -> IO (Maybe (Expr, Ctxt Expr))
+pmatchTop ctxt ((PBox _ (PVar _ var), branchExpr):_) guardExpr = do
+  Promote e <- evalIn ctxt guardExpr
+  return (Just (subst e var branchExpr, []))
+
+pmatchTop ctxt ((PBox _ (PWild _), branchExpr):_) guardExpr = do
+  Promote _ <- evalIn ctxt guardExpr
+  return (Just (branchExpr, []))
+
+pmatchTop ctxt ps guardExpr = do
+  val <- evalIn ctxt guardExpr
+  pmatch ctxt ps val
 
 pmatch :: Ctxt Value -> [(Pattern, Expr)] -> Value -> IO (Maybe (Expr, Ctxt Expr))
 pmatch _ [] _ =
