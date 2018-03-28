@@ -26,9 +26,9 @@ import Repl.ReplParser
 import Checker.Checker
 import qualified Control.Monad.Except as Ex
 
-type REPLStateIO a  = StateT (M.Map String Def) (Ex.ExceptT ReplError IO) a
+type REPLStateIO a  = StateT (M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
 
-instance MonadException m => MonadException (StateT (M.Map String Def) m) where
+instance MonadException m => MonadException (StateT (M.Map String (Def, [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
@@ -65,29 +65,37 @@ readToQueue pth = do
 
 
 loadInQueue :: Def -> REPLStateIO  ()
-loadInQueue def@(Def _ id _ _ _) = do
+loadInQueue def@(Def _ id exp _ _) = do
+  --liftIO.print $ freeVars exp
   m <- get
-  put $ M.insert (pretty id) def m
+  put $ M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m
   Ex.return()
-loadInQueue adt@(ADT _ _ _ _) = do
-  Ex.return ()
+loadInQueue adt@(ADT _ _ _ _) = Ex.return ()
 
 
-dumpStateAux ::M.Map String Def -> [String]
+dumpStateAux :: M.Map String (Def, [String]) -> [String]
 dumpStateAux m = pDef (M.toList m)
   where
-    pDef :: [(String, Def)] -> [String]
+    pDef :: [(String, (Def, [String]))] -> [String]
     pDef [] = []
-    pDef ((k,v@(Def _ _ _ _ ty)):xs) = ((pretty k)++" : "++(pretty ty)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)++(show dl)) : pDef xs
 
+extractFreeVars :: [Id] -> [String]
+extractFreeVars []     = []
+extractFreeVars (x:xs) = if sourceName x == internalName x
+                         then sourceName x : extractFreeVars xs
+                         else extractFreeVars xs
+
+makeUnique ::[String] -> [String]
+makeUnique []     = []
+makeUnique (x:xs) = x : makeUnique (filter (/=x) xs)
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
 handleCMD "" = Ex.return ()
 handleCMD s =
    case (parseLine s) of
     Right l -> handleLine l
-    Left msg -> do
-       liftIO $ putStrLn msg
+    Left msg -> liftIO $ putStrLn msg
 
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
@@ -98,7 +106,6 @@ handleCMD s =
     handleLine (LoadFile ptr) = do
       put M.empty
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
-      --liftIO $ print (concat ecs)
       return ()
 
     handleLine (AddModule ptr) = do
@@ -129,7 +136,7 @@ repl = do
     Right l -> return ()
     Left er -> print er
    where
-       loop :: InputT (StateT (M.Map String Def) (Ex.ExceptT ReplError IO)) ()
+       loop :: InputT (StateT (M.Map String (Def, [String])) (Ex.ExceptT ReplError IO)) ()
        loop = do
            minput <- getInputLine "Granule> "
            case minput of
