@@ -66,7 +66,7 @@ readToQueue pth = do
 
 loadInQueue :: Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
-  --liftIO.print $ freeVars exp
+  liftIO.print $ freeVars exp
   m <- get
   put $ M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m
   Ex.return()
@@ -130,13 +130,9 @@ helpMenu =
 
 
 repl :: IO ()
-repl = do
-  eer <- Ex.runExceptT (evalStateT (runInputT defaultSettings loop) M.empty)
-  case eer of
-    Right l -> return ()
-    Left er -> print er
+repl = evalStateT (runInputT defaultSettings loop) M.empty
    where
-       loop :: InputT (StateT (M.Map String (Def, [String])) (Ex.ExceptT ReplError IO)) ()
+       loop :: InputT (StateT (M.Map String (Def, [String])) IO) ()
        loop = do
            minput <- getInputLine "Granule> "
            case minput of
@@ -146,8 +142,10 @@ repl = do
                               -> liftIO $ putStrLn "Leaving Granule." >> return ()
                           | input == ":h" || input == ":help"
                               -> (liftIO $ putStrLn helpMenu) >> loop
-                          | otherwise -> let ?globals = defaultGlobals
-                                          in do _ <- lift $ (handleCMD $ input) `Ex.catchError` handleError
-                                                loop
+                          | otherwise -> do st <- lift $ get
+                                            r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = defaultGlobals in handleCMD input) st)
+                                            case r of
+                                              Right (_,st') -> (lift.put $ st') >> loop
+                                              Left err -> loop
          where
            handleError err = liftIO'.putStrLn.show $ err
