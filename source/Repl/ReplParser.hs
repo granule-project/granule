@@ -80,7 +80,7 @@ dumpStateParser = replIntCmdParser "d" "dump" DumpState
 
 loadFileParser = replFileCmdParser "l" "load" LoadFile
 
-addModuleParser = replFileCmdParser "a" "add" AddModule
+addModuleParser = replFileCmdParser "m" "module" AddModule
 
 
 -- lineParser =
@@ -90,7 +90,7 @@ lineParser = try dumpStateParser
           <|> try addModuleParser
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
-          <?> "parse error"
+          <?> ""
 
 parseLine :: String -> Either String REPLExpr
 parseLine s = case (parse lineParser "" s) of

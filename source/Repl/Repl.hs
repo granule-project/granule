@@ -9,7 +9,7 @@
 
 module Repl.Repl where
 
-import System.FilePath()
+import System.FilePath
 import qualified Data.Map as M
 import Control.Exception (try)
 import Control.Monad.State
@@ -59,17 +59,19 @@ readToQueue pth = do
             case checked of
                 Ok -> do
                     forM ast $ \idef -> loadInQueue idef
-                    Ex.return ()
+                    liftIO $ putStrLn $ (takeFileName pth)++" loaded and checked"
                 Failed -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
 
 
 loadInQueue :: Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
-  liftIO.print $ freeVars exp
+  --liftIO.print $ freeVars exp
   m <- get
-  put $ M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m
-  Ex.return()
+  if M.member (pretty id) m
+  then Ex.throwError (TermInContext (pretty id))
+  else put $ M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m
+
 loadInQueue adt@(ADT _ _ _ _ _) = Ex.return ()
 
 
@@ -78,7 +80,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def, [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)++(show dl)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)) : pDef xs
 
 extractFreeVars :: [Id] -> [String]
 extractFreeVars []     = []
@@ -119,33 +121,32 @@ helpMenu =
       "-----------------------------------------------------------------------------------\n"++
       "                  The Granule Help Menu                                         \n"++
       "-----------------------------------------------------------------------------------\n"++
-      ":help             (:h)  Display the help menu\n"++
-      ":quit             (:q)  Quit Granule\n"++
-      ":show <term>      (:s)  Display the Abstract Syntax Type of a term\n"++
-      ":unfold <term>    (:u)  Unfold the expression into one without toplevel definition.\n"++
-      ":dump             (:d)  Display the context\n"++
-      ":load <filepath>  (:l)  Load an external file into the context\n"++
-      ":add <filepath>   (:a)  Add file/module to the current context\n"++
+      ":help              (:h)  Display the help menu\n"++
+      ":quit              (:q)  Quit Granule\n"++
+      ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
+      ":unfold <term>     (:u)  Unfold the expression into one without toplevel definition.\n"++
+      ":dump              (:d)  Display the context\n"++
+      ":load <filepath>   (:l)  Load an external file into the context\n"++
+      ":module <filepath> (:m)  Add file/module to the current context\n"++
       "-----------------------------------------------------------------------------------"
 
 
 repl :: IO ()
-repl = evalStateT (runInputT defaultSettings loop) M.empty
+repl = runInputT defaultSettings (loop M.empty)
    where
-       loop :: InputT (StateT (M.Map String (Def, [String])) IO) ()
-       loop = do
+       loop :: M.Map String (Def, [String]) -> InputT IO ()
+       loop st = do
            minput <- getInputLine "Granule> "
            case minput of
                Nothing -> return ()
-               Just [] -> loop
+               Just [] -> loop st
                Just input | input == ":q" || input == ":quit"
                               -> liftIO $ putStrLn "Leaving Granule." >> return ()
                           | input == ":h" || input == ":help"
-                              -> (liftIO $ putStrLn helpMenu) >> loop
-                          | otherwise -> do st <- lift $ get
-                                            r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = defaultGlobals in handleCMD input) st)
+                              -> (liftIO $ putStrLn helpMenu) >> loop st
+                          | otherwise -> do r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = defaultGlobals in handleCMD input) st)
                                             case r of
-                                              Right (_,st') -> (lift.put $ st') >> loop
-                                              Left err -> loop
-         where
-           handleError err = liftIO'.putStrLn.show $ err
+                                              Right (_,st') -> loop st'
+                                              Left err -> do
+                                                 liftIO $ print err
+                                                 loop st
