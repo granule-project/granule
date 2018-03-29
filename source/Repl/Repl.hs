@@ -26,9 +26,9 @@ import Repl.ReplParser
 import Checker.Checker
 import qualified Control.Monad.Except as Ex
 
-type REPLStateIO a  = StateT (M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
+type REPLStateIO a  = StateT ([FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
 
-instance MonadException m => MonadException (StateT (M.Map String (Def, [String])) m) where
+instance MonadException m => MonadException (StateT ([FilePath], M.Map String (Def, [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
@@ -67,10 +67,10 @@ readToQueue pth = do
 loadInQueue :: Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
   --liftIO.print $ freeVars exp
-  m <- get
+  (f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
-  else put $ M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m
+  else put $ (f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m)
 
 loadInQueue adt@(ADT _ _ _ _ _) = Ex.return ()
 
@@ -102,11 +102,11 @@ handleCMD s =
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
-      dict <- get
+      (f,dict) <- get
       liftIO $ print $ dumpStateAux dict
 
     handleLine (LoadFile ptr) = do
-      put M.empty
+      put (ptr,M.empty)
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
       return ()
 
@@ -114,6 +114,11 @@ handleCMD s =
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
       return ()
 
+    handleLine Reload = do
+      (f,_) <- get
+      put (f, M.empty)
+      ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
+      return ()
 
 
 helpMenu :: String
@@ -132,9 +137,9 @@ helpMenu =
 
 
 repl :: IO ()
-repl = runInputT defaultSettings (loop M.empty)
+repl = runInputT defaultSettings (loop ([],M.empty))
    where
-       loop :: M.Map String (Def, [String]) -> InputT IO ()
+       loop :: ([FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
        loop st = do
            minput <- getInputLine "Granule> "
            case minput of

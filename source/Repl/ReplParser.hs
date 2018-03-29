@@ -38,6 +38,7 @@ data REPLExpr =
     | Eval Expr
     | LoadFile [FilePath]
     | AddModule [FilePath]
+    | Reload
     deriving Show
 
 replTermCmdParser short long c p = do
@@ -82,12 +83,15 @@ loadFileParser = replFileCmdParser "l" "load" LoadFile
 
 addModuleParser = replFileCmdParser "m" "module" AddModule
 
+reloadFileParser = replIntCmdParser "r" "reload" Reload
+
 
 -- lineParser =
 
 lineParser = try dumpStateParser
           <|> try loadFileParser
           <|> try addModuleParser
+          <|> try reloadFileParser
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
           <?> ""
