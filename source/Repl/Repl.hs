@@ -70,7 +70,7 @@ loadInQueue def@(Def _ id exp _ _) = do
   (f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
-  else put $ (f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars $ freeVars exp)) m)
+  else put $ (f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars exp))) m)
 
 loadInQueue adt@(ADT _ _ _ _ _) = Ex.return ()
 
@@ -80,13 +80,13 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def, [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)++(show dl)) : pDef xs
 
-extractFreeVars :: [Id] -> [String]
-extractFreeVars []     = []
-extractFreeVars (x:xs) = if sourceName x == internalName x
-                         then sourceName x : extractFreeVars xs
-                         else extractFreeVars xs
+extractFreeVars :: Id -> [Id] -> [String]
+extractFreeVars _ []     = []
+extractFreeVars i (x:xs) = if sourceName x == internalName x && sourceName x /= sourceName i
+                           then sourceName x : extractFreeVars i xs
+                           else extractFreeVars i xs
 
 makeUnique ::[String] -> [String]
 makeUnique []     = []
