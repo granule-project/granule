@@ -24,7 +24,6 @@ data Globals =
   , suppressInfos :: Bool
   , suppressErrors :: Bool
   , timestamp :: Bool
-  , freshIdCounter :: Int
   } deriving Show
 
 defaultGlobals :: Globals
@@ -37,7 +36,6 @@ defaultGlobals =
     , suppressInfos = False
     , suppressErrors = False
     , timestamp = False
-    , freshIdCounter = 0
     }
 
 class UserMsg a where

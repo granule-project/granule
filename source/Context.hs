@@ -35,7 +35,7 @@ replace (x : ctxt) name v
 {- | Take the intersection of two contexts based on keys
 NOTE: this is not a commutative action, consider:
 >>> intersectCtxts [(mkId "x",1)] [(mkId "x",2)]
-[(Id "x" "x",1)]
+[((Id "x" "x"),1)]
 -}
 intersectCtxts :: Ctxt a -> Ctxt a -> Ctxt a
 intersectCtxts a b = normaliseCtxt $ filter (appearsIn b) a

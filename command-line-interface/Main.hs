@@ -77,8 +77,7 @@ run input = do
       debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
       debugM "Pretty-printed AST:" $ pretty ast
       -- Check and evaluate
-      let ?globals = ?globals { freshIdCounter = maxFreshId }
-      checked <- try $ check ast
+      checked <- try $ check maxFreshId ast
       case checked of
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e

@@ -4,26 +4,29 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE InstanceSigs #-}
 
-module Syntax.Expr (AST, Value(..), Expr(..), Type(..), TypeScheme(..),
-                   letBox,
-                   Def(..), Pattern(..), CKind(..), Coeffect(..),
-                   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
-                   Id, sourceName, internalName, mkId, mkInternalId,
-                   Operator,
-                   liftCoeffectType,
-                   uniqueNames, arity, freeVars, subst,
-                   normalise,
-                   nullSpan, getSpan, getEnd, getStart, Pos, Span,
-                   typeFoldM, TypeFold(..),
-                   mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
-                   mTyInt, mPairTy, mTyInfix,
-                   baseTypeFold,
-                   con, var, (.->), (.@)
-                   ) where
+module Syntax.Expr
+  (AST, Value(..), Expr(..), Type(..), TypeScheme(..), Nat,
+  letBox,
+  Def(..), Pattern(..), CKind(..), Coeffect(..),
+  NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
+  Id(..), mkId,
+  Operator,
+  liftCoeffectType,
+  arity, freeVars, subst, freshen, Freshener, counter, runFreshener,
+  normalise,
+  nullSpan, getSpan, getEnd, getStart, Pos, Span,
+  typeFoldM, TypeFold(..),
+  mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
+  mTyInt, mPairTy, mTyInfix,
+  baseTypeFold,
+  con, var, (.->), (.@)
+  ) where
 
 import Data.List ((\\), delete)
-import Control.Monad.State
+import Control.Monad.Trans.State.Strict
+import Control.Monad (forM)
 import Control.Arrow
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
@@ -33,7 +36,10 @@ import qualified System.IO as SIO (Handle)
 
 import Syntax.FirstParameter
 
--- Internal representation of names (variables)
+-- | Natural numbers
+type Nat = Word
+
+-- | Internal representation of names (variables)
 -- which pairs their source name string with an internal name
 -- which is useually freshly generate. Error messages should
 -- always use the 'sourceName', anything involving new name
@@ -42,16 +48,13 @@ data Id = Id { sourceName :: String, internalName :: String }
   deriving (Eq, Ord)
 
 instance Show Id where
-  show (Id s i) = "Id " ++ show s ++ " " ++ show i
+  show (Id s i) = "(Id " ++ show s ++ " " ++ show i ++ ")"
 
 -- Constructors and operators are just strings
-type Operator      = String
+type Operator = String
 
 mkId :: String -> Id
 mkId x = Id x x
-
-mkInternalId :: String -> String -> Id
-mkInternalId = Id
 
 type Pos = (Int, Int) -- (line, column)
 type Span = (Pos, Pos)
@@ -120,45 +123,82 @@ data Pattern
 
 instance FirstParameter Pattern Span
 
-class Binder t where
-  boundVars :: t -> [Id]
-  freshenBinder :: t -> Freshener t
+boundVars :: Pattern -> [Id]
+boundVars (PVar _ v)     = [v]
+boundVars PWild {}       = []
+boundVars (PBox _ p)     = boundVars p
+boundVars PInt {}        = []
+boundVars PFloat {}      = []
+boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
+boundVars (PConstr _ _ ps) = concatMap boundVars ps
 
-instance Binder Pattern where
-  boundVars (PVar _ v)     = [v]
-  boundVars PWild {}       = []
-  boundVars (PBox _ p)     = boundVars p
-  boundVars PInt {}        = []
-  boundVars PFloat {}      = []
-  boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
-  boundVars (PConstr _ _ ps) = concatMap boundVars ps
-
-  freshenBinder (PVar s var) = do
+instance Freshenable Pattern where
+  freshen :: Pattern -> Freshener Pattern
+  freshen (PVar s var) = do
       var' <- freshVar Value var
       return $ PVar s var'
-  freshenBinder (PBox s p) = do
-      p' <- freshenBinder p
+  freshen (PBox s p) = do
+      p' <- freshen p
       return $ PBox s p'
-  freshenBinder (PPair s p1 p2) = do
-      p1' <- freshenBinder p1
-      p2' <- freshenBinder p2
+  freshen (PPair s p1 p2) = do
+      p1' <- freshen p1
+      p2' <- freshen p2
       return $ PPair s p1' p2'
-  freshenBinder (PConstr s name ps) = do
-      ps <- mapM freshenBinder ps
+  freshen (PConstr s name ps) = do
+      ps <- mapM freshen ps
       return (PConstr s name ps)
-  freshenBinder p @ PWild {} = return p
-  freshenBinder p @ PInt {} = return p
-  freshenBinder p @ PFloat {} = return p
+  freshen p@PWild {} = return p
+  freshen p@PInt {} = return p
+  freshen p@PFloat {} = return p
 
-type Freshener t = State (Int, [(String, String)], [(String, String)]) t
+-- | The freshening monad for alpha-conversion to avoid name capturing
+type Freshener t = State FreshenerState t
+
+data FreshenerState = FreshenerState
+  { counter :: Nat -- ^ always reset to 0 in a new definition
+  , maxFreshId :: Nat -- ^ keep track of maximum so far
+  , varMap :: [(String, String)] -- ^ mapping of variables to their freshened names
+  , tyMap :: [(String, String)] -- ^ mapping of type variables to their freshened names
+  } deriving Show
+
+-- | Initial state of freshener
+initFreshenerState :: FreshenerState
+initFreshenerState = FreshenerState
+  { counter = 0
+  , maxFreshId = 0
+  , varMap = []
+  , tyMap = []
+  }
+
+-- | Reset freshener between definitions
+resetFreshenerState :: Freshener ()
+resetFreshenerState = do
+  st <- get
+  put initFreshenerState { maxFreshId = max (maxFreshId st) (counter st) }
+
+-- | Given something freshenable, e.g. the AST, run the freshener on it and return the final state
+-- >>> runFreshener' (PVar ((0,0),(0,0)) (Id "x" "x"))
+-- (PVar ((0,0),(0,0)) (Id "x" "x0"),FreshenerState {counter = 1, maxFreshId = 0, varMap = [("x","x0")], tyMap = []})
+runFreshener' :: Freshenable t => t -> (t, FreshenerState)
+runFreshener' x = runState (freshen x) initFreshenerState
+
+-- | Alpha-convert and return maximum number to feed into checker
+runFreshener :: Freshenable t => t -> (t, Nat)
+runFreshener x =
+  let (x', st) = runFreshener' x
+  in (x', max (maxFreshId st) (counter st))
 
 class Term t where
-  -- Compute the free variables in a term
+  -- Compute the free variables in an open term
   freeVars :: t -> [Id]
+
+class Substitutable t where
   -- Syntactic substitution of a term into an expression
   -- (assuming variables are all unique to avoid capture)
   subst :: Expr -> Id -> t -> Expr
-  -- Freshen
+
+class Freshenable t where
+  -- Alpha-convert bound variables to avoid name capturing
   freshen :: t -> Freshener t
 
 -- Used to distinguish the value-level and type-level variables
@@ -167,33 +207,31 @@ data IdSyntacticCategory = Value | Type
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
 freshVar :: IdSyntacticCategory -> Id -> Freshener Id
-freshVar synCat var = do
-   (v, vmap, tmap) <- get
-   let var' = sourceName var ++ show v
-   case synCat of
-       Value -> put (v+1, (sourceName var, var') : vmap, tmap)
-       Type  -> put (v+1, vmap, (sourceName var, var') : tmap)
-   return $ var { internalName = var' }
+freshVar cat var = do
+    st <- get
+    let var' = sourceName var ++ show (counter st)
+    case cat of
+      Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
+      Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
+    return var { internalName = var' }
 
+-- | Look up a variable in the freshener state.
+-- If @Nothing@ then the variable name shouldn't change
 lookupVar :: IdSyntacticCategory -> Id -> Freshener (Maybe String)
-lookupVar synCat var = do
-  (_, vmap, tmap) <- get
-  return $ case synCat of
-    Value -> lookup (sourceName var) vmap
-    Type  -> lookup (sourceName var) tmap
+lookupVar cat v = do
+  st <- get
+  case cat of
+    Value -> return . lookup (sourceName v) . varMap $ st
+    Type  -> return . lookup (sourceName v) . tyMap $ st
 
 removeFreshenings :: [Id] -> Freshener ()
 removeFreshenings [] = return ()
 removeFreshenings (x:xs) = do
-  (v, vmap, tmap) <- get
-  put (v, delete (sourceName x, internalName x) vmap, tmap)
-  removeFreshenings xs
-
-freshenTys :: TypeScheme -> Freshener TypeScheme
-freshenTys (Forall s binds ty) = do
-      binds' <- mapM (\(v, k) -> do { v' <- freshVar Type v; return (v', k) }) binds
-      ty' <- freshen ty
-      return $ Forall s binds' ty'
+    st <- get
+    put st { varMap = delete x' (varMap st) }
+    removeFreshenings xs
+  where
+    x' = (sourceName x, internalName x)
 
 instance Term Type where
   freeVars = runIdentity . typeFoldM TypeFold
@@ -208,7 +246,7 @@ instance Term Type where
     , tfTyInfix = \_ y z -> return $ y ++ z
     }
 
-  subst e _ t = e
+instance Freshenable Type where
   freshen =
     typeFoldM (baseTypeFold { tfTyApp = rewriteTyApp,
                               tfTyVar = freshenTyVar,
@@ -217,7 +255,7 @@ instance Term Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" =
-          return $ Box (CInfinity (CPoly $ mkInternalId "∞" "infinity")) t2
+          return $ Box (CInfinity (CPoly $ Id "∞" "infinity")) t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
@@ -248,8 +286,7 @@ instance Term Coeffect where
     freeVars CSet{} = []
     freeVars (CSig c _) = freeVars c
 
-    subst e _ _ = e
-
+instance Freshenable Coeffect where
     freshen (CVar v) = do
       v' <- lookupVar Type v
       case v' of
@@ -307,6 +344,7 @@ instance Term Value where
     freeVars (CharLiteral _) = []
     freeVars (StringLiteral _) = []
 
+instance Substitutable Value where
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
     subst es v (Promote e)      = Val nullSpan $ Promote (subst es v e)
@@ -320,8 +358,9 @@ instance Term Value where
     subst _ _ v@StringLiteral{}   = Val nullSpan v
     subst _ _ v@Handle{}          = Val nullSpan v
 
+instance Freshenable Value where
     freshen (Abs p t e) = do
-      p'   <- freshenBinder p
+      p'   <- freshen p
       e'   <- freshen e
       t'   <- case t of
                 Nothing -> return Nothing
@@ -364,6 +403,7 @@ instance Term Expr where
     freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
 
+instance Substitutable Expr where
     subst es v (App s e1 e2)        = App s (subst es v e1) (subst es v e2)
     subst es v (Binop s op e1 e2)   = Binop s op (subst es v e1) (subst es v e2)
     subst es v (LetDiamond s w t e1 e2) =
@@ -373,36 +413,38 @@ instance Term Expr where
                                      (subst es v expr)
                                      (map (second (subst es v)) cases)
 
+instance Freshenable Expr where
     freshen (App s e1 e2) = do
-      e1' <- freshen e1
-      e2' <- freshen e2
-      return $ App s e1' e2'
+      e1 <- freshen e1
+      e2 <- freshen e2
+      return $ App s e1 e2
 
     freshen (LetDiamond s p t e1 e2) = do
-      e1' <- freshen e1
-      p'  <- freshenBinder p
-      e2' <- freshen e2
-      t'   <- case t of
+      e1 <- freshen e1
+      p  <- freshen p
+      e2 <- freshen e2
+      t   <- case t of
                 Nothing -> return Nothing
                 Just ty -> freshen ty >>= (return . Just)
-      return $ LetDiamond s p' t' e1' e2'
+      return $ LetDiamond s p t e1 e2
 
     freshen (Binop s op e1 e2) = do
-      e1' <- freshen e1
-      e2' <- freshen e2
-      return $ Binop s op e1' e2'
+      e1 <- freshen e1
+      e2 <- freshen e2
+      return $ Binop s op e1 e2
 
     freshen (Case s expr cases) = do
-      expr'     <- freshen expr
-      cases' <- forM cases $ \(p, e) -> do
-                  p' <- freshenBinder p
-                  e' <- freshen e
-                  return (p', e')
-      return (Case s expr' cases')
+      expr     <- freshen expr
+      cases <- forM cases $ \(p, e) -> do
+                  p <- freshen p
+                  e <- freshen e
+                  removeFreshenings (boundVars p)
+                  return (p, e)
+      return (Case s expr cases)
 
     freshen (Val s v) = do
-     v' <- freshen v
-     return (Val s v')
+     v <- freshen v
+     return (Val s v)
 
 --------- Definitions
 
@@ -422,33 +464,45 @@ data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
 instance FirstParameter DataConstr Span
 
 -- | How many data constructors a type has (Nothing -> don't know)
-type Cardinality = Maybe Word
+type Cardinality = Maybe Nat
 
--- Alpha-convert all bound variables
-uniqueNames :: AST -> (AST, Int)
-uniqueNames =
-   -- Since the type checker will generate new fresh names as well
-   -- find the maximum fresh id that occured in the renaming stage
-   -- so that there will be no clashes later
-   foldr (\def (freshDefs, maxFresh) ->
-      let (def', (maxFresh', _, _)) = runState (freshenDef def) (0 :: Int, [], [])
-      in (def' : freshDefs, maxFresh `max` maxFresh')) ([], 0)
-  where
-    freshenDef (Def s var e ps t) = do
-      ps' <- mapM freshenBinder ps
-      t'  <- freshenTys t
-      e'  <- freshen e
-      return $ Def s var e' ps' t'
+instance Freshenable AST where
+  freshen = mapM freshen
 
-    -- in the case of ADTs, also push down the type variables from the data declaration head
-    -- into the data constructors
-    freshenDef (ADT sp tyCon tyVars kind dataCs) = do
-      dataCs <-
-        forM dataCs $ \(DataConstr sp name tySch) -> do
-                        (Forall sp' vs ty) <- freshenTys tySch
-                        return $ DataConstr sp name (Forall sp' (tyVars ++ vs) ty)
-      return $ ADT sp tyCon tyVars kind dataCs
+{-| Alpha-convert all bound variables of a definition, modulo the things on the lhs
+Eg this:
+@
+foo : Int -> Int
+foo x = (\(x : Int) -> x * 2) x
+@
+will become
+@
+foo : Int -> Int
+foo x = (\(x0 : Int) -> x0 * 2) x
+@
 
+>>> fst . runFreshener $ Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x0"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x")))) [PVar ((2,5),(2,5)) (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
+Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x0"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x")))) [PVar ((2,5),(2,5)) (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
+-}
+instance Freshenable Def where
+  freshen (Def s var e ps t) = do
+    t  <- freshen t
+    -- ps <- mapM freshen ps
+    e  <- freshen e
+    resetFreshenerState
+    return (Def s var e ps t)
+
+  -- in the case of ADTs, also push down the type variables from the data declaration head
+  -- into the data constructors
+  freshen (ADT sp tyCon tyVars kind dataCs) = do
+    dataCs <-
+      forM dataCs $ \(DataConstr sp name tySch) -> do
+                      (Forall sp' vs ty) <- freshen tySch
+                      return $ DataConstr sp name (Forall sp' (tyVars ++ vs) ty)
+    return $ ADT sp tyCon tyVars kind dataCs
+
+instance Term Def where
+  freeVars (Def _ name body binders _) = delete name (freeVars body \\ concatMap boundVars binders)
 
 ----------- Types
 
@@ -456,6 +510,13 @@ data TypeScheme = Forall Span [(Id, Kind)] Type -- [(Id, Kind)] are the binders
     deriving (Eq, Show, Generic)
 
 instance FirstParameter TypeScheme Span
+
+instance Freshenable TypeScheme where
+  freshen :: TypeScheme -> Freshener TypeScheme
+  freshen (Forall s binds ty) = do
+        binds' <- mapM (\(v, k) -> do { v' <- freshVar Type v; return (v', k) }) binds
+        ty' <- freshen ty
+        return $ Forall s binds' ty'
 
 {-| Types.
 Example: `List n Int` is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
@@ -549,7 +610,7 @@ typeFoldM algebra = go
      t2' <- go t2
      (tfTyInfix algebra) op t1' t2'
 
-arity :: Type -> Int
+arity :: Type -> Nat
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 

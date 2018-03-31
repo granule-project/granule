@@ -35,7 +35,7 @@ evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
                              ++ " on " ++ show v1 ++ " and " ++ show v2
 
 -- Call-by-value big step semantics
-evalIn :: Ctxt Value -> Expr -> IO Value
+evalIn :: (?globals :: Globals) => Ctxt Value -> Expr -> IO Value
 
 evalIn _ (Val s (Var v)) | internalName v == "read" = do
     putStr "> "
@@ -126,7 +126,8 @@ applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
     a list of cases (pattern-expression pairs) and the guard expression.
     If there is a matching pattern p_i then return Just of the branch
     expression e_i and a list of bindings in scope -}
-pmatchTop :: Ctxt Value -> [(Pattern, Expr)] -> Expr -> IO (Maybe (Expr, Ctxt Expr))
+pmatchTop :: (?globals :: Globals) =>
+  Ctxt Value -> [(Pattern, Expr)] -> Expr -> IO (Maybe (Expr, Ctxt Expr))
 pmatchTop ctxt ((PBox _ (PVar _ var), branchExpr):_) guardExpr = do
   Promote e <- evalIn ctxt guardExpr
   return (Just (subst e var branchExpr, []))
@@ -139,7 +140,8 @@ pmatchTop ctxt ps guardExpr = do
   val <- evalIn ctxt guardExpr
   pmatch ctxt ps val
 
-pmatch :: Ctxt Value -> [(Pattern, Expr)] -> Value -> IO (Maybe (Expr, Ctxt Expr))
+pmatch :: (?globals :: Globals) =>
+  Ctxt Value -> [(Pattern, Expr)] -> Value -> IO (Maybe (Expr, Ctxt Expr))
 pmatch _ [] _ =
    return Nothing
 

@@ -16,7 +16,7 @@ import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Context
 import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern,
-                    TypeScheme(..), Cardinality, mkId, internalName)
+                    TypeScheme(..), Cardinality, mkId, internalName, Nat)
 import Syntax.Pretty
 import Utils
 
@@ -32,9 +32,6 @@ evalChecker initialState =
 runChecker :: CheckerState -> Checker a -> IO (a, CheckerState)
 runChecker initialState =
   flip runStateT initialState . unwrap
-
--- For fresh name generation
-type VarCounter  = Int
 
 -- Types or discharged coeffects
 data Assumption =
@@ -52,7 +49,7 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 
 data CheckerState = CS
             { -- Fresh variable id
-              uniqueVarId  :: VarCounter
+              uniqueVarIdCounter  :: Nat
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
             -- Type variable context, maps type variables to their kinds
@@ -79,7 +76,7 @@ data CheckerState = CS
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS { uniqueVarId = 0
+initState = CS { uniqueVarIdCounter = 0
                , predicateStack = []
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
@@ -200,11 +197,9 @@ addConstraintToPreviousFrame p = do
 freshVar :: String -> MaybeT Checker String
 freshVar s = do
   checkerState <- get
-  let v = uniqueVarId checkerState
-  let prefix = s
-  let cvar = prefix ++ show v
-  put $ checkerState { uniqueVarId = v + 1 }
-  return cvar
+  let v = uniqueVarIdCounter checkerState
+  put checkerState { uniqueVarIdCounter = v + 1 }
+  return $ s ++ show v
 
 {- Helpers for error messages and checker control flow -}
 data TypeError

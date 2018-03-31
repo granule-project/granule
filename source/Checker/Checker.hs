@@ -31,8 +31,9 @@ import Utils
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
-check :: (?globals :: Globals ) => AST -> IO CheckerResult
-check ast = do
+check :: (?globals :: Globals ) => Nat -> AST -> IO CheckerResult
+check currentFreshId ast = do
+      -- liftIO $ putStrLn $ pretty freshenedAst
       let checkADTs = do { mapM checkTyCon adts; mapM checkDataCons adts }
 
       -- Get the types of all definitions (assume that they are correct for
@@ -59,7 +60,7 @@ check ast = do
     where
       adts = filter (\case ADT{} -> True; _ -> False) ast
       defs = filter (\case Def{} -> True; _ -> False) ast
-      go = evalChecker initState { uniqueVarId = freshIdCounter ?globals }
+      go = evalChecker initState { uniqueVarIdCounter = currentFreshId }
 
 checkTyCon :: (?globals :: Globals ) => Def -> Checker (Maybe ())
 checkTyCon (ADT _ name tyVars kindAnn ds) =
