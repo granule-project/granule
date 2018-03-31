@@ -5,15 +5,17 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ImplicitParams #-}
 
 module Syntax.Pretty where
 
 import Data.List
 import Syntax.Expr
+import Utils
 
 -- The pretty printer class
 class Pretty t where
-    pretty :: t -> String
+    pretty :: (?globals :: Globals) => t -> String
 
 -- Mostly for debugging
 
@@ -139,7 +141,7 @@ instance Pretty Value where
         valueAtom _             = False
 
 instance Pretty Id where
-  pretty = sourceName
+  pretty = if debugging ?globals then internalName else sourceName
 
 instance Pretty Expr where
   pretty (App _ e1 e2) = parens $ pretty e1 ++ " " ++ pretty e2
@@ -153,7 +155,7 @@ instance Pretty Expr where
 parens :: String -> String
 parens s = "(" ++ s ++ ")"
 
-parensOn :: Pretty a => (a -> Bool) -> a -> String
+parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
 parensOn p t =
   if p t
     then "(" ++ pretty t ++ ")"
