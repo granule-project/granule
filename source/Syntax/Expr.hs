@@ -480,6 +480,7 @@ instance Freshenable Def where
 
 instance Term Def where
   freeVars (Def _ name body binders _) = delete name (freeVars body \\ concatMap boundVars binders)
+  freeVars _ = []
 
 ----------- Types
 
