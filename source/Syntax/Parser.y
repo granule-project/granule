@@ -332,10 +332,10 @@ parseError t = do
     die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO (AST, Nat)
+parseDefs :: (?globals :: Globals) => String -> IO AST
 parseDefs input = do
     ast <- parseDefs' input
-    return $ runFreshener ast
+    return $ freshenAST ast
 
 parseDefs' :: (?globals :: Globals) => String -> IO AST
 parseDefs' input = do

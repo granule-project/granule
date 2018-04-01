@@ -199,7 +199,7 @@ freshVar s = do
   checkerState <- get
   let v = uniqueVarIdCounter checkerState
   put checkerState { uniqueVarIdCounter = v + 1 }
-  return $ s ++ show v
+  return $ s ++ "_" ++ show v
 
 {- Helpers for error messages and checker control flow -}
 data TypeError

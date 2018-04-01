@@ -14,7 +14,7 @@ module Syntax.Expr
   Id(..), mkId,
   Operator,
   liftCoeffectType,
-  arity, freeVars, subst, freshen, Freshener, counter, runFreshener,
+  arity, freeVars, subst, freshen, Freshener, freshenAST,
   normalise,
   nullSpan, getSpan, getEnd, getStart, Pos, Span,
   typeFoldM, TypeFold(..),
@@ -155,38 +155,16 @@ instance Freshenable Pattern where
 type Freshener t = State FreshenerState t
 
 data FreshenerState = FreshenerState
-  { counter :: Nat -- ^ always reset to 0 in a new definition
-  , maxFreshId :: Nat -- ^ keep track of maximum so far
+  { counter :: Nat -- ^ fresh Id counter
   , varMap :: [(String, String)] -- ^ mapping of variables to their freshened names
   , tyMap :: [(String, String)] -- ^ mapping of type variables to their freshened names
   } deriving Show
 
--- | Initial state of freshener
-initFreshenerState :: FreshenerState
-initFreshenerState = FreshenerState
-  { counter = 0
-  , maxFreshId = 0
-  , varMap = []
-  , tyMap = []
-  }
-
--- | Reset freshener between definitions
-resetFreshenerState :: Freshener ()
-resetFreshenerState = do
-  st <- get
-  put initFreshenerState { maxFreshId = max (maxFreshId st) (counter st) }
-
 -- | Given something freshenable, e.g. the AST, run the freshener on it and return the final state
--- >>> runFreshener' (PVar ((0,0),(0,0)) (Id "x" "x"))
--- (PVar ((0,0),(0,0)) (Id "x" "x0"),FreshenerState {counter = 1, maxFreshId = 0, varMap = [("x","x0")], tyMap = []})
-runFreshener' :: Freshenable t => t -> (t, FreshenerState)
-runFreshener' x = runState (freshen x) initFreshenerState
-
--- | Alpha-convert and return maximum number to feed into checker
-runFreshener :: Freshenable t => t -> (t, Nat)
-runFreshener x =
-  let (x', st) = runFreshener' x
-  in (x', max (maxFreshId st) (counter st))
+-- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
+-- PVar ((0,0),(0,0)) (Id "x" "x0")
+runFreshener :: Freshenable t => t -> t
+runFreshener x = evalState (freshen x) FreshenerState { counter = 0, varMap = [], tyMap = [] }
 
 class Term t where
   -- Compute the free variables in an open term
@@ -222,7 +200,7 @@ lookupVar cat v = do
   st <- get
   case cat of
     Value -> return . lookup (sourceName v) . varMap $ st
-    Type  -> return . lookup (sourceName v) . tyMap $ st
+    Type  -> return . lookup (sourceName v) .  tyMap $ st
 
 removeFreshenings :: [Id] -> Freshener ()
 removeFreshenings [] = return ()
@@ -466,8 +444,8 @@ instance FirstParameter DataConstr Span
 -- | How many data constructors a type has (Nothing -> don't know)
 type Cardinality = Maybe Nat
 
-instance Freshenable AST where
-  freshen = mapM freshen
+freshenAST :: AST -> AST
+freshenAST = map runFreshener
 
 {-| Alpha-convert all bound variables of a definition, modulo the things on the lhs
 Eg this:
@@ -481,7 +459,7 @@ foo : Int -> Int
 foo x = (\(x0 : Int) -> x0 * 2) x
 @
 
->>> fst . runFreshener $ Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x0"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x")))) [PVar ((2,5),(2,5)) (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
+>>> runFreshener $ Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x0"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x")))) [PVar ((2,5),(2,5)) (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
 Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x0"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x")))) [PVar ((2,5),(2,5)) (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
 -}
 instance Freshenable Def where
@@ -489,7 +467,6 @@ instance Freshenable Def where
     t  <- freshen t
     -- ps <- mapM freshen ps
     e  <- freshen e
-    resetFreshenerState
     return (Def s var e ps t)
 
   -- in the case of ADTs, also push down the type variables from the data declaration head
