@@ -31,16 +31,16 @@ localCheckingSpec = do
         localState `shouldBe` (transformState endStateExpectation)
 
   where
-    endStateExpectation = initState { uniqueVarId = 10 }
+    endStateExpectation = initState { uniqueVarIdCounter = 10 }
     localising = runChecker initState $ runMaybeT $ do
       state <- get
-      put (state { uniqueVarId = 10 })
+      put (state { uniqueVarIdCounter = 10 })
       localChecking $ do
         state <- get
         put (transformState state)
-        return $ "x" ++ show (uniqueVarId state)
+        return $ "x" ++ show (uniqueVarIdCounter state)
     transformState st =
-      st { uniqueVarId  = 1 + uniqueVarId st
+      st { uniqueVarIdCounter  = 1 + uniqueVarIdCounter st
          , tyVarContext = [(mkId "inner", (KType, ForallQ))]
          , kVarContext  = [(mkId "innerk", KType)]
          , deriv        = Just $ Leaf "testing"

@@ -50,8 +50,7 @@ spec = do
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
-          Right (ast, maxFreshId) -> do
-            let ?globals = ?globals { freshIdCounter = maxFreshId }
+          Right ast -> do
             result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
@@ -64,8 +63,7 @@ spec = do
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
-          Right (ast, maxFreshId) -> do
-            let ?globals = ?globals { freshIdCounter = maxFreshId }
+          Right ast -> do
             result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
@@ -77,19 +75,19 @@ spec = do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged tyVarK (CNat Ordered 5))]
               [(varA, Discharged tyVarK (CNat Ordered 10))]
-       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a0")))]
+       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a_0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CNat Ordered 10) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
-              , Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))]]
+         [Conj [Con (ApproximatedBy nullSpan (CNat Ordered 10) (CVar (mkId "a_0")) (CConstr $ mkId "Nat"))
+              , Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a_0")) (CConstr $ mkId "Nat"))]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged (tyVarK) (CNat Ordered 5))]
               []
-       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a0")))]
+       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a_0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CZero (CConstr $ mkId "Nat")) (CVar (mkId "a0")) (CConstr $ mkId "Nat"))
-               ,Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a0")) (CConstr $ mkId"Nat"))]]
+         [Conj [Con (ApproximatedBy nullSpan (CZero (CConstr $ mkId "Nat")) (CVar (mkId "a_0")) (CConstr $ mkId "Nat"))
+               ,Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a_0")) (CConstr $ mkId"Nat"))]]
 
 
     describe "intersectCtxtsWithWeaken" $ do

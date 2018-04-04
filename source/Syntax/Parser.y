@@ -332,23 +332,25 @@ parseError t = do
     die $ show l ++ ":" ++ show c ++ ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO (AST, Int)
+parseDefs :: (?globals :: Globals) => String -> IO AST
 parseDefs input = do
-    (defs, maxFreshId) <- parse input
-    importedDefsAndFreshIds <- forM imports $ \path -> do
+    ast <- parseDefs' input
+    return $ freshenAST ast
+
+parseDefs' :: (?globals :: Globals) => String -> IO AST
+parseDefs' input = do
+    defs <- parse input
+    importedDefs <- forM imports $ \path -> do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
-      parseDefs src
-    let (importedDefs, maxFreshIds) = unzip importedDefsAndFreshIds
-    -- add defs at the end because definitions
-    -- need to precede use sites
+      parseDefs' src
     let allDefs = (concat importedDefs) ++ defs
     checkNameClashes allDefs
-    let maxFreshId' = if null maxFreshIds then 0 else maximum maxFreshIds
-    return (allDefs, maxFreshId `max` maxFreshId')
+    return allDefs
 
   where
-    parse = fmap (uniqueNames) . defs . scanTokens
+    parse = defs . scanTokens
+
     imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/') . catMaybes
                   . map (stripPrefix "import ") . lines $ input
     replace from to = map (\c -> if c == from then to else c)

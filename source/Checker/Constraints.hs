@@ -1,6 +1,8 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ImplicitParams #-}
+
 
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
@@ -16,7 +18,7 @@ import Checker.Predicates
 import Context (Ctxt)
 import Syntax.Expr
 import Syntax.Pretty
-
+import Utils
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
@@ -31,8 +33,9 @@ normaliseConstraint (ApproximatedBy s c1 c2 k) = ApproximatedBy s (normalise c1)
 
 -- Compile constraint into an SBV symbolic bool, along with a list of
 -- constraints which are trivially unsatisfiable (e.g., things like 1=0).
-compileToSBV :: Pred -> Ctxt (CKind, Quantifier) -> Ctxt CKind
-             -> (Symbolic SBool, Symbolic SBool, [Constraint])
+compileToSBV :: (?globals :: Globals) =>
+  Pred -> Ctxt (CKind, Quantifier) -> Ctxt CKind
+  -> (Symbolic SBool, Symbolic SBool, [Constraint])
 compileToSBV predicate tyVarContext kVarContext =
   (buildTheorem id compileQuant
   , buildTheorem bnot (compileQuant . flipQuant)
@@ -191,7 +194,8 @@ freshCVar _ _ k _ =
   error $ "Trying to make a fresh solver variable for a coeffect of kind: " ++ show k ++ " but I don't know how."
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
-compile :: Ctxt SCoeffect -> Constraint -> SBool
+compile :: (?globals :: Globals) =>
+  Ctxt SCoeffect -> Constraint -> SBool
 compile vars (Eq _ c1 c2 k) =
   eqConstraint c1' c2'
     where
@@ -209,7 +213,8 @@ compile vars (ApproximatedBy _ c1 c2 k) =
       c2' = compileCoeffect c2 k vars
 
 -- Compile a coeffect term into its symbolic representation
-compileCoeffect :: Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
+compileCoeffect :: (?globals :: Globals) =>
+  Coeffect -> CKind -> [(Id, SCoeffect)] -> SCoeffect
 
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
