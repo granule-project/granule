@@ -10,10 +10,12 @@ data ReplError = FilePathError String
                | OtherError
                | TypeCheckError String
                | ParseError SomeException
+               | TermNotInContext String
 
 instance Show ReplError where
-  show (FilePathError pth)  = "The file path "++pth++" does not exist."
-  show (TermInContext trm)  = "The term "++trm++" is already in context"
-  show (TypeCheckError pth) = "Error type checking "++pth
-  show (ParseError e)       = show e
-  show OtherError           = "Error"
+  show (FilePathError pth)    = "The file path "++pth++" does not exist."
+  show (TermInContext trm)    = "The term "++trm++" is already in context"
+  show (TypeCheckError pth)   = "Error type checking "++pth
+  show (ParseError e)         = show e
+  show (TermNotInContext trm) = "The term "++trm++" is not in the context"
+  show OtherError             = "Error"

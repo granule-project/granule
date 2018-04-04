@@ -39,6 +39,7 @@ data REPLExpr =
     | LoadFile [FilePath]
     | AddModule [FilePath]
     | Reload
+    | CheckType String
     deriving Show
 
 replTermCmdParser short long c p = do
@@ -57,6 +58,16 @@ replIntCmdParser short long c = do
     eof
     if (cmd == long || cmd == short)
     then return c
+    else fail $ "Command \":"++cmd++"\" is unrecognized."
+
+replTyCmdParser short long c = do
+    symbol ":"
+    cmd <- many lower
+    ws
+    term <- many1 anyChar
+    eof
+    if (cmd == long || cmd == short)
+    then return $ c term
     else fail $ "Command \":"++cmd++"\" is unrecognized."
 
 replFileCmdParser short long c = do
@@ -85,6 +96,8 @@ addModuleParser = replFileCmdParser "m" "module" AddModule
 
 reloadFileParser = replIntCmdParser "r" "reload" Reload
 
+checkTypeParser = replTyCmdParser "t" "type" CheckType
+
 
 -- lineParser =
 
@@ -92,6 +105,7 @@ lineParser = try dumpStateParser
           <|> try loadFileParser
           <|> try addModuleParser
           <|> try reloadFileParser
+          <|> try checkTypeParser
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
           <?> ""

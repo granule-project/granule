@@ -64,6 +64,7 @@ readToQueue pth = do
       Left e -> Ex.throwError (ParseError e)
 
 
+
 loadInQueue :: Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
   --liftIO.print $ freeVars exp
@@ -80,7 +81,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def, [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)++(show dl)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -91,6 +92,24 @@ extractFreeVars i (x:xs) = if sourceName x == internalName x && sourceName x /= 
 makeUnique ::[String] -> [String]
 makeUnique []     = []
 makeUnique (x:xs) = x : makeUnique (filter (/=x) xs)
+
+buildAST ::String -> M.Map String (Def, [String]) -> [Def]
+buildAST t m = let v = M.lookup t m in
+                  case v of
+                   Nothing -> []
+                   Just (def,lid) -> case lid of
+                                      []  ->  [def]
+                                      ids -> (buildDef ids ++ [def])
+                                               where
+                                                 buildDef :: [String] -> [Def]
+                                                 buildDef [] =  []
+                                                 buildDef (x:xs) =  buildDef xs++(buildAST x m)
+
+printType:: String -> M.Map String (Def, [String]) -> String
+printType trm m = let v = M.lookup trm m in
+                    case v of
+                      Nothing ->""
+                      Just (def@(Def _ id _ _ ty),lid) -> (pretty id)++" : "++(pretty ty)
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
 handleCMD "" = Ex.return ()
@@ -120,6 +139,18 @@ handleCMD s =
       ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
       return ()
 
+    handleLine (CheckType trm) = do
+      (_,m) <- get
+      let cked = buildAST trm m
+      case cked of
+        []  -> Ex.throwError (TermNotInContext trm)
+        ast -> do
+          checked <- liftIO' $ check ast
+          case checked of
+            Ok -> liftIO $ putStrLn (printType trm m)
+            Failed -> Ex.throwError (TypeCheckError trm)
+
+
 
 helpMenu :: String
 helpMenu =
@@ -127,14 +158,14 @@ helpMenu =
       "                  The Granule Help Menu                                         \n"++
       "-----------------------------------------------------------------------------------\n"++
       ":help              (:h)  Display the help menu\n"++
-      ":quit              (:q)  Quit Granule\n"++
-      ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
-      ":unfold <term>     (:u)  Unfold the expression into one without toplevel definition.\n"++
+      ":quit              (:q)  Quit Granule\n"++    
+      ":type <term>       (:t)  Display type of term\n"++
       ":dump              (:d)  Display the context\n"++
       ":load <filepath>   (:l)  Load an external file into the context\n"++
       ":module <filepath> (:m)  Add file/module to the current context\n"++
       "-----------------------------------------------------------------------------------"
-
+-- ":unfold <term>     (:u)  Unfold the expression into one without toplevel definition.\n"++
+-- ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
 
 repl :: IO ()
 repl = runInputT defaultSettings (loop ([],M.empty))
