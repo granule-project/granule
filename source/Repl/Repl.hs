@@ -53,8 +53,7 @@ readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
     pf <- liftIO' $ try $ parseDefs =<< readFile pth
     case pf of
-      Right (ast, maxFreshId) -> do
-            let ?globals = ?globals { freshIdCounter = maxFreshId }
+      Right ast -> do
             checked <-  liftIO' $ check ast
             case checked of
                 Ok -> do
@@ -65,7 +64,7 @@ readToQueue pth = do
 
 
 
-loadInQueue :: Def -> REPLStateIO  ()
+loadInQueue :: (?globals::Globals) => Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
   --liftIO.print $ freeVars exp
   (f,m) <- get
@@ -76,7 +75,7 @@ loadInQueue def@(Def _ id exp _ _) = do
 loadInQueue adt@(ADT _ _ _ _ _) = Ex.return ()
 
 
-dumpStateAux :: M.Map String (Def, [String]) -> [String]
+dumpStateAux :: (?globals::Globals) => M.Map String (Def, [String]) -> [String]
 dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def, [String]))] -> [String]
@@ -105,7 +104,7 @@ buildAST t m = let v = M.lookup t m in
                                                  buildDef [] =  []
                                                  buildDef (x:xs) =  buildDef xs++(buildAST x m)
 
-printType:: String -> M.Map String (Def, [String]) -> String
+printType :: (?globals::Globals) => String -> M.Map String (Def, [String]) -> String
 printType trm m = let v = M.lookup trm m in
                     case v of
                       Nothing ->""
@@ -158,7 +157,7 @@ helpMenu =
       "                  The Granule Help Menu                                         \n"++
       "-----------------------------------------------------------------------------------\n"++
       ":help              (:h)  Display the help menu\n"++
-      ":quit              (:q)  Quit Granule\n"++    
+      ":quit              (:q)  Quit Granule\n"++
       ":type <term>       (:t)  Display type of term\n"++
       ":dump              (:d)  Display the context\n"++
       ":load <filepath>   (:l)  Load an external file into the context\n"++
