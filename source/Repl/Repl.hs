@@ -26,9 +26,9 @@ import Repl.ReplParser
 import Checker.Checker
 import qualified Control.Monad.Except as Ex
 
-type REPLStateIO a  = StateT ([FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
+type REPLStateIO a  = StateT ([Def],[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
 
-instance MonadException m => MonadException (StateT ([FilePath], M.Map String (Def, [String])) m) where
+instance MonadException m => MonadException (StateT ([Def],[FilePath], M.Map String (Def, [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
@@ -66,13 +66,16 @@ readToQueue pth = do
 
 loadInQueue :: (?globals::Globals) => Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
-  --liftIO.print $ freeVars exp
-  (f,m) <- get
+  -- liftIO.print $ freeVars def
+  -- liftIO.print $ freeVars exp
+  (adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
-  else put $ (f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars exp))) m)
+  else put $ (adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
 
-loadInQueue adt@(ADT _ _ _ _ _) = Ex.return ()
+loadInQueue adt'@(ADT _ _ _ _ _) = do
+  (adt,f,m) <- get
+  put ((adt':adt),f,m)
 
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def, [String]) -> [String]
@@ -120,11 +123,11 @@ handleCMD s =
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
-      (f,dict) <- get
+      (adt,f,dict) <- get
       liftIO $ print $ dumpStateAux dict
 
     handleLine (LoadFile ptr) = do
-      put (ptr,M.empty)
+      put ([],ptr,M.empty)
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
       return ()
 
@@ -133,18 +136,18 @@ handleCMD s =
       return ()
 
     handleLine Reload = do
-      (f,_) <- get
-      put (f, M.empty)
+      (adt,f,_) <- get
+      put (adt,f, M.empty)
       ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
       return ()
 
     handleLine (CheckType trm) = do
-      (_,m) <- get
+      (adt,_,m) <- get
       let cked = buildAST trm m
       case cked of
         []  -> Ex.throwError (TermNotInContext trm)
         ast -> do
-          checked <- liftIO' $ check ast
+          checked <- liftIO' $ check (adt++ast)
           case checked of
             Ok -> liftIO $ putStrLn (printType trm m)
             Failed -> Ex.throwError (TypeCheckError trm)
@@ -167,9 +170,9 @@ helpMenu =
 -- ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
 
 repl :: IO ()
-repl = runInputT defaultSettings (loop ([],M.empty))
+repl = runInputT defaultSettings (loop ([],[],M.empty))
    where
-       loop :: ([FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
+       loop :: ([Def],[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
        loop st = do
            minput <- getInputLine "Granule> "
            case minput of
