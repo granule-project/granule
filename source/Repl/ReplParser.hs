@@ -35,11 +35,11 @@ data REPLExpr =
     | ShowAST Expr
     | DumpState
     | Unfold Expr
-    | Eval Expr
     | LoadFile [FilePath]
     | AddModule [FilePath]
     | Reload
     | CheckType String
+    | Eval String
     deriving Show
 
 replTermCmdParser short long c p = do
@@ -83,7 +83,9 @@ replFileCmdParser short long c = do
         return $ c fpath
     else fail $ "Command \":"++cmd++"\" is unrecognized."
 
-
+evalParser = do
+  ev <- many anyChar
+  return $ Eval ev
 -- showASTParser = replTermCmdParser "s" "show" ShowAST
 
 -- unfoldTermParser = replTermCmdParser "u" "unfold" Unfold
@@ -99,6 +101,8 @@ reloadFileParser = replIntCmdParser "r" "reload" Reload
 checkTypeParser = replTyCmdParser "t" "type" CheckType
 
 
+
+
 -- lineParser =
 
 lineParser = try dumpStateParser
@@ -108,7 +112,7 @@ lineParser = try dumpStateParser
           <|> try checkTypeParser
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
-          <?> ""
+          <|> evalParser
 
 parseLine :: String -> Either String REPLExpr
 parseLine s = case (parse lineParser "" s) of

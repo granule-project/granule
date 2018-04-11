@@ -16,7 +16,6 @@ import Control.Monad.State
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 import Repl.ReplError
-import System.Exit()
 import System.FilePath.Glob (glob)
 import Utils
 import Syntax.Pretty
@@ -24,6 +23,7 @@ import Syntax.Expr
 import Syntax.Parser
 import Repl.ReplParser
 import Checker.Checker
+import Eval
 import qualified Control.Monad.Except as Ex
 
 type REPLStateIO a  = StateT ([Def],[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
@@ -113,6 +113,7 @@ printType trm m = let v = M.lookup trm m in
                       Nothing ->""
                       Just (def@(Def _ id _ _ ty),lid) -> (pretty id)++" : "++(pretty ty)
 
+
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
 handleCMD "" = Ex.return ()
 handleCMD s =
@@ -152,6 +153,30 @@ handleCMD s =
             Ok -> liftIO $ putStrLn (printType trm m)
             Failed -> Ex.throwError (TypeCheckError trm)
 
+    handleLine (Eval ev) = do
+      (adt,fp,m) <- get
+      let cked = buildAST ev m
+      case cked of
+        [] -> undefined -- if can eval without full function def, do it here
+        ast -> do
+          checked <- liftIO' $ check (adt++ast)
+          case checked of
+            Ok -> do
+              result <- liftIO' $ try $ eval (adt++ast)
+              case result of
+                Left e -> Ex.throwError (EvalError e)
+                Right Nothing -> liftIO $ putStrLn "here"
+                Right (Just result) -> liftIO $ putStrLn (pretty result)
+
+      -- pev <- liftIO' $ try $ parseDefs ev
+      -- case pev of
+      --   Right ast -> do
+      --         checked <-  liftIO' $ check ast
+      --         case checked of
+      --           Ok -> do
+      --             result <- eval ast
+      --           Failed -> undefined
+      --   Left e -> Ex.throwError (ParseError e)
 
 
 helpMenu :: String
