@@ -33,6 +33,7 @@ tokens :-
   $eol+                         { \p s -> TokenNL p }
   $white+                       ;
   "--".*                        ;
+  "{-"(.|$white)*"-}"           ;
   "import".*                    ;
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
