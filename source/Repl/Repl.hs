@@ -27,9 +27,11 @@ import Checker.Checker
 import Eval
 import qualified Control.Monad.Except as Ex
 
-type REPLStateIO a  = StateT ([Def],[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
+type ReplPATH = [FilePath]
+type ADT = [Def]
+type REPLStateIO a  = StateT (ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
 
-instance MonadException m => MonadException (StateT ([Def],[FilePath], M.Map String (Def, [String])) m) where
+instance MonadException m => MonadException (StateT (ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
@@ -49,6 +51,9 @@ processFilesREPL globPatterns f = forM globPatterns $ (\p -> do
         [] -> lift $ Ex.throwError (FilePathError p)
         _ -> forM filePaths f)
 
+searchPath :: ReplPATH -> [FilePath]
+searchPath [] = []
+searchPath (r:rp) = undefined
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
@@ -69,14 +74,14 @@ loadInQueue :: (?globals::Globals) => Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
   -- liftIO.print $ freeVars def
   -- liftIO.print $ freeVars exp
-  (adt,f,m) <- get
+  (rp,adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
-  else put $ (adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
+  else put $ (rp,adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
 
 loadInQueue adt'@(ADT _ _ _ _ _) = do
-  (adt,f,m) <- get
-  put ((adt':adt),f,m)
+  (rp,adt,f,m) <- get
+  put (rp,(adt':adt),f,m)
 
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def, [String]) -> [String]
@@ -125,11 +130,12 @@ handleCMD s =
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
-      (adt,f,dict) <- get
+      (_,adt,f,dict) <- get
       liftIO $ print $ dumpStateAux dict
 
     handleLine (LoadFile ptr) = do
-      put ([],ptr,M.empty)
+      (rp,_,_,_) <- get
+      put (rp,[],ptr,M.empty)
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
       return ()
 
@@ -138,13 +144,13 @@ handleCMD s =
       return ()
 
     handleLine Reload = do
-      (adt,f,_) <- get
-      put (adt,f, M.empty)
+      (rp,adt,f,_) <- get
+      put (rp,adt,f, M.empty)
       ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
       return ()
 
     handleLine (CheckType trm) = do
-      (adt,_,m) <- get
+      (_,adt,_,m) <- get
       let cked = buildAST trm m
       case cked of
         []  -> Ex.throwError (TermNotInContext trm)
@@ -155,7 +161,7 @@ handleCMD s =
             Failed -> Ex.throwError (TypeCheckError trm)
 
     handleLine (Eval ev) = do
-      (adt,fp,m) <- get
+      (_,adt,_,m) <- get
       let cked = buildAST ev m
       case cked of
         [] -> do
@@ -202,11 +208,12 @@ helpMenu =
       "-----------------------------------------------------------------------------------"
 -- ":unfold <term>     (:u)  Unfold the expression into one without toplevel definition.\n"++
 -- ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
-
+defaultReplPath :: [FilePath]
+defaultReplPath = ["examples\\","tests\\regression\\good\\"]
 repl :: IO ()
-repl = runInputT defaultSettings (loop ([],[],M.empty))
+repl = runInputT defaultSettings (loop (defaultReplPath,[],[],M.empty))
    where
-       loop :: ([Def],[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
+       loop :: (ReplPATH,ADT,[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
        loop st = do
            minput <- getInputLine "Granule> "
            case minput of
