@@ -21,6 +21,7 @@ import Utils
 import Syntax.Pretty
 import Syntax.Expr
 import Syntax.Parser
+import Syntax.Lexer
 import Repl.ReplParser
 import Checker.Checker
 import Eval
@@ -157,15 +158,23 @@ handleCMD s =
       (adt,fp,m) <- get
       let cked = buildAST ev m
       case cked of
-        [] -> undefined -- if can eval without full function def, do it here
+        [] -> do
+          pexp <- liftIO' $ try $ expr $ scanTokens ev
+          case pexp of
+            Right exp -> do
+              result <- liftIO' $ try $ evalIn builtIns exp
+              case result of
+                Right r -> liftIO $ putStrLn (pretty r)
+                Left e -> Ex.throwError (EvalError e)
+            Left e -> Ex.throwError (ParseError e)
         ast -> do
           checked <- liftIO' $ check (adt++ast)
           case checked of
             Ok -> do
-              result <- liftIO' $ try $ eval (adt++ast)
+              result <- liftIO' $ try $ eval (adt++ast) -- looks for only "main" to evaluate
               case result of
                 Left e -> Ex.throwError (EvalError e)
-                Right Nothing -> liftIO $ putStrLn "here"
+                Right Nothing -> liftIO $ putStrLn "here" -- need to fiqure out if I am keeping this for just "main"
                 Right (Just result) -> liftIO $ putStrLn (pretty result)
 
       -- pev <- liftIO' $ try $ parseDefs ev

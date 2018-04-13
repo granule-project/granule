@@ -1,6 +1,6 @@
 -- Granule interpreter
 {-# LANGUAGE ImplicitParams #-}
-module Eval (eval) where
+module Eval (eval, evalIn, builtIns) where
 
 import Syntax.Expr
 import Syntax.Pretty
