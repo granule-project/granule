@@ -100,6 +100,7 @@ Binding :: { (Id, Expr, [Pattern]) }
 
 DataConstrs :: { [DataConstr] }
   : DataConstr DataConstrNext { $1 : $2 }
+  | {- empty -}               { [] }
 
 DataConstr :: { DataConstr }
   : CONSTR ':' TypeScheme     { DataConstr (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
