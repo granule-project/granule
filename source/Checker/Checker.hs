@@ -32,9 +32,8 @@ data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
 check :: (?globals :: Globals ) => AST -> IO CheckerResult
-check ast = do
-      -- liftIO $ putStrLn $ pretty freshenedAst
-      let checkADTs = do { mapM checkTyCon adts; mapM checkDataCons adts }
+check (AST dataDecls defs) = do
+      let checkDataDecls = do { mapM checkTyCon dataDecls; mapM checkDataCons dataDecls }
 
       -- Get the types of all definitions (assume that they are correct for
       -- the purposes of (mutually)recursive calls).
@@ -49,42 +48,30 @@ check ast = do
                 mapM (checkDef defCtxt) defs
 
       -- ... and evaluate the computation with initial state
-      let thingsToCheck = (++) <$> checkADTs <*> checkedDefs
-      results <- go thingsToCheck
+      let thingsToCheck = (++) <$> checkDataDecls <*> checkedDefs
+      results <- evalChecker initState thingsToCheck
 
       -- If all definitions type checked, then the whole file type checks
-      -- let results = (results_ADT ++ results_Def)
+      -- let results = (results_DataDecl ++ results_Def)
       if all isJust results
         then return Ok
         else return Failed
-    where
-      adts = filter (\case ADT{} -> True; _ -> False) ast
-      defs = filter (\case Def{} -> True; _ -> False) ast
-      go = evalChecker initState
 
-checkTyCon :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkTyCon (ADT _ name tyVars kindAnn ds) =
-    runMaybeT $ do
-      debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty name ++ "`: `"
-                                    ++ pretty tyConKind ++ "` (Show: `" ++ show tyConKind ++ "`)"
-      modify $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
-
+checkTyCon :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkTyCon (DataDecl _ name tyVars kindAnn ds) = runMaybeT $
+    modify' $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkDataCons (ADT _ name tyVars _ dataConstrs) =
-  runMaybeT $ do
+checkDataCons :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
     st <- get
-    case lookup name (typeConstructors st) of
-      Just (kind,_) ->
-        do modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-           mapM_ (checkDataCon name kind) dataConstrs
-      -- all type constructors have already been put into the checker monad, so shouldn't fail
-      _ -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+    let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
+    modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
+    mapM_ (checkDataCon name kind) dataConstrs
 
 checkDataCon :: (?globals :: Globals )
   => Id -- ^ The type constructor and associated type to check against

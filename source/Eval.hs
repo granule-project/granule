@@ -244,19 +244,18 @@ builtIns =
          return $ Pure (Val nullSpan (Constr (mkId "()") []))
 
 
-evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
+evalDefs :: (?globals :: Globals) => Ctxt Value -> [Def] -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
     evalDefs (extend ctxt var val) defs
-evalDefs ctxt (ADT {} : defs) = evalDefs ctxt defs
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
     debugM "Desugaring" $ pretty d'
     evalDefs ctxt (d' : defs)
 
 eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
-eval defs = do
+eval (AST dataDecls defs) = do
     bindings <- evalDefs builtIns defs
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing

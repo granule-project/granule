@@ -87,13 +87,18 @@ instance Pretty Type where
     pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
 
-instance {-# OVERLAPS #-} Pretty AST where
-    pretty = intercalate "\n\n" . map pretty
+instance Pretty AST where
+    pretty (AST dataDecls defs) = pretty' dataDecls ++ "\n\n" ++ pretty' defs
+      where
+        pretty' :: Pretty a => [a] -> String
+        pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty Def where
     pretty (Def _ v e ps t) = pretty v ++ " : " ++ pretty t ++ "\n" ++
                               pretty v ++ " " ++ pretty ps ++ "= " ++ pretty e
-    pretty (ADT _ tyCon tyVars kind dataConstrs) =
+
+instance Pretty DataDecl where
+    pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
       let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars ++ " "
           ki = case kind of Nothing -> ""; Just k -> pretty k ++ " "
       in "data " ++ pretty tyCon ++ " " ++ tvs ++ ki ++ "where\n  " ++ pretty dataConstrs

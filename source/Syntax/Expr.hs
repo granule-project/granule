@@ -7,9 +7,9 @@
 {-# LANGUAGE InstanceSigs #-}
 
 module Syntax.Expr
-  (AST, Value(..), Expr(..), Type(..), TypeScheme(..), Nat,
+  (AST(..), Value(..), Expr(..), Type(..), TypeScheme(..), Nat,
   letBox,
-  Def(..), Pattern(..), CKind(..), Coeffect(..),
+  Def(..), DataDecl(..), Pattern(..), CKind(..), Coeffect(..),
   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
   Id(..), mkId,
   Operator,
@@ -426,16 +426,19 @@ instance Freshenable Expr where
 
 --------- Definitions
 
+data AST = AST [DataDecl] [Def] deriving Show
+
 data Def = Def Span Id Expr [Pattern] TypeScheme
-         | ADT Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
-          deriving (Generic)
+  deriving (Generic, Show)
 
 deriving instance Eq (Value -> IO Value) => Eq Def
-deriving instance Show Def
-
-type AST = [Def]
 
 instance FirstParameter Def Span
+
+data DataDecl = DataDecl Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
+  deriving (Generic, Show)
+
+instance FirstParameter DataDecl Span
 
 data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
 
@@ -445,7 +448,7 @@ instance FirstParameter DataConstr Span
 type Cardinality = Maybe Nat
 
 freshenAST :: AST -> AST
-freshenAST = map runFreshener
+freshenAST (AST dds defs) = AST (map runFreshener dds) (map runFreshener defs)
 
 {-| Alpha-convert all bound variables of a definition, modulo the things on the lhs
 Eg this:
@@ -469,18 +472,18 @@ instance Freshenable Def where
     e  <- freshen e
     return (Def s var e ps t)
 
-  -- in the case of ADTs, also push down the type variables from the data declaration head
-  -- into the data constructors
-  freshen (ADT sp tyCon tyVars kind dataCs) = do
+-- | Also push down the type variables from the data declaration head
+-- into the data constructors
+instance Freshenable DataDecl where
+  freshen (DataDecl sp tyCon tyVars kind dataCs) = do
     dataCs <-
       forM dataCs $ \(DataConstr sp name tySch) -> do
                       (Forall sp' vs ty) <- freshen tySch
                       return $ DataConstr sp name (Forall sp' (tyVars ++ vs) ty)
-    return $ ADT sp tyCon tyVars kind dataCs
+    return $ DataDecl sp tyCon tyVars kind dataCs
 
 instance Term Def where
   freeVars (Def _ name body binders _) = delete name (freeVars body \\ concatMap boundVars binders)
-  freeVars _ = []
 
 ----------- Types
 

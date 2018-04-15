@@ -15,7 +15,7 @@
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM)
-import Data.List (intercalate, stripPrefix)
+import Data.List (stripPrefix)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
@@ -74,7 +74,7 @@ run input = do
 
     Right ast -> do
       -- Print to terminal when in debugging mode:
-      debugM "AST" $ "[" <> intercalate ",\n\n" (map show ast) <> "]"
+      debugM "AST" (show ast)
       debugM "Pretty-printed AST:" $ pretty ast
       -- Check and evaluate
       checked <- try $ check ast

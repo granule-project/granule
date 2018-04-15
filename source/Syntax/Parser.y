@@ -8,7 +8,7 @@ import Utils
 
 import Control.Monad (forM)
 import Data.List ((\\), intercalate, nub, stripPrefix)
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 import Numeric
 import System.Exit (die)
 
@@ -75,9 +75,16 @@ import System.Exit (die)
 %%
 
 Defs :: { AST }
-  : Def                       { [$1] }
-  | Def NL Defs               { $1 : $3 }
+  : Def                       { AST [] [$1] }
 
+  | DataDecl                  { AST [$1] [] }
+
+  | DataDecl NL Defs          { let (AST dds defs) = $3
+                                 in AST ($1 : dds) defs }
+  | Def NL Defs               { let (AST dds defs) = $3
+                                 in AST dds ($1 : defs) }
+
+NL :: { () }
 NL : nl NL                    { }
    | nl                       { }
 
@@ -88,8 +95,9 @@ Def :: { Def }
         else error $ "Signature for `" ++ sourceName (fst3 $3) ++ "` does not match the \
                                       \signature head `" ++ sourceName (fst3 $1) ++ "`"  }
 
-  | data CONSTR TyVars KindAnn where DataConstrs
-      { ADT (getPos $1, snd $ getSpan (last $6)) (mkId $ constrString $2) $3 $4 $6 }
+DataDecl :: { DataDecl }
+  : data CONSTR TyVars KindAnn where DataConstrs
+      { DataDecl (getPos $1, snd $ getSpan (last $6)) (mkId $ constrString $2) $3 $4 $6 }
 
 Sig ::  { (Id, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (mkId $ symString $1, $3, getPos $1) }
@@ -345,25 +353,32 @@ parseDefs' input = do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
       parseDefs' src
-    let allDefs = (concat importedDefs) ++ defs
+    let allDefs = merge $ defs : importedDefs
     checkNameClashes allDefs
     return allDefs
 
   where
+    merge :: [AST] -> AST
+    merge xs =
+      let conc [] dds defs = AST dds defs
+          conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds ++ ddsAcc) (defs ++ defsAcc)
+       in conc xs [] []
+
     parse = defs . scanTokens
 
-    imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/') . catMaybes
-                  . map (stripPrefix "import ") . lines $ input
+    imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/')
+              . mapMaybe (stripPrefix "import ") . lines $ input
+
     replace from to = map (\c -> if c == from then to else c)
-    checkNameClashes ds =
+
+    checkNameClashes ds@(AST dataDecls defs) =
         if null clashes
 	        then return ()
           else die $ "Error: Name clash: " ++ intercalate ", " (map sourceName clashes)
       where
         clashes = names \\ nub names
-        names = (`map` ds) (\d -> case d of (Def _ name _ _ _) -> name
-                                            (ADT _ name _ _ _) -> name)
-
+        names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
+                ++ (`map` defs) (\(Def _ name _ _ _) -> name)
 
 myReadFloat :: String -> Rational
 myReadFloat str =
