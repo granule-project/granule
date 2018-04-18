@@ -17,7 +17,7 @@ module Syntax.Expr
   arity, freeVars, subst, freshen, Freshener, freshenAST,
   normalise,
   nullSpan, getSpan, getEnd, getStart, Pos, Span,
-  typeFoldM, TypeFold(..),
+  typeFoldM, TypeFold(..), resultType,
   mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
   mTyInt, mPairTy, mTyInfix,
   baseTypeFold,
@@ -467,9 +467,9 @@ Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (A
 -}
 instance Freshenable Def where
   freshen (Def s var e ps t) = do
-    t  <- freshen t
-    -- ps <- mapM freshen ps
+    ps <- mapM freshen ps
     e  <- freshen e
+    t  <- freshen t
     return (Def s var e ps t)
 
 -- | Also push down the type variables from the data declaration head
@@ -594,6 +594,13 @@ typeFoldM algebra = go
 arity :: Type -> Nat
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
+
+-- | Get the result type after the last Arrow, e.g. for @a -> b -> Pair a b@
+-- the result type is @Pair a b@
+resultType :: Type -> Type
+resultType (FunTy _ t) = resultType t
+resultType t = t
+
 
 data Kind = KType
           | KCoeffect
