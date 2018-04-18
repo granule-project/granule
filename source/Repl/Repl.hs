@@ -11,8 +11,10 @@ module Repl.Repl where
 
 import System.FilePath
 import qualified Data.Map as M
+import qualified Checker.Monad as Mo
 import Control.Exception (try)
 import Control.Monad.State
+import Control.Monad.Trans.Maybe
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 import Repl.ReplError
@@ -25,6 +27,7 @@ import Syntax.Lexer
 import Repl.ReplParser
 import Checker.Checker
 import Eval
+import Context
 import qualified Control.Monad.Except as Ex
 
 type ReplPATH = [FilePath]
@@ -168,6 +171,10 @@ handleCMD s =
           pexp <- liftIO' $ try $ expr $ scanTokens ev
           case pexp of
             Right exp -> do
+              typ <- liftIO $ synType exp
+              case typ of
+                Just (t,a) -> liftIO $ print (pretty t)
+                Nothing -> Ex.throwError (TypeCheckError ev)
               result <- liftIO' $ try $ evalIn builtIns exp
               case result of
                 Right r -> liftIO $ putStrLn (pretty r)
@@ -183,6 +190,20 @@ handleCMD s =
                 Right Nothing -> liftIO $ putStrLn "here" -- need to fiqure out if I am keeping this for just "main"
                 Right (Just result) -> liftIO $ putStrLn (pretty result)
 
+synType :: (?globals::Globals) => Expr -> IO (Maybe (Type, Ctxt Mo.Assumption))
+synType exp = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
+
+
+
+
+    -- synType :: (?globals::Globals) => Expr -> IO Type
+    -- synType exp = do
+    --   ty <- liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
+    --   case ty of
+    --     Just (t,a) -> do
+    --       print t
+    --       return t
+    --     Nothing -> _
       -- pev <- liftIO' $ try $ parseDefs ev
       -- case pev of
       --   Right ast -> do
@@ -192,7 +213,9 @@ handleCMD s =
       --             result <- eval ast
       --           Failed -> undefined
       --   Left e -> Ex.throwError (ParseError e)
-
+      -- ty <- runMaybeT $ synthExpr empty empty Positive exp
+      -- case ty of
+      --   x -> return x
 
 helpMenu :: String
 helpMenu =
