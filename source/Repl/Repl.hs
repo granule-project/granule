@@ -167,43 +167,48 @@ handleCMD s =
       (_,adt,_,m) <- get
       let cked = buildAST ev m
       case cked of
-        [] -> do
+        [] -> do --Expression does not have terms in state.  Try to parse and type and if checks out eval
           pexp <- liftIO' $ try $ expr $ scanTokens ev
           case pexp of
             Right exp -> do
-              typ <- liftIO $ synType exp
+              typ <- liftIO $ synType exp []
               case typ of
-                Just (t,a) -> liftIO $ print (pretty t)
+                Just (t,a) -> liftIO $ putStrLn (pretty t)
                 Nothing -> Ex.throwError (TypeCheckError ev)
               result <- liftIO' $ try $ evalIn builtIns exp
               case result of
                 Right r -> liftIO $ putStrLn (pretty r)
                 Left e -> Ex.throwError (EvalError e)
             Left e -> Ex.throwError (ParseError e)
-        ast -> do
+        ast -> do -- Expression does have terms in state.
           checked <- liftIO' $ check (adt++ast)
           case checked of
             Ok -> do
               result <- liftIO' $ try $ eval (adt++ast) -- looks for only "main" to evaluate
               case result of
                 Left e -> Ex.throwError (EvalError e)
-                Right Nothing -> liftIO $ putStrLn "here" -- need to fiqure out if I am keeping this for just "main"
+                Right Nothing -> liftIO $ print "here"
                 Right (Just result) -> liftIO $ putStrLn (pretty result)
 
-synType :: (?globals::Globals) => Expr -> IO (Maybe (Type, Ctxt Mo.Assumption))
-synType exp = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
+synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ctxt Mo.Assumption))
+synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
+synType exp cts = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr cts empty Positive exp
 
+synTypePlus :: (?globals::Globals) => Expr -> AST -> IO Type
+synTypePlus exp ast = do
+  ty <- synType exp (buildCtxtTS ast)
+  case ty of
+    Just (t,a) -> return t
 
+buildCtxtTS :: (?globals::Globals) => AST -> Ctxt TypeScheme
+buildCtxtTS [] = []
+buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
 
+buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
+buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
-    -- synType :: (?globals::Globals) => Expr -> IO Type
-    -- synType exp = do
-    --   ty <- liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
-    --   case ty of
-    --     Just (t,a) -> do
-    --       print t
-    --       return t
-    --     Nothing -> _
+buildDef ::TypeScheme -> Expr -> Def
+buildDef ts ex = Def ((0,0),(0,0)) (mkId "main") ex [] ts
       -- pev <- liftIO' $ try $ parseDefs ev
       -- case pev of
       --   Right ast -> do
