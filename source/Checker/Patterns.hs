@@ -81,17 +81,11 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
     Just tySch -> do
       (dataConstructorTypeFresh, freshTyVars) <- freshPolymorphicInstance BoundQ tySch
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh ++ "\n" ++ pretty ty
-
-      -- unpeel `ty` by matching each pattern with the head of an arrow
-      let
-
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
           dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
-          --
           (t,(as, bs, us)) <- unpeel ps dataConstrutorSpecialised
-          --
           subst <- combineSubstitutions s unifiers us
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
           -- Updated type variable context
@@ -104,7 +98,6 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
                                                 _        -> Nothing) subst
           put (state { tyVarContext = tyVars
                     , kVarContext = kindSubst ++ kVarContext state }) -}
-          --
           return (ctxtSubbed ++ ctxtUnsubbed, freshTyVars++bs, subst)
 
         _ -> halt $ PatternTypingError (Just s) $
