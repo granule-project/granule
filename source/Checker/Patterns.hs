@@ -128,25 +128,6 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
     p        -> halt $ PatternTypingError (Just s)
                    $  "Cannot unify pattern " ++ pretty p
                    ++ "with type variable " ++ pretty v
-  -- return ([], [], [])
-  {-
-  case p of
-    PVar _ x -> return ([(x, Linear t)], [], [])
-    -- Trying to match a polymorphic type variable against a box pattern
-    PBox _ p' -> do
-      -- Create a fresh type: Box (c' : k) t'
-      polyName <- freshVar "fk"
-      let ckind = CPoly $ mkId polyName
-      cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
-      let c' = CVar $ cvar
-      tyvar <- freshVar "t'"
-      let t' = TyVar $ mkId tyvar
-      -- Register the type variable
-      modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ)) : tyVarContext state })
-
-      (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
-      return (map (discharge ckind c') binders, vars, (v, SubstT $ Box c' t') : unifiers)
-   -- TODO: cases missing -}
 
 ctxtFromTypedPattern s t p = do
   st <- get
