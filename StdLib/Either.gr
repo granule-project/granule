@@ -1,0 +1,17 @@
+data Either a b where
+  Left : a -> Either a b;
+  Right : b -> Either a b
+
+pushEither : forall (a : Type, b : Type, k : Nat)
+        . (Either a b) |k+1| -> Either (a |k+1|) (b |k+1|)
+pushEither x =
+  case x of
+    |(Left x)| -> Left |x|;
+    |(Right y)| -> Right |y|
+
+pullEither : forall (a : Type, b : Type, k : Nat)
+        . Either (a |k|) (b |k|) -> (Either a b) |k|
+pullEither x =
+  case x of
+    (Left |y|) -> |(Left y)|;
+    (Right |y|) -> |(Right y)|
