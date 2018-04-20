@@ -164,31 +164,40 @@ handleCMD s =
             Failed -> Ex.throwError (TypeCheckError trm)
 
     handleLine (Eval ev) = do
-      (_,adt,_,m) <- get
-      let cked = buildAST ev m
-      case cked of
-        [] -> do --Expression does not have terms in state.  Try to parse and type and if checks out eval
-          pexp <- liftIO' $ try $ expr $ scanTokens ev
-          case pexp of
+        (_,adt,_,m) <- get
+        pexp <- liftIO' $ try $ expr $ scanTokens ev
+        case pexp of
             Right exp -> do
-              typ <- liftIO $ synType exp []
-              case typ of
-                Just (t,a) -> liftIO $ putStrLn (pretty t)
-                Nothing -> Ex.throwError (TypeCheckError ev)
-              result <- liftIO' $ try $ evalIn builtIns exp
-              case result of
-                Right r -> liftIO $ putStrLn (pretty r)
-                Left e -> Ex.throwError (EvalError e)
-            Left e -> Ex.throwError (ParseError e)
-        ast -> do -- Expression does have terms in state.
-          checked <- liftIO' $ check (adt++ast)
-          case checked of
-            Ok -> do
-              result <- liftIO' $ try $ eval (adt++ast) -- looks for only "main" to evaluate
-              case result of
-                Left e -> Ex.throwError (EvalError e)
-                Right Nothing -> liftIO $ print "here"
-                Right (Just result) -> liftIO $ putStrLn (pretty result)
+                let fv = freeVars exp
+                case fv of
+                    [] -> do -- simple expressions
+                        typ <- liftIO $ synType exp []
+                        case typ of
+                            Just (t,a) -> return ()
+                            Nothing -> Ex.throwError (TypeCheckError ev)
+                        result <- liftIO' $ try $ evalIn builtIns exp
+                        case result of
+                            Right r -> liftIO $ putStrLn (pretty r)
+                            Left e -> Ex.throwError (EvalError e)
+                    _ -> do
+                        let ast = buildForEval fv m
+                        typer <- liftIO $ synTypePlus exp (adt++ast)
+                        let ndef = buildDef (buildTypeScheme typer) exp
+                        checked <- liftIO' $ check (adt++ast++(ndef:[]))
+                        case checked of
+                            Ok -> do
+                                result <- liftIO' $ try $ eval (adt++ast++(ndef:[]))
+                                case result of
+                                    Left e -> Ex.throwError (EvalError e)
+                                    Right Nothing -> liftIO $ print "here"
+                                    Right (Just result) -> liftIO $ putStrLn (pretty result)
+                            Failed -> Ex.throwError (OtherError)
+            Left e -> Ex.throwError (ParseError e) --error from parsing (pexp)
+
+buildForEval :: [Id] -> M.Map String (Def, [String]) -> AST
+buildForEval [] _ = []
+buildForEval (x:xs) m = buildAST (sourceName x) m ++ buildForEval xs m
+
 
 synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ctxt Mo.Assumption))
 synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
@@ -209,18 +218,6 @@ buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
 buildDef ::TypeScheme -> Expr -> Def
 buildDef ts ex = Def ((0,0),(0,0)) (mkId "main") ex [] ts
-      -- pev <- liftIO' $ try $ parseDefs ev
-      -- case pev of
-      --   Right ast -> do
-      --         checked <-  liftIO' $ check ast
-      --         case checked of
-      --           Ok -> do
-      --             result <- eval ast
-      --           Failed -> undefined
-      --   Left e -> Ex.throwError (ParseError e)
-      -- ty <- runMaybeT $ synthExpr empty empty Positive exp
-      -- case ty of
-      --   x -> return x
 
 helpMenu :: String
 helpMenu =
