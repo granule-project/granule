@@ -231,14 +231,6 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
         Nothing ->
           return (False, [])
 
-equalTypesRelatedCoeffects s rel uS (PairTy t1 t2) (PairTy t1' t2') sp = do
-  (lefts, u1)  <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
-  t2  <- substitute u1 t2
-  t2' <- substitute u1 t2'
-  (rights, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
-  unifiers <- combineSubstitutions s u1 u2
-  return (lefts && rights, unifiers)
-
 equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
@@ -399,11 +391,6 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t1'' <- joinTypes s t1 t1'
   t2'' <- joinTypes s t2 t2'
   return (TyApp t1'' t2'')
-
-joinTypes s (PairTy t1 t2) (PairTy t1' t2') = do
-  t1'' <- joinTypes s t1 t1'
-  t2'' <- joinTypes s t2 t2'
-  return (PairTy t1'' t2'')
 
 joinTypes s t1 t2 = do
   halt $ GenericError (Just s)

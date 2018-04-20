@@ -62,13 +62,6 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
 
-
-ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
-  (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
-  (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
-  unifiers <- combineSubstitutions s substl substr
-  return (ctxtL ++ ctxtR, eVars1 ++ eVars2, unifiers)
-
 ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
 

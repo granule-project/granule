@@ -84,7 +84,6 @@ instance Pretty Type where
     pretty (TyVar v)      = pretty v
     pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
     pretty (TyInt n)      = show n
-    pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
 
 instance Pretty AST where
@@ -115,7 +114,6 @@ instance Pretty Pattern where
     pretty (PBox _ p)     = "|" ++ pretty p ++ "|"
     pretty (PInt _ n)     = show n
     pretty (PFloat _ n)   = show n
-    pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ "," ++ pretty p2 ++ ")"
     pretty (PConstr _ name args)  = intercalate " " (pretty name : map pretty args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern] where
@@ -136,7 +134,6 @@ instance Pretty Value where
     pretty (NumFloat n) = show n
     pretty (CharLiteral c) = show c
     pretty (StringLiteral s) = show s
-    pretty (Pair e1 e2) = "(" ++ pretty e1 ++ "," ++ pretty e2 ++ ")"
     pretty (Constr s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values

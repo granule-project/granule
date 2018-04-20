@@ -19,7 +19,7 @@ module Syntax.Expr
   nullSpan, getSpan, getEnd, getStart, Pos, Span,
   typeFoldM, TypeFold(..), resultType,
   mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
-  mTyInt, mPairTy, mTyInfix,
+  mTyInt, mTyInfix,
   baseTypeFold,
   con, var, (.->), (.@)
   ) where
@@ -78,7 +78,6 @@ data Value = Abs Pattern (Maybe Type) Expr
            | Pure Expr
            | Var Id
            | Constr Id [Value]
-           | Pair Expr Expr
            | CharLiteral Char
            | StringLiteral Text
            -------------------------
@@ -118,7 +117,6 @@ data Pattern
   | PInt Span Int              -- Numeric patterns
   | PFloat Span Double         -- Float pattern
   | PConstr Span Id [Pattern]  -- Constructor pattern
-  | PPair Span Pattern Pattern -- Pair patterns
   deriving (Eq, Show, Generic)
 
 instance FirstParameter Pattern Span
@@ -129,7 +127,6 @@ boundVars PWild {}       = []
 boundVars (PBox _ p)     = boundVars p
 boundVars PInt {}        = []
 boundVars PFloat {}      = []
-boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
 boundVars (PConstr _ _ ps) = concatMap boundVars ps
 
 instance Freshenable Pattern where
@@ -140,10 +137,6 @@ instance Freshenable Pattern where
   freshen (PBox s p) = do
       p' <- freshen p
       return $ PBox s p'
-  freshen (PPair s p1 p2) = do
-      p1' <- freshen p1
-      p2' <- freshen p2
-      return $ PPair s p1' p2'
   freshen (PConstr s name ps) = do
       ps <- mapM freshen ps
       return (PConstr s name ps)
@@ -220,7 +213,6 @@ instance Term Type where
     , tfTyVar   = \v -> return [v] -- or: return . return
     , tfTyApp   = \x y -> return $ x ++ y
     , tfTyInt   = \_ -> return []
-    , tfPairTy  = \x y -> return $ x ++ y
     , tfTyInfix = \_ y z -> return $ y ++ z
     }
 
@@ -315,7 +307,6 @@ instance Term Value where
     freeVars (Var x)     = [x]
     freeVars (Pure e)    = freeVars e
     freeVars (Promote e) = freeVars e
-    freeVars (Pair l r)  = freeVars l ++ freeVars r
     freeVars (NumInt _) = []
     freeVars (NumFloat _) = []
     freeVars (Constr _ _) = []
@@ -326,7 +317,6 @@ instance Substitutable Value where
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
     subst es v (Promote e)      = Val nullSpan $ Promote (subst es v e)
-    subst es v (Pair l r)       = Val nullSpan $ Pair (subst es v l) (subst es v r)
     subst es v (Var w) | v == w = es
     subst _ _ v@(NumInt _)        = Val nullSpan v
     subst _ _ v@(NumFloat _)      = Val nullSpan v
@@ -361,11 +351,6 @@ instance Freshenable Value where
          -- This case happens if we are referring to a defined
          -- function which does not get its name freshened
          Nothing -> return (Var $ Id (sourceName v) (sourceName v))
-
-    freshen (Pair l r) = do
-      l' <- freshen l
-      r' <- freshen r
-      return $ Pair l' r'
 
     freshen v@(NumInt _)   = return v
     freshen v@(NumFloat _) = return v
@@ -509,7 +494,6 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyVar Id                  -- ^ Type variable
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
-          | PairTy Type Type          -- ^ Pair/product type
           | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
@@ -541,14 +525,12 @@ mTyApp :: Monad m => Type -> Type -> m Type
 mTyApp x y   = return (TyApp x y)
 mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
-mPairTy :: Monad m => Type -> Type -> m Type
-mPairTy x y  = return (PairTy x y)
 mTyInfix :: Monad m => Operator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 
 baseTypeFold :: Monad m => TypeFold m Type
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mPairTy mTyInfix
+  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix
 
 data TypeFold m a = TypeFold
   { tfFunTy   :: a -> a        -> m a
@@ -558,7 +540,6 @@ data TypeFold m a = TypeFold
   , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
-  , tfPairTy  :: a -> a        -> m a
   , tfTyInfix :: Operator -> a -> a -> m a }
 
 -- | Monadic fold on a `Type` value
@@ -582,10 +563,6 @@ typeFoldM algebra = go
      t2' <- go t2
      (tfTyApp algebra) t1' t2'
    go (TyInt i) = (tfTyInt algebra) i
-   go (PairTy t1 t2) = do
-     t1' <- go t1
-     t2' <- go t2
-     (tfPairTy algebra) t1' t2'
    go (TyInfix op t1 t2) = do
      t1' <- go t1
      t2' <- go t2

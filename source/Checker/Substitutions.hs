@@ -131,10 +131,6 @@ instance Substitutable Type where
     u2 <- unify t2 t2'
     u1 <++> u2
   unify (TyInt i) (TyInt j) | i == j = return $ Just []
-  unify (PairTy t1 t2) (PairTy t1' t2') = do
-    u1 <- unify t1 t1'
-    u2 <- unify t2 t2'
-    u1 <++> u2
   unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
     k <- inferKindOfType nullSpan t
     k' <- inferKindOfType nullSpan t

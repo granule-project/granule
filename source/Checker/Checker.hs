@@ -527,13 +527,6 @@ synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
      return (FunTy sig tau, gam'' `subtractCtxt` binding)
   else refutablePattern s p
 
--- Pair
-synthExpr defs gam pol (Val s (Pair e1 e2)) = do
-  (t1, gam1) <- synthExpr defs gam pol e1
-  (t2, gam2) <- synthExpr defs gam pol e2
-  gam' <- ctxPlus s gam1 gam2
-  return (PairTy t1 t2, gam')
-
 synthExpr _ _ _ e =
   halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
 

@@ -38,11 +38,11 @@ inferKindOfType s t = do
 
 inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
 inferKindOfType' s quantifiedVariables t =
-    typeFoldM (TypeFold kFunOrPair kCon kBox kDiamond kVar kApp kInt kFunOrPair kInfix) t
+    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
   where
-    kFunOrPair KType KType = return KType
-    kFunOrPair KType y = illKindedNEq s KType y
-    kFunOrPair x _     = illKindedNEq s KType x
+    kFun KType KType = return KType
+    kFun KType y = illKindedNEq s KType y
+    kFun x _     = illKindedNEq s KType x
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of

@@ -146,7 +146,7 @@ PAtom :: { Pattern }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
   | '(' Pat ')'               { $2 }
   | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
-  | '(' Pat ',' Pat ')'       { PPair (getPosToSpan $1) $2 $4 }
+  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) (mkId ",") [$2, $4] }
 
 
 TypeScheme :: { TypeScheme }
@@ -179,12 +179,12 @@ Type :: { Type }
   | Type '|' Coeffect '|'     { Box $3 $1 }
   | TyAtom '<' Effect '>'       { Diamond $3 $1 }
   | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { PairTy $2 $4 }
+  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
-  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (PairTy $3 $5) }
+  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (TyApp (TyApp (TyCon $ mkId ",") $3) $5) }
   | TyJuxt '(' Type ')'       { TyApp $1 $3 }
   | TyAtom                    { $1 }
 
@@ -327,7 +327,11 @@ Atom :: { Expr }
   | VAR                       { Val (getPosToSpan $1) $ Var (mkId $ symString $1) }
   | '|' Atom '|'              { Val (getPos $1, getPos $3) $ Promote $2 }
   | CONSTR                    { Val (getPosToSpan $1) $ Constr (mkId $ constrString $1) [] }
-  | '(' Expr ',' Expr ')'     { Val (getPos $1, getPos $5) (Pair $2 $4) }
+  | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5)
+                                    (App (getPos $1, getPos $3)
+                                         (Val (getPosToSpan $3) (Constr (mkId ",") []))
+                                         $2)
+                                    $4 }
   | CHAR                      { Val (getPosToSpan $1) $
                                   case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
   | STRING                    { Val (getPosToSpan $1) $
