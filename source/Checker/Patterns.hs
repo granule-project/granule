@@ -35,9 +35,8 @@ ctxtFromTypedPattern _ t (PWild _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
-    --wild <- freshVar "wild"
-    --return ([(mkInternalId "_" wild, Linear t)], [], [])
-    return ([], [], [])
+    wild <- freshVar "wild"
+    return ([(Id "_" wild, Linear t)], [], [])
 
 ctxtFromTypedPattern _ t (PVar _ v) =
     return ([(v, Linear t)], [], [])
