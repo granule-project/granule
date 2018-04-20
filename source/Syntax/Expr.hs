@@ -468,8 +468,8 @@ Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (A
 instance Freshenable Def where
   freshen (Def s var e ps t) = do
     ps <- mapM freshen ps
-    e  <- freshen e
     t  <- freshen t
+    e  <- freshen e
     return (Def s var e ps t)
 
 -- | Also push down the type variables from the data declaration head
