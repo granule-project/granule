@@ -605,13 +605,13 @@ resultType t = t
 data Kind = KType
           | KCoeffect
           | KFun Kind Kind
-          | KPoly Id              -- Kind poly variable
+          | KVar Id              -- Kind poly variable
           | KConstr Id -- constructors that have been elevated
     deriving (Show, Ord, Eq)
 
 liftCoeffectType :: CKind -> Kind
 liftCoeffectType (CConstr cid) = KConstr cid
-liftCoeffectType (CPoly var)   = KPoly var
+liftCoeffectType (CPoly var)   = KVar var
 
 type Effect = [String]
 

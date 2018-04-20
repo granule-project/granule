@@ -163,7 +163,7 @@ VarSig :: { (Id, Kind) }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
-  | VAR                       { KPoly (mkId $ symString $1) }
+  | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
                                   "Type"     -> KType
                                   "Coeffect" -> KCoeffect

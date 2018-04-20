@@ -65,7 +65,7 @@ inferKindOfType' s quantifiedVariables t =
                        "Type variable `" ++ pretty tyVar ++ "` is unbound (not quantified)." <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
-    kApp k kArg = illKindedNEq s (KFun kArg (KPoly $ mkId "...")) k
+    kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
 
     kInt _ = return $ KConstr $ mkId "Nat"
 

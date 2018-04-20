@@ -146,7 +146,7 @@ registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
 registerCoeffectVar v (CConstr constrId) q =
     modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
 registerCoeffectVar v (CPoly constrId) q =
-    modify (\st -> st { tyVarContext = (v, (KPoly constrId, q)) : tyVarContext st })
+    modify (\st -> st { tyVarContext = (v, (KVar constrId, q)) : tyVarContext st })
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()

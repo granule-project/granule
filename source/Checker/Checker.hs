@@ -597,7 +597,7 @@ solveConstraints predicate s defName = do
              _                  -> Nothing
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
-       convert (var, (KPoly constr, q)) = Just (var, (CPoly constr, q))
+       convert (var, (KVar constr, q)) = Just (var, (CPoly constr, q))
        convert _ = Nothing
     justCoeffectTypesConvertedVars checkerState =
        stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))

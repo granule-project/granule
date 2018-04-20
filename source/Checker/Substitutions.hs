@@ -184,7 +184,7 @@ instance Substitutable Coeffect where
            case lookup v (tyVarContext checkerState) of
              -- If the coeffect variable has a poly kind then update it with the
              -- kind of c
-             Just ((KPoly kv), q) -> do
+             Just ((KVar kv), q) -> do
                 k' <- inferCoeffectType nullSpan c
                 put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
                                                            v (liftCoeffectType k', q) }
@@ -231,7 +231,7 @@ instance Substitutable Coeffect where
     case lookup v (tyVarContext checkerState) of
       -- If the coeffect variable has a poly kind then update it with the
       -- kind of c
-      Just ((KPoly kv), q) -> do
+      Just ((KVar kv), q) -> do
         k' <- inferCoeffectType nullSpan c
         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
                                                     v (liftCoeffectType k', q) }
@@ -239,7 +239,7 @@ instance Substitutable Coeffect where
         case c of
           CVar v' -> do
             case lookup v' (tyVarContext checkerState) of
-              Just (KPoly _, q) ->
+              Just (KVar _, q) ->
                 -- The type of v is known and c is a variable with a poly kind
                 put $ checkerState { tyVarContext =
                                        replace (tyVarContext checkerState)
@@ -328,15 +328,15 @@ instance Substitutable Kind where
     c1 <- substitute subst c1
     c2 <- substitute subst c2
     return $ KFun c1 c2
-  substitute subst (KPoly v) =
+  substitute subst (KVar v) =
     case lookup v subst of
       Just (SubstK k) -> return k
-      _               -> return $ KPoly v
+      _               -> return $ KVar v
   substitute subst (KConstr c) = return $ KConstr c
 
-  unify (KPoly v) k =
+  unify (KVar v) k =
     return $ Just [(v, SubstK k)]
-  unify k (KPoly v) =
+  unify k (KVar v) =
     return $ Just [(v, SubstK k)]
   unify (KFun k1 k2) (KFun k1' k2') = do
     u1 <- unify k1 k1'
@@ -472,7 +472,7 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
                  return var'
                KConstr c -> freshCoeffectVarWithBinding var (CConstr c) quantifier
                KCoeffect -> error "Coeffect kind variables not yet supported"
-               KPoly _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
+               KVar _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
                \ Please open an issue with a snippet of your code at https://github.com/dorchard/granule/issues"
                KType    -> error "Impossible" -- covered by typeBased
                KFun _ _ -> error "Tried to instantiate a non instantiatable kind"

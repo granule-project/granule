@@ -63,7 +63,7 @@ instance Pretty Kind where
     pretty KCoeffect      = "Coeffect"
     pretty (KFun k1 k2)   = pretty k1 ++ " -> " ++ pretty k2
     pretty (KConstr c)    = pretty c
-    pretty (KPoly v)      = pretty v
+    pretty (KVar v)      = pretty v
 
 instance Pretty TypeScheme where
     pretty (Forall _ [] t) = pretty t
