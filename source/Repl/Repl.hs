@@ -32,9 +32,10 @@ import qualified Control.Monad.Except as Ex
 
 type ReplPATH = [FilePath]
 type ADT = [Def]
-type REPLStateIO a  = StateT (ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
+type FreeVarGen = Int
+type REPLStateIO a  = StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
 
-instance MonadException m => MonadException (StateT (ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) m) where
+instance MonadException m => MonadException (StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
@@ -43,6 +44,15 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
   controlIO f = Ex.ExceptT $ controlIO $ \(RunIO run) -> let
                   run' = RunIO (fmap Ex.ExceptT . run . Ex.runExceptT)
                   in fmap Ex.runExceptT $ f run'
+
+eval' :: (?globals :: Globals) =>Int -> AST -> IO (Maybe Value)
+eval' val defs = do
+    bindings <- evalDefs builtIns defs
+    case lookup (mkId (" repl"++(show val))) bindings of
+      Nothing -> return Nothing
+      Just (Pure e)    -> fmap Just (evalIn bindings e)
+      Just (Promote e) -> fmap Just (evalIn bindings e)
+      Just val         -> return $ Just val
 
 liftIO' :: IO a -> REPLStateIO a
 liftIO' = lift.lift
@@ -77,14 +87,14 @@ loadInQueue :: (?globals::Globals) => Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
   -- liftIO.print $ freeVars def
   -- liftIO.print $ freeVars exp
-  (rp,adt,f,m) <- get
+  (fvg,rp,adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
-  else put $ (rp,adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
+  else put $ (fvg,rp,adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
 
 loadInQueue adt'@(ADT _ _ _ _ _) = do
-  (rp,adt,f,m) <- get
-  put (rp,(adt':adt),f,m)
+  (fvg,rp,adt,f,m) <- get
+  put (fvg,rp,(adt':adt),f,m)
 
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def, [String]) -> [String]
@@ -133,12 +143,12 @@ handleCMD s =
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
-      (_,adt,f,dict) <- get
+      (_,_,adt,f,dict) <- get
       liftIO $ print $ dumpStateAux dict
 
     handleLine (LoadFile ptr) = do
-      (rp,_,_,_) <- get
-      put (rp,[],ptr,M.empty)
+      (fvg,rp,_,_,_) <- get
+      put (fvg,rp,[],ptr,M.empty)
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
       return ()
 
@@ -147,13 +157,13 @@ handleCMD s =
       return ()
 
     handleLine Reload = do
-      (rp,adt,f,_) <- get
-      put (rp,adt,f, M.empty)
+      (fvg,rp,adt,f,_) <- get
+      put (fvg,rp,adt,f, M.empty)
       ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
       return ()
 
     handleLine (CheckType trm) = do
-      (_,adt,_,m) <- get
+      (_,_,adt,_,m) <- get
       let cked = buildAST trm m
       case cked of
         []  -> Ex.throwError (TermNotInContext trm)
@@ -164,7 +174,7 @@ handleCMD s =
             Failed -> Ex.throwError (TypeCheckError trm)
 
     handleLine (Eval ev) = do
-        (_,adt,_,m) <- get
+        (fvg,rp,adt,fp,m) <- get
         pexp <- liftIO' $ try $ expr $ scanTokens ev
         case pexp of
             Right exp -> do
@@ -181,17 +191,18 @@ handleCMD s =
                             Left e -> Ex.throwError (EvalError e)
                     _ -> do
                         let ast = buildForEval fv m
-                        typer <- liftIO $ synTypePlus exp (adt++ast)
-                        let ndef = buildDef (buildTypeScheme typer) exp
+                        typer <- synTypePlus exp (adt++ast)
+                        let ndef = buildDef fvg (buildTypeScheme typer) exp
+                        put ((fvg+1),rp,adt,fp,m)
                         checked <- liftIO' $ check (adt++ast++(ndef:[]))
                         case checked of
                             Ok -> do
-                                result <- liftIO' $ try $ eval (adt++ast++(ndef:[]))
+                                result <- liftIO' $ try $ eval' fvg (adt++ast++(ndef:[]))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "here"
                                     Right (Just result) -> liftIO $ putStrLn (pretty result)
-                            Failed -> Ex.throwError (OtherError)
+                            Failed -> Ex.throwError (OtherError')
             Left e -> Ex.throwError (ParseError e) --error from parsing (pexp)
 
 buildForEval :: [Id] -> M.Map String (Def, [String]) -> AST
@@ -203,21 +214,23 @@ synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ct
 synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
 synType exp cts = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr cts empty Positive exp
 
-synTypePlus :: (?globals::Globals) => Expr -> AST -> IO Type
+synTypePlus :: (?globals::Globals) => Expr -> AST -> REPLStateIO Type
 synTypePlus exp ast = do
-  ty <- synType exp (buildCtxtTS ast)
+  ty <- liftIO $ synType exp (buildCtxtTS ast)
   case ty of
     Just (t,a) -> return t
+    Nothing -> Ex.throwError OtherError'
 
 buildCtxtTS :: (?globals::Globals) => AST -> Ctxt TypeScheme
 buildCtxtTS [] = []
 buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
+buildCtxtTS (x@(ADT _ _ _ _ _):ast) = buildCtxtTS ast
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
-buildDef ::TypeScheme -> Expr -> Def
-buildDef ts ex = Def ((0,0),(0,0)) (mkId "main") ex [] ts
+buildDef ::Int -> TypeScheme -> Expr -> Def
+buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"++(show rfv))) ex [] ts
 
 helpMenu :: String
 helpMenu =
@@ -236,9 +249,9 @@ helpMenu =
 defaultReplPath :: [FilePath]
 defaultReplPath = ["examples\\","tests\\regression\\good\\"]
 repl :: IO ()
-repl = runInputT defaultSettings (loop (defaultReplPath,[],[],M.empty))
+repl = runInputT defaultSettings (loop (0,defaultReplPath,[],[],M.empty))
    where
-       loop :: (ReplPATH,ADT,[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
+       loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
        loop st = do
            minput <- getInputLine "Granule> "
            case minput of

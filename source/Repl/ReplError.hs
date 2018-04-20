@@ -8,6 +8,7 @@ import Control.Exception (SomeException)
 data ReplError = FilePathError String
                | TermInContext String
                | OtherError
+               | OtherError'
                | TypeCheckError String
                | ParseError SomeException
                | TermNotInContext String
@@ -21,3 +22,4 @@ instance Show ReplError where
   show (TermNotInContext trm) = "The term "++trm++" is not in the context"
   show (EvalError e)          = show e
   show OtherError             = "Error"
+  show OtherError'            = ""
