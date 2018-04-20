@@ -187,7 +187,7 @@ data IdSyntacticCategory = Value | Type
 freshVar :: IdSyntacticCategory -> Id -> Freshener Id
 freshVar cat var = do
     st <- get
-    let var' = sourceName var ++ show (counter st)
+    let var' = sourceName var ++ "_" ++ show (counter st)
     case cat of
       Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
       Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
