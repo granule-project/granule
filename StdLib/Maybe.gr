@@ -25,7 +25,7 @@ maybe |default| |f| m = case m of None -> default; (Some x) -> f x
 
 -- Monady interface for Maybe
 return : forall a : Type . a -> Maybe a
-return x = Some x
+return = Some
 
 bind : forall a : Type, b : Type
      . Maybe a -> (a -> Maybe b) |1| -> Maybe b
