@@ -1,0 +1,117 @@
+------
+--- Module: Vect
+--- Description: Base library for operations on type-indexed vects
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+-- # Operations on vects
+
+import Nat
+
+data Vect (n : Nat=) t where
+  Nil  : Vect 0 t;
+  Cons : t -> Vect n t -> Vect (n+1) t
+
+-- Length of an indexed vect into an indexed nat
+length : forall (a : Type, n : Nat=)
+       . Vect n (a |0|) -> N n
+length xs =
+  case xs of
+    Nil -> Z;
+    (Cons |_| xs) -> S (length xs)
+
+--- Map function
+map : forall (a : Type, b : Type, n : Nat=)
+    . (a -> b) |n| -> Vect n a -> Vect n b
+map |f| ys =
+  case ys of
+    Nil -> Nil;
+    (Cons x xs) -> Cons (f x) (map |f| xs)
+
+-- Standard foldr on vects
+foldr : forall (a : Type, b : Type, n : Nat=)
+      . (a -> b -> b) |n| -> b -> Vect n a -> b
+foldr |h| acc xs =
+  case xs of
+    Nil -> acc;
+    (Cons x xs) -> h x (foldr |h| acc xs)
+
+-- Append two vects
+append : forall (a : Type, n : Nat=, m : Nat=)
+       . Vect n a -> Vect m a -> Vect (n + m) a
+append xs ys =
+  case xs of
+    Nil -> ys;
+    (Cons x xs) -> Cons x (append xs ys)
+
+--- Return the first item (head) of the vect
+--- NB: non-linear in the vect
+head : forall (a : Type, n : Nat=)
+     . (Vect (n + 1) a) |1| -> a
+head xs = case xs of |(Cons x _)| -> x
+
+--- Return the vect with the first item removed
+--- NB: non-linear in the vect
+tail : forall (a : Type, n : Nat=)
+     . (Vect (n + 1) a) |1| -> Vect n a
+tail xs = case xs of |(Cons _ xs)| -> xs
+
+--- Split a vect at position 'n'
+split : forall (n : Nat=, m : Nat=, a : Type)
+         . N n -> (Vect (n + m) a) -> (Vect n a, Vect m a)
+split n xs =
+      case (n, xs) of
+        (Z , xs) -> (Nil, xs);
+        ((S n), (Cons x xs)) ->
+           let (xs', ys') = split n xs
+           in (Cons x xs', ys')
+
+--- Simple folds
+sum : forall n : Nat= . Vect n Int -> Int
+sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
+
+product : forall n : Nat= . Vect n Int -> Int
+product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
+
+--- Replicate n x is a vect of length n with x the value of every element
+replicate : forall (n : Nat=, a : Type) . N n -> a |n| -> Vect n a
+replicate n |c| = case n of
+    Z -> Nil;
+    (S n) -> Cons c (replicate n |c|)
+
+--- Make a vect of length n with all integers from 0 to n-1
+---     > range (S (S (S (S Z))))
+---     Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
+range : forall n : Nat= . N n -> Vect n Int
+range n = range' n |0|
+
+--- Make a vect of length n with all integers from `start` up until `n + i - 1`
+---     > range' (S (S (S (S Z)))) |-6|
+---     Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))
+range' : forall n : Nat= . N n -> Int |n| -> Vect n Int
+range' n |i| =
+    case n of
+    Z -> Nil;
+    (S n) -> Cons i (range' n |(i + 1)|)
+
+--- pushVect pushes in non linearity of vect into the elements
+pushVect : forall (k : Nat, n : Nat=, a : Type)
+         . (Vect n a) |k+1| -> Vect n (a |k+1|)
+pushVect xs =
+    case xs of
+      |Nil|         -> Nil;
+      |(Cons x xs)| -> Cons |x| (pushVect |xs|)
+
+--- pullVect pulls non linearity in elements into a non linearity on the whole vect
+pullVect : forall (k : Nat, n : Nat=, a : Type)
+         . Vect n (a |k|) -> (Vect n a) |k|
+pullVect xs =
+    case xs of
+       Nil -> |Nil|;
+       (Cons |x| xs) ->
+         case pullVect xs of
+          |ys| -> |(Cons x ys)|

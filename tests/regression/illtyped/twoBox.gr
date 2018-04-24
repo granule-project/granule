@@ -1,8 +1,8 @@
 data Two a where
   TwoBox : a |2| -> Two a
 
-three : forall a : Type . Two a -> List 3 a
+three : forall a : Type . Two a -> Vect 3 a
 three c = case c of (TwoBox |x|) -> Cons x (Cons x (Cons x Nil))
 
-main : List 3 Int
+main : Vect 3 Int
 main = three (TwoBox |0|)
