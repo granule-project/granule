@@ -1,0 +1,47 @@
+import Sequence
+import List
+
+--- A tree which abstracts over the branching factor.
+--- Stolen from SPJ's _Adventure with Types in Haskell_ (lecture 2)
+data FTree (f : Type -> Type) a where
+  Leaf : a -> FTree f a;
+  Branch : f (FTree f a) -> FTree f a
+
+-- type BinaryTree = FTree (List 2)
+
+binaryTree : FTree (List 2) String
+binaryTree = Branch (Cons (Leaf "Hello") (Cons (Leaf "World") Nil))
+
+--- An annotated homogenous pair
+data AnnPair a where
+  AnnPair : String -> a -> a -> AnnPair a
+
+-- type AnnBinTree = FTree AnnHPair
+annBinTree : FTree AnnPair Float
+annBinTree = Branch (AnnPair "Two awesome numbers" (Leaf 0.01) (Leaf 3.14))
+
+-- type RoseTree = FTree Sequence
+roseTree : FTree Sequence Int
+roseTree =
+  Branch
+    (Next (Leaf 1)
+    (Next (Branch
+            (Next (Leaf 2)
+            Empty))
+    Empty))
+
+--- Like `FTree`, but with data in the `Branch` instead of `Leaf`
+data FTree' (f : Type -> Type) a where
+  Empty' : FTree' f a;
+  Node' : a -> f (FTree' f a) -> FTree' f a
+
+roseTree' : FTree' Sequence Int
+roseTree' = Node' 1 (Empty)
+
+--- Alternative where `f` controls when the F-Tree stops, e.g. `Nil` case for `Sequence`,
+--- `None` case for `Maybe`.
+data Multi (f : Type -> Type) a where
+  Multi : a -> f (Multi f a) -> Multi f a
+
+foo : Multi Sequence String
+foo = Multi "Lorem" (Next (Multi "ipsum" Empty) (Next (Multi "dolor" Empty) Empty))
