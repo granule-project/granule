@@ -14,11 +14,11 @@ data Sequence a where
   Empty : Sequence a;
   Next : a -> Sequence a -> Sequence a
 
-length : forall a : Type . Sequence (a |0|) -> Int
-length xs =
+length_s : forall a : Type . Sequence (a |0|) -> Int
+length_s xs =
   case xs of
     Empty         -> 0;
-    (Next |_| xs) -> 1 + length xs
+    (Next |_| xs) -> 1 + length_s xs
 
 mbHead : forall a : Type . (Sequence a) |1| -> Maybe a
 mbHead xs =
