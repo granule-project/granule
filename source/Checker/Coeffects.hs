@@ -46,6 +46,7 @@ inferCoeffectType _ (CNatOmega _)     = return $ CConstr $ mkId "Nat*"
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
 inferCoeffectType s (CTimes c c') = mguCoeffectTypes s c c'
+inferCoeffectType s (CExpon c c') = mguCoeffectTypes s c c'
 inferCoeffectType s (CMeet c c')  = mguCoeffectTypes s c c'
 inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
 

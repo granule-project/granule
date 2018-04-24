@@ -78,6 +78,7 @@ tokens :-
   \>\=                          { \p s -> TokenOp p s }
   \=\=                          { \p s -> TokenOp p s }
   \`                            { \p s -> TokenBackTick p }
+  \^                            { \p s -> TokenCaret p }
 
 
 {
@@ -89,6 +90,7 @@ data Token
   | TokenThen   AlexPosn
   | TokenElse   AlexPosn
   | TokenData   AlexPosn
+  | TokenTypeDecl AlexPosn
   | TokenWhere  AlexPosn
   | TokenCase   AlexPosn
   | TokenOf     AlexPosn
@@ -127,6 +129,7 @@ data Token
   | TokenSemicolon  AlexPosn
   | TokenForwardSlash AlexPosn
   | TokenOp AlexPosn String
+  | TokenCaret AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String

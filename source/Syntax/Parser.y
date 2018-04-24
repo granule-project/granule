@@ -62,6 +62,7 @@ import System.Exit (die)
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
+    '^'   { TokenCaret _ }
     OP    { TokenOp _ _ }
 
 
@@ -70,6 +71,7 @@ import System.Exit (die)
 %left ':'
 %left '+' '-'
 %left '*'
+%left '^'
 %left '|'
 %left '.'
 %%
@@ -194,6 +196,7 @@ TyAtom :: { Type }
   | INT                           { let TokenInt _ x = $1 in TyInt x }
   | TyAtom '+' TyAtom             { TyInfix ("+") $1 $3 }
   | TyAtom '*' TyAtom             { TyInfix ("*") $1 $3 }
+  | TyAtom '^' TyAtom             { TyInfix ("^") $1 $3 }
   | TyAtom '/' '\\' TyAtom        { TyInfix ("/\\") $1 $4 }
   | TyAtom '\\' '/' TyAtom        { TyInfix ("\\/") $1 $4 }
   | '(' Type '|' Coeffect '|' ')' { Box $4 $2 }
@@ -211,6 +214,7 @@ Coeffect :: { Coeffect }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
+  | Coeffect '^' Coeffect       { CExpon $1 $3 }
   | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
   | '(' Coeffect ')'            { $2 }

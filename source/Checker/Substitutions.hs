@@ -173,6 +173,11 @@ instance Substitutable Coeffect where
       c2' <- substitute subst c2
       return $ CTimes c1' c2'
 
+  substitute subst (CExpon c1 c2) = do
+      c1' <- substitute subst c1
+      c2' <- substitute subst c2
+      return $ CExpon c1' c2'
+
   substitute subst (CVar v) =
       case lookup v subst of
         Just (SubstC c) -> do
@@ -417,6 +422,7 @@ compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
   case op of
     "+"   -> return $ CPlus t1' t2'
     "*"   -> return $ CTimes t1' t2'
+    "^"   -> return $ CExpon t1' t2'
     "\\/" -> return $ CJoin t1' t2'
     "/\\" -> return $ CMeet t1' t2'
     _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " ++ op

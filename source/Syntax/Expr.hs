@@ -244,6 +244,7 @@ instance Term Coeffect where
     freeVars (CVar v) = [v]
     freeVars (CPlus c1 c2) = freeVars c1 ++ freeVars c2
     freeVars (CTimes c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CExpon c1 c2) = freeVars c1 ++ freeVars c2
     freeVars (CMeet c1 c2) = freeVars c1 ++ freeVars c2
     freeVars (CJoin c1 c2) = freeVars c1 ++ freeVars c2
     freeVars CNat{}  = []
@@ -273,10 +274,16 @@ instance Freshenable Coeffect where
       c1' <- freshen c1
       c2' <- freshen c2
       return $ CPlus c1' c2'
+
     freshen (CTimes c1 c2) = do
       c1' <- freshen c1
       c2' <- freshen c2
       return $ CTimes c1' c2'
+
+    freshen (CExpon c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
+      return $ CExpon c1' c2'
 
     freshen (CMeet c1 c2) = do
       c1' <- freshen c1
@@ -606,6 +613,7 @@ data Coeffect = CNat      NatModifier Int
               | Level     Int
               | CSet      [(String, Type)]
               | CSig      Coeffect CKind
+              | CExpon    Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
 data NatModifier = Ordered | Discrete
