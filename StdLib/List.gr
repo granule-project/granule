@@ -12,9 +12,9 @@
 
 import Nat
 
-data List : Nat= -> Type -> Type where
-  Nil  : forall (t : Type) . List 0 t;
-  Cons : forall (t : Type, n : Nat=) . t -> List n t -> List (n+1) t
+data List (n : Nat=) t where
+  Nil  : List 0 t;
+  Cons : t -> List n t -> List (n+1) t
 
 -- Length of an indexed list into an indexed nat
 length : forall (a : Type, n : Nat=)
