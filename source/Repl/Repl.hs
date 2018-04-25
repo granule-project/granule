@@ -66,15 +66,18 @@ processFilesREPL globPatterns f = forM globPatterns $ (\p -> do
 
 --[] -> lift $ Ex.throwError (FilePathError p)
 
-replPath :: [String] -> [FilePath] -> IO [[FilePath]]
-replPath [] rps = return [[]]
-replPath (f:fs) rps = do
+replPath :: String -> ReplPATH -> IO [[FilePath]]
+replPath f rps = do
    let pat = compile f
    forM rps $ (\x -> globDir1 pat x)
 
-searchPath :: ReplPATH -> [FilePath]
-searchPath [] = []
-searchPath (r:rp) = undefined
+searchRP :: [String] -> ReplPATH -> IO [[FilePath]]
+searchRP [] rp = return [[]]
+searchRP (s:sx) rp =do
+   x <- (replPath s rp)
+   y <- searchRP sx rp
+   return $ x ++ y
+
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
@@ -183,7 +186,7 @@ handleCMD s =
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
       put (fvg,rp,[],ptr,M.empty)
-      x <- liftIO (replPath ptr rp)
+      x <- liftIO' (searchRP ptr rp)
       case concat x of
         [] -> do
           ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
