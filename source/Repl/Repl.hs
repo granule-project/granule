@@ -18,7 +18,7 @@ import Control.Monad.Trans.Maybe
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 import Repl.ReplError
-import System.FilePath.Glob (glob)
+import System.FilePath.Glob (glob, compile, globDir1)
 import Utils
 import Syntax.Pretty
 import Syntax.Expr
@@ -63,6 +63,14 @@ processFilesREPL globPatterns f = forM globPatterns $ (\p -> do
     case filePaths of
         [] -> lift $ Ex.throwError (FilePathError p)
         _ -> forM filePaths f)
+
+--[] -> lift $ Ex.throwError (FilePathError p)
+
+replPath :: [String] -> [FilePath] -> IO [[FilePath]]
+replPath [] rps = return [[]]
+replPath (f:fs) rps = do
+   let pat = compile f
+   forM rps $ (\x -> globDir1 pat x)
 
 searchPath :: ReplPATH -> [FilePath]
 searchPath [] = []
@@ -132,6 +140,32 @@ printType trm m = let v = M.lookup trm m in
                       Nothing ->""
                       Just (def@(Def _ id _ _ ty),lid) -> (pretty id)++" : "++(pretty ty)
 
+buildForEval :: [Id] -> M.Map String (Def, [String]) -> AST
+buildForEval [] _ = []
+buildForEval (x:xs) m = buildAST (sourceName x) m ++ buildForEval xs m
+
+synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ctxt Mo.Assumption))
+synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
+synType exp cts = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr cts empty Positive exp
+
+synTypePlus :: (?globals::Globals) => Expr -> AST -> REPLStateIO Type
+synTypePlus exp ast = do
+  ty <- liftIO $ synType exp (buildCtxtTS ast)
+  case ty of
+    Just (t,a) -> return t
+    Nothing -> Ex.throwError OtherError'
+
+buildCtxtTS :: (?globals::Globals) => AST -> Ctxt TypeScheme
+buildCtxtTS [] = []
+buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
+buildCtxtTS (x@(ADT _ _ _ _ _):ast) = buildCtxtTS ast
+
+buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
+buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
+
+buildDef ::Int -> TypeScheme -> Expr -> Def
+buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"++(show rfv))) ex [] ts
+
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
 handleCMD "" = Ex.return ()
@@ -149,8 +183,14 @@ handleCMD s =
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
       put (fvg,rp,[],ptr,M.empty)
-      ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
-      return ()
+      x <- liftIO (replPath ptr rp)
+      case concat x of
+        [] -> do
+          ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
+          return ()
+        _ -> do
+          ecs <- processFilesREPL (concat x) (let ?globals = ?globals in readToQueue)
+          return ()
 
     handleLine (AddModule ptr) = do
       ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
@@ -200,37 +240,10 @@ handleCMD s =
                                 result <- liftIO' $ try $ eval' fvg (adt++ast++(ndef:[]))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
-                                    Right Nothing -> liftIO $ print "here"
+                                    Right Nothing -> liftIO $ print "if here fix"
                                     Right (Just result) -> liftIO $ putStrLn (pretty result)
                             Failed -> Ex.throwError (OtherError')
             Left e -> Ex.throwError (ParseError e) --error from parsing (pexp)
-
-buildForEval :: [Id] -> M.Map String (Def, [String]) -> AST
-buildForEval [] _ = []
-buildForEval (x:xs) m = buildAST (sourceName x) m ++ buildForEval xs m
-
-
-synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ctxt Mo.Assumption))
-synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
-synType exp cts = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr cts empty Positive exp
-
-synTypePlus :: (?globals::Globals) => Expr -> AST -> REPLStateIO Type
-synTypePlus exp ast = do
-  ty <- liftIO $ synType exp (buildCtxtTS ast)
-  case ty of
-    Just (t,a) -> return t
-    Nothing -> Ex.throwError OtherError'
-
-buildCtxtTS :: (?globals::Globals) => AST -> Ctxt TypeScheme
-buildCtxtTS [] = []
-buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
-buildCtxtTS (x@(ADT _ _ _ _ _):ast) = buildCtxtTS ast
-
-buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
-buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
-
-buildDef ::Int -> TypeScheme -> Expr -> Def
-buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"++(show rfv))) ex [] ts
 
 helpMenu :: String
 helpMenu =
