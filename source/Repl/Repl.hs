@@ -202,8 +202,15 @@ handleCMD s =
     handleLine Reload = do
       (fvg,rp,adt,f,_) <- get
       put (fvg,rp,adt,f, M.empty)
-      ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
-      return ()
+      x <- liftIO' (searchRP f rp)
+      case concat x of
+        [] -> do
+          ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
+          return ()
+        _ -> do
+          ecs <- processFilesREPL (concat x) (let ?globals = ?globals in readToQueue)
+          return ()
+
 
     handleLine (CheckType trm) = do
       (_,_,adt,_,m) <- get
