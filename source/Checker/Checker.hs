@@ -293,16 +293,16 @@ checkExpr defs gam pol topLevel tau e = do
         debugM "+ Compare for equality " $ pretty tau' ++ " = " ++ pretty tau
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypes (getSpan e) tau' tau
-          else lEqualTypes (getSpan e) tau' tau
+          then equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+          else lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
 
       -- i.e., this check is from a synth
       Negative -> do
         debugM "- Compare for equality " $ pretty tau ++ " = " ++ pretty tau'
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypes (getSpan e) tau tau'
-          else lEqualTypes (getSpan e) tau tau'
+          then equalTypesWithPolarity (getSpan e) FstIsSpec tau' tau
+          else lEqualTypesWithPolarity (getSpan e) FstIsSpec tau' tau
 
   if tyEq
     then return (gam', subst)
