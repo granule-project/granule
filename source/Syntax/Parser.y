@@ -113,7 +113,8 @@ DataConstrs :: { [DataConstr] }
   | {- empty -}               { [] }
 
 DataConstr :: { DataConstr }
-  : CONSTR ':' TypeScheme     { DataConstr (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+  : CONSTR ':' TypeScheme     { DataConstrG (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+  | CONSTR TyParams           { DataConstrA (getPosToSpan $1) (mkId $ constrString $1) $2 }
 
 DataConstrNext :: { [DataConstr] }
   : ';' DataConstrs           { $2 }
@@ -138,7 +139,7 @@ PAtoms :: { [Pattern] }
 
 Pat :: { Pattern }
   : PAtom                     { $1 }
-  | '(' CONSTR PAtoms ')'      { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
+  | '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
 
 PAtom :: { Pattern }
   : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
@@ -201,6 +202,10 @@ TyAtom :: { Type }
   | TyAtom '\\' '/' TyAtom        { TyInfix ("\\/") $1 $4 }
   | '(' Type '|' Coeffect '|' ')' { Box $4 $2 }
   | '(' TyJuxt ')' { $2 }
+
+TyParams :: { [Type] }
+  : TyAtom TyParams             { $1 : $2 } -- use right recursion for simplicity -- VBL
+  |                             { [] }
 
 Coeffect :: { Coeffect }
   : NatCoeff                    { $1 }

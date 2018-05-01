@@ -9,9 +9,9 @@ module Checker.Checker where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import Data.List (genericLength)
+import Data.List (genericLength, intercalate)
 import Data.Maybe
-import Data.SBV hiding (Kind, kindOf)
+import Data.SBV hiding (Kind, kindOf, extend)
 
 import Checker.Coeffects
 import Checker.Constraints
@@ -71,29 +71,53 @@ checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
     st <- get
     let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    mapM_ (checkDataCon name kind) dataConstrs
+    mapM_ (checkDataCon name kind tyVars) dataConstrs
 
 checkDataCon :: (?globals :: Globals )
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
+  -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind (DataConstr sp dName tySch@(Forall _ tyVars ty)) = do
-    debugM "checkDataCons.dataCs" $ "Checking " ++ pretty dName ++ " : " ++ pretty tySch
-    tySchKind <- inferKindOfType' sp tyVars ty
-    case tySchKind of
-      KType -> valid ty
-      _     -> illKindedNEq sp KType kind
+checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) = do
+    case intersectCtxts tyVarsT tyVarsD of
+      [] -> do -- no clashes
+        let tyVars = tyVarsT ++ tyVarsD
+        tySchKind <- inferKindOfType' sp tyVars ty
+        case tySchKind of
+          KType -> do
+            check ty
+            st <- get
+            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+              Some ds -> put st { dataConstructors = ds }
+              None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" ++ pretty dName ++ "` already defined."
+          _     -> illKindedNEq sp KType kind
+      vs -> halt $ NameClashError (Just sp) $ mconcat
+                    ["Type variable(s) ", intercalate ", " $ map (\(i,_) -> "`" ++ pretty i ++ "`") vs
+                    ," in data constructor `", pretty dName
+                    ,"` are already bound by the associated type constructor `", pretty tName
+                    , "`. Choose different, unbound names."]
   where
-    valid (TyCon tC) = if tC == tName
-        then do
-          let dataConstructor = (dName, Forall sp tyVars ty)
-          modify $ \st -> st { dataConstructors = dataConstructor : dataConstructors st }
-        else halt $ GenericError (Just sp) $ "Expected type constructor `" ++ pretty tName
+    check (TyCon tC) =
+        if tC == tName
+          then return ()
+          else halt $ GenericError (Just sp) $ "Expected type constructor `" ++ pretty tName
                                              ++ "`, but got `" ++ pretty tC ++ "` in  `"
-    valid (FunTy arg res) = valid res
-    valid (TyApp fun arg) = valid fun
-    valid x = halt $ GenericError (Just sp) $ "`" ++ pretty x ++ "` not valid in a datatype definition."
+    check (FunTy arg res) = check res
+    check (TyApp fun arg) = check fun
+    check x = halt $ GenericError (Just sp) $ "`" ++ pretty x ++ "` not valid in a datatype definition."
+
+checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
+    st <- get
+    case extend (dataConstructors st) dName tySch of
+      Some ds -> put st { dataConstructors = ds }
+      None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" ++ pretty dName ++ "` already defined."
+  where
+    tySch = Forall sp tyVars ty
+    ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
+    returnTy t [] = t
+    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
+
 
 checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions

@@ -432,7 +432,10 @@ data DataDecl = DataDecl Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
 
 instance FirstParameter DataDecl Span
 
-data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
+data DataConstr
+  = DataConstrG Span Id TypeScheme
+  | DataConstrA Span Id [Type]
+  deriving (Eq, Show, Generic)
 
 instance FirstParameter DataConstr Span
 
@@ -440,7 +443,7 @@ instance FirstParameter DataConstr Span
 type Cardinality = Maybe Nat
 
 freshenAST :: AST -> AST
-freshenAST (AST dds defs) = AST (map runFreshener dds) (map runFreshener defs)
+freshenAST (AST dds defs) = AST dds (map runFreshener defs)
 
 {-| Alpha-convert all bound variables of a definition, modulo the things on the lhs
 Eg this:
@@ -463,16 +466,6 @@ instance Freshenable Def where
     t  <- freshen t
     e  <- freshen e
     return (Def s var e ps t)
-
--- | Also push down the type variables from the data declaration head
--- into the data constructors
-instance Freshenable DataDecl where
-  freshen (DataDecl sp tyCon tyVars kind dataCs) = do
-    dataCs <-
-      forM dataCs $ \(DataConstr sp name tySch) -> do
-                      (Forall sp' vs ty) <- freshen tySch
-                      return $ DataConstr sp name (Forall sp' (tyVars ++ vs) ty)
-    return $ DataDecl sp tyCon tyVars kind dataCs
 
 instance Term Def where
   freeVars (Def _ name body binders _) = delete name (freeVars body \\ concatMap boundVars binders)
