@@ -21,7 +21,7 @@ data Maybe a where
 -- returns the result.
 maybe : forall a : Type, b : Type
       . b |1| -> (a -> b) |1| -> Maybe a -> b
-maybe |default| |f| m = case m of None -> default; (Some x) -> f x
+maybe |default| |f| m = case m of None -> default; Some x -> f x
 
 -- Monady interface for Maybe
 return : forall a : Type . a -> Maybe a
@@ -32,7 +32,7 @@ bind : forall a : Type, b : Type
 bind m |k| =
   case m of
     None -> None;
-    (Some x) -> k x
+    Some x -> k x
 
 --- The fromMaybe function takes a default value and and Maybe value. If the
 -- Maybe is None, it returns the default values; otherwise, it returns the value
@@ -45,7 +45,7 @@ fromMaybe default m = maybe default |(\(x : a) -> x)| m
 isSome : forall a : Type . Maybe (a |0|) -> Bool
 isSome m =
   case m of
-    (Some |x|) -> True;
+    Some |x| -> True;
     None       -> False
 
 -- The isNone function returns True iff its argument is None.

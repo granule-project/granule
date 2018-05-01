@@ -307,6 +307,9 @@ CasesNext :: { [(Pattern, Expr)] }
 
 Case :: { (Pattern, Expr) }
   : Pat '->' Expr             { ($1, $3) }
+  | CONSTR PAtoms '->' Expr   { let TokenConstr _ x = $1
+                                 in (PConstr (getPosToSpan $1) (mkId x) $2, $4) }
+
 
 Form :: { Expr }
   : Form '+' Form             { Binop (getPosToSpan $2) "+" $1 $3 }
