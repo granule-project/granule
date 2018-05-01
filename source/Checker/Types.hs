@@ -218,16 +218,16 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
 
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
-      tyVarConstraint k1 k2 n m
+      tyVarConstraint k2 k1 m n
 
     -- Trying to unify other (existential) variables
-    (Just (KType, _), Just (k, _)) | k /= KType -> do
-      k <- inferKindOfType s (TyVar m)
-      illKindedUnifyVar s (TyVar n) KType (TyVar m) k
+  --  (Just (KType, _), Just (k, _)) | k /= KType -> do
+  --    k <- inferKindOfType s (TyVar m)
+  --    illKindedUnifyVar s (TyVar n) KType (TyVar m) k
 
-    (Just (k, _), Just (KType, _)) | k /= KType -> do
-      k <- inferKindOfType s (TyVar n)
-      illKindedUnifyVar s (TyVar n) k (TyVar m) KType
+  --  (Just (k, _), Just (KType, _)) | k /= KType -> do
+--      k <- inferKindOfType s (TyVar n)
+--      illKindedUnifyVar s (TyVar n) k (TyVar m) KType
 
     -- Otherwise
     --(Just (k1, _), Just (k2, _)) ->
