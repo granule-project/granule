@@ -404,7 +404,6 @@ substCtxt subst ((v, x):ctxt) = do
     then return (substituteds, (v, x) : unsubstituteds)
     else return ((v, x') : substituteds, unsubstituteds)
 
-
 substAssumption :: (?globals :: Globals) => Substitution -> (Id, Assumption)
   -> MaybeT Checker (Id, Assumption)
 substAssumption subst (v, Linear t) = do

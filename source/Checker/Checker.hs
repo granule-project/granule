@@ -162,8 +162,8 @@ checkExpr :: (?globals :: Globals )
 
 -- Checking of constants
 
-checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _)) | internalName c == "Int" = return ([], [])
-checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" =  return ([], [])
+checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _))   | internalName c == "Int"   = return ([], [])
+checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" = return ([], [])
 
 checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
   -- If an explicit signature on the lambda was given, then check
@@ -196,12 +196,12 @@ checkExpr defs gam pol topLevel tau
     equalTypes s (TyCon $ mkId "Float") tau
     checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon $ mkId "Float")) e
 
--- Application synthesis
+-- Application checking
 checkExpr defs gam pol topLevel tau (App s e1 e2) = do
     (argTy, gam2) <- synthExpr defs gam pol e2
     (gam1, subst) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
-    gam' <- ctxPlus s gam1 gam2
-    return (gam', subst)
+    gam <- ctxPlus s gam1 gam2
+    return (gam, subst)
 
 {-
 
@@ -457,7 +457,7 @@ synthExpr defs gam pol (App s e e') = do
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
-         (gam2, subst) <- checkExpr defs gam  (flipPol pol) False sig e'
+         (gam2, subst) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxPlus s gam1 gam2
          tau    <- substitute subst tau
          return (tau, gamNew)
