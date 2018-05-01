@@ -38,6 +38,13 @@ data Substitutors =
   | SubstE  Effect
   deriving (Eq, Show)
 
+instance Pretty Substitutors where
+  pretty (SubstT t) = "->" ++ pretty t
+  pretty (SubstC c) = "->" ++ pretty c
+  pretty (SubstK k) = "->" ++ pretty k
+  pretty (SubstCK k) = "->" ++ pretty k
+  pretty (SubstE e) = "->" ++ pretty e
+
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
   type SubstitutionContext t x
