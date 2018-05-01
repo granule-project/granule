@@ -283,6 +283,12 @@ refutablePattern sp p =
 halt :: (?globals :: Globals) => TypeError -> MaybeT Checker a
 halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 
+typeClashForVariable :: (?globals :: Globals) => Span -> Id -> Type -> Type -> MaybeT Checker a
+typeClashForVariable s var t1 t2 =
+    halt $ GenericError (Just s)
+             $ "Variable " ++ pretty var ++ " is being used at two conflicting types "
+            ++ "`" ++ pretty t1 ++ "` and `" ++ pretty t2 ++ "`"
+
 -- Various interfaces for the checker
 instance Monad Checker where
   return = Checker . return

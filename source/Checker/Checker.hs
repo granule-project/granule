@@ -761,15 +761,13 @@ extCtxt s ctxt var (Linear t) = do
        if t == t'
         then halt $ LinearityError (Just s)
                   $ "Linear variable `" ++ pretty var ++ "` is used more than once.\n"
-        else halt $ GenericError (Just s)
-                   $ "Type clash for variable `" ++ pretty var ++ "`"
+        else typeClashForVariable s var t t'
     Just (Discharged t' c) ->
        if t == t'
          then do
            k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
-         else halt $ GenericError (Just s)
-                   $ "Type clash for variable " ++ pretty var ++ "`"
+         else typeClashForVariable s var t t'
     Nothing -> return $ (var, Linear t) : ctxt
 
 extCtxt s ctxt var (Discharged t c) = do
@@ -778,17 +776,13 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Discharged t' c') ->
         if t == t'
         then return $ replace ctxt var (Discharged t' (c `CPlus` c'))
-        else do
-          halt $ GenericError (Just s)
-               $ "Type clash for variable `" ++ pretty var ++ "`"
+        else typeClashForVariable s var t t'
     Just (Linear t') ->
         if t == t'
         then do
            k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
-        else do
-          halt $ GenericError (Just s)
-               $ "Type clash for variable " ++ pretty var ++ "`"
+        else typeClashForVariable s var t t'
     Nothing -> return $ (var, Discharged t c) : ctxt
 
 -- Helper, foldM on a list with at least one element

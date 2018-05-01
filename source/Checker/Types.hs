@@ -178,6 +178,9 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   checkerState <- get
+  debugM "variable equality" $ pretty n ++ " ~ " ++ pretty m ++ " where "
+                            ++ pretty (lookup n (tyVarContext checkerState)) ++ " and "
+                            ++ pretty (lookup m (tyVarContext checkerState))
 
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
@@ -247,7 +250,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
           $ "span: " ++ show s
           ++ "\nallowUniversalSpecialisation: " ++ show allowUniversalSpecialisation
-          ++ "\nTyVar: " ++ show n ++ "\ntype: " ++ show t ++ "\nspec indicator: " ++ show sp
+          ++ "\nTyVar: " ++ show n ++ " with " ++ show (lookup n (tyVarContext checkerState))
+          ++ "\ntype: " ++ show t ++ "\nspec indicator: " ++ show sp
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | q == InstanceQ || q == BoundQ -> do
