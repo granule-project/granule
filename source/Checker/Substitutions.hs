@@ -401,6 +401,15 @@ combineSubstitutions sp u1 u2 = do
 Just ([((Id "y" "y"),Linear (TyInt 0))],[((Id "x" "x"),Linear (TyVar (Id "x" "x"))),((Id "z" "z"),Discharged (TyVar (Id "z" "z")) (CVar (Id "b" "b")))])
 -}
 
+instance Substitutable (Ctxt Assumption) where
+  type SubstitutionContext (Ctxt Assumption) x = MaybeT Checker x
+
+  substitute subst ctxt = do
+    (ctxt0, ctxt1) <- substCtxt subst ctxt
+    return (ctxt0 ++ ctxt1)
+
+  unify = error "Unify not implemented for contexts"
+
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
   -> MaybeT Checker (Ctxt Assumption, Ctxt Assumption)
 substCtxt _ [] = return ([], [])
