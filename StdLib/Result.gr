@@ -10,8 +10,8 @@
 
 --- # Result type
 data Result a where
-  Ok : a -> Result a;
-  Failed : String |1| -> Result a
+  Ok a;
+  Failed (String |1|)
 
 --- The fromResult function takes a default value and and Result value. If the
 -- Result is Failed, it returns the default value; otherwise, it returns the value

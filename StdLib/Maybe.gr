@@ -11,9 +11,7 @@
 import Bool
 
 --- Type-safe null; wrap a computation that could fail
-data Maybe a where
-  None : Maybe a;
-  Some : a -> Maybe a
+data Maybe a where Some a; None
 
 --- The maybe function takes a default value, a function, and a Maybe value.
 --- If the Maybe value is None, the function returns the default value.
