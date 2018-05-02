@@ -1,5 +1,5 @@
 import List
-import Vect
+import Vec
 
 --- A tree which abstracts over the branching factor.
 --- Stolen from SPJ's _Adventure with Types in Haskell_ (lecture 2)
@@ -7,9 +7,9 @@ data FTree (f : Type -> Type) a where
   Leaf : a -> FTree f a;
   Branch : f (FTree f a) -> FTree f a
 
--- type BinaryTree = FTree (Vect 2)
+-- type BinaryTree = FTree (Vec 2)
 
-binaryTree : FTree (Vect 2) String
+binaryTree : FTree (Vec 2) String
 binaryTree = Branch (Cons (Leaf "Hello") (Cons (Leaf "World") Nil))
 
 --- An annotated homogenous pair

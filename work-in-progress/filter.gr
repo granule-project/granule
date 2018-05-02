@@ -1,10 +1,10 @@
-import Vect
+import Vec
 import Bool
 
 filter : forall n : Nat=, m : Nat=
-       . (Int -> Bool) |n| -> Vect n Int -> Vect m Int -- where n >= m
-filter |predicate| vect =
-    case vect of
+       . (Int -> Bool) |n| -> Vec n Int -> Vec m Int -- where n >= m
+filter |predicate| vec =
+    case vec of
       Nil -> Nil;
       (Cons x xs) ->
         (case predicate x of

@@ -2,8 +2,8 @@ import Prelude
 import List
 
 filter : (Int -> Bool) |∞| -> List Int -> List Int
-filter |predicate| vect =
-    case vect of
+filter |predicate| vec =
+    case vec of
       Empty -> Empty;
       (Next x xs) -> if predicate x
         then Next x (filter |predicate| xs)
