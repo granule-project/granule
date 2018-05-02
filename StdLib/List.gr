@@ -10,9 +10,7 @@
 
 import Result
 
-data List a where
-  Empty : List a;
-  Next : a -> List a -> List a
+data List a where Empty; Next a (List a)
 
 length_s : forall a : Type . List (a |0|) -> Int
 length_s xs =

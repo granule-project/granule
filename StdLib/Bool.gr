@@ -11,9 +11,7 @@
 --- # Boolean type
 
 --- Boolean
-data Bool where
-  False : Bool;
-  True : Bool
+data Bool where False; True
 
 --- # Boolean algebra
 

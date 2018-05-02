@@ -8,14 +8,21 @@ module Context where
 
 import Data.Maybe (isJust)
 import Data.List (sortBy)
-import Syntax.Expr (Id)
+import Syntax.Expr (Id, sourceName)
+import Utils
 
 -- | Type of contexts
 type Ctxt t = [(Id, t)]
 
--- | Extend an context with a new value
-extend :: Ctxt a -> Id -> a -> Ctxt a
-extend ctxt x v = (x, v) : ctxt
+-- | Extend a context with a new value (shadowing an existing binder)
+extendShadow :: Ctxt a -> Id -> a -> Ctxt a
+extendShadow ctxt i v = (i, v) : ctxt
+
+-- | Extend an context with a new value, ensure that the name is not in the context
+extend :: Ctxt a -> Id -> a -> Result (Ctxt a)
+extend ctxt i v = case lookup i ctxt of
+  Nothing -> Some $ (i, v) : ctxt
+  _ -> None ["Name clash: `" ++ sourceName i ++ "` was already in the context."]
 
 -- | Empty context
 empty :: Ctxt a

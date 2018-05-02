@@ -1,10 +1,10 @@
 import Bool
 
-data IOMode : Type where
-  ReadMode      : IOMode;
-  WriteMode     : IOMode;
-  AppendMode    : IOMode;
-  ReadWriteMode : IOMode
+data IOMode where
+  ReadMode      ;
+  WriteMode     ;
+  AppendMode    ;
+  ReadWriteMode
 
 readFile : String -> FileIO String
 readFile filename =
