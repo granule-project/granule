@@ -185,6 +185,16 @@ handleCMD s =
       (_,_,adt,f,dict) <- get
       liftIO $ print $ dumpStateAux dict
 
+    handleLine (RunParser str) = do
+      pstr <- liftIO' $ try $ parseDefs str
+      case pstr of
+        Right ast -> liftIO $ print (show ast)
+        Left e -> do
+          liftIO $ print "here"
+          Ex.throwError (ParseError e)
+
+    handleLine (RunLexer str) = do
+      liftIO $ print $ show (scanTokens str)
 
     handleLine (ShowDef term) = do
       (_,_,_,_,m) <- get
@@ -275,6 +285,8 @@ helpMenu =
       ":quit              (:q)  Quit Granule\n"++
       ":type <term>       (:t)  Display type of term\n"++
       ":show <term>       (:s)  Display AST of term in state\n"++
+      ":parse <string>    (:p)  Run Granule parser on given string\n"++
+      ":lexer <string>    (:x)  Run Granule lexer on given string and display [Token]\n"++
       ":dump              (:d)  Display the context\n"++
       ":load <filepath>   (:l)  Load an external file into the context\n"++
       ":module <filepath> (:m)  Add file/module to the current context\n"++

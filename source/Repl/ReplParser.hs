@@ -39,6 +39,8 @@ data REPLExpr =
     | Reload
     | CheckType String
     | Eval String
+    | RunParser String
+    | RunLexer String
     deriving Show
 
 replTermCmdParser short long c p = do
@@ -101,6 +103,9 @@ checkTypeParser = replTyCmdParser "t" "type" CheckType
 
 showAstParser = replTyCmdParser "s" "show" ShowDef
 
+runParserRepl = replTyCmdParser "p" "parse" RunParser
+
+runLexer = replTyCmdParser "x" "lexer" RunLexer
 
 
 
@@ -112,6 +117,8 @@ lineParser = try dumpStateParser
           <|> try reloadFileParser
           <|> try checkTypeParser
           <|> try showAstParser
+          <|> try runParserRepl
+          <|> try runLexer
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
           <|> evalParser
