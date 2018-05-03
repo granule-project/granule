@@ -137,6 +137,8 @@ buildAST t m = let v = M.lookup t m in
                                                  buildDef [] =  []
                                                  buildDef (x:xs) =  buildDef xs++(buildAST x m)
 
+
+
 printType :: (?globals::Globals) => String -> M.Map String (Def, [String]) -> String
 printType trm m = let v = M.lookup trm m in
                     case v of
@@ -182,6 +184,15 @@ handleCMD s =
     handleLine DumpState = do
       (_,_,adt,f,dict) <- get
       liftIO $ print $ dumpStateAux dict
+
+
+    handleLine (ShowDef term) = do
+      (_,_,_,_,m) <- get
+      let def' = (M.lookup term m)
+      case def' of
+        Nothing -> Ex.throwError(TermNotInContext term)
+        Just (def,_) -> liftIO $ print (show def)
+
 
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
@@ -263,6 +274,7 @@ helpMenu =
       ":help              (:h)  Display the help menu\n"++
       ":quit              (:q)  Quit Granule\n"++
       ":type <term>       (:t)  Display type of term\n"++
+      ":show <term>       (:s)  Display AST of term in state\n"++
       ":dump              (:d)  Display the context\n"++
       ":load <filepath>   (:l)  Load an external file into the context\n"++
       ":module <filepath> (:m)  Add file/module to the current context\n"++

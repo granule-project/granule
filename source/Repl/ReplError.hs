@@ -19,7 +19,7 @@ instance Show ReplError where
   show (TermInContext trm)    = "The term "++trm++" is already in context"
   show (TypeCheckError pth)   = "Error type checking "++pth
   show (ParseError e)         = show e
-  show (TermNotInContext trm) = "The term "++trm++" is not in the context"
+  show (TermNotInContext trm) = "The term \""++trm++"\" is not in the context"
   show (EvalError e)          = show e
   show OtherError             = "Error"
   show OtherError'            = ""

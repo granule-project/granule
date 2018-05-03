@@ -32,9 +32,8 @@ symbol     = Token.symbol tokenizer
 
 data REPLExpr =
       Let Id Expr Expr
-    | ShowAST Expr
+    | ShowDef String
     | DumpState
-    | Unfold Expr
     | LoadFile [FilePath]
     | AddModule [FilePath]
     | Reload
@@ -100,6 +99,8 @@ reloadFileParser = replIntCmdParser "r" "reload" Reload
 
 checkTypeParser = replTyCmdParser "t" "type" CheckType
 
+showAstParser = replTyCmdParser "s" "show" ShowDef
+
 
 
 
@@ -110,6 +111,7 @@ lineParser = try dumpStateParser
           <|> try addModuleParser
           <|> try reloadFileParser
           <|> try checkTypeParser
+          <|> try showAstParser
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
           <|> evalParser
