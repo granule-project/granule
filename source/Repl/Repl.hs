@@ -6,10 +6,12 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
-
+{-# LANGUAGE PackageImports #-}
 module Repl.Repl where
 
 import System.FilePath
+import System.FilePath.Find
+import System.Directory
 import qualified Data.Map as M
 import qualified Checker.Monad as Mo
 import Control.Exception (try)
@@ -18,7 +20,7 @@ import Control.Monad.Trans.Maybe
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 import Repl.ReplError
-import System.FilePath.Glob (glob, compile, globDir1)
+import "Glob" System.FilePath.Glob (glob, compile, globDir1)
 import Utils
 import Syntax.Pretty
 import Syntax.Expr
@@ -78,6 +80,9 @@ searchRP (s:sx) rp =do
    y <- searchRP sx rp
    return $ x ++ y
 
+
+-- recursiveFind :: FilePath -> IO [FilePath]
+-- recursiveFind fp = find (always)(directory (hasPrefixOf fp)) fp
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
@@ -170,6 +175,34 @@ buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
 buildDef ::Int -> TypeScheme -> Expr -> Def
 buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"++(show rfv))) ex [] ts
+
+
+getPathFile :: IO String
+getPathFile = do
+  hd <- getHomeDirectory
+  let confile = hd ++ (pathSeparator:".granule.con")
+  dfe <- doesFileExist confile
+  if dfe
+    then do
+      pf <- readFile confile
+      return pf
+    else return ""
+
+
+-- parsePath :: String -> Either String [String]
+replPathParse :: [FilePath]
+replPathParse = do
+  pf <- getPathFile
+  case pf of
+    "" -> []
+    _ -> do
+      let x = parsePath pf
+      case x of
+        Right l -> l
+        Left msg -> _
+
+
+
 
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()

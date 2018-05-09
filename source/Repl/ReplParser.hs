@@ -15,8 +15,7 @@ import Text.Parsec
 import qualified Text.Parsec.Token as Token
 import Text.Parsec.Language
 --import Data.Functor.Identity
---import System.FilePath
---import System.Directory
+import System.FilePath
 import Syntax.Expr
 
 
@@ -108,6 +107,15 @@ runParserRepl = replTyCmdParser "p" "parse" RunParser
 runLexer = replTyCmdParser "x" "lexer" RunLexer
 
 
+pathParser = do
+  string "KEY"
+  string " =" <|> string "="
+  string "" <|> string " "
+  path <- manyTill anyChar (string "\n")
+  return path
+
+pathParser' = endBy pathParser eof
+
 
 -- lineParser =
 
@@ -134,3 +142,11 @@ textToFilePath [] = []
 textToFilePath (x:xs) = do
     let spth = T.unpack x
     spth : textToFilePath xs
+
+
+
+parsePath :: String -> Either String [String]
+parsePath s = do
+  case (parse pathParser' "" s) of
+    Right l -> Right l
+    Left msg -> Left $ show msg

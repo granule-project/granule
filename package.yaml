@@ -61,6 +61,7 @@ library:
   - filepath
   - directory
   - Glob
+  - filemanip 
 
 executables:
   gr:

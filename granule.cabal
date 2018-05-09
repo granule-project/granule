@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 1c06d751ddb704adb8ffd7800efe82f0592664c1d39857e0350cf7168eda4cb3
+-- hash: 8e9c5e0fc08729a9bdfe2893b3d094ba3ed0b8251d98b09f7988cf00c0b2105e
 
 name:           granule
 version:        0.5.5.4
@@ -34,6 +34,7 @@ library
     , base >=4.10 && <5
     , containers
     , directory
+    , filemanip
     , filepath
     , haskeline
     , mtl >=2.2.1
