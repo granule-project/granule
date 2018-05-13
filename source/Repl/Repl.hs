@@ -14,6 +14,7 @@ import System.FilePath.Find
 import System.Directory
 import qualified Data.Map as M
 import qualified Checker.Monad as Mo
+import qualified Data.ConfigFile as C
 import Control.Exception (try)
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
@@ -31,6 +32,7 @@ import Checker.Checker
 import Eval
 import Context
 import qualified Control.Monad.Except as Ex
+import Control.Monad.Error
 
 type ReplPATH = [FilePath]
 type ADT = [Def]
@@ -177,29 +179,27 @@ buildDef ::Int -> TypeScheme -> Expr -> Def
 buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"++(show rfv))) ex [] ts
 
 
-getPathFile :: IO String
-getPathFile = do
-  hd <- getHomeDirectory
-  let confile = hd ++ (pathSeparator:".granule.con")
+getConfigFile :: IO String
+getConfigFile = do
+  hd <- getHomeDirectory           -- .granule.conf
+  let confile = hd ++ (pathSeparator:".granule.conf")
   dfe <- doesFileExist confile
   if dfe
-    then do
-      pf <- readFile confile
-      return pf
+    then return confile
     else return ""
 
 
--- parsePath :: String -> Either String [String]
-replPathParse :: [FilePath]
-replPathParse = do
-  pf <- getPathFile
-  case pf of
-    "" -> []
-    _ -> do
-      let x = parsePath pf
-      case x of
-        Right l -> l
-        Left msg -> _
+
+-- replPathParse :: IO [FilePath]
+-- replPathParse = do
+--   pf <- getPathFile
+--   case pf of
+--     "" -> return []
+--     _ -> do
+--       let x = parsePath pf
+--       case x of
+--         Right l -> return l
+--         Left msg -> return []
 
 
 
@@ -328,8 +328,30 @@ helpMenu =
 -- ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
 defaultReplPath :: [FilePath]
 defaultReplPath = ["examples\\","tests\\regression\\good\\"]
+
+configFileStuff :: IO String
+configFileStuff = do
+  rt <- runErrorT $
+    do
+    cf <- liftIO $ getConfigFile
+    case cf of
+      "" ->  return $ "No config file found"
+      _ -> do
+         cp <- liftIO $ C.readfile C.emptyCP cf --error is occuring at this step
+         case cp of
+           Right l -> do
+             tVar <- C.get l "DEFAULT" "PATH"
+             return tVar
+  case rt of
+    Right ll -> return $ ll
+    Left ttt -> return $ show ttt
+
+
 repl :: IO ()
-repl = runInputT defaultSettings (loop (0,defaultReplPath,[],[],M.empty))
+repl = do
+  someP <- configFileStuff
+  liftIO $ putStrLn $ show (lines someP)
+  runInputT defaultSettings (loop (0,defaultReplPath,[],[],M.empty))
    where
        loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
        loop st = do

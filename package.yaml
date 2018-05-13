@@ -61,7 +61,8 @@ library:
   - filepath
   - directory
   - Glob
-  - filemanip 
+  - filemanip
+  - ConfigFile
 
 executables:
   gr:
@@ -73,6 +74,7 @@ executables:
     - Glob
     - granule
     - optparse-applicative
+
 
 # flags:
 #   dev:
