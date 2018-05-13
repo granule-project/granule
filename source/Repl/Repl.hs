@@ -326,8 +326,6 @@ helpMenu =
       "-----------------------------------------------------------------------------------"
 -- ":unfold <term>     (:u)  Unfold the expression into one without toplevel definition.\n"++
 -- ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
-defaultReplPath :: [FilePath]
-defaultReplPath = ["examples\\","tests\\regression\\good\\"]
 
 configFileStuff :: IO String
 configFileStuff = do
@@ -335,23 +333,26 @@ configFileStuff = do
     do
     cf <- liftIO $ getConfigFile
     case cf of
-      "" ->  return $ "No config file found"
+      "" ->  do
+        lift $ putStrLn "ALERT : No config file found or loaded\nenter ':h' or ':help' for menu"
+        return ""
       _ -> do
          cp <- liftIO $ C.readfile C.emptyCP cf --error is occuring at this step
          case cp of
            Right l -> do
-             tVar <- C.get l "DEFAULT" "PATH"
-             return tVar
+             pths <- C.get l "DEFAULT" "PATH"
+             return pths
   case rt of
-    Right ll -> return $ ll
-    Left ttt -> return $ show ttt
-
+    Right conpth -> return $ conpth
+    Left conptherr -> do
+      print conptherr
+      return $ show conptherr
 
 repl :: IO ()
 repl = do
   someP <- configFileStuff
-  liftIO $ putStrLn $ show (lines someP)
-  runInputT defaultSettings (loop (0,defaultReplPath,[],[],M.empty))
+  let drp = (lines someP)
+  runInputT defaultSettings (loop (0,drp,[],[],M.empty))
    where
        loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
        loop st = do
