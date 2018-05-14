@@ -249,15 +249,14 @@ handleCMD s =
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
       put (fvg,rp,[],ptr,M.empty)
-      x <- liftIO' (searchRP ptr rp)
       tester <- liftIO' $ rFindMain ptr rp
-      liftIO $ print (show $ makeUnique $ concat tester)
-      case concat x of
+      let lfp = makeUnique $ (concat tester)
+      case lfp of
         [] -> do
           ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
           return ()
         _ -> do
-          ecs <- processFilesREPL (concat x) (let ?globals = ?globals in readToQueue)
+          ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
           return ()
 
     handleLine (AddModule ptr) = do
@@ -267,13 +266,14 @@ handleCMD s =
     handleLine Reload = do
       (fvg,rp,adt,f,_) <- get
       put (fvg,rp,adt,f, M.empty)
-      x <- liftIO' (searchRP f rp)
-      case concat x of
+      tester <- liftIO' $ rFindMain f rp
+      let lfp = makeUnique $ (concat tester)
+      case lfp of
         [] -> do
           ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
           return ()
         _ -> do
-          ecs <- processFilesREPL (concat x) (let ?globals = ?globals in readToQueue)
+          ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
           return ()
 
 
