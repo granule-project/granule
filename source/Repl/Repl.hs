@@ -93,6 +93,8 @@ rFindHelper fn (r:rfp) = do
   x <-  rFindHelper fn rfp
   return (y ++ x)
 
+rFindMain :: [String] -> [FilePath] -> IO [[FilePath]]
+rFindMain fn rfp = forM fn $ (\x -> rFindHelper x rfp )
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
@@ -242,13 +244,14 @@ handleCMD s =
         Nothing -> Ex.throwError(TermNotInContext term)
         Just (def,_) -> liftIO $ print (show def)
 
-
+        -- tester <- liftIO' $ rFindHelper (head ptr) rp
+        -- liftIO $ print (show $ makeUnique tester)
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
       put (fvg,rp,[],ptr,M.empty)
-      tester <- liftIO' $ rFindHelper (head ptr) rp
-      liftIO $ print (show $ makeUnique tester)
       x <- liftIO' (searchRP ptr rp)
+      tester <- liftIO' $ rFindMain ptr rp
+      liftIO $ print (show $ makeUnique $ concat tester)
       case concat x of
         [] -> do
           ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
