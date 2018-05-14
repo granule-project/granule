@@ -82,9 +82,17 @@ searchRP (s:sx) rp =do
    y <- searchRP sx rp
    return $ x ++ y
 
+-- FileName to search for -> each path from repl path to search -> all found instances of file
+rFind :: String -> FilePath -> IO [FilePath]
+rFind fn fp = find always (fileName ==? fn) fp
+-- name of file to find -> Repl File Paths -> should be a matching file path
+rFindHelper :: String -> [FilePath] -> IO [FilePath]
+rFindHelper fn [] = return []
+rFindHelper fn (r:rfp) = do
+  y <- rFind fn r
+  x <-  rFindHelper fn rfp
+  return (y ++ x)
 
--- recursiveFind :: FilePath -> IO [FilePath]
--- recursiveFind fp = find (always)(directory (hasPrefixOf fp)) fp
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
@@ -103,8 +111,6 @@ readToQueue pth = do
 
 loadInQueue :: (?globals::Globals) => Def -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
-  -- liftIO.print $ freeVars def
-  -- liftIO.print $ freeVars exp
   (fvg,rp,adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
@@ -240,6 +246,8 @@ handleCMD s =
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
       put (fvg,rp,[],ptr,M.empty)
+      tester <- liftIO' $ rFindHelper (head ptr) rp
+      liftIO $ print (show $ makeUnique tester)
       x <- liftIO' (searchRP ptr rp)
       case concat x of
         [] -> do
