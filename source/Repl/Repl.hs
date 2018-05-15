@@ -107,7 +107,7 @@ readToQueue pth = do
                     let ast'@(AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
-                    put (fvg,rp,dd,f,m)
+                    put (fvg,rp,(dd++adt),f,m)
                     liftIO $ putStrLn $ (takeFileName pth)++" loaded and checked"
                 Failed -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
@@ -159,7 +159,7 @@ printType trm m = let v = M.lookup trm m in
                       Nothing ->""
                       Just (def@(Def _ id _ _ ty),lid) -> (pretty id)++" : "++(pretty ty)
 
-buildForEval :: [Id] -> M.Map String (Def, [String]) -> AST
+buildForEval :: [Id] -> M.Map String (Def, [String]) -> [Def]
 buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m ++ buildForEval xs m
 
@@ -174,10 +174,10 @@ synTypePlus exp ast = do
     Just (t,a) -> return t
     Nothing -> Ex.throwError OtherError'
 
-buildCtxtTS :: (?globals::Globals) => AST -> Ctxt TypeScheme
+buildCtxtTS :: (?globals::Globals) => [Def] -> Ctxt TypeScheme
 buildCtxtTS [] = []
 buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
-buildCtxtTS (x@(DataDecl _ _ _ _ _):ast) = buildCtxtTS ast
+
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
