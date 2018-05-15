@@ -15,7 +15,7 @@ import Text.Parsec
 import qualified Text.Parsec.Token as Token
 import Text.Parsec.Language
 --import Data.Functor.Identity
-import System.FilePath
+--import System.FilePath
 import Syntax.Expr
 
 
@@ -39,6 +39,7 @@ data REPLExpr =
     | CheckType String
     | Eval String
     | RunParser String
+    | RunTypeScheme String
     | RunLexer String
     deriving Show
 
@@ -63,6 +64,16 @@ replIntCmdParser short long c = do
 replTyCmdParser short long c = do
     symbol ":"
     cmd <- many lower
+    ws
+    term <- many1 anyChar
+    eof
+    if (cmd == long || cmd == short)
+    then return $ c term
+    else fail $ "Command \":"++cmd++"\" is unrecognized."
+
+replTySchCmdParser short long c = do
+    symbol ":"
+    cmd <- many (lower <|> char '_')
     ws
     term <- many1 anyChar
     eof
@@ -104,6 +115,8 @@ showAstParser = replTyCmdParser "s" "show" ShowDef
 
 runParserRepl = replTyCmdParser "p" "parse" RunParser
 
+runTypeScheme = replTySchCmdParser "ts" "type_scheme" RunTypeScheme
+
 runLexer = replTyCmdParser "x" "lexer" RunLexer
 
 
@@ -121,6 +134,7 @@ pathParser' = endBy pathParser eof
 
 lineParser = try dumpStateParser
           <|> try loadFileParser
+          <|> try runTypeScheme
           <|> try addModuleParser
           <|> try reloadFileParser
           <|> try checkTypeParser

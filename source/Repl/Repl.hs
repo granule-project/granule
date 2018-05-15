@@ -233,6 +233,13 @@ handleCMD s =
         Left e -> do
           Ex.throwError (ParseError e)
 
+    handleLine (RunTypeScheme str) = do
+      pts <- liftIO' $ try $ tscheme $ scanTokens str
+      case pts of
+        Right ts -> liftIO $ putStrLn (show ts)
+        Left e -> do
+          Ex.throwError (ParseError e)
+
     handleLine (RunLexer str) = do
       liftIO $ print $ show (scanTokens str)
 
@@ -331,15 +338,16 @@ helpMenu =
       "-----------------------------------------------------------------------------------\n"++
       "                  The Granule Help Menu                                         \n"++
       "-----------------------------------------------------------------------------------\n"++
-      ":help              (:h)  Display the help menu\n"++
-      ":quit              (:q)  Quit Granule\n"++
-      ":type <term>       (:t)  Display type of term\n"++
-      ":show <term>       (:s)  Display AST of term in state\n"++
-      ":parse <string>    (:p)  Run Granule parser on given string\n"++
-      ":lexer <string>    (:x)  Run Granule lexer on given string and display [Token]\n"++
-      ":dump              (:d)  Display the context\n"++
-      ":load <filepath>   (:l)  Load an external file into the context\n"++
-      ":module <filepath> (:m)  Add file/module to the current context\n"++
+      ":help                (:h)  Display the help menu\n"++
+      ":quit                (:q)  Quit Granule\n"++
+      ":type <term>         (:t)  Display type of term\n"++
+      ":type_scheme <type>  (:ts) Enter type and display its TypeScheme\n"++
+      ":show <term>         (:s)  Display AST of term in state\n"++
+      ":parse <expression>  (:p)  Run Granule parser on a given expression and display AST\n"++
+      ":lexer <string>      (:x)  Run Granule lexer on given string and display [Token]\n"++
+      ":dump                (:d)  Display the context\n"++
+      ":load <filepath>     (:l)  Load an external file into the context\n"++
+      ":module <filepath>   (:m)  Add file/module to the current context\n"++
       "-----------------------------------------------------------------------------------"
 -- ":unfold <term>     (:u)  Unfold the expression into one without toplevel definition.\n"++
 -- ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
@@ -359,6 +367,7 @@ configFileStuff = do
            Right l -> do
              pths <- C.get l "DEFAULT" "PATH"
              return pths
+           Left r -> return ""
   case rt of
     Right conpth -> return $ conpth
     Left conptherr -> do
