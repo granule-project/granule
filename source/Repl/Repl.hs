@@ -50,7 +50,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   in fmap Ex.runExceptT $ f run'
 
 eval' :: (?globals :: Globals) =>Int -> AST -> IO (Maybe Value)
-eval' val defs = do
+eval' val (AST dataDecls defs) = do
     bindings <- evalDefs builtIns defs
     case lookup (mkId (" repl"++(show val))) bindings of
       Nothing -> return Nothing
@@ -167,7 +167,7 @@ synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ct
 synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
 synType exp cts = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr cts empty Positive exp
 
-synTypePlus :: (?globals::Globals) => Expr -> AST -> REPLStateIO Type
+synTypePlus :: (?globals::Globals) => Expr -> [Def] -> REPLStateIO Type
 synTypePlus exp ast = do
   ty <- liftIO $ synType exp (buildCtxtTS ast)
   case ty of
@@ -295,7 +295,7 @@ handleCMD s =
       case cked of
         []  -> Ex.throwError (TermNotInContext trm)
         ast -> do
-          checked <- liftIO' $ check (adt++ast)
+          checked <- liftIO' $ check (AST adt ast)
           case checked of
             Ok -> liftIO $ putStrLn (printType trm m)
             Failed -> Ex.throwError (TypeCheckError trm)
@@ -318,13 +318,13 @@ handleCMD s =
                             Left e -> Ex.throwError (EvalError e)
                     _ -> do
                         let ast = buildForEval fv m
-                        typer <- synTypePlus exp (adt++ast)
+                        typer <- synTypePlus exp ast
                         let ndef = buildDef fvg (buildTypeScheme typer) exp
                         put ((fvg+1),rp,adt,fp,m)
-                        checked <- liftIO' $ check (adt++ast++(ndef:[]))
+                        checked <- liftIO' $ check (AST adt (ast++(ndef:[])))
                         case checked of
                             Ok -> do
-                                result <- liftIO' $ try $ eval' fvg (adt++ast++(ndef:[]))
+                                result <- liftIO' $ try $ eval' fvg (AST adt (ast++(ndef:[])))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "if here fix"
