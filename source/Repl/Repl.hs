@@ -35,7 +35,7 @@ import qualified Control.Monad.Except as Ex
 import Control.Monad.Error
 
 type ReplPATH = [FilePath]
-type ADT = [Def]
+type ADT = [DataDecl]
 type FreeVarGen = Int
 type REPLStateIO a  = StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
 
@@ -104,7 +104,10 @@ readToQueue pth = do
             checked <-  liftIO' $ check ast
             case checked of
                 Ok -> do
-                    forM ast $ \idef -> loadInQueue idef
+                    let ast'@(AST dd def) = ast
+                    forM def $ \idef -> loadInQueue idef
+                    (fvg,rp,adt,f,m) <- get
+                    put (fvg,rp,dd,f,m)
                     liftIO $ putStrLn $ (takeFileName pth)++" loaded and checked"
                 Failed -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
@@ -117,10 +120,6 @@ loadInQueue def@(Def _ id exp _ _) = do
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
   else put $ (fvg,rp,adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
-
-loadInQueue adt'@(ADT _ _ _ _ _) = do
-  (fvg,rp,adt,f,m) <- get
-  put (fvg,rp,(adt':adt),f,m)
 
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def, [String]) -> [String]
@@ -178,7 +177,7 @@ synTypePlus exp ast = do
 buildCtxtTS :: (?globals::Globals) => AST -> Ctxt TypeScheme
 buildCtxtTS [] = []
 buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
-buildCtxtTS (x@(ADT _ _ _ _ _):ast) = buildCtxtTS ast
+buildCtxtTS (x@(DataDecl _ _ _ _ _):ast) = buildCtxtTS ast
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty

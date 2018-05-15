@@ -14,13 +14,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
 import Control.Exception (SomeException, try)
-<<<<<<< HEAD
--- import Control.Monad (forM)
-import Data.List (intercalate, stripPrefix)
-=======
+
 import Control.Monad (forM)
 import Data.List (stripPrefix)
->>>>>>> master
+
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
@@ -36,13 +33,13 @@ import Syntax.Parser
 import Syntax.Pretty
 import Utils
 
--- Extracted from "else" in  main to make a generic processFile function 
+-- Extracted from "else" in  main to make a generic processFile function
 badFilePath :: Globals -> FilePath -> IO ExitCode
 badFilePath globals p = do
             let ?globals = globals { sourceFilePath = p }
             printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
             return (ExitFailure 1)
-            
+
 -- Extracted from "else" in  main to make a generic processFile function
 loadFile :: Globals -> FilePath -> IO ExitCode
 loadFile globals p = do
@@ -60,7 +57,7 @@ main = do
         exitWith =<< run =<< getContents
     else do
       debugM "Globals" (show globals)
-      results <- processFiles globPatterns (badFilePath globals) (loadFile globals)        
+      results <- processFiles globPatterns (badFilePath globals) (loadFile globals)
       -- TODO: Check the factored out code to see if there are any changes:
       -- currentDir <- getCurrentDirectory
       -- results <- forM globPatterns $ \p -> do

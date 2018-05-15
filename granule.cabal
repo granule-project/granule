@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: 3b7345690240317d7dd19a3f736ff32e46ca949cac22e59e98c3858637f9931a
+-- hash: edb5581fff9d798e30b691afd16c15b6e339d0582e2ad55c8386260f40937a2e
 
 name:           granule
-version:        0.5.5.4
+version:        0.5.5.6
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
@@ -40,7 +40,7 @@ library
     , haskeline
     , mtl >=2.2.1
     , parsec
-    , sbv >=7.3
+    , sbv >=7.5
     , text
     , time
     , transformers >=0.5
