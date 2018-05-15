@@ -248,32 +248,39 @@ handleCMD s =
         -- liftIO $ print (show $ makeUnique tester)
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
-      put (fvg,rp,[],ptr,M.empty)
       tester <- liftIO' $ rFindMain ptr rp
       let lfp = makeUnique $ (concat tester)
       case lfp of
         [] -> do
+          put (fvg,rp,[],ptr,M.empty)
           ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
           return ()
         _ -> do
+          put (fvg,rp,[],lfp,M.empty)
           ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
           return ()
 
     handleLine (AddModule ptr) = do
-      ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
-      return ()
+      (fvg,rp,adt,f,m) <- get
+      tester <- liftIO' $ rFindMain ptr rp
+      let lfp = makeUnique $ (concat tester)
+      case lfp of
+        [] -> do
+          put (fvg,rp,adt,(f++ptr),m)
+          ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
+          return ()
+        _ -> do
+          put (fvg,rp,adt,(f++lfp),m)
+          ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
+          return ()
 
     handleLine Reload = do
       (fvg,rp,adt,f,_) <- get
       put (fvg,rp,adt,f, M.empty)
-      tester <- liftIO' $ rFindMain f rp
-      let lfp = makeUnique $ (concat tester)
-      case lfp of
-        [] -> do
-          ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
-          return ()
+      case f of
+        [] -> liftIO $ putStrLn "No files to reload" >> return ()
         _ -> do
-          ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
+          ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
           return ()
 
 
