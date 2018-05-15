@@ -1,0 +1,7 @@
+import Bool
+
+foo : Bool |∞| -> Bool |1=|
+foo x =
+  case x of
+     |False| -> |False|;
+     |True| -> |True|

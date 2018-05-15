@@ -1,5 +1,5 @@
 name: granule
-version: '0.5.5.4'
+version: '0.5.5.6'
 synopsis: The Granule type checker and interpreter
 author: Dominic Orchard, Vilem-Benjamin Liepelt
 copyright: 2018 authors
@@ -52,7 +52,7 @@ library:
   - array
   - containers
   - mtl >=2.2.1
-  - sbv >=7.3
+  - sbv >=7.5
   - time
   - transformers >=0.5
   - haskeline

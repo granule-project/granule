@@ -1,0 +1,10 @@
+data Zero where
+
+data Succ a where
+
+data Vec n a where
+  Nil : Vec Zero a;
+  Cons : forall m : Type . a -> Vec m a -> Vec (Succ m) a
+
+test : Vec (Succ Zero) Int
+test = Cons 1 Nil

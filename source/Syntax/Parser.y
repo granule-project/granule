@@ -8,7 +8,7 @@ import Utils
 
 import Control.Monad (forM)
 import Data.List ((\\), intercalate, nub, stripPrefix)
-import Data.Maybe (catMaybes)
+import Data.Maybe (mapMaybe)
 import Numeric
 import System.Exit (die)
 
@@ -63,6 +63,7 @@ import System.Exit (die)
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
+    '^'   { TokenCaret _ }
     OP    { TokenOp _ _ }
 
 
@@ -71,14 +72,22 @@ import System.Exit (die)
 %left ':'
 %left '+' '-'
 %left '*'
+%left '^'
 %left '|'
 %left '.'
 %%
 
 Defs :: { AST }
-  : Def                       { [$1] }
-  | Def NL Defs               { $1 : $3 }
+  : Def                       { AST [] [$1] }
 
+  | DataDecl                  { AST [$1] [] }
+
+  | DataDecl NL Defs          { let (AST dds defs) = $3
+                                 in AST ($1 : dds) defs }
+  | Def NL Defs               { let (AST dds defs) = $3
+                                 in AST dds ($1 : defs) }
+
+NL :: { () }
 NL : nl NL                    { }
    | nl                       { }
 
@@ -89,8 +98,9 @@ Def :: { Def }
         else error $ "Signature for `" ++ sourceName (fst3 $3) ++ "` does not match the \
                                       \signature head `" ++ sourceName (fst3 $1) ++ "`"  }
 
-  | data CONSTR TyVars KindAnn where DataConstrs
-      { ADT (getPos $1, snd $ getSpan (last $6)) (mkId $ constrString $2) $3 $4 $6 }
+DataDecl :: { DataDecl }
+  : data CONSTR TyVars KindAnn where DataConstrs
+      { DataDecl (getPos $1, snd $ getSpan (last $6)) (mkId $ constrString $2) $3 $4 $6 }
 
 Sig ::  { (Id, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (mkId $ symString $1, $3, getPos $1) }
@@ -101,9 +111,11 @@ Binding :: { (Id, Expr, [Pattern]) }
 
 DataConstrs :: { [DataConstr] }
   : DataConstr DataConstrNext { $1 : $2 }
+  | {- empty -}               { [] }
 
 DataConstr :: { DataConstr }
-  : CONSTR ':' TypeScheme     { DataConstr (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+  : CONSTR ':' TypeScheme     { DataConstrG (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+  | CONSTR TyParams           { DataConstrA (getPosToSpan $1) (mkId $ constrString $1) $2 }
 
 DataConstrNext :: { [DataConstr] }
   : ';' DataConstrs           { $2 }
@@ -128,7 +140,7 @@ PAtoms :: { [Pattern] }
 
 Pat :: { Pattern }
   : PAtom                     { $1 }
-  | '(' CONSTR PAtoms ')'      { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
+  | '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
 
 PAtom :: { Pattern }
   : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
@@ -138,7 +150,7 @@ PAtom :: { Pattern }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
   | '(' Pat ')'               { $2 }
   | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
-  | '(' Pat ',' Pat ')'       { PPair (getPosToSpan $1) $2 $4 }
+  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) (mkId ",") [$2, $4] }
 
 
 TypeScheme :: { TypeScheme }
@@ -155,7 +167,7 @@ VarSig :: { (Id, Kind) }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
-  | VAR                       { KPoly (mkId $ symString $1) }
+  | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
                                   "Type"     -> KType
                                   "Coeffect" -> KCoeffect
@@ -171,12 +183,12 @@ Type :: { Type }
   | Type '|' Coeffect '|'     { Box $3 $1 }
   | TyAtom '<' Effect '>'       { Diamond $3 $1 }
   | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { PairTy $2 $4 }
+  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
-  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (PairTy $3 $5) }
+  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (TyApp (TyApp (TyCon $ mkId ",") $3) $5) }
   | TyJuxt '(' Type ')'       { TyApp $1 $3 }
   | TyAtom                    { $1 }
 
@@ -186,10 +198,15 @@ TyAtom :: { Type }
   | INT                           { let TokenInt _ x = $1 in TyInt x }
   | TyAtom '+' TyAtom             { TyInfix ("+") $1 $3 }
   | TyAtom '*' TyAtom             { TyInfix ("*") $1 $3 }
+  | TyAtom '^' TyAtom             { TyInfix ("^") $1 $3 }
   | TyAtom '/' '\\' TyAtom        { TyInfix ("/\\") $1 $4 }
   | TyAtom '\\' '/' TyAtom        { TyInfix ("\\/") $1 $4 }
   | '(' Type '|' Coeffect '|' ')' { Box $4 $2 }
   | '(' TyJuxt ')' { $2 }
+
+TyParams :: { [Type] }
+  : TyAtom TyParams             { $1 : $2 } -- use right recursion for simplicity -- VBL
+  |                             { [] }
 
 Coeffect :: { Coeffect }
   : NatCoeff                    { $1 }
@@ -203,6 +220,7 @@ Coeffect :: { Coeffect }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
+  | Coeffect '^' Coeffect       { CExpon $1 $3 }
   | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
   | '(' Coeffect ')'            { $2 }
@@ -295,6 +313,9 @@ CasesNext :: { [(Pattern, Expr)] }
 
 Case :: { (Pattern, Expr) }
   : Pat '->' Expr             { ($1, $3) }
+  | CONSTR PAtoms '->' Expr   { let TokenConstr _ x = $1
+                                 in (PConstr (getPosToSpan $1) (mkId x) $2, $4) }
+
 
 Form :: { Expr }
   : Form '+' Form             { Binop (getPosToSpan $2) "+" $1 $3 }
@@ -319,7 +340,11 @@ Atom :: { Expr }
   | VAR                       { Val (getPosToSpan $1) $ Var (mkId $ symString $1) }
   | '|' Atom '|'              { Val (getPos $1, getPos $3) $ Promote $2 }
   | CONSTR                    { Val (getPosToSpan $1) $ Constr (mkId $ constrString $1) [] }
-  | '(' Expr ',' Expr ')'     { Val (getPos $1, getPos $5) (Pair $2 $4) }
+  | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5)
+                                    (App (getPos $1, getPos $3)
+                                         (Val (getPosToSpan $3) (Constr (mkId ",") []))
+                                         $2)
+                                    $4 }
   | CHAR                      { Val (getPosToSpan $1) $
                                   case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
   | STRING                    { Val (getPosToSpan $1) $
@@ -345,25 +370,32 @@ parseDefs' input = do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
       parseDefs' src
-    let allDefs = (concat importedDefs) ++ defs
+    let allDefs = merge $ defs : importedDefs
     checkNameClashes allDefs
     return allDefs
 
   where
+    merge :: [AST] -> AST
+    merge xs =
+      let conc [] dds defs = AST dds defs
+          conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds ++ ddsAcc) (defs ++ defsAcc)
+       in conc xs [] []
+
     parse = defs . scanTokens
 
-    imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/') . catMaybes
-                  . map (stripPrefix "import ") . lines $ input
+    imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/')
+              . mapMaybe (stripPrefix "import ") . lines $ input
+
     replace from to = map (\c -> if c == from then to else c)
-    checkNameClashes ds =
+
+    checkNameClashes ds@(AST dataDecls defs) =
         if null clashes
 	        then return ()
           else die $ "Error: Name clash: " ++ intercalate ", " (map sourceName clashes)
       where
         clashes = names \\ nub names
-        names = (`map` ds) (\d -> case d of (Def _ name _ _ _) -> name
-                                            (ADT _ name _ _ _) -> name)
-
+        names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
+                ++ (`map` defs) (\(Def _ name _ _ _) -> name)
 
 myReadFloat :: String -> Rational
 myReadFloat str =

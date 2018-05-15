@@ -1,6 +1,7 @@
--- The following is not typeable
---leak : Int |Private| -> Int |Public|
---leak |x| = |x|
+{- The following is not typeable:
+leak : Int |Private| -> Int |Public|
+leak |x| = |x|
+-}
 
 notALeak : Int |Private| |0| -> Int |Public|
 notALeak |x| = |0|

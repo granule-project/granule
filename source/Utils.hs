@@ -17,6 +17,10 @@ import "Glob" System.FilePath.Glob (glob)
 
 import Syntax.Expr (Span)
 
+-- | A result data type to be used pretty much like `Maybe`, but with an explanation as to why
+-- no result was returned
+data Result a = Some a | None [String]
+
 data Globals =
   Globals
   { debugging :: Bool

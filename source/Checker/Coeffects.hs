@@ -46,6 +46,7 @@ inferCoeffectType _ (CNatOmega _)     = return $ CConstr $ mkId "Nat*"
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
 inferCoeffectType s (CTimes c c') = mguCoeffectTypes s c c'
+inferCoeffectType s (CExpon c c') = mguCoeffectTypes s c c'
 inferCoeffectType s (CMeet c c')  = mguCoeffectTypes s c c'
 inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
 
@@ -65,7 +66,7 @@ inferCoeffectType s (CVar cvar) = do
      Just (KConstr name, _) -> checkKind s (CConstr name)
 
 
-     Just (KPoly   name, _) -> return $ CPoly name
+     Just (KVar   name, _) -> return $ CPoly name
      Just (k, _)            -> illKindedNEq s KCoeffect k
 
 inferCoeffectType s (CZero k) = checkKind s k
@@ -95,7 +96,7 @@ updateCoeffectKind tyVar kind = do
   where
     rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
     rewriteCtxt [] = []
-    rewriteCtxt ((name, (KPoly kindVar, q)) : ctxt)
+    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
      | tyVar == kindVar = (name, (kind, q)) : rewriteCtxt ctxt
     rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 

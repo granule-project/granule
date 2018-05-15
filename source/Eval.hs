@@ -99,11 +99,6 @@ evalIn ctxt (Val _ (Var x)) =
       Just val -> return val
       Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context."
 
-evalIn ctxt (Val s (Pair l r)) = do
-  l' <- evalIn ctxt l
-  r' <- evalIn ctxt r
-  return $ Pair (Val s l') (Val s r')
-
 evalIn ctxt (Val s (Pure e)) = do
   v <- evalIn ctxt e
   return $ Pure (Val s v)
@@ -170,16 +165,6 @@ pmatch _ ((PInt _ n, e):_)      (NumInt m)   | n == m  =
 pmatch _ ((PFloat _ n, e):_)    (NumFloat m) | n == m =
    return $ Just (e, [])
 
-
-pmatch ctxt ((PPair _ p1 p2, e):ps) vals@(Pair (Val _ v1) (Val _ v2)) = do
-  match1 <- pmatch ctxt [(p1, e)] v1
-  match2 <- pmatch ctxt [(p2, e)] v2
-  case match1 of
-    Nothing -> pmatch ctxt ps vals
-    Just (_, bindings1) -> case match2 of
-      Nothing -> pmatch ctxt ps vals
-      Just (_, bindings2) -> return (Just (e, bindings1 ++ bindings2))
-
 pmatch ctxt (_:ps) val = pmatch ctxt ps val
 
 builtIns :: Ctxt Value
@@ -208,10 +193,7 @@ builtIns =
              case b of
                True -> Constr (mkId "True") []
                False -> Constr (mkId "False") []
-        return $ Pure (Val nullSpan
-                   (Pair (Val nullSpan (Handle h)) (Val nullSpan boolflag)))
-
-        )
+        return . Pure . Val nullSpan $ Constr (mkId ",") [Handle h, boolflag])
   ]
   where
     cast :: Int -> Double
@@ -234,9 +216,7 @@ builtIns =
     hGetChar :: Value -> IO Value
     hGetChar (Handle h) = do
           c <- SIO.hGetChar h
-          return $ Pure (Val nullSpan
-                    (Pair (Val nullSpan (Handle h))
-                          (Val nullSpan (CharLiteral c))))
+          return $ Pure (Val nullSpan (Constr (mkId ",") [Handle h, CharLiteral c]))
 
     hClose :: Value -> IO Value
     hClose (Handle h) = do
@@ -244,19 +224,20 @@ builtIns =
          return $ Pure (Val nullSpan (Constr (mkId "()") []))
 
 
-evalDefs :: (?globals :: Globals) => Ctxt Value -> AST -> IO (Ctxt Value)
+evalDefs :: (?globals :: Globals) => Ctxt Value -> [Def] -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
-    evalDefs (extend ctxt var val) defs
-evalDefs ctxt (ADT {} : defs) = evalDefs ctxt defs
+    case extend ctxt var val of
+      Some ctxt -> evalDefs ctxt defs
+      None msgs -> error $ unlines msgs
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
     debugM "Desugaring" $ pretty d'
     evalDefs ctxt (d' : defs)
 
 eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
-eval defs = do
+eval (AST dataDecls defs) = do
     bindings <- evalDefs builtIns defs
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing

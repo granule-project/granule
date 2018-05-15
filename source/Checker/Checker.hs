@@ -9,9 +9,9 @@ module Checker.Checker where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import Data.List (genericLength)
+import Data.List (genericLength, intercalate)
 import Data.Maybe
-import Data.SBV hiding (Kind, kindOf)
+import Data.SBV hiding (Kind, kindOf, extend)
 
 import Checker.Coeffects
 import Checker.Constraints
@@ -32,9 +32,8 @@ data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
 check :: (?globals :: Globals ) => AST -> IO CheckerResult
-check ast = do
-      -- liftIO $ putStrLn $ pretty freshenedAst
-      let checkADTs = do { mapM checkTyCon adts; mapM checkDataCons adts }
+check (AST dataDecls defs) = do
+      let checkDataDecls = do { mapM checkTyCon dataDecls; mapM checkDataCons dataDecls }
 
       -- Get the types of all definitions (assume that they are correct for
       -- the purposes of (mutually)recursive calls).
@@ -49,64 +48,76 @@ check ast = do
                 mapM (checkDef defCtxt) defs
 
       -- ... and evaluate the computation with initial state
-      let thingsToCheck = (++) <$> checkADTs <*> checkedDefs
-      results <- go thingsToCheck
+      let thingsToCheck = (++) <$> checkDataDecls <*> checkedDefs
+      results <- evalChecker initState thingsToCheck
 
       -- If all definitions type checked, then the whole file type checks
-      -- let results = (results_ADT ++ results_Def)
+      -- let results = (results_DataDecl ++ results_Def)
       if all isJust results
         then return Ok
         else return Failed
-    where
-      adts = filter (\case ADT{} -> True; _ -> False) ast
-      defs = filter (\case Def{} -> True; _ -> False) ast
-      go = evalChecker initState
 
-checkTyCon :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkTyCon (ADT _ name tyVars kindAnn ds) =
-    runMaybeT $ do
-      debugM "Checker.checkTyCon" $ "Calculated kind for `" ++ pretty name ++ "`: `"
-                                    ++ pretty tyConKind ++ "` (Show: `" ++ show tyConKind ++ "`)"
-      modify $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
-
+checkTyCon :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkTyCon (DataDecl _ name tyVars kindAnn ds) = runMaybeT $
+    modify' $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals ) => Def -> Checker (Maybe ())
-checkDataCons (ADT _ name tyVars _ dataConstrs) =
-  runMaybeT $ do
+checkDataCons :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
     st <- get
-    case lookup name (typeConstructors st) of
-      Just (kind,_) ->
-        do modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-           mapM_ (checkDataCon name kind) dataConstrs
-      -- all type constructors have already been put into the checker monad, so shouldn't fail
-      _ -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+    let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
+    modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
+    mapM_ (checkDataCon name kind tyVars) dataConstrs
 
 checkDataCon :: (?globals :: Globals )
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
+  -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind (DataConstr sp dName tySch@(Forall _ tyVars ty)) = do
-    debugM "checkDataCons.dataCs" $ "Checking " ++ pretty dName ++ " : " ++ pretty tySch
-    tySchKind <- inferKindOfType' sp tyVars ty
-    case tySchKind of
-      KType -> valid ty
-      _     -> illKindedNEq sp KType kind
+checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) = do
+    case intersectCtxts tyVarsT tyVarsD of
+      [] -> do -- no clashes
+        let tyVars = tyVarsT ++ tyVarsD
+        tySchKind <- inferKindOfType' sp tyVars ty
+        case tySchKind of
+          KType -> do
+            check ty
+            st <- get
+            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+              Some ds -> put st { dataConstructors = ds }
+              None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" ++ pretty dName ++ "` already defined."
+          _     -> illKindedNEq sp KType kind
+      vs -> halt $ NameClashError (Just sp) $ mconcat
+                    ["Type variable(s) ", intercalate ", " $ map (\(i,_) -> "`" ++ pretty i ++ "`") vs
+                    ," in data constructor `", pretty dName
+                    ,"` are already bound by the associated type constructor `", pretty tName
+                    , "`. Choose different, unbound names."]
   where
-    valid (TyCon tC) = if tC == tName
-        then do
-          let dataConstructor = (dName, Forall sp tyVars ty)
-          modify $ \st -> st { dataConstructors = dataConstructor : dataConstructors st }
-        else halt $ GenericError (Just sp) $ "Expected type constructor `" ++ pretty tName
+    check (TyCon tC) =
+        if tC == tName
+          then return ()
+          else halt $ GenericError (Just sp) $ "Expected type constructor `" ++ pretty tName
                                              ++ "`, but got `" ++ pretty tC ++ "` in  `"
-    valid (FunTy arg res) = valid res
-    valid (TyApp fun arg) = valid fun
-    valid x = halt $ GenericError (Just sp) $ "`" ++ pretty x ++ "` not valid in a datatype definition."
+    check (FunTy arg res) = check res
+    check (TyApp fun arg) = check fun
+    check x = halt $ GenericError (Just sp) $ "`" ++ pretty x ++ "` not valid in a datatype definition."
+
+checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
+    st <- get
+    case extend (dataConstructors st) dName tySch of
+      Some ds -> put st { dataConstructors = ds }
+      None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" ++ pretty dName ++ "` already defined."
+  where
+    tySch = Forall sp tyVars ty
+    ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
+    returnTy t [] = t
+    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
+
 
 checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions
@@ -175,8 +186,8 @@ checkExpr :: (?globals :: Globals )
 
 -- Checking of constants
 
-checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _)) | internalName c == "Int" = return ([], [])
-checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" =  return ([], [])
+checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _))   | internalName c == "Int"   = return ([], [])
+checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" = return ([], [])
 
 checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
   -- If an explicit signature on the lambda was given, then check
@@ -209,12 +220,12 @@ checkExpr defs gam pol topLevel tau
     equalTypes s (TyCon $ mkId "Float") tau
     checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon $ mkId "Float")) e
 
--- Application synthesis
+-- Application checking
 checkExpr defs gam pol topLevel tau (App s e1 e2) = do
     (argTy, gam2) <- synthExpr defs gam pol e2
     (gam1, subst) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
-    gam' <- ctxPlus s gam1 gam2
-    return (gam', subst)
+    gam <- ctxPlus s gam1 gam2
+    return (gam, subst)
 
 {-
 
@@ -306,16 +317,16 @@ checkExpr defs gam pol topLevel tau e = do
         debugM "+ Compare for equality " $ pretty tau' ++ " = " ++ pretty tau
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypes (getSpan e) tau' tau
-          else lEqualTypes (getSpan e) tau' tau
+          then equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+          else lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
 
       -- i.e., this check is from a synth
       Negative -> do
         debugM "- Compare for equality " $ pretty tau ++ " = " ++ pretty tau'
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypes (getSpan e) tau tau'
-          else lEqualTypes (getSpan e) tau tau'
+          then equalTypesWithPolarity (getSpan e) FstIsSpec tau' tau
+          else lEqualTypesWithPolarity (getSpan e) FstIsSpec tau' tau
 
   if tyEq
     then return (gam', subst)
@@ -470,7 +481,7 @@ synthExpr defs gam pol (App s e e') = do
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
-         (gam2, subst) <- checkExpr defs gam  (flipPol pol) False sig e'
+         (gam2, subst) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxPlus s gam1 gam2
          tau    <- substitute subst tau
          return (tau, gamNew)
@@ -540,13 +551,6 @@ synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
      return (FunTy sig tau, gam'' `subtractCtxt` binding)
   else refutablePattern s p
 
--- Pair
-synthExpr defs gam pol (Val s (Pair e1 e2)) = do
-  (t1, gam1) <- synthExpr defs gam pol e1
-  (t2, gam2) <- synthExpr defs gam pol e2
-  gam' <- ctxPlus s gam1 gam2
-  return (PairTy t1 t2, gam')
-
 synthExpr _ _ _ e =
   halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
 
@@ -610,7 +614,7 @@ solveConstraints predicate s defName = do
              _                  -> Nothing
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
-       convert (var, (KPoly constr, q)) = Just (var, (CPoly constr, q))
+       convert (var, (KVar constr, q)) = Just (var, (CPoly constr, q))
        convert _ = Nothing
     justCoeffectTypesConvertedVars checkerState =
        stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
@@ -781,15 +785,13 @@ extCtxt s ctxt var (Linear t) = do
        if t == t'
         then halt $ LinearityError (Just s)
                   $ "Linear variable `" ++ pretty var ++ "` is used more than once.\n"
-        else halt $ GenericError (Just s)
-                   $ "Type clash for variable `" ++ pretty var ++ "`"
+        else typeClashForVariable s var t t'
     Just (Discharged t' c) ->
        if t == t'
          then do
            k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
-         else halt $ GenericError (Just s)
-                   $ "Type clash for variable " ++ pretty var ++ "`"
+         else typeClashForVariable s var t t'
     Nothing -> return $ (var, Linear t) : ctxt
 
 extCtxt s ctxt var (Discharged t c) = do
@@ -798,17 +800,13 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Discharged t' c') ->
         if t == t'
         then return $ replace ctxt var (Discharged t' (c `CPlus` c'))
-        else do
-          halt $ GenericError (Just s)
-               $ "Type clash for variable `" ++ pretty var ++ "`"
+        else typeClashForVariable s var t t'
     Just (Linear t') ->
         if t == t'
         then do
            k <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
-        else do
-          halt $ GenericError (Just s)
-               $ "Type clash for variable " ++ pretty var ++ "`"
+        else typeClashForVariable s var t t'
     Nothing -> return $ (var, Discharged t c) : ctxt
 
 -- Helper, foldM on a list with at least one element

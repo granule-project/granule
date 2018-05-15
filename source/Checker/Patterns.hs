@@ -35,9 +35,8 @@ ctxtFromTypedPattern _ t (PWild _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
-    --wild <- freshVar "wild"
-    --return ([(mkInternalId "_" wild, Linear t)], [], [])
-    return ([], [], [])
+    wild <- freshVar "wild"
+    return ([(Id "_" wild, Linear t)], [], [])
 
 ctxtFromTypedPattern _ t (PVar _ v) =
     return ([(v, Linear t)], [], [])
@@ -63,13 +62,6 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
 
-
-ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
-  (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
-  (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
-  unifiers <- combineSubstitutions s substl substr
-  return (ctxtL ++ ctxtR, eVars1 ++ eVars2, unifiers)
-
 ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
 
@@ -79,23 +71,13 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" ++ pretty dataC ++ "`" <?> show (dataConstructors st)
     Just tySch -> do
-      (t,freshTyVars) <- freshPolymorphicInstance BoundQ tySch
-      debugM "Patterns.ctxtFromTypedPattern" $ pretty t ++ "\n" ++ pretty ty
-
-      -- unpeel `ty` by matching each pattern with the head of an arrow
-      let unpeel = unpeel' ([],[],[])
-          unpeel' acc [] t = return (t,acc)
-          unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
-              (as',bs',us') <- ctxtFromTypedPattern s t p
-              us <- combineSubstitutions s us us'
-              unpeel' (as++as',bs++bs',us) ps t'
-          unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
-                    "Have you applied constructor `" ++ sourceName dataC ++
-                    "` to too many arguments?"
-      (t,(as,bs,us)) <- unpeel ps t
-      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt t ty
+      (dataConstructorTypeFresh, freshTyVars) <- freshPolymorphicInstance BoundQ tySch
+      debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh ++ "\n" ++ pretty ty
+      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
+          dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
+          (t,(as, bs, us)) <- unpeel ps dataConstrutorSpecialised
           subst <- combineSubstitutions s unifiers us
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
           -- Updated type variable context
@@ -108,30 +90,29 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
                                                 _        -> Nothing) subst
           put (state { tyVarContext = tyVars
                     , kVarContext = kindSubst ++ kVarContext state }) -}
-          ---
           return (ctxtSubbed ++ ctxtUnsubbed, freshTyVars++bs, subst)
 
         _ -> halt $ PatternTypingError (Just s) $
-                  "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty t ++ "`"
+                  "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty dataConstructorTypeFresh ++ "`"
+  where
+    unpeel :: [Pattern] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution))
+    unpeel = unpeel' ([],[],[])
+    unpeel' acc [] t = return (t,acc)
+    unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
+        (as',bs',us') <- ctxtFromTypedPattern s t p
+        us <- combineSubstitutions s us us'
+        unpeel' (as++as',bs++bs',us) ps t'
+    unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
+              "Have you applied constructor `" ++ sourceName dataC ++
+              "` to too many arguments?"
 
 ctxtFromTypedPattern s t@(TyVar v) p = do
   case p of
     PVar _ x -> return ([(x, Linear t)], [], [])
-    -- Trying to match a polymorphic type variable against a box pattern
-    PBox _ p' -> do
-      -- Create a fresh type: Box (c' : k) t'
-      polyName <- freshVar "fk"
-      let ckind = CPoly $ mkId polyName
-      cvar <- freshCoeffectVarWithBinding (mkId "c'") ckind InstanceQ
-      let c' = CVar $ cvar
-      tyvar <- freshVar "t'"
-      let t' = TyVar $ mkId tyvar
-      -- Register the type variable
-      modify (\state -> state { tyVarContext = (mkId tyvar, (KType, InstanceQ)) : tyVarContext state })
-
-      (binders, vars, unifiers) <- ctxtFromTypedPattern s t' p'
-      return (map (discharge ckind c') binders, vars, (v, SubstT $ Box c' t') : unifiers)
-   -- TODO: cases missing
+    PWild _  -> return ([], [], [])
+    p        -> halt $ PatternTypingError (Just s)
+                   $  "Cannot unify pattern " ++ pretty p
+                   ++ "with type variable " ++ pretty v
 
 ctxtFromTypedPattern s t p = do
   st <- get

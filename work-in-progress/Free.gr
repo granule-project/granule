@@ -21,6 +21,18 @@ bind |functor| f k =
       case functor of
         (Fmap fmap) -> Impure (fmap (\(x : Free f a) -> bind |functor| x k) d)
 
+--
+foldTerm : forall (a : Type, b : Type, f : Type -> Type)
+  .  Functor f  |Inf|
+  -> (a -> b)
+  -> (f b -> b) |Inf| -> Free f a -> b
+foldTerm |functor| base |ind| term =
+  case term of
+    (Pure x)   -> base x;
+    (Impure x) ->
+      case functor of
+        (Fmap fmap) -> ind (fmap (foldTerm |functor| base |ind|) x)
+
 -------------------------------------
 
 data Incr t where

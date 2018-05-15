@@ -1,7 +1,7 @@
-import List
+import Vec
 
-foo : List 3 Int
+foo : Vec 3 Int
 foo = Cons 1 (Cons 2 (Cons 3 Nil))
 
-main : List 3 Int
+main : Vec 3 Int
 main = map |(\(x : Int) -> x * 2)| foo

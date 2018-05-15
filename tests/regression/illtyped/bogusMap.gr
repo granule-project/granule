@@ -1,5 +1,5 @@
 map : forall (n : Nat=)
-    . (Int -> Int) |n| -> List n Int -> List n Int
+    . (Int -> Int) |n| -> Vec n Int -> Vec n Int
 map |f| ys =
     case ys of
       Nil -> Nil;

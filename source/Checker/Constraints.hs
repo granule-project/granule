@@ -152,6 +152,8 @@ rewriteConstraints ctxt =
       CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect ckindVar ckind (CTimes c1 c2) =
       CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CExpon c1 c2) =
+      CExpon (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect _ _ c = c
 
 -- Symbolic coeffects
@@ -293,6 +295,15 @@ compileCoeffect c@(CTimes n m) k vars =
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
+    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
+
+compileCoeffect c@(CExpon n m) k vars =
+  case (compileCoeffect n k vars, compileCoeffect m k vars) of
+    (SNat o1 n1, SNat o2 n2) ->
+      case k of
+        CPoly v | internalName v == "infinity" -> SNat Ordered 1
+        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
+        _ | o1 == o2 -> SNat o1 (n1 .^ n2)
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 
 compileCoeffect (CZero (CConstr k')) (CConstr k) _ =

@@ -31,8 +31,6 @@ kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
     KType -> modify (\st -> st { tyVarContext = [] })
     _     -> illKindedNEq s KType kind
 
-kindCheckDef (ADT sp tyCon kind tyVars dataCs) = error "Please open an issue at https://github.com/dorchard/granule/issues"
-
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
     checkerState <- get
@@ -40,11 +38,11 @@ inferKindOfType s t = do
 
 inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
 inferKindOfType' s quantifiedVariables t =
-    typeFoldM (TypeFold kFunOrPair kCon kBox kDiamond kVar kApp kInt kFunOrPair kInfix) t
+    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
   where
-    kFunOrPair KType KType = return KType
-    kFunOrPair KType y = illKindedNEq s KType y
-    kFunOrPair x _     = illKindedNEq s KType x
+    kFun KType KType = return KType
+    kFun KType y = illKindedNEq s KType y
+    kFun x _     = illKindedNEq s KType x
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of
@@ -67,7 +65,7 @@ inferKindOfType' s quantifiedVariables t =
                        "Type variable `" ++ pretty tyVar ++ "` is unbound (not quantified)." <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
-    kApp k kArg = illKindedNEq s (KFun kArg (KPoly $ mkId "...")) k
+    kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
 
     kInt _ = return $ KConstr $ mkId "Nat"
 

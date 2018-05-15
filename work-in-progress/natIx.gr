@@ -10,7 +10,7 @@ test n |f| =
       Z -> f;
       (S m) -> test m |(scale 2.0 |f|)|
 
-mapCons : forall (n : Nat=) . (Int -> Int) |n| -> List n Int -> List n Int
+mapCons : forall (n : Nat=) . (Int -> Int) |n| -> Vec n Int -> Vec n Int
 mapCons |f| xs =
     case xs of
       Nil -> Nil;

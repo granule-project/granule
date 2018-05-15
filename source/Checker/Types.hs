@@ -18,6 +18,14 @@ import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
+lEqualTypesWithPolarity :: (?globals :: Globals )
+  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False pol
+
+equalTypesWithPolarity :: (?globals :: Globals )
+  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq False pol
+
 lEqualTypes :: (?globals :: Globals )
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False SndIsSpec
@@ -86,7 +94,7 @@ equalTypesRelatedCoeffects :: (?globals :: Globals )
   -> MaybeT Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1' t1 (flipIndicator sp)
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1 t1' (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
@@ -106,7 +114,7 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
     return (eq, unif)
 
 -- Under approximation by 'FileIO' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t') (Diamond ef t) sp
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
    | internalName con == "FileIO" = do
     (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
     return (eq, unif)
@@ -118,7 +126,7 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
         return (eq, unif)
 
 -- Under approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t') (Diamond ef t) sp
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
        | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
         (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
         return (eq, unif)
@@ -142,7 +150,10 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectTypes s c c'
   -- subst <- unify c c'
-  addConstraint (rel s c c' kind)
+  case sp of
+    SndIsSpec -> addConstraint (rel s c c' kind)
+    FstIsSpec -> addConstraint (rel s c' c kind)
+
   equalTypesRelatedCoeffects s rel uS t t' sp
   --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp
   --case subst of
@@ -167,6 +178,9 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   checkerState <- get
+  debugM "variable equality" $ pretty n ++ " ~ " ++ pretty m ++ " where "
+                            ++ pretty (lookup n (tyVarContext checkerState)) ++ " and "
+                            ++ pretty (lookup m (tyVarContext checkerState))
 
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
@@ -175,10 +189,10 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
         return (False, [])
 
     -- We can unify a universal a dependently bound universal
-    (Just (k1, ForallQ), Just (k2, BoundQ)) | sp == FstIsSpec || sp == PatternCtxt ->
+    (Just (k1, ForallQ), Just (k2, BoundQ)) ->
       tyVarConstraint k2 k1 m n
 
-    (Just (k1, BoundQ), Just (k2, ForallQ)) | sp == SndIsSpec || sp == PatternCtxt ->
+    (Just (k1, BoundQ), Just (k2, ForallQ)) ->
       tyVarConstraint k1 k2 n m
 
     -- We can unify two instance type variables
@@ -204,16 +218,16 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
 
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
-      tyVarConstraint k1 k2 n m
+      tyVarConstraint k2 k1 m n
 
     -- Trying to unify other (existential) variables
-    (Just (KType, _), Just (k, _)) | k /= KType -> do
-      k <- inferKindOfType s (TyVar m)
-      illKindedUnifyVar s (TyVar n) KType (TyVar m) k
+  --  (Just (KType, _), Just (k, _)) | k /= KType -> do
+  --    k <- inferKindOfType s (TyVar m)
+  --    illKindedUnifyVar s (TyVar n) KType (TyVar m) k
 
-    (Just (k, _), Just (KType, _)) | k /= KType -> do
-      k <- inferKindOfType s (TyVar n)
-      illKindedUnifyVar s (TyVar n) k (TyVar m) KType
+  --  (Just (k, _), Just (KType, _)) | k /= KType -> do
+--      k <- inferKindOfType s (TyVar n)
+--      illKindedUnifyVar s (TyVar n) k (TyVar m) KType
 
     -- Otherwise
     --(Just (k1, _), Just (k2, _)) ->
@@ -231,20 +245,13 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
         Nothing ->
           return (False, [])
 
-equalTypesRelatedCoeffects s rel uS (PairTy t1 t2) (PairTy t1' t2') sp = do
-  (lefts, u1)  <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
-  t2  <- substitute u1 t2
-  t2' <- substitute u1 t2'
-  (rights, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
-  unifiers <- combineSubstitutions s u1 u2
-  return (lefts && rights, unifiers)
-
 equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
           $ "span: " ++ show s
           ++ "\nallowUniversalSpecialisation: " ++ show allowUniversalSpecialisation
-          ++ "\nTyVar: " ++ show n ++ "\ntype: " ++ show t ++ "\nspec indicator: " ++ show sp
+          ++ "\nTyVar: " ++ show n ++ " with " ++ show (lookup n (tyVarContext checkerState))
+          ++ "\ntype: " ++ show t ++ "\nspec indicator: " ++ show sp
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | q == InstanceQ || q == BoundQ -> do
@@ -284,6 +291,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
              FstIsSpec -> "Trying to match a polymorphic type '" ++ pretty n
                        ++ "' with monomorphic " ++ pretty t
              SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
+             PatternCtxt -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -399,11 +407,6 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t1'' <- joinTypes s t1 t1'
   t2'' <- joinTypes s t2 t2'
   return (TyApp t1'' t2'')
-
-joinTypes s (PairTy t1 t2) (PairTy t1' t2') = do
-  t1'' <- joinTypes s t1 t1'
-  t2'' <- joinTypes s t2 t2'
-  return (PairTy t1'' t2'')
 
 joinTypes s t1 t2 = do
   halt $ GenericError (Just s)
