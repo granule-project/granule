@@ -227,11 +227,10 @@ handleCMD s =
       liftIO $ print $ dumpStateAux dict
 
     handleLine (RunParser str) = do
-      pstr <- liftIO' $ try $ parseDefs str
-      case pstr of
-        Right ast -> liftIO $ print (show ast)
+      pexp <- liftIO' $ try $ expr $ scanTokens str
+      case pexp of
+        Right ast -> liftIO $ putStrLn (show ast)
         Left e -> do
-          liftIO $ print "here"
           Ex.throwError (ParseError e)
 
     handleLine (RunLexer str) = do
