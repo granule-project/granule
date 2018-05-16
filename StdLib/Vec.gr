@@ -60,6 +60,10 @@ tail : forall (a : Type, n : Nat=)
      . (Vec (n + 1) a) |1| -> Vec n a
 tail xs = case xs of |(Cons _ xs)| -> xs
 
+uncons : forall a : Type, n : Nat=
+       . Vec (n + 1) a -> (a, Vec n a)
+uncons xs = case xs of Cons x xs -> (x,xs)
+
 --- Split a vector at position 'n'
 split : forall (n : Nat=, m : Nat=, a : Type)
          . N n -> (Vec (n + m) a) -> (Vec n a, Vec m a)
