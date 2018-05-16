@@ -628,14 +628,11 @@ data Coeffect = CNat      NatModifier Int
               | COne      CKind
               | Level     Int
               | CSet      [(String, Type)]
-              | CSig      Coeffect CKind
+              | CSig      Coeffect Type
     deriving (Eq, Ord, Show)
 
 data NatModifier = Ordered | Discrete
     deriving (Show, Ord, Eq)
-
-data CKind = CConstr Id | CPoly Id
-    deriving (Eq, Ord, Show)
 
 -- | Normalise a coeffect using the semiring laws and some
 --   local evaluation of natural numbers
@@ -645,14 +642,14 @@ normalise (CPlus (CZero _) n) = n
 normalise (CPlus n (CZero _)) = n
 normalise (CTimes (COne _) n) = n
 normalise (CTimes n (COne _)) = n
-normalise (COne (CConstr (Id _ "Nat"))) = CNat Ordered 1
-normalise (CZero (CConstr (Id _ "Nat"))) = CNat Ordered 0
-normalise (COne (CConstr (Id _ "Nat="))) = CNat Discrete 1
-normalise (CZero (CConstr (Id _ "Nat="))) = CNat Discrete 0
-normalise (COne (CConstr (Id _ "Level"))) = Level 1
-normalise (CZero (CConstr (Id _ "Level"))) = Level 0
-normalise (COne (CConstr (Id _ "Q"))) = CFloat 1
-normalise (CZero (CConstr (Id _ "Q"))) = CFloat 0
+normalise (COne (TyCon (Id _ "Nat"))) = CNat Ordered 1
+normalise (CZero (TyCon (Id _ "Nat"))) = CNat Ordered 0
+normalise (COne (TyCon (Id _ "Nat="))) = CNat Discrete 1
+normalise (CZero (TyCon (Id _ "Nat="))) = CNat Discrete 0
+normalise (COne (TyCon (Id _ "Level"))) = Level 1
+normalise (CZero (TyCon (Id _ "Level"))) = Level 0
+normalise (COne (TyCon (Id _ "Q"))) = CFloat 1
+normalise (CZero (TyCon (Id _ "Q"))) = CFloat 0
 normalise (CPlus (Level n) (Level m)) = Level (n `max` m)
 normalise (CTimes (Level n) (Level m)) = Level (n `min` m)
 normalise (CPlus (CFloat n) (CFloat m)) = CFloat (n + m)
