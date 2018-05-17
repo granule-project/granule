@@ -55,7 +55,7 @@ instance Pretty Coeffect where
     pretty (CSet xs) =
       "{" ++ intercalate "," (map (\(name, t) -> name ++ " : " ++ pretty t) xs) ++ "}"
     pretty (CSig c t) = "(" ++ pretty c ++ " : " ++ pretty t ++ ")"
-    pretty (CInfinity (CPoly kv)) | internalName kv == "infinity" = "∞"
+    pretty (CInfinity (TyVar kv)) | internalName kv == "infinity" = "∞"
     pretty (CInfinity k) = "∞ : " ++ pretty k
 
 instance Pretty Kind where
@@ -63,7 +63,8 @@ instance Pretty Kind where
     pretty KCoeffect      = "Coeffect"
     pretty (KFun k1 k2)   = pretty k1 ++ " -> " ++ pretty k2
     pretty (KConstr c)    = pretty c
-    pretty (KPoly v)      = pretty v
+    pretty (KVar v)       = pretty v
+    pretty (KPromote t)   = "↑" ++ pretty t
 
 instance Pretty TypeScheme where
     pretty (Forall _ [] t) = pretty t
@@ -71,10 +72,6 @@ instance Pretty TypeScheme where
         "forall " ++ intercalate ", " (map prettyKindSignatures cvs) ++ ". " ++ pretty t
       where
        prettyKindSignatures (var, kind) = pretty var ++ " : " ++ pretty kind
-
-instance Pretty CKind where
-    pretty (CConstr c) = pretty c
-    pretty (CPoly   v) = pretty v
 
 instance Pretty Type where
     pretty (TyCon s)      =  pretty s
@@ -84,7 +81,6 @@ instance Pretty Type where
     pretty (TyVar v)      = pretty v
     pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
     pretty (TyInt n)      = show n
-    pretty (PairTy t1 t2) = "(" ++ pretty t1 ++ "," ++ pretty t2 ++ ")"
     pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
 
 instance Pretty AST where
@@ -107,7 +103,8 @@ instance Pretty [DataConstr] where
     pretty = intercalate ";\n  " . map pretty
 
 instance Pretty DataConstr where
-    pretty (DataConstr _ name typeScheme) = pretty name ++ " : " ++ pretty typeScheme
+    pretty (DataConstrG _ name typeScheme) = pretty name ++ " : " ++ pretty typeScheme
+    pretty (DataConstrA _ name params) = pretty name ++ (unwords . map pretty) params
 
 instance Pretty Pattern where
     pretty (PVar _ v)     = pretty v
@@ -115,7 +112,6 @@ instance Pretty Pattern where
     pretty (PBox _ p)     = "|" ++ pretty p ++ "|"
     pretty (PInt _ n)     = show n
     pretty (PFloat _ n)   = show n
-    pretty (PPair _ p1 p2) = "(" ++ pretty p1 ++ "," ++ pretty p2 ++ ")"
     pretty (PConstr _ name args)  = intercalate " " (pretty name : map pretty args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern] where
@@ -136,7 +132,6 @@ instance Pretty Value where
     pretty (NumFloat n) = show n
     pretty (CharLiteral c) = show c
     pretty (StringLiteral s) = show s
-    pretty (Pair e1 e2) = "(" ++ pretty e1 ++ "," ++ pretty e2 ++ ")"
     pretty (Constr s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values

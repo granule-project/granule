@@ -14,8 +14,8 @@ import Syntax.Pretty
 import Utils
 
 -- Which coeffects can be flattened
-flattenable :: CKind -> Maybe (Coeffect -> Coeffect -> Coeffect)
-flattenable (CConstr k) =
+flattenable :: Type -> Maybe (Coeffect -> Coeffect -> Coeffect)
+flattenable (TyCon k) =
   case internalName k of
     "Nat" -> Just CTimes
     "Nat=" -> Just CTimes
@@ -73,11 +73,11 @@ inferCoeffectType s (COne k)  = checkKind s k
 inferCoeffectType s (CInfinity k)  = checkKind s k
 inferCoeffectType s (CSig _ k) = checkKind s k
 
-checkKind :: (?globals :: Globals) => Span -> CKind -> MaybeT Checker CKind
-checkKind s k@(CConstr name) = do
+checkKind :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
+checkKind s k@(TyCon name) = do
   st <- get
   case lookup name (typeConstructors st) of
-    Just (KCoeffect,_) -> return $ CConstr name
+    Just (KCoeffect,_) -> return $ TyCon name
     Just _             -> illKindedNEq s KCoeffect (KConstr name)
     _                  ->
       halt $ UnboundVariableError (Just s) $ "Type `" ++ pretty name ++ "`"
