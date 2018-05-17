@@ -21,7 +21,7 @@ import Control.Monad.Trans.Maybe
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 import Repl.ReplError
-import "Glob" System.FilePath.Glob (glob, compile, globDir1)
+import "Glob" System.FilePath.Glob (glob)
 import Utils
 import Syntax.Pretty
 import Syntax.Expr
@@ -32,7 +32,7 @@ import Checker.Checker
 import Eval
 import Context
 import qualified Control.Monad.Except as Ex
-import Control.Monad.Error
+
 
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]
@@ -49,8 +49,8 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   run' = RunIO (fmap Ex.ExceptT . run . Ex.runExceptT)
                   in fmap Ex.runExceptT $ f run'
 
-eval' :: (?globals :: Globals) =>Int -> AST -> IO (Maybe Value)
-eval' val (AST dataDecls defs) = do
+replEval :: (?globals :: Globals) =>Int -> AST -> IO (Maybe Value)
+replEval val (AST dataDecls defs) = do
     bindings <- evalDefs builtIns defs
     case lookup (mkId (" repl"++(show val))) bindings of
       Nothing -> return Nothing
@@ -68,19 +68,6 @@ processFilesREPL globPatterns f = forM globPatterns $ (\p -> do
         [] -> lift $ Ex.throwError (FilePathError p)
         _ -> forM filePaths f)
 
---[] -> lift $ Ex.throwError (FilePathError p)
-
-replPath :: String -> ReplPATH -> IO [[FilePath]]
-replPath f rps = do
-   let pat = compile f
-   forM rps $ (\x -> globDir1 pat x)
-
-searchRP :: [String] -> ReplPATH -> IO [[FilePath]]
-searchRP [] rp = return [[]]
-searchRP (s:sx) rp =do
-   x <- (replPath s rp)
-   y <- searchRP sx rp
-   return $ x ++ y
 
 -- FileName to search for -> each path from repl path to search -> all found instances of file
 rFind :: String -> FilePath -> IO [FilePath]
@@ -104,11 +91,11 @@ readToQueue pth = do
             checked <-  liftIO' $ check ast
             case checked of
                 Ok -> do
-                    let ast'@(AST dd def) = ast
+                    let (AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd++adt),f,m)
-                    liftIO $ putStrLn $ (takeFileName pth)++" loaded and checked"
+                    liftIO $ putStrLn $ pth++", interpreted"
                 Failed -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
 
@@ -167,8 +154,8 @@ synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ct
 synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
 synType exp cts = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr cts empty Positive exp
 
-synTypePlus :: (?globals::Globals) => Expr -> [Def] -> REPLStateIO Type
-synTypePlus exp ast = do
+synTypeBuilder :: (?globals::Globals) => Expr -> [Def] -> REPLStateIO Type
+synTypeBuilder exp ast = do
   ty <- liftIO $ synType exp (buildCtxtTS ast)
   case ty of
     Just (t,a) -> return t
@@ -194,22 +181,6 @@ getConfigFile = do
   if dfe
     then return confile
     else return ""
-
-
-
--- replPathParse :: IO [FilePath]
--- replPathParse = do
---   pf <- getPathFile
---   case pf of
---     "" -> return []
---     _ -> do
---       let x = parsePath pf
---       case x of
---         Right l -> return l
---         Left msg -> return []
-
-
-
 
 
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
@@ -240,17 +211,15 @@ handleCMD s =
           Ex.throwError (ParseError e)
 
     handleLine (RunLexer str) = do
-      liftIO $ print $ show (scanTokens str)
+      liftIO $ putStrLn $ show (scanTokens str)
 
     handleLine (ShowDef term) = do
       (_,_,_,_,m) <- get
       let def' = (M.lookup term m)
       case def' of
         Nothing -> Ex.throwError(TermNotInContext term)
-        Just (def,_) -> liftIO $ print (show def)
+        Just (def,_) -> liftIO $ putStrLn (show def)
 
-        -- tester <- liftIO' $ rFindHelper (head ptr) rp
-        -- liftIO $ print (show $ makeUnique tester)
     handleLine (LoadFile ptr) = do
       (fvg,rp,_,_,_) <- get
       tester <- liftIO' $ rFindMain ptr rp
@@ -318,13 +287,13 @@ handleCMD s =
                             Left e -> Ex.throwError (EvalError e)
                     _ -> do
                         let ast = buildForEval fv m
-                        typer <- synTypePlus exp ast
+                        typer <- synTypeBuilder exp ast
                         let ndef = buildDef fvg (buildTypeScheme typer) exp
                         put ((fvg+1),rp,adt,fp,m)
                         checked <- liftIO' $ check (AST adt (ast++(ndef:[])))
                         case checked of
                             Ok -> do
-                                result <- liftIO' $ try $ eval' fvg (AST adt (ast++(ndef:[])))
+                                result <- liftIO' $ try $ replEval fvg (AST adt (ast++(ndef:[])))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "if here fix"
@@ -348,34 +317,32 @@ helpMenu =
       ":load <filepath>     (:l)  Load an external file into the context\n"++
       ":module <filepath>   (:m)  Add file/module to the current context\n"++
       "-----------------------------------------------------------------------------------"
--- ":unfold <term>     (:u)  Unfold the expression into one without toplevel definition.\n"++
--- ":show <term>       (:s)  Display the Abstract Syntax Type of a term\n"++
 
-configFileStuff :: IO String
-configFileStuff = do
-  rt <- runErrorT $
+configFileGetPath :: IO String
+configFileGetPath = do
+  rt <- Ex.runExceptT $
     do
     cf <- liftIO $ getConfigFile
     case cf of
       "" ->  do
-        lift $ putStrLn "ALERT : No config file found or loaded\nenter ':h' or ':help' for menu"
+        lift $ putStrLn "ALERT: No config file found or loaded.\nPlease refer to README for config file creation and format\nEnter ':h' or ':help' for menu"
         return ""
       _ -> do
-         cp <- liftIO $ C.readfile C.emptyCP cf --error is occuring at this step
+         cp <- liftIO $ C.readfile C.emptyCP cf
          case cp of
            Right l -> do
-             pths <- C.get l "DEFAULT" "PATH"
+             pths <- C.get l "DEFAULT" "path"
              return pths
            Left r -> return ""
   case rt of
     Right conpth -> return $ conpth
     Left conptherr -> do
-      print conptherr
-      return $ show conptherr
+      liftIO $ putStrLn $ "ALERT: Path variable missing from config file.  Please refer to README for config file creation and formant"
+      return ""
 
 repl :: IO ()
 repl = do
-  someP <- configFileStuff
+  someP <- configFileGetPath
   let drp = (lines someP)
   runInputT defaultSettings (loop (0,drp,[],[],M.empty))
    where

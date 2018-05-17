@@ -16,7 +16,7 @@ import qualified Text.Parsec.Token as Token
 import Text.Parsec.Language
 --import Data.Functor.Identity
 --import System.FilePath
-import Syntax.Expr
+--import Syntax.Expr
 
 
 
@@ -30,8 +30,7 @@ symbol     = Token.symbol tokenizer
 
 
 data REPLExpr =
-      Let Id Expr Expr
-    | ShowDef String
+      ShowDef String
     | DumpState
     | LoadFile [FilePath]
     | AddModule [FilePath]
