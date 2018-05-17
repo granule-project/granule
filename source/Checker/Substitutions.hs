@@ -13,7 +13,6 @@ import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Checker.Kinds
-import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
 import Control.Monad.Trans.Maybe
@@ -34,9 +33,14 @@ data Substitutors =
     SubstT  Type
   | SubstC  Coeffect
   | SubstK  Kind
-  | SubstCK CKind
   | SubstE  Effect
   deriving (Eq, Show)
+
+instance Pretty Substitutors where
+  pretty (SubstT t) = "->" ++ pretty t
+  pretty (SubstC c) = "->" ++ pretty c
+  pretty (SubstK k) = "->" ++ pretty k
+  pretty (SubstE e) = "->" ++ pretty e
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
@@ -65,9 +69,6 @@ instance Substitutable Substitutors where
         k <- substitute subst k
         return $ SubstK k
 
-      SubstCK k ->
-        return $ SubstCK (substitute subst k)
-
       SubstE e -> do
         e <- substitute subst e
         return $ SubstE e
@@ -77,7 +78,7 @@ instance Substitutable Substitutors where
     -- We can unify a type with a coeffect, if the type is actually a Nat=
     k <- inferKindOfType nullSpan t
     k' <- inferCoeffectType nullSpan c'
-    case joinKind k (liftCoeffectType k') of
+    case joinKind k (KPromote k') of
       Just (KConstr k) | internalName k == "Nat=" -> do
              c <- compileNatKindedTypeToCoeffect nullSpan t
              unify c c'
@@ -85,7 +86,6 @@ instance Substitutable Substitutors where
   unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
   unify (SubstC c) (SubstC c') = unify c c'
   unify (SubstK k) (SubstK k') = unify k k'
-  unify (SubstCK k) (SubstCK k') = unify k k'
   unify (SubstE e) (SubstE e') = unify e e'
   unify _ _ = return Nothing
 
@@ -131,10 +131,6 @@ instance Substitutable Type where
     u2 <- unify t2 t2'
     u1 <++> u2
   unify (TyInt i) (TyInt j) | i == j = return $ Just []
-  unify (PairTy t1 t2) (PairTy t1' t2') = do
-    u1 <- unify t1 t1'
-    u2 <- unify t2 t2'
-    u1 <++> u2
   unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
     k <- inferKindOfType nullSpan t
     k' <- inferKindOfType nullSpan t
@@ -142,7 +138,7 @@ instance Substitutable Type where
       Just (KConstr k) | internalName k == "Nat=" -> do
         c  <- compileNatKindedTypeToCoeffect nullSpan t
         c' <- compileNatKindedTypeToCoeffect nullSpan t'
-        addConstraint $ Eq nullSpan c c' (CConstr $ mkId "Nat=")
+        addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat=")
         return $ Just []
 
       _ | o == o' -> do
@@ -177,6 +173,11 @@ instance Substitutable Coeffect where
       c2' <- substitute subst c2
       return $ CTimes c1' c2'
 
+  substitute subst (CExpon c1 c2) = do
+      c1' <- substitute subst c1
+      c2' <- substitute subst c2
+      return $ CExpon c1' c2'
+
   substitute subst (CVar v) =
       case lookup v subst of
         Just (SubstC c) -> do
@@ -184,10 +185,10 @@ instance Substitutable Coeffect where
            case lookup v (tyVarContext checkerState) of
              -- If the coeffect variable has a poly kind then update it with the
              -- kind of c
-             Just ((KPoly kv), q) -> do
+             Just ((KVar kv), q) -> do
                 k' <- inferCoeffectType nullSpan c
                 put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                           v (liftCoeffectType k', q) }
+                                                           v (KPromote k', q) }
              _ -> return ()
            return c
         -- Convert a single type substitution (type variable, type pair) into a
@@ -195,7 +196,7 @@ instance Substitutable Coeffect where
         Just (SubstT t) -> do
           k <- inferKindOfType nullSpan t
           k' <- inferCoeffectType nullSpan (CVar v)
-          case joinKind k (liftCoeffectType k') of
+          case joinKind k (KPromote k') of
             Just (KConstr k) ->
               case internalName k of
                 "Nat=" -> compileNatKindedTypeToCoeffect nullSpan t
@@ -204,14 +205,17 @@ instance Substitutable Coeffect where
 
         _               -> return $ CVar v
 
-  substitute subst (CInfinity k) = return $
-    CInfinity (substitute subst k)
+  substitute subst (CInfinity k) = do
+    k <- substitute subst k
+    return $ CInfinity k
 
-  substitute subst (COne k) = return $
-    COne (substitute subst k)
+  substitute subst (COne k) = do
+    k <- substitute subst k
+    return $ COne k
 
-  substitute subst (CZero k) = return $
-    CZero (substitute subst k)
+  substitute subst (CZero k) = do
+    k <- substitute subst k
+    return $ CZero k
 
   substitute subst (CSet tys) = do
     tys <- mapM (\(v, t) -> substitute subst t >>= (\t' -> return (v, t'))) tys
@@ -219,7 +223,8 @@ instance Substitutable Coeffect where
 
   substitute subst (CSig c k) = do
     c <- substitute subst c
-    return $ CSig c (substitute subst k)
+    k <- substitute subst k
+    return $ CSig c k
 
   substitute _ c@CNat{}      = return c
   substitute _ c@CNatOmega{} = return c
@@ -231,15 +236,15 @@ instance Substitutable Coeffect where
     case lookup v (tyVarContext checkerState) of
       -- If the coeffect variable has a poly kind then update it with the
       -- kind of c
-      Just ((KPoly kv), q) -> do
+      Just ((KVar kv), q) -> do
         k' <- inferCoeffectType nullSpan c
         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                    v (liftCoeffectType k', q) }
+                                                    v (KPromote k', q) }
       Just (k, q) ->
         case c of
           CVar v' -> do
             case lookup v' (tyVarContext checkerState) of
-              Just (KPoly _, q) ->
+              Just (KVar _, q) ->
                 -- The type of v is known and c is a variable with a poly kind
                 put $ checkerState { tyVarContext =
                                        replace (tyVarContext checkerState)
@@ -302,25 +307,12 @@ instance Substitutable Effect where
     if e == e' then return $ Just []
                else return $ Nothing
 
-
-instance Substitutable CKind where
-  type SubstitutionContext CKind x = x
-
-  substitute subst (CPoly v) =
-      case lookup v subst of
-        Just (SubstCK k) -> k
-        _                -> CPoly v
-  substitute _ c@CConstr{} = c
-
-  unify (CPoly v) ck =
-    return $ Just [(v, SubstCK ck)]
-  unify ck (CPoly v) =
-    return $ Just [(v, SubstCK ck)]
-  unify ck ck' =
-    if ck == ck' then return $ Just [] else return $ Nothing
-
 instance Substitutable Kind where
   type SubstitutionContext Kind x = MaybeT Checker x
+
+  substitute subst (KPromote t) = do
+      t <- substitute subst t
+      return $ KPromote t
 
   substitute subst KType = return KType
   substitute subst KCoeffect = return KCoeffect
@@ -328,15 +320,15 @@ instance Substitutable Kind where
     c1 <- substitute subst c1
     c2 <- substitute subst c2
     return $ KFun c1 c2
-  substitute subst (KPoly v) =
+  substitute subst (KVar v) =
     case lookup v subst of
       Just (SubstK k) -> return k
-      _               -> return $ KPoly v
+      _               -> return $ KVar v
   substitute subst (KConstr c) = return $ KConstr c
 
-  unify (KPoly v) k =
+  unify (KVar v) k =
     return $ Just [(v, SubstK k)]
-  unify k (KPoly v) =
+  unify k (KVar v) =
     return $ Just [(v, SubstK k)]
   unify (KFun k1 k2) (KFun k1' k2') = do
     u1 <- unify k1 k1'
@@ -393,6 +385,15 @@ combineSubstitutions sp u1 u2 = do
 Just ([((Id "y" "y"),Linear (TyInt 0))],[((Id "x" "x"),Linear (TyVar (Id "x" "x"))),((Id "z" "z"),Discharged (TyVar (Id "z" "z")) (CVar (Id "b" "b")))])
 -}
 
+instance Substitutable (Ctxt Assumption) where
+  type SubstitutionContext (Ctxt Assumption) x = MaybeT Checker x
+
+  substitute subst ctxt = do
+    (ctxt0, ctxt1) <- substCtxt subst ctxt
+    return (ctxt0 ++ ctxt1)
+
+  unify = error "Unify not implemented for contexts"
+
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
   -> MaybeT Checker (Ctxt Assumption, Ctxt Assumption)
 substCtxt _ [] = return ([], [])
@@ -402,7 +403,6 @@ substCtxt subst ((v, x):ctxt) = do
   if (v', x') == (v, x)
     then return (substituteds, (v, x) : unsubstituteds)
     else return ((v, x') : substituteds, unsubstituteds)
-
 
 substAssumption :: (?globals :: Globals) => Substitution -> (Id, Assumption)
   -> MaybeT Checker (Id, Assumption)
@@ -421,6 +421,7 @@ compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
   case op of
     "+"   -> return $ CPlus t1' t2'
     "*"   -> return $ CTimes t1' t2'
+    "^"   -> return $ CExpon t1' t2'
     "\\/" -> return $ CJoin t1' t2'
     "/\\" -> return $ CMeet t1' t2'
     _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " ++ op
@@ -470,9 +471,10 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, quantifier)) : tyVarContext st })
                  return var'
-               KConstr c -> freshCoeffectVarWithBinding var (CConstr c) quantifier
+               KConstr c -> freshCoeffectVarWithBinding var (TyCon c) quantifier
+               KPromote _ -> error "Promoted coeffect types not yet supported"
                KCoeffect -> error "Coeffect kind variables not yet supported"
-               KPoly _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
+               KVar _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
                \ Please open an issue with a snippet of your code at https://github.com/dorchard/granule/issues"
                KType    -> error "Impossible" -- covered by typeBased
                KFun _ _ -> error "Tried to instantiate a non instantiatable kind"

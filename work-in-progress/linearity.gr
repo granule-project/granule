@@ -1,0 +1,16 @@
+import Vec
+
+data Stream a where
+  Next : a -> (() -> Stream a) |1| -> Stream a
+
+delay : forall a : Type .  a -> (() -> a)
+delay x = \() -> x
+
+force : forall a : Type . (() -> a) -> a
+force t = t ()
+
+-- Fishy:
+-- We promise to use the first parameter once, but we are using it more than that.
+cycle : forall a : Type, n : Nat=, m : Nat= . Vec n a |1| -> Vec m a -> Stream a
+cycle |orig| xs = case xs of
+  Nil -> cycle |orig| orig

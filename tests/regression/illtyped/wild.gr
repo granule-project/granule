@@ -1,10 +1,8 @@
 import Prelude
+import Vec
 
-isEmpty : forall (n : Nat=) . List n Int -> Bool
+isEmpty : forall (n : Nat=) . Vec n Int -> Bool
 isEmpty xs =
     case xs of
       Nil        -> True;
       (Cons _ _) -> False
-
-foo : Int -> Int
-foo _ = 0

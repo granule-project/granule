@@ -10,6 +10,7 @@ import Checker.Coeffects
 import Checker.Exhaustivity
 import Checker.Monad
 import Checker.Predicates
+import Checker.Kinds
 import Checker.Substitutions
 import Context
 import Syntax.Expr
@@ -35,9 +36,8 @@ ctxtFromTypedPattern _ t (PWild _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
-    --wild <- freshVar "wild"
-    --return ([(mkInternalId "_" wild, Linear t)], [], [])
-    return ([], [], [])
+    wild <- freshVar "wild"
+    return ([(Id "_" wild, Linear t)], [], [])
 
 ctxtFromTypedPattern _ t (PVar _ v) =
     return ([(v, Linear t)], [], [])
@@ -62,13 +62,6 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
 
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
-
-
-ctxtFromTypedPattern s (PairTy lty rty) (PPair _ lp rp) = do
-  (ctxtL, eVars1, substl) <- ctxtFromTypedPattern s lty lp
-  (ctxtR, eVars2, substr) <- ctxtFromTypedPattern s rty rp
-  unifiers <- combineSubstitutions s substl substr
-  return (ctxtL ++ ctxtR, eVars1 ++ eVars2, unifiers)
 
 ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC

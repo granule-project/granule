@@ -3,7 +3,6 @@
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ImplicitParams #-}
 
-
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
 module Checker.Constraints where
@@ -289,7 +288,7 @@ compileCoeffect c@(CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) ->
       case k of
-        TyVar v | internalName v == "infinity" -> SNat Ordered 1
+        TyVar v | internalName v == "infinity"  -> SNat Ordered 1
         TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 * n2)
     (SSet s, SSet t) -> SSet $ S.union s t
@@ -301,8 +300,8 @@ compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) ->
       case k of
-        CPoly v | internalName v == "infinity" -> SNat Ordered 1
-        CConstr k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
+        TyVar v | internalName v == "infinity"  -> SNat Ordered 1
+        TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 .^ n2)
     _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
 

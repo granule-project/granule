@@ -1,4 +1,4 @@
-import List
+import Vec
 
-main : List 2 Int
+main : Vec 2 Int
 main = replicate (succ (succ zero)) |5|

@@ -1,0 +1,34 @@
+------
+--- Module: Result
+--- Description: A result data type for computations that can fail (Result + documentation)
+--- Authors: Vilem-Benjamin Liepelt, Dominic Orchard
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+--- # Result type
+data Result a where
+  Ok a;
+  Failed (String |1|)
+
+--- The fromResult function takes a default value and and Result value. If the
+-- Result is Failed, it returns the default value; otherwise, it returns the value
+-- contained in the Result.
+fromResult : forall a : Type . a |1| -> Result a -> a
+fromResult |default| result =
+    case result of
+      (Failed |_|) -> default;
+      (Ok x) -> x
+
+-- Monady interface for Result
+return_res : forall a : Type . a -> Result a
+return_res = Ok
+
+bind_res : forall a : Type, b : Type
+     . Result a -> (a -> Result b) |1| -> Result b
+bind_res m |k| =
+  case m of
+    (Failed r) -> Failed r;
+    (Ok x) -> k x

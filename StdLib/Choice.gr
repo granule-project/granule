@@ -1,0 +1,22 @@
+------
+--- Module: Choice
+--- Description: A datatype with two elements. The only way to consume it is by either
+---   choosing the first or the second element. You must choose exactly one.
+--- Authors: Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+--- Note: still need to encapsulate the `Choice` constructor.
+------
+
+data Choice a b where OneOf (a |1|) (b |1|) -- TODO: don't export
+
+choose1 : forall a : Type, b : Type . Choice a b -> a
+choose1 (OneOf |x| |_|) = x
+
+choose2 : forall a : Type, b : Type . Choice a b -> b
+choose2 (OneOf |_| |y|) = y
+
+choice : forall a : Type, b : Type . a |1| -> b |1| -> Choice a b
+choice x y = OneOf x y

@@ -9,17 +9,16 @@
 module Syntax.Expr
   (AST(..), Value(..), Expr(..), Type(..), TypeScheme(..), Nat,
   letBox,
-  Def(..), DataDecl(..), Pattern(..), CKind(..), Coeffect(..),
+  Def(..), DataDecl(..), Pattern(..), Coeffect(..),
   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
   Id(..), mkId,
   Operator,
-  liftCoeffectType,
   arity, freeVars, subst, freshen, Freshener, freshenAST,
   normalise,
   nullSpan, getSpan, getEnd, getStart, Pos, Span,
   typeFoldM, TypeFold(..), resultType,
   mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
-  mTyInt, mPairTy, mTyInfix,
+  mTyInt, mTyInfix,
   baseTypeFold,
   con, var, (.->), (.@)
   ) where
@@ -78,7 +77,6 @@ data Value = Abs Pattern (Maybe Type) Expr
            | Pure Expr
            | Var Id
            | Constr Id [Value]
-           | Pair Expr Expr
            | CharLiteral Char
            | StringLiteral Text
            -------------------------
@@ -118,7 +116,6 @@ data Pattern
   | PInt Span Int              -- Numeric patterns
   | PFloat Span Double         -- Float pattern
   | PConstr Span Id [Pattern]  -- Constructor pattern
-  | PPair Span Pattern Pattern -- Pair patterns
   deriving (Eq, Show, Generic)
 
 instance FirstParameter Pattern Span
@@ -129,7 +126,6 @@ boundVars PWild {}       = []
 boundVars (PBox _ p)     = boundVars p
 boundVars PInt {}        = []
 boundVars PFloat {}      = []
-boundVars (PPair _ p1 p2) = boundVars p1 ++ boundVars p2
 boundVars (PConstr _ _ ps) = concatMap boundVars ps
 
 instance Freshenable Pattern where
@@ -140,10 +136,6 @@ instance Freshenable Pattern where
   freshen (PBox s p) = do
       p' <- freshen p
       return $ PBox s p'
-  freshen (PPair s p1 p2) = do
-      p1' <- freshen p1
-      p2' <- freshen p2
-      return $ PPair s p1' p2'
   freshen (PConstr s name ps) = do
       ps <- mapM freshen ps
       return (PConstr s name ps)
@@ -162,7 +154,7 @@ data FreshenerState = FreshenerState
 
 -- | Given something freshenable, e.g. the AST, run the freshener on it and return the final state
 -- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
--- PVar ((0,0),(0,0)) (Id "x" "x0")
+-- PVar ((0,0),(0,0)) (Id "x" "x_0")
 runFreshener :: Freshenable t => t -> t
 runFreshener x = evalState (freshen x) FreshenerState { counter = 0, varMap = [], tyMap = [] }
 
@@ -187,7 +179,7 @@ data IdSyntacticCategory = Value | Type
 freshVar :: IdSyntacticCategory -> Id -> Freshener Id
 freshVar cat var = do
     st <- get
-    let var' = sourceName var ++ show (counter st)
+    let var' = sourceName var ++ "_" ++ show (counter st)
     case cat of
       Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
       Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
@@ -220,7 +212,6 @@ instance Term Type where
     , tfTyVar   = \v -> return [v] -- or: return . return
     , tfTyApp   = \x y -> return $ x ++ y
     , tfTyInt   = \_ -> return []
-    , tfPairTy  = \x y -> return $ x ++ y
     , tfTyInfix = \_ y z -> return $ y ++ z
     }
 
@@ -233,7 +224,7 @@ instance Freshenable Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" =
-          return $ Box (CInfinity (CPoly $ Id "∞" "infinity")) t2
+          return $ Box (CInfinity (TyVar $ Id "∞" "infinity")) t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
@@ -252,6 +243,7 @@ instance Term Coeffect where
     freeVars (CVar v) = [v]
     freeVars (CPlus c1 c2) = freeVars c1 ++ freeVars c2
     freeVars (CTimes c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CExpon c1 c2) = freeVars c1 ++ freeVars c2
     freeVars (CMeet c1 c2) = freeVars c1 ++ freeVars c2
     freeVars (CJoin c1 c2) = freeVars c1 ++ freeVars c2
     freeVars CNat{}  = []
@@ -270,21 +262,29 @@ instance Freshenable Coeffect where
       case v' of
         Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar $ mkId (sourceName v)
-    freshen (CInfinity (CPoly i@(Id _ ""))) = do
+
+    freshen (CInfinity (TyVar i@(Id _ ""))) = do
       t <- freshVar Type i
-      return $ CInfinity (CPoly t)
-    freshen (CInfinity (CPoly i@(Id _ " infinity"))) = do
+      return $ CInfinity (TyVar t)
+
+    freshen (CInfinity (TyVar i@(Id _ " infinity"))) = do
       t <- freshVar Type i
-      return $ CInfinity (CPoly t)
+      return $ CInfinity (TyVar t)
 
     freshen (CPlus c1 c2) = do
       c1' <- freshen c1
       c2' <- freshen c2
       return $ CPlus c1' c2'
+
     freshen (CTimes c1 c2) = do
       c1' <- freshen c1
       c2' <- freshen c2
       return $ CTimes c1' c2'
+
+    freshen (CExpon c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
+      return $ CExpon c1' c2'
 
     freshen (CMeet c1 c2) = do
       c1' <- freshen c1
@@ -315,7 +315,6 @@ instance Term Value where
     freeVars (Var x)     = [x]
     freeVars (Pure e)    = freeVars e
     freeVars (Promote e) = freeVars e
-    freeVars (Pair l r)  = freeVars l ++ freeVars r
     freeVars (NumInt _) = []
     freeVars (NumFloat _) = []
     freeVars (Constr _ _) = []
@@ -326,7 +325,6 @@ instance Substitutable Value where
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
     subst es v (Pure e)         = Val nullSpan $ Pure (subst es v e)
     subst es v (Promote e)      = Val nullSpan $ Promote (subst es v e)
-    subst es v (Pair l r)       = Val nullSpan $ Pair (subst es v l) (subst es v r)
     subst es v (Var w) | v == w = es
     subst _ _ v@(NumInt _)        = Val nullSpan v
     subst _ _ v@(NumFloat _)      = Val nullSpan v
@@ -361,11 +359,6 @@ instance Freshenable Value where
          -- This case happens if we are referring to a defined
          -- function which does not get its name freshened
          Nothing -> return (Var $ Id (sourceName v) (sourceName v))
-
-    freshen (Pair l r) = do
-      l' <- freshen l
-      r' <- freshen r
-      return $ Pair l' r'
 
     freshen v@(NumInt _)   = return v
     freshen v@(NumFloat _) = return v
@@ -440,7 +433,10 @@ data DataDecl = DataDecl Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
 
 instance FirstParameter DataDecl Span
 
-data DataConstr = DataConstr Span Id TypeScheme deriving (Eq, Show, Generic)
+data DataConstr
+  = DataConstrG Span Id TypeScheme
+  | DataConstrA Span Id [Type]
+  deriving (Eq, Show, Generic)
 
 instance FirstParameter DataConstr Span
 
@@ -448,7 +444,7 @@ instance FirstParameter DataConstr Span
 type Cardinality = Maybe Nat
 
 freshenAST :: AST -> AST
-freshenAST (AST dds defs) = AST (map runFreshener dds) (map runFreshener defs)
+freshenAST (AST dds defs) = AST dds (map runFreshener defs)
 
 {-| Alpha-convert all bound variables of a definition, modulo the things on the lhs
 Eg this:
@@ -463,24 +459,14 @@ foo x = (\(x0 : Int) -> x0 * 2) x
 @
 
 >>> runFreshener $ Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x0"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x")))) [PVar ((2,5),(2,5)) (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
-Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x0"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x")))) [PVar ((2,5),(2,5)) (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
+Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) (Val ((2,10),(2,25)) (Abs (PVar ((2,12),(2,12)) (Id "x" "x_1")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) "*" (Val ((2,24),(2,24)) (Var (Id "x" "x_1"))) (Val ((2,26),(2,26)) (NumInt 2))))) (Val ((2,29),(2,29)) (Var (Id "x" "x_0")))) [PVar ((2,5),(2,5)) (Id "x" "x_0")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
 -}
 instance Freshenable Def where
   freshen (Def s var e ps t) = do
     ps <- mapM freshen ps
-    e  <- freshen e
     t  <- freshen t
+    e  <- freshen e
     return (Def s var e ps t)
-
--- | Also push down the type variables from the data declaration head
--- into the data constructors
-instance Freshenable DataDecl where
-  freshen (DataDecl sp tyCon tyVars kind dataCs) = do
-    dataCs <-
-      forM dataCs $ \(DataConstr sp name tySch) -> do
-                      (Forall sp' vs ty) <- freshen tySch
-                      return $ DataConstr sp name (Forall sp' (tyVars ++ vs) ty)
-    return $ DataDecl sp tyCon tyVars kind dataCs
 
 instance Term Def where
   freeVars (Def _ name body binders _) = delete name (freeVars body \\ concatMap boundVars binders)
@@ -503,13 +489,12 @@ instance Freshenable TypeScheme where
 Example: `List n Int` is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
 data Type = FunTy Type Type           -- ^ Function type
-          | TyCon Id       -- ^ Type constructor
+          | TyCon Id                  -- ^ Type constructor
           | Box Coeffect Type         -- ^ Coeffect type
           | Diamond Effect Type       -- ^ Effect type
           | TyVar Id                  -- ^ Type variable
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
-          | PairTy Type Type          -- ^ Pair/product type
           | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
@@ -541,14 +526,12 @@ mTyApp :: Monad m => Type -> Type -> m Type
 mTyApp x y   = return (TyApp x y)
 mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
-mPairTy :: Monad m => Type -> Type -> m Type
-mPairTy x y  = return (PairTy x y)
 mTyInfix :: Monad m => Operator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 
 baseTypeFold :: Monad m => TypeFold m Type
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mPairTy mTyInfix
+  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix
 
 data TypeFold m a = TypeFold
   { tfFunTy   :: a -> a        -> m a
@@ -558,7 +541,6 @@ data TypeFold m a = TypeFold
   , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
-  , tfPairTy  :: a -> a        -> m a
   , tfTyInfix :: Operator -> a -> a -> m a }
 
 -- | Monadic fold on a `Type` value
@@ -582,10 +564,6 @@ typeFoldM algebra = go
      t2' <- go t2
      (tfTyApp algebra) t1' t2'
    go (TyInt i) = (tfTyInt algebra) i
-   go (PairTy t1 t2) = do
-     t1' <- go t1
-     t2' <- go t2
-     (tfPairTy algebra) t1' t2'
    go (TyInfix op t1 t2) = do
      t1' <- go t1
      t2' <- go t2
@@ -605,30 +583,29 @@ resultType t = t
 data Kind = KType
           | KCoeffect
           | KFun Kind Kind
-          | KPoly Id              -- Kind poly variable
-          | KConstr Id -- constructors that have been elevated
+          | KVar Id              -- Kind poly variable
+          -- TODO: merge KType and KCoeffect into KConstr
+          | KConstr Id           -- constructors
+          | KPromote Type        -- Promoted types
     deriving (Show, Ord, Eq)
-
-liftCoeffectType :: CKind -> Kind
-liftCoeffectType (CConstr cid) = KConstr cid
-liftCoeffectType (CPoly var)   = KPoly var
 
 type Effect = [String]
 
 data Coeffect = CNat      NatModifier Int
               | CNatOmega (Either () Int)
               | CFloat    Rational
-              | CInfinity CKind
+              | CInfinity Type
               | CVar      Id
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
-              | CZero     CKind
-              | COne      CKind
+              | CZero     Type
+              | COne      Type
               | Level     Int
               | CSet      [(String, Type)]
               | CSig      Coeffect Type
+              | CExpon    Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
 data NatModifier = Ordered | Discrete

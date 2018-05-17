@@ -1,6 +1,6 @@
 -- terrible error message:
--- Type error: examples/errors/badList.gr: :1:1:
+-- Type error: examples/errors/badVec.gr: :1:1:
 --   Definition 'foo' is Falsifiable
 
-foo : List 3 Int
+foo : Vec 3 Int
 foo = Cons 1 (Cons 2 Nil)

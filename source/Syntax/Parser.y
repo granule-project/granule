@@ -62,6 +62,7 @@ import System.Exit (die)
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
+    '^'   { TokenCaret _ }
     OP    { TokenOp _ _ }
 
 
@@ -70,6 +71,7 @@ import System.Exit (die)
 %left ':'
 %left '+' '-'
 %left '*'
+%left '^'
 %left '|'
 %left '.'
 %%
@@ -111,7 +113,8 @@ DataConstrs :: { [DataConstr] }
   | {- empty -}               { [] }
 
 DataConstr :: { DataConstr }
-  : CONSTR ':' TypeScheme     { DataConstr (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+  : CONSTR ':' TypeScheme     { DataConstrG (getPos $1, getEnd $3) (mkId $ constrString $1) $3 }
+  | CONSTR TyParams           { DataConstrA (getPosToSpan $1) (mkId $ constrString $1) $2 }
 
 DataConstrNext :: { [DataConstr] }
   : ';' DataConstrs           { $2 }
@@ -136,7 +139,7 @@ PAtoms :: { [Pattern] }
 
 Pat :: { Pattern }
   : PAtom                     { $1 }
-  | '(' CONSTR PAtoms ')'      { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
+  | '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
 
 PAtom :: { Pattern }
   : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
@@ -146,7 +149,7 @@ PAtom :: { Pattern }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
   | '(' Pat ')'               { $2 }
   | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
-  | '(' Pat ',' Pat ')'       { PPair (getPosToSpan $1) $2 $4 }
+  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) (mkId ",") [$2, $4] }
 
 
 TypeScheme :: { TypeScheme }
@@ -163,28 +166,23 @@ VarSig :: { (Id, Kind) }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
-  | VAR                       { KPoly (mkId $ symString $1) }
+  | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
                                   "Type"     -> KType
                                   "Coeffect" -> KCoeffect
                                   s          -> KConstr $ mkId s }
-
-CKind :: { CKind }
-  : VAR                       { CPoly (mkId $ symString $1) }
-  | CONSTR                    { CConstr (mkId $ constrString $1) }
-
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
   | Type '|' Coeffect '|'     { Box $3 $1 }
   | TyAtom '<' Effect '>'       { Diamond $3 $1 }
   | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { PairTy $2 $4 }
+  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
-  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (PairTy $3 $5) }
+  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (TyApp (TyApp (TyCon $ mkId ",") $3) $5) }
   | TyJuxt '(' Type ')'       { TyApp $1 $3 }
   | TyAtom                    { $1 }
 
@@ -194,28 +192,34 @@ TyAtom :: { Type }
   | INT                           { let TokenInt _ x = $1 in TyInt x }
   | TyAtom '+' TyAtom             { TyInfix ("+") $1 $3 }
   | TyAtom '*' TyAtom             { TyInfix ("*") $1 $3 }
+  | TyAtom '^' TyAtom             { TyInfix ("^") $1 $3 }
   | TyAtom '/' '\\' TyAtom        { TyInfix ("/\\") $1 $4 }
   | TyAtom '\\' '/' TyAtom        { TyInfix ("\\/") $1 $4 }
   | '(' Type '|' Coeffect '|' ')' { Box $4 $2 }
   | '(' TyJuxt ')' { $2 }
 
+TyParams :: { [Type] }
+  : TyAtom TyParams             { $1 : $2 } -- use right recursion for simplicity -- VBL
+  |                             { [] }
+
 Coeffect :: { Coeffect }
   : NatCoeff                    { $1 }
-  | '∞'                         { CInfinity (CConstr $ mkId "Cartesian") }
+  | '∞'                         { CInfinity (TyCon $ mkId "Cartesian") }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (CConstr $ mkId "Cartesian")
+                                    "Inf" -> CInfinity (TyCon $ mkId "Cartesian")
                                     x -> error $ "Unknown coeffect constructor `" ++ x ++ "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
+  | Coeffect '^' Coeffect       { CExpon $1 $3 }
   | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' CKind          { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { normalise (CSig $1 $3) }
 
 NatCoeff :: { Coeffect }
   : INT NatModifier           { let TokenInt _ x = $1 in CNat $2 x }
@@ -303,6 +307,9 @@ CasesNext :: { [(Pattern, Expr)] }
 
 Case :: { (Pattern, Expr) }
   : Pat '->' Expr             { ($1, $3) }
+  | CONSTR PAtoms '->' Expr   { let TokenConstr _ x = $1
+                                 in (PConstr (getPosToSpan $1) (mkId x) $2, $4) }
+
 
 Form :: { Expr }
   : Form '+' Form             { Binop (getPosToSpan $2) "+" $1 $3 }
@@ -327,7 +334,11 @@ Atom :: { Expr }
   | VAR                       { Val (getPosToSpan $1) $ Var (mkId $ symString $1) }
   | '|' Atom '|'              { Val (getPos $1, getPos $3) $ Promote $2 }
   | CONSTR                    { Val (getPosToSpan $1) $ Constr (mkId $ constrString $1) [] }
-  | '(' Expr ',' Expr ')'     { Val (getPos $1, getPos $5) (Pair $2 $4) }
+  | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5)
+                                    (App (getPos $1, getPos $3)
+                                         (Val (getPosToSpan $3) (Constr (mkId ",") []))
+                                         $2)
+                                    $4 }
   | CHAR                      { Val (getPosToSpan $1) $
                                   case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
   | STRING                    { Val (getPosToSpan $1) $

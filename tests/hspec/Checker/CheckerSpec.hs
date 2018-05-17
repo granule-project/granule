@@ -75,19 +75,19 @@ spec = do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged tyVarK (CNat Ordered 5))]
               [(varA, Discharged tyVarK (CNat Ordered 10))]
-       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a_0")))]
+       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CNat Ordered 10) (CVar (mkId "a_0")) (CConstr $ mkId "Nat"))
-              , Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a_0")) (CConstr $ mkId "Nat"))]]
+         [Conj [Con (ApproximatedBy nullSpan (CNat Ordered 10) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))
+              , Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged (tyVarK) (CNat Ordered 5))]
               []
-       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a_0")))]
+       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CZero (CConstr $ mkId "Nat")) (CVar (mkId "a_0")) (CConstr $ mkId "Nat"))
-               ,Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a_0")) (CConstr $ mkId"Nat"))]]
+         [Conj [Con (ApproximatedBy nullSpan (CZero (TyCon $ mkId "Nat")) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))
+               ,Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a.0")) (TyCon $ mkId"Nat"))]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
@@ -117,7 +117,7 @@ spec = do
                  []
                  [(varA, Discharged (tyVarK) (CNat Ordered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (CZero (CConstr $ mkId "Nat")))]
+                 [(varA, Discharged (tyVarK) (CZero (TyCon $ mkId "Nat")))]
 
 
 

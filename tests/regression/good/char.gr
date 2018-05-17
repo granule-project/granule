@@ -1,4 +1,4 @@
-import Sequence
+import List
 
-main : Sequence Char
+main : List Char
 main = Next 'h' (Next 'i' Empty)

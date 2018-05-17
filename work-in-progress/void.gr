@@ -1,0 +1,4 @@
+data Void where
+
+v : Void
+v = v

@@ -1,5 +1,5 @@
 import File
-import Sequence
+import List
 
 -- Haskell vs Granule file manipulation
 
