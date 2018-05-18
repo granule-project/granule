@@ -567,7 +567,9 @@ solveConstraints predicate s defName = do
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
   let ctxtCkVar = kVarContext checkerState
+  liftIO $ putStrLn $ "ctxt = " ++ show ctxtCk
   let coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
+  liftIO $ putStrLn $ "just coeffects ctxt = " ++ pretty coeffectVars
   let coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
 
   let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
@@ -606,10 +608,11 @@ solveConstraints predicate s defName = do
 
            else return True
   where
+
     justCoeffectTypesConverted checkerState = mapMaybe convert
       where
        convert (var, (KPromote (TyCon constr), q)) =
-           case lookup (constr) (typeConstructors checkerState) of
+           case lookup constr (typeConstructors checkerState) of
              Just (KCoeffect,_) -> Just (var, (TyCon constr, q))
              _                  -> Nothing
 
@@ -618,7 +621,7 @@ solveConstraints predicate s defName = do
            case lookup (constr) (typeConstructors checkerState) of
              Just (KCoeffect,_) -> Just (var, (TyCon constr, q))
              _                  -> Nothing
-       convert (var, (KPromote (TyVar v), q)) = Just (var, (TyVar v, q))
+       --convert (var, (KPromote (TyVar v), q)) = Just (var, (TyVar v, q))
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
        convert (var, (KVar v, q)) = Just (var, (TyVar v, q))
@@ -626,6 +629,7 @@ solveConstraints predicate s defName = do
 
     justCoeffectTypesConvertedVars checkerState =
        stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
+
 
 approximatedByCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker ()
