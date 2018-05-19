@@ -344,11 +344,38 @@ equalOtherKindedTypesGeneric s t1 t2 = do
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
+    (KConstr n, KConstr n') | internalName n == "Session" && internalName n' == "Session" ->
+         sessionInequality s t1 t2
+
+    --(KFun k1 k2, KFun k1', k2') ->
+    --   return (k1 == k
     _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2
                  ++ "\t\n from equality "
                  ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
+
+-- Essentially use to report better error messages when two session type
+-- are not equality
+sessionInequality :: (?globals :: Globals)
+    => Span -> Type -> Type -> MaybeT Checker (Bool, Substitution)
+sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
+  | internalName c == "Send" && internalName c' == "Send" = do
+  (g, _, u) <- equalTypes s t t'
+  return (g, u)
+
+sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
+  | internalName c == "Recv" && internalName c' == "Recv" = do
+  (g, _, u) <- equalTypes s t t'
+  return (g, u)
+
+sessionInequality s (TyCon c) (TyCon c')
+  | internalName c == "End" && internalName c' == "End" =
+  return (True, [])
+
+sessionInequality s t1 t2 =
+  halt $ GenericError (Just s)
+       $ "Session type '" ++ pretty t1 ++ "' is not equal to '" ++ pretty t2 ++ "'"
 
 isDualSession :: (?globals :: Globals)
     => Span
