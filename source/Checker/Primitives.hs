@@ -114,6 +114,15 @@ builtins =
                     (((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
                     .->
                     (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
+
+   -- forkRep : (c |n| -> Diamond ()) -> Diamond (c' |n|)
+  , (mkId "forkRep", Forall nullSpan [(mkId "s", session), (mkId "n", KConstr $ mkId "Nat=")] $
+                    (Box (CVar $ mkId "n")
+                       ((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
+                    .->
+                    (Diamond ["Com"]
+                       (Box (CVar $ mkId "n")
+                         ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
   ]
 
 binaryOperators :: [(Operator, Type)]
