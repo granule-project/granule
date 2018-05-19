@@ -1,12 +1,25 @@
 import Bool
 import Vec
 
-foo : Chan (Send Bool (Recv Int End)) -> Session Int
-foo c =
+fooClient : Chan (Send Bool (Recv Int End)) -> Session Int
+fooClient c =
   let c      <- send c True;
       (n, c) <- recv c;
       ()     <- close c
   in pure n
+
+fooServer : Chan (Dual (Send Bool (Recv Int End))) -> Session ()
+fooServer c =
+  let (b, c) <- recv c;
+      c <- case b of
+             True -> send c 1;
+	     False -> send c 0
+  in close c
+
+example : Session Int
+example =
+  let c  <- fork fooServer
+  in  fooClient c
 
 -- Given a one-shot channel for some sending a value of type 'a'
 -- but which is able to be reused 'n' times, and a vector of

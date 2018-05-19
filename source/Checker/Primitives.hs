@@ -36,6 +36,7 @@ typeLevelConstructors =
     , (mkId "Recv", (KFun KType (KFun session session), Nothing))
     , (mkId "End" , (session, Nothing))
     , (mkId "Chan", (KFun session KType, Nothing))
+    , (mkId "Dual", (KFun session session, Nothing))
     ]
 
 dataConstructors :: [(Id, TypeScheme)]
@@ -107,6 +108,12 @@ builtins =
 
   , (mkId "close", Forall nullSpan [] $
                     ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))
+
+  -- fork : (c -> Diamond ()) -> Diamond c'
+  , (mkId "fork", Forall nullSpan [(mkId "s", session)] $
+                    (((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
+                    .->
+                    (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
   ]
 
 binaryOperators :: [(Operator, Type)]
