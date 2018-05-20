@@ -18,8 +18,8 @@ intEqServer c =
                          in close d))
   in close c
 
-intClient : forall (s : Session)
-          . Chan (Send (IntEq s (Send Int (Send Int (Recv Bool End)))) End)
+intClient : forall (p : Protocol)
+          . Chan (Send (IntEq p (Send Int (Send Int (Recv Bool End)))) End)
           -> Session Bool
 intClient c =
   let

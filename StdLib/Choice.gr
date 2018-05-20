@@ -2,12 +2,12 @@
 --- Module: Choice
 --- Description: A datatype with two elements. The only way to consume it is by either
 ---   choosing the first or the second element. You must choose exactly one.
+--- Note: still need to encapsulate the `OneOf` constructor—pattern matching on it is BAD!
 --- Authors: Vilem-Benjamin Liepelt
 --- License: BSD3
 --- Copyright: (c) Authors 2018
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
---- Note: still need to encapsulate the `Choice` constructor.
 ------
 
 data Choice a b where OneOf (a |1|) (b |1|) -- TODO: don't export
