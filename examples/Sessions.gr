@@ -49,3 +49,10 @@ example2 : forall (n : Nat=, a : Type)
 example2 n list =
   let c <- forkRep (\c -> sendVec c list)
   in recvVec n c
+
+main : Session (Vec 5 Int, Int)
+main =
+  let
+    xs <- example2 (S (S (S (S (S Z))))) (Cons 1 (Cons 1 (Cons 2 (Cons 3 (Cons 5 Nil)))));
+    a <- example
+  in pure (xs, a)

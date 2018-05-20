@@ -12,7 +12,7 @@ import qualified Data.Text.IO as Text
 import Control.Monad (zipWithM)
 
 import qualified Control.Concurrent as C (forkIO)
-import qualified Control.Concurrent.Chan as CC (newChan) -- , writeChan, readChan)
+import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan)
 
 import System.IO (hFlush, stdout)
 import qualified System.IO as SIO
@@ -199,14 +199,44 @@ builtIns =
                False -> Constr (mkId "False") []
         return . Pure . Val nullSpan $ Constr (mkId ",") [Handle h, boolflag])
   , (mkId "fork", PrimitiveClosure fork)
+  , (mkId "forkRep", PrimitiveClosure forkRep)
+  , (mkId "recv", Primitive recv)
+  , (mkId "send", Primitive send)
+  , (mkId "close", Primitive close)
   ]
   where
     fork :: Ctxt Value -> Value -> IO Value
     fork ctxt e@Abs{} = do
       c <- CC.newChan
       C.forkIO $
-         evalIn ctxt (App nullSpan (Val nullSpan e) (Val nullSpan $ Chan c)) >> return ()
-      return $ Chan c
+         evalIn ctxt (App nullSpan (valExpr e) (valExpr $ Chan c)) >> return ()
+      return $ Pure $ valExpr $ Chan c
+
+    forkRep :: Ctxt Value -> Value -> IO Value
+    forkRep ctxt e@Abs{} = do
+      c <- CC.newChan
+      C.forkIO $
+         evalIn ctxt (App nullSpan
+                        (valExpr e)
+                        (valExpr $ Promote $ valExpr $ Chan c)) >> return ()
+      return $ Pure $ valExpr $ Promote $ valExpr $ Chan c
+    forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " ++ prettyDebug e
+
+    recv :: Value -> IO Value
+    recv (Chan c) = do
+      x <- CC.readChan c
+      return $ Pure $ valExpr $ Constr (mkId ",") [x, Chan c]
+    recv e = error $ "Bug in Granule. Trying to recevie from: " ++ prettyDebug e
+
+    send :: Value -> IO Value
+    send (Chan c) = return $ Primitive
+      (\v -> do
+         CC.writeChan c v
+         return $ Pure $ valExpr $ Chan c)
+    send e = error $ "Bug in Granule. Trying to send from: " ++ prettyDebug e
+
+    close :: Value -> IO Value
+    close (Chan c) = return $ Pure $ valExpr $ Constr (mkId "()") []
 
     cast :: Int -> Double
     cast = fromInteger . toInteger

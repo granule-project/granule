@@ -8,7 +8,7 @@
 
 module Syntax.Expr
   (AST(..), Value(..), Expr(..), Type(..), TypeScheme(..), Nat,
-  letBox,
+  letBox, valExpr,
   Def(..), DataDecl(..), Pattern(..), CKind(..), Coeffect(..),
   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
   Id(..), mkId,
@@ -70,6 +70,9 @@ data Value = Abs Pattern (Maybe Type) Expr
 
            -- Channels
            | Chan (CC.Chan Value)
+
+valExpr :: Value -> Expr
+valExpr = Val nullSpan
 
 deriving instance ( Eq (Value -> IO Value)
                   , Eq (Ctxt Value -> Value -> IO Value))
@@ -315,6 +318,8 @@ instance Term Value where
     freeVars (Constr _ _) = []
     freeVars (CharLiteral _) = []
     freeVars (StringLiteral _) = []
+    freeVars (Handle{}) = []
+    freeVars (Chan{})   = []
 
 instance Substitutable Value where
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
@@ -328,6 +333,9 @@ instance Substitutable Value where
     subst _ _ v@CharLiteral{}     = Val nullSpan v
     subst _ _ v@StringLiteral{}   = Val nullSpan v
     subst _ _ v@Handle{}          = Val nullSpan v
+    subst _ _ v@Chan{}            = Val nullSpan v
+    subst _ _ v@Primitive{}       = Val nullSpan v
+    subst _ _ v@PrimitiveClosure{} = Val nullSpan v
 
 instance Freshenable Value where
     freshen (Abs p t e) = do
