@@ -24,6 +24,8 @@ import qualified Checker.Primitives as Primitives
 import Checker.Substitutions
 import Checker.Types
 import Context
+
+import Syntax.Identifiers
 import Syntax.Expr
 import Syntax.Pretty
 import Utils

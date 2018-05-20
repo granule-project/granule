@@ -8,7 +8,7 @@ module Context where
 
 import Data.Maybe (isJust)
 import Data.List (sortBy)
-import Syntax.Expr (Id, sourceName)
+import Syntax.Identifiers (Id, sourceName)
 import Utils
 
 -- | Type of contexts

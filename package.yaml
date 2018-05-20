@@ -40,9 +40,11 @@ library:
   - Syntax.Desugar
   - Syntax.Expr
   - Syntax.FirstParameter
+  - Syntax.Identifiers
   - Syntax.Lexer
   - Syntax.Parser
   - Syntax.Pretty
+  - Syntax.Span
   - Utils
   dependencies:
   - array

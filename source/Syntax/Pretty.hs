@@ -13,6 +13,17 @@ import Data.List
 import Syntax.Expr
 import Utils
 
+prettyDebug :: Pretty t => t -> String
+prettyDebug x =
+  let ?globals = defaultGlobals { debugging = True }
+  in pretty x
+
+prettyUser :: Pretty t => t -> String
+prettyUser x =
+  let ?globals = defaultGlobals
+  in pretty x
+
+
 -- The pretty printer class
 class Pretty t where
     pretty :: (?globals :: Globals) => t -> String
@@ -141,6 +152,7 @@ instance Pretty Value where
         valueAtom (NumFloat _)  = True
         valueAtom (Constr _ []) = True
         valueAtom _             = False
+    pretty v = show v
 
 instance Pretty Id where
   pretty = if debugging ?globals then internalName else sourceName
