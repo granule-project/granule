@@ -40,6 +40,7 @@ inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT
 inferKindOfType' s quantifiedVariables t =
     typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
   where
+    kFun (KConstr c) (KConstr c') | internalName c == internalName c' = return $ KConstr c
     kFun KType KType = return KType
     kFun KType y = illKindedNEq s KType y
     kFun x _     = illKindedNEq s KType x
