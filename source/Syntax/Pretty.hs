@@ -145,6 +145,8 @@ instance Pretty Value where
     pretty (NumFloat n) = show n
     pretty (CharLiteral c) = show c
     pretty (StringLiteral s) = show s
+    pretty (Constr s vs) | internalName s == "," =
+      "(" ++ intercalate ", " (map pretty vs) ++ ")"
     pretty (Constr s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values
