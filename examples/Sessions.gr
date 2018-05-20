@@ -11,14 +11,12 @@ fooClient c =
 fooServer : Chan (Dual (Send Bool (Recv Int End))) -> Session ()
 fooServer c =
   let (b, c) <- recv c;
-      c <- case b of
-             True -> send c 1;
-	     False -> send c 0
+      c      <- if b then send c 1 else send c 0
   in close c
 
 example : Session Int
 example =
-  let c  <- fork fooServer
+  let c <- fork fooServer
   in  fooClient c
 
 -- Given a one-shot channel for some sending a value of type 'a'
@@ -32,7 +30,7 @@ sendVec |c| xs =
     Nil -> pure ();
     (Cons x xs) ->
        let c'  <- send c x;
-           () <- close c'
+           ()  <- close c'
        in sendVec |c| xs
 
 recvVec : forall (n : Nat=, a : Type) .
