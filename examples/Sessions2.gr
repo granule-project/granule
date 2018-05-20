@@ -1,0 +1,31 @@
+import Bool
+
+data IntEq (a : Session) (b : Session) where
+  Quit : Chan a -> IntEq a b;
+  Eq   : Chan b -> IntEq a b
+
+
+intEqServer : Chan (Recv (IntEq End (Recv Int (Recv Int (Send Bool End)))) End)
+           -> Session ()
+intEqServer c =
+ let (label, c) <- recv c;
+     () <- (case label of
+             (Quit d) -> close d;
+             (Eq d)   -> (let
+                           (int1, d) <- recv d;
+                           (int2, d) <- recv d;
+                           d <- send d (int1 == int2)
+                         in close d))
+  in close c
+
+intClient : forall (s : Session)
+          . Chan (Send (IntEq s (Send Int (Send Int (Recv Bool End)))) End)
+          -> Session Bool
+intClient c =
+  let
+    d <- fork (\d' -> let c <- send c (Eq d') in close c);
+    d <- send d 10;
+    d <- send d 32;
+    (b, d) <- recv d;
+    () <- close d
+  in pure b
