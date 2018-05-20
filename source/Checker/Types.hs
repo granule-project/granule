@@ -140,8 +140,13 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
       -- Effect approximation
       if (ef `isPrefixOf` ef')
       then return (eq, unif)
-      else halt $ GradingError (Just s) $
-        "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
+      else
+        -- Communication effect analysis is idempotent
+        if (nub ef == ["Com"] && nub ef' == ["Com"])
+        then return (eq, unif)
+        else
+          halt $ GradingError (Just s) $
+            "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
 
 equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   -- Debugging messages
