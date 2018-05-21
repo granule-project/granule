@@ -234,7 +234,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
-        Just (KConstr kc) | internalName kc /= "Session" -> do
+        Just (KConstr kc) | internalName kc /= "Protocol" -> do
           -- Don't create solver constraints for sessions- deal with before SMT
           addConstraint (Eq s (CVar n) (CVar m) (CConstr kc))
           return (True, [(n, SubstT $ TyVar m)])
@@ -350,7 +350,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
-    (KConstr n, KConstr n') | internalName n == "Session" && internalName n' == "Session" ->
+    (KConstr n, KConstr n') | internalName n == "Protocol" && internalName n' == "Protocol" ->
          sessionInequality s t1 t2
 
     --(KFun k1 k2, KFun k1', k2') ->

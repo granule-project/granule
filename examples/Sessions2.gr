@@ -1,6 +1,6 @@
 import Bool
 
-data IntEq (a : Session) (b : Session) where
+data IntEq (a : Protocol) (b : Protocol) where
   Quit : Chan a -> IntEq a b;
   Eq   : Chan b -> IntEq a b
 
