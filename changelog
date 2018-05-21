@@ -1,0 +1,5 @@
+	# 0.5.5.7
+
+	Session type duality and fork, forkRep, send, recv, close primitives.
+
+	
