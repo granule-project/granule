@@ -30,6 +30,7 @@ $alphanum  = [$alpha $digit \_]
 
 tokens :-
 
+  $white*$eol                   { \p s -> TokenNL p }
   $eol+                         { \p s -> TokenNL p }
   $white+                       ;
   "--".*                        ;
