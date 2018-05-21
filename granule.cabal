@@ -2,10 +2,10 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: edb5581fff9d798e30b691afd16c15b6e339d0582e2ad55c8386260f40937a2e
+-- hash: 461c7d5e3a26e323617600ea51c18b92831e96f666f3c5483a1fe2f9b69c5716
 
 name:           granule
-version:        0.5.5.6
+version:        0.5.5.7
 synopsis:       The Granule type checker and interpreter
 homepage:       https://github.com/dorchard/granule#readme
 bug-reports:    https://github.com/dorchard/granule/issues
@@ -64,9 +64,11 @@ library
       Syntax.Desugar
       Syntax.Expr
       Syntax.FirstParameter
+      Syntax.Identifiers
       Syntax.Lexer
       Syntax.Parser
       Syntax.Pretty
+      Syntax.Span
       Utils
       Repl.Repl
       Repl.Queue
