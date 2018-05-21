@@ -138,7 +138,23 @@ buildAST t m = let v = M.lookup t m in
                                                  buildDef [] =  []
                                                  buildDef (x:xs) =  buildDef xs++(buildAST x m)
 
+startBuildADT :: [DataDecl] -> [DataConstr]
+startBuildADT [] = []
+startBuildADT ((DataDecl _ _ _ _ dc):dataDec) = dc ++ (startBuildADT dataDec)
 
+makeMapBuildADT :: [DataConstr] -> M.Map String DataConstr
+makeMapBuildADT adc = M.fromList $ tempADT adc
+                        where
+                          tempADT :: [DataConstr] -> [(String,DataConstr)]
+                          tempADT [] = []
+                          tempADT (dc@(DataConstrG _ id _):dct) = ((sourceName id),dc) : tempADT dct
+                          tempADT (dc@(DataConstrA _ _ _):dct) = tempADT dct
+
+lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
+lookupBuildADT term aMap = let lup = M.lookup term aMap in
+                            case lup of
+                              Nothing -> ""
+                              Just (DataConstrG _ id ts) -> (pretty id) ++ " : " ++ (pretty ts)
 
 printType :: (?globals::Globals) => String -> M.Map String (Def, [String]) -> String
 printType trm m = let v = M.lookup trm m in
@@ -262,7 +278,11 @@ handleCMD s =
       (_,_,adt,_,m) <- get
       let cked = buildAST trm m
       case cked of
-        []  -> Ex.throwError (TermNotInContext trm)
+        []  -> do
+          let xtx = lookupBuildADT trm (makeMapBuildADT (startBuildADT adt))
+          case xtx of
+            "" -> Ex.throwError (TermNotInContext trm)
+            _ -> liftIO $ putStrLn xtx
         ast -> do
           checked <- liftIO' $ check (AST adt ast)
           case checked of
