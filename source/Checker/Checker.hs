@@ -30,6 +30,8 @@ import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
+-- import Debug.Trace
+
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)

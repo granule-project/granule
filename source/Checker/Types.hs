@@ -234,7 +234,8 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
-        Just (KConstr kc) -> do
+        Just (KConstr kc) | internalName kc /= "Session" -> do
+          -- Don't create solver constraints for sessions- deal with before SMT
           addConstraint (Eq s (CVar n) (CVar m) (CConstr kc))
           return (True, [(n, SubstT $ TyVar m)])
         Just _ ->
