@@ -8,7 +8,7 @@
 
 module Syntax.Expr
   (AST(..), Value(..), Expr(..), Type(..), TypeScheme(..), Nat,
-  letBox,
+  letBox, valExpr,
   Def(..), DataDecl(..), Pattern(..), CKind(..), Coeffect(..),
   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
   Id(..), mkId,
@@ -33,42 +33,18 @@ import Data.Functor.Identity (runIdentity)
 import Data.Text (Text)
 
 import qualified System.IO as SIO (Handle)
+import qualified Control.Concurrent.Chan as CC
 
+import Context
 import Syntax.FirstParameter
+import Syntax.Identifiers
+import Syntax.Span
 
 -- | Natural numbers
 type Nat = Word
 
--- | Internal representation of names (variables)
--- which pairs their source name string with an internal name
--- which is useually freshly generate. Error messages should
--- always use the 'sourceName', anything involving new name
--- generation should use 'internalName'
-data Id = Id { sourceName :: String, internalName :: String }
-  deriving (Eq, Ord)
-
-instance Show Id where
-  show (Id s i) = "(Id " ++ show s ++ " " ++ show i ++ ")"
-
 -- Constructors and operators are just strings
 type Operator = String
-
-mkId :: String -> Id
-mkId x = Id x x
-
-type Pos = (Int, Int) -- (line, column)
-type Span = (Pos, Pos)
-nullSpan :: Span
-nullSpan = ((0, 0), (0, 0))
-
-getSpan :: FirstParameter t Span => t -> Span
-getSpan = getFirstParameter
-
-getEnd ::  FirstParameter t Span => t -> Pos
-getEnd = snd . getSpan
-
-getStart ::  FirstParameter t Span => t -> Pos
-getStart = fst . getSpan
 
 -- Values in Granule
 data Value = Abs Pattern (Maybe Type) Expr
@@ -82,14 +58,36 @@ data Value = Abs Pattern (Maybe Type) Expr
            | StringLiteral Text
            -------------------------
            -- Used only inside the interpeter
+           --
+           -- Primitive functions (builtins)
            | Primitive (Value -> IO Value)
+
+           -- Primitive operations that also close over the context
+           | PrimitiveClosure (Ctxt Value -> Value -> IO Value)
+
+           -- File handler
            | Handle SIO.Handle
 
-deriving instance Eq (Value -> IO Value) => Eq Value
+           -- Channels
+           | Chan (CC.Chan Value)
+
+valExpr :: Value -> Expr
+valExpr = Val nullSpan
+
+deriving instance ( Eq (Value -> IO Value)
+                  , Eq (Ctxt Value -> Value -> IO Value))
+                  => Eq Value
+
 deriving instance Show Value
+
+instance Show (CC.Chan Value) where
+  show _ = "Some channel"
 
 instance Show (Value -> IO Value) where
   show _ = "Some primitive"
+
+instance Show (Ctxt Value -> Value -> IO Value) where
+  show _ = "Some primitive closure"
 
 -- Expressions (computations) in Granule
 data Expr = App Span Expr Expr
@@ -99,7 +97,8 @@ data Expr = App Span Expr Expr
           | Case Span Expr [(Pattern, Expr)]
           deriving (Generic)
 
-deriving instance Eq (Value -> IO Value) => Eq Expr
+deriving instance (Eq (Value -> IO Value)
+                 , Eq (Ctxt Value -> Value -> IO Value)) => Eq Expr
 deriving instance Show Expr
 
 instance FirstParameter Expr Span
@@ -319,6 +318,8 @@ instance Term Value where
     freeVars (Constr _ _) = []
     freeVars (CharLiteral _) = []
     freeVars (StringLiteral _) = []
+    freeVars (Handle{}) = []
+    freeVars (Chan{})   = []
 
 instance Substitutable Value where
     subst es v (Abs w t e)      = Val nullSpan $ Abs w t (subst es v e)
@@ -332,6 +333,9 @@ instance Substitutable Value where
     subst _ _ v@CharLiteral{}     = Val nullSpan v
     subst _ _ v@StringLiteral{}   = Val nullSpan v
     subst _ _ v@Handle{}          = Val nullSpan v
+    subst _ _ v@Chan{}            = Val nullSpan v
+    subst _ _ v@Primitive{}       = Val nullSpan v
+    subst _ _ v@PrimitiveClosure{} = Val nullSpan v
 
 instance Freshenable Value where
     freshen (Abs p t e) = do
@@ -423,7 +427,8 @@ data AST = AST [DataDecl] [Def] deriving Show
 data Def = Def Span Id Expr [Pattern] TypeScheme
   deriving (Generic, Show)
 
-deriving instance Eq (Value -> IO Value) => Eq Def
+deriving instance (Eq (Value -> IO Value)
+                 , Eq (Ctxt Value -> Value -> IO Value)) => Eq Def
 
 instance FirstParameter Def Span
 

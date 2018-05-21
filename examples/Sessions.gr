@@ -1,12 +1,23 @@
 import Bool
 import Vec
 
-foo : Chan (Send Bool (Recv Int End)) -> Session Int
-foo c =
+fooClient : Chan (Send Bool (Recv Int End)) -> Session Int
+fooClient c =
   let c      <- send c True;
       (n, c) <- recv c;
       ()     <- close c
   in pure n
+
+fooServer : Chan (Dual (Send Bool (Recv Int End))) -> Session ()
+fooServer c =
+  let (b, c) <- recv c;
+      c      <- if b then send c 1 else send c 0
+  in close c
+
+example : Session Int
+example =
+  let c <- fork fooServer
+  in  fooClient c
 
 -- Given a one-shot channel for some sending a value of type 'a'
 -- but which is able to be reused 'n' times, and a vector of
@@ -18,6 +29,30 @@ sendVec |c| xs =
   case xs of
     Nil -> pure ();
     (Cons x xs) ->
-       let c' <- send c x;
-           () <- close c'
+       let c'  <- send c x;
+           ()  <- close c'
        in sendVec |c| xs
+
+recvVec : forall (n : Nat=, a : Type) .
+   N n -> Chan (Recv a End) |n| -> Session (Vec n a)
+recvVec n |c| =
+  case n of
+    Z     -> pure Nil;
+    (S n) ->
+       let (x, c') <- recv c;
+           ()      <- close c';
+           xs      <- recvVec n |c|
+       in pure (Cons x xs)
+
+example2 : forall (n : Nat=, a : Type)
+         . N n -> Vec n a -> Session (Vec n a)
+example2 n list =
+  let c <- forkRep (\c -> sendVec c list)
+  in recvVec n c
+
+main : Session (Vec 5 Int, Int)
+main =
+  let
+    xs <- example2 (S (S (S (S (S Z))))) (Cons 1 (Cons 1 (Cons 2 (Cons 3 (Cons 5 Nil)))));
+    a <- example
+  in pure (xs, a)

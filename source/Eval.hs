@@ -11,6 +11,9 @@ import Data.Text (pack, unpack, append)
 import qualified Data.Text.IO as Text
 import Control.Monad (zipWithM)
 
+import qualified Control.Concurrent as C (forkIO)
+import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan)
+
 import System.IO (hFlush, stdout)
 import qualified System.IO as SIO
 
@@ -35,7 +38,7 @@ evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
                              ++ " on " ++ show v1 ++ " and " ++ show v2
 
 -- Call-by-value big step semantics
-evalIn :: (?globals :: Globals) => Ctxt Value -> Expr -> IO Value
+evalIn :: Ctxt Value -> Expr -> IO Value
 
 evalIn _ (Val s (Var v)) | internalName v == "read" = do
     putStr "> "
@@ -84,7 +87,7 @@ evalIn ctxt (LetDiamond _ p _ e1 e2) = do
          case p of
            Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
        other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
-                      ++ pretty other
+                      ++ prettyDebug other
 
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
@@ -96,6 +99,7 @@ evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
 
 evalIn ctxt (Val _ (Var x)) =
     case lookup x ctxt of
+      Just val@(PrimitiveClosure f) -> return $ Primitive (f ctxt)
       Just val -> return val
       Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context."
 
@@ -111,7 +115,7 @@ evalIn ctxt (Case _ guardExpr cases) = do
       Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
       Nothing             ->
         error $ "Incomplete pattern match:\n  cases: "
-             ++ pretty cases ++ "\n  expr: " ++ pretty guardExpr
+             ++ prettyUser cases ++ "\n  expr: " ++ prettyUser guardExpr
 
 applyBindings :: Ctxt Expr -> Expr -> Expr
 applyBindings [] e = e
@@ -121,7 +125,7 @@ applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
     a list of cases (pattern-expression pairs) and the guard expression.
     If there is a matching pattern p_i then return Just of the branch
     expression e_i and a list of bindings in scope -}
-pmatchTop :: (?globals :: Globals) =>
+pmatchTop ::
   Ctxt Value -> [(Pattern, Expr)] -> Expr -> IO (Maybe (Expr, Ctxt Expr))
 pmatchTop ctxt ((PBox _ (PVar _ var), branchExpr):_) guardExpr = do
   Promote e <- evalIn ctxt guardExpr
@@ -135,7 +139,7 @@ pmatchTop ctxt ps guardExpr = do
   val <- evalIn ctxt guardExpr
   pmatch ctxt ps val
 
-pmatch :: (?globals :: Globals) =>
+pmatch ::
   Ctxt Value -> [(Pattern, Expr)] -> Value -> IO (Maybe (Expr, Ctxt Expr))
 pmatch _ [] _ =
    return Nothing
@@ -194,8 +198,46 @@ builtIns =
                True -> Constr (mkId "True") []
                False -> Constr (mkId "False") []
         return . Pure . Val nullSpan $ Constr (mkId ",") [Handle h, boolflag])
+  , (mkId "fork", PrimitiveClosure fork)
+  , (mkId "forkRep", PrimitiveClosure forkRep)
+  , (mkId "recv", Primitive recv)
+  , (mkId "send", Primitive send)
+  , (mkId "close", Primitive close)
   ]
   where
+    fork :: Ctxt Value -> Value -> IO Value
+    fork ctxt e@Abs{} = do
+      c <- CC.newChan
+      C.forkIO $
+         evalIn ctxt (App nullSpan (valExpr e) (valExpr $ Chan c)) >> return ()
+      return $ Pure $ valExpr $ Chan c
+
+    forkRep :: Ctxt Value -> Value -> IO Value
+    forkRep ctxt e@Abs{} = do
+      c <- CC.newChan
+      C.forkIO $
+         evalIn ctxt (App nullSpan
+                        (valExpr e)
+                        (valExpr $ Promote $ valExpr $ Chan c)) >> return ()
+      return $ Pure $ valExpr $ Promote $ valExpr $ Chan c
+    forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " ++ prettyDebug e
+
+    recv :: Value -> IO Value
+    recv (Chan c) = do
+      x <- CC.readChan c
+      return $ Pure $ valExpr $ Constr (mkId ",") [x, Chan c]
+    recv e = error $ "Bug in Granule. Trying to recevie from: " ++ prettyDebug e
+
+    send :: Value -> IO Value
+    send (Chan c) = return $ Primitive
+      (\v -> do
+         CC.writeChan c v
+         return $ Pure $ valExpr $ Chan c)
+    send e = error $ "Bug in Granule. Trying to send from: " ++ prettyDebug e
+
+    close :: Value -> IO Value
+    close (Chan c) = return $ Pure $ valExpr $ Constr (mkId "()") []
+
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
@@ -223,8 +265,7 @@ builtIns =
          SIO.hClose h
          return $ Pure (Val nullSpan (Constr (mkId "()") []))
 
-
-evalDefs :: (?globals :: Globals) => Ctxt Value -> [Def] -> IO (Ctxt Value)
+evalDefs :: Ctxt Value -> [Def] -> IO (Ctxt Value)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
@@ -233,10 +274,9 @@ evalDefs ctxt (Def _ var e [] _ : defs) = do
       None msgs -> error $ unlines msgs
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
-    debugM "Desugaring" $ pretty d'
     evalDefs ctxt (d' : defs)
 
-eval :: (?globals :: Globals) => AST -> IO (Maybe Value)
+eval :: AST -> IO (Maybe Value)
 eval (AST dataDecls defs) = do
     bindings <- evalDefs builtIns defs
     case lookup (mkId "main") bindings of

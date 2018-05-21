@@ -13,6 +13,17 @@ import Data.List
 import Syntax.Expr
 import Utils
 
+prettyDebug :: Pretty t => t -> String
+prettyDebug x =
+  let ?globals = defaultGlobals { debugging = True }
+  in pretty x
+
+prettyUser :: Pretty t => t -> String
+prettyUser x =
+  let ?globals = defaultGlobals
+  in pretty x
+
+
 -- The pretty printer class
 class Pretty t where
     pretty :: (?globals :: Globals) => t -> String
@@ -134,6 +145,8 @@ instance Pretty Value where
     pretty (NumFloat n) = show n
     pretty (CharLiteral c) = show c
     pretty (StringLiteral s) = show s
+    pretty (Constr s vs) | internalName s == "," =
+      "(" ++ intercalate ", " (map pretty vs) ++ ")"
     pretty (Constr s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values
@@ -141,6 +154,7 @@ instance Pretty Value where
         valueAtom (NumFloat _)  = True
         valueAtom (Constr _ []) = True
         valueAtom _             = False
+    pretty v = show v
 
 instance Pretty Id where
   pretty = if debugging ?globals then internalName else sourceName

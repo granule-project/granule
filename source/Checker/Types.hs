@@ -140,8 +140,13 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
       -- Effect approximation
       if (ef `isPrefixOf` ef')
       then return (eq, unif)
-      else halt $ GradingError (Just s) $
-        "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
+      else
+        -- Communication effect analysis is idempotent
+        if (nub ef == ["Com"] && nub ef' == ["Com"])
+        then return (eq, unif)
+        else
+          halt $ GradingError (Just s) $
+            "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
 
 equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   -- Debugging messages
@@ -161,14 +166,6 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
 --      substFinal <- combineSubstitutions s subst subst'
 --      return (eq, substFinal)
   --  Nothing -> return (False, [])
-
-equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
-  (one, u1) <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
-  t2  <- substitute u1 t2
-  t2' <- substitute u1 t2'
-  (two, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
-  unifiers <- combineSubstitutions s u1 u2
-  return (one && two, unifiers)
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
   checkerState <- get
@@ -237,7 +234,8 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
-        Just (KConstr kc) -> do
+        Just (KConstr kc) | internalName kc /= "Protocol" -> do
+          -- Don't create solver constraints for sessions- deal with before SMT
           addConstraint (Eq s (CVar n) (CVar m) (CConstr kc))
           return (True, [(n, SubstT $ TyVar m)])
         Just _ ->
@@ -300,6 +298,33 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
 
+-- Duality is idempotent (left)
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d') (TyApp (TyCon d) t)) t' sp
+  | internalName d == "Dual" && internalName d' == "Dual" =
+  equalTypesRelatedCoeffects s rel uS t t' sp
+
+-- Duality is idempotent (right)
+equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d') (TyApp (TyCon d) t')) sp
+  | internalName d == "Dual" && internalName d' == "Dual" =
+  equalTypesRelatedCoeffects s rel uS t t' sp
+
+-- Do duality check (left) [special case of TyApp rule]
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d) t) t' sp
+  | internalName d == "Dual" = isDualSession s rel uS t t' sp
+
+equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d) t') sp
+  | internalName d == "Dual" = isDualSession s rel uS t t' sp
+
+-- Equality on type application
+equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
+  (one, u1) <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
+  t2  <- substitute u1 t2
+  t2' <- substitute u1 t2'
+  (two, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
+  unifiers <- combineSubstitutions s u1 u2
+  return (one && two, unifiers)
+
+
 equalTypesRelatedCoeffects s rel uS t1 t2 t = do
   debugM "equalTypesRelatedCoeffects" $ "called on: " ++ show t1 ++ "\nand:\n" ++ show t2
   equalOtherKindedTypesGeneric s t1 t2
@@ -325,33 +350,71 @@ equalOtherKindedTypesGeneric s t1 t2 = do
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
 
-    (KConstr n, KConstr n') | internalName n == "Session" && internalName n' == "Session" ->
-       sessionEquality s t1 t2
+    (KConstr n, KConstr n') | internalName n == "Protocol" && internalName n' == "Protocol" ->
+         sessionInequality s t1 t2
+
+    --(KFun k1 k2, KFun k1', k2') ->
+    --   return (k1 == k
     _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  ++ pretty k1 ++ " and " ++ pretty k2
                  ++ "\t\n from equality "
                  ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
 
-sessionEquality :: (?globals :: Globals)
+-- Essentially use to report better error messages when two session type
+-- are not equality
+sessionInequality :: (?globals :: Globals)
     => Span -> Type -> Type -> MaybeT Checker (Bool, Substitution)
-sessionEquality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
+sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
   (g, _, u) <- equalTypes s t t'
   return (g, u)
 
-sessionEquality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
+sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Recv" && internalName c' == "Recv" = do
   (g, _, u) <- equalTypes s t t'
   return (g, u)
 
-sessionEquality s (TyCon c) (TyCon c')
+sessionInequality s (TyCon c) (TyCon c')
   | internalName c == "End" && internalName c' == "End" =
   return (True, [])
 
-sessionEquality s t1 t2 =
+sessionInequality s t1 t2 =
   halt $ GenericError (Just s)
        $ "Session type '" ++ pretty t1 ++ "' is not equal to '" ++ pretty t2 ++ "'"
+
+isDualSession :: (?globals :: Globals)
+    => Span
+       -- Explain how coeffects should be related by a solver constraint
+    -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+    -> Bool -- whether to allow universal specialisation
+    -> Type
+    -> Type
+    -- Indicates whether the first type or second type is a specification
+    -> SpecIndicator
+    -> MaybeT Checker (Bool, Substitution)
+isDualSession sp rel uS (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
+  |  (internalName c == "Send" && internalName c' == "Recv")
+  || (internalName c == "Recv" && internalName c' == "Send") = do
+  (eq1, u1) <- equalTypesRelatedCoeffects sp rel uS t t' ind
+  (eq2, u2) <- isDualSession sp rel uS s s' ind
+  u <- combineSubstitutions sp u1 u2
+  return (eq1 && eq2, u)
+
+isDualSession _ _ _ (TyCon c) (TyCon c') _
+  | internalName c == "End" && internalName c' == "End" =
+  return (True, [])
+
+isDualSession sp rel uS t (TyVar v) ind =
+  equalTypesRelatedCoeffects sp rel uS (TyApp (TyCon $ mkId "Dual") t) (TyVar v) ind
+
+isDualSession sp rel uS (TyVar v) t ind =
+  equalTypesRelatedCoeffects sp rel uS (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind
+
+isDualSession sp _ _ t1 t2 _ =
+  halt $ GenericError (Just sp)
+       $ "Session type '" ++ pretty t1 ++ "' is not dual to '" ++ pretty t2 ++ "'"
+
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type

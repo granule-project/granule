@@ -4,7 +4,7 @@ module Checker.Primitives where
 
 import Syntax.Expr
 
-session = KConstr $ mkId "Session"
+protocol = KConstr $ mkId "Protocol"
 
 typeLevelConstructors :: [(Id, (Kind, Cardinality))]
 typeLevelConstructors =
@@ -31,11 +31,12 @@ typeLevelConstructors =
     , (mkId "\\/", (KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")), Nothing))
     -- File stuff
     , (mkId "Handle", (KType, Nothing))
-    -- Channels and session types
-    , (mkId "Send", (KFun KType (KFun session session), Nothing))
-    , (mkId "Recv", (KFun KType (KFun session session), Nothing))
-    , (mkId "End" , (session, Nothing))
-    , (mkId "Chan", (KFun session KType, Nothing))
+    -- Channels and protocol types
+    , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing))
+    , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing))
+    , (mkId "End" , (protocol, Nothing))
+    , (mkId "Chan", (KFun protocol KType, Nothing))
+    , (mkId "Dual", (KFun protocol protocol, Nothing))
     ]
 
 dataConstructors :: [(Id, TypeScheme)]
@@ -95,18 +96,33 @@ builtins =
   , (mkId "hClose", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
                                (Diamond ["C"] (TyCon $ mkId "()")))
-    -- Session typed primitives
-  , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
+    -- protocol typed primitives
+  , (mkId "send", Forall nullSpan [(mkId "a", KType), (mkId "s", protocol)]
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
                       .-> ((var "a")
                         .-> (Diamond ["Com"] ((con "Chan") .@ (var "s")))))
 
-  , (mkId "recv", Forall nullSpan [(mkId "a", KType), (mkId "s", session)]
+  , (mkId "recv", Forall nullSpan [(mkId "a", KType), (mkId "s", protocol)]
        $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
          .-> (Diamond ["Com"] ((con "," .@ (var "a")) .@ ((con "Chan") .@ (var "s")))))
 
   , (mkId "close", Forall nullSpan [] $
                     ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))
+
+  -- fork : (c -> Diamond ()) -> Diamond c'
+  , (mkId "fork", Forall nullSpan [(mkId "s", protocol)] $
+                    (((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
+                    .->
+                    (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
+
+   -- forkRep : (c |n| -> Diamond ()) -> Diamond (c' |n|)
+  , (mkId "forkRep", Forall nullSpan [(mkId "s", protocol), (mkId "n", KConstr $ mkId "Nat=")] $
+                    (Box (CVar $ mkId "n")
+                       ((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
+                    .->
+                    (Diamond ["Com"]
+                       (Box (CVar $ mkId "n")
+                         ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
   ]
 
 binaryOperators :: [(Operator, Type)]

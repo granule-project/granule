@@ -15,7 +15,7 @@ import System.IO (hPutStrLn, stderr)
 import System.IO.Unsafe (unsafePerformIO)
 import "Glob" System.FilePath.Glob (glob)
 
-import Syntax.Expr (Span)
+import Syntax.Span
 
 -- | A result data type to be used pretty much like `Maybe`, but with an explanation as to why
 -- no result was returned
