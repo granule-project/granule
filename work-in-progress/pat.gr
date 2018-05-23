@@ -1,0 +1,10 @@
+-- TODO: fix this
+-- source/Checker/Patterns.hs:100
+
+data Foo where
+  Bar Int Bar;
+  Quux
+
+foo : Foo -> Int
+foo f = case f of
+  Bar 1 -> 1
