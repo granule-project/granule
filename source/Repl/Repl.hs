@@ -31,6 +31,7 @@ import Repl.ReplParser
 import Checker.Checker
 import Eval
 import Context
+import qualified Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex
 
 
@@ -166,13 +167,15 @@ buildForEval :: [Id] -> M.Map String (Def, [String]) -> [Def]
 buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m ++ buildForEval xs m
 
-synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> IO (Maybe (Type, Ctxt Mo.Assumption))
-synType exp [] = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr empty empty Positive exp
-synType exp cts = liftIO $ Mo.evalChecker Mo.initState $ runMaybeT $ synthExpr cts empty Positive exp
+synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption))
+synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr empty empty Positive exp
+synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr cts empty Positive exp
 
-synTypeBuilder :: (?globals::Globals) => Expr -> [Def] -> REPLStateIO Type
-synTypeBuilder exp ast = do
-  ty <- liftIO $ synType exp (buildCtxtTS ast)
+synTypeBuilder :: (?globals::Globals) => Expr -> [Def] -> [DataDecl] -> REPLStateIO Type
+synTypeBuilder exp ast adt = do
+  let ddts = buildCtxtTSDD adt
+  ty <- liftIO $ synType exp ((buildCtxtTS ast) ++ ddts) (replSynthInitState (testSample))
+  --liftIO $ print $ show ty
   case ty of
     Just (t,a) -> return t
     Nothing -> Ex.throwError OtherError'
@@ -181,6 +184,34 @@ buildCtxtTS :: (?globals::Globals) => [Def] -> Ctxt TypeScheme
 buildCtxtTS [] = []
 buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
 
+buildCtxtTSDD :: (?globals::Globals) => [DataDecl] -> Ctxt TypeScheme
+buildCtxtTSDD [] = []
+buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) = makeCtxt dc ++ buildCtxtTSDD dd
+                                              where
+                                                makeCtxt :: [DataConstr] -> Ctxt TypeScheme
+                                                makeCtxt [] = []
+                                                makeCtxt datcon = buildCtxtTSDDhelper datcon
+
+buildCtxtTSDDhelper :: [DataConstr] -> Ctxt TypeScheme
+buildCtxtTSDDhelper [] = []
+buildCtxtTSDDhelper (dc@(DataConstrG _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
+
+replSynthInitState :: Ctxt TypeScheme -> Mo.CheckerState
+replSynthInitState ts = Mo.CS { Mo.uniqueVarIdCounter = 0
+               , Mo.predicateStack = []
+               , Mo.tyVarContext = emptyCtxt
+               , Mo.kVarContext = emptyCtxt
+               , Mo.guardContexts = []
+               , Mo.typeConstructors = [((Id "Vec" "Vec"),(KFun (KConstr (Id "Nat=" "Nat=")) (KFun KType KType),Just 2)),((Id "N" "N"),(KFun (KConstr (Id "Nat=" "Nat=")) KType,Just 2)),((Id "()" "()"),(KType,Just 1)),((Id "," ","),(KFun KType (KFun KType KType),Just 1)),((Id "Int" "Int"),(KType,Nothing)),((Id "Float" "Float"),(KType,Nothing)),((Id "Char" "Char"),(KType,Nothing)),((Id "String" "String"),(KType,Nothing)),((Id "FileIO" "FileIO"),(KFun KType KType,Nothing)),((Id "Session" "Session"),(KFun KType KType,Nothing)),((Id "List" "List"),(KFun (KConstr (Id "Nat=" "Nat=")) (KFun KType KType),Just 2)),((Id "N" "N"),(KFun (KConstr (Id "Nat=" "Nat=")) KType,Just 2)),((Id "Cartesian" "Cartesian"),(KCoeffect,Nothing)),((Id "Nat" "Nat"),(KCoeffect,Nothing)),((Id "Nat=" "Nat="),(KCoeffect,Nothing)),((Id "Nat*" "Nat*"),(KCoeffect,Nothing)),((Id "Q" "Q"),(KCoeffect,Nothing)),((Id "Level" "Level"),(KCoeffect,Nothing)),((Id "Set" "Set"),(KFun (KVar (Id "k" "k")) (KFun (KConstr (Id "k" "k")) KCoeffect),Nothing)),((Id "+" "+"),(KFun (KConstr (Id "Nat=" "Nat=")) (KFun (KConstr (Id "Nat=" "Nat=")) (KConstr (Id "Nat=" "Nat="))),Nothing)),((Id "*" "*"),(KFun (KConstr (Id "Nat=" "Nat=")) (KFun (KConstr (Id "Nat=" "Nat=")) (KConstr (Id "Nat=" "Nat="))),Nothing)),((Id "/\\" "/\\"),(KFun (KConstr (Id "Nat=" "Nat=")) (KFun (KConstr (Id "Nat=" "Nat=")) (KConstr (Id "Nat=" "Nat="))),Nothing)),((Id "\\/" "\\/"),(KFun (KConstr (Id "Nat=" "Nat=")) (KFun (KConstr (Id "Nat=" "Nat=")) (KConstr (Id "Nat=" "Nat="))),Nothing)),((Id "Handle" "Handle"),(KType,Nothing)),((Id "Send" "Send"),(KFun KType (KFun (KConstr (Id "Protocol" "Protocol")) (KConstr (Id "Protocol" "Protocol"))),Nothing)),((Id "Recv" "Recv"),(KFun KType (KFun (KConstr (Id "Protocol" "Protocol")) (KConstr (Id "Protocol" "Protocol"))),Nothing)),((Id "End" "End"),(KConstr (Id "Protocol" "Protocol"),Nothing)),((Id "Chan" "Chan"),(KFun (KConstr (Id "Protocol" "Protocol")) KType,Nothing)),((Id "Dual" "Dual"),(KFun (KConstr (Id "Protocol" "Protocol")) (KConstr (Id "Protocol" "Protocol")),Nothing))]
+               , Mo.dataConstructors = ts
+               , Mo.deriv = Nothing
+               , Mo.derivStack = []
+               }
+  where emptyCtxt = []
+
+testSample :: Ctxt TypeScheme
+testSample = [((Id "Cons" "Cons"),Forall ((17,3),(0,0)) [((Id "n" "n"),KConstr (Id "Nat=" "Nat=")),((Id "t" "t"),KType)] (FunTy (TyVar (Id "t" "t")) (FunTy (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyVar (Id "n" "n"))) (TyVar (Id "t" "t"))) (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInfix "+" (TyVar (Id "n" "n")) (TyInt 1))) (TyVar (Id "t" "t")))))),((Id "Nil" "Nil"),Forall ((16,3),(0,0)) [((Id "n" "n"),KConstr (Id "Nat=" "Nat=")),((Id "t" "t"),KType)] (TyApp (TyApp (TyCon (Id "Vec" "Vec")) (TyInt 0)) (TyVar (Id "t" "t")))),((Id "S" "S"),Forall ((13,3),(0,0)) [((Id "n" "n"),KConstr (Id "Nat=" "Nat="))] (FunTy (TyApp (TyCon (Id "N" "N")) (TyVar (Id "n" "n"))) (TyApp (TyCon (Id "N" "N")) (TyInfix "+" (TyVar (Id "n" "n")) (TyInt 1))))),((Id "Z" "Z"),Forall ((12,3),(0,0)) [((Id "n" "n"),KConstr (Id "Nat=" "Nat="))] (TyApp (TyCon (Id "N" "N")) (TyInt 0))),((Id "()" "()"),Forall ((0,0),(0,0)) [] (TyCon (Id "()" "()"))),((Id "," ","),Forall ((0,0),(0,0)) [((Id "a" "a"),KType),((Id "b" "b"),KType)] (FunTy (TyVar (Id "a" "a")) (FunTy (TyVar (Id "b" "b")) (TyApp (TyApp (TyCon (Id "," ",")) (TyVar (Id "a" "a"))) (TyVar (Id "b" "b"))))))]
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
@@ -297,7 +328,7 @@ handleCMD s =
                 let fv = freeVars exp
                 case fv of
                     [] -> do -- simple expressions
-                        typ <- liftIO $ synType exp []
+                        typ <- liftIO $ synType exp [] Mo.initState
                         case typ of
                             Just (t,a) -> return ()
                             Nothing -> Ex.throwError (TypeCheckError ev)
@@ -307,7 +338,7 @@ handleCMD s =
                             Left e -> Ex.throwError (EvalError e)
                     _ -> do
                         let ast = buildForEval fv m
-                        typer <- synTypeBuilder exp ast
+                        typer <- synTypeBuilder exp ast adt
                         let ndef = buildDef fvg (buildTypeScheme typer) exp
                         put ((fvg+1),rp,adt,fp,m)
                         checked <- liftIO' $ check (AST adt (ast++(ndef:[])))
