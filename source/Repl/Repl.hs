@@ -174,7 +174,7 @@ synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr cts empt
 synTypeBuilder :: (?globals::Globals) => Expr -> [Def] -> [DataDecl] -> REPLStateIO Type
 synTypeBuilder exp ast adt = do
   let ddts = buildCtxtTSDD adt
-  (_,cs) <- liftIO $ Mo.runChecker Mo.initState $ somefun adt
+  (_,cs) <- liftIO $ Mo.runChecker Mo.initState $ buildCheckerState adt
   ty <- liftIO $ synType exp ((buildCtxtTS ast) ++ ddts) cs
   --liftIO $ print $ show ty
   case ty of
@@ -182,8 +182,8 @@ synTypeBuilder exp ast adt = do
     Nothing -> Ex.throwError OtherError'
 
 
-somefun :: (?globals::Globals) => [DataDecl] -> Mo.Checker ()
-somefun dd = do
+buildCheckerState :: (?globals::Globals) => [DataDecl] -> Mo.Checker ()
+buildCheckerState dd = do
     let checkDataDecls = do { mapM checkTyCon dd; mapM checkDataCons dd }
     somethine <- checkDataDecls
     return ()
