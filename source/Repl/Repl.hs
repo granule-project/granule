@@ -31,7 +31,7 @@ import Repl.ReplParser
 import Checker.Checker
 import Eval
 import Context
-import qualified Checker.Primitives as Primitives
+--import qualified Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex
 
 
@@ -89,6 +89,8 @@ readToQueue pth = do
     pf <- liftIO' $ try $ parseDefs =<< readFile pth
     case pf of
       Right ast -> do
+            debugM "AST" (show ast)
+            debugM "Pretty-printed AST:" $ pretty ast
             checked <-  liftIO' $ check ast
             case checked of
                 Ok -> do
@@ -274,6 +276,22 @@ handleCMD s =
           ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
           return ()
 
+
+    handleLine (Debuger ptr) = do
+      (fvg,rp,_,_,_) <- get
+      tester <- liftIO' $ rFindMain ptr rp
+      let lfp = makeUnique $ (concat tester)
+      case lfp of
+        [] -> do
+          put (fvg,rp,[],ptr,M.empty)
+          ecs <- processFilesREPL ptr (let ?globals = ?globals {debugging = True } in readToQueue)
+          return ()
+        _ -> do
+          put (fvg,rp,[],lfp,M.empty)
+          ecs <- processFilesREPL lfp (let ?globals = ?globals {debugging = True } in readToQueue)
+          return ()
+
+
     handleLine (AddModule ptr) = do
       (fvg,rp,adt,f,m) <- get
       tester <- liftIO' $ rFindMain ptr rp
@@ -357,7 +375,8 @@ helpMenu =
       ":show <term>         (:s)  Display AST of term in state\n"++
       ":parse <expression>  (:p)  Run Granule parser on a given expression and display AST\n"++
       ":lexer <string>      (:x)  Run Granule lexer on given string and display [Token]\n"++
-      ":dump                (:d)  Display the context\n"++
+      ":debug               (:d)  Run Granule debugger and display output while loading a file\n"++
+      ":dump                ()    Display the context\n"++
       ":load <filepath>     (:l)  Load an external file into the context\n"++
       ":module <filepath>   (:m)  Add file/module to the current context\n"++
       "-----------------------------------------------------------------------------------"

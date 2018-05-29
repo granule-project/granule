@@ -40,6 +40,7 @@ data REPLExpr =
     | RunParser String
     | RunTypeScheme String
     | RunLexer String
+    | Debuger [FilePath]
     deriving Show
 
 replTermCmdParser short long c p = do
@@ -100,9 +101,11 @@ evalParser = do
 
 -- unfoldTermParser = replTermCmdParser "u" "unfold" Unfold
 
-dumpStateParser = replIntCmdParser "d" "dump" DumpState
+dumpStateParser = replIntCmdParser "dump" "dump" DumpState
 
 loadFileParser = replFileCmdParser "l" "load" LoadFile
+
+replDebugger = replFileCmdParser "d" "debug" Debuger
 
 addModuleParser = replFileCmdParser "m" "module" AddModule
 
@@ -137,6 +140,7 @@ lineParser = try dumpStateParser
           <|> try addModuleParser
           <|> try reloadFileParser
           <|> try checkTypeParser
+          <|> try replDebugger
           <|> try showAstParser
           <|> try runParserRepl
           <|> try runLexer
