@@ -1,5 +1,5 @@
 name: granule
-version: '0.5.5.7'
+version: '0.6.0.0'
 synopsis: The Granule type checker and interpreter
 author: Dominic Orchard, Vilem-Benjamin Liepelt
 copyright: 2018 authors
@@ -46,10 +46,6 @@ library:
   - Syntax.Pretty
   - Syntax.Span
   - Utils
-  - Repl.Repl
-  - Repl.Queue
-  - Repl.ReplParser
-  - Repl.ReplError
   dependencies:
   - array
   - containers
@@ -57,14 +53,9 @@ library:
   - sbv >=7.5
   - time
   - transformers >=0.5
-  - haskeline
-  - parsec
   - text
-  - filepath
-  - directory
   - Glob
-  - filemanip
-  - ConfigFile
+
 
 executables:
   gr:
@@ -76,6 +67,30 @@ executables:
     - Glob
     - granule
     - optparse-applicative
+
+executables:
+  grin:
+    main: Main.hs
+    source-dirs: repl
+    ghc-options: -O3 -W -Werror -Wno-unused-matches
+    # exposed-modules:
+    # - Queue
+    # - ReplError
+    # - ReplParser
+    dependencies:
+    - ConfigFile
+    - containers
+    - Glob
+    - directory
+    - filemanip
+    - filepath
+    - granule
+    - haskeline
+    - mtl >=2.2.1
+    - parsec
+    - text
+    - transformers >=0.5
+
 
 
 # flags:

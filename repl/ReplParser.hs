@@ -5,7 +5,7 @@ LANGUAGE
   TemplateHaskell,
   FlexibleContexts
 #-}
-module Repl.ReplParser where
+module ReplParser where
 
 import Prelude
 --import Data.List

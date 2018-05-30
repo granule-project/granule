@@ -8,7 +8,7 @@
 -- combinator over queues to make complex function definitions easier.  --
 --------------------------------------------------------------------------
 
-module Repl.Queue where
+module Queue where
 
 data Queue a = Queue [a] [a]
 
@@ -25,26 +25,28 @@ instance Foldable Queue where
 
 instance Show a => Show (Queue a) where
     show = show.toListQ
-                
+
 emptyQ :: Queue a
 emptyQ = Queue [] []
-           
+
 headQ :: Queue a -> a
 headQ (Queue (x:xs) _) = x
+headQ (Queue [] _)     = error "Empty queue"
 
 queue :: [a] -> [a] -> Queue a
 queue [] r = Queue (reverse r) []
 queue f r = Queue f r
 
 enqueue :: a -> Queue a -> Queue a
-enqueue elem (Queue f r) = (Queue (elem:f) r) 
+enqueue elem (Queue f r) = (Queue (elem:f) r)
 
 snoc :: Queue a -> a -> Queue a
 snoc (Queue f r) x = queue f (x:r)
 
 tailQ :: Queue a -> Queue a
 tailQ (Queue (x:f) r) = queue f r
-                       
+tailQ q@(Queue [] r)  = q
+
 mapQ :: (a -> b) -> Queue a -> Queue b
 mapQ m (Queue f r) = Queue (map m f) (map m r)
 

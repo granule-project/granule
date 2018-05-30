@@ -1,5 +1,5 @@
 {-# LANGUAGE FlexibleContexts #-}
-module Repl.ReplError where
+module ReplError where
 
 import Control.Monad.Except()
 import Control.Exception (SomeException)

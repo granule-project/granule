@@ -7,7 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PackageImports #-}
-module Repl.Repl where
+module Main where
 
 import System.FilePath
 import System.FilePath.Find
@@ -20,20 +20,20 @@ import Control.Monad.State
 import Control.Monad.Trans.Maybe
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
-import Repl.ReplError
 import "Glob" System.FilePath.Glob (glob)
 import Utils
 import Syntax.Pretty
 import Syntax.Expr
 import Syntax.Parser
 import Syntax.Lexer
-import Repl.ReplParser
 import Checker.Checker
 import Eval
 import Context
 --import qualified Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex
 
+import ReplError
+import ReplParser
 
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]
@@ -157,7 +157,7 @@ lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> St
 lookupBuildADT term aMap = let lup = M.lookup term aMap in
                             case lup of
                               Nothing -> ""
-                              Just (DataConstrG _ id ts) -> (pretty id) ++ " : " ++ (pretty ts)
+                              Just d -> pretty d
 
 printType :: (?globals::Globals) => String -> M.Map String (Def, [String]) -> String
 printType trm m = let v = M.lookup trm m in
@@ -404,8 +404,8 @@ configFileGetPath = do
       liftIO $ putStrLn $ "ALERT: Path variable missing from config file.  Please refer to README for config file creation and formant"
       return ""
 
-repl :: IO ()
-repl = do
+main :: IO ()
+main = do
   someP <- configFileGetPath
   let drp = (lines someP)
   runInputT defaultSettings (loop (0,drp,[],[],M.empty))
