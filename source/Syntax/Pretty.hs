@@ -54,6 +54,7 @@ instance Pretty Coeffect where
     pretty (CZero k) = "_0 : " ++ pretty k
     pretty (Level 0) = "Public"
     pretty (Level _) = "Private"
+    pretty (CExpon a b) = pretty a ++ "^" ++ pretty b
     pretty (CVar c) = pretty c
     pretty (CMeet c d) =
       pretty c ++ " /\\ " ++ pretty d
@@ -89,13 +90,14 @@ instance Pretty CKind where
 
 instance Pretty Type where
     pretty (TyCon s)      =  pretty s
-    pretty (FunTy t1 t2)  = "(" ++ pretty t1 ++ ") -> " ++ pretty t2
+    pretty (FunTy f@(FunTy _ _) t2)  = "(" ++ pretty f ++ ") -> " ++ pretty t2
+    pretty (FunTy t1 t2)  = pretty t1 ++ " -> " ++ pretty t2
     pretty (Box c t)      = "(" ++ pretty t ++ ") |" ++ pretty c ++ "|"
     pretty (Diamond e t)  = "(" ++ pretty t ++ ") <[" ++ intercalate "," e ++ "]>"
     pretty (TyVar v)      = pretty v
     pretty (TyApp t1 t2)  = pretty t1 ++ " " ++ pretty t2
     pretty (TyInt n)      = show n
-    pretty (TyInfix op t1 t2) = pretty t1 ++ " " ++ op ++ " " ++  pretty t2
+    pretty (TyInfix op t1 t2) = "(" ++ pretty t1 ++ " " ++ op ++ " " ++  pretty t2 ++ ")"
 
 instance Pretty AST where
     pretty (AST dataDecls defs) = pretty' dataDecls ++ "\n\n" ++ pretty' defs
