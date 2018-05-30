@@ -6,6 +6,7 @@ REPL for the Granule language
 - [REPL Commands and Use](#repl-commands-and-use)
   - [help](#help)
   - [quit](#quit)
+  - [load](#load)
   - [type](#type)
   - [type scheme](#typescheme)
   - [show](#show)
@@ -13,7 +14,6 @@ REPL for the Granule language
   - [lexer](#lexer)
   - [debug](#debug)
   - [dump](#dump)
-  - [load](#load)
   - [module](#module)
 - [Configuration File](#configuration-file)
   - [Config File Creation](#config-file-creation)
@@ -54,10 +54,20 @@ Display the help menu
 <a id="quit"></a>
 Leave the REPL
 
+#### :load <filepath\> (:l)
+<a id="load"></a>
+Load a file into the REPL.  This will erase content in state and replace with loaded file.
+```
+Granule> :l Vec.gr
+S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
+```
 #### :type <term\> (:t)
 <a id="type"></a>
 Display the type of a term in the REPL state
 ```
+Granule> :l Vec.gr
+S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
+
 Granule> :t head
 head : forall a : Type, n : Nat=. ((Vec n + 1 a) |1|) -> a
 ```
@@ -72,6 +82,9 @@ Forall ((0,0),(0,0)) [] (FunTy (Box (CNat Ordered 2) (TyCon (Id "Int" "Int"))) (
 <a id="show"></a>
 Show the AST for a given term in the REPL state
 ```
+Granule> :l Nat.gr
+S:\Documents\Research\granule\StdLib\Nat.gr, interpreted
+
 Granule> :s add
 Def ((32,1),(36,27)) (Id "add" "add") (Case ((34,3),(36,27)) (Val ((34,8),(34,8)) (Var (Id "n" "n_0"))) [(PConstr ((35,7),(35,7)) (Id "Z" "Z") [],Val ((35,17),(35,17)) (Var (Id "m" "m_1"))),(PConstr ((36,8),(36,8)) (Id "S" "S") [PVar ((36,10),(36,10)) (Id "n'" "n'_4")],App ((36,17),(36,27)) (Val ((36,17),(36,17)) (Constr (Id "S" "S") [])) (App ((36,20),(36,27)) (App ((36,20),(36,24)) (Val ((36,20),(36,20)) (Var (Id "add" "add"))) (Val ((36,24),(36,24)) (Var (Id "n'" "n'_4")))) (Val ((36,27),(36,27)) (Var (Id "m" "m_1")))))]) [PVar ((33,5),(33,5)) (Id "n" "n_0"),PVar ((33,7),(33,7)) (Id "m" "m_1")] (Forall ((32,7),(32,35)) [((Id "n" "n_2"),KConstr (Id "Nat=" "Nat=")),((Id "m" "m_3"),KConstr (Id "Nat=" "Nat="))] (FunTy (TyApp (TyCon (Id "N" "N")) (TyVar (Id "n" "n_2"))) (FunTy (TyApp (TyCon (Id "N" "N")) (TyVar (Id "m" "m_3"))) (TyApp (TyCon (Id "N" "N")) (TyInfix "+" (TyVar (Id "n" "n_2")) (TyVar (Id "m" "m_3")))))))
 ```
@@ -114,19 +127,16 @@ type: TyVar (Id "c" "c_5")
 <a id="dump"></a>
 Display the contents of the REPL state in the form of `term : term type`
 ```
+Granule> :l example.gr
+S:\Documents\Research\granule\tests\regression\good\example.gr, interpreted
+
 Granule> :dump
 ["dub : ((Int) |2|) -> Int","main : Int","trip : ((Int) |3|) -> Int","twice : forall c : Nat. ((((Int) |c|) -> Int) |2|) -> ((Int) |2 * c|) -> Int"]
 ```
-#### :load <filepath\> (:l)
-<a id="load"></a>
-Load a file into the REPL.  This will erase content in state and replace with loaded file
-```
-Granule> :l Vec.gr
-S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
-```
+
 #### :module <filepath\>(:m)
 <a id="module"></a>
-Adds a file to the REPL but will not overwrite the contents currently in the state
+Adds a file to the REPL by appending to the current REPL state
 ```
 Granule> :m Files.gr
 S:\Documents\Research\granule\examples\Files.gr, interpreted
@@ -134,11 +144,11 @@ S:\Documents\Research\granule\examples\Files.gr, interpreted
 ## Configuration File
 <a id="configuration-file"></a>
 
-The congiuration file contains various variables used for set up of the replace
+The congiuration file contains various variables used for set up of the REPL
 #### Config file creation
 <a id="config-file-creation"></a>
 The configuration file needs to be created by the user.  It needs to be named
-`.granule.conf`.  This file needs to be place in the home directory
+`.granule.conf`.  This file needs to be placed in the home directory
 ###### Windows
 ```
 C:\Users\<username>
