@@ -4,17 +4,17 @@ REPL for the Granule language
 ## Contents
 - [Getting Started](#getting-started)
 - [REPL Commands and Use](#repl-commands-and-use)
-  - [help](#help)
-  - [quit](#quit)
-  - [load](#load)
-  - [type](#type)
-  - [type scheme](#typescheme)
-  - [show](#show)
-  - [parse](#parse)
-  - [lexer](#lexer)
-  - [debug](#debug)
+  - [help](#help-h)
+  - [quit](#quit-q)
+  - [load](#load-filepath-l)
+  - [type](#type-term-t)
+  - [type scheme](#type-scheme-type--ts)
+  - [show](#show-term-s)
+  - [parse](#parse-expression-p)
+  - [lexer](#lexer-string-x)
+  - [debug](#debug-filepath-d)
   - [dump](#dump)
-  - [module](#module)
+  - [module](#module-filepathm)
 - [Configuration File](#configuration-file)
   - [Config File Creation](#config-file-creation)
   - [Config File Format](#config-file-format)
@@ -22,11 +22,11 @@ REPL for the Granule language
 
 ## Getting Started
 
-To use the REPL you can use stack with the following command
+To use the REPL you can use Stack with the following command
 ```
 stack ghci source\Repl\Repl.hs
 ```
-next enter `repl` into prompt
+Next enter `repl` into prompt
 
 ## REPL Commands and Use
 
@@ -80,7 +80,7 @@ Forall ((0,0),(0,0)) [] (FunTy (Box (CNat Ordered 2) (TyCon (Id "Int" "Int"))) (
 ```
 #### :show <term\> (:s)
 <a id="show"></a>
-Show the AST for a given term in the REPL state
+Show the Def for a given term in the REPL state
 ```
 Granule> :l Nat.gr
 S:\Documents\Research\granule\StdLib\Nat.gr, interpreted
@@ -90,7 +90,7 @@ Def ((32,1),(36,27)) (Id "add" "add") (Case ((34,3),(36,27)) (Val ((34,8),(34,8)
 ```
 #### :parse <expression\> (:p)
 <a id="parse"></a>
-Run Granule parser on an expression and display AST
+Run Granule parser on an expression and display Expr
 ```
 Granule> :p sum (Cons 1(Cons 2 Nil))
 App ((1,1),(1,20)) (Val ((1,1),(1,1)) (Var (Id "sum" "sum"))) (App ((1,6),(1,20)) (App ((1,6),(1,11)) (Val ((1,6),(1,6)) (Constr (Id "Cons" "Cons") [])) (Val ((1,11),(1,11)) (NumInt 1))) (App ((1,13),(1,20)) (App ((1,13),(1,18)) (Val ((1,13),(1,13)) (Constr (Id "Cons" "Cons") [])) (Val ((1,18),(1,18)) (NumInt 2))) (Val ((1,20),(1,20)) (Constr (Id "Nil" "Nil") []))))
@@ -124,7 +124,6 @@ Called with span: ((4,1),(6,16))
 type: TyVar (Id "c" "c_5")
 ```
 #### :dump
-<a id="dump"></a>
 Display the contents of the REPL state in the form of `term : term type`
 ```
 Granule> :l example.gr
@@ -161,7 +160,7 @@ C:\Users\<username>
 ```
 /Users/<username>
 ```
-#### Config File format
+#### Config File Format
 <a id="config-file-format"></a>
 The config file is set up so the config variable is on the far left (needs to be lowercase)
 followed by an equals and then the value(s).  For multiple value a newline and white space
