@@ -12,18 +12,17 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE PackageImports #-}
 
 import Control.Exception (SomeException, try)
-
 import Control.Monad (forM)
 import Data.List (stripPrefix)
-
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 
 import System.Directory (getCurrentDirectory)
---import System.FilePath.Glob (glob)
+import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 
 import Checker.Checker
@@ -33,19 +32,7 @@ import Syntax.Parser
 import Syntax.Pretty
 import Utils
 
--- Extracted from "else" in  main to make a generic processFile function
-badFilePath :: Globals -> FilePath -> IO ExitCode
-badFilePath globals p = do
-            let ?globals = globals { sourceFilePath = p }
-            printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
-            return (ExitFailure 1)
 
--- Extracted from "else" in  main to make a generic processFile function
-loadFile :: Globals -> FilePath -> IO ExitCode
-loadFile globals p = do
-            let ?globals = globals { sourceFilePath = p }
-            printInfo $ "\nChecking " <> p <> "..."
-            run =<< readFile p
 main :: IO ()
 main = do
   (globPatterns,globals) <- customExecParser (prefs disambiguate) parseArgs
@@ -57,24 +44,22 @@ main = do
         exitWith =<< run =<< getContents
     else do
       debugM "Globals" (show globals)
-      results <- processFiles globPatterns (badFilePath globals) (loadFile globals)
-      -- TODO: Check the factored out code to see if there are any changes:
-      -- currentDir <- getCurrentDirectory
-      -- results <- forM globPatterns $ \p -> do
-      --   filePaths <- glob p
-      --   case filePaths of
-      --     [] -> do
-      --       printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
-      --       return [(ExitFailure 1)]
-      --     _ -> forM filePaths $ \p -> do
-      --       let fileName =
-      --            case currentDir `stripPrefix` p of
-      --              Just f  -> tail f
-      --              Nothing -> p
+      currentDir <- getCurrentDirectory
+      results <- forM globPatterns $ \p -> do
+        filePaths <- glob p
+        case filePaths of
+          [] -> do
+            printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
+            return [(ExitFailure 1)]
+          _ -> forM filePaths $ \p -> do
+            let fileName =
+                 case currentDir `stripPrefix` p of
+                   Just f  -> tail f
+                   Nothing -> p
 
-      --       let ?globals = globals { sourceFilePath = fileName }
-      --       printInfo $ "\nChecking " <> fileName <> "..."
-      --       run =<< readFile p
+            let ?globals = globals { sourceFilePath = fileName }
+            printInfo $ "\nChecking " <> fileName <> "..."
+            run =<< readFile p
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
 
