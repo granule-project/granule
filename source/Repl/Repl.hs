@@ -372,13 +372,14 @@ helpMenu =
       ":quit                (:q)  Quit Granule\n"++
       ":type <term>         (:t)  Display type of term\n"++
       ":type_scheme <type>  (:ts) Enter type and display its TypeScheme\n"++
-      ":show <term>         (:s)  Display AST of term in state\n"++
-      ":parse <expression>  (:p)  Run Granule parser on a given expression and display AST\n"++
+      ":show <term>         (:s)  Display Def of term in state\n"++
+      ":parse <expression>  (:p)  Run Granule parser on a given expression and display Expr\n"++
       ":lexer <string>      (:x)  Run Granule lexer on given string and display [Token]\n"++
       ":debug <filepath>    (:d)  Run Granule debugger and display output while loading a file\n"++
       ":dump                ()    Display the context\n"++
       ":load <filepath>     (:l)  Load an external file into the context\n"++
       ":module <filepath>   (:m)  Add file/module to the current context\n"++
+      ":reload              (:r)  Reload last file loaded into REPL\n"++
       "-----------------------------------------------------------------------------------"
 
 configFileGetPath :: IO String

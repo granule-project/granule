@@ -15,6 +15,7 @@ REPL for the Granule language
   - [debug](#debug-filepath-d)
   - [dump](#dump)
   - [module](#module-filepathm)
+  - [reload](#reload-r)
 - [Configuration File](#configuration-file)
   - [Config File Creation](#config-file-creation)
   - [Config File Format](#config-file-format)
@@ -139,6 +140,14 @@ Adds a file to the REPL by appending to the current REPL state
 ```
 Granule> :m Files.gr
 S:\Documents\Research\granule\examples\Files.gr, interpreted
+```
+#### :reload (:r)
+Reload the last file loaded into the Repl
+```
+Granule> :l example.gr
+S:\Documents\Research\granule\tests\regression\good\example.gr, interpreted
+Granule> :r
+S:\Documents\Research\granule\tests\regression\good\example.gr, interpreted
 ```
 ## Configuration File
 <a id="configuration-file"></a>
