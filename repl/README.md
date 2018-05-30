@@ -1,6 +1,7 @@
-# Granule REPL
+# `grin`—Granule Interactive
 
-REPL for the Granule language
+A REPL for the Granule language
+
 ## Contents
 - [Getting Started](#getting-started)
 - [REPL Commands and Use](#repl-commands-and-use)
@@ -23,11 +24,15 @@ REPL for the Granule language
 
 ## Getting Started
 
-To use the REPL you can use Stack with the following command
+To install `grin`, run
 ```
-stack ghci source\Repl\Repl.hs
+$ stack install
 ```
-Next enter `repl` into prompt
+
+To launch, run
+```
+$ grin
+```
 
 ## REPL Commands and Use
 
