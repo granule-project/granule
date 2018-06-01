@@ -38,7 +38,6 @@ data REPLExpr =
     | CheckType String
     | Eval String
     | RunParser String
-    | RunTypeScheme String
     | RunLexer String
     | Debuger [FilePath]
     deriving Show
@@ -117,7 +116,6 @@ showAstParser = replTyCmdParser "s" "show" ShowDef
 
 runParserRepl = replTyCmdParser "p" "parse" RunParser
 
-runTypeScheme = replTySchCmdParser "ts" "type_scheme" RunTypeScheme
 
 runLexer = replTyCmdParser "x" "lexer" RunLexer
 
@@ -136,7 +134,6 @@ pathParser' = endBy pathParser eof
 
 lineParser = try dumpStateParser
           <|> try loadFileParser
-          <|> try runTypeScheme
           <|> try addModuleParser
           <|> try reloadFileParser
           <|> try checkTypeParser
