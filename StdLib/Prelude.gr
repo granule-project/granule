@@ -103,11 +103,11 @@ app : forall a : Type, b : Type, c : Nat . (a |c| -> b) -> a |c| -> b
 app f x = f x
 
 --- Flatten two boxes (with Nat grading)
-flatten : forall (a : Type, n : Nat, m : Nat) . a |n| |m| -> a |n * m|
+flatten : forall (a : Type, n : Nat, m : Nat) . (a |n|) |m| -> a |n * m|
 flatten ||x|| = |x|
 
 --- Expand two boxes (with Nat grading)
-unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> a |n| |m|
+unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> (a |n|) |m|
 unflatten |x| = ||x||
 
 --- Push coeffects on a pair into the left and right elements

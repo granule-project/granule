@@ -3,7 +3,7 @@ leak : Int |Private| -> Int |Public|
 leak |x| = |x|
 -}
 
-notALeak : Int |Private| |0| -> Int |Public|
+notALeak : (Int |Private|) |0| -> Int |Public|
 notALeak |x| = |0|
 
 secret : Int |Private|
@@ -18,10 +18,10 @@ main : Int |Private|
 main = hash secret
 
 -- Flattening takes the join (`\/`) of both Levels (see example below).
-flatten : forall k : Level, l : Level . Int |k| |l| -> Int |k \/ l|
+flatten : forall k : Level, l : Level . (Int |k|) |l| -> Int |k \/ l|
 flatten ||x|| = |x|
 
-xbb : Int |Public| |Private|
+xbb : (Int |Public|) |Private|
 xbb = ||1337||
 
 xb : Int |Private|

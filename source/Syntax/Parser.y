@@ -182,8 +182,6 @@ Type :: { Type }
   | Type '->' Type            { FunTy $1 $3 }
   | TyAtom '|' Coeffect '|'     { Box $3 $1 }
   | TyAtom '<' Effect '>'       { Diamond $3 $1 }
-  | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
@@ -201,8 +199,8 @@ TyAtom :: { Type }
   | TyAtom '^' TyAtom             { TyInfix ("^") $1 $3 }
   | TyAtom '/' '\\' TyAtom        { TyInfix ("/\\") $1 $4 }
   | TyAtom '\\' '/' TyAtom        { TyInfix ("\\/") $1 $4 }
-  | '(' Type '|' Coeffect '|' ')' { Box $4 $2 }
-  | '(' TyJuxt ')' { $2 }
+  | '(' Type ')'                  { $2 }
+  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyParams :: { [Type] }
   : TyAtom TyParams             { $1 : $2 } -- use right recursion for simplicity -- VBL
