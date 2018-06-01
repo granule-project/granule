@@ -180,7 +180,7 @@ CKind :: { CKind }
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
-  | Type '|' Coeffect '|'     { Box $3 $1 }
+  | TyAtom '|' Coeffect '|'     { Box $3 $1 }
   | TyAtom '<' Effect '>'       { Diamond $3 $1 }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
