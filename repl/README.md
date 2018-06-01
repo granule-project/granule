@@ -9,9 +9,8 @@ A REPL for the Granule language
   - [quit](#quit-q)
   - [load](#load-filepath-l)
   - [type](#type-term-t)
-  - [type scheme](#type-scheme-type--ts)
   - [show](#show-term-s)
-  - [parse](#parse-expression-p)
+  - [parse](#parse-expression-or-type-p)
   - [lexer](#lexer-string-x)
   - [debug](#debug-filepath-d)
   - [dump](#dump)
@@ -77,13 +76,7 @@ S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
 Granule> :t head
 head : forall a : Type, n : Nat=. ((Vec n + 1 a) |1|) -> a
 ```
-#### :type scheme <type\>  (:ts)
-<a id="typescheme"></a>
-Display the TypeScheme for a given type
-```
-Granule> :ts ((Int) |2|) -> Int
-Forall ((0,0),(0,0)) [] (FunTy (Box (CNat Ordered 2) (TyCon (Id "Int" "Int"))) (TyCon (Id "Int" "Int")))
-```
+
 #### :show <term\> (:s)
 <a id="show"></a>
 Show the Def for a given term in the REPL state
@@ -94,12 +87,18 @@ S:\Documents\Research\granule\StdLib\Nat.gr, interpreted
 Granule> :s add
 Def ((32,1),(36,27)) (Id "add" "add") (Case ((34,3),(36,27)) (Val ((34,8),(34,8)) (Var (Id "n" "n_0"))) [(PConstr ((35,7),(35,7)) (Id "Z" "Z") [],Val ((35,17),(35,17)) (Var (Id "m" "m_1"))),(PConstr ((36,8),(36,8)) (Id "S" "S") [PVar ((36,10),(36,10)) (Id "n'" "n'_4")],App ((36,17),(36,27)) (Val ((36,17),(36,17)) (Constr (Id "S" "S") [])) (App ((36,20),(36,27)) (App ((36,20),(36,24)) (Val ((36,20),(36,20)) (Var (Id "add" "add"))) (Val ((36,24),(36,24)) (Var (Id "n'" "n'_4")))) (Val ((36,27),(36,27)) (Var (Id "m" "m_1")))))]) [PVar ((33,5),(33,5)) (Id "n" "n_0"),PVar ((33,7),(33,7)) (Id "m" "m_1")] (Forall ((32,7),(32,35)) [((Id "n" "n_2"),KConstr (Id "Nat=" "Nat=")),((Id "m" "m_3"),KConstr (Id "Nat=" "Nat="))] (FunTy (TyApp (TyCon (Id "N" "N")) (TyVar (Id "n" "n_2"))) (FunTy (TyApp (TyCon (Id "N" "N")) (TyVar (Id "m" "m_3"))) (TyApp (TyCon (Id "N" "N")) (TyInfix "+" (TyVar (Id "n" "n_2")) (TyVar (Id "m" "m_3")))))))
 ```
-#### :parse <expression\> (:p)
+#### :parse <expression or type\> (:p)
 <a id="parse"></a>
-Run Granule parser on an expression and display Expr
+Run Granule parser on an expression and display Expr.  If input is not an expression parser will attempt to run it against the TypeScheme parser and display the TypeScheme
 ```
 Granule> :p sum (Cons 1(Cons 2 Nil))
 App ((1,1),(1,20)) (Val ((1,1),(1,1)) (Var (Id "sum" "sum"))) (App ((1,6),(1,20)) (App ((1,6),(1,11)) (Val ((1,6),(1,6)) (Constr (Id "Cons" "Cons") [])) (Val ((1,11),(1,11)) (NumInt 1))) (App ((1,13),(1,20)) (App ((1,13),(1,18)) (Val ((1,13),(1,13)) (Constr (Id "Cons" "Cons") [])) (Val ((1,18),(1,18)) (NumInt 2))) (Val ((1,20),(1,20)) (Constr (Id "Nil" "Nil") []))))
+```
+```
+Granule> :p Int -> Int
+1:5: parse error
+Input not an expression, checking for TypeScheme
+Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int")))
 ```
 #### :lexer <string\> (:x)
 <a id="lexer"></a>

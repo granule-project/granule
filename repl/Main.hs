@@ -243,14 +243,14 @@ handleCMD s =
       case pexp of
         Right ast -> liftIO $ putStrLn (show ast)
         Left e -> do
-          Ex.throwError (ParseError e)
+          liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
+          pts <- liftIO' $ try $ tscheme $ scanTokens str
+          case pts of
+            Right ts -> liftIO $ putStrLn (show ts)
+            Left err -> do
+              Ex.throwError (ParseError err)
+              Ex.throwError (ParseError e)
 
-    handleLine (RunTypeScheme str) = do
-      pts <- liftIO' $ try $ tscheme $ scanTokens str
-      case pts of
-        Right ts -> liftIO $ putStrLn (show ts)
-        Left e -> do
-          Ex.throwError (ParseError e)
 
     handleLine (RunLexer str) = do
       liftIO $ putStrLn $ show (scanTokens str)
@@ -368,18 +368,18 @@ helpMenu = unlines
       ["-----------------------------------------------------------------------------------"
       ,"                  The Granule Help Menu                                         "
       ,"-----------------------------------------------------------------------------------"
-      ,":help                (:h)  Display the help menu"
-      ,":quit                (:q)  Quit Granule"
-      ,":type <term>         (:t)  Display the type of a term in the context"
-      ,":type_scheme <type>  (:ts) Enter type and display its TypeScheme"
-      ,":show <term>         (:s)  Display Def of term in state"
-      ,":parse <expression>  (:p)  Run Granule parser on a given expression and display Expr"
-      ,":lexer <string>      (:x)  Run Granule lexer on given string and display [Token]"
-      ,":debug <filepath>    (:d)  Run Granule debugger and display output while loading a file"
-      ,":dump                ()    Display the context"
-      ,":load <filepath>     (:l)  Load an external file into the context"
-      ,":module <filepath>   (:m)  Add file/module to the current context"
-      ,":reload              (:r)  Reload last file loaded into REPL"
+      ,":help                     (:h)  Display the help menu"
+      ,":quit                     (:q)  Quit Granule"
+      ,":type <term>              (:t)  Display the type of a term in the context"
+      ,":show <term>              (:s)  Display Def of term in state"
+      ,":parse <expression/type>  (:p)  Run Granule parser on a given expression and display Expr."
+      ,"                                If input is not an expression will try to run against TypeScheme parser and display TypeScheme"
+      ,":lexer <string>           (:x)  Run Granule lexer on given string and display [Token]"
+      ,":debug <filepath>         (:d)  Run Granule debugger and display output while loading a file"
+      ,":dump                     ()    Display the context"
+      ,":load <filepath>          (:l)  Load an external file into the context"
+      ,":module <filepath>        (:m)  Add file/module to the current context"
+      ,":reload                   (:r)  Reload last file loaded into REPL"
       ,"-----------------------------------------------------------------------------------"
       ]
 
