@@ -2,7 +2,7 @@
 --
 -- see: https://github.com/sol/hpack
 --
--- hash: cb4351b399b4edb440ca17330415138699c0beeef9152006a6d55f08827db016
+-- hash: da36f88c755270d2bf793721625564c57e2b92b760b9addd608c164686db7eff
 
 name:           granule
 version:        0.6.0.0
@@ -66,6 +66,21 @@ library
       Utils
   other-modules:
       Checker.Exhaustivity
+      Paths_granule
+  default-language: Haskell2010
+
+executable gr
+  main-is: Main.hs
+  hs-source-dirs:
+      command-line-interface
+  ghc-options: -O0 -W -Werror -Wno-unused-matches
+  build-depends:
+      Glob
+    , base >=4.10 && <5
+    , directory
+    , granule
+    , optparse-applicative
+  other-modules:
       Paths_granule
   default-language: Haskell2010
 

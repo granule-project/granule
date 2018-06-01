@@ -245,7 +245,6 @@ handleCMD s =
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
           pts <- liftIO' $ try $ tscheme $ scanTokens str
-          liftIO $ print $ scanTokens str
           case pts of
             Right ts -> liftIO $ putStrLn (show ts)
             Left err -> do
