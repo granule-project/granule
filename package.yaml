@@ -67,8 +67,6 @@ executables:
     - Glob
     - granule
     - optparse-applicative
-
-executables:
   grin:
     main: Main.hs
     source-dirs: repl
