@@ -180,31 +180,29 @@ CKind :: { CKind }
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
-  | TyAtom '|' Coeffect '|'     { Box $3 $1 }
-  | TyAtom '<' Effect '>'       { Diamond $3 $1 }
+  | TyAtom '|' Coeffect '|'   { Box $3 $1 }
+  | TyAtom '<' Effect '>'     { Diamond $3 $1 }
 
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
-  | TyJuxt '(' Type ',' Type ')'   { TyApp $1 (TyApp (TyApp (TyCon $ mkId ",") $3) $5) }
-  | TyJuxt '(' Type ')'       { TyApp $1 $3 }
   | TyAtom                    { $1 }
+  | TyAtom '+' TyAtom         { TyInfix ("+") $1 $3 }
+  | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
+  | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
+  | TyAtom '/' '\\' TyAtom    { TyInfix ("/\\") $1 $4 }
+  | TyAtom '\\' '/' TyAtom    { TyInfix ("\\/") $1 $4 }
 
 TyAtom :: { Type }
-  : CONSTR                        { TyCon $ mkId $ constrString $1 }
-  | VAR                           { TyVar (mkId $ symString $1) }
-  | INT                           { let TokenInt _ x = $1 in TyInt x }
-  | TyAtom '+' TyAtom             { TyInfix ("+") $1 $3 }
-  | TyAtom '*' TyAtom             { TyInfix ("*") $1 $3 }
-  | TyAtom '^' TyAtom             { TyInfix ("^") $1 $3 }
-  | TyAtom '/' '\\' TyAtom        { TyInfix ("/\\") $1 $4 }
-  | TyAtom '\\' '/' TyAtom        { TyInfix ("\\/") $1 $4 }
-  | '(' Type ')'                  { $2 }
+  : CONSTR                    { TyCon $ mkId $ constrString $1 }
+  | VAR                       { TyVar (mkId $ symString $1) }
+  | INT                       { let TokenInt _ x = $1 in TyInt x }
+  | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyParams :: { [Type] }
-  : TyAtom TyParams             { $1 : $2 } -- use right recursion for simplicity -- VBL
-  |                             { [] }
+  : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
+  |                           { [] }
 
 Coeffect :: { Coeffect }
   : NatCoeff                    { $1 }
