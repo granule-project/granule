@@ -1,7 +1,7 @@
 name: granule
-version: '0.6.0.0'
+version: '0.6.0.1'
 synopsis: The Granule type checker and interpreter
-author: Dominic Orchard, Vilem-Benjamin Liepelt
+author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
 license: BSD3
 github: dorchard/granule

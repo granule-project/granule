@@ -1,5 +1,11 @@
+	# 0.6.0.1
+
+	Simplified internals of kinds and coeffect types
+
+	# 0.6.0.0
+
+	Granule REPL added, called 'grin'
+
 	# 0.5.5.7
 
 	Session type duality and fork, forkRep, send, recv, close primitives.
-
-	
