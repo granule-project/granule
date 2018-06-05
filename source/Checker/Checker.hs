@@ -774,15 +774,12 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       freshName <- freshVar (internalName var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
-      modify (\s -> s { tyVarContext = (cvar, (promoteType ctype, InstanceQ)) : tyVarContext s })
+      modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
     toFreshVar (var, Linear t) = return (var, Linear t)
 
-    promoteType (TyCon c) = KConstr c
-    promoteType (TyVar v) = KVar v
-    promoteType t = KPromote t
 
 -- Combine two contexts
 ctxPlus :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption

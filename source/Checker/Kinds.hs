@@ -9,7 +9,8 @@ module Checker.Kinds (kindCheckDef
                     , joinKind
                     , inferCoeffectType
                     , inferCoeffectTypeAssumption
-                    , mguCoeffectTypes) where
+                    , mguCoeffectTypes
+                    , promoteTypeToKind) where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -21,6 +22,12 @@ import Syntax.Expr
 import Syntax.Pretty
 import Context
 import Utils
+
+promoteTypeToKind :: Type -> Kind
+promoteTypeToKind (TyCon c) = KConstr c
+promoteTypeToKind (TyVar v) = KVar v
+promoteTypeToKind t = KPromote t
+
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def -> MaybeT Checker ()

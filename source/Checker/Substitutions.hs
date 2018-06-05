@@ -188,7 +188,7 @@ instance Substitutable Coeffect where
              Just ((KVar kv), q) -> do
                 k' <- inferCoeffectType nullSpan c
                 put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                           v (KPromote k', q) }
+                                                           v (promoteTypeToKind k', q) }
              _ -> return ()
            return c
         -- Convert a single type substitution (type variable, type pair) into a
@@ -196,7 +196,7 @@ instance Substitutable Coeffect where
         Just (SubstT t) -> do
           k <- inferKindOfType nullSpan t
           k' <- inferCoeffectType nullSpan (CVar v)
-          case joinKind k (KPromote k') of
+          case joinKind k (promoteTypeToKind k') of
             Just (KConstr k) ->
               case internalName k of
                 "Nat=" -> compileNatKindedTypeToCoeffect nullSpan t
@@ -239,7 +239,7 @@ instance Substitutable Coeffect where
       Just ((KVar kv), q) -> do
         k' <- inferCoeffectType nullSpan c
         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                    v (KPromote k', q) }
+                                                    v (promoteTypeToKind k', q) }
       Just (k, q) ->
         case c of
           CVar v' -> do
@@ -400,6 +400,7 @@ substCtxt _ [] = return ([], [])
 substCtxt subst ((v, x):ctxt) = do
   (substituteds, unsubstituteds) <- substCtxt subst ctxt
   (v', x') <- substAssumption subst (v, x)
+
   if (v', x') == (v, x)
     then return (substituteds, (v, x) : unsubstituteds)
     else return ((v, x') : substituteds, unsubstituteds)
