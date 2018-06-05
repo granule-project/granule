@@ -644,6 +644,7 @@ approximatedByCtxt s ctxt1 ctxt2 = do
 joinCtxts :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker (Ctxt Assumption)
 joinCtxts s ctxt1 ctxt2 = do
+    liftIO $ putStrLn $ "joinCtxt on = " ++ pretty ctxt1 ++ " ___ " ++ pretty ctxt2
     -- All the type assumptions from ctxt1 whose variables appear in ctxt2
     -- and weaken all others
     ctxt  <- intersectCtxtsWithWeaken s ctxt1 ctxt2
@@ -654,6 +655,7 @@ joinCtxts s ctxt1 ctxt2 = do
     -- Make an context with fresh coeffect variables for all
     -- the variables which are in both ctxt1 and ctxt2...
     varCtxt <- freshVarsIn s (map fst ctxt) ctxt
+    liftIO $ putStrLn $ "varCtxt = " ++ pretty varCtxt
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
@@ -767,11 +769,15 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       freshName <- freshVar (internalName var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
-      modify (\s -> s { tyVarContext = (cvar, (KPromote ctype, InstanceQ)) : tyVarContext s })
+      modify (\s -> s { tyVarContext = (cvar, (promoteType ctype, InstanceQ)) : tyVarContext s })
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
     toFreshVar (var, Linear t) = return (var, Linear t)
+
+    promoteType (TyCon c) = KConstr c
+    promoteType (TyVar v) = KVar v
+    promoteType t = KPromote t
 
 -- Combine two contexts
 ctxPlus :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
