@@ -271,11 +271,16 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
       newConjunct
       -- Specialise the return type and the incoming environment using the
       -- pattern-match-generated type substitution
+      liftIO $ putStrLn $ "subst = " ++ pretty subst
+      liftIO $ putStrLn $ "gam = " ++ pretty gam
       tau' <- substitute subst tau
       (specialisedGam, unspecialisedGam) <- substCtxt subst gam
 
       let checkGam = patternGam ++ specialisedGam ++ unspecialisedGam
       (localGam, subst') <- checkExpr defs checkGam pol False tau' e_i
+      liftIO $ putStrLn $ "localGam on br " ++ pretty pat_i ++ " - " ++ pretty localGam
+      liftIO $ putStrLn $ "specialisedGam " ++ pretty specialisedGam
+      liftIO $ putStrLn $ "patternGam "     ++ pretty patternGam
 
       approximatedByCtxt s localGam checkGam
 
