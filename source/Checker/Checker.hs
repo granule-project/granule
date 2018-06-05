@@ -271,16 +271,11 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
       newConjunct
       -- Specialise the return type and the incoming environment using the
       -- pattern-match-generated type substitution
-      liftIO $ putStrLn $ "subst = " ++ pretty subst
-      liftIO $ putStrLn $ "gam = " ++ pretty gam
       tau' <- substitute subst tau
       (specialisedGam, unspecialisedGam) <- substCtxt subst gam
 
       let checkGam = patternGam ++ specialisedGam ++ unspecialisedGam
       (localGam, subst') <- checkExpr defs checkGam pol False tau' e_i
-      liftIO $ putStrLn $ "localGam on br " ++ pretty pat_i ++ " - " ++ pretty localGam
-      liftIO $ putStrLn $ "specialisedGam " ++ pretty specialisedGam
-      liftIO $ putStrLn $ "patternGam "     ++ pretty patternGam
 
       approximatedByCtxt s localGam checkGam
 
@@ -572,9 +567,7 @@ solveConstraints predicate s defName = do
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
   let ctxtCkVar = kVarContext checkerState
-  liftIO $ putStrLn $ "ctxt = " ++ show ctxtCk
   let coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
-  liftIO $ putStrLn $ "just coeffects ctxt = " ++ pretty coeffectVars
   let coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
 
   let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
@@ -649,7 +642,6 @@ approximatedByCtxt s ctxt1 ctxt2 = do
 joinCtxts :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker (Ctxt Assumption)
 joinCtxts s ctxt1 ctxt2 = do
-    liftIO $ putStrLn $ "joinCtxt on = " ++ pretty ctxt1 ++ " ___ " ++ pretty ctxt2
     -- All the type assumptions from ctxt1 whose variables appear in ctxt2
     -- and weaken all others
     ctxt  <- intersectCtxtsWithWeaken s ctxt1 ctxt2
@@ -660,7 +652,6 @@ joinCtxts s ctxt1 ctxt2 = do
     -- Make an context with fresh coeffect variables for all
     -- the variables which are in both ctxt1 and ctxt2...
     varCtxt <- freshVarsIn s (map fst ctxt) ctxt
-    liftIO $ putStrLn $ "varCtxt = " ++ pretty varCtxt
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
