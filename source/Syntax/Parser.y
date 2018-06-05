@@ -216,7 +216,7 @@ Coeffect :: { Coeffect }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  | Coeffect ':' TyAtom         { normalise (CSig $1 $3) }
 
 NatCoeff :: { Coeffect }
   : INT NatModifier           { let TokenInt _ x = $1 in CNat $2 x }
