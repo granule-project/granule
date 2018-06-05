@@ -13,7 +13,6 @@ import Context
 import Syntax.Expr
 import Syntax.Pretty
 import Checker.Kinds
-import Checker.Coeffects
 import Checker.Monad
 import Checker.Predicates
 import Control.Monad.Trans.Maybe
@@ -34,7 +33,6 @@ data Substitutors =
     SubstT  Type
   | SubstC  Coeffect
   | SubstK  Kind
-  | SubstCK CKind
   | SubstE  Effect
   deriving (Eq, Show)
 
@@ -42,7 +40,6 @@ instance Pretty Substitutors where
   pretty (SubstT t) = "->" ++ pretty t
   pretty (SubstC c) = "->" ++ pretty c
   pretty (SubstK k) = "->" ++ pretty k
-  pretty (SubstCK k) = "->" ++ pretty k
   pretty (SubstE e) = "->" ++ pretty e
 
 class Substitutable t where
@@ -72,9 +69,6 @@ instance Substitutable Substitutors where
         k <- substitute subst k
         return $ SubstK k
 
-      SubstCK k ->
-        return $ SubstCK (substitute subst k)
-
       SubstE e -> do
         e <- substitute subst e
         return $ SubstE e
@@ -84,7 +78,7 @@ instance Substitutable Substitutors where
     -- We can unify a type with a coeffect, if the type is actually a Nat=
     k <- inferKindOfType nullSpan t
     k' <- inferCoeffectType nullSpan c'
-    case joinKind k (liftCoeffectType k') of
+    case joinKind k (KPromote k') of
       Just (KConstr k) | internalName k == "Nat=" -> do
              c <- compileNatKindedTypeToCoeffect nullSpan t
              unify c c'
@@ -92,7 +86,6 @@ instance Substitutable Substitutors where
   unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
   unify (SubstC c) (SubstC c') = unify c c'
   unify (SubstK k) (SubstK k') = unify k k'
-  unify (SubstCK k) (SubstCK k') = unify k k'
   unify (SubstE e) (SubstE e') = unify e e'
   unify _ _ = return Nothing
 
@@ -145,7 +138,7 @@ instance Substitutable Type where
       Just (KConstr k) | internalName k == "Nat=" -> do
         c  <- compileNatKindedTypeToCoeffect nullSpan t
         c' <- compileNatKindedTypeToCoeffect nullSpan t'
-        addConstraint $ Eq nullSpan c c' (CConstr $ mkId "Nat=")
+        addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat=")
         return $ Just []
 
       _ | o == o' -> do
@@ -195,7 +188,7 @@ instance Substitutable Coeffect where
              Just ((KVar kv), q) -> do
                 k' <- inferCoeffectType nullSpan c
                 put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                           v (liftCoeffectType k', q) }
+                                                           v (promoteTypeToKind k', q) }
              _ -> return ()
            return c
         -- Convert a single type substitution (type variable, type pair) into a
@@ -203,7 +196,7 @@ instance Substitutable Coeffect where
         Just (SubstT t) -> do
           k <- inferKindOfType nullSpan t
           k' <- inferCoeffectType nullSpan (CVar v)
-          case joinKind k (liftCoeffectType k') of
+          case joinKind k (promoteTypeToKind k') of
             Just (KConstr k) ->
               case internalName k of
                 "Nat=" -> compileNatKindedTypeToCoeffect nullSpan t
@@ -212,14 +205,17 @@ instance Substitutable Coeffect where
 
         _               -> return $ CVar v
 
-  substitute subst (CInfinity k) = return $
-    CInfinity (substitute subst k)
+  substitute subst (CInfinity k) = do
+    k <- substitute subst k
+    return $ CInfinity k
 
-  substitute subst (COne k) = return $
-    COne (substitute subst k)
+  substitute subst (COne k) = do
+    k <- substitute subst k
+    return $ COne k
 
-  substitute subst (CZero k) = return $
-    CZero (substitute subst k)
+  substitute subst (CZero k) = do
+    k <- substitute subst k
+    return $ CZero k
 
   substitute subst (CSet tys) = do
     tys <- mapM (\(v, t) -> substitute subst t >>= (\t' -> return (v, t'))) tys
@@ -227,7 +223,8 @@ instance Substitutable Coeffect where
 
   substitute subst (CSig c k) = do
     c <- substitute subst c
-    return $ CSig c (substitute subst k)
+    k <- substitute subst k
+    return $ CSig c k
 
   substitute _ c@CNat{}      = return c
   substitute _ c@CNatOmega{} = return c
@@ -242,7 +239,7 @@ instance Substitutable Coeffect where
       Just ((KVar kv), q) -> do
         k' <- inferCoeffectType nullSpan c
         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                    v (liftCoeffectType k', q) }
+                                                    v (promoteTypeToKind k', q) }
       Just (k, q) ->
         case c of
           CVar v' -> do
@@ -310,25 +307,12 @@ instance Substitutable Effect where
     if e == e' then return $ Just []
                else return $ Nothing
 
-
-instance Substitutable CKind where
-  type SubstitutionContext CKind x = x
-
-  substitute subst (CPoly v) =
-      case lookup v subst of
-        Just (SubstCK k) -> k
-        _                -> CPoly v
-  substitute _ c@CConstr{} = c
-
-  unify (CPoly v) ck =
-    return $ Just [(v, SubstCK ck)]
-  unify ck (CPoly v) =
-    return $ Just [(v, SubstCK ck)]
-  unify ck ck' =
-    if ck == ck' then return $ Just [] else return $ Nothing
-
 instance Substitutable Kind where
   type SubstitutionContext Kind x = MaybeT Checker x
+
+  substitute subst (KPromote t) = do
+      t <- substitute subst t
+      return $ KPromote t
 
   substitute subst KType = return KType
   substitute subst KCoeffect = return KCoeffect
@@ -416,6 +400,7 @@ substCtxt _ [] = return ([], [])
 substCtxt subst ((v, x):ctxt) = do
   (substituteds, unsubstituteds) <- substCtxt subst ctxt
   (v', x') <- substAssumption subst (v, x)
+
   if (v', x') == (v, x)
     then return (substituteds, (v, x) : unsubstituteds)
     else return ((v, x') : substituteds, unsubstituteds)
@@ -487,7 +472,8 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, quantifier)) : tyVarContext st })
                  return var'
-               KConstr c -> freshCoeffectVarWithBinding var (CConstr c) quantifier
+               KConstr c -> freshCoeffectVarWithBinding var (TyCon c) quantifier
+               KPromote _ -> error "Promoted coeffect types not yet supported"
                KCoeffect -> error "Coeffect kind variables not yet supported"
                KVar _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
                \ Please open an issue with a snippet of your code at https://github.com/dorchard/granule/issues"

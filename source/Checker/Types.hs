@@ -9,7 +9,6 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List
 
-import Checker.Coeffects
 import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
@@ -49,7 +48,7 @@ equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s E
 equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -- Whether to allow universal specialisation
   -> Bool
   -- Starting spec indication
@@ -85,7 +84,7 @@ flipIndicator PatternCtxt = PatternCtxt
 equalTypesRelatedCoeffects :: (?globals :: Globals )
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -> Bool -- whether to allow universal specialisation
   -> Type
   -> Type
@@ -236,7 +235,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
       case k1 `joinKind` k2 of
         Just (KConstr kc) | internalName kc /= "Protocol" -> do
           -- Don't create solver constraints for sessions- deal with before SMT
-          addConstraint (Eq s (CVar n) (CVar m) (CConstr kc))
+          addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, [(n, SubstT $ TyVar m)])
         Just _ ->
           return (True, [(n, SubstT $ TyVar m)])
@@ -260,7 +259,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
         -- If the kind is Nat=, then create a solver constraint
         Just (KConstr k) | internalName k == "Nat=" -> do
           nat <- compileNatKindedTypeToCoeffect s t
-          addConstraint (Eq s (CVar n) nat (CConstr $ mkId "Nat="))
+          addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat="))
           return (True, [(n, SubstT t)])
 
         Just _ -> return (True, [(n, SubstT t)])
@@ -277,7 +276,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
         Just (KConstr k) | internalName k == "Nat=" -> do
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
-          addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
+          addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
           return (True, [(n, SubstT t)])
         x ->
           if allowUniversalSpecialisation
@@ -344,8 +343,8 @@ equalOtherKindedTypesGeneric s t1 t2 = do
         c1 <- compileNatKindedTypeToCoeffect s t1
         c2 <- compileNatKindedTypeToCoeffect s t2
         if internalName n == "Nat" && internalName n' == "Nat"
-           then addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
-           else addConstraint $ Eq s c1 c2 (CConstr $ mkId "Nat=")
+           then addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
+           else addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
         return (True, [])
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
@@ -386,7 +385,7 @@ sessionInequality s t1 t2 =
 isDualSession :: (?globals :: Globals)
     => Span
        -- Explain how coeffects should be related by a solver constraint
-    -> (Span -> Coeffect -> Coeffect -> CKind -> Constraint)
+    -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
     -> Bool -- whether to allow universal specialisation
     -> Type
     -> Type
@@ -449,7 +448,7 @@ joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
-  let kind = CConstr $ mkId "Nat="
+  let kind = TyCon $ mkId "Nat="
   var <- freshCoeffectVar m kind
   -- Unify the two coeffects into one
   addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
@@ -459,7 +458,7 @@ joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
-  let kind = CConstr $ mkId "Nat="
+  let kind = TyCon $ mkId "Nat="
   nvar <- freshCoeffectVar n kind
   mvar <- freshCoeffectVar m kind
   -- Unify the two variables into one

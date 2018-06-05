@@ -15,7 +15,7 @@ import Checker.LaTeX
 import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Context
-import Syntax.Expr (Id, CKind(..), Span, Type, Kind(..), Coeffect, Pattern,
+import Syntax.Expr (Id, Span, Type(..), Kind(..), Coeffect, Pattern,
                     TypeScheme(..), Cardinality, mkId, internalName, Nat)
 import Syntax.Pretty
 import Utils
@@ -128,24 +128,24 @@ allGuardContexts = do
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
-freshCoeffectVar :: Id -> CKind -> MaybeT Checker Id
-freshCoeffectVar cvar kind =
-    freshCoeffectVarWithBinding cvar kind InstanceQ
+freshCoeffectVar :: Id -> Type -> MaybeT Checker Id
+freshCoeffectVar cvar ty =
+    freshCoeffectVarWithBinding cvar ty InstanceQ
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
-freshCoeffectVarWithBinding :: Id -> CKind -> Quantifier -> MaybeT Checker Id
-freshCoeffectVarWithBinding cvar kind q = do
+freshCoeffectVarWithBinding :: Id -> Type -> Quantifier -> MaybeT Checker Id
+freshCoeffectVarWithBinding cvar ty q = do
     freshName <- freshVar (internalName cvar)
     let cvar' = mkId freshName
-    registerCoeffectVar cvar' kind q
+    registerCoeffectVar cvar' ty q
     return cvar'
 
 -- | Helper for registering a new coeffect variable in the checker
-registerCoeffectVar :: Id -> CKind -> Quantifier -> MaybeT Checker ()
-registerCoeffectVar v (CConstr constrId) q =
+registerCoeffectVar :: Id -> Type -> Quantifier -> MaybeT Checker ()
+registerCoeffectVar v (TyCon constrId) q =
     modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
-registerCoeffectVar v (CPoly constrId) q =
+registerCoeffectVar v (TyVar constrId) q =
     modify (\st -> st { tyVarContext = (v, (KVar constrId, q)) : tyVarContext st })
 
 -- | Start a new conjunction frame on the predicate stack

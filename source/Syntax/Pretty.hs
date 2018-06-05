@@ -67,7 +67,7 @@ instance Pretty Coeffect where
     pretty (CSet xs) =
       "{" ++ intercalate "," (map (\(name, t) -> name ++ " : " ++ pretty t) xs) ++ "}"
     pretty (CSig c t) = "(" ++ pretty c ++ " : " ++ pretty t ++ ")"
-    pretty (CInfinity (CPoly kv)) | internalName kv == "infinity" = "∞"
+    pretty (CInfinity (TyVar kv)) | internalName kv == "infinity" = "∞"
     pretty (CInfinity k) = "∞ : " ++ pretty k
 
 instance Pretty Kind where
@@ -75,7 +75,8 @@ instance Pretty Kind where
     pretty KCoeffect      = "Coeffect"
     pretty (KFun k1 k2)   = pretty k1 ++ " -> " ++ pretty k2
     pretty (KConstr c)    = pretty c
-    pretty (KVar v)      = pretty v
+    pretty (KVar v)       = pretty v
+    pretty (KPromote t)   = "↑" ++ pretty t
 
 instance Pretty TypeScheme where
     pretty (Forall _ [] t) = pretty t
@@ -83,10 +84,6 @@ instance Pretty TypeScheme where
         "forall " ++ intercalate ", " (map prettyKindSignatures cvs) ++ ". " ++ pretty t
       where
        prettyKindSignatures (var, kind) = pretty var ++ " : " ++ pretty kind
-
-instance Pretty CKind where
-    pretty (CConstr c) = pretty c
-    pretty (CPoly   v) = pretty v
 
 instance Pretty Type where
     pretty (TyCon s)      =  pretty s
@@ -121,6 +118,7 @@ instance Pretty [DataConstr] where
 instance Pretty DataConstr where
     pretty (DataConstrG _ name typeScheme) = pretty name ++ " : " ++ pretty typeScheme
     pretty (DataConstrA _ name params) = pretty name ++ (unwords . map pretty) params
+
 instance Pretty Pattern where
     pretty (PVar _ v)     = pretty v
     pretty (PWild _)      = "_"

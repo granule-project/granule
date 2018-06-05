@@ -16,6 +16,6 @@ spec = do
       let ?globals = defaultGlobals
       Just us <- evalChecker initState $ runMaybeT $
              unify (Box (CVar $ mkId "x") (TyCon $ mkId "Bool"))
-                   (Box (COne (CConstr $ mkId "Nat")) (TyVar $ mkId "a"))
-      us `shouldBe` (Just [(mkId "x", SubstC $ COne (CConstr $ mkId "Nat"))
+                   (Box (COne (TyCon $ mkId "Nat")) (TyVar $ mkId "a"))
+      us `shouldBe` (Just [(mkId "x", SubstC $ COne (TyCon $ mkId "Nat"))
                          , (mkId "a", SubstT $ TyCon $ mkId "Bool")])

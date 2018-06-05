@@ -16,7 +16,6 @@ typeLevelConstructors =
     , (mkId "String", (KType, Nothing))
     , (mkId "FileIO", (KFun KType KType, Nothing))
     , (mkId "Session", (KFun KType KType, Nothing))
-    , (mkId "List", (KFun (KConstr $ mkId "Nat=") (KFun KType KType), Just 2))
     , (mkId "N", (KFun (KConstr $ mkId "Nat=") KType, Just 2))
     , (mkId "Cartesian", (KCoeffect, Nothing))   -- Singleton coeffect
     , (mkId "Nat",  (KCoeffect, Nothing))

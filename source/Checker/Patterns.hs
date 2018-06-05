@@ -10,6 +10,7 @@ import Checker.Coeffects
 import Checker.Exhaustivity
 import Checker.Monad
 import Checker.Predicates
+import Checker.Kinds
 import Checker.Substitutions
 import Context
 import Syntax.Expr

@@ -9,11 +9,10 @@
 module Syntax.Expr
   (AST(..), Value(..), Expr(..), Type(..), TypeScheme(..), Nat,
   letBox, valExpr,
-  Def(..), DataDecl(..), Pattern(..), CKind(..), Coeffect(..),
+  Def(..), DataDecl(..), Pattern(..), Coeffect(..),
   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
   Id(..), mkId,
   Operator,
-  liftCoeffectType,
   arity, freeVars, subst, freshen, Freshener, freshenAST,
   normalise,
   nullSpan, getSpan, getEnd, getStart, Pos, Span,
@@ -224,7 +223,7 @@ instance Freshenable Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" =
-          return $ Box (CInfinity (CPoly $ Id "∞" "infinity")) t2
+          return $ Box (CInfinity (TyVar $ Id "∞" "infinity")) t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
@@ -262,12 +261,14 @@ instance Freshenable Coeffect where
       case v' of
         Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar $ mkId (sourceName v)
-    freshen (CInfinity (CPoly i@(Id _ ""))) = do
+
+    freshen (CInfinity (TyVar i@(Id _ ""))) = do
       t <- freshVar Type i
-      return $ CInfinity (CPoly t)
-    freshen (CInfinity (CPoly i@(Id _ " infinity"))) = do
+      return $ CInfinity (TyVar t)
+
+    freshen (CInfinity (TyVar i@(Id _ " infinity"))) = do
       t <- freshVar Type i
-      return $ CInfinity (CPoly t)
+      return $ CInfinity (TyVar t)
 
     freshen (CPlus c1 c2) = do
       c1' <- freshen c1
@@ -493,7 +494,7 @@ instance Freshenable TypeScheme where
 Example: `List n Int` is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
 data Type = FunTy Type Type           -- ^ Function type
-          | TyCon Id       -- ^ Type constructor
+          | TyCon Id                  -- ^ Type constructor
           | Box Coeffect Type         -- ^ Coeffect type
           | Diamond Effect Type       -- ^ Effect type
           | TyVar Id                  -- ^ Type variable
@@ -588,37 +589,32 @@ data Kind = KType
           | KCoeffect
           | KFun Kind Kind
           | KVar Id              -- Kind poly variable
-          | KConstr Id -- constructors that have been elevated
+          -- TODO: merge KType and KCoeffect into KConstr
+          | KConstr Id           -- constructors
+          | KPromote Type        -- Promoted types
     deriving (Show, Ord, Eq)
-
-liftCoeffectType :: CKind -> Kind
-liftCoeffectType (CConstr cid) = KConstr cid
-liftCoeffectType (CPoly var)   = KVar var
 
 type Effect = [String]
 
 data Coeffect = CNat      NatModifier Int
               | CNatOmega (Either () Int)
               | CFloat    Rational
-              | CInfinity CKind
+              | CInfinity Type
               | CVar      Id
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
-              | CZero     CKind
-              | COne      CKind
+              | CZero     Type
+              | COne      Type
               | Level     Int
               | CSet      [(String, Type)]
-              | CSig      Coeffect CKind
+              | CSig      Coeffect Type
               | CExpon    Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
 data NatModifier = Ordered | Discrete
     deriving (Show, Ord, Eq)
-
-data CKind = CConstr Id | CPoly Id
-    deriving (Eq, Ord, Show)
 
 -- | Normalise a coeffect using the semiring laws and some
 --   local evaluation of natural numbers
@@ -628,14 +624,14 @@ normalise (CPlus (CZero _) n) = n
 normalise (CPlus n (CZero _)) = n
 normalise (CTimes (COne _) n) = n
 normalise (CTimes n (COne _)) = n
-normalise (COne (CConstr (Id _ "Nat"))) = CNat Ordered 1
-normalise (CZero (CConstr (Id _ "Nat"))) = CNat Ordered 0
-normalise (COne (CConstr (Id _ "Nat="))) = CNat Discrete 1
-normalise (CZero (CConstr (Id _ "Nat="))) = CNat Discrete 0
-normalise (COne (CConstr (Id _ "Level"))) = Level 1
-normalise (CZero (CConstr (Id _ "Level"))) = Level 0
-normalise (COne (CConstr (Id _ "Q"))) = CFloat 1
-normalise (CZero (CConstr (Id _ "Q"))) = CFloat 0
+normalise (COne (TyCon (Id _ "Nat"))) = CNat Ordered 1
+normalise (CZero (TyCon (Id _ "Nat"))) = CNat Ordered 0
+normalise (COne (TyCon (Id _ "Nat="))) = CNat Discrete 1
+normalise (CZero (TyCon (Id _ "Nat="))) = CNat Discrete 0
+normalise (COne (TyCon (Id _ "Level"))) = Level 1
+normalise (CZero (TyCon (Id _ "Level"))) = Level 0
+normalise (COne (TyCon (Id _ "Q"))) = CFloat 1
+normalise (CZero (TyCon (Id _ "Q"))) = CFloat 0
 normalise (CPlus (Level n) (Level m)) = Level (n `max` m)
 normalise (CTimes (Level n) (Level m)) = Level (n `min` m)
 normalise (CPlus (CFloat n) (CFloat m)) = CFloat (n + m)

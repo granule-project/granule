@@ -172,11 +172,6 @@ Kind :: { Kind }
                                   "Type"     -> KType
                                   "Coeffect" -> KCoeffect
                                   s          -> KConstr $ mkId s }
-
-CKind :: { CKind }
-  : VAR                       { CPoly (mkId $ symString $1) }
-  | CONSTR                    { CConstr (mkId $ constrString $1) }
-
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
@@ -206,12 +201,12 @@ TyParams :: { [Type] }
 
 Coeffect :: { Coeffect }
   : NatCoeff                    { $1 }
-  | '∞'                         { CInfinity (CConstr $ mkId "Cartesian") }
+  | '∞'                         { CInfinity (TyCon $ mkId "Cartesian") }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (CConstr $ mkId "Cartesian")
+                                    "Inf" -> CInfinity (TyCon $ mkId "Cartesian")
                                     x -> error $ "Unknown coeffect constructor `" ++ x ++ "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
@@ -221,7 +216,7 @@ Coeffect :: { Coeffect }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' CKind          { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { normalise (CSig $1 $3) }
 
 NatCoeff :: { Coeffect }
   : INT NatModifier           { let TokenInt _ x = $1 in CNat $2 x }

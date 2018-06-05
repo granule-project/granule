@@ -255,8 +255,8 @@ checkExpr defs gam pol _ (Box demand tau) (Val s (Promote e)) = do
         ty <- inferCoeffectTypeAssumption s as
         return $ case ty of
           Nothing -> False
-          Just (CConstr c) | internalName c == "Level" -> True
-                           | otherwise                 -> False
+          Just (TyCon c) | internalName c == "Level" -> True
+                         | otherwise                 -> False
 
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s guardExpr cases) = do
@@ -503,7 +503,7 @@ synthExpr defs gam pol (Val s (Promote e)) = do
    vark <- freshVar $ "kprom_" ++ [head (pretty e)]
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
-   var <- freshCoeffectVar (mkId $ "prom_" ++ pretty e) (CPoly $ mkId vark)
+   var <- freshCoeffectVar (mkId $ "prom_" ++ pretty e) (TyVar $ mkId vark)
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
@@ -610,18 +610,28 @@ solveConstraints predicate s defName = do
 
            else return True
   where
+
     justCoeffectTypesConverted checkerState = mapMaybe convert
       where
-       convert (var, (KConstr constr, q)) =
-           case lookup (constr) (typeConstructors checkerState) of
-             Just (KCoeffect,_) -> Just (var, (CConstr constr, q))
+       convert (var, (KPromote (TyCon constr), q)) =
+           case lookup constr (typeConstructors checkerState) of
+             Just (KCoeffect,_) -> Just (var, (TyCon constr, q))
              _                  -> Nothing
+
+       convert (var, (KConstr constr, q)) =
+           -- TODO: look into removing this case
+           case lookup (constr) (typeConstructors checkerState) of
+             Just (KCoeffect,_) -> Just (var, (TyCon constr, q))
+             _                  -> Nothing
+       --convert (var, (KPromote (TyVar v), q)) = Just (var, (TyVar v, q))
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
-       convert (var, (KVar constr, q)) = Just (var, (CPoly constr, q))
+       convert (var, (KVar v, q)) = Just (var, (TyVar v, q))
        convert _ = Nothing
+
     justCoeffectTypesConvertedVars checkerState =
        stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
+
 
 approximatedByCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker ()
@@ -759,11 +769,12 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       freshName <- freshVar (internalName var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
-      modify (\s -> s { tyVarContext = (cvar, (liftCoeffectType ctype, InstanceQ)) : tyVarContext s })
+      modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
     toFreshVar (var, Linear t) = return (var, Linear t)
+
 
 -- Combine two contexts
 ctxPlus :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
