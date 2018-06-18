@@ -223,7 +223,7 @@ instance Freshenable Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" =
-          return $ Box (CInfinity (TyVar $ Id "∞" "infinity")) t2
+          return $ Box (CInfinity (TyCon $ mkId "Cartesian")) t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
