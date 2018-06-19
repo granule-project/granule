@@ -1,0 +1,6 @@
+data Cake where Cake : Cake
+
+data Happy where Happy : Happy
+
+eat : Cake -> Happy
+eat Cake = Happy
