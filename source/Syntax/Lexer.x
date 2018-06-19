@@ -22,7 +22,7 @@ $upper  = [A-Z]
 $eol    = [\n]
 $alphanum  = [$alpha $digit \_]
 @sym    = $lower ($alphanum | \')*
-@constr = ($upper ($alphanum | \')* | \(\))
+@constr = ($upper ($alphanum | \')* | \(\)) | ◻
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
 @charLiteral = \' ([\\.] | . ) \'
@@ -48,6 +48,7 @@ tokens :-
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
   ∞                             { \p s -> TokenInfinity p }
+  ∧                             { \p s -> TokenAnd p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
   @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
@@ -96,6 +97,7 @@ data Token
   | TokenCase   AlexPosn
   | TokenOf     AlexPosn
   | TokenInfinity AlexPosn
+  | TokenAnd    AlexPosn
   | TokenLambda AlexPosn
   | TokenLetBox AlexPosn
   | TokenBind   AlexPosn
