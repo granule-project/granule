@@ -1,6 +1,22 @@
-data Cake where Cake : Cake
-
+data Cake  where Cake  : Cake
 data Happy where Happy : Happy
 
 eat : Cake -> Happy
 eat Cake = Happy
+
+-- You cannot have your cake and eat it...
+
+-- impossible : Cake -> (Happy, Cake)
+-- impossible cake = (eat cake, cake)
+
+-- ...unless you have infinite cake
+
+possible : Cake |∞| -> (Happy, Cake |∞|)
+possible lotsOfCake =
+  let |cake| = lotsOfCake in (eat cake, |cake|)
+
+-- ...or to there is a more precise way
+
+accurate : forall (n : Nat) . Cake |n+1| -> (Happy, Cake |n|)
+accurate lotsOfCake =
+  let |cake| = lotsOfCake in (eat cake, |cake|)
