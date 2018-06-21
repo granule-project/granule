@@ -18,11 +18,13 @@ A brief introduction to the Granule programming language can be found in [this e
 
 The Granule interpreter requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). An easy way to install Z3 on mac is via Homebrew, e.g.,
 
-    brew install z3
+    $ brew install z3
 
 To install Granule, we recommend you use [Stack](https://docs.haskellstack.org/en/stable/README/):
 
-    git clone https://github.com/dorchard/granule && cd granule && stack setup && stack install
+    $ git clone https://github.com/dorchard/granule && cd granule && stack setup && stack install
+
+We recommend you use the latest version of Stack. If you have any problems building, this may be due to an outdated version of Stack; you can update stack via `stack upgrade`.
 
 ## Executing Granule Programs
 
