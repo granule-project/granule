@@ -1,0 +1,9 @@
+{- First line comment needs to be here -}
+
+bad : Int
+bad = "Hi"
+
+{- Break -}
+
+ok : Int
+ok = 1
