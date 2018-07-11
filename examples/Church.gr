@@ -1,4 +1,4 @@
-{- Church numerals have graded types that explain what they encode -}
+-- Church numerals have graded types that explain what they encode
 
 zero : forall (a : Type) . (a -> a) |0| -> a -> a
 zero |f| x = x
@@ -26,7 +26,24 @@ mult : forall (a : Type, n : Nat, m : Nat) .
       -> ((a -> a) |(n*m)| -> a -> a)
 mult m |n| |f| x = m |(n |f|)| x
 
-{- Booleans -}
+-- Generalised version of Church numerals
+
+zeroGen : forall (a : Type, r : Nat) . (a |r| -> a) |0| -> a -> a
+zeroGen |f| x = x
+
+oneGen : forall (a : Type, r : Nat) . (a |r| -> a) |1| -> a |r| -> a
+oneGen |f| x = f x
+
+twoGen : forall (a : Type, r : Nat) . (a |r| -> a) |(r+1)| -> a |(r*r)| -> a
+twoGen |f| |x| = f |(f |x|)|
+
+threeGen : forall (a : Type, r : Nat) . (a |r| -> a) |(r*r)+r+1| -> a |(r*r*r)| -> a
+threeGen |f| |x| = f |(f |(f |x|)|)|
+
+fourGen : forall (a : Type, r : Nat) . (a |r| -> a) |(r*r*r)+(r*r)+r+1| -> a |(r*r*r*r)| -> a
+fourGen |f| |x| = f |(f |(f |(f |x|)|)|)|
+
+-- Booleans
 
 true : forall (a : Type) . a |1| -> a |0| -> a
 true |a| |b| = a
