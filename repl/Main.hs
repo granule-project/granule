@@ -98,7 +98,7 @@ readToQueue pth = do
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd++adt),f,m)
-                    liftIO $ putStrLn $ pth++", interpreted"
+                    liftIO $ printInfo $ green $ pth++", interpreted"
                 Failed -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
 
