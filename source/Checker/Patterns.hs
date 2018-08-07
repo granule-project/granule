@@ -144,6 +144,17 @@ ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
     return (localGam ++ localGam', ty)
   else refutablePattern s pat
 
-ctxtFromTypedPatterns s ty p =
-  error $ "Unhandled case: ctxtFromTypedPatterns called with:\
-          \Span: " ++ show s ++ "\nType: " ++ show ty ++ "\nPatterns: " ++ show p
+ctxtFromTypedPatterns s ty ps = do
+  -- This means we have patterns left over, but the type is not a
+  -- function type, so we need to throw a type error
+
+  -- First build a representation of what the type would look like
+  -- if this was well typed, i.e., if we have two patterns left we get
+  -- p0 -> p1 -> ?
+  psTyVars <- mapM (\_ -> freshVar "?" >>= return . TyVar . mkId) ps
+  let spuriousType = foldr FunTy (TyVar $ mkId "?") psTyVars
+  halt $ GenericError (Just s)
+     $ "Too many patterns.\n   Therefore, couldn't match expected type '"
+       ++ pretty ty
+       ++ "'\n   against a type of the form '" ++ pretty spuriousType
+       ++ "' implied by the remaining patterns"
