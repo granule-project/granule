@@ -43,6 +43,23 @@ threeGen |f| |x| = f |(f |(f |x|)|)|
 fourGen : forall (a : Type, r : Nat) . (a |r| -> a) |(r*r*r)+(r*r)+r+1| -> a |(r*r*r*r)| -> a
 fourGen |f| |x| = f |(f |(f |(f |x|)|)|)|
 
+-- Generalised version of Church numerals
+
+zero1 : forall (a : Type) . (a |1| -> a) |0| -> a -> a
+zero1 |f| x = x
+
+one1 : forall (a : Type) . (a |1| -> a) |1| -> a |1| -> a
+one1 |f| x = f x
+
+two1 : forall (a : Type) . (a |1| -> a) |2| -> a |1| -> a
+two1 |f| |x| = f |(f |x|)|
+
+three1 : forall (a : Type) . (a |1| -> a) |3| -> a |1| -> a
+three1 |f| |x| = f |(f |(f |x|)|)|
+
+four1 : forall (a : Type) . (a |1| -> a) |4| -> a |1| -> a
+four1 |f| |x| = f |(f |(f |(f |x|)|)|)|
+
 -- Booleans
 
 true : forall (a : Type) . a |1| -> a |0| -> a

@@ -54,7 +54,7 @@ intersectCtxtsAlternatives a b =
 
 {- | `subtractCtxt a b` removes all the key-value pairs from
    `a` that have keys in `b` -}
-subtractCtxt :: Ctxt a -> Ctxt a -> Ctxt a
+subtractCtxt :: Ctxt a -> Ctxt b -> Ctxt a
 subtractCtxt a b = filter (not . appearsIn b) a
   where appearsIn x (name, _) = isJust $ lookup name x
 

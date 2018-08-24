@@ -109,7 +109,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
 
 ctxtFromTypedPattern s t@(TyVar v) p = do
   case p of
-    PVar _ x -> return ([(x, Linear t)], [], [])
+    PVar _ x -> return ([(x, Linear $ emptyTypeScheme t)], [], [])
     PWild _  -> return ([], [], [])
     p        -> halt $ PatternTypingError (Just s)
                    $  "Cannot unify pattern " ++ pretty p

@@ -35,8 +35,9 @@ import Utils
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
-check :: (?globals :: Globals ) => AST -> IO CheckerResult
+check :: (?globals :: Globals) => AST -> IO CheckerResult
 check (AST dataDecls defs) = do
+      -- Kind check the data types first
       let checkDataDecls = do { mapM checkTyCon dataDecls; mapM checkDataCons dataDecls }
 
       -- Get the types of all definitions (assume that they are correct for
@@ -122,34 +123,37 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
+dischargePoly (v, ty) = do
+  kvar <- freshVar "topk"
+  let kind = KVar kvar
+  c <- freshCoeffectVarWithBinding "top" kind ForallQ
+  return $ (v, Discharged ty c)
 
 checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def              -- definition
          -> Checker (Maybe ())
 checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
+    --TODO: refactor this to prior to checkDef
+    -- Make everything at the top-level polymorphically coeffected
+    defCtxt <- mapM dischargePoly defCtxt
+
     result <- runMaybeT $ do
       -- Add explicit type variable quantifiers to the type variable context
       modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
-      ctxt <- case (ty, pats) of
-        (FunTy _ _, ps@(_:_)) -> do
+      -- Type the patterns
+      (patternGam, ty') <- ctxtFromTypedPatterns s ty pats
 
-          -- Type the pattern matching
-          (patternGam, ty') <- ctxtFromTypedPatterns s ty ps
+      -- Check the body in the context given by the pattern matching
+      (outGam, _) <- checkExpr [] (defCtxt ++ patternGam) Positive True ty' expr
+      -- Check that the outgoing context is a subgrading of the incoming
+      approximatedByCtxt s outGam patternGam
 
-          -- Check the body in the context given by the pattern matching
-          (outGam, _) <- checkExpr defCtxt patternGam Positive True ty' expr
-          -- Check that the outgoing context is a subgrading of the incoming
-          approximatedByCtxt s outGam patternGam
-
-          -- Check linear use
-          case checkLinearity patternGam outGam of
-                [] -> return outGam
-                xs -> illLinearityMismatch s xs
-
-        (tau, []) -> checkExpr defCtxt [] Positive True tau expr >>= (return . fst)
-        _         -> halt $ GenericError (Just s) "Expecting a function type"
+      -- Check linear use
+      ctxt <- case checkLinearity patternGam outGam of
+            [] -> return outGam
+            xs -> illLinearityMismatch s xs
 
       -- Use an SMT solver to solve the generated constraints
       checkerState <- get

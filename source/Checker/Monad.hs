@@ -35,8 +35,8 @@ runChecker initialState =
 
 -- Types or discharged coeffects
 data Assumption =
-    Linear Type
-  | Discharged Type Coeffect
+    Linear TypeScheme
+  | Discharged TypeScheme Coeffect
     deriving (Eq, Show)
 
 instance Pretty Assumption where

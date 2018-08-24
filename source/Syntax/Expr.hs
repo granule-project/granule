@@ -13,9 +13,10 @@ module Syntax.Expr
   NatModifier(..), Effect, Kind(..), DataConstr(..), Cardinality,
   Id(..), mkId,
   Operator,
-  arity, freeVars, subst, freshen, Freshener, freshenAST,
+  arity, freeVars, subst, freshen, Freshener, freshenAST, runFreshener,
   normalise,
   nullSpan, getSpan, getEnd, getStart, Pos, Span,
+  emptyTypeScheme,
   typeFoldM, TypeFold(..), resultType,
   mFunTy, mTyCon, mBox, mDiamond, mTyVar, mTyApp,
   mTyInt, mTyInfix,
@@ -480,6 +481,9 @@ instance Term Def where
 
 data TypeScheme = Forall Span [(Id, Kind)] Type -- [(Id, Kind)] are the binders
     deriving (Eq, Show, Generic)
+
+emptyTypeScheme :: Type -> TypeScheme
+emptyTypeScheme = Forall nullSpan []
 
 instance FirstParameter TypeScheme Span
 

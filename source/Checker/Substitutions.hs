@@ -44,9 +44,8 @@ instance Pretty Substitutors where
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
-  type SubstitutionContext t x
   substitute :: (?globals :: Globals)
-             => Substitution -> t -> SubstitutionContext t t
+             => Substitution -> t -> MaybeT Checker t
 
   unify :: (?globals :: Globals)
         => t -> t -> MaybeT Checker (Maybe Substitution)
@@ -54,7 +53,6 @@ class Substitutable t where
 -- Instances for the main representation of things in the types
 
 instance Substitutable Substitutors where
-  type SubstitutionContext Substitutors x = MaybeT Checker x
   substitute subst s =
     case s of
       SubstT t -> do
@@ -89,8 +87,21 @@ instance Substitutable Substitutors where
   unify (SubstE e) (SubstE e') = unify e e'
   unify _ _ = return Nothing
 
+instance Substitutable TypeScheme where
+  substitute subst tys = do
+    -- fresh binders
+    let Forall s binders ty = runFreshener tys
+    ty' <- substitute subst ty
+    return $ Forall s binders ty'
+
+  unify (Forall _ binders1 ty1) (Forall _ binders2 ty2) = do
+    subst <- unify ty1 ty2
+    case subst of
+      Nothing -> return Nothing
+      Just subst ->
+        return $ Just $ (subst `subtractCtxt` binders1) `subtractCtxt` binders2
+
 instance Substitutable Type where
-  type SubstitutionContext Type x = MaybeT Checker x
   substitute subst = typeFoldM (baseTypeFold
                               { tfTyVar = varSubst
                               , tfBox = box
@@ -151,8 +162,6 @@ instance Substitutable Type where
   unify _ _ = return $ Nothing
 
 instance Substitutable Coeffect where
-  type SubstitutionContext Coeffect x = MaybeT Checker x
-
   substitute subst (CPlus c1 c2) = do
       c1' <- substitute subst c1
       c2' <- substitute subst c2
@@ -300,7 +309,6 @@ instance Substitutable Coeffect where
 
 
 instance Substitutable Effect where
-  type SubstitutionContext Effect x = MaybeT Checker x
   -- {TODO: Make effects richer}
   substitute subst e = return e
   unify e e' =
@@ -308,7 +316,6 @@ instance Substitutable Effect where
                else return $ Nothing
 
 instance Substitutable Kind where
-  type SubstitutionContext Kind x = MaybeT Checker x
 
   substitute subst (KPromote t) = do
       t <- substitute subst t
@@ -386,8 +393,6 @@ Just ([((Id "y" "y"),Linear (TyInt 0))],[((Id "x" "x"),Linear (TyVar (Id "x" "x"
 -}
 
 instance Substitutable (Ctxt Assumption) where
-  type SubstitutionContext (Ctxt Assumption) x = MaybeT Checker x
-
   substitute subst ctxt = do
     (ctxt0, ctxt1) <- substCtxt subst ctxt
     return (ctxt0 ++ ctxt1)
