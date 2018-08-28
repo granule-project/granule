@@ -356,7 +356,7 @@ synthExpr :: (?globals :: Globals)
           -> Ctxt Assumption   -- ^ Local typing context
           -> Polarity       -- ^ Polarity of subgrading
           -> Expr           -- ^ Expression
-          -> MaybeT Checker (Type, Ctxt Assumption)
+          -> MaybeT Checker (TypeScheme, Ctxt Assumption)
 
 -- Literals
 synthExpr _ _ _ (Val _ (NumInt _))  = return (TyCon $ mkId "Int", [])
@@ -537,8 +537,8 @@ synthExpr defs gam pol (Binop s op e1 e2) = do
     selectFirstByType t1 t2 ((FunTy opt1 (FunTy opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- localChecking $ do
-         (eq1, _, _) <- equalTypes s t1 opt1
-         (eq2, _, _) <- equalTypes s t2 opt2
+         (eq1, _, _) <- equalTypes s t1 (emptyTypeScheme opt1)
+         (eq2, _, _) <- equalTypes s t2 (emptyTypeScheme opt2)
          return (eq1 && eq2)
       -- If successful then return this local computation
       case result of
@@ -556,14 +556,14 @@ synthExpr defs gam pol (Val s (Abs p (Just sig) e)) = do
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
      (tau, gam'')    <- synthExpr defs (binding ++ gam) pol e
-     return (FunTy sig tau, gam'' `subtractCtxt` binding)
+     return (extrudeTypeScheme (FunTy sig) tau, gam'' `subtractCtxt` binding)
   else refutablePattern s p
 
 synthExpr _ _ _ e =
   halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
 
 -- Check an optional type signature for equality against a type
-optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker Bool
+optionalSigEquality :: (?globals :: Globals) => Span -> Maybe TypeScheme -> TypeScheme -> MaybeT Checker Bool
 optionalSigEquality _ Nothing _ = return True
 optionalSigEquality s (Just t) t' = do
     (eq, _, _) <- equalTypes s t' t

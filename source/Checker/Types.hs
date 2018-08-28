@@ -17,24 +17,24 @@ import Syntax.Expr
 import Syntax.Pretty
 import Utils
 
-lEqualTypesWithPolarity :: (?globals :: Globals )
-  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+lEqualTypesWithPolarity :: (?globals :: Globals)
+  => Span -> SpecIndicator -> TypeScheme -> TypeScheme -> MaybeT Checker (Bool, TypeScheme, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False pol
 
-equalTypesWithPolarity :: (?globals :: Globals )
-  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+equalTypesWithPolarity :: (?globals :: Globals)
+  => Span -> SpecIndicator -> TypeScheme -> TypeScheme -> MaybeT Checker (Bool, TypeScheme, Substitution)
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq False pol
 
-lEqualTypes :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+lEqualTypes :: (?globals :: Globals)
+  => Span -> TypeScheme -> TypeScheme -> MaybeT Checker (Bool, TypeScheme, Substitution)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False SndIsSpec
 
-equalTypes :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+equalTypes :: (?globals :: Globals)
+  => Span -> TypeScheme -> TypeScheme -> MaybeT Checker (Bool, TypeScheme, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals )
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
+  => Span -> TypeScheme -> TypeScheme -> MaybeT Checker (Bool, TypeScheme, Substitution)
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True SndIsSpec
 
 {- | Check whether two types are equal, and at the same time
@@ -54,22 +54,23 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
   -- Starting spec indication
   -> SpecIndicator
   -- Left type (usually the inferred)
-  -> Type
+  -> TypeScheme
   -- Right type (usually the specified)
-  -> Type
+  -> TypeScheme
   -- Result is a effectful, producing:
   --    * a boolean of the equality
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier
-  -> MaybeT Checker (Bool, Type, Substitution)
-equalTypesRelatedCoeffectsAndUnify s rel allowUniversalSpecialisation spec t1 t2 = do
+  -> MaybeT Checker (Bool, TypeScheme, Substitution)
+equalTypesRelatedCoeffectsAndUnify
+  s rel allowUniversalSpecialisation spec ts1@(Forall _ bs1 t1) ts2@(Forall _ bs2 t2) = do
 
-   (eq, unif) <- equalTypesRelatedCoeffects s rel allowUniversalSpecialisation t1 t2 spec
+   (eq, unif) <- equalTypesRelatedCoeffects s rel allowUniversalSpecialisation t1 t2 bs1 bs2 spec
    if eq
      then do
         t2 <- substitute unif t2
-        return (eq, t2, unif)
-     else return (eq, t1, [])
+        return (eq, ts2, unif)
+     else return (eq, ts1, [])
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
@@ -86,53 +87,59 @@ equalTypesRelatedCoeffects :: (?globals :: Globals )
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -> Bool -- whether to allow universal specialisation
+  -- Left type (usually the inferred)
   -> Type
+  -- Right type (usually the specified)
   -> Type
+  -- Universal binders in scope of the left
+  -> [(Id, Kind)]
+  -- Universal binders in scope of the right
+  -> [(Id, Kind)]
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
   -> MaybeT Checker (Bool, Substitution)
-equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
+equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') bs1 bs2 sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1 t1' (flipIndicator sp)
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1 t1' bs1 bs2 (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
-  (eq2, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
+  (eq2, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' bs1 bs2 sp
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
 
-equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
+equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ _ _ =
   return (con == con', [])
 
 -- THE FOLLOWING TWO CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
 
 -- Over approximation by 'FileIO' "monad"
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
+equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') bs1 bs2 sp
    | internalName con == "FileIO" = do
-    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
+    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
     return (eq, unif)
 
 -- Under approximation by 'FileIO' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') bs1 bs2 sp
    | internalName con == "FileIO" = do
-    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
+    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
     return (eq, unif)
 
 -- Over approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
+equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') bs1 bs2 sp
        | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
-        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
+        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
         return (eq, unif)
 
 -- Under approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') bs1 bs2 sp
        | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
-        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
+        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
         return (eq, unif)
 
 
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
+equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') bs1 bs2 sp = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
   if ef == ef'
     then return (eq, unif)
     else
@@ -147,7 +154,7 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
           halt $ GradingError (Just s) $
             "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
 
-equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
+equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') bs1 bs2 sp = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c ++ " == " ++ pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
@@ -158,7 +165,7 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
     SndIsSpec -> addConstraint (rel s c c' kind)
     FstIsSpec -> addConstraint (rel s c' c kind)
 
-  equalTypesRelatedCoeffects s rel uS t t' sp
+  equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
   --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp
   --case subst of
   --  Just subst -> do
@@ -166,13 +173,13 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
 --      return (eq, substFinal)
   --  Nothing -> return (False, [])
 
-equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
+equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) bs1 bs2 _ | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
     Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ pretty n)
 
-equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
+equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) bs1 bs2 sp = do
   checkerState <- get
   debugM "variable equality" $ pretty n ++ " ~ " ++ pretty m ++ " where "
                             ++ pretty (lookup n (tyVarContext checkerState)) ++ " and "
@@ -242,7 +249,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
         Nothing ->
           return (False, [])
 
-equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
+equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t bs1 bs2 sp = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
           $ "span: " ++ show s
@@ -294,47 +301,51 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " ++ show (tyVarContext checkerState)))
 
-equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
-  equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
+equalTypesRelatedCoeffects s rel uS t (TyVar n) bs1 bs2 sp =
+  equalTypesRelatedCoeffects s rel uS (TyVar n) t bs1 bs2 (flipIndicator sp)
 
 -- Duality is idempotent (left)
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d') (TyApp (TyCon d) t)) t' sp
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d') (TyApp (TyCon d) t)) t' bs1 bs2 sp
   | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffects s rel uS t t' sp
+  equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
 
 -- Duality is idempotent (right)
-equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d') (TyApp (TyCon d) t')) sp
+equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d') (TyApp (TyCon d) t')) bs1 bs2 sp
   | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffects s rel uS t t' sp
+  equalTypesRelatedCoeffects s rel uS t t' bs1 bs2 sp
 
 -- Do duality check (left) [special case of TyApp rule]
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d) t) t' sp
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d) t) t' bs1 bs2 sp
   | internalName d == "Dual" = isDualSession s rel uS t t' sp
 
-equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d) t') sp
+equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d) t') bs1 bs2 sp
   | internalName d == "Dual" = isDualSession s rel uS t t' sp
 
 -- Equality on type application
-equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
-  (one, u1) <- equalTypesRelatedCoeffects s rel uS t1 t1' sp
+equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') bs1 bs2 sp = do
+  (one, u1) <- equalTypesRelatedCoeffects s rel uS t1 t1' bs1 bs2 sp
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
-  (two, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' sp
+  (two, u2) <- equalTypesRelatedCoeffects s rel uS t2 t2' bs1 bs2 sp
   unifiers <- combineSubstitutions s u1 u2
   return (one && two, unifiers)
 
 
-equalTypesRelatedCoeffects s rel uS t1 t2 t = do
+equalTypesRelatedCoeffects s rel uS t1 t2 bs1 bs2 t = do
   debugM "equalTypesRelatedCoeffects" $ "called on: " ++ show t1 ++ "\nand:\n" ++ show t2
-  equalOtherKindedTypesGeneric s t1 t2
+  equalOtherKindedTypesGeneric s t1 t2 bs1 bs2
 
 {- | Check whether two Nat-kinded types are equal -}
 equalOtherKindedTypesGeneric :: (?globals :: Globals )
     => Span
     -> Type
     -> Type
+    -- Universal binders in scope of the left
+    -> [(Id, Kind)]
+    -- Universal binders in scope of the right
+    -> [(Id, Kind)]
     -> MaybeT Checker (Bool, Substitution)
-equalOtherKindedTypesGeneric s t1 t2 = do
+equalOtherKindedTypesGeneric s t1 t2 bs1 bs2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
   case (k1, k2) of
@@ -366,12 +377,12 @@ sessionInequality :: (?globals :: Globals)
     => Span -> Type -> Type -> MaybeT Checker (Bool, Substitution)
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
-  (g, _, u) <- equalTypes s t t'
+  (g, _, u) <- equalTypes s (emptyTypeScheme t) (emptyTypeScheme t')
   return (g, u)
 
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Recv" && internalName c' == "Recv" = do
-  (g, _, u) <- equalTypes s t t'
+  (g, _, u) <- equalTypes s (emptyTypeScheme t) (emptyTypeScheme t')
   return (g, u)
 
 sessionInequality s (TyCon c) (TyCon c')
@@ -395,7 +406,7 @@ isDualSession :: (?globals :: Globals)
 isDualSession sp rel uS (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
-  (eq1, u1) <- equalTypesRelatedCoeffects sp rel uS t t' ind
+  (eq1, u1) <- equalTypesRelatedCoeffects sp rel uS t t' [] [] ind
   (eq2, u2) <- isDualSession sp rel uS s s' ind
   u <- combineSubstitutions sp u1 u2
   return (eq1 && eq2, u)
@@ -405,10 +416,10 @@ isDualSession _ _ _ (TyCon c) (TyCon c') _
   return (True, [])
 
 isDualSession sp rel uS t (TyVar v) ind =
-  equalTypesRelatedCoeffects sp rel uS (TyApp (TyCon $ mkId "Dual") t) (TyVar v) ind
+  equalTypesRelatedCoeffects sp rel uS (TyApp (TyCon $ mkId "Dual") t) (TyVar v) [] [] ind
 
 isDualSession sp rel uS (TyVar v) t ind =
-  equalTypesRelatedCoeffects sp rel uS (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind
+  equalTypesRelatedCoeffects sp rel uS (TyVar v) (TyApp (TyCon $ mkId "Dual") t) [] [] ind
 
 isDualSession sp _ _ t1 t2 _ =
   halt $ GenericError (Just sp)
@@ -474,3 +485,10 @@ joinTypes s t1 t2 = do
   halt $ GenericError (Just s)
     $ "Type '" ++ pretty t1 ++ "' and '"
                ++ pretty t2 ++ "' have no upper bound"
+
+-- Take a type scheme an a transformer on types (e.g. a (partially
+--  applied) type constructor) and apply the transformer in the scope
+-- of the type schemes bindings
+extrudeTypeScheme :: (Type -> Type) -> TypeScheme -> TypeScheme
+extrudeTypeScheme tr (Forall s bindings t) =
+  Forall s bindings (tr t)

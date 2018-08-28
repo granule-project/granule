@@ -287,7 +287,7 @@ refutablePattern sp p =
 halt :: (?globals :: Globals) => TypeError -> MaybeT Checker a
 halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 
-typeClashForVariable :: (?globals :: Globals) => Span -> Id -> Type -> Type -> MaybeT Checker a
+typeClashForVariable :: (?globals :: Globals) => Span -> Id -> TypeScheme -> TypeScheme -> MaybeT Checker a
 typeClashForVariable s var t1 t2 =
     halt $ GenericError (Just s)
              $ "Variable " ++ pretty var ++ " is being used at two conflicting types "

@@ -37,10 +37,10 @@ ctxtFromTypedPattern _ t (PWild _) = do
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
     wild <- freshVar "wild"
-    return ([(Id "_" wild, Linear t)], [], [])
+    return ([(Id "_" wild, Linear $ emptyTypeScheme t)], [], [])
 
 ctxtFromTypedPattern _ t (PVar _ v) =
-    return ([(v, Linear t)], [], [])
+    return ([(v, Linear $ emptyTypeScheme t)], [], [])
 
 -- Pattern matching on constarints
 ctxtFromTypedPattern _ t@(TyCon c) (PInt _ _)
@@ -74,7 +74,8 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
     Just tySch -> do
       (dataConstructorTypeFresh, freshTyVars) <- freshPolymorphicInstance BoundQ tySch
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh ++ "\n" ++ pretty ty
-      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
+      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (emptyTypeScheme $ resultType dataConstructorTypeFresh)
+                                                                        (emptyTypeScheme ty)
       case areEq of
         (True, _, unifiers) -> do
           dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
