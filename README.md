@@ -14,6 +14,33 @@ A functional programming language with a linear type system and fine-grained eff
 
 A brief introduction to the Granule programming language can be found in [this extended abstract](http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf) presented at TLLA'17. The type system is partly based on the one in ["Combining effects and coeffects via grading" (Gaboardi et al. 2016)](https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf).
 
+## Example
+
+Linearity means that the following is ill-typed:
+
+    dupBroken : forall (a : Type) . a -> (a, a)
+    dupBroken x = (x, x)
+    
+However, a graded modality can be employed to explain exactly how many times the
+parameter here can be used:
+
+    dup : forall (a : Type) . a |2| -> (a, a)
+    dup |x| = (x, x)
+
+Combining indexed types and bounded reuse in Granule leads to an interesting type
+for the standard `map` function on sized lists:
+
+    --- Map function
+    map : forall (a : Type, b : Type, n : Nat=) . (a -> b) |n| -> Vec n a -> Vec n b
+    map |f| ys =
+      case ys of
+        Nil -> Nil;
+        (Cons x xs) -> Cons (f x) (map |f| xs)
+
+This type explains that the parameter function `f` is used exactly `n` times, where `n` is the size
+of the incoming list (vector). Linearity ensures that the entire list is consumed exactly
+once to the produce the result.
+
 ## Installation
 
 The Granule interpreter requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). An easy way to install Z3 on mac is via Homebrew, e.g.,
