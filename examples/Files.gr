@@ -1,23 +1,5 @@
 import File
 
--- Haskell vs Granule file manipulation
-
--- openFile :: String -> IOMode -> IO Handle
-openFile'    : String -> IOMode -> FileIO Handle
-openFile' = openFile
-
--- hGetChar :: Handle -> IO Char
-hGetChar'    : Handle -> FileIO (Handle, Char)
-hGetChar' = hGetChar
-
--- hPutChar :: Handle -> Char  -> IO ()
-hPutChar'    : Handle -> Char  -> FileIO Handle
-hPutChar' = hPutChar
-
--- hClose :: Handle -> IO ()
-hClose'    : Handle -> FileIO ()
-hClose' = hClose
-
 main : FileIO String
 main =
     let h       <- openFile "LICENSE" ReadMode;
