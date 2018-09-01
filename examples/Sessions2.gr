@@ -29,3 +29,10 @@ intClient c =
     (b, d) <- recv d;
     () <- close d
   in pure b
+
+{-
+main : Session Bool
+main =
+  let c <- fork intEqServer
+  in intClient c
+-}

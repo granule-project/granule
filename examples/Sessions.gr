@@ -25,6 +25,7 @@ example =
 -- channel
 sendVec : forall (n : Nat=, a : Type) .
    (Chan (Send a End)) |n| -> Vec n a -> Session ()
+
 sendVec |c| xs =
   case xs of
     Nil -> pure ();
