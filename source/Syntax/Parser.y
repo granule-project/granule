@@ -141,7 +141,10 @@ PAtoms :: { [Pattern] }
 
 Pat :: { Pattern }
   : PAtom                     { $1 }
-  | '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
+
+PatNested :: { Pattern }
+PatNested
+ : '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
 
 PAtom :: { Pattern }
   : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
@@ -149,7 +152,7 @@ PAtom :: { Pattern }
   | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) x }
   | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) $ read x }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
-  | '(' Pat ')'               { $2 }
+  | PatNested                 { $1 }
   | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
   | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) (mkId ",") [$2, $4] }
 
