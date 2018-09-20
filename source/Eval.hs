@@ -24,6 +24,7 @@ evalBinOp "-" (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
 evalBinOp "+" (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
 evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
 evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
+evalBinOp "div" (NumInt n1) (NumInt n2) = NumInt (n1 `div` n2)
 evalBinOp "==" (NumInt n) (NumInt m) = Constr (mkId . show $ (n == m)) []
 evalBinOp "<=" (NumInt n) (NumInt m) = Constr (mkId . show $ (n <= m)) []
 evalBinOp "<" (NumInt n) (NumInt m) = Constr (mkId . show $ (n < m)) []
