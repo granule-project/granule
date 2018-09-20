@@ -1,5 +1,6 @@
 import List
 
+--
 data Patient where
   Patient :
      Int    |Private| -> -- Patient id
@@ -18,3 +19,11 @@ meanAge' xs |total| |n| =
   case xs of
     (Next (Patient |_| |_| |age|) xs) -> meanAge' xs |(age + total)| |(n+1)|;
     Empty -> |(div total n)|
+
+-- Rejected
+-- names : List Patient -> String |Public|
+-- names xs =
+-- case xs of
+--    (Next (Patient |_| |name| |_|) xs) ->
+--       let |allNames| = names xs in |(name `stringAppend` allNames)|;
+--    Empty -> |("")|
