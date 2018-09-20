@@ -24,7 +24,6 @@ evalBinOp "-" (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
 evalBinOp "+" (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
 evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
 evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
-evalBinOp "div" (NumInt n1) (NumInt n2) = NumInt (n1 `div` n2)
 evalBinOp "==" (NumInt n) (NumInt m) = Constr (mkId . show $ (n == m)) []
 evalBinOp "<=" (NumInt n) (NumInt m) = Constr (mkId . show $ (n <= m)) []
 evalBinOp "<" (NumInt n) (NumInt m) = Constr (mkId . show $ (n < m)) []
@@ -175,7 +174,10 @@ pmatch ctxt (_:ps) val = pmatch ctxt ps val
 builtIns :: Ctxt Value
 builtIns =
   [
-    (mkId "pure",       Primitive $ \v -> return $ Pure (Val nullSpan v))
+    (mkId "div", Primitive $ \(NumInt n1)
+          -> return $ Primitive $ \(NumInt n2) ->
+              return $ NumInt (n1 `div` n2))
+  , (mkId "pure",       Primitive $ \v -> return $ Pure (Val nullSpan v))
   , (mkId "intToFloat", Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
   , (mkId "showInt",    Primitive $ \n -> case n of
                               NumInt n -> return . StringLiteral . pack . show $ n
