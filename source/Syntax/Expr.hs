@@ -73,10 +73,6 @@ data Value = Abs Pattern (Maybe Type) Expr
 valExpr :: Value -> Expr
 valExpr = Val nullSpan
 
-deriving instance ( Eq (Value -> IO Value)
-                  , Eq (Ctxt Value -> Value -> IO Value))
-                  => Eq Value
-
 deriving instance Show Value
 
 instance Show (CC.Chan Value) where
@@ -96,8 +92,6 @@ data Expr = App Span Expr Expr
           | Case Span Expr [(Pattern, Expr)]
           deriving (Generic)
 
-deriving instance (Eq (Value -> IO Value)
-                 , Eq (Ctxt Value -> Value -> IO Value)) => Eq Expr
 deriving instance Show Expr
 
 instance FirstParameter Expr Span
@@ -427,9 +421,6 @@ data AST = AST [DataDecl] [Def] deriving Show
 
 data Def = Def Span Id Expr [Pattern] TypeScheme
   deriving (Generic, Show)
-
-deriving instance (Eq (Value -> IO Value)
-                 , Eq (Ctxt Value -> Value -> IO Value)) => Eq Def
 
 instance FirstParameter Def Span
 
