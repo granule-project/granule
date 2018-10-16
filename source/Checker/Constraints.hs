@@ -71,7 +71,7 @@ compileToSBV predicate tyVarContext kVarContext =
 
     -- TODO: generalise this to not just Nat= indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
-      if v `elem` (vars p ++ vars p')
+      if v `elem` (vars p <> vars p')
         then forAll [internalName v] (\vSolver -> do
              impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
              return $ (vSolver .>= literal 0) ==> impl)
@@ -192,7 +192,7 @@ freshCVar quant name (TyVar v) q | "infinity" == internalName v
   return (solverVar .== literal 1, SNat Ordered solverVar)
 
 freshCVar _ _ k _ =
-  error $ "Trying to make a fresh solver variable for a coeffect of kind: " ++ show k ++ " but I don't know how."
+  error $ "Trying to make a fresh solver variable for a coeffect of kind: " <> show k <> " but I don't know how."
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals) =>
@@ -246,7 +246,7 @@ compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
 compileCoeffect (CVar v) _ vars =
    case lookup v vars of
     Just cvar -> cvar
-    _ -> error $ "Looking up a variable '" ++ pretty v ++ "' in " ++ show vars
+    _ -> error $ "Looking up a variable '" <> pretty v <> "' in " <> show vars
 
 compileCoeffect c@(CMeet n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
@@ -258,7 +258,7 @@ compileCoeffect c@(CMeet n m) k vars =
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smin` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smin` n2)
-    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
+    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CJoin n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
@@ -270,7 +270,7 @@ compileCoeffect c@(CJoin n m) k vars =
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smax` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smax` n2)
-    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
+    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CPlus n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
@@ -282,7 +282,7 @@ compileCoeffect c@(CPlus n m) k vars =
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
-    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
+    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
@@ -294,7 +294,7 @@ compileCoeffect c@(CTimes n m) k vars =
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
-    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
+    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
@@ -303,7 +303,7 @@ compileCoeffect c@(CExpon n m) k vars =
         TyVar v | internalName v == "infinity"  -> SNat Ordered 1
         TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
         _ | o1 == o2 -> SNat o1 (n1 .^ n2)
-    _ -> error $ "Failed to compile: " ++ pretty c ++ " of kind " ++ pretty k
+    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect (CZero (TyCon k')) (TyCon k) _ =
   case internalName k' of
@@ -334,11 +334,11 @@ compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v =
     _       -> SNat Ordered 1
 
 compileCoeffect c (TyVar _) _ =
-   error $ "Trying to compile a polymorphically kinded " ++ pretty c
+   error $ "Trying to compile a polymorphically kinded " <> pretty c
 
 compileCoeffect coeff ckind _ =
-   error $ "Can't compile a coeffect: " ++ pretty coeff ++ " {" ++ (show coeff) ++ "}"
-        ++ " of kind " ++ pretty ckind
+   error $ "Can't compile a coeffect: " <> pretty coeff <> " {" <> (show coeff) <> "}"
+        <> " of kind " <> pretty ckind
 
 -- | Generate equality constraints for two symbolic coeffects
 eqConstraint :: SCoeffect -> SCoeffect -> SBool
@@ -346,7 +346,7 @@ eqConstraint (SNat _ n) (SNat _ m) = n .== m
 eqConstraint (SFloat n) (SFloat m) = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint x y =
-   error $ "Kind error trying to generate equality " ++ show x ++ " = " ++ show y
+   error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
 approximatedByOrEqualConstraint :: SCoeffect -> SCoeffect -> SBool
@@ -357,7 +357,7 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
 approximatedByOrEqualConstraint x y =
-   error $ "Kind error trying to generate " ++ show x ++ " <= " ++ show y
+   error $ "Kind error trying to generate " <> show x <> " <= " <> show y
 
 
 trivialUnsatisfiableConstraints :: Pred -> [Constraint]

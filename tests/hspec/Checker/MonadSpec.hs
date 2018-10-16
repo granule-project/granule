@@ -38,7 +38,7 @@ localCheckingSpec = do
       localChecking $ do
         state <- get
         put (transformState state)
-        return $ "x" ++ show (uniqueVarIdCounter state)
+        return $ "x" <> show (uniqueVarIdCounter state)
     transformState st =
       st { uniqueVarIdCounter  = 1 + uniqueVarIdCounter st
          , tyVarContext = [(mkId "inner", (KType, ForallQ))]

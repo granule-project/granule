@@ -30,7 +30,7 @@ checkKind s k@(TyCon name) = do
     Just (KCoeffect,_) -> return $ TyCon name
     Just _             -> illKindedNEq s KCoeffect (KConstr name)
     _                  ->
-      halt $ UnboundVariableError (Just s) $ "Type `" ++ pretty name ++ "`"
+      halt $ UnboundVariableError (Just s) $ "Type `" <> pretty name <> "`"
 checkKind _ k = return k
 
 -- | Multiply an context by a coeffect

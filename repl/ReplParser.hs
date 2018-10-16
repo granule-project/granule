@@ -50,7 +50,7 @@ replTermCmdParser short long c p = do
     eof
     if (cmd == long || cmd == short)
     then return $ c t
-    else fail $ "Command \":"++cmd++"\" is unrecognized."
+    else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
 replIntCmdParser short long c = do
     symbol ":"
@@ -58,7 +58,7 @@ replIntCmdParser short long c = do
     eof
     if (cmd == long || cmd == short)
     then return c
-    else fail $ "Command \":"++cmd++"\" is unrecognized."
+    else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
 replTyCmdParser short long c = do
     symbol ":"
@@ -68,7 +68,7 @@ replTyCmdParser short long c = do
     eof
     if (cmd == long || cmd == short)
     then return $ c term
-    else fail $ "Command \":"++cmd++"\" is unrecognized."
+    else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
 replTySchCmdParser short long c = do
     symbol ":"
@@ -78,7 +78,7 @@ replTySchCmdParser short long c = do
     eof
     if (cmd == long || cmd == short)
     then return $ c term
-    else fail $ "Command \":"++cmd++"\" is unrecognized."
+    else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
 replFileCmdParser short long c = do
     symbol ":"
@@ -91,7 +91,7 @@ replFileCmdParser short long c = do
         let tpath = T.words . T.pack $ pathUntrimned
         let fpath = textToFilePath tpath
         return $ c fpath
-    else fail $ "Command \":"++cmd++"\" is unrecognized."
+    else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
 evalParser = do
   ev <- many anyChar

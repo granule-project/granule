@@ -53,7 +53,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
 replEval :: (?globals :: Globals) =>Int -> AST -> IO (Maybe Value)
 replEval val (AST dataDecls defs) = do
     bindings <- evalDefs builtIns defs
-    case lookup (mkId (" repl"++(show val))) bindings of
+    case lookup (mkId (" repl"<>(show val))) bindings of
       Nothing -> return Nothing
       Just (Pure e)    -> fmap Just (evalIn bindings e)
       Just (Promote e) -> fmap Just (evalIn bindings e)
@@ -79,7 +79,7 @@ rFindHelper fn [] = return []
 rFindHelper fn (r:rfp) = do
   y <- rFind fn r
   x <-  rFindHelper fn rfp
-  return (y ++ x)
+  return (y <> x)
 
 rFindMain :: [String] -> [FilePath] -> IO [[FilePath]]
 rFindMain fn rfp = forM fn $ (\x -> rFindHelper x rfp )
@@ -97,8 +97,8 @@ readToQueue pth = do
                     let (AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
-                    put (fvg,rp,(dd++adt),f,m)
-                    liftIO $ printInfo $ green $ pth++", interpreted"
+                    put (fvg,rp,(dd<>adt),f,m)
+                    liftIO $ printInfo $ green $ pth<>", interpreted"
                 Failed -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
 
@@ -117,7 +117,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def, [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)++" : "++(pretty ty)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -135,15 +135,15 @@ buildAST t m = let v = M.lookup t m in
                    Nothing -> []
                    Just (def,lid) -> case lid of
                                       []  ->  [def]
-                                      ids -> (buildDef ids ++ [def])
+                                      ids -> (buildDef ids <> [def])
                                                where
                                                  buildDef :: [String] -> [Def]
                                                  buildDef [] =  []
-                                                 buildDef (x:xs) =  buildDef xs++(buildAST x m)
+                                                 buildDef (x:xs) =  buildDef xs<>(buildAST x m)
 
 startBuildADT :: [DataDecl] -> [DataConstr]
 startBuildADT [] = []
-startBuildADT ((DataDecl _ _ _ _ dc):dataDec) = dc ++ (startBuildADT dataDec)
+startBuildADT ((DataDecl _ _ _ _ dc):dataDec) = dc <> (startBuildADT dataDec)
 
 makeMapBuildADT :: [DataConstr] -> M.Map String DataConstr
 makeMapBuildADT adc = M.fromList $ tempADT adc
@@ -163,11 +163,11 @@ printType :: (?globals::Globals) => String -> M.Map String (Def, [String]) -> St
 printType trm m = let v = M.lookup trm m in
                     case v of
                       Nothing ->""
-                      Just (def@(Def _ id _ _ ty),lid) -> (pretty id)++" : "++(pretty ty)
+                      Just (def@(Def _ id _ _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
 
 buildForEval :: [Id] -> M.Map String (Def, [String]) -> [Def]
 buildForEval [] _ = []
-buildForEval (x:xs) m = buildAST (sourceName x) m ++ buildForEval xs m
+buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
 
 synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption))
 synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr empty empty Positive exp
@@ -177,7 +177,7 @@ synTypeBuilder :: (?globals::Globals) => Expr -> [Def] -> [DataDecl] -> REPLStat
 synTypeBuilder exp ast adt = do
   let ddts = buildCtxtTSDD adt
   (_,cs) <- liftIO $ Mo.runChecker Mo.initState $ buildCheckerState adt
-  ty <- liftIO $ synType exp ((buildCtxtTS ast) ++ ddts) cs
+  ty <- liftIO $ synType exp ((buildCtxtTS ast) <> ddts) cs
   --liftIO $ print $ show ty
   case ty of
     Just (t,a) -> return t
@@ -196,7 +196,7 @@ buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
 
 buildCtxtTSDD :: (?globals::Globals) => [DataDecl] -> Ctxt TypeScheme
 buildCtxtTSDD [] = []
-buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) = makeCtxt dc ++ buildCtxtTSDD dd
+buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) = makeCtxt dc <> buildCtxtTSDD dd
                                               where
                                                 makeCtxt :: [DataConstr] -> Ctxt TypeScheme
                                                 makeCtxt [] = []
@@ -212,13 +212,13 @@ buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
 buildDef ::Int -> TypeScheme -> Expr -> Def
-buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"++(show rfv))) ex [] ts
+buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv))) ex [] ts
 
 
 getConfigFile :: IO String
 getConfigFile = do
   hd <- getHomeDirectory           -- .granule.conf
-  let confile = hd ++ (pathSeparator:".granule.conf")
+  let confile = hd <> (pathSeparator:".granule.conf")
   dfe <- doesFileExist confile
   if dfe
     then return confile
@@ -298,11 +298,11 @@ handleCMD s =
       let lfp = makeUnique $ (concat tester)
       case lfp of
         [] -> do
-          put (fvg,rp,adt,(f++ptr),m)
+          put (fvg,rp,adt,(f<>ptr),m)
           ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
           return ()
         _ -> do
-          put (fvg,rp,adt,(f++lfp),m)
+          put (fvg,rp,adt,(f<>lfp),m)
           ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
           return ()
 
@@ -352,10 +352,10 @@ handleCMD s =
                         typer <- synTypeBuilder exp ast adt
                         let ndef = buildDef fvg (buildTypeScheme typer) exp
                         put ((fvg+1),rp,adt,fp,m)
-                        checked <- liftIO' $ check (AST adt (ast++(ndef:[])))
+                        checked <- liftIO' $ check (AST adt (ast<>(ndef:[])))
                         case checked of
                             Ok -> do
-                                result <- liftIO' $ try $ replEval fvg (AST adt (ast++(ndef:[])))
+                                result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "if here fix"

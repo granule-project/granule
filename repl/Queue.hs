@@ -13,7 +13,7 @@ module Queue where
 data Queue a = Queue [a] [a]
 
 toListQ :: Queue a -> [a]
-toListQ (Queue f r) = f ++ (reverse r)
+toListQ (Queue f r) = f <> (reverse r)
 
 fromList :: [a] -> Queue a
 fromList [] = emptyQ

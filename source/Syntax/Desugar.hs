@@ -31,7 +31,7 @@ desugar (Def s var expr pats tys@(Forall _ _ ty)) =
       return $ Val nullSpan $ Abs p (Just t1) e'
     -- Error cases
     typeDirectedDesugar (_ : _) t e =
-      error $ "(" ++ show sl ++ "," ++ show sc
-           ++ "): Definition of " ++ sourceName var ++ " expects at least " ++ show (length pats)
-           ++ " arguments, but signature specifies: " ++ show (arity t)
+      error $ "(" <> show sl <> "," <> show sc
+           <> "): Definition of " <> sourceName var <> " expects at least " <> show (length pats)
+           <> " arguments, but signature specifies: " <> show (arity t)
       where ((sl, sc), _) = getSpan e

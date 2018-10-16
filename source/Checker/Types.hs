@@ -145,12 +145,12 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
         then return (eq, unif)
         else
           halt $ GradingError (Just s) $
-            "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
+            "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
 
 equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   -- Debugging messages
-  debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c ++ " == " ++ pretty c'
-  debugM "equalTypesRelatedCoeffects (show)" $ "[ " ++ show c ++ " , " ++ show c' ++ "]"
+  debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c <> " == " <> pretty c'
+  debugM "equalTypesRelatedCoeffects (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectTypes s c c'
   -- subst <- unify c c'
@@ -170,13 +170,13 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
-    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " ++ pretty n)
+    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " <> pretty n)
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   checkerState <- get
-  debugM "variable equality" $ pretty n ++ " ~ " ++ pretty m ++ " where "
-                            ++ pretty (lookup n (tyVarContext checkerState)) ++ " and "
-                            ++ pretty (lookup m (tyVarContext checkerState))
+  debugM "variable equality" $ pretty n <> " ~ " <> pretty m <> " where "
+                            <> pretty (lookup n (tyVarContext checkerState)) <> " and "
+                            <> pretty (lookup m (tyVarContext checkerState))
 
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
@@ -229,7 +229,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
     --(Just (k1, _), Just (k2, _)) ->
     --  tyVarConstraint k1 k2 n m
 
-    (t1, t2) -> error $ pretty s ++ "-" ++ show sp ++ "\n" ++ pretty n ++ " : " ++ show t1 ++ "\n" ++ pretty m ++ " : " ++ show t2
+    (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n" <> pretty n <> " : " <> show t1 <> "\n" <> pretty m <> " : " <> show t2
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
@@ -245,10 +245,10 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
 equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
-          $ "span: " ++ show s
-          ++ "\nallowUniversalSpecialisation: " ++ show allowUniversalSpecialisation
-          ++ "\nTyVar: " ++ show n ++ " with " ++ show (lookup n (tyVarContext checkerState))
-          ++ "\ntype: " ++ show t ++ "\nspec indicator: " ++ show sp
+          $ "span: " <> show s
+          <> "\nallowUniversalSpecialisation: " <> show allowUniversalSpecialisation
+          <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
+          <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | q == InstanceQ || q == BoundQ -> do
@@ -285,14 +285,14 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
             else
             halt $ GenericError (Just s)
             $ case sp of
-             FstIsSpec -> "Trying to match a polymorphic type '" ++ pretty n
-                       ++ "' with monomorphic " ++ pretty t
-             SndIsSpec -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
-             PatternCtxt -> pretty t ++ " is not equal to " ++ pretty (TyVar n)
+             FstIsSpec -> "Trying to match a polymorphic type '" <> pretty n
+                       <> "' with monomorphic " <> pretty t
+             SndIsSpec -> pretty t <> " is not equal to " <> pretty (TyVar n)
+             PatternCtxt -> pretty t <> " is not equal to " <> pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " ++ show (tyVarContext checkerState)))
+    Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " <> show (tyVarContext checkerState)))
 
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
@@ -325,7 +325,7 @@ equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
 
 
 equalTypesRelatedCoeffects s rel uS t1 t2 t = do
-  debugM "equalTypesRelatedCoeffects" $ "called on: " ++ show t1 ++ "\nand:\n" ++ show t2
+  debugM "equalTypesRelatedCoeffects" $ "called on: " <> show t1 <> "\nand:\n" <> show t2
   equalOtherKindedTypesGeneric s t1 t2
 
 {- | Check whether two Nat-kinded types are equal -}
@@ -347,7 +347,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
            else addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
         return (True, [])
     (KType, KType) ->
-       halt $ GenericError (Just s) $ pretty t1 ++ " is not equal to " ++ pretty t2
+       halt $ GenericError (Just s) $ pretty t1 <> " is not equal to " <> pretty t2
 
     (KConstr n, KConstr n') | internalName n == "Protocol" && internalName n' == "Protocol" ->
          sessionInequality s t1 t2
@@ -356,9 +356,9 @@ equalOtherKindedTypesGeneric s t1 t2 = do
     --   return (k1 == k
     _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
-                 ++ pretty k1 ++ " and " ++ pretty k2
-                 ++ "\t\n from equality "
-                 ++ "'" ++ pretty t2 ++ "' and '" ++ pretty t1 ++ "' equal."
+                 <> pretty k1 <> " and " <> pretty k2
+                 <> "\t\n from equality "
+                 <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
@@ -380,7 +380,7 @@ sessionInequality s (TyCon c) (TyCon c')
 
 sessionInequality s t1 t2 =
   halt $ GenericError (Just s)
-       $ "Session type '" ++ pretty t1 ++ "' is not equal to '" ++ pretty t2 ++ "'"
+       $ "Session type '" <> pretty t1 <> "' is not equal to '" <> pretty t2 <> "'"
 
 isDualSession :: (?globals :: Globals)
     => Span
@@ -412,7 +412,7 @@ isDualSession sp rel uS (TyVar v) t ind =
 
 isDualSession sp _ _ t1 t2 _ =
   halt $ GenericError (Just sp)
-       $ "Session type '" ++ pretty t1 ++ "' is not dual to '" ++ pretty t2 ++ "'"
+       $ "Session type '" <> pretty t1 <> "' is not dual to '" <> pretty t2 <> "'"
 
 
 -- Essentially equality on types but join on any coeffects
@@ -432,7 +432,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
       if ef' `isPrefixOf` ef
       then return (Diamond ef tj)
       else halt $ GradingError (Just s) $
-        "Effect mismatch: " ++ pretty ef ++ " not equal to " ++ pretty ef'
+        "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
 
 joinTypes s (Box c t) (Box c' t') = do
   kind <- mguCoeffectTypes s c c'
@@ -472,5 +472,5 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
 
 joinTypes s t1 t2 = do
   halt $ GenericError (Just s)
-    $ "Type '" ++ pretty t1 ++ "' and '"
-               ++ pretty t2 ++ "' have no upper bound"
+    $ "Type '" <> pretty t1 <> "' and '"
+               <> pretty t2 <> "' have no upper bound"

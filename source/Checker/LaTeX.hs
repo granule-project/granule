@@ -1,7 +1,6 @@
 module Checker.LaTeX where
 
 import Data.List (intercalate)
-import Data.Monoid
 
 data Derivation =
   Node String [Derivation] | Leaf String

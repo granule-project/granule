@@ -9,7 +9,7 @@ data Id = Id { sourceName :: String, internalName :: String }
   deriving (Eq, Ord)
 
 instance Show Id where
-  show (Id s i) = "(Id " ++ show s ++ " " ++ show i ++ ")"
+  show (Id s i) = "(Id " <> show s <> " " <> show i <> ")"
 
 mkId :: String -> Id
 mkId x = Id x x

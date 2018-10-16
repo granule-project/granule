@@ -34,8 +34,8 @@ evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n <= m)) []
 evalBinOp "<" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n < m)) []
 evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n >= m)) []
 evalBinOp ">" (NumFloat n) (NumFloat m) = Constr (mkId . show $ (n > m)) []
-evalBinOp op v1 v2 = error $ "Unknown operator " ++ op
-                             ++ " on " ++ show v1 ++ " and " ++ show v2
+evalBinOp op v1 v2 = error $ "Unknown operator " <> op
+                             <> " on " <> show v1 <> " and " <> show v2
 
 -- Call-by-value big step semantics
 evalIn :: Ctxt Value -> Expr -> IO Value
@@ -68,7 +68,7 @@ evalIn ctxt (App _ e1 e2) = do
 
       Constr c vs -> do
         v2 <- evalIn ctxt e2
-        return $ Constr c (vs ++ [v2])
+        return $ Constr c (vs <> [v2])
 
       _ -> error $ show v1
       -- _ -> error "Cannot apply value"
@@ -87,7 +87,7 @@ evalIn ctxt (LetDiamond _ p _ e1 e2) = do
          case p of
            Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
        other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
-                      ++ prettyDebug other
+                      <> prettyDebug other
 
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
@@ -101,7 +101,7 @@ evalIn ctxt (Val _ (Var x)) =
     case lookup x ctxt of
       Just val@(PrimitiveClosure f) -> return $ Primitive (f ctxt)
       Just val -> return val
-      Nothing  -> fail $ "Variable '" ++ sourceName x ++ "' is undefined in context."
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalIn ctxt (Val s (Pure e)) = do
   v <- evalIn ctxt e
@@ -115,7 +115,7 @@ evalIn ctxt (Case _ guardExpr cases) = do
       Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
       Nothing             ->
         error $ "Incomplete pattern match:\n  cases: "
-             ++ prettyUser cases ++ "\n  expr: " ++ prettyUser guardExpr
+             <> prettyUser cases <> "\n  expr: " <> prettyUser guardExpr
 
 applyBindings :: Ctxt Expr -> Expr -> Expr
 applyBindings [] e = e
@@ -223,20 +223,20 @@ builtIns =
                         (valExpr e)
                         (valExpr $ Promote $ valExpr $ Chan c)) >> return ()
       return $ Pure $ valExpr $ Promote $ valExpr $ Chan c
-    forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " ++ prettyDebug e
+    forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     recv :: Value -> IO Value
     recv (Chan c) = do
       x <- CC.readChan c
       return $ Pure $ valExpr $ Constr (mkId ",") [x, Chan c]
-    recv e = error $ "Bug in Granule. Trying to recevie from: " ++ prettyDebug e
+    recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
 
     send :: Value -> IO Value
     send (Chan c) = return $ Primitive
       (\v -> do
          CC.writeChan c v
          return $ Pure $ valExpr $ Chan c)
-    send e = error $ "Bug in Granule. Trying to send from: " ++ prettyDebug e
+    send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
     close :: Value -> IO Value
     close (Chan c) = return $ Pure $ valExpr $ Constr (mkId "()") []

@@ -172,7 +172,7 @@ data IdSyntacticCategory = Value | Type
 freshVar :: IdSyntacticCategory -> Id -> Freshener Id
 freshVar cat var = do
     st <- get
-    let var' = sourceName var ++ "_" ++ show (counter st)
+    let var' = sourceName var <> "_" <> show (counter st)
     case cat of
       Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
       Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
@@ -198,14 +198,14 @@ removeFreshenings (x:xs) = do
 
 instance Term Type where
   freeVars = runIdentity . typeFoldM TypeFold
-    { tfFunTy   = \x y -> return $ x ++ y
+    { tfFunTy   = \x y -> return $ x <> y
     , tfTyCon   = \_ -> return [] -- or: const (return [])
-    , tfBox     = \c t -> return $ freeVars c ++ t
+    , tfBox     = \c t -> return $ freeVars c <> t
     , tfDiamond = \_ x -> return x
     , tfTyVar   = \v -> return [v] -- or: return . return
-    , tfTyApp   = \x y -> return $ x ++ y
+    , tfTyApp   = \x y -> return $ x <> y
     , tfTyInt   = \_ -> return []
-    , tfTyInfix = \_ y z -> return $ y ++ z
+    , tfTyInfix = \_ y z -> return $ y <> z
     }
 
 instance Freshenable Type where
@@ -234,11 +234,11 @@ instance Freshenable Type where
 
 instance Term Coeffect where
     freeVars (CVar v) = [v]
-    freeVars (CPlus c1 c2) = freeVars c1 ++ freeVars c2
-    freeVars (CTimes c1 c2) = freeVars c1 ++ freeVars c2
-    freeVars (CExpon c1 c2) = freeVars c1 ++ freeVars c2
-    freeVars (CMeet c1 c2) = freeVars c1 ++ freeVars c2
-    freeVars (CJoin c1 c2) = freeVars c1 ++ freeVars c2
+    freeVars (CPlus c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CTimes c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CExpon c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CMeet c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CJoin c1 c2) = freeVars c1 <> freeVars c2
     freeVars CNat{}  = []
     freeVars CNatOmega{} = []
     freeVars CFloat{} = []
@@ -365,11 +365,11 @@ instance Freshenable Value where
     freshen v@StringLiteral{} = return v
 
 instance Term Expr where
-    freeVars (App _ e1 e2)            = freeVars e1 ++ freeVars e2
-    freeVars (Binop _ _ e1 e2)        = freeVars e1 ++ freeVars e2
-    freeVars (LetDiamond _ p _ e1 e2) = freeVars e1 ++ (freeVars e2 \\ boundVars p)
+    freeVars (App _ e1 e2)            = freeVars e1 <> freeVars e2
+    freeVars (Binop _ _ e1 e2)        = freeVars e1 <> freeVars e2
+    freeVars (LetDiamond _ p _ e1 e2) = freeVars e1 <> (freeVars e2 \\ boundVars p)
     freeVars (Val _ e)                = freeVars e
-    freeVars (Case _ e cases)         = freeVars e ++ (concatMap (freeVars . snd) cases
+    freeVars (Case _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
 
 instance Substitutable Expr where

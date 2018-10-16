@@ -125,8 +125,8 @@ spec = do
     runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
-    exampleFiles = liftM2 (++) -- TODO I tried using `liftM concat` but that didn't work
-      (liftM2 (++) (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
+    exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work
+      (liftM2 (<>) (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
       (find always (extension ==? fileExtension) pathToGranuleBase))
       (find always (extension ==? fileExtension) pathToRegressionTests)
 

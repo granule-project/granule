@@ -41,10 +41,10 @@ data Assumption =
 
 instance Pretty Assumption where
     pretty (Linear ty) = pretty ty
-    pretty (Discharged t c) = ".[" ++ pretty t ++ "]. " ++ pretty c
+    pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> pretty c
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   pretty (a, b) = pretty a ++ " : " ++ pretty b
+   pretty (a, b) = pretty a <> " : " <> pretty b
 
 
 data CheckerState = CS
@@ -199,7 +199,7 @@ freshVar s = do
   checkerState <- get
   let v = uniqueVarIdCounter checkerState
   put checkerState { uniqueVarIdCounter = v + 1 }
-  return $ s ++ "." ++ show v
+  return $ s <> "." <> show v
 
 {- Helpers for error messages and checker control flow -}
 data TypeError
@@ -246,14 +246,14 @@ illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Ki
 illKindedUnifyVar sp t1 k1 t2 k2 =
     halt $ KindError (Just sp) $
       "Trying to unify a type `"
-      ++ pretty t1 ++ "` of kind " ++ pretty k1
-      ++ " with a type `"
-      ++ pretty t2 ++ "` of kind " ++ pretty k2
+      <> pretty t1 <> "` of kind " <> pretty k1
+      <> " with a type `"
+      <> pretty t2 <> "` of kind " <> pretty k2
 
 illKindedNEq :: (?globals :: Globals) => Span -> Kind -> Kind -> MaybeT Checker a
 illKindedNEq sp k1 k2 =
     halt $ KindError (Just sp) $
-      "Expected kind `" ++ pretty k1 ++ "` but got `" ++ pretty k2 ++ "`"
+      "Expected kind `" <> pretty k1 <> "` but got `" <> pretty k2 <> "`"
 
 data LinearityMismatch =
    LinearNotUsed Id
@@ -265,22 +265,22 @@ illLinearityMismatch sp mismatches =
   halt $ LinearityError (Just sp) $ intercalate "\n  " $ map mkMsg mismatches
   where
     mkMsg (LinearNotUsed v) =
-      "Linear variable `" ++ pretty v ++ "` is never used."
+      "Linear variable `" <> pretty v <> "` is never used."
     mkMsg (LinearUsedNonLinearly v) =
-      "Variable `" ++ pretty v ++ "` is promoted but its binding is linear; its binding should be under a box."
+      "Variable `" <> pretty v <> "` is promoted but its binding is linear; its binding should be under a box."
 
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
 illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern -> MaybeT Checker a
 illTypedPattern sp ty pat =
     halt $ PatternTypingError (Just sp) $
-      pretty pat ++ " does not have expected type " ++ pretty ty
+      pretty pat <> " does not have expected type " <> pretty ty
 
 -- | A helper for refutable pattern errors
 refutablePattern :: (?globals :: Globals) => Span -> Pattern -> MaybeT Checker a
 refutablePattern sp p =
   halt $ RefutablePatternError (Just sp) $
-        "Pattern match " ++ pretty p ++ " can fail; only \
+        "Pattern match " <> pretty p <> " can fail; only \
         \irrefutable patterns allowed in this context"
 
 -- | Helper for constructing error handlers
@@ -290,8 +290,8 @@ halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 typeClashForVariable :: (?globals :: Globals) => Span -> Id -> Type -> Type -> MaybeT Checker a
 typeClashForVariable s var t1 t2 =
     halt $ GenericError (Just s)
-             $ "Variable " ++ pretty var ++ " is being used at two conflicting types "
-            ++ "`" ++ pretty t1 ++ "` and `" ++ pretty t2 ++ "`"
+             $ "Variable " <> pretty var <> " is being used at two conflicting types "
+            <> "`" <> pretty t1 <> "` and `" <> pretty t2 <> "`"
 
 -- Various interfaces for the checker
 instance Monad Checker where

@@ -64,16 +64,16 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     return (map (discharge k coeff) ctx, eVars, subst)
 
 ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
-  debugM "Patterns.ctxtFromTypedPattern" $ "ty: " ++ show ty ++ "\t" ++ pretty ty ++ "\nPConstr: " ++ pretty dataC
+  debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
   case lookup dataC (dataConstructors st) of
     Nothing ->
       halt $ UnboundVariableError (Just s) $
-             "Data constructor `" ++ pretty dataC ++ "`" <?> show (dataConstructors st)
+             "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
     Just tySch -> do
       (dataConstructorTypeFresh, freshTyVars) <- freshPolymorphicInstance BoundQ tySch
-      debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh ++ "\n" ++ pretty ty
+      debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
@@ -90,11 +90,11 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
                                                 SubstK k -> Just (v, k)
                                                 _        -> Nothing) subst
           put (state { tyVarContext = tyVars
-                    , kVarContext = kindSubst ++ kVarContext state }) -}
-          return (ctxtSubbed ++ ctxtUnsubbed, freshTyVars++bs, subst)
+                    , kVarContext = kindSubst <> kVarContext state }) -}
+          return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst)
 
         _ -> halt $ PatternTypingError (Just s) $
-                  "Expected type `" ++ pretty ty ++ "` but got `" ++ pretty dataConstructorTypeFresh ++ "`"
+                  "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
   where
     unpeel :: [Pattern] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution))
     unpeel = unpeel' ([],[],[])
@@ -102,9 +102,9 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
     unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
         (as',bs',us') <- ctxtFromTypedPattern s t p
         us <- combineSubstitutions s us us'
-        unpeel' (as++as',bs++bs',us) ps t'
+        unpeel' (as<>as',bs<>bs',us) ps t'
     unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
-              "Have you applied constructor `" ++ sourceName dataC ++
+              "Have you applied constructor `" <> sourceName dataC <>
               "` to too many arguments?"
 
 ctxtFromTypedPattern s t@(TyVar v) p = do
@@ -112,15 +112,15 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
     PVar _ x -> return ([(x, Linear t)], [], [])
     PWild _  -> return ([], [], [])
     p        -> halt $ PatternTypingError (Just s)
-                   $  "Cannot unify pattern " ++ pretty p
-                   ++ "with type variable " ++ pretty v
+                   $  "Cannot unify pattern " <> pretty p
+                   <> "with type variable " <> pretty v
 
 ctxtFromTypedPattern s t p = do
   st <- get
-  debugM "ctxtFromTypedPattern" $ "Type: " ++ show t ++ "\nPat: " ++ show p
+  debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   halt $ PatternTypingError (Just s)
-    $ "Pattern match `" ++ pretty p ++ "` does not have type `" ++ pretty t ++ "`"
+    $ "Pattern match `" <> pretty p <> "` does not have type `" <> pretty t <> "`"
 
 discharge _ c (v, Linear t) = (v, Discharged t c)
 discharge k c (v, Discharged t c') =
@@ -132,7 +132,7 @@ discharge k c (v, Discharged t c') =
 ctxtFromTypedPatterns ::
   (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
 ctxtFromTypedPatterns sp ty [] = do
-  debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " ++ show sp ++ "\ntype: " ++ show ty
+  debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
   return ([], ty)
 ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   -- TODO: when we have dependent matching at the function clause
@@ -141,7 +141,7 @@ ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   pIrrefutable <- isIrrefutable s t1 pat
   if pIrrefutable then do
     (localGam', ty) <- ctxtFromTypedPatterns s t2 pats
-    return (localGam ++ localGam', ty)
+    return (localGam <> localGam', ty)
   else refutablePattern s pat
 
 ctxtFromTypedPatterns s ty ps = do
@@ -155,6 +155,6 @@ ctxtFromTypedPatterns s ty ps = do
   let spuriousType = foldr FunTy (TyVar $ mkId "?") psTyVars
   halt $ GenericError (Just s)
      $ "Too many patterns.\n   Therefore, couldn't match expected type '"
-       ++ pretty ty
-       ++ "'\n   against a type of the form '" ++ pretty spuriousType
-       ++ "' implied by the remaining patterns"
+       <> pretty ty
+       <> "'\n   against a type of the form '" <> pretty spuriousType
+       <> "' implied by the remaining patterns"

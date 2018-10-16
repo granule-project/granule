@@ -96,8 +96,8 @@ Def :: { Def }
   : Sig NL Binding
       { if (fst3 $1 == fst3 $3)
         then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
-        else error $ "Signature for `" ++ sourceName (fst3 $3) ++ "` does not match the \
-                                      \signature head `" ++ sourceName (fst3 $1) ++ "`"  }
+        else error $ "Signature for `" <> sourceName (fst3 $3) <> "` does not match the \
+                                      \signature head `" <> sourceName (fst3 $1) <> "`"  }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
@@ -213,7 +213,7 @@ Coeffect :: { Coeffect }
                                     "Public" -> Level 0
                                     "Private" -> Level 1
                                     "Inf" -> CInfinity (TyCon $ mkId "Cartesian")
-                                    x -> error $ "Unknown coeffect constructor `" ++ x ++ "`" }
+                                    x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
@@ -352,7 +352,7 @@ parseError :: [Token] -> IO a
 parseError [] = do
     die "Premature end of file"
 parseError t = do
-    die $ show l ++ ":" ++ show c ++ ": parse error"
+    die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
 parseDefs :: (?globals :: Globals) => String -> IO AST
@@ -375,12 +375,12 @@ parseDefs' input = do
     merge :: [AST] -> AST
     merge xs =
       let conc [] dds defs = AST dds defs
-          conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds ++ ddsAcc) (defs ++ defsAcc)
+          conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)
        in conc xs [] []
 
     parse = defs . scanTokens
 
-    imports = map (("StdLib/" ++ ) . (++ ".gr") . replace '.' '/')
+    imports = map (("StdLib/" <> ) . (<> ".gr") . replace '.' '/')
               . mapMaybe (stripPrefix "import ") . lines $ input
 
     replace from to = map (\c -> if c == from then to else c)
@@ -388,11 +388,11 @@ parseDefs' input = do
     checkNameClashes ds@(AST dataDecls defs) =
         if null clashes
 	        then return ()
-          else die $ "Error: Name clash: " ++ intercalate ", " (map sourceName clashes)
+          else die $ "Error: Name clash: " <> intercalate ", " (map sourceName clashes)
       where
         clashes = names \\ nub names
         names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
-                ++ (`map` defs) (\(Def _ name _ _ _) -> name)
+                <> (`map` defs) (\(Def _ name _ _ _) -> name)
 
 myReadFloat :: String -> Rational
 myReadFloat str =

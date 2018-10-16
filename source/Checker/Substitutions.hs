@@ -37,10 +37,10 @@ data Substitutors =
   deriving (Eq, Show)
 
 instance Pretty Substitutors where
-  pretty (SubstT t) = "->" ++ pretty t
-  pretty (SubstC c) = "->" ++ pretty c
-  pretty (SubstK k) = "->" ++ pretty k
-  pretty (SubstE e) = "->" ++ pretty e
+  pretty (SubstT t) = "->" <> pretty t
+  pretty (SubstC c) = "->" <> pretty c
+  pretty (SubstK k) = "->" <> pretty k
+  pretty (SubstE e) = "->" <> pretty e
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
@@ -116,20 +116,20 @@ instance Substitutable Type where
   unify (FunTy t1 t2) (FunTy t1' t2') = do
     u1 <- unify t1 t1'
     u2 <- unify t2 t2'
-    u1 <++> u2
+    u1 <<>> u2
   unify (TyCon c) (TyCon c') | c == c' = return $ Just []
   unify (Box c t) (Box c' t') = do
     u1 <- unify c c'
     u2 <- unify t t'
-    u1 <++> u2
+    u1 <<>> u2
   unify (Diamond e t) (Diamond e' t') = do
     u1 <- unify e e'
     u2 <- unify t t'
-    u1 <++> u2
+    u1 <<>> u2
   unify (TyApp t1 t2) (TyApp t1' t2') = do
     u1 <- unify t1 t1'
     u2 <- unify t2 t2'
-    u1 <++> u2
+    u1 <<>> u2
   unify (TyInt i) (TyInt j) | i == j = return $ Just []
   unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
     k <- inferKindOfType nullSpan t
@@ -144,7 +144,7 @@ instance Substitutable Type where
       _ | o == o' -> do
         u1 <- unify t1 t1'
         u2 <- unify t2 t2'
-        u1 <++> u2
+        u1 <<>> u2
       -- No unification
       _ -> return $ Nothing
   -- No unification
@@ -259,22 +259,22 @@ instance Substitutable Coeffect where
   unify (CPlus c1 c2) (CPlus c1' c2') = do
     u1 <- unify c1 c1'
     u2 <- unify c2 c2'
-    u1 <++> u2
+    u1 <<>> u2
 
   unify (CTimes c1 c2) (CTimes c1' c2') = do
     u1 <- unify c1 c1'
     u2 <- unify c2 c2'
-    u1 <++> u2
+    u1 <<>> u2
 
   unify (CMeet c1 c2) (CMeet c1' c2') = do
     u1 <- unify c1 c1'
     u2 <- unify c2 c2'
-    u1 <++> u2
+    u1 <<>> u2
 
   unify (CJoin c1 c2) (CJoin c1' c2') = do
     u1 <- unify c1 c1'
     u2 <- unify c2 c2'
-    u1 <++> u2
+    u1 <<>> u2
 
   unify (CInfinity k) (CInfinity k') = do
     unify k k'
@@ -287,13 +287,13 @@ instance Substitutable Coeffect where
 
   unify (CSet tys) (CSet tys') = do
     ums <- zipWithM (\x y -> unify (snd x) (snd y)) tys tys'
-    foldM (<++>) (Just []) ums
+    foldM (<<>>) (Just []) ums
 
 
   unify (CSig c ck) (CSig c' ck') = do
     u1 <- unify c c'
     u2 <- unify ck ck'
-    u1 <++> u2
+    u1 <<>> u2
 
   unify c c' =
     if c == c' then return $ Just [] else return Nothing
@@ -333,13 +333,13 @@ instance Substitutable Kind where
   unify (KFun k1 k2) (KFun k1' k2') = do
     u1 <- unify k1 k1'
     u2 <- unify k2 k2'
-    u1 <++> u2
+    u1 <<>> u2
   unify k k' = return $ if k == k' then Just [] else Nothing
 
 -- | Combine substitutions wrapped in Maybe
-(<++>) :: (?globals :: Globals)
+(<<>>) :: (?globals :: Globals)
   => Maybe Substitution -> Maybe Substitution -> MaybeT Checker (Maybe Substitution)
-xs <++> ys =
+xs <<>> ys =
   case (xs, ys) of
     (Just xs', Just ys') ->
          combineSubstitutions nullSpan xs' ys' >>= (return . Just)
@@ -375,7 +375,7 @@ combineSubstitutions sp u1 u2 = do
          case lookup v u1 of
            Nothing -> return [(v, s)]
            _       -> return []
-      return $ concat uss1 ++ concat uss2
+      return $ concat uss1 <> concat uss2
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts
@@ -390,7 +390,7 @@ instance Substitutable (Ctxt Assumption) where
 
   substitute subst ctxt = do
     (ctxt0, ctxt1) <- substCtxt subst ctxt
-    return (ctxt0 ++ ctxt1)
+    return (ctxt0 <> ctxt1)
 
   unify = error "Unify not implemented for contexts"
 
@@ -425,13 +425,13 @@ compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
     "^"   -> return $ CExpon t1' t2'
     "\\/" -> return $ CJoin t1' t2'
     "/\\" -> return $ CMeet t1' t2'
-    _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " ++ op
+    _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " <> op
 compileNatKindedTypeToCoeffect _ (TyInt n) =
   return $ CNat Discrete n
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
 compileNatKindedTypeToCoeffect s t =
-  halt $ KindError (Just s) $ "Type `" ++ pretty t ++ "` does not have kind `Nat=`"
+  halt $ KindError (Just s) $ "Type `" <> pretty t <> "` does not have kind `Nat=`"
 
 
 -- | Apply a name map to a type to rename the type variables

@@ -22,7 +22,7 @@ extendShadow ctxt i v = (i, v) : ctxt
 extend :: Ctxt a -> Id -> a -> Result (Ctxt a)
 extend ctxt i v = case lookup i ctxt of
   Nothing -> Some $ (i, v) : ctxt
-  _ -> None ["Name clash: `" ++ sourceName i ++ "` was already in the context."]
+  _ -> None ["Name clash: `" <> sourceName i <> "` was already in the context."]
 
 -- | Empty context
 empty :: Ctxt a

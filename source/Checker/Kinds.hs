@@ -57,7 +57,7 @@ inferKindOfType' s quantifiedVariables t =
         st <- get
         case lookup conId (typeConstructors st) of
           Just (kind,_) -> return kind
-          Nothing   -> halt $ UnboundVariableError (Just s) (pretty conId ++ " constructor.")
+          Nothing   -> halt $ UnboundVariableError (Just s) (pretty conId <> " constructor.")
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
@@ -72,7 +72,7 @@ inferKindOfType' s quantifiedVariables t =
       case lookup tyVar quantifiedVariables of
         Just kind -> return kind
         Nothing   -> halt $ UnboundVariableError (Just s) $
-                       "Type variable `" ++ pretty tyVar ++ "` is unbound (not quantified)." <?> show quantifiedVariables
+                       "Type variable `" <> pretty tyVar <> "` is unbound (not quantified)." <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
@@ -88,7 +88,7 @@ inferKindOfType' s quantifiedVariables t =
                then return kr
                else illKindedNEq s k2' k2
           else illKindedNEq s k1' k1
-       Nothing   -> halt $ UnboundVariableError (Just s) (pretty op ++ " operator.")
+       Nothing   -> halt $ UnboundVariableError (Just s) (pretty op <> " operator.")
 
 joinKind :: Kind -> Kind -> Maybe Kind
 joinKind k1 k2 | k1 == k2 = Just k1
@@ -136,10 +136,10 @@ inferCoeffectType s (CVar cvar) = do
   st <- get
   case lookup cvar (tyVarContext st) of
      Nothing -> do
-       halt $ UnboundVariableError (Just s) $ "Tried to look up kind of `" ++ pretty cvar ++ "`"
+       halt $ UnboundVariableError (Just s) $ "Tried to look up kind of `" <> pretty cvar <> "`"
                                               <?> show (cvar,(tyVarContext st))
 --       state <- get
---       let newType = TyVar $ "ck" ++ show (uniqueVarId state)
+--       let newType = TyVar $ "ck" <> show (uniqueVarId state)
        -- We don't know what it is yet though, so don't update the coeffect kind ctxt
 --       put (state { uniqueVarId = uniqueVarId state + 1 })
 --       return newType
@@ -209,8 +209,8 @@ mguCoeffectTypes s c1 c2 = do
       return $ TyCon ck
 
     (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
-               ++ pretty k1 ++ "' and '" ++ pretty k2
-               ++ "' for coeffects " ++ pretty c1 ++ " and " ++ pretty c2
+               <> pretty k1 <> "' and '" <> pretty k2
+               <> "' for coeffects " <> pretty c1 <> " and " <> pretty c2
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in an context
