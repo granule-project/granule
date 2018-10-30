@@ -304,12 +304,16 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
 
   popGuardContext
 
+  debugM "*** Branches and substitutions from case " (pretty branchCtxtsAndSubst)
+
   -- Find the upper-bound contexts
   let (branchCtxts, substs) = unzip branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxPlus s branchesGam guardGam
+
+  debugM "--- Output context for case " (pretty g)
   return (g, concat substs)
 
 -- All other expressions must be checked using synthesis

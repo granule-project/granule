@@ -1,0 +1,12 @@
+import Vec
+
+foo : forall (a : Type, n : Nat=)
+    . Vec n (a |0|) -> Int |n| -> Int |n| -> Int
+foo xs |x| |y| =
+  case xs of
+    Nil -> 0;
+    Cons |_| ys -> foo ys |x| |2| + x
+
+-- The above should not type check due to `y` not being used in the
+-- branches, but it does not show up in the "output" context because
+-- it is being removed by specialisation, which is wrong.
