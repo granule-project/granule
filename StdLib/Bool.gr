@@ -76,7 +76,6 @@ impl x |y| = if x then y else True
 
 --- Logical implication (linear)
 --- NB: strict in both arguments
---- NB: non-strict in second argument
 ---     > let x = True in
 ---     | let y = False in
 ---     | impl x y
