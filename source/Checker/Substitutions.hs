@@ -54,7 +54,7 @@ class Substitutable t where
 -- Instances for the main representation of things in the types
 
 instance Substitutable Substitutors where
-  type SubstitutionContext Substitutors x = MaybeT Checker x
+
   substitute subst s =
     case s of
       SubstT t -> do
@@ -90,7 +90,6 @@ instance Substitutable Substitutors where
   unify _ _ = return Nothing
 
 instance Substitutable Type where
-  type SubstitutionContext Type x = MaybeT Checker x
   substitute subst = typeFoldM (baseTypeFold
                               { tfTyVar = varSubst
                               , tfBox = box
@@ -151,7 +150,6 @@ instance Substitutable Type where
   unify _ _ = return $ Nothing
 
 instance Substitutable Coeffect where
-  type SubstitutionContext Coeffect x = MaybeT Checker x
 
   substitute subst (CPlus c1 c2) = do
       c1' <- substitute subst c1
@@ -300,7 +298,6 @@ instance Substitutable Coeffect where
 
 
 instance Substitutable Effect where
-  type SubstitutionContext Effect x = MaybeT Checker x
   -- {TODO: Make effects richer}
   substitute subst e = return e
   unify e e' =
@@ -308,7 +305,6 @@ instance Substitutable Effect where
                else return $ Nothing
 
 instance Substitutable Kind where
-  type SubstitutionContext Kind x = MaybeT Checker x
 
   substitute subst (KPromote t) = do
       t <- substitute subst t
@@ -386,7 +382,6 @@ Just ([((Id "y" "y"),Linear (TyInt 0))],[((Id "x" "x"),Linear (TyVar (Id "x" "x"
 -}
 
 instance Substitutable (Ctxt Assumption) where
-  type SubstitutionContext (Ctxt Assumption) x = MaybeT Checker x
 
   substitute subst ctxt = do
     (ctxt0, ctxt1) <- substCtxt subst ctxt

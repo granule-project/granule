@@ -71,6 +71,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
     Just tySch -> do
       (dataConstructorTypeFresh, freshTyVars) <- freshPolymorphicInstance BoundQ tySch
+
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of

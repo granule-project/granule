@@ -190,8 +190,11 @@ checkExpr :: (?globals :: Globals )
 
 -- Checking of constants
 
-checkExpr _ _ _ _ (TyCon c) (Val _ (NumInt _))   | internalName c == "Int"   = return ([], [])
-checkExpr _ _ _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" = return ([], [])
+checkExpr _ [] _ _ (TyCon c) (Val _ (NumInt _))   | internalName c == "Int"   =
+    return ([], [])
+
+checkExpr _ [] _ _ (TyCon c) (Val _ (NumFloat _)) | internalName c == "Float" =
+    return ([], [])
 
 checkExpr defs gam pol _ (FunTy sig tau) (Val s (Abs p t e)) = do
   -- If an explicit signature on the lambda was given, then check
@@ -296,6 +299,8 @@ checkExpr defs gam pol True tau (Case s guardExpr cases) = do
            --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
            -- But we want promotion to invovlve the guard to avoid leaks
            let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
+           -- Probably don't want to remove specialised things in this way- we want to
+           -- invert the substitution and put these things into the context
 
            return (branchCtxt, subst')
 
