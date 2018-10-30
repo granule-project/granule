@@ -1,6 +1,6 @@
 import File
 
-main : FileIO String
+main : String <[O,RW,RW,C]>
 main =
     let h       <- openFile "LICENSE" ReadMode;
         (h, c)  <- hGetChar h;

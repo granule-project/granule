@@ -44,9 +44,11 @@ instance Pretty Substitutors where
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
-  type SubstitutionContext t x
   substitute :: (?globals :: Globals)
-             => Substitution -> t -> SubstitutionContext t t
+             => Substitution -> t -> MaybeT Checker t
+
+--  invertSubstitute :: (?globals :: Globals)
+--             => Substitution -> t -> MaybeT Checker t
 
   unify :: (?globals :: Globals)
         => t -> t -> MaybeT Checker (Maybe Substitution)
