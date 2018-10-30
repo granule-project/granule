@@ -55,10 +55,8 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     k <- inferCoeffectType s coeff
 
     -- Check whether a unification was caused
-    if definitelyUnifying p
-      then do
-        addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
-      else return ()
+    when (definitelyUnifying p)
+        $ addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
 
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
