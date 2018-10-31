@@ -2,8 +2,13 @@
 {-# LANGUAGE ImplicitParams #-}
 module Syntax.Parser where
 
+import Syntax.Identifiers
 import Syntax.Lexer
+import Syntax.Def
 import Syntax.Expr
+import Syntax.Pattern
+import Syntax.Span
+import Syntax.Type
 import Utils
 
 import Control.Monad (forM)
@@ -78,7 +83,7 @@ import System.Exit (die)
 %left '.'
 %%
 
-Defs :: { AST }
+Defs :: { AST () () }
   : Def                       { AST [] [$1] }
 
   | DataDecl                  { AST [$1] [] }
@@ -92,7 +97,7 @@ NL :: { () }
 NL : nl NL                    { }
    | nl                       { }
 
-Def :: { Def }
+Def :: { Def () () }
   : Sig NL Binding
       { if (fst3 $1 == fst3 $3)
         then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
@@ -106,7 +111,7 @@ DataDecl :: { DataDecl }
 Sig ::  { (Id, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (mkId $ symString $1, $3, getPos $1) }
 
-Binding :: { (Id, Expr, [Pattern]) }
+Binding :: { (Id, Expr () (), [Pattern ()]) }
   : VAR '=' Expr              { (mkId $ symString $1, $3, []) }
   | VAR Pats '=' Expr         { (mkId $ symString $1, $4, $2) }
 
@@ -122,7 +127,7 @@ DataConstrNext :: { [DataConstr] }
   : ';' DataConstrs           { $2 }
   | {- empty -}               { [] }
 
-TyVars :: { [(Id,Kind)] }
+TyVars :: { [(Id, Kind)] }
   : '(' VAR ':' Kind ')' TyVars { (mkId $ symString $2, $4) : $6 }
   | VAR TyVars                  { (mkId $ symString $1, KType) : $2 }
   | {- empty -}                 { [] }
@@ -131,30 +136,30 @@ KindAnn :: { Maybe Kind }
   : ':' Kind                  { Just $2 }
   | {- empty -}               { Nothing }
 
-Pats :: { [Pattern] }
+Pats :: { [Pattern ()] }
   : Pat                       { [$1] }
   | Pat Pats                  { $1 : $2 }
 
-PAtoms :: { [Pattern] }
+PAtoms :: { [Pattern ()] }
   : PAtom                     { [$1] }
   | PAtom PAtoms              { $1 : $2 }
 
-Pat :: { Pattern }
+Pat :: { Pattern () }
   : PAtom                     { $1 }
 
-PatNested :: { Pattern }
+PatNested :: { Pattern () }
 PatNested
- : '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
+ : '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) () (mkId x) $3 }
 
-PAtom :: { Pattern }
-  : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
-  | '_'                       { PWild (getPosToSpan $1) }
-  | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) x }
-  | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) $ read x }
-  | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
+PAtom :: { Pattern () }
+  : VAR                       { PVar (getPosToSpan $1) () (mkId $ symString $1) }
+  | '_'                       { PWild (getPosToSpan $1) () }
+  | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) () x }
+  | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) () $ read x }
+  | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) [] }
   | PatNested                 { $1 }
-  | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
-  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) (mkId ",") [$2, $4] }
+  | '|' Pat '|'               { PBox (getPosToSpan $1) () $2 }
+  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) () (mkId ",") [$2, $4] }
 
 
 TypeScheme :: { TypeScheme }
@@ -246,106 +251,106 @@ Effs :: { [String] }
 Eff :: { String }
   : CONSTR                    { constrString $1 }
 
-Expr :: { Expr }
+Expr :: { Expr () () }
   : let LetBind MultiLet
     { let (_, pat, mt, expr) = $2
-      in App (getPos $1, getEnd $3)
-         (Val (getSpan $3) (Abs pat mt $3)) expr }
+	in App (getPos $1, getEnd $3) ()
+	(Val (getSpan $3) () (Abs () pat mt $3)) expr }
 
   | '\\' '(' Pat ':' Type ')' '->' Expr
-      { Val (getPos $1, getEnd $8) (Abs $3 (Just $5) $8) }
+  { Val (getPos $1, getEnd $8) () (Abs () $3 (Just $5) $8) }
 
   | '\\' Pat '->' Expr
-      { Val (getPos $1, getEnd $4) (Abs $2 Nothing $4) }
+  { Val (getPos $1, getEnd $4) () (Abs () $2 Nothing $4) }
 
   | let LetBindEff MultiLetEff
       { let (_, pat, mt, expr) = $2
-        in LetDiamond (getPos $1, getEnd $3) pat mt expr $3 }
+        in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3 }
 
   | case Expr of Cases
-      { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
+  { Case (getPos $1, getEnd . snd . last $ $4) () $2 $4 }
 
   | if Expr then Expr else Expr
-      { Case (getPos $1, getEnd $6) $2 [(PConstr (getPosToSpan $3) (mkId "True") [], $4),
-                                        (PConstr (getPosToSpan $3) (mkId "False") [], $6)] }
+  { Case (getPos $1, getEnd $6) () $2 [(PConstr (getPosToSpan $3) () (mkId "True") [], $4),
+                                       (PConstr (getPosToSpan $3) () (mkId "False") [], $6)] }
 
   | Form
     { $1 }
 
-LetBind :: { (Pos, Pattern, Maybe Type, Expr) }
+LetBind :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
 LetBind
  : Pat ':' Type '=' Expr
     { (getStart $1, $1, Just $3, $5) }
  | Pat '=' Expr
     { (getStart $1, $1, Nothing, $3) }
 
-MultiLet :: { Expr }
+MultiLet :: { Expr () () }
 MultiLet
   : ';' LetBind MultiLet
     { let (_, pat, mt, expr) = $2
-      in App (getPos $1, getEnd $3)
-           (Val (getSpan $3) (Abs pat mt $3)) expr }
+	in App (getPos $1, getEnd $3) ()
+     	    (Val (getSpan $3) () (Abs () pat mt $3)) expr }
   | in Expr
     { $2 }
 
-LetBindEff :: { (Pos, Pattern, Maybe Type, Expr) }
+LetBindEff :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
 LetBindEff :
    Pat '<-' Expr            { (getStart $1, $1, Nothing, $3) }
  | Pat ':' Type '<-' Expr   { (getStart $1, $1, Just $3, $5) }
 
-MultiLetEff :: { Expr }
+MultiLetEff :: { Expr () () }
 MultiLetEff
   : ';' LetBindEff MultiLetEff
       { let (_, pat, mt, expr) = $2
-        in LetDiamond (getPos $1, getEnd $3) pat mt expr $3 }
+	  in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3 }
   | in Expr
       { $2 }
 
-Cases :: { [(Pattern, Expr)] }
+Cases :: { [(Pattern (), Expr () () )] }
  : Case CasesNext             { $1 : $2 }
 
-CasesNext :: { [(Pattern, Expr)] }
+CasesNext :: { [(Pattern (), Expr () ())] }
   : ';' Cases                 { $2 }
   | {- empty -}               { [] }
 
-Case :: { (Pattern, Expr) }
+Case :: { (Pattern (), Expr () ()) }
   : Pat '->' Expr             { ($1, $3) }
   | CONSTR PAtoms '->' Expr   { let TokenConstr _ x = $1
-                                 in (PConstr (getPosToSpan $1) (mkId x) $2, $4) }
+                                 in (PConstr (getPosToSpan $1) () (mkId x) $2, $4) }
 
 
-Form :: { Expr }
-  : Form '+' Form             { Binop (getPosToSpan $2) "+" $1 $3 }
-  | Form '-' Form             { Binop (getPosToSpan $2) "-" $1 $3 }
-  | Form '*' Form             { Binop (getPosToSpan $2) "*" $1 $3 }
-  | Form '<' Form             { Binop (getPosToSpan $2) "<" $1 $3 }
-  | Form '>' Form             { Binop (getPosToSpan $2) ">" $1 $3 }
-  | Form OP  Form             { Binop (getPosToSpan $2) (symString $2) $1 $3 }
-  | Juxt                      { $1 }
+Form :: { Expr () () }
+  : Form '+' Form  { Binop (getPosToSpan $2) () "+" $1 $3 }
+  | Form '-' Form  { Binop (getPosToSpan $2) () "-" $1 $3 }
+  | Form '*' Form  { Binop (getPosToSpan $2) () "*" $1 $3 }
+  | Form '<' Form  { Binop (getPosToSpan $2) () "<" $1 $3 }
+  | Form '>' Form  { Binop (getPosToSpan $2) () ">" $1 $3 }
+  | Form OP  Form  { Binop (getPosToSpan $2) () (symString $2) $1 $3 }
+  | Juxt           { $1 }
 
-Juxt :: { Expr }
-  : Juxt '`' Atom '`'         { App (getStart $1, getEnd $3) $3 $1 }
-  | Juxt Atom                 { App (getStart $1, getEnd $2) $1 $2 }
+Juxt :: { Expr () () }
+  : Juxt '`' Atom '`'         { App (getStart $1, getEnd $3) () $3 $1 }
+  | Juxt Atom                 { App (getStart $1, getEnd $2) () $1 $2 }
   | Atom                      { $1 }
 
-Atom :: { Expr }
+Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
   | INT                       { let (TokenInt _ x) = $1
-                                in Val (getPosToSpan $1) $ NumInt x }
+                                in Val (getPosToSpan $1) () $ NumInt () x }
   | FLOAT                     { let (TokenFloat _ x) = $1
-                                in Val (getPosToSpan $1) $ NumFloat $ read x }
-  | VAR                       { Val (getPosToSpan $1) $ Var (mkId $ symString $1) }
-  | '|' Atom '|'              { Val (getPos $1, getPos $3) $ Promote $2 }
-  | CONSTR                    { Val (getPosToSpan $1) $ Constr (mkId $ constrString $1) [] }
-  | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5)
-                                    (App (getPos $1, getPos $3)
-                                         (Val (getPosToSpan $3) (Constr (mkId ",") []))
+                                in Val (getPosToSpan $1) () $ NumFloat () $ read x }
+  | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
+  | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
+  | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
+  | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5) ()
+                                    (App (getPos $1, getPos $3) ()
+                                         (Val (getPosToSpan $3) () (Constr () (mkId ",") []))
                                          $2)
                                     $4 }
-  | CHAR                      { Val (getPosToSpan $1) $
-                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
-  | STRING                    { Val (getPosToSpan $1) $
-                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
+  | CHAR                      { Val (getPosToSpan $1) () $
+                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral () c }
+  | STRING                    { Val (getPosToSpan $1) () $
+                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral () c }
 
 {
 parseError :: [Token] -> IO a
@@ -355,12 +360,12 @@ parseError t = do
     die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO AST
+parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefs input = do
     ast <- parseDefs' input
     return $ freshenAST ast
 
-parseDefs' :: (?globals :: Globals) => String -> IO AST
+parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefs' input = do
     defs <- parse input
     importedDefs <- forM imports $ \path -> do
@@ -372,7 +377,7 @@ parseDefs' input = do
     return allDefs
 
   where
-    merge :: [AST] -> AST
+    merge :: [AST () ()] -> AST () ()
     merge xs =
       let conc [] dds defs = AST dds defs
           conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)

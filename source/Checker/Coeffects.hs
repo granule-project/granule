@@ -8,8 +8,10 @@ import Control.Monad.Trans.Maybe
 
 import Checker.Monad
 import Context
-import Syntax.Expr
+import Syntax.Identifiers
+import Syntax.Type
 import Syntax.Pretty
+import Syntax.Span
 import Utils
 
 -- Which coeffects can be flattened

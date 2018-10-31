@@ -13,14 +13,17 @@ import Checker.Predicates
 import Checker.Kinds
 import Checker.Substitutions
 import Context
-import Syntax.Expr
+import Syntax.Identifiers
+import Syntax.Pattern
+import Syntax.Type
+import Syntax.Span
 import Syntax.Pretty
 import Utils
 --import Data.Maybe (mapMaybe)
 
-definitelyUnifying :: Pattern -> Bool
-definitelyUnifying (PConstr _ _ _) = True
-definitelyUnifying (PInt _ _) = True
+definitelyUnifying :: Pattern t -> Bool
+definitelyUnifying (PConstr _ _ _ _) = True
+definitelyUnifying (PInt _ _ _) = True
 definitelyUnifying _ = False
 
 -- | Given a pattern and its type, construct Just of the binding context
@@ -28,29 +31,29 @@ definitelyUnifying _ = False
 --   Returns also a list of any variables bound by the pattern
 --   (e.g. for dependent matching) and a substitution for variables
 --   caused by pattern matching (e.g., from unification).
-ctxtFromTypedPattern :: (?globals :: Globals ) => Span -> Type -> Pattern
+ctxtFromTypedPattern :: (?globals :: Globals, Show t) => Span -> Type -> Pattern t
   -> MaybeT Checker (Ctxt Assumption, [Id], Substitution)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern _ t (PWild _) = do
+ctxtFromTypedPattern _ t (PWild _ _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
     wild <- freshVar "wild"
     return ([(Id "_" wild, Linear t)], [], [])
 
-ctxtFromTypedPattern _ t (PVar _ v) =
+ctxtFromTypedPattern _ t (PVar _ _ v) =
     return ([(v, Linear t)], [], [])
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern _ t@(TyCon c) (PInt _ _)
+ctxtFromTypedPattern _ t@(TyCon c) (PInt _ _ _)
   | internalName c == "Int" = return ([], [], [])
 
-ctxtFromTypedPattern _ t@(TyCon c) (PFloat _ _)
+ctxtFromTypedPattern _ t@(TyCon c) (PFloat _ _ _)
   | internalName c == "Float" = return ([], [], [])
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
+ctxtFromTypedPattern s (Box coeff ty) (PBox _ _ p) = do
     (ctx, eVars, subst) <- ctxtFromTypedPattern s ty p
     k <- inferCoeffectType s coeff
 
@@ -61,7 +64,7 @@ ctxtFromTypedPattern s (Box coeff ty) (PBox _ p) = do
     -- Discharge all variables bound by the inner pattern
     return (map (discharge k coeff) ctx, eVars, subst)
 
-ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
+ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -95,7 +98,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
   where
-    unpeel :: [Pattern] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution))
+    unpeel :: Show t => [Pattern t] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution))
     unpeel = unpeel' ([],[],[])
     unpeel' acc [] t = return (t,acc)
     unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
@@ -108,9 +111,9 @@ ctxtFromTypedPattern _ ty p@(PConstr s dataC ps) = do
 
 ctxtFromTypedPattern s t@(TyVar v) p = do
   case p of
-    PVar _ x -> return ([(x, Linear t)], [], [])
-    PWild _  -> return ([], [], [])
-    p        -> halt $ PatternTypingError (Just s)
+    PVar _ _ x -> return ([(x, Linear t)], [], [])
+    PWild _ _  -> return ([], [], [])
+    p          -> halt $ PatternTypingError (Just s)
                    $  "Cannot unify pattern " <> pretty p
                    <> "with type variable " <> pretty v
 
@@ -129,7 +132,7 @@ discharge k c (v, Discharged t c') =
     Nothing        -> (v, Discharged t c')
 
 ctxtFromTypedPatterns ::
-  (?globals :: Globals) => Span -> Type -> [Pattern] -> MaybeT Checker (Ctxt Assumption, Type)
+  (?globals :: Globals, Show t) => Span -> Type -> [Pattern t] -> MaybeT Checker (Ctxt Assumption, Type)
 ctxtFromTypedPatterns sp ty [] = do
   debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
   return ([], ty)

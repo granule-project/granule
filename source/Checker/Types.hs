@@ -13,8 +13,11 @@ import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
 import Checker.Substitutions
-import Syntax.Expr
+import Syntax.Identifiers
 import Syntax.Pretty
+import Syntax.Span
+import Syntax.Type
+
 import Utils
 
 lEqualTypesWithPolarity :: (?globals :: Globals )

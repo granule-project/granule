@@ -38,13 +38,17 @@ library:
   - Context
   - Eval
   - Syntax.Desugar
+  - Syntax.Def
   - Syntax.Expr
+  - Syntax.Helpers
   - Syntax.FirstParameter
   - Syntax.Identifiers
   - Syntax.Lexer
   - Syntax.Parser
+  - Syntax.Pattern
   - Syntax.Pretty
   - Syntax.Span
+  - Syntax.Type
   - Utils
   dependencies:
   - array

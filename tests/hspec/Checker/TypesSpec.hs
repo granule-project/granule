@@ -1,6 +1,6 @@
 module Checker.TypesSpec where
 
-import Syntax.Expr
+import Syntax.Identifiers
 import Test.Hspec
 import Context
 

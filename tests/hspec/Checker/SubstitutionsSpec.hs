@@ -2,7 +2,9 @@
 
 module Checker.SubstitutionsSpec where
 
-import Syntax.Expr
+import Syntax.Type
+import Syntax.Identifiers
+
 import Test.Hspec
 import Checker.Substitutions
 import Checker.Monad
