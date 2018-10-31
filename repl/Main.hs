@@ -138,7 +138,12 @@ makeUnique (x:xs) = x : makeUnique (filter (/=x) xs)
 buildAST ::String -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildAST t m = let v = M.lookup t m in
                   case v of
-                   Nothing -> []
+                   Nothing ->
+                     -- Check primitives
+                     case lookup (mkId t) Primitives.builtins of
+                       Nothing -> []
+                       -- Create a trivial definition (x = x) with the right type
+                       Just ty -> [Def nullSpan (mkId t) (Val nullSpan () (Var () (mkId t))) [] ty]
                    Just (def,lid) -> case lid of
                                       []  ->  [def]
                                       ids -> (buildDef ids <> [def])
@@ -162,13 +167,19 @@ makeMapBuildADT adc = M.fromList $ tempADT adc
 lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
 lookupBuildADT term aMap = let lup = M.lookup term aMap in
                             case lup of
-                              Nothing -> ""
-                              Just d -> pretty d
+                              Nothing ->
+                                case lookup (mkId term) Primitives.typeLevelConstructors of
+                                  Nothing -> ""
+                                  Just (k, _) -> term <> " : " <> pretty k
+                              Just d -> term <> " : " <> pretty d
 
 printType :: (?globals::Globals) => String -> M.Map String (Def () (), [String]) -> String
 printType trm m = let v = M.lookup trm m in
                     case v of
-                      Nothing ->""
+                      Nothing ->
+                        case lookup (mkId trm) Primitives.builtins of
+                          Nothing -> "Unknown"
+                          Just ty -> trm <> " : " <> pretty ty
                       Just (def@(Def _ id _ _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
 
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
