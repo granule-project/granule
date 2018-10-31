@@ -43,9 +43,3 @@ div2 : forall (n : Nat=) . N (2 * n) -> N n
 div2 x = case x of
   Z   -> Z;
   S x -> (case x of S x -> S (div2 x))
-
---- # Finitely bounded sets
-
-data Fin : Nat= -> Type where
-  FZ : forall (k : Nat=) . Fin (k + 1);
-  FS : forall (k : Nat=) . Fin k -> Fin (k + 1)
