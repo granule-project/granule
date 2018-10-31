@@ -2,7 +2,10 @@
 
 module Checker.Primitives where
 
-import Syntax.Expr
+import Syntax.Def
+import Syntax.Identifiers
+import Syntax.Type
+import Syntax.Span
 
 protocol = KConstr $ mkId "Protocol"
 

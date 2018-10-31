@@ -4,13 +4,19 @@
 
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE UndecidableInstances #-}
 
 module Syntax.Pretty where
 
 import Data.List
 import Syntax.Expr
+import Syntax.Type
+import Syntax.Pattern
+import Syntax.Def
+import Syntax.Identifiers
 import Utils
 
 prettyDebug :: Pretty t => t -> String
@@ -98,13 +104,13 @@ instance Pretty Type where
     pretty (TyInt n)      = show n
     pretty (TyInfix op t1 t2) = "(" <> pretty t1 <> " " <> op <> " " <>  pretty t2 <> ")"
 
-instance Pretty AST where
+instance Pretty (Value v a) => Pretty (AST v a) where
     pretty (AST dataDecls defs) = pretty' dataDecls <> "\n\n" <> pretty' defs
       where
-        pretty' :: Pretty a => [a] -> String
+        pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty
 
-instance Pretty Def where
+instance Pretty (Value v a) => Pretty (Def v a) where
     pretty (Def _ v e ps t) = pretty v <> " : " <> pretty t <> "\n" <>
                               pretty v <> " " <> pretty ps <> "= " <> pretty e
 
@@ -121,15 +127,15 @@ instance Pretty DataConstr where
     pretty (DataConstrG _ name typeScheme) = pretty name <> " : " <> pretty typeScheme
     pretty (DataConstrA _ name params) = pretty name <> (unwords . map pretty) params
 
-instance Pretty Pattern where
-    pretty (PVar _ v)     = pretty v
-    pretty (PWild _)      = "_"
-    pretty (PBox _ p)     = "|" <> pretty p <> "|"
-    pretty (PInt _ n)     = show n
-    pretty (PFloat _ n)   = show n
-    pretty (PConstr _ name args)  = intercalate " " (pretty name : map pretty args)
+instance Pretty (Pattern a) where
+    pretty (PVar _ _ v)     = pretty v
+    pretty (PWild _ _)      = "_"
+    pretty (PBox _ _ p)     = "|" <> pretty p <> "|"
+    pretty (PInt _ _ n)     = show n
+    pretty (PFloat _ _ n)   = show n
+    pretty (PConstr _ _ name args)  = intercalate " " (pretty name : map pretty args)
 
-instance {-# OVERLAPS #-} Pretty [Pattern] where
+instance {-# OVERLAPS #-} Pretty [Pattern a] where
     pretty [] = ""
     pretty ps = unwords (map pretty ps) <> " "
 
@@ -137,37 +143,37 @@ instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
     pretty (Just x) = pretty x
 
-instance Pretty Value where
-    pretty (Abs x t e)  = parens $ "\\(" <> pretty x <> " : " <> pretty t
+instance Pretty (Value () a) where
+    pretty (Abs _ x t e)  = parens $ "\\(" <> pretty x <> " : " <> pretty t
                                <> ") -> " <> pretty e
-    pretty (Promote e)  = "|" <> pretty e <> "|"
-    pretty (Pure e)     = "<" <> pretty e <> ">"
-    pretty (Var x)      = pretty x
-    pretty (NumInt n)   = show n
-    pretty (NumFloat n) = show n
-    pretty (CharLiteral c) = show c
-    pretty (StringLiteral s) = show s
-    pretty (Constr s vs) | internalName s == "," =
+    pretty (Promote _ e)  = "|" <> pretty e <> "|"
+    pretty (Pure _ e)     = "<" <> pretty e <> ">"
+    pretty (Var _ x)      = pretty x
+    pretty (NumInt _ n)   = show n
+    pretty (NumFloat _ n) = show n
+    pretty (CharLiteral _ c) = show c
+    pretty (StringLiteral _ s) = show s
+    pretty (Constr _ s vs) | internalName s == "," =
       "(" <> intercalate ", " (map pretty vs) <> ")"
-    pretty (Constr s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
+    pretty (Constr _ s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values
-        valueAtom (NumInt _)    = True
-        valueAtom (NumFloat _)  = True
-        valueAtom (Constr _ []) = True
+        valueAtom (NumInt _ _)    = True
+        valueAtom (NumFloat _ _)  = True
+        valueAtom (Constr _ _ []) = True
         valueAtom _             = False
-    pretty v = show v
+    pretty (ExtendedValue _ _) = ""
 
 instance Pretty Id where
   pretty = if debugging ?globals then internalName else sourceName
 
-instance Pretty Expr where
-  pretty (App _ e1 e2) = parens $ pretty e1 <> " " <> pretty e2
-  pretty (Binop _ op e1 e2) = parens $ pretty e1 <> " " <> op <> " " <> pretty e2
-  pretty (LetDiamond _ v t e1 e2) = parens $ "let " <> pretty v <> " :" <> pretty t <> " <- "
+instance Pretty (Value v a) => Pretty (Expr v a) where
+  pretty (App _ _ e1 e2) = parens $ pretty e1 <> " " <> pretty e2
+  pretty (Binop _ _ op e1 e2) = parens $ pretty e1 <> " " <> op <> " " <> pretty e2
+  pretty (LetDiamond _ _ v t e1 e2) = parens $ "let " <> pretty v <> " :" <> pretty t <> " <- "
                                     <> pretty e1 <> " in " <> pretty e2
-  pretty (Val _ v) = pretty v
-  pretty (Case _ e ps) = "\n    (case " <> pretty e <> " of\n      " <>
+  pretty (Val _ _ v) = pretty v
+  pretty (Case _ _ e ps) = "\n    (case " <> pretty e <> " of\n      " <>
                          intercalate ";\n      " (map (\(p, e') -> pretty p <> " -> " <> pretty e') ps) <> ")"
 
 parens :: String -> String

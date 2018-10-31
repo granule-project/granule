@@ -15,7 +15,31 @@ import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan)
 
 import System.IO (hFlush, stdout)
-import qualified System.IO as SIO
+import qualified System.IO as SIO (Handle)
+
+data EValue =
+  NormalValue (Value ())
+  -------------------------
+  -- Used only inside the interpeter
+  -- Primitive functions (builtins)
+  | Primitive (EValue -> IO EValue)
+  -- Primitive operations that also close over the context
+  | PrimitiveClosure (Ctxt EValue -> EValue -> IO EValue)
+  -- File handler
+  | Handle SIO.Handle
+  -- Channels
+  | Chan (CC.Chan EValue)
+
+
+instance Show (CC.Chan EValue) where
+  show _ = "Some channel"
+
+instance Show (EValue -> IO EValue) where
+  show _ = "Some primitive"
+
+instance Show (Ctxt EValue -> EValue -> IO EValue) where
+  show _ = "Some primitive closure"
+
 
 evalBinOp :: String -> Value -> Value -> Value
 evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
@@ -89,6 +113,10 @@ evalIn ctxt (LetDiamond _ p _ e1 e2) = do
        other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       <> prettyDebug other
 
+{-
+-- Hard-coded 'scale', removed for now
+
+
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
     (Abs (PVar nullSpan $ mkId " y") Nothing (
@@ -96,6 +124,7 @@ evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
          (Val nullSpan (Var (mkId " y")))
          (Binop nullSpan
            "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
+-}
 
 evalIn ctxt (Val _ (Var x)) =
     case lookup x ctxt of

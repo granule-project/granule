@@ -2,7 +2,11 @@
 
 module Syntax.Desugar where
 
+import Syntax.Def
 import Syntax.Expr
+import Syntax.Identifiers
+import Syntax.Span
+import Syntax.Type
 import Control.Monad.State.Strict
 
 {- | 'desugar' erases pattern matches in function definitions
@@ -20,7 +24,7 @@ import Control.Monad.State.Strict
    Note that the explicit typing from the type signature is pushed
    inside of the definition to give an explicit typing on the coeffect-let
    binding. -}
-desugar :: Def -> Def
+desugar :: Def v () -> Def v ()
 -- desugar adt@ADT{} = adt
 desugar (Def s var expr pats tys@(Forall _ _ ty)) =
   Def s var (evalState (typeDirectedDesugar pats ty expr) (0 :: Int)) [] tys
@@ -28,7 +32,7 @@ desugar (Def s var expr pats tys@(Forall _ _ ty)) =
     typeDirectedDesugar [] _ e = return e
     typeDirectedDesugar (p : ps) (FunTy t1 t2) e = do
       e' <- typeDirectedDesugar ps t2 e
-      return $ Val nullSpan $ Abs p (Just t1) e'
+      return $ Val nullSpan () $ Abs () p (Just t1) e'
     -- Error cases
     typeDirectedDesugar (_ : _) t e =
       error $ "(" <> show sl <> "," <> show sc
