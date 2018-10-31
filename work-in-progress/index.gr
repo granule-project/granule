@@ -1,0 +1,10 @@
+import Vec
+import Fin
+
+-- Given an index i and a vector, return its ith element
+-- Note: i is guaranteed to be in-bounds
+index : forall a : Type, n : Nat=
+      . (Fin (n + 1)) |1| -> (Vec (n + 1) a) |1| -> a
+index n xs = case (n, xs) of
+  (|FZ|, |(Cons x _)|) -> x;
+  (|(FS k)|, |(Cons _ xs')|) -> index |k| |xs'|
