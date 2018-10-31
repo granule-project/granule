@@ -27,7 +27,7 @@ import Options.Applicative
 
 import Checker.Checker
 import Eval
-import Paths_granule (version)
+import Paths_granule_interpreter (version)
 import Syntax.Parser
 import Syntax.Pretty
 import Utils

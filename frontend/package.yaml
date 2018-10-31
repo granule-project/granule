@@ -1,18 +1,15 @@
-name: granule
+name: granule-frontend
 version: '0.6.0.4'
-synopsis: The Granule type checker and interpreter
+synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
 license: BSD3
 github: dorchard/granule
-extra-source-files:
-- README.md
-- LICENSE
 dependencies:
 - base >=4.10 && <5
 
 library:
-  source-dirs: source
+  source-dirs: src
   ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
   # when:
   # - condition: flag(dev)
@@ -35,8 +32,6 @@ library:
   - Checker.Primitives
   - Checker.Substitutions
   - Checker.Types
-  - Context
-  - Eval
   - Syntax.Desugar
   - Syntax.Def
   - Syntax.Expr
@@ -49,56 +44,17 @@ library:
   - Syntax.Pretty
   - Syntax.Span
   - Syntax.Type
+  - Context
   - Utils
   dependencies:
   - array
   - containers
   - mtl >=2.2.1
   - sbv >=7.5
-  - time
   - transformers >=0.5
   - text
+  - time
   - Glob
-
-
-executables:
-  gr:
-    main: Main.hs
-    source-dirs: command-line-interface
-    ghc-options: -O0 -W -Werror -Wno-unused-matches
-    dependencies:
-    - directory
-    - Glob
-    - granule
-    - optparse-applicative
-  grin:
-    main: Main.hs
-    source-dirs: repl
-    ghc-options: -O3 -W -Werror -Wno-unused-matches
-    # exposed-modules:
-    # - Queue
-    # - ReplError
-    # - ReplParser
-    dependencies:
-    - ConfigFile
-    - containers
-    - Glob
-    - directory
-    - filemanip
-    - filepath
-    - granule
-    - haskeline
-    - mtl >=2.2.1
-    - parsec
-    - text
-    - transformers >=0.5
-
-
-
-# flags:
-#   dev:
-#     default: True
-#     manual: True
 
 tests:
   spec:
@@ -107,7 +63,8 @@ tests:
     ghc-options: -fno-warn-partial-type-signatures
     dependencies:
     - filemanip
-    - granule
+    - directory
+    - granule-frontend
     - hspec
     - QuickCheck
     - mtl
@@ -117,5 +74,5 @@ tests:
     source-dirs: tests
     dependencies:
     - doctest
-    - granule
+    - granule-frontend
     ghc-options: -threaded

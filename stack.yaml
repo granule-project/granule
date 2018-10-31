@@ -1,7 +1,10 @@
 resolver: lts-12.13
 
 packages:
-- '.'
+- compiler/
+- frontend/
+- interpreter/
+- repl/
 
 # Dependency packages to be pulled from upstream that are not in the resolver
 # (e.g., acme-missiles-0.3)
@@ -10,6 +13,9 @@ extra-deps:
 - sbv-7.12
 - crackNum-2.2
 - FloatingHex-0.4
+- llvm-hs-6.3.0
+- llvm-hs-pure-6.2.1
+- llvm-hs-pretty-0.5.0.0
 
 # Override default flag values for local packages and extra-deps
 flags: {}

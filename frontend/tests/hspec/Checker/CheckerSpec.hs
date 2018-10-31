@@ -21,7 +21,7 @@ import Syntax.Type
 import Syntax.Span
 import Syntax.Identifiers
 import Utils
-
+import System.Directory (setCurrentDirectory)
 
 pathToExamples :: FilePath
 pathToExamples = "examples"
@@ -30,10 +30,10 @@ pathToGranuleBase :: FilePath
 pathToGranuleBase = "StdLib"
 
 pathToRegressionTests :: FilePath
-pathToRegressionTests = "tests/regression/good"
+pathToRegressionTests = "frontend/tests/regression/good"
 
 pathToIlltyped :: FilePath
-pathToIlltyped = "tests/regression/illtyped"
+pathToIlltyped = "frontend/tests/regression/illtyped"
 
  -- files in these directories don't get checked
 exclude :: FilePath
@@ -44,6 +44,10 @@ fileExtension = ".gr"
 
 spec :: Spec
 spec = do
+    runIO $ setCurrentDirectory "../"
+    -- Working directory must be root of project for StdLib
+    -- imports to work
+
     -- Integration tests based on the fixtures
     let ?globals = defaultGlobals { suppressInfos = True }
     srcFiles <- runIO exampleFiles
