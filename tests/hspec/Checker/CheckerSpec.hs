@@ -17,6 +17,9 @@ import Checker.Monad
 import Control.Monad.Trans.Maybe
 import Syntax.Parser
 import Syntax.Expr
+import Syntax.Type
+import Syntax.Span
+import Syntax.Identifiers
 import Utils
 
 

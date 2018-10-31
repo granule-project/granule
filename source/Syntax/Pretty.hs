@@ -42,6 +42,9 @@ instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
 instance {-# OVERLAPS #-} Pretty String where
    pretty s = s
 
+instance Pretty () where
+   pretty () = ""
+
 instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
    pretty xs = "[" <> intercalate "," (map pretty xs) <> "]"
 
@@ -143,7 +146,7 @@ instance Pretty t => Pretty (Maybe t) where
     pretty Nothing = "unknown"
     pretty (Just x) = pretty x
 
-instance Pretty (Value () a) where
+instance Pretty v => Pretty (Value v a) where
     pretty (Abs _ x t e)  = parens $ "\\(" <> pretty x <> " : " <> pretty t
                                <> ") -> " <> pretty e
     pretty (Promote _ e)  = "|" <> pretty e <> "|"
@@ -162,7 +165,7 @@ instance Pretty (Value () a) where
         valueAtom (NumFloat _ _)  = True
         valueAtom (Constr _ _ []) = True
         valueAtom _             = False
-    pretty (ExtendedValue _ _) = ""
+    pretty (Ext _ _) = ""
 
 instance Pretty Id where
   pretty = if debugging ?globals then internalName else sourceName

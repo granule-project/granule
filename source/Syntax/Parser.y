@@ -149,17 +149,17 @@ Pat :: { Pattern () }
 
 PatNested :: { Pattern () }
 PatNested
- : '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) (mkId x) $3 }
+ : '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) () (mkId x) $3 }
 
 PAtom :: { Pattern () }
-  : VAR                       { PVar (getPosToSpan $1) (mkId $ symString $1) }
-  | '_'                       { PWild (getPosToSpan $1) }
-  | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) x }
-  | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) $ read x }
-  | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) (mkId x) [] }
+  : VAR                       { PVar (getPosToSpan $1) () (mkId $ symString $1) }
+  | '_'                       { PWild (getPosToSpan $1) () }
+  | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) () x }
+  | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) () $ read x }
+  | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) [] }
   | PatNested                 { $1 }
-  | '|' Pat '|'               { PBox (getPosToSpan $1) $2 }
-  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) (mkId ",") [$2, $4] }
+  | '|' Pat '|'               { PBox (getPosToSpan $1) () $2 }
+  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) () (mkId ",") [$2, $4] }
 
 
 TypeScheme :: { TypeScheme }
@@ -254,25 +254,25 @@ Eff :: { String }
 Expr :: { Expr () () }
   : let LetBind MultiLet
     { let (_, pat, mt, expr) = $2
-      in App (getPos $1, getEnd $3)
-         (Val (getSpan $3) (Abs pat mt $3)) expr }
+	in App (getPos $1, getEnd $3) ()
+	(Val (getSpan $3) () (Abs () pat mt $3)) expr }
 
   | '\\' '(' Pat ':' Type ')' '->' Expr
-      { Val (getPos $1, getEnd $8) (Abs $3 (Just $5) $8) }
+  { Val (getPos $1, getEnd $8) () (Abs () $3 (Just $5) $8) }
 
   | '\\' Pat '->' Expr
-      { Val (getPos $1, getEnd $4) (Abs $2 Nothing $4) }
+  { Val (getPos $1, getEnd $4) () (Abs () $2 Nothing $4) }
 
   | let LetBindEff MultiLetEff
       { let (_, pat, mt, expr) = $2
-        in LetDiamond (getPos $1, getEnd $3) pat mt expr $3 }
+        in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3 }
 
   | case Expr of Cases
-      { Case (getPos $1, getEnd . snd . last $ $4) $2 $4 }
+  { Case (getPos $1, getEnd . snd . last $ $4) () $2 $4 }
 
   | if Expr then Expr else Expr
-      { Case (getPos $1, getEnd $6) $2 [(PConstr (getPosToSpan $3) (mkId "True") [], $4),
-                                        (PConstr (getPosToSpan $3) (mkId "False") [], $6)] }
+  { Case (getPos $1, getEnd $6) () $2 [(PConstr (getPosToSpan $3) () (mkId "True") [], $4),
+                                       (PConstr (getPosToSpan $3) () (mkId "False") [], $6)] }
 
   | Form
     { $1 }
@@ -288,8 +288,8 @@ MultiLet :: { Expr () () }
 MultiLet
   : ';' LetBind MultiLet
     { let (_, pat, mt, expr) = $2
-      in App (getPos $1, getEnd $3)
-           (Val (getSpan $3) (Abs pat mt $3)) expr }
+	in App (getPos $1, getEnd $3) ()
+     	    (Val (getSpan $3) () (Abs () pat mt $3)) expr }
   | in Expr
     { $2 }
 
@@ -302,7 +302,7 @@ MultiLetEff :: { Expr () () }
 MultiLetEff
   : ';' LetBindEff MultiLetEff
       { let (_, pat, mt, expr) = $2
-        in LetDiamond (getPos $1, getEnd $3) pat mt expr $3 }
+	  in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3 }
   | in Expr
       { $2 }
 
@@ -316,41 +316,41 @@ CasesNext :: { [(Pattern (), Expr () ())] }
 Case :: { (Pattern (), Expr () ()) }
   : Pat '->' Expr             { ($1, $3) }
   | CONSTR PAtoms '->' Expr   { let TokenConstr _ x = $1
-                                 in (PConstr (getPosToSpan $1) (mkId x) $2, $4) }
+                                 in (PConstr (getPosToSpan $1) () (mkId x) $2, $4) }
 
 
 Form :: { Expr () () }
-  : Form '+' Form             { Binop (getPosToSpan $2) "+" $1 $3 }
-  | Form '-' Form             { Binop (getPosToSpan $2) "-" $1 $3 }
-  | Form '*' Form             { Binop (getPosToSpan $2) "*" $1 $3 }
-  | Form '<' Form             { Binop (getPosToSpan $2) "<" $1 $3 }
-  | Form '>' Form             { Binop (getPosToSpan $2) ">" $1 $3 }
-  | Form OP  Form             { Binop (getPosToSpan $2) (symString $2) $1 $3 }
-  | Juxt                      { $1 }
+  : Form '+' Form  { Binop (getPosToSpan $2) () "+" $1 $3 }
+  | Form '-' Form  { Binop (getPosToSpan $2) () "-" $1 $3 }
+  | Form '*' Form  { Binop (getPosToSpan $2) () "*" $1 $3 }
+  | Form '<' Form  { Binop (getPosToSpan $2) () "<" $1 $3 }
+  | Form '>' Form  { Binop (getPosToSpan $2) () ">" $1 $3 }
+  | Form OP  Form  { Binop (getPosToSpan $2) () (symString $2) $1 $3 }
+  | Juxt           { $1 }
 
 Juxt :: { Expr () () }
-  : Juxt '`' Atom '`'         { App (getStart $1, getEnd $3) $3 $1 }
-  | Juxt Atom                 { App (getStart $1, getEnd $2) $1 $2 }
+  : Juxt '`' Atom '`'         { App (getStart $1, getEnd $3) () $3 $1 }
+  | Juxt Atom                 { App (getStart $1, getEnd $2) () $1 $2 }
   | Atom                      { $1 }
 
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
   | INT                       { let (TokenInt _ x) = $1
-                                in Val (getPosToSpan $1) $ NumInt x }
+                                in Val (getPosToSpan $1) () $ NumInt () x }
   | FLOAT                     { let (TokenFloat _ x) = $1
-                                in Val (getPosToSpan $1) $ NumFloat $ read x }
-  | VAR                       { Val (getPosToSpan $1) $ Var (mkId $ symString $1) }
-  | '|' Atom '|'              { Val (getPos $1, getPos $3) $ Promote $2 }
-  | CONSTR                    { Val (getPosToSpan $1) $ Constr (mkId $ constrString $1) [] }
-  | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5)
-                                    (App (getPos $1, getPos $3)
-                                         (Val (getPosToSpan $3) (Constr (mkId ",") []))
+                                in Val (getPosToSpan $1) () $ NumFloat () $ read x }
+  | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
+  | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
+  | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
+  | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5) ()
+                                    (App (getPos $1, getPos $3) ()
+                                         (Val (getPosToSpan $3) () (Constr () (mkId ",") []))
                                          $2)
                                     $4 }
-  | CHAR                      { Val (getPosToSpan $1) $
-                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
-  | STRING                    { Val (getPosToSpan $1) $
-                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
+  | CHAR                      { Val (getPosToSpan $1) () $
+                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral () c }
+  | STRING                    { Val (getPosToSpan $1) () $
+                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral () c }
 
 {
 parseError :: [Token] -> IO a

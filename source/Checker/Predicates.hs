@@ -17,9 +17,12 @@ import Data.List (intercalate, (\\))
 import GHC.Generics (Generic)
 
 import Context
+import Syntax.Helpers
+import Syntax.Identifiers
 import Syntax.FirstParameter
 import Syntax.Pretty
-import Syntax.Expr
+import Syntax.Span
+import Syntax.Type
 
 data Quantifier =
     -- | Universally quantification, e.g. polymorphic

@@ -23,10 +23,16 @@ import System.Console.Haskeline.MonadException()
 import "Glob" System.FilePath.Glob (glob)
 import Utils
 import Syntax.Pretty
+import Syntax.Def
 import Syntax.Expr
+import Syntax.Helpers
+import Syntax.Identifiers
+import Syntax.Type
 import Syntax.Parser
 import Syntax.Lexer
+import Syntax.Span
 import Checker.Checker
+import qualified Checker.Primitives as Primitives
 import Eval
 import Context
 --import qualified Checker.Primitives as Primitives
@@ -38,9 +44,9 @@ import ReplParser
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]
 type FreeVarGen = Int
-type REPLStateIO a  = StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) (Ex.ExceptT ReplError IO) a
+type REPLStateIO a  = StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) (Ex.ExceptT ReplError IO) a
 
-instance MonadException m => MonadException (StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def, [String])) m) where
+instance MonadException m => MonadException (StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
@@ -50,14 +56,14 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   run' = RunIO (fmap Ex.ExceptT . run . Ex.runExceptT)
                   in fmap Ex.runExceptT $ f run'
 
-replEval :: (?globals :: Globals) =>Int -> AST -> IO (Maybe Value)
+replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
 replEval val (AST dataDecls defs) = do
-    bindings <- evalDefs builtIns defs
+    bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId (" repl"<>(show val))) bindings of
       Nothing -> return Nothing
-      Just (Pure e)    -> fmap Just (evalIn bindings e)
-      Just (Promote e) -> fmap Just (evalIn bindings e)
-      Just val         -> return $ Just val
+      Just (Pure _ e)    -> fmap Just (evalIn bindings e)
+      Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just val           -> return $ Just val
 
 liftIO' :: IO a -> REPLStateIO a
 liftIO' = lift.lift
@@ -104,7 +110,7 @@ readToQueue pth = do
 
 
 
-loadInQueue :: (?globals::Globals) => Def -> REPLStateIO  ()
+loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
 loadInQueue def@(Def _ id exp _ _) = do
   (fvg,rp,adt,f,m) <- get
   if M.member (pretty id) m
@@ -112,10 +118,10 @@ loadInQueue def@(Def _ id exp _ _) = do
   else put $ (fvg,rp,adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
 
 
-dumpStateAux :: (?globals::Globals) => M.Map String (Def, [String]) -> [String]
+dumpStateAux :: (?globals::Globals) => M.Map String (Def () (), [String]) -> [String]
 dumpStateAux m = pDef (M.toList m)
   where
-    pDef :: [(String, (Def, [String]))] -> [String]
+    pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
     pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
 
@@ -129,7 +135,7 @@ makeUnique ::[String] -> [String]
 makeUnique []     = []
 makeUnique (x:xs) = x : makeUnique (filter (/=x) xs)
 
-buildAST ::String -> M.Map String (Def, [String]) -> [Def]
+buildAST ::String -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildAST t m = let v = M.lookup t m in
                   case v of
                    Nothing -> []
@@ -137,7 +143,7 @@ buildAST t m = let v = M.lookup t m in
                                       []  ->  [def]
                                       ids -> (buildDef ids <> [def])
                                                where
-                                                 buildDef :: [String] -> [Def]
+                                                 buildDef :: [String] -> [Def () ()]
                                                  buildDef [] =  []
                                                  buildDef (x:xs) =  buildDef xs<>(buildAST x m)
 
@@ -159,21 +165,21 @@ lookupBuildADT term aMap = let lup = M.lookup term aMap in
                               Nothing -> ""
                               Just d -> pretty d
 
-printType :: (?globals::Globals) => String -> M.Map String (Def, [String]) -> String
+printType :: (?globals::Globals) => String -> M.Map String (Def () (), [String]) -> String
 printType trm m = let v = M.lookup trm m in
                     case v of
                       Nothing ->""
                       Just (def@(Def _ id _ _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
 
-buildForEval :: [Id] -> M.Map String (Def, [String]) -> [Def]
+buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
 
-synType :: (?globals::Globals) => Expr -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption))
+synType :: (?globals::Globals) => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption))
 synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr empty empty Positive exp
 synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr cts empty Positive exp
 
-synTypeBuilder :: (?globals::Globals) => Expr -> [Def] -> [DataDecl] -> REPLStateIO Type
+synTypeBuilder :: (?globals::Globals) => Expr () () -> [Def () ()] -> [DataDecl] -> REPLStateIO Type
 synTypeBuilder exp ast adt = do
   let ddts = buildCtxtTSDD adt
   (_,cs) <- liftIO $ Mo.runChecker Mo.initState $ buildCheckerState adt
@@ -190,7 +196,7 @@ buildCheckerState dd = do
     somethine <- checkDataDecls
     return ()
 
-buildCtxtTS :: (?globals::Globals) => [Def] -> Ctxt TypeScheme
+buildCtxtTS :: (?globals::Globals) => [Def () ()] -> Ctxt TypeScheme
 buildCtxtTS [] = []
 buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
 
@@ -211,7 +217,7 @@ buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
-buildDef ::Int -> TypeScheme -> Expr -> Def
+buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv))) ex [] ts
 
 
@@ -326,6 +332,7 @@ handleCMD s =
             "" -> Ex.throwError (TermNotInContext trm)
             _ -> liftIO $ putStrLn xtx
         ast -> do
+          -- TODO: use the type that comes out of the checker to return the type
           checked <- liftIO' $ check (AST adt ast)
           case checked of
             Ok -> liftIO $ putStrLn (printType trm m)
@@ -343,7 +350,7 @@ handleCMD s =
                         case typ of
                             Just (t,a) -> return ()
                             Nothing -> Ex.throwError (TypeCheckError ev)
-                        result <- liftIO' $ try $ evalIn builtIns exp
+                        result <- liftIO' $ try $ evalIn builtIns (toRuntimeRep exp)
                         case result of
                             Right r -> liftIO $ putStrLn (pretty r)
                             Left e -> Ex.throwError (EvalError e)
@@ -411,7 +418,7 @@ main = do
   let drp = (lines someP)
   runInputT defaultSettings (loop (0,drp,[],[],M.empty))
    where
-       loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def, [String])) -> InputT IO ()
+       loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def () (), [String])) -> InputT IO ()
        loop st = do
            minput <- getInputLine "Granule> "
            case minput of

@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE StandaloneDeriving #-}
-
+{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Syntax.Expr where
@@ -16,13 +16,14 @@ import Data.Text (Text)
 import Data.List ((\\))
 
 import Syntax.FirstParameter
-import Syntax.Freshening
+import Syntax.Helpers
 import Syntax.Identifiers
 import Syntax.Pattern
 import Syntax.Span
 import Syntax.Type
 
--- Values in Granule that are extensible with `v`
+-- | Values in Granule that are extensible with values `v`
+-- | and can have annotations 'a'
 data Value v a = Abs a (Pattern a) (Maybe Type) (Expr v a)
            | NumInt a Int
            | NumFloat a Double
@@ -33,22 +34,25 @@ data Value v a = Abs a (Pattern a) (Maybe Type) (Expr v a)
            | CharLiteral a Char
            | StringLiteral a Text
            -- Extensible part
-           | ExtendedValue a v
-   deriving Generic
+           | Ext a v
+   deriving (Generic)
 
 instance FirstParameter (Value v a) a
 deriving instance Show v => Show (Value v ())
+deriving instance Functor (Value v)
 
--- Expressions (computations) in Granule
+-- | Expressions (computations) in Granule (with `v` extended values
+-- | and annotations `a`).
 data Expr v a =
     App Span a (Expr v a) (Expr v a)
   | Binop Span a Operator (Expr v a) (Expr v a)
   | LetDiamond Span a (Pattern a) (Maybe Type) (Expr v a) (Expr v a)
   | Val Span a (Value v a)
   | Case Span a (Expr v a) [(Pattern a, Expr v a)]
-  deriving Generic
+  deriving (Generic)
 
 deriving instance (Show (Value v a), Show a) => Show (Expr v a)
+deriving instance Functor (Expr v)
 
 instance FirstParameter (Expr v a) Span
 
@@ -74,7 +78,7 @@ instance Term (Value v a) where
     freeVars Constr{}        = []
     freeVars CharLiteral{}   = []
     freeVars StringLiteral{} = []
-    freeVars ExtendedValue{} = []
+    freeVars Ext{} = []
 
 instance Substitutable Value where
     subst es v (Abs a w t e)      = Val nullSpan a $ Abs a w t (subst es v e)
@@ -87,7 +91,7 @@ instance Substitutable Value where
     subst _ _ v@Constr{}        = Val nullSpan (getFirstParameter v) v
     subst _ _ v@CharLiteral{}   = Val nullSpan (getFirstParameter v) v
     subst _ _ v@StringLiteral{} = Val nullSpan (getFirstParameter v) v
-    subst _ _ v@ExtendedValue{} = Val nullSpan (getFirstParameter v) v
+    subst _ _ v@Ext{} = Val nullSpan (getFirstParameter v) v
 
 instance Freshenable (Value v a) where
     freshen (Abs a p t e) = do

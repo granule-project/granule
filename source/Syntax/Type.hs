@@ -9,7 +9,7 @@
 module Syntax.Type where
 
 import Syntax.FirstParameter
-import Syntax.Freshening
+import Syntax.Helpers
 import Syntax.Identifiers
 import Syntax.Span
 
@@ -78,6 +78,9 @@ type Effect = [String]
 
 ----------------------------------------------------------------------
 -- Helpers
+
+-- | Natural numbers
+type Nat = Word
 
 -- | Compute the arity of a function type
 arity :: Type -> Nat

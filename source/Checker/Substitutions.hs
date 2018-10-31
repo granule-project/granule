@@ -10,8 +10,11 @@ import Control.Monad
 import Control.Monad.State.Strict
 
 import Context
-import Syntax.Expr
+import Syntax.Identifiers
 import Syntax.Pretty
+import Syntax.Span
+import Syntax.Type
+
 import Checker.Kinds
 import Checker.Monad
 import Checker.Predicates
@@ -20,7 +23,8 @@ import Utils
 
 -- For doctest:
 -- $setup
--- >>> import Syntax.Expr (mkId)
+-- >>> import Syntax.Identifiers (mkId)
+-- >>> import Syntax.Pattern
 -- >>> :set -XImplicitParams
 
 {-| Substitutions map from variables to type-level things as defined by

@@ -15,8 +15,9 @@ import Control.Arrow (first)
 
 import Checker.Predicates
 import Context (Ctxt)
-import Syntax.Expr
+import Syntax.Identifiers
 import Syntax.Pretty
+import Syntax.Type
 import Utils
 
 -- | What is the SBV represnetation of a quantifier

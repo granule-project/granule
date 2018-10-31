@@ -2,7 +2,9 @@ module Checker.MonadSpec where
 
 import Test.Hspec
 
-import Syntax.Expr
+import Syntax.Identifiers
+import Syntax.Type
+
 import Checker.Monad
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe

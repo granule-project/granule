@@ -18,8 +18,12 @@ import Control.Monad.Trans.Maybe
 import Checker.Monad
 
 import Checker.Predicates
-import Syntax.Expr
+
+import Syntax.Def
+import Syntax.Identifiers
 import Syntax.Pretty
+import Syntax.Span
+import Syntax.Type
 import Context
 import Utils
 
@@ -30,7 +34,7 @@ promoteTypeToKind t = KPromote t
 
 
 -- Currently we expect that a type scheme has kind KType
-kindCheckDef :: (?globals :: Globals) => Def -> MaybeT Checker ()
+kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
 kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})

@@ -15,9 +15,12 @@ import Checker.LaTeX
 import Checker.Predicates
 import qualified Checker.Primitives as Primitives
 import Context
-import Syntax.Expr (Id, Span, Type(..), Kind(..), Coeffect, Pattern,
-                    TypeScheme(..), Cardinality, mkId, internalName, Nat)
+import Syntax.Def
+import Syntax.Identifiers
+import Syntax.Type
+import Syntax.Pattern
 import Syntax.Pretty
+import Syntax.Span
 import Utils
 
 
@@ -147,6 +150,9 @@ registerCoeffectVar v (TyCon constrId) q =
     modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
 registerCoeffectVar v (TyVar constrId) q =
     modify (\st -> st { tyVarContext = (v, (KVar constrId, q)) : tyVarContext st })
+registerCoeffectVar v t _ =
+   error $ "Bug: trying to register the following type as a coeffect "
+     ++ show t
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
@@ -271,13 +277,13 @@ illLinearityMismatch sp mismatches =
 
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
-illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern -> MaybeT Checker a
+illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern t -> MaybeT Checker a
 illTypedPattern sp ty pat =
     halt $ PatternTypingError (Just sp) $
       pretty pat <> " does not have expected type " <> pretty ty
 
 -- | A helper for refutable pattern errors
-refutablePattern :: (?globals :: Globals) => Span -> Pattern -> MaybeT Checker a
+refutablePattern :: (?globals :: Globals) => Span -> Pattern t -> MaybeT Checker a
 refutablePattern sp p =
   halt $ RefutablePatternError (Just sp) $
         "Pattern match " <> pretty p <> " can fail; only \

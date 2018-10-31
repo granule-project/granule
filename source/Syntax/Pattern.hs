@@ -4,12 +4,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DeriveFunctor #-}
 
 module Syntax.Pattern where
 
 import GHC.Generics (Generic)
 
-import Syntax.Freshening
+import Syntax.Helpers
 import Syntax.FirstParameter
 import Syntax.Identifiers
 import Syntax.Span
@@ -23,7 +24,7 @@ data Pattern a
   | PInt Span a Int               -- ^ Numeric patterns
   | PFloat Span a Double          -- ^ Float pattern
   | PConstr Span a Id [Pattern a] -- ^ Constructor pattern
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, Functor)
 
 -- | First parameter of patterns is their span
 instance FirstParameter (Pattern a) Span
@@ -37,7 +38,10 @@ boundVars PInt {}        = []
 boundVars PFloat {}      = []
 boundVars (PConstr _ _ _ ps) = concatMap boundVars ps
 
--- | Frehsening for patterns
+-- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
+-- PVar ((0,0),(0,0)) (Id "x" "x_0")
+
+-- | Freshening for patterns
 instance Freshenable (Pattern a) where
 
   freshen :: Pattern a -> Freshener (Pattern a)

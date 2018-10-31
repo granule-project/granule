@@ -38,7 +38,7 @@ replace (x : ctxt) name v
   = x : replace ctxt name v
 
 -- $setup
--- >>> import Syntax.Expr (mkId)
+-- >>> import Syntax.Identifiers (mkId)
 {- | Take the intersection of two contexts based on keys
 NOTE: this is not a commutative action, consider:
 >>> intersectCtxts [(mkId "x",1)] [(mkId "x",2)]
