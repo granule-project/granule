@@ -1,5 +1,3 @@
-import File
-
 main : String <[O,RW,RW,C]>
 main =
     let h       <- openFile "LICENSE" ReadMode;

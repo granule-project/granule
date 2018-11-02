@@ -1,9 +1,13 @@
+	# 0.6.0.5
+	- IOMode is now a primitive type rather than being used
+	primitively but being defined in a library
+
 	# 0.6.0.4
-	
+
 	- Improved type support in `grin`
 	- Refactoring to how ASTs are internally represented
 	- Some fixes regarding consumption effects in pattern matches.
-       
+
         # 0.6.0.1
 
 	Simplified internals of kinds and coeffect types

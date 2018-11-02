@@ -33,6 +33,7 @@ typeLevelConstructors =
     , (mkId "\\/", (KFun (KConstr $ mkId "Nat=") (KFun (KConstr $ mkId "Nat=") (KConstr $ mkId "Nat=")), Nothing))
     -- File stuff
     , (mkId "Handle", (KType, Nothing))
+    , (mkId "IOMode", (KType, Nothing))
     -- Channels and protocol types
     , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing))
     , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing))
@@ -48,6 +49,10 @@ dataConstructors =
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
                  (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
+    , (mkId "ReadMode", Forall nullSpan [] (TyCon $ mkId "IOMode"))
+    , (mkId "WriteMode", Forall nullSpan [] (TyCon $ mkId "IOMode"))
+    , (mkId "AppendMode", Forall nullSpan [] (TyCon $ mkId "IOMode"))
+    , (mkId "ReadWriteMode", Forall nullSpan [] (TyCon $ mkId "IOMode"))
     ]
 
 builtins :: [(Id, TypeScheme)]
