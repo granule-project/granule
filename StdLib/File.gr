@@ -1,11 +1,5 @@
 import Bool
 
-data IOMode where
-  ReadMode      ;
-  WriteMode     ;
-  AppendMode    ;
-  ReadWriteMode
-
 readFile : String -> FileIO String
 readFile filename =
   let h       <- openFile filename ReadMode;
