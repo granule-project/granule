@@ -57,7 +57,7 @@ library:
   - Glob
 
 tests:
-  spec:
+  frontend-spec:
     main: Spec.hs
     source-dirs: tests/hspec
     ghc-options: -fno-warn-partial-type-signatures
@@ -69,7 +69,7 @@ tests:
     - QuickCheck
     - mtl
     - transformers >=0.5
-  zdoctest: # the "z" is to make them run after hspec
+  zfrontend-doctest: # the "z" is to make them run after hspec
     main: doctest.hs
     source-dirs: tests
     dependencies:

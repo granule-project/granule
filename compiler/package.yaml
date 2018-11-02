@@ -39,3 +39,17 @@ executables:
     - llvm-hs-pure >= 6.0
     - llvm-hs >= 6.0
     - llvm-hs-pretty
+
+tests:
+  compiler-spec:
+    main: Spec.hs
+    source-dirs: tests/hspec
+    ghc-options: -fno-warn-partial-type-signatures
+    dependencies:
+    - filemanip
+    - directory
+    - granule-compiler
+    - hspec
+    - QuickCheck
+    - mtl
+    - transformers >=0.5
