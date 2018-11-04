@@ -17,12 +17,12 @@ import Nat
 
 -- interface with no constraints
 interface Magma a where
-  <+> : a -> a -> a
+  op : a -> a -> a
 
 
 -- interface with one constraint
 interface (Magma ty) => Semigroup ty where
-  pfSemiAssoc : forall (a : ty, b : ty, c : ty) . (a <+> b) <+> c = a <+> (b <+> c)
+  pfSemiAssoc : forall (a : ty, b : ty, c : ty) . op (op a b) c = op a (op b c)
 
 
 
@@ -41,7 +41,7 @@ interface (Magma ty) => Semigroup ty where
 
 -- simple instance of a Magma with Natural numbers
 instance Magma N where
-  x <+> y = add x y
+  op x y = add x y
 
 
 instance Semigroup N where
@@ -62,7 +62,7 @@ instance Semigroup N where
 
 -- function with one constraint
 combine3 : forall (a : Type) . (Semigroup a) => a -> a -> a -> a
-combine3 x y z = x <+> y <+> z
+combine3 x y z = op (op x y) z
 
 
 
@@ -82,7 +82,7 @@ combine3 x y z = x <+> y <+> z
 -- - [ ] interface with multiple constraints
 -- - [ ] function with multiple constraints
 -- - [ ] specifying use of particular named instance
---   - ideas: 'x <+> y @{plusNatSemi}' (like Idris)?
+--   - ideas: 'op x y @{plusNatSemi}' (like Idris)?
 -- - [ ] should parentheses be optional for single-constraint functions
 --   - i.e., 'f : forall (x : ty) . Constr ty => ...' rather than
 --     'f : forall (x : ty) . (Constr ty) => ...'
