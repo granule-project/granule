@@ -18,27 +18,32 @@ A brief introduction to the Granule programming language can be found in [this e
 
 Linearity means that the following is ill-typed:
 
-    dupBroken : forall (a : Type) . a -> (a, a)
-    dupBroken x = (x, x)
+```idris
+dupBroken : forall (a : Type) . a -> (a, a)
+dupBroken x = (x, x)
+```
     
 However, a graded modality can be employed to explain exactly how many times the
 parameter here can be used:
 
-    dup : forall (a : Type) . a |2| -> (a, a)
-    dup |x| = (x, x)
+```idris
+dup : forall (a : Type) . a |2| -> (a, a)
+dup |x| = (x, x)
+```
 
 Combining indexed types and bounded reuse in Granule leads to an interesting type
-for the standard `map` function on sized lists:
+for the standard `map` function on sized lists ("vectors"):
 
-    --- Map function
-    map : forall (a : Type, b : Type, n : Nat=) . (a -> b) |n| -> Vec n a -> Vec n b
-    map |f| ys =
-      case ys of
-        Nil -> Nil;
-        (Cons x xs) -> Cons (f x) (map |f| xs)
+```idris
+--- Map function
+map : forall (a : Type, b : Type, n : Nat=) . (a -> b) |n| -> Vec n a -> Vec n b
+map |f| xs = case xs of
+    Nil -> Nil;
+    Cons x xs' -> Cons (f x) (map |f| xs')
+```
 
 This type explains that the parameter function `f` is used exactly `n` times, where `n` is the size
-of the incoming list (vector). Linearity ensures that the entire list is consumed exactly
+of the incoming list. Linearity ensures that the entire list is consumed exactly
 once to the produce the result.
 
 ## Installation
