@@ -7,7 +7,7 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Syntax.Expr where
+module Language.Granule.Syntax.Expr where
 
 import GHC.Generics (Generic)
 import Control.Monad (forM)
@@ -15,12 +15,12 @@ import Control.Arrow
 import Data.Text (Text)
 import Data.List ((\\))
 
-import Syntax.FirstParameter
-import Syntax.Helpers
-import Syntax.Identifiers
-import Syntax.Pattern
-import Syntax.Span
-import Syntax.Type
+import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
 
 -- | Values in Granule that are extensible with values `v`
 -- | and can have annotations 'a'

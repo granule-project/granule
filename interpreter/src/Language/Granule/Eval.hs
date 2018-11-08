@@ -3,17 +3,17 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Eval where
+module Language.Granule.Eval where
 
-import Syntax.Def
-import Syntax.Desugar
-import Syntax.Expr
-import Syntax.Identifiers
-import Syntax.Pattern
-import Syntax.Pretty
-import Syntax.Span
-import Context
-import Utils
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Desugar
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Context
+import Language.Granule.Utils
 
 import Data.Text (pack, unpack, append)
 import qualified Data.Text.IO as Text

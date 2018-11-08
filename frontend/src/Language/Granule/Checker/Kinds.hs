@@ -1,7 +1,7 @@
 -- Mainly provides a kind checker on types
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.Kinds (kindCheckDef
+module Language.Granule.Checker.Kinds (kindCheckDef
                     , inferKindOfType
                     , inferKindOfType'
                     , joinCoeffectConstr
@@ -15,17 +15,17 @@ module Checker.Kinds (kindCheckDef
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
-import Checker.Monad
+import Language.Granule.Checker.Monad
 
-import Checker.Predicates
+import Language.Granule.Checker.Predicates
 
-import Syntax.Def
-import Syntax.Identifiers
-import Syntax.Pretty
-import Syntax.Span
-import Syntax.Type
-import Context
-import Utils
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
+import Language.Granule.Context
+import Language.Granule.Utils
 
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyCon c) = KConstr c

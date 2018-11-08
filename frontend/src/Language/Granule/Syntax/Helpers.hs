@@ -1,9 +1,9 @@
-module Syntax.Helpers where
+module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete)
 import Control.Monad.Trans.State.Strict
 
-import Syntax.Identifiers
+import Language.Granule.Syntax.Identifiers
 
 class Freshenable t where
   -- Alpha-convert bound variables to avoid name capturing

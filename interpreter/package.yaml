@@ -18,14 +18,14 @@ library:
   #   else:
   #     ghc-options: -O3 -w
   exposed-modules:
-  - Eval
+  - Language.Granule.Eval
   dependencies:
   - granule-frontend
   - text
 
 executables:
   gr:
-    main: Main.hs
+    main: Language/Granule/Main.hs
     source-dirs: app
     ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:

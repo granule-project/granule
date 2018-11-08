@@ -1,16 +1,16 @@
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.Exhaustivity (isIrrefutable) where
+module Language.Granule.Checker.Exhaustivity (isIrrefutable) where
 
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 
-import Checker.Monad
-import Syntax.Identifiers
-import Syntax.Pattern
-import Syntax.Span
-import Syntax.Type
-import Utils
+import Language.Granule.Checker.Monad
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
+import Language.Granule.Utils
 
 -- | Check whether a given pattern match will always succeed
 -- NB: This is work in progress.

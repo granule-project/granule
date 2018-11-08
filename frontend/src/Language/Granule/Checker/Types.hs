@@ -3,22 +3,22 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.Types where
+module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List
 
-import Checker.Kinds
-import Checker.Monad
-import Checker.Predicates
-import Checker.Substitutions
-import Syntax.Identifiers
-import Syntax.Pretty
-import Syntax.Span
-import Syntax.Type
+import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Substitutions
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
 
-import Utils
+import Language.Granule.Utils
 
 lEqualTypesWithPolarity :: (?globals :: Globals )
   => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)

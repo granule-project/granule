@@ -1,9 +1,9 @@
-module Codegen.CodegenSpec where
+module Language.Granule.Codegen.CodegenSpec where
 
 import Test.Hspec hiding (Spec)
 import qualified Test.Hspec as Test
 import Test.QuickCheck
-import Codegen.Codegen
+import Language.Granule.Codegen.Codegen
 
 spec :: Test.Spec
 spec = do

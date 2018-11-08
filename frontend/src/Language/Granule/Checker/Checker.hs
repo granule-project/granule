@@ -5,7 +5,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Checker.Checker where
+module Language.Granule.Checker.Checker where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -13,26 +13,26 @@ import Data.List (genericLength, intercalate)
 import Data.Maybe
 import Data.SBV hiding (Kind, kindOf, extend)
 
-import Checker.Coeffects
-import Checker.Constraints
-import Checker.Kinds
-import Checker.Exhaustivity
-import Checker.Monad
-import Checker.Patterns
-import Checker.Predicates
-import qualified Checker.Primitives as Primitives
-import Checker.Substitutions
-import Checker.Types
-import Context
+import Language.Granule.Checker.Coeffects
+import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.Exhaustivity
+import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Patterns
+import Language.Granule.Checker.Predicates
+import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Types
+import Language.Granule.Context
 
-import Syntax.Identifiers
-import Syntax.Helpers (freeVars)
-import Syntax.Def
-import Syntax.Expr
-import Syntax.Pretty
-import Syntax.Span
-import Syntax.Type
-import Utils
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Helpers (freeVars)
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
+import Language.Granule.Utils
 
 -- import Debug.Trace
 

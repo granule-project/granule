@@ -1,18 +1,18 @@
-module Checker.MonadSpec where
+module Language.Granule.Checker.MonadSpec where
 
 import Test.Hspec
 
-import Syntax.Identifiers
-import Syntax.Type
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Type
 
-import Checker.Monad
+import Language.Granule.Checker.Monad
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Reader.Class
 
-import Checker.Constraints
-import Checker.Predicates
-import Checker.LaTeX
+import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.LaTeX
 
 spec :: Spec
 spec = do

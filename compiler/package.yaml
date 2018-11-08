@@ -18,7 +18,7 @@ library:
   #   else:
   #     ghc-options: -O3 -w
   exposed-modules:
-  - Codegen.Codegen
+  - Language.Granule.Codegen.Codegen
   dependencies:
   - granule-frontend
   - llvm-hs-pure >= 6.0
@@ -26,7 +26,7 @@ library:
 
 executables:
   grc:
-    main: Main.hs
+    main: Language/Granule/Main.hs
     source-dirs: app
     ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:

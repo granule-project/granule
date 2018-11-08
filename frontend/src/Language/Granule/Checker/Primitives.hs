@@ -1,11 +1,11 @@
 -- Provides all the type information for built-ins
 
-module Checker.Primitives where
+module Language.Granule.Checker.Primitives where
 
-import Syntax.Def
-import Syntax.Identifiers
-import Syntax.Type
-import Syntax.Span
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Span
 
 protocol = KConstr $ mkId "Protocol"
 

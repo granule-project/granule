@@ -4,14 +4,14 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
 
--- Syntax of types, coeffects, and effects
+-- Language.Granule.Syntax of types, coeffects, and effects
 
-module Syntax.Type where
+module Language.Granule.Syntax.Type where
 
-import Syntax.FirstParameter
-import Syntax.Helpers
-import Syntax.Identifiers
-import Syntax.Span
+import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Span
 
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)

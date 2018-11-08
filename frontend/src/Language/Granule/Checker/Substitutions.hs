@@ -4,27 +4,27 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Checker.Substitutions where
+module Language.Granule.Checker.Substitutions where
 
 import Control.Monad
 import Control.Monad.State.Strict
 
-import Context
-import Syntax.Identifiers
-import Syntax.Pretty
-import Syntax.Span
-import Syntax.Type
+import Language.Granule.Context
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
 
-import Checker.Kinds
-import Checker.Monad
-import Checker.Predicates
+import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Predicates
 import Control.Monad.Trans.Maybe
-import Utils
+import Language.Granule.Utils
 
 -- For doctest:
 -- $setup
--- >>> import Syntax.Identifiers (mkId)
--- >>> import Syntax.Pattern
+-- >>> import Language.Granule.Syntax.Identifiers (mkId)
+-- >>> import Language.Granule.Syntax.Pattern
 -- >>> :set -XImplicitParams
 
 {-| Substitutions map from variables to type-level things as defined by

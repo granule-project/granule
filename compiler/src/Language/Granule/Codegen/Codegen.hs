@@ -1,10 +1,10 @@
 {-# LANGUAGE OverloadedStrings #-}
 {-# LANGUAGE RecursiveDo #-}
-module Codegen.Codegen where
+module Language.Granule.Codegen.Codegen where
 
 import Control.Exception (SomeException)
 
-import Syntax.Def
+import Language.Granule.Syntax.Def
 
 import qualified LLVM.AST.Float as F
 import qualified LLVM.AST.Constant as C

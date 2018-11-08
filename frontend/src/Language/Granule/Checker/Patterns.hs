@@ -1,24 +1,24 @@
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.Patterns where
+module Language.Granule.Checker.Patterns where
 
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 
-import Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
-import Checker.Coeffects
-import Checker.Exhaustivity
-import Checker.Monad
-import Checker.Predicates
-import Checker.Kinds
-import Checker.Substitutions
-import Context
-import Syntax.Identifiers
-import Syntax.Pattern
-import Syntax.Type
-import Syntax.Span
-import Syntax.Pretty
-import Utils
+import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
+import Language.Granule.Checker.Coeffects
+import Language.Granule.Checker.Exhaustivity
+import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.Substitutions
+import Language.Granule.Context
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Utils
 --import Data.Maybe (mapMaybe)
 
 definitelyUnifying :: Pattern t -> Bool

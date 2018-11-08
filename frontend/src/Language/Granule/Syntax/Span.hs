@@ -1,8 +1,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 
-module Syntax.Span where
+module Language.Granule.Syntax.Span where
 
-import Syntax.FirstParameter
+import Language.Granule.Syntax.FirstParameter
 
 type Pos = (Int, Int) -- (line, column)
 type Span = (Pos, Pos)

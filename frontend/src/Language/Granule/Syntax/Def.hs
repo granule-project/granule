@@ -6,18 +6,18 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Syntax.Def where
+module Language.Granule.Syntax.Def where
 
 import Data.List ((\\), delete)
 import GHC.Generics (Generic)
 
-import Syntax.FirstParameter
-import Syntax.Helpers
-import Syntax.Identifiers
-import Syntax.Span
-import Syntax.Expr
-import Syntax.Type
-import Syntax.Pattern
+import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Pattern
 
 -- | Top-level ASTs
 -- | Comprise a list of data type declarations and a list

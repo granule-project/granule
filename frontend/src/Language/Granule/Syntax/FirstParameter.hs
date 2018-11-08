@@ -5,7 +5,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FunctionalDependencies #-}
 
-module Syntax.FirstParameter where
+module Language.Granule.Syntax.FirstParameter where
 
 import GHC.Generics
 

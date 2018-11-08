@@ -1,4 +1,4 @@
-module Checker.LaTeX where
+module Language.Granule.Checker.LaTeX where
 
 import Data.List (intercalate)
 

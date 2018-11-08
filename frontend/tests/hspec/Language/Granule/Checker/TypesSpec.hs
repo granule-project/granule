@@ -1,8 +1,8 @@
-module Checker.TypesSpec where
+module Language.Granule.Checker.TypesSpec where
 
-import Syntax.Identifiers
+import Language.Granule.Syntax.Identifiers
 import Test.Hspec
-import Context
+import Language.Granule.Context
 
 spec :: Spec
 spec = do

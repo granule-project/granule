@@ -1,9 +1,9 @@
-module ContextSpec where
+module Language.Granule.ContextSpec where
 
 import Test.Hspec hiding (Spec)
 import qualified Test.Hspec as Test
 import Test.QuickCheck
-import Context
+import Language.Granule.Context
 
 spec :: Test.Spec
 spec = do

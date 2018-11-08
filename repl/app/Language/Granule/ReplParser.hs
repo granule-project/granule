@@ -5,7 +5,7 @@ LANGUAGE
   TemplateHaskell,
   FlexibleContexts
 #-}
-module ReplParser where
+module Language.Granule.ReplParser where
 
 import Prelude
 --import Data.List
@@ -16,7 +16,7 @@ import qualified Text.Parsec.Token as Token
 import Text.Parsec.Language
 --import Data.Functor.Identity
 --import System.FilePath
---import Syntax.Expr
+--import Language.Granule.Syntax.Expr
 
 
 

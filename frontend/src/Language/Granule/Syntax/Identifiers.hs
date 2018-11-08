@@ -1,4 +1,4 @@
-module Syntax.Identifiers where
+module Language.Granule.Syntax.Identifiers where
 
 -- | Internal representation of entinames (variables)
 -- which pairs their source name string with an internal name

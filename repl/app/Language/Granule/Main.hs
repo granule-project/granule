@@ -13,7 +13,7 @@ import System.FilePath
 import System.FilePath.Find
 import System.Directory
 import qualified Data.Map as M
-import qualified Checker.Monad as Mo
+import qualified Language.Granule.Checker.Monad as Mo
 import qualified Data.ConfigFile as C
 import Control.Exception (try)
 import Control.Monad.State
@@ -21,25 +21,25 @@ import Control.Monad.Trans.Maybe
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 import "Glob" System.FilePath.Glob (glob)
-import Utils
-import Syntax.Pretty
-import Syntax.Def
-import Syntax.Expr
-import Syntax.Helpers
-import Syntax.Identifiers
-import Syntax.Type
-import Syntax.Parser
-import Syntax.Lexer
-import Syntax.Span
-import Checker.Checker
-import qualified Checker.Primitives as Primitives
-import Eval
-import Context
---import qualified Checker.Primitives as Primitives
+import Language.Granule.Utils
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Parser
+import Language.Granule.Syntax.Lexer
+import Language.Granule.Syntax.Span
+import Language.Granule.Checker.Checker
+import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Eval
+import Language.Granule.Context
+--import qualified Language.Granule.Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex
 
-import ReplError
-import ReplParser
+import Language.Granule.ReplError
+import Language.Granule.ReplParser
 
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]

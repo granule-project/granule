@@ -9,15 +9,15 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE UndecidableInstances #-}
 
-module Syntax.Pretty where
+module Language.Granule.Syntax.Pretty where
 
 import Data.List
-import Syntax.Expr
-import Syntax.Type
-import Syntax.Pattern
-import Syntax.Def
-import Syntax.Identifiers
-import Utils
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Utils
 
 prettyDebug :: Pretty t => t -> String
 prettyDebug x =

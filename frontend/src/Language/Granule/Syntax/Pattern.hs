@@ -6,17 +6,17 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveFunctor #-}
 
-module Syntax.Pattern where
+module Language.Granule.Syntax.Pattern where
 
 import GHC.Generics (Generic)
 
-import Syntax.Helpers
-import Syntax.FirstParameter
-import Syntax.Identifiers
-import Syntax.Span
+import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Span
 
 
--- | Syntax of patterns
+-- | Language.Granule.Syntax of patterns
 data Pattern a
   = PVar Span a Id                -- ^ Variable patterns
   | PWild Span a                  -- ^ Wildcard (underscore) pattern

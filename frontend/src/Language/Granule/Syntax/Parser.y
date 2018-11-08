@@ -1,15 +1,15 @@
 {
 {-# LANGUAGE ImplicitParams #-}
-module Syntax.Parser where
+module Language.Granule.Syntax.Parser where
 
-import Syntax.Identifiers
-import Syntax.Lexer
-import Syntax.Def
-import Syntax.Expr
-import Syntax.Pattern
-import Syntax.Span
-import Syntax.Type
-import Utils
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Lexer
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
+import Language.Granule.Utils
 
 import Control.Monad (forM)
 import Data.List ((\\), intercalate, nub, stripPrefix)

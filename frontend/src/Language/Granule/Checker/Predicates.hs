@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
 
-module Checker.Predicates where
+module Language.Granule.Checker.Predicates where
 
 {-
 
@@ -16,13 +16,13 @@ inside the type checker.
 import Data.List (intercalate, (\\))
 import GHC.Generics (Generic)
 
-import Context
-import Syntax.Helpers
-import Syntax.Identifiers
-import Syntax.FirstParameter
-import Syntax.Pretty
-import Syntax.Span
-import Syntax.Type
+import Language.Granule.Context
+import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
 
 data Quantifier =
     -- | Universally quantification, e.g. polymorphic

@@ -1,13 +1,13 @@
-module Syntax.ExprSpec where
+module Language.Granule.Syntax.ExprSpec where
 
 import Test.Hspec hiding (Spec)
 import qualified Test.Hspec as Test
 
-import Syntax.Expr
-import Syntax.Helpers
-import Syntax.Identifiers
-import Syntax.Pattern
-import Syntax.Span
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Span
 
 spec :: Test.Spec
 spec = do

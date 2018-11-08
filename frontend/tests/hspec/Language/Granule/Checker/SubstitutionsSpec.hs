@@ -1,13 +1,13 @@
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.SubstitutionsSpec where
+module Language.Granule.Checker.SubstitutionsSpec where
 
-import Syntax.Type
-import Syntax.Identifiers
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Identifiers
 
 import Test.Hspec
-import Checker.Substitutions
-import Checker.Monad
+import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Monad
 import Control.Monad.Trans.Maybe
 import Language.Granule.Utils
 

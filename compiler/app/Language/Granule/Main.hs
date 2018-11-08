@@ -25,18 +25,18 @@ import System.Directory (getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 
-import Checker.Checker
+import Language.Granule.Checker.Checker
 import Paths_granule_compiler (version)
-import Syntax.Parser
-import Syntax.Pretty
-import Utils
+import Language.Granule.Syntax.Parser
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Utils
 
 import Data.Text.Lazy (unpack)
 import LLVM.Pretty (ppllvm)
 import LLVM.Target
 import LLVM.Module
 import LLVM.Internal.Context
-import Codegen.Codegen
+import Language.Granule.Codegen.Codegen
 
 main :: IO ()
 main = do

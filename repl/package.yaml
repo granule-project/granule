@@ -10,13 +10,13 @@ dependencies:
 
 executables:
   grin:
-    main: Main.hs
+    main: Language/Granule/Main.hs
     source-dirs: app
     ghc-options: -O3 -W -Werror -Wno-unused-matches
     # exposed-modules:
-    # - Queue
-    # - ReplError
-    # - ReplParser
+    # - Language.Granule.Queue
+    # - Language.Granule.ReplError
+    # - Language.Granule.ReplParser
     dependencies:
     - granule-interpreter
     - granule-frontend

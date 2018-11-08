@@ -5,7 +5,7 @@
 
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
-module Checker.Constraints where
+module Language.Granule.Checker.Constraints where
 
 import Data.Foldable (foldrM)
 import Data.List (isPrefixOf)
@@ -13,12 +13,12 @@ import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
 
-import Checker.Predicates
-import Context (Ctxt)
-import Syntax.Identifiers
-import Syntax.Pretty
-import Syntax.Type
-import Utils
+import Language.Granule.Checker.Predicates
+import Language.Granule.Context (Ctxt)
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Type
+import Language.Granule.Utils
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))

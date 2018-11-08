@@ -25,12 +25,12 @@ import System.Directory (getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 
-import Checker.Checker
-import Eval
+import Language.Granule.Checker.Checker
+import Language.Granule.Eval
 import Paths_granule_interpreter (version)
-import Syntax.Parser
-import Syntax.Pretty
-import Utils
+import Language.Granule.Syntax.Parser
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Utils
 
 
 main :: IO ()

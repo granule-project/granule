@@ -1,18 +1,18 @@
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.Coeffects where
+module Language.Granule.Checker.Coeffects where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
-import Checker.Monad
-import Context
-import Syntax.Identifiers
-import Syntax.Type
-import Syntax.Pretty
-import Syntax.Span
-import Utils
+import Language.Granule.Checker.Monad
+import Language.Granule.Context
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Utils
 
 -- Which coeffects can be flattened
 flattenable :: Type -> Maybe (Coeffect -> Coeffect -> Coeffect)

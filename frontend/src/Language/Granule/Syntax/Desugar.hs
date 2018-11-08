@@ -1,12 +1,12 @@
 -- Provides the desugaring step of the language
 
-module Syntax.Desugar where
+module Language.Granule.Syntax.Desugar where
 
-import Syntax.Def
-import Syntax.Expr
-import Syntax.Identifiers
-import Syntax.Span
-import Syntax.Type
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
 import Control.Monad.State.Strict
 
 {- | 'desugar' erases pattern matches in function definitions

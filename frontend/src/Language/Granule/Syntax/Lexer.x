@@ -4,10 +4,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 
-module Syntax.Lexer (Token(..),scanTokens,getPos,
+module Language.Granule.Syntax.Lexer (Token(..),scanTokens,getPos,
                      getPosToSpan,symString,constrString) where
-import Syntax.Expr
-import Syntax.FirstParameter
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.FirstParameter
 import GHC.Generics (Generic)
 import Data.Text (Text)
 

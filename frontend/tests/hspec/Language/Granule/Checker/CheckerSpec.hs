@@ -1,7 +1,7 @@
 {-# LANGUAGE PartialTypeSignatures #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.CheckerSpec where
+module Language.Granule.Checker.CheckerSpec where
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM_, liftM2)
@@ -10,17 +10,17 @@ import Data.Maybe (fromJust)
 import System.FilePath.Find
 import Test.Hspec
 
-import Checker.Checker
-import Checker.Constraints
-import Checker.Predicates
-import Checker.Monad
+import Language.Granule.Checker.Checker
+import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Monad
 import Control.Monad.Trans.Maybe
-import Syntax.Parser
-import Syntax.Expr
-import Syntax.Type
-import Syntax.Span
-import Syntax.Identifiers
-import Utils
+import Language.Granule.Syntax.Parser
+import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Utils
 import System.Directory (setCurrentDirectory)
 
 pathToExamples :: FilePath

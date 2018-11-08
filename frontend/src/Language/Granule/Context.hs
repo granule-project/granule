@@ -4,12 +4,12 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
-module Context where
+module Language.Granule.Context where
 
 import Data.Maybe (isJust)
 import Data.List (sortBy)
-import Syntax.Identifiers (Id, sourceName)
-import Utils
+import Language.Granule.Syntax.Identifiers (Id, sourceName)
+import Language.Granule.Utils
 
 -- | Type of contexts
 type Ctxt t = [(Id, t)]
@@ -38,7 +38,7 @@ replace (x : ctxt) name v
   = x : replace ctxt name v
 
 -- $setup
--- >>> import Syntax.Identifiers (mkId)
+-- >>> import Language.Granule.Syntax.Identifiers (mkId)
 {- | Take the intersection of two contexts based on keys
 NOTE: this is not a commutative action, consider:
 >>> intersectCtxts [(mkId "x",1)] [(mkId "x",2)]

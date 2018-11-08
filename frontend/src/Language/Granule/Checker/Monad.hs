@@ -5,23 +5,23 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ImplicitParams #-}
 
-module Checker.Monad where
+module Language.Granule.Checker.Monad where
 
 import Data.List (intercalate)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
-import Checker.LaTeX
-import Checker.Predicates
-import qualified Checker.Primitives as Primitives
-import Context
-import Syntax.Def
-import Syntax.Identifiers
-import Syntax.Type
-import Syntax.Pattern
-import Syntax.Pretty
-import Syntax.Span
-import Utils
+import Language.Granule.Checker.LaTeX
+import Language.Granule.Checker.Predicates
+import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Context
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Utils
 
 
 -- State of the check/synth functions
