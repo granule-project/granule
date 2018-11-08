@@ -9,7 +9,7 @@ import Test.Hspec
 import Checker.Substitutions
 import Checker.Monad
 import Control.Monad.Trans.Maybe
-import Utils
+import Language.Granule.Utils
 
 spec :: Spec
 spec = do
