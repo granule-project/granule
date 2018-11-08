@@ -1,7 +1,7 @@
 resolver: lts-12.13
 
 packages:
-- compiler/
+# - compiler/
 - frontend/
 - interpreter/
 - repl/
