@@ -1,5 +1,5 @@
 -- TODO: fix this
--- source/Checker/Patterns.hs:100
+-- source/Language.Granule.Checker.Patterns.hs:100
 
 data Foo where
   Bar Int Bar;

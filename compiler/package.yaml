@@ -1,0 +1,55 @@
+name: granule-compiler
+version: '0.6.0.5'
+synopsis: The Granule compiler
+author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
+copyright: 2018 authors
+license: BSD3
+github: dorchard/granule
+dependencies:
+- base >=4.10 && <5
+
+library:
+  source-dirs: src
+  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
+  # when:
+  # - condition: flag(dev)
+  #   then:
+  #     ghc-options: -O0 -W -Werror -Wno-unused-matches
+  #   else:
+  #     ghc-options: -O3 -w
+  exposed-modules:
+  - Language.Granule.Codegen.Codegen
+  dependencies:
+  - granule-frontend
+  - llvm-hs-pure >= 6.0
+  - llvm-hs >= 6.0
+
+executables:
+  grc:
+    main: Language/Granule/Main.hs
+    source-dirs: app
+    ghc-options: -O0 -W -Werror -Wno-unused-matches
+    dependencies:
+    - directory
+    - Glob
+    - granule-frontend
+    - granule-compiler
+    - optparse-applicative
+    - text
+    - llvm-hs-pure >= 6.0
+    - llvm-hs >= 6.0
+    - llvm-hs-pretty
+
+tests:
+  compiler-spec:
+    main: Spec.hs
+    source-dirs: tests/hspec
+    ghc-options: -fno-warn-partial-type-signatures
+    dependencies:
+    - filemanip
+    - directory
+    - granule-compiler
+    - hspec
+    - QuickCheck
+    - mtl
+    - transformers >=0.5

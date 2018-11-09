@@ -1,0 +1,33 @@
+name: granule-repl
+version: '0.6.0.5'
+synopsis: The GRanule INteractive interpreter
+author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
+copyright: 2018 authors
+license: BSD3
+github: dorchard/granule
+dependencies:
+- base >=4.10 && <5
+
+executables:
+  grin:
+    main: Language/Granule/Main.hs
+    source-dirs: app
+    ghc-options: -O3 -W -Werror -Wno-unused-matches
+    # exposed-modules:
+    # - Language.Granule.Queue
+    # - Language.Granule.ReplError
+    # - Language.Granule.ReplParser
+    dependencies:
+    - granule-interpreter
+    - granule-frontend
+    - ConfigFile
+    - containers
+    - Glob
+    - directory
+    - filemanip
+    - filepath
+    - haskeline
+    - mtl >=2.2.1
+    - parsec
+    - text
+    - transformers >=0.5
