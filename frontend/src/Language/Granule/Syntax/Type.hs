@@ -291,10 +291,7 @@ instance Freshenable Coeffect where
     freshen c@Level{}  = return c
     freshen c@CNat{}   = return c
     freshen c@CNatOmega{} = return c
-    freshen (CUsage c1 c2) = do
-      c1' <- freshen c1
-      c2' <- freshen c2
-      return $ CUsage c1 c2
+    freshen (CUsage c1 c2) = CUsage <$> freshen c1 <*> freshen c2
 
 ----------------------------------------------------------------------
 
