@@ -369,6 +369,7 @@ eqConstraint :: SCoeffect -> SCoeffect -> SBool
 eqConstraint (SNat _ n) (SNat _ m) = n .== m
 eqConstraint (SFloat n) (SFloat m) = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
+eqConstraint (SUsage lb1 ub1) (SUsage lb2 ub2) = lb1 .== lb2 &&& ub1 .== ub2
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
@@ -406,6 +407,7 @@ trivialUnsatisfiableConstraints cs =
     approximatedByC (CNat Discrete n) (CNat Discrete m) = not $ n == m
     approximatedByC (Level n) (Level m)   = not $ n >= m
     approximatedByC (CFloat n) (CFloat m) = not $ n <= m
+    approximatedByC (CUsage lb1 ub1) (CUsage lb2 ub2) = not $ lb1 >= lb2 && ub1 <= ub2
     approximatedByC _ _                   = False
 
     -- Attempt to see if one coeffect is trivially not equal to the other
