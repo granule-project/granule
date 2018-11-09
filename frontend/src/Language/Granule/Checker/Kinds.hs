@@ -128,12 +128,12 @@ inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
 inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
 inferCoeffectType _ (CNatOmega _)     = return $ TyCon $ mkId "Nat*"
 inferCoeffectType s (CUsage c1 c2)    = do
-  TyCon t1 <- inferCoeffectType s c1
-  unless (internalName t1 == "Nat") $
-    halt $ KindError (Just s) $ "Expected Nat= in lower bound of `Usage` but got: " <> pretty t1
-  TyCon t2 <- inferCoeffectType s c2
-  unless (internalName t1 == "Nat") $
-    halt $ KindError (Just s) $ "Expected Nat= in upper bound of `Usage` but got: " <> pretty t2  
+  -- TyCon t1 <- inferCoeffectType s c1
+  -- unless (internalName t1 == "Nat=") $
+  --   halt $ KindError (Just s) $ "Expected Nat= in lower bound of `Usage` but got: " <> pretty t1
+  -- TyCon t2 <- inferCoeffectType s c2
+  -- unless (internalName t1 == "Nat=") $
+  --   halt $ KindError (Just s) $ "Expected Nat= in upper bound of `Usage` but got: " <> pretty t2  
   return $ TyCon $ mkId "Usage"
 
 -- Take the join for compound coeffect epxressions
