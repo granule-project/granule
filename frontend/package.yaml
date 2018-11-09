@@ -7,7 +7,13 @@ license: BSD3
 github: dorchard/granule
 dependencies:
 - base >=4.10 && <5
-
+default-extensions:
+- FlexibleInstances
+- DeriveGeneric
+- RankNTypes
+- ImplicitParams
+- ViewPatterns
+  
 library:
   source-dirs: src
   ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns

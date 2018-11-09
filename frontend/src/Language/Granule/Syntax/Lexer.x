@@ -34,7 +34,7 @@ tokens :-
   $eol+                         { \p s -> TokenNL p }
   $white+                       ;
   "--".*                        ;
-  "{-" (\\.|[^\{\-]|\n)* "-}"     ;
+  "{-" (\\.|[^\{\-]|\n)* "-}"   ;
   "import".*                    ;
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
@@ -48,7 +48,6 @@ tokens :-
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
   ∞                             { \p s -> TokenInfinity p }
-  ∧                             { \p s -> TokenAnd p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
   @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
@@ -81,7 +80,7 @@ tokens :-
   \=\=                          { \p s -> TokenOp p s }
   \`                            { \p s -> TokenBackTick p }
   \^                            { \p s -> TokenCaret p }
-
+  ".."                          { \p s -> TokenDotDot p }
 
 {
 
@@ -97,7 +96,6 @@ data Token
   | TokenCase   AlexPosn
   | TokenOf     AlexPosn
   | TokenInfinity AlexPosn
-  | TokenAnd    AlexPosn
   | TokenLambda AlexPosn
   | TokenLetBox AlexPosn
   | TokenBind   AlexPosn
@@ -133,6 +131,7 @@ data Token
   | TokenForwardSlash AlexPosn
   | TokenOp AlexPosn String
   | TokenCaret AlexPosn
+  | TokenDotDot AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String

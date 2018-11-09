@@ -1,15 +1,14 @@
 {
-{-# LANGUAGE ImplicitParams #-}
-module Language.Granule.Syntax.Parser where
+module Syntax.Parser where
 
-import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Lexer
-import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Expr
-import Language.Granule.Syntax.Pattern
-import Language.Granule.Syntax.Span
-import Language.Granule.Syntax.Type
-import Language.Granule.Utils
+import Syntax.Identifiers
+import Syntax.Lexer
+import Syntax.Def
+import Syntax.Expr
+import Syntax.Pattern
+import Syntax.Span
+import Syntax.Type
+import Utils
 
 import Control.Monad (forM)
 import Data.List ((\\), intercalate, nub, stripPrefix)
@@ -69,7 +68,7 @@ import System.Exit (die)
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
-    ".."  { TokenDotDot _ }
+    '..'  { TokenTwoDots _}
     OP    { TokenOp _ _ }
 
 

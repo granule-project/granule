@@ -4,7 +4,7 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
 
--- Language.Granule.Syntax of types, coeffects, and effects
+-- Syntax of types, coeffects, and effects
 
 module Language.Granule.Syntax.Type where
 
@@ -56,6 +56,7 @@ data Coeffect = CNat      NatModifier Int
               | CNatOmega (Either () Int)
               | CFloat    Rational
               | CInfinity Type
+              | CUsage    { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
@@ -202,6 +203,7 @@ instance Term Coeffect where
     freeVars Level{} = []
     freeVars CSet{} = []
     freeVars (CSig c _) = freeVars c
+    freeVars (CUsage c1 c2) = freeVars c1 <> freeVars c2
 
 ----------------------------------------------------------------------
 -- Freshenable instances
@@ -289,6 +291,10 @@ instance Freshenable Coeffect where
     freshen c@Level{}  = return c
     freshen c@CNat{}   = return c
     freshen c@CNatOmega{} = return c
+    freshen (CUsage c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
+      return $ CUsage c1 c2
 
 ----------------------------------------------------------------------
 
