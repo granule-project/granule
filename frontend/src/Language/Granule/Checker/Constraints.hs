@@ -173,9 +173,7 @@ freshCVar quant name (TyCon (internalName -> "Usage")) q = do
   solverVarLb <- (quant q) (name <> ".lower")
   solverVarUb <- (quant q) (name <> ".upper")
   return
-    ( solverVarLb .>= literal 0
-      &&& solverVarUb .>= literal 0
-      &&& solverVarUb .>= solverVarLb
+    ( solverVarLb .>= literal 0 &&& solverVarUb .>= solverVarLb
     , SUsage solverVarLb solverVarUb
     )
 freshCVar quant name (TyCon (internalName -> "Q")) q = do
