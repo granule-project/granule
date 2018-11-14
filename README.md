@@ -48,19 +48,19 @@ once to the produce the result.
 
 ## Installation
 
-The Granule interpreter requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). An easy way to install Z3 on mac is via Homebrew, e.g.,
+The Granule interpreter requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). On mac, an easy way to install Z3 is via Homebrew:
 
     $ brew install z3
 
 To install Granule, we recommend you use [Stack](https://docs.haskellstack.org/en/stable/README/):
 
-    $ git clone https://github.com/dorchard/granule && cd granule && stack setup && stack install
+    $ git clone https://github.com/granule-project/granule && cd granule && stack setup && stack install
 
-We recommend you use the latest version of Stack. If you have any problems building, this may be due to an outdated version of Stack; you can update stack via `stack upgrade`.
+If you have any problems building, this may be due to an outdated version of Stack; you can update Stack via `stack upgrade`.
 
 ## Executing Granule Programs
 
-Granule program files have file extension `.gr`. Use the `gr` command to execute them:
+Granule program files have file extension `.gr`. Use the `gr` command to run the interpreter:
 
     $ gr examples/NonEmpty.gr
     Checking examples/NonEmpty.gr...
