@@ -165,7 +165,7 @@ data SCoeffect =
   deriving (Show, Eq)
 
 -- | Generate a solver variable of a particular kind, along with
--- a refinement predicatec
+-- a refinement predicate
 freshCVar :: (forall a . SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
           -> String -> Type -> Quantifier -> Symbolic (SBool, SCoeffect)
 
