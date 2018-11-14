@@ -2,11 +2,10 @@ import List
 
 --
 data Patient where
-  Patient :
-     Int    |Private| -> -- Patient id
-     String |Private| -> -- Patient name
-     Int    |Public|  -> -- Patient age
-     Patient
+  Patient
+    (Int    |Private|) -- Patient id
+    (String |Private|) -- Patient name
+    (Int    |Public| ) -- Patient age
 
 meanAge : List Patient -> Int |Public|
 meanAge xs = meanAge' xs |0| |0|
