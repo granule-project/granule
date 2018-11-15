@@ -37,6 +37,7 @@ import Language.Granule.Utils hiding (mkSpan)
     nl    { TokenNL _ }
     data  { TokenData _ }
     interface { TokenIFace _ }
+    instance  { TokenInst _ }
     where { TokenWhere _ }
     let   { TokenLet _ }
     in    { TokenIn  _  }
@@ -104,6 +105,7 @@ Defs :: { AST () () }
   | DataDecl                  { AST [$1] [] }
   | DataDecl NL Defs          { let (AST dds defs) = $3 in AST ($1 : dds) defs }
   | IFaceDecl                 { AST [] [] }
+  | InstDecl                  { AST [] [] }
   | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
   -- | NL                        { AST [] [] }
 
@@ -149,6 +151,13 @@ IFaceSigs :: { [(Id, TypeScheme, Pos)] }
 IFaceDecl :: { () }
   : interface IFaceName VAR where IFaceSigs { }
   | interface '(' IFaceConstrns ')' '=>' IFaceName VAR where IFaceSigs { }
+
+InstBinds :: { [(Id, Expr () (), [Pattern ()])] }
+  : Binding ';' InstBinds { $1 : $3 }
+  | Binding               { [$1] }
+
+InstDecl :: { () }
+  : instance IFaceName CONSTR where InstBinds { }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
