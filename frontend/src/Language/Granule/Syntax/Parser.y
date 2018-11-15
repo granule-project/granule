@@ -156,8 +156,12 @@ InstBinds :: { [(Id, Expr () (), [Pattern ()])] }
   : Binding ';' InstBinds { $1 : $3 }
   | Binding               { [$1] }
 
+InstVar :: { () }
+  : CONSTR { }
+  | '(' CONSTR TyParams ')' { }
+
 InstDecl :: { () }
-  : instance IFaceName CONSTR where InstBinds { }
+  : instance IFaceName InstVar where InstBinds { }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }

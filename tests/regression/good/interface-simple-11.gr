@@ -1,0 +1,3 @@
+-- instance with nested var
+instance Simple (Foo a) where
+  simple x = x
