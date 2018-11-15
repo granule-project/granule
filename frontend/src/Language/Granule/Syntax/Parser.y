@@ -127,7 +127,8 @@ IFaceName :: { Id }
   : CONSTR { mkId $ constrString $1 }
 
 IFaceSigs :: { [(Id, TypeScheme, Pos)] }
-  : Sig { [$1] }
+  : Sig ';' IFaceSigs { $1 : $3 }
+  | Sig { [$1] }
 
 IFaceDecl :: { () }
   : interface IFaceName VAR where IFaceSigs { }

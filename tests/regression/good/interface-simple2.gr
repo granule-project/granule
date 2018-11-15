@@ -1,0 +1,6 @@
+-- simple interface with no additional constraints,
+-- and multiple signatures
+interface Simple a where
+  simple1 : a;
+  simple2 : a -> a;
+  simple3 : a -> a -> a
