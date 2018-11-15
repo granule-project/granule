@@ -1,0 +1,3 @@
+-- a function with an interface constraint
+simple : forall (a : Type) (Simple a) . a -> a
+simple x = x

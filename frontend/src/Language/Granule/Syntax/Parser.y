@@ -143,7 +143,7 @@ IFaceVar :: { () }
   : VAR { }
   | '(' VarSig ')' { }
 
-IFaceSigs :: { [(Id, TypeScheme, Pos)] }
+IFaceSigs :: { [(String, TypeScheme, Pos)] }
   : Sig ';' IFaceSigs { $1 : $3 }
   | Sig { [$1] }
 
@@ -151,7 +151,7 @@ IFaceDecl :: { () }
   : interface IFaceName IFaceVar where IFaceSigs { }
   | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs { }
 
-InstBinds :: { [(Id, Expr () (), [Pattern ()])] }
+InstBinds :: { [(Maybe String, Equation () ())] }
   : Binding ';' InstBinds { $1 : $3 }
   | Binding               { [$1] }
 
@@ -256,15 +256,20 @@ NAryConstr :: { Pattern () }
                                 in (mkSpan (getPos $1, getEnd $ last $2)) >>=
                                        \sp -> return $ PConstr sp  () (mkId x) $2 }
 
+ForallSig :: { [(Id, Kind)] }
+  : '(' VarSigs ')' { $2 }
+  | VarSigs         { $1 }
+
+Forall :: { ((Pos, Pos), [(Id, Kind)]) }
+  : forall ForallSig '.'                       { ((getPos $1, getPos $3), $2) }
+  | forall ForallSig '(' IFaceConstrns ')' '.' { ((getPos $1, getPos $6), $2) }
+
 TypeScheme :: { TypeScheme }
   : Type
         {% return $ Forall nullSpanNoFile [] $1 }
 
-  | forall '(' VarSigs ')' '.' Type
-        {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ Forall sp $3 $6 }
-
-  | forall VarSigs '.' Type
-        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Forall sp $2 $4 }
+  | Forall Type
+        {% (mkSpan (fst $1) ) >>= \sp -> return $ Forall sp (snd $1) $2 }
 
 VarSigs :: { [(Id, Kind)] }
   : VarSig ',' VarSigs        { $1 : $3 }
