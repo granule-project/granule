@@ -55,6 +55,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '/'  { TokenForwardSlash _ }
     '->'  { TokenArrow _ }
     '<-'  { TokenBind _ }
+    '=>'  { TokenConstrain _ }
     ','   { TokenComma _ }
     '×'   { TokenTimes _ }
     '='   { TokenEq _ }
@@ -126,12 +127,20 @@ DataDecl :: { DataDecl }
 IFaceName :: { Id }
   : CONSTR { mkId $ constrString $1 }
 
+IFaceConstrns :: { [(Id, Id)] }
+  : IFaceConstrn ',' IFaceConstrns { $1 : $3 }
+  | IFaceConstrn                   { [$1] }
+
+IFaceConstrn :: { (Id, Id) }
+  : IFaceName VAR { ($1, mkId $ symString $2) }
+
 IFaceSigs :: { [(Id, TypeScheme, Pos)] }
   : Sig ';' IFaceSigs { $1 : $3 }
   | Sig { [$1] }
 
 IFaceDecl :: { () }
   : interface IFaceName VAR where IFaceSigs { }
+  | interface '(' IFaceConstrns ')' '=>' IFaceName VAR where IFaceSigs { }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
