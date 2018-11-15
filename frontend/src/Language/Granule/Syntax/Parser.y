@@ -137,6 +137,9 @@ DataDecl :: { DataDecl }
 IFaceName :: { Id }
   : CONSTR { mkId $ constrString $1 }
 
+IFaceConstrained :: { [(Id, Id)] }
+  : '(' IFaceConstrns ')' '=>' { $2 }
+
 IFaceConstrns :: { [(Id, Id)] }
   : IFaceConstrn ',' IFaceConstrns { $1 : $3 }
   | IFaceConstrn                   { [$1] }
@@ -154,7 +157,7 @@ IFaceSigs :: { [(Id, TypeScheme, Pos)] }
 
 IFaceDecl :: { () }
   : interface IFaceName IFaceVar where IFaceSigs { }
-  | interface '(' IFaceConstrns ')' '=>' IFaceName IFaceVar where IFaceSigs { }
+  | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs { }
 
 InstBinds :: { [(Id, Expr () (), [Pattern ()])] }
   : Binding ';' InstBinds { $1 : $3 }
@@ -166,6 +169,7 @@ InstVar :: { () }
 
 InstDecl :: { () }
   : instance IFaceName InstVar where InstBinds { }
+  | instance IFaceConstrained IFaceName InstVar where InstBinds { }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
