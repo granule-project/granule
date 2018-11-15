@@ -1,0 +1,3 @@
+-- interface with kind
+interface Simple (a : Type -> Type) where
+  simple : forall (b : Type) . a b -> a b
