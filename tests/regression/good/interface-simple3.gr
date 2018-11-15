@@ -1,0 +1,3 @@
+-- simple interface with a parent constraint
+interface (Simple1 a) => Simple2 a where
+  simple : a -> a
