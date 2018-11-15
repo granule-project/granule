@@ -136,13 +136,17 @@ IFaceConstrns :: { [(Id, Id)] }
 IFaceConstrn :: { (Id, Id) }
   : IFaceName VAR { ($1, mkId $ symString $2) }
 
+IFaceVar :: { () }
+  : VAR { }
+  | '(' VarSig ')' { }
+
 IFaceSigs :: { [(Id, TypeScheme, Pos)] }
   : Sig ';' IFaceSigs { $1 : $3 }
   | Sig { [$1] }
 
 IFaceDecl :: { () }
-  : interface IFaceName VAR where IFaceSigs { }
-  | interface '(' IFaceConstrns ')' '=>' IFaceName VAR where IFaceSigs { }
+  : interface IFaceName IFaceVar where IFaceSigs { }
+  | interface '(' IFaceConstrns ')' '=>' IFaceName IFaceVar where IFaceSigs { }
 
 InstBinds :: { [(Id, Expr () (), [Pattern ()])] }
   : Binding ';' InstBinds { $1 : $3 }
