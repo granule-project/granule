@@ -145,7 +145,7 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
           -- Check the body in the context given by the pattern matching
           (outGam, _) <- checkExpr defCtxt patternGam Positive True ty' expr
           -- Check that the outgoing context is a subgrading of the incoming
-          approximatedByCtxt s outGam patternGam
+          ctxtEquals s outGam patternGam
 
           -- Check linear use
           case checkLinearity patternGam outGam of
@@ -289,7 +289,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
       let checkGam = patternGam <> specialisedGam <> unspecialisedGam
       (localGam, subst') <- checkExpr defs checkGam pol False tau' e_i
 
-      approximatedByCtxt s localGam checkGam
+      -- ctxtApprox s localGam checkGam
 
       -- Check linear use in anything Linear
       case checkLinearity patternGam localGam of
@@ -647,12 +647,19 @@ solveConstraints predicate s defName = do
        stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
 
 
-approximatedByCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
+ctxtApprox :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker ()
-approximatedByCtxt s ctxt1 ctxt2 = do
+ctxtApprox s ctxt1 ctxt2 = do
     let ctxt  = ctxt1 `intersectCtxts` ctxt2
         ctxt' = ctxt2 `intersectCtxts` ctxt1
-    zipWithM_ (approximatedByAssumption s) ctxt ctxt'
+    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt ctxt'
+
+ctxtEquals :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
+  -> MaybeT Checker ()
+ctxtEquals s ctxt1 ctxt2 = do
+    let ctxt  = ctxt1 `intersectCtxts` ctxt2
+        ctxt' = ctxt2 `intersectCtxts` ctxt1
+    zipWithM_ (relateByAssumption s Eq) ctxt ctxt'
 
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
@@ -673,8 +680,8 @@ joinCtxts s ctxt1 ctxt2 = do
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
-    zipWithM_ (approximatedByAssumption s) ctxt varCtxt
-    zipWithM_ (approximatedByAssumption s) ctxt' varCtxt
+    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt varCtxt
+    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt' varCtxt
     -- Return the common upper-bound context of ctxt1 and ctxt2
     return varCtxt
 
@@ -722,18 +729,22 @@ checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
   checkLinearity inCtxt outCtxt
 
 
-approximatedByAssumption :: (?globals :: Globals) => Span -> (Id, Assumption) -> (Id, Assumption)
+relateByAssumption :: (?globals :: Globals)
+  => Span
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> (Id, Assumption)
+  -> (Id, Assumption)
   -> MaybeT Checker ()
 
 -- Linear assumptions ignored
-approximatedByAssumption _ (_, Linear _) (_, Linear _) = return ()
+relateByAssumption _ _ (_, Linear _) (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
-approximatedByAssumption s (_, Discharged _ c1) (_, Discharged _ c2) = do
+relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
   kind <- mguCoeffectTypes s c1 c2
-  addConstraint (ApproximatedBy s c1 c2 kind)
+  addConstraint (rel s c1 c2 kind)
 
-approximatedByAssumption s x y =
+relateByAssumption s _ x y =
   halt $ GenericError (Just s) $ "Can't unify free-variable types:\n\t"
            <> "(graded) " <> pretty x <> "\n  with\n\t(linear) " <> pretty y
 
