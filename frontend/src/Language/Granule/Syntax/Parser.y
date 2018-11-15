@@ -34,6 +34,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %token
     nl    { TokenNL _ }
     data  { TokenData _ }
+    interface { TokenIFace _ }
     where { TokenWhere _ }
     let   { TokenLet _ }
     in    { TokenIn  _  }
@@ -94,6 +95,7 @@ Defs :: { AST () () }
   : Def                       { AST [] [$1] }
   | DataDecl                  { AST [$1] [] }
   | DataDecl NL Defs          { let (AST dds defs) = $3 in AST ($1 : dds) defs }
+  | IFaceDecl                 { AST [] [] }
   | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
 
 NL :: { () }
@@ -120,6 +122,15 @@ DataDecl :: { DataDecl }
       {% do
           span <- mkSpan (getPos $1, lastSpan' $6)
           return $ DataDecl span (mkId $ constrString $2) $3 $4 $6 }
+
+IFaceName :: { Id }
+  : CONSTR { mkId $ constrString $1 }
+
+IFaceSigs :: { [(Id, TypeScheme, Pos)] }
+  : Sig { [$1] }
+
+IFaceDecl :: { () }
+  : interface IFaceName VAR where IFaceSigs { }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }

@@ -1,0 +1,4 @@
+-- simple interface with no additional constraints,
+-- and only one signature
+interface Simple a where
+  simple : a
