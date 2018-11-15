@@ -151,7 +151,7 @@ IFaceVar :: { () }
   : VAR { }
   | '(' VarSig ')' { }
 
-IFaceSigs :: { [(Id, TypeScheme, Pos)] }
+IFaceSigs :: { [(String, TypeScheme, Pos)] }
   : Sig ';' IFaceSigs { $1 : $3 }
   | Sig { [$1] }
 
@@ -159,7 +159,7 @@ IFaceDecl :: { () }
   : interface IFaceName IFaceVar where IFaceSigs { }
   | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs { }
 
-InstBinds :: { [(Id, Expr () (), [Pattern ()])] }
+InstBinds :: { [(Maybe String, Equation () ())] }
   : Binding ';' InstBinds { $1 : $3 }
   | Binding               { [$1] }
 
