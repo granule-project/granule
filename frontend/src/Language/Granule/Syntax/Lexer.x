@@ -41,6 +41,7 @@ tokens :-
   let                           { \p s -> TokenLet p }
   data                          { \p s -> TokenData p }
   interface                     { \p s -> TokenIFace p }
+  instance                      { \p s -> TokenInst p }
   where                         { \p s -> TokenWhere p }
   in                            { \p s -> TokenIn p }
   if                            { \p s -> TokenIf p }
@@ -95,6 +96,7 @@ data Token
   | TokenElse   AlexPosn
   | TokenData   AlexPosn
   | TokenIFace  AlexPosn
+  | TokenInst   AlexPosn
   | TokenTypeDecl AlexPosn
   | TokenWhere  AlexPosn
   | TokenCase   AlexPosn

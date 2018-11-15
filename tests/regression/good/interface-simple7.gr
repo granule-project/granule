@@ -1,0 +1,3 @@
+-- simple instance
+instance Simple SimpleDT where
+  simple x = x

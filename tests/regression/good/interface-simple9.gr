@@ -1,0 +1,5 @@
+-- instance with multiple bindings
+instance Simple SimpleDT where
+  simple1 x = x;
+  simple2 x y = x;
+  simple3 x y z = x
