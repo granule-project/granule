@@ -179,7 +179,7 @@ freshCVar quant name (TyCon (internalName -> "Usage")) q = do
 freshCVar quant name (TyCon (internalName -> "Q")) q = do
   solverVar <- (quant q) name
   return (true, SFloat solverVar)
-  
+
 freshCVar quant name (TyCon k) q = do
   solverVar <- (quant q) name
   case internalName k of
@@ -322,8 +322,8 @@ compileCoeffect c@(CUsage lb ub) k vars =
     --   case k of
     --     -- TyVar v | internalName v == "infinity"  -> SNat Ordered 1
     --     -- TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
-    --     -- _ -> SUsage 
-    -- _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
+    --     -- _ -> SUsage
+    _ -> error $ "Failed to compile: " <> show c <> " of kind " <> pretty k
 
 compileCoeffect (CZero (TyCon k')) (TyCon k) _ = assert (internalName k' == internalName k) $
   case internalName k' of
