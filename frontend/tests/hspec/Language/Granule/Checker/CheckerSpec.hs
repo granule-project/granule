@@ -30,10 +30,10 @@ pathToGranuleBase :: FilePath
 pathToGranuleBase = "StdLib"
 
 pathToRegressionTests :: FilePath
-pathToRegressionTests = "frontend/tests/regression/good"
+pathToRegressionTests = "frontend/tests/cases/positive"
 
 pathToIlltyped :: FilePath
-pathToIlltyped = "frontend/tests/regression/illtyped"
+pathToIlltyped = "frontend/tests/cases/negative"
 
  -- files in these directories don't get checked
 exclude :: FilePath
@@ -52,7 +52,7 @@ spec = do
     let ?globals = defaultGlobals { suppressInfos = True }
     srcFiles <- runIO exampleFiles
     forM_ srcFiles $ \file ->
-      describe file $ it "typechecks" $ do
+      describe file $ it "should typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file }
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
@@ -65,7 +65,7 @@ spec = do
     -- Negative tests: things which should fail to check
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
-      describe file $ it "does not typecheck" $ do
+      describe file $ it "should not typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file, suppressErrors = True }
         parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
         case parsed of
