@@ -1,0 +1,4 @@
+--- Pull coeffects of pair elements up to the pair
+pull : forall (a : Type, b : Type, n : Nat, m : Nat)
+     . (a |n|, b |m|) -> (a, b) |n /\ m|
+pull (|x|, |y|) = |(x, y)|

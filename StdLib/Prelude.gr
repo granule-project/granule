@@ -114,11 +114,6 @@ unflatten |x| = ||x||
 push : forall (a : Type, b : Type, n : Nat) . (a, b) |n+1| -> (a |n+1|, b |n+1|)
 push |(x, y)| = (|x|, |y|)
 
---- Pull coeffects of pair elements up to the pair
-pull : forall (a : Type, b : Type, n : Nat, m : Nat)
-     . (a |n|, b |m|) -> (a, b) |n /\ m|
-pull (|x|, |y|) = |(x, y)|
-
 --- Undefined can be used to satisfy the type checker during development.
 undefined : forall (a:Type) . a
 undefined = undefined
