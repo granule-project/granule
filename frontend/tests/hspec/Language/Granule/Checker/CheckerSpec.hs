@@ -127,9 +127,19 @@ spec = do
                  [(varA, Discharged (tyVarK) (CZero (TyCon $ mkId "Nat")))]
 
 
+    describe "elaborator tests" $ do
+      it "simple elaborator tests" $ do
+        -- Simple definitions
+        -- \x -> x + 1
+        p1 <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
+        Just d <- runChecker initState (checkDef [] p1)
+        (getAnnotation (extractMainExpr d)) `shouldBe`
+            (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
 
-  where
-    runCtxts f a b =
+
+extractMainExpr (AST _ ((Def _ _ e _ _):_)) = e
+
+runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
     exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work

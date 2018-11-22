@@ -328,9 +328,9 @@ Juxt :: { Expr () () }
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
   | INT                       { let (TokenInt _ x) = $1
-                                in Val (getPosToSpan $1) () $ NumInt () x }
+                                in Val (getPosToSpan $1) () $ NumInt x }
   | FLOAT                     { let (TokenFloat _ x) = $1
-                                in Val (getPosToSpan $1) () $ NumFloat () $ read x }
+                                in Val (getPosToSpan $1) () $ NumFloat $ read x }
   | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
   | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
   | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
@@ -340,9 +340,9 @@ Atom :: { Expr () () }
                                          $2)
                                     $4 }
   | CHAR                      { Val (getPosToSpan $1) () $
-                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral () c }
+                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
   | STRING                    { Val (getPosToSpan $1) () $
-                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral () c }
+                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
 
 {
 parseError :: [Token] -> IO a

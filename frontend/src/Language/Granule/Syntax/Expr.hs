@@ -16,6 +16,7 @@ import Data.Text (Text)
 import Data.List ((\\))
 
 import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -23,16 +24,18 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
 -- | Values in Granule that are extensible with values `v`
--- | and can have annotations 'a'
+-- | and can have annotations 'a', though leaf value do not need
+-- | an annotation since this should be provided by a `Val` constructor
+-- | in an expression
 data Value v a = Abs a (Pattern a) (Maybe Type) (Expr v a)
-           | NumInt a Int
-           | NumFloat a Double
+           | NumInt Int
+           | NumFloat Double
            | Promote a (Expr v a)
            | Pure a (Expr v a)
            | Var a Id
            | Constr a Id [Value v a]
-           | CharLiteral a Char
-           | StringLiteral a Text
+           | CharLiteral Char
+           | StringLiteral Text
            -- Extensible part
            | Ext a v
    deriving (Generic)
@@ -55,6 +58,10 @@ deriving instance (Show (Value v a), Show a) => Show (Expr v a)
 deriving instance Functor (Expr v)
 
 instance FirstParameter (Expr v a) Span
+instance SecondParameter (Expr v a) a
+
+getAnnotation :: Expr v a -> a
+getAnnotation = getSecondParameter
 
 -- Syntactic sugar constructor
 letBox :: Span -> Pattern () -> Expr v () -> Expr v () -> Expr v ()
