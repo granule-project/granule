@@ -17,6 +17,7 @@ import Language.Granule.Checker.Monad
 import Control.Monad.Trans.Maybe
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
@@ -127,27 +128,29 @@ spec = do
                  [(varA, Discharged (tyVarK) (CZero (TyCon $ mkId "Nat")))]
 
 
-    describe "elaborator tests" $ do
+    describe "elaborator tests" $
       it "simple elaborator tests" $ do
         -- Simple definitions
         -- \x -> x + 1
-        p1 <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
-        Just d <- runChecker initState (checkDef [] p1)
-        (getAnnotation (extractMainExpr d)) `shouldBe`
+        (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
+        (Just defElab, _) <- runChecker initState (checkDef [] def1)
+        getAnnotation (extractMainExpr defElab) `shouldBe`
             (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
 
 
-extractMainExpr (AST _ ((Def _ _ e _ _):_)) = e
+extractMainExpr (Def _ _ e _ _) = e
 
 runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
-    exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work
+
+exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work
       (liftM2 (<>) (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
       (find always (extension ==? fileExtension) pathToGranuleBase))
       (find always (extension ==? fileExtension) pathToRegressionTests)
 
-    illTypedFiles =
-      find always (extension ==? fileExtension) pathToIlltyped
-    tyVarK = TyVar $ mkId "k"
-    varA = mkId "a"
+illTypedFiles =
+  find always (extension ==? fileExtension) pathToIlltyped
+
+tyVarK = TyVar $ mkId "k"
+varA = mkId "a"
