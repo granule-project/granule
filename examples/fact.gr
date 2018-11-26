@@ -6,7 +6,7 @@ fact x =
       |0| -> 1;
       |m| -> m * fact |(m - 1)|
 
-factAlt : forall (n : Nat=) . (N n) |(n+1)| |  -> Int
+factAlt : forall (n : Nat=) . (N n) |(n+1)| -> Int
 factAlt x =
     case x of
       |Z| -> 1;

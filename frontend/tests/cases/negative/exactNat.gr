@@ -1,2 +1,2 @@
-dub : Int |2=| -> Int
+dub : Int |2 : Nat=| -> Int
 dub |x| = x
