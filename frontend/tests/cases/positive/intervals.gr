@@ -5,15 +5,17 @@ data Bool where True; False
 foo : Int -> Int |0..1| -> Int
 foo x |y| = if x > 5 then 0 else y
 
+foo' : Int -> Int |0..1| -> Int |0..1|
+foo' x |y| = if x > 5 then |0| else |y|
+
+foo'test : Int |0..1|
+foo'test = foo' 43 (foo' 4 |1|)
+
 foo1 : Int -> Int |0..2| -> Int
 foo1 x |y| = if x > 5 then 0 else y+y
 
 foo2 : Int -> Int |1..2| -> Int
 foo2 x |y| = if x > 5 then y else y+y
-
--- good: this shouldn't typecheck because the correct lb is 1
--- foo3 : Int -> Int |2..2| -> Int
--- foo3 x |y| = if x > 5 then y else y+y
 
 foo4 : Int |1..1| -> Int
 foo4 |x| = x
@@ -30,7 +32,6 @@ foo6 x |y| = if x > y then y else y
 foo7 : Int |1..Inf| -> Int
 foo7 |n| = if n == 0 then 1 else foo7 |(n - 1)|
 
--- bad! This should typecheck!
 foo8 : Int -> Int |2..3| -> Int
 foo8 x |y| = if x > y then y else y + y
 
@@ -38,9 +39,12 @@ foo8 x |y| = if x > y then y else y + y
 foo9 : Int -> Int |1..3| -> Int
 foo9 x |y| = if x > y then y else y + y
 
-foo10 : forall k : Nat= . N k -> Int |k..(k*2)| -> Int |k..(k*2)| -> Vec k Int
-foo10 n |x| |y| = case n of
-  Z -> Nil;
-  S n -> if x > y
-    then Cons y (foo10 n |y| |(x*2)|)
-    else Cons x (foo10 n |x| |y|)
+-- foo10 : forall k : Nat= . N k -> Int |k..(k*2)| -> Int |k..(k*2)| -> Vec k Int
+-- foo10 n |x| |y| = case n of
+--   Z -> Nil;
+--   S n -> if x > y
+--     then Cons y (foo10 n |y| |(x*2)|)
+--     else Cons x (foo10 n |x| |y|)
+
+foo11 : Int |2| -> Int
+foo11 |x| = x+x
