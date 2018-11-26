@@ -65,7 +65,7 @@ compileToSBV predicate tyVarContext kVarContext =
     buildTheorem' :: Ctxt SCoeffect -> Pred -> Symbolic SBool
     buildTheorem' solverVars (Conj ps) = do
       ps' <- mapM (buildTheorem' solverVars) ps
-      return $ foldr (&&&) true ps'
+      return $ bAnd ps'
 
     buildTheorem' solverVars (Impl [] p1 p2) = do
         p1' <- buildTheorem' solverVars p1
