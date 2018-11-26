@@ -19,13 +19,13 @@ library:
   #   -Wincomplete-record-updates
   #   -Wincomplete-uni-patterns
   #   -Wredundant-constraints
-  
-  when:
-  - condition: flag(dev)
-    then:
-      ghc-options: -O0 -W -Werror -Wno-unused-matches
-    else:
-      ghc-options: -O3 -Wall -Werror -Wno-unused-matches
+
+  # when:
+  # - condition: flag(dev)
+  #   then:
+  #     ghc-options: -O0 -W -Werror -Wno-unused-matches
+  #   else:
+  #     ghc-options: -O3 -Wall -Werror -Wno-unused-matches
   build-tools:
   - alex
   - happy
