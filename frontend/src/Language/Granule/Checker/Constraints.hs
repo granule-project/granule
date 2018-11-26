@@ -1,3 +1,9 @@
+{-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
+
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
 module Language.Granule.Checker.Constraints where
