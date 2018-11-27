@@ -134,8 +134,7 @@ spec = do
         -- \x -> x + 1
         (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
         (Just defElab, _) <- runChecker initState (checkDef [] def1)
-        getAnnotation (extractMainExpr defElab) `shouldBe`
-            (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+        getAnnotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
 
 extractMainExpr (Def _ _ e _ _) = e
