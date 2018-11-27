@@ -240,7 +240,7 @@ compileCoeffect (CInfinity Nothing) _ _ = _
 
 compileCoeffect (CInfinity (Just (TyCon k))) _ _ | internalName k == "Cartesian" = _
 
-compileCoeffect (CNat _ n) (TyCon k) _ = -- trace ("$$$$$" <> show n <> "\n" <> show k) $
+compileCoeffect (CNat n) (TyCon k) _ = -- trace ("$$$$$" <> show n <> "\n" <> show k) $
   case internalName k of
     "Nat" -> SNat  . fromInteger . toInteger $ n
 
@@ -256,10 +256,10 @@ compileCoeffect (CVar v) _ vars =
 
 compileCoeffect c@(CMeet n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat o1 n1, SNat o2 n2) ->
+    (SNat n1, SNat n2) ->
       case k of
         TyCon k | internalName k == "Cartesian" -> _
-        _ | o1 == o2 -> SNat o1 (n1 `smin` n2)
+        _                                       -> SNat (n1 `smin` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smin` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smin` n2)
@@ -268,10 +268,10 @@ compileCoeffect c@(CMeet n m) k vars =
 
 compileCoeffect c@(CJoin n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat o1 n1, SNat o2 n2) ->
+    (SNat n1, SNat n2) ->
       case k of
         TyCon k | internalName k == "Cartesian" -> _
-        _ | o1 == o2 -> SNat o1 (n1 `smax` n2)
+        _ -> SNat (n1 `smax` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smax` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smax` n2)
@@ -280,10 +280,10 @@ compileCoeffect c@(CJoin n m) k vars =
 
 compileCoeffect c@(CPlus n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat o1 n1, SNat o2 n2) ->
+    (SNat n1, SNat n2) ->
       case k of
         TyCon k | internalName k == "Cartesian" -> _
-        _ | o1 == o2 -> SNat o1 (n1 + n2)
+        _ -> SNat (n1 + n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
@@ -292,10 +292,10 @@ compileCoeffect c@(CPlus n m) k vars =
 
 compileCoeffect c@(CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat o1 n1, SNat o2 n2) ->
+    (SNat n1, SNat n2) ->
       case k of
         TyCon k | internalName k == "Cartesian" -> _
-        _ | o1 == o2 -> SNat o1 (n1 * n2)
+        _ -> SNat (n1 * n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
@@ -304,15 +304,15 @@ compileCoeffect c@(CTimes n m) k vars =
 
 compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat o1 n1, SNat o2 n2) ->
+    (SNat n1, SNat n2) ->
       case k of
         TyCon k | internalName k == "Cartesian" -> _
-        _ | o1 == o2 -> SNat o1 (n1 .^ n2)
+        _ -> SNat (n1 .^ n2)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CUsage lb ub) k vars =
   case (compileCoeffect lb (TyCon $ mkId "Nat") vars, compileCoeffect ub (TyCon $ mkId "Nat") vars) of
-    (SNat _ lb, SNat _ ub) -> SUsage lb ub
+    (SNat lb, SNat ub) -> SUsage lb ub
     _ -> error $ "Failed to compile: " <> show c <> " of kind " <> pretty k
 
 compileCoeffect (CZero (TyCon k')) (TyCon k) _ = assert (internalName k' == internalName k) $

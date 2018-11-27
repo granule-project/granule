@@ -215,7 +215,7 @@ Coeffect :: { Coeffect }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (TyCon $ mkId "Cartesian")
+                                    "Inf" -> CInfinity (Just $ TyCon $ mkId "Cartesian")
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect ".." Coeffect      { CUsage $1 $3 }

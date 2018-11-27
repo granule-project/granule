@@ -306,7 +306,6 @@ instance Substitutable Coeffect where
   unify c c' =
     if c == c' then return $ Just [] else return Nothing
 
-
 instance Substitutable Effect where
   -- {TODO: Make effects richer}
   substitute subst e = return e
@@ -341,6 +340,14 @@ instance Substitutable Kind where
     u2 <- unify k2 k2'
     u1 <<>> u2
   unify k k' = return $ if k == k' then Just [] else Nothing
+
+instance Substitutable t => Substitutable (Maybe t) where
+  substitute s Nothing = return Nothing
+  substitute s (Just t) = substitute s t >>= return . Just
+  unify Nothing _ = return (Just [])
+  unify _ Nothing = return (Just [])
+  unify (Just x) (Just y) = unify x y
+
 
 -- | Combine substitutions wrapped in Maybe
 (<<>>) :: (?globals :: Globals)
