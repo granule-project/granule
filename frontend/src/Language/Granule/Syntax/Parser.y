@@ -98,6 +98,8 @@ Defs :: { AST () () }
   | DataDecl                  { AST [$1] [] }
   | DataDecl NL Defs          { let (AST dds defs) = $3 in AST ($1 : dds) defs }
   | IFaceDecl                 { AST [] [] }
+  | IFaceDecl NL Defs         { let (AST dds defs) = $3
+                                 in AST dds defs }
   | InstDecl                  { AST [] [] }
   | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
 
