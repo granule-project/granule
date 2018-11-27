@@ -169,7 +169,8 @@ inferCoeffectType s (CVar cvar) = do
 
 inferCoeffectType s (CZero t) = checkKindIsCoeffect s t
 inferCoeffectType s (COne t)  = checkKindIsCoeffect s t
-inferCoeffectType s (CInfinity t)  = checkKindIsCoeffect s t
+inferCoeffectType s (CInfinity (Just t)) = checkKindIsCoeffect s t
+inferCoeffectType s (CInfinity Nothing) = TyCon $ mkId "Usage"
 inferCoeffectType s (CSig _ t) = checkKindIsCoeffect s t
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)

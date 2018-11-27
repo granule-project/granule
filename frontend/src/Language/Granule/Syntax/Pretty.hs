@@ -77,7 +77,6 @@ instance Pretty Coeffect where
     pretty (CSet xs) =
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> pretty t) xs) <> "}"
     pretty (CSig c t) = "(" <> pretty c <> " : " <> pretty t <> ")"
-    pretty (CInfinity (TyVar kv)) | internalName kv == "infinity" = "∞"
     pretty (CInfinity k) = "∞ : " <> pretty k
     pretty (CUsage c1 c2) = pretty c1 <> ".." <> pretty c2
 

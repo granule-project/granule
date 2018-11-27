@@ -76,7 +76,7 @@ compileToSBV predicate tyVarContext kVarContext =
     buildTheorem' solverVars (Impl (v:vs) p p') =
       if v `elem` (vars p <> vars p')
         then forAll [internalName v] (\vSolver -> do
-             impl <- buildTheorem' ((v, SNat Discrete vSolver) : solverVars) (Impl vs p p')
+             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
              return $ (vSolver .>= literal 0) ==> impl)
         else do
           buildTheorem' solverVars (Impl vs p p')
@@ -188,18 +188,17 @@ freshCVar quant name (TyCon (internalName -> "Q")) q = do
 freshCVar quant name (TyCon k) q = do
   solverVar <- (quant q) name
   case internalName k of
-    "Cartesian" -> return (solverVar .== literal 1 ||| solverVar .== literal 0, SNat Ordered solverVar)
-    "Nat"       -> return (solverVar .>= literal 0, SNat Discrete solverVar)
+    "Cartesian" -> return (solverVar .== literal 1 ||| solverVar .== literal 0, _)
+    "Nat"       -> return (solverVar .>= literal 0, SNat solverVar)
     "Level"     -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
     "Set"       -> return (true, SSet S.empty)
 
--- A poly typed coeffect variable whose element is 'infinity' gets
--- compiled into the One type (since this satisfies all the same properties)
-freshCVar quant name (TyVar v) q | "infinity" == internalName v
+-- A poly typed coeffect variable compiled into the
+--  infinity value (since this satisfies all the semiring properties on the nose)
+freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-                           || "kprom" `isPrefixOf` internalName v = do
   solverVar <- (quant q) name
-  return (solverVar .== literal 1, SNat Ordered solverVar)
+  return (solverVar .== literal 1, _)
 
 freshCVar _ _ k _ =
   error $ "Trying to make a fresh solver variable for a coeffect of kind: " <> show k <> " but I don't know how."
@@ -233,15 +232,17 @@ compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
   SLevel . fromInteger . toInteger $ n
 
 -- Any polymorphic `Inf` gets compiled to the `Inf : One` coeffect
-compileCoeffect (CInfinity (TyVar _)) _ _ = SNat Ordered 1
-compileCoeffect (CInfinity (TyCon k)) _ _ | internalName k == "Cartesian" =
-  SNat Ordered 1
+-- TODO: see if we can erase this, does it actually happen?
+compileCoeffect (CInfinity (Just (TyVar _))) _ _ = _
+
+compileCoeffect (CInfinity Nothing) _ _ = _
+
+
+compileCoeffect (CInfinity (Just (TyCon k))) _ _ | internalName k == "Cartesian" = _
 
 compileCoeffect (CNat _ n) (TyCon k) _ = -- trace ("$$$$$" <> show n <> "\n" <> show k) $
   case internalName k of
-    "Nat" -> SNat Ordered  . fromInteger . toInteger $ n
-    "Nat=" -> SNat Discrete . fromInteger . toInteger $ n -- <- This can also happen when we use
-                    -- natural number coeffects but with an explicit signature to make them Nat=
+    "Nat" -> SNat  . fromInteger . toInteger $ n
 
 compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" = SFloat  . fromRational $ r
 
@@ -257,8 +258,7 @@ compileCoeffect c@(CMeet n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) ->
       case k of
-        TyVar v | internalName v == "infinity" -> SNat Ordered 1
-        TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smin` n2)
+        TyCon k | internalName k == "Cartesian" -> _
         _ | o1 == o2 -> SNat o1 (n1 `smin` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smin` t
@@ -270,8 +270,7 @@ compileCoeffect c@(CJoin n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) ->
       case k of
-        TyVar v | internalName v == "infinity" -> SNat Ordered 1
-        TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
+        TyCon k | internalName k == "Cartesian" -> _
         _ | o1 == o2 -> SNat o1 (n1 `smax` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smax` t
@@ -283,8 +282,7 @@ compileCoeffect c@(CPlus n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) ->
       case k of
-        TyVar v | internalName v == "infinity" -> SNat Ordered 1
-        TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
+        TyCon k | internalName k == "Cartesian" -> _
         _ | o1 == o2 -> SNat o1 (n1 + n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
@@ -296,8 +294,7 @@ compileCoeffect c@(CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) ->
       case k of
-        TyVar v | internalName v == "infinity"  -> SNat Ordered 1
-        TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
+        TyCon k | internalName k == "Cartesian" -> _
         _ | o1 == o2 -> SNat o1 (n1 * n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
@@ -309,49 +306,40 @@ compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat o1 n1, SNat o2 n2) ->
       case k of
-        TyVar v | internalName v == "infinity"  -> SNat Ordered 1
-        TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
+        TyCon k | internalName k == "Cartesian" -> _
         _ | o1 == o2 -> SNat o1 (n1 .^ n2)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CUsage lb ub) k vars =
   case (compileCoeffect lb (TyCon $ mkId "Nat") vars, compileCoeffect ub (TyCon $ mkId "Nat") vars) of
     (SNat _ lb, SNat _ ub) -> SUsage lb ub
-    --   case k of
-    --     -- TyVar v | internalName v == "infinity"  -> SNat Ordered 1
-    --     -- TyCon k | internalName k == "Cartesian" -> SNat Ordered (n1 `smax` n2)
-    --     -- _ -> SUsage
     _ -> error $ "Failed to compile: " <> show c <> " of kind " <> pretty k
 
 compileCoeffect (CZero (TyCon k')) (TyCon k) _ = assert (internalName k' == internalName k) $
   case internalName k' of
     "Level"     -> SLevel 0
-    "Nat"       -> SNat Ordered 0
-    "Nat="      -> SNat Discrete 0
+    "Nat"       -> SNat 0
     "Q"         -> SFloat (fromRational 0)
     "Set"       -> SSet (S.fromList [])
-    "Cartesian" -> SNat Ordered 0
+    "Cartesian" -> _
     "Usage"     -> SUsage 0 0
 
 compileCoeffect (COne (TyCon k')) (TyCon k) _ = assert (internalName k' == internalName k) $
   case internalName k' of
     "Level"     -> SLevel 1
-    "Nat"       -> SNat Ordered 1
-    "Nat="      -> SNat Discrete 1
+    "Nat"       -> SNat 1
     "Q"         -> SFloat (fromRational 1)
     "Set"       -> SSet (S.fromList [])
-    "Cartesian" -> SNat Ordered 1
+    "Cartesian" -> _
     "Usage"     -> SUsage 1 1
-
-compileCoeffect _ (TyVar v) _ | "infinity" == internalName v = SNat Ordered 1
 
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v =
   case c of
-    CZero _ -> SNat Ordered 0
-    _       -> SNat Ordered 1
+    CZero _ -> _
+    _       -> _
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c
@@ -362,7 +350,7 @@ compileCoeffect coeff ckind _ =
 
 -- | Generate equality constraints for two symbolic coeffects
 eqConstraint :: SCoeffect -> SCoeffect -> SBool
-eqConstraint (SNat _ n) (SNat _ m) = n .== m
+eqConstraint (SNat n) (SNat m) = n .== m
 eqConstraint (SFloat n) (SFloat m) = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint (SUsage lb1 ub1) (SUsage lb2 ub2) = lb1 .== lb2 &&& ub1 .== ub2
@@ -371,8 +359,7 @@ eqConstraint x y =
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
 approximatedByOrEqualConstraint :: SCoeffect -> SCoeffect -> SBool
-approximatedByOrEqualConstraint (SNat Ordered n) (SNat Ordered m)   = n .<= m
-approximatedByOrEqualConstraint (SNat Discrete n) (SNat Discrete m) = n .== m
+approximatedByOrEqualConstraint (SNat n) (SNat m) = n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
 approximatedByOrEqualConstraint (SSet s) (SSet t) =

@@ -219,7 +219,7 @@ instance Freshenable Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" || internalName ident == "◻" =
-          return $ Box (CInfinity (TyCon $ mkId "Cartesian")) t2
+          return $ Box (CInfinity (Just $ TyCon $ mkId "Cartesian")) t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
@@ -241,13 +241,9 @@ instance Freshenable Coeffect where
         Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar $ mkId (sourceName v)
 
-    freshen (CInfinity (TyVar i@(Id _ ""))) = do
+    freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do
       t <- freshVar Type i
-      return $ CInfinity (TyVar t)
-
-    freshen (CInfinity (TyVar i@(Id _ " infinity"))) = do
-      t <- freshVar Type i
-      return $ CInfinity (TyVar t)
+      return $ CInfinity $ Just $ TyVar t
 
     freshen (CPlus c1 c2) = do
       c1' <- freshen c1
@@ -328,5 +324,5 @@ normalise (CSig (CNat 0) k) = CZero k
 normalise (CSig (CZero _)  k) = CZero k
 normalise (CSig (CNat 1) k) = COne k
 normalise (CSig (COne _)   k) = CZero k
-normalise (CSig (CInfinity _)  k) = CInfinity k
+normalise (CSig (CInfinity _)  k) = CInfinity (Just k)
 normalise c = c
