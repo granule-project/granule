@@ -101,6 +101,10 @@ Defs :: { AST () () }
   | IFaceDecl NL Defs         { let (AST dds defs) = $3
                                  in AST dds defs }
   | InstDecl                  { AST [] [] }
+
+  | InstDecl NL Defs          { let (AST dds defs) = $3
+                                 in AST dds defs }
+
   | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
 
 NL :: { () }

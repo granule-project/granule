@@ -1,0 +1,6 @@
+-- two instances
+instance Simple Nat where
+  simple x = x
+
+instance Simple Bool where
+  simple x = x
