@@ -159,10 +159,7 @@ checkDef defCtxt (Def s defName expr pats (Forall _ foralls ty)) = do
       checkerState <- get
       let predStack = predicateStack checkerState
       debugM "Solver predicate" $ pretty (Conj predStack)
-      solved <- solveConstraints (Conj predStack) s defName
-      if solved
-        then return ()
-        else halt $ GenericError (Just s) "Constraints violated"
+      solveConstraints (Conj predStack) s defName
 
     -- Erase the solver predicate between definitions
     modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
@@ -579,50 +576,48 @@ optionalSigEquality s (Just t) t' = do
     (eq, _, _) <- equalTypes s t' t
     return eq
 
-solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker Bool
+solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
 solveConstraints predicate s defName = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
-  let ctxtCk  = tyVarContext checkerState
-  let ctxtCkVar = kVarContext checkerState
-  let coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
-  let coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
+  let
+    ctxtCk  = tyVarContext checkerState
+    ctxtCkVar = kVarContext checkerState
+    coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
+    coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
+    (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
 
-  let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
-
-  thmRes <- liftIO . prove $ sbvTheorem
+  ThmResult thmRes <- liftIO . proveWith defaultSMTCfg {-{verbose=True}-} $ sbvTheorem
 
   case thmRes of
-     -- Tell the user if there was a hard proof error (e.g., if
-     -- z3 is not installed/accessible).
-     -- TODO: give more information
-     ThmResult (ProofError _ msgs) ->
-        halt $ CheckerError Nothing $ "Prover error:" <> unlines msgs
-     _ -> if modelExists thmRes
-           then
-             case getModelAssignment thmRes of
-               -- Main 'Falsifiable' result
-               Right (False, assg :: [ Integer ] ) -> do
-                   -- Show any trivial inequalities
-                   mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
-                   -- Show fatal error, with prover result
-                   {-
-                   negated <- liftIO . sat $ sbvSatTheorem
-                   print $ show $ getModelDictionary negated
-                   case (getModelAssignment negated) of
-                     Right (_, assg :: [Integer]) -> do
-                       print $ show assg
-                     Left msg -> print $ show msg
-                   -}
-                   halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' is " <> show thmRes
+    Satisfiable {} -> return ()
+    SatExtField {} -> return ()
+    ProofError _ msgs ->
+      halt $ CheckerError Nothing $ "Prover error:" <> unlines msgs
+    Unknown _ reason  ->
+      halt $ CheckerError Nothing $ "Prover says unknown:\n" <> show reason
+    Unsatisfiable {} ->
+      case getModelAssignment thmRes of
+        -- Main 'Falsifiable' result
+        Right (False, assg :: [ Integer ] ) -> do
+          -- Show any trivial inequalities
+          mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
+          -- Show fatal error, with prover result
+          {-
+          negated <- liftIO . sat $ sbvSatTheorem
+          print $ show $ getModelDictionary negated
+          case (getModelAssignment negated) of
+            Right (_, assg :: [Integer]) -> do
+              print $ show assg
+            Left msg -> print $ show msg
+          -}
+          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' is " <> show (ThmResult thmRes)
 
-               Right (True, _) ->
-                   halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' returned probable model."
+        Right (True, _) ->
+          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' returned probable model."
 
-               Left str        ->
-                   halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> " had a solver fail: " <> str
-
-           else return True
+        Left str        ->
+          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> " had a solver fail: " <> str
   where
 
     justCoeffectTypesConverted checkerState = mapMaybe convert
