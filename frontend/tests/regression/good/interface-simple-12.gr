@@ -1,0 +1,6 @@
+-- two interface definitions
+interface Simple a where
+  simple : a -> a
+
+interface Simple2 a where
+  simple2 : a -> a
