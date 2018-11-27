@@ -454,7 +454,7 @@ joinTypes s (TyInt n) (TyVar m) = do
   let kind = TyCon $ mkId "Nat="
   var <- freshCoeffectVar m kind
   -- Unify the two coeffects into one
-  addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
+  addConstraint (Eq s (CNat n) (CVar var) kind)
   return $ TyInt n
 
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)

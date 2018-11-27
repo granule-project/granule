@@ -162,8 +162,7 @@ rewriteConstraints ctxt =
 
 -- Symbolic coeffects
 data SCoeffect =
-     SNat      NatModifier SInteger
-   | SNatOmega SInteger
+     SNat      SInteger
    | SFloat    SFloat
    | SLevel    SInteger
    | SSet      (S.Set (Id, Type))
@@ -189,12 +188,10 @@ freshCVar quant name (TyCon (internalName -> "Q")) q = do
 freshCVar quant name (TyCon k) q = do
   solverVar <- (quant q) name
   case internalName k of
-    "Nat*" -> return (solverVar .>= literal 0, SNatOmega solverVar)
-    "Nat" -> return (solverVar .>= literal 0, SNat Ordered solverVar)
     "Cartesian" -> return (solverVar .== literal 1 ||| solverVar .== literal 0, SNat Ordered solverVar)
-    "Nat=" -> return (solverVar .>= literal 0, SNat Discrete solverVar)
-    "Level" -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
-    "Set" -> return (true, SSet S.empty)
+    "Nat"       -> return (solverVar .>= literal 0, SNat Discrete solverVar)
+    "Level"     -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
+    "Set"       -> return (true, SSet S.empty)
 
 -- A poly typed coeffect variable whose element is 'infinity' gets
 -- compiled into the One type (since this satisfies all the same properties)
@@ -226,7 +223,7 @@ compile vars (ApproximatedBy _ c1 c2 k) = -- trace (show c1 <> "\n" <> show c2 <
       c1' = compileCoeffect c1 k vars
       c2' = compileCoeffect c2 k vars
 
--- Compile a coeffect term into its symbolic representation
+-- | Compile a coeffect term into its symbolic representation
 compileCoeffect :: (?globals :: Globals) =>
   Coeffect -> Type -> [(Id, SCoeffect)] -> SCoeffect
 
@@ -245,11 +242,6 @@ compileCoeffect (CNat _ n) (TyCon k) _ = -- trace ("$$$$$" <> show n <> "\n" <> 
     "Nat" -> SNat Ordered  . fromInteger . toInteger $ n
     "Nat=" -> SNat Discrete . fromInteger . toInteger $ n -- <- This can also happen when we use
                     -- natural number coeffects but with an explicit signature to make them Nat=
-
-compileCoeffect (CNatOmega (n)) (TyCon k) _ | internalName k == "Nat*" =
-  case n of
-    Left () -> error "TODO: Recursion not yet supported"
-    Right n -> SNatOmega . fromInteger . toInteger $ n
 
 compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" = SFloat  . fromRational $ r
 
@@ -407,8 +399,7 @@ trivialUnsatisfiableConstraints cs =
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
     approximatedByC :: Coeffect -> Coeffect -> Bool
-    approximatedByC (CNat Ordered n)  (CNat Ordered m)  = not $ n <= m
-    approximatedByC (CNat Discrete n) (CNat Discrete m) = not $ n == m
+    approximatedByC (CNat n) (CNat m) = not $ n == m
     approximatedByC (Level n) (Level m)   = not $ n >= m
     approximatedByC (CFloat n) (CFloat m) = not $ n <= m
     approximatedByC (CUsage lb1 ub1) (CUsage lb2 ub2) = not $ lb1 >= lb2 && ub1 <= ub2
@@ -416,8 +407,7 @@ trivialUnsatisfiableConstraints cs =
 
     -- Attempt to see if one coeffect is trivially not equal to the other
     eqC :: Coeffect -> Coeffect -> Bool
-    eqC (CNat Ordered n)  (CNat Ordered m)  = n /= m
-    eqC (CNat Discrete n) (CNat Discrete m) = n /= m
+    eqC (CNat n) (CNat m) = n /= m
     eqC (Level n) (Level m)   = n /= m
     eqC (CFloat n) (CFloat m) = n /= m
     eqC _ _                   = False

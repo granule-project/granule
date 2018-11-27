@@ -209,8 +209,8 @@ TyParams :: { [Type] }
   |                           { [] }
 
 Coeffect :: { Coeffect }
-  : INT                         { let TokenInt _ x = $1 in CNat Ordered x }
-  | '∞'                         { CInfinity (TyCon $ mkId "Cartesian") }
+  : INT                         { let TokenInt _ x = $1 in CNat x }
+  | '∞'                         { CInfinity Nothing }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0

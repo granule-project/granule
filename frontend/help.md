@@ -40,5 +40,5 @@ For using functions that require implicit parameters within GHCi you can do some
 ```
 $ stack repl source/Language/Granule/Checker/Checker.hs
 *Language.Granule.Checker.Checker> :set -XImplicitParams
-*Language.Granule.Checker.Checker>  let ?globals = defaultGlobals in runChecker initState $ checkDataCons $ DataDecl ((1,1),(1,23)) (Id "Choice" "Choice") [((Id "a" "a"),KType),((Id "b" "b"),KType)] Nothing [DataConstrA ((1,23),(1,23)) (Id "MkChoice" "MkChoice") [Box (CNat Ordered 1) (TyVar (Id "a" "a")),Box (CNat Ordered 1) (TyVar (Id "b" "b"))]]
+*Language.Granule.Checker.Checker>  let ?globals = defaultGlobals in runChecker initState $ checkDataCons $ DataDecl ((1,1),(1,23)) (Id "Choice" "Choice") [((Id "a" "a"),KType),((Id "b" "b"),KType)] Nothing [DataConstrA ((1,23),(1,23)) (Id "MkChoice" "MkChoice") [Box (CNat 1) (TyVar (Id "a" "a")),Box (CNat 1) (TyVar (Id "b" "b"))]]
 ```

@@ -58,10 +58,7 @@ instance {-# OVERLAPS #-} Pretty Effect where
    pretty es = "[" <> intercalate "," es <> "]"
 
 instance Pretty Coeffect where
-    pretty (CNat Ordered n) = show n
-    pretty (CNat Discrete n) = show n <> "="
-    pretty (CNatOmega (Left ())) = "∞"
-    pretty (CNatOmega (Right x)) = show x
+    pretty (CNat n) = show n
     pretty (CFloat n) = show n
     pretty (COne k)  = "_1 : " <> pretty k
     pretty (CZero k) = "_0 : " <> pretty k

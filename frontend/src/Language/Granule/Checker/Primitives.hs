@@ -42,6 +42,7 @@ typeLevelConstructors =
     , (mkId "Chan", (KFun protocol KType, Nothing))
     , (mkId "Dual", (KFun protocol protocol, Nothing))
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
+    , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
     ]
 
 dataConstructors :: [(Id, TypeScheme)]
