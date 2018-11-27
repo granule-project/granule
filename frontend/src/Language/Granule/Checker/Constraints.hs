@@ -17,6 +17,11 @@ import Control.Exception (assert)
 
 import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
+
+-- Extended nats
+import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
+import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
+
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
@@ -166,8 +171,12 @@ data SCoeffect =
    | SFloat    SFloat
    | SLevel    SInteger
    | SSet      (S.Set (Id, Type))
-   | SUsage    { sLowerBound :: SInteger, sUpperBound :: SInteger }
-  deriving (Show, Eq)
+   | SUsage    { sLowerBound :: SNatX, sUpperBound :: SNatX }
+   | SExtNat   SNatX
+  deriving Show
+
+-- | Symbolic coeffect representing 0..Inf
+zeroToInfinity = SUsage (SNatX 0) SNatX.inf
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
@@ -188,7 +197,6 @@ freshCVar quant name (TyCon (internalName -> "Q")) q = do
 freshCVar quant name (TyCon k) q = do
   solverVar <- (quant q) name
   case internalName k of
-    "Cartesian" -> return (solverVar .== literal 1 ||| solverVar .== literal 0, _)
     "Nat"       -> return (solverVar .>= literal 0, SNat solverVar)
     "Level"     -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
     "Set"       -> return (true, SSet S.empty)
@@ -197,8 +205,9 @@ freshCVar quant name (TyCon k) q = do
 --  infinity value (since this satisfies all the semiring properties on the nose)
 freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
+-- TODO: possibly this can now be removed
   solverVar <- (quant q) name
-  return (solverVar .== literal 1, _)
+  return (solverVar .== literal -1, SExtNat solverVar)
 
 freshCVar _ _ k _ =
   error $ "Trying to make a fresh solver variable for a coeffect of kind: " <> show k <> " but I don't know how."
@@ -231,14 +240,10 @@ compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
   SLevel . fromInteger . toInteger $ n
 
--- Any polymorphic `Inf` gets compiled to the `Inf : One` coeffect
--- TODO: see if we can erase this, does it actually happen?
-compileCoeffect (CInfinity (Just (TyVar _))) _ _ = _
-
-compileCoeffect (CInfinity Nothing) _ _ = _
-
-
-compileCoeffect (CInfinity (Just (TyCon k))) _ _ | internalName k == "Cartesian" = _
+-- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
+-- TODO: see if we can erase this, does it actually happen anymore?
+compileCoeffect (CInfinity (Just (TyVar _))) _ _ = zeroToInfinity
+compileCoeffect (CInfinity Nothing) _ _ = zeroToInfinity
 
 compileCoeffect (CNat n) (TyCon k) _ = -- trace ("$$$$$" <> show n <> "\n" <> show k) $
   case internalName k of
@@ -258,88 +263,93 @@ compileCoeffect c@(CMeet n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat n1, SNat n2) ->
       case k of
-        TyCon k | internalName k == "Cartesian" -> _
         _                                       -> SNat (n1 `smin` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smin` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smin` n2)
     (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 `smax` lb2) (ub1 `smin` ub2)
+    (SExtNat x, SExtNat y) -> SExtNat (x `smin` y)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CJoin n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat n1, SNat n2) ->
       case k of
-        TyCon k | internalName k == "Cartesian" -> _
         _ -> SNat (n1 `smax` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smax` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smax` n2)
     (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 `smin` lb2) (ub1 `smax` ub2)
+    (SExtNat x, SExtNat y) -> SExtNat (x `smax` y)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CPlus n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat n1, SNat n2) ->
       case k of
-        TyCon k | internalName k == "Cartesian" -> _
         _ -> SNat (n1 + n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
     (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 + lb2) (ub1 + ub2)
+    (SExtNat x, SExtNat y) -> SExtNat (x + y)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat n1, SNat n2) ->
       case k of
-        TyCon k | internalName k == "Cartesian" -> _
         _ -> SNat (n1 * n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
     (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 * lb2) (ub1 * ub2)
+    (SExtNat x, SExtNat y) -> SExtNat (x * y)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat n1, SNat n2) ->
       case k of
-        TyCon k | internalName k == "Cartesian" -> _
         _ -> SNat (n1 .^ n2)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CUsage lb ub) k vars =
-  case (compileCoeffect lb (TyCon $ mkId "Nat") vars, compileCoeffect ub (TyCon $ mkId "Nat") vars) of
-    (SNat lb, SNat ub) -> SUsage lb ub
+  case (compileCoeffect lb extendedNat vars, compileCoeffect ub extendedNat vars) of
+    (SExtNat lb, SExtNat ub) -> SUsage lb ub
     _ -> error $ "Failed to compile: " <> show c <> " of kind " <> pretty k
 
-compileCoeffect (CZero (TyCon k')) (TyCon k) _ = assert (internalName k' == internalName k) $
-  case internalName k' of
-    "Level"     -> SLevel 0
-    "Nat"       -> SNat 0
-    "Q"         -> SFloat (fromRational 0)
-    "Set"       -> SSet (S.fromList [])
-    "Cartesian" -> _
-    "Usage"     -> SUsage 0 0
+compileCoeffect (CZero k') k _ =
+  case (k', k) of
+    (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
+      case internalName k' of
+        "Level"     -> SLevel 0
+        "Nat"       -> SNat 0
+        "Q"         -> SFloat (fromRational 0)
+        "Set"       -> SSet (S.fromList [])
+        "Usage"     -> SUsage 0 0
+    (otherK', otherK) | otherK' == extendedNat && otherK == extendedNat ->
+      SExtNat 0
 
-compileCoeffect (COne (TyCon k')) (TyCon k) _ = assert (internalName k' == internalName k) $
-  case internalName k' of
-    "Level"     -> SLevel 1
-    "Nat"       -> SNat 1
-    "Q"         -> SFloat (fromRational 1)
-    "Set"       -> SSet (S.fromList [])
-    "Cartesian" -> _
-    "Usage"     -> SUsage 1 1
+compileCoeffect (COne k') k _ =
+  case (k', k) of
+    (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
+      case internalName k' of
+        "Level"     -> SLevel 1
+        "Nat"       -> SNat 1
+        "Q"         -> SFloat (fromRational 1)
+        "Set"       -> SSet (S.fromList [])
+        "Usage"     -> SUsage 1 1
+    (otherK', otherK) | otherK' == extendedNat && otherK == extendedNat ->
+      SExtNat 1
 
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v =
   case c of
-    CZero _ -> _
-    _       -> _
+    CZero _ -> SUsage 0 0
+    _       -> zeroToInfinity
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c
@@ -354,6 +364,7 @@ eqConstraint (SNat n) (SNat m) = n .== m
 eqConstraint (SFloat n) (SFloat m) = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint (SUsage lb1 ub1) (SUsage lb2 ub2) = lb1 .== lb2 &&& ub1 .== ub2
+eqConstraint (SExtNat x) (SExtNat y) = x .== y
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
@@ -365,6 +376,7 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
 approximatedByOrEqualConstraint (SUsage lb1 ub1) (SUsage lb2 ub2) = lb1 .>= lb2 &&& ub1 .<= ub2
+approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .>= y
 approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " <> show x <> " <= " <> show y
 

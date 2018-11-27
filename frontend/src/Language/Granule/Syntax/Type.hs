@@ -69,6 +69,9 @@ data Coeffect = CNat      Int
               | CExpon    Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
+extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
+infiniteUsage = CUsage (CZero extendedNat) (CInfinity (Just extendedNat))
+
 -- | Represents effect grades
 -- TODO: Make richer
 type Effect = [String]
@@ -219,7 +222,7 @@ instance Freshenable Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" || internalName ident == "◻" =
-          return $ Box (CInfinity (Just $ TyCon $ mkId "Cartesian")) t2
+          return $ Box infiniteUsage t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do

@@ -210,12 +210,12 @@ TyParams :: { [Type] }
 
 Coeffect :: { Coeffect }
   : INT                         { let TokenInt _ x = $1 in CNat x }
-  | '∞'                         { CInfinity Nothing }
+  | '∞'                         { infiniteUsage }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (Just $ TyCon $ mkId "Cartesian")
+                                    "Inf" -> infiniteUsage
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect ".." Coeffect      { CUsage $1 $3 }
