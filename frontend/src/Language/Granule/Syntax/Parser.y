@@ -260,16 +260,16 @@ ForallSig :: { [(Id, Kind)] }
   : '(' VarSigs ')' { $2 }
   | VarSigs         { $1 }
 
-Forall :: { ((Pos, Pos), [(Id, Kind)]) }
-  : forall ForallSig '.'                       { ((getPos $1, getPos $3), $2) }
-  | forall ForallSig '(' IFaceConstrns ')' '.' { ((getPos $1, getPos $6), $2) }
+Forall :: { (((Pos, Pos), [(Id, Kind)]), [(Id, Id)]) }
+  : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
+  | forall ForallSig '(' IFaceConstrns ')' '.' { (((getPos $1, getPos $6), $2), $4) }
 
 TypeScheme :: { TypeScheme }
   : Type
-        {% return $ Forall nullSpanNoFile [] $1 }
+        {% return $ Forall nullSpanNoFile [] [] $1 }
 
   | Forall Type
-        {% (mkSpan (fst $1) ) >>= \sp -> return $ Forall sp (snd $1) $2 }
+        {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ Forall sp (snd $ fst $1) (snd $1) $2 }
 
 VarSigs :: { [(Id, Kind)] }
   : VarSig ',' VarSigs        { $1 : $3 }

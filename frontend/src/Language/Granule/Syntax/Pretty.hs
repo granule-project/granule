@@ -107,8 +107,8 @@ instance Pretty Kind where
     prettyL l (KPromote t)   = "↑" <> prettyL l t
 
 instance Pretty TypeScheme where
-    prettyL l (Forall _ [] t) = prettyL l t
-    prettyL l (Forall _ cvs t) =
+    prettyL l (Forall _ [] _ t) = prettyL l t
+    prettyL l (Forall _ cvs _ t) =
         "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". " <> prettyL l t
       where
        prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind

@@ -21,6 +21,7 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
+    [(Id, Id)]    -- constraints
     Type          -- type
   deriving (Eq, Show, Generic)
 
@@ -273,10 +274,11 @@ instance Term Coeffect where
 
 instance Monad m => Freshenable m TypeScheme where
   freshen :: TypeScheme -> Freshener m TypeScheme
-  freshen (Forall s binds ty) = do
+  freshen (Forall s binds constrs ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
+        let constrs' = constrs
         ty' <- freshen ty
-        return $ Forall s binds' ty'
+        return $ Forall s binds' constrs' ty'
 
 instance Freshenable m Type where
   freshen =

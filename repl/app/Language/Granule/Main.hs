@@ -237,7 +237,7 @@ buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
 
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
-buildTypeScheme ty = Forall nullSpanInteractive [] ty
+buildTypeScheme ty = Forall nullSpanInteractive [] [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))

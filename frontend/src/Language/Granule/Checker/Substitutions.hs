@@ -480,7 +480,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
   -> TypeScheme   -- Type scheme to freshen
   -> MaybeT Checker (Type, [Id])
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds ty) = do
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds _ ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
