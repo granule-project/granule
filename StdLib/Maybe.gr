@@ -18,7 +18,7 @@ data Maybe a where Some a; None
 --- Otherwise, it applies the function to the value inside the Some and
 -- returns the result.
 maybe : forall a : Type, b : Type
-      . b |1| -> (a -> b) |1| -> Maybe a -> b
+      . b |0..1| -> (a -> b) |0..1| -> Maybe a -> b
 maybe |default| |f| m = case m of None -> default; Some x -> f x
 
 -- Monady interface for Maybe
@@ -26,7 +26,7 @@ return : forall a : Type . a -> Maybe a
 return = Some
 
 bind : forall a : Type, b : Type
-     . Maybe a -> (a -> Maybe b) |1| -> Maybe b
+     . Maybe a -> (a -> Maybe b) |0..1| -> Maybe b
 bind m |k| =
   case m of
     None -> None;
@@ -36,7 +36,7 @@ bind m |k| =
 -- Maybe is None, it returns the default values; otherwise, it returns the value
 -- contained in the Maybe.
 fromMaybe : forall a : Type
-          . a |1| -> Maybe a -> a
+          . a |0..1| -> Maybe a -> a
 fromMaybe default m = maybe default |(\(x : a) -> x)| m
 
 --- The isSome function returns True iff its argument is of the form Some _.
