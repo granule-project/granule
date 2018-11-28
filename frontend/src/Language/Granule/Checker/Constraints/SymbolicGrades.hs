@@ -34,8 +34,6 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (symbolicMerge s sb lb1 lb2) (symbolicMerge s sb ub1 ub2)
 
-
-
 instance OrdSymbolic SGrade where
   (SInterval lb1 ub1) .< (SInterval lb2 ub2) =
     lb2 .< lb1 &&& ub1 .< ub2
