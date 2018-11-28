@@ -184,7 +184,7 @@ freshCVar :: (forall a . Quantifiable a => Quantifier -> (String -> Symbolic a))
 freshCVar quant name (isInterval -> Just t) q = do
   -- Interval, therefore recursively generate fresh vars for the lower and upper
   (predLb, solverVarLb) <- freshCVar quant (name <> ".lower") t q
-  (predUb, solverVarUb) <- freshCVar quant (name <> ".lower") t q
+  (predUb, solverVarUb) <- freshCVar quant (name <> ".upper") t q
   return
      -- Respect the meaning of intervals
     ( predLb &&& predUb &&& solverVarUb .>= solverVarLb
