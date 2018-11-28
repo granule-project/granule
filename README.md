@@ -22,7 +22,7 @@ Linearity means that the following is ill-typed:
 dupBroken : forall (a : Type) . a -> (a, a)
 dupBroken x = (x, x)
 ```
-    
+
 However, a graded modality can be employed to explain exactly how many times the
 parameter here can be used:
 
@@ -36,7 +36,7 @@ for the standard `map` function on sized lists ("vectors"):
 
 ```idris
 --- Map function
-map : forall (a : Type, b : Type, n : Nat=) . (a -> b) |n| -> Vec n a -> Vec n b
+map : forall (a : Type, b : Type, n : Nat) . (a -> b) |n| -> Vec n a -> Vec n b
 map |f| xs = case xs of
     Nil -> Nil;
     Cons x xs' -> Cons (f x) (map |f| xs')

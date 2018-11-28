@@ -74,7 +74,7 @@ Granule> :l Vec.gr
 S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
 
 Granule> :t head
-head : forall a : Type, n : Nat=. ((Vec n + 1 a) |1|) -> a
+head : forall a : Type, n : Nat. ((Vec n + 1 a) |1|) -> a
 ```
 
 #### :show <term\> (:s)

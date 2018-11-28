@@ -18,11 +18,11 @@ import Language.Granule.Utils
 flattenable :: Type -> Maybe (Coeffect -> Coeffect -> Coeffect)
 flattenable (TyCon k) =
   case internalName k of
-    "Nat" -> Just CTimes
-    "Nat=" -> Just CTimes
-    "Nat*" -> Just CTimes
+    "Nat"   -> Just CTimes
     "Level" -> Just CJoin
-    _ -> Nothing
+    "Usage" -> Just CTimes
+    _       -> Nothing
+flattenable t | t == extendedNat = Just CTimes
 flattenable _ = Nothing
 
 checkKind :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type

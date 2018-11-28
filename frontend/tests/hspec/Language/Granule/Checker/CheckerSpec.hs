@@ -148,17 +148,9 @@ exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't 
       (find always (extension ==? fileExtension) pathToGranuleBase))
       (find always (extension ==? fileExtension) pathToRegressionTests)
 
-<<<<<<< HEAD
+cNatOrdered x = CSig (CNat x) (TyCon $ mkId "Usage")
+
 illTypedFiles =
   find always (extension ==? fileExtension) pathToIlltyped
-
 tyVarK = TyVar $ mkId "k"
 varA = mkId "a"
-=======
-    cNatOrdered x = CSig (CNat x) (TyCon $ mkId "Usage")
-
-    illTypedFiles =
-      find always (extension ==? fileExtension) pathToIlltyped
-    tyVarK = TyVar $ mkId "k"
-    varA = mkId "a"
->>>>>>> WIP removing Nat= (will be broken)

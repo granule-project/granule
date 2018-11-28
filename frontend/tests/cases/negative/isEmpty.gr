@@ -1,6 +1,6 @@
 import Prelude
 
-isEmpty : forall (n : Nat=) . Vec n Int -> Bool
+isEmpty : forall (n : Nat) . Vec n Int -> Bool
 isEmpty xs =
     case xs of
       Nil        -> True;

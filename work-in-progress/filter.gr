@@ -1,7 +1,7 @@
 import Vec
 import Bool
 
-filter : forall n : Nat=, k : Nat=
+filter : forall n : Nat, k : Nat
        . (Int -> Bool) |(n+k)| -> Vec (n + k) Int -> Vec n Int
 filter |predicate| vec =
     case vec of

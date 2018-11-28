@@ -1,6 +1,6 @@
 import Vec
 
-foo : forall (a : Type, n : Nat=)
+foo : forall (a : Type, n : Nat)
     . Vec n (a |0|) -> Int |n| -> Int |n| -> Int
 foo xs |x| |y| =
   case xs of

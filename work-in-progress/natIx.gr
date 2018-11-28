@@ -1,16 +1,16 @@
 zero : N 0
 zero = Z
 
-succ : forall (n : Nat=) . N n -> N (n+1)
+succ : forall (n : Nat) . N n -> N (n+1)
 succ x = S x
 
-test : forall (n : Nat=) . N n -> Float |6.0| -> Float
+test : forall (n : Nat) . N n -> Float |6.0| -> Float
 test n |f| =
     case n of
       Z -> f;
       (S m) -> test m |(scale 2.0 |f|)|
 
-mapCons : forall (n : Nat=) . (Int -> Int) |n| -> Vec n Int -> Vec n Int
+mapCons : forall (n : Nat) . (Int -> Int) |n| -> Vec n Int -> Vec n Int
 mapCons |f| xs =
     case xs of
       Nil -> Nil;

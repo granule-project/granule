@@ -5,6 +5,7 @@
 {-# LANGUAGE BlockArguments  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
+-- | Represents the extended natural numbers in the solver
 module Language.Granule.Checker.Constraints.SNatX where
 
 -- import Control.Monad ((<=<))
@@ -43,22 +44,25 @@ instance OrdSymbolic SNatX where
          $ ite (isInf b) true
          $ xVal a .< xVal b
 
+representationConstraint :: SInteger -> SBool
+representationConstraint = v .>= -1
+
 freeSNatX :: String -> Symbolic SNatX
 freeSNatX nm = do
   v <- sInteger $ nm <> "_xVal"
-  constrain $ v .>= -1
+  constrain $ representationConstraint v
   return $ SNatX v
 
 existsSNatX :: String -> Symbolic SNatX
 existsSNatX nm = do
   v <- exists $ nm <> "_xVal"
-  constrain $ v .>= -1
+  constrain $ representationConstraint v
   return $ SNatX v
 
 forallSNatX :: String -> Symbolic SNatX
 forallSNatX nm = do
   v <- forall $ nm <> "_xVal"
-  constrain $ v .>= -1
+  constrain $ representationConstraint v
   return $ SNatX v
 
 -- main :: IO ()

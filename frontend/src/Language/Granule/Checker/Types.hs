@@ -259,10 +259,10 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
       case k1 `joinKind` k2 of
         Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
 
-        -- If the kind is Nat=, then create a solver constraint
-        Just (KConstr k) | internalName k == "Nat=" -> do
+        -- If the kind is Nat, then create a solver constraint
+        Just (KConstr k) | internalName k == "Nat" -> do
           nat <- compileNatKindedTypeToCoeffect s t
-          addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat="))
+          addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
           return (True, [(n, SubstT t)])
 
         Just _ -> return (True, [(n, SubstT t)])
@@ -276,10 +276,10 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
       k1 <- inferKindOfType s (TyVar n)
       k2 <- inferKindOfType s t
       case k1 `joinKind` k2 of
-        Just (KConstr k) | internalName k == "Nat=" -> do
+        Just (KConstr k) | internalName k == "Nat" -> do
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
-          addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
+          addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
           return (True, [(n, SubstT t)])
         x ->
           if allowUniversalSpecialisation
@@ -342,12 +342,10 @@ equalOtherKindedTypesGeneric s t1 t2 = do
   k2 <- inferKindOfType s t2
   case (k1, k2) of
     (KConstr n, KConstr n')
-      | "Nat" `isPrefixOf` (internalName n) && "Nat" `isPrefixOf` (internalName  n') -> do
+      | internalName n == "Nat" && internalName n' == "Nat" -> do
         c1 <- compileNatKindedTypeToCoeffect s t1
         c2 <- compileNatKindedTypeToCoeffect s t2
-        if internalName n == "Nat" && internalName n' == "Nat"
-           then addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
-           else addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
+        addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
         return (True, [])
     (KType, KType) ->
        halt $ GenericError (Just s) $ pretty t1 <> " is not equal to " <> pretty t2
@@ -451,22 +449,25 @@ joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
-  let kind = TyCon $ mkId "Nat="
+  let kind = TyCon $ mkId "Nat"
   var <- freshCoeffectVar m kind
   -- Unify the two coeffects into one
-  addConstraint (Eq s (CNat n) (CVar var) kind)
+  addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
   return $ TyInt n
 
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
-  let kind = TyCon $ mkId "Nat="
-  nvar <- freshCoeffectVar n kind
-  mvar <- freshCoeffectVar m kind
+  -- TODO: how do we know they are tyints? Looks suspicious
+  --let kind = TyCon $ mkId "Nat"
+  --nvar <- freshCoeffectVar n kind
+  --mvar <- freshCoeffectVar m kind
   -- Unify the two variables into one
-  addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
-  return $ TyVar n
+  --addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
+  --return $ TyVar n
+  -- TODO: FIX. The above can't be right.
+  error $ "Trying to join two type variables: " ++ pretty n ++ " and " ++ pretty m
 
 joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t1'' <- joinTypes s t1 t1'

@@ -81,7 +81,7 @@ inferKindOfType' s quantifiedVariables t =
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
 
-    kInt _ = return $ KConstr $ mkId "Nat="
+    kInt _ = return $ KConstr $ mkId "Nat"
 
     kInfix op k1 k2 = do
       st <- get
@@ -108,12 +108,8 @@ hasLub k1 k2 =
 joinCoeffectConstr :: Id -> Id -> Maybe Id
 joinCoeffectConstr k1 k2 = fmap mkId $ go (internalName k1) (internalName k2)
   where
-    --go "Nat" n | "Nat" `isPrefixOf` n = Just n
-    --go n "Nat" | "Nat" `isPrefixOf` n = Just n
     go "Float" "Nat" = Just "Float"
     go "Nat" "Float" = Just "Float"
-    go "Nat=" "Nat"  = Just "Nat="
-    go "Nat" "Nat="  = Just "Nat="
     go k k' | k == k' = Just k
     go _ _ = Nothing
 
@@ -128,11 +124,11 @@ inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
 inferCoeffectType s (CUsage c1 c2)    = do
   TyCon t1 <- inferCoeffectType s c1
   unless (internalName t1 == "Nat") $
-     halt $ KindError (Just s) $ "Expected Nat= in lower bound of `Usage` but got: " <> pretty t1
+     halt $ KindError (Just s) $ "Expected Nat in lower bound of `Usage` but got: " <> pretty t1
 
   TyCon t2 <- inferCoeffectType s c2
   unless (internalName t1 == "Nat") $
-     halt $ KindError (Just s) $ "Expected Nat= in upper bound of `Usage` but got: " <> pretty t2
+     halt $ KindError (Just s) $ "Expected Nat in upper bound of `Usage` but got: " <> pretty t2
 
   return $ TyCon $ mkId "Usage"
 
@@ -209,12 +205,6 @@ mguCoeffectTypes s c1 c2 = do
     (ck1', TyVar kv2) -> do
       updateCoeffectType kv2 ck1'
       return ck1'
-
-    (TyCon k1, TyCon k2) | internalName k1 == "Nat=" && internalName k2 == "Nat"
-      -> return $ TyCon $ mkId "Nat="
-
-    (TyCon k1, TyCon k2) | internalName k1 == "Nat" && internalName k2 == "Nat="
-      -> return $ TyCon $ mkId "Nat="
 
     (TyCon k1, TyCon k2) | k1 == k2 -> return $ TyCon k1
 

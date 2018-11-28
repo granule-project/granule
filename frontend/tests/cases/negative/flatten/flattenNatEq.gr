@@ -1,2 +1,0 @@
-flattenNatEq : forall m : Nat=, n : Nat= . (Int |m|) |n| -> Int |m + n|
-flattenNatEq ||x|| = |x|

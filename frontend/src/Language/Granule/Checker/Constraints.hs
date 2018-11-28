@@ -19,6 +19,7 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
 
 -- Extended nats
+import Language.Granule.Checker.Constraints.Quantifiable
 import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
@@ -28,20 +29,20 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 -- | What is the SBV represnetation of a quantifier
-compileQuant :: SymWord a => Quantifier -> (String -> Symbolic (SBV a))
-compileQuant ForallQ   = forall
-compileQuant InstanceQ = exists
-compileQuant BoundQ    = exists
+compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic (SBV a))
+compileQuant ForallQ   = universal
+compileQuant InstanceQ = existential
+compileQuant BoundQ    = existential
 
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 k)   = Eq s (normalise c1) (normalise c2) k
 normaliseConstraint (Neq s c1 c2 k)  = Neq s (normalise c1) (normalise c2) k
 normaliseConstraint (ApproximatedBy s c1 c2 k) = ApproximatedBy s (normalise c1) (normalise c2) k
 
--- Compile constraint into an SBV symbolic bool, along with a list of
--- constraints which are trivially unsatisfiable (e.g., things like 1=0).
-compileToSBV :: (?globals :: Globals) =>
-  Pred -> Ctxt (Type, Quantifier) -> Ctxt Type
+-- | Compile constraint into an SBV symbolic bool, along with a list of
+-- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
+compileToSBV :: (?globals :: Globals)
+  => Pred -> Ctxt (Type, Quantifier) -> Ctxt Type
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
 compileToSBV predicate tyVarContext kVarContext =
   (buildTheorem id compileQuant
@@ -77,7 +78,7 @@ compileToSBV predicate tyVarContext kVarContext =
         p2' <- buildTheorem' solverVars p2
         return $ p1' ==> p2'
 
-    -- TODO: generalise this to not just Nat= indices
+    -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
       if v `elem` (vars p <> vars p')
         then forAll [internalName v] (\vSolver -> do
@@ -184,18 +185,18 @@ freshCVar :: (forall a . SymWord a => Quantifier -> (String -> Symbolic (SBV a))
           -> String -> Type -> Quantifier -> Symbolic (SBool, SCoeffect)
 
 freshCVar quant name (TyCon (internalName -> "Usage")) q = do
-  solverVarLb <- (quant q) (name <> ".lower")
-  solverVarUb <- (quant q) (name <> ".upper")
+  solverVarLb <- quant q (name <> ".lower")
+  solverVarUb <- quant q (name <> ".upper")
   return
     ( solverVarLb .>= literal 0 &&& solverVarUb .>= solverVarLb
     , SUsage solverVarLb solverVarUb
     )
 freshCVar quant name (TyCon (internalName -> "Q")) q = do
-  solverVar <- (quant q) name
+  solverVar <- quant q name
   return (true, SFloat solverVar)
 
 freshCVar quant name (TyCon k) q = do
-  solverVar <- (quant q) name
+  solverVar <- quant q name
   case internalName k of
     "Nat"       -> return (solverVar .>= literal 0, SNat solverVar)
     "Level"     -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
@@ -206,7 +207,7 @@ freshCVar quant name (TyCon k) q = do
 freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 -- TODO: possibly this can now be removed
-  solverVar <- (quant q) name
+  solverVar <- quant q name
   return (solverVar .== literal -1, SExtNat solverVar)
 
 freshCVar _ _ k _ =

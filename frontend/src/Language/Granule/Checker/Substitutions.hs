@@ -81,11 +81,11 @@ instance Substitutable Substitutors where
 
   unify (SubstT t) (SubstT t') = unify t t'
   unify (SubstT t) (SubstC c') = do
-    -- We can unify a type with a coeffect, if the type is actually a Nat=
+    -- We can unify a type with a coeffect, if the type is actually a Nat
     k <- inferKindOfType nullSpan t
     k' <- inferCoeffectType nullSpan c'
     case joinKind k (KPromote k') of
-      Just (KConstr k) | internalName k == "Nat=" -> do
+      Just (KConstr k) | internalName k == "Nat" -> do
              c <- compileNatKindedTypeToCoeffect nullSpan t
              unify c c'
       _ -> return Nothing
@@ -140,10 +140,10 @@ instance Substitutable Type where
     k <- inferKindOfType nullSpan t
     k' <- inferKindOfType nullSpan t
     case joinKind k k' of
-      Just (KConstr k) | internalName k == "Nat=" -> do
+      Just (KConstr k) | internalName k == "Nat" -> do
         c  <- compileNatKindedTypeToCoeffect nullSpan t
         c' <- compileNatKindedTypeToCoeffect nullSpan t'
-        addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat=")
+        addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
         return $ Just []
 
       _ | o == o' -> do
@@ -208,7 +208,7 @@ instance Substitutable Coeffect where
           case joinKind k (promoteTypeToKind k') of
             Just (KConstr k) ->
               case internalName k of
-                "Nat=" -> compileNatKindedTypeToCoeffect nullSpan t
+                "Nat" -> compileNatKindedTypeToCoeffect nullSpan t
                 _      -> return (CVar v)
             _ -> return (CVar v)
 
@@ -443,7 +443,7 @@ compileNatKindedTypeToCoeffect _ (TyInt n) =
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
 compileNatKindedTypeToCoeffect s t =
-  halt $ KindError (Just s) $ "Type `" <> pretty t <> "` does not have kind `Nat=`"
+  halt $ KindError (Just s) $ "Type `" <> pretty t <> "` does not have kind `Nat`"
 
 
 -- | Apply a name map to a type to rename the type variables
