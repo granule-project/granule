@@ -63,10 +63,13 @@ compileToSBV predicate tyVarContext kVarContext =
      -> (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
      -> Symbolic SBool
     buildTheorem polarity quant = do
-        (pres, constraints, solverVars) <-
+      -- Create fresh solver variables for everything in the type variable
+      -- context of the write kind
+        (preConstraints, constraints, solverVars) <-
             foldrM (createFreshVar quant) (true, true, []) tyVarContext
+
         predC <- buildTheorem' solverVars predicate'
-        return (polarity (pres ==> (constraints &&& predC)))
+        return (polarity (preConstraints ==> (constraints &&& predC)))
 
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
@@ -106,7 +109,8 @@ compileToSBV predicate tyVarContext kVarContext =
       -> (Id, (Type, Quantifier))
       -> (SBool, SBool, Ctxt SGrade)
       -> Symbolic (SBool, SBool, Ctxt SGrade)
-    -- Ignore variables coming from a dependent pattern match
+    -- Ignore variables coming from a dependent pattern match because
+    -- they get created elsewhere
     createFreshVar _ (_, (_, BoundQ)) x = return x
 
     createFreshVar quant
@@ -205,8 +209,9 @@ freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
   solverVar <- quant q name
   return (solverVar .== -1, SExtNat solverVar)
 
-freshCVar _ _ k _ =
-  error $ "Trying to make a fresh solver variable for a coeffect of kind: " <> show k <> " but I don't know how."
+freshCVar _ _ t _ =
+  error $ "Trying to make a fresh solver variable for a grade of type: "
+   <> show t <> " but I don't know how."
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals) =>
