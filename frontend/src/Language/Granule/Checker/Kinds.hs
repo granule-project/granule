@@ -213,6 +213,8 @@ mguCoeffectTypes s c1 c2 = do
     (TyCon k1, TyCon k2) | Just ck <- joinCoeffectConstr k1 k2 ->
       return $ TyCon ck
 
+    (t, t') | t == t' -> return t
+
     (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
                <> pretty k1 <> "' and '" <> pretty k2
                <> "' for coeffects " <> pretty c1 <> " and " <> pretty c2
