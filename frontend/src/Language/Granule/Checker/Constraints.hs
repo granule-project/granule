@@ -348,10 +348,20 @@ approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
+
+-- Perform approximation when nat-like grades are involved
+approximatedByOrEqualConstraint
+    (SInterval (natLike -> Just lb1) (natLike -> Just ub1))
+    (SInterval (natLike -> Just lb2) (natLike -> Just ub2)) =
+      (lb2 .<= lb1) &&& (ub1 .<= ub2)
+
+-- if intervals are not nat-like then use the notion of approximation
+-- given here
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
-  (approximatedByOrEqualConstraint lb1 lb2)
+  (approximatedByOrEqualConstraint lb2 lb1)
   &&& (approximatedByOrEqualConstraint ub1 ub2)
-approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .>= y
+
+approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
 approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " <> show x <> " <= " <> show y
 

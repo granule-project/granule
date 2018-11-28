@@ -25,6 +25,11 @@ data SGrade =
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
     deriving (Show, Generic)
 
+natLike :: SGrade -> Maybe SInteger
+natLike (SNat x) = Just x
+natLike (SExtNat (SNatX x)) = Just x
+natLike _ = Nothing
+
 instance Mergeable SGrade where
   symbolicMerge s sb (SNat n) (SNat n') = SNat (symbolicMerge s sb n n')
   symbolicMerge s sb (SFloat n) (SFloat n') = SFloat (symbolicMerge s sb n n')
