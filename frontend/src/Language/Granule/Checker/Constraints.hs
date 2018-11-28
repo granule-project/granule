@@ -280,8 +280,8 @@ compileCoeffect c@(CExpon n m) k vars =
     (SNat n1, SNat n2) -> SNat (n1 .^ n2)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
-compileCoeffect c@(CInterval lb ub) k vars =
-  SInterval (compileCoeffect lb k vars) (compileCoeffect ub k vars)
+compileCoeffect c@(CInterval lb ub) (isInterval -> Just t) vars =
+  SInterval (compileCoeffect lb t vars) (compileCoeffect ub t vars)
 
 compileCoeffect (CZero k') k vars  =
   case (k', k) of
