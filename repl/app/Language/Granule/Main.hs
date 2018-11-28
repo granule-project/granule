@@ -445,3 +445,15 @@ main = do
                                               Left err -> do
                                                  liftIO $ print err
                                                  loop st
+       defaultGlobals :: Globals
+       defaultGlobals =
+           Globals
+           { debugging = False
+           , sourceFilePath = ""
+           , noColors = False
+           , noEval = False
+           , suppressInfos = False
+           , suppressErrors = False
+           , timestamp = False
+           , solverTimeoutMillis = Just 1000
+           }
