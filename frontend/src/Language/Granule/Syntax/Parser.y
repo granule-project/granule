@@ -209,13 +209,13 @@ TyParams :: { [Type] }
   |                           { [] }
 
 Coeffect :: { Coeffect }
-  : INT                         { let TokenInt _ x = $1 in CNat Ordered x }
-  | '∞'                         { CInfinity (TyCon $ mkId "Cartesian") }
+  : INT                         { let TokenInt _ x = $1 in CNat x }
+  | '∞'                         { infiniteUsage }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (TyCon $ mkId "Cartesian")
+                                    "Inf" -> infiniteUsage
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect ".." Coeffect      { CUsage $1 $3 }
@@ -328,9 +328,9 @@ Juxt :: { Expr () () }
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
   | INT                       { let (TokenInt _ x) = $1
-                                in Val (getPosToSpan $1) () $ NumInt () x }
+                                in Val (getPosToSpan $1) () $ NumInt x }
   | FLOAT                     { let (TokenFloat _ x) = $1
-                                in Val (getPosToSpan $1) () $ NumFloat () $ read x }
+                                in Val (getPosToSpan $1) () $ NumFloat $ read x }
   | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
   | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
   | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
@@ -340,9 +340,9 @@ Atom :: { Expr () () }
                                          $2)
                                     $4 }
   | CHAR                      { Val (getPosToSpan $1) () $
-                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral () c }
+                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
   | STRING                    { Val (getPosToSpan $1) () $
-                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral () c }
+                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
 
 {
 parseError :: [Token] -> IO a

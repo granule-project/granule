@@ -117,23 +117,23 @@ joinCoeffectConstr k1 k2 = fmap mkId $ go (internalName k1) (internalName k2)
     go k k' | k == k' = Just k
     go _ _ = Nothing
 
--- What is the kind of a particular coeffect
+-- | Infer the type of ta coeffect term (giving its span as well)
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> MaybeT Checker Type
 
 -- Coeffect constants have an obvious kind
 inferCoeffectType _ (Level _)         = return $ TyCon $ mkId "Level"
-inferCoeffectType _ (CNat Ordered _)  = return $ TyCon $ mkId "Nat"
-inferCoeffectType _ (CNat Discrete _) = return $ TyCon $ mkId "Nat="
+inferCoeffectType _ (CNat _)          = return $ TyCon $ mkId "Nat"
 inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
 inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
-inferCoeffectType _ (CNatOmega _)     = return $ TyCon $ mkId "Nat*"
 inferCoeffectType s (CUsage c1 c2)    = do
-  -- TyCon t1 <- inferCoeffectType s c1
-  -- unless (internalName t1 == "Nat=") $
-  --   halt $ KindError (Just s) $ "Expected Nat= in lower bound of `Usage` but got: " <> pretty t1
-  -- TyCon t2 <- inferCoeffectType s c2
-  -- unless (internalName t1 == "Nat=") $
-  --   halt $ KindError (Just s) $ "Expected Nat= in upper bound of `Usage` but got: " <> pretty t2  
+  TyCon t1 <- inferCoeffectType s c1
+  unless (internalName t1 == "Nat") $
+     halt $ KindError (Just s) $ "Expected Nat= in lower bound of `Usage` but got: " <> pretty t1
+
+  TyCon t2 <- inferCoeffectType s c2
+  unless (internalName t1 == "Nat") $
+     halt $ KindError (Just s) $ "Expected Nat= in upper bound of `Usage` but got: " <> pretty t2
+
   return $ TyCon $ mkId "Usage"
 
 -- Take the join for compound coeffect epxressions
@@ -169,7 +169,8 @@ inferCoeffectType s (CVar cvar) = do
 
 inferCoeffectType s (CZero t) = checkKindIsCoeffect s t
 inferCoeffectType s (COne t)  = checkKindIsCoeffect s t
-inferCoeffectType s (CInfinity t)  = checkKindIsCoeffect s t
+inferCoeffectType s (CInfinity (Just t)) = checkKindIsCoeffect s t
+inferCoeffectType s (CInfinity Nothing) = return $ TyCon $ mkId "Usage"
 inferCoeffectType s (CSig _ t) = checkKindIsCoeffect s t
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)

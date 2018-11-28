@@ -52,22 +52,22 @@ instance Show (Runtime a) => Pretty (Runtime a) where
   pretty = show
 
 evalBinOp :: String -> RValue -> RValue -> RValue
-evalBinOp "+" (NumInt _ n1) (NumInt _ n2) = NumInt () (n1 + n2)
-evalBinOp "*" (NumInt _ n1) (NumInt _ n2) = NumInt () (n1 * n2)
-evalBinOp "-" (NumInt _ n1) (NumInt _ n2) = NumInt () (n1 - n2)
-evalBinOp "+" (NumFloat _ n1) (NumFloat _ n2) = NumFloat () (n1 + n2)
-evalBinOp "*" (NumFloat _ n1) (NumFloat _ n2) = NumFloat () (n1 * n2)
-evalBinOp "-" (NumFloat _ n1) (NumFloat _ n2) = NumFloat () (n1 - n2)
-evalBinOp "==" (NumInt _ n) (NumInt _ m) = Constr () (mkId . show $ (n == m)) []
-evalBinOp "<=" (NumInt _ n) (NumInt _ m) = Constr () (mkId . show $ (n <= m)) []
-evalBinOp "<" (NumInt _ n) (NumInt _ m)  = Constr () (mkId . show $ (n < m)) []
-evalBinOp ">=" (NumInt _ n) (NumInt _ m) = Constr () (mkId . show $ (n >= m)) []
-evalBinOp ">" (NumInt _ n) (NumInt _ m)  = Constr () (mkId . show $ (n > m)) []
-evalBinOp "==" (NumFloat _ n) (NumFloat _ m) = Constr () (mkId . show $ (n == m)) []
-evalBinOp "<=" (NumFloat _ n) (NumFloat _ m) = Constr () (mkId . show $ (n <= m)) []
-evalBinOp "<" (NumFloat _ n) (NumFloat _ m)  = Constr () (mkId . show $ (n < m)) []
-evalBinOp ">=" (NumFloat _ n) (NumFloat _ m) = Constr () (mkId . show $ (n >= m)) []
-evalBinOp ">" (NumFloat _ n) (NumFloat _ m)  = Constr () (mkId . show $ (n > m)) []
+evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
+evalBinOp "*" (NumInt n1) (NumInt n2) = NumInt (n1 * n2)
+evalBinOp "-" (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
+evalBinOp "+" (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
+evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
+evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
+evalBinOp "==" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n == m)) []
+evalBinOp "<=" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n <= m)) []
+evalBinOp "<" (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n < m)) []
+evalBinOp ">=" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n >= m)) []
+evalBinOp ">" (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n > m)) []
+evalBinOp "==" (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n == m)) []
+evalBinOp "<=" (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n <= m)) []
+evalBinOp "<" (NumFloat n) (NumFloat m)  = Constr () (mkId . show $ (n < m)) []
+evalBinOp ">=" (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n >= m)) []
+evalBinOp ">" (NumFloat n) (NumFloat m)  = Constr () (mkId . show $ (n > m)) []
 evalBinOp op v1 v2 = error $ "Unknown operator " <> op
                              <> " on " <> show v1 <> " and " <> show v2
 
@@ -78,13 +78,13 @@ evalIn _ (Val s _ (Var _ v)) | internalName v == "read" = do
     putStr "> "
     hFlush stdout
     val <- Text.getLine
-    return $ Pure () (Val s () (StringLiteral () val))
+    return $ Pure () (Val s () (StringLiteral val))
 
 evalIn _ (Val s _ (Var _ v)) | internalName v == "readInt" = do
     putStr "> "
     hFlush stdout
     val <- readLn
-    return $ Pure () (Val s () (NumInt () val))
+    return $ Pure () (Val s () (NumInt val))
 
 evalIn _ (Val _ _ (Abs _ p t e)) = return $ Abs () p t e
 
@@ -211,10 +211,10 @@ pmatch ctxt ((PBox _ _ p, e):ps) (Promote _ e') = do
     Just (_, bindings) -> return $ Just (e, bindings)
     Nothing -> pmatch ctxt ps (Promote () e')
 
-pmatch _ ((PInt _ _ n, e):_)   (NumInt _ m)   | n == m  =
+pmatch _ ((PInt _ _ n, e):_)   (NumInt m)   | n == m  =
    return $ Just (e, [])
 
-pmatch _ ((PFloat _ _ n, e):_) (NumFloat _ m) | n == m =
+pmatch _ ((PFloat _ _ n, e):_) (NumFloat m) | n == m =
    return $ Just (e, [])
 
 pmatch ctxt (_:ps) val = pmatch ctxt ps val
@@ -224,15 +224,15 @@ valExpr = Val nullSpan ()
 builtIns :: (?globals :: Globals) => Ctxt RValue
 builtIns =
   [
-    (mkId "div", Ext () $ Primitive $ \(NumInt _ n1)
-          -> return $ Ext () $ Primitive $ \(NumInt _ n2) ->
-              return $ NumInt () (n1 `div` n2))
+    (mkId "div", Ext () $ Primitive $ \(NumInt n1)
+          -> return $ Ext () $ Primitive $ \(NumInt n2) ->
+              return $ NumInt (n1 `div` n2))
   , (mkId "pure",       Ext () $ Primitive $ \v -> return $ Pure () (Val nullSpan () v))
-  , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt _ n) -> return $ NumFloat () (cast n))
+  , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> return $ NumFloat (cast n))
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
-                              NumInt _ n -> return . (StringLiteral ()) . pack . show $ n
-                              n          -> error $ show n)
-  , (mkId "write", Ext () $ Primitive $ \(StringLiteral _ s) -> do
+                              NumInt n -> return . StringLiteral . pack . show $ n
+                              n        -> error $ show n)
+  , (mkId "write", Ext () $ Primitive $ \(StringLiteral s) -> do
                               Text.putStrLn s
                               return $ Pure () (Val nullSpan () (Constr () (mkId "()") [])))
   , (mkId "openFile", Ext () $ Primitive openFile)
@@ -240,10 +240,10 @@ builtIns =
   , (mkId "hPutChar", Ext () $ Primitive hPutChar)
   , (mkId "hClose",   Ext () $ Primitive hClose)
   , (mkId "showChar",
-        Ext () $ Primitive $ \(CharLiteral _ c) -> return $ StringLiteral () $ pack [c])
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
   , (mkId "stringAppend",
-        Ext () $ Primitive $ \(StringLiteral _ s) -> return $
-          Ext () $ Primitive $ \(StringLiteral _ t) -> return $ StringLiteral () $ s `append` t)
+        Ext () $ Primitive $ \(StringLiteral s) -> return $
+          Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `append` t)
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> do
         b <- SIO.isEOF
         let boolflag =
@@ -296,7 +296,7 @@ builtIns =
     cast = fromInteger . toInteger
 
     openFile :: RValue -> IO RValue
-    openFile (StringLiteral _ s) = return $
+    openFile (StringLiteral s) = return $
       Ext () $ Primitive (\(Constr _ m []) ->
         let mode = (read (internalName m)) :: SIO.IOMode
         in do
@@ -305,14 +305,14 @@ builtIns =
 
     hPutChar :: RValue -> IO RValue
     hPutChar (Ext _ (Handle h)) = return $
-      Ext () $ Primitive (\(CharLiteral _ c) -> do
+      Ext () $ Primitive (\(CharLiteral c) -> do
          SIO.hPutChar h c
          return $ Pure () $ valExpr $ Ext () $ Handle h)
 
     hGetChar :: RValue -> IO RValue
     hGetChar (Ext _ (Handle h)) = do
           c <- SIO.hGetChar h
-          return $ Pure () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral () c])
+          return $ Pure () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
 
     hClose :: RValue -> IO RValue
     hClose (Ext _ (Handle h)) = do
@@ -351,11 +351,11 @@ instance RuntimeRep Value where
   toRuntimeRep (Pure a e) = Pure a (toRuntimeRep e)
   toRuntimeRep (Constr a i vs) = Constr a i (map toRuntimeRep vs)
   -- identity cases
-  toRuntimeRep (CharLiteral a c) = CharLiteral a c
-  toRuntimeRep (StringLiteral a c) = StringLiteral a c
+  toRuntimeRep (CharLiteral c) = CharLiteral c
+  toRuntimeRep (StringLiteral c) = StringLiteral c
   toRuntimeRep (Var a x) = Var a x
-  toRuntimeRep (NumInt a x) = NumInt a x
-  toRuntimeRep (NumFloat a x) = NumFloat a x
+  toRuntimeRep (NumInt x) = NumInt x
+  toRuntimeRep (NumFloat x) = NumFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval (AST dataDecls defs) = do

@@ -20,10 +20,7 @@ typeLevelConstructors =
     , (mkId "FileIO", (KFun KType KType, Nothing))
     , (mkId "Session", (KFun KType KType, Nothing))
     , (mkId "N", (KFun (KConstr $ mkId "Nat=") KType, Just 2))
-    , (mkId "Cartesian", (KCoeffect, Nothing))   -- Singleton coeffect
     , (mkId "Nat",  (KCoeffect, Nothing))
-    , (mkId "Nat=", (KCoeffect, Nothing))
-    , (mkId "Nat*", (KCoeffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Usage", (KCoeffect, Nothing))
@@ -41,6 +38,9 @@ typeLevelConstructors =
     , (mkId "End" , (protocol, Nothing))
     , (mkId "Chan", (KFun protocol KType, Nothing))
     , (mkId "Dual", (KFun protocol protocol, Nothing))
+    , (mkId "->", (KFun KType (KFun KType KType), Nothing))
+    -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
+    , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
     ]
 
 dataConstructors :: [(Id, TypeScheme)]

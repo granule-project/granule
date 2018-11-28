@@ -33,6 +33,10 @@ class Pretty t where
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
    pretty (a, b) = "(" <> pretty a <> ", " <> pretty b <> ")"
 
+instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b, Pretty c) => Pretty (a, b,c) where
+      pretty (a, b, c) = "(" <> pretty a <> ", " <> pretty b <> "," <> pretty c <> ")"
+
+
 instance {-# OVERLAPS #-} Pretty String where
    pretty s = s
 
@@ -48,10 +52,7 @@ instance {-# OVERLAPS #-} Pretty Effect where
    pretty es = "[" <> intercalate "," es <> "]"
 
 instance Pretty Coeffect where
-    pretty (CNat Ordered n) = show n
-    pretty (CNat Discrete n) = show n <> "="
-    pretty (CNatOmega (Left ())) = "∞"
-    pretty (CNatOmega (Right x)) = show x
+    pretty (CNat n) = show n
     pretty (CFloat n) = show n
     pretty (COne k)  = "_1 : " <> pretty k
     pretty (CZero k) = "_0 : " <> pretty k
@@ -70,7 +71,6 @@ instance Pretty Coeffect where
     pretty (CSet xs) =
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> pretty t) xs) <> "}"
     pretty (CSig c t) = "(" <> pretty c <> " : " <> pretty t <> ")"
-    pretty (CInfinity (TyVar kv)) | internalName kv == "infinity" = "∞"
     pretty (CInfinity k) = "∞ : " <> pretty k
     pretty (CUsage c1 c2) = pretty c1 <> ".." <> pretty c2
 
@@ -147,17 +147,17 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Promote _ e)  = "|" <> pretty e <> "|"
     pretty (Pure _ e)     = "<" <> pretty e <> ">"
     pretty (Var _ x)      = pretty x
-    pretty (NumInt _ n)   = show n
-    pretty (NumFloat _ n) = show n
-    pretty (CharLiteral _ c) = show c
-    pretty (StringLiteral _ s) = show s
+    pretty (NumInt n)   = show n
+    pretty (NumFloat n) = show n
+    pretty (CharLiteral c) = show c
+    pretty (StringLiteral s) = show s
     pretty (Constr _ s vs) | internalName s == "," =
       "(" <> intercalate ", " (map pretty vs) <> ")"
     pretty (Constr _ s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values
-        valueAtom (NumInt _ _)    = True
-        valueAtom (NumFloat _ _)  = True
+        valueAtom (NumInt _)    = True
+        valueAtom (NumFloat _)  = True
         valueAtom (Constr _ _ []) = True
         valueAtom _             = False
     pretty (Ext _ _) = ""

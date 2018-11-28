@@ -1,8 +1,8 @@
 -- can also write `Inf` instead of `∞`
-dub : Int |∞ : Cartesian| -> Int
+dub : Int |∞| -> Int
 dub |x| = x + x
 
-trip : Int |∞ : Cartesian| -> Int
+trip : Int |∞| -> Int
 trip |x| = x + x + x
 
 twice : (Int |∞| -> Int) |∞| -> Int |∞| -> Int

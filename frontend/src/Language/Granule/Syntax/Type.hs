@@ -52,10 +52,9 @@ data Kind = KType
     deriving (Show, Ord, Eq)
 
 -- | Represents coeffect grades
-data Coeffect = CNat      NatModifier Int
-              | CNatOmega (Either () Int)
+data Coeffect = CNat      Int
               | CFloat    Rational
-              | CInfinity Type
+              | CInfinity (Maybe Type)
               | CUsage    { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
@@ -70,8 +69,8 @@ data Coeffect = CNat      NatModifier Int
               | CExpon    Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
-data NatModifier = Ordered | Discrete
-    deriving (Show, Ord, Eq)
+extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
+infiniteUsage = CUsage (CZero extendedNat) (CInfinity (Just extendedNat))
 
 -- | Represents effect grades
 -- TODO: Make richer
@@ -195,7 +194,6 @@ instance Term Coeffect where
     freeVars (CMeet c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CJoin c1 c2) = freeVars c1 <> freeVars c2
     freeVars CNat{}  = []
-    freeVars CNatOmega{} = []
     freeVars CFloat{} = []
     freeVars CInfinity{} = []
     freeVars CZero{} = []
@@ -224,7 +222,7 @@ instance Freshenable Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" || internalName ident == "◻" =
-          return $ Box (CInfinity (TyCon $ mkId "Cartesian")) t2
+          return $ Box infiniteUsage t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
@@ -246,13 +244,9 @@ instance Freshenable Coeffect where
         Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar $ mkId (sourceName v)
 
-    freshen (CInfinity (TyVar i@(Id _ ""))) = do
+    freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do
       t <- freshVar Type i
-      return $ CInfinity (TyVar t)
-
-    freshen (CInfinity (TyVar i@(Id _ " infinity"))) = do
-      t <- freshVar Type i
-      return $ CInfinity (TyVar t)
+      return $ CInfinity $ Just $ TyVar t
 
     freshen (CPlus c1 c2) = do
       c1' <- freshen c1
@@ -290,7 +284,6 @@ instance Freshenable Coeffect where
     freshen c@COne{}   = return c
     freshen c@Level{}  = return c
     freshen c@CNat{}   = return c
-    freshen c@CNatOmega{} = return c
     freshen (CUsage c1 c2) = CUsage <$> freshen c1 <*> freshen c2
 
 ----------------------------------------------------------------------
@@ -305,10 +298,8 @@ normalise (CPlus (CZero _) n) = n
 normalise (CPlus n (CZero _)) = n
 normalise (CTimes (COne _) n) = n
 normalise (CTimes n (COne _)) = n
-normalise (COne (TyCon (Id _ "Nat"))) = CNat Ordered 1
-normalise (CZero (TyCon (Id _ "Nat"))) = CNat Ordered 0
-normalise (COne (TyCon (Id _ "Nat="))) = CNat Discrete 1
-normalise (CZero (TyCon (Id _ "Nat="))) = CNat Discrete 0
+normalise (COne (TyCon (Id _ "Nat"))) = CNat 1
+normalise (CZero (TyCon (Id _ "Nat"))) = CNat 0
 normalise (COne (TyCon (Id _ "Level"))) = Level 1
 normalise (CZero (TyCon (Id _ "Level"))) = Level 0
 normalise (COne (TyCon (Id _ "Q"))) = CFloat 1
@@ -317,8 +308,7 @@ normalise (CPlus (Level n) (Level m)) = Level (n `max` m)
 normalise (CTimes (Level n) (Level m)) = Level (n `min` m)
 normalise (CPlus (CFloat n) (CFloat m)) = CFloat (n + m)
 normalise (CTimes (CFloat n) (CFloat m)) = CFloat (n * m)
-normalise (CPlus (CNat k n) (CNat k' m)) | k == k' = CNat k (n + m)
-normalise (CTimes (CNat k n) (CNat k' m)) | k == k' = CNat k (n * m)
+normalise (CPlus (CNat n) (CNat m)) = CNat (n + m)
 normalise (CPlus n m) =
     if (n == n') && (m == m')
     then CPlus n m
@@ -333,9 +323,9 @@ normalise (CTimes n m) =
   where
     n' = normalise n
     m' = normalise m
-normalise (CSig (CNat _ 0) k) = CZero k
+normalise (CSig (CNat 0) k) = CZero k
 normalise (CSig (CZero _)  k) = CZero k
-normalise (CSig (CNat _ 1) k) = COne k
+normalise (CSig (CNat 1) k) = COne k
 normalise (CSig (COne _)   k) = CZero k
-normalise (CSig (CInfinity _)  k) = CInfinity k
+normalise (CSig (CInfinity _)  k) = CInfinity (Just k)
 normalise c = c

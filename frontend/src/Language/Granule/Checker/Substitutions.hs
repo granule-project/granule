@@ -181,12 +181,12 @@ instance Substitutable Coeffect where
       c1' <- substitute subst c1
       c2' <- substitute subst c2
       return $ CExpon c1' c2'
-  
+
   substitute subst (CUsage c1 c2) = do
       c1' <- substitute subst c1
       c2' <- substitute subst c2
       return $ CUsage c1' c2'
-  
+
   substitute subst (CVar v) =
       case lookup v subst of
         Just (SubstC c) -> do
@@ -236,7 +236,6 @@ instance Substitutable Coeffect where
     return $ CSig c k
 
   substitute _ c@CNat{}      = return c
-  substitute _ c@CNatOmega{} = return c
   substitute _ c@CFloat{}    = return c
   substitute _ c@Level{}     = return c
 
@@ -307,7 +306,6 @@ instance Substitutable Coeffect where
   unify c c' =
     if c == c' then return $ Just [] else return Nothing
 
-
 instance Substitutable Effect where
   -- {TODO: Make effects richer}
   substitute subst e = return e
@@ -342,6 +340,14 @@ instance Substitutable Kind where
     u2 <- unify k2 k2'
     u1 <<>> u2
   unify k k' = return $ if k == k' then Just [] else Nothing
+
+instance Substitutable t => Substitutable (Maybe t) where
+  substitute s Nothing = return Nothing
+  substitute s (Just t) = substitute s t >>= return . Just
+  unify Nothing _ = return (Just [])
+  unify _ Nothing = return (Just [])
+  unify (Just x) (Just y) = unify x y
+
 
 -- | Combine substitutions wrapped in Maybe
 (<<>>) :: (?globals :: Globals)
@@ -433,7 +439,7 @@ compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
     "/\\" -> return $ CMeet t1' t2'
     _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " <> op
 compileNatKindedTypeToCoeffect _ (TyInt n) =
-  return $ CNat Discrete n
+  return $ CNat n
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
 compileNatKindedTypeToCoeffect s t =

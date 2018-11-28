@@ -17,6 +17,7 @@ import Language.Granule.Checker.Monad
 import Control.Monad.Trans.Maybe
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
@@ -80,64 +81,84 @@ spec = do
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
        (c, pred) <- runCtxts joinCtxts
-              [(varA, Discharged tyVarK (CNat Ordered 5))]
-              [(varA, Discharged tyVarK (CNat Ordered 10))]
+              [(varA, Discharged tyVarK (CSig (CNat 5) (TyCon $ mkId "Usage")))]
+              [(varA, Discharged tyVarK (cNatOrdered 10))]
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CNat Ordered 10) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))
-              , Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))]]
+         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))
+              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
-              [(varA, Discharged (tyVarK) (CNat Ordered 5))]
+              [(varA, Discharged (tyVarK) (cNatOrdered 5))]
               []
        c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
        pred `shouldBe`
          [Conj [Con (ApproximatedBy nullSpan (CZero (TyCon $ mkId "Nat")) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))
-               ,Con (ApproximatedBy nullSpan (CNat Ordered 5) (CVar (mkId "a.0")) (TyCon $ mkId"Nat"))]]
+               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) (TyCon $ mkId"Nat"))]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
       it "contexts with matching discharged variables" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
-                 [(varA, Discharged (tyVarK) (CNat Ordered 10))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 10))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
 
       it "contexts with matching discharged variables" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyVarK) (CNat Ordered 10))]
-                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 10))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (CNat Ordered 10))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 10))]
 
       it "contexts with matching discharged variables" $ do
          (c, preds) <- (runCtxts intersectCtxtsWithWeaken)
-                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
                  []
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
 
       it "contexts with matching discharged variables (symm)" $ do
          (c, _) <- (runCtxts intersectCtxtsWithWeaken)
                  []
-                 [(varA, Discharged (tyVarK) (CNat Ordered 5))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 5))]
          c `shouldBe`
                  [(varA, Discharged (tyVarK) (CZero (TyCon $ mkId "Nat")))]
 
 
+    describe "elaborator tests" $
+      it "simple elaborator tests" $ do
+        -- Simple definitions
+        -- \x -> x + 1
+        (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
+        (Just defElab, _) <- runChecker initState (checkDef [] def1)
+        getAnnotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
-  where
-    runCtxts f a b =
+
+extractMainExpr (Def _ _ e _ _) = e
+
+runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
-    exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work
+
+exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work
       (liftM2 (<>) (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
       (find always (extension ==? fileExtension) pathToGranuleBase))
       (find always (extension ==? fileExtension) pathToRegressionTests)
+
+<<<<<<< HEAD
+illTypedFiles =
+  find always (extension ==? fileExtension) pathToIlltyped
+
+tyVarK = TyVar $ mkId "k"
+varA = mkId "a"
+=======
+    cNatOrdered x = CSig (CNat x) (TyCon $ mkId "Usage")
 
     illTypedFiles =
       find always (extension ==? fileExtension) pathToIlltyped
     tyVarK = TyVar $ mkId "k"
     varA = mkId "a"
+>>>>>>> WIP removing Nat= (will be broken)
