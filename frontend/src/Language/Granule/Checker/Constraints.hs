@@ -29,7 +29,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 -- | What is the SBV represnetation of a quantifier
-compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic (SBV a))
+compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
 compileQuant ForallQ   = universal
 compileQuant InstanceQ = existential
 compileQuant BoundQ    = existential
@@ -58,7 +58,7 @@ compileToSBV predicate tyVarContext kVarContext =
 
     buildTheorem ::
         (SBool -> SBool)
-     -> (forall a. SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
+     -> (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
      -> Symbolic SBool
     buildTheorem polarity quant = do
         (pres, constraints, solverVars) <-
@@ -100,7 +100,7 @@ compileToSBV predicate tyVarContext kVarContext =
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
-      :: (forall a. SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
+      :: (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
       -> (Id, (Type, Quantifier))
       -> (SBool, SBool, Ctxt SCoeffect)
       -> Symbolic (SBool, SBool, Ctxt SCoeffect)
@@ -181,14 +181,14 @@ zeroToInfinity = SUsage (SNatX 0) SNatX.inf
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
-freshCVar :: (forall a . SymWord a => Quantifier -> (String -> Symbolic (SBV a)))
+freshCVar :: (forall a . Quantifiable a => Quantifier -> (String -> Symbolic a))
           -> String -> Type -> Quantifier -> Symbolic (SBool, SCoeffect)
 
 freshCVar quant name (TyCon (internalName -> "Usage")) q = do
   solverVarLb <- quant q (name <> ".lower")
   solverVarUb <- quant q (name <> ".upper")
   return
-    ( solverVarLb .>= literal 0 &&& solverVarUb .>= solverVarLb
+    ( solverVarLb .>= 0 &&& solverVarUb .>= solverVarLb
     , SUsage solverVarLb solverVarUb
     )
 freshCVar quant name (TyCon (internalName -> "Q")) q = do
@@ -198,8 +198,8 @@ freshCVar quant name (TyCon (internalName -> "Q")) q = do
 freshCVar quant name (TyCon k) q = do
   solverVar <- quant q name
   case internalName k of
-    "Nat"       -> return (solverVar .>= literal 0, SNat solverVar)
-    "Level"     -> return (solverVar .== literal 0 ||| solverVar .== 1, SLevel solverVar)
+    "Nat"       -> return (solverVar .>= 0, SNat solverVar)
+    "Level"     -> return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
     "Set"       -> return (true, SSet S.empty)
 
 -- A poly typed coeffect variable compiled into the
@@ -208,7 +208,7 @@ freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 -- TODO: possibly this can now be removed
   solverVar <- quant q name
-  return (solverVar .== literal -1, SExtNat solverVar)
+  return (solverVar .== -1, SExtNat solverVar)
 
 freshCVar _ _ k _ =
   error $ "Trying to make a fresh solver variable for a coeffect of kind: " <> show k <> " but I don't know how."
@@ -262,9 +262,7 @@ compileCoeffect (CVar v) _ vars =
 
 compileCoeffect c@(CMeet n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) ->
-      case k of
-        _                                       -> SNat (n1 `smin` n2)
+    (SNat n1, SNat n2) -> SNat (n1 `smin` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smin` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smin` n2)
@@ -274,9 +272,7 @@ compileCoeffect c@(CMeet n m) k vars =
 
 compileCoeffect c@(CJoin n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) ->
-      case k of
-        _ -> SNat (n1 `smax` n2)
+    (SNat n1, SNat n2) -> SNat (n1 `smax` n2)
     (SSet s, SSet t) -> SSet $ S.intersection s t
     (SLevel s, SLevel t) -> SLevel $ s `smax` t
     (SFloat n1, SFloat n2) -> SFloat (n1 `smax` n2)
@@ -286,9 +282,7 @@ compileCoeffect c@(CJoin n m) k vars =
 
 compileCoeffect c@(CPlus n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) ->
-      case k of
-        _ -> SNat (n1 + n2)
+    (SNat n1, SNat n2) -> SNat (n1 + n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
@@ -298,9 +292,7 @@ compileCoeffect c@(CPlus n m) k vars =
 
 compileCoeffect c@(CTimes n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) ->
-      case k of
-        _ -> SNat (n1 * n2)
+    (SNat n1, SNat n2) -> SNat (n1 * n2)
     (SSet s, SSet t) -> SSet $ S.union s t
     (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
     (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
@@ -310,9 +302,7 @@ compileCoeffect c@(CTimes n m) k vars =
 
 compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) ->
-      case k of
-        _ -> SNat (n1 .^ n2)
+    (SNat n1, SNat n2) -> SNat (n1 .^ n2)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
 compileCoeffect c@(CUsage lb ub) k vars =

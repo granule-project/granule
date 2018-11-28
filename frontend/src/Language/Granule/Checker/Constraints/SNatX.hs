@@ -45,7 +45,7 @@ instance OrdSymbolic SNatX where
          $ xVal a .< xVal b
 
 representationConstraint :: SInteger -> SBool
-representationConstraint = v .>= -1
+representationConstraint v = v .>= -1
 
 freeSNatX :: String -> Symbolic SNatX
 freeSNatX nm = do
