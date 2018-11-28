@@ -35,7 +35,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
--- import Debug.Trace
+--import Debug.Trace
 
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
@@ -726,7 +726,9 @@ solveConstraints predicate s defName = do
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised
        convert (var, (KVar v, q)) = Just (var, (TyVar v, q))
-       convert _ = Nothing
+       -- Unpromote things that are already types
+       convert (var, (KPromote t, q)) = Just (var, (t, q))
+       convert (var, t) = Nothing
 
     justCoeffectTypesConvertedVars checkerState =
        stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
