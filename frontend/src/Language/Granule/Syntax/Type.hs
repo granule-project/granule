@@ -69,6 +69,7 @@ data Coeffect = CNat      Int
               | CExpon    Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
+nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
 infiniteUsage = CUsage (CZero extendedNat) (CInfinity (Just extendedNat))
 

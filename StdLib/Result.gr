@@ -16,7 +16,7 @@ data Result a where
 --- The fromResult function takes a default value and and Result value. If the
 -- Result is Failed, it returns the default value; otherwise, it returns the value
 -- contained in the Result.
-fromResult : forall a : Type . a |1| -> Result a -> a
+fromResult : forall a : Type . a |0..1| -> Result a -> a
 fromResult |default| result =
     case result of
       (Failed |_|) -> default;
@@ -27,7 +27,7 @@ return_res : forall a : Type . a -> Result a
 return_res = Ok
 
 bind_res : forall a : Type, b : Type
-     . Result a -> (a -> Result b) |1| -> Result b
+         . Result a -> (a -> Result b) |0..1| -> Result b
 bind_res m |k| =
   case m of
     (Failed r) -> Failed r;

@@ -122,13 +122,15 @@ inferCoeffectType _ (CNat _)          = return $ TyCon $ mkId "Nat"
 inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
 inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
 inferCoeffectType s (CUsage c1 c2)    = do
-  TyCon t1 <- inferCoeffectType s c1
-  unless (internalName t1 == "Nat") $
-     halt $ KindError (Just s) $ "Expected Nat in lower bound of `Usage` but got: " <> pretty t1
+  k1 <- inferCoeffectType s c1
+  unless (k1 == extendedNat || k1 == nat) $
+     halt $ KindError (Just s) $ "Expected " <> pretty extendedNat
+          <> "`` in lower bound of `Usage` but got ``" <> pretty k1 <> "`"
 
-  TyCon t2 <- inferCoeffectType s c2
-  unless (internalName t1 == "Nat") $
-     halt $ KindError (Just s) $ "Expected Nat in upper bound of `Usage` but got: " <> pretty t2
+  k2 <- inferCoeffectType s c2
+  unless (k2 == extendedNat || k2 == nat) $
+     halt $ KindError (Just s) $ "Expected `" <> pretty extendedNat
+          <> " in upper bound of `Usage` but got: `" <> pretty k2 <> "`"
 
   return $ TyCon $ mkId "Usage"
 

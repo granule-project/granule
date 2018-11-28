@@ -246,11 +246,14 @@ compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
 compileCoeffect (CInfinity (Just (TyVar _))) _ _ = zeroToInfinity
 compileCoeffect (CInfinity Nothing) _ _ = zeroToInfinity
 
-compileCoeffect (CNat n) (TyCon k) _ = -- trace ("$$$$$" <> show n <> "\n" <> show k) $
-  case internalName k of
-    "Nat" -> SNat  . fromInteger . toInteger $ n
+compileCoeffect (CNat n) k _ | k == nat =
+  SNat  . fromInteger . toInteger $ n
 
-compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" = SFloat  . fromRational $ r
+compileCoeffect (CNat n) k _ | k == extendedNat =
+  SExtNat . fromInteger . toInteger $ n
+
+compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
+  SFloat  . fromRational $ r
 
 compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
   SSet . S.fromList $ (map (first mkId) xs)
@@ -319,7 +322,7 @@ compileCoeffect (CZero k') k _ =
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
         "Usage"     -> SUsage 0 0
-    (otherK', otherK) | otherK' == extendedNat && otherK == extendedNat ->
+    (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 0
 
 compileCoeffect (COne k') k _ =
@@ -331,7 +334,7 @@ compileCoeffect (COne k') k _ =
         "Q"         -> SFloat (fromRational 1)
         "Set"       -> SSet (S.fromList [])
         "Usage"     -> SUsage 1 1
-    (otherK', otherK) | otherK' == extendedNat && otherK == extendedNat ->
+    (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 1
 
 -- Trying to compile a coeffect from a promotion that was never
