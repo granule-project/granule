@@ -33,6 +33,19 @@ data Globals =
   , solverTimeoutMillis :: Maybe Integer
   } deriving Show
 
+defaultGlobals :: Globals
+defaultGlobals =
+    Globals
+    { debugging = False
+    , sourceFilePath = ""
+    , noColors = False
+    , noEval = False
+    , suppressInfos = False
+    , suppressErrors = False
+    , timestamp = False
+    , solverTimeoutMillis = Just 1000
+    }
+
 class UserMsg a where
   title :: a -> String
   location :: a -> Maybe Span
