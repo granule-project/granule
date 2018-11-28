@@ -74,7 +74,7 @@ extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
 infiniteUsage = CInterval (CZero extendedNat) (CInfinity (Just extendedNat))
 
 isInterval :: Type -> Maybe Type
-isInterval (TyApp (TyCon c) t) | internalName c == "interval" = Just t
+isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
 -- | Represents effect grades
