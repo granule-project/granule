@@ -22,6 +22,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
+import Language.Granule.TestUtils
 import System.Directory (setCurrentDirectory)
 
 pathToExamples :: FilePath
@@ -42,19 +43,6 @@ exclude = ""
 
 fileExtension :: String
 fileExtension = ".gr"
-
-defaultGlobals :: Globals
-defaultGlobals =
-    Globals
-    { debugging = False
-    , sourceFilePath = ""
-    , noColors = False
-    , noEval = False
-    , suppressInfos = False
-    , suppressErrors = False
-    , timestamp = False
-    , solverTimeoutMillis = Just 1000
-    }
 
 spec :: Spec
 spec = do
