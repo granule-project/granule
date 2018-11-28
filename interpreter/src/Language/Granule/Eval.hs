@@ -72,7 +72,7 @@ evalBinOp op v1 v2 = error $ "Unknown operator " <> op
                              <> " on " <> show v1 <> " and " <> show v2
 
 -- Call-by-value big step semantics
-evalIn :: Ctxt RValue -> RExpr -> IO RValue
+evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
 
 evalIn _ (Val s _ (Var _ v)) | internalName v == "read" = do
     putStr "> "
@@ -154,7 +154,7 @@ evalIn ctxt (Case _ _ guardExpr cases) = do
       Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
       Nothing             ->
         error $ "Incomplete pattern match:\n  cases: "
-             <> prettyUser cases <> "\n  expr: " <> prettyUser guardExpr
+             <> pretty cases <> "\n  expr: " <> pretty guardExpr
 
 applyBindings :: Ctxt RExpr -> RExpr -> RExpr
 applyBindings [] e = e
@@ -165,7 +165,8 @@ applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
     If there is a matching pattern p_i then return Just of the branch
     expression e_i and a list of bindings in scope -}
 pmatchTop ::
-     Ctxt RValue
+  (?globals :: Globals)
+  => Ctxt RValue
   -> [(Pattern (), RExpr)]
   -> RExpr
   -> IO (Maybe (RExpr, Ctxt RExpr))
@@ -183,7 +184,8 @@ pmatchTop ctxt ps guardExpr = do
   pmatch ctxt ps val
 
 pmatch ::
-     Ctxt RValue
+  (?globals :: Globals)
+  => Ctxt RValue
   -> [(Pattern (), RExpr)]
   -> RValue
   -> IO (Maybe (RExpr, Ctxt RExpr))
@@ -219,7 +221,7 @@ pmatch ctxt (_:ps) val = pmatch ctxt ps val
 
 valExpr = Val nullSpan ()
 
-builtIns :: Ctxt RValue
+builtIns :: (?globals :: Globals) => Ctxt RValue
 builtIns =
   [
     (mkId "div", Ext () $ Primitive $ \(NumInt _ n1)
@@ -256,14 +258,15 @@ builtIns =
   , (mkId "close",   Ext () $ Primitive close)
   ]
   where
-    fork :: Ctxt RValue -> RValue -> IO RValue
+    fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     fork ctxt e@Abs{} = do
       c <- CC.newChan
       C.forkIO $
          evalIn ctxt (App nullSpan () (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
       return $ Pure () $ valExpr $ Ext () $ Chan c
+    fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
-    forkRep :: Ctxt RValue -> RValue -> IO RValue
+    forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkRep ctxt e@Abs{} = do
       c <- CC.newChan
       C.forkIO $
@@ -273,13 +276,13 @@ builtIns =
       return $ Pure () $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
     forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
-    recv :: RValue -> IO RValue
+    recv :: (?globals :: Globals) => RValue -> IO RValue
     recv (Ext _ (Chan c)) = do
       x <- CC.readChan c
       return $ Pure () $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
 
-    send :: RValue -> IO RValue
+    send :: (?globals :: Globals) => RValue -> IO RValue
     send (Ext _ (Chan c)) = return $ Ext () $ Primitive
       (\v -> do
          CC.writeChan c v
@@ -316,7 +319,7 @@ builtIns =
          SIO.hClose h
          return $ Pure () $ valExpr (Constr () (mkId "()") [])
 
-evalDefs :: Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
+evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
 evalDefs ctxt (Def _ var e [] _ : defs) = do
     val <- evalIn ctxt e
@@ -354,7 +357,7 @@ instance RuntimeRep Value where
   toRuntimeRep (NumInt a x) = NumInt a x
   toRuntimeRep (NumFloat a x) = NumFloat a x
 
-eval :: AST () () -> IO (Maybe RValue)
+eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval (AST dataDecls defs) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId "main") bindings of

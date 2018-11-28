@@ -40,13 +40,13 @@ compileToSBV :: (?globals :: Globals) =>
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
 compileToSBV predicate tyVarContext kVarContext =
   (buildTheorem id compileQuant
-  , buildTheorem bnot (compileQuant . flipQuant)
+  , undefined -- buildTheorem bnot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
 
   where
-    flipQuant ForallQ   = InstanceQ
-    flipQuant InstanceQ = ForallQ
-    flipQuant BoundQ    = BoundQ
+    -- flipQuant ForallQ   = InstanceQ
+    -- flipQuant InstanceQ = ForallQ
+    -- flipQuant BoundQ    = BoundQ
 
     predicate' = rewriteConstraints kVarContext predicate
 

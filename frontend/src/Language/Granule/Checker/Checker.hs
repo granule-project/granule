@@ -587,16 +587,24 @@ solveConstraints predicate s defName = do
     coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
     (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
 
-  ThmResult thmRes <- liftIO . proveWith defaultSMTCfg {-{verbose=True}-} $ sbvTheorem
+  ThmResult thmRes <- liftIO . prove $ do -- proveWith defaultSMTCfg {verbose=True}
+    case solverTimeoutMillis ?globals of
+      Nothing -> return ()
+      Just n -> setTimeOut n
+    sbvTheorem
 
   case thmRes of
-    Satisfiable {} -> return ()
-    SatExtField {} -> return ()
+    Unsatisfiable {} -> return () -- we're good: the negation of the theorem is unsatisfiable
     ProofError _ msgs ->
-      halt $ CheckerError Nothing $ "Prover error:" <> unlines msgs
+      halt $ CheckerError Nothing $ "Solver error:" <> unlines msgs
+    Unknown _ UnknownTimeOut ->
+      halt $ CheckerError Nothing $
+        "Solver timed out with limit of " <>
+        show (solverTimeoutMillis ?globals) <>
+        " ms. You may want to increase the timeout (see --help)."
     Unknown _ reason  ->
-      halt $ CheckerError Nothing $ "Prover says unknown:\n" <> show reason
-    Unsatisfiable {} ->
+      halt $ CheckerError Nothing $ "Solver says unknown: " <> show reason
+    _ ->
       case getModelAssignment thmRes of
         -- Main 'Falsifiable' result
         Right (False, assg :: [ Integer ] ) -> do

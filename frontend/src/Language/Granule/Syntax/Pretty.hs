@@ -19,17 +19,11 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
 
-prettyDebug :: Pretty t => t -> String
+prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
-  let ?globals = defaultGlobals { debugging = True }
+  let ?globals = ?globals { debugging = True }
   in pretty x
-
-prettyUser :: Pretty t => t -> String
-prettyUser x =
-  let ?globals = defaultGlobals
-  in pretty x
-
-
+  
 -- The pretty printer class
 class Pretty t where
     pretty :: (?globals :: Globals) => t -> String

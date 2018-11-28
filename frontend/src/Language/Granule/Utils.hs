@@ -30,19 +30,8 @@ data Globals =
   , suppressInfos :: Bool
   , suppressErrors :: Bool
   , timestamp :: Bool
+  , solverTimeoutMillis :: Maybe Integer
   } deriving Show
-
-defaultGlobals :: Globals
-defaultGlobals =
-    Globals
-    { debugging = False
-    , sourceFilePath = ""
-    , noColors = False
-    , noEval = False
-    , suppressInfos = False
-    , suppressErrors = False
-    , timestamp = False
-    }
 
 class UserMsg a where
   title :: a -> String

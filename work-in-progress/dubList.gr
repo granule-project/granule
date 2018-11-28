@@ -1,3 +1,5 @@
+-- This kills SMT
+
 data Vec : Nat= -> Type -> Type where
   Nil  : forall (t : Type) . Vec 0 t;
   Cons : forall (t : Type, n : Nat=) . t -> Vec n t -> Vec (n+1) t
