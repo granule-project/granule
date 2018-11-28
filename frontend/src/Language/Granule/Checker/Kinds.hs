@@ -121,18 +121,14 @@ inferCoeffectType _ (Level _)         = return $ TyCon $ mkId "Level"
 inferCoeffectType _ (CNat _)          = return $ TyCon $ mkId "Nat"
 inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
 inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
-inferCoeffectType s (CUsage c1 c2)    = do
+inferCoeffectType s (CInterval c1 c2)    = do
   k1 <- inferCoeffectType s c1
-  unless (k1 == extendedNat || k1 == nat) $
-     halt $ KindError (Just s) $ "Expected " <> pretty extendedNat
-          <> "`` in lower bound of `Usage` but got ``" <> pretty k1 <> "`"
-
   k2 <- inferCoeffectType s c2
-  unless (k2 == extendedNat || k2 == nat) $
-     halt $ KindError (Just s) $ "Expected `" <> pretty extendedNat
-          <> " in upper bound of `Usage` but got: `" <> pretty k2 <> "`"
+  unless (k1 == k2) $
+     halt $ KindError (Just s) $ "Interval grades do not match `" <> pretty k1
+          <> "` does not match with `" <> pretty k2 <> "`"
 
-  return $ TyCon $ mkId "Usage"
+  return $ TyApp (TyCon $ mkId "Interval") k1
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
@@ -168,7 +164,8 @@ inferCoeffectType s (CVar cvar) = do
 inferCoeffectType s (CZero t) = checkKindIsCoeffect s t
 inferCoeffectType s (COne t)  = checkKindIsCoeffect s t
 inferCoeffectType s (CInfinity (Just t)) = checkKindIsCoeffect s t
-inferCoeffectType s (CInfinity Nothing) = return $ TyCon $ mkId "Usage"
+-- Unknown infinity defaults to the interval of extended nats version
+inferCoeffectType s (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat)
 inferCoeffectType s (CSig _ t) = checkKindIsCoeffect s t
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)

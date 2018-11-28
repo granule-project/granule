@@ -82,7 +82,7 @@ spec = do
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
        (c, pred) <- runCtxts joinCtxts
-              [(varA, Discharged tyVarK (CSig (CNat 5) (TyCon $ mkId "Usage")))]
+              [(varA, Discharged tyVarK (CSig (CNat 5) natInterval))]
               [(varA, Discharged tyVarK (cNatOrdered 10))]
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
        pred `shouldBe`
@@ -149,7 +149,8 @@ exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't 
       (find always (extension ==? fileExtension) pathToGranuleBase))
       (find always (extension ==? fileExtension) pathToRegressionTests)
 
-cNatOrdered x = CSig (CNat x) (TyCon $ mkId "Usage")
+cNatOrdered x = CSig (CNat x) natInterval
+natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")
 
 illTypedFiles =
   find always (extension ==? fileExtension) pathToIlltyped

@@ -23,7 +23,7 @@ typeLevelConstructors =
     , (mkId "Nat",  (KCoeffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
-    , (mkId "Usage", (KCoeffect, Nothing))
+    , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (KConstr $ mkId "k") KCoeffect), Nothing))
     , (mkId "+",   (KFun (KConstr $ mkId "Nat") (KFun (KConstr $ mkId "Nat") (KConstr $ mkId "Nat")), Nothing))
     , (mkId "*",   (KFun (KConstr $ mkId "Nat") (KFun (KConstr $ mkId "Nat") (KConstr $ mkId "Nat")), Nothing))

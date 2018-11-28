@@ -218,7 +218,7 @@ Coeffect :: { Coeffect }
                                     "Inf" -> infiniteUsage
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
-  | Coeffect ".." Coeffect      { CUsage $1 $3 }
+  | Coeffect ".." Coeffect      { CInterval $1 $3 }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }

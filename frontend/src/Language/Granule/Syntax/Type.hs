@@ -55,7 +55,7 @@ data Kind = KType
 data Coeffect = CNat      Int
               | CFloat    Rational
               | CInfinity (Maybe Type)
-              | CUsage    { lowerBound :: Coeffect, upperBound :: Coeffect }
+              | CInterval { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
@@ -71,7 +71,11 @@ data Coeffect = CNat      Int
 
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
-infiniteUsage = CUsage (CZero extendedNat) (CInfinity (Just extendedNat))
+infiniteUsage = CInterval (CZero extendedNat) (CInfinity (Just extendedNat))
+
+isInterval :: Type -> Maybe Type
+isInterval (TyApp (TyCon c) t) | internalName c == "interval" = Just t
+isInterval _ = Nothing
 
 -- | Represents effect grades
 -- TODO: Make richer
@@ -202,7 +206,7 @@ instance Term Coeffect where
     freeVars Level{} = []
     freeVars CSet{} = []
     freeVars (CSig c _) = freeVars c
-    freeVars (CUsage c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CInterval c1 c2) = freeVars c1 <> freeVars c2
 
 ----------------------------------------------------------------------
 -- Freshenable instances
@@ -285,7 +289,7 @@ instance Freshenable Coeffect where
     freshen c@COne{}   = return c
     freshen c@Level{}  = return c
     freshen c@CNat{}   = return c
-    freshen (CUsage c1 c2) = CUsage <$> freshen c1 <*> freshen c2
+    freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2
 
 ----------------------------------------------------------------------
 

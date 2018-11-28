@@ -14,16 +14,22 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Utils
 
--- Which coeffects can be flattened
+-- | Find out whether a coeffect if flattenable, and if so get the operation
+-- | used to representing flattening on the grades
 flattenable :: Type -> Maybe (Coeffect -> Coeffect -> Coeffect)
-flattenable (TyCon k) =
-  case internalName k of
-    "Nat"   -> Just CTimes
-    "Level" -> Just CJoin
-    "Usage" -> Just CTimes
-    _       -> Nothing
-flattenable t | t == extendedNat = Just CTimes
-flattenable _ = Nothing
+flattenable k =
+  case k of
+   TyCon k ->
+     -- Nat and Level are flattenable
+     case internalName k of
+      "Nat"   -> Just CTimes
+      "Level" -> Just CJoin
+   TyApp (TyCon k) t ->
+      -- Interval and top-completion are flattenable if their parameter type is
+      case internalName k of
+        "Interval" -> flattenable t
+        "Ext"      -> flattenable t
+   _ -> Nothing
 
 checkKind :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
 checkKind s k@(TyCon name) = do

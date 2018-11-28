@@ -18,7 +18,7 @@ import Control.Exception (assert)
 import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
 
--- Extended nats
+import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Constraints.Quantifiable
 import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
@@ -68,7 +68,7 @@ compileToSBV predicate tyVarContext kVarContext =
 
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
-    buildTheorem' :: Ctxt SCoeffect -> Pred -> Symbolic SBool
+    buildTheorem' :: Ctxt SGrade -> Pred -> Symbolic SBool
     buildTheorem' solverVars (Conj ps) = do
       ps' <- mapM (buildTheorem' solverVars) ps
       return $ bAnd ps'
@@ -102,8 +102,8 @@ compileToSBV predicate tyVarContext kVarContext =
     createFreshVar
       :: (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
       -> (Id, (Type, Quantifier))
-      -> (SBool, SBool, Ctxt SCoeffect)
-      -> Symbolic (SBool, SBool, Ctxt SCoeffect)
+      -> (SBool, SBool, Ctxt SGrade)
+      -> Symbolic (SBool, SBool, Ctxt SGrade)
     -- Ignore variables coming from a dependent pattern match
     createFreshVar _ (_, (_, BoundQ)) x = return x
 
@@ -162,34 +162,27 @@ rewriteConstraints ctxt =
       CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect ckindVar ckind (CExpon c1 c2) =
       CExpon (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CUsage c1 c2) =
-      CUsage (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CInterval c1 c2) =
+      CInterval (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect _ _ c = c
 
--- Symbolic coeffects
-data SCoeffect =
-     SNat      SInteger
-   | SFloat    SFloat
-   | SLevel    SInteger
-   | SSet      (S.Set (Id, Type))
-   | SUsage    { sLowerBound :: SNatX, sUpperBound :: SNatX }
-   | SExtNat   SNatX
-  deriving Show
 
 -- | Symbolic coeffect representing 0..Inf
-zeroToInfinity = SUsage (SNatX 0) SNatX.inf
+zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat $ SNatX.inf)
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
 freshCVar :: (forall a . Quantifiable a => Quantifier -> (String -> Symbolic a))
-          -> String -> Type -> Quantifier -> Symbolic (SBool, SCoeffect)
+          -> String -> Type -> Quantifier -> Symbolic (SBool, SGrade)
 
-freshCVar quant name (TyCon (internalName -> "Usage")) q = do
-  solverVarLb <- quant q (name <> ".lower")
-  solverVarUb <- quant q (name <> ".upper")
+freshCVar quant name (isInterval -> Just t) q = do
+  -- Interval, therefore recursively generate fresh vars for the lower and upper
+  (predLb, solverVarLb) <- freshCVar quant (name <> ".lower") t q
+  (predUb, solverVarUb) <- freshCVar quant (name <> ".lower") t q
   return
-    ( solverVarLb .>= 0 &&& solverVarUb .>= solverVarLb
-    , SUsage solverVarLb solverVarUb
+     -- Respect the meaning of intervals
+    ( predLb &&& predUb &&& solverVarUb .>= solverVarLb
+    , SInterval solverVarLb solverVarUb
     )
 freshCVar quant name (TyCon (internalName -> "Q")) q = do
   solverVar <- quant q name
@@ -215,7 +208,7 @@ freshCVar _ _ k _ =
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals) =>
-  Ctxt SCoeffect -> Constraint -> SBool
+  Ctxt SGrade -> Constraint -> SBool
 compile vars (Eq _ c1 c2 k) =
   eqConstraint c1' c2'
     where
@@ -234,7 +227,7 @@ compile vars (ApproximatedBy _ c1 c2 k) = -- trace (show c1 <> "\n" <> show c2 <
 
 -- | Compile a coeffect term into its symbolic representation
 compileCoeffect :: (?globals :: Globals) =>
-  Coeffect -> Type -> [(Id, SCoeffect)] -> SCoeffect
+  Coeffect -> Type -> [(Id, SGrade)] -> SGrade
 
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
@@ -256,7 +249,7 @@ compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
   SFloat  . fromRational $ r
 
 compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
-  SSet . S.fromList $ (map (first mkId) xs)
+  SSet . S.fromList $ map (first mkId) xs
 
 compileCoeffect (CVar v) _ vars =
    case lookup v vars of
@@ -264,56 +257,26 @@ compileCoeffect (CVar v) _ vars =
     _ -> error $ "Looking up a variable '" <> pretty v <> "' in " <> show vars
 
 compileCoeffect c@(CMeet n m) k vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) -> SNat (n1 `smin` n2)
-    (SSet s, SSet t) -> SSet $ S.intersection s t
-    (SLevel s, SLevel t) -> SLevel $ s `smin` t
-    (SFloat n1, SFloat n2) -> SFloat (n1 `smin` n2)
-    (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 `smax` lb2) (ub1 `smin` ub2)
-    (SExtNat x, SExtNat y) -> SExtNat (x `smin` y)
-    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
+  (compileCoeffect n k vars) `symGradeMeet` (compileCoeffect m k vars)
 
 compileCoeffect c@(CJoin n m) k vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) -> SNat (n1 `smax` n2)
-    (SSet s, SSet t) -> SSet $ S.intersection s t
-    (SLevel s, SLevel t) -> SLevel $ s `smax` t
-    (SFloat n1, SFloat n2) -> SFloat (n1 `smax` n2)
-    (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 `smin` lb2) (ub1 `smax` ub2)
-    (SExtNat x, SExtNat y) -> SExtNat (x `smax` y)
-    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
+  (compileCoeffect n k vars) `symGradeJoin` (compileCoeffect m k vars)
 
 compileCoeffect c@(CPlus n m) k vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) -> SNat (n1 + n2)
-    (SSet s, SSet t) -> SSet $ S.union s t
-    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smax` lev2
-    (SFloat n1, SFloat n2) -> SFloat $ n1 + n2
-    (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 + lb2) (ub1 + ub2)
-    (SExtNat x, SExtNat y) -> SExtNat (x + y)
-    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
+  (compileCoeffect n k vars) `symGradePlus` (compileCoeffect m k vars)
 
 compileCoeffect c@(CTimes n m) k vars =
-  case (compileCoeffect n k vars, compileCoeffect m k vars) of
-    (SNat n1, SNat n2) -> SNat (n1 * n2)
-    (SSet s, SSet t) -> SSet $ S.union s t
-    (SLevel lev1, SLevel lev2) -> SLevel $ lev1 `smin` lev2
-    (SFloat n1, SFloat n2) -> SFloat $ n1 * n2
-    (SUsage lb1 ub1, SUsage lb2 ub2) -> SUsage (lb1 * lb2) (ub1 * ub2)
-    (SExtNat x, SExtNat y) -> SExtNat (x * y)
-    _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
+  (compileCoeffect n k vars) `symGradeTimes` (compileCoeffect m k vars)
 
 compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
     (SNat n1, SNat n2) -> SNat (n1 .^ n2)
     _ -> error $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
-compileCoeffect c@(CUsage lb ub) k vars =
-  case (compileCoeffect lb extendedNat vars, compileCoeffect ub extendedNat vars) of
-    (SExtNat lb, SExtNat ub) -> SUsage lb ub
-    _ -> error $ "Failed to compile: " <> show c <> " of kind " <> pretty k
+compileCoeffect c@(CInterval lb ub) k vars =
+  SInterval (compileCoeffect lb k vars) (compileCoeffect ub k vars)
 
-compileCoeffect (CZero k') k _ =
+compileCoeffect (CZero k') k vars  =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
@@ -321,11 +284,15 @@ compileCoeffect (CZero k') k _ =
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
-        "Usage"     -> SUsage 0 0
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 0
+    -- Build an interval for 0
+    (isInterval -> Just t, isInterval -> Just t') ->
+      SInterval
+        (compileCoeffect (CZero t) t' vars)
+        (compileCoeffect (CZero t) t' vars)
 
-compileCoeffect (COne k') k _ =
+compileCoeffect (COne k') k vars =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
@@ -333,16 +300,20 @@ compileCoeffect (COne k') k _ =
         "Nat"       -> SNat 1
         "Q"         -> SFloat (fromRational 1)
         "Set"       -> SSet (S.fromList [])
-        "Usage"     -> SUsage 1 1
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 1
+    -- Build an interval for 1
+    (isInterval -> Just t, isInterval -> Just t') ->
+        SInterval
+          (compileCoeffect (COne t) t' vars)
+          (compileCoeffect (COne t) t' vars)
 
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v =
   case c of
-    CZero _ -> SUsage 0 0
+    CZero _ -> SInterval (SNat 0) (SNat 0) -- TODO: probably cant remove this now
     _       -> zeroToInfinity
 
 compileCoeffect c (TyVar _) _ =
@@ -353,23 +324,26 @@ compileCoeffect coeff ckind _ =
         <> " of kind " <> pretty ckind
 
 -- | Generate equality constraints for two symbolic coeffects
-eqConstraint :: SCoeffect -> SCoeffect -> SBool
+eqConstraint :: SGrade -> SGrade -> SBool
 eqConstraint (SNat n) (SNat m) = n .== m
 eqConstraint (SFloat n) (SFloat m) = n .== m
 eqConstraint (SLevel l) (SLevel k) = l .== k
-eqConstraint (SUsage lb1 ub1) (SUsage lb2 ub2) = lb1 .== lb2 &&& ub1 .== ub2
+eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
+  (eqConstraint lb1 lb2) &&& (eqConstraint ub1 ub2)
 eqConstraint (SExtNat x) (SExtNat y) = x .== y
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
-approximatedByOrEqualConstraint :: SCoeffect -> SCoeffect -> SBool
+approximatedByOrEqualConstraint :: SGrade -> SGrade -> SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m) = n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
-approximatedByOrEqualConstraint (SUsage lb1 ub1) (SUsage lb2 ub2) = lb1 .>= lb2 &&& ub1 .<= ub2
+approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
+  (approximatedByOrEqualConstraint lb1 lb2)
+  &&& (approximatedByOrEqualConstraint ub1 ub2)
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .>= y
 approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " <> show x <> " <= " <> show y
@@ -385,8 +359,8 @@ trivialUnsatisfiableConstraints cs =
     positiveConstraints = predFold concat (\_ _ q -> q) (\x -> [x])
 
     unsat :: Constraint -> Bool
-    unsat (Eq _ c1 c2 _)  = c1 `eqC` c2
-    unsat (Neq _ c1 c2 _) = not (c1 `eqC` c2)
+    unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
+    unsat (Neq _ c1 c2 _) = not (c1 `neqC` c2)
     unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
@@ -395,12 +369,15 @@ trivialUnsatisfiableConstraints cs =
     approximatedByC (CNat n) (CNat m) = not $ n == m
     approximatedByC (Level n) (Level m)   = not $ n >= m
     approximatedByC (CFloat n) (CFloat m) = not $ n <= m
-    approximatedByC (CUsage lb1 ub1) (CUsage lb2 ub2) = not $ lb1 >= lb2 && ub1 <= ub2
+    approximatedByC (CInterval lb1 ub1) (CInterval lb2 ub2) =
+        not $ (approximatedByC lb2 lb1) && (approximatedByC ub1 ub2)
     approximatedByC _ _                   = False
 
     -- Attempt to see if one coeffect is trivially not equal to the other
-    eqC :: Coeffect -> Coeffect -> Bool
-    eqC (CNat n) (CNat m) = n /= m
-    eqC (Level n) (Level m)   = n /= m
-    eqC (CFloat n) (CFloat m) = n /= m
-    eqC _ _                   = False
+    neqC :: Coeffect -> Coeffect -> Bool
+    neqC (CNat n) (CNat m) = n /= m
+    neqC (Level n) (Level m)   = n /= m
+    neqC (CFloat n) (CFloat m) = n /= m
+    neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
+      neqC lb1 ub1 || neqC lb2 ub2
+    neqC _ _                   = False

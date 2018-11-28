@@ -23,7 +23,7 @@ prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
   let ?globals = ?globals { debugging = True }
   in pretty x
-  
+
 -- The pretty printer class
 class Pretty t where
     pretty :: (?globals :: Globals) => t -> String
@@ -72,7 +72,7 @@ instance Pretty Coeffect where
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> pretty t) xs) <> "}"
     pretty (CSig c t) = "(" <> pretty c <> " : " <> pretty t <> ")"
     pretty (CInfinity k) = "∞ : " <> pretty k
-    pretty (CUsage c1 c2) = pretty c1 <> ".." <> pretty c2
+    pretty (CInterval c1 c2) = pretty c1 <> ".." <> pretty c2
 
 instance Pretty Kind where
     pretty KType          = "Type"
