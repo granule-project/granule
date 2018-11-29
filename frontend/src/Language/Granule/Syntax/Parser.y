@@ -94,18 +94,25 @@ import Language.Granule.Utils hiding (mkSpan)
 %%
 
 Defs :: { AST () () }
-  : Def                       { AST [] [$1] }
-  | DataDecl                  { AST [$1] [] }
-  | DataDecl NL Defs          { let (AST dds defs) = $3 in AST ($1 : dds) defs }
-  | IFaceDecl                 { AST [] [] }
-  | IFaceDecl NL Defs         { let (AST dds defs) = $3
-                                 in AST dds defs }
-  | InstDecl                  { AST [] [] }
+  : Def                       { AST [] [$1] [] [] }
 
-  | InstDecl NL Defs          { let (AST dds defs) = $3
-                                 in AST dds defs }
+  | DataDecl                  { AST [$1] [] [] [] }
 
-  | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
+  | DataDecl NL Defs          { let (AST dds defs ifaces insts) = $3
+                                 in AST ($1 : dds) defs ifaces insts }
+
+  | IFaceDecl                 { AST [] [] [$1] [] }
+
+  | IFaceDecl NL Defs         { let (AST dds defs ifaces insts) = $3
+                                 in AST dds defs ($1 : ifaces) insts }
+
+  | InstDecl                  { AST [] [] [] [$1] }
+
+  | InstDecl NL Defs          { let (AST dds defs ifaces insts) = $3
+                                 in AST dds defs ifaces ($1 : insts) }
+
+  | Def NL Defs               { let (AST dds defs ifaces insts) = $3
+                                 in AST dds ($1 : defs) ifaces insts }
 
 NL :: { () }
   : nl NL                    { }
@@ -153,9 +160,9 @@ IFaceSigs :: { [(String, TypeScheme, Pos)] }
   : Sig ';' IFaceSigs { $1 : $3 }
   | Sig { [$1] }
 
-IFaceDecl :: { () }
-  : interface IFaceName IFaceVar where IFaceSigs { }
-  | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs { }
+IFaceDecl :: { IFace }
+  : interface IFaceName IFaceVar where IFaceSigs { IFace }
+  | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs { IFace }
 
 InstBinds :: { [(Maybe String, Equation () ())] }
   : Binding ';' InstBinds { $1 : $3 }
@@ -165,9 +172,9 @@ InstVar :: { () }
   : CONSTR { }
   | '(' CONSTR TyParams ')' { }
 
-InstDecl :: { () }
-  : instance IFaceName InstVar where InstBinds { }
-  | instance IFaceConstrained IFaceName InstVar where InstBinds { }
+InstDecl :: { Instance () ()  }
+  : instance IFaceName InstVar where InstBinds { Instance }
+  | instance IFaceConstrained IFaceName InstVar where InstBinds { Instance }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
@@ -522,9 +529,11 @@ parseDefs' input = do
   where
     merge :: [AST () ()] -> AST () ()
     merge xs =
-      let conc [] dds defs = AST dds defs
-          conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)
-       in conc xs [] []
+      let conc [] dds defs ifaces insts = AST dds defs ifaces insts
+          conc ((AST dds defs ifaces insts):xs) ddsAcc defsAcc ifacesAcc instsAcc =
+            conc xs (dds <> ddsAcc) (defs <> defsAcc)
+                    (ifaces <> ifacesAcc) (insts <> instsAcc)
+       in conc xs [] [] [] []
 
     parse = defs . scanTokens
 
@@ -533,7 +542,7 @@ parseDefs' input = do
 
     replace from to = map (\c -> if c == from then to else c)
 
-    checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
+    checkMatchingNumberOfArgs ds@(AST dataDecls defs ifaces insts) =
       mapM checkMatchingNumberOfArgs' defs
 
     checkMatchingNumberOfArgs' (Def _ name eqs _) =
@@ -548,7 +557,7 @@ parseDefs' input = do
           lengths = map (\(Equation _ _ pats _) -> length pats) eqs
 
 
-    checkNameClashes ds@(AST dataDecls defs) =
+    checkNameClashes ds@(AST dataDecls defs ifaces insts) =
         if null clashes
 	        then return ()
           else die $ "Error: Name clash: " <> intercalate ", " (map sourceName clashes)

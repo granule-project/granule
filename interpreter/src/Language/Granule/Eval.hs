@@ -373,7 +373,7 @@ instance RuntimeRep Value where
   toRuntimeRep (NumFloat x) = NumFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
-eval (AST dataDecls defs) = do
+eval (AST dataDecls defs ifaces insts) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing
