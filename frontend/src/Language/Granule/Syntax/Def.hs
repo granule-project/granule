@@ -23,7 +23,7 @@ import Language.Granule.Syntax.Pattern
 -- | Comprise a list of data type declarations and a list
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
-data AST v a = AST [DataDecl] [Def v a]
+data AST v a = AST [DataDecl] [Def v a] [IFace] [Instance v a]
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
@@ -70,10 +70,22 @@ instance FirstParameter DataConstr Span
 -- | How many data constructors a type has (Nothing -> don't know)
 type Cardinality = Maybe Nat
 
+
+-- | Interfaces
+data IFace = IFace deriving (Show, Eq)
+
+
+-- | Instances
+data Instance v a = Instance deriving (Show)
+
+deriving instance Functor (Instance v)
+deriving instance (Eq v, Eq a) => Eq (Instance v a)
+
+
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
-freshenAST (AST dds defs) =
-  AST dds' defs'
+freshenAST (AST dds defs ifaces insts) =
+  AST dds' defs' ifaces insts
     where (dds', defs') = (map runFreshener dds, map runFreshener defs)
 
 instance Monad m => Freshenable m DataDecl where

@@ -163,7 +163,7 @@ appChain (TyApp t1 t2)           = True
 appChain _                       = False
 
 instance (Pretty (Value v a), Pretty v) => Pretty (AST v a) where
-    prettyL l (AST dataDecls defs) = pretty' dataDecls <> "\n\n" <> pretty' defs
+    prettyL l (AST dataDecls defs ifaces insts) = pretty' dataDecls <> "\n\n" <> pretty' defs
       where
         pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty

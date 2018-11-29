@@ -46,7 +46,7 @@ import Language.Granule.Utils
 
 -- Checking (top-level)
 check :: (?globals :: Globals) => AST () () -> IO (Maybe (AST () Type))
-check (AST dataDecls defs) = evalChecker initState $ do
+check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
     rs3 <- mapM (runMaybeT . kindCheckDef) defs
@@ -54,7 +54,7 @@ check (AST dataDecls defs) = evalChecker initState $ do
 
     return $
       if all isJust (rs1 <> rs2 <> rs3 <> (map (fmap (const ())) rs4))
-        then Just (AST dataDecls (catMaybes rs4))
+        then Just (AST dataDecls (catMaybes rs4) [] [])
         else Nothing
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
