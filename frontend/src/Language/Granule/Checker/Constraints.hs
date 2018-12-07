@@ -28,7 +28,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
---import Debug.Trace
+-- import Debug.Trace
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
@@ -207,13 +207,18 @@ freshCVar quant name (TyCon k) q = do
         "Nat"       -> return (solverVar .>= 0, SNat solverVar)
         "Level"     -> return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
 
+-- Extended nat
+freshCVar quant name t q | t == extendedNat = do
+  solverVar <- quant q name
+  return (SNatX.representationConstraint $ SNatX.xVal solverVar
+        , SExtNat solverVar)
+
 -- A poly typed coeffect variable compiled into the
 --  infinity value (since this satisfies all the semiring properties on the nose)
 freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 -- TODO: possibly this can now be removed
-  solverVar <- quant q name
-  return (solverVar .== -1, SExtNat solverVar)
+  return (true, SPoint)
 
 freshCVar _ _ t _ =
   error $ "Trying to make a fresh solver variable for a grade of type: "
@@ -324,10 +329,7 @@ compileCoeffect (COne k') k vars =
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v =
-  case c of
-    CZero _ -> SInterval (SNat 0) (SNat 0) -- TODO: probably cant remove this now
-    _       -> zeroToInfinity
+compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v = SPoint
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c
@@ -344,6 +346,7 @@ eqConstraint (SLevel l) (SLevel k) = l .== k
 eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   (eqConstraint lb1 lb2) &&& (eqConstraint ub1 ub2)
 eqConstraint (SExtNat x) (SExtNat y) = x .== y
+eqConstraint SPoint SPoint = true
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
@@ -354,6 +357,7 @@ approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
+approximatedByOrEqualConstraint SPoint SPoint = true
 
 -- Perform approximation when nat-like grades are involved
 approximatedByOrEqualConstraint

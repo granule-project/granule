@@ -23,6 +23,8 @@ data SGrade =
      | SSet      (S.Set (Id, Type))
      | SExtNat   SNatX
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
+     -- Single point coeffect
+     | SPoint
     deriving (Show, Generic)
 
 natLike :: SGrade -> Maybe SInteger
@@ -38,6 +40,7 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SExtNat n) (SExtNat n') = SExtNat (symbolicMerge s sb n n')
   symbolicMerge s sb (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (symbolicMerge s sb lb1 lb2) (symbolicMerge s sb ub1 ub2)
+  symbolicMerge s sb SPoint SPoint = SPoint
 
 instance OrdSymbolic SGrade where
   (SInterval lb1 ub1) .< (SInterval lb2 ub2) =
@@ -47,6 +50,7 @@ instance OrdSymbolic SGrade where
   (SLevel n)  .< (SLevel n') = n .< n'
   (SSet n)    .< (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .< (SExtNat n') = n .< n'
+  SPoint .< SPoint = true
 
 instance EqSymbolic SGrade where
   (SInterval lb1 ub1) .== (SInterval lb2 ub2) =
@@ -56,6 +60,7 @@ instance EqSymbolic SGrade where
   (SLevel n)  .== (SLevel n') = n .== n'
   (SSet n)    .== (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .== (SExtNat n') = n .== n'
+  SPoint .== SPoint = true
 
 -- | Meet operation on symbolic grades
 symGradeMeet :: SGrade -> SGrade -> SGrade
@@ -66,6 +71,7 @@ symGradeMeet (SFloat n1) (SFloat n2) = SFloat $ n1 `smin` n2
 symGradeMeet (SExtNat x) (SExtNat y) = SExtNat (x `smin` y)
 symGradeMeet (SInterval lb1 ub1) (SInterval lb2 ub2) =
   SInterval (lb1 `symGradeMeet` lb2) (ub1 `symGradeMeet` ub2)
+symGradeMeet SPoint SPoint = SPoint
 
 -- | Join operation on symbolic grades
 symGradeJoin :: SGrade -> SGrade -> SGrade
@@ -76,6 +82,7 @@ symGradeJoin (SFloat n1) (SFloat n2) = SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = SExtNat (x `smax` y)
 symGradeJoin (SInterval lb1 ub1) (SInterval lb2 ub2) =
    SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeJoin` ub2)
+symGradeJoin SPoint SPoint = SPoint
 
 -- | Plus operation on symbolic grades
 symGradePlus :: SGrade -> SGrade -> SGrade
@@ -86,6 +93,7 @@ symGradePlus (SFloat n1) (SFloat n2) = SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = SExtNat (x + y)
 symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (lb1 `symGradePlus` lb2) (ub1 `symGradePlus` ub2)
+symGradePlus SPoint SPoint = SPoint
 
 -- | Times operation on symbolic grades
 symGradeTimes :: SGrade -> SGrade -> SGrade
@@ -96,3 +104,4 @@ symGradeTimes (SFloat n1) (SFloat n2) = SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = SExtNat (x * y)
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
+symGradeTimes SPoint SPoint = SPoint
