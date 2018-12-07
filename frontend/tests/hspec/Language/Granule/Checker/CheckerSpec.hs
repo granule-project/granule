@@ -126,7 +126,8 @@ spec = do
                  []
                  [(varA, Discharged (tyVarK) (cNatOrdered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (CZero (TyCon $ mkId "Nat")))]
+                 [(varA, Discharged (tyVarK) (CZero
+                     (TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat"))))]
 
 
     describe "elaborator tests" $
