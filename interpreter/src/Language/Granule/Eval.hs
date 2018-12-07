@@ -49,7 +49,7 @@ instance Show (Runtime a) where
   show (Handle _) = "Some handle"
 
 instance Show (Runtime a) => Pretty (Runtime a) where
-  pretty = show
+  prettyL _ = show
 
 evalBinOp :: String -> RValue -> RValue -> RValue
 evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)

@@ -42,10 +42,10 @@ data Substitutors =
   deriving (Eq, Show)
 
 instance Pretty Substitutors where
-  pretty (SubstT t) = "->" <> pretty t
-  pretty (SubstC c) = "->" <> pretty c
-  pretty (SubstK k) = "->" <> pretty k
-  pretty (SubstE e) = "->" <> pretty e
+  prettyL l (SubstT t) = "->" <> prettyL l t
+  prettyL l (SubstC c) = "->" <> prettyL l c
+  prettyL l (SubstK k) = "->" <> prettyL l k
+  prettyL l (SubstE e) = "->" <> prettyL l e
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution

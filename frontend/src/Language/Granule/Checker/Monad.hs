@@ -43,11 +43,11 @@ data Assumption =
     deriving (Eq, Show)
 
 instance Pretty Assumption where
-    pretty (Linear ty) = pretty ty
-    pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> pretty c
+    prettyL l (Linear ty) = prettyL l ty
+    prettyL l (Discharged t c) = ".[" <> prettyL l t <> "]. " <> prettyL l c
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   pretty (a, b) = pretty a <> " : " <> pretty b
+   prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
 
 
 data CheckerState = CS
