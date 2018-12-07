@@ -36,7 +36,7 @@ runChecker :: CheckerState -> Checker a -> IO (a, CheckerState)
 runChecker initialState =
   flip runStateT initialState . unwrap
 
--- Types or discharged coeffects
+-- | Types of discharged coeffects
 data Assumption =
     Linear Type
   | Discharged Type Coeffect

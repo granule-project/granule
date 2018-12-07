@@ -3,8 +3,8 @@
 
 module Language.Granule.Checker.Constraints.SymbolicGrades where
 
-{- | Provides a symbolic representation of grades (coeffects, effects, indices)
-     in order for a solver to use.
+{- Provides a symbolic representation of grades (coeffects, effects, indices)
+   in order for a solver to use.
 -}
 
 import Language.Granule.Syntax.Identifiers
@@ -23,7 +23,7 @@ data SGrade =
      | SSet      (S.Set (Id, Type))
      | SExtNat   SNatX
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
-     -- Single point coeffect
+     -- Single point coeffect (not exposed at the moment)
      | SPoint
     deriving (Show, Generic)
 
