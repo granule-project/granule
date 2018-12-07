@@ -190,16 +190,22 @@ freshCVar quant name (isInterval -> Just t) q = do
     ( predLb &&& predUb &&& solverVarUb .>= solverVarLb
     , SInterval solverVarLb solverVarUb
     )
-freshCVar quant name (TyCon (internalName -> "Q")) q = do
-  solverVar <- quant q name
-  return (true, SFloat solverVar)
 
 freshCVar quant name (TyCon k) q = do
-  solverVar <- quant q name
   case internalName k of
-    "Nat"       -> return (solverVar .>= 0, SNat solverVar)
-    "Level"     -> return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
+    -- Floats (rationals)
+    "Q" -> do
+      solverVar <- quant q name
+      return (true, SFloat solverVar)
+
+    -- Esssentially a stub for sets at this point
     "Set"       -> return (true, SSet S.empty)
+
+    _ -> do -- Otherwise it must be an SInteger-like constraint:
+      solverVar <- quant q name
+      case internalName k of
+        "Nat"       -> return (solverVar .>= 0, SNat solverVar)
+        "Level"     -> return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
 
 -- A poly typed coeffect variable compiled into the
 --  infinity value (since this satisfies all the semiring properties on the nose)
