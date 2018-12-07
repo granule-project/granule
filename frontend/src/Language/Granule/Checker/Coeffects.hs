@@ -36,7 +36,7 @@ checkKind s k@(TyCon name) = do
   st <- get
   case lookup name (typeConstructors st) of
     Just (KCoeffect,_) -> return $ TyCon name
-    Just _             -> illKindedNEq s KCoeffect (KConstr name)
+    Just _             -> illKindedNEq s KCoeffect (kConstr name)
     _                  ->
       halt $ UnboundVariableError (Just s) $ "Type `" <> pretty name <> "`"
 checkKind _ k = return k

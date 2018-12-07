@@ -667,7 +667,8 @@ solveConstraints predicate s defName = do
     ctxtCkVar = kVarContext checkerState
     coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
     coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
-    (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
+
+  let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
 
   ThmResult thmRes <- liftIO . prove $ do -- proveWith defaultSMTCfg {verbose=True}
     case solverTimeoutMillis ?globals of
@@ -717,11 +718,6 @@ solveConstraints predicate s defName = do
              Just (KCoeffect,_) -> Just (var, (TyCon constr, q))
              _                  -> Nothing
 
-       convert (var, (KConstr constr, q)) =
-           -- TODO: look into removing this case
-           case lookup (constr) (typeConstructors checkerState) of
-             Just (KCoeffect,_) -> Just (var, (TyCon constr, q))
-             _                  -> Nothing
        --convert (var, (KPromote (TyVar v), q)) = Just (var, (TyVar v, q))
        -- TODO: currently all poly variables are treated as kind 'Coeffect'
        -- but this need not be the case, so this can be generalised

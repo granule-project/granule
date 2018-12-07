@@ -174,13 +174,18 @@ VarSigs :: { [(Id, Kind)] }
 VarSig :: { (Id, Kind) }
   : VAR ':' Kind              { (mkId $ symString $1, $3) }
 
+
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
   | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
                                   "Type"     -> KType
                                   "Coeffect" -> KCoeffect
-                                  s          -> KConstr $ mkId s }
+                                  s          -> kConstr $ mkId s }
+  | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
+  | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
+
+
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }

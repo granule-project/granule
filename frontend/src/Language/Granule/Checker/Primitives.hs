@@ -7,7 +7,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 
-protocol = KConstr $ mkId "Protocol"
+protocol = kConstr $ mkId "Protocol"
 
 typeLevelConstructors :: [(Id, (Kind, Cardinality))]
 typeLevelConstructors =
@@ -19,16 +19,16 @@ typeLevelConstructors =
     , (mkId "String", (KType, Nothing))
     , (mkId "FileIO", (KFun KType KType, Nothing))
     , (mkId "Session", (KFun KType KType, Nothing))
-    , (mkId "N", (KFun (KConstr $ mkId "Nat") KType, Just 2))
+    , (mkId "N", (KFun (kConstr $ mkId "Nat") KType, Just 2))
     , (mkId "Nat",  (KCoeffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
-    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (KConstr $ mkId "k") KCoeffect), Nothing))
-    , (mkId "+",   (KFun (KConstr $ mkId "Nat") (KFun (KConstr $ mkId "Nat") (KConstr $ mkId "Nat")), Nothing))
-    , (mkId "*",   (KFun (KConstr $ mkId "Nat") (KFun (KConstr $ mkId "Nat") (KConstr $ mkId "Nat")), Nothing))
-    , (mkId "/\\", (KFun (KConstr $ mkId "Nat") (KFun (KConstr $ mkId "Nat") (KConstr $ mkId "Nat")), Nothing))
-    , (mkId "\\/", (KFun (KConstr $ mkId "Nat") (KFun (KConstr $ mkId "Nat") (KConstr $ mkId "Nat")), Nothing))
+    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
+    , (mkId "+",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "*",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "/\\", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "\\/", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
     -- File stuff
     , (mkId "Handle", (KType, Nothing))
     , (mkId "IOMode", (KType, Nothing))
@@ -126,7 +126,7 @@ builtins =
                     (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
 
    -- forkRep : (c |n| -> Diamond ()) -> Diamond (c' |n|)
-  , (mkId "forkRep", Forall nullSpan [(mkId "s", protocol), (mkId "n", KConstr $ mkId "Nat")] $
+  , (mkId "forkRep", Forall nullSpan [(mkId "s", protocol), (mkId "n", kConstr $ mkId "Nat")] $
                     (Box (CVar $ mkId "n")
                        ((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
                     .->

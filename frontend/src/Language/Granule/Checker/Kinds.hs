@@ -1,10 +1,11 @@
 -- Mainly provides a kind checker on types
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Kinds (kindCheckDef
                     , inferKindOfType
                     , inferKindOfType'
-                    , joinCoeffectConstr
+                    , joinCoeffectTypes
                     , hasLub
                     , joinKind
                     , inferCoeffectType
@@ -28,7 +29,7 @@ import Language.Granule.Context
 import Language.Granule.Utils
 
 promoteTypeToKind :: Type -> Kind
-promoteTypeToKind (TyCon c) = KConstr c
+promoteTypeToKind (TyCon c) = kConstr c
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
 
@@ -53,7 +54,9 @@ inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT
 inferKindOfType' s quantifiedVariables t =
     typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
   where
-    kFun (KConstr c) (KConstr c') | internalName c == internalName c' = return $ KConstr c
+    kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
+     | internalName c == internalName c' = return $ kConstr c
+
     kFun KType KType = return KType
     kFun KType y = illKindedNEq s KType y
     kFun x _     = illKindedNEq s KType x
@@ -81,7 +84,7 @@ inferKindOfType' s quantifiedVariables t =
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
 
-    kInt _ = return $ KConstr $ mkId "Nat"
+    kInt _ = return $ kConstr $ mkId "Nat"
 
     kInfix op k1 k2 = do
       st <- get
@@ -94,24 +97,43 @@ inferKindOfType' s quantifiedVariables t =
           else illKindedNEq s k1' k1
        Nothing   -> halt $ UnboundVariableError (Just s) (pretty op <> " operator.")
 
+-- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe Kind
 joinKind k1 k2 | k1 == k2 = Just k1
-joinKind (KConstr kc1) (KConstr kc2) = fmap KConstr $ joinCoeffectConstr kc1 kc2
+joinKind (KPromote t1) (KPromote t2) =
+   fmap KPromote (joinCoeffectTypes t1 t2)
 joinKind _ _ = Nothing
 
+-- | Some coeffect types can be joined (have a least-upper bound). This
+-- | function computes the join if it exists.
+joinCoeffectTypes :: Type -> Type -> Maybe Type
+joinCoeffectTypes t1 t2 =
+ case (t1, t2) of
+  -- `Nat` can unify with `Q` to `Q`
+  (TyCon (internalName -> "Q"), TyCon (internalName -> "Nat")) ->
+        Just $ TyCon $ mkId "Q"
+
+  (TyCon (internalName -> "Nat"), TyCon (internalName -> "Q")) ->
+        Just $ TyCon $ mkId "Q"
+
+  -- `Nat` can unify with `Ext Nat` to `Ext Nat`
+  (t, TyCon (internalName -> "Nat")) | t == extendedNat ->
+        Just extendedNat
+  (TyCon (internalName -> "Nat"), t) | t == extendedNat ->
+        Just extendedNat
+
+  -- Equal things unify to the same thing
+  (t, t') | t == t' -> Just t
+
+  _ -> Nothing
+
+-- | Predicate on whether two kinds have a leasy upper bound
 hasLub :: Kind -> Kind -> Bool
 hasLub k1 k2 =
   case joinKind k1 k2 of
     Nothing -> False
     Just _  -> True
 
-joinCoeffectConstr :: Id -> Id -> Maybe Id
-joinCoeffectConstr k1 k2 = fmap mkId $ go (internalName k1) (internalName k2)
-  where
-    go "Float" "Nat" = Just "Float"
-    go "Nat" "Float" = Just "Float"
-    go k k' | k == k' = Just k
-    go _ _ = Nothing
 
 -- | Infer the type of ta coeffect term (giving its span as well)
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> MaybeT Checker Type
@@ -124,11 +146,14 @@ inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
 inferCoeffectType s (CInterval c1 c2)    = do
   k1 <- inferCoeffectType s c1
   k2 <- inferCoeffectType s c2
-  unless (k1 == k2) $
-     halt $ KindError (Just s) $ "Interval grades do not match `" <> pretty k1
+
+  case joinCoeffectTypes k1 k2 of
+    Just k -> return $ TyApp (TyCon $ mkId "Interval") k
+
+    Nothing ->
+      halt $ KindError (Just s) $ "Interval grades do not match: `" <> pretty k1
           <> "` does not match with `" <> pretty k2 <> "`"
 
-  return $ TyApp (TyCon $ mkId "Interval") k1
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
@@ -150,16 +175,10 @@ inferCoeffectType s (CVar cvar) = do
 --       put (state { uniqueVarId = uniqueVarId state + 1 })
 --       return newType
 
-     Just (KConstr name, _) -> checkKindIsCoeffect s (TyCon name)
-
 
      Just (KVar   name, _) -> return $ TyVar name
-     Just (KPromote t, _)   -> do
-       k <- inferKindOfType s t
-       case k of
-         KCoeffect -> return t
-         _         -> illKindedNEq s KCoeffect k
-     Just (k, _)            -> illKindedNEq s KCoeffect k
+     Just (KPromote t, _)  -> checkKindIsCoeffect s t
+     Just (k, _)           -> illKindedNEq s KCoeffect k
 
 inferCoeffectType s (CZero t) = checkKindIsCoeffect s t
 inferCoeffectType s (COne t)  = checkKindIsCoeffect s t
@@ -207,10 +226,10 @@ mguCoeffectTypes s c1 c2 = do
 
     (TyCon k1, TyCon k2) | k1 == k2 -> return $ TyCon k1
 
-    (TyCon k1, TyCon k2) | Just ck <- joinCoeffectConstr k1 k2 ->
-      return $ TyCon ck
-
     (t, t') | t == t' -> return t
+
+    -- Try to unify coeffect types
+    (t, t') | Just tj <- joinCoeffectTypes t t' -> return tj
 
     (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
                <> pretty k1 <> "' and '" <> pretty k2

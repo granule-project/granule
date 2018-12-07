@@ -3,6 +3,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Substitutions where
 
@@ -85,7 +86,7 @@ instance Substitutable Substitutors where
     k <- inferKindOfType nullSpan t
     k' <- inferCoeffectType nullSpan c'
     case joinKind k (KPromote k') of
-      Just (KConstr k) | internalName k == "Nat" -> do
+      Just (KPromote (TyCon k)) | internalName k == "Nat" -> do
              c <- compileNatKindedTypeToCoeffect nullSpan t
              unify c c'
       _ -> return Nothing
@@ -140,7 +141,7 @@ instance Substitutable Type where
     k <- inferKindOfType nullSpan t
     k' <- inferKindOfType nullSpan t
     case joinKind k k' of
-      Just (KConstr k) | internalName k == "Nat" -> do
+      Just (KPromote (TyCon (internalName -> "Nat"))) -> do
         c  <- compileNatKindedTypeToCoeffect nullSpan t
         c' <- compileNatKindedTypeToCoeffect nullSpan t'
         addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
@@ -206,10 +207,8 @@ instance Substitutable Coeffect where
           k <- inferKindOfType nullSpan t
           k' <- inferCoeffectType nullSpan (CVar v)
           case joinKind k (promoteTypeToKind k') of
-            Just (KConstr k) ->
-              case internalName k of
-                "Nat" -> compileNatKindedTypeToCoeffect nullSpan t
-                _      -> return (CVar v)
+            Just (KPromote (TyCon (internalName -> "Nat"))) ->
+              compileNatKindedTypeToCoeffect nullSpan t
             _ -> return (CVar v)
 
         _               -> return $ CVar v
@@ -329,7 +328,6 @@ instance Substitutable Kind where
     case lookup v subst of
       Just (SubstK k) -> return k
       _               -> return $ KVar v
-  substitute subst (KConstr c) = return $ KConstr c
 
   unify (KVar v) k =
     return $ Just [(v, SubstK k)]
@@ -484,8 +482,8 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, quantifier)) : tyVarContext st })
                  return var'
-               KConstr c -> freshCoeffectVarWithBinding var (TyCon c) quantifier
-               KPromote _ -> error "Promoted coeffect types not yet supported"
+               KPromote (TyCon c) -> freshCoeffectVarWithBinding var (TyCon c) quantifier
+               KPromote _ -> error "Arbirary promoted types not yet supported"
                KCoeffect -> error "Coeffect kind variables not yet supported"
                KVar _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
                \ Please open an issue with a snippet of your code at https://github.com/dorchard/granule/issues"

@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Types where
 
@@ -236,7 +237,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
-        Just (KConstr kc) | internalName kc /= "Protocol" -> do
+        Just (KPromote (TyCon kc)) | internalName kc /= "Protocol" -> do
           -- Don't create solver constraints for sessions- deal with before SMT
           addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, [(n, SubstT $ TyVar m)])
@@ -260,7 +261,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
         Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
 
         -- If the kind is Nat, then create a solver constraint
-        Just (KConstr k) | internalName k == "Nat" -> do
+        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
           nat <- compileNatKindedTypeToCoeffect s t
           addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
           return (True, [(n, SubstT t)])
@@ -276,7 +277,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
       k1 <- inferKindOfType s (TyVar n)
       k2 <- inferKindOfType s t
       case k1 `joinKind` k2 of
-        Just (KConstr k) | internalName k == "Nat" -> do
+        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
           addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
@@ -331,7 +332,7 @@ equalTypesRelatedCoeffects s rel uS t1 t2 t = do
   debugM "equalTypesRelatedCoeffects" $ "called on: " <> show t1 <> "\nand:\n" <> show t2
   equalOtherKindedTypesGeneric s t1 t2
 
-{- | Check whether two Nat-kinded types are equal -}
+{- | Equality on other types (e.g. Nat and Session members) -}
 equalOtherKindedTypesGeneric :: (?globals :: Globals )
     => Span
     -> Type
@@ -340,26 +341,29 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals )
 equalOtherKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
-  case (k1, k2) of
-    (KConstr n, KConstr n')
-      | internalName n == "Nat" && internalName n' == "Nat" -> do
+  if k1 == k2 then
+    case k1 of
+      KPromote (TyCon (internalName -> "Nat")) -> do
         c1 <- compileNatKindedTypeToCoeffect s t1
         c2 <- compileNatKindedTypeToCoeffect s t2
         addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
         return (True, [])
-    (KType, KType) ->
-       halt $ GenericError (Just s) $ pretty t1 <> " is not equal to " <> pretty t2
 
-    (KConstr n, KConstr n') | internalName n == "Protocol" && internalName n' == "Protocol" ->
-         sessionInequality s t1 t2
+      KPromote (TyCon (internalName -> "Protocol")) ->
+        sessionInequality s t1 t2
 
-    --(KFun k1 k2, KFun k1', k2') ->
-    --   return (k1 == k
-    _ ->
+      KType ->
+        halt $ GenericError (Just s) $
+           "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
+
+      _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  <> pretty k1 <> " and " <> pretty k2
                  <> "\t\n from equality "
                  <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
+  else
+    halt $ GenericError (Just s) $
+       "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
