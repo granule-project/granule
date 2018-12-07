@@ -147,9 +147,12 @@ freshCoeffectVarWithBinding cvar ty q = do
 -- | Helper for registering a new coeffect variable in the checker
 registerCoeffectVar :: Id -> Type -> Quantifier -> MaybeT Checker ()
 registerCoeffectVar v (TyCon constrId) q =
-    modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
+    modify (\st -> st { tyVarContext = (v, (kConstr constrId, q)) : tyVarContext st })
 registerCoeffectVar v (TyVar constrId) q =
     modify (\st -> st { tyVarContext = (v, (KVar constrId, q)) : tyVarContext st })
+registerCoeffectVar v t q | extendedNat == t =
+    modify (\st -> st { tyVarContext = (v, (KPromote t, q)) : tyVarContext st })
+
 registerCoeffectVar v t _ =
    error $ "Bug: trying to register the following type as a coeffect "
      ++ show t
