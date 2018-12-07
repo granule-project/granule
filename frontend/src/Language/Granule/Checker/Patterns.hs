@@ -12,6 +12,8 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Variables
+
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -161,7 +163,7 @@ ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   if pIrrefutable then do
     (localGam', ty, elabPs) <- ctxtFromTypedPatterns s t2 pats
     return (localGam <> localGam', ty, elabP : elabPs)
-    
+
   else refutablePattern s pat
 
 ctxtFromTypedPatterns s ty ps = do

@@ -33,7 +33,6 @@ promoteTypeToKind (TyCon c) = kConstr c
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
 
-
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
 kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
@@ -153,7 +152,6 @@ inferCoeffectType s (CInterval c1 c2)    = do
     Nothing ->
       halt $ KindError (Just s) $ "Interval grades do not match: `" <> pretty k1
           <> "` does not match with `" <> pretty k2 <> "`"
-
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'

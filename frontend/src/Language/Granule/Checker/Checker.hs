@@ -24,6 +24,7 @@ import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Checker.Substitutions
 import Language.Granule.Checker.Types
+import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
@@ -891,12 +892,6 @@ ctxPlus _ [] ctxt2 = return ctxt2
 ctxPlus s ((i, v) : ctxt1) ctxt2 = do
   ctxt' <- extCtxt s ctxt2 i v
   ctxPlus s ctxt1 ctxt'
-
--- Erase a variable from the context
-eraseVar :: Ctxt Assumption -> Id -> Ctxt Assumption
-eraseVar [] _ = []
-eraseVar ((var, t):ctxt) var' | var == var' = ctxt
-                             | otherwise = (var, t) : eraseVar ctxt var'
 
 -- ExtCtxt the context
 extCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Id -> Assumption

@@ -19,6 +19,8 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Variables (freshCoeffectVarWithBinding, freshVar)
+
 import Control.Monad.Trans.Maybe
 import Language.Granule.Utils
 
