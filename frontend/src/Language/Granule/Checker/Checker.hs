@@ -586,6 +586,8 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
 
    -- Create a fresh kind variable for this coeffect
    vark <- freshVar $ "kprom_" <> [head (pretty e)]
+   -- remember this new kind variable in the kind environment
+   modify (\st -> st { kVarContext = (mkId vark, KCoeffect) : kVarContext st })
 
    -- TODO: note that this does not of the specil hanlding that happens with Level
 

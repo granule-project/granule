@@ -77,7 +77,12 @@ inferKindOfType' s quantifiedVariables t =
     kVar tyVar =
       case lookup tyVar quantifiedVariables of
         Just kind -> return kind
-        Nothing   -> halt $ UnboundVariableError (Just s) $
+        Nothing   -> do
+          st <- get
+          case lookup tyVar (kVarContext st) of
+            Just kind -> return kind
+            Nothing ->
+              halt $ UnboundVariableError (Just s) $
                        "Type variable `" <> pretty tyVar <> "` is unbound (not quantified)." <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
