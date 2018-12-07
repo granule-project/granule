@@ -406,5 +406,5 @@ trivialUnsatisfiableConstraints cs =
     neqC (Level n) (Level m)   = n /= m
     neqC (CFloat n) (CFloat m) = n /= m
     neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
-      neqC lb1 ub1 || neqC lb2 ub2
+      neqC lb1 lb2 || neqC ub1 ub2
     neqC _ _                   = False
