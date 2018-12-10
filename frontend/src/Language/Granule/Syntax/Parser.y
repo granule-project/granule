@@ -168,23 +168,27 @@ IFaceDecl :: { IFace }
   | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs
     { % mkSpan (getPos $1, lastSpan' $6) >>= \sp -> return $ IFace sp $3 $2 (snd $4) (fst $4) $6 }
 
-InstBinds :: { [(Maybe String, Equation () ())] }
-  : Binding ';' InstBinds { $1 : $3 }
-  | Binding               { [$1] }
+InstBinds :: { [IDef () ()] }
+  : Binding ';' InstBinds
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ IDef sp (fst $ fst $1) (snd $1) : $3 }
+  | Binding
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fst $ fst $1) (snd $1)] }
 
-InstVar :: { () }
-  : CONSTR { }
-  | '(' CONSTR TyParams ')' { }
+InstVar :: { IFaceDat }
+  :     CONSTR              { IFaceDat (mkId $ symString $1) [] }
+  | '(' CONSTR TyParams ')' { IFaceDat (mkId $ symString $2) $3 }
 
 InstDecl :: { Instance () ()  }
-  : instance IFaceName InstVar where InstBinds { Instance }
-  | instance IFaceConstrained IFaceName InstVar where InstBinds { Instance }
+  : instance IFaceName InstVar where InstBinds
+    { % mkSpan (getPos $1, getEnd . last $ $5) >>= \sp -> return $ Instance sp $2 [] $3 $5 }
+  | instance IFaceConstrained IFaceName InstVar where InstBinds
+    { % mkSpan (getPos $1, getEnd . last $ $6) >>= \sp -> return $ Instance sp $3 $2 $4 $6 }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
 
 Bindings :: { (Maybe String, [Equation () ()]) }
-  : Binding ';' NL Bindings   { let (v, bind) = $1
+  : Binding ';' NL Bindings   { let ((v, _), bind) = $1
                                 in case $4 of
                                     (v', binds)
                                       | v' == v || v' == Nothing ->
@@ -192,23 +196,23 @@ Bindings :: { (Maybe String, [Equation () ()]) }
                                       | otherwise ->
                                           error $ "Identifier " <> show v' <> " in group of equations does not match " <> show v
                               }
-  | Binding                   { case $1 of (v, bind) -> (v, [bind]) }
+  | Binding                   { case $1 of ((v, _), bind) -> (v, [bind]) }
 
-Binding :: { (Maybe String, Equation () ()) }
+Binding :: { ((Maybe String, Pos), Equation () ()) }
   : VAR '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $3)
-          return (Just $ symString $1, Equation span () [] $3) }
+          return ((Just $ symString $1, getPos $1), Equation span () [] $3) }
 
   | VAR Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
-          return (Just $ symString $1, Equation span () $2 $4) }
+          return ((Just $ symString $1, getPos $1), Equation span () $2 $4) }
 
   | '|' Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
-          return (Nothing, Equation span () $2 $4) }
+          return ((Nothing, getPos $1), Equation span () $2 $4) }
 
 DataConstrs :: { [DataConstr] }
   : DataConstr DataConstrNext { $1 : $2 }
