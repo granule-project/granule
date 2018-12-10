@@ -72,7 +72,22 @@ type Cardinality = Maybe Nat
 
 
 -- | Interfaces
-data IFace = IFace deriving (Show, Eq)
+data IFace =
+  IFace
+  Span
+  Id           -- ^ interface name
+  [(Id, Id)]   -- ^ constraints
+  (Maybe Kind) -- ^ kind of parameter
+  Id           -- ^ name of parameter
+  [IFaceTy]
+  deriving (Show, Eq)
+
+
+-- | Interface types
+data IFaceTy = IFaceTy Span Id TypeScheme
+  deriving (Generic, Show, Eq)
+
+instance FirstParameter IFaceTy Span
 
 
 -- | Instances

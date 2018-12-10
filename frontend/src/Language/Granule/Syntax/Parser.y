@@ -159,17 +159,21 @@ IFaceConstrns :: { [(Id, Id)] }
 IFaceConstrn :: { (Id, Id) }
   : IFaceName VAR { ($1, mkId $ symString $2) }
 
-IFaceVar :: { () }
-  : VAR { }
-  | '(' VarSig ')' { }
+IFaceVar :: { (Id, Maybe Kind) }
+  : VAR            { (mkId $ symString $1, Nothing) }
+  | '(' VarSig ')' { (fst $2, Just (snd $2)) }
 
-IFaceSigs :: { [(String, TypeScheme, Pos)] }
-  : Sig ';' IFaceSigs { $1 : $3 }
-  | Sig { [$1] }
+IFaceSigs :: { [IFaceTy] }
+  : Sig ';' IFaceSigs
+    { % mkSpan (thd3 $1, getEnd $ snd3 $1) >>= \sp -> return $ IFaceTy sp (mkId $ fst3 $1) (snd3 $1) : $3 }
+  | Sig
+    { % mkSpan (thd3 $1, getEnd $ snd3 $1) >>= \sp -> return $ [IFaceTy sp (mkId $ fst3 $1) (snd3 $1)] }
 
 IFaceDecl :: { IFace }
-  : interface IFaceName IFaceVar where IFaceSigs { IFace }
-  | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs { IFace }
+  : interface IFaceName IFaceVar where IFaceSigs
+    { % mkSpan (getPos $1, lastSpan' $5) >>= \sp -> return $ IFace sp $2 [] (snd $3) (fst $3) $5 }
+  | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs
+    { % mkSpan (getPos $1, lastSpan' $6) >>= \sp -> return $ IFace sp $3 $2 (snd $4) (fst $4) $6 }
 
 InstBinds :: { [(Maybe String, Equation () ())] }
   : Binding ';' InstBinds { $1 : $3 }
