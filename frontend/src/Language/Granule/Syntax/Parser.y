@@ -275,7 +275,7 @@ ForallSig :: { [(Id, Kind)] }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [(Id, Id)]) }
   : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
-  | forall ForallSig '(' IFaceConstrns ')' '.' { (((getPos $1, getPos $6), $2), $4) }
+  | forall ForallSig '.' '{' IFaceConstrns '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
 TypeScheme :: { TypeScheme }
   : Type
