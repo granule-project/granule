@@ -91,10 +91,31 @@ instance FirstParameter IFaceTy Span
 
 
 -- | Instances
-data Instance v a = Instance deriving (Show)
+data Instance v a =
+  Instance
+  Span
+  Id         -- ^ interface name
+  [(Id, Id)] -- ^ constraints
+  IFaceDat   -- ^ instance type
+  [IDef v a] -- ^ implementations
 
 deriving instance Functor (Instance v)
 deriving instance (Eq v, Eq a) => Eq (Instance v a)
+deriving instance (Show v, Show a) => Show (Instance v a)
+
+-- | Instance implementation
+data IDef v a = IDef Span (Maybe String) (Equation v a)
+  deriving (Generic)
+
+instance FirstParameter (IDef v a) Span
+deriving instance Functor (IDef v)
+deriving instance (Eq v, Eq a) => Eq (IDef v a)
+deriving instance (Show v, Show a) => Show (IDef v a)
+
+
+-- | Instance type
+data IFaceDat = IFaceDat Id [Type]
+  deriving (Show, Generic, Eq)
 
 
 -- | Fresh a whole AST
