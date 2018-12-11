@@ -71,7 +71,7 @@ data Coeffect = CNat      Int
 
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
-infiniteUsage = CInterval (CZero extendedNat) (CInfinity (Just extendedNat))
+infinity = CInfinity (Just extendedNat)
 
 isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
@@ -135,7 +135,7 @@ mTyInfix op x y  = return (TyInfix op x y)
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
   { tfFunTy   :: a -> a        -> m a
-  , tfTyCon   :: Id -> m a
+  , tfTyCon   :: Id            -> m a
   , tfBox     :: Coeffect -> a -> m a
   , tfDiamond :: Effect -> a   -> m a
   , tfTyVar   :: Id            -> m a
@@ -227,7 +227,7 @@ instance Freshenable Type where
       -- Rewrite type aliases of Box
       rewriteTyApp t1@(TyCon ident) t2
         | internalName ident == "Box" || internalName ident == "◻" =
-          return $ Box infiniteUsage t2
+          return $ Box (CInterval (CZero extendedNat) infinity) t2
       rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do

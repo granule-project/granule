@@ -51,8 +51,8 @@ algRecall x =
     (Recall f) -> \|x| -> f (unMem x) |(Mem (unMem x))|
 
 algSum : forall (a : Type, b : Type, f : Type -> Type, g : Type -> Type)
-       .  (f a -> a) |1|
-       -> (g a -> a) |1|
+       .  (f a -> a) |0..1|
+       -> (g a -> a) |0..1|
        -> Sum f g a -> a
 algSum |j| |k| x =
   case x of

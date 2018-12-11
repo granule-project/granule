@@ -1,0 +1,13 @@
+import Nat
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+--- this should fail
+map : forall (a : Type, b : Type, n : Nat)
+    . (a -> b) |n+4| -> Vec n a -> Vec n b
+map |f| ys =
+  case ys of
+    Nil -> Nil;
+    (Cons x xs) -> Cons (f x) (map |f| xs)

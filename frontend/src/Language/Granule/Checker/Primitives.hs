@@ -9,7 +9,7 @@ import Language.Granule.Syntax.Span
 
 protocol = kConstr $ mkId "Protocol"
 
-typeLevelConstructors :: [(Id, (Kind, Cardinality))]
+typeLevelConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeLevelConstructors =
     [ (mkId "()", (KType, Just 1))
     , (mkId ",", (KFun KType (KFun KType KType), Just 1))
@@ -19,6 +19,7 @@ typeLevelConstructors =
     , (mkId "String", (KType, Nothing))
     , (mkId "FileIO", (KFun KType KType, Nothing))
     , (mkId "Session", (KFun KType KType, Nothing))
+    , (mkId "Protocol", (KType, Nothing))
     , (mkId "N", (KFun (kConstr $ mkId "Nat") KType, Just 2))
     , (mkId "Nat",  (KCoeffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals

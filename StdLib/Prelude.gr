@@ -45,11 +45,11 @@ fixF |f| = f |(fixF |f|)|
 
 --- Conditional on integers
 --- Returns `x` if `g` is zero, else returns `y`
-if0 : forall a : Type . Int |1| -> a |1| -> a |1| -> a
+if0 : forall a : Type . Int |0..1| -> a |0..1| -> a |0..1| -> a
 if0 g |x| |y| =
     case g of
       |0| -> x;
-      |n| -> y
+      |_| -> y
 
 
 --- # Numeric functions and constants
@@ -58,7 +58,7 @@ if0 g |x| |y| =
 -- + 1 iff n is positive
 -- + -1 iff n is negative
 -- + 0 otherwise
-sign : Int |2| -> Int
+sign : Int |1..2| -> Int
 sign |x| = if x > 0 then 1 else if x < 0 then -1 else 0
 
 --- An approximation of pi

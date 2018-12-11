@@ -66,7 +66,7 @@ instance Pretty (Neg Constraint) where
       "` is not equal to specified grade `" <> prettyL l c2 <> "`"
 
     prettyL l (Neg (ApproximatedBy _ c1 c2 (TyCon k))) =
-      prettyL l c1 <> " is greater than " <> prettyL l c2
+      prettyL l c1 <> " is not approximated by " <> prettyL l c2
 
 instance Pretty [Constraint] where
     prettyL l constr =

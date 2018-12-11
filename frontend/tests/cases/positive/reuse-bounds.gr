@@ -1,7 +1,7 @@
 n : Int |1+1*2+1 : Nat|
 n = |1|
 
-quad : Int |4=| -> Int
+quad : Int |4| -> Int
 quad |x| = x + x + x + x
 
 main : Int

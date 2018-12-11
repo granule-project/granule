@@ -1,0 +1,5 @@
+import PropositionalEquality
+
+sym : forall x : Type, y : Type .
+  Eq x y -> Eq y x
+sym Refl = Refl

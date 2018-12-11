@@ -256,7 +256,8 @@ compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
 -- TODO: see if we can erase this, does it actually happen anymore?
 compileCoeffect (CInfinity (Just (TyVar _))) _ _ = zeroToInfinity
 compileCoeffect (CInfinity Nothing) _ _ = zeroToInfinity
-
+compileCoeffect (CInfinity _) t _
+  | t == extendedNat = SExtNat SNatX.inf
 compileCoeffect (CNat n) k _ | k == nat =
   SNat  . fromInteger . toInteger $ n
 

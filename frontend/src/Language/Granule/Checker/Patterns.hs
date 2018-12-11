@@ -68,7 +68,8 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
 
     -- Check whether a unification was caused
     when (definitelyUnifying p)
-        $ addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
+         -- $ addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
+         $ addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
 
     -- Discharge all variables bound by the inner pattern
     let elabP = PBox sp t elabPinner
