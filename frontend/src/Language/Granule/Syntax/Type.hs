@@ -42,6 +42,12 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
+
+-- | Interface constraints
+newtype IConstr = IConstr (Id, Id)
+  deriving (Eq, Show)
+
+
 -- | Kinds
 data Kind = KType
           | KCoeffect
