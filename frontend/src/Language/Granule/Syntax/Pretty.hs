@@ -111,7 +111,7 @@ instance Pretty TypeScheme where
     prettyL l (Forall _ cvs _ t) =
         "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". " <> prettyL l t
       where
-       prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
+       prettyKindSignatures (var, kind) = prettyColonSep l var kind
 
 instance Pretty Type where
     -- Atoms
@@ -160,15 +160,17 @@ appChain (TyApp t1 t2)           = True
 appChain _                       = False
 
 instance (Pretty (Value v a), Pretty v) => Pretty (AST v a) where
-    prettyL l (AST dataDecls defs ifaces insts) = pretty' dataDecls <> "\n\n" <> pretty' defs
+    prettyL l (AST dataDecls defs ifaces insts) =
+      concat [pretty' dataDecls, "\n\n",
+              pretty' defs, "\n\n",
+              pretty' ifaces]
       where
         pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty
 
 instance (Pretty (Value v a), Pretty v) => Pretty (Def v a) where
-    prettyL l (Def _ v eqs t) =
-        prettyL l v <> " : " <> prettyL l t <> "\n"
-                    <> intercalate "\n" (map prettyEq eqs)
+    prettyL l (Def _ v eqs t) = prettyColonSep l v t <> "\n" <>
+                                intercalate "\n" (map prettyEq eqs)
       where
         prettyEq (Equation _ _ ps e) =
           prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
@@ -180,11 +182,29 @@ instance Pretty DataDecl where
       in "data " <> prettyL l tyCon <> " " <> tvs <> ki <> "where\n  " <> prettyL l dataConstrs
 
 instance Pretty [DataConstr] where
-    prettyL l = intercalate ";\n  " . map pretty
+    prettyL l = prettySemiSep 0
 
 instance Pretty DataConstr where
-    prettyL l (DataConstrG _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
+    prettyL l (DataConstrG _ name typeScheme) = prettyColonSep l name typeScheme
     prettyL l (DataConstrA _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
+
+instance Pretty IFace where
+    prettyL l (IFace _ iName constrs kind paramName tys) =
+      concat ["interface ", constrStr, pretty iName, " ", pStr, " where\n", tyStr]
+      where
+        constrStr =
+          case constrs of
+            [] -> ""
+            cs -> parens l (prettyCommaSep 0 cs) <> " => "
+        pStr = maybe (pretty paramName)
+          (\k -> parens l $ prettyColonSep 0 paramName k) kind
+        tyStr = "  " ++ prettySemiSep 0 tys
+
+instance Pretty IFaceTy where
+    prettyL l (IFaceTy _ name ty) = prettyColonSep l name ty
+
+instance Pretty IConstr where
+    prettyL l (IConstr (iface, var)) = unwords [prettyL l iface, prettyL l var]
 
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v
@@ -203,7 +223,7 @@ instance Pretty t => Pretty (Maybe t) where
     prettyL l (Just x) = prettyL l x
 
 instance Pretty v => Pretty (Value v a) where
-    prettyL l (Abs _ x t e)  = parens l $ "\\(" <> prettyL l x <> " : " <> prettyL l t
+    prettyL l (Abs _ x t e)  = parens l $ "\\(" <> prettyColonSep l x t
                                <> ") -> " <> prettyL l e
     prettyL l (Promote _ e)  = "[" <> prettyL l e <> "]"
     prettyL l (Pure _ e)     = "<" <> prettyL l e <> ">"
@@ -257,3 +277,20 @@ instance Pretty Int where
 
 instance Pretty Span where
   prettyL _ (Span start end fileName) = "(" <> pretty start <> ":" <> pretty end <> ")"
+
+
+-- | Pretty-print multiple items separated by lines and
+-- | semicolons, with indentation.
+prettySemiSep :: (?globals :: Globals) => (Pretty a) => Level -> [a] -> String
+prettySemiSep l = intercalate ";\n  " . map (prettyL l)
+
+
+-- | Pretty-print mulitple items separated by commas
+prettyCommaSep :: (?globals :: Globals) => (Pretty a) => Level -> [a] -> String
+prettyCommaSep l = intercalate ", " . map (prettyL l)
+
+
+-- | Pretty-print two items separated by a colon surrounded by
+-- | spaces
+prettyColonSep :: (?globals :: Globals) => (Pretty a, Pretty b) => Level -> a -> b -> String
+prettyColonSep l x y = prettyL l x <> " : " <> prettyL l y

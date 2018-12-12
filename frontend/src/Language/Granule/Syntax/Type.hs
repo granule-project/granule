@@ -21,7 +21,7 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
-    [(Id, Id)]    -- constraints
+    [IConstr]     -- constraints
     Type          -- type
   deriving (Eq, Show, Generic)
 
@@ -41,6 +41,12 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyInt Int                 -- ^ Type-level Int
           | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
+
+
+-- | Interface constraints
+newtype IConstr = IConstr (Id, Id)
+  deriving (Eq, Show)
+
 
 -- | Kinds
 data Kind = KType

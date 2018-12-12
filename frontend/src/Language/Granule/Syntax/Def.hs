@@ -71,7 +71,7 @@ data IFace =
   IFace
   Span
   Id           -- ^ interface name
-  [(Id, Id)]   -- ^ constraints
+  [IConstr]    -- ^ constraints
   (Maybe Kind) -- ^ kind of parameter
   Id           -- ^ name of parameter
   [IFaceTy]
@@ -90,7 +90,7 @@ data Instance v a =
   Instance
   Span
   Id         -- ^ interface name
-  [(Id, Id)] -- ^ constraints
+  [IConstr]  -- ^ constraints
   IFaceDat   -- ^ instance type
   [IDef v a] -- ^ implementations
 

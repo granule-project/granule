@@ -142,15 +142,15 @@ DataDecl :: { DataDecl }
 IFaceName :: { Id }
   : CONSTR { mkId $ constrString $1 }
 
-IFaceConstrained :: { [(Id, Id)] }
+IFaceConstrained :: { [IConstr] }
   : '(' IFaceConstrns ')' '=>' { $2 }
 
-IFaceConstrns :: { [(Id, Id)] }
+IFaceConstrns :: { [IConstr] }
   : IFaceConstrn ',' IFaceConstrns { $1 : $3 }
   | IFaceConstrn                   { [$1] }
 
-IFaceConstrn :: { (Id, Id) }
-  : IFaceName VAR { ($1, mkId $ symString $2) }
+IFaceConstrn :: { IConstr }
+  : IFaceName VAR { IConstr ($1, mkId $ symString $2) }
 
 IFaceVar :: { (Id, Maybe Kind) }
   : VAR            { (mkId $ symString $1, Nothing) }
@@ -281,7 +281,7 @@ ForallSig :: { [(Id, Kind)] }
   : '(' VarSigs ')' { $2 }
   | VarSigs         { $1 }
 
-Forall :: { (((Pos, Pos), [(Id, Kind)]), [(Id, Id)]) }
+Forall :: { (((Pos, Pos), [(Id, Kind)]), [IConstr]) }
   : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
   | forall ForallSig '.' '{' IFaceConstrns '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
