@@ -167,7 +167,8 @@ instance (Pretty (Value v a), Pretty v) => Pretty (AST v a) where
     prettyL l (AST dataDecls defs ifaces insts) =
       concat [pretty' dataDecls, "\n\n",
               pretty' defs, "\n\n",
-              pretty' ifaces]
+              pretty' ifaces, "\n\n",
+              pretty' insts]
       where
         pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty
@@ -209,6 +210,22 @@ instance Pretty IFaceTy where
 
 instance Pretty IConstr where
     prettyL l (IConstr (iface, var)) = unwords [prettyL l iface, prettyL l var]
+
+instance (Pretty (Value v a)) => Pretty (Instance v a) where
+    pretty (Instance _ name cts idat defs) =
+      unwords ["instance", ctsStr <> pretty name,
+               pretty idat, "where\n  " <> prettySemiSep defs]
+      where ctsStr =
+              case cts of
+                [] -> ""
+                _ -> prettyConstraintsParens cts
+
+instance Pretty IFaceDat where
+    pretty (IFaceDat name []) = pretty name
+    pretty (IFaceDat name tys) = parens . unwords $ pretty name : map pretty tys
+
+instance (Pretty (Value v a)) => Pretty (IDef v a) where
+    pretty (IDef _ v e ps) = pretty v <> " " <> pretty ps <> "= " <> pretty e
 
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v
