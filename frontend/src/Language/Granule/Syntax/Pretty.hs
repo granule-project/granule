@@ -109,12 +109,13 @@ instance Pretty Kind where
 
 instance Pretty TypeScheme where
     prettyL l (Forall _ [] [] t) = prettyL l t
-    prettyL l (Forall _ cvs cons t) =
-        "forall " <> intercalate ", " (map prettyKindSignatures cvs)
-                  <> intercalate ", " (map (prettyL l) cons)
-                  <> ". " <> prettyL l t
-      where
-       prettyKindSignatures (var, kind) = prettyColonSep l var kind
+    prettyL l (Forall _ cvs cts t) = forallform <> ctsStr <> prettyL l t
+      where forallform = "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". "
+            ctsStr =
+              case cts of
+                [] -> ""
+                _ -> prettyConstraintsBraces cts
+            prettyKindSignatures (var, kind) = prettyColonSep 0 var kind
 
 instance Pretty Type where
     -- Atoms
@@ -198,7 +199,7 @@ instance Pretty IFace where
         constrStr =
           case constrs of
             [] -> ""
-            cs -> parens l (prettyCommaSep 0 cs) <> " => "
+            cs -> prettyConstraintsParens l cs
         pStr = maybe (pretty paramName)
           (\k -> parens l $ prettyColonSep 0 paramName k) kind
         tyStr = "  " ++ prettySemiSep 0 tys
@@ -280,6 +281,12 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
 parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
 parensOn p t = prettyL (if p t then 0 else 1) t
 
+
+-- | Surround a string with curly braces
+braces :: String -> String
+braces x = "{" <> x <> "}"
+
+
 instance Pretty Int where
   prettyL l = show
 
@@ -302,3 +309,21 @@ prettyCommaSep l = intercalate ", " . map (prettyL l)
 -- | spaces
 prettyColonSep :: (?globals :: Globals) => (Pretty a, Pretty b) => Level -> a -> b -> String
 prettyColonSep l x y = prettyL l x <> " : " <> prettyL l y
+
+
+-- | Pretty-print some constraints
+-- |
+-- | The result includes a trailing space
+-- |
+-- | This variant uses parentheses
+prettyConstraintsParens :: (?globals :: Globals) => Level -> [IConstr] -> String
+prettyConstraintsParens l = (<> " => ") . parens l . prettyCommaSep 0
+
+
+-- | Pretty-print some constraints
+-- |
+-- | The result includes a trailing space
+-- |
+-- | This variant uses curly braces
+prettyConstraintsBraces :: (?globals :: Globals) => [IConstr] -> String
+prettyConstraintsBraces = (<> " => ") . braces . prettyCommaSep 0
