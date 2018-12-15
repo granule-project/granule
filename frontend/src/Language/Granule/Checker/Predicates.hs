@@ -66,7 +66,10 @@ instance Pretty (Neg Constraint) where
       "` is not equal to specified grade `" <> prettyL l c2 <> "`"
 
     prettyL l (Neg (ApproximatedBy _ c1 c2 (TyCon k))) =
-      prettyL l c1 <> " is not approximated by " <> prettyL l c2
+      prettyL l c1 <> " is not approximatable by " <> prettyL l c2 <> " for type " <> pretty k
+      <> if internalName k == "Nat" then " because Nat denotes precise usage." else ""
+
+
 
 instance Pretty [Constraint] where
     prettyL l constr =
