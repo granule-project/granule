@@ -28,7 +28,7 @@ import Language.Granule.Utils
 -- $setup
 -- >>> import Language.Granule.Syntax.Identifiers (mkId)
 -- >>> import Language.Granule.Syntax.Pattern
--- >>> import Language.Granule.TestUtils
+-- >>> import Language.Granule.Utils
 -- >>> :set -XImplicitParams
 
 {-| Substitutions map from variables to type-level things as defined by
