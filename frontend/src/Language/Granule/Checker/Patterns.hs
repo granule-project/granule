@@ -30,9 +30,12 @@ definitelyUnifying _ = False
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
---   Returns also a list of any variables bound by the pattern
---   (e.g. for dependent matching) and a substitution for variables
---   caused by pattern matching (e.g., from unification).
+--   Returns also:
+--      - a list of any variables bound by the pattern
+--        (e.g. for dependent matching)
+--      - a substitution for variables
+--           caused by pattern matching (e.g., from unification),
+--      - a consumption context explaining usage triggered by pattern matching
 ctxtFromTypedPattern :: (?globals :: Globals, Show t) => Span -> Type -> Pattern t
   -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type)
 
@@ -64,16 +67,28 @@ ctxtFromTypedPattern _ t@(TyCon c) (PFloat s _ n)
 ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
 
     (ctx, eVars, subst, elabPinner) <- ctxtFromTypedPattern s ty p
-    k <- inferCoeffectType s coeff
+    coeffTy <- inferCoeffectType s coeff
 
     -- Check whether a unification was caused
-    when (definitelyUnifying p)
-         -- $ addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
-         $ addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
+    when (definitelyUnifying p) $ do
+      x <- freshVar "x"
+      addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
+
+    ctxtUnificationCoeffect <-
+        if definitelyUnifying p
+        then do
+          -- Create a dummy variable that is discharged (1) of type k
+          v <- freshVar "unif"
+          return [(mkId v, Discharged (TyCon $ mkId "()") (COne t))]
+        else return []
+
+         -- addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
+        -- addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
+
+    let elabP = PBox sp t elabPinner
 
     -- Discharge all variables bound by the inner pattern
-    let elabP = PBox sp t elabPinner
-    return (map (discharge k coeff) ctx, eVars, subst, elabP)
+    return (map (discharge t coeff) ctx ++ ctxtUnificationCoeffect, eVars, subst, elabP)
 
 ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC

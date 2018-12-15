@@ -335,6 +335,12 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            -- Conclude the implication
            concludeImplication eVars
 
+           debugM "Specialised gam" (pretty specialisedGam)
+           debugM "Unspecialised gam" (pretty unspecialisedGam)
+
+           debugM "pattern gam" (pretty patternGam)
+           debugM "local gam" (pretty localGam)
+
            -- The resulting context has the shared part removed
            -- 28/02/2018 - We used to have this
            --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam

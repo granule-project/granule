@@ -37,9 +37,10 @@ compileQuant InstanceQ = existential
 compileQuant BoundQ    = existential
 
 normaliseConstraint :: Constraint -> Constraint
-normaliseConstraint (Eq s c1 c2 k)   = Eq s (normalise c1) (normalise c2) k
-normaliseConstraint (Neq s c1 c2 k)  = Neq s (normalise c1) (normalise c2) k
-normaliseConstraint (ApproximatedBy s c1 c2 k) = ApproximatedBy s (normalise c1) (normalise c2) k
+normaliseConstraint (Eq s c1 c2 t)   = Eq s (normalise c1) (normalise c2) t
+normaliseConstraint (Neq s c1 c2 t)  = Neq s (normalise c1) (normalise c2) t
+normaliseConstraint (ApproximatedBy s c1 c2 t) = ApproximatedBy s (normalise c1) (normalise c2) t
+normaliseConstraint (NonZeroPromotableTo s x c t) = NonZeroPromotableTo s x (normalise c) t
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
@@ -93,7 +94,7 @@ compileToSBV predicate tyVarContext kVarContext =
           buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
-      return $ compile solverVars cons
+      compile solverVars cons
 
     -- Perform a substitution on a predicate tree
     -- substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
@@ -150,6 +151,12 @@ rewriteConstraints ctxt =
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)
+
+    updateConstraint ckindVar ckind (NonZeroPromotableTo s x c t) =
+       NonZeroPromotableTo s x (updateCoeffect ckindVar ckind c)
+          (case t of
+             TyVar ckindVar' | ckindVar == ckindVar' -> ckind
+             _  -> t)
 
     -- `updateCoeffect v k c` rewrites any occurence of the kind variable
     -- `v` in the coeffect `c` with the kind `k`
@@ -226,22 +233,36 @@ freshCVar _ _ t _ =
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals) =>
-  Ctxt SGrade -> Constraint -> SBool
-compile vars (Eq _ c1 c2 k) =
-  eqConstraint c1' c2'
+  Ctxt SGrade -> Constraint -> Symbolic SBool
+compile vars (Eq _ c1 c2 t) =
+  return $ eqConstraint c1' c2'
     where
-      c1' = compileCoeffect c1 k vars
-      c2' = compileCoeffect c2 k vars
-compile vars (Neq _ c1 c2 k) =
-   bnot (eqConstraint c1' c2')
+      c1' = compileCoeffect c1 t vars
+      c2' = compileCoeffect c2 t vars
+compile vars (Neq _ c1 c2 t) =
+   return $ bnot (eqConstraint c1' c2')
   where
-    c1' = compileCoeffect c1 k vars
-    c2' = compileCoeffect c2 k vars
-compile vars (ApproximatedBy _ c1 c2 k) = -- trace (show c1 <> "\n" <> show c2 <> "\n" <> show k)
-  approximatedByOrEqualConstraint c1' c2'
+    c1' = compileCoeffect c1 t vars
+    c2' = compileCoeffect c2 t vars
+compile vars (ApproximatedBy _ c1 c2 t) = -- trace (show c1 <> "\n" <> show c2 <> "\n" <> show k)
+  return $ approximatedByOrEqualConstraint c1' c2'
     where
-      c1' = compileCoeffect c1 k vars
-      c2' = compileCoeffect c2 k vars
+      c1' = compileCoeffect c1 t vars
+      c2' = compileCoeffect c2 t vars
+
+-- NonZeroPromotableTo s c means that:
+compile vars (NonZeroPromotableTo s x c t) = do
+  -- exists x .
+  (req, xVar) <- freshCVar compileQuant (internalName x) t InstanceQ
+
+  -- x != 0
+  nonZero <- compile ((x, xVar) : vars) (Neq s (CZero t) (CVar x) t)
+
+  -- x * 1 == c
+  promotableToC <- compile ((x, xVar) : vars) (Eq s (CTimes (COne t) (CVar x)) c t)
+
+  return (req &&& nonZero &&& promotableToC)
+
 
 -- | Compile a coeffect term into its symbolic representation
 compileCoeffect :: (?globals :: Globals) =>
@@ -390,6 +411,8 @@ trivialUnsatisfiableConstraints cs =
     unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
     unsat (Neq _ c1 c2 _) = not (c1 `neqC` c2)
     unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
+    unsat (NonZeroPromotableTo _ _ (CZero _) _) = true
+    unsat (NonZeroPromotableTo _ _ _ _) = false
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other

@@ -18,8 +18,8 @@ instance Quantifiable SInteger where
   existential = exists
 
 instance Quantifiable SFloat where
-    universal = forall
-    existential = exists
+  universal = forall
+  existential = exists
 
 instance Quantifiable SNatX where
   universal = forallSNatX

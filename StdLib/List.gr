@@ -24,6 +24,13 @@ head_list xs =
     |Empty|      -> Failed |"Empty list!"|;
     |(Next x _)| -> Ok x
 
+pushList2 : forall (k : Nat, a : Type)
+         . (List a) |2| -> List (a |2|)
+pushList2 xs =
+    case xs of
+      |Empty|       -> Empty;
+      |(Next x xs)| -> Next |x| (pushList2 |xs|)
+
 pushList : forall (k : Nat, a : Type)
          . (List a) |k+1| -> List (a |k+1|)
 pushList xs =
