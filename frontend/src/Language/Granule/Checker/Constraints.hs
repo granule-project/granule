@@ -174,7 +174,7 @@ rewriteConstraints ctxt =
 
 
 -- | Symbolic coeffect representing 0..Inf
-zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat $ SNatX.inf)
+zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate

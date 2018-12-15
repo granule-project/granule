@@ -240,6 +240,9 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
        [] -> do
           subst <- combineSubstitutions s subst1 subst2
 
+          -- Locally we should have this property (as we are under a binder)
+          ctxtEquals s bindings (gam' `intersectCtxts` bindings)
+
           let elaborated = Val s ty (Abs tau elaboratedP t elaboratedE)
           return (gam' `subtractCtxt` bindings, subst, elaborated)
 
@@ -339,6 +342,11 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
            -- Probably don't want to remove specialised things in this way- we want to
            -- invert the substitution and put these things into the context
+
+           debugM "branchctxt" (pretty branchCtxt)
+
+           -- Locally we should have this property of the binders from the pattern
+           ctxtEquals s patternGam (localGam `intersectCtxts` patternGam)
 
            return (branchCtxt, subst', (elaborated_pat_i, elaborated_i))
 
@@ -451,6 +459,9 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       ---
       (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
       concludeImplication eVars
+
+      ctxtEquals s patternGam (localGam `subtractCtxt` patternGam)
+
       -- Check linear use in anything Linear
       case checkLinearity patternGam localGam of
          -- Return the resulting computed context, without any of
@@ -514,6 +525,10 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
       typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 ep elt1 elt2 = do
         optionalSigEquality s optionalTySig ty1
+
+        -- Check grades on binders
+        ctxtEquals s binders (gam2 `intersectCtxts` binders)
+
         gamNew <- ctxPlus s (gam2 `subtractCtxt` binders) gam1
         -- Check linearity of locally bound variables
         case checkLinearity binders gam2 of
@@ -640,15 +655,19 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
-  (binding, _, subst, elaboratedP) <- ctxtFromTypedPattern s sig p
+  (bindings, _, subst, elaboratedP) <- ctxtFromTypedPattern s sig p
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
-     (tau, gam'', elaboratedE) <- synthExpr defs (binding <> gam) pol e
+     (tau, gam'', elaboratedE) <- synthExpr defs (bindings <> gam) pol e
+
+     -- Locally we should have this property (as we are under a binder)
+     ctxtEquals s bindings (gam'' `intersectCtxts` bindings)
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs tau elaboratedP (Just sig) elaboratedE)
-     return (finalTy, gam'' `subtractCtxt` binding, elaborated)
+
+     return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
   else refutablePattern s p
 
 synthExpr _ _ _ e =

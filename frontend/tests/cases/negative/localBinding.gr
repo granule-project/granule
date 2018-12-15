@@ -1,0 +1,3 @@
+-- Should fail
+foof : Int |3| -> Int |1|
+foof = \|x| -> |x|

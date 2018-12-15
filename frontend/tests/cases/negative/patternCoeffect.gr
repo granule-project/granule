@@ -1,0 +1,8 @@
+data Cont (a : Type) : Type where
+  MkC : a -> Cont a
+
+-- Should succeed
+bar : forall (a : Type) . (Cont a) |2| -> a |3|
+bar x =
+  case x of
+    |(MkC x)| -> |x|
