@@ -107,12 +107,10 @@ instance Substitutable Type where
     where
       box c t = do
         c <- substitute subst c
-        t <- substitute subst t
         mBox c t
 
       dia e t = do
         e <- substitute subst e
-        t <- substitute subst t
         mDiamond e t
 
       varSubst v =
