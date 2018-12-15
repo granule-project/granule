@@ -78,6 +78,9 @@ spec = do
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
                 Right checked -> checked `shouldBe` Failed
 
+    let tyVarK = TyVar $ mkId "k"
+    let varA = mkId "a"
+
     -- Unit tests
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
@@ -86,8 +89,8 @@ spec = do
               [(varA, Discharged tyVarK (cNatOrdered 10))]
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))
-              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))]]
+         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
+              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
@@ -95,8 +98,8 @@ spec = do
               []
        c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CZero (TyCon $ mkId "Nat")) (CVar (mkId "a.0")) (TyCon $ mkId "Nat"))
-               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) (TyCon $ mkId"Nat"))]]
+         [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
+               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
@@ -155,5 +158,3 @@ natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")
 
 illTypedFiles =
   find always (extension ==? fileExtension) pathToIlltyped
-tyVarK = TyVar $ mkId "k"
-varA = mkId "a"
