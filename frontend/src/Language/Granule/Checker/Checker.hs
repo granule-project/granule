@@ -466,7 +466,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
       concludeImplication eVars
 
-      ctxtEquals s patternGam (localGam `subtractCtxt` patternGam)
+      ctxtEquals s patternGam (localGam `intersectCtxts` patternGam)
 
       -- Check linear use in anything Linear
       case checkLinearity patternGam localGam of
