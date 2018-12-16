@@ -442,7 +442,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
         "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
 
 joinTypes s (Box c t) (Box c' t') = do
-  kind <- mguCoeffectTypes s c c'
+  coeffTy <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
   topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one

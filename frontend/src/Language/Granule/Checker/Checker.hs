@@ -693,8 +693,8 @@ solveConstraints predicate s defName = do
   let
     ctxtCk  = tyVarContext checkerState
     ctxtCkVar = kVarContext checkerState
-    coeffectVars = justCoeffectTypesConverted checkerState ctxtCk
-    coeffectKVars = justCoeffectTypesConvertedVars checkerState ctxtCkVar
+  coeffectVars <- justCoeffectTypesConverted ctxtCk
+  coeffectKVars <- justCoeffectTypesConvertedVars ctxtCkVar
 
   let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
 
@@ -739,23 +739,24 @@ solveConstraints predicate s defName = do
           halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> " had a solver fail: " <> str
   where
 
-    justCoeffectTypesConverted checkerState = mapMaybe convert
+    justCoeffectTypesConverted xs = mapM convert xs >>= (return . catMaybes)
       where
-       convert (var, (KPromote (TyCon constr), q)) =
-           case lookup constr (typeConstructors checkerState) of
-             Just (KCoeffect,_) -> Just (var, (TyCon constr, q))
-             _                  -> Nothing
+        convert (var, (KPromote t, q)) = do
+          k <- inferKindOfType s t
+          case k of
+            KCoeffect -> return $ Just (var, (t, q))
+            _         -> return Nothing
+        convert (var, (KVar v, q)) = do
+          k <- inferKindOfType s (TyVar v)
+          case k of
+            KCoeffect -> return $ Just (var, (TyVar v, q))
+            _         -> return Nothing
+        convert _ = return Nothing
 
-       --convert (var, (KPromote (TyVar v), q)) = Just (var, (TyVar v, q))
-       -- TODO: currently all poly variables are treated as kind 'Coeffect'
-       -- but this need not be the case, so this can be generalised
-       convert (var, (KVar v, q)) = Just (var, (TyVar v, q))
-       -- Unpromote things that are already types
-       convert (var, (KPromote t, q)) = Just (var, (t, q))
-       convert (var, t) = Nothing
-
-    justCoeffectTypesConvertedVars checkerState =
-       stripQuantifiers . (justCoeffectTypesConverted checkerState) . map (\(var, k) -> (var, (k, ForallQ)))
+    justCoeffectTypesConvertedVars env = do
+      let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
+      env' <- justCoeffectTypesConverted implicitUniversalMadeExplicit
+      return $ stripQuantifiers env'
 
 
 ctxtApprox :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
