@@ -46,7 +46,6 @@ defaultGlobals =
     , solverTimeoutMillis = Just 1000
     }
 
-
 class UserMsg a where
   title :: a -> String
   location :: a -> Maybe Span
