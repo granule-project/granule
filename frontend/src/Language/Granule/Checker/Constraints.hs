@@ -270,6 +270,11 @@ compileCoeffect :: (?globals :: Globals) =>
 
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
+-- Trying to compile a coeffect from a promotion that was never
+-- constrained further: default to the cartesian coeffect
+-- future TODO: resolve polymorphism to free coeffect (uninterpreted)
+compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v = SPoint
+
 compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
   SLevel . fromInteger . toInteger $ n
 
@@ -347,11 +352,6 @@ compileCoeffect (COne k') k vars =
         SInterval
           (compileCoeffect (COne t) t' vars)
           (compileCoeffect (COne t) t' vars)
-
--- Trying to compile a coeffect from a promotion that was never
--- constrained further: default to the cartesian coeffect
--- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v = SPoint
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c

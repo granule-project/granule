@@ -840,7 +840,6 @@ checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
   -- happens with them
   checkLinearity inCtxt outCtxt
 
-
 relateByAssumption :: (?globals :: Globals)
   => Span
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
