@@ -606,14 +606,14 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    debugM "Synthing a promotion of " $ pretty e
 
    -- Create a fresh kind variable for this coeffect
-   vark <- freshVar $ "kprom_" <> [head (pretty e)]
+   vark <- freshIdentifierBase $ "kprom_" <> [head (pretty e)]
    -- remember this new kind variable in the kind environment
    modify (\st -> st { kVarContext = (mkId vark, KCoeffect) : kVarContext st })
 
    -- TODO: note that this does not of the specil hanlding that happens with Level
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
-   var <- freshCoeffectVar (mkId $ "prom_" <> pretty e) (TyVar $ mkId vark)
+   var <- freshTyVarInContext (mkId $ "prom_" <> pretty e) (KVar $ mkId vark)
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
@@ -871,15 +871,16 @@ discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption ->
 discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      kind <- mguCoeffectTypes s c coeffect
+      coeffTy <- mguCoeffectTypes s c coeffect
+
       -- Create a fresh variable
-      cvar  <- freshCoeffectVar var kind
+      cvar  <- freshTyVarInContext var (promoteTypeToKind coeffTy)
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
     toFreshVar (var, Linear t) = do
-      kind <- inferCoeffectType s coeffect
-      return (var, Discharged t (COne kind))
+      coeffTy <- inferCoeffectType s coeffect
+      return (var, Discharged t (COne coeffTy))
 
 
 -- `freshVarsIn names ctxt` creates a new context with
@@ -902,7 +903,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
     toFreshVar (var, Discharged t c) = do
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
-      freshName <- freshVar (internalName var)
+      freshName <- freshIdentifierBase (internalName var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })

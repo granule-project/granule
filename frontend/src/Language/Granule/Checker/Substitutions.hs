@@ -19,7 +19,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Variables (freshCoeffectVarWithBinding, freshVar)
+import Language.Granule.Checker.Variables (freshTyVarInContextWithBinding)
 
 import Control.Monad.Trans.Maybe
 import Language.Granule.Utils
@@ -475,15 +475,20 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
   where
     -- Freshen variables, create existential instantiation
     instantiateVariable (var, k) = do
-      -- Freshen the variable depending on its kind
+      var' <- freshTyVarInContextWithBinding var k quantifier
+      return (var, var')
+
+      {-
       var' <- case k of
                k | typeBased k -> do
-                 freshName <- freshVar (internalName var)
+                 freshName <- freshIdentifierBase (internalName var)
                  let var'  = mkId freshName
                  -- Label fresh variable as an existential
                  modify (\st -> st { tyVarContext = (var', (k, quantifier)) : tyVarContext st })
                  return var'
-               KPromote (TyCon c) -> freshCoeffectVarWithBinding var (TyCon c) quantifier
+               KPromote (TyCon c) -> do
+                  debugM "kpromote in insantiateVariable" (pretty k)
+                  freshTyVarInContextWithBinding var (TyCon c) quantifier
                KPromote _ -> error "Arbirary promoted types not yet supported"
                KCoeffect -> error "Coeffect kind variables not yet supported"
                KVar _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
@@ -496,3 +501,4 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
     typeBased KType = True
     typeBased (KFun k1 k2) = typeBased k1 && typeBased k2
     typeBased _     = False
+    -}

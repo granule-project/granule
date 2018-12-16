@@ -44,7 +44,7 @@ ctxtFromTypedPattern _ t (PWild s _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
-    wild <- freshVar "wild"
+    wild <- freshIdentifierBase "wild"
     let elabP = PWild s t
     return ([(Id "_" wild, Linear t)], [], [], elabP)
 
@@ -189,7 +189,7 @@ ctxtFromTypedPatterns s ty ps = do
   -- First build a representation of what the type would look like
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
-  psTyVars <- mapM (\_ -> freshVar "?" >>= return . TyVar . mkId) ps
+  psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
   let spuriousType = foldr FunTy (TyVar $ mkId "?") psTyVars
   halt $ GenericError (Just s)
      $ "Too many patterns.\n   Therefore, couldn't match expected type '"

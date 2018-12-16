@@ -444,21 +444,21 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
 joinTypes s (Box c t) (Box c' t') = do
   kind <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
-  topVar <- freshCoeffectVar (mkId "") kind
+  topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
-  addConstraint (ApproximatedBy s c  (CVar topVar) kind)
-  addConstraint (ApproximatedBy s c' (CVar topVar) kind)
-  tu <- joinTypes s t t'
-  return $ Box (CVar topVar) tu
+  addConstraint (ApproximatedBy s c  (CVar topVar) coeffTy)
+  addConstraint (ApproximatedBy s c' (CVar topVar) coeffTy)
+  tUpper <- joinTypes s t t'
+  return $ Box (CVar topVar) tUpper
 
 joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
-  let kind = TyCon $ mkId "Nat"
-  var <- freshCoeffectVar m kind
+  let ty = TyCon $ mkId "Nat"
+  var <- freshTyVarInContext m (KPromote ty)
   -- Unify the two coeffects into one
-  addConstraint (Eq s (CNat n) (CVar var) kind)
+  addConstraint (Eq s (CNat n) (CVar var) ty)
   return $ TyInt n
 
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
@@ -467,8 +467,8 @@ joinTypes s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
   -- TODO: how do we know they are tyints? Looks suspicious
   --let kind = TyCon $ mkId "Nat"
-  --nvar <- freshCoeffectVar n kind
-  --mvar <- freshCoeffectVar m kind
+  --nvar <- freshTyVarInContext n kind
+  --mvar <- freshTyVarInContext m kind
   -- Unify the two variables into one
   --addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
   --return $ TyVar n

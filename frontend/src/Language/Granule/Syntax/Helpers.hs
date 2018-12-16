@@ -42,8 +42,8 @@ removeFreshenings (x:xs) = do
 
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
-freshVar :: IdSyntacticCategory -> Id -> Freshener Id
-freshVar cat var = do
+freshIdentifierBase :: IdSyntacticCategory -> Id -> Freshener Id
+freshIdentifierBase cat var = do
     st <- get
     let var' = sourceName var <> "_" <> show (counter st)
     case cat of

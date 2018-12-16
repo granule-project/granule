@@ -214,7 +214,7 @@ instance Term Coeffect where
 instance Freshenable TypeScheme where
   freshen :: TypeScheme -> Freshener TypeScheme
   freshen (Forall s binds ty) = do
-        binds' <- mapM (\(v, k) -> do { v' <- freshVar Type v; return (v', k) }) binds
+        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
         ty' <- freshen ty
         return $ Forall s binds' ty'
 
@@ -250,7 +250,7 @@ instance Freshenable Coeffect where
         Nothing -> return $ CVar $ mkId (sourceName v)
 
     freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do
-      t <- freshVar Type i
+      t <- freshIdentifierBase Type i
       return $ CInfinity $ Just $ TyVar t
 
     freshen (CPlus c1 c2) = do
