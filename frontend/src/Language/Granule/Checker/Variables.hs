@@ -25,18 +25,18 @@ freshIdentifierBase s = do
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
 freshTyVarInContext :: (?globals :: Globals) => Id -> Kind -> MaybeT Checker Id
-freshTyVarInContext cvar ty =
-    freshTyVarInContextWithBinding cvar ty InstanceQ
+freshTyVarInContext cvar k =
+    freshTyVarInContextWithBinding cvar k InstanceQ
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
 freshTyVarInContextWithBinding ::
    (?globals :: Globals) => Id -> Kind -> Quantifier -> MaybeT Checker Id
-freshTyVarInContextWithBinding cvar ty q = do
-    freshName <- freshIdentifierBase (internalName cvar)
-    let cvar' = mkId freshName
-    registerTyVarInContext cvar' ty q
-    return cvar'
+freshTyVarInContextWithBinding var k q = do
+    freshName <- freshIdentifierBase (internalName var)
+    let var' = mkId freshName
+    registerTyVarInContext var' k q
+    return var'
 
 -- | Helper for registering a new coeffect variable in the checker
 registerTyVarInContext ::

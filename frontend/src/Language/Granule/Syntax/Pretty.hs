@@ -199,8 +199,9 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
                        <> prettyL l e1 <> " in " <> prettyL l e2
 
   prettyL l (Val _ _ v) = prettyL l v
-  prettyL l (Case _ _ e ps) = "\n    (case " <> prettyL l e <> " of\n      " <>
-                         intercalate ";\n      " (map (\(p, e') -> prettyL l p <> " -> " <> prettyL l e') ps) <> ")"
+  prettyL l (Case _ _ e ps) = "\n    (case " <> prettyL l e <> " of\n      "
+                      <> intercalate ";\n      " (map (\(p, e') -> prettyL l p
+                      <> " -> " <> prettyL l e') ps) <> ")"
 
 parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
 parensOn p t = prettyL (if p t then 0 else 1) t

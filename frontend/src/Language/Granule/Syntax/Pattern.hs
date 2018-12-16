@@ -15,7 +15,6 @@ import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
-
 -- | Language.Granule.Syntax of patterns
 data Pattern a
   = PVar Span a Id                -- ^ Variable patterns

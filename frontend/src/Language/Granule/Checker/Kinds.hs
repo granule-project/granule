@@ -213,23 +213,23 @@ mguCoeffectTypes s c1 c2 = do
   ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
     -- Both are poly
-    (TyVar kv1, TyVar kv2) -> do
-      updateCoeffectType kv1 (TyVar kv2)
+    (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
+      updateCoeffectType kv1 (KVar kv2)
       return (TyVar kv2)
+
+    (t, t') | t == t' -> return t
 
    -- Linear-hand side is a poly variable, but right is concrete
     (TyVar kv1, ck2') -> do
-      updateCoeffectType kv1 ck2'
+      updateCoeffectType kv1 (promoteTypeToKind ck2')
       return ck2'
 
     -- Right-hand side is a poly variable, but Linear is concrete
     (ck1', TyVar kv2) -> do
-      updateCoeffectType kv2 ck1'
+      updateCoeffectType kv2 (promoteTypeToKind ck1')
       return ck1'
 
     (TyCon k1, TyCon k2) | k1 == k2 -> return $ TyCon k1
-
-    (t, t') | t == t' -> return t
 
     -- Try to unify coeffect types
     (t, t') | Just tj <- joinCoeffectTypes t t' -> return tj
@@ -241,15 +241,15 @@ mguCoeffectTypes s c1 c2 = do
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in an context
 -- and update the current solver predicate as well
-updateCoeffectType :: Id -> Type -> MaybeT Checker ()
-updateCoeffectType tyVar ty = do
+updateCoeffectType :: Id -> Kind -> MaybeT Checker ()
+updateCoeffectType tyVar k = do
    modify (\checkerState ->
     checkerState
      { tyVarContext = rewriteCtxt (tyVarContext checkerState),
-       kVarContext = replace (kVarContext checkerState) tyVar (KPromote ty) })
+       kVarContext = replace (kVarContext checkerState) tyVar k })
  where
    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
    rewriteCtxt [] = []
    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
-    | tyVar == kindVar = (name, (KPromote ty, q)) : rewriteCtxt ctxt
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

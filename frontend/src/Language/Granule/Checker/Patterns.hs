@@ -71,7 +71,7 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
 
     -- Check whether a unification was caused
     when (definitelyUnifying p) $ do
-      x <- freshVar "x"
+      x <- freshIdentifierBase "x"
       addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
 
     {- An alternate idea to do with dummy/shadow vars
@@ -92,7 +92,7 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
     let elabP = PBox sp t elabPinner
 
     -- Discharge all variables bound by the inner pattern
-    return (map (discharge t coeff) ctx ++ ctxtUnificationCoeffect, eVars, subst, elabP)
+    return (map (discharge coeffTy coeff) ctx, eVars, subst, elabP)
 
 ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
