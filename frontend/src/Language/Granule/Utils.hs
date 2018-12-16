@@ -43,7 +43,7 @@ defaultGlobals =
     , suppressInfos = False
     , suppressErrors = False
     , timestamp = False
-    , solverTimeoutMillis = Just 1000
+    , solverTimeoutMillis = Just 3000
     }
 
 class UserMsg a where
