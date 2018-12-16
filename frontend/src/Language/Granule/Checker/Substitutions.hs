@@ -477,28 +477,3 @@ freshPolymorphicInstance quantifier (Forall s kinds ty) = do
     instantiateVariable (var, k) = do
       var' <- freshTyVarInContextWithBinding var k quantifier
       return (var, var')
-
-      {-
-      var' <- case k of
-               k | typeBased k -> do
-                 freshName <- freshIdentifierBase (internalName var)
-                 let var'  = mkId freshName
-                 -- Label fresh variable as an existential
-                 modify (\st -> st { tyVarContext = (var', (k, quantifier)) : tyVarContext st })
-                 return var'
-               KPromote (TyCon c) -> do
-                  debugM "kpromote in insantiateVariable" (pretty k)
-                  freshTyVarInContextWithBinding var (TyCon c) quantifier
-               KPromote _ -> error "Arbirary promoted types not yet supported"
-               KCoeffect -> error "Coeffect kind variables not yet supported"
-               KVar _ -> error "Tried to instantiate a polymorphic kind. This is not supported yet.\
-               \ Please open an issue with a snippet of your code at https://github.com/dorchard/granule/issues"
-               KType    -> error "Impossible" -- covered by typeBased
-               KFun _ _ -> error "Tried to instantiate a non instantiatable kind"
-      -- Return pair of old variable name and instantiated name (for
-      -- name map)
-      return (var, var')
-    typeBased KType = True
-    typeBased (KFun k1 k2) = typeBased k1 && typeBased k2
-    typeBased _     = False
-    -}
