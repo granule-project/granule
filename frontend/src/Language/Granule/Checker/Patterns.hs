@@ -74,16 +74,20 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
       x <- freshVar "x"
       addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
 
-    ctxtUnificationCoeffect <-
+    {- An alternate idea to do with dummy/shadow vars
+      ctxtUnificationCoeffect <-
         if definitelyUnifying p
         then do
           -- Create a dummy variable that is discharged (1) of type k
           v <- freshVar "unif"
           return [(mkId v, Discharged (TyCon $ mkId "()") (COne t))]
         else return []
+    -}
 
+    {- Old approach
          -- addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
         -- addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
+    -}
 
     let elabP = PBox sp t elabPinner
 
