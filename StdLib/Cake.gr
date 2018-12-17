@@ -14,12 +14,12 @@ have Cake = Cake
 
 -- ...unless you have infinite cake
 
-possible : Cake |∞| -> (Happy, Cake |∞|)
+possible : Cake [∞] -> (Happy, Cake [∞])
 possible lotsOfCake =
-  let |cake| = lotsOfCake in (eat cake, |(have cake)|)
+  let [cake] = lotsOfCake in (eat cake, [have cake])
 
 -- ...or to there is a more precise way
 
-accurate : forall (n : Nat) . Cake |n+1| -> (Happy, Cake |n|)
+accurate : forall (n : Nat) . Cake [n+1] -> (Happy, Cake [n])
 accurate lotsOfCake =
-  let |cake| = lotsOfCake in (eat cake, |(have cake)|)
+  let [cake] = lotsOfCake in (eat cake, [have cake])
