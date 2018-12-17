@@ -44,11 +44,11 @@ fixF |f| = f |(fixF |f|)|
 
 --- Conditional on integers
 --- Returns `x` if `g` is zero, else returns `y`
---if0 : forall a : Type . Int |1..1| -> a |0..1| -> a |0..1| -> a
---if0 g |x| |y| =
---    case g of
---      |0| -> x;
---      |_| -> y
+if0 : forall a : Type . Int |0..1| -> a |0..1| -> a |0..1| -> a
+if0 g |x| |y| =
+    case g of
+      |0| -> x;
+      |_| -> y
 
 
 --- # Numeric functions and constants
