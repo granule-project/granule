@@ -142,7 +142,7 @@ checkDef defCtxt (Def s defName expr pats tys@(Forall _ foralls ty)) = do
       -- Add explicit type variable quantifiers to the type variable context
       modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
-      (ctxt, elaboratedExpr, elaboratedPats) <- case (ty, pats) of
+      (_ctxt, elaboratedExpr, elaboratedPats) <- case (ty, pats) of
         (FunTy _ _, ps@(_:_)) -> do
 
           -- Type the pattern matching

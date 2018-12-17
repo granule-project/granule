@@ -34,22 +34,21 @@ until |p| |f| |x| =
     True  -> until |p| |f| |(f x)|
 
 --- Standard fixed point
-fix : forall (a : Type) . (a -> a) |Inf| -> a
+fix : forall (a : Type) . (a -> a) |∞| -> a
 fix |f| = f (fix |f|)
 
 --- Specialised first-order fixed point
 fixF : forall (a : Type, b : Type)
-     . ((a -> b) |Inf| -> (a -> b)) |Inf| -> (a -> b)
+     . ((a -> b) |Inf| -> (a -> b)) |∞| -> (a -> b)
 fixF |f| = f |(fixF |f|)|
-
 
 --- Conditional on integers
 --- Returns `x` if `g` is zero, else returns `y`
-if0 : forall a : Type . Int |0..1| -> a |0..1| -> a |0..1| -> a
-if0 g |x| |y| =
-    case g of
-      |0| -> x;
-      |_| -> y
+--if0 : forall a : Type . Int |1..1| -> a |0..1| -> a |0..1| -> a
+--if0 g |x| |y| =
+--    case g of
+--      |0| -> x;
+--      |_| -> y
 
 
 --- # Numeric functions and constants
@@ -113,3 +112,5 @@ unflatten |x| = ||x||
 --- Push coeffects on a pair into the left and right elements
 push : forall (a : Type, b : Type, n : Nat) . (a, b) |n+1| -> (a |n+1|, b |n+1|)
 push |(x, y)| = (|x|, |y|)
+
+-- approx : a |n| -> a |m| where m <= n

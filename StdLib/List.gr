@@ -18,7 +18,7 @@ length_list xs =
     Empty         -> 0;
     (Next |_| xs) -> 1 + length_list xs
 
-head_list : forall a : Type . (List a) |1| -> Result a
+head_list : forall a : Type . (List a) |0..1| -> Result a
 head_list xs =
   case xs of
     |Empty|      -> Failed |"Empty list!"|;
