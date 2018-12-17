@@ -784,13 +784,50 @@ solveConstraints predicate s defName = do
       env' <- justCoeffectTypesConverted implicitUniversalMadeExplicit
       return $ stripQuantifiers env'
 
-
+{-
 ctxtApprox :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker ()
 ctxtApprox s ctxt1 ctxt2 = do
     let ctxt  = ctxt1 `intersectCtxts` ctxt2
         ctxt' = ctxt2 `intersectCtxts` ctxt1
     zipWithM_ (relateByAssumption s ApproximatedBy) ctxt ctxt'
+-}
+
+-- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
+--   and the typical pattern is that `ctxt2` represents a specification
+--   (i.e. input to checking) and `ctxt1` represents actually usage
+ctxtApprox :: (?globals :: Globals) =>
+    Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker ()
+ctxtApprox s ctxt1 ctxt2 = do
+  -- intersection contains those ids from ctxt1 which appears in ctxt2
+  intersection <-
+    -- For everything in the right context
+    -- (which should come as an input to checking)
+    forM ctxt2 $ \(id, ass2) ->
+      -- See if it appears in the left context...
+      case lookup id ctxt1 of
+        -- ... if so equate
+        Just ass1 -> do
+          relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
+          return id
+        -- ... if not check to see if the missing variable is linear
+        Nothing   ->
+           case ass2 of
+             -- Linear gets instantly reported
+             Linear t -> illLinearityMismatch s [LinearNotUsed id]
+             -- Else, this could be due to weakening so see if this is allowed
+             Discharged t c -> do
+               kind <- inferCoeffectType s c
+               relateByAssumption s ApproximatedBy (id, Discharged t (CZero kind)) (id, ass2)
+               return id
+  -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
+  -- then we have an issue!
+  forM_ ctxt1 $ \(id, ass1) ->
+    if (id `elem` intersection)
+      then return ()
+      else halt $ UnboundVariableError (Just s) $
+                "Variable `" <> pretty id <> "` was used but is not bound here"
+
 
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
