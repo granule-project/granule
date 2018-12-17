@@ -359,20 +359,28 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
            -- But we want promotion to invovlve the guard to avoid leaks
            let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
+
+           branchCtxt' <- ctxtPlus s branchCtxt  (justLinear $ (gam `intersectCtxts` specialisedGam) `intersectCtxts` localGam)
+
            -- Probably don't want to remove specialised things in this way- we want to
            -- invert the substitution and put these things into the context
 
            -- Check local binding use
            ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
+
+
            -- Check "global" (to the definition) binding use
            consumedGam <- ctxtPlus s guardGam localGam
+           debugM "** gam = " (pretty gam)
+           debugM "** c sub p = " (pretty (consumedGam `subtractCtxt` patternGam))
+
            ctxtApprox s (consumedGam `subtractCtxt` patternGam) gam
 
            -- Conclude the implication
            concludeImplication eVars
 
-           return (branchCtxt, subst', (elaborated_pat_i, elaborated_i))
+           return (branchCtxt', subst', (elaborated_pat_i, elaborated_i))
 
         -- Anything that was bound in the pattern but not used correctly
         xs -> illLinearityMismatch s xs
@@ -1005,3 +1013,7 @@ extCtxt s ctxt var (Discharged t c) = do
 fold1M :: Monad m => (a -> a -> m a) -> [a] -> m a
 fold1M _ []     = error "Must have at least one case"
 fold1M f (x:xs) = foldM f x xs
+
+justLinear [] = []
+justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
+justLinear ((x, _) : xs) = justLinear xs
