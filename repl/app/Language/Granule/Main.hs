@@ -186,7 +186,7 @@ buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
 
-synType :: (?globals::Globals) => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption))
+synType :: (?globals::Globals) => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption, Expr () Type))
 synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr empty empty Positive exp
 synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr cts empty Positive exp
 
@@ -197,7 +197,7 @@ synTypeBuilder exp ast adt = do
   ty <- liftIO $ synType exp ((buildCtxtTS ast) <> ddts) cs
   --liftIO $ print $ show ty
   case ty of
-    Just (t,a) -> return t
+    Just (t,a,_) -> return t
     Nothing -> Ex.throwError OtherError'
 
 
@@ -359,7 +359,7 @@ handleCMD s =
                     [] -> do -- simple expressions
                         typ <- liftIO $ synType exp [] Mo.initState
                         case typ of
-                            Just (t,a) -> return ()
+                            Just (t,a, _) -> return ()
                             Nothing -> Ex.throwError (TypeCheckError ev)
                         result <- liftIO' $ try $ evalIn builtIns (toRuntimeRep exp)
                         case result of
@@ -445,3 +445,15 @@ main = do
                                               Left err -> do
                                                  liftIO $ print err
                                                  loop st
+       defaultGlobals :: Globals
+       defaultGlobals =
+           Globals
+           { debugging = False
+           , sourceFilePath = ""
+           , noColors = False
+           , noEval = False
+           , suppressInfos = False
+           , suppressErrors = False
+           , timestamp = False
+           , solverTimeoutMillis = Just 1000
+           }

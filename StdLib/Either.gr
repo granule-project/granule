@@ -1,7 +1,7 @@
 data Either a b where Left a; Right b
 
-pushEither : forall (a : Type, b : Type, k : Nat)
-        . (Either a b) |k+1| -> Either (a |k+1|) (b |k+1|)
+pushEither : forall (a : Type, b : Type, n : Nat)
+        . (Either a b) |n+1| -> Either (a |n+1|) (b |n+1|)
 pushEither x =
   case x of
     |(Left x)| -> Left |x|;

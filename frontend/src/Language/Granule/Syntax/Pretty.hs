@@ -19,174 +19,192 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
 
-prettyDebug :: Pretty t => t -> String
+prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
-  let ?globals = defaultGlobals { debugging = True }
-  in pretty x
+  let ?globals = ?globals { debugging = True }
+  in prettyL 0 x
 
-prettyUser :: Pretty t => t -> String
-prettyUser x =
-  let ?globals = defaultGlobals
-  in pretty x
+pretty :: (?globals :: Globals, Pretty t) => t -> String
+pretty = prettyL 0
 
+type Level = Int
+
+parens :: Level -> String -> String
+parens 0 x = x
+parens n x = "(" <> x <> ")"
 
 -- The pretty printer class
 class Pretty t where
-    pretty :: (?globals :: Globals) => t -> String
+    -- `prettyL l` pretty printers something at nesting level `l`
+    prettyL :: (?globals :: Globals) => Level -> t -> String
 
 -- Mostly for debugging
 
 instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b) => Pretty (a, b) where
-   pretty (a, b) = "(" <> pretty a <> ", " <> pretty b <> ")"
+   prettyL l (a, b) = "(" <> prettyL l a <> ", " <> prettyL l b <> ")"
+
+instance {-# OVERLAPPABLE #-} (Pretty a, Pretty b, Pretty c) => Pretty (a, b,c) where
+   prettyL l (a, b, c) = "(" <> prettyL l a <> ", " <> prettyL l b <> "," <> prettyL l c <> ")"
 
 instance {-# OVERLAPS #-} Pretty String where
-   pretty s = s
+   prettyL l s = s
 
 instance Pretty () where
-   pretty () = ""
+   prettyL l () = ""
 
 instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
-   pretty xs = "[" <> intercalate "," (map pretty xs) <> "]"
+   prettyL l xs = "[" <> intercalate "," (map (prettyL l) xs) <> "]"
 
--- Core pretty printers
+-- Core prettyL l printers
 
 instance {-# OVERLAPS #-} Pretty Effect where
-   pretty es = "[" <> intercalate "," es <> "]"
+   prettyL l es = "[" <> intercalate "," es <> "]"
 
 instance Pretty Coeffect where
-    pretty (CNat Ordered n) = show n
-    pretty (CNat Discrete n) = show n <> "="
-    pretty (CNatOmega (Left ())) = "∞"
-    pretty (CNatOmega (Right x)) = show x
-    pretty (CFloat n) = show n
-    pretty (COne k)  = "_1 : " <> pretty k
-    pretty (CZero k) = "_0 : " <> pretty k
-    pretty (Level 0) = "Public"
-    pretty (Level _) = "Private"
-    pretty (CExpon a b) = pretty a <> "^" <> pretty b
-    pretty (CVar c) = pretty c
-    pretty (CMeet c d) =
-      pretty c <> " /\\ " <> pretty d
-    pretty (CJoin c d) =
-      pretty c <> " \\/ " <> pretty d
-    pretty (CPlus c d) =
-      pretty c <> " + " <> pretty d
-    pretty (CTimes c d) =
-      pretty c <> " * " <> pretty d
-    pretty (CSet xs) =
-      "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> pretty t) xs) <> "}"
-    pretty (CSig c t) = "(" <> pretty c <> " : " <> pretty t <> ")"
-    pretty (CInfinity (TyVar kv)) | internalName kv == "infinity" = "∞"
-    pretty (CInfinity k) = "∞ : " <> pretty k
+    prettyL l (CNat n) = show n
+    prettyL l (CFloat n) = show n
+    prettyL l (COne k)  = "_1 : " <> prettyL l k
+    prettyL l (CZero k) = "_0 : " <> prettyL l k
+    prettyL l (Level 0) = "Public"
+    prettyL l (Level _) = "Private"
+    prettyL l (CExpon a b) = prettyL l a <> "^" <> prettyL l b
+    prettyL l (CVar c) = prettyL l c
+    prettyL l (CMeet c d) =
+      prettyL l c <> " /\\ " <> prettyL l d
+    prettyL l (CJoin c d) =
+      prettyL l c <> " \\/ " <> prettyL l d
+    prettyL l (CPlus c d) =
+      prettyL l c <> " + " <> prettyL l d
+    prettyL l (CTimes c d) =
+      prettyL l c <> " * " <> prettyL l d
+    prettyL l (CSet xs) =
+      "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyL l t) xs) <> "}"
+    prettyL l (CSig c t) =
+       parens l (prettyL (l+1) c <> " : " <> prettyL l t)
+
+    prettyL l (CInfinity k) = "∞ : " <> prettyL l k
+    prettyL l (CInterval c1 c2) = prettyL l c1 <> ".." <> prettyL l c2
 
 instance Pretty Kind where
-    pretty KType          = "Type"
-    pretty KCoeffect      = "Coeffect"
-    pretty (KFun k1 k2)   = pretty k1 <> " -> " <> pretty k2
-    pretty (KConstr c)    = pretty c
-    pretty (KVar v)       = pretty v
-    pretty (KPromote t)   = "↑" <> pretty t
+    prettyL l KType          = "Type"
+    prettyL l KCoeffect      = "Coeffect"
+    prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
+    prettyL l (KVar v)       = prettyL l v
+    prettyL l (KPromote t)   = "↑" <> prettyL l t
 
 instance Pretty TypeScheme where
-    pretty (Forall _ [] t) = pretty t
-    pretty (Forall _ cvs t) =
-        "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". " <> pretty t
+    prettyL l (Forall _ [] t) = prettyL l t
+    prettyL l (Forall _ cvs t) =
+        "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". " <> prettyL l t
       where
-       prettyKindSignatures (var, kind) = pretty var <> " : " <> pretty kind
+       prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
 
 instance Pretty Type where
-    pretty (TyCon s)      =  pretty s
-    pretty (FunTy f@(FunTy _ _) t2)  = "(" <> pretty f <> ") -> " <> pretty t2
-    pretty (FunTy t1 t2)  = pretty t1 <> " -> " <> pretty t2
-    pretty (Box c t)      = "((" <> pretty t <> ") |" <> pretty c <> "|)"
-    pretty (Diamond e t)  = "((" <> pretty t <> ") <" <> pretty e <> ">)"
-    pretty (TyVar v)      = pretty v
-    pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
-      "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
-    pretty (TyApp t1 t2)  = pretty t1 <> " " <> pretty t2
-    pretty (TyInt n)      = show n
-    pretty (TyInfix op t1 t2) = "(" <> pretty t1 <> " " <> op <> " " <>  pretty t2 <> ")"
+    prettyL l (TyCon s)      =  prettyL l s
+
+    prettyL l (FunTy t1 t2)  =
+       prettyL (l+1) t1 <> " -> " <> prettyL l t2
+
+    prettyL l (Box c t)      =
+       parens l (prettyL (l+1) t <> " |" <> prettyL l c <> "|")
+
+    prettyL l (Diamond e t)  =
+       parens l (prettyL (l+1) t <> " <" <> prettyL l e <> ">")
+
+    prettyL l (TyVar v)      = prettyL l v
+
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
+      parens l (prettyL l t1 <> ", " <> prettyL l t2)
+
+    prettyL l (TyApp t1 t2)  =
+      parens l (prettyL (l+1) t1 <> " " <> prettyL l t2)
+
+    prettyL l (TyInt n)      = show n
+
+    prettyL l (TyInfix op t1 t2) =
+      parens l (prettyL (l+1) t1 <> " " <> op <> " " <>  prettyL (l+1) t2)
 
 instance Pretty (Value v a) => Pretty (AST v a) where
-    pretty (AST dataDecls defs) = pretty' dataDecls <> "\n\n" <> pretty' defs
+    prettyL l (AST dataDecls defs) = pretty' dataDecls <> "\n\n" <> pretty' defs
       where
         pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty (Value v a) => Pretty (Def v a) where
-    pretty (Def _ v e ps t) = pretty v <> " : " <> pretty t <> "\n" <>
-                              pretty v <> " " <> pretty ps <> "= " <> pretty e
+    prettyL l (Def _ v e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
+                              prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
 
 instance Pretty DataDecl where
-    pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
+    prettyL l (DataDecl _ tyCon tyVars kind dataConstrs) =
       let tvs = case tyVars of [] -> ""; _ -> (unwords . map pretty) tyVars <> " "
-          ki = case kind of Nothing -> ""; Just k -> pretty k <> " "
-      in "data " <> pretty tyCon <> " " <> tvs <> ki <> "where\n  " <> pretty dataConstrs
+          ki = case kind of Nothing -> ""; Just k -> prettyL l k <> " "
+      in "data " <> prettyL l tyCon <> " " <> tvs <> ki <> "where\n  " <> prettyL l dataConstrs
 
 instance Pretty [DataConstr] where
-    pretty = intercalate ";\n  " . map pretty
+    prettyL l = intercalate ";\n  " . map pretty
 
 instance Pretty DataConstr where
-    pretty (DataConstrG _ name typeScheme) = pretty name <> " : " <> pretty typeScheme
-    pretty (DataConstrA _ name params) = pretty name <> (unwords . map pretty) params
+    prettyL l (DataConstrG _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
+    prettyL l (DataConstrA _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
 
 instance Pretty (Pattern a) where
-    pretty (PVar _ _ v)     = pretty v
-    pretty (PWild _ _)      = "_"
-    pretty (PBox _ _ p)     = "|" <> pretty p <> "|"
-    pretty (PInt _ _ n)     = show n
-    pretty (PFloat _ _ n)   = show n
-    pretty (PConstr _ _ name args)  = intercalate " " (pretty name : map pretty args)
+    prettyL l (PVar _ _ v)     = prettyL l v
+    prettyL l (PWild _ _)      = "_"
+    prettyL l (PBox _ _ p)     = "|" <> prettyL l p <> "|"
+    prettyL l (PInt _ _ n)     = show n
+    prettyL l (PFloat _ _ n)   = show n
+    prettyL l (PConstr _ _ name args)  = intercalate " " (prettyL l name : map (prettyL l) args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
-    pretty [] = ""
-    pretty ps = unwords (map pretty ps) <> " "
+    prettyL l [] = ""
+    prettyL l ps = unwords (map (prettyL l) ps) <> " "
 
 instance Pretty t => Pretty (Maybe t) where
-    pretty Nothing = "unknown"
-    pretty (Just x) = pretty x
+    prettyL l Nothing = "unknown"
+    prettyL l (Just x) = prettyL l x
 
 instance Pretty v => Pretty (Value v a) where
-    pretty (Abs _ x t e)  = parens $ "\\(" <> pretty x <> " : " <> pretty t
-                               <> ") -> " <> pretty e
-    pretty (Promote _ e)  = "|" <> pretty e <> "|"
-    pretty (Pure _ e)     = "<" <> pretty e <> ">"
-    pretty (Var _ x)      = pretty x
-    pretty (NumInt _ n)   = show n
-    pretty (NumFloat _ n) = show n
-    pretty (CharLiteral _ c) = show c
-    pretty (StringLiteral _ s) = show s
-    pretty (Constr _ s vs) | internalName s == "," =
-      "(" <> intercalate ", " (map pretty vs) <> ")"
-    pretty (Constr _ s vs) = intercalate " " (pretty s : map (parensOn (not . valueAtom)) vs)
+    prettyL l (Abs _ x t e)  = parens l $ "\\(" <> prettyL l x <> " : " <> prettyL l t
+                               <> ") -> " <> prettyL l e
+    prettyL l (Promote _ e)  = "|" <> prettyL l e <> "|"
+    prettyL l (Pure _ e)     = "<" <> prettyL l e <> ">"
+    prettyL l (Var _ x)      = prettyL l x
+    prettyL l (NumInt n)   = show n
+    prettyL l (NumFloat n) = show n
+    prettyL l (CharLiteral c) = show c
+    prettyL l (StringLiteral s) = show s
+    prettyL l (Constr _ s vs) | internalName s == "," =
+      "(" <> intercalate ", " (map (prettyL l) vs) <> ")"
+    prettyL l (Constr _ s vs) = intercalate " " (prettyL l s : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values
-        valueAtom (NumInt _ _)    = True
-        valueAtom (NumFloat _ _)  = True
+        valueAtom (NumInt _)    = True
+        valueAtom (NumFloat _)  = True
         valueAtom (Constr _ _ []) = True
         valueAtom _             = False
-    pretty (Ext _ _) = ""
+    prettyL l (Ext _ _) = ""
 
 instance Pretty Id where
-  pretty = if debugging ?globals then internalName else sourceName
+  prettyL l = if debugging ?globals then internalName else sourceName
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
-  pretty (App _ _ e1 e2) = parens $ pretty e1 <> " " <> pretty e2
-  pretty (Binop _ _ op e1 e2) = parens $ pretty e1 <> " " <> op <> " " <> pretty e2
-  pretty (LetDiamond _ _ v t e1 e2) = parens $ "let " <> pretty v <> " :" <> pretty t <> " <- "
-                                    <> pretty e1 <> " in " <> pretty e2
-  pretty (Val _ _ v) = pretty v
-  pretty (Case _ _ e ps) = "\n    (case " <> pretty e <> " of\n      " <>
-                         intercalate ";\n      " (map (\(p, e') -> pretty p <> " -> " <> pretty e') ps) <> ")"
+  prettyL l (App _ _ e1 e2) =
+    parens l $ prettyL (l+1) e1 <> " " <> prettyL l e2
 
-parens :: String -> String
-parens s = "(" <> s <> ")"
+  prettyL l (Binop _ _ op e1 e2) =
+    parens l $ prettyL (l+1) e1 <> " " <> op <> " " <> prettyL (l+1) e2
+
+  prettyL l (LetDiamond _ _ v t e1 e2) =
+    parens l $ "let " <> prettyL l v <> " :" <> prettyL l t <> " <- "
+                       <> prettyL l e1 <> " in " <> prettyL l e2
+
+  prettyL l (Val _ _ v) = prettyL l v
+  prettyL l (Case _ _ e ps) = "\n    (case " <> prettyL l e <> " of\n      "
+                      <> intercalate ";\n      " (map (\(p, e') -> prettyL l p
+                      <> " -> " <> prettyL l e') ps) <> ")"
 
 parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
-parensOn p t =
-  if p t
-    then "(" <> pretty t <> ")"
-    else pretty t
+parensOn p t = prettyL (if p t then 0 else 1) t
 
 instance Pretty Int where
-  pretty = show
+  prettyL l = show

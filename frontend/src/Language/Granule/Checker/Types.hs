@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Types where
 
@@ -13,6 +14,8 @@ import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Variables
+
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -236,7 +239,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
-        Just (KConstr kc) | internalName kc /= "Protocol" -> do
+        Just (KPromote (TyCon kc)) | internalName kc /= "Protocol" -> do
           -- Don't create solver constraints for sessions- deal with before SMT
           addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, [(n, SubstT $ TyVar m)])
@@ -259,10 +262,10 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
       case k1 `joinKind` k2 of
         Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
 
-        -- If the kind is Nat=, then create a solver constraint
-        Just (KConstr k) | internalName k == "Nat=" -> do
+        -- If the kind is Nat, then create a solver constraint
+        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
           nat <- compileNatKindedTypeToCoeffect s t
-          addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat="))
+          addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
           return (True, [(n, SubstT t)])
 
         Just _ -> return (True, [(n, SubstT t)])
@@ -276,10 +279,10 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
       k1 <- inferKindOfType s (TyVar n)
       k2 <- inferKindOfType s t
       case k1 `joinKind` k2 of
-        Just (KConstr k) | internalName k == "Nat=" -> do
+        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
-          addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
+          addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
           return (True, [(n, SubstT t)])
         x ->
           if allowUniversalSpecialisation
@@ -331,7 +334,7 @@ equalTypesRelatedCoeffects s rel uS t1 t2 t = do
   debugM "equalTypesRelatedCoeffects" $ "called on: " <> show t1 <> "\nand:\n" <> show t2
   equalOtherKindedTypesGeneric s t1 t2
 
-{- | Check whether two Nat-kinded types are equal -}
+{- | Equality on other types (e.g. Nat and Session members) -}
 equalOtherKindedTypesGeneric :: (?globals :: Globals )
     => Span
     -> Type
@@ -340,28 +343,29 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals )
 equalOtherKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
-  case (k1, k2) of
-    (KConstr n, KConstr n')
-      | "Nat" `isPrefixOf` (internalName n) && "Nat" `isPrefixOf` (internalName  n') -> do
+  if k1 == k2 then
+    case k1 of
+      KPromote (TyCon (internalName -> "Nat")) -> do
         c1 <- compileNatKindedTypeToCoeffect s t1
         c2 <- compileNatKindedTypeToCoeffect s t2
-        if internalName n == "Nat" && internalName n' == "Nat"
-           then addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
-           else addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat=")
+        addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
         return (True, [])
-    (KType, KType) ->
-       halt $ GenericError (Just s) $ pretty t1 <> " is not equal to " <> pretty t2
 
-    (KConstr n, KConstr n') | internalName n == "Protocol" && internalName n' == "Protocol" ->
-         sessionInequality s t1 t2
+      KPromote (TyCon (internalName -> "Protocol")) ->
+        sessionInequality s t1 t2
 
-    --(KFun k1 k2, KFun k1', k2') ->
-    --   return (k1 == k
-    _ ->
+      KType ->
+        halt $ GenericError (Just s) $
+           "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
+
+      _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  <> pretty k1 <> " and " <> pretty k2
                  <> "\t\n from equality "
                  <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
+  else
+    halt $ GenericError (Just s) $
+       "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
@@ -438,35 +442,38 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
         "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
 
 joinTypes s (Box c t) (Box c' t') = do
-  kind <- mguCoeffectTypes s c c'
+  coeffTy <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
-  topVar <- freshCoeffectVar (mkId "") kind
+  topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
-  addConstraint (ApproximatedBy s c  (CVar topVar) kind)
-  addConstraint (ApproximatedBy s c' (CVar topVar) kind)
-  tu <- joinTypes s t t'
-  return $ Box (CVar topVar) tu
+  addConstraint (ApproximatedBy s c  (CVar topVar) coeffTy)
+  addConstraint (ApproximatedBy s c' (CVar topVar) coeffTy)
+  tUpper <- joinTypes s t t'
+  return $ Box (CVar topVar) tUpper
 
 joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
-  let kind = TyCon $ mkId "Nat="
-  var <- freshCoeffectVar m kind
+  let ty = TyCon $ mkId "Nat"
+  var <- freshTyVarInContext m (KPromote ty)
   -- Unify the two coeffects into one
-  addConstraint (Eq s (CNat Discrete n) (CVar var) kind)
+  addConstraint (Eq s (CNat n) (CVar var) ty)
   return $ TyInt n
 
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
   -- Create fresh variables for the two tyint variables
-  let kind = TyCon $ mkId "Nat="
-  nvar <- freshCoeffectVar n kind
-  mvar <- freshCoeffectVar m kind
+  -- TODO: how do we know they are tyints? Looks suspicious
+  --let kind = TyCon $ mkId "Nat"
+  --nvar <- freshTyVarInContext n kind
+  --mvar <- freshTyVarInContext m kind
   -- Unify the two variables into one
-  addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
-  return $ TyVar n
+  --addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
+  --return $ TyVar n
+  -- TODO: FIX. The above can't be right.
+  error $ "Trying to join two type variables: " ++ pretty n ++ " and " ++ pretty m
 
 joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t1'' <- joinTypes s t1 t1'

@@ -1,6 +1,6 @@
 import Bool
 
-foo : Bool |∞| -> Bool |1=|
+foo : Bool |∞| -> Bool |1 : Nat|
 foo x =
   case x of
      |False| -> |False|;

@@ -1,9 +1,0 @@
-data Vec : Nat= -> Type -> Type where
-  Nil  : forall (t : Type) . Vec 0 t;
-  Cons : forall (t : Type, n : Nat=) . t -> Vec n t -> Vec (n+1) t
-
-dubVec : forall (n : Nat=) . Vec n Int -> Vec (2*n) Int
-dubVec xs =
-    case xs of
-      Nil -> Nil;
-      (Cons x xs) -> Cons x (Cons 0 (dubVec xs))

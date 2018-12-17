@@ -1,2 +1,0 @@
-dub : Int |2=| -> Int
-dub |x| = x

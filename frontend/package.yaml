@@ -1,22 +1,31 @@
 name: granule-frontend
-version: '0.6.0.5'
+version: '0.6.1.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
 license: BSD3
-github: dorchard/granule
+github: granule-project/granule
 dependencies:
 - base >=4.10 && <5
 
 library:
   source-dirs: src
   ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
+  # ghc-options: >
+  #   -O0
+  #   -Wall
+  #   -Werror
+  #   -Wcompat
+  #   -Wincomplete-record-updates
+  #   -Wincomplete-uni-patterns
+  #   -Wredundant-constraints
+
   # when:
   # - condition: flag(dev)
   #   then:
   #     ghc-options: -O0 -W -Werror -Wno-unused-matches
   #   else:
-  #     ghc-options: -O3 -w
+  #     ghc-options: -O3 -Wall -Werror -Wno-unused-matches
   build-tools:
   - alex
   - happy
@@ -24,6 +33,7 @@ library:
   - Language.Granule.Checker.Checker
   - Language.Granule.Checker.Coeffects
   - Language.Granule.Checker.Constraints
+  - Language.Granule.Checker.Constraints.SNatX
   - Language.Granule.Checker.Kinds
   - Language.Granule.Checker.LaTeX
   - Language.Granule.Checker.Monad

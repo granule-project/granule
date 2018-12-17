@@ -4,6 +4,7 @@ module Language.Granule.Checker.SubstitutionsSpec where
 
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.TestUtils
 
 import Test.Hspec
 import Language.Granule.Checker.Substitutions

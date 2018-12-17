@@ -36,18 +36,18 @@ runChecker :: CheckerState -> Checker a -> IO (a, CheckerState)
 runChecker initialState =
   flip runStateT initialState . unwrap
 
--- Types or discharged coeffects
+-- | Types of discharged coeffects
 data Assumption =
     Linear Type
   | Discharged Type Coeffect
     deriving (Eq, Show)
 
 instance Pretty Assumption where
-    pretty (Linear ty) = pretty ty
-    pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> pretty c
+    prettyL l (Linear ty) = prettyL l ty
+    prettyL l (Discharged t c) = ".[" <> prettyL l t <> "]. " <> prettyL l c
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   pretty (a, b) = pretty a <> " : " <> pretty b
+   prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
 
 
 data CheckerState = CS
@@ -129,31 +129,6 @@ allGuardContexts = do
   state <- get
   return $ concat (guardContexts state)
 
--- | Helper for creating a few (existential) coeffect variable of a particular
---   coeffect type.
-freshCoeffectVar :: Id -> Type -> MaybeT Checker Id
-freshCoeffectVar cvar ty =
-    freshCoeffectVarWithBinding cvar ty InstanceQ
-
--- | Helper for creating a few (existential) coeffect variable of a particular
---   coeffect type.
-freshCoeffectVarWithBinding :: Id -> Type -> Quantifier -> MaybeT Checker Id
-freshCoeffectVarWithBinding cvar ty q = do
-    freshName <- freshVar (internalName cvar)
-    let cvar' = mkId freshName
-    registerCoeffectVar cvar' ty q
-    return cvar'
-
--- | Helper for registering a new coeffect variable in the checker
-registerCoeffectVar :: Id -> Type -> Quantifier -> MaybeT Checker ()
-registerCoeffectVar v (TyCon constrId) q =
-    modify (\st -> st { tyVarContext = (v, (KConstr constrId, q)) : tyVarContext st })
-registerCoeffectVar v (TyVar constrId) q =
-    modify (\st -> st { tyVarContext = (v, (KVar constrId, q)) : tyVarContext st })
-registerCoeffectVar v t _ =
-   error $ "Bug: trying to register the following type as a coeffect "
-     ++ show t
-
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
 newConjunct = do
@@ -198,14 +173,6 @@ addConstraintToPreviousFrame p = do
             put (checkerState { predicateStack = ps : Conj [Con p] : stack })
           stack ->
             put (checkerState { predicateStack = Conj [Con p] : stack })
-
--- | Generate a fresh alphanumeric variable name
-freshVar :: String -> MaybeT Checker String
-freshVar s = do
-  checkerState <- get
-  let v = uniqueVarIdCounter checkerState
-  put checkerState { uniqueVarIdCounter = v + 1 }
-  return $ s <> "." <> show v
 
 {- Helpers for error messages and checker control flow -}
 data TypeError

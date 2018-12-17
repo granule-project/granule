@@ -1,4 +1,4 @@
-diagE : forall (a : Type, b : Type) . a |2| -> (a, a |0|)
+diagE : forall (a : Type) . a |1| -> (a, a |0|)
 diagE |x| = (x, |x|)
 
 fst : forall (a : Type, b : Type) . (a, b |0|) -> a

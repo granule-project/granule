@@ -69,7 +69,7 @@ import System.Exit (die)
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
-    '&'   { TokenAnd _ }
+    ".."  { TokenDotDot _ }
     OP    { TokenOp _ _ }
 
 
@@ -174,13 +174,18 @@ VarSigs :: { [(Id, Kind)] }
 VarSig :: { (Id, Kind) }
   : VAR ':' Kind              { (mkId $ symString $1, $3) }
 
+
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
   | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
                                   "Type"     -> KType
                                   "Coeffect" -> KCoeffect
-                                  s          -> KConstr $ mkId s }
+                                  s          -> kConstr $ mkId s }
+  | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
+  | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
+
+
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
@@ -203,23 +208,22 @@ TyAtom :: { Type }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
-  | '(' Type '&' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
-
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
   |                           { [] }
 
 Coeffect :: { Coeffect }
-  : NatCoeff                    { $1 }
-  | '∞'                         { CInfinity (TyCon $ mkId "Cartesian") }
+  : INT                         { let TokenInt _ x = $1 in CNat x }
+  | '∞'                         { infinity }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level 0
                                     "Private" -> Level 1
-                                    "Inf" -> CInfinity (TyCon $ mkId "Cartesian")
+                                    "Inf" -> infinity
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
+  | Coeffect ".." Coeffect      { CInterval $1 $3 }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
@@ -228,13 +232,6 @@ Coeffect :: { Coeffect }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
   | Coeffect ':' TyAtom         { normalise (CSig $1 $3) }
-
-NatCoeff :: { Coeffect }
-  : INT NatModifier           { let TokenInt _ x = $1 in CNat $2 x }
-
-NatModifier :: { NatModifier }
-  : {- empty -}               { Ordered }
-  | '='                       { Discrete }
 
 Set :: { [(String, Type)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
@@ -336,9 +333,9 @@ Juxt :: { Expr () () }
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
   | INT                       { let (TokenInt _ x) = $1
-                                in Val (getPosToSpan $1) () $ NumInt () x }
+                                in Val (getPosToSpan $1) () $ NumInt x }
   | FLOAT                     { let (TokenFloat _ x) = $1
-                                in Val (getPosToSpan $1) () $ NumFloat () $ read x }
+                                in Val (getPosToSpan $1) () $ NumFloat $ read x }
   | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
   | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
   | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
@@ -348,9 +345,9 @@ Atom :: { Expr () () }
                                          $2)
                                     $4 }
   | CHAR                      { Val (getPosToSpan $1) () $
-                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral () c }
+                                  case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
   | STRING                    { Val (getPosToSpan $1) () $
-                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral () c }
+                                  case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
 
 {
 parseError :: [Token] -> IO a

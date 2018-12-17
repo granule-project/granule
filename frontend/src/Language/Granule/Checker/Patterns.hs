@@ -12,6 +12,8 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Variables
+
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -28,41 +30,77 @@ definitelyUnifying _ = False
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
---   Returns also a list of any variables bound by the pattern
---   (e.g. for dependent matching) and a substitution for variables
---   caused by pattern matching (e.g., from unification).
+--   Returns also:
+--      - a list of any variables bound by the pattern
+--        (e.g. for dependent matching)
+--      - a substitution for variables
+--           caused by pattern matching (e.g., from unification),
+--      - a consumption context explaining usage triggered by pattern matching
 ctxtFromTypedPattern :: (?globals :: Globals, Show t) => Span -> Type -> Pattern t
-  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution)
+  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern _ t (PWild _ _) = do
+ctxtFromTypedPattern _ t (PWild s _) = do
     -- Fresh variable to represent this (linear) value
     --   Wildcards are allowed, but only inside boxed patterns
     --   The following binding context will become discharged
-    wild <- freshVar "wild"
-    return ([(Id "_" wild, Linear t)], [], [])
+    wild <- freshIdentifierBase "wild"
+    let elabP = PWild s t
+    return ([(Id "_" wild, Linear t)], [], [], elabP)
+    -- return ([], [], [], elabP)
 
-ctxtFromTypedPattern _ t (PVar _ _ v) =
-    return ([(v, Linear t)], [], [])
+
+ctxtFromTypedPattern _ t (PVar s _ v) = do
+    let elabP = PVar s t v
+    return ([(v, Linear t)], [], [], elabP)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern _ t@(TyCon c) (PInt _ _ _)
-  | internalName c == "Int" = return ([], [], [])
+ctxtFromTypedPattern _ t@(TyCon c) (PInt s _ n)
+  | internalName c == "Int" = do
+    let elabP = PInt s t n
+    return ([], [], [], elabP)
 
-ctxtFromTypedPattern _ t@(TyCon c) (PFloat _ _ _)
-  | internalName c == "Float" = return ([], [], [])
+ctxtFromTypedPattern _ t@(TyCon c) (PFloat s _ n)
+  | internalName c == "Float" = do
+    let elabP = PFloat s t n
+    return ([], [], [], elabP)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern s (Box coeff ty) (PBox _ _ p) = do
-    (ctx, eVars, subst) <- ctxtFromTypedPattern s ty p
-    k <- inferCoeffectType s coeff
+ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
+
+    (ctx, eVars, subst, elabPinner) <- ctxtFromTypedPattern s ty p
+    coeffTy <- inferCoeffectType s coeff
 
     -- Check whether a unification was caused
-    when (definitelyUnifying p)
-        $ addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
+    when (definitelyUnifying p) $ do
+      (addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
+      --addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+
+    --when (containsNoUnifyingUpToNextBox p) $ do
+    --  addConstraintToPreviousFrame $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
+
+      --(addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
+      --x <- freshIdentifierBase "x"
+      --addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
+
+      -- An alternate idea to do with dummy/shadow vars
+    {- ctxtUnificationCoeffect <-
+        if definitelyUnifying p
+        then do
+          -- Create a dummy variable that is discharged (1) of type k
+          v <- freshIdentifierBase "guardUnif"
+          return [(mkId v, Discharged (TyCon $ mkId "()") (COne coeffTy))]
+        else return [] -}
+
+    {- Old approach
+         -- addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
+        -- addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
+    -}
+
+    let elabP = PBox sp t elabPinner
 
     -- Discharge all variables bound by the inner pattern
-    return (map (discharge k coeff) ctx, eVars, subst)
+    return (map (discharge coeffTy coeff) ctx, eVars, subst, elabP)
 
 ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
@@ -80,7 +118,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
       case areEq of
         (True, _, unifiers) -> do
           dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
-          (t,(as, bs, us)) <- unpeel ps dataConstrutorSpecialised
+          (t,(as, bs, us, elabPs)) <- unpeel ps dataConstrutorSpecialised
           subst <- combineSubstitutions s unifiers us
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
           -- Updated type variable context
@@ -93,26 +131,33 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
                                                 _        -> Nothing) subst
           put (state { tyVarContext = tyVars
                     , kVarContext = kindSubst <> kVarContext state }) -}
-          return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst)
+          let elabP = PConstr s ty dataC elabPs
+          return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst, elabP)
 
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
   where
-    unpeel :: Show t => [Pattern t] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution))
-    unpeel = unpeel' ([],[],[])
+    unpeel :: Show t => [Pattern t] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution, [Pattern Type]))
+    unpeel = unpeel' ([],[],[],[])
     unpeel' acc [] t = return (t,acc)
-    unpeel' (as,bs,us) (p:ps) (FunTy t t') = do
-        (as',bs',us') <- ctxtFromTypedPattern s t p
+    unpeel' (as,bs,us,elabPs) (p:ps) (FunTy t t') = do
+        (as',bs',us',elabP) <- ctxtFromTypedPattern s t p
         us <- combineSubstitutions s us us'
-        unpeel' (as<>as',bs<>bs',us) ps t'
+        unpeel' (as<>as',bs<>bs',us,elabP:elabPs) ps t'
     unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
               "Have you applied constructor `" <> sourceName dataC <>
               "` to too many arguments?"
 
 ctxtFromTypedPattern s t@(TyVar v) p = do
   case p of
-    PVar _ _ x -> return ([(x, Linear t)], [], [])
-    PWild _ _  -> return ([], [], [])
+    PVar s _ x -> do
+      let elabP = PVar s t x
+      return ([(x, Linear t)], [], [], elabP)
+
+    PWild s _  -> do
+      let elabP = PWild s t
+      return ([], [], [], elabP)
+
     p          -> halt $ PatternTypingError (Just s)
                    $  "Cannot unify pattern " <> pretty p
                    <> "with type variable " <> pretty v
@@ -132,18 +177,21 @@ discharge k c (v, Discharged t c') =
     Nothing        -> (v, Discharged t c')
 
 ctxtFromTypedPatterns ::
-  (?globals :: Globals, Show t) => Span -> Type -> [Pattern t] -> MaybeT Checker (Ctxt Assumption, Type)
+  (?globals :: Globals, Show t) => Span -> Type -> [Pattern t] -> MaybeT Checker (Ctxt Assumption, Type, [Pattern Type])
 ctxtFromTypedPatterns sp ty [] = do
   debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
-  return ([], ty)
+  return ([], ty, [])
+
 ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   -- TODO: when we have dependent matching at the function clause
   -- level, we will need to pay attention to the bound variables here
-  (localGam, _, _) <- ctxtFromTypedPattern s t1 pat
+  (localGam, _, _, elabP) <- ctxtFromTypedPattern s t1 pat
   pIrrefutable <- isIrrefutable s t1 pat
+
   if pIrrefutable then do
-    (localGam', ty) <- ctxtFromTypedPatterns s t2 pats
-    return (localGam <> localGam', ty)
+    (localGam', ty, elabPs) <- ctxtFromTypedPatterns s t2 pats
+    return (localGam <> localGam', ty, elabP : elabPs)
+
   else refutablePattern s pat
 
 ctxtFromTypedPatterns s ty ps = do
@@ -153,7 +201,7 @@ ctxtFromTypedPatterns s ty ps = do
   -- First build a representation of what the type would look like
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
-  psTyVars <- mapM (\_ -> freshVar "?" >>= return . TyVar . mkId) ps
+  psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
   let spuriousType = foldr FunTy (TyVar $ mkId "?") psTyVars
   halt $ GenericError (Just s)
      $ "Too many patterns.\n   Therefore, couldn't match expected type '"

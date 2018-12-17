@@ -8,6 +8,6 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
-data Fin : Nat= -> Type where
-  FZ : forall (k : Nat=) . Fin (k + 1);
-  FS : forall (k : Nat=) . Fin k -> Fin (k + 1)
+data Fin : Nat -> Type where
+  FZ : forall (k : Nat) . Fin (k + 1);
+  FS : forall (k : Nat) . Fin k -> Fin (k + 1)

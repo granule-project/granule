@@ -10,7 +10,7 @@
 --- Repository: https://github.com/dorchard/granule
 ------
 
-data Choice a b where OneOf (a |1|) (b |1|) -- TODO: don't export
+data Choice a b where OneOf (a |0..1|) (b |0..1|) -- TODO: don't export
 
 choose1 : forall a : Type, b : Type . Choice a b -> a
 choose1 (OneOf |x| |_|) = x
@@ -18,5 +18,5 @@ choose1 (OneOf |x| |_|) = x
 choose2 : forall a : Type, b : Type . Choice a b -> b
 choose2 (OneOf |_| |y|) = y
 
-choice : forall a : Type, b : Type . a |1| -> b |1| -> Choice a b
+choice : forall a : Type, b : Type . a |0..1| -> b |0..1| -> Choice a b
 choice x y = OneOf x y

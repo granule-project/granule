@@ -1,0 +1,4 @@
+import Vec
+
+main : Vec 2 Int
+main = replicate (S (S Z)) |5|

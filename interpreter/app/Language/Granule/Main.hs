@@ -13,6 +13,7 @@
 {-# LANGUAGE NamedFieldPuns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE TypeApplications #-}
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM)
@@ -115,18 +116,55 @@ parseArgs = info (go <**> helper) $ briefDesc
     go = do
         files <- many $ argument str $ metavar "SOURCE_FILES..."
         debugging <-
-          switch $ long "debug" <> short 'd' <> help "(D)ebug mode"
+          switch $
+            long "debug" <>
+            help "Debug mode"
+
         suppressInfos <-
-          switch $ long "no-infos" <> short 'i' <> help "Don't output (i)nfo messages"
+          switch $
+            long "no-info" <>
+            help "Don't output info messages"
+
         suppressErrors <-
-          switch $ long "no-errors" <> short 'e' <> help "Don't output (e)rror messages"
+          switch $
+            long "no-error" <>
+            help "Don't output error messages"
+
         noColors <-
-          switch $ long "no-colors" <> short 'c' <> help "Turn off (c)olors in terminal output"
+          switch $
+            long "no-color" <>
+            help "Turn off colors in terminal output"
+
         noEval <-
-          switch $ long "no-eval" <> short 't' <> help "Don't evaluate, only (t)ype-check"
+          switch $
+            long "no-eval" <>
+            help "Don't evaluate, only type-check"
+
         timestamp <-
-          switch $ long "timestamp" <> help "Print timestamp in info and error messages"
-        pure (files, defaultGlobals { debugging, noColors, noEval, suppressInfos, suppressErrors, timestamp })
+          switch $
+            long "timestamp" <>
+            help "Print timestamp in info and error messages"
+
+        solverTimeoutMillis <- (\n -> if n < 0 then Nothing else Just n) <$>
+          option (auto @Integer) (
+            long "solver-timeout" <>
+            help "SMT solver timeout in milliseconds (negative for unlimited)" <>
+            value 1000 <> showDefault
+            )
+
+        pure
+          ( files
+          , Globals
+            { debugging
+            , sourceFilePath = ""
+            , noColors
+            , noEval
+            , suppressInfos
+            , suppressErrors
+            , timestamp
+            , solverTimeoutMillis
+            }
+          )
 
 data RuntimeError
   = ParseError String

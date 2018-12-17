@@ -1,10 +1,11 @@
 -- Mainly provides a kind checker on types
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Kinds (kindCheckDef
                     , inferKindOfType
                     , inferKindOfType'
-                    , joinCoeffectConstr
+                    , joinCoeffectTypes
                     , hasLub
                     , joinKind
                     , inferCoeffectType
@@ -28,10 +29,9 @@ import Language.Granule.Context
 import Language.Granule.Utils
 
 promoteTypeToKind :: Type -> Kind
-promoteTypeToKind (TyCon c) = KConstr c
+promoteTypeToKind (TyCon c) = kConstr c
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
-
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
@@ -53,7 +53,9 @@ inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT
 inferKindOfType' s quantifiedVariables t =
     typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
   where
-    kFun (KConstr c) (KConstr c') | internalName c == internalName c' = return $ KConstr c
+    kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
+     | internalName c == internalName c' = return $ kConstr c
+
     kFun KType KType = return KType
     kFun KType y = illKindedNEq s KType y
     kFun x _     = illKindedNEq s KType x
@@ -75,13 +77,18 @@ inferKindOfType' s quantifiedVariables t =
     kVar tyVar =
       case lookup tyVar quantifiedVariables of
         Just kind -> return kind
-        Nothing   -> halt $ UnboundVariableError (Just s) $
+        Nothing   -> do
+          st <- get
+          case lookup tyVar (kVarContext st) of
+            Just kind -> return kind
+            Nothing ->
+              halt $ UnboundVariableError (Just s) $
                        "Type variable `" <> pretty tyVar <> "` is unbound (not quantified)." <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
 
-    kInt _ = return $ KConstr $ mkId "Nat="
+    kInt _ = return $ kConstr $ mkId "Nat"
 
     kInfix op k1 k2 = do
       st <- get
@@ -94,39 +101,62 @@ inferKindOfType' s quantifiedVariables t =
           else illKindedNEq s k1' k1
        Nothing   -> halt $ UnboundVariableError (Just s) (pretty op <> " operator.")
 
+-- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe Kind
 joinKind k1 k2 | k1 == k2 = Just k1
-joinKind (KConstr kc1) (KConstr kc2) = fmap KConstr $ joinCoeffectConstr kc1 kc2
+joinKind (KPromote t1) (KPromote t2) =
+   fmap KPromote (joinCoeffectTypes t1 t2)
 joinKind _ _ = Nothing
 
+-- | Some coeffect types can be joined (have a least-upper bound). This
+-- | function computes the join if it exists.
+joinCoeffectTypes :: Type -> Type -> Maybe Type
+joinCoeffectTypes t1 t2 =
+ case (t1, t2) of
+  -- `Nat` can unify with `Q` to `Q`
+  (TyCon (internalName -> "Q"), TyCon (internalName -> "Nat")) ->
+        Just $ TyCon $ mkId "Q"
+
+  (TyCon (internalName -> "Nat"), TyCon (internalName -> "Q")) ->
+        Just $ TyCon $ mkId "Q"
+
+  -- `Nat` can unify with `Ext Nat` to `Ext Nat`
+  (t, TyCon (internalName -> "Nat")) | t == extendedNat ->
+        Just extendedNat
+  (TyCon (internalName -> "Nat"), t) | t == extendedNat ->
+        Just extendedNat
+
+  -- Equal things unify to the same thing
+  (t, t') | t == t' -> Just t
+
+  _ -> Nothing
+
+-- | Predicate on whether two kinds have a leasy upper bound
 hasLub :: Kind -> Kind -> Bool
 hasLub k1 k2 =
   case joinKind k1 k2 of
     Nothing -> False
     Just _  -> True
 
-joinCoeffectConstr :: Id -> Id -> Maybe Id
-joinCoeffectConstr k1 k2 = fmap mkId $ go (internalName k1) (internalName k2)
-  where
-    --go "Nat" n | "Nat" `isPrefixOf` n = Just n
-    --go n "Nat" | "Nat" `isPrefixOf` n = Just n
-    go "Float" "Nat" = Just "Float"
-    go "Nat" "Float" = Just "Float"
-    go "Nat=" "Nat"  = Just "Nat="
-    go "Nat" "Nat="  = Just "Nat="
-    go k k' | k == k' = Just k
-    go _ _ = Nothing
 
--- What is the kind of a particular coeffect
+-- | Infer the type of ta coeffect term (giving its span as well)
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> MaybeT Checker Type
 
 -- Coeffect constants have an obvious kind
 inferCoeffectType _ (Level _)         = return $ TyCon $ mkId "Level"
-inferCoeffectType _ (CNat Ordered _)  = return $ TyCon $ mkId "Nat"
-inferCoeffectType _ (CNat Discrete _) = return $ TyCon $ mkId "Nat="
+inferCoeffectType _ (CNat _)          = return $ TyCon $ mkId "Nat"
 inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
 inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
-inferCoeffectType _ (CNatOmega _)     = return $ TyCon $ mkId "Nat*"
+inferCoeffectType s (CInterval c1 c2)    = do
+  k1 <- inferCoeffectType s c1
+  k2 <- inferCoeffectType s c2
+
+  case joinCoeffectTypes k1 k2 of
+    Just k -> return $ TyApp (TyCon $ mkId "Interval") k
+
+    Nothing ->
+      halt $ KindError (Just s) $ "Interval grades do not match: `" <> pretty k1
+          <> "` does not match with `" <> pretty k2 <> "`"
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
@@ -148,20 +178,16 @@ inferCoeffectType s (CVar cvar) = do
 --       put (state { uniqueVarId = uniqueVarId state + 1 })
 --       return newType
 
-     Just (KConstr name, _) -> checkKindIsCoeffect s (TyCon name)
-
 
      Just (KVar   name, _) -> return $ TyVar name
-     Just (KPromote t, _)   -> do
-       k <- inferKindOfType s t
-       case k of
-         KCoeffect -> return t
-         _         -> illKindedNEq s KCoeffect k
-     Just (k, _)            -> illKindedNEq s KCoeffect k
+     Just (KPromote t, _)  -> checkKindIsCoeffect s t
+     Just (k, _)           -> illKindedNEq s KCoeffect k
 
 inferCoeffectType s (CZero t) = checkKindIsCoeffect s t
 inferCoeffectType s (COne t)  = checkKindIsCoeffect s t
-inferCoeffectType s (CInfinity t)  = checkKindIsCoeffect s t
+inferCoeffectType s (CInfinity (Just t)) = checkKindIsCoeffect s t
+-- Unknown infinity defaults to the interval of extended nats version
+inferCoeffectType s (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat)
 inferCoeffectType s (CSig _ t) = checkKindIsCoeffect s t
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)
@@ -187,30 +213,26 @@ mguCoeffectTypes s c1 c2 = do
   ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
     -- Both are poly
-    (TyVar kv1, TyVar kv2) -> do
-      updateCoeffectType kv1 (TyVar kv2)
+    (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
+      updateCoeffectType kv1 (KVar kv2)
       return (TyVar kv2)
+
+    (t, t') | t == t' -> return t
 
    -- Linear-hand side is a poly variable, but right is concrete
     (TyVar kv1, ck2') -> do
-      updateCoeffectType kv1 ck2'
+      updateCoeffectType kv1 (promoteTypeToKind ck2')
       return ck2'
 
     -- Right-hand side is a poly variable, but Linear is concrete
     (ck1', TyVar kv2) -> do
-      updateCoeffectType kv2 ck1'
+      updateCoeffectType kv2 (promoteTypeToKind ck1')
       return ck1'
-
-    (TyCon k1, TyCon k2) | internalName k1 == "Nat=" && internalName k2 == "Nat"
-      -> return $ TyCon $ mkId "Nat="
-
-    (TyCon k1, TyCon k2) | internalName k1 == "Nat" && internalName k2 == "Nat="
-      -> return $ TyCon $ mkId "Nat="
 
     (TyCon k1, TyCon k2) | k1 == k2 -> return $ TyCon k1
 
-    (TyCon k1, TyCon k2) | Just ck <- joinCoeffectConstr k1 k2 ->
-      return $ TyCon ck
+    -- Try to unify coeffect types
+    (t, t') | Just tj <- joinCoeffectTypes t t' -> return tj
 
     (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
                <> pretty k1 <> "' and '" <> pretty k2
@@ -219,15 +241,15 @@ mguCoeffectTypes s c1 c2 = do
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in an context
 -- and update the current solver predicate as well
-updateCoeffectType :: Id -> Type -> MaybeT Checker ()
-updateCoeffectType tyVar ty = do
+updateCoeffectType :: Id -> Kind -> MaybeT Checker ()
+updateCoeffectType tyVar k = do
    modify (\checkerState ->
     checkerState
      { tyVarContext = rewriteCtxt (tyVarContext checkerState),
-       kVarContext = replace (kVarContext checkerState) tyVar (KPromote ty) })
+       kVarContext = replace (kVarContext checkerState) tyVar k })
  where
    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
    rewriteCtxt [] = []
    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
-    | tyVar == kindVar = (name, (KPromote ty, q)) : rewriteCtxt ctxt
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

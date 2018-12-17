@@ -1,8 +1,8 @@
 -- A function with an exact bound of 2
 -- The following alternate signature would be a type error
--- dub : Int |3=| -> Int
+-- dub : Int |3 : Nat| -> Int
 
-dub : Int |2=| -> Int
+dub : Int |2 : Nat| -> Int
 dub |x| = x + x
 
 main : Int

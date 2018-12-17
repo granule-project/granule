@@ -30,6 +30,7 @@ data Globals =
   , suppressInfos :: Bool
   , suppressErrors :: Bool
   , timestamp :: Bool
+  , solverTimeoutMillis :: Maybe Integer
   } deriving Show
 
 defaultGlobals :: Globals
@@ -42,6 +43,7 @@ defaultGlobals =
     , suppressInfos = False
     , suppressErrors = False
     , timestamp = False
+    , solverTimeoutMillis = Just 3000
     }
 
 class UserMsg a where

@@ -15,7 +15,6 @@ import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
-
 -- | Language.Granule.Syntax of patterns
 data Pattern a
   = PVar Span a Id                -- ^ Variable patterns
@@ -46,7 +45,7 @@ instance Freshenable (Pattern a) where
 
   freshen :: Pattern a -> Freshener (Pattern a)
   freshen (PVar s a var) = do
-      var' <- freshVar Value var
+      var' <- freshIdentifierBase Value var
       return $ PVar s a var'
 
   freshen (PBox s a p) = do

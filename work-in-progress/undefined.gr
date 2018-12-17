@@ -1,5 +1,3 @@
-undefined : Int
+--- Undefined can be used to satisfy the type checker during development.
+undefined : forall (a:Type) . a
 undefined = undefined
-
-main : Int
-main = undefined
