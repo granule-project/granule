@@ -9,8 +9,8 @@ fact x =
 factAlt : forall (n : Nat) . (N n) |0..(n+1)| -> Int
 factAlt x =
     case x of
-      |Z| -> 1;
-      |(S m)| -> (natToInt (S m)) * factAlt |m|
+      [Z] -> 1;
+      [(S m)] -> (natToInt (S m)) * factAlt |m|
 
 main : Int
 main = fact |7| + factAlt |(S (S (S (S Z))))|

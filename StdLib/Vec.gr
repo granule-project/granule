@@ -51,13 +51,13 @@ append xs ys =
 --- Return the first item (head) of the vector
 --- NB: non-linear in the vector
 head : forall (a : Type, n : Nat)
-     . (Vec (n + 1) a) [1] -> a
+     . (Vec (n + 1) a) [0..1] -> a
 head xs = case xs of [(Cons x _)] -> x
 
 --- Return the vector with the first item removed
 --- NB: non-linear in the vector
 tail : forall (a : Type, n : Nat)
-     . (Vec (n + 1) a) [1] -> Vec n a
+     . (Vec (n + 1) a) [0..1] -> Vec n a
 tail xs = case xs of [(Cons _ xs)] -> xs
 
 uncons : forall a : Type, n : Nat
