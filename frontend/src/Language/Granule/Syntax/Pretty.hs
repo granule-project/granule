@@ -30,7 +30,7 @@ pretty = prettyL 0
 type Level = Int
 
 parens :: Level -> String -> String
-parens 0 x = x
+parens l x | l <= 0 = x
 parens n x = "(" <> x <> ")"
 
 -- The pretty printer class
@@ -103,10 +103,15 @@ instance Pretty Type where
     prettyL l (TyCon s)      =  prettyL l s
 
     prettyL l (FunTy t1 t2)  =
-       prettyL (l+1) t1 <> " -> " <> prettyL l t2
+      parens l $ case t1 of
+        FunTy{} -> prettyL (l+1) t1 <> " -> " <> prettyL l t2
+        _       ->  prettyL l t1 <> " -> " <> prettyL l t2
 
     prettyL l (Box c t)      =
-       parens l (prettyL (l+1) t <> " |" <> prettyL l c <> "|")
+       parens l (prettyL (l+1) t <> " [" <> prettyL l c <> "]")
+
+    prettyL l (Diamond e t) | e == ["Com"] =
+      parens l ("Session " <> prettyL (l+1) t)
 
     prettyL l (Diamond e t)  =
        parens l (prettyL (l+1) t <> " <" <> prettyL l e <> ">")
