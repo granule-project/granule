@@ -42,6 +42,7 @@ kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
     KType -> modify (\st -> st { tyVarContext = [] })
+    KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> illKindedNEq s KType kind
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
@@ -57,6 +58,7 @@ inferKindOfType' s quantifiedVariables t =
      | internalName c == internalName c' = return $ kConstr c
 
     kFun KType KType = return KType
+    kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
     kFun KType y = illKindedNEq s KType y
     kFun x _     = illKindedNEq s KType x
     kCon conId = do

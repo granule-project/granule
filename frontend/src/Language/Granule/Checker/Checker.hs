@@ -104,6 +104,13 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
             case extend (dataConstructors st) dName (Forall sp tyVars ty) of
               Some ds -> put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
+          KPromote (TyCon k) | internalName k == "Protocol" -> do
+            check ty
+            st <- get
+            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+              Some ds -> put st { dataConstructors = ds }
+              None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
+
           _     -> illKindedNEq sp KType kind
       vs -> halt $ NameClashError (Just sp) $ mconcat
                     ["Type variable(s) ", intercalate ", " $ map (\(i,_) -> "`" <> pretty i <> "`") vs
