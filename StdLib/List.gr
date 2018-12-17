@@ -29,8 +29,8 @@ pushList : forall (k : Nat, a : Type)
          . (List a) |k+1| -> List (a |k+1|)
 pushList xs =
     case xs of
-      |Empty|       -> Empty;
-      |(Next x xs)| -> Next |x| (pushList |xs|)
+      [Empty]       -> Empty;
+      [(Next x xs)] -> Next |x| (pushList |xs|)
 
 pullList : forall (k : Nat, a : Type)
          . List (a |k|) -> (List a) |k|

@@ -19,6 +19,7 @@ example =
   let c <- fork fooServer
   in  fooClient c
 
+
 -- Given a one-shot channel for some sending a value of type 'a'
 -- but which is able to be reused 'n' times, and a vector of
 -- length 'n', then send every element of the vector on the
