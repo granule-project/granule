@@ -19,7 +19,7 @@ data Result a where
 fromResult : forall a : Type . a |0..1| -> Result a -> a
 fromResult |default| result =
     case result of
-      (Failed |s|) -> default;
+      (Failed |_|) -> default;
       (Ok x) -> x
 
 -- Monady interface for Result

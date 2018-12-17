@@ -74,6 +74,12 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
     -- Check whether a unification was caused
     when (definitelyUnifying p) $ do
       (addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
+      --addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+
+    --when (containsNoUnifyingUpToNextBox p) $ do
+    --  addConstraintToPreviousFrame $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
+
+      --(addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
       --x <- freshIdentifierBase "x"
       --addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
 

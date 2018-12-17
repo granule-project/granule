@@ -155,7 +155,7 @@ checkDef defCtxt (Def s defName expr pats tys@(Forall _ foralls ty)) = do
             -- top-level case has ctxtEquals applied in its branches already
             -- TODO: this is a stop gap till dependent case is refactored into function equations
             Case{} -> return ()
-            _      -> ctxtEquals s outGam patternGam
+            _      -> ctxtApprox s outGam patternGam
 
           -- Check linear use
           case checkLinearity patternGam outGam of
@@ -356,7 +356,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            -- invert the substitution and put these things into the context
 
            -- Check local binding use
-           ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
+           ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
            -- Check "global" (to the definition) binding use
            consumedGam <- ctxtPlus s guardGam localGam
