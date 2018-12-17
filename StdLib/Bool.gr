@@ -27,8 +27,8 @@ not x = if x then False else True
 ---     | let y = False in
 ---     | and x |y|
 ---     False
-and : Bool -> Bool |0..1| -> Bool
-and x |y| = if x then y else False
+and : Bool -> Bool [0..1] -> Bool
+and x [y] = if x then y else False
 
 --- Logical and (linear)
 --- NB: consumes both arguments
@@ -45,8 +45,8 @@ and' x y = if x then y else if y then True else False
 ---     | let y = False in
 ---     | or x |y|
 ---     True
-or : Bool -> Bool |0..1| -> Bool
-or x |y| = if x then True else y
+or : Bool -> Bool [0..1] -> Bool
+or x [y] = if x then True else y
 
 --- Inclusive or (linear)
 --- NB: strict in both arguments
@@ -71,8 +71,8 @@ xor x y = if x then not y else y
 ---     | let y = False in
 ---     | impl x |y|
 ---     False
-impl : Bool -> Bool |0..1| -> Bool
-impl x |y| = if x then y else True
+impl : Bool -> Bool [0..1] -> Bool
+impl x [y] = if x then y else True
 
 --- Logical implication (linear)
 --- NB: strict in both arguments
