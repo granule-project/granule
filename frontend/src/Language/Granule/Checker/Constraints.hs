@@ -420,8 +420,9 @@ trivialUnsatisfiableConstraints cs =
     approximatedByC (CNat n) (CNat m) = not $ n == m
     approximatedByC (Level n) (Level m)   = not $ n >= m
     approximatedByC (CFloat n) (CFloat m) = not $ n <= m
-    approximatedByC (CInterval lb1 ub1) (CInterval lb2 ub2) =
-        not $ (approximatedByC lb2 lb1) && (approximatedByC ub1 ub2)
+    -- Nat like intervals
+    approximatedByC (CInterval (CNat lb1) (CNat ub1)) (CInterval (CNat lb2) (CNat ub2)) =
+        not $ (lb2 <= lb1) && (ub1 <= ub2)
     approximatedByC _ _                   = False
 
     -- Attempt to see if one coeffect is trivially not equal to the other
@@ -429,6 +430,6 @@ trivialUnsatisfiableConstraints cs =
     neqC (CNat n) (CNat m) = n /= m
     neqC (Level n) (Level m)   = n /= m
     neqC (CFloat n) (CFloat m) = n /= m
-    neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
-      neqC lb1 lb2 || neqC ub1 ub2
+    --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
+    --   neqC lb1 lb2 || neqC ub1 ub2
     neqC _ _                   = False
