@@ -163,6 +163,8 @@ PAtom :: { Pattern () }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) [] }
   | PatNested                 { $1 }
   | '[' Pat ']'               { PBox (getPosToSpan $1) () $2 }
+  | '|' Pat '|'               { PBox (getPosToSpan $1) () $2 }
+
   | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) () (mkId ",") [$2, $4] }
 
 
@@ -194,6 +196,8 @@ Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
   | TyAtom '[' Coeffect ']'   { Box $3 $1 }
+  | TyAtom '|' Coeffect '|'   { Box $3 $1 }
+
   | TyAtom '<' Effect '>'     { Diamond $3 $1 }
 
 TyJuxt :: { Type }
@@ -342,6 +346,8 @@ Atom :: { Expr () () }
                                 in Val (getPosToSpan $1) () $ NumFloat $ read x }
   | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
   | '[' Expr ']'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
+  | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
+
   | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
   | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5) ()
                                     (App (getPos $1, getPos $3) ()
