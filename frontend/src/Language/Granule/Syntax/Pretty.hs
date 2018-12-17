@@ -155,7 +155,7 @@ instance Pretty DataConstr where
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v
     prettyL l (PWild _ _)      = "_"
-    prettyL l (PBox _ _ p)     = "|" <> prettyL l p <> "|"
+    prettyL l (PBox _ _ p)     = "[" <> prettyL l p <> "]"
     prettyL l (PInt _ _ n)     = show n
     prettyL l (PFloat _ _ n)   = show n
     prettyL l (PConstr _ _ name args)  = intercalate " " (prettyL l name : map (prettyL l) args)
@@ -171,7 +171,7 @@ instance Pretty t => Pretty (Maybe t) where
 instance Pretty v => Pretty (Value v a) where
     prettyL l (Abs _ x t e)  = parens l $ "\\(" <> prettyL l x <> " : " <> prettyL l t
                                <> ") -> " <> prettyL l e
-    prettyL l (Promote _ e)  = "|" <> prettyL l e <> "|"
+    prettyL l (Promote _ e)  = "[" <> prettyL l e <> "]"
     prettyL l (Pure _ e)     = "<" <> prettyL l e <> ">"
     prettyL l (Var _ x)      = prettyL l x
     prettyL l (NumInt n)   = show n
