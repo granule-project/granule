@@ -47,6 +47,8 @@ ctxtFromTypedPattern _ t (PWild s _) = do
     wild <- freshIdentifierBase "wild"
     let elabP = PWild s t
     return ([(Id "_" wild, Linear t)], [], [], elabP)
+    -- return ([], [], [], elabP)
+
 
 ctxtFromTypedPattern _ t (PVar s _ v) = do
     let elabP = PVar s t v
@@ -71,18 +73,18 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
 
     -- Check whether a unification was caused
     when (definitelyUnifying p) $ do
-      x <- freshIdentifierBase "x"
-      addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
+      (addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
+      --x <- freshIdentifierBase "x"
+      --addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
 
-    {- An alternate idea to do with dummy/shadow vars
-      ctxtUnificationCoeffect <-
+      -- An alternate idea to do with dummy/shadow vars
+    {- ctxtUnificationCoeffect <-
         if definitelyUnifying p
         then do
           -- Create a dummy variable that is discharged (1) of type k
-          v <- freshVar "unif"
-          return [(mkId v, Discharged (TyCon $ mkId "()") (COne t))]
-        else return []
-    -}
+          v <- freshIdentifierBase "guardUnif"
+          return [(mkId v, Discharged (TyCon $ mkId "()") (COne coeffTy))]
+        else return [] -}
 
     {- Old approach
          -- addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k

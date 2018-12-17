@@ -151,12 +151,16 @@ checkDef defCtxt (Def s defName expr pats tys@(Forall _ foralls ty)) = do
           -- Check the body in the context given by the pattern matching
           (outGam, _, elaboratedExpr) <- checkExpr defCtxt patternGam Positive True ty' expr
           -- Check that the outgoing context is a subgrading of the incoming
-          ctxtEquals s outGam patternGam
+          case expr of
+            -- top-level case has ctxtEquals applied in its branches already
+            -- TODO: this is a stop gap till dependent case is refactored into function equations
+            Case{} -> return ()
+            _      -> ctxtEquals s outGam patternGam
 
           -- Check linear use
           case checkLinearity patternGam outGam of
-                [] -> return (outGam, elaboratedExpr, elaboratedPats)
-                xs -> illLinearityMismatch s xs
+            [] -> return (outGam, elaboratedExpr, elaboratedPats)
+            xs -> illLinearityMismatch s xs
 
         (tau, []) -> do
           -- No patterns, non function type
@@ -241,7 +245,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
           subst <- combineSubstitutions s subst1 subst2
 
           -- Locally we should have this property (as we are under a binder)
-          ctxtEquals s bindings (gam' `intersectCtxts` bindings)
+          ctxtEquals s (gam' `intersectCtxts` bindings) bindings
 
           let elaborated = Val s ty (Abs tau elaboratedP t elaboratedE)
           return (gam' `subtractCtxt` bindings, subst, elaborated)
@@ -262,7 +266,7 @@ checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
     (argTy, gam2, elaboratedL) <- synthExpr defs gam pol e2
     (gam1, subst, elaboratedR) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
-    gam <- ctxPlus s gam1 gam2
+    gam <- ctxtPlus s gam1 gam2
 
     let elaborated = App s tau elaboratedL elaboratedR
     return (gam, subst, elaborated)
@@ -324,7 +328,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
       (localGam, subst', elaborated_i) <- checkExpr defs checkGam pol False tau' e_i
 
       -- We could do this, but it seems redundant.
-      -- localGam' <- ctxPlus s guardGam localGam
+      -- localGam' <- ctxtPlus s guardGam localGam
       -- ctxtApprox s localGam' checkGam
 
       -- Check linear use in anything Linear
@@ -332,14 +336,16 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-           -- Conclude the implication
-           concludeImplication eVars
+
 
            debugM "Specialised gam" (pretty specialisedGam)
            debugM "Unspecialised gam" (pretty unspecialisedGam)
 
            debugM "pattern gam" (pretty patternGam)
            debugM "local gam" (pretty localGam)
+
+           st <- get
+           debugM "pred so far" (pretty (predicateStack st))
 
            -- The resulting context has the shared part removed
            -- 28/02/2018 - We used to have this
@@ -349,10 +355,15 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            -- Probably don't want to remove specialised things in this way- we want to
            -- invert the substitution and put these things into the context
 
-           debugM "branchctxt" (pretty branchCtxt)
+           -- Check local binding use
+           ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
 
-           -- Locally we should have this property of the binders from the pattern
-           ctxtEquals s patternGam (localGam `intersectCtxts` patternGam)
+           -- Check "global" (to the definition) binding use
+           consumedGam <- ctxtPlus s guardGam localGam
+           ctxtApprox s (consumedGam `subtractCtxt` patternGam) gam
+
+           -- Conclude the implication
+           concludeImplication eVars
 
            return (branchCtxt, subst', (elaborated_pat_i, elaborated_i))
 
@@ -368,9 +379,9 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
-  g <- ctxPlus s branchesGam guardGam
-
+  g <- ctxtPlus s branchesGam guardGam
   debugM "--- Output context for case " (pretty g)
+
   let elaborated = Case s tau elaboratedGuard elaboratedCases
   return (g, concat substs, elaborated)
 
@@ -466,7 +477,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
       concludeImplication eVars
 
-      ctxtEquals s patternGam (localGam `intersectCtxts` patternGam)
+      ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
 
       -- Check linear use in anything Linear
       case checkLinearity patternGam localGam of
@@ -487,7 +498,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
   -- Contract the outgoing context of the guard and the branches (joined)
-  gamNew <- ctxPlus s branchesGam guardGam
+  gamNew <- ctxtPlus s branchesGam guardGam
 
   let elaborated = Case s branchType elaboratedGuard elaboratedCases
   return (branchType, gamNew, elaborated)
@@ -533,9 +544,9 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
         optionalSigEquality s optionalTySig ty1
 
         -- Check grades on binders
-        ctxtEquals s binders (gam2 `intersectCtxts` binders)
+        ctxtEquals s (gam2 `intersectCtxts` binders) binders
 
-        gamNew <- ctxPlus s (gam2 `subtractCtxt` binders) gam1
+        gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
         -- Check linearity of locally bound variables
         case checkLinearity binders gam2 of
             [] ->  do
@@ -590,7 +601,7 @@ synthExpr defs gam pol (App s _ e e') = do
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
          (gam2, subst, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
-         gamNew <- ctxPlus s gam1 gam2
+         gamNew <- ctxtPlus s gam1 gam2
          tau    <- substitute subst tau
 
          let elaborated = App s tau elaboratedL elaboratedR
@@ -633,7 +644,7 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
       [] -> halt $ UnboundVariableError (Just s) $ "Binary operator " <> op
       ops -> do
         returnType <- selectFirstByType t1 t2 ops
-        gamOut <- ctxPlus s gam1 gam2
+        gamOut <- ctxtPlus s gam1 gam2
 
         let elaborated = Binop s returnType op elaboratedL elaboratedR
         return (returnType, gamOut, elaborated)
@@ -668,7 +679,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      (tau, gam'', elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtEquals s bindings (gam'' `intersectCtxts` bindings)
+     ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs tau elaboratedP (Just sig) elaboratedE)
@@ -766,6 +777,9 @@ ctxtApprox s ctxt1 ctxt2 = do
         ctxt' = ctxt2 `intersectCtxts` ctxt1
     zipWithM_ (relateByAssumption s ApproximatedBy) ctxt ctxt'
 
+-- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
+--   and the typical pattern is that `ctxt2` represents a specification
+--   (i.e. input to checking) and `ctxt1` represents actually usage
 ctxtEquals :: (?globals :: Globals) =>
     Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker ()
 ctxtEquals s ctxt1 ctxt2 = do
@@ -939,12 +953,12 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
 
 
 -- Combine two contexts
-ctxPlus :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
+ctxtPlus :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker (Ctxt Assumption)
-ctxPlus _ [] ctxt2 = return ctxt2
-ctxPlus s ((i, v) : ctxt1) ctxt2 = do
+ctxtPlus _ [] ctxt2 = return ctxt2
+ctxtPlus s ((i, v) : ctxt1) ctxt2 = do
   ctxt' <- extCtxt s ctxt2 i v
-  ctxPlus s ctxt1 ctxt'
+  ctxtPlus s ctxt1 ctxt'
 
 -- ExtCtxt the context
 extCtxt :: (?globals :: Globals) => Span -> Ctxt Assumption -> Id -> Assumption

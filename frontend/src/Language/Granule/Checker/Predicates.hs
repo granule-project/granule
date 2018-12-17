@@ -65,18 +65,17 @@ data Neg a = Neg a
 
 instance Pretty (Neg Constraint) where
     prettyL l (Neg (Neq _ c1 c2 _)) =
-      "Trying to prove that " <> prettyL l c1 <> " /= " <> prettyL l c2
+      "Trying to prove that " <> prettyL l c1 <> " == " <> prettyL l c2
 
     prettyL l (Neg (Eq _ c1 c2 _)) =
       "Actual grade `" <> prettyL l c1 <>
       "` is not equal to specified grade `" <> prettyL l c2 <> "`"
 
-    prettyL l (Neg (ApproximatedBy _ c1 c2 (TyCon k))) =
+    prettyL l (Neg (ApproximatedBy _ c1 c2 k)) =
       prettyL l c1 <> " is not approximatable by " <> prettyL l c2 <> " for type " <> pretty k
-      <> if internalName k == "Nat" then " because Nat denotes precise usage." else ""
+      <> if k == (TyCon $ mkId "Nat") then " because Nat denotes precise usage." else ""
 
     prettyL l (Neg (NonZeroPromotableTo _ _ c _)) = "TODO"
-
 
 instance Pretty [Constraint] where
     prettyL l constr =
