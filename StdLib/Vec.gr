@@ -18,27 +18,27 @@ data Vec (n : Nat) t where
 
 -- Length of an indexed vector into an indexed nat
 length : forall (a : Type, n : Nat)
-       . Vec n (a |0|) -> N n
+       . Vec n (a [0]) -> N n
 length xs =
   case xs of
     Nil -> Z;
-    (Cons |_| xs) -> S (length xs)
+    (Cons [_] xs) -> S (length xs)
 
 --- Map function
 map : forall (a : Type, b : Type, n : Nat)
-    . (a -> b) |n| -> Vec n a -> Vec n b
-map |f| ys =
+    . (a -> b) [n] -> Vec n a -> Vec n b
+map [f] ys =
   case ys of
     Nil -> Nil;
-    (Cons x xs) -> Cons (f x) (map |f| xs)
+    (Cons x xs) -> Cons (f x) (map [f] xs)
 
 -- Standard foldr on vectors
 foldr : forall (a : Type, b : Type, n : Nat)
-      . (a -> b -> b) |n| -> b -> Vec n a -> b
-foldr |h| acc xs =
+      . (a -> b -> b) [n] -> b -> Vec n a -> b
+foldr [h] acc xs =
   case xs of
     Nil -> acc;
-    (Cons x xs) -> h x (foldr |h| acc xs)
+    (Cons x xs) -> h x (foldr [h] acc xs)
 
 -- Append two vectors
 append : forall (a : Type, n : Nat, m : Nat)
@@ -51,14 +51,14 @@ append xs ys =
 --- Return the first item (head) of the vector
 --- NB: non-linear in the vector
 head : forall (a : Type, n : Nat)
-     . (Vec (n + 1) a) |1| -> a
-head xs = case xs of |(Cons x _)| -> x
+     . (Vec (n + 1) a) [1] -> a
+head xs = case xs of [(Cons x _)] -> x
 
 --- Return the vector with the first item removed
 --- NB: non-linear in the vector
 tail : forall (a : Type, n : Nat)
-     . (Vec (n + 1) a) |1| -> Vec n a
-tail xs = case xs of |(Cons _ xs)| -> xs
+     . (Vec (n + 1) a) [1] -> Vec n a
+tail xs = case xs of [(Cons _ xs)] -> xs
 
 uncons : forall a : Type, n : Nat
        . Vec (n + 1) a -> (a, Vec n a)
@@ -76,46 +76,46 @@ split n xs =
 
 --- Simple folds
 sum : forall n : Nat . Vec n Int -> Int
-sum = foldr |(\(x : Int) -> \(y : Int) -> x + y)| 0
+sum = foldr [\(x : Int) -> \(y : Int) -> x + y] 0
 
 product : forall n : Nat . Vec n Int -> Int
-product = foldr |(\(x : Int) -> \(y : Int) -> x * y)| 1
+product = foldr [\(x : Int) -> \(y : Int) -> x * y] 1
 
 --- Replicate n x is a vector of length n with x the value of every element
-replicate : forall (n : Nat, a : Type) . N n -> a |n| -> Vec n a
-replicate n |c| = case n of
+replicate : forall (n : Nat, a : Type) . N n -> a [n] -> Vec n a
+replicate n [c] = case n of
     Z -> Nil;
-    (S n) -> Cons c (replicate n |c|)
+    (S n) -> Cons c (replicate n [c])
 
 --- Make a vector of length n with all integers from 0 to n-1
 ---     > range (S (S (S (S Z))))
 ---     Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
 range : forall n : Nat . N n -> Vec n Int
-range n = range' n |0|
+range n = range' n [0]
 
 --- Make a vector of length n with all integers from `start` up until `n + i - 1`
 ---     > range' (S (S (S (S Z)))) |-6|
 ---     Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))
-range' : forall n : Nat . N n -> Int |n| -> Vec n Int
-range' n |i| =
+range' : forall n : Nat . N n -> Int [n] -> Vec n Int
+range' n [i] =
     case n of
     Z -> Nil;
-    (S n) -> Cons i (range' n |(i + 1)|)
+    (S n) -> Cons i (range' n [i + 1])
 
 --- pushVec pushes in non linearity of vector into the elements
 pushVec : forall (k : Nat, n : Nat, a : Type)
-         . (Vec n a) |k+1| -> Vec n (a |k+1|)
+         . (Vec n a) [k+1] -> Vec n (a [k+1])
 pushVec xs =
     case xs of
-      |Nil|         -> Nil;
-      |(Cons x xs)| -> Cons |x| (pushVec |xs|)
+      [Nil]       -> Nil;
+      [Cons x xs] -> Cons [x] (pushVec [xs])
 
 --- pullVec pulls non linearity in elements into a non linearity on the whole vector
 pullVec : forall (k : Nat, n : Nat, a : Type)
-         . Vec n (a |k|) -> (Vec n a) |k|
+         . Vec n (a [k]) -> (Vec n a) [k]
 pullVec xs =
     case xs of
-       Nil -> |Nil|;
-       (Cons |x| xs) ->
+       Nil -> [Nil];
+       (Cons [x] xs) ->
          case pullVec xs of
-          |ys| -> |(Cons x ys)|
+          [ys] -> [Cons x ys]
