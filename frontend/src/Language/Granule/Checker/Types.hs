@@ -248,6 +248,17 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
         Nothing ->
           return (False, [])
 
+
+-- Duality is idempotent (left)
+equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d') (TyApp (TyCon d) t)) t' sp
+  | internalName d == "Dual" && internalName d' == "Dual" =
+  equalTypesRelatedCoeffects s rel uS t t' sp
+
+-- Duality is idempotent (right)
+equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d') (TyApp (TyCon d) t')) sp
+  | internalName d == "Dual" && internalName d' == "Dual" =
+  equalTypesRelatedCoeffects s rel uS t t' sp
+
 equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
@@ -303,15 +314,6 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
 
--- Duality is idempotent (left)
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d') (TyApp (TyCon d) t)) t' sp
-  | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffects s rel uS t t' sp
-
--- Duality is idempotent (right)
-equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d') (TyApp (TyCon d) t')) sp
-  | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffects s rel uS t t' sp
 
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d) t) t' sp

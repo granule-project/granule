@@ -159,8 +159,8 @@ ctxtFromTypedPattern s t@(TyVar v) p = do
       return ([], [], [], elabP)
 
     p          -> halt $ PatternTypingError (Just s)
-                   $  "Cannot unify pattern " <> pretty p
-                   <> "with type variable " <> pretty v
+                   $  "Cannot unify pattern `" <> pretty p
+                   <> "` with type `" <> pretty v <> ""
 
 ctxtFromTypedPattern s t p = do
   st <- get

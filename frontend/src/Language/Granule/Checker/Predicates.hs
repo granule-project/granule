@@ -71,6 +71,9 @@ instance Pretty (Neg Constraint) where
       "Actual grade `" <> prettyL l c1 <>
       "` is not equal to specified grade `" <> prettyL l c2 <> "`"
 
+    prettyL l (Neg (ApproximatedBy _ c1 c2 (TyCon k))) | internalName k == "Level" =
+      prettyL l c2 <> " value cannot be moved to level " <> prettyL l c1
+
     prettyL l (Neg (ApproximatedBy _ c1 c2 k)) =
       prettyL l c1 <> " is not approximatable by " <> prettyL l c2 <> " for type " <> pretty k
       <> if k == (TyCon $ mkId "Nat") then " because Nat denotes precise usage." else ""

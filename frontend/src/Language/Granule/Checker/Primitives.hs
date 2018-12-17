@@ -134,6 +134,8 @@ builtins =
                     (Diamond ["Com"]
                        (Box (CVar $ mkId "n")
                          ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
+  , (mkId "unpack", Forall nullSpan [(mkId "s", protocol)]
+                            (FunTy ((con "Chan") .@ (var "s")) (var "s")))
   ]
 
 binaryOperators :: [(Operator, Type)]

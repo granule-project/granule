@@ -27,16 +27,16 @@ add n m = case n of
   S n' -> S (add n' m)
 
 --- Right-moded multiplication
-mult : forall (n : Nat, m : Nat) . N n -> (N m) |n| -> N (n * m)
-mult n |m| = case n of
+mult : forall (n : Nat, m : Nat) . N n -> (N m) [n] -> N (n * m)
+mult n [m] = case n of
   Z    -> Z;
-  S n' -> add m (mult n' |m|)
+  S n' -> add m (mult n' [m])
 
 --- Left-moded multiplication
-mult_r : forall (n : Nat, m : Nat) . (N n) |m| -> (N m) -> N (n * m)
-mult_r |n| m = case m of
+mult_r : forall (n : Nat, m : Nat) . (N n) [m] -> (N m) -> N (n * m)
+mult_r [n] m = case m of
   Z    -> Z;
-  S m' -> add n (mult_r |n| m')
+  S m' -> add n (mult_r [n] m')
 
 --- Divide by two
 div2 : forall (n : Nat) . N (2 * n) -> N n

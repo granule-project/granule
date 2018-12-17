@@ -1,5 +1,7 @@
 {
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Language.Granule.Syntax.Parser where
 
 import Language.Granule.Syntax.Identifiers
@@ -106,7 +108,7 @@ Def :: { Def () () }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
-      { DataDecl (getPos $1, snd $ getSpan (last $6)) (mkId $ constrString $2) $3 $4 $6 }
+      { DataDecl (getPos $1, lastSpan' $6) (mkId $ constrString $2) $3 $4 $6 }
 
 Sig ::  { (Id, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (mkId $ symString $1, $3, getPos $1) }
@@ -146,6 +148,8 @@ PAtoms :: { [Pattern ()] }
 
 Pat :: { Pattern () }
   : PAtom                     { $1 }
+  | CONSTR PAtoms             { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) $2 }
+
 
 PatNested :: { Pattern () }
 PatNested
@@ -158,7 +162,9 @@ PAtom :: { Pattern () }
   | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) () $ read x }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) [] }
   | PatNested                 { $1 }
+  | '[' Pat ']'               { PBox (getPosToSpan $1) () $2 }
   | '|' Pat '|'               { PBox (getPosToSpan $1) () $2 }
+
   | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) () (mkId ",") [$2, $4] }
 
 
@@ -189,7 +195,9 @@ Kind :: { Kind }
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
+  | TyAtom '[' Coeffect ']'   { Box $3 $1 }
   | TyAtom '|' Coeffect '|'   { Box $3 $1 }
+
   | TyAtom '<' Effect '>'     { Diamond $3 $1 }
 
 TyJuxt :: { Type }
@@ -265,7 +273,7 @@ Expr :: { Expr () () }
         in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3 }
 
   | case Expr of Cases
-  { Case (getPos $1, getEnd . snd . last $ $4) () $2 $4 }
+  { Case (getPos $1, lastSpan $4) () $2 $4 }
 
   | if Expr then Expr else Expr
   { Case (getPos $1, getEnd $6) () $2 [(PConstr (getPosToSpan $3) () (mkId "True") [], $4),
@@ -337,7 +345,9 @@ Atom :: { Expr () () }
   | FLOAT                     { let (TokenFloat _ x) = $1
                                 in Val (getPosToSpan $1) () $ NumFloat $ read x }
   | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
+  | '[' Expr ']'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
   | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
+
   | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
   | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5) ()
                                     (App (getPos $1, getPos $3) ()
@@ -395,6 +405,12 @@ parseDefs' input = do
         clashes = names \\ nub names
         names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
                 <> (`map` defs) (\(Def _ name _ _ _) -> name)
+
+lastSpan [] = fst $ nullSpan
+lastSpan xs = getEnd . snd . last $ xs
+
+lastSpan' [] = fst $ nullSpan
+lastSpan' xs = snd $ getSpan (last xs)
 
 myReadFloat :: String -> Rational
 myReadFloat str =

@@ -30,7 +30,7 @@ pretty = prettyL 0
 type Level = Int
 
 parens :: Level -> String -> String
-parens 0 x = x
+parens l x | l <= 0 = x
 parens n x = "(" <> x <> ")"
 
 -- The pretty printer class
@@ -103,10 +103,15 @@ instance Pretty Type where
     prettyL l (TyCon s)      =  prettyL l s
 
     prettyL l (FunTy t1 t2)  =
-       prettyL (l+1) t1 <> " -> " <> prettyL l t2
+      parens l $ case t1 of
+        FunTy{} -> prettyL (l+1) t1 <> " -> " <> prettyL l t2
+        _       ->  prettyL l t1 <> " -> " <> prettyL l t2
 
     prettyL l (Box c t)      =
-       parens l (prettyL (l+1) t <> " |" <> prettyL l c <> "|")
+       parens l (prettyL (l+1) t <> " [" <> prettyL l c <> "]")
+
+    prettyL l (Diamond e t) | e == ["Com"] =
+      parens l ("Session " <> prettyL (l+1) t)
 
     prettyL l (Diamond e t)  =
        parens l (prettyL (l+1) t <> " <" <> prettyL l e <> ">")
@@ -114,10 +119,10 @@ instance Pretty Type where
     prettyL l (TyVar v)      = prettyL l v
 
     prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
-      parens l (prettyL l t1 <> ", " <> prettyL l t2)
+      parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
     prettyL l (TyApp t1 t2)  =
-      parens l (prettyL (l+1) t1 <> " " <> prettyL l t2)
+      parens l (prettyL (l-1) t1 <> " " <> prettyL (l+1) t2)
 
     prettyL l (TyInt n)      = show n
 
@@ -150,7 +155,7 @@ instance Pretty DataConstr where
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v
     prettyL l (PWild _ _)      = "_"
-    prettyL l (PBox _ _ p)     = "|" <> prettyL l p <> "|"
+    prettyL l (PBox _ _ p)     = "[" <> prettyL l p <> "]"
     prettyL l (PInt _ _ n)     = show n
     prettyL l (PFloat _ _ n)   = show n
     prettyL l (PConstr _ _ name args)  = intercalate " " (prettyL l name : map (prettyL l) args)
@@ -166,7 +171,7 @@ instance Pretty t => Pretty (Maybe t) where
 instance Pretty v => Pretty (Value v a) where
     prettyL l (Abs _ x t e)  = parens l $ "\\(" <> prettyL l x <> " : " <> prettyL l t
                                <> ") -> " <> prettyL l e
-    prettyL l (Promote _ e)  = "|" <> prettyL l e <> "|"
+    prettyL l (Promote _ e)  = "[" <> prettyL l e <> "]"
     prettyL l (Pure _ e)     = "<" <> prettyL l e <> ">"
     prettyL l (Var _ x)      = prettyL l x
     prettyL l (NumInt n)   = show n

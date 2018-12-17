@@ -104,6 +104,13 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
             case extend (dataConstructors st) dName (Forall sp tyVars ty) of
               Some ds -> put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
+          KPromote (TyCon k) | internalName k == "Protocol" -> do
+            check ty
+            st <- get
+            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+              Some ds -> put st { dataConstructors = ds }
+              None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
+
           _     -> illKindedNEq sp KType kind
       vs -> halt $ NameClashError (Just sp) $ mconcat
                     ["Type variable(s) ", intercalate ", " $ map (\(i,_) -> "`" <> pretty i <> "`") vs
@@ -352,20 +359,28 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
            -- But we want promotion to invovlve the guard to avoid leaks
            let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
+
+           branchCtxt' <- ctxtPlus s branchCtxt  (justLinear $ (gam `intersectCtxts` specialisedGam) `intersectCtxts` localGam)
+
            -- Probably don't want to remove specialised things in this way- we want to
            -- invert the substitution and put these things into the context
 
            -- Check local binding use
            ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
+
+
            -- Check "global" (to the definition) binding use
            consumedGam <- ctxtPlus s guardGam localGam
+           debugM "** gam = " (pretty gam)
+           debugM "** c sub p = " (pretty (consumedGam `subtractCtxt` patternGam))
+
            ctxtApprox s (consumedGam `subtractCtxt` patternGam) gam
 
            -- Conclude the implication
            concludeImplication eVars
 
-           return (branchCtxt, subst', (elaborated_pat_i, elaborated_i))
+           return (branchCtxt', subst', (elaborated_pat_i, elaborated_i))
 
         -- Anything that was bound in the pattern but not used correctly
         xs -> illLinearityMismatch s xs
@@ -769,13 +784,50 @@ solveConstraints predicate s defName = do
       env' <- justCoeffectTypesConverted implicitUniversalMadeExplicit
       return $ stripQuantifiers env'
 
-
+{-
 ctxtApprox :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
   -> MaybeT Checker ()
 ctxtApprox s ctxt1 ctxt2 = do
     let ctxt  = ctxt1 `intersectCtxts` ctxt2
         ctxt' = ctxt2 `intersectCtxts` ctxt1
     zipWithM_ (relateByAssumption s ApproximatedBy) ctxt ctxt'
+-}
+
+-- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
+--   and the typical pattern is that `ctxt2` represents a specification
+--   (i.e. input to checking) and `ctxt1` represents actually usage
+ctxtApprox :: (?globals :: Globals) =>
+    Span -> Ctxt Assumption -> Ctxt Assumption -> MaybeT Checker ()
+ctxtApprox s ctxt1 ctxt2 = do
+  -- intersection contains those ids from ctxt1 which appears in ctxt2
+  intersection <-
+    -- For everything in the right context
+    -- (which should come as an input to checking)
+    forM ctxt2 $ \(id, ass2) ->
+      -- See if it appears in the left context...
+      case lookup id ctxt1 of
+        -- ... if so equate
+        Just ass1 -> do
+          relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
+          return id
+        -- ... if not check to see if the missing variable is linear
+        Nothing   ->
+           case ass2 of
+             -- Linear gets instantly reported
+             Linear t -> illLinearityMismatch s [LinearNotUsed id]
+             -- Else, this could be due to weakening so see if this is allowed
+             Discharged t c -> do
+               kind <- inferCoeffectType s c
+               relateByAssumption s ApproximatedBy (id, Discharged t (CZero kind)) (id, ass2)
+               return id
+  -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
+  -- then we have an issue!
+  forM_ ctxt1 $ \(id, ass1) ->
+    if (id `elem` intersection)
+      then return ()
+      else halt $ UnboundVariableError (Just s) $
+                "Variable `" <> pretty id <> "` was used but is not bound here"
+
 
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
@@ -998,3 +1050,7 @@ extCtxt s ctxt var (Discharged t c) = do
 fold1M :: Monad m => (a -> a -> m a) -> [a] -> m a
 fold1M _ []     = error "Must have at least one case"
 fold1M f (x:xs) = foldM f x xs
+
+justLinear [] = []
+justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
+justLinear ((x, _) : xs) = justLinear xs
