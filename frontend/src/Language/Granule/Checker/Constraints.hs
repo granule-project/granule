@@ -28,8 +28,6 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
--- import Debug.Trace
-
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
 compileQuant ForallQ   = universal
@@ -382,9 +380,8 @@ approximatedByOrEqualConstraint (SSet s) (SSet t) =
 approximatedByOrEqualConstraint SPoint SPoint = true
 
 -- Perform approximation when nat-like grades are involved
-approximatedByOrEqualConstraint
-    (SInterval (natLike -> Just lb1) (natLike -> Just ub1))
-    (SInterval (natLike -> Just lb2) (natLike -> Just ub2)) =
+approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)
+    | natLike lb1 && natLike lb2 && natLike ub1 && natLike ub2 =
       (lb2 .<= lb1) &&& (ub1 .<= ub2)
 
 -- if intervals are not nat-like then use the notion of approximation
