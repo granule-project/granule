@@ -7,7 +7,6 @@ import Control.Monad.State.Strict
 
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Language.Granule.Checker.Coeffects
-import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
@@ -176,23 +175,23 @@ discharge k c (v, Discharged t c') =
     Just flattenOp -> (v, Discharged t (flattenOp c c'))
     Nothing        -> (v, Discharged t c')
 
-ctxtFromTypedPatterns ::
-  (?globals :: Globals, Show t) => Span -> Type -> [Pattern t] -> MaybeT Checker (Ctxt Assumption, Type, [Pattern Type])
+ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
+  => Span
+  -> Type
+  -> [Pattern t]
+  -> MaybeT Checker (Ctxt Assumption, Type, [Id], Substitution, [Pattern Type])
 ctxtFromTypedPatterns sp ty [] = do
   debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
-  return ([], ty, [])
+  return ([], ty, [], [], [])
 
 ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   -- TODO: when we have dependent matching at the function clause
   -- level, we will need to pay attention to the bound variables here
-  (localGam, _, _, elabP) <- ctxtFromTypedPattern s t1 pat
-  pIrrefutable <- isIrrefutable s t1 pat
+  (localGam, eVars, subst, elabP) <- ctxtFromTypedPattern s t1 pat
 
-  if pIrrefutable then do
-    (localGam', ty, elabPs) <- ctxtFromTypedPatterns s t2 pats
-    return (localGam <> localGam', ty, elabP : elabPs)
-
-  else refutablePattern s pat
+  (localGam', ty, eVars', substs, elabPs) <- ctxtFromTypedPatterns s t2 pats
+  substs' <- combineSubstitutions s subst substs
+  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs)
 
 ctxtFromTypedPatterns s ty ps = do
   -- This means we have patterns left over, but the type is not a

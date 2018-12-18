@@ -44,7 +44,8 @@ import Language.Granule.ReplParser
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]
 type FreeVarGen = Int
-type REPLStateIO a  = StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) (Ex.ExceptT ReplError IO) a
+type REPLStateIO a  =
+  StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) (Ex.ExceptT ReplError IO) a
 
 instance MonadException m => MonadException (StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
@@ -111,7 +112,7 @@ readToQueue pth = do
 
 
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
-loadInQueue def@(Def _ id exp _ _) = do
+loadInQueue def@(Def _ id _ _) = do
   (fvg,rp,adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
@@ -123,7 +124,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -143,7 +144,8 @@ buildAST t m = let v = M.lookup t m in
                      case lookup (mkId t) Primitives.builtins of
                        Nothing -> []
                        -- Create a trivial definition (x = x) with the right type
-                       Just ty -> [Def nullSpan (mkId t) (Val nullSpan () (Var () (mkId t))) [] ty]
+                       Just ty -> [Def nullSpan (mkId t) [] ty]
+                       --   (Val nullSpan () (Var () (mkId t)))
                    Just (def,lid) -> case lid of
                                       []  ->  [def]
                                       ids -> (buildDef ids <> [def])
@@ -180,7 +182,7 @@ printType trm m = let v = M.lookup trm m in
                         case lookup (mkId trm) Primitives.builtins of
                           Nothing -> "Unknown"
                           Just ty -> trm <> " : " <> pretty ty
-                      Just (def@(Def _ id _ _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
+                      Just (def@(Def _ id _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
 
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
@@ -209,7 +211,7 @@ buildCheckerState dd = do
 
 buildCtxtTS :: (?globals::Globals) => [Def () ()] -> Ctxt TypeScheme
 buildCtxtTS [] = []
-buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
+buildCtxtTS ((x@(Def _ id _ ts)):ast) =  (id,ts) : buildCtxtTS ast
 
 buildCtxtTSDD :: (?globals::Globals) => [DataDecl] -> Ctxt TypeScheme
 buildCtxtTSDD [] = []
@@ -229,7 +231,8 @@ buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
-buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv))) ex [] ts
+buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv)))
+   [Equation nullSpan () [] ex] ts
 
 
 getConfigFile :: IO String

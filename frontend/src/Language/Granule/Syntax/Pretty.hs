@@ -129,15 +129,19 @@ instance Pretty Type where
     prettyL l (TyInfix op t1 t2) =
       parens l (prettyL (l+1) t1 <> " " <> op <> " " <>  prettyL (l+1) t2)
 
-instance Pretty (Value v a) => Pretty (AST v a) where
+instance (Pretty (Value v a), Pretty v) => Pretty (AST v a) where
     prettyL l (AST dataDecls defs) = pretty' dataDecls <> "\n\n" <> pretty' defs
       where
         pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty
 
-instance Pretty (Value v a) => Pretty (Def v a) where
-    prettyL l (Def _ v e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
-                              prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
+instance (Pretty (Value v a), Pretty v) => Pretty (Def v a) where
+    prettyL l (Def _ v eqs t) =
+        prettyL l v <> " : " <> prettyL l t <> "\n"
+                    <> intercalate "\n" (map prettyEq eqs)
+      where
+        prettyEq (Equation _ _ ps e) =
+          prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
 
 instance Pretty DataDecl where
     prettyL l (DataDecl _ tyCon tyVars kind dataConstrs) =

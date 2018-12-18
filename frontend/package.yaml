@@ -42,7 +42,6 @@ library:
   - Language.Granule.Checker.Primitives
   - Language.Granule.Checker.Substitutions
   - Language.Granule.Checker.Types
-  - Language.Granule.Syntax.Desugar
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers

@@ -49,7 +49,7 @@ check (AST dataDecls defs) = do
       -- the purposes of (mutually)recursive calls).
       let checkKinds = mapM kindCheckDef defs
       -- Build a computation which checks all the defs (in order)...
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
+      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
       let checkedDefs = do
             status <- runMaybeT checkKinds
             case status of
@@ -143,56 +143,76 @@ checkDef :: (?globals :: Globals )
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Maybe (Def () Type))
-checkDef defCtxt (Def s defName expr pats tys@(Forall _ foralls ty)) = do
+checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
-     result <- runMaybeT $ do
-      -- Add explicit type variable quantifiers to the type variable context
-      modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+    results <-
+       -- _ :: Checker [Maybe (Equation...)]
+       forM equations $ \equation -> runMaybeT $ do
+         elaboratedEq <- checkEquation defCtxt defName equation tys
 
-      (_ctxt, elaboratedExpr, elaboratedPats) <- case (ty, pats) of
-        (FunTy _ _, ps@(_:_)) -> do
+         -- Solve the generated constraints
+         checkerState <- get
+         let predStack = predicateStack checkerState
+         debugM "Solver predicate" $ pretty (Conj predStack)
+         solveConstraints (Conj predStack) s defName
 
-          -- Type the pattern matching
-          (patternGam, ty', elaboratedPats) <- ctxtFromTypedPatterns s ty ps
+         -- Erase the solver predicate between equations
+         modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
 
-          -- Check the body in the context given by the pattern matching
-          (outGam, _, elaboratedExpr) <- checkExpr defCtxt patternGam Positive True ty' expr
-          -- Check that the outgoing context is a subgrading of the incoming
-          case expr of
-            -- top-level case has ctxtEquals applied in its branches already
-            -- TODO: this is a stop gap till dependent case is refactored into function equations
-            Case{} -> return ()
-            _      -> ctxtApprox s outGam patternGam
+         return elaboratedEq
 
-          -- Check linear use
-          case checkLinearity patternGam outGam of
-            [] -> return (outGam, elaboratedExpr, elaboratedPats)
-            xs -> illLinearityMismatch s xs
+    case sequence results of
+        Just elaboratedEquations ->
+           return (Just $ Def s defName elaboratedEquations tys)
 
-        (tau, []) -> do
-          -- No patterns, non function type
-          (_, _, elaboratedExpr) <- checkExpr defCtxt [] Positive True tau expr
-          return ([], elaboratedExpr, [])
+        Nothing ->
+           return Nothing
 
-        _         -> halt $ GenericError (Just s) "Expecting a function type"
+checkEquation :: (?globals :: Globals) =>
+     Ctxt TypeScheme -- context of top-level definitions
+  -> Id              -- Name of the definition
+  -> Equation () ()  -- Equation
+  -> TypeScheme      -- Type scheme
+  -> MaybeT Checker (Equation () Type)
 
-      -- Use an SMT solver to solve the generated constraints
-      checkerState <- get
-      let predStack = predicateStack checkerState
-      debugM "Solver predicate" $ pretty (Conj predStack)
-      solveConstraints (Conj predStack) s defName
+checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
 
-      return (elaboratedExpr, elaboratedPats)
+  -- Freshen the type context
+  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
-     -- Erase the solver predicate between definitions
-     modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
+  -- Create conjunct to capture the pattern constraints
+  newConjunct
 
-     case result of
-       Just (elaboratedExpr, elaboratedPats) ->
-          return (Just $ Def s defName elaboratedExpr elaboratedPats tys)
+  -- Build the binding context for the branch pattern
+  (patternGam, tau, eVars, subst, elaborated_pats) <- ctxtFromTypedPatterns s ty pats
 
-       Nothing ->
-          return Nothing
+  -- Create conjunct to capture the body expression constraints
+  newConjunct
+
+  -- Specialise the return type by the pattern generated substitution
+  tau' <- substitute subst tau
+
+  -- Check the body
+  (localGam, subst', elaboratedExpr) <-
+       checkExpr defCtxt patternGam Positive True tau' expr
+
+  case checkLinearity patternGam localGam of
+    [] -> do
+      -- Check that our consumption context approximations the binding
+      ctxtApprox s localGam patternGam
+
+      -- Conclude the implication
+      concludeImplication eVars
+
+      -- Create elaborated equation
+      subst'' <- combineSubstitutions s subst subst'
+      ty' <- substitute subst'' ty
+      let elab = Equation s ty' elaborated_pats elaboratedExpr
+      return $ elab
+
+    -- Anything that was bound in the pattern but not used up
+    xs -> illLinearityMismatch s xs
+
 
 data Polarity = Positive | Negative deriving Show
 

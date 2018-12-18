@@ -5,8 +5,8 @@
 
 module Language.Granule.Eval where
 
+import Language.Granule.Desugar
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Desugar
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -321,7 +321,7 @@ builtIns =
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var e [] _ : defs) = do
+evalDefs ctxt (Def _ var [Equation _ _ [] e] _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Some ctxt -> evalDefs ctxt defs
@@ -335,7 +335,10 @@ class RuntimeRep t where
   toRuntimeRep :: t () () -> t (Runtime ()) ()
 
 instance RuntimeRep Def where
-  toRuntimeRep (Def s i e ps tys) = Def s i (toRuntimeRep e) ps tys
+  toRuntimeRep (Def s i eqs tys) = Def s i (map toRuntimeRep eqs) tys
+
+instance RuntimeRep Equation where
+  toRuntimeRep (Equation s a ps e) = Equation s a ps (toRuntimeRep e)
 
 instance RuntimeRep Expr where
   toRuntimeRep (Val s a v) = Val s a (toRuntimeRep v)

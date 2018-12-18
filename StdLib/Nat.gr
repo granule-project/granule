@@ -14,32 +14,27 @@ data N (n : Nat) where
 
 --- Convert an indexed natural number to an untyped int
 natToInt : forall (n : Nat) . N n -> Int
-natToInt x = case x of
-  Z   -> 0;
-  S m -> 1 + natToInt m
+natToInt Z = 0;
+natToInt (S m) = 1 + natToInt m
 
 --- # Arithmetic operations
 
 --- Addition
 add : forall (n : Nat, m : Nat) . N n -> N m -> N (n + m)
-add n m = case n of
-  Z    -> m;
-  S n' -> S (add n' m)
+add Z m = m;
+add (S n') m = S (add n' m)
 
 --- Right-moded multiplication
 mult : forall (n : Nat, m : Nat) . N n -> (N m) [n] -> N (n * m)
-mult n [m] = case n of
-  Z    -> Z;
-  S n' -> add m (mult n' [m])
+mult Z [m] = Z;
+mult (S n') [m] = add m (mult n' [m])
 
 --- Left-moded multiplication
 mult_r : forall (n : Nat, m : Nat) . (N n) [m] -> (N m) -> N (n * m)
-mult_r [n] m = case m of
-  Z    -> Z;
-  S m' -> add n (mult_r [n] m')
+mult_r [n] Z = Z;
+mult_r [n] (S m') = add n (mult_r [n] m')
 
 --- Divide by two
 div2 : forall (n : Nat) . N (2 * n) -> N n
-div2 x = case x of
-  Z   -> Z;
-  S x -> (case x of S x -> S (div2 x))
+div2 Z = Z;
+div2 (S (S x)) = S (div2 x)

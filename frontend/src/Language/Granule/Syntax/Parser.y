@@ -100,22 +100,38 @@ NL : nl NL                    { }
    | nl                       { }
 
 Def :: { Def () () }
-  : Sig NL Binding
-      { if (fst3 $1 == fst3 $3)
-        then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
-        else error $ "Signature for `" <> sourceName (fst3 $3) <> "` does not match the \
-                                      \signature head `" <> sourceName (fst3 $1) <> "`"  }
+  : Sig NL Bindings
+      { let (id, bindings) = $3
+        in if (fst3 $1 == id) then
+             if length bindings > 0 then
+               Def (thd3 $1, snd $ getSpan $ last bindings) (mkId id) bindings (snd3 $1)
+             else
+               error $ "Missing function equations for " <> fst3 $1
+            else
+              error $ "Name for equation `" <> id <> "` does not match the \
+                                            \signature head `" <> fst3 $1 <> "`"  }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
       { DataDecl (getPos $1, lastSpan' $6) (mkId $ constrString $2) $3 $4 $6 }
 
-Sig ::  { (Id, TypeScheme, Pos) }
-  : VAR ':' TypeScheme        { (mkId $ symString $1, $3, getPos $1) }
+Sig ::  { (String, TypeScheme, Pos) }
+  : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
 
-Binding :: { (Id, Expr () (), [Pattern ()]) }
-  : VAR '=' Expr              { (mkId $ symString $1, $3, []) }
-  | VAR Pats '=' Expr         { (mkId $ symString $1, $4, $2) }
+Bindings :: { (String, [Equation () ()]) }
+Bindings :
+  Binding ';' NL Bindings { case $1 of
+                           (v, bind) ->
+                              case $4 of
+                                (v', binds) ->
+                                  if (v == v')
+                                    then (v, (bind : binds))
+                                    else error $ "Identifier " <> show v' <> " in group of equations does not match " <> show v }
+  | Binding       { case $1 of (v, bind) -> (v, [bind]) }
+
+Binding :: { (String, Equation () ()) }
+  : VAR '=' Expr              { (symString $1, Equation (getPos $1, getEnd $3) () [] $3) }
+  | VAR Pats '=' Expr         { (symString $1, Equation (getPos $1, getEnd $4) () $2 $4) }
 
 DataConstrs :: { [DataConstr] }
   : DataConstr DataConstrNext { $1 : $2 }
@@ -148,8 +164,10 @@ PAtoms :: { [Pattern ()] }
 
 Pat :: { Pattern () }
   : PAtom                     { $1 }
-  | CONSTR PAtoms             { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) $2 }
 
+PatUnderBox :: { Pattern () }
+  : CONSTR PAtoms    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) $2 }
+  | PAtom            { $1 }
 
 PatNested :: { Pattern () }
 PatNested
@@ -162,8 +180,8 @@ PAtom :: { Pattern () }
   | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) () $ read x }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) [] }
   | PatNested                 { $1 }
-  | '[' Pat ']'               { PBox (getPosToSpan $1) () $2 }
-  | '|' Pat '|'               { PBox (getPosToSpan $1) () $2 }
+  | '[' PatUnderBox ']'               { PBox (getPosToSpan $1) () $2 }
+  | '|' PatUnderBox '|'               { PBox (getPosToSpan $1) () $2 }
 
   | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) () (mkId ",") [$2, $4] }
 
@@ -381,6 +399,7 @@ parseDefs' input = do
       parseDefs' src
     let allDefs = merge $ defs : importedDefs
     checkNameClashes allDefs
+    checkMatchingNumberOfArgs allDefs
     return allDefs
 
   where
@@ -397,6 +416,21 @@ parseDefs' input = do
 
     replace from to = map (\c -> if c == from then to else c)
 
+    checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
+      mapM checkMatchingNumberOfArgs' defs
+
+    checkMatchingNumberOfArgs' (Def _ name eqs _) =
+      if length eqs >= 1
+      then if (and $ map (\x -> x == head lengths) lengths)
+            then return ()
+            else
+              die $ "Syntax error: Number of arguments differs in the equations of "
+                  <> sourceName name
+      else return ()
+        where
+          lengths = map (\(Equation _ _ pats _) -> length pats) eqs
+
+
     checkNameClashes ds@(AST dataDecls defs) =
         if null clashes
 	        then return ()
@@ -404,7 +438,7 @@ parseDefs' input = do
       where
         clashes = names \\ nub names
         names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
-                <> (`map` defs) (\(Def _ name _ _ _) -> name)
+                <> (`map` defs) (\(Def _ name _ _) -> name)
 
 lastSpan [] = fst $ nullSpan
 lastSpan xs = getEnd . snd . last $ xs

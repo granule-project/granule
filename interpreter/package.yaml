@@ -19,8 +19,10 @@ library:
   #     ghc-options: -O3 -w
   exposed-modules:
   - Language.Granule.Eval
+  - Language.Granule.Desugar
   dependencies:
   - granule-frontend
+  - mtl >=2.2.1
   - text
 
 executables:
