@@ -21,11 +21,12 @@ choice x y = OneOf x y
 -- export it, for this to hold.) NB: Polymorphism allows further nonlinearity to
 -- be encapsulated inside of the `a` and `b`. In other words, `[0..1]` is the
 -- minimum amount of linearity required. Example:
-
-choiceExample : forall a : Type, b : Type
-  . a [0..2] -> b [0..1] -> Choice (a [1..2]) b
-choiceExample aBox bBox = choice (unflatten aBox) bBox
--- TODO: don't export this example
+--
+-- ```granule
+-- choiceExample : forall a : Type, b : Type
+--   . a [0..2] -> b [0..1] -> Choice (a [1..2]) b
+-- choiceExample aBox bBox = choice (unflatten aBox) bBox
+-- ```
 
 choose1 : forall a : Type, b : Type . Choice a b -> a
 choose1 (OneOf [x] [_]) = x
