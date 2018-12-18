@@ -25,16 +25,13 @@ import Language.Granule.Syntax.Pattern
 -- | where `v` is the type of values and `a` annotations
 data AST v a = AST [DataDecl] [Def v a]
 
-
-deriving instance (Show (Value v a), Show a) => Show (AST v a)
-deriving instance Functor (AST v)
+deriving instance (Show (Def v a), Show a) => Show (AST v a)
 
 -- | Expression definitions
 data Def v a = Def Span Id (Expr v a) [Pattern a] TypeScheme
   deriving Generic
+deriving instance (Show a, Show v) => Show (Def v a)
 
-deriving instance Functor (Def v)
-deriving instance (Show (Value v a), Show a) => Show (Def v a)
 instance FirstParameter (Def v a) Span
 
 -- | Data type declarations
@@ -72,7 +69,7 @@ foo x = (\(x0 : Int) -> x0 * 2) x
 @
 
 >>> runFreshener $ Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) () (Val ((2,10),(2,25)) () (Abs () (PVar ((2,12),(2,12)) () (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) () "*" (Val ((2,24),(2,24)) () (Var () (Id "x" "x0"))) (Val ((2,26),(2,26)) () (NumInt 2))))) (Val ((2,29),(2,29)) () (Var () (Id "x" "x")))) [PVar ((2,5),(2,5)) () (Id "x" "x")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
-Def ((1,1),(2,29)) (Id "foo" "foo") (App ((2,10),(2,29)) () (Val ((2,10),(2,25)) () (Abs () (PVar ((2,12),(2,12)) () (Id "x" "x_1")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) () "*" (Val ((2,24),(2,24)) () (Var () (Id "x" "x_1"))) (Val ((2,26),(2,26)) () (NumInt 2))))) (Val ((2,29),(2,29)) () (Var () (Id "x" "x_0")))) [PVar ((2,5),(2,5)) () (Id "x" "x_0")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
+Def ((1,1),(2,29)) (Id "foo" "foo") (AppF ((2,10),(2,29)) () (ValF ((2,10),(2,25)) () (AbsF () (PVar ((2,12),(2,12)) () (Id "x" "x_1")) (Just (TyCon (Id "Int" "Int"))) (BinopF ((2,25),(2,25)) () "*" (ValF ((2,24),(2,24)) () (VarF () (Id "x" "x_1"))) (ValF ((2,26),(2,26)) () (NumIntF 2))))) (ValF ((2,29),(2,29)) () (VarF () (Id "x" "x_0")))) [PVar ((2,5),(2,5)) () (Id "x" "x_0")] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
 -}
 instance Freshenable (Def v a) where
   freshen (Def s var e ps t) = do
