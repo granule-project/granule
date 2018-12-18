@@ -187,7 +187,7 @@ instance Pretty v => Pretty (Value v a) where
         valueAtom (NumFloat _)  = True
         valueAtom (Constr _ _ []) = True
         valueAtom _             = False
-    prettyL l (Ext _ _) = ""
+    prettyL l (Ext _ v) = prettyL l v
 
 instance Pretty Id where
   prettyL l = if debugging ?globals then internalName else sourceName

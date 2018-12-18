@@ -18,7 +18,7 @@
       http://www.staff.science.uu.nl/~swier101/Papers/1999/AFP3.pdf -}
 module Data.Bifunctor.Foldable where
 
-import Data.Bifunctor
+import Data.Bifunctor hiding (second)
 import Data.Bitraversable
 import Control.Monad ((<=<))
 
@@ -27,9 +27,6 @@ newtype Fix2 f g = Fix2 { unFix :: (f (Fix2 f g) (Fix2 g f)) }
 -- The base functor of two mutually recurive fixed points
 type family Base t q :: (* -> * -> *)
 type instance Base (Fix2 f g) (Fix2 g f) = f
-
-instance (Bifunctor f, Bifunctor g) => Birecursive (Fix2 f g) (Fix2 g f) where
-    project = unFix
 
 instance Show (f (Fix2 f g) (Fix2 g f)) => Show (Fix2 f g) where
     showsPrec n x = showsPrec 11 (unFix x)
@@ -40,6 +37,9 @@ instance Eq (f (Fix2 f g) (Fix2 g f)) => Eq (Fix2 f g) where
 
 class (Bifunctor (Base t q)) => Birecursive t q | t -> q where
     project :: t -> (Base t q) t q
+
+instance (Bifunctor f, Bifunctor g) => Birecursive (Fix2 f g) (Fix2 g f) where
+    project = unFix
 
 bicata :: (Birecursive x z, Birecursive z x)
        => (Bifunctor (Base x z), Bifunctor (Base z x))
