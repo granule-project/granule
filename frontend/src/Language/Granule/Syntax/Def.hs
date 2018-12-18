@@ -24,26 +24,18 @@ import Language.Granule.Syntax.Pattern
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
 data AST v a = AST [DataDecl] [Def v a]
-
-deriving instance (Show v, Show a) => Show (AST v a)
-deriving instance (Eq v, Eq a) => Eq (AST v a)
-deriving instance Functor (AST v)
+deriving instance (Show (Def v a), Show a) => Show (AST v a)
 
 -- | Function definitions
 data Def v a = Def Span Id [Equation v a] TypeScheme
   deriving Generic
+deriving instance (Show (Value v a), Show a) => Show (Def v a)
 
 -- | Single equation of a function
 data Equation v a =
     Equation Span a [Pattern a] (Expr v a)
   deriving Generic
-
-deriving instance Functor (Def v)
-deriving instance Functor (Equation v)
-deriving instance (Show v, Show a) => Show (Def v a)
-deriving instance (Eq v, Eq a) => Eq (Def v a)
-deriving instance (Show v, Show a) => Show (Equation v a)
-deriving instance (Eq v, Eq a) => Eq (Equation v a)
+deriving instance (Show (Value v a), Show a) => Show (Equation v a)
 
 instance FirstParameter (Def v a) Span
 instance FirstParameter (Equation v a) Span

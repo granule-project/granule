@@ -6,6 +6,9 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TemplateHaskell #-}
+{-# LANGUAGE PatternSynonyms #-}
+{-# LANGUAGE TypeFamilies #-}
 
 module Language.Granule.Syntax.Expr where
 
@@ -14,6 +17,9 @@ import Control.Monad (forM)
 import Control.Arrow
 import Data.Text (Text)
 import Data.List ((\\))
+import Data.Bifunctor.TH
+import Data.Bifunctor hiding (second)
+import Data.Bifunctor.Foldable (Base, Birecursive, project)
 
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.SecondParameter
@@ -23,57 +29,111 @@ import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
--- | Values in Granule that are extensible with values `v`
--- | and can have annotations 'a', though leaf value do not need
+newtype ExprFix2 f g ev a = ExprFix2 { unExprFix :: UnExprFix2 f g ev a }
+type UnExprFix2 f g ev a = (f ev a (ExprFix2 f g ev a) (ExprFix2 g f ev a))
+
+instance Show (UnExprFix2 f g ev a) => Show (ExprFix2 f g ev a) where
+    showsPrec n x = showsPrec 11 (unExprFix x)
+
+instance Eq (UnExprFix2 f g ev a) => Eq (ExprFix2 f g ev a) where
+    a == b = (unExprFix a) == (unExprFix b)
+
+-- | Values in Granule that are extensible with values `ev`
+-- | and can have annotations 'a', though leaf values do not need
 -- | an annotation since this should be provided by a `Val` constructor
 -- | in an expression
-data Value v a = Abs a (Pattern a) (Maybe Type) (Expr v a)
-           | NumInt Int
-           | NumFloat Double
-           | Promote a (Expr v a)
-           | Pure a (Expr v a)
-           | Var a Id
-           | Constr a Id [Value v a]
-           | CharLiteral Char
-           | StringLiteral Text
-           -- Extensible part
-           | Ext a v
-   deriving (Generic)
+data ValueF ev a value expr =
+      AbsF a (Pattern a) (Maybe Type) expr
+    | PromoteF a expr
+    | PureF a expr
+    | ConstrF a Id [value]
+    | VarF a Id
+    | NumIntF Int
+    | NumFloatF Double
+    | CharLiteralF Char
+    | StringLiteralF Text
+    -- Extensible part
+    | ExtF a ev
+   deriving Generic
 
-instance FirstParameter (Value v a) a
-deriving instance (Show v, Show a) => Show (Value v a)
-deriving instance (Eq v, Eq a) => Eq (Value v a)
-deriving instance Functor (Value v)
+deriving instance (Show ev, Show a, Show value, Show expr)
+    => Show (ValueF ev a value expr)
+
+$(deriveBifunctor ''ValueF)
+$(deriveBifoldable ''ValueF)
+$(deriveBitraversable ''ValueF)
+
+type Value = ExprFix2 ValueF ExprF
+type UnfixedValue ev a = UnExprFix2 ValueF ExprF ev a
+
+pattern Abs a arg mty ex = (ExprFix2 (AbsF a arg mty ex))
+pattern Promote a ex = (ExprFix2 (PromoteF a ex))
+pattern Pure a ex = (ExprFix2 (PureF a ex))
+pattern Constr a ident vals = (ExprFix2 (ConstrF a ident vals))
+pattern Var a ident = (ExprFix2 (VarF a ident))
+pattern NumInt n = (ExprFix2 (NumIntF n))
+pattern NumFloat n = (ExprFix2 (NumFloatF n))
+pattern CharLiteral ch = (ExprFix2 (CharLiteralF ch))
+pattern StringLiteral str = (ExprFix2 (StringLiteralF str))
+pattern Ext a extv = (ExprFix2 (ExtF a extv))
 
 -- | Expressions (computations) in Granule (with `v` extended values
 -- | and annotations `a`).
-data Expr v a =
-    App Span a (Expr v a) (Expr v a)
-  | Binop Span a Operator (Expr v a) (Expr v a)
-
-  | LetDiamond Span a (Pattern a) (Maybe Type) (Expr v a) (Expr v a)
+data ExprF ev a expr value =
+    AppF Span a expr expr
+  | BinopF Span a Operator expr expr
+  | LetDiamondF Span a (Pattern a) (Maybe Type) expr expr
      -- Graded monadic composition (like Haskell do)
      -- let p : t <- e1 in e2
      -- or
      -- let p <- e1 in e2
+  | ValF Span a value
+  | CaseF Span a expr [(Pattern a, expr)]
+  deriving Generic
 
-  | Val Span a (Value v a)
-  | Case Span a (Expr v a) [(Pattern a, Expr v a)]
-  deriving (Generic)
+deriving instance (Show ev, Show a, Show value, Show expr)
+    => Show (ExprF ev a value expr)
 
-deriving instance (Show v, Show a) => Show (Expr v a)
-deriving instance (Eq v, Eq a) => Eq (Expr v a)
+$(deriveBifunctor ''ExprF)
+$(deriveBifoldable ''ExprF)
+$(deriveBitraversable ''ExprF)
 
-deriving instance Functor (Expr v)
+type Expr = ExprFix2 ExprF ValueF
+type UnfixedExpr ev a = UnExprFix2 ExprF ValueF ev a
 
-instance FirstParameter (Expr v a) Span
-instance SecondParameter (Expr v a) a
+pattern App sp a fexp argexp = (ExprFix2 (AppF sp a fexp argexp))
+pattern Binop sp a op lhs rhs = (ExprFix2 (BinopF sp a op lhs rhs))
+pattern LetDiamond sp a pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a pat mty nowexp nextexp))
+pattern Val sp a val = (ExprFix2 (ValF sp a val))
+pattern Case sp a swexp arms = (ExprFix2 (CaseF sp a swexp arms))
 
-getAnnotation :: Expr v a -> a
+instance (Bifunctor (f ev a), Bifunctor (g ev a))
+    => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
+    project = unExprFix
+
+type instance Base (ExprFix2 f g ev a) (ExprFix2 g f ev a) = (f ev a)
+
+instance FirstParameter (UnfixedValue ev a) a
+instance FirstParameter (UnfixedExpr ev a) Span
+instance SecondParameter (UnfixedExpr ev a) a
+
+instance FirstParameter (Value ev a) a where
+    getFirstParameter v = getFirstParameter $ unExprFix v
+    setFirstParameter x v = ExprFix2 $ setFirstParameter x $ unExprFix v
+
+instance FirstParameter (Expr ev a) Span where
+    getFirstParameter e = getFirstParameter $ unExprFix e
+    setFirstParameter x e = ExprFix2 $ setFirstParameter x $ unExprFix e
+
+instance SecondParameter (Expr ev a) a where
+    getSecondParameter e = getSecondParameter $ unExprFix e
+    setSecondParameter x e = ExprFix2 $ setSecondParameter x $ unExprFix e
+
+getAnnotation :: Expr ev a -> a
 getAnnotation = getSecondParameter
 
 -- Syntactic sugar constructor
-letBox :: Span -> Pattern () -> Expr v () -> Expr v () -> Expr v ()
+letBox :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
 letBox s pat e1 e2 =
   App s () (Val s () (Abs () (PBox s () pat) Nothing e2)) e1
 
@@ -84,10 +144,10 @@ pair s e1 e2 = App s () (App s () (Val s () (Constr () (mkId "(,)") [])) e1) e2
 class Substitutable t where
   -- Syntactic substitution of a term into an expression
   -- (assuming variables are all unique to avoid capture)
-  subst :: Expr v a -> Id -> t v a -> Expr v a
+  subst :: Expr ev a -> Id -> t ev a -> Expr ev a
 
 
-instance Term (Value v a) where
+instance Term (Value ev a) where
     freeVars (Abs _ p _ e) = freeVars e \\ boundVars p
     freeVars (Var _ x)     = [x]
     freeVars (Pure _ e)    = freeVars e
