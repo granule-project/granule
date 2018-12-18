@@ -18,9 +18,11 @@ choice x y = OneOf x y
 -- To construct a `Choice a b`, we need an `a [0..1]` and a `b [0..1]` because
 -- the consumer can pick either the `a` or the `b`, not both. (That is currently
 -- a lie, we need to be able to make the Choice constructor abstract, i.e. not
--- export it, for this to hold.) NB: Polymorphism allows further nonlinearity to
--- be encapsulated inside of the `a` and `b`. In other words, `[0..1]` is the
--- minimum amount of linearity required. Example:
+-- export it, for this to hold.)
+--
+-- NB: Polymorphism allows further nonlinearity to be encapsulated inside of the
+-- `a` and `b`. In other words, `[0..1]` is just the minimum amount of linearity
+-- required. Example:
 --
 -- ```granule
 -- choiceExample : forall a : Type, b : Type
