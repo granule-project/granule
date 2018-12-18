@@ -1,0 +1,2 @@
+const : forall (a : Type, b : Type) . a -> Box b -> a
+const x [y] = x

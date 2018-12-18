@@ -27,10 +27,10 @@ data SGrade =
      | SPoint
     deriving (Show, Generic)
 
-natLike :: SGrade -> Maybe SInteger
-natLike (SNat x) = Just x
-natLike (SExtNat (SNatX x)) = Just x
-natLike _ = Nothing
+natLike :: SGrade -> Bool
+natLike (SNat _) = True
+natLike (SExtNat _) = True
+natLike _ = False
 
 instance Mergeable SGrade where
   symbolicMerge s sb (SNat n) (SNat n') = SNat (symbolicMerge s sb n n')
