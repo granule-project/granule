@@ -11,6 +11,7 @@
 -- # Operations on vectors
 
 import Nat
+-- import Prelude
 
 data Vec (n : Nat) t where
   Nil  : Vec 0 t;
@@ -22,7 +23,7 @@ length : forall (a : Type, n : Nat)
 length xs =
   case xs of
     Nil -> Z;
-    (Cons [_] xs) -> S (length xs)
+    Cons [_] xs -> S (length xs)
 
 --- Map function
 map : forall (a : Type, b : Type, n : Nat)
@@ -30,15 +31,44 @@ map : forall (a : Type, b : Type, n : Nat)
 map [f] ys =
   case ys of
     Nil -> Nil;
-    (Cons x xs) -> Cons (f x) (map [f] xs)
+    Cons x xs -> Cons (f x) (map [f] xs)
+
+-- map' : forall (a : Type, b : Type, n : Nat)
+--      . (a -> b) [n] -> Vec n a -> Vec n b
+-- map' [f] = foldr [(der Cons) `comp` f] Nil
 
 -- Standard foldr on vectors
 foldr : forall (a : Type, b : Type, n : Nat)
       . (a -> b -> b) [n] -> b -> Vec n a -> b
-foldr [h] acc xs =
+foldr [f] z xs =
+  case xs of
+    Nil -> z;
+    Cons x xs -> f x (foldr [f] z xs)
+
+-- The type reflects that we don't use the magma in the case when n = 0 and the
+-- vector contains only a single element.
+-- foldr1 : forall (a : Type, n : Nat)
+--       . (a -> a -> a) [n] -> Vec (n + 1) a -> a
+-- foldr1 [m] xs = case xs of
+--     Cons x Nil -> x;
+--     Cons x xs -> m x (foldr1 [m] xs)
+
+foldl : forall (a : Type, b : Type, n : Nat)
+      . (b -> a -> b) [n] -> b -> Vec n a -> b
+foldl [f] acc xs =
   case xs of
     Nil -> acc;
-    (Cons x xs) -> h x (foldr [h] acc xs)
+    Cons x xs -> foldl [f] (f acc x) xs
+
+-- foldl1 : forall (a : Type, n : Nat)
+--       . (a -> a -> a) [n] -> Vec (n + 1) a -> a
+-- foldl1 [m] xs = case xs of
+--     Cons x Nil -> x;
+--     Cons x1 (Cons x2 xs) -> foldl1 [m] (Cons (m x1 x2) xs)
+--
+-- reverse : forall (a : Type, n : Nat)
+--         . Vec n a -> Vec n a
+-- reverse = foldl [Cons] Nil
 
 -- Append two vectors
 append : forall (a : Type, n : Nat, m : Nat)
@@ -46,13 +76,17 @@ append : forall (a : Type, n : Nat, m : Nat)
 append xs ys =
   case xs of
     Nil -> ys;
-    (Cons x xs) -> Cons x (append xs ys)
+    Cons x xs -> Cons x (append xs ys)
 
 --- Return the first item (head) of the vector
 --- NB: non-linear in the vector
 head : forall (a : Type, n : Nat)
      . (Vec (n + 1) a) [0..1] -> a
-head xs = case xs of [(Cons x _)] -> x
+head xs = case xs of [Cons x _] -> x
+
+-- head' : forall (a : Type, n : Nat)
+--      . (Vec (n + 1) a) [0..1] -> a
+-- head' xs = foldr1 const
 
 --- Return the vector with the first item removed
 --- NB: non-linear in the vector
@@ -70,7 +104,7 @@ split : forall (n : Nat, m : Nat, a : Type)
 split n xs =
       case (n, xs) of
         (Z , xs) -> (Nil, xs);
-        ((S n), (Cons x xs)) ->
+        (S n, Cons x xs) ->
            let (xs', ys') = split n xs
            in (Cons x xs', ys')
 
@@ -85,7 +119,7 @@ product = foldr [\(x : Int) -> \(y : Int) -> x * y] 1
 replicate : forall (n : Nat, a : Type) . N n -> a [n] -> Vec n a
 replicate n [c] = case n of
     Z -> Nil;
-    (S n) -> Cons c (replicate n [c])
+    S n -> Cons c (replicate n [c])
 
 --- Make a vector of length n with all integers from 0 to n-1
 ---     > range (S (S (S (S Z))))
@@ -100,7 +134,7 @@ range' : forall n : Nat . N n -> Int [n] -> Vec n Int
 range' n [i] =
     case n of
     Z -> Nil;
-    (S n) -> Cons i (range' n [i + 1])
+    S n -> Cons i (range' n [i + 1])
 
 --- pushVec pushes in non linearity of vector into the elements
 pushVec : forall (k : Nat, n : Nat, a : Type)
@@ -116,6 +150,6 @@ pullVec : forall (k : Nat, n : Nat, a : Type)
 pullVec xs =
     case xs of
        Nil -> [Nil];
-       (Cons [x] xs) ->
+       Cons [x] xs ->
          case pullVec xs of
           [ys] -> [Cons x ys]
