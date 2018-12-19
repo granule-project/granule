@@ -25,14 +25,19 @@ length (Cons [_] xs) = S (length xs)
 --- Map function
 map : forall (a : Type, b : Type, n : Nat)
     . (a -> b) [n] -> Vec n a -> Vec n b
-map [f] Nil = Nil;
+map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
 
 -- Standard foldr on vectors
 foldr : forall (a : Type, b : Type, n : Nat)
       . (a -> b -> b) [n] -> b -> Vec n a -> b
-foldr [h] acc Nil = acc;
-foldr [h] acc (Cons x xs) = h x (foldr [h] acc xs)
+foldr [_] z Nil = z;
+foldr [f] z (Cons x xs) = f x (foldr [f] z xs)
+
+foldr1 : forall (a : Type, n : Nat)
+       . (a -> a -> a) [n] -> Vec (n + 1) a -> a
+foldr1 [_] (Cons x Nil) = x;
+foldr1 [m] (Cons x (Cons x' xs)) = foldr1 [m] (Cons (x `m` x') xs)
 
 -- Append two vectors
 append : forall (a : Type, n : Nat, m : Nat)
