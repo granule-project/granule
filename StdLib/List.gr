@@ -24,6 +24,13 @@ head_list xs =
     [Empty]      -> Failed ["Empty list!"];
     [(Next x _)] -> Ok x
 
+-- Standard foldr on vectors
+foldr_list : forall (a : Type, b : Type)
+      . (a -> b -> b) [∞] -> b -> List a -> b
+foldr_list [f] z xs =
+  case xs of
+    Empty -> z;
+    Next x xs -> f x (foldr_list [f] z xs)
 
 pushList : forall (k : Nat, a : Type)
          . (List a) |k+1| -> List (a |k+1|)
