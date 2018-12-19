@@ -47,3 +47,8 @@ pullList xs =
        (Next |x| xs) ->
          case pullList xs of
           |ys| -> |(Next x ys)|
+
+append : forall a : Type . List a -> List a -> List a
+append xs ys = case xs of
+  Empty -> ys;
+  Next x xs -> Next x (append xs ys)
