@@ -10,6 +10,7 @@
 
 -- # Operations on vectors
 
+import Bool
 import Nat
 -- import Prelude
 
@@ -153,3 +154,17 @@ pullVec xs =
        Cons [x] xs ->
          case pullVec xs of
           [ys] -> [Cons x ys]
+
+--- n-ary logical AND
+andV : forall n : Nat . (Vec n Bool) [0..1] -> Bool
+andV xs = case xs of
+  [Nil] -> True;
+  [Cons False _] -> False;
+  [Cons True xs] -> andV [xs]
+
+--- n-ary logical OR
+orV : forall n : Nat . (Vec n Bool) [0..1] -> Bool
+orV xs = case xs of
+  [Nil] -> False;
+  [Cons False xs] -> orV [xs];
+  [Cons True _] -> True
