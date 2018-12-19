@@ -142,7 +142,7 @@ spec = do
         getAnnotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
 
-extractMainExpr (Def _ _ e _ _) = e
+extractMainExpr (Def _ _ [(Equation _ _ _ e)] _) = e
 
 runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))

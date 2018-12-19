@@ -101,11 +101,13 @@ data Pred where
     Conj :: [Pred] -> Pred
     Impl :: [Id] -> Pred -> Pred -> Pred
     Con  :: Constraint -> Pred
+    NegPred  :: Pred -> Pred
 
 vars :: Pred -> [Id]
 vars (Conj ps) = concatMap vars ps
 vars (Impl bounds p1 p2) = (vars p1 <> vars p2) \\ bounds
 vars (Con c) = varsConstraint c
+vars (NegPred p) = vars p
 
 varsConstraint :: Constraint -> [Id]
 varsConstraint (Eq _ c1 c2 _) = freeVars c1 <> freeVars c2
@@ -117,10 +119,11 @@ deriving instance Show Pred
 deriving instance Eq Pred
 
 -- Fold operation on a predicate
-predFold :: ([a] -> a) -> ([Id] -> a -> a -> a) -> (Constraint -> a) -> Pred -> a
-predFold c i a (Conj ps)   = c (map (predFold c i a) ps)
-predFold c i a (Impl eVar p p') = i eVar (predFold c i a p) (predFold c i a p')
-predFold _ _ a (Con cons)  = a cons
+predFold :: ([a] -> a) -> ([Id] -> a -> a -> a) -> (Constraint -> a) -> (a -> a) -> Pred -> a
+predFold c i a n (Conj ps)   = c (map (predFold c i a n) ps)
+predFold c i a n (Impl eVar p p') = i eVar (predFold c i a n p) (predFold c i a n p')
+predFold _ _ a _ (Con cons)  = a cons
+predFold c i a n (NegPred p) = n (predFold c i a n p)
 
 instance Pretty Pred where
   prettyL l =
@@ -128,4 +131,6 @@ instance Pretty Pred where
      (intercalate " & ")
      (\s p q ->
          (if null s then "" else "forall " <> intercalate "," (map sourceName s) <> " . ")
-      <> "(" <> p <> " -> " <> q <> ")") (prettyL l)
+      <> "(" <> p <> " -> " <> q <> ")")
+      (prettyL l)
+      (\p -> "¬ (" <> p <> ")")

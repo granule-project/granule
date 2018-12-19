@@ -145,19 +145,26 @@ checkDef :: (?globals :: Globals )
          -> Checker (Maybe (Def () Type))
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
+    -- Clean up knowledge shared between equations of a definition
+    modify (\st -> st { failedCaseKnowledge = [] } )
+
     results <-
        -- _ :: Checker [Maybe (Equation...)]
        forM equations $ \equation -> runMaybeT $ do
+
+         -- Erase the solver predicate between equations
+         modify (\st -> st { predicateStack = [],
+                               tyVarContext = [],
+                               kVarContext = [],
+                               guardContexts = [] })
+
          elaboratedEq <- checkEquation defCtxt defName equation tys
 
          -- Solve the generated constraints
          checkerState <- get
-         let predStack = predicateStack checkerState
-         debugM "Solver predicate" $ pretty (Conj predStack)
-         solveConstraints (Conj predStack) s defName
-
-         -- Erase the solver predicate between equations
-         modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
+         let predStack = Conj $ predicateStack checkerState
+         debugM "Solver predicate" $ show predStack
+         solveConstraints predStack s defName
 
          return elaboratedEq
 
@@ -184,7 +191,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
   newConjunct
 
   -- Build the binding context for the branch pattern
-  (patternGam, tau, eVars, subst, elaborated_pats) <- ctxtFromTypedPatterns s ty pats
+  (patternGam, tau, localVars, subst, elaborated_pats) <- ctxtFromTypedPatterns s ty pats
 
   -- Create conjunct to capture the body expression constraints
   newConjunct
@@ -202,13 +209,13 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
       ctxtApprox s localGam patternGam
 
       -- Conclude the implication
-      concludeImplication eVars
+      concludeImplication localVars
 
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
       ty' <- substitute subst'' ty
       let elab = Equation s ty' elaborated_pats elaboratedExpr
-      return $ elab
+      return elab
 
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs

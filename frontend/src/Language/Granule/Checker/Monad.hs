@@ -55,6 +55,11 @@ data CheckerState = CS
               uniqueVarIdCounter  :: Nat
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
+
+            -- Additional knowledge from failed guards from preceding cases
+            -- pairs a list of locally bound variables and the negated predicate
+            , failedCaseKnowledge :: [([Id], Pred)]
+
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
             , tyVarContext   :: Ctxt (Kind, Quantifier)
@@ -81,6 +86,7 @@ data CheckerState = CS
 initState :: CheckerState
 initState = CS { uniqueVarIdCounter = 0
                , predicateStack = []
+               , failedCaseKnowledge = []
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
                , guardContexts = []
@@ -139,16 +145,34 @@ newConjunct = do
 -- impliciation
 -- The first parameter is a list of any
 -- existential variables being introduced in this implication
-concludeImplication :: [Id] -> MaybeT Checker ()
-concludeImplication eVar = do
+concludeImplication :: (?globals :: Globals) => [Id] -> MaybeT Checker ()
+concludeImplication localVars = do
   checkerState <- get
   case predicateStack checkerState of
-    (p' : p : stack) ->
+    (p' : p : stack) -> do
+      let _previousGuards = failedCaseKnowledge checkerState
+
+      -- Store the negated version of `p` (impliciation antecedent) to use in later cases
+      modify (\st -> st { failedCaseKnowledge = (localVars, NegPred p) : failedCaseKnowledge st })
+
+      let _previousGuardVars = concatMap fst _previousGuards
+      let _negatedPrevGuardPred = Conj (map snd _previousGuards)
+
+      debugM "negatedPreviousGard" (pretty _negatedPrevGuardPred)
+
+      let _antecedent = Impl (_previousGuardVars ++ localVars) (Conj [p, _negatedPrevGuardPred]) p'
+      --let antecedent = Impl localVars p p'
+
+      debugM "ant" (pretty _antecedent)
+
+      debugM "stack" (pretty stack)
+
       case stack of
          (Conj ps : stack') ->
-            put (checkerState { predicateStack = Conj (Impl eVar p p' : ps) : stack' })
+            modify (\st -> st { predicateStack = Conj (_antecedent : ps) : stack' })
          stack' ->
-            put (checkerState { predicateStack = Conj [Impl eVar p p'] : stack' })
+            modify (\st -> st { predicateStack = Conj [_antecedent] : stack' })
+
     _ -> error "Predicate: not enough conjunctions on the stack"
 
 -- | A helper for adding a constraint to the context

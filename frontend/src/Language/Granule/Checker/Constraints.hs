@@ -28,6 +28,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
+
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
 compileQuant ForallQ   = universal
@@ -82,6 +83,10 @@ compileToSBV predicate tyVarContext kVarContext =
         p2' <- buildTheorem' solverVars p2
         return $ p1' ==> p2'
 
+    buildTheorem' solverVars (NegPred p) = do
+        p' <- buildTheorem' solverVars p
+        return $ bnot p'
+
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
       if v `elem` (vars p <> vars p')
@@ -128,7 +133,7 @@ compileToSBV predicate tyVarContext kVarContext =
 -- are replaced with the coeffect type
 rewriteConstraints :: Ctxt Type -> Pred -> Pred
 rewriteConstraints ctxt =
-    predFold Conj Impl (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
+    predFold Conj Impl (\c -> Con $ foldr (uncurry updateConstraint) c ctxt) NegPred
   where
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`
@@ -402,7 +407,7 @@ trivialUnsatisfiableConstraints cs =
     -- Only check trivial constraints in positive positions
     -- This means we don't report a branch concluding false trivially
     -- TODO: may check trivial constraints everywhere?
-    positiveConstraints = predFold concat (\_ _ q -> q) (\x -> [x])
+    positiveConstraints = predFold concat (\_ _ q -> q) (\x -> [x]) id
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
