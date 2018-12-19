@@ -1,0 +1,92 @@
+------
+--- Module: Graph
+--- Description: Algebraic Graphs based on work by Andrey Mokhov
+--- Authors: Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+import List
+import Prelude
+
+data Graph a where
+  EmptyG : Graph a;
+  Vertex : a -> Graph a;
+  Overlay : Graph a -> Graph a -> Graph a;
+  Connect : Graph a -> Graph a -> Graph a
+
+vertices : forall a : Type . List a -> Graph a
+vertices = foldr_list [Overlay `o` Vertex] EmptyG
+
+edge : forall a : Type . a -> a -> Graph a
+edge x y = Connect (Vertex x) (Vertex y)
+
+mapG : forall a : Type, b : Type . (a -> b) [∞] -> Graph a -> Graph b
+mapG [f] g = case g of
+  EmptyG -> EmptyG;
+  Vertex a -> Vertex (f a);
+  Overlay g1 g2 -> Overlay (mapG [f] g1) (mapG [f] g2);
+  Connect g1 g2 -> Connect (mapG [f] g1) (mapG [f] g2)
+
+-- foldG : forall a : Type, b : Type
+--       . b [∞]
+--       -> (a -> b) [∞]
+--       -> (b -> b -> b) [∞]
+--       -> (b -> b -> b) [∞]
+--       -> Graph a
+--       -> b
+-- foldG [e] [v] [o] [c] g =
+--   let [rec] = [foldG [e] [v] [o] [c]] in
+--   case g of
+--     EmptyG -> e;
+--     Vertex a -> v a;
+--     Overlay g1 g2 -> o (rec g1) (rec g2);
+--     Connect g1 g2 -> c (rec g1) (rec g2)
+
+-- Error during type checking: StdLib/Graph.gr:
+--   Trying to join two type variables: b and b
+-- CallStack (from HasCallStack):
+--   error, called at src/Language/Granule/Checker/Types.hs:478:3 in granule-frontend-0.6.1.0-39lWg9n8iVuFNWgIo
+-- DxNvA:Language.Granule.Checker.Types
+
+foldG : forall a : Type, b : Type
+      . b [∞]
+      -> (a -> b) [∞]
+      -> (b -> b -> b) [∞]
+      -> (b -> b -> b) [∞]
+      -> Graph a
+      -> b
+foldG [e] [v] [o] [c] g =
+  case g of
+    EmptyG -> e;
+    Vertex a -> v a;
+    Overlay g1 g2 -> o (foldG [e] [v] [o] [c] g1) (foldG [e] [v] [o] [c] g2);
+    Connect g1 g2 -> c (foldG [e] [v] [o] [c] g1) (foldG [e] [v] [o] [c] g2)
+
+-- isEmpty : forall a : Type . Graph (a [0]) -> Bool [0..1]
+-- isEmpty = foldG [[True]] [const [False]] [and''] [and'']
+--
+-- and'' : Bool [1] -> Bool [0..1] -> Bool
+-- and'' = and `o` unbox
+
+isEmpty : forall a : Type . Graph (a [0]) -> Bool
+isEmpty = foldG [True] [const False] [and'] [and']
+
+-- hasVertex : Int -> Graph Int -> Bool
+-- hasVertex x = foldG [False] [\(x' : Int) -> x == x'] [or'] [or']
+
+toList : forall a : Type . Graph a -> List a
+toList = foldG [Empty] [singleton_list] [append_list] [append_list]
+
+transpose : forall a : Type . Graph a -> Graph a
+transpose = foldG [EmptyG] [Vertex] [Overlay] [flip Connect]
+
+import Nat
+--- Count number of leaves of the graph expression
+size : forall a : Type, n : Nat . Graph (a [0]) -> N n
+size = foldG [S Z] [const (S Z)] [add] [add]
+
+vertexcount : forall a : Type, n : Nat . Graph (a [0]) -> N n
+vertexcount = foldG [Z] [const (S Z)] [add] [add]
