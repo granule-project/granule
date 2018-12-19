@@ -1,0 +1,43 @@
+------
+--- Module: Graph
+--- Description: Algebraic Graphs based on work by Andrey Mokhov
+--- Authors: Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+import Vec
+import Prelude
+
+
+data Graph e v where
+  Vertex : v -> Graph e v;
+  Connect : e -> Graph e v -> Graph e v -> Graph e v
+
+-- alias Unlabeled = Bool
+
+
+vertices : forall e : Type, v : Type, n : Nat . e [n] -> Vec (n + 1) v -> Graph e v
+vertices [e] = (foldr1 [Connect e]) `o` (map [Vertex])
+
+
+edge : forall e : Type, v : Type . v -> e -> v -> Graph e v
+edge v1 e v2 = Connect e (Vertex v1) (Vertex v2)
+
+
+bimapG : forall e1 : Type, e2 : Type, v1 : Type, v2 : Type
+       . (e1 -> e2) [∞] -> (v1 -> v2) [∞] -> Graph e1 v1 -> Graph e2 v2
+bimapG [_] [fv] (Vertex v) = Vertex (fv v);
+bimapG [fe] [fv] (Connect e g1 g2)
+  = Connect (fe e) (bimapG [fe] [fv] g1) (bimapG [fe] [fv] g2)
+
+
+foldG : forall e : Type, v : Type, g : Type
+      .  (v -> g) [∞]
+      -> (e -> g -> g -> g) [∞]
+      -> Graph e v
+      -> g
+foldG [v] [_] (Vertex x) = v x;
+foldG [v] [c] (Connect e g1 g2) = c e (foldG [v] [c] g1) (foldG [v] [c] g2)
