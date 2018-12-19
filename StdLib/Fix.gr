@@ -1,0 +1,14 @@
+------
+--- Module: Fix
+--- Description: Type level fixpoint
+--- Authors: Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+data Fix (f : Type -> Type) where Fix (f (Fix f))
+
+unfix : forall a : Type, f : Type -> Type . Fix f -> f (Fix f)
+unfix (Fix x) = x

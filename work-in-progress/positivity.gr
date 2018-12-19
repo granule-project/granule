@@ -1,0 +1,11 @@
+-- Example adapted from https://agda.readthedocs.io/en/v2.5.4.2/language/data-types.html#strict-positivity
+data Void : Type where
+
+data Bad : Type where
+  Bad : (Bad -> Void) |∞| -> Bad
+
+selfApp : Bad -> Void
+selfApp = \(Bad |f|) -> f (Bad |f|)
+
+absurd : Void
+absurd = selfApp (Bad |selfApp|)

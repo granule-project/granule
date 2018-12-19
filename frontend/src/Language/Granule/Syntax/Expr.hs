@@ -49,7 +49,13 @@ deriving instance Functor (Value v)
 data Expr v a =
     App Span a (Expr v a) (Expr v a)
   | Binop Span a Operator (Expr v a) (Expr v a)
+
   | LetDiamond Span a (Pattern a) (Maybe Type) (Expr v a) (Expr v a)
+     -- Graded monadic composition (like Haskell do)
+     -- let p : t <- e1 in e2
+     -- or
+     -- let p <- e1 in e2
+ 
   | Val Span a (Value v a)
   | Case Span a (Expr v a) [(Pattern a, Expr v a)]
   deriving (Generic)
