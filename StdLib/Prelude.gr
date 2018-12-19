@@ -25,6 +25,11 @@ flip f x y = f y x
 const : forall a : Type, b : Type . a -> b |0| -> a
 const x |y| = x
 
+--- linear function composition (use infix ``g `o` f``)
+o : forall a : Type, b : Type, c : Type
+  . (b -> c) -> (a -> b) -> (a -> c)
+o g f = \x -> g (f x)
+
 --- Apply f to x until p holds
 until : forall a : Type
       . (a -> Bool) |∞| -> (a -> a) |∞| -> a |∞| -> a
@@ -39,7 +44,7 @@ fix |f| = f (fix |f|)
 
 --- Specialised first-order fixed point
 fixF : forall (a : Type, b : Type)
-     . ((a -> b) |Inf| -> (a -> b)) |∞| -> (a -> b)
+     . ((a -> b) |∞| -> (a -> b)) |∞| -> (a -> b)
 fixF |f| = f |(fixF |f|)|
 
 --- Conditional on integers
@@ -94,8 +99,11 @@ uncurry f (x, y) = f x y
 
 --- Coeffectful composition
 comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
-       (b |n| -> c) -> (a |m| -> b) |n| -> a |n * m| -> c
-comp g |f| |x| = g |(f |x|)|
+       (b [n] -> c) -> (a [m] -> b) [n] -> a [m * n] -> c
+comp g [f] = \[x] -> g [f [x]]
+
+unbox : forall a : Type . a [1] -> a
+unbox [x] = x
 
 --- Coeffectful application
 app : forall a : Type, b : Type, c : Nat . (a |c| -> b) -> a |c| -> b
