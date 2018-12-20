@@ -162,6 +162,7 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
          -- Solve the generated constraints
          checkerState <- get
+         debugM "tyVarContext" (pretty $ tyVarContext checkerState)
          let predStack = Conj $ predicateStack checkerState
          debugM "Solver predicate" $ show predStack
          solveConstraints predStack s defName
