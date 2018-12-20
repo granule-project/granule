@@ -7,7 +7,7 @@ The place to collect tips and tricks for debugging the Granule source. Please ex
 Uses Alex. To run the lexer in GHCi (bear in mind that the actual path may change):
 
 ```
-$ stack install; stack repl .stack-work/dist/x86_64-osx/Cabal-2.0.1.0/build/Language/Granule/Syntax/Lexer.hs
+$ stack install; stack repl frontend/.stack-work/dist/x86_64-osx/Cabal-2.4.0.1/build/Language/Granule/Syntax/Lexer.hs
 [...]
 *Language.Granule.Syntax.Lexer> :t alexScanTokens
 alexScanTokens :: String -> [Token]
@@ -18,7 +18,7 @@ alexScanTokens :: String -> [Token]
 Uses Happy. To run the parser in GHCi (bear in mind that the actual path may change):
 
 ```
-$ stack install; stack repl .stack-work/dist/x86_64-osx/Cabal-2.0.1.0/build/Language/Granule/Syntax/Parser.hs
+$ stack install; stack repl frontend/.stack-work/dist/x86_64-osx/Cabal-2.4.0.1/build/Language/Granule/Syntax/Parser.hs
 
 [...]
 *Language.Granule.Syntax.Parser> :set -XImplicitParams

@@ -1,6 +1,6 @@
 import Bool
 
-foo : Bool |2| -> ()
+foo : Bool [2] -> ()
 foo b = case b of
-  |True| -> ();
-  |False| -> ()
+  [True] -> ();
+  [False] -> ()

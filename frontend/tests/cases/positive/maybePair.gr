@@ -1,7 +1,7 @@
 import Maybe
 
-maybePair : forall (a : Type, b : Type) . Maybe (a, b |0|) -> a |0..1| -> a
-maybePair x |d| =
+maybePair : forall (a : Type, b : Type) . Maybe (a, b [0]) -> a [0..1] -> a
+maybePair x [d] =
   case x of
     None -> d;
-    Some (a, |b|) -> a
+    Some (a, [b]) -> a

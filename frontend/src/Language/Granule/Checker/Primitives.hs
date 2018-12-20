@@ -12,7 +12,7 @@ protocol = kConstr $ mkId "Protocol"
 typeLevelConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeLevelConstructors =
     [ (mkId "()", (KType, Just 1))
-    , (mkId ",", (KFun KType (KFun KType KType), Just 1))
+    , (mkId "(,)", (KFun KType (KFun KType KType), Just 1))
     , (mkId "Int",  (KType, Nothing))
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
@@ -47,10 +47,10 @@ typeLevelConstructors =
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
     [ (mkId "()", Forall nullSpan [] (TyCon $ mkId "()"))
-    , (mkId ",", Forall nullSpan [((mkId "a"),KType),((mkId "b"),KType)]
+    , (mkId "(,)", Forall nullSpan [((mkId "a"),KType),((mkId "b"),KType)]
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
-                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
+                 (TyApp (TyApp (TyCon (mkId "(,)")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
     , (mkId "ReadMode", Forall nullSpan [] (TyCon $ mkId "IOMode"))
     , (mkId "WriteMode", Forall nullSpan [] (TyCon $ mkId "IOMode"))
     , (mkId "AppendMode", Forall nullSpan [] (TyCon $ mkId "IOMode"))
@@ -91,7 +91,7 @@ builtins =
   , (mkId "hGetChar", Forall nullSpan [] $
                         FunTy (TyCon $ mkId "Handle")
                                (Diamond ["RW"]
-                                (TyApp (TyApp (TyCon $ mkId ",")
+                                (TyApp (TyApp (TyCon $ mkId "(,)")
                                               (TyCon $ mkId "Handle"))
                                        (TyCon $ mkId "Char"))))
   , (mkId "hPutChar", Forall nullSpan [] $
@@ -101,7 +101,7 @@ builtins =
   , (mkId "isEOF", Forall nullSpan [] $
                      FunTy (TyCon $ mkId "Handle")
                             (Diamond ["R"]
-                             (TyApp (TyApp (TyCon $ mkId ",")
+                             (TyApp (TyApp (TyCon $ mkId "(,)")
                                            (TyCon $ mkId "Handle"))
                                     (TyCon $ mkId "Bool"))))
   , (mkId "hClose", Forall nullSpan [] $
@@ -115,7 +115,7 @@ builtins =
 
   , (mkId "recv", Forall nullSpan [(mkId "a", KType), (mkId "s", protocol)]
        $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
-         .-> (Diamond ["Com"] ((con "," .@ (var "a")) .@ ((con "Chan") .@ (var "s")))))
+         .-> (Diamond ["Com"] ((con "(,)" .@ (var "a")) .@ ((con "Chan") .@ (var "s")))))
 
   , (mkId "close", Forall nullSpan [] $
                     ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))

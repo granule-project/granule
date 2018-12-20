@@ -1,2 +1,2 @@
-flatten : forall m : Nat, n : Nat . (Int |m|) |n| -> Int |m * n|
-flatten xbb = let |xb| = xbb in let |x| = xb in |x|
+flatten : forall m : Nat, n : Nat . (Int [m]) [n] -> Int [m * n]
+flatten xbb = let [xb] = xbb in let [x] = xb in [x]

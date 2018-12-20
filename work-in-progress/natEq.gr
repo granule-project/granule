@@ -1,2 +1,2 @@
-notAleak : (Int |Private|) |1| -> Int |Public|
-notAleak |x| = |42|
+notAleak : (Int [Private]) [1] -> Int [Public]
+notAleak [x] = [42]

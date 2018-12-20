@@ -1,5 +1,5 @@
 data X a where
-  X : a |Private| |10| -> X a
+  X : (a [Private]) [10] -> X a
 
-go : X Int -> Int |Private|
-go x = case x of (X ||x||) -> |(x * x * x)|
+go : X Int -> Int [Private]
+go x = case x of (X [[x]]) -> [x * x * x]

@@ -1,2 +1,2 @@
-flatten : forall (c : Nat, d : Nat) . (Int |c+1|) |d+1| -> Int |(c+1) * (d+1)|
-flatten |xbox| = let |x| = xbox in |x|
+flatten : forall (c : Nat, d : Nat) . (Int [c+1]) [d+1] -> Int [(c+1) * (d+1)]
+flatten [xbox] = let [x] = xbox in [x]

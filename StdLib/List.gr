@@ -16,7 +16,7 @@ length_list : forall a : Type . List (a [0]) -> Int
 length_list xs =
   case xs of
     Empty         -> 0;
-    (Next |_| xs) -> 1 + length_list xs
+    (Next [_] xs) -> 1 + length_list xs
 
 head_list : forall a : Type . (List a) [0..1] -> Result a
 head_list xs =
@@ -33,20 +33,20 @@ foldr_list [f] z xs =
     Next x xs -> f x (foldr_list [f] z xs)
 
 pushList : forall (k : Nat, a : Type)
-         . (List a) |k+1| -> List (a |k+1|)
+         . (List a) [k+1] -> List (a [k+1])
 pushList xs =
     case xs of
       [Empty]       -> Empty;
-      [(Next x xs)] -> Next |x| (pushList |xs|)
+      [Next x xs] -> Next [x] (pushList [xs])
 
 pullList : forall (k : Nat, a : Type)
-         . List (a |k|) -> (List a) |k|
+         . List (a [k]) -> (List a) [k]
 pullList xs =
     case xs of
-       Empty -> |Empty|;
-       (Next |x| xs) ->
+       Empty -> [Empty];
+       (Next [x] xs) ->
          case pullList xs of
-          |ys| -> |(Next x ys)|
+          [ys] -> [Next x ys]
 
 append_list : forall a : Type . List a -> List a -> List a
 append_list xs ys = case xs of

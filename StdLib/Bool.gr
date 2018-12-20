@@ -11,74 +11,62 @@
 --- # Boolean type
 
 --- Boolean
-data Bool where False; True
+data Bool where False | True
+
+dropB : Bool -> ()
+dropB False = ();
+|     True = ()
 
 --- # Boolean algebra
 
 --- Logical negation
----     > not True
----     False
 not : Bool -> Bool
-not x = if x then False else True
+not False = True;
+|   True = False
 
 --- Logical and
 --- NB: non-strict in second argument
----     > let x = True in
----     | let y = False in
----     | and x |y|
----     False
 and : Bool -> Bool [0..1] -> Bool
-and x [y] = if x then y else False
+and True [y] = y;
+|   False [_] = False
 
 --- Logical and (linear)
 --- NB: consumes both arguments
----     > let x = True in
----     | let y = False in
----     | and' x y
----     False
 and' : Bool -> Bool -> Bool
-and' x y = if x then y else if y then True else False
+and' False False = False;
+|    False True = False;
+|    True False = False;
+|    True True = True
+
 
 --- Inclusive or
 --- NB: non-strict in second argument
----     > let x = True in
----     | let y = False in
----     | or x |y|
----     True
 or : Bool -> Bool [0..1] -> Bool
-or x [y] = if x then True else y
+or True [_] = True;
+|  False [y] = y
 
 --- Inclusive or (linear)
---- NB: strict in both arguments
----     > let x = True in
----     | let y = False in
----     | or' x y
----     True
 or' : Bool -> Bool -> Bool
-or' x y = if x then if y then True else True else y
+or' False False = False;
+|   False True = True;
+|   True False = True;
+|   True True = True
 
 --- Exclusive or
----     > let x = True in
----     | let y = False in
----     | xor x y
----     True
 xor : Bool -> Bool -> Bool
-xor x y = if x then not y else y
+xor True y = not y;
+|   False y = y
 
 --- Logical implication
 --- NB: non-strict in second argument
----     > let x = True in
----     | let y = False in
----     | impl x |y|
----     False
 impl : Bool -> Bool [0..1] -> Bool
-impl x [y] = if x then y else True
+impl True [y] = y;
+|    False [_] = True
 
 --- Logical implication (linear)
 --- NB: strict in both arguments
----     > let x = True in
----     | let y = False in
----     | impl x y
----     False
 impl' : Bool -> Bool -> Bool
-impl' x y = if x then y else if y then True else True
+impl' False False = True;
+|     False True = True;
+|     True False = False;
+|     True True = True

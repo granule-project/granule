@@ -1,4 +1,4 @@
 import Bool
 
-leak : Bool |Private| -> Bool |Public|
-leak |x| = |x|
+leak : Bool [Private] -> Bool [Public]
+leak [x] = [x]

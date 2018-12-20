@@ -22,8 +22,8 @@ flip f x y = f y x
 
 --- Constant combinator
 --- NB: Throws away its second argument and returns the first
-const : forall a : Type, b : Type . a -> b |0| -> a
-const x |y| = x
+const : forall a : Type, b : Type . a -> b [0] -> a
+const x [y] = x
 
 --- linear function composition (use infix ``g `o` f``)
 o : forall a : Type, b : Type, c : Type
@@ -32,28 +32,28 @@ o g f = \x -> g (f x)
 
 --- Apply f to x until p holds
 until : forall a : Type
-      . (a -> Bool) |∞| -> (a -> a) |∞| -> a |∞| -> a
-until |p| |f| |x| =
+      . (a -> Bool) [∞] -> (a -> a) [∞] -> a [∞] -> a
+until [p] [f] [x] =
   case p x of
     False -> x;
-    True  -> until |p| |f| |(f x)|
+    True  -> until [p] [f] [f x]
 
 --- Standard fixed point
-fix : forall (a : Type) . (a -> a) |∞| -> a
-fix |f| = f (fix |f|)
+fix : forall (a : Type) . (a -> a) [∞] -> a
+fix [f] = f (fix [f])
 
 --- Specialised first-order fixed point
 fixF : forall (a : Type, b : Type)
-     . ((a -> b) |∞| -> (a -> b)) |∞| -> (a -> b)
-fixF |f| = f |(fixF |f|)|
+     . ((a -> b) [∞] -> (a -> b)) [∞] -> (a -> b)
+fixF [f] = f [fixF [f]]
 
 --- Conditional on integers
 --- Returns `x` if `g` is zero, else returns `y`
-if0 : forall a : Type . Int |0..1| -> a |0..1| -> a |0..1| -> a
-if0 g |x| |y| =
+if0 : forall a : Type . Int [0..1] -> a [0..1] -> a [0..1] -> a
+if0 g [x] [y] =
     case g of
-      |0| -> x;
-      |_| -> y
+      [0] -> x;
+      [_] -> y
 
 
 --- # Numeric functions and constants
@@ -62,8 +62,8 @@ if0 g |x| |y| =
 -- + 1 iff n is positive
 -- + -1 iff n is negative
 -- + 0 otherwise
-sign : Int |1..2| -> Int
-sign |x| = if x > 0 then 1 else if x < 0 then -1 else 0
+sign : Int [1..2] -> Int
+sign [x] = if x > 0 then 1 else if x < 0 then -1 else 0
 
 --- An approximation of pi
 pi : Float
@@ -77,12 +77,12 @@ e = 2.718281828459045
 --- # Combinators involving products (pairs)
 
 --- Extract the left part of a pair
-fst : forall a : Type, b : Type . (a, b |0|) -> a
-fst (x, |_|) = x
+fst : forall a : Type, b : Type . (a, b [0]) -> a
+fst (x, [_]) = x
 
 --- Extract the right part of a pair
-snd : forall a : Type, b : Type . (a |0|, b) -> b
-snd (|_|, y) = y
+snd : forall a : Type, b : Type . (a [0], b) -> b
+snd ([_], y) = y
 
 --- curry converts an uncurried function to a curried function
 curry : forall a : Type, b : Type, c : Type .
@@ -106,19 +106,19 @@ unbox : forall a : Type . a [1] -> a
 unbox [x] = x
 
 --- Coeffectful application
-app : forall a : Type, b : Type, c : Nat . (a |c| -> b) -> a |c| -> b
+app : forall a : Type, b : Type, c : Nat . (a [c] -> b) -> a [c] -> b
 app f x = f x
 
 --- Flatten two boxes (with Nat grading)
-flatten : forall (a : Type, n : Nat, m : Nat) . (a |n|) |m| -> a |n * m|
-flatten ||x|| = |x|
+flatten : forall (a : Type, n : Nat, m : Nat) . (a [n]) [m] -> a [n * m]
+flatten [[x]] = [x]
 
 --- Expand two boxes (with Nat grading)
-unflatten : forall (a : Type, n : Nat, m : Nat) . a |n*m| -> (a |n|) |m|
-unflatten |x| = ||x||
+unflatten : forall (a : Type, n : Nat, m : Nat) . a [n*m] -> (a [n]) [m]
+unflatten [x] = [[x]]
 
 --- Push coeffects on a pair into the left and right elements
-push : forall (a : Type, b : Type, n : Nat) . (a, b) |n+1| -> (a |n+1|, b |n+1|)
-push |(x, y)| = (|x|, |y|)
+push : forall (a : Type, b : Type, n : Nat) . (a, b) [n+1] -> (a [n+1], b [n+1])
+push [(x, y)] = ([x], [y])
 
--- approx : a |n| -> a |m| where m <= n
+-- approx : a [n] -> a [m] where m <= n

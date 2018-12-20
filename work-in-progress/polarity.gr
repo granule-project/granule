@@ -1,13 +1,13 @@
 -- Approximation not allowed in let
 secondOrder : forall (a : Type, b : Type)
-   . (a |0..0| -> b) -> a |0..1| -> b
-secondOrder f xb = let |x| = xb in f |x|
+   . (a [0..0] -> b) -> a [0..1] -> b
+secondOrder f xb = let [x] = xb in f [x]
 
 -- This kind of approximation is allowed
 secondOrderAlt : forall (a : Type, b : Type)
-   . (a |0..0| -> b) -> a |0..1| -> b
-secondOrderAlt f |x| = f |x|
+   . (a [0..0] -> b) -> a [0..1] -> b
+secondOrderAlt f [x] = f [x]
 
-thirdOrder : ((Int |0..2| -> Int) -> Int) -> Int
+thirdOrder : ((Int [0..2] -> Int) -> Int) -> Int
 thirdOrder f =
-        f (\(yb : Int |0..1|) -> let |y| : Int |0..1| = yb in y)
+        f (\(yb : Int [0..1]) -> let [y] : Int [0..1] = yb in y)

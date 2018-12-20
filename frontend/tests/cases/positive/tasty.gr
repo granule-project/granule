@@ -13,12 +13,12 @@ data Meal where
   Side : Salad -> Meal;
   Meat : Meat -> Meal
 
-vegetarian : Meal |0..1| -> Bool
+vegetarian : Meal [0..1] -> Bool
 vegetarian m =
     case m of
-      |(Side Lettuce)| -> True;
-      |(Side Slaw)| -> True;
-      |_| -> False
+      [Side Lettuce] -> True;
+      [Side Slaw] -> True;
+      [_] -> False
 
 vegetarianL : Meal -> (Bool,Meal)
 vegetarianL m =

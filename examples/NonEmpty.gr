@@ -2,10 +2,10 @@ data NonEmpty a where
   Next : a -> NonEmpty a -> NonEmpty a;
   NonEmpty : a -> NonEmpty a
 
-head : forall a : Type . (NonEmpty a) |0..1| -> a
+head : forall a : Type . (NonEmpty a) [0..1] -> a
 head x = case x of
-  |(Next x _)| -> x;
-  |(NonEmpty x)| -> x
+  [Next x _] -> x;
+  [NonEmpty x] -> x
 
 main : Int
-main = head |(NonEmpty 1)|
+main = head [NonEmpty 1]

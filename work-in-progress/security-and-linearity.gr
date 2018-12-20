@@ -1,0 +1,3 @@
+-- @buggymcbugfix
+dub : forall a : Type . a [Private] -> (a, a)
+dub [x] = (x,x)

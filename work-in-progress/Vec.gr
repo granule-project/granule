@@ -6,8 +6,8 @@ data Vec (n : Nat) t where
 
 --- this should fail
 map : forall (a : Type, b : Type, n : Nat)
-    . (a -> b) |n+4| -> Vec n a -> Vec n b
-map |f| ys =
+    . (a -> b) [n+4] -> Vec n a -> Vec n b
+map [f] ys =
   case ys of
     Nil -> Nil;
-    (Cons x xs) -> Cons (f x) (map |f| xs)
+    (Cons x xs) -> Cons (f x) (map [f] xs)

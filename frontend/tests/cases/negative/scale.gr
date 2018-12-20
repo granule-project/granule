@@ -1,8 +1,8 @@
-f : Float |3.0| -> Float
-f |x| = (scale 2.5 |x| + 1.0) * (scale 3.0 |x|)
+f : Float [3.0] -> Float
+f [x] = (scale 2.5 [x] + 1.0) * (scale 3.0 [x])
 
-g : Float |7.5| -> Float
-g |x| = scale 3.0 |(scale 2.5 |x|)|
+g : Float [7.5] -> Float
+g [x] = scale 3.0 [scale 2.5 [x]]
 
 main : Float
-main = f |(g |10.0|)|
+main = f [g [10.0]]

@@ -1,12 +1,12 @@
 -- can also write `Inf` instead of `∞`
-dub : Int |∞| -> Int
-dub |x| = x + x
+dub : Int [∞] -> Int
+dub [x] = x + x
 
-trip : Int |∞| -> Int
-trip |x| = x + x + x
+trip : Int [∞] -> Int
+trip [x] = x + x + x
 
-twice : (Int |∞| -> Int) |∞| -> Int |∞| -> Int
-twice |f| |x| = f |x| + f |x|
+twice : (Int [∞] -> Int) [∞] -> Int [∞] -> Int
+twice [f] [x] = f [x] + f [x]
 
 main : Int
-main = twice |trip| |42| + twice |dub| |2|
+main = twice [trip] [42] + twice [dub] [2]

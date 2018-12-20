@@ -118,7 +118,7 @@ instance Pretty Type where
 
     prettyL l (TyVar v)      = prettyL l v
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(,)" =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
     prettyL l (TyApp t1 t2)  =

@@ -1,15 +1,15 @@
-data Either a b where Left a; Right b
+data Either a b where Left a | Right b
 
 pushEither : forall (a : Type, b : Type, n : Nat)
-        . (Either a b) |n+1| -> Either (a |n+1|) (b |n+1|)
+        . (Either a b) [n+1] -> Either (a [n+1]) (b [n+1])
 pushEither x =
   case x of
-    |(Left x)| -> Left |x|;
-    |(Right y)| -> Right |y|
+    [Left x] -> Left [x];
+    [Right y] -> Right [y]
 
 pullEither : forall (a : Type, b : Type, k : Nat)
-        . Either (a |k|) (b |k|) -> (Either a b) |k|
+        . Either (a [k]) (b [k]) -> (Either a b) [k]
 pullEither x =
   case x of
-    (Left |y|) -> |(Left y)|;
-    (Right |y|) -> |(Right y)|
+    (Left [y]) -> [Left y];
+    (Right [y]) -> [Right y]

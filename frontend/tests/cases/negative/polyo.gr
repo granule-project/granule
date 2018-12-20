@@ -1,5 +1,5 @@
-fix : forall (a : Type) . (a -> a) |Inf| -> a
-fix |f| = f (fix |f|)
+fix : forall (a : Type) . (a -> a) [Inf] -> a
+fix [f] = f (fix [f])
 
 foo : Bool -> Int
 foo x =
@@ -8,4 +8,4 @@ foo x =
     False -> 1
 
 main : Int
-main = fix |foo|
+main = fix [foo]

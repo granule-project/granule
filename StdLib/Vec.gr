@@ -92,7 +92,7 @@ range : forall n : Nat . N n -> Vec n Int
 range n = range' n [0]
 
 --- Make a vector of length n with all integers from `start` up until `n + i - 1`
----     > range' (S (S (S (S Z)))) |-6|
+---     > range' (S (S (S (S Z)))) [-6]
 ---     Cons -6 (Cons -5 (Cons -4 (Cons -3 Nil)))
 range' : forall n : Nat . N n -> Int [n] -> Vec n Int
 range' Z [i] = Nil;

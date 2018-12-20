@@ -1,2 +1,2 @@
-diag : forall (a : Type, b : Type) . a |∞| -> (a, b)
-diag |x| = (x, x)
+diag : forall (a : Type, b : Type) . a [∞] -> (a, b)
+diag [x] = (x, x)

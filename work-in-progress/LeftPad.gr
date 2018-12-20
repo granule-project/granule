@@ -1,8 +1,8 @@
 import Vec
 
 leftPad : forall (n : Nat=, m : Nat=) .
-          Char |n| -> N n -> Vec m Char -> Vec (n + m) Char
-leftPad |c| n str =
+          Char [n] -> N n -> Vec m Char -> Vec (n + m) Char
+leftPad [c] n str =
   case n of
     Z -> str;
-    (S n) -> Cons c (leftPad |c| n str)
+    (S n) -> Cons c (leftPad [c] n str)

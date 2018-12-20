@@ -1,5 +1,5 @@
-castLevel : forall (a : Type) . a |Public| -> a |Private|
-castLevel |x| = |x|
+castLevel : forall (a : Type) . a [Public] -> a [Private]
+castLevel [x] = [x]
 
-castNat : forall (a : Type) . a |5| -> a |4|
-castNat |x| = |x|
+castNat : forall (a : Type) . a [5] -> a [4]
+castNat [x] = [x]
