@@ -27,8 +27,8 @@ However, a graded modality can be employed to explain exactly how many times the
 parameter here can be used:
 
 ```idris
-dup : forall (a : Type) . a |2| -> (a, a)
-dup |x| = (x, x)
+dup : forall (a : Type) . a [2] -> (a, a)
+dup [x] = (x, x)
 ```
 
 Combining indexed types and bounded reuse in Granule leads to an interesting type
@@ -36,10 +36,10 @@ for the standard `map` function on sized lists ("vectors"):
 
 ```idris
 --- Map function
-map : forall (a : Type, b : Type, n : Nat) . (a -> b) |n| -> Vec n a -> Vec n b
-map |f| xs = case xs of
-    Nil -> Nil;
-    Cons x xs' -> Cons (f x) (map |f| xs')
+map : forall (a : Type, b : Type, n : Nat)
+    . (a -> b) [n] -> Vec n a -> Vec n b
+map [_] Nil = Nil;
+map [f] (Cons x xs) = Cons (f x) (map [f] xs)
 ```
 
 This type explains that the parameter function `f` is used exactly `n` times, where `n` is the size
