@@ -199,6 +199,10 @@ Type :: { Type }
 
   | TyAtom '<' Effect '>'     { Diamond $3 $1 }
 
+TyApp :: { Type }
+ : TyJuxt TyAtom              { TyApp $1 $2 }
+ | TyAtom                     { $1 }
+
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
@@ -238,7 +242,7 @@ Coeffect :: { Coeffect }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' TyAtom         { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { normalise (CSig $1 $3) }
 
 Set :: { [(String, Type)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
