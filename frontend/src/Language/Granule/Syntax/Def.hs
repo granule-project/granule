@@ -66,7 +66,7 @@ type Cardinality = Maybe Nat
 freshenAST :: AST v a -> AST v a
 freshenAST (AST dds defs) = AST dds (map runFreshener defs)
 
-instance Freshenable (Equation v a) where
+instance Monad m => Freshenable m (Equation v a) where
   freshen (Equation s a ps e) = do
     ps <- mapM freshen ps
     e <- freshen e
@@ -87,7 +87,7 @@ foo x = (\(x0 : Int) -> x0 * 2) x
 >>> runFreshener $ Def ((1,1),(2,29)) (Id "foo" "foo") [Equation ((2,1),(2,29)) [PVar ((2,5),(2,5)) () (Id "x" "x")] (App ((2,10),(2,29)) () (Val ((2,10),(2,25)) () (Abs () (PVar ((2,12),(2,12)) () (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) () "*" (Val ((2,24),(2,24)) () (Var () (Id "x" "x0"))) (Val ((2,26),(2,26)) () (NumInt 2))))) (Val ((2,29),(2,29)) () (Var () (Id "x" "x"))))] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
 Def ((1,1),(2,29)) (Id "foo" "foo") [Equation ((2,1),(2,29)) [PVar ((2,5),(2,5)) () (Id "x" "x_0")] (App ((2,10),(2,29)) () (Val ((2,10),(2,25)) () (Abs () (PVar ((2,12),(2,12)) () (Id "x" "x_1")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) () "*" (Val ((2,24),(2,24)) () (Var () (Id "x" "x_1"))) (Val ((2,26),(2,26)) () (NumInt 2))))) (Val ((2,29),(2,29)) () (Var () (Id "x" "x_0"))))] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
 -}
-instance Freshenable (Def v a) where
+instance Monad m => Freshenable m (Def v a) where
   freshen (Def s var eqs t) = do
     t  <- freshen t
     eqs <- mapM freshen eqs

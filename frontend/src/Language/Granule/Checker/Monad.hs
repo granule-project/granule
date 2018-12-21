@@ -56,9 +56,9 @@ data CheckerState = CS
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
 
-            -- Additional knowledge from failed guards from preceding cases
-            -- pairs a list of locally bound variables and the negated predicate
-            , failedCaseKnowledge :: [([Id], Pred)]
+            -- Stack of additional knowledge from failed guards from preceding cases
+            -- tuples a list of locally bound variables and the negated predicate
+            , failedCaseKnowledge :: [[([Id], Pred)]]
 
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
@@ -86,7 +86,7 @@ data CheckerState = CS
 initState :: CheckerState
 initState = CS { uniqueVarIdCounter = 0
                , predicateStack = []
-               , failedCaseKnowledge = []
+               , failedCaseKnowledge = [[]]
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
                , guardContexts = []
@@ -141,6 +141,14 @@ newConjunct = do
   checkerState <- get
   put (checkerState { predicateStack = Conj [] : predicateStack checkerState })
 
+newCaseFrame :: MaybeT Checker ()
+newCaseFrame =
+  modify (\st -> st { failedCaseKnowledge = [] : failedCaseKnowledge st } )
+
+popCaseFrame :: MaybeT Checker ()
+popCaseFrame =
+  modify (\st -> st { failedCaseKnowledge = tail (failedCaseKnowledge st) })
+
 -- | Takes the top two conjunction frames and turns them into an
 -- impliciation
 -- The first parameter is a list of any
@@ -150,28 +158,32 @@ concludeImplication localVars = do
   checkerState <- get
   case predicateStack checkerState of
     (p' : p : stack) -> do
-      let _previousGuards = failedCaseKnowledge checkerState
+
+      let previousGuards : knowledgeStack = failedCaseKnowledge checkerState
 
       -- Store the negated version of `p` (impliciation antecedent) to use in later cases
-      modify (\st -> st { failedCaseKnowledge = (localVars, NegPred p) : failedCaseKnowledge st })
+      -- on the top of the failedCaseKnowledge stack
+      put (checkerState { failedCaseKnowledge =
+                            ((localVars, NegPred p) : previousGuards)
+                                : knowledgeStack })
 
-      let _previousGuardVars = concatMap fst _previousGuards
-      let _negatedPrevGuardPred = Conj (map snd _previousGuards)
+      let previousGuardVars = concatMap fst previousGuards
+      let negatedPrevGuardPred = Conj (map snd previousGuards)
 
-      debugM "negatedPreviousGard" (pretty _negatedPrevGuardPred)
+      debugM "negatedPreviousGard" (pretty negatedPrevGuardPred)
 
-      let _antecedent = Impl (_previousGuardVars ++ localVars) (Conj [p, _negatedPrevGuardPred]) p'
-      --let antecedent = Impl localVars p p'
+      let impl = Impl (previousGuardVars ++ localVars) (Conj [p, negatedPrevGuardPred]) p'
+      --let impl = Impl localVars p p'
 
-      debugM "ant" (pretty _antecedent)
+      debugM "impl" (pretty impl)
 
       debugM "stack" (pretty stack)
 
       case stack of
          (Conj ps : stack') ->
-            modify (\st -> st { predicateStack = Conj (_antecedent : ps) : stack' })
+            modify (\st -> st { predicateStack = Conj (impl : ps) : stack' })
          stack' ->
-            modify (\st -> st { predicateStack = Conj [_antecedent] : stack' })
+            modify (\st -> st { predicateStack = Conj [impl] : stack' })
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 

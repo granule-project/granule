@@ -59,6 +59,21 @@ data Constraint =
 
 instance FirstParameter Constraint Span
 
+instance Monad m => Freshenable m Constraint where
+  freshen (Eq s' c1 c2 k) = do
+    c1 <- freshen c1
+    c2 <- freshen c2
+    return $ Eq s' c1 c2 k
+
+  freshen (Neq s' c1 c2 k) = do
+    c1 <- freshen c1
+    c2 <- freshen c2
+    return $ Neq s' c1 c2 k
+
+  freshen (ApproximatedBy s' c1 c2 t) = do
+    c1 <- freshen c1
+    c2 <- freshen c2
+    return $ ApproximatedBy s' c1 c2 t
 -- Used to negate constraints
 data Neg a = Neg a
   deriving Show
@@ -103,6 +118,14 @@ data Pred where
     Con  :: Constraint -> Pred
     NegPred  :: Pred -> Pred
 
+instance Monad m => Freshenable m Pred where
+  freshen =
+    predFoldM
+      (return . Conj)
+      (\v p1 p2 -> return $ Impl v p1 p2)
+      (\c -> freshen c >>= (return . Con))
+      (return . NegPred)
+
 vars :: Pred -> [Id]
 vars (Conj ps) = concatMap vars ps
 vars (Impl bounds p1 p2) = (vars p1 <> vars p2) \\ bounds
@@ -124,6 +147,29 @@ predFold c i a n (Conj ps)   = c (map (predFold c i a n) ps)
 predFold c i a n (Impl eVar p p') = i eVar (predFold c i a n p) (predFold c i a n p')
 predFold _ _ a _ (Con cons)  = a cons
 predFold c i a n (NegPred p) = n (predFold c i a n p)
+
+-- Fold operation on a predicate (monadic)
+predFoldM :: Monad m =>
+     ([a] -> m a)
+  -> ([Id] -> a -> a -> m a)
+  -> (Constraint -> m a)
+  -> (a -> m a)
+  -> Pred
+  -> m a
+predFoldM c i a n (Conj ps)   = do
+  ps <- mapM (predFoldM c i a n) ps
+  c ps
+
+predFoldM c i a n (Impl localVars p p') = do
+  p <- predFoldM c i a n p
+  p' <- predFoldM c i a n p'
+  i localVars p p'
+
+predFoldM _ _ a _ (Con cons)  =
+  a cons
+
+predFoldM c i a n (NegPred p) =
+  predFoldM c i a n p >>= n
 
 instance Pretty Pred where
   prettyL l =

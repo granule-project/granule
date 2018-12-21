@@ -211,14 +211,14 @@ instance Term Coeffect where
 ----------------------------------------------------------------------
 -- Freshenable instances
 
-instance Freshenable TypeScheme where
-  freshen :: TypeScheme -> Freshener TypeScheme
+instance Monad m => Freshenable m TypeScheme where
+  freshen :: TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
         ty' <- freshen ty
         return $ Forall s binds' ty'
 
-instance Freshenable Type where
+instance Freshenable m Type where
   freshen =
     typeFoldM (baseTypeFold { tfTyApp = rewriteTyApp,
                               tfTyVar = freshenTyVar,
@@ -242,12 +242,12 @@ instance Freshenable Type where
            -- function which does not get its name freshened
            Nothing -> return (TyVar $ mkId (sourceName v))
 
-instance Freshenable Coeffect where
+instance Freshenable m Coeffect where
     freshen (CVar v) = do
       v' <- lookupVar Type v
       case v' of
         Just v' -> return $ CVar $ Id (sourceName v) v'
-        Nothing -> return $ CVar $ mkId (sourceName v)
+        Nothing -> return $ CVar v
 
     freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do
       t <- freshIdentifierBase Type i

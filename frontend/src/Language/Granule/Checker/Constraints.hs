@@ -14,6 +14,8 @@ import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
 import Control.Exception (assert)
+import Control.Monad.Trans.State.Strict
+import Control.Monad.Trans (lift)
 
 import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
@@ -24,10 +26,11 @@ import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Helpers
+    (freshen, runFreshenerM, Freshener, FreshenerState(..))
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
-
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
@@ -68,17 +71,20 @@ compileToSBV predicate tyVarContext kVarContext =
         (preConstraints, constraints, solverVars) <-
             foldrM (createFreshVar quant) (true, true, []) tyVarContext
 
-        predC <- buildTheorem' solverVars predicate'
+        predC <- runFreshenerM (buildTheorem' solverVars predicate')
         return (polarity (preConstraints ==> (constraints &&& predC)))
 
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
-    buildTheorem' :: Ctxt SGrade -> Pred -> Symbolic SBool
+    buildTheorem' :: Ctxt SGrade -> Pred -> Freshener Symbolic SBool
     buildTheorem' solverVars (Conj ps) = do
       ps' <- mapM (buildTheorem' solverVars) ps
       return $ bAnd ps'
 
     buildTheorem' solverVars (Impl [] p1 p2) = do
+        -- Increment freshener
+        modify (\st -> st { counter = counter st + 1 })
+
         p1' <- buildTheorem' solverVars p1
         p2' <- buildTheorem' solverVars p2
         return $ p1' ==> p2'
@@ -90,21 +96,32 @@ compileToSBV predicate tyVarContext kVarContext =
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
       if v `elem` (vars p <> vars p')
-        then forAll [internalName v] (\vSolver -> do
-             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
-             return $ (vSolver .>= literal 0) ==> impl)
-        else do
-          buildTheorem' solverVars (Impl vs p p')
+        -- If the quantified variable appears in the theorem
+        then do
+          st <- get
+
+          -- Freshen the variable bound here
+          let v' = mkId $ internalName v <> "-" <> show (counter st)
+          put (st { tyMap = (internalName v, internalName v') : tyMap st })
+
+          -- Freshen the rest of the predicates
+          p_s <- freshen p
+          p_s' <- freshen p'
+
+          -- Create fresh solver variable
+          vSolver <- lift $ forall (internalName v')
+
+          impl <- buildTheorem' ((Id (sourceName v) (internalName v'), SNat vSolver) : solverVars) (Impl vs p_s p_s')
+          return ((vSolver .>= literal 0) ==> impl)
+
+        else
+         -- An optimisation, don't both quantifying things
+         -- which don't appear in the theorem anyway
+         buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
-      compile solverVars cons
+      lift $ compile solverVars cons
 
-    -- Perform a substitution on a predicate tree
-    -- substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
-    -- substConstraint rmap (Eq s' c1 c2 k) =
-    --     Eq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
-    -- substConstraint rmap (ApproximatedBy s' c1 c2 k) =
-    --     ApproximatedBy s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
@@ -302,7 +319,7 @@ compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
 compileCoeffect (CVar v) _ vars =
    case lookup v vars of
     Just cvar -> cvar
-    _ -> error $ "Looking up a variable '" <> pretty v <> "' in " <> show vars
+    _ -> error $ "Looking up a variable '" <> show v <> "' in " <> show vars
 
 compileCoeffect c@(CMeet n m) k vars =
   (compileCoeffect n k vars) `symGradeMeet` (compileCoeffect m k vars)

@@ -146,7 +146,7 @@ checkDef :: (?globals :: Globals )
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
-    modify (\st -> st { failedCaseKnowledge = [] } )
+    modify (\st -> st { failedCaseKnowledge = [[]] } )
 
     results <-
        -- _ :: Checker [Maybe (Equation...)]
@@ -164,7 +164,7 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
          checkerState <- get
          debugM "tyVarContext" (pretty $ tyVarContext checkerState)
          let predStack = Conj $ predicateStack checkerState
-         debugM "Solver predicate" $ show predStack
+         debugM "Solver predicate" $ pretty predStack
          solveConstraints predStack s defName
 
          return elaboratedEq
@@ -345,6 +345,8 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   (guardTy, guardGam, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   pushGuardContext guardGam
 
+  newCaseFrame
+
   -- Check each of the branches
   branchCtxtsAndSubst <-
     forM cases $ \(pat_i, e_i) -> do
@@ -414,6 +416,8 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
         xs -> illLinearityMismatch s xs
 
   popGuardContext
+
+  popCaseFrame
 
   debugM "*** Branches and substitutions from case " (pretty branchCtxtsAndSubst)
 
@@ -510,6 +514,9 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (ty, guardGam, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   -- then synthesise the types of the branches
+
+  newCaseFrame
+
   branchTysAndCtxts <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
@@ -529,6 +536,8 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
          [] -> return (tyCase, localGam `subtractCtxt` patternGam,
                         (elaborated_pat_i, elaborated_i))
          xs -> illLinearityMismatch s xs
+
+  popCaseFrame
 
   let (branchTys, branchCtxts, elaboratedCases) = unzip3 branchTysAndCtxts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)

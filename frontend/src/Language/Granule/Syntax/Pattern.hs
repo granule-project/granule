@@ -44,9 +44,9 @@ ppair s p1 p2 = PConstr s () (mkId "(,)") [p1, p2]
 -- PVar ((0,0),(0,0)) (Id "x" "x_0")
 
 -- | Freshening for patterns
-instance Freshenable (Pattern a) where
+instance Monad m => Freshenable m (Pattern a) where
 
-  freshen :: Pattern a -> Freshener (Pattern a)
+  freshen :: Pattern a -> Freshener m (Pattern a)
   freshen (PVar s a var) = do
       var' <- freshIdentifierBase Value var
       return $ PVar s a var'

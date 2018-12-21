@@ -1,13 +1,17 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts #-}
+
 module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete)
 import Control.Monad.Trans.State.Strict
+import Control.Monad.Identity
 
 import Language.Granule.Syntax.Identifiers
 
-class Freshenable t where
+class Freshenable m t where
   -- Alpha-convert bound variables to avoid name capturing
-  freshen :: t -> Freshener t
+  freshen :: Monad m => t -> Freshener m t
 
 class Term t where
   -- Compute the free variables in an open term
@@ -16,9 +20,8 @@ class Term t where
 -- Used to distinguish the value-level and type-level variables
 data IdSyntacticCategory = Value | Type
 
-
 -- | The freshening monad for alpha-conversion to avoid name capturing
-type Freshener t = State FreshenerState t
+type Freshener m t = StateT FreshenerState m t
 
 data FreshenerState = FreshenerState
   { counter :: Int -- ^ fresh Id counter
@@ -28,10 +31,14 @@ data FreshenerState = FreshenerState
 
 -- | Given something freshenable,
 -- | e.g. the AST, run the freshener on it and return the final state
-runFreshener :: Freshenable t => t -> t
-runFreshener x = evalState (freshen x) FreshenerState { counter = 0, varMap = [], tyMap = [] }
+runFreshener :: Freshenable Identity t => t -> t
+runFreshener x = runIdentity $ runFreshenerM (freshen x)
 
-removeFreshenings :: [Id] -> Freshener ()
+runFreshenerM :: Monad m => Freshener m t -> m t
+runFreshenerM x =
+  evalStateT x FreshenerState { counter = 0, varMap = [], tyMap = [] }
+
+removeFreshenings :: Monad m => [Id] -> Freshener m ()
 removeFreshenings [] = return ()
 removeFreshenings (x:xs) = do
     st <- get
@@ -42,7 +49,7 @@ removeFreshenings (x:xs) = do
 
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
-freshIdentifierBase :: IdSyntacticCategory -> Id -> Freshener Id
+freshIdentifierBase :: Monad m => IdSyntacticCategory -> Id -> Freshener m Id
 freshIdentifierBase cat var = do
     st <- get
     let var' = sourceName var <> "_" <> show (counter st)
@@ -53,7 +60,7 @@ freshIdentifierBase cat var = do
 
 -- | Look up a variable in the freshener state.
 -- If @Nothing@ then the variable name shouldn't change
-lookupVar :: IdSyntacticCategory -> Id -> Freshener (Maybe String)
+lookupVar :: Monad m => IdSyntacticCategory -> Id -> Freshener m (Maybe String)
 lookupVar cat v = do
   st <- get
   case cat of
