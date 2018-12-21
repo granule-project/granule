@@ -89,8 +89,8 @@ Def ((1,1),(2,29)) (Id "foo" "foo") [Equation ((2,1),(2,29)) [PVar ((2,5),(2,5))
 -}
 instance Freshenable (Def v a) where
   freshen (Def s var eqs t) = do
-    eqs <- mapM freshen eqs
     t  <- freshen t
+    eqs <- mapM freshen eqs
     return (Def s var eqs t)
 
 instance Term (Equation v a) where
