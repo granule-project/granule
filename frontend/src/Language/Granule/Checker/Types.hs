@@ -235,7 +235,9 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
     --(Just (k1, _), Just (k2, _)) ->
     --  tyVarConstraint k1 k2 n m
 
-    (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n" <> pretty n <> " : " <> show t1 <> "\n" <> pretty m <> " : " <> show t2
+    (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
+              <> pretty n <> " : " <> show t1
+              <> "\n" <> pretty m <> " : " <> show t2
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of

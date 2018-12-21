@@ -212,6 +212,7 @@ freshCVar quant name (isInterval -> Just t) q = do
   -- Interval, therefore recursively generate fresh vars for the lower and upper
   (predLb, solverVarLb) <- freshCVar quant (name <> ".lower") t q
   (predUb, solverVarUb) <- freshCVar quant (name <> ".upper") t q
+  -- constrain (predLb &&& predUb &&& solverVarUb .>= solverVarLb)
   return
      -- Respect the meaning of intervals
     ( predLb &&& predUb &&& solverVarUb .>= solverVarLb
@@ -231,12 +232,18 @@ freshCVar quant name (TyCon k) q = do
     _ -> do -- Otherwise it must be an SInteger-like constraint:
       solverVar <- quant q name
       case internalName k of
-        "Nat"       -> return (solverVar .>= 0, SNat solverVar)
-        "Level"     -> return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
+        "Nat"       -> do
+          -- constrain (solverVar .>= 0)
+          return (solverVar .>= 0, SNat solverVar)
+
+        "Level"     -> do
+          -- constrain (solverVar .== 0 ||| solverVar .== 1)
+          return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
 
 -- Extended nat
 freshCVar quant name t q | t == extendedNat = do
   solverVar <- quant q name
+  -- constrain (SNatX.representationConstraint $ SNatX.xVal solverVar)
   return (SNatX.representationConstraint $ SNatX.xVal solverVar
         , SExtNat solverVar)
 
