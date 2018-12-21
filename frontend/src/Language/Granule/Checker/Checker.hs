@@ -821,15 +821,6 @@ solveConstraints predicate s defName = do
       env' <- justCoeffectTypesConverted implicitUniversalMadeExplicit
       return $ stripQuantifiers env'
 
-{-
-ctxtApprox :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
-  -> MaybeT Checker ()
-ctxtApprox s ctxt1 ctxt2 = do
-    let ctxt  = ctxt1 `intersectCtxts` ctxt2
-        ctxt' = ctxt2 `intersectCtxts` ctxt1
-    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt ctxt'
--}
-
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage
