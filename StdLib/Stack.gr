@@ -1,12 +1,12 @@
 data Stack : Nat -> Type -> Type where
   Empty : forall (a : Type) . Stack 0 a;
-  Ext : forall (a : Type, n : Nat) . a [1..2] -> Stack n a -> Stack (n+1) a
+  Ext : forall (a : Type, n : Nat) . a [0..∞] -> Stack n a -> Stack (n+1) a
 
 pop : forall (n : Nat, a : Type) . Stack (n+1) a -> (a, Stack n a)
 pop s = case s of Ext [x] xs -> (x, xs)
 
-push : forall (n : Nat, a : Type) . a [1..2] -> Stack n a -> Stack (n+1) a
+push : forall (n : Nat, a : Type) . a [0..∞] -> Stack n a -> Stack (n+1) a
 push x s = Ext x s
 
 peek : forall (n : Nat, a : Type) . Stack (n+1) a -> (a, Stack (n+1) a)
-peek s = case s of Ext [x] xs -> (x, Ext [x] xs)
+peek (Ext [x] xs) = (x, Ext [x] xs)
