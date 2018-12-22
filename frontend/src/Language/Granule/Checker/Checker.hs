@@ -751,55 +751,58 @@ optionalSigEquality s (Just t) t' = do
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
 solveConstraints predicate s defName = do
-  -- Get the coeffect kind context and constraints
-  checkerState <- get
-  let
-    ctxtCk  = tyVarContext checkerState
-    ctxtCkVar = kVarContext checkerState
-  coeffectVars <- justCoeffectTypesConverted ctxtCk
-  coeffectKVars <- justCoeffectTypesConvertedVars ctxtCkVar
+  if isTrivial predicate
+    then debugM "solveConstraints" "Skipping solver because predicate is trivial."
+    else do
+      -- Get the coeffect kind context and constraints
+      checkerState <- get
+      let
+        ctxtCk  = tyVarContext checkerState
+        ctxtCkVar = kVarContext checkerState
+      coeffectVars <- justCoeffectTypesConverted ctxtCk
+      coeffectKVars <- justCoeffectTypesConvertedVars ctxtCkVar
 
-  let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
+      let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
 
-  ThmResult thmRes <- liftIO . prove $ do -- proveWith defaultSMTCfg {verbose=True}
-    case solverTimeoutMillis ?globals of
-      Nothing -> return ()
-      Just n -> setTimeOut n
-    sbvTheorem
+      ThmResult thmRes <- liftIO . prove $ do -- proveWith defaultSMTCfg {verbose=True}
+        case solverTimeoutMillis ?globals of
+          Nothing -> return ()
+          Just n -> setTimeOut n
+        sbvTheorem
 
-  case thmRes of
-    Unsatisfiable {} -> return () -- we're good: the negation of the theorem is unsatisfiable
-    ProofError _ msgs ->
-      halt $ CheckerError Nothing $ "Solver error:" <> unlines msgs
-    Unknown _ UnknownTimeOut ->
-      halt $ CheckerError Nothing $
-        "Solver timed out with limit of " <>
-        show (solverTimeoutMillis ?globals) <>
-        " ms. You may want to increase the timeout (see --help)."
-    Unknown _ reason  ->
-      halt $ CheckerError Nothing $ "Solver says unknown: " <> show reason
-    _ ->
-      case getModelAssignment thmRes of
-        -- Main 'Falsifiable' result
-        Right (False, assg :: [ Integer ] ) -> do
-          -- Show any trivial inequalities
-          mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
-          -- Show fatal error, with prover result
-          {-
-          negated <- liftIO . sat $ sbvSatTheorem
-          print $ show $ getModelDictionary negated
-          case (getModelAssignment negated) of
-            Right (_, assg :: [Integer]) -> do
-              print $ show assg
-            Left msg -> print $ show msg
-          -}
-          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' is " <> show (ThmResult thmRes)
+      case thmRes of
+        Unsatisfiable {} -> return () -- we're good: the negation of the theorem is unsatisfiable
+        ProofError _ msgs ->
+          halt $ CheckerError Nothing $ "Solver error:" <> unlines msgs
+        Unknown _ UnknownTimeOut ->
+          halt $ CheckerError Nothing $
+            "Solver timed out with limit of " <>
+            show (solverTimeoutMillis ?globals) <>
+            " ms. You may want to increase the timeout (see --help)."
+        Unknown _ reason  ->
+          halt $ CheckerError Nothing $ "Solver says unknown: " <> show reason
+        _ ->
+          case getModelAssignment thmRes of
+            -- Main 'Falsifiable' result
+            Right (False, assg :: [ Integer ] ) -> do
+              -- Show any trivial inequalities
+              mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
+              -- Show fatal error, with prover result
+              {-
+              negated <- liftIO . sat $ sbvSatTheorem
+              print $ show $ getModelDictionary negated
+              case (getModelAssignment negated) of
+                Right (_, assg :: [Integer]) -> do
+                  print $ show assg
+                Left msg -> print $ show msg
+              -}
+              halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' is " <> show (ThmResult thmRes)
 
-        Right (True, _) ->
-          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' returned probable model."
+            Right (True, _) ->
+              halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' returned probable model."
 
-        Left str        ->
-          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> " had a solver fail: " <> str
+            Left str        ->
+              halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> " had a solver fail: " <> str
   where
 
     justCoeffectTypesConverted xs = mapM convert xs >>= (return . catMaybes)

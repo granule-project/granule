@@ -180,3 +180,7 @@ instance Pretty Pred where
       <> "(" <> p <> " -> " <> q <> ")")
       (prettyL l)
       (\p -> "¬ (" <> p <> ")")
+
+-- | Whether the predicate is empty, i.e. contains no constraints
+isTrivial :: Pred -> Bool
+isTrivial = predFold and (\_ lhs rhs -> lhs && rhs) (const False) id
