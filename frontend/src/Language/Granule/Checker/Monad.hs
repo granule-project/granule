@@ -221,6 +221,7 @@ data TypeError
   | UnboundVariableError (Maybe Span) String
   | RefutablePatternError (Maybe Span) String
   | NameClashError (Maybe Span) String
+  | DuplicatePatternError (Maybe Span) String
 
 instance UserMsg TypeError where
   title CheckerError {} = "Checker error"
@@ -232,6 +233,7 @@ instance UserMsg TypeError where
   title UnboundVariableError {} = "Unbound variable error"
   title RefutablePatternError {} = "Pattern is refutable"
   title NameClashError {} = "Name clash"
+  title DuplicatePatternError {} = "Duplicate pattern"
   location (CheckerError sp _) = sp
   location (GenericError sp _) = sp
   location (GradingError sp _) = sp
@@ -241,6 +243,7 @@ instance UserMsg TypeError where
   location (UnboundVariableError sp _) = sp
   location (RefutablePatternError sp _) = sp
   location (NameClashError sp _) = sp
+  location (DuplicatePatternError sp _) = sp
   msg (CheckerError _ m) = m
   msg (GenericError _ m) = m
   msg (GradingError _ m) = m
@@ -250,6 +253,7 @@ instance UserMsg TypeError where
   msg (UnboundVariableError _ m) = m
   msg (RefutablePatternError _ m) = m
   msg (NameClashError _ m) = m
+  msg (DuplicatePatternError _ m) = m
 
 illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
 illKindedUnifyVar sp t1 k1 t2 k2 =

@@ -1,9 +1,11 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Patterns where
 
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
+import Data.List (intercalate)
 
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Language.Granule.Checker.Coeffects
@@ -207,3 +209,16 @@ ctxtFromTypedPatterns s ty ps = do
        <> pretty ty
        <> "'\n   against a type of the form '" <> pretty spuriousType
        <> "' implied by the remaining patterns"
+
+duplicateBinderCheck :: (?globals::Globals) => Span -> [Pattern a] -> MaybeT Checker ()
+duplicateBinderCheck s ps = unless (null duplicateBinders) $
+    halt $ DuplicatePatternError (Just s) $ intercalate ", " duplicateBinders
+  where
+    duplicateBinders = duplicates . concatMap getBinders $ ps
+    getBinders = patternFold
+      (\_ _ id -> [sourceName id])
+      (\_ _ -> [])
+      (\_ _ bs -> bs)
+      (\_ _ _ -> [])
+      (\_ _ _ -> [])
+      (\_ _ _ bss -> concat bss)

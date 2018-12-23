@@ -34,6 +34,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
+
 import Language.Granule.Utils
 
 --import Debug.Trace
@@ -41,7 +42,7 @@ import Language.Granule.Utils
 data CheckerResult = Failed | Ok deriving (Eq, Show)
 
 -- Checking (top-level)
-check :: (?globals :: Globals ) => AST () () -> IO CheckerResult
+check :: (?globals :: Globals) => AST () () -> IO CheckerResult
 check (AST dataDecls defs) = do
       let checkDataDecls = do { mapM_ checkTyCon dataDecls; mapM checkDataCons dataDecls }
 
@@ -184,6 +185,8 @@ checkEquation :: (?globals :: Globals) =>
   -> MaybeT Checker (Equation () Type)
 
 checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
+  -- Check that the lhs doesn't introduce any duplicate binders
+  duplicateBinderCheck s pats
 
   -- Freshen the type context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})

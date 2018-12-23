@@ -5,6 +5,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Granule.Syntax.Pattern where
 
@@ -27,6 +28,25 @@ data Pattern a
 
 -- | First parameter of patterns is their span
 instance FirstParameter (Pattern a) Span
+
+patternFold
+  :: (Span -> ann -> Id -> b)
+  -> (Span -> ann -> b)
+  -> (Span -> ann -> b -> b)
+  -> (Span -> ann -> Int -> b)
+  -> (Span -> ann -> Double -> b)
+  -> (Span -> ann -> Id -> [b] -> b)
+  -> Pattern ann
+  -> b
+patternFold v w b i f c = go
+  where
+    go = \case
+      PVar sp ann nm -> v sp ann nm
+      PWild sp ann -> w sp ann
+      PBox sp ann pat -> b sp ann (go pat)
+      PInt sp ann int -> i sp ann int
+      PFloat sp ann doub -> f sp ann doub
+      PConstr sp ann nm pats -> c sp ann nm (go <$> pats)
 
 -- | Variables bound by patterns
 boundVars :: Pattern a -> [Id]
