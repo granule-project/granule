@@ -55,7 +55,7 @@ data ValueF ev a value expr =
     | StringLiteralF Text
     -- Extensible part
     | ExtF a ev
-   deriving Generic
+   deriving (Generic, Eq)
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ValueF ev a value expr)
@@ -88,7 +88,7 @@ data ExprF ev a expr value =
      -- let p : t <- e1 in e2  or  let p <- e1 in e2
   | ValF Span a value
   | CaseF Span a expr [(Pattern a, expr)]
-  deriving Generic
+  deriving (Generic, Eq)
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ExprF ev a value expr)
