@@ -18,8 +18,10 @@ library:
   #   else:
   #     ghc-options: -O3 -w
   exposed-modules:
+  - Language.Granule.Codegen.NormalisedDef
   - Language.Granule.Codegen.Codegen
   dependencies:
+  - containers
   - granule-frontend
   - llvm-hs-pure >= 6.0
   - llvm-hs >= 6.0
@@ -48,6 +50,7 @@ tests:
     dependencies:
     - filemanip
     - directory
+    - granule-frontend
     - granule-compiler
     - hspec
     - QuickCheck
