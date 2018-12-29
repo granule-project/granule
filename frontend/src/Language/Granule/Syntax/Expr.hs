@@ -22,6 +22,7 @@ import Data.Bifunctor hiding (second)
 import Data.Bifunctor.Foldable (Base, Birecursive, project)
 
 import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Annotated
 import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
@@ -129,8 +130,15 @@ instance SecondParameter (Expr ev a) a where
     getSecondParameter e = getSecondParameter $ unExprFix e
     setSecondParameter x e = ExprFix2 $ setSecondParameter x $ unExprFix e
 
-getAnnotation :: Expr ev a -> a
-getAnnotation = getSecondParameter
+instance Annotated (Expr ev a) a where
+    annotation = getSecondParameter
+
+instance Annotated (Value ev Type) Type where
+    annotation (NumInt _) = TyCon (mkId "Int")
+    annotation (NumFloat _) = TyCon (mkId "Float")
+    annotation (StringLiteral _) = TyCon (mkId "String")
+    annotation (CharLiteral _) = TyCon (mkId "Char")
+    annotation other = getFirstParameter other
 
 -- Syntactic sugar constructor
 letBox :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()

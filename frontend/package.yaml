@@ -47,6 +47,7 @@ library:
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers
   - Language.Granule.Syntax.FirstParameter
+  - Language.Granule.Syntax.Annotated
   - Language.Granule.Syntax.Identifiers
   - Language.Granule.Syntax.Lexer
   - Language.Granule.Syntax.Parser

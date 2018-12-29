@@ -13,6 +13,8 @@ import GHC.Generics (Generic)
 
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Annotated
+import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
@@ -28,6 +30,10 @@ data Pattern a
 
 -- | First parameter of patterns is their span
 instance FirstParameter (Pattern a) Span
+instance SecondParameter (Pattern a) a
+
+instance Annotated (Pattern a) a where
+    annotation = getSecondParameter
 
 patternFold
   :: (Span -> ann -> Id -> b)
