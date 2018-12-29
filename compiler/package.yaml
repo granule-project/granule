@@ -20,6 +20,7 @@ library:
   exposed-modules:
   - Language.Granule.Codegen.NormalisedDef
   - Language.Granule.Codegen.Codegen
+  - Language.Granule.Codegen.TopsortDefinitions
   dependencies:
   - containers
   - granule-frontend
