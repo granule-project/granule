@@ -1,0 +1,7 @@
+data Vec : Nat -> Type -> Type where
+  Nil : forall (a : Type) . Vec 0 a;
+  Cons : forall (a : Type, n : Nat) . a -> Vec n a -> Vec (n+1) a
+
+vmap : forall (a : Type, b : Type, n : Nat) . (a -> b) [n] -> Vec n a -> Vec n b
+vmap [f] Nil = Nil;
+vmap [f] (Cons x xs) = Cons (f x) (vmap [f] xs)
