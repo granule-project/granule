@@ -282,7 +282,7 @@ instance Monad m => Freshenable m TypeScheme where
   freshen :: TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds constrs ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
-        let constrs' = constrs
+        constrs' <- mapM freshen constrs
         ty' <- freshen ty
         return $ Forall s binds' constrs' ty'
 
@@ -359,6 +359,13 @@ instance Freshenable m Coeffect where
     freshen c@CNat{}   = return c
     freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2
     freshen (CProduct c1 c2) = CProduct <$> freshen c1 <*> freshen c2
+
+instance Freshenable m IConstr where
+    freshen (IConstr (c, v)) = do
+      v' <- lookupVar Type v
+      return $ case v' of
+        Just v' -> IConstr (c, Id (sourceName v) v')
+        Nothing -> IConstr (c, mkId (sourceName v))
 
 ----------------------------------------------------------------------
 
