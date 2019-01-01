@@ -56,9 +56,10 @@ data CheckerState = CS
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
 
-            -- Stack of additional knowledge from failed guards from preceding cases
-            -- tuples a list of locally bound variables and the negated predicate
-            , failedCaseKnowledge :: [[([Id], Pred)]]
+            -- Stack of a list of additional knowledge from failed patterns/guards
+            -- (i.e. from preceding cases) stored as a list of lists ("frames")
+            -- tupling a context of locally bound variables and the predicate
+            , failedPatternPreds :: [[(Ctxt Kind, Pred)]]
 
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
@@ -86,7 +87,7 @@ data CheckerState = CS
 initState :: CheckerState
 initState = CS { uniqueVarIdCounter = 0
                , predicateStack = []
-               , failedCaseKnowledge = [[]]
+               , failedPatternPreds = [[]]
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
                , guardContexts = []
@@ -141,13 +142,17 @@ newConjunct = do
   checkerState <- get
   put (checkerState { predicateStack = Conj [] : predicateStack checkerState })
 
+-- | Creates a new "frame" on the stack of information about failed cases
+-- | This happens when we start a case expression
 newCaseFrame :: MaybeT Checker ()
 newCaseFrame =
-  modify (\st -> st { failedCaseKnowledge = [] : failedCaseKnowledge st } )
+  modify (\st -> st { failedPatternPreds = [] : failedPatternPreds st } )
 
+-- | Pop (and don't return) the top of the failed case knowledge stack
+-- | This happens when we finish a case expression
 popCaseFrame :: MaybeT Checker ()
 popCaseFrame =
-  modify (\st -> st { failedCaseKnowledge = tail (failedCaseKnowledge st) })
+  modify (\st -> st { failedPatternPreds = tail (failedPatternPreds st) })
 
 -- | Takes the top two conjunction frames and turns them into an
 -- impliciation
@@ -159,56 +164,114 @@ concludeImplication localVars = do
   case predicateStack checkerState of
     (p' : p : stack) -> do
 
-      let previousGuards : knowledgeStack = failedCaseKnowledge checkerState
+       -- Get all the kinds for the local variables
+       localCtxt <- forM localVars $ \v ->
+                      case lookup v (tyVarContext checkerState) of
+                        Just (k, _) -> return (v, k)
+                        Nothing -> error $ "I don't know the kind of "
+                                          <> pretty v <> " in "
+                                          <> pretty (tyVarContext checkerState)
 
-      -- Store the negated version of `p` (impliciation antecedent) to use in later cases
-      -- on the top of the failedCaseKnowledge stack
-      put (checkerState { failedCaseKnowledge =
-                            ((localVars, NegPred p) : previousGuards)
-                                : knowledgeStack })
+       case failedPatternPreds checkerState of
 
-      let previousGuardVars = concatMap fst previousGuards
-      let negatedPrevGuardPred = Conj (map snd previousGuards)
+        -- No previous guards in the current frame to provide additional information
+        [] : knowledgeStack -> do
+          let impl = Impl localVars p p'
 
-      debugM "negatedPreviousGard" (pretty negatedPrevGuardPred)
+          let knowledge =
+               if isTrivial p
+                 then []
+                 else [(localCtxt, p)]
 
-      let impl = Impl (previousGuardVars ++ localVars) (Conj [p, negatedPrevGuardPred]) p'
-      --let impl = Impl localVars p p'
+          -- Add the implication to the predicate stack
+          modify (\st -> st { predicateStack = pushPred impl stack
+          -- And add this case to the knowledge stack
+                            , failedPatternPreds = knowledge : knowledgeStack })
 
-      debugM "impl" (pretty impl)
+        -- Some information currently in the stack frame
+        previousGuards : knowledgeStack -> do
 
-      debugM "stack" (pretty stack)
+           let previousGuardCtxt = concatMap fst previousGuards
+           let prevGuardPred = Conj (map snd previousGuards)
 
-      case stack of
-         (Conj ps : stack') ->
-            modify (\st -> st { predicateStack = Conj (impl : ps) : stack' })
-         stack' ->
-            modify (\st -> st { predicateStack = Conj [impl] : stack' })
+           debugM "previousGard" (pretty prevGuardPred)
+
+           debugM "p'" (pretty p')
+
+          --let impl = Impl (previousGuardVars ++ localVars) (Conj [p, negatedPrevGuardPred]) p'
+          --let impl = Impl localVars p p'
+          {- let impl = Impl localVars
+                  (Conj [p, NegPred (Impl previousGuardVars (Conj []) negatedPrevGuardPred)])
+                  p' -}
+
+           let guard = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
+           let impl = Impl localVars (Conj [p, guard]) p'
+
+           debugM "impl" (pretty impl)
+
+           debugM "stack" (pretty stack)
+
+           let knowledge =
+                if isTrivial p
+                 then previousGuards
+                 else (localCtxt, p) : previousGuards
+
+           -- Store `p` (impliciation antecedent) to use in later cases
+           -- on the top of the failedPatternPreds stack
+           modify (\st -> st { predicateStack = pushPred impl stack
+           -- And add this case to the knowledge stack
+                             , failedPatternPreds = knowledge : knowledgeStack })
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
+{-
+-- Create a local existential scope
+-- NOTE: leaving this here, but this approach is not used and is incompataible
+-- with the way that existential variables are generated in the solver
+--
+existential :: (?globals :: Globals) => Id -> Kind -> MaybeT Checker ()
+existential var k = do
+  case k of
+    -- No need to add variables of kind Type to the predicate
+    KType -> return ()
+    k -> do
+      checkerState <- get
+      case predicateStack checkerState of
+        (p : stack) -> do
+          put (checkerState { predicateStack = Exists var k p : stack })
+-}
+
+pushPred :: Pred -> [Pred] -> [Pred]
+pushPred p (p' : stack) = appendPred p p' : stack
+pushPred p [] = [Conj [p]]
+
+appendPred :: Pred -> Pred -> Pred
+appendPred p (Conj ps) = Conj (p : ps)
+appendPred p (Exists var k ps) = Exists var k (appendPred p ps)
+appendPred _ p = error $ "Cannot append a predicate to " <> show p
+
 -- | A helper for adding a constraint to the context
 addConstraint :: Constraint -> MaybeT Checker ()
-addConstraint p = do
+addConstraint c = do
   checkerState <- get
   case predicateStack checkerState of
-    (Conj ps : stack) ->
-      put (checkerState { predicateStack = Conj (Con p : ps) : stack })
+    (p : stack) ->
+      put (checkerState { predicateStack = appendPred (Con c) p : stack })
     stack ->
-      put (checkerState { predicateStack = Conj [Con p] : stack })
+      put (checkerState { predicateStack = Conj [Con c] : stack })
 
 -- | A helper for adding a constraint to the previous frame (i.e.)
 -- | if I am in a local context, push it to the global
 addConstraintToPreviousFrame :: Constraint -> MaybeT Checker ()
-addConstraintToPreviousFrame p = do
+addConstraintToPreviousFrame c = do
         checkerState <- get
         case predicateStack checkerState of
-          (ps : Conj ps' : stack) ->
-            put (checkerState { predicateStack = ps : Conj (Con p : ps') : stack })
+          (ps : ps' : stack) ->
+            put (checkerState { predicateStack = ps : (appendPred (Con c) ps') : stack })
           (ps : stack) ->
-            put (checkerState { predicateStack = ps : Conj [Con p] : stack })
+            put (checkerState { predicateStack = ps : Conj [Con c] : stack })
           stack ->
-            put (checkerState { predicateStack = Conj [Con p] : stack })
+            put (checkerState { predicateStack = Conj [Con c] : stack })
 
 {- Helpers for error messages and checker control flow -}
 data TypeError

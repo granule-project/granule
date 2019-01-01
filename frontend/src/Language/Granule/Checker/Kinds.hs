@@ -11,7 +11,8 @@ module Language.Granule.Checker.Kinds (kindCheckDef
                     , inferCoeffectType
                     , inferCoeffectTypeAssumption
                     , mguCoeffectTypes
-                    , promoteTypeToKind) where
+                    , promoteTypeToKind
+                    , demoteKindToType) where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -29,9 +30,13 @@ import Language.Granule.Context
 import Language.Granule.Utils
 
 promoteTypeToKind :: Type -> Kind
-promoteTypeToKind (TyCon c) = kConstr c
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
+
+demoteKindToType :: Kind -> Maybe Type
+demoteKindToType (KPromote t) = Just t
+demoteKindToType (KVar v)     = Just (TyVar v)
+demoteKindToType _            = Nothing
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()

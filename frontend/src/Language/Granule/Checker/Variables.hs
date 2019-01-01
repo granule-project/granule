@@ -25,7 +25,7 @@ freshIdentifierBase s = do
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
 freshTyVarInContext :: (?globals :: Globals) => Id -> Kind -> MaybeT Checker Id
-freshTyVarInContext cvar k =
+freshTyVarInContext cvar k = do
     freshTyVarInContextWithBinding cvar k InstanceQ
 
 -- | Helper for creating a few (existential) coeffect variable of a particular

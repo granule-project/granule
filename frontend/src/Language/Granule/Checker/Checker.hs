@@ -147,7 +147,7 @@ checkDef :: (?globals :: Globals )
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
-    modify (\st -> st { failedCaseKnowledge = [[]] } )
+    modify (\st -> st { failedPatternPreds = [[]] } )
 
     results <-
        -- _ :: Checker [Maybe (Equation...)]
@@ -402,7 +402,6 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
 
-
            -- Check "global" (to the definition) binding use
            consumedGam <- ctxtPlus s guardGam localGam
            debugM "** gam = " (pretty gam)
@@ -420,6 +419,8 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
 
   popGuardContext
 
+  -- Pop from stacks related to case
+  popGuardContext
   popCaseFrame
 
   debugM "*** Branches and substitutions from case " (pretty branchCtxtsAndSubst)
@@ -984,10 +985,6 @@ relateByAssumption s _ x y =
   halt $ GenericError (Just s) $ "Can't unify free-variable types:\n\t"
            <> "(graded) " <> pretty x <> "\n  with\n\t(linear) " <> pretty y
 
-relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
-relevantSubCtxt vars = filter relevant
- where relevant (var, _) = var `elem` vars
-
 -- Replace all top-level discharged coeffects with a variable
 -- and derelict anything else
 -- but add a var
@@ -1032,6 +1029,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
+
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 

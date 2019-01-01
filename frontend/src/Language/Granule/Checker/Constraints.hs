@@ -18,6 +18,7 @@ import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans (lift)
 
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
@@ -82,9 +83,6 @@ compileToSBV predicate tyVarContext kVarContext =
       return $ bAnd ps'
 
     buildTheorem' solverVars (Impl [] p1 p2) = do
-        -- Increment freshener
-        modify (\st -> st { counter = counter st + 1 })
-
         p1' <- buildTheorem' solverVars p1
         p2' <- buildTheorem' solverVars p2
         return $ p1' ==> p2'
@@ -92,6 +90,32 @@ compileToSBV predicate tyVarContext kVarContext =
     buildTheorem' solverVars (NegPred p) = do
         p' <- buildTheorem' solverVars p
         return $ bnot p'
+
+    buildTheorem' solverVars (Exists v k p) = do
+      st <- get
+
+      -- Freshen the variable bound here
+      let v' = mkId $ internalName v <> "-e" <> show (counter st)
+      put (st { tyMap = (internalName v, internalName v') : tyMap st
+              , counter = counter st + 1 })
+
+      p_s <- freshen p
+
+      case demoteKindToType k of
+        Just t -> do
+          -- Create a fresh solver variable
+          (pred, solverVar) <- lift $ freshCVar compileQuant (internalName v') t InstanceQ
+          let id' = Id (sourceName v) (internalName v')
+
+          -- Recursively build the theorem
+          pred' <- buildTheorem' ((id', solverVar) : solverVars) p_s
+          return (pred &&& pred')
+
+        Nothing ->
+          case k of
+            KType -> buildTheorem' solverVars p
+            _ -> error $ "Trying to make a fresh existential solver variable for a grade of kind: "
+                         <> show k <> " but I don't know how."
 
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
@@ -102,7 +126,8 @@ compileToSBV predicate tyVarContext kVarContext =
 
           -- Freshen the variable bound here
           let v' = mkId $ internalName v <> "-" <> show (counter st)
-          put (st { tyMap = (internalName v, internalName v') : tyMap st })
+          put (st { tyMap = (internalName v, internalName v') : tyMap st
+                  , counter = counter st + 1 })
 
           -- Freshen the rest of the predicates
           p_s <- freshen p
@@ -122,7 +147,6 @@ compileToSBV predicate tyVarContext kVarContext =
     buildTheorem' solverVars (Con cons) =
       lift $ compile solverVars cons
 
-
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
@@ -132,6 +156,7 @@ compileToSBV predicate tyVarContext kVarContext =
       -> Symbolic (SBool, SBool, Ctxt SGrade)
     -- Ignore variables coming from a dependent pattern match because
     -- they get created elsewhere
+
     createFreshVar _ (_, (_, BoundQ)) x = return x
 
     createFreshVar quant
@@ -142,16 +167,31 @@ compileToSBV predicate tyVarContext kVarContext =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
-              BoundQ -> (universalConstraints, pre &&& existentialConstraints)
+          --    BoundQ -> (universalConstraints, pre &&& existentialConstraints)
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
+
 
 -- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
 rewriteConstraints :: Ctxt Type -> Pred -> Pred
 rewriteConstraints ctxt =
-    predFold Conj Impl (\c -> Con $ foldr (uncurry updateConstraint) c ctxt) NegPred
+    predFold
+      Conj
+      Impl
+      (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
+      NegPred
+      existsCase
   where
+    existsCase :: Id -> Language.Granule.Syntax.Type.Kind -> Pred -> Pred
+    existsCase var (KVar kvar) p =
+      Exists var k' p
+        where
+          k' = case lookup kvar ctxt of
+                  Just ty -> KPromote ty
+                  Nothing -> KVar kvar
+    existsCase var k p = Exists var k p
+
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`
     updateConstraint :: Id -> Type -> Constraint -> Constraint
@@ -431,7 +471,8 @@ trivialUnsatisfiableConstraints cs =
     -- Only check trivial constraints in positive positions
     -- This means we don't report a branch concluding false trivially
     -- TODO: may check trivial constraints everywhere?
-    positiveConstraints = predFold concat (\_ _ q -> q) (\x -> [x]) id
+    positiveConstraints =
+        predFold concat (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
