@@ -3,6 +3,7 @@ module Issue where
 open import Data.Product
 open import Data.Integer
 open import Data.Nat hiding (_+_; _≥_)
+open import Data.Sum
 
 open import Relation.Nullary
 open import Relation.Binary.PropositionalEquality

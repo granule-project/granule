@@ -417,21 +417,25 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
         -- Anything that was bound in the pattern but not used correctly
         xs -> illLinearityMismatch s xs
 
-  popGuardContext
+  st <- get
+  debugM "pred so after branches" (pretty (predicateStack st))
 
   -- Pop from stacks related to case
   popGuardContext
   popCaseFrame
 
-  debugM "*** Branches and substitutions from case " (pretty branchCtxtsAndSubst)
-
   -- Find the upper-bound contexts
   let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
+  debugM "*** Branches from the case " (pretty branchCtxts)
+
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxtPlus s branchesGam guardGam
   debugM "--- Output context for case " (pretty g)
+
+  st <- get
+  debugM "pred at end of case" (pretty (predicateStack st))
 
   let elaborated = Case s tau elaboratedGuard elaboratedCases
   return (g, concat substs, elaborated)

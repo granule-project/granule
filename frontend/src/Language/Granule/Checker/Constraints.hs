@@ -33,6 +33,8 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
+--import Debug.Trace
+
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
 compileQuant ForallQ   = universal
