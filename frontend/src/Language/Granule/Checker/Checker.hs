@@ -165,13 +165,19 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
          debugM "tyVarContext" (pretty $ tyVarContext checkerState)
          let predStack = Conj $ predicateStack checkerState
          debugM "Solver predicate" $ pretty predStack
-         solveConstraints predStack s defName
+         solveConstraints predStack (getSpan equation) defName
 
          return elaboratedEq
 
     case sequence results of
-        Just elaboratedEquations ->
-           return (Just $ Def s defName elaboratedEquations tys)
+        Just elaboratedEquations -> do
+
+            resultImp <- runMaybeT $ checkGuardsForImpossibility s defName
+            -- Guard checks
+            case sequence [resultImp] of
+              Just _ ->
+               return (Just $ Def s defName elaboratedEquations tys)
+              Nothing -> return Nothing
 
         Nothing ->
            return Nothing
@@ -1059,3 +1065,45 @@ fold1M f (x:xs) = foldM f x xs
 justLinear [] = []
 justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
 justLinear ((x, _) : xs) = justLinear xs
+
+
+checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
+checkGuardsForImpossibility s name = do
+  -- Get top of guard predicate stack
+  st <- get
+  let ps : _ = guardPredicates st
+
+  -- Convert all universal variables to existential
+  let tyVarContextExistential =
+         mapMaybe (\(v, (k, q)) ->
+                       case q of
+                         BoundQ -> Nothing
+                         _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
+
+  coeffectVars <- justCoeffectTypesConverted s tyVarContextExistential
+  coeffectKVars <- justCoeffectTypesConvertedVars s (kVarContext st)
+
+  forM_ ps $ \((ctxt, p), s) -> do
+
+    let thm = foldr (uncurry Exists) p ctxt
+
+    convCtxt <- justCoeffectTypesConverted s (map (\(id, k) -> (id, (k, InstanceQ))) ctxt)
+
+    result <- liftIO $ provePredicate s thm (coeffectVars ++ convCtxt) coeffectKVars
+    let msgHead = "Pattern guard for equation of `" <> pretty name <> "``"
+
+    case result of
+      QED -> return ()
+      NotValid msg -> halt $ GenericError (Just s) $ msgHead <>
+                        " is impossible. Its condition " <> msg
+      NotValidTrivial unsats ->
+                      halt $ GenericError (Just s) $ msgHead <>
+                        " is impossible. " <>
+                        intercalate "\n\t" (map (pretty . Neg) unsats)
+      Timeout -> halt $ CheckerError (Just s) $
+         "While checking plausibility of pattern guard for equation " <> pretty name
+         <> "the solver timed out with limit of " <>
+         show (solverTimeoutMillis ?globals) <>
+         " ms. You may want to increase the timeout (see --help)."
+
+      Error msg -> halt msg
