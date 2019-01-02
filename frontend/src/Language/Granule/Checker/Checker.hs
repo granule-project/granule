@@ -1079,21 +1079,24 @@ checkGuardsForImpossibility s name = do
                        case q of
                          BoundQ -> Nothing
                          _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
+  tyVars <- justCoeffectTypesConverted s tyVarContextExistential
+  kVars <- justCoeffectTypesConvertedVars s (kVarContext st)
 
-  coeffectVars <- justCoeffectTypesConverted s tyVarContextExistential
-  coeffectKVars <- justCoeffectTypesConvertedVars s (kVarContext st)
-
+  -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
+    -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
 
-    convCtxt <- justCoeffectTypesConverted s (map (\(id, k) -> (id, (k, InstanceQ))) ctxt)
+    -- Try to prove the theorem
+    result <- liftIO $ provePredicate s thm tyVars kVars
 
-    result <- liftIO $ provePredicate s thm (coeffectVars ++ convCtxt) coeffectKVars
     let msgHead = "Pattern guard for equation of `" <> pretty name <> "``"
 
     case result of
       QED -> return ()
+
+      -- Various kinds of error
       NotValid msg -> halt $ GenericError (Just s) $ msgHead <>
                         " is impossible. Its condition " <> msg
       NotValidTrivial unsats ->
