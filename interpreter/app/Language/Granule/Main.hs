@@ -149,7 +149,7 @@ parseArgs = info (go <**> helper) $ briefDesc
           option (auto @Integer) (
             long "solver-timeout" <>
             help "SMT solver timeout in milliseconds (negative for unlimited)" <>
-            value 1000 <> showDefault
+            value 5000 <> showDefault
             )
 
         pure

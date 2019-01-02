@@ -458,5 +458,5 @@ main = do
            , suppressInfos = False
            , suppressErrors = False
            , timestamp = False
-           , solverTimeoutMillis = Just 1000
+           , solverTimeoutMillis = Just 5000
            }
