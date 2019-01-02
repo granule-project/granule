@@ -1,0 +1,16 @@
+data Vec (n : Nat) (a : Type) : Type where
+  Nil : Vec 0 a;
+  Cons : a -> Vec n a -> Vec (n + 1) a;
+  Cons' : a -> Vec n a -> Vec (n + 1) a
+
+map : forall (a : Type, b : Type, n : Nat)
+    . (a -> b) [n] -> Vec n a -> Vec n b
+map [_] Nil = Nil;
+map [f] (Cons x xs) = Cons (f x) (map [f] xs);
+map [f] (Cons' x xs) = Cons' (f x) (map [f] xs)
+
+
+last : forall (a : Type, n : Nat) . (Vec (n+1) (Int [0..1])) -> Int
+last (Cons [x] Nil)   = x;
+last (Cons [_] xs)    = last xs;
+last (Cons' [_] xs)    = last xs

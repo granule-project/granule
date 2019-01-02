@@ -1,0 +1,8 @@
+import Fin
+import Vec
+
+index : forall a : Type, n : Nat
+      . (Fin (n + 1)) [1] -> (Vec (n + 1) a) [0..1] -> a
+index n xs = case (n, xs) of
+  ([FZ], [Cons x _]) -> x;
+  ([FS k], [Cons _ xs']) -> index [k] [xs']
