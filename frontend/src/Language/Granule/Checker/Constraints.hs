@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
@@ -17,6 +18,7 @@ import Control.Exception (assert)
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans (lift)
 
+import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
@@ -30,6 +32,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Helpers
     (freshen, runFreshenerM, Freshener, FreshenerState(..))
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
@@ -502,3 +505,67 @@ trivialUnsatisfiableConstraints cs =
     --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
     --   neqC lb1 lb2 || neqC ub1 ub2
     neqC _ _                   = False
+
+data SolverResult =
+    QED
+  | NotValid String
+  | NotValidTrivial [Constraint]
+  | Timeout
+  | Error TypeError
+
+provePredicate :: (?globals :: Globals) =>
+     Span
+  -> Pred                    -- Predicate
+  -> Ctxt (Type, Quantifier) -- Free variable quantifiers
+  -> Ctxt Type               -- Free variable kinds
+  -> IO SolverResult
+provePredicate s predicate vars kvars =
+  if isTrivial predicate
+    then do
+      debugM "solveConstraints" "Skipping solver because predicate is trivial."
+      return QED
+
+    else do
+      let (sbvTheorem, _, unsats) = compileToSBV predicate vars kvars
+
+      ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
+        case solverTimeoutMillis ?globals of
+          Nothing -> return ()
+          Just n -> setTimeOut n
+        sbvTheorem
+
+      return $ case thmRes of
+        -- we're good: the negation of the theorem is unsatisfiable
+        Unsatisfiable {} -> QED
+
+        ProofError _ msgs -> Error $ CheckerError (Just s) $ "Solver error:" <> unlines msgs
+
+        Unknown _ UnknownTimeOut -> Timeout
+
+        Unknown _ reason  ->
+          Error $ CheckerError (Just s) $ "Solver says unknown: " <> show reason
+
+        _ ->
+          case getModelAssignment thmRes of
+            -- Main 'Falsifiable' result
+            Right (False, assg :: [ Integer ] ) ->
+              -- Show any trivial inequalities
+              if not (null unsats)
+                then NotValidTrivial unsats
+                else
+                  -- Show fatal error, with prover result
+                  {-
+                  negated <- liftIO . sat $ sbvSatTheorem
+                  print $ show $ getModelDictionary negated
+                  case (getModelAssignment negated) of
+                    Right (_, assg :: [Integer]) -> do
+                      print $ show assg
+                    Left msg -> print $ show msg
+                  -}
+                   NotValid $ "is " <> show (ThmResult thmRes)
+
+            Right (True, _) ->
+              NotValid "returned probable model."
+
+            Left str        ->
+              Error $ GenericError (Just s) str

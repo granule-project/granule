@@ -12,7 +12,6 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List (genericLength, intercalate)
 import Data.Maybe
-import Data.SBV hiding (Kind, kindOf, extend)
 
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
@@ -147,7 +146,7 @@ checkDef :: (?globals :: Globals )
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
-    modify (\st -> st { failedPatternPreds = [[]] } )
+    modify (\st -> st { guardPredicates = [[]] } )
 
     results <-
        -- _ :: Checker [Maybe (Equation...)]
@@ -213,7 +212,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
       ctxtApprox s localGam patternGam
 
       -- Conclude the implication
-      concludeImplication localVars
+      concludeImplication s localVars
 
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
@@ -410,7 +409,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            ctxtApprox s (consumedGam `subtractCtxt` patternGam) gam
 
            -- Conclude the implication
-           concludeImplication eVars
+           concludeImplication (getSpan pat_i) eVars
 
            return (branchCtxt', subst', (elaborated_pat_i, elaborated_i))
 
@@ -533,7 +532,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       newConjunct
       ---
       (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
-      concludeImplication eVars
+      concludeImplication (getSpan pati) eVars
 
       ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
 
@@ -758,79 +757,49 @@ optionalSigEquality s (Just t) t' = do
     return eq
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
-solveConstraints predicate s defName = do
-  if isTrivial predicate
-    then debugM "solveConstraints" "Skipping solver because predicate is trivial."
-    else do
-      -- Get the coeffect kind context and constraints
-      checkerState <- get
-      let
-        ctxtCk  = tyVarContext checkerState
-        ctxtCkVar = kVarContext checkerState
-      coeffectVars <- justCoeffectTypesConverted ctxtCk
-      coeffectKVars <- justCoeffectTypesConvertedVars ctxtCkVar
+solveConstraints predicate s name = do
 
-      let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
+  -- Get the coeffect kind context and constraints
+  checkerState <- get
+  let ctxtCk  = tyVarContext checkerState
+  let ctxtCkVar = kVarContext checkerState
+  coeffectVars <- justCoeffectTypesConverted s ctxtCk
+  coeffectKVars <- justCoeffectTypesConvertedVars s ctxtCkVar
 
-      ThmResult thmRes <- liftIO . prove $ do -- proveWith defaultSMTCfg {verbose=True}
-        case solverTimeoutMillis ?globals of
-          Nothing -> return ()
-          Just n -> setTimeOut n
-        sbvTheorem
+  result <- liftIO $ provePredicate s predicate coeffectVars coeffectKVars
 
-      case thmRes of
-        Unsatisfiable {} -> return () -- we're good: the negation of the theorem is unsatisfiable
-        ProofError _ msgs ->
-          halt $ CheckerError Nothing $ "Solver error:" <> unlines msgs
-        Unknown _ UnknownTimeOut ->
-          halt $ CheckerError Nothing $
-            "Solver timed out with limit of " <>
-            show (solverTimeoutMillis ?globals) <>
-            " ms. You may want to increase the timeout (see --help)."
-        Unknown _ reason  ->
-          halt $ CheckerError Nothing $ "Solver says unknown: " <> show reason
-        _ ->
-          case getModelAssignment thmRes of
-            -- Main 'Falsifiable' result
-            Right (False, assg :: [ Integer ] ) -> do
-              -- Show any trivial inequalities
-              mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
-              -- Show fatal error, with prover result
-              {-
-              negated <- liftIO . sat $ sbvSatTheorem
-              print $ show $ getModelDictionary negated
-              case (getModelAssignment negated) of
-                Right (_, assg :: [Integer]) -> do
-                  print $ show assg
-                Left msg -> print $ show msg
-              -}
-              halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' is " <> show (ThmResult thmRes)
+  case result of
+    QED -> return ()
+    NotValid msg ->
+       halt $ GenericError (Just s) $ "Definition '" <> pretty name <> "'" <> msg
+    NotValidTrivial unsats ->
+       mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
+    Timeout ->
+       halt $ CheckerError Nothing $
+         "Solver timed out with limit of " <>
+         show (solverTimeoutMillis ?globals) <>
+         " ms. You may want to increase the timeout (see --help)."
+    Error msg ->
+       halt msg
 
-            Right (True, _) ->
-              halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' returned probable model."
-
-            Left str        ->
-              halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> " had a solver fail: " <> str
+justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
+    convert (var, (KPromote t, q)) = do
+      k <- inferKindOfType s t
+      case k of
+        KCoeffect -> return $ Just (var, (t, q))
+        _         -> return Nothing
+    convert (var, (KVar v, q)) = do
+      k <- inferKindOfType s (TyVar v)
+      case k of
+        KCoeffect -> return $ Just (var, (TyVar v, q))
+        _         -> return Nothing
+    convert _ = return Nothing
 
-    justCoeffectTypesConverted xs = mapM convert xs >>= (return . catMaybes)
-      where
-        convert (var, (KPromote t, q)) = do
-          k <- inferKindOfType s t
-          case k of
-            KCoeffect -> return $ Just (var, (t, q))
-            _         -> return Nothing
-        convert (var, (KVar v, q)) = do
-          k <- inferKindOfType s (TyVar v)
-          case k of
-            KCoeffect -> return $ Just (var, (TyVar v, q))
-            _         -> return Nothing
-        convert _ = return Nothing
-
-    justCoeffectTypesConvertedVars env = do
-      let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
-      env' <- justCoeffectTypesConverted implicitUniversalMadeExplicit
-      return $ stripQuantifiers env'
+justCoeffectTypesConvertedVars s env = do
+  let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
+  env' <- justCoeffectTypesConverted s implicitUniversalMadeExplicit
+  return $ stripQuantifiers env'
 
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification

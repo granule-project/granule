@@ -59,7 +59,7 @@ data CheckerState = CS
             -- Stack of a list of additional knowledge from failed patterns/guards
             -- (i.e. from preceding cases) stored as a list of lists ("frames")
             -- tupling a context of locally bound variables and the predicate
-            , failedPatternPreds :: [[(Ctxt Kind, Pred)]]
+            , guardPredicates :: [[((Ctxt Kind, Pred), Span)]]
 
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
@@ -87,7 +87,7 @@ data CheckerState = CS
 initState :: CheckerState
 initState = CS { uniqueVarIdCounter = 0
                , predicateStack = []
-               , failedPatternPreds = [[]]
+               , guardPredicates = [[]]
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
                , guardContexts = []
@@ -146,20 +146,20 @@ newConjunct = do
 -- | This happens when we start a case expression
 newCaseFrame :: MaybeT Checker ()
 newCaseFrame =
-  modify (\st -> st { failedPatternPreds = [] : failedPatternPreds st } )
+  modify (\st -> st { guardPredicates = [] : guardPredicates st } )
 
 -- | Pop (and don't return) the top of the failed case knowledge stack
 -- | This happens when we finish a case expression
 popCaseFrame :: MaybeT Checker ()
 popCaseFrame =
-  modify (\st -> st { failedPatternPreds = tail (failedPatternPreds st) })
+  modify (\st -> st { guardPredicates = tail (guardPredicates st) })
 
 -- | Takes the top two conjunction frames and turns them into an
 -- impliciation
 -- The first parameter is a list of any
 -- existential variables being introduced in this implication
-concludeImplication :: (?globals :: Globals) => [Id] -> MaybeT Checker ()
-concludeImplication localVars = do
+concludeImplication :: (?globals :: Globals) => Span -> [Id] -> MaybeT Checker ()
+concludeImplication s localVars = do
   checkerState <- get
   case predicateStack checkerState of
     (p' : p : stack) -> do
@@ -172,55 +172,38 @@ concludeImplication localVars = do
                                           <> pretty v <> " in "
                                           <> pretty (tyVarContext checkerState)
 
-       case failedPatternPreds checkerState of
+       case guardPredicates checkerState of
 
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
           let impl = Impl localVars p p'
 
-          let knowledge =
-               if isTrivial p
-                 then []
-                 else [(localCtxt, p)]
-
           -- Add the implication to the predicate stack
           modify (\st -> st { predicateStack = pushPred impl stack
           -- And add this case to the knowledge stack
-                            , failedPatternPreds = knowledge : knowledgeStack })
+                            , guardPredicates = [((localCtxt, p), s)] : knowledgeStack })
 
         -- Some information currently in the stack frame
         previousGuards : knowledgeStack -> do
 
-           let previousGuardCtxt = concatMap fst previousGuards
-           let prevGuardPred = Conj (map snd previousGuards)
+           let previousGuardCtxt = concatMap (fst . fst) previousGuards
+           let prevGuardPred = Conj (map (snd . fst) previousGuards)
 
-           debugM "previousGard" (pretty prevGuardPred)
-
-           debugM "p'" (pretty p')
-
-          --let impl = Impl (previousGuardVars ++ localVars) (Conj [p, negatedPrevGuardPred]) p'
-          --let impl = Impl localVars p p'
-          {- let impl = Impl localVars
-                  (Conj [p, NegPred (Impl previousGuardVars (Conj []) negatedPrevGuardPred)])
-                  p' -}
-
+           -- negation of the previous guard
            let guard = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
-           let impl = Impl localVars (Conj [p, guard]) p'
 
-           debugM "impl" (pretty impl)
+           -- Implication of p &&& negated previous guards => p'
+           let impl = if (isTrivial prevGuardPred)
+                        then Impl localVars p p'
+                        else Impl localVars (Conj [p, guard]) p'
 
-           debugM "stack" (pretty stack)
-
-           let knowledge =
-                if isTrivial p
-                 then previousGuards
-                 else (localCtxt, p) : previousGuards
+           let knowledge = ((localCtxt, p), s) : previousGuards
 
            -- Store `p` (impliciation antecedent) to use in later cases
-           -- on the top of the failedPatternPreds stack
+           -- on the top of the guardPredicates stack
            modify (\st -> st { predicateStack = pushPred impl stack
            -- And add this case to the knowledge stack
-                             , failedPatternPreds = knowledge : knowledgeStack })
+                             , guardPredicates = knowledge : knowledgeStack })
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
