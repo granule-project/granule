@@ -23,6 +23,8 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
 
+import Language.Granule.Syntax.Helpers
+
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Constraints.Quantifiable
 import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
@@ -35,8 +37,6 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
-
---import Debug.Trace
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
@@ -104,7 +104,9 @@ compileToSBV predicate tyVarContext kVarContext =
       put (st { tyMap = (internalName v, internalName v') : tyMap st
               , counter = counter st + 1 })
 
-      p_s <- freshen p
+      p <- freshen p
+      -- Freshening now out of scope
+      removeFreshenings [Id (internalName v) (internalName v')]
 
       case demoteKindToType k of
         Just t -> do
@@ -113,7 +115,7 @@ compileToSBV predicate tyVarContext kVarContext =
           let id' = Id (sourceName v) (internalName v')
 
           -- Recursively build the theorem
-          pred' <- buildTheorem' ((id', solverVar) : solverVars) p_s
+          pred' <- buildTheorem' ((id', solverVar) : solverVars) p
           return (pred &&& pred')
 
         Nothing ->
@@ -135,19 +137,22 @@ compileToSBV predicate tyVarContext kVarContext =
                   , counter = counter st + 1 })
 
           -- Freshen the rest of the predicates
-          p_s <- freshen p
-          p_s' <- freshen p'
+          p <- freshen p
+          p' <- freshen p'
+          -- Freshening now out of scope
+          removeFreshenings [Id (internalName v) (internalName v')]
 
           -- Create fresh solver variable
           vSolver <- lift $ forall (internalName v')
 
-          impl <- buildTheorem' ((Id (sourceName v) (internalName v'), SNat vSolver) : solverVars) (Impl vs p_s p_s')
+          impl <- buildTheorem' ((Id (sourceName v) (internalName v'), SNat vSolver) : solverVars) (Impl vs p p')
           return ((vSolver .>= literal 0) ==> impl)
 
         else
-         -- An optimisation, don't both quantifying things
-         -- which don't appear in the theorem anyway
-         buildTheorem' solverVars (Impl vs p p')
+          -- An optimisation, don't bother quantifying things
+          -- which don't appear in the theorem anyway
+
+          buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
       lift $ compile solverVars cons

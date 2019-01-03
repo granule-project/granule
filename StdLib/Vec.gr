@@ -11,6 +11,7 @@
 -- # Operations on vectors
 
 import Nat
+import Fin
 
 data Vec (n : Nat) t where
   Nil  : Vec 0 t;
@@ -27,6 +28,12 @@ map : forall (a : Type, b : Type, n : Nat)
     . (a -> b) [n] -> Vec n a -> Vec n b
 map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
+
+-- Safe random-access indexing from a vector
+index : forall a : Type, n : Nat
+      . Fin (n + 1) -> (Vec (n + 1) a) [0..1] -> a
+index FZ     [Cons x _]   = x;
+index (FS k) [Cons _ xs'] = index k [xs']
 
 -- Standard foldr on vectors
 foldr : forall (a : Type, b : Type, n : Nat)

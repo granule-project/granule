@@ -136,7 +136,7 @@ instance Monad m => Freshenable m Pred where
   freshen =
     predFoldM
       (return . Conj)
-      (\v p1 p2 -> return $ Impl v p1 p2)
+      (\vs p1 p2 -> return $ Impl vs p1 p2)
       (\c -> freshen c >>= (return . Con))
       (return . NegPred)
       (\x t p -> return $ Exists x t p)

@@ -42,7 +42,8 @@ removeFreshenings :: Monad m => [Id] -> Freshener m ()
 removeFreshenings [] = return ()
 removeFreshenings (x:xs) = do
     st <- get
-    put st { varMap = delete x' (varMap st) }
+    put st { varMap = delete x' (varMap st)
+           , tyMap = delete x' (tyMap st) }
     removeFreshenings xs
   where
     x' = (sourceName x, internalName x)
