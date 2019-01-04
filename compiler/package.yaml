@@ -21,7 +21,10 @@ library:
   - Language.Granule.Codegen.NormalisedDef
   - Language.Granule.Codegen.Codegen
   - Language.Granule.Codegen.TopsortDefinitions
+  - Language.Granule.Codegen.ClosureFreeDef
+  - Language.Granule.Codegen.ConvertClosures
   dependencies:
+  - transformers
   - containers
   - granule-frontend
   - llvm-hs-pure >= 6.0
