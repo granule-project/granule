@@ -52,6 +52,39 @@ bicata falg galg =
     where fcata = falg . (bimap fcata gcata) . project
           gcata = galg . (bimap gcata fcata) . project
 
+bicataP :: (Birecursive x z, Birecursive z x)
+       => (Bifunctor (Base x z), Bifunctor (Base z x))
+       => ((p -> (Base x z) a b -> a), x -> p -> p)
+       -> ((p -> (Base z x) b a -> b), z -> p -> p)
+       -> p
+       -> x
+       -> a
+bicataP (falgP, ftop) (galgP, gtop) =
+    fcataP
+    where fcataP p fp =
+            let p' = ftop fp p
+            in falgP p' $ bimap (fcataP p') (gcataP p') $ project fp
+          gcataP p fp =
+            let p' = gtop fp p
+            in galgP p' $ bimap (gcataP p') (fcataP p') $ project fp
+
+bicataPM :: (Birecursive x z, Birecursive z x)
+         => (Bitraversable (Base x z), Bitraversable (Base z x))
+         => (Monad m)
+         => ((p -> (Base x z) a b -> m a), x -> p -> p)
+         -> ((p -> (Base z x) b a -> m b), z -> p -> p)
+         -> p
+         -> x
+         -> m a
+bicataPM (falgPM, ftop) (galgPM, gtop) =
+    fcataPM
+    where fcataPM p fp =
+            let p' = ftop fp p
+            in (bimapM (fcataPM p') (gcataPM p') $ project fp) >>= falgPM p'
+          gcataPM p fp =
+            let p' = gtop fp p
+            in (bimapM (gcataPM p') (fcataPM p') $ project fp) >>= galgPM p'
+
 bicataM :: (Birecursive x z, Birecursive z x)
         => (Bitraversable (Base x z), Bitraversable (Base z x))
         => (Monad m)
