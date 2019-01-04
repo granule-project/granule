@@ -173,7 +173,7 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
         Just elaboratedEquations -> do
 
             resultImp <- runMaybeT $ checkGuardsForImpossibility s defName
-            resultExh <- runMaybeT $ checkGuardsForExhaustivity s defName
+            resultExh <- runMaybeT $ checkGuardsForExhaustivity s defName ty equations
             -- Guard checks
             case sequence [resultImp, resultExh] of
               Just _ ->
@@ -1067,8 +1067,9 @@ justLinear [] = []
 justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
 justLinear ((x, _) : xs) = justLinear xs
 
-checkGuardsForExhaustivity :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
-checkGuardsForExhaustivity s name = do
+checkGuardsForExhaustivity :: (?globals :: Globals)
+  => Span -> Id -> Type -> [Equation () ()] -> MaybeT Checker ()
+checkGuardsForExhaustivity s name ty eqs = do
   -- TODO:
   return ()
 
