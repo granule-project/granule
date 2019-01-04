@@ -33,6 +33,7 @@ module Language.Granule.Codegen.NormalisedDef where
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Pattern (Pattern)
 import Language.Granule.Syntax.Annotated
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
@@ -44,9 +45,13 @@ data ValueDef v a =
     ValueDef {
         valueDefSpan :: Span,
         valueDefIdentifier :: Id,
-        valueDefBody :: (Expr v a),
+        valueDefInitializer :: (Expr v a),
         valueDefTypeScheme :: TypeScheme }
     deriving Generic
+
+instance (Pretty v) => Pretty (ValueDef v a) where
+    prettyL l (ValueDef _ v e t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
+                                   prettyL l v <> " = " <> prettyL l e
 
 type FunctionDef v a = Def v a
 
@@ -55,10 +60,10 @@ instance FirstParameter (ValueDef v a) Span
 deriving instance (Show a, Show v) => Show (ValueDef v a)
 deriving instance (Eq a, Eq v) => Eq (ValueDef v a)
 
-instance Definition ValueDef where
+instance Definition (ValueDef v a) (Expr v a) where
     definitionSpan = valueDefSpan
     definitionIdentifier = valueDefIdentifier
-    definitionBody = valueDefBody
+    definitionBody = valueDefInitializer
     definitionTypeScheme = valueDefTypeScheme
 
 isFunctionDef :: Def v a -> Bool
