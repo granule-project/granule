@@ -1,4 +1,4 @@
-module Language.Granule.Codegen.AstBuilding where
+module Language.Granule.Codegen.BuildAST where
 import Language.Granule.Codegen.NormalisedDef
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Expr
@@ -32,7 +32,7 @@ app f x =
     App nullSpan retTy f x
     where (FunTy _ retTy) = annotation f
 
-defval :: String -> Expr () Type -> TypeScheme -> ValueDef () Type
+defval :: String -> Expr ev Type -> TypeScheme -> ValueDef ev Type
 defval name initexpr ts =
     ValueDef nullSpan (mkId name) initexpr ts
 
@@ -45,6 +45,12 @@ lambdaexp argument fnty body =
     Val nullSpan fnty (Abs fnty argument Nothing body)
 
 plus :: Expr ev Type -> Expr ev Type -> Expr ev Type
-x `plus` y | xTy == yTy =
-    Binop nullSpan xTy "+" x y
+x `plus` y
+    | xTy == yTy =
+        Binop nullSpan xTy "+" x y
+    | otherwise =
+        error $ show xTy ++ " not equal to " ++ show yTy
     where (xTy, yTy) = (annotation x, annotation y)
+
+normASTFromDefs :: [FunctionDef ev Type] -> [ValueDef ev Type] -> NormalisedAST ev Type
+normASTFromDefs functionDefs valueDefs = NormalisedAST [] functionDefs valueDefs
