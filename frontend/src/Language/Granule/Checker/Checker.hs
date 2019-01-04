@@ -97,14 +97,16 @@ checkDataCon :: (?globals :: Globals )
 checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
-        let tyVars = tyVarsT <> tyVarsD
+        -- Only relevant type variables get included
+        let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
         tySchKind <- inferKindOfType' sp tyVars ty
         case tySchKind of
           KType -> do
             check ty
             st <- get
             case extend (dataConstructors st) dName (Forall sp tyVars ty) of
-              Some ds -> put st { dataConstructors = ds }
+              Some ds -> do
+                put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
           KPromote (TyCon k) | internalName k == "Protocol" -> do
             check ty
