@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -27,11 +28,11 @@ data AST v a = AST [DataDecl] [Def v a]
 
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 
-class Definition d where
-    definitionSpan :: d v a -> Span
-    definitionIdentifier :: d v a -> Id
-    definitionBody :: d v a -> Expr v a
-    definitionTypeScheme :: d v a -> TypeScheme
+class Definition d expr | d -> expr where
+    definitionSpan :: d -> Span
+    definitionIdentifier :: d -> Id
+    definitionBody :: d -> expr
+    definitionTypeScheme :: d -> TypeScheme
 
 -- | Expression definitions
 data Def v a = Def {
@@ -46,13 +47,13 @@ instance FirstParameter (Def v a) Span
 deriving instance (Show a, Show v) => Show (Def v a)
 deriving instance (Eq a, Eq v) => Eq (Def v a)
 
-instance Definition Def where
+instance Definition (Def ev a) (Expr ev a) where
     definitionSpan = getSpan
     definitionIdentifier = defIdentifier
     definitionBody = defBody
     definitionTypeScheme = defTypeScheme
 
-definitionType :: (Definition d) => d v a -> Type
+definitionType :: (Definition d expr) => d -> Type
 definitionType def =
     ty where (Forall _ _ ty) = definitionTypeScheme def
 
