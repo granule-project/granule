@@ -18,7 +18,7 @@ import Control.Exception (assert)
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Trans (lift)
 
-import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)

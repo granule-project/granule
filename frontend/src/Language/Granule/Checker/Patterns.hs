@@ -7,6 +7,7 @@ import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
 import Data.List (intercalate)
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad

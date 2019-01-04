@@ -11,6 +11,7 @@ import Data.List (intercalate)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
@@ -22,7 +23,6 @@ import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Utils
-
 
 -- State of the check/synth functions
 newtype Checker a =
@@ -256,68 +256,18 @@ addConstraintToPreviousFrame c = do
           stack ->
             put (checkerState { predicateStack = Conj [Con c] : stack })
 
-{- Helpers for error messages and checker control flow -}
-data TypeError
-  = CheckerError (Maybe Span) String
-  | GenericError (Maybe Span) String
-  | GradingError (Maybe Span) String
-  | KindError (Maybe Span) String
-  | LinearityError (Maybe Span) String
-  | PatternTypingError (Maybe Span) String
-  | UnboundVariableError (Maybe Span) String
-  | RefutablePatternError (Maybe Span) String
-  | NameClashError (Maybe Span) String
-  | DuplicatePatternError (Maybe Span) String
-
-instance UserMsg TypeError where
-  title CheckerError {} = "Checker error"
-  title GenericError {} = "Type error"
-  title GradingError {} = "Grading error"
-  title KindError {} = "Kind error"
-  title LinearityError {} = "Linearity error"
-  title PatternTypingError {} = "Pattern typing error"
-  title UnboundVariableError {} = "Unbound variable error"
-  title RefutablePatternError {} = "Pattern is refutable"
-  title NameClashError {} = "Name clash"
-  title DuplicatePatternError {} = "Duplicate pattern"
-  location (CheckerError sp _) = sp
-  location (GenericError sp _) = sp
-  location (GradingError sp _) = sp
-  location (KindError sp _) = sp
-  location (LinearityError sp _) = sp
-  location (PatternTypingError sp _) = sp
-  location (UnboundVariableError sp _) = sp
-  location (RefutablePatternError sp _) = sp
-  location (NameClashError sp _) = sp
-  location (DuplicatePatternError sp _) = sp
-  msg (CheckerError _ m) = m
-  msg (GenericError _ m) = m
-  msg (GradingError _ m) = m
-  msg (KindError _ m) = m
-  msg (LinearityError _ m) = m
-  msg (PatternTypingError _ m) = m
-  msg (UnboundVariableError _ m) = m
-  msg (RefutablePatternError _ m) = m
-  msg (NameClashError _ m) = m
-  msg (DuplicatePatternError _ m) = m
-
 illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
 illKindedUnifyVar sp t1 k1 t2 k2 =
-    halt $ KindError (Just sp) $
-      "Trying to unify a type `"
-      <> pretty t1 <> "` of kind " <> pretty k1
-      <> " with a type `"
-      <> pretty t2 <> "` of kind " <> pretty k2
+   halt $ KindError (Just sp) $
+     "Trying to unify a type `"
+     <> pretty t1 <> "` of kind " <> pretty k1
+     <> " with a type `"
+     <> pretty t2 <> "` of kind " <> pretty k2
 
 illKindedNEq :: (?globals :: Globals) => Span -> Kind -> Kind -> MaybeT Checker a
 illKindedNEq sp k1 k2 =
-    halt $ KindError (Just sp) $
-      "Expected kind `" <> pretty k1 <> "` but got `" <> pretty k2 <> "`"
-
-data LinearityMismatch =
-   LinearNotUsed Id
- | LinearUsedNonLinearly Id
-   deriving Show -- for debugging
+   halt $ KindError (Just sp) $
+     "Expected kind `" <> pretty k1 <> "` but got `" <> pretty k2 <> "`"
 
 illLinearityMismatch :: (?globals :: Globals) => Span -> [LinearityMismatch] -> MaybeT Checker a
 illLinearityMismatch sp mismatches =
@@ -327,7 +277,6 @@ illLinearityMismatch sp mismatches =
       "Linear variable `" <> pretty v <> "` is never used."
     mkMsg (LinearUsedNonLinearly v) =
       "Variable `" <> pretty v <> "` is promoted but its binding is linear; its binding should be under a box."
-
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
 illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern t -> MaybeT Checker a

@@ -6,6 +6,7 @@ module Language.Granule.Checker.Coeffects where
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Monad
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers

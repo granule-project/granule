@@ -13,6 +13,7 @@ import Control.Monad.Trans.Maybe
 import Data.List (genericLength, intercalate)
 import Data.Maybe
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
@@ -43,7 +44,8 @@ data CheckerResult = Failed | Ok deriving (Eq, Show)
 -- Checking (top-level)
 check :: (?globals :: Globals) => AST () () -> IO CheckerResult
 check (AST dataDecls defs) = do
-      let checkDataDecls = do { mapM_ checkTyCon dataDecls; mapM checkDataCons dataDecls }
+      let checkDataDecls = do { mapM_ checkTyCon dataDecls;
+                                mapM checkDataCons dataDecls }
 
       -- Get the types of all definitions (assume that they are correct for
       -- the purposes of (mutually)recursive calls).
