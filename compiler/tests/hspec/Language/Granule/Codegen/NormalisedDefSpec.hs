@@ -18,7 +18,7 @@ spec = do
   describe "normalising definitions" $ do
     let ?globals = defaultGlobals
     let x = (var "x" int)
-    let y = (var "x" int)
+    let y = (var "y" int)
     it "curries multi-arg definitions" $ do
         let curried  = (normaliseDefinition $
                            defun "add" [(arg "x" int), (arg "y" int)]
