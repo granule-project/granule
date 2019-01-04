@@ -15,15 +15,11 @@ import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
 import Control.Exception (assert)
-import Control.Monad.Trans.State.Strict
-import Control.Monad.Trans (lift)
 
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
-
-import Language.Granule.Syntax.Helpers
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Constraints.Quantifiable
@@ -31,8 +27,6 @@ import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Helpers
-    (freshen, runFreshenerM, Freshener, FreshenerState(..))
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
@@ -77,12 +71,12 @@ compileToSBV predicate tyVarContext kVarContext =
         (preConstraints, constraints, solverVars) <-
             foldrM (createFreshVar quant) (true, true, []) tyVarContext
 
-        predC <- runFreshenerM (buildTheorem' solverVars predicate')
+        predC <- buildTheorem' solverVars predicate'
         return (polarity (preConstraints ==> (constraints &&& predC)))
 
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
-    buildTheorem' :: Ctxt SGrade -> Pred -> Freshener Symbolic SBool
+    buildTheorem' :: Ctxt SGrade -> Pred -> Symbolic SBool
     buildTheorem' solverVars (Conj ps) = do
       ps' <- mapM (buildTheorem' solverVars) ps
       return $ bAnd ps'
@@ -97,56 +91,53 @@ compileToSBV predicate tyVarContext kVarContext =
         return $ bnot p'
 
     buildTheorem' solverVars (Exists v k p) = do
-      st <- get
+      if v `elem` (vars p)
+        -- optimisation
+        then do
 
-      -- Freshen the variable bound here
-      let v' = mkId $ internalName v <> "-e" <> show (counter st)
-      put (st { tyMap = (internalName v, internalName v') : tyMap st
-              , counter = counter st + 1 })
+          case demoteKindToType k of
+            Just t | t == extendedNat ->
+                  forSome [internalName v] $ \solverVar -> do
+                    pred' <- buildTheorem' ((v, SExtNat (SNatX solverVar)) : solverVars) p
+                    return ((SNatX.representationConstraint solverVar) &&& pred')
 
-      p <- freshen p
-      -- Freshening now out of scope
-      removeFreshenings [Id (internalName v) (internalName v')]
+            Just (TyCon k) ->
+                  case internalName k of
+                    "Q" -> do
+                      forSome [internalName v] $ \solverVar -> do
+                        pred' <- buildTheorem' ((v, SFloat solverVar) : solverVars) p
+                        return pred'
 
-      case demoteKindToType k of
-        Just t -> do
-          -- Create a fresh solver variable
-          (pred, solverVar) <- lift $ freshCVar compileQuant (internalName v') t InstanceQ
-          let id' = Id (sourceName v) (internalName v')
+                    -- Esssentially a stub for sets at this point
+                    "Set" -> buildTheorem' ((v, SSet S.empty) : solverVars) p
 
-          -- Recursively build the theorem
-          pred' <- buildTheorem' ((id', solverVar) : solverVars) p
-          return (pred &&& pred')
+                    "Nat" ->
+                      forSome [(internalName v)] $ \solverVar -> do
+                        pred' <- buildTheorem' ((v, SNat solverVar) : solverVars) p
+                        return (solverVar .>= 0 &&& pred')
 
-        Nothing ->
-          case k of
-            KType -> buildTheorem' solverVars p
-            _ -> error $ "Trying to make a fresh existential solver variable for a grade of kind: "
-                         <> show k <> " but I don't know how."
+                    "Level" ->
+                       forSome [(internalName v)] $ \solverVar -> do
+                         pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
+                         return ((solverVar .== 0 ||| solverVar .== 1) &&& pred')
+
+            Nothing ->
+              case k of
+                KType -> buildTheorem' solverVars p
+                _ -> error $ "Trying to make a fresh existential solver variable for a grade of kind: "
+                             <> show k <> " but I don't know how."
+        else
+          buildTheorem' solverVars p
 
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
       if v `elem` (vars p <> vars p')
         -- If the quantified variable appears in the theorem
         then do
-          st <- get
-
-          -- Freshen the variable bound here
-          let v' = mkId $ internalName v <> "-" <> show (counter st)
-          put (st { tyMap = (internalName v, internalName v') : tyMap st
-                  , counter = counter st + 1 })
-
-          -- Freshen the rest of the predicates
-          p <- freshen p
-          p' <- freshen p'
-          -- Freshening now out of scope
-          removeFreshenings [Id (internalName v) (internalName v')]
-
           -- Create fresh solver variable
-          vSolver <- lift $ forall (internalName v')
-
-          impl <- buildTheorem' ((Id (sourceName v) (internalName v'), SNat vSolver) : solverVars) (Impl vs p p')
-          return ((vSolver .>= literal 0) ==> impl)
+          forAll [(internalName v)] $ \vSolver -> do
+            impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
+            return ((vSolver .>= literal 0) ==> impl)
 
         else
           -- An optimisation, don't bother quantifying things
@@ -155,7 +146,7 @@ compileToSBV predicate tyVarContext kVarContext =
           buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
-      lift $ compile solverVars cons
+      compile solverVars cons
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
@@ -252,6 +243,7 @@ rewriteConstraints ctxt =
 
 -- | Symbolic coeffect representing 0..Inf
 zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
+
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate

@@ -1,10 +1,12 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete)
 import Control.Monad.Trans.State.Strict
+import Control.Monad.Fail
 import Control.Monad.Identity
 
 import Language.Granule.Syntax.Identifiers
@@ -23,8 +25,11 @@ data IdSyntacticCategory = Value | Type
 -- | The freshening monad for alpha-conversion to avoid name capturing
 type Freshener m t = StateT FreshenerState m t
 
+--instance MonadFail m => MonadFail (StateT FreshenerState m) where
+--  fail = Control.Monad.Fail.fail
+
 data FreshenerState = FreshenerState
-  { counter :: Int -- ^ fresh Id counter
+  { counter :: Word -- ^ fresh Id counter
   , varMap :: [(String, String)] -- ^ mapping of variables to their fresh names
   , tyMap  :: [(String, String)] -- ^ mapping of type variables to fresh names
   } deriving Show
@@ -67,3 +72,6 @@ lookupVar cat v = do
   case cat of
     Value -> return . lookup (sourceName v) . varMap $ st
     Type  -> return . lookup (sourceName v) .  tyMap $ st
+
+instance MonadFail Identity where
+  fail = error

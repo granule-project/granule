@@ -10,13 +10,16 @@ module Language.Granule.Checker.Monad where
 import Data.List (intercalate)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
+import Control.Monad.Identity
 
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Context
+
 import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -190,7 +193,8 @@ concludeImplication s localVars = do
            let prevGuardPred = Conj (map (snd . fst) previousGuards)
 
            -- negation of the previous guard
-           let guard = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
+           let guard' = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
+           guard <- freshenPred guard'
 
            -- Implication of p &&& negated previous guards => p'
            let impl = if (isTrivial prevGuardPred)
@@ -205,8 +209,19 @@ concludeImplication s localVars = do
            -- And add this case to the knowledge stack
                              , guardPredicates = knowledge : knowledgeStack })
 
+
     _ -> error "Predicate: not enough conjunctions on the stack"
 
+freshenPred :: Pred -> MaybeT Checker Pred
+freshenPred pred = do
+    st <- get
+    -- Run the freshener using the checkers unique variable id
+    let (pred', freshenerState) =
+         runIdentity $ runStateT (freshen pred)
+          (FreshenerState { counter = uniqueVarIdCounter st, varMap = [], tyMap = []})
+    -- Update the unique counter in the checker
+    put (st { uniqueVarIdCounter = counter freshenerState })
+    return pred'
 {-
 -- Create a local existential scope
 -- NOTE: leaving this here, but this approach is not used and is incompataible

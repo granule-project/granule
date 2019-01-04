@@ -13,6 +13,8 @@ inside the type checker.
 
 -}
 
+import Control.Monad.Fail
+import Control.Monad.Trans.State.Strict
 import Data.List (intercalate, (\\))
 import GHC.Generics (Generic)
 
@@ -132,14 +134,55 @@ vars (Con c) = varsConstraint c
 vars (NegPred p) = vars p
 vars (Exists x _ p) = vars p \\ [x]
 
-instance Monad m => Freshenable m Pred where
-  freshen =
-    predFoldM
-      (return . Conj)
-      (\vs p1 p2 -> return $ Impl vs p1 p2)
-      (\c -> freshen c >>= (return . Con))
-      (return . NegPred)
-      (\x t p -> return $ Exists x t p)
+instance (Monad m, MonadFail m) => Freshenable m Pred where
+  freshen (Conj ps) = do
+    ps' <- mapM freshen ps
+    return $ Conj ps'
+
+  freshen (NegPred p) = do
+    p' <- freshen p
+    return $ NegPred p'
+
+  freshen (Exists v k p) = do
+    st <- get
+
+    -- Create a new binding name for v
+    let v' = internalName v <> "-e" <> show (counter st)
+
+    -- Updated freshener state
+    put (st { tyMap = (internalName v, v') : tyMap st
+          , counter = counter st + 1 })
+
+    -- Freshen the rest of the predicate
+    p' <- freshen p
+    -- Freshening now out of scope
+    removeFreshenings [Id (internalName v) v']
+
+    return $ Exists (Id (internalName v) v') k p'
+
+  freshen (Impl [] p1 p2) = do
+    p1' <- freshen p1
+    p2' <- freshen p2
+    return $ Impl [] p1' p2'
+
+  freshen (Impl (v:vs) p p') = do
+    st <- get
+
+    -- Freshen the variable bound here
+    let v' = internalName v <> "-" <> show (counter st)
+    put (st { tyMap = (internalName v, v') : tyMap st
+            , counter = counter st + 1 })
+
+    -- Freshen the rest
+    (Impl vs' pf pf') <- freshen (Impl vs p p')
+    -- Freshening now out of scope
+    removeFreshenings [Id (internalName v) v']
+
+    return $ Impl ((Id (internalName v) v'):vs') pf pf'
+
+  freshen (Con cons) = do
+    cons' <- freshen cons
+    return $ Con cons'
 
 deriving instance Show Pred
 deriving instance Eq Pred
