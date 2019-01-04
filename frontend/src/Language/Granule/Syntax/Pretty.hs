@@ -100,8 +100,12 @@ instance Pretty TypeScheme where
        prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
 
 instance Pretty Type where
-    prettyL l (TyCon s)      =  prettyL l s
+    -- Atoms
+    prettyL l (TyCon s)      =  prettyL 0 s
+    prettyL l (TyVar v)      = prettyL 0 v
+    prettyL l (TyInt n)      = show n
 
+    -- Non atoms
     prettyL l (FunTy t1 t2)  =
       parens l $ case t1 of
         FunTy{} -> prettyL (l+1) t1 <> " -> " <> prettyL l t2
@@ -116,18 +120,26 @@ instance Pretty Type where
     prettyL l (Diamond e t)  =
        parens l (prettyL (l+1) t <> " <" <> prettyL l e <> ">")
 
-    prettyL l (TyVar v)      = prettyL l v
-
     prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(,)" =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
-    prettyL l (TyApp t1 t2)  =
-      parens l (prettyL (l-1) t1 <> " " <> prettyL (l+1) t2)
+    prettyL l t@(TyApp (TyApp _ _) _) | appChain t =
+      parens l tyAppPretty
+        where
+          tyAppPretty = intercalate " " (map (prettyL (l+1)) (flatten t))
+          flatten (TyApp t1 t2) = flatten t1 ++ [t2]
+          flatten t = [t]
 
-    prettyL l (TyInt n)      = show n
+    prettyL l (TyApp t1 t2)  =
+      parens l (prettyL l t1 <> " " <> prettyL (l+1) t2)
 
     prettyL l (TyInfix op t1 t2) =
       parens l (prettyL (l+1) t1 <> " " <> op <> " " <>  prettyL (l+1) t2)
+
+appChain :: Type -> Bool
+appChain (TyApp (TyApp t1 t2) _) = appChain (TyApp t1 t2)
+appChain (TyApp t1 t2)           = True
+appChain _                       = False
 
 instance (Pretty (Value v a), Pretty v) => Pretty (AST v a) where
     prettyL l (AST dataDecls defs) = pretty' dataDecls <> "\n\n" <> pretty' defs
@@ -177,21 +189,22 @@ instance Pretty v => Pretty (Value v a) where
                                <> ") -> " <> prettyL l e
     prettyL l (Promote _ e)  = "[" <> prettyL l e <> "]"
     prettyL l (Pure _ e)     = "<" <> prettyL l e <> ">"
-    prettyL l (Var _ x)      = prettyL l x
+    prettyL l (Var _ x)      = prettyL 0 x
     prettyL l (NumInt n)   = show n
     prettyL l (NumFloat n) = show n
     prettyL l (CharLiteral c) = show c
     prettyL l (StringLiteral s) = show s
     prettyL l (Constr _ s vs) | internalName s == "," =
       "(" <> intercalate ", " (map (prettyL l) vs) <> ")"
-    prettyL l (Constr _ s vs) = intercalate " " (prettyL l s : map (parensOn (not . valueAtom)) vs)
+    prettyL l (Constr _ n []) = prettyL 0 n
+    prettyL l (Constr _ n vs) = intercalate " " (prettyL l n : map (parensOn (not . valueAtom)) vs)
       where
         -- Syntactically atomic values
         valueAtom (NumInt _)    = True
         valueAtom (NumFloat _)  = True
         valueAtom (Constr _ _ []) = True
         valueAtom _             = False
-    prettyL l (Ext _ _) = ""
+    prettyL l (Ext _ v) = prettyL l v
 
 instance Pretty Id where
   prettyL l = if debugging ?globals then internalName else sourceName
