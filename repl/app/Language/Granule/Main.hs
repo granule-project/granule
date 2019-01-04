@@ -173,7 +173,7 @@ lookupBuildADT term aMap = let lup = M.lookup term aMap in
                                 case lookup (mkId term) Primitives.typeLevelConstructors of
                                   Nothing -> ""
                                   Just (k, _) -> term <> " : " <> pretty k
-                              Just d -> term <> " : " <> pretty d
+                              Just d -> pretty d
 
 printType :: (?globals::Globals) => String -> M.Map String (Def () (), [String]) -> String
 printType trm m = let v = M.lookup trm m in
