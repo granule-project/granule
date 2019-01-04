@@ -29,13 +29,13 @@ deriving instance (Show (Def v a), Show a) => Show (AST v a)
 -- | Function definitions
 data Def v a = Def Span Id [Equation v a] TypeScheme
   deriving Generic
-deriving instance (Show (Value v a), Show a) => Show (Def v a)
+deriving instance (Show v, Show a) => Show (Def v a)
 
 -- | Single equation of a function
 data Equation v a =
     Equation Span a [Pattern a] (Expr v a)
   deriving Generic
-deriving instance (Show (Value v a), Show a) => Show (Equation v a)
+deriving instance (Show v, Show a) => Show (Equation v a)
 
 instance FirstParameter (Def v a) Span
 instance FirstParameter (Equation v a) Span
