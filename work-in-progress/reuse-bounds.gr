@@ -1,9 +1,0 @@
-import Nat
-
---- Reuse bound on `N n` is `[n]`, but it actually gets used
---- `|n + n * (n+1) / 2|` times (or something like that)
-fact : forall (n : Nat) . (N n) [n] -> Int
-fact x =
-    case x of
-       [Z] -> 1;
-       [S m] -> (natToInt (S m)) * fact [m]

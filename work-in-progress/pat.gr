@@ -1,10 +1,9 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
 -- TODO: fix this
 -- source/Language.Granule.Checker.Patterns.hs:100
 
-data Foo where
-  Bar Int Bar;
-  Quux
+data Foo where Bar Bar
 
-foo : Foo -> Int
-foo f = case f of
-  Bar 1 -> 1
+unfoo : Foo -> ()
+unfoo Bar = ()

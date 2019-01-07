@@ -1,3 +1,5 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
 data Dyn where
   Dyn : forall a : Type . a -> Dyn
 
@@ -6,3 +8,4 @@ f (Dyn x) = x+1
 
 main : Int
 main = f (Dyn 'h')
+-- this shouldn't typecheck

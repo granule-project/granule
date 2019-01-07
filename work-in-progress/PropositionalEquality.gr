@@ -1,5 +1,10 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
 -- The following should be possible even without full depndent types, but just a little type dependency.
 -- Currently it does not work.
 
 data Eq (k : Kind) : k -> k -> Type where
   Refl : forall (a : k) . Eq k a a
+
+foo : Eq Nat 1 1
+foo = Refl

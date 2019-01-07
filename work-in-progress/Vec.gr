@@ -1,12 +1,19 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
 import Nat
+
+-- this definition is fine, but gives the following error:
+--
+-- Type error: work-in-progress/Vec.gr: :10:1:
+--   Definition 'map''is Falsifiable. Counter-example:
+--   n_2 = 1 :: Integer
 
 data Vec (n : Nat) t where
   Nil  : Vec 0 t;
   Cons : t -> Vec n t -> Vec (n+1) t
 
---- this should fail
 map : forall (a : Type, b : Type, n : Nat)
-    . (a -> b) [n+4] -> Vec n a -> Vec n b
+    . (a -> b) [n] -> Vec n a -> Vec n b
 map [f] ys =
   case ys of
     Nil -> Nil;

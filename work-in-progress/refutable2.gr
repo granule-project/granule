@@ -1,2 +1,0 @@
-foo : Int -> Int
-foo 2 = 4
