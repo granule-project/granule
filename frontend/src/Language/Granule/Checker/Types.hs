@@ -306,8 +306,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
             halt $ GenericError (Just s)
             $ case sp of
              FstIsSpec -> "Trying to match a polymorphic type '" <> pretty n
-                       <> "' with monomorphic " <> pretty t
-             SndIsSpec -> pretty t <> " is not equal to " <> pretty (TyVar n)
+                       <> "' with monomorphic `" <> pretty t <> "`"
+             SndIsSpec -> pretty t <> " is not equal to " <> pretty (TyVar n) <> " (probably existentially quantified)"
              PatternCtxt -> pretty t <> " is not equal to " <> pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"

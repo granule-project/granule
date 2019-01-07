@@ -84,6 +84,7 @@ printErr err = when (not $ suppressErrors ?globals) $ do
       <> (bold $ red $ title err <> ": ")
       <> sourceFile <> lineCol <> "\n"
       <> indent (msg err)
+      <> "\n"
   where
     sourceFile =
         case sourceFilePath ?globals of
