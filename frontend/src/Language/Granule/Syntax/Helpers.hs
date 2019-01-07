@@ -15,6 +15,19 @@ class Freshenable m t where
   -- Alpha-convert bound variables to avoid name capturing
   freshen :: Monad m => t -> Freshener m t
 
+instance (Freshenable m a, Freshenable m b) => Freshenable m (a, b) where
+  freshen (x, y) = do
+    x <- freshen x
+    y <- freshen y
+    return (x, y)
+
+instance Freshenable m a => Freshenable m [a] where
+  freshen = mapM freshen
+
+instance Freshenable m a => Freshenable m (Maybe a) where
+  freshen Nothing = return Nothing
+  freshen (Just x) = freshen x >>= return . Just
+
 class Term t where
   -- Compute the free variables in an open term
   freeVars :: t -> [Id]

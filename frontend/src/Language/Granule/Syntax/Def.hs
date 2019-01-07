@@ -64,7 +64,24 @@ type Cardinality = Maybe Nat
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
-freshenAST (AST dds defs) = AST dds (map runFreshener defs)
+freshenAST (AST dds defs) =
+  AST dds' defs'
+    where (dds', defs') = (map runFreshener dds, map runFreshener defs)
+
+instance Monad m => Freshenable m DataDecl where
+  freshen (DataDecl s v tyVars kind ds) = do
+    tyVars <- mapM (\(v, k) -> freshen k >>= \k' -> return (v, k')) tyVars
+    kind <- freshen kind
+    ds <- freshen ds
+    return $ DataDecl s v tyVars kind ds
+
+instance Monad m => Freshenable m DataConstr where
+  freshen (DataConstrG sp v tys) = do
+    tys <- freshen tys
+    return $ DataConstrG sp v tys
+  freshen (DataConstrA sp v ts) = do
+    ts <- mapM freshen ts
+    return $ DataConstrA sp v ts
 
 instance Monad m => Freshenable m (Equation v a) where
   freshen (Equation s a ps e) = do
