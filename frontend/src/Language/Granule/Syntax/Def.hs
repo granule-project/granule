@@ -72,12 +72,7 @@ instance Monad m => Freshenable m (Equation v a) where
     e <- freshen e
     return (Equation s a ps e)
 
-{-| Alpha-convert all bound variables of a definition to (hopefully) unique
-names.
-
->>> runFreshener $ Def ((1,1),(2,29)) (Id "foo" "foo") [Equation ((2,1),(2,29)) [PVar ((2,5),(2,5)) () (Id "x" "x")] (App ((2,10),(2,29)) () (Val ((2,10),(2,25)) () (Abs () (PVar ((2,12),(2,12)) () (Id "x" "x0")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) () "*" (Val ((2,24),(2,24)) () (Var () (Id "x" "x0"))) (Val ((2,26),(2,26)) () (NumInt 2))))) (Val ((2,29),(2,29)) () (Var () (Id "x" "x"))))] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
-Def ((1,1),(2,29)) (Id "foo" "foo") [Equation ((2,1),(2,29)) [PVar ((2,5),(2,5)) () (Id "x" "x_0")] (App ((2,10),(2,29)) () (Val ((2,10),(2,25)) () (Abs () (PVar ((2,12),(2,12)) () (Id "x" "x_1")) (Just (TyCon (Id "Int" "Int"))) (Binop ((2,25),(2,25)) () "*" (Val ((2,24),(2,24)) () (Var () (Id "x" "x_1"))) (Val ((2,26),(2,26)) () (NumInt 2))))) (Val ((2,29),(2,29)) () (Var () (Id "x" "x_0"))))] (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int"))))
--}
+-- | Alpha-convert all bound variables of a definition to unique names. 
 instance Monad m => Freshenable m (Def v a) where
   freshen (Def s var eqs t) = do
     t  <- freshen t
