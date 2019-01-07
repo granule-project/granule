@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Checker where
 
@@ -348,9 +349,12 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
     isLevelKinded (_, as) = do
         ty <- inferCoeffectTypeAssumption s as
         return $ case ty of
-          Nothing -> False
-          Just (TyCon c) | internalName c == "Level" -> True
-                         | otherwise                 -> False
+          Just (TyCon (internalName -> "Level"))
+            -> True
+          Just (TyApp (TyCon (internalName -> "Interval"))
+                      (TyCon (internalName -> "Level")))
+            -> True
+          _ -> False
 
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
