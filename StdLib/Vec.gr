@@ -46,6 +46,11 @@ foldr1 : forall (a : Type, n : Nat)
 foldr1 [_] (Cons x Nil) = x;
 foldr1 [mag] (Cons x (Cons x' xs)) = foldr1 [mag] (Cons (x `mag` x') xs)
 
+foldl : forall (a : Type, b : Type, n : Nat)
+      . (b -> a -> b) [n] -> b -> Vec n a -> b
+foldl [_] acc Nil = acc;
+foldl [op] acc (Cons x xs) = foldl [op] (acc `op` x) xs
+
 -- Append two vectors
 append : forall (a : Type, n : Nat, m : Nat)
        . Vec n a -> Vec m a -> Vec (n + m) a
