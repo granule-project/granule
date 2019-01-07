@@ -113,7 +113,8 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
     Just tySch -> do
-      (dataConstructorTypeFresh, freshTyVars) <- freshPolymorphicInstance BoundQ tySch
+      (dataConstructorTypeFresh, freshTyVars) <-
+          freshPolymorphicInstance BoundQ True tySch
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty

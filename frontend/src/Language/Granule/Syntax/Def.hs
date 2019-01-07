@@ -72,7 +72,7 @@ instance Monad m => Freshenable m (Equation v a) where
     e <- freshen e
     return (Equation s a ps e)
 
--- | Alpha-convert all bound variables of a definition to unique names. 
+-- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
   freshen (Def s var eqs t) = do
     t  <- freshen t

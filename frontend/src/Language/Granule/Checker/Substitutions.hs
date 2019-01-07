@@ -9,8 +9,10 @@ module Language.Granule.Checker.Substitutions where
 
 import Control.Monad
 import Control.Monad.State.Strict
+import Data.Maybe (mapMaybe)
 
 import Language.Granule.Context
+import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -462,16 +464,39 @@ renameType subst t =
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
 freshPolymorphicInstance :: (?globals :: Globals)
-  => Quantifier -> TypeScheme -> MaybeT Checker (Type, [Id])
-freshPolymorphicInstance quantifier (Forall s kinds ty) = do
+  => Quantifier   -- Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
+  -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
+  -> TypeScheme   -- Type scheme to freshen
+  -> MaybeT Checker (Type, [Id])
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
-    ty <- renameType renameMap ty
-    return (ty, map snd renameMap)
+    ty <- renameType (elideEither renameMap) ty
+    -- Return the type and all skolem variables
+    return (ty, justLefts renameMap)
 
   where
-    -- Freshen variables, create existential instantiation
-    instantiateVariable (var, k) = do
-      var' <- freshTyVarInContextWithBinding var k quantifier
-      return (var, var')
+    -- Freshen variables, create skolem variables
+    -- Left of id means a succesful skolem variable created
+    -- Right of id means that this is an existential and so a skolem is not generated
+    instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either Id Id)
+    instantiateVariable (var, k) =
+      if isDataConstructor && not (var `elem` (freeVars $ resultType ty))
+         then do
+           -- Signals an existential
+           var' <- freshTyVarInContextWithBinding var k ForallQ
+           -- Don't return this as a fresh skolem variable
+           return (var, Right var')
+
+         else do
+           var' <- freshTyVarInContextWithBinding var k quantifier
+           return (var, Left var')
+    -- Forget the Either
+    elideEither = map proj
+      where proj (v, Left a) = (v, a)
+            proj (v, Right a) = (v, a)
+    -- Get just the lefts (used to extract just the skolems)
+    justLefts = mapMaybe conv
+      where conv (_, Left a) = Just a
+            conv (_, Right _) = Nothing

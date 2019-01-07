@@ -98,9 +98,15 @@ checkDataCon :: (?globals :: Globals )
 checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
+
         -- Only relevant type variables get included
         let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
+        let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
+
+        -- Add the type variables from the data constructor into the environment
+        modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
         tySchKind <- inferKindOfType' sp tyVars ty
+
         case tySchKind of
           KType -> do
             check ty
@@ -523,7 +529,7 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
     Just tySch -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty,_) <- freshPolymorphicInstance InstanceQ tySch
+      (ty,_) <- freshPolymorphicInstance InstanceQ False tySch
 
       let elaborated = Val s ty (Constr ty c [])
       return (ty, [], elaborated)
@@ -637,7 +643,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty',_) <- freshPolymorphicInstance InstanceQ tyScheme -- discard list of fresh type variables
+           (ty',_) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
 
            let elaborated = Val s ty' (Var ty' x)
            return (ty', [], elaborated)
