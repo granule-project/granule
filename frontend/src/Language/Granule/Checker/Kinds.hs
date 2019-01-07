@@ -118,8 +118,10 @@ joinKind _ _ = Nothing
 -- | Some coeffect types can be joined (have a least-upper bound). This
 -- | function computes the join if it exists.
 joinCoeffectTypes :: Type -> Type -> Maybe Type
-joinCoeffectTypes t1 t2 =
- case (t1, t2) of
+joinCoeffectTypes t1 t2 = case (t1, t2) of
+  -- Equal things unify to the same thing
+  (t, t') | t == t' -> Just t
+
   -- `Nat` can unify with `Q` to `Q`
   (TyCon (internalName -> "Q"), TyCon (internalName -> "Nat")) ->
         Just $ TyCon $ mkId "Q"
@@ -133,8 +135,8 @@ joinCoeffectTypes t1 t2 =
   (TyCon (internalName -> "Nat"), t) | t == extendedNat ->
         Just extendedNat
 
-  -- Equal things unify to the same thing
-  (t, t') | t == t' -> Just t
+  (TyApp t1 t2, TyApp t1' t2') ->
+    TyApp <$> joinCoeffectTypes t1 t1' <*> joinCoeffectTypes t2 t2'
 
   _ -> Nothing
 
