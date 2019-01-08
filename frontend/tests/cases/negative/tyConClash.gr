@@ -1,7 +1,5 @@
 data Int where
 
-data N where
-
 data Float where
 
 data () where
