@@ -3,4 +3,7 @@
 -- constructor itself contains no information
 
 foo : () [2] -> Int
-foo x = case x of [()] -> 0
+foo [()] = 0
+
+bar : () [0] -> Int
+bar [()] = 0
