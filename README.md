@@ -68,6 +68,7 @@ Granule program files have file extension `.gr`. Use the `gr` command to run the
     `main` returned:
     1
 
-See the `examples` directory for more sample programs, or `tests/regression` if you dare.
+See the `examples` directory for more sample programs, or `frontend/tests/cases`
+if you dare.
 
 All contributions are welcome!
