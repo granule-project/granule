@@ -24,23 +24,23 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
-lEqualTypesWithPolarity :: (?globals :: Globals )
+lEqualTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False pol
 
-equalTypesWithPolarity :: (?globals :: Globals )
+equalTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq False pol
 
-lEqualTypes :: (?globals :: Globals )
+lEqualTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False SndIsSpec
 
-equalTypes :: (?globals :: Globals )
+equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals )
+equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True SndIsSpec
 
@@ -52,7 +52,7 @@ equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s E
      e.g., the first argument is inferred, the second is a specification
      being checked against
 -}
-equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
+equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
@@ -88,7 +88,7 @@ flipIndicator PatternCtxt = PatternCtxt
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and a unifier
       Polarity indicates which -}
-equalTypesRelatedCoeffects :: (?globals :: Globals )
+equalTypesRelatedCoeffects :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
@@ -340,7 +340,7 @@ equalTypesRelatedCoeffects s rel uS t1 t2 t = do
   equalOtherKindedTypesGeneric s t1 t2
 
 {- | Equality on other types (e.g. Nat and Session members) -}
-equalOtherKindedTypesGeneric :: (?globals :: Globals )
+equalOtherKindedTypesGeneric :: (?globals :: Globals)
     => Span
     -> Type
     -> Type

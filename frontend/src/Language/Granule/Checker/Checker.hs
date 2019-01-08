@@ -73,7 +73,7 @@ check (AST dataDecls defs) = do
 eraseElaborated (Just _) = return (Just ())
 eraseElaborated Nothing = return Nothing
 
-checkTyCon :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkTyCon :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
 checkTyCon (DataDecl sp name tyVars kindAnn ds) = runMaybeT $ do
   clash <- isJust . lookup name <$> gets typeConstructors
   when clash $ halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty name <> "` already defined."
@@ -85,7 +85,7 @@ checkTyCon (DataDecl sp name tyVars kindAnn ds) = runMaybeT $ do
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkDataCons :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
 checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
     st <- get
     let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
@@ -153,7 +153,7 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
 
-checkDef :: (?globals :: Globals )
+checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Maybe (Def () Type))
@@ -260,7 +260,7 @@ flipPol Negative = Positive
 --  (which explains the exact coeffect demands)
 --  or `Nothing` if the typing does not match.
 
-checkExpr :: (?globals :: Globals )
+checkExpr :: (?globals :: Globals)
           => Ctxt TypeScheme   -- context of top-level definitions
           -> Ctxt Assumption   -- local typing context
           -> Polarity         -- polarity of <= constraints
