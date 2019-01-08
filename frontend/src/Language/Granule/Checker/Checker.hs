@@ -396,7 +396,8 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
       -- ctxtApprox s localGam' checkGam
 
       -- Check linear use in anything Linear
-      case checkLinearity patternGam localGam of
+      gamSoFar <- ctxtPlus s guardGam localGam
+      case checkLinearity patternGam gamSoFar of
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
@@ -561,8 +562,9 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
 
       ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
 
-      -- Check linear use in anything Linear
-      case checkLinearity patternGam localGam of
+      -- Check linear use in this branch
+      gamSoFar <- ctxtPlus s guardGam localGam
+      case checkLinearity patternGam gamSoFar of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
          [] -> return (tyCase, localGam `subtractCtxt` patternGam,
