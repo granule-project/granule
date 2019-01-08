@@ -40,54 +40,32 @@ import Language.Granule.Utils
 
 --import Debug.Trace
 
-data CheckerResult = Failed | Ok deriving (Eq, Show)
-
 -- Checking (top-level)
-check :: (?globals :: Globals) => AST () () -> IO CheckerResult
-check (AST dataDecls defs) = do
-      let checkDataDecls = do { r1 <- mapM checkTyCon dataDecls;
-                                r2 <- mapM checkDataCons dataDecls;
-                                return $ r1 <> r2 }
+check :: (?globals :: Globals) => AST () () -> IO (Maybe ())
+check (AST dataDecls defs) = evalChecker initState $ runMaybeT $ do
+    mapM_ checkTyCon dataDecls
+    mapM_ checkDataCons dataDecls
+    mapM_ kindCheckDef defs
+    mapM_ (checkDef defCtxt) defs
+  where
+    defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
 
-      -- Get the types of all definitions (assume that they are correct for
-      -- the purposes of (mutually)recursive calls).
-      let checkKinds = mapM kindCheckDef defs
-      -- Build a computation which checks all the defs (in order)...
-      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
-      let checkedDefs = do
-            status <- runMaybeT checkKinds
-            case status of
-              Nothing -> return [Nothing]
-              Just _  -> do -- Now check the definition
-                mapM (\d -> checkDef defCtxt d >>= eraseElaborated) defs
-
-      -- ... and evaluate the computation with initial state
-      let thingsToCheck = (<>) <$> checkDataDecls <*> checkedDefs
-      results <- evalChecker initState thingsToCheck
-
-      -- If all definitions type checked, then the whole file type checks
-      -- let results = (results_DataDecl <> results_Def)
-      if all isJust results
-        then return Ok
-        else return Failed
-
-eraseElaborated (Just _) = return (Just ())
-eraseElaborated Nothing = return Nothing
-
-checkTyCon :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
-checkTyCon (DataDecl sp name tyVars kindAnn ds) = runMaybeT $ do
+checkTyCon :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
+checkTyCon (DataDecl sp name tyVars kindAnn ds) = do
   clash <- isJust . lookup name <$> gets typeConstructors
-  when clash $ halt $ NameClashError (Just sp) $ "Type constructor `" <> pretty name <> "` already defined."
-  modify' $ \st ->
-    st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
+  if clash
+    then halt $ NameClashError (Just sp) $ "Type constructor `" <> pretty name <> "` already defined."
+    else modify' $ \st ->
+      st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
-checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
+checkDataCons :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
+checkDataCons (DataDecl _ name tyVars _ dataConstrs) =
+     do
     st <- get
     let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
@@ -157,46 +135,32 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
-         -> Checker (Maybe (Def () Type))
+         -> MaybeT Checker (Def () Type)
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]] } )
+    elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
+        -- Erase the solver predicate between equations
+        modify' $ \st -> st
+            { predicateStack = []
+            , tyVarContext = []
+            , kVarContext = []
+            , guardContexts = []
+            }
+        elaboratedEq <- checkEquation defCtxt defName equation tys
 
-    results <-
-       -- _ :: Checker [Maybe (Equation...)]
-       forM equations $ \equation -> runMaybeT $ do
+        -- Solve the generated constraints
+        checkerState <- get
+        debugM "tyVarContext" (pretty $ tyVarContext checkerState)
+        let predStack = Conj $ predicateStack checkerState
+        debugM "Solver predicate" $ pretty predStack
+        solveConstraints predStack (getSpan equation) defName
+        pure elaboratedEq
 
-         -- Erase the solver predicate between equations
-         modify (\st -> st { predicateStack = [],
-                               tyVarContext = [],
-                               kVarContext = [],
-                               guardContexts = [] })
-
-         elaboratedEq <- checkEquation defCtxt defName equation tys
-
-         -- Solve the generated constraints
-         checkerState <- get
-         debugM "tyVarContext" (pretty $ tyVarContext checkerState)
-         let predStack = Conj $ predicateStack checkerState
-         debugM "Solver predicate" $ pretty predStack
-         solveConstraints predStack (getSpan equation) defName
-
-         return elaboratedEq
-
-    case sequence results of
-        Just elaboratedEquations -> do
-
-            resultImp <- runMaybeT $ checkGuardsForImpossibility s defName
-            resultExh <- runMaybeT $ checkGuardsForExhaustivity s defName ty equations
-            -- Guard checks
-            case sequence [resultImp, resultExh] of
-              Just _ ->
-               return (Just $ Def s defName elaboratedEquations tys)
-              Nothing -> return Nothing
-
-        Nothing ->
-           return Nothing
+    checkGuardsForImpossibility s defName
+    checkGuardsForExhaustivity s defName ty equations
+    pure $ Def s defName elaboratedEquations tys
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions
@@ -798,7 +762,7 @@ solveConstraints predicate s name = do
   case result of
     QED -> return ()
     NotValid msg ->
-       halt $ GenericError (Just s) $ "Definition '" <> pretty name <> "'" <> msg
+       halt $ GenericError (Just s) $ "Definition `" <> pretty name <> "` " <> msg
     NotValidTrivial unsats ->
        mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
     Timeout ->

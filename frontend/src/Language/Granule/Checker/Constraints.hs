@@ -508,7 +508,7 @@ data SolverResult =
   | NotValid String
   | NotValidTrivial [Constraint]
   | Timeout
-  | Error TypeError
+  | Error CheckerError
 
 provePredicate :: (?globals :: Globals) =>
      Span

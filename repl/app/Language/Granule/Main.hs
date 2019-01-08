@@ -100,13 +100,13 @@ readToQueue pth = do
             debugM "Pretty-printed AST:" $ pretty ast
             checked <-  liftIO' $ check ast
             case checked of
-                Ok -> do
+                Just _ -> do
                     let (AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd<>adt),f,m)
                     liftIO $ printInfo $ green $ pth<>", interpreted"
-                Failed -> Ex.throwError (TypeCheckError pth)
+                Nothing -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
 
 
@@ -205,7 +205,7 @@ synTypeBuilder exp ast adt = do
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Mo.Checker ()
 buildCheckerState dd = do
-    let checkDataDecls = do { mapM checkTyCon dd; mapM checkDataCons dd }
+    let checkDataDecls = runMaybeT (mapM_ checkTyCon dd *> mapM_ checkDataCons dd)
     somethine <- checkDataDecls
     return ()
 
@@ -349,8 +349,8 @@ handleCMD s =
           -- TODO: use the type that comes out of the checker to return the type
           checked <- liftIO' $ check (AST adt ast)
           case checked of
-            Ok -> liftIO $ putStrLn (printType trm m)
-            Failed -> Ex.throwError (TypeCheckError trm)
+            Just _ -> liftIO $ putStrLn (printType trm m)
+            Nothing -> Ex.throwError (TypeCheckError trm)
 
     handleLine (Eval ev) = do
         (fvg,rp,adt,fp,m) <- get
@@ -375,13 +375,13 @@ handleCMD s =
                         put ((fvg+1),rp,adt,fp,m)
                         checked <- liftIO' $ check (AST adt (ast<>(ndef:[])))
                         case checked of
-                            Ok -> do
+                            Just _ -> do
                                 result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "if here fix"
                                     Right (Just result) -> liftIO $ putStrLn (pretty result)
-                            Failed -> Ex.throwError (OtherError')
+                            Nothing -> Ex.throwError (OtherError')
             Left e -> Ex.throwError (ParseError e) --error from parsing (pexp)
 
 helpMenu :: String

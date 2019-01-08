@@ -307,7 +307,7 @@ refutablePattern sp p =
         \irrefutable patterns allowed in this context"
 
 -- | Helper for constructing error handlers
-halt :: (?globals :: Globals) => TypeError -> MaybeT Checker a
+halt :: (?globals :: Globals) => CheckerError -> MaybeT Checker a
 halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 
 typeClashForVariable :: (?globals :: Globals) => Span -> Id -> Type -> Type -> MaybeT Checker a

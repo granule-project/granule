@@ -84,10 +84,10 @@ run input = do
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e
           return (ExitFailure 1)
-        Right Failed -> do
+        Right Nothing -> do
           printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
-        Right Ok -> do
+        Right (Just _) -> do
           if noEval ?globals then do
             printInfo $ green "Ok"
             return ExitSuccess
