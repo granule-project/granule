@@ -20,7 +20,6 @@ typeLevelConstructors =
     , (mkId "FileIO", (KFun KType KType, Nothing))
     , (mkId "Session", (KFun KType KType, Nothing))
     , (mkId "Protocol", (KType, Nothing))
-    , (mkId "N", (KFun (kConstr $ mkId "Nat") KType, Just 2))
     , (mkId "Nat",  (KCoeffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level

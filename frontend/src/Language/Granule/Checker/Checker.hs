@@ -74,8 +74,11 @@ eraseElaborated (Just _) = return (Just ())
 eraseElaborated Nothing = return Nothing
 
 checkTyCon :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
-checkTyCon (DataDecl _ name tyVars kindAnn ds) = runMaybeT $
-    modify' $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
+checkTyCon (DataDecl sp name tyVars kindAnn ds) = runMaybeT $ do
+  clash <- isJust . lookup name <$> gets typeConstructors
+  when clash $ halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty name <> "` already defined."
+  modify' $ \st ->
+    st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
@@ -89,7 +92,7 @@ checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
 
-checkDataCon :: (?globals :: Globals )
+checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
