@@ -45,8 +45,9 @@ data CheckerResult = Failed | Ok deriving (Eq, Show)
 -- Checking (top-level)
 check :: (?globals :: Globals) => AST () () -> IO CheckerResult
 check (AST dataDecls defs) = do
-      let checkDataDecls = do { mapM_ checkTyCon dataDecls;
-                                mapM checkDataCons dataDecls }
+      let checkDataDecls = do { r1 <- mapM checkTyCon dataDecls;
+                                r2 <- mapM checkDataCons dataDecls;
+                                return $ r1 <> r2 }
 
       -- Get the types of all definitions (assume that they are correct for
       -- the purposes of (mutually)recursive calls).
@@ -76,7 +77,7 @@ eraseElaborated Nothing = return Nothing
 checkTyCon :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
 checkTyCon (DataDecl sp name tyVars kindAnn ds) = runMaybeT $ do
   clash <- isJust . lookup name <$> gets typeConstructors
-  when clash $ halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty name <> "` already defined."
+  when clash $ halt $ NameClashError (Just sp) $ "Type constructor `" <> pretty name <> "` already defined."
   modify' $ \st ->
     st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
