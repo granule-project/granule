@@ -40,40 +40,39 @@ import Language.Granule.Utils
 
 --import Debug.Trace
 
-data CheckerResult = Failed | Ok deriving (Eq, Show)
+data CheckerResult =
+    Ok (AST () Type)
+    | Failed
+    deriving (Eq, Show)
+
+isOk :: CheckerResult -> Bool
+isOk (Ok _) = True
+isOk Failed = False
 
 -- Checking (top-level)
 check :: (?globals :: Globals) => AST () () -> IO CheckerResult
 check (AST dataDecls defs) = do
-      let checkDataDecls = do { mapM_ checkTyCon dataDecls;
-                                mapM checkDataCons dataDecls }
-
-      -- Get the types of all definitions (assume that they are correct for
-      -- the purposes of (mutually)recursive calls).
-      let checkKinds = mapM kindCheckDef defs
-      -- Build a computation which checks all the defs (in order)...
       let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
-      let checkedDefs = do
-            status <- runMaybeT checkKinds
-            case status of
-              Nothing -> return [Nothing]
-              Just _  -> do -- Now check the definition
-                mapM (\d -> checkDef defCtxt d >>= eraseElaborated) defs
-
-      -- ... and evaluate the computation with initial state
-      let thingsToCheck = (<>) <$> checkDataDecls <*> checkedDefs
-      results <- evalChecker initState thingsToCheck
-
+      -- Build a computation which checks all the defs (in order)...
+      -- and evaluate the computation with initial state
       -- If all definitions type checked, then the whole file type checks
-      -- let results = (results_DataDecl <> results_Def)
-      if all isJust results
-        then return Ok
-        else return Failed
+      evalChecker initState $ do
+          checkedDataDeclsResult <- checkDataDecls dataDecls
+          checkedDefsResult <- checkDefs defCtxt defs
+          return $
+              if and $ (isJust <$> checkedDefsResult) ++ (isJust <$> checkedDataDeclsResult) then
+                  let checkedDefs = fromJust <$> checkedDefsResult
+                  in Ok $ AST dataDecls checkedDefs
+              else
+                  Failed
 
-eraseElaborated (Just _) = return (Just ())
-eraseElaborated Nothing = return Nothing
+checkDataDecls :: (?globals :: Globals) => [DataDecl] -> Checker [Maybe ()]
+checkDataDecls dataDecls =
+    do
+        mapM checkTyCon dataDecls
+        mapM checkDataCons dataDecls
 
-checkTyCon :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkTyCon :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
 checkTyCon (DataDecl _ name tyVars kindAnn ds) = runMaybeT $
     modify' $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
@@ -82,14 +81,14 @@ checkTyCon (DataDecl _ name tyVars kindAnn ds) = runMaybeT $
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkDataCons :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
 checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
     st <- get
     let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
 
-checkDataCon :: (?globals :: Globals )
+checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
@@ -149,8 +148,23 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
+checkDefs :: (?globals :: Globals)
+          => Ctxt TypeScheme
+          -> [Def () ()]
+          -> Checker [Maybe (Def () Type)]
+checkDefs defCtxt defs =
+    do
+        -- Get the types of all definitions (assume that they are correct for
+        -- the purposes of (mutually)recursive calls).
+        let checkKinds = mapM kindCheckDef defs
+        status <- runMaybeT checkKinds
+        case status of
+            Nothing -> return [Nothing]
+            Just _  ->
+                -- Now check the definition
+                mapM (checkDef defCtxt) defs
 
-checkDef :: (?globals :: Globals )
+checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Maybe (Def () Type))
@@ -158,7 +172,6 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]] } )
-
     results <-
        -- _ :: Checker [Maybe (Equation...)]
        forM equations $ \equation -> runMaybeT $ do

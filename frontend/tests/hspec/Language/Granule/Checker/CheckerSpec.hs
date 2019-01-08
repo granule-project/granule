@@ -63,7 +63,7 @@ spec = do
             result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldBe` Ok
+                Right checked -> checked `shouldSatisfy` isOk
     -- Negative tests: things which should fail to check
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->

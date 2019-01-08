@@ -87,7 +87,7 @@ run input = do
         Right Failed -> do
           printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
-        Right Ok -> do
+        Right (Ok _) -> do
           if noEval ?globals then do
             printInfo $ green "Ok"
             return ExitSuccess

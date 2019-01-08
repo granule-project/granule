@@ -100,7 +100,7 @@ readToQueue pth = do
             debugM "Pretty-printed AST:" $ pretty ast
             checked <-  liftIO' $ check ast
             case checked of
-                Ok -> do
+                (Ok _) -> do
                     let (AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
@@ -349,7 +349,7 @@ handleCMD s =
           -- TODO: use the type that comes out of the checker to return the type
           checked <- liftIO' $ check (AST adt ast)
           case checked of
-            Ok -> liftIO $ putStrLn (printType trm m)
+            (Ok _) -> liftIO $ putStrLn (printType trm m)
             Failed -> Ex.throwError (TypeCheckError trm)
 
     handleLine (Eval ev) = do
@@ -375,7 +375,7 @@ handleCMD s =
                         put ((fvg+1),rp,adt,fp,m)
                         checked <- liftIO' $ check (AST adt (ast<>(ndef:[])))
                         case checked of
-                            Ok -> do
+                            (Ok _) -> do
                                 result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
