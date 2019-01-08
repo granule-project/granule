@@ -1,5 +1,6 @@
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Granule.Checker.Coeffects where
 
@@ -18,8 +19,7 @@ import Language.Granule.Utils
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
 flattenable :: Type -> Maybe (Coeffect -> Coeffect -> Coeffect)
-flattenable k =
-  case k of
+flattenable = \case
    TyCon k ->
      -- Nat and Level are flattenable
      case internalName k of

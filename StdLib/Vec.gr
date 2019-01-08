@@ -118,16 +118,8 @@ range' : forall n : Nat . N n -> Int [n] -> Vec n Int
 range' Z [i] = Nil;
 range' (S n) [i] = Cons i (range' n [i + 1])
 
---- pushVec pushes in non linearity of vector into the elements
-pushVec : forall (k : Nat, n : Nat, a : Type)
-         . (Vec n a) [k+1] -> Vec n (a [k+1])
-pushVec [Nil] = Nil;
-pushVec [Cons x xs] = Cons [x] (pushVec [xs])
-
 --- pullVec pulls non linearity in elements into a non linearity on the whole vector
 pullVec : forall (k : Nat, n : Nat, a : Type)
          . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
-pullVec (Cons [x] xs) =
-  case pullVec xs of
-    [ys] -> [Cons x ys]
+pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]

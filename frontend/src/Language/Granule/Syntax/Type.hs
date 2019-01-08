@@ -118,6 +118,13 @@ resultType :: Type -> Type
 resultType (FunTy _ t) = resultType t
 resultType t = t
 
+-- | Get the leftmost type of an application
+-- >>> leftmostOfApplication $ TyCon (mkId "(,)") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
+-- TyCon (Id "(,)" "(,)")
+leftmostOfApplication :: Type -> Type
+leftmostOfApplication (TyApp t _) = leftmostOfApplication t
+leftmostOfApplication t = t
+
 -- | Smart constructor for type constructors
 con :: String -> Type
 con = TyCon . mkId
