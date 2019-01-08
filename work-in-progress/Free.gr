@@ -1,3 +1,4 @@
+-- Requires Rank N quantification (work in progress)
 
 -- Free monad data type (in multiplicative style)
 data Free (f : Type -> Type) a where
@@ -9,29 +10,17 @@ return x = Pure x
 
 -- Wrapping for a morphism mapping on `f`
 data Functor (f : Type -> Type) where
-  Fmap : forall (a : Type, b : Type) .
-         ((a -> b) -> f a -> f b) -> Functor f
+  Fmap : (forall (a : Type, b : Type) .
+         ((a -> b) -> f a -> f b)) -> Functor f
 
 bind : forall (a : Type, b : Type, f : Type -> Type) .
-       (Functor f) |Inf| -> Free f a -> (a -> Free f b) -> Free f b
-bind |functor| f k =
+       (Functor f) [Inf] -> Free f a -> (a -> Free f b) -> Free f b
+bind [functor] f k =
   case f of
     (Pure x)   -> k x;
     (Impure d) ->
       case functor of
-        (Fmap fmap) -> Impure (fmap (\(x : Free f a) -> bind |functor| x k) d)
-
---
-foldTerm : forall (a : Type, b : Type, f : Type -> Type)
-  .  Functor f  |Inf|
-  -> (a -> b)
-  -> (f b -> b) |Inf| -> Free f a -> b
-foldTerm |functor| base |ind| term =
-  case term of
-    (Pure x)   -> base x;
-    (Impure x) ->
-      case functor of
-        (Fmap fmap) -> ind (fmap (foldTerm |functor| base |ind|) x)
+        (Fmap fmap) -> Impure (fmap (\(x : Free f a) -> bind [functor] x k) d)
 
 -------------------------------------
 
@@ -57,16 +46,16 @@ algIncr x =
   case x of
     (Incr n t) -> \x -> t (Mem (unMem x + n))
 
-algRecall : forall (a : Type) . Recall (Mem |Inf| -> (a, Mem)) -> (Mem |Inf| -> (a , Mem))
+algRecall : forall (a : Type) . Recall (Mem [Inf] -> (a, Mem)) -> (Mem [Inf] -> (a , Mem))
 algRecall x =
    case x of
-    (Recall f) -> \|x| -> f (unMem x) |(Mem (unMem x))|
+    (Recall f) -> \[x] -> f (unMem x) [Mem (unMem x)]
 
 algSum : forall (a : Type, b : Type, f : Type -> Type, g : Type -> Type)
-       .  (f a -> a) |1|
-       -> (g a -> a) |1|
+       .  (f a -> a) [0..1]
+       -> (g a -> a) [0..1]
        -> Sum f g a -> a
-algSum |j| |k| x =
+algSum [j] [k] x =
   case x of
     (Left y)  -> j y;
     (Right z) -> k z

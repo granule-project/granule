@@ -1,12 +1,14 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
 import Vec
 import Bool
 
-filter : forall n : Nat, k : Nat
-       . (Int -> Bool) |(n+k)| -> Vec (n + k) Int -> Vec n Int
-filter |predicate| vec =
-    case vec of
-      Nil -> Nil;
-      (Cons x xs) ->
-        (case predicate x of
-          True -> Cons x (filter |predicate| xs);
-          False -> filter |predicate| xs)
+-- Type error: work-in-progress/filter.gr: :7:1:
+--   Definition 'filter'is Falsifiable. Counter-example:
+--   k_2 = 2 :: Integer
+--   n_1 = 0 :: Integer
+-- Failed
+filter : forall a : Type, n : Nat, k : Nat
+       . (a -> Bool) [n+k] -> Vec (n + k) (a [0..2]) -> Vec n a
+filter [_] Nil = Nil;
+filter [p] (Cons [x] xs) = if p x then Cons x (filter [p] xs) else filter [p] xs

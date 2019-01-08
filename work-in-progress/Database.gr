@@ -1,0 +1,30 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
+import List
+
+--
+data Patient where
+  Patient
+    ((Int    [Private]) [0..1]) -- Patient id
+    ((String [Private]) [0..1]) -- Patient name
+    ((Int    [Public]) [0..1]) -- Patient age
+
+meanAge : List Patient -> Int [Public]
+meanAge xs = meanAge' xs [0] [0]
+
+meanAge' : List Patient -- Patient database
+       -> Int [Public]   -- Count
+       -> Int [Public]   -- Current age sum
+       -> Int [Public]   -- Mean age viewed public
+meanAge' xs [total] [n] =
+  case xs of
+    (Next (Patient [_] [_] [[age]]) xs) -> meanAge' xs [age + total] [n+1];
+    Empty -> [div total n]
+
+-- Rejected
+-- names : List Patient -> String [Public]
+-- names xs =
+-- case xs of
+--    (Next (Patient [_] [name] [_]) xs) ->
+--       let [allNames] = names xs in [name `stringAppend` allNames];
+--    Empty -> [""]

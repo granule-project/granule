@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Checker where
 
@@ -12,8 +13,8 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List (genericLength, intercalate)
 import Data.Maybe
-import Data.SBV hiding (Kind, kindOf, extend)
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
@@ -34,43 +35,44 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
+
 import Language.Granule.Utils
 
 --import Debug.Trace
 
-data CheckerResult = Failed | Ok deriving (Eq, Show)
+data CheckerResult =
+    Ok (AST () Type)
+    | Failed
+    deriving (Eq, Show)
+
+isOk :: CheckerResult -> Bool
+isOk (Ok _) = True
+isOk Failed = False
 
 -- Checking (top-level)
-check :: (?globals :: Globals ) => AST () () -> IO CheckerResult
+check :: (?globals :: Globals) => AST () () -> IO CheckerResult
 check (AST dataDecls defs) = do
-      let checkDataDecls = do { mapM_ checkTyCon dataDecls; mapM checkDataCons dataDecls }
-
-      -- Get the types of all definitions (assume that they are correct for
-      -- the purposes of (mutually)recursive calls).
-      let checkKinds = mapM kindCheckDef defs
+      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
       -- Build a computation which checks all the defs (in order)...
-      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
-      let checkedDefs = do
-            status <- runMaybeT checkKinds
-            case status of
-              Nothing -> return [Nothing]
-              Just _  -> do -- Now check the definition
-                mapM (\d -> checkDef defCtxt d >>= eraseElaborated) defs
-
-      -- ... and evaluate the computation with initial state
-      let thingsToCheck = (<>) <$> checkDataDecls <*> checkedDefs
-      results <- evalChecker initState thingsToCheck
-
+      -- and evaluate the computation with initial state
       -- If all definitions type checked, then the whole file type checks
-      -- let results = (results_DataDecl <> results_Def)
-      if all isJust results
-        then return Ok
-        else return Failed
+      evalChecker initState $ do
+          checkedDataDeclsResult <- checkDataDecls dataDecls
+          checkedDefsResult <- checkDefs defCtxt defs
+          return $
+              if and $ (isJust <$> checkedDefsResult) ++ (isJust <$> checkedDataDeclsResult) then
+                  let checkedDefs = fromJust <$> checkedDefsResult
+                  in Ok $ AST dataDecls checkedDefs
+              else
+                  Failed
 
-eraseElaborated (Just _) = return (Just ())
-eraseElaborated Nothing = return Nothing
+checkDataDecls :: (?globals :: Globals) => [DataDecl] -> Checker [Maybe ()]
+checkDataDecls dataDecls =
+    do
+        mapM checkTyCon dataDecls
+        mapM checkDataCons dataDecls
 
-checkTyCon :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkTyCon :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
 checkTyCon (DataDecl _ name tyVars kindAnn ds) = runMaybeT $
     modify' $ \st -> st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
@@ -79,14 +81,14 @@ checkTyCon (DataDecl _ name tyVars kindAnn ds) = runMaybeT $
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals ) => DataDecl -> Checker (Maybe ())
+checkDataCons :: (?globals :: Globals) => DataDecl -> Checker (Maybe ())
 checkDataCons (DataDecl _ name tyVars _ dataConstrs) = runMaybeT $ do
     st <- get
     let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
 
-checkDataCon :: (?globals :: Globals )
+checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
@@ -95,14 +97,22 @@ checkDataCon :: (?globals :: Globals )
 checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
-        let tyVars = tyVarsT <> tyVarsD
+
+        -- Only relevant type variables get included
+        let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
+        let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
+
+        -- Add the type variables from the data constructor into the environment
+        modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
         tySchKind <- inferKindOfType' sp tyVars ty
+
         case tySchKind of
           KType -> do
             check ty
             st <- get
             case extend (dataConstructors st) dName (Forall sp tyVars ty) of
-              Some ds -> put st { dataConstructors = ds }
+              Some ds -> do
+                put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
           KPromote (TyCon k) | internalName k == "Protocol" -> do
             check ty
@@ -138,61 +148,112 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
+checkDefs :: (?globals :: Globals)
+          => Ctxt TypeScheme
+          -> [Def () ()]
+          -> Checker [Maybe (Def () Type)]
+checkDefs defCtxt defs =
+    do
+        -- Get the types of all definitions (assume that they are correct for
+        -- the purposes of (mutually)recursive calls).
+        let checkKinds = mapM kindCheckDef defs
+        status <- runMaybeT checkKinds
+        case status of
+            Nothing -> return [Nothing]
+            Just _  ->
+                -- Now check the definition
+                mapM (checkDef defCtxt) defs
 
-checkDef :: (?globals :: Globals )
+checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Maybe (Def () Type))
-checkDef defCtxt (Def s defName expr pats tys@(Forall _ foralls ty)) = do
+checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
-     result <- runMaybeT $ do
-      -- Add explicit type variable quantifiers to the type variable context
-      modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+    -- Clean up knowledge shared between equations of a definition
+    modify (\st -> st { guardPredicates = [[]] } )
+    results <-
+       -- _ :: Checker [Maybe (Equation...)]
+       forM equations $ \equation -> runMaybeT $ do
 
-      (_ctxt, elaboratedExpr, elaboratedPats) <- case (ty, pats) of
-        (FunTy _ _, ps@(_:_)) -> do
+         -- Erase the solver predicate between equations
+         modify (\st -> st { predicateStack = [],
+                               tyVarContext = [],
+                               kVarContext = [],
+                               guardContexts = [] })
 
-          -- Type the pattern matching
-          (patternGam, ty', elaboratedPats) <- ctxtFromTypedPatterns s ty ps
+         elaboratedEq <- checkEquation defCtxt defName equation tys
 
-          -- Check the body in the context given by the pattern matching
-          (outGam, _, elaboratedExpr) <- checkExpr defCtxt patternGam Positive True ty' expr
-          -- Check that the outgoing context is a subgrading of the incoming
-          case expr of
-            -- top-level case has ctxtEquals applied in its branches already
-            -- TODO: this is a stop gap till dependent case is refactored into function equations
-            Case{} -> return ()
-            _      -> ctxtApprox s outGam patternGam
+         -- Solve the generated constraints
+         checkerState <- get
+         debugM "tyVarContext" (pretty $ tyVarContext checkerState)
+         let predStack = Conj $ predicateStack checkerState
+         debugM "Solver predicate" $ pretty predStack
+         solveConstraints predStack (getSpan equation) defName
 
-          -- Check linear use
-          case checkLinearity patternGam outGam of
-            [] -> return (outGam, elaboratedExpr, elaboratedPats)
-            xs -> illLinearityMismatch s xs
+         return elaboratedEq
 
-        (tau, []) -> do
-          -- No patterns, non function type
-          (_, _, elaboratedExpr) <- checkExpr defCtxt [] Positive True tau expr
-          return ([], elaboratedExpr, [])
+    case sequence results of
+        Just elaboratedEquations -> do
 
-        _         -> halt $ GenericError (Just s) "Expecting a function type"
+            resultImp <- runMaybeT $ checkGuardsForImpossibility s defName
+            resultExh <- runMaybeT $ checkGuardsForExhaustivity s defName ty equations
+            -- Guard checks
+            case sequence [resultImp, resultExh] of
+              Just _ ->
+               return (Just $ Def s defName elaboratedEquations tys)
+              Nothing -> return Nothing
 
-      -- Use an SMT solver to solve the generated constraints
-      checkerState <- get
-      let predStack = predicateStack checkerState
-      debugM "Solver predicate" $ pretty (Conj predStack)
-      solveConstraints (Conj predStack) s defName
+        Nothing ->
+           return Nothing
 
-      return (elaboratedExpr, elaboratedPats)
+checkEquation :: (?globals :: Globals) =>
+     Ctxt TypeScheme -- context of top-level definitions
+  -> Id              -- Name of the definition
+  -> Equation () ()  -- Equation
+  -> TypeScheme      -- Type scheme
+  -> MaybeT Checker (Equation () Type)
 
-     -- Erase the solver predicate between definitions
-     modify (\st -> st { predicateStack = [], tyVarContext = [], kVarContext = [] })
+checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
+  -- Check that the lhs doesn't introduce any duplicate binders
+  duplicateBinderCheck s pats
 
-     case result of
-       Just (elaboratedExpr, elaboratedPats) ->
-          return (Just $ Def s defName elaboratedExpr elaboratedPats tys)
+  -- Freshen the type context
+  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
 
-       Nothing ->
-          return Nothing
+  -- Create conjunct to capture the pattern constraints
+  newConjunct
+
+  -- Build the binding context for the branch pattern
+  (patternGam, tau, localVars, subst, elaborated_pats) <- ctxtFromTypedPatterns s ty pats
+
+  -- Create conjunct to capture the body expression constraints
+  newConjunct
+
+  -- Specialise the return type by the pattern generated substitution
+  tau' <- substitute subst tau
+
+  -- Check the body
+  (localGam, subst', elaboratedExpr) <-
+       checkExpr defCtxt patternGam Positive True tau' expr
+
+  case checkLinearity patternGam localGam of
+    [] -> do
+      -- Check that our consumption context approximations the binding
+      ctxtApprox s localGam patternGam
+
+      -- Conclude the implication
+      concludeImplication s localVars
+
+      -- Create elaborated equation
+      subst'' <- combineSubstitutions s subst subst'
+      ty' <- substitute subst'' ty
+      let elab = Equation s ty' elaborated_pats elaboratedExpr
+      return elab
+
+    -- Anything that was bound in the pattern but not used up
+    xs -> illLinearityMismatch s xs
+
 
 data Polarity = Positive | Negative deriving Show
 
@@ -307,15 +368,20 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
     isLevelKinded (_, as) = do
         ty <- inferCoeffectTypeAssumption s as
         return $ case ty of
-          Nothing -> False
-          Just (TyCon c) | internalName c == "Level" -> True
-                         | otherwise                 -> False
+          Just (TyCon (internalName -> "Level"))
+            -> True
+          Just (TyApp (TyCon (internalName -> "Interval"))
+                      (TyCon (internalName -> "Level")))
+            -> True
+          _ -> False
 
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   pushGuardContext guardGam
+
+  newCaseFrame
 
   -- Check each of the branches
   branchCtxtsAndSubst <-
@@ -369,7 +435,6 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
 
-
            -- Check "global" (to the definition) binding use
            consumedGam <- ctxtPlus s guardGam localGam
            debugM "** gam = " (pretty gam)
@@ -378,24 +443,32 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            ctxtApprox s (consumedGam `subtractCtxt` patternGam) gam
 
            -- Conclude the implication
-           concludeImplication eVars
+           concludeImplication (getSpan pat_i) eVars
 
            return (branchCtxt', subst', (elaborated_pat_i, elaborated_i))
 
         -- Anything that was bound in the pattern but not used correctly
         xs -> illLinearityMismatch s xs
 
-  popGuardContext
+  st <- get
+  debugM "pred so after branches" (pretty (predicateStack st))
 
-  debugM "*** Branches and substitutions from case " (pretty branchCtxtsAndSubst)
+  -- Pop from stacks related to case
+  popGuardContext
+  popCaseFrame
 
   -- Find the upper-bound contexts
   let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
+  debugM "*** Branches from the case " (pretty branchCtxts)
+
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxtPlus s branchesGam guardGam
   debugM "--- Output context for case " (pretty g)
+
+  st <- get
+  debugM "pred at end of case" (pretty (predicateStack st))
 
   let elaborated = Case s tau elaboratedGuard elaboratedCases
   return (g, concat substs, elaborated)
@@ -469,7 +542,7 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
     Just tySch -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty,_) <- freshPolymorphicInstance InstanceQ tySch
+      (ty,_) <- freshPolymorphicInstance InstanceQ False tySch
 
       let elaborated = Val s ty (Constr ty c [])
       return (ty, [], elaborated)
@@ -482,6 +555,9 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (ty, guardGam, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   -- then synthesise the types of the branches
+
+  newCaseFrame
+
   branchTysAndCtxts <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
@@ -490,7 +566,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       newConjunct
       ---
       (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
-      concludeImplication eVars
+      concludeImplication (getSpan pati) eVars
 
       ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
 
@@ -501,6 +577,8 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
          [] -> return (tyCase, localGam `subtractCtxt` patternGam,
                         (elaborated_pat_i, elaborated_i))
          xs -> illLinearityMismatch s xs
+
+  popCaseFrame
 
   let (branchTys, branchCtxts, elaboratedCases) = unzip3 branchTysAndCtxts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
@@ -578,7 +656,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty',_) <- freshPolymorphicInstance InstanceQ tyScheme -- discard list of fresh type variables
+           (ty',_) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
 
            let elaborated = Val s ty' (Var ty' x)
            return (ty', [], elaborated)
@@ -713,85 +791,49 @@ optionalSigEquality s (Just t) t' = do
     return eq
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
-solveConstraints predicate s defName = do
+solveConstraints predicate s name = do
+
   -- Get the coeffect kind context and constraints
   checkerState <- get
-  let
-    ctxtCk  = tyVarContext checkerState
-    ctxtCkVar = kVarContext checkerState
-  coeffectVars <- justCoeffectTypesConverted ctxtCk
-  coeffectKVars <- justCoeffectTypesConvertedVars ctxtCkVar
+  let ctxtCk  = tyVarContext checkerState
+  let ctxtCkVar = kVarContext checkerState
+  coeffectVars <- justCoeffectTypesConverted s ctxtCk
+  coeffectKVars <- justCoeffectTypesConvertedVars s ctxtCkVar
 
-  let (sbvTheorem, _, unsats) = compileToSBV predicate coeffectVars coeffectKVars
+  result <- liftIO $ provePredicate s predicate coeffectVars coeffectKVars
 
-  ThmResult thmRes <- liftIO . prove $ do -- proveWith defaultSMTCfg {verbose=True}
-    case solverTimeoutMillis ?globals of
-      Nothing -> return ()
-      Just n -> setTimeOut n
-    sbvTheorem
+  case result of
+    QED -> return ()
+    NotValid msg ->
+       halt $ GenericError (Just s) $ "Definition '" <> pretty name <> "'" <> msg
+    NotValidTrivial unsats ->
+       mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
+    Timeout ->
+       halt $ CheckerError Nothing $
+         "Solver timed out with limit of " <>
+         show (solverTimeoutMillis ?globals) <>
+         " ms. You may want to increase the timeout (see --help)."
+    Error msg ->
+       halt msg
 
-  case thmRes of
-    Unsatisfiable {} -> return () -- we're good: the negation of the theorem is unsatisfiable
-    ProofError _ msgs ->
-      halt $ CheckerError Nothing $ "Solver error:" <> unlines msgs
-    Unknown _ UnknownTimeOut ->
-      halt $ CheckerError Nothing $
-        "Solver timed out with limit of " <>
-        show (solverTimeoutMillis ?globals) <>
-        " ms. You may want to increase the timeout (see --help)."
-    Unknown _ reason  ->
-      halt $ CheckerError Nothing $ "Solver says unknown: " <> show reason
-    _ ->
-      case getModelAssignment thmRes of
-        -- Main 'Falsifiable' result
-        Right (False, assg :: [ Integer ] ) -> do
-          -- Show any trivial inequalities
-          mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
-          -- Show fatal error, with prover result
-          {-
-          negated <- liftIO . sat $ sbvSatTheorem
-          print $ show $ getModelDictionary negated
-          case (getModelAssignment negated) of
-            Right (_, assg :: [Integer]) -> do
-              print $ show assg
-            Left msg -> print $ show msg
-          -}
-          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' is " <> show (ThmResult thmRes)
-
-        Right (True, _) ->
-          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> "' returned probable model."
-
-        Left str        ->
-          halt $ GenericError (Just s) $ "Definition '" <> pretty defName <> " had a solver fail: " <> str
+justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
+    convert (var, (KPromote t, q)) = do
+      k <- inferKindOfType s t
+      case k of
+        KCoeffect -> return $ Just (var, (t, q))
+        _         -> return Nothing
+    convert (var, (KVar v, q)) = do
+      k <- inferKindOfType s (TyVar v)
+      case k of
+        KCoeffect -> return $ Just (var, (TyVar v, q))
+        _         -> return Nothing
+    convert _ = return Nothing
 
-    justCoeffectTypesConverted xs = mapM convert xs >>= (return . catMaybes)
-      where
-        convert (var, (KPromote t, q)) = do
-          k <- inferKindOfType s t
-          case k of
-            KCoeffect -> return $ Just (var, (t, q))
-            _         -> return Nothing
-        convert (var, (KVar v, q)) = do
-          k <- inferKindOfType s (TyVar v)
-          case k of
-            KCoeffect -> return $ Just (var, (TyVar v, q))
-            _         -> return Nothing
-        convert _ = return Nothing
-
-    justCoeffectTypesConvertedVars env = do
-      let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
-      env' <- justCoeffectTypesConverted implicitUniversalMadeExplicit
-      return $ stripQuantifiers env'
-
-{-
-ctxtApprox :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
-  -> MaybeT Checker ()
-ctxtApprox s ctxt1 ctxt2 = do
-    let ctxt  = ctxt1 `intersectCtxts` ctxt2
-        ctxt' = ctxt2 `intersectCtxts` ctxt1
-    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt ctxt'
--}
+justCoeffectTypesConvertedVars s env = do
+  let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
+  env' <- justCoeffectTypesConverted s implicitUniversalMadeExplicit
+  return $ stripQuantifiers env'
 
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
@@ -950,10 +992,6 @@ relateByAssumption s _ x y =
   halt $ GenericError (Just s) $ "Can't unify free-variable types:\n\t"
            <> "(graded) " <> pretty x <> "\n  with\n\t(linear) " <> pretty y
 
-relevantSubCtxt :: [Id] -> [(Id, t)] -> [(Id, t)]
-relevantSubCtxt vars = filter relevant
- where relevant (var, _) = var `elem` vars
-
 -- Replace all top-level discharged coeffects with a variable
 -- and derelict anything else
 -- but add a var
@@ -998,6 +1036,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
+
       -- Return the freshened var-type mapping
       return (var, Discharged t (CVar cvar))
 
@@ -1054,3 +1093,53 @@ fold1M f (x:xs) = foldM f x xs
 justLinear [] = []
 justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
 justLinear ((x, _) : xs) = justLinear xs
+
+checkGuardsForExhaustivity :: (?globals :: Globals)
+  => Span -> Id -> Type -> [Equation () ()] -> MaybeT Checker ()
+checkGuardsForExhaustivity s name ty eqs = do
+  -- TODO:
+  return ()
+
+checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
+checkGuardsForImpossibility s name = do
+  -- Get top of guard predicate stack
+  st <- get
+  let ps : _ = guardPredicates st
+
+  -- Convert all universal variables to existential
+  let tyVarContextExistential =
+         mapMaybe (\(v, (k, q)) ->
+                       case q of
+                         BoundQ -> Nothing
+                         _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
+  tyVars <- justCoeffectTypesConverted s tyVarContextExistential
+  kVars <- justCoeffectTypesConvertedVars s (kVarContext st)
+
+  -- For each guard predicate
+  forM_ ps $ \((ctxt, p), s) -> do
+
+    -- Existentially quantify those variables occuring in the pattern in scope
+    let thm = foldr (uncurry Exists) p ctxt
+
+    -- Try to prove the theorem
+    result <- liftIO $ provePredicate s thm tyVars kVars
+
+    let msgHead = "Pattern guard for equation of `" <> pretty name <> "``"
+
+    case result of
+      QED -> return ()
+
+      -- Various kinds of error
+      NotValid msg -> halt $ GenericError (Just s) $ msgHead <>
+                        " is impossible. Its condition " <> msg
+      NotValidTrivial unsats ->
+                      halt $ GenericError (Just s) $ msgHead <>
+                        " is impossible. " <>
+                        intercalate "\n\t" (map (pretty . Neg) unsats)
+      Timeout -> halt $ CheckerError (Just s) $
+         "While checking plausibility of pattern guard for equation " <> pretty name
+         <> "the solver timed out with limit of " <>
+         show (solverTimeoutMillis ?globals) <>
+         " ms. You may want to increase the timeout (see --help)."
+
+      Error msg -> halt msg

@@ -21,8 +21,8 @@ import Control.Monad.Trans.State
 import Control.Monad.Trans.Writer
 import Control.Monad.Trans.Class
 
-convertClosuresInAST :: NormalisedAST () Type -> ClosureFreeAST
-convertClosuresInAST (NormalisedAST dataDecl functionDefs valueDefs) =
+convertClosures :: NormalisedAST () Type -> ClosureFreeAST
+convertClosures (NormalisedAST dataDecl functionDefs valueDefs) =
     let globals = (definitionIdentifier <$> functionDefs) ++ (definitionIdentifier <$> valueDefs)
         ((functionDefs', valueDefs'), lambdaDefs) =
             evalLiftLambda $ do
@@ -32,13 +32,11 @@ convertClosuresInAST (NormalisedAST dataDecl functionDefs valueDefs) =
     in ClosureFreeAST dataDecl (functionDefs' ++ lambdaDefs) valueDefs'
 
 convertClosuresInFunctionDef :: [Id] -> FunctionDef () Type -> LiftLambdaM ClosureFreeFunctionDef
-convertClosuresInFunctionDef globals (Def sp ident body [arg] ts) =
+convertClosuresInFunctionDef globals (FunctionDef sp ident body arg ts) =
     do
         let locals = boundVars arg
         body' <- convertClosuresInExpression globals locals body
-        return $ FunctionDef sp ident Nothing body' arg ts
-convertClosuresInFunctionDef _ _ =
-    error "Attempted to lambda lift definition with multiple arguments."
+        return $ ClosureFreeFunctionDef sp ident Nothing body' arg ts
 
 convertClosuresInValueDef :: [Id] -> ValueDef () Type -> LiftLambdaM ClosureFreeValueDef
 convertClosuresInValueDef globals (ValueDef sp ident initExpr ts) =
@@ -154,7 +152,7 @@ convertClosuresFromValue globals (_, maybeCurrentEnv, _) (AbsF ty arg mty expr) 
         (lambdaIdent, envName) <- freshLambdaIdentifiers
         let lambdaTypeScheme = Forall nullSpan [] ty
         let envTy = environmentType envName maybeCurrentEnv
-        let lambdaDef = FunctionDef nullSpan lambdaIdent envTy expr arg lambdaTypeScheme
+        let lambdaDef = ClosureFreeFunctionDef nullSpan lambdaIdent envTy expr arg lambdaTypeScheme
         lift $ tell [lambdaDef]
         return $ maybe (Ext ty $ MakeTrivialClosure lambdaIdent) (\env ->
             let initializer = ClosureEnvironmentInit envName env

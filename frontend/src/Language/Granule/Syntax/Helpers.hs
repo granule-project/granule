@@ -1,13 +1,32 @@
+{-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE FlexibleInstances #-}
+
 module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete)
 import Control.Monad.Trans.State.Strict
+import Control.Monad.Fail
+import Control.Monad.Identity
 
 import Language.Granule.Syntax.Identifiers
 
-class Freshenable t where
+class Freshenable m t where
   -- Alpha-convert bound variables to avoid name capturing
-  freshen :: t -> Freshener t
+  freshen :: Monad m => t -> Freshener m t
+
+instance (Freshenable m a, Freshenable m b) => Freshenable m (a, b) where
+  freshen (x, y) = do
+    x <- freshen x
+    y <- freshen y
+    return (x, y)
+
+instance Freshenable m a => Freshenable m [a] where
+  freshen = mapM freshen
+
+instance Freshenable m a => Freshenable m (Maybe a) where
+  freshen Nothing = return Nothing
+  freshen (Just x) = freshen x >>= return . Just
 
 class Term t where
   -- Compute the free variables in an open term
@@ -16,33 +35,40 @@ class Term t where
 -- Used to distinguish the value-level and type-level variables
 data IdSyntacticCategory = Value | Type
 
-
 -- | The freshening monad for alpha-conversion to avoid name capturing
-type Freshener t = State FreshenerState t
+type Freshener m t = StateT FreshenerState m t
+
+--instance MonadFail m => MonadFail (StateT FreshenerState m) where
+--  fail = Control.Monad.Fail.fail
 
 data FreshenerState = FreshenerState
-  { counter :: Int -- ^ fresh Id counter
+  { counter :: Word -- ^ fresh Id counter
   , varMap :: [(String, String)] -- ^ mapping of variables to their fresh names
   , tyMap  :: [(String, String)] -- ^ mapping of type variables to fresh names
   } deriving Show
 
 -- | Given something freshenable,
 -- | e.g. the AST, run the freshener on it and return the final state
-runFreshener :: Freshenable t => t -> t
-runFreshener x = evalState (freshen x) FreshenerState { counter = 0, varMap = [], tyMap = [] }
+runFreshener :: Freshenable Identity t => t -> t
+runFreshener x = runIdentity $ runFreshenerM (freshen x)
 
-removeFreshenings :: [Id] -> Freshener ()
+runFreshenerM :: Monad m => Freshener m t -> m t
+runFreshenerM x =
+  evalStateT x FreshenerState { counter = 0, varMap = [], tyMap = [] }
+
+removeFreshenings :: Monad m => [Id] -> Freshener m ()
 removeFreshenings [] = return ()
 removeFreshenings (x:xs) = do
     st <- get
-    put st { varMap = delete x' (varMap st) }
+    put st { varMap = delete x' (varMap st)
+           , tyMap = delete x' (tyMap st) }
     removeFreshenings xs
   where
     x' = (sourceName x, internalName x)
 
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
-freshIdentifierBase :: IdSyntacticCategory -> Id -> Freshener Id
+freshIdentifierBase :: Monad m => IdSyntacticCategory -> Id -> Freshener m Id
 freshIdentifierBase cat var = do
     st <- get
     let var' = sourceName var <> "_" <> show (counter st)
@@ -53,9 +79,12 @@ freshIdentifierBase cat var = do
 
 -- | Look up a variable in the freshener state.
 -- If @Nothing@ then the variable name shouldn't change
-lookupVar :: IdSyntacticCategory -> Id -> Freshener (Maybe String)
+lookupVar :: Monad m => IdSyntacticCategory -> Id -> Freshener m (Maybe String)
 lookupVar cat v = do
   st <- get
   case cat of
     Value -> return . lookup (sourceName v) . varMap $ st
     Type  -> return . lookup (sourceName v) .  tyMap $ st
+
+instance MonadFail Identity where
+  fail = error

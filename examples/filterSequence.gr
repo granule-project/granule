@@ -1,13 +1,11 @@
 import Prelude
 import List
 
-filter : (Int -> Bool) |∞| -> List Int -> List Int
-filter |predicate| vec =
-    case vec of
-      Empty -> Empty;
-      (Next x xs) -> if predicate x
-        then Next x (filter |predicate| xs)
-        else filter |predicate| xs
+filter : (Int -> Bool) [0..∞] -> (List Int) [1..2] -> List Int
+filter [_] [Empty] = Empty;
+filter [predicate] [Next x xs] = if predicate x
+        then Next x (filter [predicate] [xs])
+        else filter [predicate] [xs]
 
 main : List Int
-main = filter |(\(x : Int) -> x < 3)| (Next 1 (Next 2 (Next 3 (Next 4 Empty))))
+main = filter [\(x : Int) -> x < 3] [Next 1 (Next 2 (Next 3 (Next 4 Empty)))]

@@ -11,13 +11,14 @@ module Language.Granule.Checker.Kinds (kindCheckDef
                     , inferCoeffectType
                     , inferCoeffectTypeAssumption
                     , mguCoeffectTypes
-                    , promoteTypeToKind) where
+                    , promoteTypeToKind
+                    , demoteKindToType) where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Monad
-
 import Language.Granule.Checker.Predicates
 
 import Language.Granule.Syntax.Def
@@ -29,13 +30,17 @@ import Language.Granule.Context
 import Language.Granule.Utils
 
 promoteTypeToKind :: Type -> Kind
-promoteTypeToKind (TyCon c) = kConstr c
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
 
+demoteKindToType :: Kind -> Maybe Type
+demoteKindToType (KPromote t) = Just t
+demoteKindToType (KVar v)     = Just (TyVar v)
+demoteKindToType _            = Nothing
+
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ _ (Forall _ quantifiedVariables ty)) = do
+kindCheckDef (Def s _ _ (Forall _ quantifiedVariables ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
@@ -113,8 +118,10 @@ joinKind _ _ = Nothing
 -- | Some coeffect types can be joined (have a least-upper bound). This
 -- | function computes the join if it exists.
 joinCoeffectTypes :: Type -> Type -> Maybe Type
-joinCoeffectTypes t1 t2 =
- case (t1, t2) of
+joinCoeffectTypes t1 t2 = case (t1, t2) of
+  -- Equal things unify to the same thing
+  (t, t') | t == t' -> Just t
+
   -- `Nat` can unify with `Q` to `Q`
   (TyCon (internalName -> "Q"), TyCon (internalName -> "Nat")) ->
         Just $ TyCon $ mkId "Q"
@@ -128,8 +135,8 @@ joinCoeffectTypes t1 t2 =
   (TyCon (internalName -> "Nat"), t) | t == extendedNat ->
         Just extendedNat
 
-  -- Equal things unify to the same thing
-  (t, t') | t == t' -> Just t
+  (TyApp t1 t2, TyApp t1' t2') ->
+    TyApp <$> joinCoeffectTypes t1 t1' <*> joinCoeffectTypes t2 t2'
 
   _ -> Nothing
 

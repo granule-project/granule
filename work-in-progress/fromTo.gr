@@ -1,9 +1,0 @@
--- Help, the type is crippling the function
-fromTo : forall n : Nat . Int |∞| -> Int |∞| -> Vec 0 Int
-fromTo |initial| |final| = case (initial > final) of
-  True -> Nil;
-  False -> Cons initial (fromTo |(initial+1)| |final|)
-
--- fromStepTo |initial| |step| |final| = match (initial > final) of
---   True -> Nil;
---   False -> Cons initial (fromStepTo |(initial+step)| |step| |final|)

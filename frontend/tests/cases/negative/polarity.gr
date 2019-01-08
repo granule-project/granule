@@ -1,7 +1,7 @@
 secondOrder : forall (a : Type, b : Type)
-   . (a |1| -> b) -> a |0| -> b
-secondOrder f xb = let |x| : a = xb in f |x|
+   . (a [1] -> b) -> a [0] -> b
+secondOrder f xb = let [x] : a = xb in f [x]
 
 secondOrderAlt : forall (a : Type, b : Type)
-   . (a |1| -> b) -> a |0| -> b
-secondOrderAlt f |x| = f |x|
+   . (a [1] -> b) -> a [0] -> b
+secondOrderAlt f [x] = f [x]

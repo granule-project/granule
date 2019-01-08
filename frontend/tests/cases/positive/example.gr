@@ -1,13 +1,13 @@
 -- doubling function
 
-dub : Int |2|  -> Int
-dub |x| = x + x
+dub : Int [2]  -> Int
+dub [x] = x + x
 
-trip : Int |3| -> Int
-trip |x| = x + x + x
+trip : Int [3] -> Int
+trip [x] = x + x + x
 
-twice : forall (c : Nat) . (Int |c| -> Int) |2| -> Int |2 * c| -> Int
-twice |g| |x| = g |x| + g |x|
+twice : forall (c : Nat) . (Int [c] -> Int) [2] -> Int [2 * c] -> Int
+twice [g] [x] = g [x] + g [x]
 
 main : Int
-main = twice |dub| |2| + twice |trip| |1|
+main = twice [dub] [2] + twice [trip] [1]

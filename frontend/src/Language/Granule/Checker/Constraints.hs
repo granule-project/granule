@@ -1,8 +1,9 @@
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ScopedTypeVariables #-}
+
 
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 
@@ -15,7 +16,9 @@ import qualified Data.Set as S
 import Control.Arrow (first)
 import Control.Exception (assert)
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
@@ -25,6 +28,7 @@ import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
@@ -82,24 +86,67 @@ compileToSBV predicate tyVarContext kVarContext =
         p2' <- buildTheorem' solverVars p2
         return $ p1' ==> p2'
 
+    buildTheorem' solverVars (NegPred p) = do
+        p' <- buildTheorem' solverVars p
+        return $ bnot p'
+
+    buildTheorem' solverVars (Exists v k p) = do
+      if v `elem` (vars p)
+        -- optimisation
+        then do
+
+          case demoteKindToType k of
+            Just t | t == extendedNat ->
+                  forSome [internalName v] $ \solverVar -> do
+                    pred' <- buildTheorem' ((v, SExtNat (SNatX solverVar)) : solverVars) p
+                    return ((SNatX.representationConstraint solverVar) &&& pred')
+
+            Just (TyCon k) ->
+                  case internalName k of
+                    "Q" -> do
+                      forSome [internalName v] $ \solverVar -> do
+                        pred' <- buildTheorem' ((v, SFloat solverVar) : solverVars) p
+                        return pred'
+
+                    -- Esssentially a stub for sets at this point
+                    "Set" -> buildTheorem' ((v, SSet S.empty) : solverVars) p
+
+                    "Nat" ->
+                      forSome [(internalName v)] $ \solverVar -> do
+                        pred' <- buildTheorem' ((v, SNat solverVar) : solverVars) p
+                        return (solverVar .>= 0 &&& pred')
+
+                    "Level" ->
+                       forSome [(internalName v)] $ \solverVar -> do
+                         pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
+                         return ((solverVar .== 0 ||| solverVar .== 1) &&& pred')
+
+            Nothing ->
+              case k of
+                KType -> buildTheorem' solverVars p
+                _ -> error $ "Trying to make a fresh existential solver variable for a grade of kind: "
+                             <> show k <> " but I don't know how."
+        else
+          buildTheorem' solverVars p
+
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl (v:vs) p p') =
       if v `elem` (vars p <> vars p')
-        then forAll [internalName v] (\vSolver -> do
-             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
-             return $ (vSolver .>= literal 0) ==> impl)
-        else do
+        -- If the quantified variable appears in the theorem
+        then do
+          -- Create fresh solver variable
+          forAll [(internalName v)] $ \vSolver -> do
+            impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
+            return ((vSolver .>= literal 0) ==> impl)
+
+        else
+          -- An optimisation, don't bother quantifying things
+          -- which don't appear in the theorem anyway
+
           buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
       compile solverVars cons
-
-    -- Perform a substitution on a predicate tree
-    -- substPred rmap = predFold Conj Impl (Con . substConstraint rmap)
-    -- substConstraint rmap (Eq s' c1 c2 k) =
-    --     Eq s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
-    -- substConstraint rmap (ApproximatedBy s' c1 c2 k) =
-    --     ApproximatedBy s' (substCoeffect rmap c1) (substCoeffect rmap c2) k
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
@@ -110,6 +157,7 @@ compileToSBV predicate tyVarContext kVarContext =
       -> Symbolic (SBool, SBool, Ctxt SGrade)
     -- Ignore variables coming from a dependent pattern match because
     -- they get created elsewhere
+
     createFreshVar _ (_, (_, BoundQ)) x = return x
 
     createFreshVar quant
@@ -120,16 +168,31 @@ compileToSBV predicate tyVarContext kVarContext =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
-              BoundQ -> (universalConstraints, pre &&& existentialConstraints)
+          --    BoundQ -> (universalConstraints, pre &&& existentialConstraints)
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
+
 
 -- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
 rewriteConstraints :: Ctxt Type -> Pred -> Pred
 rewriteConstraints ctxt =
-    predFold Conj Impl (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
+    predFold
+      Conj
+      Impl
+      (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
+      NegPred
+      existsCase
   where
+    existsCase :: Id -> Language.Granule.Syntax.Type.Kind -> Pred -> Pred
+    existsCase var (KVar kvar) p =
+      Exists var k' p
+        where
+          k' = case lookup kvar ctxt of
+                  Just ty -> KPromote ty
+                  Nothing -> KVar kvar
+    existsCase var k p = Exists var k p
+
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`
     updateConstraint :: Id -> Type -> Constraint -> Constraint
@@ -181,6 +244,7 @@ rewriteConstraints ctxt =
 -- | Symbolic coeffect representing 0..Inf
 zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
 
+
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate
 freshCVar :: (forall a . Quantifiable a => Quantifier -> (String -> Symbolic a))
@@ -190,6 +254,7 @@ freshCVar quant name (isInterval -> Just t) q = do
   -- Interval, therefore recursively generate fresh vars for the lower and upper
   (predLb, solverVarLb) <- freshCVar quant (name <> ".lower") t q
   (predUb, solverVarUb) <- freshCVar quant (name <> ".upper") t q
+  -- constrain (predLb &&& predUb &&& solverVarUb .>= solverVarLb)
   return
      -- Respect the meaning of intervals
     ( predLb &&& predUb &&& solverVarUb .>= solverVarLb
@@ -209,12 +274,18 @@ freshCVar quant name (TyCon k) q = do
     _ -> do -- Otherwise it must be an SInteger-like constraint:
       solverVar <- quant q name
       case internalName k of
-        "Nat"       -> return (solverVar .>= 0, SNat solverVar)
-        "Level"     -> return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
+        "Nat"       -> do
+          -- constrain (solverVar .>= 0)
+          return (solverVar .>= 0, SNat solverVar)
+
+        "Level"     -> do
+          -- constrain (solverVar .== 0 ||| solverVar .== 1)
+          return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
 
 -- Extended nat
 freshCVar quant name t q | t == extendedNat = do
   solverVar <- quant q name
+  -- constrain (SNatX.representationConstraint $ SNatX.xVal solverVar)
   return (SNatX.representationConstraint $ SNatX.xVal solverVar
         , SExtNat solverVar)
 
@@ -297,7 +368,7 @@ compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
 compileCoeffect (CVar v) _ vars =
    case lookup v vars of
     Just cvar -> cvar
-    _ -> error $ "Looking up a variable '" <> pretty v <> "' in " <> show vars
+    _ -> error $ "Looking up a variable '" <> show v <> "' in " <> show vars
 
 compileCoeffect c@(CMeet n m) k vars =
   (compileCoeffect n k vars) `symGradeMeet` (compileCoeffect m k vars)
@@ -402,7 +473,8 @@ trivialUnsatisfiableConstraints cs =
     -- Only check trivial constraints in positive positions
     -- This means we don't report a branch concluding false trivially
     -- TODO: may check trivial constraints everywhere?
-    positiveConstraints = predFold concat (\_ _ q -> q) (\x -> [x])
+    positiveConstraints =
+        predFold concat (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
@@ -430,3 +502,67 @@ trivialUnsatisfiableConstraints cs =
     --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
     --   neqC lb1 lb2 || neqC ub1 ub2
     neqC _ _                   = False
+
+data SolverResult =
+    QED
+  | NotValid String
+  | NotValidTrivial [Constraint]
+  | Timeout
+  | Error TypeError
+
+provePredicate :: (?globals :: Globals) =>
+     Span
+  -> Pred                    -- Predicate
+  -> Ctxt (Type, Quantifier) -- Free variable quantifiers
+  -> Ctxt Type               -- Free variable kinds
+  -> IO SolverResult
+provePredicate s predicate vars kvars =
+  if isTrivial predicate
+    then do
+      debugM "solveConstraints" "Skipping solver because predicate is trivial."
+      return QED
+
+    else do
+      let (sbvTheorem, _, unsats) = compileToSBV predicate vars kvars
+
+      ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
+        case solverTimeoutMillis ?globals of
+          Nothing -> return ()
+          Just n -> setTimeOut n
+        sbvTheorem
+
+      return $ case thmRes of
+        -- we're good: the negation of the theorem is unsatisfiable
+        Unsatisfiable {} -> QED
+
+        ProofError _ msgs -> Error $ CheckerError (Just s) $ "Solver error:" <> unlines msgs
+
+        Unknown _ UnknownTimeOut -> Timeout
+
+        Unknown _ reason  ->
+          Error $ CheckerError (Just s) $ "Solver says unknown: " <> show reason
+
+        _ ->
+          case getModelAssignment thmRes of
+            -- Main 'Falsifiable' result
+            Right (False, assg :: [ Integer ] ) ->
+              -- Show any trivial inequalities
+              if not (null unsats)
+                then NotValidTrivial unsats
+                else
+                  -- Show fatal error, with prover result
+                  {-
+                  negated <- liftIO . sat $ sbvSatTheorem
+                  print $ show $ getModelDictionary negated
+                  case (getModelAssignment negated) of
+                    Right (_, assg :: [Integer]) -> do
+                      print $ show assg
+                    Left msg -> print $ show msg
+                  -}
+                   NotValid $ "is " <> show (ThmResult thmRes)
+
+            Right (True, _) ->
+              NotValid "returned probable model."
+
+            Left str        ->
+              Error $ GenericError (Just s) str

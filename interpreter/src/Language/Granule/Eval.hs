@@ -7,8 +7,8 @@
 
 module Language.Granule.Eval where
 
+import Language.Granule.Desugar
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Desugar
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -252,7 +252,7 @@ builtIns =
              case b of
                True -> Constr () (mkId "True") []
                False -> Constr () (mkId "False") []
-        return . (Pure ()) . Val nullSpan () $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
+        return . (Pure ()) . Val nullSpan () $ Constr () (mkId "(,)") [Ext () $ Handle h, boolflag])
   , (mkId "fork",    Ext () $ PrimitiveClosure fork)
   , (mkId "forkRep", Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
@@ -281,7 +281,7 @@ builtIns =
     recv :: (?globals :: Globals) => RValue -> IO RValue
     recv (Ext _ (Chan c)) = do
       x <- CC.readChan c
-      return $ Pure () $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
+      return $ Pure () $ valExpr $ Constr () (mkId "(,)") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> IO RValue
@@ -314,7 +314,7 @@ builtIns =
     hGetChar :: RValue -> IO RValue
     hGetChar (Ext _ (Handle h)) = do
           c <- SIO.hGetChar h
-          return $ Pure () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
+          return $ Pure () $ valExpr (Constr () (mkId "(,)") [Ext () $ Handle h, CharLiteral c])
 
     hClose :: RValue -> IO RValue
     hClose (Ext _ (Handle h)) = do
@@ -323,7 +323,7 @@ builtIns =
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var e [] _ : defs) = do
+evalDefs ctxt (Def _ var [Equation _ _ [] e] _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Some ctxt -> evalDefs ctxt defs
@@ -337,7 +337,10 @@ class RuntimeRep t where
   toRuntimeRep :: t () () -> t (Runtime ()) ()
 
 instance RuntimeRep Def where
-  toRuntimeRep (Def s i e ps tys) = Def s i (toRuntimeRep e) ps tys
+  toRuntimeRep (Def s i eqs tys) = Def s i (map toRuntimeRep eqs) tys
+
+instance RuntimeRep Equation where
+  toRuntimeRep (Equation s a ps e) = Equation s a ps (toRuntimeRep e)
 
 instance RuntimeRep Expr where
   toRuntimeRep (Val s a v) = Val s a (toRuntimeRep v)

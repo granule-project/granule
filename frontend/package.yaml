@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.6.1.0'
+version: '0.7.0.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
@@ -43,7 +43,6 @@ library:
   - Language.Granule.Checker.Primitives
   - Language.Granule.Checker.Substitutions
   - Language.Granule.Checker.Types
-  - Language.Granule.Syntax.Desugar
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers
@@ -68,6 +67,7 @@ library:
   - time
   - Glob
   - bifunctors
+  # - raw-strings-qq (Quasiquoter for multiline, automatically escaped strings)
 
 tests:
   frontend-spec:

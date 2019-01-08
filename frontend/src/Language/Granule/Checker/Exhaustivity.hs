@@ -30,6 +30,7 @@ unpeel s (TyApp t1 t2) (p:ps) = do
     irrefutable <- isIrrefutable s t2 p
     if irrefutable then unpeel s t1 ps else return False
 unpeel _ (TyCon c) _ = checkCardinality c
+unpeel _ _ _ = return False
 
 -- | Get the number of data constructors, only irrefutable if = `Just 1`
 checkCardinality :: (?globals :: Globals ) => Id -> MaybeT Checker Bool

@@ -7,9 +7,7 @@ data ABList (a : Type) (b : Type) : Nat -> Nat -> Type where
   Bcons : forall (n : Nat, m : Nat) . b -> ABList a b m n -> ABList a b m (n+1)
 
 abmap : forall (a : Type, b : Type, c : Type, d : Type, n : Nat, m : Nat) .
-    (a -> b) |m| -> (c -> d) |n| -> ABList a c m n -> ABList b d m n
-abmap |f| |g| xs =
-  case xs of
-    Nil -> Nil;
-    (Acons a xs') -> Acons (f a) (abmap |f| |g| xs');
-    (Bcons b xs') -> Bcons (g b) (abmap |f| |g| xs')
+    (a -> b) [m] -> (c -> d) [n] -> ABList a c m n -> ABList b d m n
+abmap [_] [_] Nil = Nil;
+|     [f] [g] (Acons a xs) = Acons (f a) (abmap [f] [g] xs);
+|     [f] [g] (Bcons b xs) = Bcons (g b) (abmap [f] [g] xs)

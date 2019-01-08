@@ -5,6 +5,7 @@
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Granule.Syntax.Pattern where
 
@@ -34,6 +35,25 @@ instance SecondParameter (Pattern a) a
 instance Annotated (Pattern a) a where
     annotation = getSecondParameter
 
+patternFold
+  :: (Span -> ann -> Id -> b)
+  -> (Span -> ann -> b)
+  -> (Span -> ann -> b -> b)
+  -> (Span -> ann -> Int -> b)
+  -> (Span -> ann -> Double -> b)
+  -> (Span -> ann -> Id -> [b] -> b)
+  -> Pattern ann
+  -> b
+patternFold v w b i f c = go
+  where
+    go = \case
+      PVar sp ann nm -> v sp ann nm
+      PWild sp ann -> w sp ann
+      PBox sp ann pat -> b sp ann (go pat)
+      PInt sp ann int -> i sp ann int
+      PFloat sp ann doub -> f sp ann doub
+      PConstr sp ann nm pats -> c sp ann nm (go <$> pats)
+
 -- | Variables bound by patterns
 boundVars :: Pattern a -> [Id]
 boundVars (PVar _ _ v)     = [v]
@@ -43,13 +63,31 @@ boundVars PInt {}        = []
 boundVars PFloat {}      = []
 boundVars (PConstr _ _ _ ps) = concatMap boundVars ps
 
+boundVarsAndAnnotations :: Pattern a -> [(a, Id)]
+boundVarsAndAnnotations =
+    patternFold var wild box int flt cstr
+    where var  _ ty ident = [(ty, ident)]
+          wild _ _        = []
+          box _ _ pat     = pat
+          int _ _ _       = []
+          flt _ _ _       = []
+          cstr _ _ _ pats = concat pats
+
+ppair :: Span
+      -> a
+      -> Pattern a
+      -> Pattern a
+      -> Pattern a
+ppair s annotation left right =
+    PConstr s annotation (mkId "(,)") [left, right]
+
 -- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
 -- PVar ((0,0),(0,0)) (Id "x" "x_0")
 
 -- | Freshening for patterns
-instance Freshenable (Pattern a) where
+instance Monad m => Freshenable m (Pattern a) where
 
-  freshen :: Pattern a -> Freshener (Pattern a)
+  freshen :: Pattern a -> Freshener m (Pattern a)
   freshen (PVar s a var) = do
       var' <- freshIdentifierBase Value var
       return $ PVar s a var'

@@ -29,8 +29,7 @@ env :: String -> [Type] -> Maybe NamedClosureEnvironmentType
 env name types =
     Just (name, TyClosureEnvironment types)
 
-makeClosure :: (Definition d ClosureFreeExpr)
-            => d
+makeClosure :: ClosureFreeFunctionDef
             -> String
             -> [ClosureVariableInit]
             -> ClosureFreeExpr
@@ -56,7 +55,7 @@ defclos  :: String
          -> TypeScheme
          -> ClosureFreeFunctionDef
 defclos name arg env bodyexpr ts =
-    FunctionDef {
+    ClosureFreeFunctionDef {
         closureFreeDefSpan = nullSpan,
         closureFreeDefIdentifier = mkId name,
         closureFreeDefEnvironment = env,
@@ -71,7 +70,7 @@ spec = do
     let ?globals = defaultGlobals
     it "works correctly for two arg add" $ do
         let original = normASTFromDefs
-                            [defun "add" [arg "x" int]
+                            [defun "add" (arg "x" int)
                                 (lambdaexp (arg "y" int) (int .-> int)
                                      ((val (var "x" int)) `plus` (val (var "y" int))))
                                 (tts $ int .-> int .-> int)]
@@ -85,10 +84,10 @@ spec = do
                                  defclos "add" (arg "x" int) Nothing
                                     (makeClosure lambda0 "lambda.0.env" [local "x" int])
                                     (tts $ int .-> int .-> int)
-        convertClosuresInAST original `shouldBe` expected
+        convertClosures original `shouldBe` expected
     it "doesn't capture globals" $ do
         let original = normASTFromDefs
-                           [defun "add" [arg "x" int]
+                           [defun "add" (arg "x" int)
                                (lambdaexp (arg "y" int) (int .-> int)
                                    ((val (var "x" int)) `plus`
                                    (val (var "y" int)) `plus`
@@ -107,10 +106,10 @@ spec = do
                                     (makeClosure lambda0 "lambda.0.env" [local "x" int])
                                     (tts $ int .-> int .-> int)
                              g = defval "g" (val (lit 10)) (tts int)
-        convertClosuresInAST original `shouldBe` expected
+        convertClosures original `shouldBe` expected
     it "ensures second occurence has same index as first" $ do
         let original = normASTFromDefs
-                           [defun "add" [arg "x" int]
+                           [defun "add" (arg "x" int)
                                (lambdaexp (arg "y" int) (int .-> int)
                                     ((val (var "x" int)) `plus`
                                      (val (var "x" int)) `plus`
@@ -126,10 +125,10 @@ spec = do
                                             (val (cap "x" 0 int)) `plus`
                                             (val (var "y" int)))
                                            (tts $ int .-> int)
-        convertClosuresInAST original `shouldBe` expected
+        convertClosures original `shouldBe` expected
     it "handles nested lambdas" $ do
         let original = normASTFromDefs
-                           [defun "add" [arg "x" int]
+                           [defun "add" (arg "x" int)
                                (lambdaexp (arg "y" int) (int .-> int .-> int)
                                     (lambdaexp (arg "z" int) (int .-> int)
                                         ((val (var "y" int)) `plus`
@@ -149,4 +148,4 @@ spec = do
                                             (val (cap "x" 0 int)) `plus`
                                             (val (var "z" int)))
                                            (tts $ int .-> int)
-        convertClosuresInAST original `shouldBe` expected
+        convertClosures original `shouldBe` expected

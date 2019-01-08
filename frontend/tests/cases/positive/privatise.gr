@@ -1,0 +1,2 @@
+privatise : Int [Public] -> Int [Private]
+privatise [x] = [x]

@@ -1,2 +1,2 @@
-flattenLevel : forall k : Level, l : Level . (Int |k|) |l| -> Int |k /\ l|
-flattenLevel ||x|| = |x|
+flattenLevel : forall k : Level, l : Level . (Int [k]) [l] -> Int [k /\ l]
+flattenLevel [[x]] = [x]

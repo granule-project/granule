@@ -33,7 +33,7 @@ closureVariableInitType :: ClosureVariableInit -> Type
 closureVariableInitType (FromParentEnv _ ty _) = ty
 closureVariableInitType (FromLocalScope _ ty) = ty
 
-data ClosureFreeFunctionDef = FunctionDef {
+data ClosureFreeFunctionDef = ClosureFreeFunctionDef {
     closureFreeDefSpan :: Span,
     closureFreeDefIdentifier :: Id,
     closureFreeDefEnvironment :: Maybe NamedClosureEnvironmentType,
@@ -45,10 +45,9 @@ data ClosureFreeFunctionDef = FunctionDef {
 type ClosureFreeExpr = Expr ClosureMarkerValue Type
 type ClosureFreeValue = Value ClosureMarkerValue Type
 
-instance Definition ClosureFreeFunctionDef ClosureFreeExpr where
+instance Definition ClosureFreeFunctionDef where
     definitionSpan = closureFreeDefSpan
     definitionIdentifier = closureFreeDefIdentifier
-    definitionBody = closureFreeDefBody
     definitionTypeScheme = closureFreeDefTypeScheme
 
 type ClosureFreeValueDef = ValueDef ClosureMarkerValue Type
@@ -71,7 +70,7 @@ instance Pretty ClosureFreeAST where
             pretty' = intercalate "\n\n" . map (prettyL l)
 
 instance Pretty ClosureFreeFunctionDef where
-    prettyL l (FunctionDef _ v env e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
+    prettyL l (ClosureFreeFunctionDef _ v env e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
                               prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
 
 instance Pretty ClosureMarkerValue where

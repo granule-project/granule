@@ -1,0 +1,24 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
+fact : Int [∞] -> Int
+fact [0] = 1;
+fact [m] = m * fact [m - 1]
+
+import Nat
+
+fact' : forall (n : Nat) . (N n) [1..n+1] -> Int
+fact' [Z] = 1;
+fact' [S m] = natToInt (S m) * fact' [m]
+
+-- This one shouldn't type check
+fact'' : forall (n : Nat) . (N n) [∞..∞] -> Int
+fact'' [Z] = 1;
+fact'' [S m] = natToInt (S m) * fact'' [m]
+
+-- @buggymcbugfix thinks this one shouldn't type check either
+fact''' : forall (n : Nat) . (N n) [0..∞] -> Int
+fact''' [Z] = 1;
+fact''' [S m] = natToInt (S m) * fact''' [m]
+
+main : Int
+main = fact [7] + fact' [S (S (S (S Z)))]

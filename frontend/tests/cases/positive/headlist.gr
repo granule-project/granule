@@ -1,0 +1,9 @@
+import Result
+
+data List a where Empty; Next a (List a)
+
+head_list : forall a : Type . (List a) [0..1] -> Result a
+head_list xs =
+  case xs of
+    [Empty]      -> Failed ["Empty list!"];
+    [(Next x _)] -> Ok x

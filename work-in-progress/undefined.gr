@@ -1,3 +1,10 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
+-- Checking work-in-progress/undefined.gr...
+-- Ok, evaluating...
+-- Error during evaluation: work-in-progress/undefined.gr:
+--   user error (Variable 'undefined' is undefined in context.)
+
 --- Undefined can be used to satisfy the type checker during development.
 undefined : forall (a:Type) . a
 undefined = undefined

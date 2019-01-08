@@ -10,6 +10,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -235,7 +236,9 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
     --(Just (k1, _), Just (k2, _)) ->
     --  tyVarConstraint k1 k2 n m
 
-    (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n" <> pretty n <> " : " <> show t1 <> "\n" <> pretty m <> " : " <> show t2
+    (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
+              <> pretty n <> " : " <> show t1
+              <> "\n" <> pretty m <> " : " <> show t2
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
@@ -303,8 +306,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
             halt $ GenericError (Just s)
             $ case sp of
              FstIsSpec -> "Trying to match a polymorphic type '" <> pretty n
-                       <> "' with monomorphic " <> pretty t
-             SndIsSpec -> pretty t <> " is not equal to " <> pretty (TyVar n)
+                       <> "' with monomorphic `" <> pretty t <> "`"
+             SndIsSpec -> pretty t <> " is not equal to " <> pretty (TyVar n) <> " (probably existentially quantified)"
              PatternCtxt -> pretty t <> " is not equal to " <> pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"

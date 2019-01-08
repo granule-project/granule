@@ -1,8 +1,8 @@
-test : Int |2| -> Int
-test = \x -> let |y| = x in y + y
+test : Int [2] -> Int
+test = \x -> let [y] = x in y + y
 
-test' : Int |2| -> Int
-test' |y| = y + y
+test' : Int [2] -> Int
+test' [y] = y + y
 
 main : Int
-main = test |1| + test' |2|
+main = test [1] + test' [2]

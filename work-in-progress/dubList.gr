@@ -1,3 +1,5 @@
+-- last checked 2019-01-07 by @buggymcbugfix
+
 -- This kills SMT
 
 data Vec : Nat -> Type -> Type where
@@ -5,7 +7,5 @@ data Vec : Nat -> Type -> Type where
   Cons : forall (t : Type, n : Nat) . t -> Vec n t -> Vec (n+1) t
 
 dubVec : forall (n : Nat) . Vec n Int -> Vec (2*n) Int
-dubVec xs =
-    case xs of
-      Nil -> Nil;
-      (Cons x xs) -> Cons x (Cons 0 (dubVec xs))
+dubVec Nil = Nil;
+dubVec (Cons x xs) = Cons x (Cons 0 (dubVec xs))

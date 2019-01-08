@@ -1,13 +1,15 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Patterns where
 
 import Control.Monad.Trans.Maybe
 import Control.Monad.State.Strict
+import Data.List (intercalate)
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Language.Granule.Checker.Coeffects
-import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
@@ -111,7 +113,8 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
     Just tySch -> do
-      (dataConstructorTypeFresh, freshTyVars) <- freshPolymorphicInstance BoundQ tySch
+      (dataConstructorTypeFresh, freshTyVars) <-
+          freshPolymorphicInstance BoundQ True tySch
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
@@ -176,23 +179,23 @@ discharge k c (v, Discharged t c') =
     Just flattenOp -> (v, Discharged t (flattenOp c c'))
     Nothing        -> (v, Discharged t c')
 
-ctxtFromTypedPatterns ::
-  (?globals :: Globals, Show t) => Span -> Type -> [Pattern t] -> MaybeT Checker (Ctxt Assumption, Type, [Pattern Type])
+ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
+  => Span
+  -> Type
+  -> [Pattern t]
+  -> MaybeT Checker (Ctxt Assumption, Type, [Id], Substitution, [Pattern Type])
 ctxtFromTypedPatterns sp ty [] = do
   debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
-  return ([], ty, [])
+  return ([], ty, [], [], [])
 
 ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
   -- TODO: when we have dependent matching at the function clause
   -- level, we will need to pay attention to the bound variables here
-  (localGam, _, _, elabP) <- ctxtFromTypedPattern s t1 pat
-  pIrrefutable <- isIrrefutable s t1 pat
+  (localGam, eVars, subst, elabP) <- ctxtFromTypedPattern s t1 pat
 
-  if pIrrefutable then do
-    (localGam', ty, elabPs) <- ctxtFromTypedPatterns s t2 pats
-    return (localGam <> localGam', ty, elabP : elabPs)
-
-  else refutablePattern s pat
+  (localGam', ty, eVars', substs, elabPs) <- ctxtFromTypedPatterns s t2 pats
+  substs' <- combineSubstitutions s subst substs
+  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs)
 
 ctxtFromTypedPatterns s ty ps = do
   -- This means we have patterns left over, but the type is not a
@@ -208,3 +211,16 @@ ctxtFromTypedPatterns s ty ps = do
        <> pretty ty
        <> "'\n   against a type of the form '" <> pretty spuriousType
        <> "' implied by the remaining patterns"
+
+duplicateBinderCheck :: (?globals::Globals) => Span -> [Pattern a] -> MaybeT Checker ()
+duplicateBinderCheck s ps = unless (null duplicateBinders) $
+    halt $ DuplicatePatternError (Just s) $ intercalate ", " duplicateBinders
+  where
+    duplicateBinders = duplicates . concatMap getBinders $ ps
+    getBinders = patternFold
+      (\_ _ id -> [sourceName id])
+      (\_ _ -> [])
+      (\_ _ bs -> bs)
+      (\_ _ _ -> [])
+      (\_ _ _ -> [])
+      (\_ _ _ bss -> concat bss)

@@ -29,7 +29,7 @@ import System.Exit (die)
 %monad { IO }
 
 %token
-    nl    { TokenNL  _ }
+    nl    { TokenNL _ }
     data  { TokenData _ }
     where { TokenWhere _ }
     let   { TokenLet _ }
@@ -78,6 +78,7 @@ import System.Exit (die)
 %right in
 %right '->'
 %left ':'
+%left ".."
 %left '+' '-'
 %left '*'
 %left '^'
@@ -87,35 +88,46 @@ import System.Exit (die)
 
 Defs :: { AST () () }
   : Def                       { AST [] [$1] }
-
   | DataDecl                  { AST [$1] [] }
-
-  | DataDecl NL Defs          { let (AST dds defs) = $3
-                                 in AST ($1 : dds) defs }
-  | Def NL Defs               { let (AST dds defs) = $3
-                                 in AST dds ($1 : defs) }
+  | DataDecl NL Defs          { let (AST dds defs) = $3 in AST ($1 : dds) defs }
+  | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
 
 NL :: { () }
-NL : nl NL                    { }
-   | nl                       { }
+  : nl NL                    { }
+  | nl                       { }
 
 Def :: { Def () () }
-  : Sig NL Binding
-      { if (fst3 $1 == fst3 $3)
-        then Def (thd3 $1, getEnd $ snd3 $3) (fst3 $3) (snd3 $3) (thd3 $3) (snd3 $1)
-        else error $ "Signature for `" <> sourceName (fst3 $3) <> "` does not match the \
-                                      \signature head `" <> sourceName (fst3 $1) <> "`"  }
+  : Sig NL Bindings
+    { let name = fst3 $1 in
+      case $3 of
+        (Just nameB, _) | not (nameB == name) ->
+          error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+        (_, bindings) ->
+          Def (thd3 $1, snd $ getSpan $ last bindings) (mkId name) bindings (snd3 $1)
+    }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
       { DataDecl (getPos $1, lastSpan' $6) (mkId $ constrString $2) $3 $4 $6 }
 
-Sig ::  { (Id, TypeScheme, Pos) }
-  : VAR ':' TypeScheme        { (mkId $ symString $1, $3, getPos $1) }
+Sig :: { (String, TypeScheme, Pos) }
+  : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
 
-Binding :: { (Id, Expr () (), [Pattern ()]) }
-  : VAR '=' Expr              { (mkId $ symString $1, $3, []) }
-  | VAR Pats '=' Expr         { (mkId $ symString $1, $4, $2) }
+Bindings :: { (Maybe String, [Equation () ()]) }
+  : Binding ';' NL Bindings   { let (v, bind) = $1
+                                in case $4 of
+                                    (v', binds)
+                                      | v' == v || v' == Nothing ->
+                                          (v, (bind : binds))
+                                      | otherwise ->
+                                          error $ "Identifier " <> show v' <> " in group of equations does not match " <> show v
+                              }
+  | Binding                   { case $1 of (v, bind) -> (v, [bind]) }
+
+Binding :: { (Maybe String, Equation () ()) }
+  : VAR '=' Expr              { (Just $ symString $1, Equation (getPos $1, getEnd $3) () [] $3) }
+  | VAR Pats '=' Expr         { (Just $ symString $1, Equation (getPos $1, getEnd $4) () $2 $4) }
+  | '|' Pats '=' Expr         { (Nothing,             Equation (getPos $1, getEnd $4) () $2 $4) }
 
 DataConstrs :: { [DataConstr] }
   : DataConstr DataConstrNext { $1 : $2 }
@@ -126,7 +138,8 @@ DataConstr :: { DataConstr }
   | CONSTR TyParams           { DataConstrA (getPosToSpan $1) (mkId $ constrString $1) $2 }
 
 DataConstrNext :: { [DataConstr] }
-  : ';' DataConstrs           { $2 }
+  : '|' DataConstrs           { $2 }
+  | ';' DataConstrs           { $2 }
   | {- empty -}               { [] }
 
 TyVars :: { [(Id, Kind)] }
@@ -139,21 +152,8 @@ KindAnn :: { Maybe Kind }
   | {- empty -}               { Nothing }
 
 Pats :: { [Pattern ()] }
-  : Pat                       { [$1] }
-  | Pat Pats                  { $1 : $2 }
-
-PAtoms :: { [Pattern ()] }
   : PAtom                     { [$1] }
-  | PAtom PAtoms              { $1 : $2 }
-
-Pat :: { Pattern () }
-  : PAtom                     { $1 }
-  | CONSTR PAtoms             { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) $2 }
-
-
-PatNested :: { Pattern () }
-PatNested
- : '(' CONSTR PAtoms ')'     { let TokenConstr _ x = $2 in PConstr (getPosToSpan $2) () (mkId x) $3 }
+  | PAtom Pats                { $1 : $2 }
 
 PAtom :: { Pattern () }
   : VAR                       { PVar (getPosToSpan $1) () (mkId $ symString $1) }
@@ -161,12 +161,13 @@ PAtom :: { Pattern () }
   | INT                       { let TokenInt _ x = $1 in PInt (getPosToSpan $1) () x }
   | FLOAT                     { let TokenFloat _ x = $1 in PFloat (getPosToSpan $1) () $ read x }
   | CONSTR                    { let TokenConstr _ x = $1 in PConstr (getPosToSpan $1) () (mkId x) [] }
-  | PatNested                 { $1 }
-  | '[' Pat ']'               { PBox (getPosToSpan $1) () $2 }
-  | '|' Pat '|'               { PBox (getPosToSpan $1) () $2 }
+  | '(' NAryConstr ')'        { $2 }
+  | '[' PAtom ']'             { PBox (getPos $1, getPos $3) () $2 }
+  | '[' NAryConstr ']'        { PBox (getPos $1, getPos $3) () $2 }
+  | '(' PAtom ',' PAtom ')'   { PConstr (getPos $1, getPos $5) () (mkId "(,)") [$2, $4] }
 
-  | '(' Pat ',' Pat ')'       { PConstr (getPosToSpan $1) () (mkId ",") [$2, $4] }
-
+NAryConstr :: { Pattern () }
+  : CONSTR Pats               { let TokenConstr _ x = $1 in PConstr (getPos $1, getEnd $ last $2) () (mkId x) $2 }
 
 TypeScheme :: { TypeScheme }
   : Type                              { Forall nullSpan [] $1 }
@@ -196,9 +197,12 @@ Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
   | TyAtom '[' Coeffect ']'   { Box $3 $1 }
-  | TyAtom '|' Coeffect '|'   { Box $3 $1 }
 
   | TyAtom '<' Effect '>'     { Diamond $3 $1 }
+
+TyApp :: { Type }
+ : TyJuxt TyAtom              { TyApp $1 $2 }
+ | TyAtom                     { $1 }
 
 TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
@@ -215,7 +219,7 @@ TyAtom :: { Type }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
+  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId "(,)") $2) $4 }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
@@ -239,7 +243,7 @@ Coeffect :: { Coeffect }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' TyAtom         { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { normalise (CSig $1 $3) }
 
 Set :: { [(String, Type)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
@@ -258,36 +262,35 @@ Eff :: { String }
 
 Expr :: { Expr () () }
   : let LetBind MultiLet
-    { let (_, pat, mt, expr) = $2
-	in App (getPos $1, getEnd $3) ()
-	(Val (getSpan $3) () (Abs () pat mt $3)) expr }
+      { let (_, pat, mt, expr) = $2
+      	in App (getPos $1, getEnd $3) () (Val (getSpan $3) () (Abs () pat mt $3)) expr
+      }
 
-  | '\\' '(' Pat ':' Type ')' '->' Expr
-  { Val (getPos $1, getEnd $8) () (Abs () $3 (Just $5) $8) }
+  | '\\' '(' PAtom ':' Type ')' '->' Expr
+      { Val (getPos $1, getEnd $8) () (Abs () $3 (Just $5) $8) }
 
-  | '\\' Pat '->' Expr
-  { Val (getPos $1, getEnd $4) () (Abs () $2 Nothing $4) }
+  | '\\' PAtom '->' Expr
+      { Val (getPos $1, getEnd $4) () (Abs () $2 Nothing $4) }
 
   | let LetBindEff MultiLetEff
       { let (_, pat, mt, expr) = $2
         in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3 }
 
   | case Expr of Cases
-  { Case (getPos $1, lastSpan $4) () $2 $4 }
+    { Case (getPos $1, lastSpan $4) () $2 $4 }
 
   | if Expr then Expr else Expr
-  { Case (getPos $1, getEnd $6) () $2 [(PConstr (getPosToSpan $3) () (mkId "True") [], $4),
-                                       (PConstr (getPosToSpan $3) () (mkId "False") [], $6)] }
+    { Case (getPos $1, getEnd $6) () $2 [(PConstr (getPosToSpan $3) () (mkId "True") [], $4),
+                                         (PConstr (getPosToSpan $3) () (mkId "False") [], $6)] }
 
   | Form
     { $1 }
 
 LetBind :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
-LetBind
- : Pat ':' Type '=' Expr
-    { (getStart $1, $1, Just $3, $5) }
- | Pat '=' Expr
-    { (getStart $1, $1, Nothing, $3) }
+  : PAtom ':' Type '=' Expr
+      { (getStart $1, $1, Just $3, $5) }
+  | PAtom '=' Expr
+      { (getStart $1, $1, Nothing, $3) }
 
 MultiLet :: { Expr () () }
 MultiLet
@@ -299,17 +302,16 @@ MultiLet
     { $2 }
 
 LetBindEff :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
-LetBindEff :
-   Pat '<-' Expr            { (getStart $1, $1, Nothing, $3) }
- | Pat ':' Type '<-' Expr   { (getStart $1, $1, Just $3, $5) }
+  : PAtom '<-' Expr            { (getStart $1, $1, Nothing, $3) }
+  | PAtom ':' Type '<-' Expr   { (getStart $1, $1, Just $3, $5) }
 
 MultiLetEff :: { Expr () () }
 MultiLetEff
   : ';' LetBindEff MultiLetEff
       { let (_, pat, mt, expr) = $2
-	  in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3 }
-  | in Expr
-      { $2 }
+	      in LetDiamond (getPos $1, getEnd $3) () pat mt expr $3
+      }
+  | in Expr                   { $2 }
 
 Cases :: { [(Pattern (), Expr () () )] }
  : Case CasesNext             { $1 : $2 }
@@ -319,10 +321,8 @@ CasesNext :: { [(Pattern (), Expr () ())] }
   | {- empty -}               { [] }
 
 Case :: { (Pattern (), Expr () ()) }
-  : Pat '->' Expr             { ($1, $3) }
-  | CONSTR PAtoms '->' Expr   { let TokenConstr _ x = $1
-                                 in (PConstr (getPosToSpan $1) () (mkId x) $2, $4) }
-
+  : PAtom '->' Expr           { ($1, $3) }
+  | NAryConstr '->' Expr      { ($1, $3) }
 
 Form :: { Expr () () }
   : Form '+' Form  { Binop (getPosToSpan $2) () "+" $1 $3 }
@@ -346,12 +346,10 @@ Atom :: { Expr () () }
                                 in Val (getPosToSpan $1) () $ NumFloat $ read x }
   | VAR                       { Val (getPosToSpan $1) () $ Var () (mkId $ symString $1) }
   | '[' Expr ']'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
-  | '|' Atom '|'              { Val (getPos $1, getPos $3) () $ Promote () $2 }
-
   | CONSTR                    { Val (getPosToSpan $1) () $ Constr () (mkId $ constrString $1) [] }
   | '(' Expr ',' Expr ')'     { App (getPos $1, getPos $5) ()
                                     (App (getPos $1, getPos $3) ()
-                                         (Val (getPosToSpan $3) () (Constr () (mkId ",") []))
+                                         (Val (getPosToSpan $3) () (Constr () (mkId "(,)") []))
                                          $2)
                                     $4 }
   | CHAR                      { Val (getPosToSpan $1) () $
@@ -381,6 +379,7 @@ parseDefs' input = do
       parseDefs' src
     let allDefs = merge $ defs : importedDefs
     checkNameClashes allDefs
+    checkMatchingNumberOfArgs allDefs
     return allDefs
 
   where
@@ -397,6 +396,21 @@ parseDefs' input = do
 
     replace from to = map (\c -> if c == from then to else c)
 
+    checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
+      mapM checkMatchingNumberOfArgs' defs
+
+    checkMatchingNumberOfArgs' (Def _ name eqs _) =
+      if length eqs >= 1
+      then if (and $ map (\x -> x == head lengths) lengths)
+            then return ()
+            else
+              die $ "Syntax error: Number of arguments differs in the equations of "
+                  <> sourceName name
+      else return ()
+        where
+          lengths = map (\(Equation _ _ pats _) -> length pats) eqs
+
+
     checkNameClashes ds@(AST dataDecls defs) =
         if null clashes
 	        then return ()
@@ -404,7 +418,7 @@ parseDefs' input = do
       where
         clashes = names \\ nub names
         names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
-                <> (`map` defs) (\(Def _ name _ _ _) -> name)
+                <> (`map` defs) (\(Def _ name _ _) -> name)
 
 lastSpan [] = fst $ nullSpan
 lastSpan xs = getEnd . snd . last $ xs

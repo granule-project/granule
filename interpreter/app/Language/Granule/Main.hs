@@ -87,7 +87,7 @@ run input = do
         Right Failed -> do
           printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
-        Right Ok -> do
+        Right (Ok _) -> do
           if noEval ?globals then do
             printInfo $ green "Ok"
             return ExitSuccess
@@ -149,7 +149,7 @@ parseArgs = info (go <**> helper) $ briefDesc
           option (auto @Integer) (
             long "solver-timeout" <>
             help "SMT solver timeout in milliseconds (negative for unlimited)" <>
-            value 1000 <> showDefault
+            value 5000 <> showDefault
             )
 
         pure

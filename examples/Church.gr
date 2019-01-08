@@ -1,66 +1,66 @@
 -- Church numerals have graded types that explain what they encode
 
-zero : forall (a : Type) . (a -> a) |0| -> a -> a
-zero |f| x = x
+zero : forall (a : Type) . (a -> a) [0] -> a -> a
+zero [f] x = x
 
-one : forall (a : Type) . (a -> a) |1| -> a -> a
-one |f| x = f x
+one : forall (a : Type) . (a -> a) [1] -> a -> a
+one [f] x = f x
 
-two : forall (a : Type) . (a -> a) |2| -> a -> a
-two |f| x = f (f x)
+two : forall (a : Type) . (a -> a) [2] -> a -> a
+two [f] x = f (f x)
 
 plus : forall (a : Type, n : Nat, m : Nat) .
-         ((a -> a) |m| -> a -> a)
-      -> ((a -> a) |n| -> a -> a)
-      -> ((a -> a) |(m+n)| -> a -> a)
-plus m n |f| x = m |f| (n |f| x)
+         ((a -> a) [m] -> a -> a)
+      -> ((a -> a) [n] -> a -> a)
+      -> ((a -> a) [m+n] -> a -> a)
+plus m n [f] x = m [f] (n [f] x)
 
 succ : forall (a : Type, n : Nat) .
-         ((a -> a) |n| -> a -> a)
-      -> ((a -> a) |(n+1)| -> a -> a)
-succ n |f| x = f (n |f| x)
+         ((a -> a) [n] -> a -> a)
+      -> ((a -> a) [n+1] -> a -> a)
+succ n [f] x = f (n [f] x)
 
 mult : forall (a : Type, n : Nat, m : Nat) .
-         ((a -> a) |m| -> a -> a)
-      -> ((a -> a) |n| -> a -> a) |m|
-      -> ((a -> a) |(n*m)| -> a -> a)
-mult m |n| |f| x = m |(n |f|)| x
+         ((a -> a) [m] -> a -> a)
+      -> ((a -> a) [n] -> a -> a) [m]
+      -> ((a -> a) [n*m] -> a -> a)
+mult m [n] [f] x = m [n [f]] x
 
 -- Generalised version of Church numerals
 
-zeroGen : forall (a : Type, r : Nat) . (a |r| -> a) |0| -> a -> a
-zeroGen |f| x = x
+zeroGen : forall (a : Type, r : Nat) . (a [r] -> a) [0] -> a -> a
+zeroGen [f] x = x
 
-oneGen : forall (a : Type, r : Nat) . (a |r| -> a) |1| -> a |r| -> a
-oneGen |f| x = f x
+oneGen : forall (a : Type, r : Nat) . (a [r] -> a) [1] -> a [r] -> a
+oneGen [f] x = f x
 
-twoGen : forall (a : Type, r : Nat) . (a |r| -> a) |(r+1)| -> a |(r*r)| -> a
-twoGen |f| |x| = f |(f |x|)|
+twoGen : forall (a : Type, r : Nat) . (a [r] -> a) [r+1] -> a [r*r] -> a
+twoGen [f] [x] = f [f [x]]
 
-threeGen : forall (a : Type, r : Nat) . (a |r| -> a) |(r*r)+r+1| -> a |(r*r*r)| -> a
-threeGen |f| |x| = f |(f |(f |x|)|)|
+threeGen : forall (a : Type, r : Nat) . (a [r] -> a) [(r*r)+r+1] -> a [r*r*r] -> a
+threeGen [f] [x] = f [f [f [x]]]
 
-fourGen : forall (a : Type, r : Nat) . (a |r| -> a) |(r*r*r)+(r*r)+r+1| -> a |(r*r*r*r)| -> a
-fourGen |f| |x| = f |(f |(f |(f |x|)|)|)|
+fourGen : forall (a : Type, r : Nat) . (a [r] -> a) [(r*r*r)+(r*r)+r+1] -> a [r*r*r*r] -> a
+fourGen [f] [x] = f [f [f [f [x]]]]
 
 -- Booleans
 
-true : forall (a : Type) . a |1| -> a |0| -> a
-true |a| |b| = a
+true : forall (a : Type) . a [1] -> a [0] -> a
+true [a] [b] = a
 
-false : forall (a : Type) . a |0| -> a |1| -> a
-false |a| |b| = b
+false : forall (a : Type) . a [0] -> a [1] -> a
+false [a] [b] = b
 
 -- Need arbitrary rank polymorphism for most binary operators!
 
 not : forall (a : Type, n : Nat, m : Nat) .
-      (a |m| -> a |n| -> a) -> a |n| -> a |m| -> a
+      (a [m] -> a [n] -> a) -> a [n] -> a [m] -> a
 not p x y = p y x
 
 xor : forall (a : Type, c : Type, n : Nat, m : Nat, p : Nat, q : Nat) .
-         ((a |q| -> a |p| -> a) |n|
-      ->  (a |p| -> a |q| -> a) |m|
+         ((a [q] -> a [p] -> a) [n]
+      ->  (a [p] -> a [q] -> a) [m]
       ->  c)
-      -> (a |p| -> a |q| -> a) |(n+m)|
+      -> (a [p] -> a [q] -> a) [n+m]
       -> c
-xor a |b| = a |(not b)| |b|
+xor a [b] = a [not b] [b]

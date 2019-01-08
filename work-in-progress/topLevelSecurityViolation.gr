@@ -1,11 +1,13 @@
-pin : Int |Private|
-pin = |42|
+-- last checked 2019-01-07 by @buggymcbugfix
 
-leak : Int |Private| -> Int
-leak |x| = x
+pin : Int [Private]
+pin = [42]
+
+leak : Int [Private] -> Int
+leak [x] = x
 
 bad : Int
 bad = leak pin
 
-veryBad : Int |Public|
-veryBad = |(leak pin)|
+veryBad : Int [Public]
+veryBad = [leak pin]

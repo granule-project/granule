@@ -1,5 +1,5 @@
-dub : Float |2| -> Float
-dub |x| = x + x
+dub : Float [2] -> Float
+dub [x] = x + x
 
 main : Float
-main = dub |1.0|
+main = dub [1.0]

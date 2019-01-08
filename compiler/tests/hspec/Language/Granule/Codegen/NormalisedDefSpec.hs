@@ -20,24 +20,28 @@ spec = do
     let x = (var "x" int)
     let y = (var "y" int)
     it "curries multi-arg definitions" $ do
-        let curried  = (normaliseDefinition $
-                           defun "add" [(arg "x" int), (arg "y" int)]
+        let curried = (normaliseDefinition $
+                           def "add" [(arg "x" int), (arg "y" int)]
                                ((val x) `plus` (val y))
                                (tts $ int .-> int .-> int))
-        let expected = defun "add" [(arg "x" int)]
-                           (lambdaexp (arg "y" int) (int .-> int)
-                                ((val x) `plus` (val y)))
-                           (tts $ int .-> int .-> int)
+        let expected = Left $
+                           defun "add" (arg "x" int)
+                               (lambdaexp (arg "y" int) (int .-> int)
+                                    ((val x) `plus` (val y)))
+                               (tts $ int .-> int .-> int)
         curried `shouldBe` expected
     it "hoists multi-argument lambda" $ do
-        let hoisted  = (normaliseDefinition $
-                           defun "add" []
+        let hoisted = (normaliseDefinition $
+                           def "add" []
                                (lambdaexp (arg "x" int) (int .-> int .-> int)
                                     (lambdaexp (arg "y" int) (int .-> int)
                                         ((val x) `plus` (val y))))
                                (tts $ int .-> int .-> int))
-        let expected = defun "add" [(arg "x" int)]
-                           (lambdaexp (arg "y" int) (int .-> int)
-                                ((val x) `plus` (val y)))
-                           (tts $ int .-> int .-> int)
+        let expected = Left $
+                           defun "add" (arg "x" int)
+                              (lambdaexp (arg "y" int) (int .-> int)
+                                   ((val x) `plus` (val y)))
+                              (tts $ int .-> int .-> int)
         hoisted `shouldBe` expected
+    it "desugars multple-equations as case" $ do
+        True `shouldBe` True

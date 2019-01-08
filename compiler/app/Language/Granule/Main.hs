@@ -36,7 +36,7 @@ import LLVM.Pretty (ppllvm)
 import LLVM.Target
 import LLVM.Module
 import LLVM.Internal.Context
-import Language.Granule.Codegen.Codegen
+import Language.Granule.Codegen.Compile
 
 main :: IO ()
 main = do
@@ -91,13 +91,13 @@ run input = do
         Right Failed -> do
           printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
-        Right Ok -> do
+        Right (Ok typedAst) -> do
           if noEval ?globals then do
             printInfo $ green "Ok"
             return ExitSuccess
           else do
-            printInfo $ green "Ok, evaluating..."
-            let result = codegen ast
+            printInfo $ green "Ok, compiling..."
+            let result = compile (sourceFilePath ?globals) typedAst
             case result of
               Left (e :: SomeException) -> do
                 printErr $ EvalError $ show e

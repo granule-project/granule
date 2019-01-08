@@ -10,9 +10,9 @@ c : forall (a : Type, b : Type, c : Type)
 c f x y = f y x
 
 k : forall (a : Type, b : Type)
-  . a -> b |0| -> a
-k x |y| = x
+  . a -> b [0] -> a
+k x [y] = x
 
 s : forall (a : Type, b : Type, c : Type)
-  . (a -> b -> c) -> (a -> b) -> a |2| -> c
-s f g |x| = f x (g x)
+  . (a -> b -> c) -> (a -> b) -> a [2] -> c
+s f g [x] = f x (g x)

@@ -1,3 +1,11 @@
+  # 0.7.0.0
+	- Functions can now be written as a set of equations, and this
+	  is the best way to get dependent pattern matching
+
+	- Various key bug fixes
+
+	- Existentials
+
 	# 0.6.0.5
 	- IOMode is now a primitive type rather than being used
 	primitively but being defined in a library
@@ -8,7 +16,7 @@
 	- Refactoring to how ASTs are internally represented
 	- Some fixes regarding consumption effects in pattern matches.
 
-        # 0.6.0.1
+  # 0.6.0.1
 
 	Simplified internals of kinds and coeffect types
 

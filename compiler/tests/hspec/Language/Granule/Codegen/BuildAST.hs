@@ -36,9 +36,15 @@ defval :: String -> Expr ev Type -> TypeScheme -> ValueDef ev Type
 defval name initexpr ts =
     ValueDef nullSpan (mkId name) initexpr ts
 
-defun :: String -> [Pattern Type] -> Expr () Type -> TypeScheme -> Def () Type
-defun name args bodyexpr ts =
-    Def nullSpan (mkId name) bodyexpr args ts
+defun :: String -> Pattern Type -> Expr () Type -> TypeScheme -> FunctionDef () Type
+defun name arg bodyexpr ts =
+    FunctionDef nullSpan (mkId name) bodyexpr arg ts
+
+def :: String -> [Pattern Type] -> Expr () Type -> TypeScheme -> Def () Type
+def name args bodyexpr ts =
+    Def nullSpan (mkId name) [equation] ts
+    where equation = Equation nullSpan ty args bodyexpr
+          (Forall _ [] ty) = ts
 
 lambdaexp :: Pattern Type -> Type -> Expr ev Type -> Expr ev Type
 lambdaexp argument fnty body =

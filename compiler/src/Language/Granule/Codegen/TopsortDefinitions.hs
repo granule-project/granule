@@ -25,8 +25,8 @@ data TopsortResult ev a =
 deriving instance (Show ev, Show a) => Show (TopsortResult ev a)
 deriving instance (Eq ev, Eq a) => Eq (TopsortResult ev a)
 
-topologicalSortDefinitions :: (Show ev, Show a) =>  NormalisedAST ev a -> TopsortResult ev a
-topologicalSortDefinitions (NormalisedAST dataDefs functionDefs valueDefs)
+topologicallySortDefinitions :: (Show ev, Show a) =>  NormalisedAST ev a -> TopsortResult ev a
+topologicallySortDefinitions (NormalisedAST dataDefs functionDefs valueDefs)
     | any isRecursiveValue valueDefs =
         RecursiveValues $ filter isRecursiveValue valueDefs
     | otherwise =
@@ -52,21 +52,22 @@ topSortValueDefinitions functionDefs valueDefs =
             [] -> Left $ rights (vertexToNode <$> topSort depGraph)
             (badDefs:_) -> Right (lefts badDefs, rights badDefs)
 
-dependencyGraph :: (Show a, Show ev) => [FunctionDef ev a]
+dependencyGraph :: (Show a, Show ev)
+                => [FunctionDef ev a]
                 -> [ValueDef ev a]
                 -> (Graph, Vertex -> Either (FunctionDef ev a) (ValueDef ev a), Id -> Maybe Vertex)
 dependencyGraph functionDefs valueDefs =
     let graph = graphFromEdges $ (map functionNode functionDefs) ++ (map valueNode valueDefs)
-                where functionNode def = (Left def,  definitionIdentifier def, edges def)
-                      valueNode    def = (Right def, definitionIdentifier def, edges def)
-                      edges        def = Set.toList $ definitionDependencies definitionIds def
+                where functionNode def = (Left def,  definitionIdentifier def, edges $ functionDefBody def)
+                      valueNode    def = (Right def, definitionIdentifier def, edges $ valueDefInitializer def)
+                      edges        expr = Set.toList $ expressionDependencies definitionIds expr
                       definitionIds    = allDefinitionIds functionDefs valueDefs
     in let (g, vertexToNode, keyToVertex) = graph
        in (g, (\(~(n, _, _)) -> n) . vertexToNode, keyToVertex)
 
-definitionDependencies :: (Definition d (Expr ev a)) => [Id] -> d -> Set Id
-definitionDependencies defIds def =
-    referencedDefinitions (definitionBody def) defIds
+expressionDependencies :: [Id] -> Expr ev a -> Set Id
+expressionDependencies defIds expr =
+    referencedDefinitions expr defIds
 
 referencedDefinitions :: Expr ev a -> [Id] -> Set Id
 referencedDefinitions ex defIds =
@@ -84,4 +85,4 @@ allDefinitionIds functionDefs valueDefs =
 
 isRecursiveValue :: ValueDef ev a -> Bool
 isRecursiveValue def =
-    not $ Set.null $ definitionDependencies [definitionIdentifier def] def
+    not $ Set.null $ expressionDependencies [definitionIdentifier def] (valueDefInitializer def)

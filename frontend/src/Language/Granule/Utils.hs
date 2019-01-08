@@ -7,6 +7,7 @@ module Language.Granule.Utils where
 
 import Control.Exception (SomeException, catch, try)
 import Control.Monad (when, forM)
+import Data.List ((\\), nub)
 import Data.Semigroup ((<>))
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.LocalTime (getTimeZone, utc, utcToLocalTime)
@@ -43,7 +44,7 @@ defaultGlobals =
     , suppressInfos = False
     , suppressErrors = False
     , timestamp = False
-    , solverTimeoutMillis = Just 3000
+    , solverTimeoutMillis = Just 5000
     }
 
 class UserMsg a where
@@ -83,6 +84,7 @@ printErr err = when (not $ suppressErrors ?globals) $ do
       <> (bold $ red $ title err <> ": ")
       <> sourceFile <> lineCol <> "\n"
       <> indent (msg err)
+      <> "\n"
   where
     sourceFile =
         case sourceFilePath ?globals of
@@ -157,3 +159,9 @@ lookupMany :: Eq a => a -> [(a, b)] -> [b]
 lookupMany _ []                     = []
 lookupMany a' ((a, b):xs) | a == a' = b : lookupMany a' xs
 lookupMany a' (_:xs)                = lookupMany a' xs
+
+-- | Get set of duplicates in a list.
+-- >>> duplicates [1,2,2,3,3,3]
+-- [2,3]
+duplicates :: Eq a => [a] -> [a]
+duplicates xs = nub (xs \\ nub xs)

@@ -85,7 +85,9 @@ data ExprF ev a expr value =
   | BinopF Span a Operator expr expr
   | LetDiamondF Span a (Pattern a) (Maybe Type) expr expr
      -- Graded monadic composition (like Haskell do)
-     -- let p : t <- e1 in e2  or  let p <- e1 in e2
+     -- let p : t <- e1 in e2
+     -- or
+     -- let p <- e1 in e2
   | ValF Span a value
   | CaseF Span a expr [(Pattern a, expr)]
   deriving (Generic, Eq)
@@ -143,6 +145,21 @@ letBox :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
 letBox s pat e1 e2 =
   App s () (Val s () (Abs () (PBox s () pat) Nothing e2)) e1
 
+pair :: Span -> Expr v () -> Expr v () -> Expr v ()
+pair s e1 e2 = App s () (App s () (Val s () (Constr () (mkId "(,)") [])) e1) e2
+
+typedPair :: Span -> Expr v Type -> Expr v Type -> Expr v Type
+typedPair s left right =
+    App s ty (App s (rightType .-> ty)
+        (Val s ty (Constr (leftType .-> rightType .-> ty) (mkId "(,)") [])) left) right
+    where leftType = annotation left
+          rightType = annotation right
+          ty = pairType leftType rightType
+
+pairType :: Type -> Type -> Type
+pairType leftType rightType =
+    TyApp (TyApp (TyCon (Id "," ",")) leftType) rightType
+
 class Substitutable t where
   -- Syntactic substitution of a term into an expression
   -- (assuming variables are all unique to avoid capture)
@@ -174,7 +191,7 @@ instance Substitutable Value where
     subst _ _ v@StringLiteral{} = Val nullSpan (getFirstParameter v) v
     subst _ _ v@Ext{} = Val nullSpan (getFirstParameter v) v
 
-instance Freshenable (Value ev a) where
+instance Monad m => Freshenable m (Value v a) where
     freshen (Abs a p t e) = do
       p'   <- freshen p
       e'   <- freshen e
@@ -231,7 +248,7 @@ instance Substitutable Expr where
       Case s a (subst es v expr)
                (map (second (subst es v)) cases)
 
-instance Freshenable (Expr ev a) where
+instance Monad m => Freshenable m (Expr v a) where
     freshen (App s a e1 e2) = do
       e1 <- freshen e1
       e2 <- freshen e2

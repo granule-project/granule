@@ -1,3 +1,3 @@
 -- One is unknown
-dub : Int |∞ : One| -> Int
-dub |x| = x + x
+dub : Int [∞ : One] -> Int
+dub [x] = x + x

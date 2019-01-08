@@ -25,35 +25,46 @@ import Language.Granule.Syntax.Pattern
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
 data AST v a = AST [DataDecl] [Def v a]
-
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
+deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
-class Definition d expr | d -> expr where
+class Definition d where
     definitionSpan :: d -> Span
     definitionIdentifier :: d -> Id
-    definitionBody :: d -> expr
     definitionTypeScheme :: d -> TypeScheme
 
--- | Expression definitions
-data Def v a = Def {
-    defSpan :: Span,
-    defIdentifier :: Id,
-    defBody :: Expr v a,
-    defArguments :: [Pattern a],
-    defTypeScheme :: TypeScheme }
+-- | Function definitions
+data Def v a =
+    Def {
+        defSpan :: Span,
+        defIdentifier :: Id,
+        defEquations :: [Equation v a],
+        defTypeScheme :: TypeScheme }
     deriving Generic
 
 instance FirstParameter (Def v a) Span
-deriving instance (Show a, Show v) => Show (Def v a)
-deriving instance (Eq a, Eq v) => Eq (Def v a)
+deriving instance (Eq v, Eq a) => Eq (Def v a)
+deriving instance (Show v, Show a) => Show (Def v a)
 
-instance Definition (Def ev a) (Expr ev a) where
+-- | Single equation of a function
+data Equation v a =
+    Equation {
+        equationSpan :: Span,
+        equationType :: a,
+        equationArguments :: [Pattern a],
+        equationBody :: (Expr v a) }
+    deriving Generic
+
+deriving instance (Eq v, Eq a) => Eq (Equation v a)
+deriving instance (Show v, Show a) => Show (Equation v a)
+instance FirstParameter (Equation v a) Span
+
+instance Definition (Def ev a) where
     definitionSpan = getSpan
     definitionIdentifier = defIdentifier
-    definitionBody = defBody
     definitionTypeScheme = defTypeScheme
 
-definitionType :: (Definition d expr) => d -> Type
+definitionType :: (Definition d) => d -> Type
 definitionType def =
     ty where (Forall _ _ ty) = definitionTypeScheme def
 
@@ -76,47 +87,47 @@ data DataConstr
 
 instance FirstParameter DataConstr Span
 
-
 -- | How many data constructors a type has (Nothing -> don't know)
 type Cardinality = Maybe Nat
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
-freshenAST (AST dds defs) = AST dds (map runFreshener defs)
+freshenAST (AST dds defs) =
+  AST dds' defs'
+    where (dds', defs') = (map runFreshener dds, map runFreshener defs)
 
-{-| Alpha-convert all bound variables of a definition, modulo the things on the lhs
-Eg this:
-@
-foo : Int -> Int
-foo x = (\(x : Int) -> x * 2) x
-@
-will become
-@
-foo : Int -> Int
-foo x = (\(x0 : Int) -> x0 * 2) x
-@
+instance Monad m => Freshenable m DataDecl where
+  freshen (DataDecl s v tyVars kind ds) = do
+    tyVars <- mapM (\(v, k) -> freshen k >>= \k' -> return (v, k')) tyVars
+    kind <- freshen kind
+    ds <- freshen ds
+    return $ DataDecl s v tyVars kind ds
 
->>> :{
-runFreshener $ Def { defSpan = ((1,1),(2,29)),
-                     defIdentifier = (Id "foo" "foo"),
-                     defBody = (App ((2,10),(2,29)) ()
-                               (Val ((2,10),(2,25)) ()
-                                   (Abs () (PVar ((2,12),(2,12)) () (Id "x" "x0")) (Just (TyCon (Id "Int" "Int")))
-                                       (Binop ((2,25),(2,25)) () "*"
-                                           (Val ((2,24),(2,24)) () (Var () (Id "x" "x0")))
-                                           (Val ((2,26),(2,26)) () (NumInt 2)))))
-                               (Val ((2,29),(2,29)) () (Var () (Id "x" "x")))),
-                     defArguments = [PVar ((2,5),(2,5)) () (Id "x" "x")],
-                     defTypeScheme = (Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int")))) }
-:}
-Def {defSpan = ((1,1),(2,29)), defIdentifier = (Id "foo" "foo"), defBody = (AppF ((2,10),(2,29)) () (ValF ((2,10),(2,25)) () (AbsF () (PVar ((2,12),(2,12)) () (Id "x" "x_1")) (Just (TyCon (Id "Int" "Int"))) (BinopF ((2,25),(2,25)) () "*" (ValF ((2,24),(2,24)) () (VarF () (Id "x" "x_1"))) (ValF ((2,26),(2,26)) () (NumIntF 2))))) (ValF ((2,29),(2,29)) () (VarF () (Id "x" "x_0")))), defArguments = [PVar ((2,5),(2,5)) () (Id "x" "x_0")], defTypeScheme = Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int")))}
--}
-instance Freshenable (Def v a) where
-  freshen (Def s var e ps t) = do
+instance Monad m => Freshenable m DataConstr where
+  freshen (DataConstrG sp v tys) = do
+    tys <- freshen tys
+    return $ DataConstrG sp v tys
+  freshen (DataConstrA sp v ts) = do
+    ts <- mapM freshen ts
+    return $ DataConstrA sp v ts
+
+instance Monad m => Freshenable m (Equation v a) where
+  freshen (Equation s a ps e) = do
     ps <- mapM freshen ps
+    e <- freshen e
+    return (Equation s a ps e)
+
+-- | Alpha-convert all bound variables of a definition to unique names.
+instance Monad m => Freshenable m (Def v a) where
+  freshen (Def s var eqs t) = do
     t  <- freshen t
-    e  <- freshen e
-    return (Def s var e ps t)
+    eqs <- mapM freshen eqs
+    return (Def s var eqs t)
+
+instance Term (Equation v a) where
+  freeVars (Equation s a binders body) =
+      freeVars body \\ concatMap boundVars binders
 
 instance Term (Def v a) where
-  freeVars (Def _ name body binders _) = delete name (freeVars body \\ concatMap boundVars binders)
+  freeVars (Def _ name equations _) =
+    delete name (concatMap freeVars equations)

@@ -1,35 +1,35 @@
-dup : Int |2| -> Int
-dup |n| = n + n
+dup : Int [2] -> Int
+dup [n] = n + n
 
 dup' : Int -> Int
 dup' n = n * 2
 
-twice : forall (c : Nat) . (Int |c| -> Int) |2| -> Int |2*c| -> Int
-twice |f| |n| = f |n| + f |n|
+twice : forall (c : Nat) . (Int [c] -> Int) [2] -> Int [2*c] -> Int
+twice [f] [n] = f [n] + f [n]
 
-trip : Int |3| -> Int
-trip |x| = x + x + x
+trip : Int [3] -> Int
+trip [x] = x + x + x
 
 -- main : Int
--- main = twice |dup| |10| + twice |trip| |20|
+-- main = twice [dup] [10] + twice [trip] [20]
 
-secret : Int |Private|
-secret = |4253|
+secret : Int [Private]
+secret = [4253]
 
-hash : forall (l : Level) . Int |l| -> Int |l|
-hash |x| = |(x*x)|
+hash : forall (l : Level) . Int [l] -> Int [l]
+hash [x] = [x*x]
 
-notAleak : (Int |Private|) |0| -> Int |Public|
-notAleak |x| = |42|
+notAleak : (Int [Private]) [0] -> Int [Public]
+notAleak [x] = [42]
 
--- main : Int |Private|
+-- main : Int [Private]
 -- main = hash secret
 
-doTwice : (Int <[R]>) |2| -> Int <[R, R]>
-doTwice |f| =
+doTwice : (Int <[R]>) [2] -> Int <[R, R]>
+doTwice [f] =
   let a <- f;
       b <- f
   in pure (a + b)
 
 main : Int <[R, R]>
-main = doTwice |readInt|
+main = doTwice [readInt]

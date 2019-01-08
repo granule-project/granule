@@ -44,7 +44,8 @@ import Language.Granule.ReplParser
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]
 type FreeVarGen = Int
-type REPLStateIO a  = StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) (Ex.ExceptT ReplError IO) a
+type REPLStateIO a  =
+  StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) (Ex.ExceptT ReplError IO) a
 
 instance MonadException m => MonadException (StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
@@ -99,7 +100,7 @@ readToQueue pth = do
             debugM "Pretty-printed AST:" $ pretty ast
             checked <-  liftIO' $ check ast
             case checked of
-                Ok -> do
+                (Ok _) -> do
                     let (AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
@@ -111,7 +112,7 @@ readToQueue pth = do
 
 
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
-loadInQueue def@(Def _ id exp _ _) = do
+loadInQueue def@(Def _ id _ _) = do
   (fvg,rp,adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
@@ -123,7 +124,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -143,7 +144,8 @@ buildAST t m = let v = M.lookup t m in
                      case lookup (mkId t) Primitives.builtins of
                        Nothing -> []
                        -- Create a trivial definition (x = x) with the right type
-                       Just ty -> [Def nullSpan (mkId t) (Val nullSpan () (Var () (mkId t))) [] ty]
+                       Just ty -> [Def nullSpan (mkId t) [] ty]
+                       --   (Val nullSpan () (Var () (mkId t)))
                    Just (def,lid) -> case lid of
                                       []  ->  [def]
                                       ids -> (buildDef ids <> [def])
@@ -171,7 +173,7 @@ lookupBuildADT term aMap = let lup = M.lookup term aMap in
                                 case lookup (mkId term) Primitives.typeLevelConstructors of
                                   Nothing -> ""
                                   Just (k, _) -> term <> " : " <> pretty k
-                              Just d -> term <> " : " <> pretty d
+                              Just d -> pretty d
 
 printType :: (?globals::Globals) => String -> M.Map String (Def () (), [String]) -> String
 printType trm m = let v = M.lookup trm m in
@@ -180,7 +182,7 @@ printType trm m = let v = M.lookup trm m in
                         case lookup (mkId trm) Primitives.builtins of
                           Nothing -> "Unknown"
                           Just ty -> trm <> " : " <> pretty ty
-                      Just (def@(Def _ id _ _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
+                      Just (def@(Def _ id _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
 
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
@@ -209,7 +211,7 @@ buildCheckerState dd = do
 
 buildCtxtTS :: (?globals::Globals) => [Def () ()] -> Ctxt TypeScheme
 buildCtxtTS [] = []
-buildCtxtTS ((x@(Def _ id _ _ ts)):ast) =  (id,ts) : buildCtxtTS ast
+buildCtxtTS ((x@(Def _ id _ ts)):ast) =  (id,ts) : buildCtxtTS ast
 
 buildCtxtTSDD :: (?globals::Globals) => [DataDecl] -> Ctxt TypeScheme
 buildCtxtTSDD [] = []
@@ -229,7 +231,8 @@ buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
 buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
-buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv))) ex [] ts
+buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv)))
+   [Equation nullSpan () [] ex] ts
 
 
 getConfigFile :: IO String
@@ -346,7 +349,7 @@ handleCMD s =
           -- TODO: use the type that comes out of the checker to return the type
           checked <- liftIO' $ check (AST adt ast)
           case checked of
-            Ok -> liftIO $ putStrLn (printType trm m)
+            (Ok _) -> liftIO $ putStrLn (printType trm m)
             Failed -> Ex.throwError (TypeCheckError trm)
 
     handleLine (Eval ev) = do
@@ -372,7 +375,7 @@ handleCMD s =
                         put ((fvg+1),rp,adt,fp,m)
                         checked <- liftIO' $ check (AST adt (ast<>(ndef:[])))
                         case checked of
-                            Ok -> do
+                            (Ok _) -> do
                                 result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
@@ -455,5 +458,5 @@ main = do
            , suppressInfos = False
            , suppressErrors = False
            , timestamp = False
-           , solverTimeoutMillis = Just 1000
+           , solverTimeoutMillis = Just 5000
            }

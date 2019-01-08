@@ -2,7 +2,7 @@ import File
 
 main : FileIO String
 main =
-    let |mh|    = |(openFile "LICENSE" ReadMode)| in
+    let [mh]    = [openFile "LICENSE" ReadMode] in
     let h       <- mh;
         h'      <- mh;
         ()      <- hClose h';
