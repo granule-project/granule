@@ -3,9 +3,8 @@ data NonEmpty a where
   NonEmpty : a -> NonEmpty a
 
 head : forall a : Type . (NonEmpty a) [0..1] -> a
-head x = case x of
-  [Next x _] -> x;
-  [NonEmpty x] -> x
+head [Next x _] = x;
+|    [NonEmpty x] = x
 
 main : Int
 main = head [NonEmpty 1]
