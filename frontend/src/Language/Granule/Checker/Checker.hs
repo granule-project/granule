@@ -43,11 +43,16 @@ import Language.Granule.Utils
 
 -- Checking (top-level)
 check :: (?globals :: Globals) => AST () () -> IO (Maybe ())
-check (AST dataDecls defs) = evalChecker initState $ runMaybeT $ do
-    mapM_ checkTyCon dataDecls
-    mapM_ checkDataCons dataDecls
-    mapM_ kindCheckDef defs
-    mapM_ (checkDef defCtxt) defs
+check (AST dataDecls defs) = evalChecker initState $ do
+    rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
+    rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
+    rs3 <- mapM (runMaybeT . kindCheckDef) defs
+    rs4 <- mapM (runMaybeT . (checkDef defCtxt)) defs
+
+    return $
+      if all isJust (rs1 <> rs2 <> rs3 <> (map (fmap (const ())) rs4))
+        then Just () -- TODO: add Ed's elaborated AST back in here ResultType with rs4
+        else Nothing
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
 
