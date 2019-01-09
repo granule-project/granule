@@ -561,7 +561,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   (sig, gam1, elaborated1) <- synthExpr defs gam pol e1
   case sig of
     (TyApp (TyCon con) t')
-      | internalName con == "FileIO" || internalName con == "Session" ->
+      | internalName con == "IO" || internalName con == "Session" ->
       typeLetSubject gam1 [] t' elaborated1
 
     Diamond ef1 ty1 ->
@@ -584,7 +584,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
                 typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 elaboratedP elaborated1 elaborated2
 
             (TyApp (TyCon con) t')
-               | internalName con == "FileIO" || internalName con == "Session" ->
+               | internalName con == "IO" || internalName con == "Session" ->
                  typeLetBody gam1 gam2 ef1 [] binders ty1 t' elaboratedP elaborated1 elaborated2
 
             t -> halt $ GenericError (Just s)

@@ -113,15 +113,15 @@ equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
 
 -- THE FOLLOWING TWO CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
 
--- Over approximation by 'FileIO' "monad"
+-- Over approximation by 'IO' "monad"
 equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
-   | internalName con == "FileIO" = do
+   | internalName con == "IO" = do
     (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
     return (eq, unif)
 
--- Under approximation by 'FileIO' "monad"
+-- Under approximation by 'IO' "monad"
 equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
-   | internalName con == "FileIO" = do
+   | internalName con == "IO" = do
     (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
     return (eq, unif)
 

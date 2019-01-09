@@ -16,7 +16,7 @@
 {-# LANGUAGE TypeApplications #-}
 
 import Control.Exception (SomeException, try)
-import Control.Monad (forM)
+import Control.Monad (forM, when)
 import Data.List (stripPrefix)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
@@ -25,6 +25,7 @@ import System.Exit
 import System.Directory (getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
+import "pretty-simple" Text.Pretty.Simple
 
 import Language.Granule.Checker.Checker
 import Language.Granule.Eval
@@ -76,8 +77,8 @@ run input = do
 
     Right ast -> do
       -- Print to terminal when in debugging mode:
-      debugM "AST" (show ast)
       debugM "Pretty-printed AST:" $ pretty ast
+      when (debugging ?globals) (pPrintOpt defaultOutputOptionsNoColor{outputOptionsIndentAmount = 1} ast)
       -- Check and evaluate
       checked <- try $ check ast
       case checked of

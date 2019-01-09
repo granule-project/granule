@@ -17,7 +17,7 @@ typeLevelConstructors =
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
     , (mkId "String", (KType, Nothing))
-    , (mkId "FileIO", (KFun KType KType, Nothing))
+    , (mkId "IO", (KFun KType KType, Nothing))
     , (mkId "Session", (KFun KType KType, Nothing))
     , (mkId "Protocol", (KType, Nothing))
     , (mkId "Nat",  (KCoeffect, Nothing))
