@@ -13,6 +13,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List (genericLength, intercalate)
 import Data.Maybe
+import qualified Data.Text as T
 
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
@@ -761,8 +762,9 @@ solveConstraints predicate s name = do
 
   case result of
     QED -> return ()
-    NotValid msg ->
-       halt $ GenericError (Just s) $ "Definition `" <> pretty name <> "` " <> msg
+    NotValid msg -> do
+       msg' <- rewriteMessage msg
+       halt $ GenericError (Just s) $ "Definition `" <> pretty name <> "` " <> msg'
     NotValidTrivial unsats ->
        mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
     Timeout ->
@@ -772,6 +774,32 @@ solveConstraints predicate s name = do
          " ms. You may want to increase the timeout (see --help)."
     Error msg ->
        halt msg
+
+-- Rewrite an error message coming from the solver
+rewriteMessage :: String -> MaybeT Checker String
+rewriteMessage msg = do
+    st <- get
+    let tyVars = tyVarContext st
+    let msgLines = T.lines $ T.pack msg
+    -- Rewrite internal names to source names
+    let msgLines' = map (\line -> foldl convertLine line tyVars) msgLines
+
+    return $ T.unpack (T.unlines msgLines')
+  where
+    convertLine line (v, (k, _)) =
+        -- Try to replace line variables in the line
+       let line' = T.replace (T.pack (internalName v)) (T.pack (sourceName v)) line
+       -- If this succeeds we might want to do some other replacements
+           line'' =
+             if line /= line' then
+               case k of
+                 KPromote (TyCon (internalName -> "Level")) ->
+                    T.replace (T.pack $ show 1) (T.pack "Private")
+                      (T.replace (T.pack $ show 0) (T.pack "Public")
+                       (T.replace (T.pack "Integer") (T.pack "Level") line'))
+                 _ -> line'
+             else line'
+       in line''
 
 justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
