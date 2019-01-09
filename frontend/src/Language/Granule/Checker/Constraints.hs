@@ -417,7 +417,7 @@ compileCoeffect (COne k') k vars =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> SLevel $ literal publicRepresentation
+        "Level"     -> SLevel $ literal privateRepresentation
         "Nat"       -> SNat 1
         "Q"         -> SFloat (fromRational 1)
         "Set"       -> SSet (S.fromList [])

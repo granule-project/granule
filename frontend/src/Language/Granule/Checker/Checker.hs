@@ -498,11 +498,9 @@ synthExpr _ _ _ (Val s _ (StringLiteral c)) = do
 synthExpr defs gam pol
   (App s _ (Val _ _ (Var _ (sourceName -> "weak"))) v@(Val _ _ (Var _ x))) = do
 
-  (t, gam', elabE) <- synthExpr defs gam pol v
+  (t, _, elabE) <- synthExpr defs gam pol v
 
-  ctxtEquals s gam' [(x, Discharged t (CZero (TyCon $ mkId "Level")))]
-
-  return (t, gam', elabE)
+  return (t, [(x, Discharged t (CZero (TyCon $ mkId "Level")))], elabE)
 
 -- Constructors
 synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
@@ -564,7 +562,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxtPlus s branchesGam guardGam
 
-  liftIO $ putStrLn $ pretty branchesGam
+  debugM "*** synth branchesGam" (pretty branchesGam)
 
   let elaborated = Case s branchType elaboratedGuard elaboratedCases
   return (branchType, gamNew, elaborated)

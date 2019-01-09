@@ -105,7 +105,7 @@ symGradePlus s t = cannotDo "plus" s t
 symGradeTimes :: SGrade -> SGrade -> SGrade
 symGradeTimes (SNat n1) (SNat n2) = SNat (n1 * n2)
 symGradeTimes (SSet s) (SSet t) = SSet $ S.union s t
-symGradeTimes (SLevel lev1) (SLevel lev2) = SLevel $ lev1 `smax` lev2
+symGradeTimes (SLevel lev1) (SLevel lev2) = SLevel $ lev1 `smin` lev2
 symGradeTimes (SFloat n1) (SFloat n2) = SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = SExtNat (x * y)
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
