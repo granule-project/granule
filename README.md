@@ -48,15 +48,13 @@ once to the produce the result.
 
 ## Installation
 
-The Granule interpreter requires Z3, for which installation instructions can be found [here](https://github.com/Z3Prover/z3). On mac, an easy way to install Z3 is via Homebrew:
+Make sure you have [Z3](https://github.com/Z3Prover/z3) and [Stack](https://docs.haskellstack.org/en/stable/README/) on your system.
 
-    $ brew install z3
+Now run
 
-To install Granule, we recommend you use [Stack](https://docs.haskellstack.org/en/stable/README/):
+    $ git clone https://github.com/granule-project/granule && cd granule && stack setup && stack install --test
 
-    $ git clone https://github.com/granule-project/granule && cd granule && stack setup && stack install
-
-If you have any problems building, this may be due to an outdated version of Stack; you can update Stack via `stack upgrade`.
+More details about how to install can be found on the [wiki page](https://github.com/granule-project/granule/wiki/Installing-Granule).
 
 ## Executing Granule Programs
 
