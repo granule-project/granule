@@ -230,8 +230,8 @@ Coeffect :: { Coeffect }
   | '∞'                         { infinity }
   | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
   | CONSTR                      { case (constrString $1) of
-                                    "Public" -> Level 0
-                                    "Private" -> Level 1
+                                    "Public" -> Level publicRepresentation
+                                    "Private" -> Level privateRepresentation
                                     "Inf" -> infinity
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }

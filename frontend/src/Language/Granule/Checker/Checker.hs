@@ -277,6 +277,9 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
        xs -> illLinearityMismatch s xs
   else refutablePattern s p
 
+
+
+
 -- Application special case for built-in 'scale'
 -- TODO: needs more thought
 {- checkExpr defs gam pol topLevel tau
@@ -491,6 +494,16 @@ synthExpr _ _ _ (Val s _ (StringLiteral c)) = do
   let t = TyCon $ mkId "String"
   return (t, [], Val s t (StringLiteral c))
 
+-- Secret syntactic weakening
+synthExpr defs gam pol
+  (App s _ (Val _ _ (Var _ (sourceName -> "weak"))) v@(Val _ _ (Var _ x))) = do
+
+  (t, gam', elabE) <- synthExpr defs gam pol v
+
+  ctxtEquals s gam' [(x, Discharged t (CZero (TyCon $ mkId "Level")))]
+
+  return (t, gam', elabE)
+
 -- Constructors
 synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
   -- Should be provided in the type checkers environment
@@ -550,6 +563,8 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
 
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxtPlus s branchesGam guardGam
+
+  liftIO $ putStrLn $ pretty branchesGam
 
   let elaborated = Case s branchType elaboratedGuard elaboratedCases
   return (branchType, gamNew, elaborated)
@@ -794,8 +809,8 @@ rewriteMessage msg = do
              if line /= line' then
                case k of
                  KPromote (TyCon (internalName -> "Level")) ->
-                    T.replace (T.pack $ show 1) (T.pack "Private")
-                      (T.replace (T.pack $ show 0) (T.pack "Public")
+                    T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
+                      (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
                        (T.replace (T.pack "Integer") (T.pack "Level") line'))
                  _ -> line'
              else line'

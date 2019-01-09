@@ -119,7 +119,8 @@ compileToSBV predicate tyVarContext kVarContext =
                     "Level" ->
                        forSome [(internalName v)] $ \solverVar -> do
                          pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
-                         return ((solverVar .== 0 ||| solverVar .== 1) &&& pred')
+                         return ((solverVar .== literal privateRepresentation
+                              ||| solverVar .== literal publicRepresentation) &&& pred')
 
             Nothing ->
               case k of
@@ -280,7 +281,11 @@ freshCVar quant name (TyCon k) q = do
 
         "Level"     -> do
           -- constrain (solverVar .== 0 ||| solverVar .== 1)
-          return (solverVar .== 0 ||| solverVar .== 1, SLevel solverVar)
+          return (solverVar .== literal privateRepresentation
+              ||| solverVar .== literal publicRepresentation, SLevel solverVar)
+
+        k -> do
+           error $ "I don't know how to make a fresh solver variable of type " <> show k
 
 -- Extended nat
 freshCVar quant name t q | t == extendedNat = do
@@ -394,10 +399,11 @@ compileCoeffect (CZero k') k vars  =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> SLevel 0
+        "Level"     -> SLevel $ literal privateRepresentation
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
+        _           -> error $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 0
     -- Build an interval for 0
@@ -405,15 +411,18 @@ compileCoeffect (CZero k') k vars  =
       SInterval
         (compileCoeffect (CZero t) t' vars)
         (compileCoeffect (CZero t) t' vars)
+    _ -> error $ "I don't know how to compile a 0 for " <> pretty k'
 
 compileCoeffect (COne k') k vars =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> SLevel 1
+        "Level"     -> SLevel $ literal publicRepresentation
         "Nat"       -> SNat 1
         "Q"         -> SFloat (fromRational 1)
         "Set"       -> SSet (S.fromList [])
+        _           -> error $ "I don't know how to compile a 1 for " <> pretty k'
+
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 1
     -- Build an interval for 1
@@ -421,6 +430,8 @@ compileCoeffect (COne k') k vars =
         SInterval
           (compileCoeffect (COne t) t' vars)
           (compileCoeffect (COne t) t' vars)
+    _ -> error $ "I don't know how to compile a 1 for " <> pretty k'
+
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c

@@ -83,11 +83,15 @@ data Coeffect = CNat      Int
               | CJoin     Coeffect Coeffect
               | CZero     Type
               | COne      Type
-              | Level     Int
+              | Level     Integer
               | CSet      [(String, Type)]
               | CSig      Coeffect Type
               | CExpon    Coeffect Coeffect
     deriving (Eq, Ord, Show)
+
+publicRepresentation, privateRepresentation :: Integer
+privateRepresentation = 1
+publicRepresentation  = 0
 
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")

@@ -25,11 +25,13 @@ flattenable = \case
      case internalName k of
       "Nat"   -> Just CTimes
       "Level" -> Just CJoin
+      _       -> Nothing
    TyApp (TyCon k) t ->
       -- Interval and top-completion are flattenable if their parameter type is
       case internalName k of
         "Interval" -> flattenable t
         "Ext"      -> flattenable t
+        _          -> Nothing
    _ -> Nothing
 
 checkKind :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
