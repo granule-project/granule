@@ -195,7 +195,7 @@ ctxtFromTypedPattern s t p = do
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   halt $ PatternTypingError (Just s)
-    $ "Pattern match `" <> pretty p <> "` does not have type `" <> pretty t <> "`"
+    $ "Pattern match `" <> pretty p <> "` does not match expected type `" <> pretty t <> "`"
 
 discharge _ _ c (v, Linear t) = return (v, Discharged t c)
 discharge s ct c (v, Discharged t c') = do
