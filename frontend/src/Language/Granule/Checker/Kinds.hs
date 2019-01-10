@@ -245,7 +245,7 @@ mguCoeffectTypes s c1 c2 = do
 
     (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
                <> pretty k1 <> "' and '" <> pretty k2
-               <> "' for coeffects " <> pretty c1 <> " and " <> pretty c2
+               <> "' for coeffects `" <> pretty c1 <> "` and `" <> pretty c2 <> "`"
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in an context
