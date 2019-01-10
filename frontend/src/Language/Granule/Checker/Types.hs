@@ -307,8 +307,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
             $ case sp of
              FstIsSpec -> "Trying to match a polymorphic type '" <> pretty n
                        <> "' with monomorphic `" <> pretty t <> "`"
-             SndIsSpec -> pretty t <> " is not equal to " <> pretty (TyVar n) <> " (probably existentially quantified)"
-             PatternCtxt -> pretty t <> " is not equal to " <> pretty (TyVar n)
+             SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n) <> " (probably existentially quantified)"
+             PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -361,7 +361,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
 
       KType ->
         halt $ GenericError (Just s) $
-           "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
+           "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
 
       _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
@@ -370,7 +370,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
                  <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
   else
     halt $ GenericError (Just s) $
-       "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
+       "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
