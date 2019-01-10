@@ -18,8 +18,10 @@ import qualified Data.ConfigFile as C
 import Control.Exception (try)
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Reader
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
+
 import "Glob" System.FilePath.Glob (glob)
 import Language.Granule.Utils
 import Language.Granule.Syntax.Pretty
@@ -40,6 +42,8 @@ import qualified Control.Monad.Except as Ex
 
 import Language.Granule.ReplError
 import Language.Granule.ReplParser
+
+nullSpanInteractive = Span (0,0) (0,0) "interactive"
 
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]
@@ -144,8 +148,8 @@ buildAST t m = let v = M.lookup t m in
                      case lookup (mkId t) Primitives.builtins of
                        Nothing -> []
                        -- Create a trivial definition (x = x) with the right type
-                       Just ty -> [Def nullSpan (mkId t) [] ty]
-                       --   (Val nullSpan () (Var () (mkId t)))
+                       Just ty -> [Def nullSpanInteractive (mkId t) [] ty]
+                       --   (Val nullSpanInteractive () (Var () (mkId t)))
                    Just (def,lid) -> case lid of
                                       []  ->  [def]
                                       ids -> (buildDef ids <> [def])
@@ -228,11 +232,11 @@ buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
 
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
-buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
+buildTypeScheme ty = Forall nullSpanInteractive [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
-buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv)))
-   [Equation nullSpan () [] ex] ts
+buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
+   [Equation nullSpanInteractive () [] ex] ts
 
 
 getConfigFile :: IO String
@@ -259,12 +263,12 @@ handleCMD s =
       liftIO $ print $ dumpStateAux dict
 
     handleLine (RunParser str) = do
-      pexp <- liftIO' $ try $ expr $ scanTokens str
+      pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens str) "interactive"
       case pexp of
         Right ast -> liftIO $ putStrLn (show ast)
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
-          pts <- liftIO' $ try $ tscheme $ scanTokens str
+          pts <- liftIO' $ try $ runReaderT (tscheme $ scanTokens str) "interactive"
           case pts of
             Right ts -> liftIO $ putStrLn (show ts)
             Left err -> do
@@ -354,7 +358,7 @@ handleCMD s =
 
     handleLine (Eval ev) = do
         (fvg,rp,adt,fp,m) <- get
-        pexp <- liftIO' $ try $ expr $ scanTokens ev
+        pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens ev) "interactive"
         case pexp of
             Right exp -> do
                 let fv = freeVars exp
