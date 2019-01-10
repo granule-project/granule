@@ -501,7 +501,7 @@ synthExpr _ _ _ (Val s _ (StringLiteral c)) = do
 
 -- Secret syntactic weakening
 synthExpr defs gam pol
-  (App s _ (Val _ _ (Var _ (sourceName -> "weak"))) v@(Val _ _ (Var _ x))) = do
+  (App s _ (Val _ _ (Var _ (sourceName -> "weak__"))) v@(Val _ _ (Var _ x))) = do
 
   (t, _, elabE) <- synthExpr defs gam pol v
 

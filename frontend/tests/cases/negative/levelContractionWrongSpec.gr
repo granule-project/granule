@@ -1,7 +1,7 @@
 -- Should fail because Private + Public = Public
 
 foo : Int [Private] -> Int
-foo [x] = weak x + (bar [x])
+foo [x] = weak__ x + (bar [x])
         -- x :Private Int   x :Public Int
 
 -- A way to get a variable graded as Public above
