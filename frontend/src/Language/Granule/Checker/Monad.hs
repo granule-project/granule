@@ -177,6 +177,8 @@ concludeImplication s localVars = do
 
        case guardPredicates checkerState of
 
+        [] -> error "Internal bug: Guard predicate is [] and should not be"
+
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
           let impl = Impl localVars p p'
