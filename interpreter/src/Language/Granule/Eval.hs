@@ -88,7 +88,7 @@ evalIn _ (Val s _ (Var _ v)) | internalName v == "readInt" = do
 
 evalIn _ (Val _ _ (Abs _ p t e)) = return $ Abs () p t e
 
-evalIn ctxt (App _ _ e1 e2) = do
+evalIn ctxt (App s _ e1 e2) = do
     v1 <- evalIn ctxt e1
     case v1 of
       (Ext _ (Primitive k)) -> do
@@ -99,6 +99,7 @@ evalIn ctxt (App _ _ e1 e2) = do
         p <- pmatchTop ctxt [(p, e3)] e2
         case p of
           Just (e3, bindings) -> evalIn ctxt (applyBindings bindings e3)
+          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
         v2 <- evalIn ctxt e2
@@ -112,7 +113,7 @@ evalIn ctxt (Binop _ _ op e1 e2) = do
      v2 <- evalIn ctxt e2
      return $ evalBinOp op v1 v2
 
-evalIn ctxt (LetDiamond _ _ p _ e1 e2) = do
+evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
      v1 <- evalIn ctxt e1
      case v1 of
        Pure _ e -> do
@@ -120,6 +121,7 @@ evalIn ctxt (LetDiamond _ _ p _ e1 e2) = do
          p  <- pmatch ctxt [(p, e2)] v1'
          case p of
            Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
+           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
        other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       <> prettyDebug other
 
@@ -291,33 +293,42 @@ builtIns =
 
     close :: RValue -> IO RValue
     close (Ext _ (Chan c)) = return $ Pure () $ valExpr $ Constr () (mkId "()") []
+    close rval = error $ "Runtime exception: trying to close a value which is not a channel"
 
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
     openFile :: RValue -> IO RValue
     openFile (StringLiteral s) = return $
-      Ext () $ Primitive (\(Constr _ m []) ->
-        let mode = (read (internalName m)) :: SIO.IOMode
-        in do
-             h <- SIO.openFile (unpack s) mode
-             return $ Pure () $ valExpr $ Ext () $ Handle h)
+      Ext () $ Primitive (\x ->
+        case x of
+           (Constr _ m []) -> do
+               let mode = (read (internalName m)) :: SIO.IOMode
+               h <- SIO.openFile (unpack s) mode
+               return $ Pure () $ valExpr $ Ext () $ Handle h
+           rval -> error $ "Runtime exception: trying to open with a non-mode value")
+    openFile _ = error $ "Runtime exception: trying to open from a non string filename"
 
     hPutChar :: RValue -> IO RValue
     hPutChar (Ext _ (Handle h)) = return $
-      Ext () $ Primitive (\(CharLiteral c) -> do
-         SIO.hPutChar h c
-         return $ Pure () $ valExpr $ Ext () $ Handle h)
+      Ext () $ Primitive (\c ->
+        case c of
+          (CharLiteral c) -> do
+            SIO.hPutChar h c
+            return $ Pure () $ valExpr $ Ext () $ Handle h
+          _ -> error $ "Runtime exception: trying to put a non character value")
 
     hGetChar :: RValue -> IO RValue
     hGetChar (Ext _ (Handle h)) = do
           c <- SIO.hGetChar h
           return $ Pure () $ valExpr (Constr () (mkId "(,)") [Ext () $ Handle h, CharLiteral c])
+    hGetChar _ = error $ "Runtime exception: trying to get from a non handle value"
 
     hClose :: RValue -> IO RValue
     hClose (Ext _ (Handle h)) = do
          SIO.hClose h
          return $ Pure () $ valExpr (Constr () (mkId "()") [])
+    hClose _ = error $ "Runtime exception: trying to close a non handle value"
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
