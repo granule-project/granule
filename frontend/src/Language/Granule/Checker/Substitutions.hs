@@ -189,6 +189,11 @@ instance Substitutable Coeffect where
       c2' <- substitute subst c2
       return $ CInterval c1' c2'
 
+  substitute subst (CProduct c1 c2) = do
+      c1' <- substitute subst c1
+      c2' <- substitute subst c2
+      return $ CProduct c1' c2'
+
   substitute subst (CVar v) =
       case lookup v subst of
         Just (SubstC c) -> do

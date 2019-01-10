@@ -154,7 +154,7 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
           halt $ GradingError (Just s) $
             "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
 
-equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
+equalTypesRelatedCoeffects s rel uS x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
@@ -164,6 +164,9 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   case sp of
     SndIsSpec -> addConstraint (rel s c c' kind)
     FstIsSpec -> addConstraint (rel s c' c kind)
+    _ -> halt $ GenericError (Just s) $ "Trying to unify `"
+                <> pretty x <> "` and `"
+                <> pretty y <> "` but in a context where unification is not allowed."
 
   equalTypesRelatedCoeffects s rel uS t t' sp
   --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp

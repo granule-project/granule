@@ -28,17 +28,17 @@ data SGrade =
      | SProduct { sfst :: SGrade, ssnd :: SGrade }
     deriving (Show, Generic)
 
+-- Work out if two symbolic grades are of the same type
 match :: SGrade -> SGrade -> Bool
 match (SNat _) (SNat _) = True
 match (SFloat _) (SFloat _) = True
 match (SLevel _) (SLevel _) = True
 match (SSet _) (SSet _) = True
 match (SExtNat _) (SExtNat _) = True
-match (SInterval s1 s2) (SInterval t1 t2) =
-  match s1 t1 && match t1 t2
+match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
 match SPoint SPoint = True
-match (SProduct s1 s2) (SProduct t1 t2) =
-  match s1 t1 && match s2 t2
+match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
+match _ _ = False
 
 isSProduct :: SGrade -> Bool
 isSProduct (SProduct _ _) = True

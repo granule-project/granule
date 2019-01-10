@@ -106,6 +106,7 @@ inferKindOfType' s quantifiedVariables t =
                then return kr
                else illKindedNEq s k2' k2
           else illKindedNEq s k1' k1
+       Just (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
        Nothing   -> halt $ UnboundVariableError (Just s) (pretty op <> " operator.")
 
 -- | Compute the join of two kinds, if it exists

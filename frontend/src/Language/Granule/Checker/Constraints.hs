@@ -122,6 +122,9 @@ compileToSBV predicate tyVarContext kVarContext =
                          return ((solverVar .== literal privateRepresentation
                               ||| solverVar .== literal publicRepresentation) &&& pred')
 
+                    k -> error $ "Solver error: I don't know how to create an existntial for " <> show k
+            Just k -> error $ "Solver error: I don't know how to create an existntial for demotable type " <> show k
+
             Nothing ->
               case k of
                 KType -> buildTheorem' solverVars p
@@ -169,6 +172,7 @@ compileToSBV predicate tyVarContext kVarContext =
             case quantifierType of
               ForallQ -> (pre &&& universalConstraints, existentialConstraints)
               InstanceQ -> (universalConstraints, pre &&& existentialConstraints)
+              b -> error $ "Impossible freshening a BoundQ, but this is cause above"
           --    BoundQ -> (universalConstraints, pre &&& existentialConstraints)
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 

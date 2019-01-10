@@ -317,6 +317,7 @@ builtIns =
             SIO.hPutChar h c
             return $ Pure () $ valExpr $ Ext () $ Handle h
           _ -> error $ "Runtime exception: trying to put a non character value")
+    hPutChar _ = error $ "Runtime exception: trying to put from a non handle value"
 
     hGetChar :: RValue -> IO RValue
     hGetChar (Ext _ (Handle h)) = do
