@@ -38,7 +38,7 @@ desugar (Def s var eqs tys@(Forall _ _ ty)) =
     typeDirectedDesugar (Equation _ _ [] e) _ = return e
     typeDirectedDesugar (Equation s a (p : ps) e) (FunTy t1 t2) = do
       e' <- typeDirectedDesugar (Equation s a ps e) t2
-      return $ Val nullSpan () $ Abs () p (Just t1) e'
+      return $ Val nullSpanNoFile () $ Abs () p (Just t1) e'
     -- Error cases
     typeDirectedDesugar (Equation s _ pats@(_ : _) e) t =
       error $ "(" <> show s
@@ -47,8 +47,8 @@ desugar (Def s var eqs tys@(Forall _ _ ty)) =
 
     -- Fold function equations into a single case expression
     mkSingleEquation eqs =
-      Equation nullSpan () (map (PVar nullSpan ()) vars)
-        (Case nullSpan () guard cases)
+      Equation nullSpanNoFile () (map (PVar nullSpanNoFile ()) vars)
+        (Case nullSpanNoFile () guard cases)
 
       where
         numArgs = case head eqs of Equation _ _ ps _ -> length ps
@@ -57,10 +57,10 @@ desugar (Def s var eqs tys@(Forall _ _ ty)) =
         vars = [mkId (" internal" ++ show i) | i <- [1..numArgs]]
 
         -- Guard expression
-        guard = foldl (pair nullSpan) unitVal guardVars
-        unitVal = Val nullSpan () (Constr () (mkId "()") [])
-        guardVars = map (\i -> Val nullSpan () (Var () i)) vars
+        guard = foldl (pair nullSpanNoFile) unitVal guardVars
+        unitVal = Val nullSpanNoFile () (Constr () (mkId "()") [])
+        guardVars = map (\i -> Val nullSpanNoFile () (Var () i)) vars
 
         -- case for each equation
         cases = map (\(Equation _ _ pats expr) ->
-           (foldl (ppair nullSpan) (PWild nullSpan ()) pats, expr)) eqs
+           (foldl (ppair nullSpanNoFile) (PWild nullSpanNoFile ()) pats, expr)) eqs

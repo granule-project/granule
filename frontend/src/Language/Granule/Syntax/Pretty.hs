@@ -15,6 +15,7 @@ import Data.List
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
@@ -230,3 +231,6 @@ parensOn p t = prettyL (if p t then 0 else 1) t
 
 instance Pretty Int where
   prettyL l = show
+
+instance Pretty Span where
+  prettyL _ (Span start end fileName) = "(" <> pretty start <> ":" <> pretty end <> ")"

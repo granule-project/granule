@@ -219,7 +219,7 @@ pmatch _ ((PFloat _ _ n, e):_) (NumFloat m) | n == m =
 
 pmatch ctxt (_:ps) val = pmatch ctxt ps val
 
-valExpr = Val nullSpan ()
+valExpr = Val nullSpanNoFile ()
 
 builtIns :: (?globals :: Globals) => Ctxt RValue
 builtIns =
