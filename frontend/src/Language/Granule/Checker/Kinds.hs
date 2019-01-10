@@ -156,6 +156,11 @@ inferCoeffectType _ (Level _)         = return $ TyCon $ mkId "Level"
 inferCoeffectType _ (CNat _)          = return $ TyCon $ mkId "Nat"
 inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
 inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
+inferCoeffectType s (CProduct c1 c2)    = do
+  k1 <- inferCoeffectType s c1
+  k2 <- inferCoeffectType s c2
+  return $ TyApp (TyApp (TyCon $ mkId "(*)") k1) k2
+
 inferCoeffectType s (CInterval c1 c2)    = do
   k1 <- inferCoeffectType s c1
   k2 <- inferCoeffectType s c2
@@ -242,6 +247,12 @@ mguCoeffectTypes s c1 c2 = do
 
     -- Try to unify coeffect types
     (t, t') | Just tj <- joinCoeffectTypes t t' -> return tj
+
+    -- Unifying a product of (t, t') with t yields (t, t') [and the symmetric version]
+    (isProduct -> Just (t1, t2), t) | t1 == t -> return $ ck1
+    (isProduct -> Just (t1, t2), t) | t2 == t -> return $ ck1
+    (t, isProduct -> Just (t1, t2)) | t1 == t -> return $ ck2
+    (t, isProduct -> Just (t1, t2)) | t2 == t -> return $ ck2
 
     (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
                <> pretty k1 <> "' and '" <> pretty k2

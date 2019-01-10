@@ -262,6 +262,12 @@ freshCVar quant name (isInterval -> Just t) q = do
     , SInterval solverVarLb solverVarUb
     )
 
+freshCVar quant name (isProduct -> Just (t1, t2)) q = do
+  -- Product, therefore recursively generate fresh vars for the lower and upper
+  (predLb, solverVarFst) <- freshCVar quant (name <> ".fst") t1 q
+  (predUb, solverVarSnd) <- freshCVar quant (name <> ".snd") t2 q
+  return (true, SProduct solverVarFst solverVarSnd)
+
 freshCVar quant name (TyCon k) q = do
   case internalName k of
     -- Floats (rationals)
@@ -352,12 +358,19 @@ compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v = SPoint
 compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
   SLevel . fromInteger . toInteger $ n
 
+compileCoeffect (Level n) (isProduct -> Just (TyCon k, t2)) vars | internalName k == "Level" =
+  SProduct (SLevel . fromInteger . toInteger $ n) (compileCoeffect (COne t2) t2 vars)
+
+compileCoeffect (Level n) (isProduct -> Just (t1, TyCon k)) vars | internalName k == "Level" =
+  SProduct (compileCoeffect (COne t1) t1 vars) (SLevel . fromInteger . toInteger $ n)
+
 -- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
 -- TODO: see if we can erase this, does it actually happen anymore?
 compileCoeffect (CInfinity (Just (TyVar _))) _ _ = zeroToInfinity
 compileCoeffect (CInfinity Nothing) _ _ = zeroToInfinity
 compileCoeffect (CInfinity _) t _
   | t == extendedNat = SExtNat SNatX.inf
+
 compileCoeffect (CNat n) k _ | k == nat =
   SNat  . fromInteger . toInteger $ n
 
@@ -406,7 +419,12 @@ compileCoeffect (CZero k') k vars  =
         _           -> error $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 0
-    -- Build an interval for 0
+
+    (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
+      SProduct
+        (compileCoeffect (CZero t1) t1' vars)
+        (compileCoeffect (CZero t2) t2' vars)
+
     (isInterval -> Just t, isInterval -> Just t') ->
       SInterval
         (compileCoeffect (CZero t) t' vars)
@@ -425,6 +443,12 @@ compileCoeffect (COne k') k vars =
 
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 1
+
+    (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
+      SProduct
+        (compileCoeffect (COne t1) t1' vars)
+        (compileCoeffect (COne t2) t2' vars)
+
     -- Build an interval for 1
     (isInterval -> Just t, isInterval -> Just t') ->
         SInterval
@@ -432,6 +456,8 @@ compileCoeffect (COne k') k vars =
           (compileCoeffect (COne t) t' vars)
     _ -> error $ "I don't know how to compile a 1 for " <> pretty k'
 
+compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
+  SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c
@@ -449,6 +475,8 @@ eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   (eqConstraint lb1 lb2) &&& (eqConstraint ub1 ub2)
 eqConstraint (SExtNat x) (SExtNat y) = x .== y
 eqConstraint SPoint SPoint = true
+eqConstraint s t | isSProduct s && isSProduct t =
+  applyToProducts (.==) (&&&) (const true) s t
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
@@ -460,6 +488,9 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then true else false
 approximatedByOrEqualConstraint SPoint SPoint = true
+
+approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
+  applyToProducts approximatedByOrEqualConstraint (&&&) (const true) s t
 
 -- Perform approximation when nat-like grades are involved
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)

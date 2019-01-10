@@ -85,6 +85,7 @@ instance Pretty Coeffect where
 
     prettyL l (CInfinity k) = "∞ : " <> prettyL l k
     prettyL l (CInterval c1 c2) = prettyL l c1 <> ".." <> prettyL l c2
+    prettyL l (CProduct c1 c2) = "(" <> prettyL l c1 <> " * " <> prettyL l c2 <> ")"
 
 instance Pretty Kind where
     prettyL l KType          = "Type"
@@ -123,6 +124,9 @@ instance Pretty Type where
 
     prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(,)" =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
+
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(*)" =
+      parens l ("(" <> prettyL l t1 <> " * " <> prettyL l t2 <> ")")
 
     prettyL l t@(TyApp (TyApp _ _) _) | appChain t =
       parens l tyAppPretty

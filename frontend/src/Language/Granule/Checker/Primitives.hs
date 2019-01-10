@@ -15,6 +15,7 @@ typeLevelConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not 
 typeLevelConstructors =
     [ (mkId "()", (KType, Just 1))
     , (mkId "(,)", (KFun KType (KFun KType KType), Just 1))
+    , (mkId "(*)", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
@@ -52,6 +53,7 @@ dataConstructors =
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
                  (TyApp (TyApp (TyCon (mkId "(,)")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
+
     , (mkId "ReadMode", Forall nullSpanBuiltin [] (TyCon $ mkId "IOMode"))
     , (mkId "WriteMode", Forall nullSpanBuiltin [] (TyCon $ mkId "IOMode"))
     , (mkId "AppendMode", Forall nullSpanBuiltin [] (TyCon $ mkId "IOMode"))

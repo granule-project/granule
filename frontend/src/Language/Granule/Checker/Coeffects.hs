@@ -1,6 +1,7 @@
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Coeffects where
 
@@ -18,21 +19,18 @@ import Language.Granule.Utils
 
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
-flattenable :: Type -> Maybe (Coeffect -> Coeffect -> Coeffect)
-flattenable = \case
-   TyCon k ->
-     -- Nat and Level are flattenable
-     case internalName k of
-      "Nat"   -> Just CTimes
-      "Level" -> Just CJoin
-      _       -> Nothing
-   TyApp (TyCon k) t ->
-      -- Interval and top-completion are flattenable if their parameter type is
-      case internalName k of
-        "Interval" -> flattenable t
-        "Ext"      -> flattenable t
-        _          -> Nothing
-   _ -> Nothing
+flattenable :: Type -> Type -> Maybe ((Coeffect -> Coeffect -> Coeffect), Type)
+flattenable t1 t2
+ | t1 == t2 = case t1 of
+     TyCon (internalName -> "Nat")   -> Just (CTimes, t1)
+     TyCon (internalName -> "Level") -> Just (CJoin, t1)
+
+     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
+     TyApp (TyCon (internalName -> "Ext")) t ->  flattenable t t
+     -- TODO
+
+     _ -> Nothing
+ | otherwise = Just (CProduct, TyCon (mkId "(*)") .@ t1 .@ t2)
 
 checkKind :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
 checkKind s k@(TyCon name) = do

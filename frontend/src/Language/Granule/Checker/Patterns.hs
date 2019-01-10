@@ -126,7 +126,8 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
     let elabP = PBox sp t elabPinner
 
     -- Discharge all variables bound by the inner pattern
-    return (map (discharge coeffTy coeff) ctx, eVars, subst, elabP)
+    ctxt' <- mapM (discharge s coeffTy coeff) ctx
+    return (ctxt', eVars, subst, elabP)
 
 ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
@@ -196,12 +197,13 @@ ctxtFromTypedPattern s t p = do
   halt $ PatternTypingError (Just s)
     $ "Pattern match `" <> pretty p <> "` does not have type `" <> pretty t <> "`"
 
-discharge _ c (v, Linear t) = (v, Discharged t c)
-discharge k c (v, Discharged t c') =
-  case flattenable k of
+discharge _ _ c (v, Linear t) = return (v, Discharged t c)
+discharge s ct c (v, Discharged t c') = do
+  ct' <- inferCoeffectType s c'
+  return $ case flattenable ct ct' of
     -- Implicit flatten operation allowed on this coeffect
-    Just flattenOp -> (v, Discharged t (flattenOp c c'))
-    Nothing        -> (v, Discharged t c')
+    Just (flattenOp, ct'')  -> (v, Discharged t (flattenOp c c'))
+    Nothing                 -> (v, Discharged t c')
 
 ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
   => Span
