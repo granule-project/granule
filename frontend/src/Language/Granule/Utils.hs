@@ -102,8 +102,7 @@ printErr err = when (not $ suppressErrors ?globals) $ do
         case location err of
           Nothing -> ""
           Just (Span (0,0) (0,0) _) -> ""
-          Just (Span (line,col) _ fileName) ->
-              ":" <> show line <> ":" <> show col <> ":"
+          Just (Span (line,col) _ fileName) -> show line <> ":" <> show col <> ":"
 
 printInfo :: (?globals :: Globals) => String -> IO ()
 printInfo message =
