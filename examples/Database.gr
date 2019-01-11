@@ -1,5 +1,3 @@
--- last checked 2019-01-07 by @buggymcbugfix
-
 import List
 
 --
@@ -9,18 +7,18 @@ data Patient where
     (String [Private]) -- Patient name
     (Int    [Public])  -- Patient age
 
-meanAge : (List Patient) [0..1] -> Int
+meanAge : (List Patient) [0..1] -> Int [Public]
 meanAge xs = meanAge' xs [0] [0]
 
 meanAge' : (List Patient) [0..1] -- Patient database
        -> Int [Public]   -- Count
        -> Int [Public]   -- Current age sum
-       -> Int   -- Mean age viewed public
+       -> Int [Public]  -- Mean age viewed public
 
 meanAge' [Next (Patient [_] [_] [age]) xs] [total] [n] =
    meanAge' [xs] [age + total] [n+1];
 
-meanAge' [Empty] [total] [n] = div total n
+meanAge' [Empty] [total] [n] = [div total n]
 
 -- Rejected
 -- names : (List Patient) [0..1] -> String [Public]
