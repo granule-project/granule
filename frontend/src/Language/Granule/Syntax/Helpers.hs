@@ -71,7 +71,7 @@ removeFreshenings (x:xs) = do
 freshIdentifierBase :: Monad m => IdSyntacticCategory -> Id -> Freshener m Id
 freshIdentifierBase cat var = do
     st <- get
-    let var' = sourceName var <> "_" <> show (counter st)
+    let var' = sourceName var <> "`" <> show (counter st)
     case cat of
       Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
       Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }

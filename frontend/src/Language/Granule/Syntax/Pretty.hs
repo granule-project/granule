@@ -212,7 +212,10 @@ instance Pretty v => Pretty (Value v a) where
     prettyL l (Ext _ v) = prettyL l v
 
 instance Pretty Id where
-  prettyL l = if debugging ?globals then internalName else sourceName
+  prettyL l
+    = if debugging ?globals
+        then internalName
+        else takeWhile (\c -> c /= '.' && c /= '`') . sourceName
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
   prettyL l (App _ _ e1 e2) =
