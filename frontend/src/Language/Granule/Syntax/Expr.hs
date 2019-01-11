@@ -42,6 +42,7 @@ data Value v a = Abs a (Pattern a) (Maybe Type) (Expr v a)
 
 instance FirstParameter (Value v a) a
 deriving instance (Show v, Show a) => Show (Value v a)
+deriving instance (Eq v, Eq a) => Eq (Value v a)
 deriving instance Functor (Value v)
 
 -- | Expressions (computations) in Granule (with `v` extended values
@@ -60,7 +61,9 @@ data Expr v a =
   | Case Span a (Expr v a) [(Pattern a, Expr v a)]
   deriving (Generic)
 
-deriving instance (Show (Value v a), Show a) => Show (Expr v a)
+deriving instance (Show v, Show a) => Show (Expr v a)
+deriving instance (Eq v, Eq a) => Eq (Expr v a)
+
 deriving instance Functor (Expr v)
 
 instance FirstParameter (Expr v a) Span
