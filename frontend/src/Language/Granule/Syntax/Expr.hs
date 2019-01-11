@@ -41,7 +41,7 @@ data Value v a = Abs a (Pattern a) (Maybe Type) (Expr v a)
    deriving (Generic)
 
 instance FirstParameter (Value v a) a
-deriving instance Show v => Show (Value v ())
+deriving instance (Show v, Show a) => Show (Value v a)
 deriving instance Functor (Value v)
 
 -- | Expressions (computations) in Granule (with `v` extended values

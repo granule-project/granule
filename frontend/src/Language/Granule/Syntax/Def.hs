@@ -25,7 +25,7 @@ import Language.Granule.Syntax.Pattern
 -- | where `v` is the type of values and `a` annotations
 data AST v a = AST [DataDecl] [Def v a]
 
-deriving instance (Show (Value v a), Show a) => Show (AST v a)
+deriving instance (Show v, Show a) => Show (AST v a)
 deriving instance Functor (AST v)
 
 -- | Function definitions
@@ -39,8 +39,8 @@ data Equation v a =
 
 deriving instance Functor (Def v)
 deriving instance Functor (Equation v)
-deriving instance (Show (Value v a), Show a) => Show (Def v a)
-deriving instance (Show (Value v a), Show a) => Show (Equation v a)
+deriving instance (Show v, Show a) => Show (Def v a)
+deriving instance (Show v, Show a) => Show (Equation v a)
 
 instance FirstParameter (Def v a) Span
 instance FirstParameter (Equation v a) Span
