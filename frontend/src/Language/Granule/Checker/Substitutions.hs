@@ -12,6 +12,7 @@ import Control.Monad.State.Strict
 import Data.Maybe (mapMaybe)
 
 import Language.Granule.Context
+import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -486,7 +487,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds ty) = do
     -- Right of id means that this is an existential and so a skolem is not generated
     instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either Id Id)
     instantiateVariable (var, k) = do
-      if isDataConstructor && not (var `elem` (freeAtomsVars $ resultType ty))
+      if isDataConstructor && not (var `elem` (freeVars $ resultType ty))
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
