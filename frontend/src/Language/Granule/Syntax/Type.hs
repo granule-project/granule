@@ -107,6 +107,8 @@ isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "(*)" =
     Just (t, t')
 isProduct _ = Nothing
 
+
+
 -- | Represents effect grades
 -- TODO: Make richer
 type Effect = [String]

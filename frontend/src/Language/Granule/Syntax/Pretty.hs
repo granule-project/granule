@@ -32,7 +32,10 @@ type Level = Int
 
 parens :: Level -> String -> String
 parens l x | l <= 0 = x
-parens n x = "(" <> x <> ")"
+parens n x =
+  if head x == '(' && last x == ')'
+    then x
+    else "(" <> x <> ")"
 
 -- The pretty printer class
 class Pretty t where
