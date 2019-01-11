@@ -241,6 +241,7 @@ Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
   | TyAtom '[' Coeffect ']'   { Box $3 $1 }
+  | TyAtom '[' ']'            { Box (CInterval (CZero extendedNat) infinity) $1 }
 
   | TyAtom '<' Effect '>'     { Diamond $3 $1 }
 

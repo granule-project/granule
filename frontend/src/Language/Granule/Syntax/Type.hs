@@ -258,15 +258,9 @@ instance Monad m => Freshenable m TypeScheme where
 
 instance Freshenable m Type where
   freshen =
-    typeFoldM (baseTypeFold { tfTyApp = rewriteTyApp,
-                              tfTyVar = freshenTyVar,
+    typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox })
     where
-      -- Rewrite type aliases of Box
-      rewriteTyApp t1@(TyCon ident) t2
-        | internalName ident == "Box" || internalName ident == "◻" =
-          return $ Box (CInterval (CZero extendedNat) infinity) t2
-      rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
         c' <- freshen c
