@@ -213,6 +213,12 @@ typeFoldM algebra = go
 
 instance FirstParameter TypeScheme Span
 
+freeAtomsVars :: Type -> [Id]
+freeAtomsVars (TyVar v) = [v]
+freeAtomsVars (TyApp t1 (TyVar v)) = v : freeAtomsVars t1
+freeAtomsVars (TyApp t1 _) = freeAtomsVars t1
+freeAtomsVars t = []
+
 ----------------------------------------------------------------------
 -- Types and coeffects are terms
 
