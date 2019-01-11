@@ -308,6 +308,21 @@ refutablePattern sp p =
         "Pattern match " <> pretty p <> " can fail; only \
         \irrefutable patterns allowed in this context"
 
+-- | A helper for non unifiable types
+nonUnifiable :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker a
+nonUnifiable s t1 t2 =
+  halt $ GenericError (Just s) $
+    if pretty t1 == pretty t2
+     then "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "` coming from a different binding"
+     else "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
+
+typeClash :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker a
+typeClash s t1 t2 =
+  halt $ GenericError (Just s) $
+    if pretty t1 == pretty t2
+      then "Expected `" <> pretty t1 <> "` but got `" <> pretty t2 <> "` coming from a different binding"
+      else "Expected `" <> pretty t1 <> "` but got `" <> pretty t2 <> ""
+
 -- | Helper for constructing error handlers
 halt :: (?globals :: Globals) => CheckerError -> MaybeT Checker a
 halt err = liftIO (printErr err) >> MaybeT (return Nothing)

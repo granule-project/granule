@@ -464,14 +464,8 @@ checkExpr defs gam pol topLevel tau e = do
     then return (gam', subst, elaboratedE)
     else do
       case pol of
-        Positive -> do
-          halt $ GenericError (Just $ getSpan e)
-               $ "Expected '" <> pretty tau <> "' but got '" <> pretty tau' <> "'"
-
-        Negative -> do
-          halt $ GenericError (Just $ getSpan e)
-               $ "Expected '" <> pretty tau' <> "' but got '" <> pretty tau <> "'"
-
+        Positive -> typeClash (getSpan e) tau tau'
+        Negative -> typeClash (getSpan e) tau' tau
 
 -- | Synthesise the 'Type' of expressions.
 -- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>

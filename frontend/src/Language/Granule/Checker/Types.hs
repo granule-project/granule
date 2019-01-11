@@ -320,7 +320,6 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
 
-
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d) t) t' sp
   | internalName d == "Dual" = isDualSession s rel uS t t' sp
@@ -362,18 +361,14 @@ equalOtherKindedTypesGeneric s t1 t2 = do
       KPromote (TyCon (internalName -> "Protocol")) ->
         sessionInequality s t1 t2
 
-      KType ->
-        halt $ GenericError (Just s) $
-           "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
+      KType -> nonUnifiable s t1 t2
 
       _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  <> pretty k1 <> " and " <> pretty k2
                  <> "\t\n from equality "
                  <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
-  else
-    halt $ GenericError (Just s) $
-       "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
+  else nonUnifiable s t1 t2
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
