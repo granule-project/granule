@@ -5,7 +5,7 @@ module Language.Granule.Checker.CheckerSpec where
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM_, liftM2)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust)
 
 import System.FilePath.Find
 import Test.Hspec
@@ -63,7 +63,7 @@ spec = do
             result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldBe` Just ()
+                Right checked -> checked `shouldSatisfy` isJust
     -- Negative tests: things which should fail to check
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
