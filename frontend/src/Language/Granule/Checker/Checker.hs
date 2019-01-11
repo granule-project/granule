@@ -42,7 +42,7 @@ import Language.Granule.Utils
 --import Debug.Trace
 
 -- Checking (top-level)
-check :: (?globals :: Globals) => AST () () -> IO (Maybe ())
+check :: (?globals :: Globals) => AST () () -> IO (Maybe (AST () Type))
 check (AST dataDecls defs) = evalChecker initState $ do
     rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
@@ -51,7 +51,7 @@ check (AST dataDecls defs) = evalChecker initState $ do
 
     return $
       if all isJust (rs1 <> rs2 <> rs3 <> (map (fmap (const ())) rs4))
-        then Just () -- TODO: add Ed's elaborated AST back in here ResultType with rs4
+        then Just (AST dataDecls (catMaybes rs4))
         else Nothing
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
