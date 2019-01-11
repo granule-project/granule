@@ -2,6 +2,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PackageImports #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Utils where
 
@@ -54,6 +55,12 @@ class UserMsg a where
 
   location _ = Nothing
 
+mkSpan :: (?globals :: Globals) => (Pos, Pos) -> Span
+mkSpan (start, end) = Span start end (sourceFilePath ?globals)
+
+nullSpan :: (?globals :: Globals) => Span
+nullSpan = Span (0, 0) (0, 0) (sourceFilePath ?globals)
+
 debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM explanation message =
     when (debugging ?globals) $ traceM $
@@ -87,14 +94,15 @@ printErr err = when (not $ suppressErrors ?globals) $ do
       <> "\n"
   where
     sourceFile =
-        case sourceFilePath ?globals of
-          "" -> ""
-          p -> p <> ": "
+        case location err of -- sourceFilePath ?globals
+          Nothing -> ""
+          Just (filename -> "") -> ""
+          Just (filename -> p)  -> p <> ":"
     lineCol =
         case location err of
           Nothing -> ""
-          Just ((0,0),(0,0)) -> ""
-          Just ((line,col),_) -> ":" <> show line <> ":" <> show col <> ":"
+          Just (Span (0,0) (0,0) _) -> ""
+          Just (Span (line,col) _ fileName) -> show line <> ":" <> show col <> ":"
 
 printInfo :: (?globals :: Globals) => String -> IO ()
 printInfo message =

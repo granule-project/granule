@@ -5,7 +5,7 @@ module Language.Granule.Checker.CheckerSpec where
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM_, liftM2)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, isJust)
 
 import System.FilePath.Find
 import Test.Hspec
@@ -64,7 +64,7 @@ spec = do
             result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldSatisfy` isOk
+                Right checked -> checked `shouldSatisfy` isJust
     -- Negative tests: things which should fail to check
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
@@ -77,7 +77,7 @@ spec = do
             result <- try (check ast) :: IO (Either SomeException _)
             case result of
                 Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldBe` Failed
+                Right checked -> checked `shouldBe` Nothing
 
     let tyVarK = TyVar $ mkId "k"
     let varA = mkId "a"
@@ -139,7 +139,7 @@ spec = do
         -- Simple definitions
         -- \x -> x + 1
         (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
-        (Just defElab, _) <- runChecker initState (checkDef [] def1)
+        (Just defElab, _) <- runChecker initState (runMaybeT $ checkDef [] def1)
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
 

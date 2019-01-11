@@ -177,6 +177,8 @@ concludeImplication s localVars = do
 
        case guardPredicates checkerState of
 
+        [] -> error "Internal bug: Guard predicate is [] and should not be"
+
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
           let impl = Impl localVars p p'
@@ -307,7 +309,7 @@ refutablePattern sp p =
         \irrefutable patterns allowed in this context"
 
 -- | Helper for constructing error handlers
-halt :: (?globals :: Globals) => TypeError -> MaybeT Checker a
+halt :: (?globals :: Globals) => CheckerError -> MaybeT Checker a
 halt err = liftIO (printErr err) >> MaybeT (return Nothing)
 
 typeClashForVariable :: (?globals :: Globals) => Span -> Id -> Type -> Type -> MaybeT Checker a

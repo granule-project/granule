@@ -150,7 +150,7 @@ makeIrrefutableArgs patternLists =
 patternForArg :: Int -> [Pattern Type] -> Pattern Type
 patternForArg n patterns =
     let patternTy = annotation $ head patterns
-        defaultPattern = PVar nullSpan patternTy (mkId $ "arg." ++ show n)
+        defaultPattern = PVar nullSpanNoFile patternTy (mkId $ "arg." ++ show n)
         accumulateBestName irrefutablePat@(PVar _ _ ident) bestName = irrefutablePat
         accumulateBestName reffutablePat bestName                   = bestName
     in foldr accumulateBestName defaultPattern patterns
@@ -159,7 +159,7 @@ makeCaseExpr :: [Pattern Type]
              -> ([[Pattern Type]], [Expr ev Type])
              -> Expr ev Type
 makeCaseExpr irrefutableArgPatterns (casePatterns, caseExprs) =
-    Case nullSpan ty swexpr branches
+    Case nullSpanNoFile ty swexpr branches
     where branches       = zip (map mergePatterns casePatterns) caseExprs
           ty             = annotation (head caseExprs)
           swexpr         = mergeArguments $ boundVarsAndAnnotations $
@@ -169,13 +169,13 @@ makeCaseExpr irrefutableArgPatterns (casePatterns, caseExprs) =
 mergePatterns :: [Pattern Type] -> Pattern Type
 mergePatterns (firstPattern:remainingPatterns) =
     foldl patternPair firstPattern remainingPatterns
-    where patternPair left right = ppair nullSpan (pairType (annotation left) (annotation right)) left right
+    where patternPair left right = ppair nullSpanNoFile (pairType (annotation left) (annotation right)) left right
           patternPair :: Pattern Type -> Pattern Type -> Pattern Type
 
 mergeArguments :: [(Type, Id)] -> Expr ev Type
 mergeArguments argumentsIds =
-    let firstArg:otherArgs = map (\(ty, ident) -> Val nullSpan ty (Var ty ident)) argumentsIds
-    in foldl (typedPair nullSpan) firstArg otherArgs
+    let firstArg:otherArgs = map (\(ty, ident) -> Val nullSpanNoFile ty (Var ty ident)) argumentsIds
+    in foldl (typedPair nullSpanNoFile) firstArg otherArgs
 
 normaliseEquation :: Equation ev Type -> Equation ev Type
 normaliseEquation eq@Equation { equationArguments = [] } = tryHoistLambda eq

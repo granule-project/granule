@@ -5,15 +5,26 @@ module Language.Granule.Syntax.Span where
 import Language.Granule.Syntax.FirstParameter
 
 type Pos = (Int, Int) -- (line, column)
-type Span = (Pos, Pos)
-nullSpan :: Span
-nullSpan = ((0, 0), (0, 0))
+
+data Span = Span { startPos :: Pos
+                 , endPos :: Pos
+                 , filename :: String }
+  deriving (Eq, Show)
+
+nullSpanLocs :: (Pos, Pos)
+nullSpanLocs = ((0, 0), (0, 0))
+
+nullSpanNoFile :: Span
+nullSpanNoFile = Span (0, 0) (0, 0) ""
+
+nullSpanInFile :: Span -> Span
+nullSpanInFile s = Span (0, 0) (0, 0) (filename s)
 
 getSpan :: FirstParameter t Span => t -> Span
 getSpan = getFirstParameter
 
 getEnd ::  FirstParameter t Span => t -> Pos
-getEnd = snd . getSpan
+getEnd = endPos . getSpan
 
 getStart ::  FirstParameter t Span => t -> Pos
-getStart = fst . getSpan
+getStart = startPos . getSpan

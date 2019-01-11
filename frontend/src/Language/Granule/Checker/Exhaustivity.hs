@@ -14,7 +14,7 @@ import Language.Granule.Utils
 
 -- | Check whether a given pattern match will always succeed
 -- NB: This is work in progress.
-isIrrefutable :: (?globals :: Globals ) => Span -> Type -> Pattern t -> MaybeT Checker Bool
+isIrrefutable :: (?globals :: Globals) => Span -> Type -> Pattern t -> MaybeT Checker Bool
 isIrrefutable s t (PVar _ _ _) = return True
 isIrrefutable s t (PWild _ _)  = return True
 isIrrefutable s (Box _ t) (PBox _ _ p) = isIrrefutable s t p
@@ -25,7 +25,7 @@ isIrrefutable s _ _ = return False
 
 -- | Check if every sub-pattern of a type application is also irrefutable
 -- (reverse the patterns coming out of a PConstr before calling this)
-unpeel :: (?globals :: Globals ) => Span -> Type -> [Pattern t] -> MaybeT Checker Bool
+unpeel :: (?globals :: Globals) => Span -> Type -> [Pattern t] -> MaybeT Checker Bool
 unpeel s (TyApp t1 t2) (p:ps) = do
     irrefutable <- isIrrefutable s t2 p
     if irrefutable then unpeel s t1 ps else return False
@@ -33,7 +33,7 @@ unpeel _ (TyCon c) _ = checkCardinality c
 unpeel _ _ _ = return False
 
 -- | Get the number of data constructors, only irrefutable if = `Just 1`
-checkCardinality :: (?globals :: Globals ) => Id -> MaybeT Checker Bool
+checkCardinality :: (?globals :: Globals) => Id -> MaybeT Checker Bool
 checkCardinality tyCon = do
     st <- get
     case lookup tyCon (typeConstructors st) of

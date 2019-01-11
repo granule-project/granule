@@ -150,9 +150,9 @@ convertClosuresFromValue :: [Id]
 convertClosuresFromValue globals (_, maybeCurrentEnv, _) (AbsF ty arg mty expr) =
     do
         (lambdaIdent, envName) <- freshLambdaIdentifiers
-        let lambdaTypeScheme = Forall nullSpan [] ty
+        let lambdaTypeScheme = Forall nullSpanNoFile [] ty
         let envTy = environmentType envName maybeCurrentEnv
-        let lambdaDef = ClosureFreeFunctionDef nullSpan lambdaIdent envTy expr arg lambdaTypeScheme
+        let lambdaDef = ClosureFreeFunctionDef nullSpanNoFile lambdaIdent envTy expr arg lambdaTypeScheme
         lift $ tell [lambdaDef]
         return $ maybe (Ext ty $ MakeTrivialClosure lambdaIdent) (\env ->
             let initializer = ClosureEnvironmentInit envName env

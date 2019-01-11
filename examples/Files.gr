@@ -1,4 +1,4 @@
-main : FileIO String
+main : IO String
 main =
     let h       <- openFile "LICENSE" ReadMode;
         (h, c)  <- hGetChar h;

@@ -179,17 +179,17 @@ instance Term (Value ev a) where
     freeVars Ext{} = []
 
 instance Substitutable Value where
-    subst es v (Abs a w t e)      = Val nullSpan a $ Abs a w t (subst es v e)
-    subst es v (Pure a e)         = Val nullSpan a $ Pure a (subst es v e)
-    subst es v (Promote a e)      = Val nullSpan a $ Promote a (subst es v e)
+    subst es v (Abs a w t e)      = Val (nullSpanInFile $ getSpan es) a $ Abs a w t (subst es v e)
+    subst es v (Pure a e)         = Val (nullSpanInFile $ getSpan es) a $ Pure a (subst es v e)
+    subst es v (Promote a e)      = Val (nullSpanInFile $ getSpan es) a $ Promote a (subst es v e)
     subst es v (Var a w) | v == w = es
-    subst _ _ v@NumInt{}        = Val nullSpan (getFirstParameter v) v
-    subst _ _ v@NumFloat{}      = Val nullSpan (getFirstParameter v) v
-    subst _ _ v@Var{}           = Val nullSpan (getFirstParameter v) v
-    subst _ _ v@Constr{}        = Val nullSpan (getFirstParameter v) v
-    subst _ _ v@CharLiteral{}   = Val nullSpan (getFirstParameter v) v
-    subst _ _ v@StringLiteral{} = Val nullSpan (getFirstParameter v) v
-    subst _ _ v@Ext{} = Val nullSpan (getFirstParameter v) v
+    subst es _ v@NumInt{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
+    subst es _ v@NumFloat{}      = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
+    subst es _ v@Var{}           = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
+    subst es _ v@Constr{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
+    subst es _ v@CharLiteral{}   = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
+    subst es _ v@StringLiteral{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
+    subst es _ v@Ext{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
 
 instance Monad m => Freshenable m (Value v a) where
     freshen (Abs a p t e) = do
@@ -222,6 +222,7 @@ instance Monad m => Freshenable m (Value v a) where
     freshen v@Constr{}   = return v
     freshen v@CharLiteral{} = return v
     freshen v@StringLiteral{} = return v
+    freshen v@Ext{} = return v
 
 instance Term (Expr v a) where
     freeVars (App _ _ e1 e2)            = freeVars e1 <> freeVars e2

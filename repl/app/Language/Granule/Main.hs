@@ -18,8 +18,10 @@ import qualified Data.ConfigFile as C
 import Control.Exception (try)
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
+import Control.Monad.Trans.Reader
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
+
 import "Glob" System.FilePath.Glob (glob)
 import Language.Granule.Utils
 import Language.Granule.Syntax.Pretty
@@ -40,6 +42,8 @@ import qualified Control.Monad.Except as Ex
 
 import Language.Granule.ReplError
 import Language.Granule.ReplParser
+
+nullSpanInteractive = Span (0,0) (0,0) "interactive"
 
 type ReplPATH = [FilePath]
 type ADT = [DataDecl]
@@ -100,13 +104,13 @@ readToQueue pth = do
             debugM "Pretty-printed AST:" $ pretty ast
             checked <-  liftIO' $ check ast
             case checked of
-                (Ok _) -> do
+                Just _ -> do
                     let (AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd<>adt),f,m)
                     liftIO $ printInfo $ green $ pth<>", interpreted"
-                Failed -> Ex.throwError (TypeCheckError pth)
+                Nothing -> Ex.throwError (TypeCheckError pth)
       Left e -> Ex.throwError (ParseError e)
 
 
@@ -144,8 +148,8 @@ buildAST t m = let v = M.lookup t m in
                      case lookup (mkId t) Primitives.builtins of
                        Nothing -> []
                        -- Create a trivial definition (x = x) with the right type
-                       Just ty -> [Def nullSpan (mkId t) [] ty]
-                       --   (Val nullSpan () (Var () (mkId t)))
+                       Just ty -> [Def nullSpanInteractive (mkId t) [] ty]
+                       --   (Val nullSpanInteractive () (Var () (mkId t)))
                    Just (def,lid) -> case lid of
                                       []  ->  [def]
                                       ids -> (buildDef ids <> [def])
@@ -205,7 +209,7 @@ synTypeBuilder exp ast adt = do
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Mo.Checker ()
 buildCheckerState dd = do
-    let checkDataDecls = do { mapM checkTyCon dd; mapM checkDataCons dd }
+    let checkDataDecls = runMaybeT (mapM_ checkTyCon dd *> mapM_ checkDataCons dd)
     somethine <- checkDataDecls
     return ()
 
@@ -228,11 +232,11 @@ buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
 
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
-buildTypeScheme ty = Forall ((0,0),(0,0)) [] ty
+buildTypeScheme ty = Forall nullSpanInteractive [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
-buildDef rfv ts ex = Def ((0,0),(0,0)) (mkId (" repl"<>(show rfv)))
-   [Equation nullSpan () [] ex] ts
+buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
+   [Equation nullSpanInteractive () [] ex] ts
 
 
 getConfigFile :: IO String
@@ -259,12 +263,12 @@ handleCMD s =
       liftIO $ print $ dumpStateAux dict
 
     handleLine (RunParser str) = do
-      pexp <- liftIO' $ try $ expr $ scanTokens str
+      pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens str) "interactive"
       case pexp of
         Right ast -> liftIO $ putStrLn (show ast)
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
-          pts <- liftIO' $ try $ tscheme $ scanTokens str
+          pts <- liftIO' $ try $ runReaderT (tscheme $ scanTokens str) "interactive"
           case pts of
             Right ts -> liftIO $ putStrLn (show ts)
             Left err -> do
@@ -349,12 +353,12 @@ handleCMD s =
           -- TODO: use the type that comes out of the checker to return the type
           checked <- liftIO' $ check (AST adt ast)
           case checked of
-            (Ok _) -> liftIO $ putStrLn (printType trm m)
-            Failed -> Ex.throwError (TypeCheckError trm)
+            Just _ -> liftIO $ putStrLn (printType trm m)
+            Nothing -> Ex.throwError (TypeCheckError trm)
 
     handleLine (Eval ev) = do
         (fvg,rp,adt,fp,m) <- get
-        pexp <- liftIO' $ try $ expr $ scanTokens ev
+        pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens ev) "interactive"
         case pexp of
             Right exp -> do
                 let fv = freeVars exp
@@ -375,13 +379,13 @@ handleCMD s =
                         put ((fvg+1),rp,adt,fp,m)
                         checked <- liftIO' $ check (AST adt (ast<>(ndef:[])))
                         case checked of
-                            (Ok _) -> do
+                            Just _ -> do
                                 result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])))
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "if here fix"
                                     Right (Just result) -> liftIO $ putStrLn (pretty result)
-                            Failed -> Ex.throwError (OtherError')
+                            Nothing -> Ex.throwError (OtherError')
             Left e -> Ex.throwError (ParseError e) --error from parsing (pexp)
 
 helpMenu :: String

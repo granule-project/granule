@@ -24,23 +24,23 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
-lEqualTypesWithPolarity :: (?globals :: Globals )
+lEqualTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False pol
 
-equalTypesWithPolarity :: (?globals :: Globals )
+equalTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq False pol
 
-lEqualTypes :: (?globals :: Globals )
+lEqualTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False SndIsSpec
 
-equalTypes :: (?globals :: Globals )
+equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals )
+equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True SndIsSpec
 
@@ -52,7 +52,7 @@ equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s E
      e.g., the first argument is inferred, the second is a specification
      being checked against
 -}
-equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals )
+equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
@@ -88,7 +88,7 @@ flipIndicator PatternCtxt = PatternCtxt
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and a unifier
       Polarity indicates which -}
-equalTypesRelatedCoeffects :: (?globals :: Globals )
+equalTypesRelatedCoeffects :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
@@ -113,15 +113,15 @@ equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
 
 -- THE FOLLOWING TWO CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
 
--- Over approximation by 'FileIO' "monad"
+-- Over approximation by 'IO' "monad"
 equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
-   | internalName con == "FileIO" = do
+   | internalName con == "IO" = do
     (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
     return (eq, unif)
 
--- Under approximation by 'FileIO' "monad"
+-- Under approximation by 'IO' "monad"
 equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
-   | internalName con == "FileIO" = do
+   | internalName con == "IO" = do
     (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
     return (eq, unif)
 
@@ -154,7 +154,7 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
           halt $ GradingError (Just s) $
             "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
 
-equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
+equalTypesRelatedCoeffects s rel uS x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
@@ -164,6 +164,9 @@ equalTypesRelatedCoeffects s rel uS (Box c t) (Box c' t') sp = do
   case sp of
     SndIsSpec -> addConstraint (rel s c c' kind)
     FstIsSpec -> addConstraint (rel s c' c kind)
+    _ -> halt $ GenericError (Just s) $ "Trying to unify `"
+                <> pretty x <> "` and `"
+                <> pretty y <> "` but in a context where unification is not allowed."
 
   equalTypesRelatedCoeffects s rel uS t t' sp
   --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp
@@ -307,8 +310,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
             $ case sp of
              FstIsSpec -> "Trying to match a polymorphic type '" <> pretty n
                        <> "' with monomorphic `" <> pretty t <> "`"
-             SndIsSpec -> pretty t <> " is not equal to " <> pretty (TyVar n) <> " (probably existentially quantified)"
-             PatternCtxt -> pretty t <> " is not equal to " <> pretty (TyVar n)
+             SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
+             PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -340,7 +343,7 @@ equalTypesRelatedCoeffects s rel uS t1 t2 t = do
   equalOtherKindedTypesGeneric s t1 t2
 
 {- | Equality on other types (e.g. Nat and Session members) -}
-equalOtherKindedTypesGeneric :: (?globals :: Globals )
+equalOtherKindedTypesGeneric :: (?globals :: Globals)
     => Span
     -> Type
     -> Type
@@ -361,7 +364,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
 
       KType ->
         halt $ GenericError (Just s) $
-           "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
+           "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
 
       _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
@@ -370,7 +373,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
                  <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
   else
     halt $ GenericError (Just s) $
-       "Type `" <> pretty t1 <> "` is not equal to type `" <> pretty t2 <> "`"
+       "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
 
 -- Essentially use to report better error messages when two session type
 -- are not equality

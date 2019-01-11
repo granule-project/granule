@@ -83,11 +83,16 @@ data Coeffect = CNat      Int
               | CJoin     Coeffect Coeffect
               | CZero     Type
               | COne      Type
-              | Level     Int
+              | Level     Integer
               | CSet      [(String, Type)]
               | CSig      Coeffect Type
               | CExpon    Coeffect Coeffect
+              | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
+
+publicRepresentation, privateRepresentation :: Integer
+privateRepresentation = 1
+publicRepresentation  = 0
 
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
@@ -96,6 +101,11 @@ infinity = CInfinity (Just extendedNat)
 isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
+
+isProduct :: Type -> Maybe (Type, Type)
+isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "(*)" =
+    Just (t, t')
+isProduct _ = Nothing
 
 -- | Represents effect grades
 -- TODO: Make richer
@@ -117,6 +127,13 @@ arity _           = 0
 resultType :: Type -> Type
 resultType (FunTy _ t) = resultType t
 resultType t = t
+
+-- | Get the leftmost type of an application
+-- >>> leftmostOfApplication $ TyCon (mkId "(,)") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
+-- TyCon (Id "(,)" "(,)")
+leftmostOfApplication :: Type -> Type
+leftmostOfApplication (TyApp t _) = leftmostOfApplication t
+leftmostOfApplication t = t
 
 -- | Smart constructor for type constructors
 con :: String -> Type
@@ -228,6 +245,7 @@ instance Term Coeffect where
     freeVars CSet{} = []
     freeVars (CSig c _) = freeVars c
     freeVars (CInterval c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CProduct c1 c2) = freeVars c1 <> freeVars c2
 
 ----------------------------------------------------------------------
 -- Freshenable instances
@@ -311,6 +329,7 @@ instance Freshenable m Coeffect where
     freshen c@Level{}  = return c
     freshen c@CNat{}   = return c
     freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2
+    freshen (CProduct c1 c2) = CProduct <$> freshen c1 <*> freshen c2
 
 ----------------------------------------------------------------------
 

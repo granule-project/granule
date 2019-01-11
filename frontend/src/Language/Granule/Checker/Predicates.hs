@@ -76,6 +76,12 @@ instance Monad m => Freshenable m Constraint where
     c1 <- freshen c1
     c2 <- freshen c2
     return $ ApproximatedBy s' c1 c2 t
+
+  freshen (NonZeroPromotableTo s i c t) = do
+    c <- freshen c
+    t <- freshen t
+    return $ NonZeroPromotableTo s i c t
+
 -- Used to negate constraints
 data Neg a = Neg a
   deriving Show

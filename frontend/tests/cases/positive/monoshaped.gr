@@ -1,0 +1,9 @@
+-- Since unit type "monoshaped", i.e. has one constructor, then we allow
+-- pattern matching its constructor to have any coeffect, since the
+-- constructor itself contains no information
+
+foo : () [2] -> Int
+foo [()] = 0
+
+bar : () [0] -> Int
+bar [()] = 0

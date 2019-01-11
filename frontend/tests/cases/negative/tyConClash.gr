@@ -1,0 +1,7 @@
+data Int where
+
+data Float where
+
+data () where
+
+-- etc

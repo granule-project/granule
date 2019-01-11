@@ -25,7 +25,53 @@ data SGrade =
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
      | SPoint
+     | SProduct { sfst :: SGrade, ssnd :: SGrade }
     deriving (Show, Generic)
+
+-- Work out if two symbolic grades are of the same type
+match :: SGrade -> SGrade -> Bool
+match (SNat _) (SNat _) = True
+match (SFloat _) (SFloat _) = True
+match (SLevel _) (SLevel _) = True
+match (SSet _) (SSet _) = True
+match (SExtNat _) (SExtNat _) = True
+match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
+match SPoint SPoint = True
+match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
+match _ _ = False
+
+isSProduct :: SGrade -> Bool
+isSProduct (SProduct _ _) = True
+isSProduct _ = False
+
+applyToProducts :: (SGrade -> SGrade -> a)
+            -> (a -> a -> b)
+            -> (SGrade -> a)
+            -> SGrade -> SGrade -> b
+
+applyToProducts f g _ a@(SProduct a1 b1) b@(SProduct a2 b2) =
+  if (match a1 a2) && (match b1 b2)
+    then g (f a1 a2) (f b1 b2)
+    else if (match a1 b2) && (match b1 a2)
+      then g (f a1 b2) (f b1 a2)
+      else error $"Solver grades " <> show a <> " and " <> show b <> " are incompatible "
+
+applyToProducts f g h a@(SProduct a1 b1) c =
+  if match a1 c
+    then g (f a1 c) (h b1)
+    else if match b1 c
+         then g (h a1) (f b1 c)
+         else error $ "Solver grades " <> show a <> " and " <> show c <> " are incompatible "
+
+applyToProducts f g h c a@(SProduct a1 b1) =
+  if match c a1
+    then g (f c a1) (h b1)
+    else if match c b1
+         then g (h a1) (f c b1)
+         else error $ "Solver grades " <> show a <> " and " <> show c <> " are incompatible "
+
+applyToProducts _ _ _ a b =
+  error $ "Solver grades " <> show a <> " and " <> show b <> " are not products"
 
 natLike :: SGrade -> Bool
 natLike (SNat _) = True
@@ -42,6 +88,11 @@ instance Mergeable SGrade where
     SInterval (symbolicMerge s sb lb1 lb2) (symbolicMerge s sb ub1 ub2)
   symbolicMerge s sb SPoint SPoint = SPoint
 
+  symbolicMerge s sb a b | isSProduct a || isSProduct b =
+    applyToProducts (symbolicMerge s sb) SProduct id a b
+
+  symbolicMerge _ _ s t = cannotDo "symbolicMerge" s t
+
 instance OrdSymbolic SGrade where
   (SInterval lb1 ub1) .< (SInterval lb2 ub2) =
     lb2 .< lb1 &&& ub1 .< ub2
@@ -51,6 +102,8 @@ instance OrdSymbolic SGrade where
   (SSet n)    .< (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .< (SExtNat n') = n .< n'
   SPoint .< SPoint = true
+  s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (&&&) (const true) s t
+  s .< t = cannotDo ".<" s t
 
 instance EqSymbolic SGrade where
   (SInterval lb1 ub1) .== (SInterval lb2 ub2) =
@@ -61,6 +114,8 @@ instance EqSymbolic SGrade where
   (SSet n)    .== (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .== (SExtNat n') = n .== n'
   SPoint .== SPoint = true
+  s .== t | isSProduct s || isSProduct t = applyToProducts (.==) (&&&) (const true) s t
+  s .== t = cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
 symGradeMeet :: SGrade -> SGrade -> SGrade
@@ -72,6 +127,9 @@ symGradeMeet (SExtNat x) (SExtNat y) = SExtNat (x `smin` y)
 symGradeMeet (SInterval lb1 ub1) (SInterval lb2 ub2) =
   SInterval (lb1 `symGradeMeet` lb2) (ub1 `symGradeMeet` ub2)
 symGradeMeet SPoint SPoint = SPoint
+symGradeMeet s t | isSProduct s || isSProduct t =
+  applyToProducts symGradeMeet SProduct id s t
+symGradeMeet s t = cannotDo "meet" s t
 
 -- | Join operation on symbolic grades
 symGradeJoin :: SGrade -> SGrade -> SGrade
@@ -83,17 +141,23 @@ symGradeJoin (SExtNat x) (SExtNat y) = SExtNat (x `smax` y)
 symGradeJoin (SInterval lb1 ub1) (SInterval lb2 ub2) =
    SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeJoin` ub2)
 symGradeJoin SPoint SPoint = SPoint
+symGradeJoin s t | isSProduct s || isSProduct t =
+  applyToProducts symGradeJoin SProduct id s t
+symGradeJoin s t = cannotDo "join" s t
 
 -- | Plus operation on symbolic grades
 symGradePlus :: SGrade -> SGrade -> SGrade
 symGradePlus (SNat n1) (SNat n2) = SNat (n1 + n2)
 symGradePlus (SSet s) (SSet t) = SSet $ S.union s t
-symGradePlus (SLevel lev1) (SLevel lev2) = SLevel $ lev1 `smax` lev2
+symGradePlus (SLevel lev1) (SLevel lev2) = SLevel $ lev1 `smin` lev2
 symGradePlus (SFloat n1) (SFloat n2) = SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = SExtNat (x + y)
 symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (lb1 `symGradePlus` lb2) (ub1 `symGradePlus` ub2)
 symGradePlus SPoint SPoint = SPoint
+symGradePlus s t | isSProduct s || isSProduct t =
+   applyToProducts symGradePlus SProduct id s t
+symGradePlus s t = cannotDo "plus" s t
 
 -- | Times operation on symbolic grades
 symGradeTimes :: SGrade -> SGrade -> SGrade
@@ -105,3 +169,13 @@ symGradeTimes (SExtNat x) (SExtNat y) = SExtNat (x * y)
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
 symGradeTimes SPoint SPoint = SPoint
+symGradeTimes s t | isSProduct s || isSProduct t =
+  applyToProducts symGradeTimes SProduct id s t
+symGradeTimes s t = cannotDo "times" s t
+
+cannotDo :: String -> SGrade -> SGrade -> a
+cannotDo op s t =
+  error $ "Cannot perform symbolic operation `"
+      <> op <> "` on "
+      <> show s <> " and "
+      <> show t

@@ -7,7 +7,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
 {- Helpers for error messages and checker control flow -}
-data TypeError
+data CheckerError
   = CheckerError (Maybe Span) String
   | GenericError (Maybe Span) String
   | GradingError (Maybe Span) String
@@ -18,8 +18,9 @@ data TypeError
   | RefutablePatternError (Maybe Span) String
   | NameClashError (Maybe Span) String
   | DuplicatePatternError (Maybe Span) String
+  deriving (Show, Eq)
 
-instance UserMsg TypeError where
+instance UserMsg CheckerError where
   title CheckerError {} = "Checker error"
   title GenericError {} = "Type error"
   title GradingError {} = "Grading error"

@@ -1,0 +1,4 @@
+fooa : Int [Private] -> Int [Public]
+fooa [x] = [(weak__ x) + 0]
+            -- x : Private but Public * Private = Public
+            -- i.e. cannot leak

@@ -1,5 +1,3 @@
-import Prelude
-
 dubInput : () <[R, W]>
 dubInput = let x <- readInt in write (showInt (x * 2))
 

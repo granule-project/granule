@@ -56,7 +56,7 @@ defclos  :: String
          -> ClosureFreeFunctionDef
 defclos name arg env bodyexpr ts =
     ClosureFreeFunctionDef {
-        closureFreeDefSpan = nullSpan,
+        closureFreeDefSpan = nullSpanNoFile,
         closureFreeDefIdentifier = mkId name,
         closureFreeDefEnvironment = env,
         closureFreeDefBody = bodyexpr,

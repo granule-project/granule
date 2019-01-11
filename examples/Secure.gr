@@ -16,7 +16,7 @@ hash [x] = [x + x]
 main : Int [Private]
 main = hash secret
 
--- Flattening takes the join (`\/`) of both Levels (see example below).
+-- Flattening takes the meet (`\/`) of both Levels (see example below).
 flatten : forall k : Level, l : Level . (Int [k]) [l] -> Int [k \/ l]
 flatten [[x]] = [x]
 

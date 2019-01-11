@@ -30,6 +30,27 @@ definitelyUnifying (PConstr _ _ _ _) = True
 definitelyUnifying (PInt _ _ _) = True
 definitelyUnifying _ = False
 
+-- | Predicate on whether a type has more than 1 shape (constructor)
+polyShaped :: (?globals :: Globals) => Type -> MaybeT Checker Bool
+polyShaped t = case leftmostOfApplication t of
+    TyCon k -> do
+      mCardinality <- lookup k <$> gets typeConstructors
+      case mCardinality of
+        Just (_, c) -> case c of
+          Just 1 -> do
+            debugM "uniShaped constructor" (show t <> "\n" <> show c)
+            pure False
+          _ -> do
+            debugM "polyShaped constructor" (show t <> "\n" <> show c)
+            pure True
+        Nothing -> error $ mconcat
+          [ "Internal checker error, tried to look up nonexistent type "
+          , show k
+          , " in context." ]
+    _ -> do
+      debugM "polyShaped because not a constructor" (show t)
+      pure True
+
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also:
@@ -74,9 +95,12 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
     coeffTy <- inferCoeffectType s coeff
 
     -- Check whether a unification was caused
-    when (definitelyUnifying p) $ do
-      (addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
-      --addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+    isPoly <- polyShaped ty
+    when (definitelyUnifying p && isPoly) $ do
+      -- (addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
+      --addConstraintToPreviousFrame $ Eq s (COne coeffTy) coeff coeffTy
+      addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+
 
     --when (containsNoUnifyingUpToNextBox p) $ do
     --  addConstraintToPreviousFrame $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
@@ -102,7 +126,8 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
     let elabP = PBox sp t elabPinner
 
     -- Discharge all variables bound by the inner pattern
-    return (map (discharge coeffTy coeff) ctx, eVars, subst, elabP)
+    ctxt' <- mapM (discharge s coeffTy coeff) ctx
+    return (ctxt', eVars, subst, elabP)
 
 ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
@@ -170,14 +195,15 @@ ctxtFromTypedPattern s t p = do
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   halt $ PatternTypingError (Just s)
-    $ "Pattern match `" <> pretty p <> "` does not have type `" <> pretty t <> "`"
+    $ "Pattern match `" <> pretty p <> "` does not match expected type `" <> pretty t <> "`"
 
-discharge _ c (v, Linear t) = (v, Discharged t c)
-discharge k c (v, Discharged t c') =
-  case flattenable k of
+discharge _ _ c (v, Linear t) = return (v, Discharged t c)
+discharge s ct c (v, Discharged t c') = do
+  ct' <- inferCoeffectType s c'
+  return $ case flattenable ct ct' of
     -- Implicit flatten operation allowed on this coeffect
-    Just flattenOp -> (v, Discharged t (flattenOp c c'))
-    Nothing        -> (v, Discharged t c')
+    Just (flattenOp, ct'')  -> (v, Discharged t (flattenOp c c'))
+    Nothing                 -> (v, Discharged t c')
 
 ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
   => Span

@@ -15,6 +15,7 @@ import Data.List
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
@@ -84,6 +85,7 @@ instance Pretty Coeffect where
 
     prettyL l (CInfinity k) = "∞ : " <> prettyL l k
     prettyL l (CInterval c1 c2) = prettyL l c1 <> ".." <> prettyL l c2
+    prettyL l (CProduct c1 c2) = "(" <> prettyL l c1 <> " * " <> prettyL l c2 <> ")"
 
 instance Pretty Kind where
     prettyL l KType          = "Type"
@@ -122,6 +124,9 @@ instance Pretty Type where
 
     prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(,)" =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
+
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(*)" =
+      parens l ("(" <> prettyL l t1 <> " * " <> prettyL l t2 <> ")")
 
     prettyL l t@(TyApp (TyApp _ _) _) | appChain t =
       parens l tyAppPretty
@@ -207,7 +212,10 @@ instance Pretty v => Pretty (Value v a) where
     prettyL l (Ext _ v) = prettyL l v
 
 instance Pretty Id where
-  prettyL l = if debugging ?globals then internalName else sourceName
+  prettyL l
+    = if debugging ?globals
+        then internalName
+        else takeWhile (\c -> c /= '.' && c /= '`') . sourceName
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
   prettyL l (App _ _ e1 e2) =
@@ -230,3 +238,6 @@ parensOn p t = prettyL (if p t then 0 else 1) t
 
 instance Pretty Int where
   prettyL l = show
+
+instance Pretty Span where
+  prettyL _ (Span start end fileName) = "(" <> pretty start <> ":" <> pretty end <> ")"
