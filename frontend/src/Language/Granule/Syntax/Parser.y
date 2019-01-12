@@ -54,6 +54,7 @@ import System.Exit (die)
     '->'  { TokenArrow _ }
     '<-'  { TokenBind _ }
     ','   { TokenComma _ }
+    '×'   { TokenTimes _ }
     '='   { TokenEq _ }
     '+'   { TokenAdd _ }
     '-'   { TokenSub _ }
@@ -76,10 +77,10 @@ import System.Exit (die)
     ".."  { TokenDotDot _ }
     OP    { TokenOp _ _ }
 
-
 %right in
 %right '->'
 %left ':'
+%right '×'
 %left ".."
 %left '+' '-'
 %left '*'
@@ -111,6 +112,10 @@ Def :: { Def () () }
 
 DataDecl :: { DataDecl }
   : data CONSTR TyVars KindAnn where DataConstrs
+      {% do
+          span <- mkSpan (getPos $1, lastSpan' $6)
+          return $ DataDecl span (mkId $ constrString $2) $3 $4 $6 }
+  | data CONSTR TyVars KindAnn '=' DataConstrs
       {% do
           span <- mkSpan (getPos $1, lastSpan' $6)
           return $ DataDecl span (mkId $ constrString $2) $3 $4 $6 }
@@ -240,6 +245,7 @@ Kind :: { Kind }
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
+  | Type '×' Type             { TyApp (TyApp (TyCon $ mkId "(,)") $1) $3 }
   | TyAtom '[' Coeffect ']'   { Box $3 $1 }
   | TyAtom '[' ']'            { Box (CInterval (CZero extendedNat) infinity) $1 }
 

@@ -77,21 +77,21 @@ e = 2.718281828459045
 --- # Combinators involving products (pairs)
 
 --- Extract the left part of a pair
-fst : forall a : Type, b : Type . (a, b [0]) -> a
+fst : forall a : Type, b : Type . a × b [0] -> a
 fst (x, [_]) = x
 
 --- Extract the right part of a pair
-snd : forall a : Type, b : Type . (a [0], b) -> b
+snd : forall a : Type, b : Type . a [0] × b -> b
 snd ([_], y) = y
 
 --- curry converts an uncurried function to a curried function
 curry : forall a : Type, b : Type, c : Type .
-        ((a, b) -> c) -> a -> b -> c
+        (a × b -> c) -> a -> b -> c
 curry f x y = f (x, y)
 
 --- uncurry converts a curried function to a function on pairs
 uncurry : forall a : Type, b : Type, c : Type .
-          (a -> b -> c) -> ((a, b) -> c)
+          (a -> b -> c) -> (a × b -> c)
 uncurry f (x, y) = f x y
 
 
@@ -118,10 +118,9 @@ unflatten : forall (a : Type, n : Nat, m : Nat) . a [n*m] -> (a [n]) [m]
 unflatten [x] = [[x]]
 
 --- Push coeffects on a pair into the left and right elements
-push : forall (a : Type, b : Type, n : Nat) . (a, b) [n] -> (a [n], b [n])
+push : forall (a : Type, b : Type, n : Nat) . (a × b) [n] -> a [n] × b [n]
 push [(x, y)] = ([x], [y])
 
 --- Pull coeffects of pair elements up to the pair
-pull : forall (a : Type, b : Type, n : Nat)
-     . (a [n], b [n]) -> (a, b) [n]
+pull : forall (a : Type, b : Type, n : Nat) . a [n] × b [n] -> (a × b) [n]
 pull ([x], [y]) = [(x, y)]

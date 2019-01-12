@@ -69,6 +69,7 @@ tokens :-
   \<                            { \p s -> TokenLangle p }
   \>                            { \p s -> TokenRangle p }
   \,                            { \p s -> TokenComma p }
+  \×                            { \p s -> TokenTimes p }
   \.                            { \p s -> TokenPeriod p }
   \:                            { \p s -> TokenSig p }
   @sym				                  { \p s -> TokenSym p s }
@@ -124,6 +125,7 @@ data Token
   | TokenLangle   AlexPosn
   | TokenRangle   AlexPosn
   | TokenComma    AlexPosn
+  | TokenTimes AlexPosn
   | TokenPeriod   AlexPosn
   | TokenPipe     AlexPosn
   | TokenUnderscore AlexPosn
