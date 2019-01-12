@@ -53,6 +53,34 @@ instance Pretty Assumption where
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
    prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
 
+-- Describes where a pattern is fully consuming, i.e. amounts
+-- to linear use and therefore triggers other patterns to be counted
+-- as linear, e.g.
+--    foo 0 = ..
+--    foo _ = ..
+-- can be typed as foo : Int ->  because the first means
+-- consumption is linear
+data Consumption = Full | NotFull deriving (Eq, Show)
+
+-- Given a set of equations, creates an intial vector to describe
+-- the consumption behaviour of the patterns (assumes that)
+-- the number of patterns is the same for each equation, which
+-- is checked elsewhere
+initialisePatternConsumptions :: [Equation v a] -> [Consumption]
+initialisePatternConsumptions [] = []
+initialisePatternConsumptions ((Equation _ _ pats _):_) =
+  map (\_ -> NotFull) pats
+
+-- Join information about consumption
+joinConsumption :: Consumption -> Consumption -> Consumption
+joinConsumption Full _ = Full
+joinConsumption _ Full = Full
+joinConsumption _ _ = NotFull
+
+meetConsumption :: Consumption -> Consumption -> Consumption
+meetConsumption NotFull _ = NotFull
+meetConsumption _ NotFull = NotFull
+meetConsumption Full Full = Full
 
 data CheckerState = CS
             { -- Fresh variable id state
@@ -78,6 +106,11 @@ data CheckerState = CS
             -- which get promoted by branch promotions
             , guardContexts :: [Ctxt Assumption]
 
+            -- Records the amount of consumption by patterns in equation equation
+            -- used to work out whether an abstract type has been definitly unified with
+            -- and can therefore be linear
+            , patternConsumption :: [Consumption]
+
             -- Data type information
             , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
             , dataConstructors :: Ctxt TypeScheme
@@ -97,6 +130,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
                , guardContexts = []
+               , patternConsumption = []
                , typeConstructors = Primitives.typeLevelConstructors
                , dataConstructors = Primitives.dataConstructors
                , deriv = Nothing

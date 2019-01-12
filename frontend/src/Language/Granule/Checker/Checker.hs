@@ -146,7 +146,8 @@ checkDef :: (?globals :: Globals)
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
-    modify (\st -> st { guardPredicates = [[]] } )
+    modify (\st -> st { guardPredicates = [[]]
+                      , patternConsumption = initialisePatternConsumptions equations } )
     elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
         -- Erase the solver predicate between equations
         modify' $ \st -> st
@@ -187,7 +188,13 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
   newConjunct
 
   -- Build the binding context for the branch pattern
-  (patternGam, tau, localVars, subst, elaborated_pats) <- ctxtFromTypedPatterns s ty pats
+  st <- get
+  (patternGam, tau, localVars, subst, elaborated_pats, consumptions) <-
+     ctxtFromTypedPatterns s ty pats (patternConsumption st)
+
+  -- Update the consumption information
+  modify (\st -> st { patternConsumption =
+                         zipWith joinConsumption consumptions (patternConsumption st) } )
 
   -- Create conjunct to capture the body expression constraints
   newConjunct
@@ -262,7 +269,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
       unless eqT (halt $ GenericError (Just s) $ pretty sig <> " not equal to " <> pretty t')
       return (tau, subst)
 
-  (bindings, _, subst, elaboratedP) <- ctxtFromTypedPattern s sig p
+  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
   debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig p
@@ -353,7 +360,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
     forM cases $ \(pat_i, e_i) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i) <- ctxtFromTypedPattern s guardTy pat_i
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
 
       -- Checking the case body
       newConjunct
@@ -530,7 +537,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, _, elaborated_pat_i) <- ctxtFromTypedPattern s ty pati
+      (patternGam, eVars, _, elaborated_pat_i, _) <- ctxtFromTypedPattern s ty pati NotFull
       newConjunct
       ---
       (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
@@ -587,7 +594,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
    where
       typeLetSubject gam1 ef1 ty1 elaborated1 = do
-        (binders, _, _, elaboratedP)  <- ctxtFromTypedPattern s ty1 p
+        (binders, _, _, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
         pIrrefutable <- isIrrefutable s ty1 p
         if not pIrrefutable
         then refutablePattern s p
@@ -735,7 +742,7 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
-  (bindings, _, subst, elaboratedP) <- ctxtFromTypedPattern s sig p
+  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
