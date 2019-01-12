@@ -1,6 +1,6 @@
 import File
 
-main : IO String
+main : String <IO>
 main =
     let [mh]    = [openFile "LICENSE" ReadMode] in
     let h       <- mh;

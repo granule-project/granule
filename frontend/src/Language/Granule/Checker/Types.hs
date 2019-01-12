@@ -108,51 +108,44 @@ equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
 
-equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
-  return (con == con', [])
+equalTypesRelatedCoeffects _ _ _ (TyCon con1) (TyCon con2) _ =
+  return (con1 == con2, [])
 
 -- THE FOLLOWING TWO CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
 
 -- Over approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
-   | internalName con == "IO" = do
-    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-    return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ef t1) (Diamond ["IO"] t2) sp
+    = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
 -- Under approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
-   | internalName con == "IO" = do
-    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-    return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ["IO"] t1) (Diamond ef t2) sp
+    = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
 -- Over approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
-       | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
-        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-        return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ef t1) (Diamond ["Session"] t2) sp
+    | "Com" `elem` ef || null ef
+      = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
 -- Under approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
-       | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
-        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-        return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ["Session"] t1) (Diamond ef t2) sp
+    | "Com" `elem` ef || null ef
+      = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
-
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-  if ef == ef'
+equalTypesRelatedCoeffects s rel uS (Diamond ef1 t1) (Diamond ef2 t2) sp = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel uS t1 t2 sp
+  if ef1 == ef2
     then return (eq, unif)
     else
       -- Effect approximation
-      if (ef `isPrefixOf` ef')
+      if (ef1 `isPrefixOf` ef2)
       then return (eq, unif)
       else
         -- Communication effect analysis is idempotent
-        if (nub ef == ["Com"] && nub ef' == ["Com"])
+        if (nub ef1 == ["Com"] && nub ef2 == ["Com"])
         then return (eq, unif)
         else
           halt $ GradingError (Just s) $
-            "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
+            "Effect mismatch: `" <> pretty ef1 <> "` not equal to `" <> pretty ef2 <> "`"
 
 equalTypesRelatedCoeffects s rel uS x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages

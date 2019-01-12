@@ -4,5 +4,5 @@ bar = read --- reads but doesn't do anything with that result
 foo : () -> String <R>
 foo = \() -> read
 
-main : IO ()
+main : () <IO>
 main = let userInp <- foo () in write userInp

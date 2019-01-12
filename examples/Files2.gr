@@ -4,33 +4,31 @@ import List
 -- Haskell vs Granule file manipulation
 
 -- openFile :: String -> IOMode -> IO Handle
-openFile'    : String -> IOMode -> IO Handle
+openFile'    : String -> IOMode -> Handle <IO>
 openFile' = openFile
 
 -- hGetChar :: Handle -> IO Char
-hGetChar'    : Handle -> IO (Handle, Char)
+hGetChar'    : Handle -> (Handle, Char) <IO>
 hGetChar' = hGetChar
 
 -- hPutChar :: Handle -> Char  -> IO ()
-hPutChar'    : Handle -> Char  -> IO Handle
+hPutChar'    : Handle -> Char  -> Handle <IO>
 hPutChar' = hPutChar
 
 -- hClose :: Handle -> IO ()
-hClose'    : Handle -> IO ()
+hClose'    : Handle -> () <IO>
 hClose' = hClose
 
-getMany : Int -> Handle -> IO (Handle, String)
-getMany n h =
-    case n of
-      0     -> pure (h, "");
-      n ->
-        let (h, c) <- hGetChar h;
-            (h, cs) <- getMany (n - 1) h
-        in pure (h, stringAppend (showChar c) cs)
+getMany : Int -> Handle -> (Handle, String) <IO>
+getMany 0 h = pure (h, "");
+getMany n h = let
+    (h, c) <- hGetChar h;
+    (h, cs) <- getMany (n - 1) h
+    in pure (h, stringAppend (showChar c) cs)
 
-main : IO String
-main =
-    let h       <- openFile "LICENSE" ReadMode;
-        (h, s)  <- getMany 10 h;
-        ()      <- hClose h
+main : String <IO>
+main = let
+    h      <- openFile "LICENSE" ReadMode;
+    (h, s) <- getMany 10 h;
+    ()     <- hClose h
     in pure s
