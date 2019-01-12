@@ -35,3 +35,11 @@ choose1 (OneOf [x] [_]) = x
 
 choose2 : forall a : Type, b : Type . Choice a b -> b
 choose2 (OneOf [_] [y]) = y
+
+-- TODO: Use the following when existentials are fixed
+-- data Choice : Type -> Type -> Nat -> Type where
+--   Choices : forall a : Type, b : Type, m : Nat, n : Nat
+--           . a [m] -> b [n] -> Choice a b (m + n)
+--
+-- getA : forall a : Type, b : Type . Choice a b 1 -> a
+-- getA (Choices [a] [b]) = a
