@@ -332,7 +332,7 @@ handleCMD s =
 
     handleLine Reload = do
       (fvg,rp,adt,f,_) <- get
-      put (fvg,rp,adt,f, M.empty)
+      put (fvg,rp,[],f, M.empty)
       case f of
         [] -> liftIO $ putStrLn "No files to reload" >> return ()
         _ -> do
