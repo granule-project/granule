@@ -67,8 +67,10 @@ instance {-# OVERLAPS #-} Pretty Effect where
 instance Pretty Coeffect where
     prettyL l (CNat n) = show n
     prettyL l (CFloat n) = show n
-    prettyL l (COne k)  = "_1 : " <> prettyL l k
-    prettyL l (CZero k) = "_0 : " <> prettyL l k
+    prettyL l (COne k) | k == TyCon (mkId "Nat") || k == extendedNat = "1"
+    prettyL l (CZero k) | k == TyCon (mkId "Nat") || k == extendedNat = "0"
+    prettyL l (COne k)  = "1 : " <> prettyL l k
+    prettyL l (CZero k) = "0 : " <> prettyL l k
     prettyL l (Level 0) = "Public"
     prettyL l (Level _) = "Private"
     prettyL l (CExpon a b) = prettyL l a <> "^" <> prettyL l b
@@ -85,6 +87,9 @@ instance Pretty Coeffect where
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyL l t) xs) <> "}"
     prettyL l (CSig c t) =
        parens l (prettyL (l+1) c <> " : " <> prettyL l t)
+
+    prettyL l (CInfinity (Just k))
+       | k == TyCon (mkId "Nat") || k == extendedNat = "∞"
 
     prettyL l (CInfinity k) = "∞ : " <> prettyL l k
     prettyL l (CInterval c1 c2) = prettyL l c1 <> ".." <> prettyL l c2
