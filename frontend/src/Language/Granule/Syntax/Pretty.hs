@@ -128,7 +128,8 @@ instance Pretty Type where
       parens l ("Session " <> prettyL (l+1) t)
 
     prettyL l (Diamond e t)  =
-       parens l (prettyL (l+1) t <> " <" <> prettyL l e <> ">")
+       parens l (prettyL (l+1) t
+       <> " <" <> intercalate "," (map (prettyL l) e) <> ">")
 
     prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(,)" =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")

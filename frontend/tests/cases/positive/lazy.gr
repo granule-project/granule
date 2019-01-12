@@ -1,7 +1,7 @@
-bar : String <[R]>
+bar : String <R>
 bar = read --- reads but doesn't do anything with that result
 
-foo : () -> String <[R]>
+foo : () -> String <R>
 foo = \() -> read
 
 main : IO ()

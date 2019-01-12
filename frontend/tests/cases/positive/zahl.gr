@@ -4,11 +4,11 @@ data Number where
 n : Number
 n = Zahl 42
 
-check : Number -> () <[W]>
+check : Number -> () <W>
 check n =
     case n of
       (Zahl 42) -> write "0";
       (Zahl n)  -> write (showInt n)
 
-main : () <[W]>
+main : () <W>
 main = check n

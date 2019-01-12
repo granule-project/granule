@@ -35,5 +35,5 @@ last x =
 exLast : Int
 exLast = fromMaybe [42] (last ex0)
 
-main : () <[W]>
+main : () <W>
 main = write (showInt exLast)

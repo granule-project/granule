@@ -295,8 +295,8 @@ Set :: { [(String, Type)] }
   | VAR ':' Type              { [(symString $1, $3)] }
 
 Effect :: { Effect }
-  : '[' Effs ']'              { $2 }
-  | '[' ']'                   { [] }
+  : Effs                 { $1 }
+  | {-empty-}            { [] }
 
 Effs :: { [String] }
   : Eff ',' Effs              { $1 : $3 }
