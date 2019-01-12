@@ -43,5 +43,22 @@ spec = do
                                    ((val x) `plus` (val y)))
                               (tts $ int .-> int .-> int)
         hoisted `shouldBe` expected
-    it "desugars multple-equations as case" $ do
-        True `shouldBe` True
+    it "desugars multple-arg, multi-equations as case" $ do
+        let hoisted = (normaliseDefinition $
+                          casedef "xor"
+                              [([pint 0, pint 0],           (val (lit 1))),
+                               ([pint 1, pint 1],           (val (lit 1))),
+                               ([arg "x" int, arg "y" int], (val (lit 0)))]
+                              (tts $ int .-> int .-> int))
+        let expected = Left $
+                           defun "xor" (arg "x" int)
+                              (lambdaexp (arg "y" int) (int .-> int)
+                                   (caseexpr (val (typedPair (var "x" int) (var "y" int)))
+                                       [(ppair (pint 0) (pint 0),
+                                            (val (lit 1))),
+                                        (ppair (pint 1) (pint 1),
+                                            (val (lit 1))),
+                                        (ppair (arg "x" int) (arg "y" int),
+                                            (val (lit 0)))]))
+                              (tts $ int .-> int .-> int)
+        hoisted `shouldBe` expected

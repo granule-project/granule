@@ -145,16 +145,16 @@ letBox :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
 letBox s pat e1 e2 =
   App s () (Val s () (Abs () (PBox s () pat) Nothing e2)) e1
 
-pair :: Span -> Expr v () -> Expr v () -> Expr v ()
-pair s e1 e2 = App s () (App s () (Val s () (Constr () (mkId "(,)") [])) e1) e2
+pair :: Expr v () -> Expr v () -> Expr v ()
+pair e1 e2 = App s () (App s () (Val s () (Constr () (mkId "(,)") [])) e1) e2
+             where s = nullSpanNoFile
 
-typedPair :: Span -> Expr v Type -> Expr v Type -> Expr v Type
-typedPair s left right =
-    App s ty (App s (rightType .-> ty)
-        (Val s ty (Constr (leftType .-> rightType .-> ty) (mkId "(,)") [])) left) right
-    where leftType = annotation left
+typedPair :: Value v Type -> Value v Type -> Value v Type
+typedPair left right =
+    Constr ty (mkId "(,)") [left, right]
+    where ty = pairType leftType rightType
+          leftType = annotation left
           rightType = annotation right
-          ty = pairType leftType rightType
 
 pairType :: Type -> Type -> Type
 pairType leftType rightType =

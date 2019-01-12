@@ -24,6 +24,9 @@ lit n = NumInt n
 arg :: String -> Type -> Pattern Type
 arg name ty = (PVar nullSpanNoFile ty (mkId name))
 
+pint :: Int -> Pattern Type
+pint n = PInt nullSpanNoFile int n
+
 tts :: Type -> TypeScheme
 tts ty = Forall nullSpanNoFile [] ty
 
@@ -45,6 +48,22 @@ def name args bodyexpr ts =
     Def nullSpanNoFile (mkId name) [equation] ts
     where equation = Equation nullSpanNoFile ty args bodyexpr
           (Forall _ [] ty) = ts
+
+casedef :: String -> [([Pattern Type], Expr () Type)] -> TypeScheme -> Def () Type
+casedef name cases ts =
+    Def nullSpanNoFile (mkId name) (equation <$> cases) ts
+    where equation (args, bodyexpr) = Equation nullSpanNoFile ty args bodyexpr
+          (Forall _ [] ty) = ts
+
+caseexpr :: Expr () Type -> [(Pattern Type, Expr () Type)] -> Expr () Type
+caseexpr swexp cases@((p,ex):_) =
+    Case nullSpanNoFile ty swexp cases
+    where ty = annotation ex
+
+ppair :: Pattern Type -> Pattern Type -> Pattern Type
+ppair left right =
+    PConstr nullSpanNoFile ty (mkId "(,)") [left, right]
+    where ty = pairType (annotation left) (annotation right)
 
 lambdaexp :: Pattern Type -> Type -> Expr ev Type -> Expr ev Type
 lambdaexp argument fnty body =

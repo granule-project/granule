@@ -159,10 +159,10 @@ makeCaseExpr :: [Pattern Type]
              -> ([[Pattern Type]], [Expr ev Type])
              -> Expr ev Type
 makeCaseExpr irrefutableArgPatterns (casePatterns, caseExprs) =
-    Case nullSpanNoFile ty swexpr branches
+    Case nullSpanNoFile ty (Val nullSpanNoFile (annotation sw) sw) branches
     where branches       = zip (map mergePatterns casePatterns) caseExprs
           ty             = annotation (head caseExprs)
-          swexpr         = mergeArguments $ boundVarsAndAnnotations $
+          sw         = mergeArguments $ boundVarsAndAnnotations $
                                mergePatterns irrefutableArgPatterns
 
 -- | x, y, z -> ((x, y), z)
@@ -172,10 +172,10 @@ mergePatterns (firstPattern:remainingPatterns) =
     where patternPair left right = ppair nullSpanNoFile (pairType (annotation left) (annotation right)) left right
           patternPair :: Pattern Type -> Pattern Type -> Pattern Type
 
-mergeArguments :: [(Type, Id)] -> Expr ev Type
+mergeArguments :: [(Type, Id)] -> Value ev Type
 mergeArguments argumentsIds =
-    let firstArg:otherArgs = map (\(ty, ident) -> Val nullSpanNoFile ty (Var ty ident)) argumentsIds
-    in foldl (typedPair nullSpanNoFile) firstArg otherArgs
+    let firstArg:otherArgs = map (\(ty, ident) -> Var ty ident) argumentsIds
+    in foldl typedPair firstArg otherArgs
 
 normaliseEquation :: Equation ev Type -> Equation ev Type
 normaliseEquation eq@Equation { equationArguments = [] } = tryHoistLambda eq
