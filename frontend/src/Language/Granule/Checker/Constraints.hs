@@ -38,12 +38,6 @@ compileQuant ForallQ   = universal
 compileQuant InstanceQ = existential
 compileQuant BoundQ    = existential
 
-normaliseConstraint :: Constraint -> Constraint
-normaliseConstraint (Eq s c1 c2 t)   = Eq s (normalise c1) (normalise c2) t
-normaliseConstraint (Neq s c1 c2 t)  = Neq s (normalise c1) (normalise c2) t
-normaliseConstraint (ApproximatedBy s c1 c2 t) = ApproximatedBy s (normalise c1) (normalise c2) t
-normaliseConstraint (NonZeroPromotableTo s x c t) = NonZeroPromotableTo s x (normalise c) t
-
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
@@ -176,6 +170,7 @@ compileToSBV predicate tyVarContext kVarContext =
           --    BoundQ -> (universalConstraints, pre &&& existentialConstraints)
       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
+-- TODO: replace with use of `substitute`
 
 -- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable

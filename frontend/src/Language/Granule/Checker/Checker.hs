@@ -24,6 +24,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Checker.Simplifier
 import Language.Granule.Checker.Substitutions
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
@@ -775,7 +776,13 @@ solveConstraints predicate s name = do
     QED -> return ()
     NotValid msg -> do
        msg' <- rewriteMessage msg
+       simpPred <- simplifyPred predicate
+
        halt $ GenericError (Just s) $ "Definition `" <> pretty name <> "` " <> msg'
+                 <> if msg' == "is Falsifiable\n"
+                     then "\n  because " <> pretty (NegPred simpPred)
+                     else ""
+
     NotValidTrivial unsats ->
        mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
     Timeout ->
