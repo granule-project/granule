@@ -173,6 +173,18 @@ symGradeTimes s t | isSProduct s || isSProduct t =
   applyToProducts symGradeTimes SProduct id s t
 symGradeTimes s t = cannotDo "times" s t
 
+-- | Minus operation on symbolic grades
+symGradeMinus :: SGrade -> SGrade -> SGrade
+symGradeMinus (SNat n1) (SNat n2) = SNat $ ite (n1 .< n2) 0 (n1 - n2)
+symGradeMinus (SSet s) (SSet t) = SSet $ s S.\\ t
+symGradeMinus (SExtNat x) (SExtNat y) = SExtNat (x - y)
+symGradeMinus (SInterval lb1 ub1) (SInterval lb2 ub2) =
+    SInterval (lb1 `symGradeMinus` lb2) (ub1 `symGradeMinus` ub2)
+symGradeMinus SPoint SPoint = SPoint
+symGradeMinus s t | isSProduct s || isSProduct t =
+  applyToProducts symGradeMinus SProduct id s t
+symGradeMinus s t = cannotDo "minus" s t
+
 cannotDo :: String -> SGrade -> SGrade -> a
 cannotDo op s t =
   error $ "Cannot perform symbolic operation `"

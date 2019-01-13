@@ -581,8 +581,8 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
       typeLetSubject gam1 ef1 ty1 elaborated1
 
     t -> halt $ GenericError (Just s)
-              $ "Expected an effect type but inferred '"
-             <> pretty t <> "' in body of let<>"
+              $ "Expected an effect type but inferred `"
+             <> pretty t <> "` in body of let<>"
 
    where
       typeLetSubject gam1 ef1 ty1 elaborated1 = do
@@ -600,7 +600,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
             Diamond ef2 ty2 ->
                 typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 elaboratedP elaborated1 elaborated2
             t -> halt $ GenericError (Just s)
-                      $ "Expected an effect type but got ''" <> pretty t <> "'"
+                      $ "Expected an effect type but got `" <> pretty t <> "`"
 
       typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 ep elt1 elt2 = do
         optionalSigEquality s optionalTySig ty1

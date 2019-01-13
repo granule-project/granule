@@ -22,7 +22,7 @@ instance Show SNatX where
     _         -> "<symbolic>"
 
 inf :: SNatX
-inf = SNatX (-1)
+inf = -1
 
 isInf :: SNatX -> SBool
 isInf (SNatX n) = n .== -1
@@ -34,6 +34,11 @@ instance Num SNatX where
   x * y = ite ((isInf x &&& y ./= 0) ||| (isInf y &&& x ./= 0)) -- 0 * ∞ = ∞ * 0 = 0
               inf
               (SNatX (xVal x * xVal y))
+  x - y = ite (isInf x ||| isInf y)  -- ???
+              inf
+              (ite (x .< y)          -- monus
+                   0
+                   (SNatX (xVal x - xVal y)))
   fromInteger = SNatX . literal
 
 instance EqSymbolic SNatX where

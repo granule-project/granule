@@ -289,6 +289,7 @@ Coeffect :: { Coeffect }
   | Coeffect ".." Coeffect      { CInterval $1 $3 }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
+  | Coeffect '-' Coeffect       { CMinus $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
   | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
   | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }

@@ -83,6 +83,8 @@ instance Pretty Coeffect where
       prettyL l c <> " + " <> prettyL l d
     prettyL l (CTimes c d) =
       prettyL l c <> " * " <> prettyL l d
+    prettyL l (CMinus c d) =
+      prettyL l c <> " - " <> prettyL l d
     prettyL l (CSet xs) =
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyL l t) xs) <> "}"
     prettyL l (CSig c t) =

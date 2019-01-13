@@ -175,6 +175,7 @@ inferCoeffectType s (CInterval c1 c2)    = do
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
+inferCoeffectType s (CMinus c c') = mguCoeffectTypes s c c'
 inferCoeffectType s (CTimes c c') = mguCoeffectTypes s c c'
 inferCoeffectType s (CMeet c c')  = mguCoeffectTypes s c c'
 inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'

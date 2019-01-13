@@ -79,6 +79,7 @@ data Coeffect = CNat      Int
               | CVar      Id
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
+              | CMinus    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
               | CZero     Type
@@ -240,6 +241,7 @@ instance Term Coeffect where
     freeVars (CVar v) = [v]
     freeVars (CPlus c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CTimes c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CMinus c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CExpon c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CMeet c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CJoin c1 c2) = freeVars c1 <> freeVars c2
@@ -303,6 +305,11 @@ instance Freshenable m Coeffect where
       c2' <- freshen c2
       return $ CTimes c1' c2'
 
+    freshen (CMinus c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
+      return $ CMinus c1' c2'
+
     freshen (CExpon c1 c2) = do
       c1' <- freshen c1
       c2' <- freshen c2
@@ -312,6 +319,7 @@ instance Freshenable m Coeffect where
       c1' <- freshen c1
       c2' <- freshen c2
       return $ CMeet c1' c2'
+
     freshen (CJoin c1 c2) = do
       c1' <- freshen c1
       c2' <- freshen c2

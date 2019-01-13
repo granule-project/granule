@@ -239,6 +239,8 @@ rewriteConstraints ctxt =
       CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect ckindVar ckind (CTimes c1 c2) =
       CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CMinus c1 c2) =
+      CMinus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect ckindVar ckind (CExpon c1 c2) =
       CExpon (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect ckindVar ckind (CInterval c1 c2) =
@@ -403,6 +405,9 @@ compileCoeffect c@(CPlus n m) k vars =
 
 compileCoeffect c@(CTimes n m) k vars =
   (compileCoeffect n k vars) `symGradeTimes` (compileCoeffect m k vars)
+
+compileCoeffect c@(CMinus n m) k vars =
+  (compileCoeffect n k vars) `symGradeMinus` (compileCoeffect m k vars)
 
 compileCoeffect c@(CExpon n m) k vars =
   case (compileCoeffect n k vars, compileCoeffect m k vars) of
