@@ -338,6 +338,7 @@ instance Substitutable Kind where
   substitute subst (KVar v) =
     case lookup v subst of
       Just (SubstK k) -> return k
+      Just (SubstT t) -> return $ KPromote t
       _               -> return $ KVar v
 
   unify (KVar v) k =
@@ -511,3 +512,40 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds ty) = do
     justLefts = mapMaybe conv
       where conv (_, Left a) = Just a
             conv (_, Right _) = Nothing
+
+instance Substitutable Pred where
+  substitute ctxt =
+      predFoldM
+        (return . Conj)
+        (\ids p1 p2 -> return $ Impl ids p1 p2)
+        (\c -> substitute ctxt c >>= return . Con)
+        (return . NegPred)
+        (\ids k p -> substitute ctxt k >>= \k' -> return $ Exists ids k' p)
+
+  unify _ _ = error "Can't unify predicates"
+
+instance Substitutable Constraint where
+  substitute ctxt (Eq s c1 c2 k) = do
+    c1 <- substitute ctxt c1
+    c2 <- substitute ctxt c2
+    k <- substitute ctxt k
+    return $ Eq s c1 c2 k
+
+  substitute ctxt (Neq s c1 c2 k) = do
+    c1 <- substitute ctxt c1
+    c2 <- substitute ctxt c2
+    k <- substitute ctxt k
+    return $ Neq s c1 c2 k
+
+  substitute ctxt (ApproximatedBy s c1 c2 k) = do
+    c1 <- substitute ctxt c1
+    c2 <- substitute ctxt c2
+    k <- substitute ctxt k
+    return $ ApproximatedBy s c1 c2 k
+
+  substitute ctxt (NonZeroPromotableTo s v c k) = do
+    c <- substitute ctxt c
+    k <- substitute ctxt k
+    return $ NonZeroPromotableTo s v c k
+
+  unify _ _ = error "Can't unify constraints"

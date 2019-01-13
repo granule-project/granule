@@ -61,6 +61,12 @@ data Constraint =
 
 instance FirstParameter Constraint Span
 
+normaliseConstraint :: Constraint -> Constraint
+normaliseConstraint (Eq s c1 c2 t)   = Eq s (normalise c1) (normalise c2) t
+normaliseConstraint (Neq s c1 c2 t)  = Neq s (normalise c1) (normalise c2) t
+normaliseConstraint (ApproximatedBy s c1 c2 t) = ApproximatedBy s (normalise c1) (normalise c2) t
+normaliseConstraint (NonZeroPromotableTo s x c t) = NonZeroPromotableTo s x (normalise c) t
+
 instance Monad m => Freshenable m Constraint where
   freshen (Eq s' c1 c2 k) = do
     c1 <- freshen c1
@@ -132,6 +138,7 @@ data Pred where
     Con  :: Constraint -> Pred
     NegPred  :: Pred -> Pred
     Exists :: Id -> Kind -> Pred -> Pred
+
 
 vars :: Pred -> [Id]
 vars (Conj ps) = concatMap vars ps
