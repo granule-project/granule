@@ -63,6 +63,11 @@ drop Z [xs] = xs;
 drop (S n) [Nil] = drop n [Nil];
 drop (S n) [Cons _ xs] = drop n [xs]
 
+take : forall a : Type, m : Nat, n : Nat
+     . N m -> (Vec n a) [0..1] -> Vec (n + (m - n)) a
+take Z [xs] = xs;
+take (S k) [Cons x xs] = Cons x (take k [xs])
+
 --- Return the first item (head) of the vector
 --- NB: non-linear in the vector
 head : forall (a : Type, n : Nat)
