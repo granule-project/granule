@@ -29,6 +29,7 @@ typeLevelConstructors =
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
     , (mkId "+",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "-",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
     , (mkId "*",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
     , (mkId "/\\", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
     , (mkId "\\/", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
