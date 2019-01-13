@@ -38,8 +38,8 @@ data Quantifier =
   deriving (Show, Eq)
 
 instance Pretty Quantifier where
-  prettyL l ForallQ   = "forall"
-  prettyL l InstanceQ = "exists"
+  prettyL l ForallQ   = "∀"
+  prettyL l InstanceQ = "∃"
   prettyL l BoundQ    = "pi"
 
 stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
@@ -250,13 +250,13 @@ instance Pretty [Pred] where
 instance Pretty Pred where
   prettyL l =
     predFold
-     (intercalate " & ")
+     (intercalate " ∧ ")
      (\s p q ->
-         (if null s then "" else "forall " <> intercalate "," (map sourceName s) <> " . ")
-      <> "(" <> p <> " -> " <> q <> ")")
+         (if null s then "" else "∀ " <> intercalate "," (map sourceName s) <> " . ")
+      <> "(" <> p <> " → " <> q <> ")")
       (prettyL l)
       (\p -> "¬ (" <> p <> ")")
-      (\x t p -> "exists " <> pretty x <> " : " <> pretty t <> " . " <> p)
+      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
