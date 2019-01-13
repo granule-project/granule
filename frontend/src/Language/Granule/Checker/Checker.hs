@@ -687,7 +687,7 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    -- TODO: note that this does not of the specil hanlding that happens with Level
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
-   var <- freshTyVarInContext (mkId $ "prom_" <> pretty e) (KVar $ mkId vark)
+   var <- freshTyVarInContext (mkId $ "prom_" <> (map spaceToUnderscore $ pretty e)) (KVar $ mkId vark)
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
@@ -696,6 +696,9 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy (Promote t elaboratedE)
    return (finalTy, multAll (freeVars e) (CVar var) gam', elaborated)
+  where
+    spaceToUnderscore ' ' = '_'
+    spaceToUnderscore c = c
 
 -- BinOp
 synthExpr defs gam pol (Binop s _ op e1 e2) = do
