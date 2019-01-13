@@ -12,9 +12,9 @@ force t = t ()
 repeat : forall a : Type . a [1..∞] -> Stream a
 repeat [x] = Next x [delay (repeat [x])]
 
-take : forall a : Type, p : Nat . N p -> Stream a -> Vec p a
-take (S Z) (Next hd [_])  = Cons hd Nil;
-take (S n) (Next hd [tl]) = Cons hd (take n (force tl))
+takeS : forall a : Type, p : Nat . N p -> Stream a -> Vec p a
+takeS (S Z) (Next hd [_])  = Cons hd Nil;
+takeS (S n) (Next hd [tl]) = Cons hd (takeS n (force tl))
 
 cycle : forall a : Type, n : Nat . (Vec (n + 1) a) [0..Inf] -> Stream a
 cycle [xs] = cycleInner [xs] [xs]
@@ -28,4 +28,4 @@ cycleInner [again] [Cons x Nil] = Next x [delay (cycleInner [again] [again])];
 cycleInner [again] [Cons x xs]  = Next x [delay (cycleInner [again] [xs])]
 
 main : Vec 7 Int
-main = take (S (S (S (S (S (S (S Z))))))) (cycle [Cons 1 (Cons 2 (Cons 3 Nil))])
+main = takeS (S (S (S (S (S (S (S Z))))))) (cycle [Cons 1 (Cons 2 (Cons 3 Nil))])
