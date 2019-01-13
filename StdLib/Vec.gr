@@ -54,10 +54,8 @@ foldl [op] acc (Cons x xs) = foldl [op] (acc `op` x) xs
 -- Append two vectors
 append : forall (a : Type, n : Nat, m : Nat)
        . Vec n a -> Vec m a -> Vec (n + m) a
-append xs ys =
-  case xs of
-    Nil -> ys;
-    (Cons x xs) -> Cons x (append xs ys)
+append Nil ys = ys;
+append (Cons x xs) ys = Cons x (append xs ys)
 
 drop : forall a : Type, m : Nat, n : Nat
      . N m -> (Vec n a) [0..1] -> Vec (n - m) a
