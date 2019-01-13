@@ -28,9 +28,6 @@ import System.Directory (setCurrentDirectory)
 pathToExamples :: FilePath
 pathToExamples = "examples"
 
-pathToGranuleBase :: FilePath
-pathToGranuleBase = "StdLib"
-
 pathToRegressionTests :: FilePath
 pathToRegressionTests = "frontend/tests/cases/positive"
 
@@ -148,10 +145,11 @@ runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
 
-exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work
-      (liftM2 (<>) (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
-      (find always (extension ==? fileExtension) pathToGranuleBase))
-      (find always (extension ==? fileExtension) pathToRegressionTests)
+exampleFiles = foldr1 (liftM2 (<>))
+    [ find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
+    , find always (extension ==? fileExtension) (includePath defaultGlobals)
+    , find always (extension ==? fileExtension) pathToRegressionTests
+    ]
 
 cNatOrdered x = CSig (CNat x) natInterval
 natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")

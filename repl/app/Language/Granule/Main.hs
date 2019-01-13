@@ -463,15 +463,3 @@ main = do
                                      let (fv, rpath, adts, _, map) = st
                                      in loop (fv, rpath, adts, fs, map)
                                    Nothing -> loop st
-       defaultGlobals :: Globals
-       defaultGlobals =
-           Globals
-           { debugging = False
-           , sourceFilePath = ""
-           , noColors = False
-           , noEval = False
-           , suppressInfos = False
-           , suppressErrors = False
-           , timestamp = False
-           , solverTimeoutMillis = Just 5000
-           }

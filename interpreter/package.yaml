@@ -27,7 +27,7 @@ library:
 
 executables:
   gr:
-    main: Language/Granule/Main.hs
+    main: Language/Granule/Interpreter/Main.hs
     source-dirs: app
     ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:
@@ -36,4 +36,3 @@ executables:
     - directory
     - Glob
     - optparse-applicative
-    - pretty-simple

@@ -14,36 +14,40 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE TypeApplications #-}
+{-# LANGUAGE LambdaCase #-}
 
 import Control.Exception (SomeException, try)
-import Control.Monad (forM, when)
+import Control.Monad (forM)
 import Data.List (stripPrefix)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
+import Text.Read (readMaybe)
 
-import System.Directory (getCurrentDirectory)
+import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
-import "pretty-simple" Text.Pretty.Simple
 
 import Language.Granule.Checker.Checker
 import Language.Granule.Eval
-import Paths_granule_interpreter (version)
+import Language.Granule.Interpreter.Config
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Pretty
-import Language.Granule.Utils
+import Language.Granule.Utils (Globals, debugM, printInfo, printErr, green)
+import qualified Language.Granule.Utils as Utils
+import Paths_granule_interpreter (version)
 
 
 main :: IO ()
 main = do
-  (globPatterns,globals) <- customExecParser (prefs disambiguate) parseArgs
+  (globPatterns, cmdlineOpts) <- customExecParser (prefs disambiguate) parseArgs
+  userConfig <- readUserConfig cmdlineOpts
+  let globals = toGlobals "" $ defaultConfig (cmdlineOpts <> userConfig)
   let ?globals = globals in do
-    if null globPatterns then do
-      let ?globals = globals { sourceFilePath = "stdin" } in do
-        printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
-        debugM "Globals" (show globals)
-        exitWith =<< run =<< getContents
+    if null globPatterns then let ?globals = globals { Utils.sourceFilePath = "stdin" } in do
+      printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
+      debugM "Globals" (show globals)
+      exitWith =<< run =<< getContents
     else do
       debugM "Globals" (show globals)
       currentDir <- getCurrentDirectory
@@ -59,10 +63,31 @@ main = do
                    Just f  -> tail f
                    Nothing -> p
 
-            let ?globals = globals { sourceFilePath = fileName }
+            let ?globals = globals { Utils.sourceFilePath = fileName }
             printInfo $ "\nChecking " <> fileName <> "..."
             run =<< readFile p
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
+
+  where
+    -- TODO: UNIX specific
+    readUserConfig :: Options Maybe -> IO (Options Maybe)
+    readUserConfig cmdlineOpts = do
+      let ?globals = toGlobals "" $ defaultConfig cmdlineOpts
+      try (getAppUserDataDirectory "granule") >>= \case
+        Left (e :: SomeException) -> do
+          debugM "Read user config" $ show e
+          pure mempty
+        Right configFile ->
+          try (readMaybe @(Options Maybe) <$> readFile configFile) >>= \case
+            Left (e :: SomeException) -> do
+              debugM "Read user config" $ show e
+              pure mempty
+            Right Nothing -> do
+              printInfo $ "Couldn't parse granule configuration file at "
+                        <> configFile
+              pure mempty
+            Right (Just os) -> do
+              pure os
 
 
 {-| Run the input through the type checker and evaluate.
@@ -78,7 +103,7 @@ run input = do
     Right ast -> do
       -- Print to terminal when in debugging mode:
       debugM "Pretty-printed AST:" $ pretty ast
-      when (debugging ?globals) (pPrintOpt defaultOutputOptionsNoColor{outputOptionsIndentAmount = 1} ast)
+      debugM "Raw AST:" $ show ast
       -- Check and evaluate
       checked <- try $ check ast
       case checked of
@@ -89,7 +114,7 @@ run input = do
           printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
         Right (Just _) -> do
-          if noEval ?globals then do
+          if Utils.noEval ?globals then do
             printInfo $ green "Ok"
             return ExitSuccess
           else do
@@ -108,62 +133,67 @@ run input = do
                 return ExitSuccess
 
 
-parseArgs :: ParserInfo ([FilePath],Globals)
+parseArgs :: ParserInfo ([FilePath], Options Maybe)
 parseArgs = info (go <**> helper) $ briefDesc
     <> header ("Granule " <> showVersion version)
     <> footer "\n\nThis software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
-              \ Consult the LICENSE for further information."
+              \Consult the LICENSE for further information."
   where
     go = do
         files <- many $ argument str $ metavar "SOURCE_FILES..."
         debugging <-
-          switch $
-            long "debug" <>
-            help "Debug mode"
+          flag Nothing (Just True)
+            $ long "debug"
+            <> help "Debug mode"
 
         suppressInfos <-
-          switch $
-            long "no-info" <>
-            help "Don't output info messages"
+          flag Nothing (Just True)
+            $ long "no-info"
+            <> help "Don't output info messages"
 
         suppressErrors <-
-          switch $
-            long "no-error" <>
-            help "Don't output error messages"
+          flag Nothing (Just True)
+            $ long "no-error"
+            <> help "Don't output error messages"
 
         noColors <-
-          switch $
-            long "no-color" <>
-            help "Turn off colors in terminal output"
+          flag Nothing (Just True)
+            $ long "no-color"
+            <> help "Turn off colors in terminal output"
 
         noEval <-
-          switch $
-            long "no-eval" <>
-            help "Don't evaluate, only type-check"
+          flag Nothing (Just True)
+            $ long "no-eval"
+            <> help "Don't evaluate, only type-check"
 
         timestamp <-
-          switch $
-            long "timestamp" <>
-            help "Print timestamp in info and error messages"
+          flag Nothing (Just True)
+            $ long "timestamp"
+            <> help "Print timestamp in info and error messages"
 
-        solverTimeoutMillis <- (\n -> if n < 0 then Nothing else Just n) <$>
-          option (auto @Integer) (
-            long "solver-timeout" <>
-            help "SMT solver timeout in milliseconds (negative for unlimited)" <>
-            value 5000 <> showDefault
+        solverTimeoutMillis <-
+          optional $ option (auto @Integer) (
+            long "solver-timeout"
+            <> help "SMT solver timeout in milliseconds (negative for unlimited)"
             )
+
+        includePath <-
+          optional $ strOption
+            $ long "include-path"
+            <> help "Path to the standard library"
+            <> metavar "PATH"
 
         pure
           ( files
-          , Globals
+          , Options
             { debugging
-            , sourceFilePath = ""
             , noColors
             , noEval
             , suppressInfos
             , suppressErrors
             , timestamp
             , solverTimeoutMillis
+            , includePath
             }
           )
 
@@ -173,7 +203,7 @@ data RuntimeError
   | EvalError String
   | GenericError String
 
-instance UserMsg RuntimeError where
+instance Utils.UserMsg RuntimeError where
   title ParseError {} = "Error during parsing"
   title CheckerError {} = "Error during type checking"
   title EvalError {} = "Error during evaluation"

@@ -132,3 +132,10 @@ pullVec : forall (k : Nat, n : Nat, a : Type)
          . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
 pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]
+
+copySpine : forall a : Type, n : Nat
+          . Vec n a -> Vec n () × Vec n a
+copySpine Nil = (Nil, Nil);
+copySpine (Cons x xs) = let
+  (ss, xs) = copySpine xs
+  in (Cons () ss, Cons x xs)

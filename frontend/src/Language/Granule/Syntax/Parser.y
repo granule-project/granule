@@ -4,6 +4,15 @@
 
 module Language.Granule.Syntax.Parser where
 
+import Control.Monad (forM)
+import Control.Monad.Trans.Reader
+import Control.Monad.Trans.Class (lift)
+import Data.List ((\\), intercalate, nub, stripPrefix)
+import Data.Maybe (mapMaybe)
+import Numeric
+import System.Exit (die)
+import System.FilePath ((</>))
+
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Def
@@ -12,14 +21,6 @@ import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils hiding (mkSpan)
-
-import Control.Monad (forM)
-import Control.Monad.Trans.Reader
-import Control.Monad.Trans.Class (lift)
-import Data.List ((\\), intercalate, nub, stripPrefix)
-import Data.Maybe (mapMaybe)
-import Numeric
-import System.Exit (die)
 
 }
 
@@ -474,7 +475,7 @@ parseDefs' input = do
 
     parse = defs . scanTokens
 
-    imports = map (("StdLib/" <> ) . (<> ".gr") . replace '.' '/')
+    imports = map ((includePath ?globals </>) . (<> ".gr") . replace '.' '/')
               . mapMaybe (stripPrefix "import ") . lines $ input
 
     replace from to = map (\c -> if c == from then to else c)

@@ -573,8 +573,8 @@ provePredicate s predicate vars kvars =
 
       ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
         case solverTimeoutMillis ?globals of
-          Nothing -> return ()
-          Just n -> setTimeOut n
+          n | n <= 0 -> return ()
+          n -> setTimeOut n
         sbvTheorem
 
       return $ case thmRes of

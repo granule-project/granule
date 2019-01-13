@@ -64,6 +64,7 @@ library:
   - text
   - time
   - Glob
+  - filepath
   # - raw-strings-qq (Quasiquoter for multiline, automatically escaped strings)
 
 tests:
