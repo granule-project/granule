@@ -91,6 +91,18 @@ data Coeffect = CNat      Int
               | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
+coeffectIsAtom :: Coeffect -> Bool
+coeffectIsAtom (CNat _) = True
+coeffectIsAtom (CFloat _) = True
+coeffectIsAtom (CInfinity _) = True
+coeffectIsAtom (CVar _) = True
+coeffectIsAtom (COne _) = True
+coeffectIsAtom (CZero _) = True
+coeffectIsAtom (Level _) = True
+coeffectIsAtom (CSet _) = True
+coeffectIsAtom _ = False
+
+
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
 publicRepresentation  = 0

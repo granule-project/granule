@@ -82,9 +82,11 @@ instance Pretty Coeffect where
     prettyL l (CPlus c d) =
       prettyL l c <> " + " <> prettyL l d
     prettyL l (CTimes c d) =
-      prettyL l c <> " * " <> prettyL l d
+      prettyLAlt l c <> " * " <> prettyLAlt l d
+        where prettyLAlt l c | coeffectIsAtom c = prettyL l c
+                             | otherwise = parens 1 (prettyL l c)
     prettyL l (CMinus c d) =
-      prettyL l c <> " - " <> prettyL l d
+      "(" <> prettyL l c <> " - " <> prettyL l d <> ")"
     prettyL l (CSet xs) =
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyL l t) xs) <> "}"
     prettyL l (CSig c t) =
@@ -226,7 +228,7 @@ instance Pretty Id where
   prettyL l
     = if debugging ?globals
         then internalName
-        else takeWhile (\c -> c /= '.' && c /= '`') . sourceName
+        else filter (\c -> c /= '.' && c /= '`') . sourceName
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
   prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "(,)" =
