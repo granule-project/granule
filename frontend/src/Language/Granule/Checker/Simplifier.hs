@@ -20,7 +20,7 @@ simplifyPred :: (?globals :: Globals)
              => Pred -> MaybeT Checker Pred
 simplifyPred p = do
   p <- simplifyPred' p
-  return $ normalisePred p
+  return $ flatten $ normalisePred p
   where
     normalisePred = predFold
        Conj Impl (Con . normaliseConstraint) NegPred Exists
@@ -38,7 +38,7 @@ simplifyPred' c@(Impl ids p1 p2) = do
   let subst = collectSubst p1
   p1' <- simpl subst p1
   p2' <- simpl subst p2
-  let subst' = collectSubst p2
+  let subst' = collectSubst p2'
   p2'' <- simpl subst' p2'
   return $ removeTrivialImpls . removeTrivialIds $ (Impl ids p1' p2'')
 
@@ -50,6 +50,23 @@ simplifyPred' c@(NegPred p) =
 
 simplifyPred' (Con c) = return (Con c)
 
+flatten :: Pred -> Pred
+flatten (Conj []) = Conj []
+flatten (Conj ((Conj []):ps)) =
+ flatten (Conj ps)
+flatten (Conj (p : ps)) =
+  case flatten p of
+    Conj [] -> flatten (Conj ps)
+    p'      -> case flatten (Conj ps) of
+                Conj ps' -> Conj (p' : ps')
+                p'' -> Conj [p, p'']
+flatten (Impl ids p1 p2) =
+  Impl ids (flatten p1) (flatten p2)
+flatten (Exists v k p) = Exists v k (flatten p)
+flatten (NegPred p) = NegPred (flatten p)
+flatten (Con c) = Con c
+
+
 simpl :: (?globals :: Globals)
            => Substitution -> Pred -> MaybeT Checker Pred
 simpl subst p = substitute subst p >>= (return . removeTrivialImpls . removeTrivialIds)
@@ -58,6 +75,7 @@ removeTrivialImpls :: Pred -> Pred
 removeTrivialImpls =
   predFold Conj remImpl Con NegPred Exists
     where remImpl _ (Conj []) p = p
+          remImpl _ (Conj ps) p | all (\p -> case p of Conj [] -> True; _ -> False) ps = p
           remImpl ids p1 p2 = Impl ids p1 p2
 
 removeTrivialIds :: Pred -> Pred
@@ -65,7 +83,6 @@ removeTrivialIds =
   predFold conj Impl conRemove NegPred Exists
     where removeTrivialIdCon (Con (Eq _ c c' _)) | c == c' = Nothing
           removeTrivialIdCon c = Just c
-
 
           conj ps = Conj $ catMaybes (map removeTrivialIdCon ps)
           conRemove c =
@@ -75,7 +92,6 @@ removeTrivialIds =
 
 collectSubst :: Pred -> Substitution
 collectSubst (Conj ps) = concatMap collectSubst ps
-collectSubst c@(Con (Eq _ (CVar v) (CVar v') _)) = []
 collectSubst (Con (Eq _ (CVar v) c _)) = [(v, SubstC c)]
 collectSubst (Con (Eq _ c (CVar v) _)) = [(v, SubstC c)]
 collectSubst _ = []

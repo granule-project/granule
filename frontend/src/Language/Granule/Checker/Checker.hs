@@ -780,9 +780,9 @@ solveConstraints predicate s name = do
 
        halt $ GenericError (Just s) $ "The associated theorem for `" <> pretty name <> "` "
           <> if msg' == "is Falsifiable\n"
-              then  "is false: "
-                 <> "\n\t " <> pretty (NegPred simpPred)
-              else msg'
+              then  "is false. "
+                 <> "\n  That is: " <> pretty (NegPred simpPred)
+              else msg' <> "\n  thus: "  <> pretty (NegPred simpPred)
 
     NotValidTrivial unsats ->
        mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
