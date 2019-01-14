@@ -8,6 +8,7 @@
 module Language.Granule.Checker.Monad where
 
 import Data.List (intercalate)
+import qualified Data.Map as M
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Identity
@@ -54,8 +55,9 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 
 
 data CheckerState = CS
-            { -- Fresh variable id
-              uniqueVarIdCounter  :: Nat
+            { -- Fresh variable id state
+              uniqueVarIdCounterMap  :: M.Map String Nat
+            , uniqueVarIdCounter     :: Nat
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
 
@@ -88,7 +90,8 @@ data CheckerState = CS
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS { uniqueVarIdCounter = 0
+initState = CS { uniqueVarIdCounterMap = M.empty
+               , uniqueVarIdCounter = 0
                , predicateStack = []
                , guardPredicates = [[]]
                , tyVarContext = emptyCtxt
@@ -220,7 +223,7 @@ freshenPred pred = do
     -- Run the freshener using the checkers unique variable id
     let (pred', freshenerState) =
          runIdentity $ runStateT (freshen pred)
-          (FreshenerState { counter = uniqueVarIdCounter st, varMap = [], tyMap = []})
+          (FreshenerState { counter = 1 + uniqueVarIdCounter st, varMap = [], tyMap = []})
     -- Update the unique counter in the checker
     put (st { uniqueVarIdCounter = counter freshenerState })
     return pred'
