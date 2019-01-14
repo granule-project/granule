@@ -255,8 +255,11 @@ instance Pretty Pred where
          (if null s then "" else "∀ " <> intercalate "," (map sourceName s) <> " . ")
       <> "(" <> p <> " → " <> q <> ")")
       (prettyL l)
-      (\p -> "¬ (" <> p <> ")")
+      (\p -> "¬" <> brack p)
       (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
+
+   where brack xs | length xs > 0 && head xs == '(' && last xs == ')' = xs
+                  | otherwise = "(" <> xs <> ")"
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
