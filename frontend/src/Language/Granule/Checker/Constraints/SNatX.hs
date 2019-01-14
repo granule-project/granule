@@ -22,7 +22,7 @@ instance Show SNatX where
     _         -> "<symbolic>"
 
 inf :: SNatX
-inf = -1
+inf = SNatX $ (literal (-1))
 
 isInf :: SNatX -> SBool
 isInf (SNatX n) = n .== -1

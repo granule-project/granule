@@ -325,7 +325,7 @@ compile vars (Neq _ c1 c2 t) =
   where
     c1' = compileCoeffect c1 t vars
     c2' = compileCoeffect c2 t vars
-compile vars (ApproximatedBy _ c1 c2 t) = -- trace (show c1 <> "\n" <> show c2 <> "\n" <> show k)
+compile vars (ApproximatedBy _ c1 c2 t) =
   return $ approximatedByOrEqualConstraint c1' c2'
     where
       c1' = compileCoeffect c1 t vars
@@ -505,7 +505,7 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)
 -- given here
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   (approximatedByOrEqualConstraint lb2 lb1)
-  &&& (approximatedByOrEqualConstraint ub1 ub2)
+     &&& (approximatedByOrEqualConstraint ub1 ub2)
 
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
 approximatedByOrEqualConstraint x y =

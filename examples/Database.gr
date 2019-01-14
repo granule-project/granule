@@ -11,8 +11,8 @@ meanAge : (List Patient) [0..1] -> Int [Public]
 meanAge xs = meanAge' xs [0] [0]
 
 meanAge' : (List Patient) [0..1] -- Patient database
-       -> Int [Public]   -- Count
        -> Int [Public]   -- Current age sum
+       -> Int [Public]   -- Count
        -> Int [Public]  -- Mean age viewed public
 
 meanAge' [Next (Patient [_] [_] [age]) xs] [total] [n] =
