@@ -286,6 +286,12 @@ Coeffect :: { Coeffect }
                                     "Public" -> Level publicRepresentation
                                     "Private" -> Level privateRepresentation
                                     "Inf" -> infinity
+                                    -- Monotonicity information
+                                    "Id" -> CMode ModeId
+                                    "Op" -> CMode ModeOp
+                                    "Box" -> CMode ModeBox
+                                    "Dia" -> CMode ModeDia
+
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect ".." Coeffect      { CInterval $1 $3 }

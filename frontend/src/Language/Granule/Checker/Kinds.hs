@@ -162,6 +162,8 @@ inferCoeffectType s (CProduct c1 c2)    = do
   k2 <- inferCoeffectType s c2
   return $ TyApp (TyApp (TyCon $ mkId "(*)") k1) k2
 
+inferCoeffectType s (CMode _) = return $ TyCon $ mkId "Mode"
+
 inferCoeffectType s (CInterval c1 c2)    = do
   k1 <- inferCoeffectType s c1
   k2 <- inferCoeffectType s c2

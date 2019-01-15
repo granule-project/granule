@@ -1,5 +1,6 @@
 {-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric  #-}
+{-# LANGUAGE PatternSynonyms #-}
 
 module Language.Granule.Checker.Constraints.SymbolicGrades where
 
@@ -26,6 +27,7 @@ data SGrade =
      -- Single point coeffect (not exposed at the moment)
      | SPoint
      | SProduct { sfst :: SGrade, ssnd :: SGrade }
+     | SMode SInteger
     deriving (Show, Generic)
 
 -- Work out if two symbolic grades are of the same type
@@ -38,6 +40,7 @@ match (SExtNat _) (SExtNat _) = True
 match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
 match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
+match (SMode s) (SMode s') = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -91,7 +94,14 @@ instance Mergeable SGrade where
   symbolicMerge s sb a b | isSProduct a || isSProduct b =
     applyToProducts (symbolicMerge s sb) SProduct id a b
 
+  symbolicMerge s sb (SMode m) (SMode m') = SMode (symbolicMerge s sb m m')
+
   symbolicMerge _ _ s t = cannotDo "symbolicMerge" s t
+
+pattern SModeBox = 0
+pattern SModeId = 1
+pattern SModeOp = 2
+pattern SModeDia = 3
 
 instance OrdSymbolic SGrade where
   (SInterval lb1 ub1) .< (SInterval lb2 ub2) =
@@ -101,6 +111,13 @@ instance OrdSymbolic SGrade where
   (SLevel n)  .< (SLevel n') = n .< n'
   (SSet n)    .< (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .< (SExtNat n') = n .< n'
+
+  -- Mode ordering
+  (SMode s) .< (SMode SModeDia) = true
+  (SMode SModeBox) .< (SMode s') = true
+  (SMode s) .< (SMode s') = s .== s'
+
+
   SPoint .< SPoint = true
   s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (&&&) (const true) s t
   s .< t = cannotDo ".<" s t

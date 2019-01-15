@@ -98,6 +98,11 @@ instance Pretty Coeffect where
     prettyL l (CInfinity k) = "∞ : " <> prettyL l k
     prettyL l (CInterval c1 c2) = prettyL l c1 <> ".." <> prettyL l c2
     prettyL l (CProduct c1 c2) = "(" <> prettyL l c1 <> " * " <> prettyL l c2 <> ")"
+    prettyL l (CMode ModeId) = "Id"
+    prettyL l (CMode ModeOp) = "Op"
+    prettyL l (CMode ModeBox) = "Box"
+    prettyL l (CMode ModeDia) = "Dia"
+
 
 instance Pretty Kind where
     prettyL l KType          = "Type"
