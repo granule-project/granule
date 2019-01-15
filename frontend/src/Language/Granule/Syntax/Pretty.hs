@@ -122,7 +122,7 @@ instance Pretty Type where
     -- Non atoms
     prettyL l (FunTy t1 t2)  =
       parens l $ case t1 of
-        FunTy{} -> prettyL (l+1) t1 <> " -> " <> prettyL l t2
+        FunTy{} -> "(" <> prettyL l t1 <> ") -> " <> prettyL l t2
         _       ->  prettyL l t1 <> " -> " <> prettyL l t2
 
     prettyL l (Box c t)      =
