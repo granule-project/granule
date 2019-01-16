@@ -282,6 +282,10 @@ freshCVar quant name (TyCon k) q = do
     _ -> do -- Otherwise it must be an SInteger-like constraint:
       solverVar <- quant q name
       case internalName k of
+        "Mode" -> do
+          return (solverVar .>= 0 &&& solverVar .<= 3,
+                 SMode solverVar)
+
         "Nat"       -> do
           -- constrain (solverVar .>= 0)
           return (solverVar .>= 0, SNat solverVar)
@@ -384,6 +388,13 @@ compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
 compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
   SSet . S.fromList $ map (first mkId) xs
 
+compileCoeffect (CMode m) (TyCon (internalName -> "Mode")) _ =
+  SMode $ case m of
+    ModeBox -> SModeBox
+    ModeId -> SModeId
+    ModeOp -> SModeOp
+    ModeDia -> SModeDia
+
 compileCoeffect (CVar v) _ vars =
    case lookup v vars of
     Just cvar -> cvar
@@ -420,6 +431,7 @@ compileCoeffect (CZero k') k vars  =
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
+        "Mode"      -> SMode SModeDia
         _           -> error $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 0
@@ -443,6 +455,7 @@ compileCoeffect (COne k') k vars =
         "Nat"       -> SNat 1
         "Q"         -> SFloat (fromRational 1)
         "Set"       -> SSet (S.fromList [])
+        "Mode"      -> SMode SModeId
         _           -> error $ "I don't know how to compile a 1 for " <> pretty k'
 
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
@@ -470,6 +483,7 @@ compileCoeffect coeff ckind _ =
    error $ "Can't compile a coeffect: " <> pretty coeff <> " {" <> (show coeff) <> "}"
         <> " of kind " <> pretty ckind
 
+-- TODO: unify with .==
 -- | Generate equality constraints for two symbolic coeffects
 eqConstraint :: SGrade -> SGrade -> SBool
 eqConstraint (SNat n) (SNat m) = n .== m
@@ -479,11 +493,13 @@ eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   (eqConstraint lb1 lb2) &&& (eqConstraint ub1 ub2)
 eqConstraint (SExtNat x) (SExtNat y) = x .== y
 eqConstraint SPoint SPoint = true
+eqConstraint (SMode n) (SMode m) = n .== m
 eqConstraint s t | isSProduct s && isSProduct t =
   applyToProducts (.==) (&&&) (const true) s t
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
+-- TODO: unify with .<
 -- | Generate less-than-equal constraints for two symbolic coeffects
 approximatedByOrEqualConstraint :: SGrade -> SGrade -> SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m) = n .== m
@@ -506,6 +522,9 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   (approximatedByOrEqualConstraint lb2 lb1)
      &&& (approximatedByOrEqualConstraint ub1 ub2)
+
+approximatedByOrEqualConstraint x@(SMode n) y@(SMode m) =
+  (n .< m) ||| (n .== m)
 
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
 approximatedByOrEqualConstraint x y =

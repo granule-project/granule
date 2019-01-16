@@ -113,10 +113,8 @@ instance OrdSymbolic SGrade where
   (SExtNat n) .< (SExtNat n') = n .< n'
 
   -- Mode ordering
-  (SMode s) .< (SMode SModeDia) = true
-  (SMode SModeBox) .< (SMode s') = true
-  (SMode s) .< (SMode s') = s .== s'
-
+  (SMode n) .< (SMode m) =
+    (m .== SModeDia) ||| (n .== SModeBox)
 
   SPoint .< SPoint = true
   s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (&&&) (const true) s t
@@ -130,6 +128,9 @@ instance EqSymbolic SGrade where
   (SLevel n)  .== (SLevel n') = n .== n'
   (SSet n)    .== (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .== (SExtNat n') = n .== n'
+
+  (SMode n) .== (SMode m) = n .== m
+
   SPoint .== SPoint = true
   s .== t | isSProduct s || isSProduct t = applyToProducts (.==) (&&&) (const true) s t
   s .== t = cannotDo ".==" s t
@@ -144,6 +145,12 @@ symGradeMeet (SExtNat x) (SExtNat y) = SExtNat (x `smin` y)
 symGradeMeet (SInterval lb1 ub1) (SInterval lb2 ub2) =
   SInterval (lb1 `symGradeMeet` lb2) (ub1 `symGradeMeet` ub2)
 symGradeMeet SPoint SPoint = SPoint
+
+symGradeMeet (SMode n) (SMode m) =
+  ite (n .== SModeDia) (SMode m) $
+  ite (m .== SModeDia) (SMode n) $
+  ite (n .== m) (SMode n) (SMode SModeBox)
+
 symGradeMeet s t | isSProduct s || isSProduct t =
   applyToProducts symGradeMeet SProduct id s t
 symGradeMeet s t = cannotDo "meet" s t
@@ -158,6 +165,12 @@ symGradeJoin (SExtNat x) (SExtNat y) = SExtNat (x `smax` y)
 symGradeJoin (SInterval lb1 ub1) (SInterval lb2 ub2) =
    SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeJoin` ub2)
 symGradeJoin SPoint SPoint = SPoint
+
+symGradeJoin (SMode n) (SMode m) =
+  ite (n .== SModeBox) (SMode m) $
+  ite (m .== SModeBox) (SMode m) $
+  ite (n .== m) (SMode n) (SMode SModeDia)
+
 symGradeJoin s t | isSProduct s || isSProduct t =
   applyToProducts symGradeJoin SProduct id s t
 symGradeJoin s t = cannotDo "join" s t
@@ -172,6 +185,10 @@ symGradePlus (SExtNat x) (SExtNat y) = SExtNat (x + y)
 symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (lb1 `symGradePlus` lb2) (ub1 `symGradePlus` ub2)
 symGradePlus SPoint SPoint = SPoint
+
+symGradePlus x@(SMode n) y@(SMode m) =
+  symGradeMeet x y
+
 symGradePlus s t | isSProduct s || isSProduct t =
    applyToProducts symGradePlus SProduct id s t
 symGradePlus s t = cannotDo "plus" s t
@@ -186,6 +203,15 @@ symGradeTimes (SExtNat x) (SExtNat y) = SExtNat (x * y)
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
 symGradeTimes SPoint SPoint = SPoint
+
+symGradeTimes (SMode n) (SMode m) =
+  ite (n .== SModeId) (SMode m) $
+  ite (m .== SModeId) (SMode n) $
+  ite (n .== SModeOp &&& m .== SModeOp) (SMode SModeId) $
+  ite (m .== SModeBox ||| m .== SModeDia) (SMode m) $
+  -- because m = SModeOp and n is either box or diamond
+  (SMode n)
+
 symGradeTimes s t | isSProduct s || isSProduct t =
   applyToProducts symGradeTimes SProduct id s t
 symGradeTimes s t = cannotDo "times" s t

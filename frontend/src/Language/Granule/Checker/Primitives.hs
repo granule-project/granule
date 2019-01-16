@@ -24,6 +24,7 @@ typeLevelConstructors =
     , (mkId "Session", (KFun KType KType, Nothing))
     , (mkId "Protocol", (KType, Nothing))
     , (mkId "Nat",  (KCoeffect, Nothing))
+    , (mkId "Mode", (KCoeffect, Just 4))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
