@@ -17,6 +17,7 @@ module Language.Granule.Checker.Kinds (kindCheckDef
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
+import Language.Granule.Checker.Contexts
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -40,7 +41,7 @@ demoteKindToType _            = Nothing
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ (Forall _ quantifiedVariables ty)) = do
+kindCheckDef (Def s _ _ (Forall _ quantifiedVariables ty) _) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 

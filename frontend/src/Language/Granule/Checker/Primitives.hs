@@ -2,10 +2,12 @@
 
 module Language.Granule.Checker.Primitives where
 
+import Language.Granule.Checker.Contexts
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
+import Language.Granule.Context
 
 protocol = kConstr $ mkId "Protocol"
 
@@ -61,84 +63,84 @@ dataConstructors =
     , (mkId "ReadWriteMode", Forall nullSpanBuiltin [] (TyCon $ mkId "IOMode"))
     ]
 
-builtins :: [(Id, TypeScheme)]
+builtins :: Ctxt TysAssumption
 builtins =
-  [ (mkId "div", Forall nullSpanBuiltin []
+  [ (mkId "div", Unrestricted $ Forall nullSpanBuiltin []
        (FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))))
     -- Graded monad unit operation
-  , (mkId "pure", Forall nullSpanBuiltin [(mkId "a", KType)]
+  , (mkId "pure", Unrestricted $ Forall nullSpanBuiltin [(mkId "a", KType)]
        $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
 
     -- String stuff
-  , (mkId "stringAppend", Forall nullSpanBuiltin []
+  , (mkId "stringAppend", Unrestricted $ Forall nullSpanBuiltin []
       $ (FunTy (TyCon $ mkId "String") (FunTy (TyCon $ mkId "String") (TyCon $ mkId "String"))))
-  , (mkId "showChar", Forall nullSpanBuiltin []
+  , (mkId "showChar", Unrestricted $ Forall nullSpanBuiltin []
       $ (FunTy (TyCon $ mkId "Char") (TyCon $ mkId "String")))
 
     -- Effectful primitives
-  , (mkId "read", Forall nullSpanBuiltin [] $ Diamond ["R"] (TyCon $ mkId "String"))
-  , (mkId "write", Forall nullSpanBuiltin [] $
+  , (mkId "read", Unrestricted $ Forall nullSpanBuiltin [] $ Diamond ["R"] (TyCon $ mkId "String"))
+  , (mkId "write", Unrestricted $ Forall nullSpanBuiltin [] $
        FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
-  , (mkId "readInt", Forall nullSpanBuiltin [] $ Diamond ["R"] (TyCon $ mkId "Int"))
+  , (mkId "readInt", Unrestricted $ Forall nullSpanBuiltin [] $ Diamond ["R"] (TyCon $ mkId "Int"))
     -- Other primitives
-  , (mkId "intToFloat", Forall nullSpanBuiltin [] $ FunTy (TyCon $ mkId "Int")
+  , (mkId "intToFloat", Unrestricted $ Forall nullSpanBuiltin [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "Float"))
 
-  , (mkId "showInt", Forall nullSpanBuiltin [] $ FunTy (TyCon $ mkId "Int")
+  , (mkId "showInt", Unrestricted $ Forall nullSpanBuiltin [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "String"))
 
     -- File stuff
-  , (mkId "openFile", Forall nullSpanBuiltin [] $
+  , (mkId "openFile", Unrestricted $ Forall nullSpanBuiltin [] $
                         FunTy (TyCon $ mkId "String")
                           (FunTy (TyCon $ mkId "IOMode")
                                 (Diamond ["O"] (TyCon $ mkId "Handle"))))
-  , (mkId "hGetChar", Forall nullSpanBuiltin [] $
+  , (mkId "hGetChar", Unrestricted $ Forall nullSpanBuiltin [] $
                         FunTy (TyCon $ mkId "Handle")
                                (Diamond ["RW"]
                                 (TyApp (TyApp (TyCon $ mkId "(,)")
                                               (TyCon $ mkId "Handle"))
                                        (TyCon $ mkId "Char"))))
-  , (mkId "hPutChar", Forall nullSpanBuiltin [] $
+  , (mkId "hPutChar", Unrestricted $ Forall nullSpanBuiltin [] $
                         FunTy (TyCon $ mkId "Handle")
                          (FunTy (TyCon $ mkId "Char")
                            (Diamond ["W"] (TyCon $ mkId "Handle"))))
-  , (mkId "isEOF", Forall nullSpanBuiltin [] $
+  , (mkId "isEOF", Unrestricted $ Forall nullSpanBuiltin [] $
                      FunTy (TyCon $ mkId "Handle")
                             (Diamond ["R"]
                              (TyApp (TyApp (TyCon $ mkId "(,)")
                                            (TyCon $ mkId "Handle"))
                                     (TyCon $ mkId "Bool"))))
-  , (mkId "hClose", Forall nullSpanBuiltin [] $
+  , (mkId "hClose", Unrestricted $ Forall nullSpanBuiltin [] $
                         FunTy (TyCon $ mkId "Handle")
                                (Diamond ["C"] (TyCon $ mkId "()")))
     -- protocol typed primitives
-  , (mkId "send", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)]
+  , (mkId "send", Unrestricted $ Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)]
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
                       .-> ((var "a")
                         .-> (Diamond ["Com"] ((con "Chan") .@ (var "s")))))
 
-  , (mkId "recv", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)]
+  , (mkId "recv", Unrestricted $ Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)]
        $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
          .-> (Diamond ["Com"] ((con "(,)" .@ (var "a")) .@ ((con "Chan") .@ (var "s")))))
 
-  , (mkId "close", Forall nullSpanBuiltin [] $
+  , (mkId "close", Unrestricted $ Forall nullSpanBuiltin [] $
                     ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))
 
   -- fork : (c -> Diamond ()) -> Diamond c'
-  , (mkId "fork", Forall nullSpanBuiltin [(mkId "s", protocol)] $
+  , (mkId "fork", Unrestricted $ Forall nullSpanBuiltin [(mkId "s", protocol)] $
                     (((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
                     .->
                     (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
 
    -- forkRep : (c |n| -> Diamond ()) -> Diamond (c' |n|)
-  , (mkId "forkRep", Forall nullSpanBuiltin [(mkId "s", protocol), (mkId "n", kConstr $ mkId "Nat")] $
+  , (mkId "forkRep", Unrestricted $ Forall nullSpanBuiltin [(mkId "s", protocol), (mkId "n", kConstr $ mkId "Nat")] $
                     (Box (CVar $ mkId "n")
                        ((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
                     .->
                     (Diamond ["Com"]
                        (Box (CVar $ mkId "n")
                          ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
-  , (mkId "unpack", Forall nullSpanBuiltin [(mkId "s", protocol)]
+  , (mkId "unpack", Unrestricted $ Forall nullSpanBuiltin [(mkId "s", protocol)]
                             (FunTy ((con "Chan") .@ (var "s")) (var "s")))
   ]
 

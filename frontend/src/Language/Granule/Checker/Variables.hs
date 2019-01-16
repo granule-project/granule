@@ -7,6 +7,7 @@ import Control.Monad.State.Strict
 
 import qualified Data.Map as M
 
+import Language.Granule.Checker.Contexts
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 

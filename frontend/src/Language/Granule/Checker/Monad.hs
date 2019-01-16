@@ -13,6 +13,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Identity
 
+import Language.Granule.Checker.Contexts
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
@@ -39,20 +40,6 @@ evalChecker initialState =
 runChecker :: CheckerState -> Checker a -> IO (a, CheckerState)
 runChecker initialState =
   flip runStateT initialState . unwrap
-
--- | Types of discharged coeffects
-data Assumption =
-    Linear Type
-  | Discharged Type Coeffect
-    deriving (Eq, Show)
-
-instance Pretty Assumption where
-    prettyL l (Linear ty) = prettyL l ty
-    prettyL l (Discharged t c) = ".[" <> prettyL l t <> "]. " <> prettyL l c
-
-instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
-
 
 data CheckerState = CS
             { -- Fresh variable id state

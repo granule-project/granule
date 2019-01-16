@@ -166,10 +166,12 @@ instance (Pretty (Value v a), Pretty v) => Pretty (AST v a) where
         pretty' = intercalate "\n\n" . map pretty
 
 instance (Pretty (Value v a), Pretty v) => Pretty (Def v a) where
-    prettyL l (Def _ v eqs t) =
-        prettyL l v <> " : " <> prettyL l t <> "\n"
+    prettyL l (Def _ v eqs t maybeC) =
+        prettyL l v <> prettyC maybeC <> ": " <> prettyL l t <> "\n"
                     <> intercalate "\n" (map prettyEq eqs)
       where
+        prettyC Nothing = " "
+        prettyC (Just x) = " " <> pretty x <> " "
         prettyEq (Equation _ _ ps e) =
           prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
 

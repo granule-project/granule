@@ -30,7 +30,7 @@ deriving instance (Eq v, Eq a) => Eq (AST v a)
 deriving instance Functor (AST v)
 
 -- | Function definitions
-data Def v a = Def Span Id [Equation v a] TypeScheme
+data Def v a = Def Span Id [Equation v a] TypeScheme (Maybe Coeffect)
   deriving Generic
 
 -- | Single equation of a function
@@ -94,15 +94,16 @@ instance Monad m => Freshenable m (Equation v a) where
 
 -- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
-  freshen (Def s var eqs t) = do
+  freshen (Def s var eqs t c) = do
     t  <- freshen t
+    c  <- freshen c
     eqs <- mapM freshen eqs
-    return (Def s var eqs t)
+    return (Def s var eqs t c)
 
 instance Term (Equation v a) where
   freeVars (Equation s a binders body) =
       freeVars body \\ concatMap boundVars binders
 
 instance Term (Def v a) where
-  freeVars (Def _ name equations _) =
+  freeVars (Def _ name equations _ _) =
     delete name (concatMap freeVars equations)

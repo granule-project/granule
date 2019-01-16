@@ -33,6 +33,7 @@ library:
   - Language.Granule.Checker.Checker
   - Language.Granule.Checker.Coeffects
   - Language.Granule.Checker.Constraints
+  - Language.Granule.Checker.Contexts
   - Language.Granule.Checker.Constraints.SNatX
   - Language.Granule.Checker.Kinds
   - Language.Granule.Checker.LaTeX

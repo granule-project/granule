@@ -13,6 +13,7 @@ import System.FilePath
 import System.FilePath.Find
 import System.Directory
 import qualified Data.Map as M
+import qualified Language.Granule.Checker.Contexts as Co
 import qualified Language.Granule.Checker.Monad as Mo
 import qualified Data.ConfigFile as C
 import Control.Exception (try)
@@ -121,7 +122,7 @@ readToQueue pth = do
 
 
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
-loadInQueue def@(Def _ id _ _) = do
+loadInQueue def@(Def _ id _ _ _) = do
   (fvg,rp,adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
@@ -133,7 +134,8 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
+    pDef ((k,((Def s v _ ty c),dl)):xs) =
+      (pretty (Def s v ([]::[Equation () ()]) ty c)) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -153,7 +155,8 @@ buildAST t m = let v = M.lookup t m in
                      case lookup (mkId t) Primitives.builtins of
                        Nothing -> []
                        -- Create a trivial definition (x = x) with the right type
-                       Just ty -> [Def nullSpanInteractive (mkId t) [] ty]
+                       Just (Co.Unrestricted ty) -> [Def nullSpanInteractive (mkId t) [] ty Nothing]
+                       Just (Co.Restricted ty c) -> [Def nullSpanInteractive (mkId t) [] ty (Just c)]
                        --   (Val nullSpanInteractive () (Var () (mkId t)))
                    Just (def,lid) -> case lid of
                                       []  ->  [def]
@@ -185,19 +188,25 @@ lookupBuildADT term aMap = let lup = M.lookup term aMap in
                               Just d -> pretty d
 
 printType :: (?globals::Globals) => String -> M.Map String (Def () (), [String]) -> String
-printType trm m = let v = M.lookup trm m in
-                    case v of
-                      Nothing ->
-                        case lookup (mkId trm) Primitives.builtins of
-                          Nothing -> "Unknown"
-                          Just ty -> trm <> " : " <> pretty ty
-                      Just (def@(Def _ id _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
+printType trm m =
+  let v = M.lookup trm m in
+  case v of
+    Nothing ->
+      case lookup (mkId trm) Primitives.builtins of
+        Nothing -> "Unknown"
+        Just (Co.Unrestricted ty) -> trm <> " : " <> pretty ty
+        Just (Co.Restricted ty c) -> trm <> " " <> pretty c <> " : " <> pretty ty
+
+    Just (def@(Def _ id _ ty c),lid) -> pretty id <> prettyC c <> ": "<>(pretty ty)
+  where
+    prettyC Nothing = " "
+    prettyC (Just x) = " " <> pretty x <> " "
 
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
 
-synType :: (?globals::Globals) => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption, Expr () Type))
+synType :: (?globals::Globals) => Expr () () -> Ctxt Co.TysAssumption -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Co.Assumption, Expr () Type))
 synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr empty empty Positive exp
 synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr cts empty Positive exp
 
@@ -218,21 +227,21 @@ buildCheckerState dd = do
     somethine <- checkDataDecls
     return ()
 
-buildCtxtTS :: (?globals::Globals) => [Def () ()] -> Ctxt TypeScheme
+buildCtxtTS :: (?globals::Globals) => [Def () ()] -> Ctxt Co.TysAssumption
 buildCtxtTS [] = []
-buildCtxtTS ((x@(Def _ id _ ts)):ast) =  (id,ts) : buildCtxtTS ast
+buildCtxtTS ((x@(Def _ id _ ts c)):ast) =  (id,Co.toDefAssumption c ts) : buildCtxtTS ast
 
-buildCtxtTSDD :: (?globals::Globals) => [DataDecl] -> Ctxt TypeScheme
+buildCtxtTSDD :: (?globals::Globals) => [DataDecl] -> Ctxt Co.TysAssumption
 buildCtxtTSDD [] = []
 buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) = makeCtxt dc <> buildCtxtTSDD dd
                                               where
-                                                makeCtxt :: [DataConstr] -> Ctxt TypeScheme
+                                                makeCtxt :: [DataConstr] -> Ctxt Co.TysAssumption
                                                 makeCtxt [] = []
                                                 makeCtxt datcon = buildCtxtTSDDhelper datcon
 
-buildCtxtTSDDhelper :: [DataConstr] -> Ctxt TypeScheme
+buildCtxtTSDDhelper :: [DataConstr] -> Ctxt Co.TysAssumption
 buildCtxtTSDDhelper [] = []
-buildCtxtTSDDhelper (dc@(DataConstrG _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrG _ id ts):dct) = (id, Co.Unrestricted ts) : buildCtxtTSDDhelper dct
 buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
 
 
@@ -241,7 +250,7 @@ buildTypeScheme ty = Forall nullSpanInteractive [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
-   [Equation nullSpanInteractive () [] ex] ts
+   [Equation nullSpanInteractive () [] ex] ts Nothing
 
 
 getConfigFile :: IO String

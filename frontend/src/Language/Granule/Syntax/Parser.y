@@ -102,13 +102,13 @@ NL :: { () }
 
 Def :: { Def () () }
   : Sig NL Bindings
-    {% let name = fst3 $1
+    {% let (name, tyS, pos, maybeC) = $1
        in case $3 of
           (Just nameB, _) | not (nameB == name) ->
             error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
           (_, bindings) -> do
-            span <- mkSpan (thd3 $1, endPos $ getSpan $ last bindings)
-            return $ Def span (mkId name) bindings (snd3 $1)
+            span <- mkSpan (pos, endPos $ getSpan $ last bindings)
+            return $ Def span (mkId name) bindings tyS maybeC
     }
 
 DataDecl :: { DataDecl }
@@ -121,8 +121,9 @@ DataDecl :: { DataDecl }
           span <- mkSpan (getPos $1, lastSpan' $6)
           return $ DataDecl span (mkId $ constrString $2) $3 $4 $6 }
 
-Sig :: { (String, TypeScheme, Pos) }
-  : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
+Sig :: { (String, TypeScheme, Pos, Maybe Coeffect) }
+  : VAR ':' TypeScheme            { (symString $1, $3, getPos $1, Nothing) }
+  | VAR Coeffect ':' TypeScheme   { (symString $1, $4, getPos $1, Just $2) }
 
 Bindings :: { (Maybe String, [Equation () ()]) }
   : Binding ';' NL Bindings   { let (v, bind) = $1
@@ -483,7 +484,7 @@ parseDefs' input = do
     checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
       mapM checkMatchingNumberOfArgs' defs
 
-    checkMatchingNumberOfArgs' (Def _ name eqs _) =
+    checkMatchingNumberOfArgs' (Def _ name eqs _ _) =
       if length eqs >= 1
       then if (and $ map (\x -> x == head lengths) lengths)
             then return ()
@@ -502,7 +503,7 @@ parseDefs' input = do
       where
         clashes = names \\ nub names
         names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
-                <> (`map` defs) (\(Def _ name _ _) -> name)
+                <> (`map` defs) (\(Def _ name _ _ _) -> name)
 
 lastSpan [] = fst $ nullSpanLocs
 lastSpan xs = getEnd . snd . last $ xs

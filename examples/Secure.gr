@@ -5,16 +5,16 @@
 notALeak : (Int [Private]) [0] -> Int [Public]
 notALeak [x] = [0]
 
-secret : Int [Private]
-secret = [1234]
+secret Private: Int
+secret = 1234
 
-hash : forall l : Level . Int [l] -> Int [l]
-hash [x] = [x + x]
+hash : Int -> Int
+hash x = x*535
 
 -- If `main` was of type `Int [Public]`, this wouldn't type check, i.e. the secret
 -- can't be used in a Public security environment.
-main : Int [Private]
-main = hash secret
+main : Int [Public]
+main = [hash secret]
 
 -- Flattening takes the meet (`\/`) of both Levels (see example below).
 flatten : forall k : Level, l : Level . (Int [k]) [l] -> Int [k \/ l]

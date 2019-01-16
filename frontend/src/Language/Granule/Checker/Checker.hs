@@ -18,6 +18,7 @@ import qualified Data.Text as T
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.Contexts
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
@@ -55,7 +56,11 @@ check (AST dataDecls defs) = evalChecker initState $ do
         then Just (AST dataDecls (catMaybes rs4))
         else Nothing
   where
-    defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+    defCtxt = map defType defs
+    defType (Def _ name _ tys c) =
+      case c of
+        Nothing -> (name, Unrestricted tys)
+        Just c  -> (name, Restricted tys c)
 
 checkTyCon :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
 checkTyCon (DataDecl sp name tyVars kindAnn ds) = do
@@ -140,10 +145,10 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
 
 
 checkDef :: (?globals :: Globals)
-         => Ctxt TypeScheme  -- context of top-level definitions
-         -> Def () ()        -- definition
+         => Ctxt TysAssumption -- context of top-level definitions
+         -> Def () ()          -- definition
          -> MaybeT Checker (Def () Type)
-checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
+checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty) c) = do
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]] } )
@@ -167,10 +172,10 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
 
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
-    pure $ Def s defName elaboratedEquations tys
+    pure $ Def s defName elaboratedEquations tys c
 
 checkEquation :: (?globals :: Globals) =>
-     Ctxt TypeScheme -- context of top-level definitions
+     Ctxt TysAssumption -- context of top-level definitions
   -> Id              -- Name of the definition
   -> Equation () ()  -- Equation
   -> TypeScheme      -- Type scheme
@@ -202,7 +207,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
   case checkLinearity patternGam localGam of
     [] -> do
       -- Check that our consumption context approximations the binding
-      ctxtApprox s localGam patternGam
+      ctxtApprox s localGam (patternGam <> relevantDefs localGam defCtxt)
 
       -- Conclude the implication
       concludeImplication s localVars
@@ -216,9 +221,17 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs
 
+relevantDefs :: (?globals::Globals) => Ctxt Assumption -> Ctxt TysAssumption -> Ctxt Assumption
+relevantDefs ctxt defs =
+  mapMaybe (\(v, _) ->
+    case lookup v defs of
+      Just (Restricted (Forall _ _ ty) c) -> Just (v, Discharged ty c)
+      Just (Unrestricted _) ->
+        error $ "Internal error, looking for an unrestricted variable: " <> pretty v
+      Nothing -> Nothing)
+  ctxt
 
 data Polarity = Positive | Negative deriving Show
-
 
 flipPol :: Polarity -> Polarity
 flipPol Positive = Negative
@@ -233,7 +246,7 @@ flipPol Negative = Positive
 --  or `Nothing` if the typing does not match.
 
 checkExpr :: (?globals :: Globals)
-          => Ctxt TypeScheme   -- context of top-level definitions
+          => Ctxt TysAssumption   -- context of top-level definitions
           -> Ctxt Assumption   -- local typing context
           -> Polarity         -- polarity of <= constraints
           -> Bool             -- whether we are top-level or not
@@ -471,7 +484,7 @@ checkExpr defs gam pol topLevel tau e = do
 -- | Synthesise the 'Type' of expressions.
 -- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>
 synthExpr :: (?globals :: Globals)
-          => Ctxt TypeScheme   -- ^ Context of top-level definitions
+          => Ctxt TysAssumption -- ^ Context of top-level definitions
           -> Ctxt Assumption   -- ^ Local typing context
           -> Polarity          -- ^ Polarity of subgrading
           -> Expr () ()        -- ^ Expression
@@ -625,14 +638,21 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
      Nothing ->
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
-         Just tyScheme  -> do
+         Just a@(assumptionTypeScheme -> tyScheme) -> do
            (ty',_) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
 
            let elaborated = Val s ty' (Var ty' x)
-           return (ty', [], elaborated)
+
+           case a of
+             Unrestricted{} -> return (ty', [], elaborated)
+             Restricted _ c      -> do
+               k <- inferCoeffectType s c
+               return (ty', [(x, Discharged ty' (COne k))], elaborated)
 
          -- Couldn't find it
-         Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
+         Nothing  ->  do
+           liftIO $ putStrLn $ pretty defs
+           halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
                               <> if debugging ?globals then
                                   " { looking for " <> show x
                                   <> " in context " <> show gam
