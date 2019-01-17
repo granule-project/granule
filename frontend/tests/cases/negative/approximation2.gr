@@ -1,0 +1,5 @@
+blurg : Int [0..1] -> Int [3..4] -> Int
+blurg = blurg
+
+borg : Int [5..6] -> Int
+borg [x] = blurg [x] [x]
