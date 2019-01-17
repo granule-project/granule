@@ -265,6 +265,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
   (bindings, _, subst, elaboratedP) <- ctxtFromTypedPattern s sig p
   debugM "binding from lam" $ pretty bindings
 
+  -- liftIO $ putStrLn $ show (sig, p)
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
     -- Check the body in the extended context

@@ -25,7 +25,7 @@ length (Cons [_] xs) = S (length xs)
 
 --- Map function
 map : forall (a : Type, b : Type, n : Nat)
-    . (a -> b) [n - 1] -> Vec n a -> Vec n b
+    . (a -> b) [n] -> Vec n a -> Vec n b
 
 map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)

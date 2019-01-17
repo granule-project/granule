@@ -523,8 +523,8 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   (approximatedByOrEqualConstraint lb2 lb1)
      &&& (approximatedByOrEqualConstraint ub1 ub2)
 
-approximatedByOrEqualConstraint x@(SMode n) y@(SMode m) =
-  (n .< m) ||| (n .== m)
+approximatedByOrEqualConstraint x@SMode{} y@SMode{} =
+  (x .== y) ||| (x .< y)
 
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
 approximatedByOrEqualConstraint x y =
