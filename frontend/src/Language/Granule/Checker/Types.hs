@@ -100,7 +100,7 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> MaybeT Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1 t1' (flipIndicator sp)
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1' t1 (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
