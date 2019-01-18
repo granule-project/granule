@@ -1,0 +1,14 @@
+import List
+
+setDiff : (List Int) [Id] -> (List Int) [Op] -> List Int
+setDiff = setDiff
+
+foo : Int [Box] -> Int
+foo [x] = x
+
+-- Disallowed:
+-- bar : (List Int) [Id] -> List Int
+-- bar : (List Int) [Dia] -> List Int
+-- bar : (List Int) [Op] -> List Int
+bar : (List Int) [Box] -> List Int
+bar [x] = setDiff [x] [x]

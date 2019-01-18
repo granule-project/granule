@@ -166,10 +166,10 @@ symGradeJoin (SInterval lb1 ub1) (SInterval lb2 ub2) =
    SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeJoin` ub2)
 symGradeJoin SPoint SPoint = SPoint
 
-symGradeJoin (SMode n) (SMode m) = error "JOIN" {-
+symGradeJoin (SMode n) (SMode m) =
   ite (n .== SModeBox) (SMode m) $
   ite (m .== SModeBox) (SMode n) $
-  ite (n .== m) (SMode n) (SMode SModeDia) -}
+  ite (n .== m) (SMode n) (SMode SModeDia)
 
 symGradeJoin s t | isSProduct s || isSProduct t =
   applyToProducts symGradeJoin SProduct id s t
