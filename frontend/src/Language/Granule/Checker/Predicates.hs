@@ -115,13 +115,13 @@ instance Pretty [Constraint] where
 
 instance Pretty Constraint where
     prettyL l (Eq _ c1 c2 _) =
-      "(" <> prettyL l c1 <> " == " <> prettyL l c2 <> ")" -- @" <> show s
+      "(" <> prettyL l c1 <> " = " <> prettyL l c2 <> ")" -- @" <> show s
 
     prettyL l (Neq _ c1 c2 _) =
-        "(" <> prettyL l c1 <> " /= " <> prettyL l c2 <> ")" -- @" <> show s
+        "(" <> prettyL l c1 <> " ≠ " <> prettyL l c2 <> ")" -- @" <> show s
 
     prettyL l (ApproximatedBy _ c1 c2 _) =
-      "(" <> prettyL l c1 <> " <= " <> prettyL l c2 <> ")" -- @" <> show s
+      "(" <> prettyL l c1 <> " ≤ " <> prettyL l c2 <> ")" -- @" <> show s
 
     prettyL l (NonZeroPromotableTo _ _ c _) = "TODO"
 
