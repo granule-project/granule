@@ -68,6 +68,18 @@ bicataP (falgP, ftop) (galgP, gtop) =
             let p' = gtop fp p
             in galgP p' $ bimap (gcataP p') (fcataP p') $ project fp
 
+bicataM :: (Birecursive x z, Birecursive z x)
+        => (Bitraversable (Base x z), Bitraversable (Base z x))
+        => (Monad m)
+        => ((Base x z) a b -> m a)
+        -> ((Base z x) b a -> m b)
+        -> x
+        -> m a
+bicataM falgM galgM =
+    fcataM
+    where fcataM = falgM <=< (bimapM fcataM gcataM) . project
+          gcataM = galgM <=< (bimapM gcataM fcataM) . project
+
 bicataPM :: (Birecursive x z, Birecursive z x)
          => (Bitraversable (Base x z), Bitraversable (Base z x))
          => (Monad m)
@@ -85,14 +97,65 @@ bicataPM (falgPM, ftop) (galgPM, gtop) =
             let p' = gtop fp p
             in (bimapM (gcataPM p') (fcataPM p') $ project fp) >>= galgPM p'
 
-bicataM :: (Birecursive x z, Birecursive z x)
+bipara :: (Birecursive x z, Birecursive z x)
+       => (Bifunctor (Base x z), Bifunctor (Base z x))
+       => ((Base x z) (x, a) (z, b) -> a)
+       -> ((Base z x) (z, b) (x, a) -> b)
+       -> x
+       -> a
+bipara falg galg =
+    fpara
+    where fpara =
+            falg . (bimap ((,) <*> fpara) ((,) <*> gpara)) . project
+          gpara =
+            galg . (bimap ((,) <*> gpara) ((,) <*> fpara)) . project
+
+-- Is there a magic operator to get this like (,) <*> above?
+applyLeft f x = do
+    fx <- f x
+    return (x, fx)
+
+biparaP :: (Birecursive x z, Birecursive z x)
+       => (Bifunctor (Base x z), Bifunctor (Base z x))
+       => ((p -> (Base x z) (x, a) (z, b) -> a), x -> p -> p)
+       -> ((p -> (Base z x) (z, b) (x, a) -> b), z -> p -> p)
+       -> p
+       -> x
+       -> a
+biparaP (falgP, ftop) (galgP, gtop) =
+    fparaP
+    where fparaP p fp =
+            let p' = ftop fp p
+            in falgP p' $ bimap ((,) <*> (fparaP p')) ((,) <*> (gparaP p')) $ project fp
+          gparaP p fp =
+            let p' = gtop fp p
+            in galgP p' $ bimap ((,) <*> (gparaP p')) ((,) <*> (fparaP p')) $ project fp
+
+biparaM :: (Birecursive x z, Birecursive z x)
         => (Bitraversable (Base x z), Bitraversable (Base z x))
         => (Monad m)
-        => ((Base x z) a b -> m a)
-        -> ((Base z x) b a -> m b)
+        => ((Base x z) (x, a) (z, b) -> m a)
+        -> ((Base z x) (z, b) (x, a) -> m b)
         -> x
         -> m a
-bicataM falgM galgM =
-    fcataM
-    where fcataM = falgM <=< (bimapM fcataM gcataM) . project
-          gcataM = galgM <=< (bimapM gcataM fcataM) . project
+biparaM falgM galgM =
+    fparaM
+    where fparaM = falgM <=< (bimapM (applyLeft fparaM) (applyLeft gparaM)) . project
+          gparaM = galgM <=< (bimapM (applyLeft gparaM) (applyLeft fparaM)) . project
+
+biparaPM :: (Birecursive x z, Birecursive z x)
+         => (Bitraversable (Base x z), Bitraversable (Base z x))
+         => (Monad m)
+         => ((p -> (Base x z) (x, a) (z, b) -> m a), x -> p -> p)
+         -> ((p -> (Base z x) (z, b) (x, a) -> m b), z -> p -> p)
+         -> p
+         -> x
+         -> m a
+biparaPM (falgPM, ftop) (galgPM, gtop) =
+    fcataPM
+    where fcataPM p fp =
+            let p' = ftop fp p
+            in ((bimapM (applyLeft $ fcataPM p') (applyLeft $ gcataPM p')) $ project fp) >>= falgPM p'
+          gcataPM p fp =
+            let p' = gtop fp p
+            in ((bimapM (applyLeft $ gcataPM p') (applyLeft $ fcataPM p')) $ project fp) >>= galgPM p'
