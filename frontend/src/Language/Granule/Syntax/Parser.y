@@ -18,6 +18,7 @@ import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Preprocessor.Markdown
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils hiding (mkSpan)
@@ -95,6 +96,7 @@ Defs :: { AST () () }
   | DataDecl                  { AST [$1] [] }
   | DataDecl NL Defs          { let (AST dds defs) = $3 in AST ($1 : dds) defs }
   | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
+  -- | NL                        { AST [] [] }
 
 NL :: { () }
   : nl NL                    { }
@@ -449,9 +451,15 @@ parseError t = do
     lift $ die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
+-- | Preprocess the source file based on the file extension.
+preprocess :: (?globals :: Globals) => String -> String
+preprocess = case reverse . takeWhile (/= '.') . reverse . sourceFilePath $ ?globals of
+    "md" -> unmarkdown
+    _ -> id
+
 parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefs input = do
-    ast <- parseDefs' input
+    ast <- parseDefs' (preprocess input)
     return $ freshenAST ast
 
 parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())

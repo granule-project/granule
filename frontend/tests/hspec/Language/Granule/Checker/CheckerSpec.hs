@@ -38,8 +38,8 @@ pathToIlltyped = "frontend/tests/cases/negative"
 exclude :: FilePath
 exclude = ""
 
-fileExtension :: String
-fileExtension = ".gr"
+fileExtensions :: [String]
+fileExtensions = [".gr", ".md"]
 
 spec :: Spec
 spec = do
@@ -145,14 +145,16 @@ runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
 
-exampleFiles = foldr1 (liftM2 (<>))
-    [ find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
-    , find always (extension ==? fileExtension) (includePath defaultGlobals)
-    , find always (extension ==? fileExtension) pathToRegressionTests
-    ]
+exampleFiles = foldr1 (liftM2 (<>)) $ do
+    fileExtension <- fileExtensions
+    id [ find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
+       , find always (extension ==? fileExtension) (includePath defaultGlobals)
+       , find always (extension ==? fileExtension) pathToRegressionTests
+       ] -- `id` in order to indent list, otherwise it doesn't parse in `do` notation
 
 cNatOrdered x = CSig (CNat x) natInterval
 natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")
 
-illTypedFiles =
-  find always (extension ==? fileExtension) pathToIlltyped
+illTypedFiles = foldr1 (liftM2 (<>)) $ do
+      fileExtension <- fileExtensions
+      [ find always (extension ==? fileExtension) pathToIlltyped ]

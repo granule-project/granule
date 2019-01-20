@@ -56,7 +56,7 @@ Now run
 
 More details about how to install can be found on the [wiki page](https://github.com/granule-project/granule/wiki/Installing-Granule).
 
-## Executing Granule Programs
+## Running the Interpreter
 
 Granule program files have file extension `.gr`. Use the `gr` command to run the interpreter:
 
@@ -68,5 +68,40 @@ Granule program files have file extension `.gr`. Use the `gr` command to run the
 
 See the `examples` directory for more sample programs, or `frontend/tests/cases`
 if you dare.
+
+### Literate Granule Files
+
+The interpreter also takes markdown files with the extension `.md`, in which
+case all fenced code blocks labelled with `granule` will get parsed as the input
+source code. All other lines are ignored, but counted as whitespace to retain
+line numbers for error messages.
+
+    # Example literate granule (markdown) file
+
+    Code blocks can be fenced with twiddles...
+
+    ~~~ granule
+    a : Int
+    a = 1
+    ~~~
+
+    ... or backticks.
+
+    ```granule
+    b : Int
+    b = 2
+    ```
+
+    The following code blocks will get ignored.
+
+    ~~~
+    c : Int
+    c = 3
+    ~~~
+
+    ```not granule
+    d : Int
+    d = 4
+    ```
 
 All contributions are welcome!
