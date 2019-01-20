@@ -277,7 +277,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
           -- Locally we should have this property (as we are under a binder)
           ctxtEquals s (gam' `intersectCtxts` bindings) bindings
 
-          let elaborated = Val s ty (Abs tau elaboratedP t elaboratedE)
+          let elaborated = Val s ty (Abs ty elaboratedP t elaboratedE)
           return (gam' `subtractCtxt` bindings, subst, elaborated)
 
        xs -> illLinearityMismatch s xs
@@ -297,8 +297,8 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
-    (argTy, gam2, elaboratedL) <- synthExpr defs gam pol e2
-    (gam1, subst, elaboratedR) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
+    (argTy, gam2, elaboratedR) <- synthExpr defs gam pol e2
+    (gam1, subst, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
     gam <- ctxtPlus s gam1 gam2
 
     let elaborated = App s tau elaboratedL elaboratedR
@@ -745,7 +745,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy sig tau
-     let elaborated = Val s finalTy (Abs tau elaboratedP (Just sig) elaboratedE)
+     let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
      return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
   else refutablePattern s p
