@@ -201,7 +201,7 @@ instance Pretty IFace where
             [] -> ""
             cs -> prettyConstraintsParens cs
         pStr = maybe (pretty paramName)
-          (\k -> parens l $ prettyColonSep 0 paramName k) kind
+          (\k -> parens' $ prettyColonSep 0 paramName k) kind
         tyStr = "  " ++ prettySemiSep 0 tys
 
 instance Pretty IFaceTy where
