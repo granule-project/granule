@@ -324,7 +324,7 @@ typeClash s t1 t2 =
   halt $ GenericError (Just s) $
     if pretty t1 == pretty t2
       then "Expected `" <> pretty t1 <> "` but got `" <> pretty t2 <> "` coming from a different binding"
-      else "Expected `" <> pretty t1 <> "` but got `" <> pretty t2 <> ""
+      else "Expected `" <> pretty t1 <> "` but got `" <> pretty t2 <> "`"
 
 -- | Helper for constructing error handlers
 halt :: (?globals :: Globals) => CheckerError -> MaybeT Checker a

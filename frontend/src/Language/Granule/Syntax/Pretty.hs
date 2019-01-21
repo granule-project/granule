@@ -228,7 +228,12 @@ instance Pretty Id where
   prettyL l
     = if debugging ?globals
         then internalName
-        else filter (\c -> c /= '.' && c /= '`') . sourceName
+        else (stripMarker '`') . (stripMarker '.') . sourceName
+    where
+      stripMarker c [] = []
+      stripMarker c (c':cs) | c == c' = cs
+                            | otherwise = c' : stripMarker c cs
+
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
   prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "(,)" =
