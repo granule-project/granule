@@ -225,7 +225,7 @@ instance Pretty IFaceDat where
     prettyL l (IFaceDat name tys) = parens l . unwords $ pretty name : map pretty tys
 
 instance (Pretty v, Pretty a) => Pretty (IDef v a) where
-    prettyL l (IDef _ v eq) = prettyL l v <> " " <> prettyEq eq
+    prettyL l (IDef _ v eq) = prettyEq eq
       where
         prettyEq (Equation _ _ ps e) =
           prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
