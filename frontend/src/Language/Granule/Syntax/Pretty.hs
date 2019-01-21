@@ -222,7 +222,7 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
 
 instance Pretty IFaceDat where
     prettyL l (IFaceDat name []) = prettyL l name
-    prettyL l (IFaceDat name tys) = parens l . unwords $ pretty name : map pretty tys
+    prettyL l (IFaceDat name tys) = parens' . unwords $ pretty name : map pretty tys
 
 instance (Pretty v, Pretty a) => Pretty (IDef v a) where
     prettyL l (IDef _ v eq) = prettyEq eq
@@ -306,6 +306,9 @@ parensOn p t = prettyL (if p t then 0 else 1) t
 braces :: String -> String
 braces x = "{" <> x <> "}"
 
+-- | Surround a string with parentheses
+parens' :: String -> String
+parens' x = if head x == '(' && last x == ')' then x else "(" <> x <> ")"
 
 instance Pretty Int where
   prettyL l = show
@@ -337,8 +340,7 @@ prettyColonSep l x y = prettyL l x <> " : " <> prettyL l y
 -- |
 -- | This variant uses parentheses
 prettyConstraintsParens :: (?globals :: Globals) => [IConstr] -> String
-prettyConstraintsParens = (<> " => ") . parens . prettyCommaSep 0
-  where parens x = if head x == '(' && last x == ')' then x else "(" <> x <> ")"
+prettyConstraintsParens = (<> " => ") . parens' . prettyCommaSep 0
 
 
 -- | Pretty-print some constraints
