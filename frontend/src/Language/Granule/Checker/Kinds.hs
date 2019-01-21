@@ -29,6 +29,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Context
 import Language.Granule.Utils
 
+
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
@@ -90,10 +91,12 @@ inferKindOfType' s quantifiedVariables t =
             Just kind -> return kind
             Nothing ->
               halt $ UnboundVariableError (Just s) $
-                       "Type variable `" <> pretty tyVar <> "` is unbound (not quantified)." <?> show quantifiedVariables
+                       "Type variable `" <> pretty tyVar
+                    <> "` is unbound (not quantified)."
+                    <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
-    kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
+    kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "....")) k
 
     kInt _ = return $ kConstr $ mkId "Nat"
 
@@ -214,11 +217,18 @@ inferCoeffectTypeAssumption s (Discharged _ c) = do
     return $ Just t
 
 checkKindIsCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
-checkKindIsCoeffect s t = do
-  k <- inferKindOfType s t
-  case k of
-    KCoeffect -> return t
-    k         -> illKindedNEq s KCoeffect k
+checkKindIsCoeffect span ty = do
+  kind <- inferKindOfType span ty
+  case kind of
+    KCoeffect -> return ty
+    -- Came out as a promoted type, check that this is a coeffect
+    KPromote k -> do
+      kind' <- inferKindOfType span k
+      case kind' of
+        KCoeffect -> return ty
+        _         -> illKindedNEq span KCoeffect kind
+
+    _         -> illKindedNEq span KCoeffect kind
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
