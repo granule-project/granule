@@ -140,7 +140,7 @@ freshLambdaIdentifiers =
     do
         index <- get
         modify (+1)
-        let lambdaName = "lambda." ++ show index
+        let lambdaName = "lambda#" ++ show index
         let envName = "env." ++ lambdaName
         return (mkId lambdaName, envName)
 
