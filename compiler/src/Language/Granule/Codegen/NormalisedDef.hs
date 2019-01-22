@@ -29,6 +29,23 @@
         f : Int -> Int -> Int
         f x = (\y -> x + y)
     @
+
+    It also elimitates refutable argument pattern matches, converting
+    them to case expressions.
+
+    e.g.
+    @
+       xor 1 1 = True
+       xor 0 0 = True
+       xor x y = False
+    @
+
+    @
+       xor x y =
+          case (x, y) of
+            (1, 1) -> True
+            (0, 0) -> True
+            (x, y) -> False
   |-}
 module Language.Granule.Codegen.NormalisedDef where
 
@@ -42,11 +59,18 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.FirstParameter
 import Data.Either (lefts, rights)
-import Data.List (transpose)
+import Data.List (transpose, intercalate)
 import GHC.Generics
 
 data NormalisedAST v a =
     NormalisedAST [DataDecl] [FunctionDef v a] [ValueDef v a]
+
+instance (Pretty v, Pretty a) => Pretty (NormalisedAST a v) where
+    prettyL l (NormalisedAST dataDecls functionDefs valueDefs) =
+        pretty' dataDecls <> "\n\n" <> pretty' functionDefs <> pretty' valueDefs
+        where
+            pretty' :: Pretty l => [l] -> String
+            pretty' = intercalate "\n\n" . map (prettyL l)
 
 deriving instance (Show a, Show v) => Show (NormalisedAST v a)
 deriving instance (Eq a, Eq v) => Eq (NormalisedAST v a)
@@ -131,8 +155,23 @@ toFunctionDef (Def sp ident [caseEquation] ts) =
         functionDefArgument = head $ equationArguments caseEquation,
         functionDefTypeScheme = ts }
 
+isTriviallyIrrefutable :: Pattern Type -> Bool
+isTriviallyIrrefutable
+    = patternFold
+          (\_ _ _  -> True)         -- PVar
+          (\_ _    -> True)         -- PWild
+          (\_ _ ch -> True)         -- PBox
+          (\_ _ _  -> False)        -- PInt
+          (\_ _ _  -> False)        -- PFloat
+          (\_ _ _ args -> and args) -- PConstr
+
+hasTriviallyIrrefutableMatch :: Equation ev Type -> Bool
+hasTriviallyIrrefutableMatch Equation { equationArguments = patterns }
+    = all isTriviallyIrrefutable patterns
+
 makeSingleEquationWithCase :: Def ev Type -> Def ev Type
-makeSingleEquationWithCase def@(Def sp ident [eq] ts) = def
+makeSingleEquationWithCase def@(Def sp ident [eq] ts)
+    | hasTriviallyIrrefutableMatch eq = def
 makeSingleEquationWithCase def@(Def sp ident eqs ts) =
     let equation = Equation sp (definitionType def) irrefutableArgs generatedCaseExpr
                    where irrefutableArgs     = makeIrrefutableArgs casePatterns
@@ -146,11 +185,11 @@ makeIrrefutableArgs patternLists =
     zipWith patternForArg [1..] (transpose patternLists)
 
 -- | Assumes best name is the last in the list.
--- | If there are no irrefutable matches the name is arg.n.
+-- | If there are no simple var matches the name is unnamed.n
 patternForArg :: Int -> [Pattern Type] -> Pattern Type
 patternForArg n patterns =
     let patternTy = annotation $ head patterns
-        defaultPattern = PVar nullSpanNoFile patternTy (mkId $ "arg." ++ show n)
+        defaultPattern = PVar nullSpanNoFile patternTy (mkId $ "unnamed." ++ show n)
         accumulateBestName irrefutablePat@(PVar _ _ ident) bestName = irrefutablePat
         accumulateBestName reffutablePat bestName                   = bestName
     in foldr accumulateBestName defaultPattern patterns
