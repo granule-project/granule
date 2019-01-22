@@ -10,7 +10,7 @@ dependencies:
 
 library:
   source-dirs: src
-  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
+  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns -fmax-pmcheck-iterations=10000000
   # when:
   # - condition: flag(dev)
   #   then:
@@ -19,12 +19,15 @@ library:
   #     ghc-options: -O3 -w
   exposed-modules:
   - Language.Granule.Codegen.NormalisedDef
-  - Language.Granule.Codegen.Codegen
   - Language.Granule.Codegen.TopsortDefinitions
   - Language.Granule.Codegen.ClosureFreeDef
   - Language.Granule.Codegen.ConvertClosures
+  - Language.Granule.Codegen.LLVMHelpers
+  - Language.Granule.Codegen.EmitLLVM
+  - Language.Granule.Codegen.Compile
   dependencies:
-  - transformers
+  - mtl
+  - text
   - containers
   - granule-frontend
   - llvm-hs-pure >= 6.0

@@ -84,6 +84,7 @@ run input = do
       debugM "Pretty-printed AST:" $ pretty ast
       -- Check and evaluate
       checked <- try $ check ast
+
       case checked of
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e
@@ -97,17 +98,22 @@ run input = do
             return ExitSuccess
           else do
             printInfo $ green "Ok, compiling..."
+            --printInfo $ show typedAst
             let result = compile (sourceFilePath ?globals) typedAst
             case result of
               Left (e :: SomeException) -> do
                 printErr $ EvalError $ show e
                 return (ExitFailure 1)
               Right irModuleAst -> do
-                printInfo "Compiled Successfully"
+                printInfo "Generated Emitable AST"
+                printInfo (show typedAst)
                 printInfo (unpack (ppllvm irModuleAst))
                 withHostTargetMachine $ \machine ->
                     withContext $ \context -> do
-                        withModuleFromAST context irModuleAst (writeObjectToFile machine (File "out.o"))
+                        withModuleFromAST context irModuleAst $ \mo -> do
+                            writeBitcodeToFile (File ((sourceFilePath ?globals) ++ ".bc")) mo
+                            writeObjectToFile machine (File ((sourceFilePath ?globals) ++ ".o")) mo
+                printInfo "Compiled Successfully"
                 return ExitSuccess
 
 
