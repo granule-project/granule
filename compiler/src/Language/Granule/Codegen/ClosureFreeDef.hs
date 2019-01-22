@@ -64,14 +64,14 @@ data ClosureFreeAST =
 
 instance Pretty ClosureFreeAST where
     prettyL l (ClosureFreeAST dataDecls functionDefs valueDefs) =
-        pretty' dataDecls <> "\n\n" <> pretty' functionDefs <> pretty' valueDefs
+        pretty' dataDecls <> "\n\n" <> pretty' functionDefs <> "\n\n" <> pretty' valueDefs
         where
             pretty' :: Pretty l => [l] -> String
             pretty' = intercalate "\n\n" . map (prettyL l)
 
 instance Pretty ClosureFreeFunctionDef where
     prettyL l (ClosureFreeFunctionDef _ v env e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
-                              prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
+                              prettyL l v <> " " <> prettyL l ps <> " = " <> prettyL l e
 
 instance Pretty ClosureMarkerValue where
     prettyL l (CapturedVar _ty ident _n) =
