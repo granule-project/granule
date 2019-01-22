@@ -5,7 +5,7 @@ import Language.Granule.Codegen.ClosureFreeDef
 import Language.Granule.Codegen.NormalisedDef
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
-import Language.Granule.Syntax.Pattern (boundVars)
+import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
@@ -17,9 +17,8 @@ import Data.Bifunctor.Foldable
 import Data.Bifoldable
 import qualified Data.Set as Set
 
-import Control.Monad.Trans.State
-import Control.Monad.Trans.Writer
-import Control.Monad.Trans.Class
+import Control.Monad.State
+import Control.Monad.Writer
 
 convertClosures :: NormalisedAST () Type -> ClosureFreeAST
 convertClosures (NormalisedAST dataDecl functionDefs valueDefs) =
@@ -50,19 +49,22 @@ evalLiftLambda :: LiftLambdaM a -> (a, [ClosureFreeFunctionDef])
 evalLiftLambda s = runWriter $ evalStateT s 0
 
 convertClosuresInExpression :: [Id]
-                        -> [Id]
-                        -> Expr () Type
-                        -> LiftLambdaM ClosureFreeExpr
+                            -> [Id]
+                            -> Expr () Type
+                            -> LiftLambdaM ClosureFreeExpr
 convertClosuresInExpression globals locals =
     bicataPM (convertClosuresFromExpr, boundFromExpr)
              (liftFromValue, boundFromValue)
              (Nothing, Nothing, locals)
     where liftFromValue = convertClosuresFromValue globals
-          boundFromExpr _ ctx = ctx
+          boundFromExpr (Case _ _ _ arms) (x, y, bound) =
+              (x, y, bound ++ boundByArms arms)
+          boundFromExpr _ bound = bound
           boundFromValue (Abs _ arg _ body) (_, parentEnvironment, parentLocals) =
-              let locals = boundVars arg
-                  initializer = environmentInitializer globals parentEnvironment parentLocals locals body
-              in (parentEnvironment, Just initializer, locals)
+              let locals           = boundVars arg
+                  initializer      = environmentInitializer globals parentEnvironment parentLocals locals body
+                  maybeInitializer = if null initializer then Nothing else Just initializer
+              in (parentEnvironment, maybeInitializer, locals)
           boundFromValue _ ctx = ctx
 
 environmentInitializer :: [Id]
@@ -87,9 +89,9 @@ variableInitializer _ (Just parentEnvironment) (ty, ident) =
         Just n -> FromParentEnv ident ty n
         Nothing -> error $ "Attempt to capture " ++ (show ident) ++
                            " which is not in the parent environment or local scope."
-variableInitializer local cvis var =
+variableInitializer locals parentEnv var =
     error $ "Invalid combination of arguments to generate initializer \n"
-            ++ (show local) ++ "\n" ++ (show cvis) ++ "\n" ++ (show var)
+            ++ (show locals) ++ "\n" ++ (show parentEnv) ++ "\n" ++ (show var)
 
 findCaptureIndex :: [ClosureVariableInit] -> Id -> Maybe Int
 findCaptureIndex env ident =
@@ -108,8 +110,18 @@ captures globals locals ex =
                   Set.empty
           capturesInValue _ val = bifold val
           accumBoundValue (Abs _ arg _ expr) bound = bound ++ (boundVars arg)
+          -- NOTE: This marks all names bound by every match as bound in every arm.
+          -- Which is not technically correct but should be ok because of the
+          -- freshener.
           accumBoundValue _ bound = bound
+          accumBoundExpr (Case _ _ _ arms) bound = bound ++ boundByArms arms
+          accumBoundExpr (LetDiamond _ _ pattern _ _ _) bound = bound ++ (boundVars pattern)
           accumBoundExpr _ bound = bound
+
+
+boundByArms :: [(Pattern a, b)] -> [Id]
+boundByArms = concatMap (boundVars . fst)
+
 
 convertClosuresFromExpr :: (Maybe [ClosureVariableInit], Maybe [ClosureVariableInit], [Id])
                     -> ExprF ev Type ClosureFreeExpr ClosureFreeValue
@@ -129,7 +141,7 @@ freshLambdaIdentifiers =
         index <- get
         modify (+1)
         let lambdaName = "lambda." ++ show index
-        let envName = lambdaName ++ ".env"
+        let envName = "env." ++ lambdaName
         return (mkId lambdaName, envName)
 
 environmentType :: String
@@ -144,19 +156,20 @@ environmentType name maybeVariableInitializers =
                 in Just (name, TyClosureEnvironment types)
 
 convertClosuresFromValue :: [Id]
-                     -> (Maybe [ClosureVariableInit], Maybe [ClosureVariableInit], [Id])
-                     -> ValueF ev Type ClosureFreeValue ClosureFreeExpr
-                     -> LiftLambdaM ClosureFreeValue
-convertClosuresFromValue globals (_, maybeCurrentEnv, _) (AbsF ty arg mty expr) =
+                         -> (Maybe [ClosureVariableInit], Maybe [ClosureVariableInit], [Id])
+                         -> ValueF ev Type ClosureFreeValue ClosureFreeExpr
+                         -> LiftLambdaM ClosureFreeValue
+convertClosuresFromValue globals (_, maybeCurrentEnv, _) (AbsF ty@(FunTy _ _) arg mty expr) =
     do
         (lambdaIdent, envName) <- freshLambdaIdentifiers
         let lambdaTypeScheme = Forall nullSpanNoFile [] ty
         let envTy = environmentType envName maybeCurrentEnv
         let lambdaDef = ClosureFreeFunctionDef nullSpanNoFile lambdaIdent envTy expr arg lambdaTypeScheme
         lift $ tell [lambdaDef]
-        return $ maybe (Ext ty $ MakeTrivialClosure lambdaIdent) (\env ->
-            let initializer = ClosureEnvironmentInit envName env
-            in Ext ty $ MakeClosure lambdaIdent initializer) maybeCurrentEnv
+        return $ Ext ty $
+            case maybeCurrentEnv of
+                Just env -> MakeClosure lambdaIdent (ClosureEnvironmentInit envName env)
+                Nothing  -> MakeTrivialClosure lambdaIdent
 
 convertClosuresFromValue globals (_, maybeCurrentEnv, locals) (VarF ty ident)
     | (not $ ident `elem` locals || ident `elem` globals) =
@@ -165,6 +178,7 @@ convertClosuresFromValue globals (_, maybeCurrentEnv, locals) (VarF ty ident)
                          where errorMessage = error $ "Could not find captured variable "
                                               ++ (sourceName ident) ++ " in environment."
         in return $ Ext ty (CapturedVar ty ident indexInEnv)
+
 convertClosuresFromValue globals _ other =
     return $
         case other of
