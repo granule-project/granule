@@ -77,6 +77,8 @@ pattern NumFloat n = (ExprFix2 (NumFloatF n))
 pattern CharLiteral ch = (ExprFix2 (CharLiteralF ch))
 pattern StringLiteral str = (ExprFix2 (StringLiteralF str))
 pattern Ext a extv = (ExprFix2 (ExtF a extv))
+{-# COMPLETE Abs, Promote, Pure, Constr, Var, NumInt,
+             NumFloat, CharLiteral, StringLiteral, Ext #-}
 
 -- | Expressions (computations) in Granule (with `v` extended values
 -- | and annotations `a`).
@@ -107,6 +109,7 @@ pattern Binop sp a op lhs rhs = (ExprFix2 (BinopF sp a op lhs rhs))
 pattern LetDiamond sp a pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a pat mty nowexp nextexp))
 pattern Val sp a val = (ExprFix2 (ValF sp a val))
 pattern Case sp a swexp arms = (ExprFix2 (CaseF sp a swexp arms))
+{-# COMPLETE App, Binop, LetDiamond, Val, Case #-}
 
 instance (Bifunctor (f ev a), Bifunctor (g ev a))
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
