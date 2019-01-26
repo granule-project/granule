@@ -136,7 +136,7 @@ spec = do
         -- Simple definitions
         -- \x -> x + 1
         (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
-        (Just defElab, _) <- runChecker initState (checkDef [] def1)
+        (Just defElab, _) <- runChecker initState (runMaybeT $ checkDef [] def1)
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
 
