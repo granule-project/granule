@@ -23,6 +23,7 @@ import System.Exit
 
 import System.Directory (getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
+import System.FilePath (splitExtension)
 import Options.Applicative
 
 import Language.Granule.Checker.Checker
@@ -36,7 +37,7 @@ import LLVM.Pretty (ppllvm)
 import LLVM.Target
 import LLVM.Module
 import LLVM.Internal.Context
-import Language.Granule.Codegen.Codegen
+import Language.Granule.Codegen.Compile
 
 main :: IO ()
 main = do
@@ -84,30 +85,38 @@ run input = do
       debugM "Pretty-printed AST:" $ pretty ast
       -- Check and evaluate
       checked <- try $ check ast
+
       case checked of
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e
           return (ExitFailure 1)
-        Right Failed -> do
+        Right Nothing -> do
           printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
-        Right Ok -> do
+        Right (Just typedAst) -> do
           if noEval ?globals then do
             printInfo $ green "Ok"
             return ExitSuccess
           else do
-            printInfo $ green "Ok, evaluating..."
-            let result = codegen ast
+            printInfo $ green "Ok, compiling..."
+            --printInfo $ show typedAst
+            let result = compile (sourceFilePath ?globals) typedAst
             case result of
               Left (e :: SomeException) -> do
                 printErr $ EvalError $ show e
                 return (ExitFailure 1)
               Right irModuleAst -> do
-                printInfo "Compiled Successfully"
-                printInfo (unpack (ppllvm irModuleAst))
+                printInfo "Generated Emitable AST"
+                let llvmir = unpack $ ppllvm irModuleAst
+                let moduleName = fst $ splitExtension $ sourceFilePath ?globals
+                printInfo llvmir
+                writeFile (moduleName ++ ".ll") llvmir
                 withHostTargetMachine $ \machine ->
                     withContext $ \context -> do
-                        withModuleFromAST context irModuleAst (writeObjectToFile machine (File "out.o"))
+                        withModuleFromAST context irModuleAst $ \mo -> do
+                            --writeBitcodeToFile (File (moduleName ++ ".bc")) mo
+                            writeObjectToFile machine (File (moduleName ++ ".o")) mo
+                printInfo "Compiled Successfully"
                 return ExitSuccess
 
 

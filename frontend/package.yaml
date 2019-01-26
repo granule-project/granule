@@ -30,6 +30,7 @@ library:
   - alex
   - happy
   exposed-modules:
+  - Data.Bifunctor.Foldable
   - Language.Granule.Checker.Checker
   - Language.Granule.Checker.Coeffects
   - Language.Granule.Checker.Constraints
@@ -46,6 +47,7 @@ library:
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers
   - Language.Granule.Syntax.FirstParameter
+  - Language.Granule.Syntax.Annotated
   - Language.Granule.Syntax.Identifiers
   - Language.Granule.Syntax.Lexer
   - Language.Granule.Syntax.Parser
@@ -65,6 +67,7 @@ library:
   - time
   - Glob
   - filepath
+  - bifunctors
   # - raw-strings-qq (Quasiquoter for multiline, automatically escaped strings)
 
 tests:
@@ -81,6 +84,7 @@ tests:
     - mtl
     - containers
     - transformers >=0.5
+    - bifunctors
   zfrontend-doctest: # the "z" is to make them run after hspec
     main: doctest.hs
     source-dirs: tests

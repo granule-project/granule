@@ -2,6 +2,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Granule.Eval where
 

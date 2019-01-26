@@ -13,6 +13,8 @@ import GHC.Generics (Generic)
 
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Annotated
+import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
@@ -28,6 +30,10 @@ data Pattern a
 
 -- | First parameter of patterns is their span
 instance FirstParameter (Pattern a) Span
+instance SecondParameter (Pattern a) a
+
+instance Annotated (Pattern a) a where
+    annotation = getSecondParameter
 
 patternFold
   :: (Span -> ann -> Id -> b)
@@ -57,8 +63,23 @@ boundVars PInt {}        = []
 boundVars PFloat {}      = []
 boundVars (PConstr _ _ _ ps) = concatMap boundVars ps
 
-ppair :: Span -> Pattern () -> Pattern () -> Pattern ()
-ppair s p1 p2 = PConstr s () (mkId "(,)") [p1, p2]
+boundVarsAndAnnotations :: Pattern a -> [(a, Id)]
+boundVarsAndAnnotations =
+    patternFold var wild box int flt cstr
+    where var  _ ty ident = [(ty, ident)]
+          wild _ _        = []
+          box _ _ pat     = pat
+          int _ _ _       = []
+          flt _ _ _       = []
+          cstr _ _ _ pats = concat pats
+
+ppair :: Span
+      -> a
+      -> Pattern a
+      -> Pattern a
+      -> Pattern a
+ppair s annotation left right =
+    PConstr s annotation (mkId "(,)") [left, right]
 
 -- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
 -- PVar ((0,0),(0,0)) (Id "x" "x_0")

@@ -57,10 +57,10 @@ desugar (Def s var eqs tys@(Forall _ _ ty)) =
         vars = [mkId (" internal" ++ show i) | i <- [1..numArgs]]
 
         -- Guard expression
-        guard = foldl (pair nullSpanNoFile) unitVal guardVars
+        guard = foldl pair unitVal guardVars
         unitVal = Val nullSpanNoFile () (Constr () (mkId "()") [])
         guardVars = map (\i -> Val nullSpanNoFile () (Var () i)) vars
 
         -- case for each equation
         cases = map (\(Equation _ _ pats expr) ->
-           (foldl (ppair nullSpanNoFile) (PWild nullSpanNoFile ()) pats, expr)) eqs
+           (foldl (ppair nullSpanNoFile ()) (PWild nullSpanNoFile ()) pats, expr)) eqs

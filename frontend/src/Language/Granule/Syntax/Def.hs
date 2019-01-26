@@ -1,4 +1,5 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -24,33 +25,57 @@ import Language.Granule.Syntax.Pattern
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
 data AST v a = AST [DataDecl] [Def v a]
+deriving instance (Show (Def v a), Show a) => Show (AST v a)
+deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
-deriving instance (Show v, Show a) => Show (AST v a)
-deriving instance (Eq v, Eq a) => Eq (AST v a)
-deriving instance Functor (AST v)
+class Definition d where
+    definitionSpan :: d -> Span
+    definitionIdentifier :: d -> Id
+    definitionTypeScheme :: d -> TypeScheme
 
 -- | Function definitions
-data Def v a = Def Span Id [Equation v a] TypeScheme
-  deriving Generic
+data Def v a =
+    Def {
+        defSpan :: Span,
+        defIdentifier :: Id,
+        defEquations :: [Equation v a],
+        defTypeScheme :: TypeScheme }
+    deriving Generic
+
+instance FirstParameter (Def v a) Span
+deriving instance (Eq v, Eq a) => Eq (Def v a)
+deriving instance (Show v, Show a) => Show (Def v a)
 
 -- | Single equation of a function
 data Equation v a =
-    Equation Span a [Pattern a] (Expr v a)
-  deriving Generic
+    Equation {
+        equationSpan :: Span,
+        equationType :: a,
+        equationArguments :: [Pattern a],
+        equationBody :: (Expr v a) }
+    deriving Generic
 
-deriving instance Functor (Def v)
-deriving instance Functor (Equation v)
-deriving instance (Show v, Show a) => Show (Def v a)
-deriving instance (Eq v, Eq a) => Eq (Def v a)
-deriving instance (Show v, Show a) => Show (Equation v a)
 deriving instance (Eq v, Eq a) => Eq (Equation v a)
-
-instance FirstParameter (Def v a) Span
+deriving instance (Show v, Show a) => Show (Equation v a)
 instance FirstParameter (Equation v a) Span
 
+instance Definition (Def ev a) where
+    definitionSpan = getSpan
+    definitionIdentifier = defIdentifier
+    definitionTypeScheme = defTypeScheme
+
+definitionType :: (Definition d) => d -> Type
+definitionType def =
+    ty where (Forall _ _ ty) = definitionTypeScheme def
+
 -- | Data type declarations
-data DataDecl = DataDecl Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
-  deriving (Generic, Show, Eq)
+data DataDecl = DataDecl {
+    dataDeclSpan :: Span,
+    dataDeclName :: Id,
+    dataDeclMembers :: [(Id,Kind)],
+    dataDeclKind :: (Maybe Kind),
+    dataDeclConstructors :: [DataConstr] }
+    deriving (Generic, Show, Eq)
 
 instance FirstParameter DataDecl Span
 

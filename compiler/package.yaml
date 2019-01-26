@@ -10,7 +10,7 @@ dependencies:
 
 library:
   source-dirs: src
-  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
+  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns -fmax-pmcheck-iterations=10000000
   # when:
   # - condition: flag(dev)
   #   then:
@@ -18,8 +18,18 @@ library:
   #   else:
   #     ghc-options: -O3 -w
   exposed-modules:
-  - Language.Granule.Codegen.Codegen
+  - Language.Granule.Codegen.NormalisedDef
+  - Language.Granule.Codegen.TopsortDefinitions
+  - Language.Granule.Codegen.ClosureFreeDef
+  - Language.Granule.Codegen.ConvertClosures
+  - Language.Granule.Codegen.LLVMHelpers
+  - Language.Granule.Codegen.EmitLLVM
+  - Language.Granule.Codegen.MarkGlobals
+  - Language.Granule.Codegen.Compile
   dependencies:
+  - mtl
+  - text
+  - containers
   - granule-frontend
   - llvm-hs-pure >= 6.0
   - llvm-hs >= 6.0
@@ -39,6 +49,7 @@ executables:
     - llvm-hs-pure >= 6.0
     - llvm-hs >= 6.0
     - llvm-hs-pretty
+    - filepath
 
 tests:
   compiler-spec:
@@ -48,6 +59,7 @@ tests:
     dependencies:
     - filemanip
     - directory
+    - granule-frontend
     - granule-compiler
     - hspec
     - QuickCheck
