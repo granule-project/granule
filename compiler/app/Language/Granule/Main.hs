@@ -23,6 +23,7 @@ import System.Exit
 
 import System.Directory (getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
+import System.FilePath (splitExtension)
 import Options.Applicative
 
 import Language.Granule.Checker.Checker
@@ -106,13 +107,15 @@ run input = do
                 return (ExitFailure 1)
               Right irModuleAst -> do
                 printInfo "Generated Emitable AST"
-                printInfo (show typedAst)
-                printInfo (unpack (ppllvm irModuleAst))
+                let llvmir = unpack $ ppllvm irModuleAst
+                let moduleName = fst $ splitExtension $ sourceFilePath ?globals
+                printInfo llvmir
+                writeFile (moduleName ++ ".ll") llvmir
                 withHostTargetMachine $ \machine ->
                     withContext $ \context -> do
                         withModuleFromAST context irModuleAst $ \mo -> do
-                            writeBitcodeToFile (File ((sourceFilePath ?globals) ++ ".bc")) mo
-                            writeObjectToFile machine (File ((sourceFilePath ?globals) ++ ".o")) mo
+                            --writeBitcodeToFile (File (moduleName ++ ".bc")) mo
+                            writeObjectToFile machine (File (moduleName ++ ".o")) mo
                 printInfo "Compiled Successfully"
                 return ExitSuccess
 
