@@ -24,6 +24,7 @@ library:
   - Language.Granule.Codegen.ConvertClosures
   - Language.Granule.Codegen.LLVMHelpers
   - Language.Granule.Codegen.EmitLLVM
+  - Language.Granule.Codegen.MarkGlobals
   - Language.Granule.Codegen.Compile
   dependencies:
   - mtl
@@ -48,6 +49,7 @@ executables:
     - llvm-hs-pure >= 6.0
     - llvm-hs >= 6.0
     - llvm-hs-pretty
+    - filepath
 
 tests:
   compiler-spec:

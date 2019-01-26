@@ -8,16 +8,17 @@ import Language.Granule.Codegen.NormalisedDef
 import Language.Granule.Codegen.TopsortDefinitions
 import Language.Granule.Codegen.ConvertClosures
 import Language.Granule.Codegen.EmitLLVM
+import Language.Granule.Codegen.MarkGlobals
 import Language.Granule.Utils
 import qualified LLVM.AST as IR
-import Debug.Trace
-import Language.Granule.Syntax.Pretty
+--import Language.Granule.Syntax.Pretty
 
 compile :: String -> AST () Type -> Either SomeException IR.Module
 compile moduleName typedAST =
     let ?globals       = defaultGlobals in
     let normalised     = normaliseDefinitions typedAST
-        (Ok topsorted) = topologicallySortDefinitions normalised
+        markedGlobals  = markGlobals normalised
+        (Ok topsorted) = topologicallySortDefinitions markedGlobals
         closureFree    = convertClosures topsorted
-    in trace ("CFAST:\n" ++ pretty closureFree) (emitLLVM moduleName closureFree)
+    in emitLLVM moduleName closureFree
     -- NOTE Closures have the wrong type

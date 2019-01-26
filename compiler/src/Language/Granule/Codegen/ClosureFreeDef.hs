@@ -4,6 +4,7 @@
 {-# LANGUAGE DeriveGeneric #-}
 module Language.Granule.Codegen.ClosureFreeDef where
 import Language.Granule.Codegen.NormalisedDef
+import Language.Granule.Codegen.MarkGlobals
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Def
@@ -37,22 +38,22 @@ data ClosureFreeFunctionDef = ClosureFreeFunctionDef {
     closureFreeDefSpan :: Span,
     closureFreeDefIdentifier :: Id,
     closureFreeDefEnvironment :: Maybe NamedClosureEnvironmentType,
-    closureFreeDefBody :: Expr ClosureMarkerValue Type,
+    closureFreeDefBody :: Expr (Either GlobalMarker ClosureMarker) Type,
     closureFreeDefArgument :: Pattern Type,
     closureFreeDefTypeScheme :: TypeScheme }
     deriving (Generic, Eq, Show)
 
-type ClosureFreeExpr = Expr ClosureMarkerValue Type
-type ClosureFreeValue = Value ClosureMarkerValue Type
+type ClosureFreeExpr = Expr (Either GlobalMarker ClosureMarker) Type
+type ClosureFreeValue = Value (Either GlobalMarker ClosureMarker) Type
 
 instance Definition ClosureFreeFunctionDef where
     definitionSpan = closureFreeDefSpan
     definitionIdentifier = closureFreeDefIdentifier
     definitionTypeScheme = closureFreeDefTypeScheme
 
-type ClosureFreeValueDef = ValueDef ClosureMarkerValue Type
+type ClosureFreeValueDef = ValueDef (Either GlobalMarker ClosureMarker) Type
 
-data ClosureMarkerValue =
+data ClosureMarker =
     CapturedVar Type Id Int
     | MakeClosure Id ClosureEnvironmentInit
     | MakeTrivialClosure Id
@@ -73,7 +74,7 @@ instance Pretty ClosureFreeFunctionDef where
     prettyL l (ClosureFreeFunctionDef _ v env e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
                               prettyL l v <> " " <> prettyL l ps <> " = " <> prettyL l e
 
-instance Pretty ClosureMarkerValue where
+instance Pretty ClosureMarker where
     prettyL l (CapturedVar _ty ident _n) =
         "env(" ++ (prettyL l ident) ++ ")"
     prettyL l (MakeClosure ident env) =

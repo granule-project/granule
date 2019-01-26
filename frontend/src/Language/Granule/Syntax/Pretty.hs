@@ -236,6 +236,10 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
 parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
 parensOn p t = prettyL (if p t then 0 else 1) t
 
+instance (Pretty a, Pretty b) => Pretty (Either a b) where
+    prettyL l (Left v) = prettyL l v
+    prettyL l (Right v) = prettyL l v
+
 instance Pretty Int where
   prettyL l = show
 

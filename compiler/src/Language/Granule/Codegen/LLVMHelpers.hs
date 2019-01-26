@@ -60,3 +60,9 @@ charConstant ch =
 stringConstant :: String -> Constant
 stringConstant str =
     C.Vector (map charConstant str)
+
+intConstant :: Int -> Constant
+intConstant n =
+    C.Int {
+        C.integerBits = 32,
+        C.integerValue = toInteger n }

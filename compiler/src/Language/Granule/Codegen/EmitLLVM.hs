@@ -26,6 +26,7 @@ import qualified LLVM.AST.Type as IRType
 import Language.Granule.Codegen.LLVMHelpers
 import Language.Granule.Codegen.ClosureFreeDef
 import Language.Granule.Codegen.NormalisedDef
+import Language.Granule.Codegen.MarkGlobals
 import Language.Granule.Syntax.Pattern (boundVars, Pattern)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type hiding (Type)
@@ -47,6 +48,7 @@ import Control.Exception (SomeException)
 import Control.Monad (zipWithM_)
 import Control.Monad.Fix
 import Control.Monad.State.Strict hiding (void)
+--import Debug.Trace
 
 type GrType = GRType.Type
 type IrType = IRType.Type
@@ -95,9 +97,7 @@ llvmType :: GrType -> IrType
 llvmType (FunTy from to) =
     llvmTypeForClosure $ llvmTypeForFunction (llvmType from) (llvmType to)
 llvmType (TyApp (TyApp (TyCon (MkId "(,)")) left) right) =
-    StructureType {
-        isPacked = False,
-        elementTypes = [llvmType left, llvmType right] }
+    StructureType False [llvmType left, llvmType right]
 llvmType (TyCon (MkId "Int")) = i32
 llvmType (TyCon (MkId "Float")) = double
 llvmType (TyCon (MkId "Char")) = i8
@@ -112,15 +112,14 @@ llvmTopLevelType other = llvmType other
 
 maybeEmitEnvironmentType :: (MonadModuleBuilder m)
                          => Maybe NamedClosureEnvironmentType
-                         -> m (Maybe (IrType, Name))
+                         -> m (Maybe IrType)
 maybeEmitEnvironmentType =
     mapM toLLVMType
     where toLLVMType (identifier, environmentType) =
               let llvmName = mkName identifier
                   llvmType = llvmTypeForEnvironment environmentType
-              in do
-                  ty <- typedef llvmName (Just llvmType)
-                  return (ty, llvmName)
+              in typedef llvmName (Just llvmType)
+
 
 emitLLVM :: String -> ClosureFreeAST -> Either SomeException IR.Module
 emitLLVM moduleName (ClosureFreeAST dataDecls functionDefs valueDefs) =
@@ -129,9 +128,15 @@ emitLLVM moduleName (ClosureFreeAST dataDecls functionDefs valueDefs) =
         malloc <- extern (mkName "malloc") [i64] (ptr i8)
         abort <- extern (mkName "abort") [] void
         mapM_ emitDataDecl dataDecls
+        mapM_ emitEnvironmentType functionDefs
         mapM_ emitFunctionDef functionDefs
         valueInitPairs <- mapM emitValueDef valueDefs
         emitGlobalInitializer valueInitPairs
+
+emitEnvironmentType :: (MonadModuleBuilder m) => ClosureFreeFunctionDef -> m (Maybe IrType)
+emitEnvironmentType (ClosureFreeFunctionDef { closureFreeDefEnvironment = envType }) =
+    maybeEmitEnvironmentType envType
+
 
 emitGlobalInitializer :: (MonadModuleBuilder m) => [(Operand, Operand)] -> m Operand
 emitGlobalInitializer valueInitPairs =
@@ -140,13 +145,13 @@ emitGlobalInitializer valueInitPairs =
             value <- call initializer []
             store global 4 value) valueInitPairs
         exitCode <- load (IR.ConstantOperand $ C.GlobalReference (ptr i32) (mkName "def.main")) 4
-        ret exitCode -- exitCode
+        ret exitCode
 
 emitValueDef :: (MonadState (Map Id Operand) m, MonadModuleBuilder m, MonadFix m) => ClosureFreeValueDef -> m (Operand, Operand)
 emitValueDef def@(ValueDef sp ident initExpr typeScheme) =
     do
         clearLocals
-        let name = mkName $ "def." ++ internalName ident
+        let name = definitionNameFromId ident
         let valueType = llvmTopLevelType (definitionType def)
         let initializerName = mkName $ "init." ++ (internalName ident)
         initializer <- privateFunction initializerName [] valueType $ \[] -> do
@@ -155,18 +160,21 @@ emitValueDef def@(ValueDef sp ident initExpr typeScheme) =
         value <- global name valueType (C.Undef valueType)
         return (value, initializer)
 
+maybeEnvironment :: Maybe NamedClosureEnvironmentType -> Maybe IrType
+maybeEnvironment = fmap (\(name, _) -> NamedTypeReference (mkName name))
+
 emitFunctionDef :: (MonadState (Map Id Operand) m, MonadModuleBuilder m, MonadFix m) => ClosureFreeFunctionDef -> m (Operand, Operand)
 emitFunctionDef def@(ClosureFreeFunctionDef sp ident environment body argument typeScheme) =
     do
         clearLocals
-        maybeEnvironmentType <- maybeEmitEnvironmentType environment
+        let maybeEnvironmentType = maybeEnvironment environment -- maybeEmitEnvironmentType environment
         function <- emitFunction ident maybeEnvironmentType body argument (definitionType def)
         trivialClosure <- emitTrivialClosure (ident, definitionType def)
         return (trivialClosure, function)
 
 emitFunction :: (MonadState (Map Id Operand) m, MonadModuleBuilder m, MonadFix m)
              => Id
-             -> Maybe (IrType, Name)
+             -> Maybe IrType
              -> EmitableExpr
              -> Pattern GrType
              -> GrType
@@ -188,11 +196,11 @@ emitFunction ident maybeEnvironmentType body argument (FunTy from to) =
 
 maybeBitcastEnvironment :: (MonadIRBuilder m)
                         => Operand
-                        -> Maybe (IrType, Name)
+                        -> Maybe IrType
                         -> m (Maybe Operand)
 maybeBitcastEnvironment environmentPointerUntyped maybeEnvironmentType =
     mapM emitBitcast maybeEnvironmentType
-    where emitBitcast (environmentType, _) =
+    where emitBitcast environmentType =
               bitcast environmentPointerUntyped (ptr environmentType)
 
 makeTrivialClosure :: Id
@@ -230,7 +238,7 @@ emitExpression env =
 
 emitExpr :: (MonadState (Map Id Operand) m, MonadIRBuilder m, MonadFix m)
          => Maybe Operand
-         -> ExprF ClosureMarkerValue Type (EmitableExpr, m Operand) (EmitableValue, m Operand)
+         -> ExprF (Either GlobalMarker ClosureMarker) Type (EmitableExpr, m Operand) (EmitableValue, m Operand)
          -> m Operand
 emitExpr environment (AppF _ ty (_, emitFunction) (_, emitArg)) =
     do
@@ -292,7 +300,7 @@ emitCaseArm switchOnExpr resultStorage successLabel failLabel =
     \case
         (PInt _ _ n, (_, emitArmExpr)) -> mdo
             checkMatches <- block
-            matches <- icmp IP.EQ (IR.ConstantOperand $ C.Int 32 (toInteger n)) switchOnExpr
+            matches <- icmp IP.EQ (IR.ConstantOperand $ intConstant n) switchOnExpr
             condBr matches storeResult failLabel
 
             storeResult <- block
@@ -363,30 +371,28 @@ llvmOperator leftType operator rightType returnType =
           rhs = (show rightType)
           ret = (show returnType)
 
-
 emitValue :: (MonadFix m, MonadState (Map Id Operand) m, MonadModuleBuilder m, MonadIRBuilder m)
           => Maybe Operand
-          -> ValueF ClosureMarkerValue Type (EmitableValue, m Operand) (EmitableExpr, m Operand)
+          -> ValueF (Either GlobalMarker ClosureMarker) Type (EmitableValue, m Operand) (EmitableExpr, m Operand)
           -> m Operand
 -- TODO make normalised definitions have strings as args, eliminate patterns from lambda args.
 emitValue _ (PromoteF ty (_, emitEx)) = error "Let diamond not yet supported."
 emitValue _ (PureF ty (_, emitEx)) = error "Let diamond not yet supported."
-emitValue _ (VarF ty ident) =
-    -- NOTE Pending global argument pass.
-    local ident
+emitValue _ (VarF ty ident) = local ident
 emitValue _ (NumIntF n) = IC.int32 (toInteger n)
 emitValue _ (NumFloatF n) = IC.double n
 emitValue _ (CharLiteralF ch) =
     return $ IR.ConstantOperand (charConstant ch)
 emitValue _ (StringLiteralF str) =
     return $ IR.ConstantOperand (stringConstant $ unpack str)
--- emitValue _ (ExtF a (GlobalVar ty ident))) =
-emitValue environment (ExtF ty cm) =
+emitValue _ (ExtF a (Left (GlobalVar ty ident))) = do
+    let ref = IR.ConstantOperand $ C.GlobalReference (ptr (llvmType ty)) (definitionNameFromId ident)
+    load ref 4
+emitValue environment (ExtF ty (Right cm)) =
     emitClosureMarker environment cm
     where emitClosureMarker (Just env) (CapturedVar ty ident idx) =
               do
-                  addr <- gep env [IR.ConstantOperand (C.Int 32 0),
-                                   IR.ConstantOperand (C.Int 32 (toInteger idx))]
+                  addr <- gep env $ (IR.ConstantOperand . intConstant) <$> [0, idx]
                   load addr 4
           emitClosureMarker Nothing (CapturedVar _ _ _) =
               error "Use of captured variable when no environment present."
@@ -402,7 +408,7 @@ emitValue environment (ExtF ty cm) =
               return $ IR.ConstantOperand $ makeTrivialClosure identifier ty
           emitClosureMarker :: (MonadIRBuilder m, MonadModuleBuilder m)
                             => Maybe Operand
-                            -> ClosureMarkerValue
+                            -> ClosureMarker
                             -> m Operand
 {- TODO: Support tagged unions, also affects Case.
 Requires information from previously emited enum + variant types.
@@ -412,7 +418,7 @@ emitValue environment (ExtF ty (ADTMarker adt)) =
         possibleVariants :: Integer
         varaint :: Integer
         values :: [Value]
-    }
+    } This is silly, this needs to go in a dictionary.
     where emitADT (Constructor 1 1 []) =
             -- No Tag, Just Val room for further optimization.
           emitADT (Constructor 1 1 (v:vs))
@@ -436,16 +442,13 @@ emitEnvironmentInit variableInitializers env maybeParentEnv =
     where emitEnvironmentVariableInit n (FromParentEnv ident ty idx) =
               do
                   let parentEnv = fromJust maybeParentEnv
-                  uninitAddr <- gep env [IR.ConstantOperand $ C.Int 32 0,
-                                         IR.ConstantOperand $ C.Int 32 n]
-                  parentAddr <- gep parentEnv [IR.ConstantOperand $ C.Int 32 0,
-                                               IR.ConstantOperand $ C.Int 32 (toInteger idx)]
+                  uninitAddr <- gep env $ (IR.ConstantOperand . intConstant) <$> [0, n]
+                  parentAddr <- gep parentEnv $ (IR.ConstantOperand . intConstant) <$> [0, idx]
                   value <- load parentAddr 4
                   store uninitAddr 4 value
           emitEnvironmentVariableInit n (FromLocalScope ident ty) =
               do
-                  uninitAddr <- gep env [IR.ConstantOperand $ C.Int 32 0,
-                                         IR.ConstantOperand $ C.Int 32 n]
+                  uninitAddr <- gep env $ (IR.ConstantOperand . intConstant) <$> [0, n]
                   let value = IR.LocalReference (llvmType ty) (localNameFromId ident)
                   store uninitAddr 4 value
 
