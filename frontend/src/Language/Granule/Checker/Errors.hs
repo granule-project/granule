@@ -55,4 +55,5 @@ instance UserMsg CheckerError where
 data LinearityMismatch =
    LinearNotUsed Id
  | LinearUsedNonLinearly Id
+ | NonLinearPattern
    deriving Show -- for debugging

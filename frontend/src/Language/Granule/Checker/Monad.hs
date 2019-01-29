@@ -330,6 +330,8 @@ illLinearityMismatch sp mismatches =
       "Linear variable `" <> pretty v <> "` is never used."
     mkMsg (LinearUsedNonLinearly v) =
       "Variable `" <> pretty v <> "` is promoted but its binding is linear; its binding should be under a box."
+    mkMsg NonLinearPattern =
+      "Wildcard pattern `_` allowing a value to be discarded in a position which requires linear use."
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
 illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern t -> MaybeT Checker a

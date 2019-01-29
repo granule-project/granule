@@ -59,28 +59,21 @@ polyShaped t = case leftmostOfApplication t of
 --      - a substitution for variables
 --           caused by pattern matching (e.g., from unification),
 --      - a consumption context explaining usage triggered by pattern matching
-ctxtFromTypedPattern :: (?globals :: Globals, Show t) => Span -> Type -> Pattern t -> Consumption
+ctxtFromTypedPattern :: (?globals :: Globals, Show t) =>
+  Span
+  -> Type
+  -> Pattern t
+  -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern _ t (PWild s _) cons =
     case cons of
       Full ->
-        -- Full consumption is already happening
+        -- Full consumption is allowed here
         return ([], [], [], PWild s t, Full)
 
-      _ -> do
-
-        -- Fresh variable to represent this (linear) value
-        --  Since we don't have full consumption
-        --   Wildcards are allowed, but only inside boxed patterns
-        --   The following binding context will become discharged
-
-        wild <- freshIdentifierBase "wild"
-        let elabP = PWild s t
-        return ([(Id "_" wild, Linear t)], [], [], elabP, NotFull)
-        -- return ([], [], [], elabP)
-
+      _ -> illLinearityMismatch s [NonLinearPattern]
 
 ctxtFromTypedPattern _ t (PVar s _ v) _ = do
     let elabP = PVar s t v
@@ -100,7 +93,7 @@ ctxtFromTypedPattern _ t@(TyCon c) (PFloat s _ n) _
 -- Pattern match on a modal box
 ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) _ = do
 
-    (ctx, eVars, subst, elabPinner, _) <- ctxtFromTypedPattern s ty p NotFull
+    (ctx, eVars, subst, elabPinner, _) <- ctxtFromTypedPattern s ty p Full
     coeffTy <- inferCoeffectType s coeff
 
     -- Check whether a unification was caused
