@@ -1,3 +1,9 @@
+interface Simple1 a where
+  simple1 : a -> a
+
+interface Simple2 a where
+  simple2 : a -> a
+
 -- simple interface with multiple parent constraints
 interface (Simple1 a, Simple2 a) => Simple3 a where
   simple : a -> a

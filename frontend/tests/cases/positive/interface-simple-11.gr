@@ -1,3 +1,9 @@
+interface Simple a where
+  simple : a -> a
+
+data Foo a where
+  F : Foo a
+
 -- instance with nested var
 instance Simple (Foo a) where
   simple x = x

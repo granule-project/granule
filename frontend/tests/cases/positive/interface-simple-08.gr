@@ -1,3 +1,12 @@
+interface Simple1 a where
+  simple1 : a -> a
+
+interface Simple2 a where
+  simple2 : a -> a
+
+data SimpleDT a where
+  DT : SimpleDT a
+
 -- simple instance with interface constraint
 instance (Simple1 a) => Simple2 (SimpleDT a) where
   simple x = x
