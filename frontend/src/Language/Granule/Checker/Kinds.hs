@@ -2,7 +2,9 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Granule.Checker.Kinds (kindCheckDef
+module Language.Granule.Checker.Kinds (
+                      kindCheckDef
+                    , kindCheckSig
                     , inferKindOfType
                     , inferKindOfType'
                     , joinCoeffectTypes
@@ -57,6 +59,9 @@ kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
     KType -> modify (\st -> st { tyVarContext = [] })
     KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> illKindedNEq s KType kind
+
+kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
+kindCheckDef (Def s _ _ f) = kindCheckSig s f
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do

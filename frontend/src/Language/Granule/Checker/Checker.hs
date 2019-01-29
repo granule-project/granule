@@ -49,13 +49,15 @@ check :: (?globals :: Globals) => AST () () -> IO (Maybe (AST () Type))
 check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
-    rsIFTys <- mapM (runMaybeT . checkTyIFace) ifaces
+    rsIFHeads <- mapM (runMaybeT . checkIFaceHead) ifaces
+    rsIFTys <- mapM (runMaybeT . checkIFaceTys) ifaces
     rsInsts <- mapM (runMaybeT . checkInst) insts
     rs3 <- mapM (runMaybeT . kindCheckDef) defs
     rs4 <- mapM (runMaybeT . (checkDef defCtxt)) defs
 
     return $
       if all isJust (rs1 <> rs2
+                     <> rsIFHeads
                      <> rsIFTys
                      <> rsInsts
                      <> rs3 <> (map (fmap (const ())) rs4))
@@ -220,8 +222,8 @@ checkConstrIFaceExists sp (IConstr (name,_)) =
   checkIFaceExists sp name
 
 
-checkTyIFace :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkTyIFace (IFace sp name constrs _ _ _) = do
+checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
+checkIFaceHead (IFace sp name constrs kindAnn pname _) = do
   checkDuplicate
   mapM_ (checkConstrIFaceExists sp) constrs
   modify' $ \st ->
@@ -230,6 +232,17 @@ checkTyIFace (IFace sp name constrs _ _ _) = do
     checkDuplicate = do
       clash <- isJust . lookup name <$> gets ifaceContext
       when clash $ halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
+
+
+checkIFaceTys :: (?globals :: Globals) => IFace -> MaybeT Checker ()
+checkIFaceTys (IFace sp _ _ kindAnn pname tys) = do
+  initKVarContext <- fmap kVarContext get
+  modify' $ \st -> st { kVarContext = [(pname, tyVarKind)] <> initKVarContext }
+  mapM_ checkIFaceTy tys
+  modify' $ \st -> st { kVarContext = initKVarContext }
+  where
+    checkIFaceTy (IFaceTy sp _ tys) = kindCheckSig sp tys
+    tyVarKind = case kindAnn of Just k -> k; Nothing -> KType
 
 
 checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()

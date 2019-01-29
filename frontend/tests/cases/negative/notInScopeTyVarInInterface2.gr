@@ -1,0 +1,6 @@
+interface Simple a where
+  simple : a -> a
+
+-- 'a' is unbound
+interface Simple2 b where
+  simple : a -> b
