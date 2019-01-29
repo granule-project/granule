@@ -50,11 +50,15 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
     rsIFTys <- mapM (runMaybeT . checkTyIFace) ifaces
+    rsInsts <- mapM (runMaybeT . checkInst) insts
     rs3 <- mapM (runMaybeT . kindCheckDef) defs
     rs4 <- mapM (runMaybeT . (checkDef defCtxt)) defs
 
     return $
-      if all isJust (rs1 <> rs2 <> rsIFTys <> rs3 <> (map (fmap (const ())) rs4))
+      if all isJust (rs1 <> rs2
+                     <> rsIFTys
+                     <> rsInsts
+                     <> rs3 <> (map (fmap (const ())) rs4))
         then Just (AST dataDecls (catMaybes rs4) [] [])
         else Nothing
   where
@@ -207,6 +211,14 @@ checkTyIFace (IFace sp name _ _ _ _) = do
     then halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
     else modify' $ \st ->
       st{ ifaceContext = (name, ()) : ifaceContext st }
+
+
+checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
+checkInst (Instance sp iname _ _ _) = do
+  exists <- isJust . lookup iname <$> gets ifaceContext
+  if not exists
+    then halt $ UnboundVariableError (Just sp) $ "Interface `" <> pretty iname <> "` is not in scope."
+    else pure ()
 
 
 checkDef :: (?globals :: Globals)
