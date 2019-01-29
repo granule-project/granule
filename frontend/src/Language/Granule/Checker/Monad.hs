@@ -73,9 +73,8 @@ initialisePatternConsumptions ((Equation _ _ pats _):_) =
 
 -- Join information about consumption
 joinConsumption :: Consumption -> Consumption -> Consumption
-joinConsumption Full _ = Full
-joinConsumption _ Full = Full
-joinConsumption _ _ = NotFull
+joinConsumption Full _       = Full
+joinConsumption _ _          = NotFull
 
 meetConsumption :: Consumption -> Consumption -> Consumption
 meetConsumption NotFull _ = NotFull

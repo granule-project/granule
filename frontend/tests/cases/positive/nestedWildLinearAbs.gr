@@ -1,0 +1,4 @@
+foo : (Int, Int) -> Int
+foo (1, 0) = 42;
+foo (0, _) = 43;
+foo (x, y) = x+y
