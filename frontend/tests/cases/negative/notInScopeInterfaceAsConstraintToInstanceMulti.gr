@@ -1,0 +1,11 @@
+interface Simple a where
+  simple : a -> a
+
+interface Simple1 a where
+  simple1 : a -> a
+
+data SimpleDT a = SDT
+
+-- interface Simple2 is not in scope
+instance (Simple1 a, Simple2 a) => Simple (SimpleDT a) where
+  simple x = x

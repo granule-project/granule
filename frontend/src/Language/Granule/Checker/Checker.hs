@@ -143,17 +143,6 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
-checkTyIFace :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkTyIFace (IFace sp name constrs _ _ _) = do
-  checkDuplicate
-  mapM_ (checkIFaceConstr sp) constrs
-  modify' $ \st ->
-    st{ ifaceContext = (name, ()) : ifaceContext st }
-  where
-    checkDuplicate = do
-      clash <- isJust . lookup name <$> gets ifaceContext
-      when clash $ halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
-
 notInScope :: (?globals :: Globals) => String -> Span -> Id -> MaybeT Checker ()
 notInScope desc sp name = halt $
   UnboundVariableError (Just sp) $ concat [desc, " `", pretty name, "` is not in scope."]
@@ -163,13 +152,25 @@ checkIFaceExists sp name = do
   exists <- isJust . lookup name <$> gets ifaceContext
   when (not exists) (notInScope "Interface" sp name)
 
-checkIFaceConstr :: (?globals :: Globals) => Span -> IConstr -> MaybeT Checker ()
-checkIFaceConstr sp (IConstr (iname,_)) = do
-  checkIFaceExists sp iname
+checkConstrIFaceExists :: (?globals :: Globals) => Span -> IConstr -> MaybeT Checker ()
+checkConstrIFaceExists sp (IConstr (name,_)) =
+  checkIFaceExists sp name
+
+checkTyIFace :: (?globals :: Globals) => IFace -> MaybeT Checker ()
+checkTyIFace (IFace sp name constrs _ _ _) = do
+  checkDuplicate
+  mapM_ (checkConstrIFaceExists sp) constrs
+  modify' $ \st ->
+    st{ ifaceContext = (name, ()) : ifaceContext st }
+  where
+    checkDuplicate = do
+      clash <- isJust . lookup name <$> gets ifaceContext
+      when clash $ halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
 
 checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
-checkInst (Instance sp iname _ idt _) = do
+checkInst (Instance sp iname constrs idt _) = do
   checkIFaceExists sp iname
+  mapM_ (checkConstrIFaceExists sp) constrs
   checkInstTy idt
 
 checkInstTy :: (?globals :: Globals) => IFaceDat -> MaybeT Checker ()
