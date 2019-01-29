@@ -2,7 +2,9 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Granule.Checker.Kinds (kindCheckDef
+module Language.Granule.Checker.Kinds (
+                      kindCheckDef
+                    , kindCheckSig
                     , inferKindOfType
                     , inferKindOfType'
                     , joinCoeffectTypes
@@ -39,8 +41,8 @@ demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
 -- Currently we expect that a type scheme has kind KType
-kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ (Forall _ quantifiedVariables _ ty)) = do
+kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
+kindCheckSig s (Forall _ quantifiedVariables _ ty) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
@@ -49,6 +51,9 @@ kindCheckDef (Def s _ _ (Forall _ quantifiedVariables _ ty)) = do
     KType -> modify (\st -> st { tyVarContext = [] })
     KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> illKindedNEq s KType kind
+
+kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
+kindCheckDef (Def s _ _ f) = kindCheckSig s f
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
