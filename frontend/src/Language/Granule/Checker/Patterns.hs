@@ -129,7 +129,7 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) _ = do
 
     -- Discharge all variables bound by the inner pattern
     ctxt' <- mapM (discharge s coeffTy coeff) ctx
-    return (ctxt', eVars, subst, elabP, NotFull)
+    return (ctxt', eVars, subst, elabP, Full)
 
 ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
@@ -144,53 +144,43 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
           freshPolymorphicInstance BoundQ True tySch
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
+
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
+
           dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
+
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstrutorSpecialised
           subst <- combineSubstitutions s unifiers us
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
-          -- Updated type variable context
-          {- state <- get
-          tyVars <- mapM (\(v, (k, q)) -> do
-                      k <- substitute subst k
-                      return (v, (k, q))) (tyVarContext state)
-          let kindSubst = mapMaybe (\(v, s) -> case s of
-                                                SubstK k -> Just (v, k)
-                                                _        -> Nothing) subst
-          put (state { tyVarContext = tyVars
-                    , kVarContext = kindSubst <> kVarContext state }) -}
+
           let elabP = PConstr s ty dataC elabPs
           return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst, elabP, consumptionOut)
 
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
   where
-    unpeel :: Show t => [Pattern t] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution, [Pattern Type], Consumption))
+    unpeel :: Show t
+          -- A list of patterns for each part of a data constructor pattern
+            => [Pattern t]
+            -- The remaining type of the constructor
+            -> Type
+            -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution, [Pattern Type], Consumption))
     unpeel = unpeel' ([],[],[],[],Full)
+
+    -- Tail recursive version of unpell
     unpeel' acc [] t = return (t,acc)
+
     unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
         (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern s t p cons
         us <- combineSubstitutions s us us'
-        unpeel' (as<>as',bs<>bs',us,elabP:elabPs,consOut `meetConsumption` consOut') ps t'
+        unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
+
     unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
               "Have you applied constructor `" <> sourceName dataC <>
               "` to too many arguments?"
 
-ctxtFromTypedPattern s t@(TyVar v) p _ = do
-  case p of
-    PVar s _ x -> do
-      let elabP = PVar s t x
-      return ([(x, Linear t)], [], [], elabP, NotFull)
-
-    PWild s _  -> do
-      let elabP = PWild s t
-      return ([], [], [], elabP, NotFull)
-
-    p          -> halt $ PatternTypingError (Just s)
-                   $  "Cannot unify pattern `" <> pretty p
-                   <> "` with type `" <> pretty v <> ""
 
 ctxtFromTypedPattern s t p _ = do
   st <- get
