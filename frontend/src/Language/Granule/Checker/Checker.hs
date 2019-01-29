@@ -49,11 +49,12 @@ check :: (?globals :: Globals) => AST () () -> IO (Maybe (AST () Type))
 check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
+    rsIFTys <- mapM (runMaybeT . checkTyIFace) ifaces
     rs3 <- mapM (runMaybeT . kindCheckDef) defs
     rs4 <- mapM (runMaybeT . (checkDef defCtxt)) defs
 
     return $
-      if all isJust (rs1 <> rs2 <> rs3 <> (map (fmap (const ())) rs4))
+      if all isJust (rs1 <> rs2 <> rsIFTys <> rs3 <> (map (fmap (const ())) rs4))
         then Just (AST dataDecls (catMaybes rs4) [] [])
         else Nothing
   where
@@ -197,6 +198,16 @@ checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
 
 checkAndGenerateSubstitution' sp _ x _ =
   halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
+
+
+checkTyIFace :: (?globals :: Globals) => IFace -> MaybeT Checker ()
+checkTyIFace (IFace sp name _ _ _ _) = do
+  clash <- isJust . lookup name <$> gets ifaceContext
+  if clash
+    then halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
+    else modify' $ \st ->
+      st{ ifaceContext = (name, ()) : ifaceContext st }
+
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions

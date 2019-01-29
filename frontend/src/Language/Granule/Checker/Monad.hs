@@ -117,6 +117,9 @@ data CheckerState = CS
             , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
+            -- Interface information
+            , ifaceContext :: Ctxt ()
+
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
@@ -134,6 +137,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , patternConsumption = []
                , typeConstructors = Primitives.typeConstructors
                , dataConstructors = Primitives.dataConstructors
+               , ifaceContext = []
                , deriv = Nothing
                , derivStack = []
                }
