@@ -1,0 +1,5 @@
+interface Foo a where
+  simple : a -> a
+
+interface Foo b where
+  simple2 : b -> b
