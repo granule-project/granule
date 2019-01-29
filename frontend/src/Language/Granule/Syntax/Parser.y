@@ -175,8 +175,12 @@ InstBinds :: { [IDef () ()] }
     { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fst $ fst $1) (snd $1)] }
 
 InstVar :: { IFaceDat }
-  :     CONSTR              { IFaceDat (mkId $ constrString $1) [] }
-  | '(' CONSTR TyParams ')' { IFaceDat (mkId $ constrString $2) $3 }
+  :     CONSTR
+    {% mkSpan (getPosToSpan $1) >>=
+      \sp -> return $ IFaceDat sp (mkId $ constrString $1) [] }
+  | '(' CONSTR TyParams ')'
+    { % mkSpan (getPos $1, getPos $4) >>=
+      \sp -> return $ IFaceDat sp (mkId $ constrString $2) $3 }
 
 InstDecl :: { Instance () ()  }
   : instance IFaceName InstVar where InstBinds

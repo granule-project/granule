@@ -109,8 +109,10 @@ deriving instance (Show v, Show a) => Show (IDef v a)
 
 
 -- | Instance type
-data IFaceDat = IFaceDat Id [Type]
+data IFaceDat = IFaceDat Span Id [Type]
   deriving (Show, Generic, Eq)
+
+instance FirstParameter IFaceDat Span
 
 
 -- | Fresh a whole AST
