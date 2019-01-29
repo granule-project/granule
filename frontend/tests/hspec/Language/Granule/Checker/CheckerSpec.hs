@@ -134,7 +134,7 @@ spec = do
       it "simple elaborator tests" $ do
         -- Simple definitions
         -- \x -> x + 1
-        (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
+        (AST _ (def1:_) _ _) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
         (Just defElab, _) <- runChecker initState (runMaybeT $ checkDef [] def1)
         getAnnotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
