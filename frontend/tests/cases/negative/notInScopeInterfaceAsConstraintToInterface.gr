@@ -1,0 +1,4 @@
+-- we attempt to use 'Simple1' as a constraint,
+-- but it is not in scope
+interface (Simple1 a) => Simple2 a where
+  simple : a -> a

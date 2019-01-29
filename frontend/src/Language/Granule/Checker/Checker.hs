@@ -205,12 +205,15 @@ checkAndGenerateSubstitution' sp _ x _ =
 
 
 checkTyIFace :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkTyIFace (IFace sp name _ _ _ _) = do
-  clash <- isJust . lookup name <$> gets ifaceContext
-  if clash
-    then halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
-    else modify' $ \st ->
-      st{ ifaceContext = (name, ()) : ifaceContext st }
+checkTyIFace (IFace sp name constrs _ _ _) = do
+  checkDuplicate
+  mapM_ (checkIFaceConstr sp) constrs
+  modify' $ \st ->
+    st{ ifaceContext = (name, ()) : ifaceContext st }
+  where
+    checkDuplicate = do
+      clash <- isJust . lookup name <$> gets ifaceContext
+      when clash $ halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
 
 
 notInScope :: (?globals :: Globals) => String -> Span -> Id -> MaybeT Checker ()
@@ -218,12 +221,22 @@ notInScope desc sp name = halt $
   UnboundVariableError (Just sp) $ concat [desc, " `", pretty name, "` is not in scope."]
 
 
+checkIFaceExists :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
+checkIFaceExists sp name = do
+  exists <- isJust . lookup name <$> gets ifaceContext
+  when (not exists) (notInScope "Interface" sp name)
+
+
+checkIFaceConstr :: (?globals :: Globals) => Span -> IConstr -> MaybeT Checker ()
+checkIFaceConstr sp (IConstr (iname,_)) = do
+  checkIFaceExists sp iname
+
+
 checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInst (Instance sp iname _ idt _) = do
-  exists <- isJust . lookup iname <$> gets ifaceContext
-  if not exists
-    then notInScope "Interface" sp iname
-    else checkInstTy idt
+  checkIFaceExists sp iname
+  checkInstTy idt
+
 
 checkInstTy :: (?globals :: Globals) => IFaceDat -> MaybeT Checker ()
 checkInstTy (IFaceDat sp tname _) = do
