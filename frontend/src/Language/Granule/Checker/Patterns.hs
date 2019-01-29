@@ -71,7 +71,7 @@ ctxtFromTypedPattern _ t (PWild s _) cons =
     case cons of
       Full ->
         -- Full consumption is allowed here
-        return ([], [], [], PWild s t, Full)
+        return ([], [], [], PWild s t, NotFull)
 
       _ -> illLinearityMismatch s [NonLinearPattern]
 
@@ -129,7 +129,7 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) _ = do
 
     -- Discharge all variables bound by the inner pattern
     ctxt' <- mapM (discharge s coeffTy coeff) ctx
-    return (ctxt', eVars, subst, elabP, Full)
+    return (ctxt', eVars, subst, elabP, NotFull)
 
 ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
