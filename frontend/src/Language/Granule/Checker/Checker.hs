@@ -213,11 +213,23 @@ checkTyIFace (IFace sp name _ _ _ _) = do
       st{ ifaceContext = (name, ()) : ifaceContext st }
 
 
+notInScope :: (?globals :: Globals) => String -> Span -> Id -> MaybeT Checker ()
+notInScope desc sp name = halt $
+  UnboundVariableError (Just sp) $ concat [desc, " `", pretty name, "` is not in scope."]
+
+
 checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
-checkInst (Instance sp iname _ _ _) = do
+checkInst (Instance sp iname _ idt _) = do
   exists <- isJust . lookup iname <$> gets ifaceContext
   if not exists
-    then halt $ UnboundVariableError (Just sp) $ "Interface `" <> pretty iname <> "` is not in scope."
+    then notInScope "Interface" sp iname
+    else checkInstTy idt
+
+checkInstTy :: (?globals :: Globals) => IFaceDat -> MaybeT Checker ()
+checkInstTy (IFaceDat sp tname _) = do
+  exists <- isJust . lookup tname <$> gets typeConstructors
+  if not exists
+    then notInScope "Type constructor" sp tname
     else pure ()
 
 

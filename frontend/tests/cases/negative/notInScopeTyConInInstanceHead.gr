@@ -1,0 +1,6 @@
+interface Simple a where
+  simple : a -> a
+
+-- type SimpleDT is not in scope
+instance Simple SimpleDT where
+  simple x = x
