@@ -1,0 +1,9 @@
+interface Simple a where
+  simple : a -> a;
+  simple2 : a -> a
+
+data A = A
+
+-- we fail to provide a definition for 'simple'
+instance Simple A where
+  simple x = x
