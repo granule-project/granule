@@ -1,0 +1,7 @@
+data SimpleDT = SDT
+
+interface Simple a where
+  simple : a -> a
+
+instance Simple (SimpleDT A) where
+  simple x = x
