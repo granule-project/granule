@@ -1,0 +1,9 @@
+data A a = A
+
+data B = B
+
+interface Simple a where
+  simple : a -> a
+
+instance Simple (A B) where
+  simple x = x

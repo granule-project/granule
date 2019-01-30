@@ -1,0 +1,8 @@
+interface Simple (a : Type -> Type) where
+  simple : forall (b : Type) . a b
+
+data A = A
+
+-- 'A' has the wrong kind
+instance Simple A where
+  simple _ = A
