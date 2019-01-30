@@ -1,0 +1,7 @@
+-- 'simple' is defined in distinct
+-- interfaces
+interface Simple a where
+  simple : a -> a
+
+interface Simple2 b where
+  simple : b -> b

@@ -44,10 +44,6 @@ import Language.Granule.Utils
 
 --import Debug.Trace
 
-maybeKindToKind :: Maybe Kind -> Kind
-maybeKindToKind Nothing  = KType
-maybeKindToKind (Just k) = k
-
 -- Checking (top-level)
 check :: (?globals :: Globals) => AST () () -> IO (Maybe (AST () Type))
 check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
@@ -56,8 +52,8 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rsIFHeads <- mapM (runMaybeT . checkIFaceHead) ifaces
     rsIFTys <- mapM (runMaybeT . checkIFaceTys) ifaces
     rsInsts <- mapM (runMaybeT . checkInst) insts
-    rs3 <- mapM (runMaybeT . kindCheckDef) defs
-    rs4 <- mapM (runMaybeT . (checkDef defCtxt)) defs
+    rs3 <- mapM (runMaybeT . checkDefTy) defs
+    rs4 <- mapM (runMaybeT . checkDef) defs
 
     return $
       if all isJust (rs1 <> rs2
@@ -67,17 +63,6 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
                      <> rs3 <> (map (fmap (const ())) rs4))
         then Just (AST dataDecls (catMaybes rs4) [] [])
         else Nothing
-  where
-    defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs <> ifaceDefs
-    -- to get definition context from interfaces, we annotate
-    -- the type schemes to include a constraint of the interface,
-    -- and add a binder for the interface variable
-    ifaceDefs = concatMap (\(IFace _ iname _ kindAnn ivar itys) ->
-      ifaceTys iname ivar (maybeKindToKind kindAnn) itys) ifaces
-    ifaceTys iname ivar kind = map (\(IFaceTy _ name tys) ->
-      (name, injectConstr iname ivar kind tys))
-    injectConstr iname ivar kind (Forall sp binds constrs ty) =
-      Forall sp (binds <> [(ivar, kind)]) (constrs <> [IConstr (iname, ivar)]) ty
 
 checkTyCon :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
 checkTyCon (DataDecl sp name tyVars kindAnn ds) = do
@@ -235,27 +220,47 @@ checkConstrIFaceExists sp (IConstr (name,_)) =
   checkIFaceExists sp name
 
 
+-- | @checkDuplicate (ctxtf, descr) sp name@ checks if
+-- | @name@ already exists in the context retrieved by
+-- | @ctxtf@. If a name already exists, then the program
+-- | halts with a `NameClashError`.
+checkDuplicate :: (?globals :: Globals) => ((CheckerState -> Ctxt a), String) -> Span -> Id -> MaybeT Checker ()
+checkDuplicate (ctxtf, descr) sp name = do
+  clash <- isJust . lookup name <$> gets ctxtf
+  when clash $ halt $ NameClashError (Just sp) $ concat [descr, " `", pretty name, "` already defined."]
+
+
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
 checkIFaceHead (IFace sp name constrs kindAnn pname _) = do
-  checkDuplicate
+  checkDuplicate (ifaceContext, "Interface") sp name
   mapM_ (checkConstrIFaceExists sp) constrs
   modify' $ \st ->
     st{ ifaceContext = (name, ()) : ifaceContext st }
-  where
-    checkDuplicate = do
-      clash <- isJust . lookup name <$> gets ifaceContext
-      when clash $ halt $ NameClashError (Just sp) $ "Interface `" <> pretty name <> "` already defined."
+
+
+registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
+registerDefSig sp name tys = do
+  checkDuplicate (defContext, "Definition") sp name
+  modify' $ \st -> st { defContext = [(name, tys)] <> defContext st }
 
 
 checkIFaceTys :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkIFaceTys (IFace sp _ _ kindAnn pname tys) = do
+checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
   initKVarContext <- fmap kVarContext get
   modify' $ \st -> st { kVarContext = [(pname, tyVarKind)] <> initKVarContext }
   mapM_ checkIFaceTy tys
   modify' $ \st -> st { kVarContext = initKVarContext }
   where
-    checkIFaceTy (IFaceTy sp _ tys) = kindCheckSig sp tys
+    checkIFaceTy (IFaceTy sp name tys) = do
+      kindCheckSig sp tys
+      mkIFaceTyBind sp name tys
     tyVarKind = case kindAnn of Just k -> k; Nothing -> KType
+    mkIFaceTyBind sp name (Forall fsp binds constrs ty) = do
+      -- to get definition context from interfaces, we annotate
+      -- the type schemes to include a constraint of the interface,
+      -- and add a binder for the interface variable
+      let tys' = Forall fsp (binds <> [(pname, tyVarKind)]) (constrs <> [IConstr (iname, pname)]) ty
+      registerDefSig sp name tys'
 
 
 checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
@@ -273,12 +278,18 @@ checkInstTy (IFaceDat sp tname _) = do
     else pure ()
 
 
+checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()
+checkDefTy d@(Def sp name _ tys) = do
+  kindCheckDef d
+  registerDefSig sp name tys
+
+
 checkDef :: (?globals :: Globals)
-         => Ctxt TypeScheme  -- context of top-level definitions
-         -> Def () ()        -- definition
+         => Def () ()        -- definition
          -> MaybeT Checker (Def () Type)
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty)) = do
 
+    defCtxt <- fmap defContext get
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )

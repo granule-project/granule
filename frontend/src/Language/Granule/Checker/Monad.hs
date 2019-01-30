@@ -120,6 +120,9 @@ data CheckerState = CS
             -- Interface information
             , ifaceContext :: Ctxt ()
 
+            -- context of definition types
+            , defContext :: Ctxt TypeScheme
+
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
@@ -138,6 +141,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , typeConstructors = Primitives.typeConstructors
                , dataConstructors = Primitives.dataConstructors
                , ifaceContext = []
+               , defContext = []
                , deriv = Nothing
                , derivStack = []
                }
