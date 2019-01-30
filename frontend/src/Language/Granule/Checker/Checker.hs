@@ -42,6 +42,10 @@ import Language.Granule.Utils
 
 --import Debug.Trace
 
+maybeKindToKind :: Maybe Kind -> Kind
+maybeKindToKind Nothing  = KType
+maybeKindToKind (Just k) = k
+
 -- Checking (top-level)
 check :: (?globals :: Globals) => AST () () -> IO (Maybe (AST () Type))
 check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
@@ -62,7 +66,16 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
         then Just (AST dataDecls (catMaybes rs4) [] [])
         else Nothing
   where
-    defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+    defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs <> ifaceDefs
+    -- to get definition context from interfaces, we annotate
+    -- the type schemes to include a constraint of the interface,
+    -- and add a binder for the interface variable
+    ifaceDefs = concatMap (\(IFace _ iname _ kindAnn ivar itys) ->
+      ifaceTys iname ivar (maybeKindToKind kindAnn) itys) ifaces
+    ifaceTys iname ivar kind = map (\(IFaceTy _ name tys) ->
+      (name, injectConstr iname ivar kind tys))
+    injectConstr iname ivar kind (Forall sp binds constrs ty) =
+      Forall sp (binds <> [(ivar, kind)]) (constrs <> [IConstr (iname, ivar)]) ty
 
 checkTyCon :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
 checkTyCon (DataDecl sp name tyVars kindAnn ds) = do

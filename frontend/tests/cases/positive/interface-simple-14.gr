@@ -1,0 +1,8 @@
+-- use of an interface function when it is
+-- constrained
+
+interface Simple a where
+  simple : a -> a
+
+simple1 : forall (a : Type) . {Simple a} => a -> a
+simple1 x = simple x
