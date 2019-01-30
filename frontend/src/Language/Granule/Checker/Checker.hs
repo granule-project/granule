@@ -209,10 +209,16 @@ notInScope desc sp name = halt $
   UnboundVariableError (Just sp) $ concat [desc, " `", pretty name, "` is not in scope."]
 
 
+-- | Verify that a name exists in the context, fail if it
+-- | doesn't.
+checkExists :: (?globals :: Globals) => (CheckerState -> Ctxt a, String) -> Span -> Id -> MaybeT Checker ()
+checkExists (ctxtf, descr) sp name = do
+  exists <- isJust . lookup name <$> gets ctxtf
+  when (not exists) $ notInScope descr sp name
+
+
 checkIFaceExists :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
-checkIFaceExists sp name = do
-  exists <- isJust . lookup name <$> gets ifaceContext
-  when (not exists) (notInScope "Interface" sp name)
+checkIFaceExists = checkExists (ifaceContext, "Interface")
 
 
 checkConstrIFaceExists :: (?globals :: Globals) => Span -> IConstr -> MaybeT Checker ()
@@ -272,10 +278,7 @@ checkInst (Instance sp iname constrs idt _) = do
 
 checkInstTy :: (?globals :: Globals) => IFaceDat -> MaybeT Checker ()
 checkInstTy (IFaceDat sp tname _) = do
-  exists <- isJust . lookup tname <$> gets typeConstructors
-  if not exists
-    then notInScope "Type constructor" sp tname
-    else pure ()
+  checkExists (typeConstructors, "Type constructor") sp tname
 
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()
