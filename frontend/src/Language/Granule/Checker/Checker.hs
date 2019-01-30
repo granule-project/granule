@@ -51,7 +51,8 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
     rsIFHeads <- mapM (runMaybeT . checkIFaceHead) ifaces
     rsIFTys <- mapM (runMaybeT . checkIFaceTys) ifaces
-    rsInsts <- mapM (runMaybeT . checkInst) insts
+    rsInstHeads <- mapM (runMaybeT . checkInstHead) insts
+    rsInstDefs <- mapM (runMaybeT . checkInstDefs) insts
     rs3 <- mapM (runMaybeT . checkDefTy) defs
     rs4 <- mapM (runMaybeT . checkDef) defs
 
@@ -59,7 +60,8 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
       if all isJust (rs1 <> rs2
                      <> rsIFHeads
                      <> rsIFTys
-                     <> rsInsts
+                     <> rsInstHeads
+                     <> rsInstDefs
                      <> rs3 <> (map (fmap (const ())) rs4))
         then Just (AST dataDecls (catMaybes rs4) [] [])
         else Nothing
@@ -237,12 +239,14 @@ checkDuplicate (ctxtf, descr) sp name = do
 
 
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkIFaceHead (IFace sp name constrs kindAnn pname _) = do
+checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
   checkDuplicate (ifaceContext, "Interface") sp name
   mapM_ (checkConstrIFaceExists sp) constrs
   modify' $ \st ->
-    st{ ifaceContext = (name, kind) : ifaceContext st }
-  where kind = case kindAnn of Nothing -> KType; Just k -> k
+    st{ ifaceContext = (name, (kind, ifnames)) : ifaceContext st }
+  where
+    kind = case kindAnn of Nothing -> KType; Just k -> k
+    ifnames = map (\(IFaceTy _ name _) -> name) itys
 
 
 registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
@@ -270,8 +274,8 @@ checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
       registerDefSig sp name tys'
 
 
-checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
-checkInst (Instance sp iname constrs idt _) = do
+checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
+checkInstHead (Instance sp iname constrs idt _) = do
   checkIFaceExists sp iname
   mapM_ (checkConstrIFaceExists sp) constrs
   checkInstTy iname idt
@@ -280,7 +284,7 @@ checkInst (Instance sp iname constrs idt _) = do
 checkInstTy :: (?globals :: Globals) => Id -> IFaceDat -> MaybeT Checker ()
 checkInstTy iname (IFaceDat sp tname itys) = do
   checkExists (typeConstructors, "Type constructor") sp tname
-  Just iKind <- requiredKindForInterface iname
+  Just iKind <- getInterfaceKind iname
 
   kVarContextInit <- fmap kVarContext get
   modify $ \st -> st { kVarContext = [(v, KType) | v <- freeVars ty] <> kVarContext st }
@@ -290,7 +294,19 @@ checkInstTy iname (IFaceDat sp tname itys) = do
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
   where
     ty = foldl TyApp (TyCon tname) itys
-    requiredKindForInterface name = fmap (lookup name . ifaceContext) get
+
+
+checkInstDefs :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
+checkInstDefs (Instance sp iname constrs idt ds) =
+  mapM_ (checkInstDef iname) ds
+
+
+checkInstDef :: (?globals :: Globals) => Id -> IDef v a -> MaybeT Checker ()
+checkInstDef iname (IDef _ Nothing _) = pure ()
+checkInstDef iname (IDef sp (Just name) eqs) = do
+  Just names <- getInterfaceMembers iname
+  unless (elem name names) (halt $ GenericError (Just sp) $
+    concat ["`", pretty name, "` is not a member of interface `", pretty iname, "`"])
 
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()

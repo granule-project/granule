@@ -1,0 +1,10 @@
+interface Simple a where
+  simple : a
+
+data A = A
+
+-- 'simple2' is not a member
+-- of the 'Simple' interface
+instance Simple A where
+  simple = A;
+  simple2 = A

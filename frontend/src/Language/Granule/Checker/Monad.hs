@@ -88,6 +88,8 @@ meetConsumption Empty Full = NotFull
 meetConsumption Full Empty = NotFull
 
 
+type IFaceCtxt = (Kind, [Id])
+
 data CheckerState = CS
             { -- Fresh variable id state
               uniqueVarIdCounterMap  :: M.Map String Nat
@@ -118,7 +120,7 @@ data CheckerState = CS
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
             -- Interface information
-            , ifaceContext :: Ctxt (Kind)
+            , ifaceContext :: Ctxt IFaceCtxt
 
             -- context of definition types
             , defContext :: Ctxt TypeScheme
@@ -149,6 +151,14 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- *** Various helpers for manipulating the context
 
+getInterface :: Id -> MaybeT Checker (Maybe IFaceCtxt)
+getInterface iname = fmap (lookup iname . ifaceContext) get
+
+getInterfaceKind :: Id -> MaybeT Checker (Maybe Kind)
+getInterfaceKind = fmap (fmap fst) . getInterface
+
+getInterfaceMembers :: Id -> MaybeT Checker (Maybe [Id])
+getInterfaceMembers = fmap (fmap snd) . getInterface
 
 {- | Useful if a checking procedure is needed which
      may get discarded within a wider checking, e.g., for
