@@ -1,0 +1,8 @@
+data A a b = A
+
+interface Simple a where
+  simple : a -> a
+
+-- multi-param datatype should be well-kinded
+instance Simple (A a b) where
+  simple x = x

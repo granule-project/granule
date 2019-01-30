@@ -241,7 +241,8 @@ checkIFaceHead (IFace sp name constrs kindAnn pname _) = do
   checkDuplicate (ifaceContext, "Interface") sp name
   mapM_ (checkConstrIFaceExists sp) constrs
   modify' $ \st ->
-    st{ ifaceContext = (name, ()) : ifaceContext st }
+    st{ ifaceContext = (name, kind) : ifaceContext st }
+  where kind = case kindAnn of Nothing -> KType; Just k -> k
 
 
 registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
@@ -273,12 +274,23 @@ checkInst :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInst (Instance sp iname constrs idt _) = do
   checkIFaceExists sp iname
   mapM_ (checkConstrIFaceExists sp) constrs
-  checkInstTy idt
+  checkInstTy iname idt
 
 
-checkInstTy :: (?globals :: Globals) => IFaceDat -> MaybeT Checker ()
-checkInstTy (IFaceDat sp tname _) = do
+checkInstTy :: (?globals :: Globals) => Id -> IFaceDat -> MaybeT Checker ()
+checkInstTy iname (IFaceDat sp tname itys) = do
   checkExists (typeConstructors, "Type constructor") sp tname
+  Just iKind <- requiredKindForInterface iname
+
+  kVarContextInit <- fmap kVarContext get
+  modify $ \st -> st { kVarContext = [(v, KType) | v <- freeVars ty] <> kVarContext st }
+  tyKind <- inferKindOfType sp ty
+  modify $ \st -> st { kVarContext = kVarContextInit }
+
+  when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
+  where
+    ty = foldl TyApp (TyCon tname) itys
+    requiredKindForInterface name = fmap (lookup name . ifaceContext) get
 
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()

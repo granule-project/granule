@@ -1,0 +1,10 @@
+data A a = A
+
+data B b = B
+
+interface Simple a where
+  simple : a -> a
+
+-- well-kinded nested datatype
+instance Simple (A (B b)) where
+  simple x = x

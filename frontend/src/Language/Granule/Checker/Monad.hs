@@ -118,7 +118,7 @@ data CheckerState = CS
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
             -- Interface information
-            , ifaceContext :: Ctxt ()
+            , ifaceContext :: Ctxt (Kind)
 
             -- context of definition types
             , defContext :: Ctxt TypeScheme
