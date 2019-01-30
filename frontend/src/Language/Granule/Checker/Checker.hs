@@ -226,15 +226,20 @@ checkInstTy iname (IFaceDat sp tname itys) = do
     ty = foldl TyApp (TyCon tname) itys
 
 checkInstDefs :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
-checkInstDefs (Instance sp iname constrs idt ds) =
-  mapM_ (checkInstDef iname) ds
-
-checkInstDef :: (?globals :: Globals) => Id -> IDef v a -> MaybeT Checker ()
-checkInstDef iname (IDef _ Nothing _) = pure ()
-checkInstDef iname (IDef sp (Just name) eqs) = do
+checkInstDefs (Instance sp iname constrs idt ds) = do
   Just names <- getInterfaceMembers iname
-  unless (elem name names) (halt $ GenericError (Just sp) $
-    concat ["`", pretty name, "` is not a member of interface `", pretty iname, "`"])
+  defnames <- mapM (\(sp, name) ->
+    checkInstDefName names sp name) [(sp, name) | (IDef sp (Just name) _) <- ds]
+  forM_ (filter (`notElem` defnames) names)
+    (\name -> halt $ GenericError (Just sp) $
+      concat ["No implementation given for `", pretty name
+             , "` which is a required member of interface `"
+             , pretty iname, "`"])
+  where
+    checkInstDefName names sp name = do
+      unless (elem name names) (halt $ GenericError (Just sp) $
+        concat ["`", pretty name, "` is not a member of interface `", pretty iname, "`"])
+      pure name
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()
 checkDefTy d@(Def sp name _ tys) = do
