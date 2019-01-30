@@ -177,9 +177,9 @@ IFaceDecl :: { IFace }
 
 InstBinds :: { [IDef () ()] }
   : Binding ';' InstBinds
-    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ IDef sp (fst $ fst $1) (snd $1) : $3 }
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ IDef sp (fmap mkId $ fst $ fst $1) (snd $1) : $3 }
   | Binding
-    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fst $ fst $1) (snd $1)] }
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
 
 InstVar :: { IFaceDat }
   :     CONSTR
