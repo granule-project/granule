@@ -99,7 +99,7 @@ deriving instance (Eq v, Eq a) => Eq (Instance v a)
 deriving instance (Show v, Show a) => Show (Instance v a)
 
 -- | Instance implementation
-data IDef v a = IDef Span (Maybe String) (Equation v a)
+data IDef v a = IDef Span (Maybe Id) (Equation v a)
   deriving (Generic)
 
 instance FirstParameter (IDef v a) Span
