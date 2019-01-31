@@ -25,6 +25,8 @@ import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Ch
 import System.IO (hFlush, stdout)
 import qualified System.IO as SIO (Handle, hGetChar, hPutChar, hClose, openFile, IOMode, isEOF)
 
+import Data.Array.IO
+
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
 
@@ -38,6 +40,9 @@ data Runtime a =
 
   -- | File handler
   | Handle SIO.Handle
+
+  -- | Arrays
+  | IOArray Int (Value (Runtime a) a)
 
   -- | Channels
   | Chan (CC.Chan (Value (Runtime a) a))
@@ -258,8 +263,29 @@ builtIns =
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)
+  , (mkId "mkArray", Ext () $ Primitive mkArray)
   ]
   where
+    mkArray :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
+    mkArray ctxt n@Constr{} = do
+      Ext () $ Primitive $ \x ->
+        case x of
+          Promote _ e -> do
+            v <- evalIn ctxt e
+            case v of
+              f@(Abs _ ) ->
+                mapM (evalIn ctxt (App ))
+
+    mkArray ctxt e = error $ "Bug in Granule. Trying to mkArray: " <> prettyDebug e
+
+    convertNatToInt :: RValue -> Int
+    convertNatToInt (Constr _ (sourceName -> "S") [x]) =
+      1 + convertNatToInt x
+    convertNatToInt (Const _ (sourceName -> "Z") []) =
+      0
+    convertNatToInt x =
+       error $ "Bug in Granule. Trying to convert inductive nat for: " <> prettyDebug x
+
     fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     fork ctxt e@Abs{} = do
       c <- CC.newChan

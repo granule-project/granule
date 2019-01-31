@@ -31,9 +31,15 @@ map [f] (Cons x xs) = Cons (f x) (map [f] xs)
 
 -- Safe random-access indexing from a vector
 index : forall a : Type, n : Nat
-      . Fin (n + 1) -> (Vec (n + 1) a) [0..1] -> a
-index FZ     [Cons x _]   = x;
-index (FS k) [Cons _ xs'] = index k [xs']
+      . (Vec (n + 1) a) [0..1] -> Fin (n + 1) -> a
+index [Cons x _]   FZ     = x;
+index [Cons _ xs'] (FS k) = index [xs'] k
+
+swap : forall a : Type, n : Nat
+     . (Vec (n + 1) a) -> Fin (n + 1) -> a -> (a, Vec (n + 1) a)
+swap (Cons x xs) FZ y = (x, Cons y xs);
+swap (Cons x xs) (FS k) y =
+  let (z, xs') = swap xs k y in (z, Cons x xs')
 
 -- Standard foldr on vectors
 foldr : forall (a : Type, b : Type, n : Nat)
@@ -132,6 +138,7 @@ pullVec : forall (k : Nat, n : Nat, a : Type)
          . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
 pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]
+
 
 copySpine : forall a : Type, n : Nat
           . Vec n a -> Vec n () × Vec n a

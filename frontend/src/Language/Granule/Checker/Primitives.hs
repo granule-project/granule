@@ -17,6 +17,7 @@ typeLevelConstructors =
     , (mkId "(,)", (KFun KType (KFun KType KType), Just 1))
     , (mkId "(*)", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
+    , (mkId "Array", (KFun (kConstr $ mkId "Nat") (KFun KType KType), Nothing))
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
     , (mkId "String", (KType, Nothing))
@@ -140,11 +141,29 @@ builtins =
                          ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
   , (mkId "unpack", Forall nullSpanBuiltin [(mkId "s", protocol)]
                             (FunTy ((con "Chan") .@ (var "s")) (var "s")))
+
+  , (mkId "mkArray", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "n", kConstr $ mkId "Nat")]
+                      (FunTy ((con "N") .@ (var "n"))
+                        (FunTy
+                           (Box (CVar $ mkId "n")
+                                 (FunTy ((con "Fin") .@ (var "n"))
+                                         (var "a")))
+                            (((con "Array") .@ (var "n")) .@ (var "a")))))
+
+  , (mkId "swap", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "n", kConstr $ mkId "Nat")]
+                    (FunTy (((con "Array") .@ nPlus1) .@ (var "a"))
+                           $ FunTy ((con "Fin") .@ nPlus1)
+                             $ FunTy (var "a")
+                              $ (((con "(,)") .@ (var "a")) .@ (((con "Array") .@ nPlus1) .@ (var "a"))))
+     )
   ]
+
+nPlus1 = TyInfix "+" (var "n") (TyInt 1)
 
 binaryOperators :: [(Operator, Type)]
 binaryOperators =
   [ ("+", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
+   ,("+", FunTy (TyCon $ mkId "HInt") (FunTy (TyCon $ mkId "HInt") (TyCon $ mkId "HInt")))
    ,("+", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
    ,("-", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
    ,("-", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
