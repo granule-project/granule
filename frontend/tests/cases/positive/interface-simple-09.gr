@@ -2,11 +2,11 @@ data SimpleDT = SDT
 
 interface Simple a where
   simple1 : a -> a;
-  simple2 : a -> a -> a;
-  simple3 : a -> a -> a -> a
+  simple2 : a -> a [0] -> a;
+  simple3 : a -> a [0] -> a [0] -> a
 
 -- instance with multiple bindings
 instance Simple SimpleDT where
   simple1 x = x;
-  simple2 x y = x;
-  simple3 x y z = x
+  simple2 x [_] = x;
+  simple3 x [_] [_] = x

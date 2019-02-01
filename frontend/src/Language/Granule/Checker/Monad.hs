@@ -151,14 +151,20 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- *** Various helpers for manipulating the context
 
+lookupContext :: (CheckerState -> Ctxt a) -> Id -> MaybeT Checker (Maybe a)
+lookupContext ctxtf name = fmap (lookup name . ctxtf) get
+
 getInterface :: Id -> MaybeT Checker (Maybe IFaceCtxt)
-getInterface iname = fmap (lookup iname . ifaceContext) get
+getInterface = lookupContext ifaceContext
 
 getInterfaceKind :: Id -> MaybeT Checker (Maybe Kind)
 getInterfaceKind = fmap (fmap fst) . getInterface
 
 getInterfaceMembers :: Id -> MaybeT Checker (Maybe [Id])
 getInterfaceMembers = fmap (fmap snd) . getInterface
+
+getTypeScheme :: Id -> MaybeT Checker (Maybe TypeScheme)
+getTypeScheme = lookupContext defContext
 
 {- | Useful if a checking procedure is needed which
      may get discarded within a wider checking, e.g., for

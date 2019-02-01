@@ -11,7 +11,7 @@ module Language.Granule.Checker.Checker where
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import Data.List (genericLength, intercalate)
+import Data.List (genericLength, groupBy, intercalate)
 import Data.Maybe
 import qualified Data.Text as T
 
@@ -298,7 +298,7 @@ checkInstTy iname (IFaceDat sp itys) = do
     ty = foldl1 TyApp itys
 
 
-checkInstDefs :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
+checkInstDefs :: (?globals :: Globals) => Instance () () -> MaybeT Checker ()
 checkInstDefs (Instance sp iname constrs idt ds) = do
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
@@ -308,6 +308,16 @@ checkInstDefs (Instance sp iname constrs idt ds) = do
       concat ["No implementation given for `", pretty name
              , "` which is a required member of interface `"
              , pretty iname, "`"])
+  let nameGroupedDefs = groupBy
+        (\(IDef _ name1 _) (IDef _ name2 _) ->
+          name1 == name2 || name2 == Nothing) ds
+      groupedEqns = map
+        (\((IDef sp (Just name) eq):dt) ->
+          let eqs = map (\(IDef _ _ eq) -> eq) dt
+          in ((sp, name), eq:eqs)) nameGroupedDefs
+  mapM_ (\((sp, name), eqs) -> do
+    Just tys <- getTypeScheme name
+    checkDef' sp name eqs tys) groupedEqns
   where
     checkInstDefName names sp name = do
       unless (elem name names) (halt $ GenericError (Just sp) $
@@ -321,8 +331,9 @@ checkDefTy d@(Def sp name _ tys) = do
   registerDefSig sp name tys
 
 
-checkDef :: (?globals :: Globals)
-         => Def () ()        -- definition
+checkDef' :: (?globals :: Globals)
+         => Span -> Id -> [Equation () ()]
+         -> TypeScheme
          -> MaybeT Checker (Def () Type)
 checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty)) = do
 
@@ -351,6 +362,12 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty))
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     pure $ Def s defName elaboratedEquations tys
+
+checkDef :: (?globals :: Globals)
+         => Def () ()        -- definition
+         -> MaybeT Checker (Def () Type)
+checkDef (Def s defName equations tys@(Forall _ foralls _ ty)) =
+  checkDef' s defName equations tys
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions
