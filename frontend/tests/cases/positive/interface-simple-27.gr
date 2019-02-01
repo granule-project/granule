@@ -1,0 +1,6 @@
+interface Id a where
+  id1 : a -> a
+
+-- generic instance
+instance Id a where
+  id1 x = x

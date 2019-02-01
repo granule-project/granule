@@ -175,12 +175,10 @@ InstBinds :: { [IDef () ()] }
     { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
 
 InstVar :: { IFaceDat }
-  :     CONSTR
-    {% mkSpan (getPosToSpan $1) >>=
-      \sp -> return $ IFaceDat sp (mkId $ constrString $1) [] }
-  | '(' CONSTR TyParams ')'
+  :     TyAtomWithSpan { IFaceDat (snd $1) [fst $1] }
+  | '(' TyAtom TyParams ')'
     { % mkSpan (getPos $1, getPos $4) >>=
-      \sp -> return $ IFaceDat sp (mkId $ constrString $2) $3 }
+      \sp -> return $ IFaceDat sp ($2:$3) }
 
 InstDecl :: { Instance () ()  }
   : instance IFaceName InstVar where InstBinds
@@ -340,11 +338,24 @@ TyJuxt :: { Type }
   | TyAtom '\\' '/' TyAtom    { TyInfix ("\\/") $1 $4 }
 
 TyAtom :: { Type }
-  : CONSTR                    { TyCon $ mkId $ constrString $1 }
-  | VAR                       { TyVar (mkId $ symString $1) }
-  | INT                       { let TokenInt _ x = $1 in TyInt x }
-  | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId "(,)") $2) $4 }
+  : TyAtomWithSpan { fst $1 }
+
+TyAtomWithSpan :: { (Type, Span) }
+  : CONSTR                    {
+    % mkSpan (getPosToSpan $1) >>=
+      \sp -> return (TyCon $ mkId $ constrString $1, sp) }
+  | VAR                       {
+    % mkSpan (getPosToSpan $1) >>=
+      \sp -> return (TyVar (mkId $ symString $1), sp) }
+  | INT                       {
+    % mkSpan (getPosToSpan $1) >>=
+      \sp -> return (let TokenInt _ x = $1 in TyInt x, sp) }
+  | '(' Type ')'              {
+    % mkSpan (getPos $1, getPos $3) >>=
+      \sp -> return ($2, sp) }
+  | '(' Type ',' Type ')'     {
+    % mkSpan (getPos $1, getPos $5) >>=
+      \sp -> return (TyApp (TyApp (TyCon $ mkId "(,)") $2) $4, sp) }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
