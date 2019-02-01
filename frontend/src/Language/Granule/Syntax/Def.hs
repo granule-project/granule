@@ -109,7 +109,7 @@ deriving instance (Show v, Show a) => Show (IDef v a)
 
 
 -- | Instance type
-data IFaceDat = IFaceDat Span [Type]
+data IFaceDat = IFaceDat Span Type
   deriving (Show, Generic, Eq)
 
 instance FirstParameter IFaceDat Span
