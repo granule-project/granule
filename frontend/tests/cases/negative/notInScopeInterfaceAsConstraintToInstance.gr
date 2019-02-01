@@ -4,5 +4,5 @@ interface Simple a where
 data SimpleDT a = SDT
 
 -- interface Simple1 is not in scope
-instance (Simple1 a) => Simple (SimpleDT a) where
+instance {Simple1 a} => Simple (SimpleDT a) where
   simple x = x

@@ -8,5 +8,5 @@ data SimpleDT a where
   DT : SimpleDT a
 
 -- simple instance with interface constraint
-instance (Simple1 a) => Simple2 (SimpleDT a) where
+instance {Simple1 a} => Simple2 (SimpleDT a) where
   simple2 x = x

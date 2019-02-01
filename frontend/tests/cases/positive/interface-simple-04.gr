@@ -5,5 +5,5 @@ interface Simple2 a where
   simple2 : a -> a
 
 -- simple interface with multiple parent constraints
-interface (Simple1 a, Simple2 a) => Simple3 a where
+interface {Simple1 a, Simple2 a} => Simple3 a where
   simple : a -> a

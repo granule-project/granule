@@ -1,8 +1,8 @@
 -- recursive interface constraint
 -- won't even check recursive constraint as
 -- a scope error will be raised first
-interface (Simple1 a) => Simple2 a where
+interface {Simple1 a} => Simple2 a where
   simple2 : a -> a
 
-interface (Simple2 a) => Simple1 a where
+interface {Simple2 a} => Simple1 a where
   simple1 : a -> a

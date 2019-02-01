@@ -2,5 +2,5 @@ interface Simple1 a where
   simple1 : a -> a
 
 -- one of the parent interfaces is not in scope
-interface (Simple1 a, Simple2 a) => Simple3 a where
+interface {Simple1 a, Simple2 a} => Simple3 a where
   simple3 : a -> a
