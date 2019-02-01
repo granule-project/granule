@@ -238,7 +238,7 @@ mguCoeffectTypes s c1 c2 = do
   ck1 <- inferCoeffectType s c1
   ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
-    -- Both are poly
+    -- Both are variables
     (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
       updateCoeffectType kv1 (KVar kv2)
       return (TyVar kv2)
