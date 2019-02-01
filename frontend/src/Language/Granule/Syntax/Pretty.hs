@@ -199,7 +199,7 @@ instance Pretty IFace where
         constrStr =
           case constrs of
             [] -> ""
-            cs -> prettyConstraintsParens cs
+            cs -> prettyConstraintsBraces cs
         pStr = maybe (pretty paramName)
           (\k -> parens' $ prettyColonSep 0 paramName k) kind
         tyStr = "  " ++ prettySemiSep 0 tys
@@ -217,7 +217,7 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
       where ctsStr =
               case cts of
                 [] -> ""
-                _ -> prettyConstraintsParens cts
+                _ -> prettyConstraintsBraces cts
 
 instance Pretty IFaceDat where
     prettyL l (IFaceDat _ [name]) = prettyL l name
@@ -326,15 +326,6 @@ prettyCommaSep l = intercalate ", " . map (prettyL l)
 -- | spaces
 prettyColonSep :: (?globals :: Globals) => (Pretty a, Pretty b) => Level -> a -> b -> String
 prettyColonSep l x y = prettyL l x <> " : " <> prettyL l y
-
-
--- | Pretty-print some constraints
--- |
--- | The result includes a trailing space
--- |
--- | This variant uses parentheses
-prettyConstraintsParens :: (?globals :: Globals) => [IConstr] -> String
-prettyConstraintsParens = (<> " => ") . parens' . prettyCommaSep 0
 
 
 -- | Pretty-print some constraints
