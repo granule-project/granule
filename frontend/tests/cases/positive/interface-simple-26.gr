@@ -1,0 +1,9 @@
+-- instance of unit
+interface Simple a where
+  simple : a -> a
+
+instance Simple () where
+  simple x = x
+
+simple1 : () -> ()
+simple1 = simple
