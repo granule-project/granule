@@ -1,0 +1,4 @@
+-- we have a duplicate signature for 'simple'
+interface Simple a where
+  simple : a;
+  simple : a -> a
