@@ -50,8 +50,8 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rsIFHeads <- mapM (runMaybeT . checkIFaceHead) ifaces
     rsIFTys <- mapM (runMaybeT . checkIFaceTys) ifaces
     rsInstHeads <- mapM (runMaybeT . checkInstHead) insts
-    rsInstDefs <- mapM (runMaybeT . checkInstDefs) insts
     rs3 <- mapM (runMaybeT . checkDefTy) defs
+    rsInstDefs <- mapM (runMaybeT . checkInstDefs) insts
     rs4 <- mapM (runMaybeT . checkDef) defs
 
     return $
