@@ -210,10 +210,7 @@ instance Pretty IFaceTy where
 
 instance Pretty IConstr where
     prettyL l (IConstr (iface, ty)) =
-      let pretTy = prettyL l ty in
-      unwords [prettyL l iface, case ty of
-                                  (TyVar v) -> pretTy
-                                  _ -> parens' pretTy]
+      unwords [prettyL l iface, prettyTy l ty]
 
 instance (Pretty v, Pretty a) => Pretty (Instance v a) where
     prettyL l (Instance _ name cts idat defs) =
@@ -225,8 +222,7 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
                 _ -> prettyConstraintsBraces cts
 
 instance Pretty IFaceDat where
-    prettyL l (IFaceDat _ [name]) = prettyL l name
-    prettyL l (IFaceDat _ tys) = parens' . unwords $ map pretty tys
+    prettyL l (IFaceDat _ ty) = prettyTy l ty
 
 instance (Pretty v, Pretty a) => Pretty (IDef v a) where
     prettyL l (IDef _ v eq) = prettyEq eq
@@ -345,3 +341,11 @@ prettyColonSep l x y = prettyL l x <> " : " <> prettyL l y
 -- | This variant uses curly braces
 prettyConstraintsBraces :: (?globals :: Globals) => [IConstr] -> String
 prettyConstraintsBraces = (<> " => ") . braces . prettyCommaSep 0
+
+
+-- | Pretty-print a type (possibly surrounded by parentheses)
+-- |
+-- | E.g., 'a', 'Int', '(List a)'
+prettyTy :: (?globals :: Globals) => Level -> Type -> String
+prettyTy l ty@(TyApp _ _) = parens' $ prettyL l ty
+prettyTy l ty = prettyL l ty

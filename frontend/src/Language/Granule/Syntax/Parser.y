@@ -182,10 +182,7 @@ InstBinds :: { [IDef () ()] }
     { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
 
 InstVar :: { IFaceDat }
-  :     TyAtomWithSpan { IFaceDat (snd $1) [fst $1] }
-  | '(' TyAtom TyParams ')'
-    { % mkSpan (getPos $1, getPos $4) >>=
-      \sp -> return $ IFaceDat sp ($2:$3) }
+  : TyAtomWithSpan { IFaceDat (snd $1) (fst $1) }
 
 InstDecl :: { Instance () ()  }
   : instance IFaceName InstVar where InstBinds
