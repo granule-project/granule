@@ -118,8 +118,10 @@ instance FirstParameter IFaceDat Span
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
 freshenAST (AST dds defs ifaces insts) =
-  AST dds' defs' ifaces insts
-    where (dds', defs') = (map runFreshener dds, map runFreshener defs)
+  AST dds' defs' ifaces' insts
+    where dds' = map runFreshener dds
+          defs' = map runFreshener defs
+          ifaces' = map runFreshener ifaces
 
 instance Monad m => Freshenable m DataDecl where
   freshen (DataDecl s v tyVars kind ds) = do
@@ -135,6 +137,19 @@ instance Monad m => Freshenable m DataConstr where
   freshen (DataConstrA sp v ts) = do
     ts <- mapM freshen ts
     return $ DataConstrA sp v ts
+
+instance Monad m => Freshenable m IFace where
+  freshen (IFace sp iname constrs kind pname itys) = do
+    pname' <- freshIdentifierBase Type pname
+    constrs' <- mapM freshen constrs
+    itys' <- mapM freshen itys
+    kind' <- freshen kind
+    return $ IFace sp iname constrs' kind' pname' itys'
+
+instance Monad m => Freshenable m IFaceTy where
+  freshen (IFaceTy sp name tys) = do
+    tys' <- freshen tys
+    return $ IFaceTy sp name tys'
 
 instance Monad m => Freshenable m (Equation v a) where
   freshen (Equation s a ps e) = do
