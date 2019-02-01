@@ -84,10 +84,10 @@ inferKindOfType' s quantifiedVariables t =
         case lookup conId (typeConstructors st) of
           Just (kind,_) -> return kind
           Nothing   ->
-            case lookup conId (dataConstructors st) of
-              Just (Forall _ [] [] t, []) -> return $ KPromote t
-              Just _ -> halt $ GenericError (Just s) ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId)
-              Nothing -> halt $ UnboundVariableError (Just s) (pretty conId <> " constructor.")
+            conTys <- requireInScope (dataConstructors, "Constructor") s conId
+            case conTys of
+              (Forall _ [] [] t, []) -> pure $ KPromote t
+              _ -> halt $ GenericError (Just s) ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId)
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
@@ -118,15 +118,15 @@ inferKindOfType' s quantifiedVariables t =
 
     kInfix op k1 k2 = do
       st <- get
-      case lookup (mkId op) (typeConstructors st) of
-       Just (KFun k1' (KFun k2' kr), _) ->
+      (ka, kb) <- requireInScope (typeConstructors, "Operator") s (mkId op)
+      case (ka, kb) of
+       (KFun k1' (KFun k2' kr), _) ->
          if k1 `hasLub` k1'
           then if k2 `hasLub` k2'
                then return kr
                else illKindedNEq s k2' k2
           else illKindedNEq s k1' k1
-       Just (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
-       Nothing   -> halt $ UnboundVariableError (Just s) (pretty op <> " operator.")
+       (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
 
 -- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe Kind
