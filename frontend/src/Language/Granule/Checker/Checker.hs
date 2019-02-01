@@ -282,8 +282,10 @@ checkInstHead (Instance sp iname constrs idt _) = do
 
 
 checkInstTy :: (?globals :: Globals) => Id -> IFaceDat -> MaybeT Checker ()
-checkInstTy iname (IFaceDat sp tname itys) = do
-  checkExists (typeConstructors, "Type constructor") sp tname
+-- this case shouldn't be possible (from parsing)
+checkInstTy _ (IFaceDat sp []) =
+  halt $ GenericError (Just sp) "missing instance parameter"
+checkInstTy iname (IFaceDat sp itys) = do
   Just iKind <- getInterfaceKind iname
 
   kVarContextInit <- fmap kVarContext get
@@ -293,7 +295,7 @@ checkInstTy iname (IFaceDat sp tname itys) = do
 
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
   where
-    ty = foldl TyApp (TyCon tname) itys
+    ty = foldl1 TyApp itys
 
 
 checkInstDefs :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()

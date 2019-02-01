@@ -221,8 +221,8 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
                 _ -> prettyConstraintsParens cts
 
 instance Pretty IFaceDat where
-    prettyL l (IFaceDat _ name []) = prettyL l name
-    prettyL l (IFaceDat _ name tys) = parens' . unwords $ pretty name : map pretty tys
+    prettyL l (IFaceDat _ [name]) = prettyL l name
+    prettyL l (IFaceDat _ tys) = parens' . unwords $ map pretty tys
 
 instance (Pretty v, Pretty a) => Pretty (IDef v a) where
     prettyL l (IDef _ v eq) = prettyEq eq
