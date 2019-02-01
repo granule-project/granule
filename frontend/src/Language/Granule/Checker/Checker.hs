@@ -609,17 +609,15 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
      optionalSigEquality s optionalTySig ty1
 
-     -- Check grades on binders
+     -- Check that usage matches the binding grades/linearity
+     -- (performs the linearity check)
      ctxtEquals s (gam2 `intersectCtxts` binders) binders
 
      gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
-     -- Check linearity of locally bound variables
-     case checkLinearity binders gam2 of
-          [] ->  do
-            let t = Diamond (ef1 <> ef2) ty2
-            let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
-            return (t, gamNew, elaborated)
-          xs -> illLinearityMismatch s xs
+
+     let t = Diamond (ef1 <> ef2) ty2
+     let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
+     return (t, gamNew, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
