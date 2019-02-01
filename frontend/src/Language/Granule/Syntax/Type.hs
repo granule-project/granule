@@ -44,7 +44,7 @@ data Type = FunTy Type Type           -- ^ Function type
 
 
 -- | Interface constraints
-newtype IConstr = IConstr (Id, Id)
+newtype IConstr = IConstr (Id, Type)
   deriving (Eq, Show)
 
 
@@ -362,10 +362,8 @@ instance Freshenable m Coeffect where
 
 instance Freshenable m IConstr where
     freshen (IConstr (c, v)) = do
-      v' <- lookupVar Type v
-      return $ case v' of
-        Just v' -> IConstr (c, Id (sourceName v) v')
-        Nothing -> IConstr (c, mkId (sourceName v))
+      v' <- freshen v
+      return (IConstr (c, v'))
 
 ----------------------------------------------------------------------
 

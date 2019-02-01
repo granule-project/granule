@@ -1,0 +1,8 @@
+interface Simple a where
+  simple : a -> a
+
+data A a = A
+
+-- instance with complex constraint
+instance {Simple (A a)} => Simple a where
+  simple x = x

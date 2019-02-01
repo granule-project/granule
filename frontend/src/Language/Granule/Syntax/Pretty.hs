@@ -208,7 +208,11 @@ instance Pretty IFaceTy where
     prettyL l (IFaceTy _ name ty) = prettyColonSep l name ty
 
 instance Pretty IConstr where
-    prettyL l (IConstr (iface, var)) = unwords [prettyL l iface, prettyL l var]
+    prettyL l (IConstr (iface, ty)) =
+      let pretTy = prettyL l ty in
+      unwords [prettyL l iface, case ty of
+                                  (TyVar v) -> pretTy
+                                  _ -> parens' pretTy]
 
 instance (Pretty v, Pretty a) => Pretty (Instance v a) where
     prettyL l (Instance _ name cts idat defs) =
