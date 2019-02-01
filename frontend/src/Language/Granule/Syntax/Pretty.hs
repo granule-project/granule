@@ -166,8 +166,8 @@ appChain _                       = False
 instance (Pretty v, Pretty a) => Pretty (AST v a) where
     prettyL l (AST dataDecls defs ifaces insts) =
       concat [pretty' dataDecls, "\n\n",
-              pretty' defs, "\n\n",
               pretty' ifaces, "\n\n",
+              pretty' defs, "\n\n",
               pretty' insts]
       where
         pretty' :: Pretty l => [l] -> String
