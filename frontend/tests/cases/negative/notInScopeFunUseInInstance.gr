@@ -1,0 +1,8 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A
+
+-- id1 is not in scope
+instance Simple A where
+  simple = id1
