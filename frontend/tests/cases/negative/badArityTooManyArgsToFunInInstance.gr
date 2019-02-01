@@ -1,0 +1,8 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A
+
+-- too many arguments to 'simple'
+instance Simple A where
+  simple A A = A
