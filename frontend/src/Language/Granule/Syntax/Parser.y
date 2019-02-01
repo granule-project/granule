@@ -143,7 +143,7 @@ IFaceName :: { Id }
   : CONSTR { mkId $ constrString $1 }
 
 IFaceConstrained :: { [IConstr] }
-  : '(' IFaceConstrns ')' '=>' { $2 }
+  : '{' IFaceConstrns '}' '=>' { $2 }
 
 IFaceConstrns :: { [IConstr] }
   : IFaceConstrn ',' IFaceConstrns { $1 : $3 }
