@@ -1,0 +1,6 @@
+interface Simple a where
+  simple : a -> a
+
+-- simple1 should have type 'a -> a'
+simple1 : forall (a : Type) . {Simple a} => a
+simple1 = simple
