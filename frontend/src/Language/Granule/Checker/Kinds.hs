@@ -73,9 +73,8 @@ inferKindOfType' s quantifiedVariables t =
     kFun x _     = illKindedNEq s KType x
     kCon conId = do
         st <- get
-        case lookup conId (typeConstructors st) of
-          Just (kind,_) -> return kind
-          Nothing   -> halt $ UnboundVariableError (Just s) (pretty conId <> " constructor.")
+        (kind,_) <- requireInScope (typeConstructors, "Type constructor") s conId
+        return kind
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
@@ -104,15 +103,15 @@ inferKindOfType' s quantifiedVariables t =
 
     kInfix op k1 k2 = do
       st <- get
-      case lookup (mkId op) (typeConstructors st) of
-       Just (KFun k1' (KFun k2' kr), _) ->
+      (ka, kb) <- requireInScope (typeConstructors, "Operator") s (mkId op)
+      case (ka, kb) of
+       (KFun k1' (KFun k2' kr), _) ->
          if k1 `hasLub` k1'
           then if k2 `hasLub` k2'
                then return kr
                else illKindedNEq s k2' k2
           else illKindedNEq s k1' k1
-       Just (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
-       Nothing   -> halt $ UnboundVariableError (Just s) (pretty op <> " operator.")
+       (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
 
 -- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe Kind

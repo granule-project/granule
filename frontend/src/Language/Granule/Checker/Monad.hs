@@ -299,6 +299,19 @@ addConstraintToPreviousFrame c = do
           stack ->
             put (checkerState { predicateStack = Conj [Con c] : stack })
 
+-- | Retrieve the value associated with a name in the retrieved
+-- | context, failing if it doesn't
+requireInScope :: (?globals :: Globals) => (CheckerState -> Ctxt a, String) -> Span -> Id -> MaybeT Checker a
+requireInScope (ctxtf, descr) sp name = do
+  def <- lookup name <$> gets ctxtf
+  case def of
+    Nothing -> notInScope descr sp name
+    Just d -> pure d
+
+notInScope :: (?globals :: Globals) => String -> Span -> Id -> MaybeT Checker a
+notInScope desc sp name = halt $
+  UnboundVariableError (Just sp) $ concat [desc, " `", pretty name, "` is not in scope."]
+
 illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
 illKindedUnifyVar sp t1 k1 t2 k2 =
    halt $ KindError (Just sp) $
