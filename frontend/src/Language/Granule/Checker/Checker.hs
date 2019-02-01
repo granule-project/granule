@@ -580,50 +580,46 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   -- specifying effect over-approximations and type aliases
 
   (sig, gam1, elaborated1) <- synthExpr defs gam pol e1
-  case sig of
-    Diamond ["IO"] ty1 ->
-      typeLetSubject gam1 [] ty1 elaborated1
-    Diamond ["Session"] ty1 ->
-      typeLetSubject gam1 [] ty1 elaborated1
-    Diamond ef1 ty1 ->
-      typeLetSubject gam1 ef1 ty1 elaborated1
 
-    t -> halt $ GenericError (Just s)
-              $ "Expected an effect type but inferred `"
-             <> pretty t <> "` in body of let<>"
-
-   where
-      typeLetSubject gam1 ef1 ty1 elaborated1 = do
-        (binders, _, _, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
-        pIrrefutable <- isIrrefutable s ty1 p
-        if not pIrrefutable
-        then refutablePattern s p
-        else do
-           (tau, gam2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
-           case tau of
-            Diamond ["IO"] ty2 ->
-              typeLetBody gam1 gam2 ef1 [] binders ty1 ty2 elaboratedP elaborated1 elaborated2
-            Diamond ["Session"] ty2 ->
-              typeLetBody gam1 gam2 ef1 [] binders ty1 ty2 elaboratedP elaborated1 elaborated2
-            Diamond ef2 ty2 ->
-                typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 elaboratedP elaborated1 elaborated2
+  (ef1, ty1) <-
+          case sig of
+            Diamond ["IO"] ty1 -> return ([], ty1)
+            Diamond ["Session"] ty1 -> return ([], ty1)
+            Diamond ef1 ty1 -> return (ef1, ty1)
             t -> halt $ GenericError (Just s)
-                      $ "Expected an effect type but got `" <> pretty t <> "`"
+                   $ "Expected an effect type but got `"
+                  <> pretty t <> "` in subject of let"
 
-      typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 ep elt1 elt2 = do
-        optionalSigEquality s optionalTySig ty1
+  -- Type body of the let...
+  -- ...in the context of the binders from the pattern
+  (binders, _, _, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  pIrrefutable <- isIrrefutable s ty1 p
+  if not pIrrefutable
+  then refutablePattern s p
+  else do
+     (tau, gam2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+     (ef2, ty2) <-
+           case tau of
+             Diamond ["IO"] ty2 -> return ([], ty2)
+             Diamond ["Session"] ty2 -> return ([], ty2)
+             Diamond ef2 ty2 -> return (ef2, ty2)
+             t -> halt $ GenericError (Just s)
+                    $ "Expected an effect type but got `"
+                    <> pretty t <> "` in body of let"
 
-        -- Check grades on binders
-        ctxtEquals s (gam2 `intersectCtxts` binders) binders
+     optionalSigEquality s optionalTySig ty1
 
-        gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
-        -- Check linearity of locally bound variables
-        case checkLinearity binders gam2 of
-            [] ->  do
-              let t = Diamond (ef1 <> ef2) ty2
-              let elaborated = LetDiamond s t ep optionalTySig elt1 elt2
-              return (t, gamNew, elaborated)
-            xs -> illLinearityMismatch s xs
+     -- Check grades on binders
+     ctxtEquals s (gam2 `intersectCtxts` binders) binders
+
+     gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
+     -- Check linearity of locally bound variables
+     case checkLinearity binders gam2 of
+          [] ->  do
+            let t = Diamond (ef1 <> ef2) ty2
+            let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
+            return (t, gamNew, elaborated)
+          xs -> illLinearityMismatch s xs
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
