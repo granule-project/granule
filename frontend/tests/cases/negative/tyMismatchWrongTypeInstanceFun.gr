@@ -1,0 +1,9 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A
+
+-- the instance requires that 'simple : A -> A',
+-- we provide a function of type 'simple : A', however
+instance Simple A where
+  simple = A
