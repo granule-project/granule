@@ -1,0 +1,30 @@
+data
+  Array
+    (capacity : Nat)
+    (currentSize : Nat)
+    (a : Type)
+
+push
+  : ∀ (a : Type, cap : Nat, size : Nat)
+  . size < cap
+  ⇒ Array cap size a
+  → a
+  → Array cap (size + 1) a
+
+pop
+  : ∀ (a : Type, cap : Nat, size : Nat)
+  . Array cap (size + 1) a
+  → a × Array cap size a
+
+-- Boxed array, so we allocate cap words
+allocate
+  : ∀ (a : Type, cap : Nat)
+  . N cap
+  → Array cap 0 a
+
+swap
+  : ∀ (a : Type, cap : Nat, size : Nat)
+  . Array cap (size + 1) a
+  → Fin (size + 1)
+  → a
+  → a × Array cap (size + 1) a
