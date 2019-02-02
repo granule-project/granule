@@ -1,0 +1,10 @@
+-- last checked 2019-02-02 by @buggymcbugfix
+
+import Bool
+
+data Foo (b : Bool) where
+  Bar : Foo b;
+  Baz : Foo True
+
+-- Unbound variable error: test.gr:4:3:
+--   True constructor.
