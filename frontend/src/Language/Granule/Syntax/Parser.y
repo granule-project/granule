@@ -19,7 +19,7 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Preprocessor.Markdown
-import Language.Granule.Syntax.Preprocessor.LaTeX
+import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils hiding (mkSpan)
@@ -455,9 +455,9 @@ parseError t = do
 -- | Preprocess the source file based on the file extension.
 preprocess :: (?globals :: Globals) => String -> String
 preprocess = case reverse . takeWhile (/= '.') . reverse . sourceFilePath $ ?globals of
-    "md" -> unmarkdown
-    "tex" -> unlatex
-    "latex" -> unlatex
+    "md" -> unMarkdown
+    "tex" -> unLatex
+    "latex" -> unLatex
     _ -> id
 
 parseDefs :: (?globals :: Globals) => String -> IO (AST () ())

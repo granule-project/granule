@@ -1,4 +1,4 @@
-module Language.Granule.Syntax.Preprocessor.Markdown (unmarkdown) where
+module Language.Granule.Syntax.Preprocessor.Markdown (unMarkdown) where
 
 import Data.Char (isSpace)
 import Control.Arrow ((>>>))
@@ -11,8 +11,8 @@ data DocType
 -- | Extract fenced code blocks labeled  "granule" from markdown files on a
 -- line-by-line basis. Maps other lines to the empty string, such that line
 -- numbers are preserved.
-unmarkdown :: String -> String
-unmarkdown = lines >>> map stripEnd >>> go Markdown >>> unlines
+unMarkdown :: String -> String
+unMarkdown = lines >>> map stripEnd >>> go Markdown >>> unlines
   where
     go :: DocType -> [String] -> [String]
     go Markdown ("~~~granule"         : xs) = "" : go GranuleCodeBlockTwiddle xs
