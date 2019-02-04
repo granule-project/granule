@@ -1,0 +1,5 @@
+import Bool
+
+data Foo (b : Bool) where
+  Bar : Foo b;
+  Baz : Foo True

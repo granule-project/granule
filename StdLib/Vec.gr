@@ -18,13 +18,13 @@ data Vec (n : Nat) t where
   Cons : t -> Vec n t -> Vec (n+1) t
 
 -- Length of an indexed vector into an indexed nat
-length : forall (a : Type, n : Nat)
+length : forall {a : Type, n : Nat}
        . Vec n (a [0]) -> N n
 length Nil = Z;
 length (Cons [_] xs) = S (length xs)
 
 --- Map function
-map : forall (a : Type, b : Type, n : Nat)
+map : forall {a : Type, b : Type, n : Nat}
     . (a -> b) [n] -> Vec n a -> Vec n b
 map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
@@ -36,23 +36,23 @@ index FZ     [Cons x _]   = x;
 index (FS k) [Cons _ xs'] = index k [xs']
 
 -- Standard foldr on vectors
-foldr : forall (a : Type, b : Type, n : Nat)
+foldr : forall {a : Type, b : Type, n : Nat}
       . (a -> b -> b) [n] -> b -> Vec n a -> b
 foldr [_] z Nil = z;
 foldr [f] z (Cons x xs) = f x (foldr [f] z xs)
 
-foldr1 : forall (a : Type, n : Nat)
+foldr1 : forall {a : Type, n : Nat}
        . (a -> a -> a) [n] -> Vec (n + 1) a -> a
 foldr1 [_] (Cons x Nil) = x;
 foldr1 [mag] (Cons x (Cons x' xs)) = foldr1 [mag] (Cons (x `mag` x') xs)
 
-foldl : forall (a : Type, b : Type, n : Nat)
+foldl : forall {a : Type, b : Type, n : Nat}
       . (b -> a -> b) [n] -> b -> Vec n a -> b
 foldl [_] acc Nil = acc;
 foldl [op] acc (Cons x xs) = foldl [op] (acc `op` x) xs
 
 -- Append two vectors
-append : forall (a : Type, n : Nat, m : Nat)
+append : forall {a : Type, n : Nat, m : Nat}
        . Vec n a -> Vec m a -> Vec (n + m) a
 append Nil ys = ys;
 append (Cons x xs) ys = Cons x (append xs ys)
@@ -70,24 +70,24 @@ take (S k) [Cons x xs] = Cons x (take k [xs])
 
 --- Return the first item (head) of the vector
 --- NB: non-linear in the vector
-head : forall (a : Type, n : Nat)
+head : forall {a : Type, n : Nat}
      . (Vec (n + 1) a) [0..1] -> a
 head [Cons x _] = x
 
 --- Return the vector with the first item removed
 --- NB: non-linear in the vector
-tail : forall (a : Type, n : Nat)
+tail : forall {a : Type, n : Nat}
      . (Vec (n + 1) a) [0..1] -> Vec n a
 tail [Cons _ xs] = xs
 
 --- Get the last item of a Vector
-last : forall (a : Type, n : Nat)
+last : forall {a : Type, n : Nat}
      . (Vec (n + 1) a) [0..1] -> a
 last [Cons x Nil] = x;
 last [Cons _ xs] = last [xs]
 
 ---
-init : forall (a : Type, n : Nat)
+init : forall {a : Type, n : Nat}
      . (Vec (n + 1) a) [0..1] -> Vec n a
 init [Cons _ Nil] = Nil;
 init [Cons x xs] = Cons x (init [xs])
@@ -97,7 +97,7 @@ uncons : forall a : Type, n : Nat
 uncons (Cons x xs) = (x,xs)
 
 --- Split a vector at position 'n'
-split : forall (n : Nat, m : Nat, a : Type)
+split : forall {n : Nat, m : Nat, a : Type}
          . N n -> (Vec (n + m) a) -> (Vec n a, Vec m a)
 split Z xs = (Nil, xs);
 split (S n) (Cons x xs) = let (xs', ys') = split n xs in (Cons x xs', ys')
@@ -110,7 +110,7 @@ product : forall n : Nat . Vec n Int -> Int
 product = foldr [\(x : Int) -> \(y : Int) -> x * y] 1
 
 --- Replicate n x is a vector of length n with x the value of every element
-replicate : forall (n : Nat, a : Type) . N n -> a [n] -> Vec n a
+replicate : forall {n : Nat, a : Type} . N n -> a [n] -> Vec n a
 replicate Z [c] = Nil;
 replicate (S n) [c] = Cons c (replicate n [c])
 
@@ -128,7 +128,7 @@ range' Z [i] = Nil;
 range' (S n) [i] = Cons i (range' n [i + 1])
 
 --- pullVec pulls non linearity in elements into a non linearity on the whole vector
-pullVec : forall (k : Nat, n : Nat, a : Type)
+pullVec : forall {k : Nat, n : Nat, a : Type}
          . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
 pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]

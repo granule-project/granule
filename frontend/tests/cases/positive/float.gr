@@ -1,4 +1,4 @@
-dub : Float [2] -> Float
+dub : Float [2] → Float
 dub [x] = x + x
 
 main : Float

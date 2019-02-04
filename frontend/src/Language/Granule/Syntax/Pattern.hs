@@ -58,7 +58,7 @@ boundVars PFloat {}      = []
 boundVars (PConstr _ _ _ ps) = concatMap boundVars ps
 
 ppair :: Span -> Pattern () -> Pattern () -> Pattern ()
-ppair s p1 p2 = PConstr s () (mkId "(,)") [p1, p2]
+ppair s p1 p2 = PConstr s () (mkId ",") [p1, p2]
 
 -- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
 -- PVar ((0,0),(0,0)) (Id "x" "x_0")

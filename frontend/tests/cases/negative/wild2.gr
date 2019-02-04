@@ -1,2 +1,2 @@
-foo : Int -> Int
+foo : Int → Int
 foo _ = 0

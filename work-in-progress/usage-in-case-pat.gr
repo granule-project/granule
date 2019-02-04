@@ -2,11 +2,11 @@
 
 import Bool
 
-foo : Bool [2] -> ()
+foo : Bool [2] → ()
 foo b = case b of
-  [True] -> ();
-  [False] -> ()
+  [True] → ();
+  [False] → ()
 
-bar : Bool [2] -> ()
+bar : Bool [2] → ()
 bar [True] = ();
 bar [False] = ()

@@ -2,5 +2,5 @@
 
 import Vec
 
-identity : forall a : Type, n : Nat . Vec n a -> Vec n a
+identity : ∀ a : Type, n : Nat . Vec n a → Vec n a
 identity = foldr [Cons] Nil

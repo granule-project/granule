@@ -38,6 +38,7 @@ tokens :-
   "import".*                    ;
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
+  ∀                             { \p s -> TokenForall p }
   let                           { \p s -> TokenLet p }
   data                          { \p s -> TokenData p }
   where                         { \p s -> TokenWhere p }
@@ -53,7 +54,9 @@ tokens :-
   @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
   @stringLiteral                { \p s -> TokenStringLiteral p $ read s }
   "->"                          { \p s -> TokenArrow p }
+  "→"                           { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
+  "←"                           { \p s -> TokenBind p }
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
   \\                            { \p s -> TokenLambda p }
@@ -69,16 +72,19 @@ tokens :-
   \<                            { \p s -> TokenLangle p }
   \>                            { \p s -> TokenRangle p }
   \,                            { \p s -> TokenComma p }
-  \×                            { \p s -> TokenTimes p }
+  \×                            { \p s -> TokenCross p }
   \.                            { \p s -> TokenPeriod p }
   \:                            { \p s -> TokenSig p }
   @sym				                  { \p s -> TokenSym p s }
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
-  \<\=                          { \p s -> TokenOp p s }
-  \>\=                          { \p s -> TokenOp p s }
-  \=\=                          { \p s -> TokenOp p s }
+  "≤"                           { \p s -> TokenOp p s }
+  \<\=                          { \p s -> TokenOp p "≤" }
+  "≥"                           { \p s -> TokenOp p s }
+  \>\=                          { \p s -> TokenOp p "≥" }
+  "≡"                           { \p s -> TokenOp p s }
+  \=\=                          { \p s -> TokenOp p "≡" }
   \`                            { \p s -> TokenBackTick p }
   \^                            { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
@@ -125,7 +131,7 @@ data Token
   | TokenLangle   AlexPosn
   | TokenRangle   AlexPosn
   | TokenComma    AlexPosn
-  | TokenTimes AlexPosn
+  | TokenCross AlexPosn
   | TokenPeriod   AlexPosn
   | TokenPipe     AlexPosn
   | TokenUnderscore AlexPosn

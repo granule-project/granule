@@ -11,4 +11,4 @@ answer =
         else -7
 
 main : Bool
-main = case answer of 42 -> True
+main = case answer of 42 → True

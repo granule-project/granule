@@ -1,2 +1,2 @@
-idBad : forall (a : Type) . a -> a
-idBad = \(x : Int) -> x
+idBad : ∀ {a : Type} . a → a
+idBad = \(x : Int) → x

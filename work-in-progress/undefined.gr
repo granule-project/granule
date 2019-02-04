@@ -6,5 +6,5 @@
 --   user error (Variable 'undefined' is undefined in context.)
 
 --- Undefined can be used to satisfy the type checker during development.
-undefined : forall (a:Type) . a
+undefined : ∀ {a:Type} . a
 undefined = undefined

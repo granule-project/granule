@@ -1,0 +1,79 @@
+<h1 id="granule">Granule</h1>
+<p>This is an introduction to the linear functional programming language Granule, culminating in a verified implementation of the string manipulation function <code>leftPad</code>. The aim is to learn about linearity and graded modal types as an exciting new tool in the statically typed programmer’s toolbox.</p>
+<p>This is an adaptation of our POPL’19 tutorial given in Cascais, Portugal.</p>
+<p>The source of this document is a literate granule file (markdown), meaning that all code in <code>granule</code> code blocks will be type checked and run when given to the interpreter.</p>
+<h2 id="linearity">Linearity</h2>
+<p>Granule is based on the linear lambda calculus, which restricts our ability to write programs due to its <em>substructural</em> type system. We will explore this notion rather casually here; if you want more details, I can recommend <span class="citation" data-cites="cs152">[<a href="#ref-cs152">1</a>:17]</span> or <span class="citation" data-cites="attapl">[<a href="#ref-attapl">2</a>:1]</span>.</p>
+<p>The following two functions, for example, violate linearity. (Note that type variables are explicitly quantified.)</p>
+<pre class="granule-bad"><code>-- ✘
+drop : forall a : Type . a -&gt; ()
+drop x = ()
+
+-- ✘
+dup : forall a : Type . a -&gt; a × a
+dup x = (x,x)</code></pre>
+<p>Granule’s type system is substructural and doesn’t allow arbitrary <em>weakening</em> (dropping variables) and <em>contraction</em> (duplicating variables). We retain <em>exchange</em> v</p>
+<p>But we can type the following functions:</p>
+<pre class="granule"><code>id : forall a : Type . a -&gt; a
+id x = x
+
+flip : forall a : Type, b : Type . a × b -&gt; b × a
+flip (x,y) = (y,x)</code></pre>
+<p>How can we write these functions? We use the postfix box modality <code>[]</code> to denote unrestricted use of parameters. For example <code>a []</code> means that we use <code>a</code> nonlinearly as much as we want—i.e. <code>a</code> is <em>cartesian</em>.</p>
+<pre class="granule"><code>drop&#39; : forall a : Type . a [] -&gt; ()
+drop&#39; x = ()
+
+dup&#39; : forall a : Type . a [] -&gt; a × a
+dup&#39; x = (x, x)</code></pre>
+<p>Modalities in Granule are <em>graded</em> by a <em>resource algebra</em>. One such algebra tracks the exact usage of parameters via the usual natural number semiring:</p>
+<pre class="granule"><code>drop&#39;&#39; : forall a : Type . a [0] -&gt; ()
+drop&#39;&#39; x = ()
+
+dup&#39;&#39; : forall a : Type . a [2] -&gt; a × a
+dup&#39;&#39; x = (x, x)</code></pre>
+<p>The resource algebra</p>
+<p>In fact <code>[]</code> is just sugar for <code>[0..∞]</code>, where <code>0..∞</code></p>
+<h2 id="section">–</h2>
+<p>– drop : forall a : Type . (List a) [0] -&gt; () – drop [_] = ()</p>
+<p>drop1 : forall a : Type . (List a) [0] -&gt; () drop1 [_] = ()</p>
+<h2 id="section-1">–</h2>
+<h2 id="section-2">–</h2>
+<p>– – – – – – –</p>
+<p>– polymorphism allows us to consume the list, but ignore the elements drop2 : forall b : Type . List (b [0]) -&gt; () drop2 NilL = (); drop2 (ConsL [_] xs) = drop2 xs – – – – – – __ – – – – – – – – – – – – – define <code>map</code> mapL : forall a : Type, b : Type . (a -&gt; b) [0..∞] -&gt; List a -&gt; List b mapL [f] NilL = NilL; mapL [f] (ConsL x xs) = ConsL (f x) (mapL [f] xs) – – – – – – – – – – – – – – – – – – dub : Int [2] -&gt; Int dub [x] = x + x</p>
+<table>
+<thead>
+<tr class="header">
+<th>–</th>
+<th>–</th>
+</tr>
+</thead>
+<tbody>
+<tr class="odd">
+<td>–</td>
+<td>– – data Vector (n : Nat) a where</td>
+</tr>
+<tr class="even">
+<td>–</td>
+<td>– – ConsV : a -&gt; Vector n a -&gt; Vector (n + 1) a;</td>
+</tr>
+<tr class="odd">
+<td>–</td>
+<td>– – NilV : Vector 0 a</td>
+</tr>
+</tbody>
+</table>
+<p>import Vec – – – – – – – – – – – – – – – – – – – – – – – length’ : forall a : Type, n : Nat – . Vec n a – -&gt; N n × Vec n a – length’ Nil = (Z, Nil); – length’ (Cons x xs) = let – (n, xs) = length’ xs – in (S n, Cons x xs) – – – – – – – – sq : Int [2] -&gt; Int – – sq [x] = x*x – – – – input : Vec 3 Int – – input = Cons 1 (Cons 2 (Cons 3 Nil)) – – – – – – main : Vec 3 Int – – – main = let – – – – – – map [sq] input – – – – – – – – – – – &gt; Leftpad. Takes a padding character, a string, and a total length, returns – &gt; the string padded to that length with that character. If length is less – &gt; than the length of the string, does nothing. – Credits: Hillel Wayne</p>
+<p>– leftPad ‘a’ 4 “bb” = “aabb” – leftPad ‘a’ 4 “bbbb” = “bbbb”</p>
+<p>leftPad : forall a : Type, m : Nat, n : Nat . a [n - m] -&gt; N n -&gt; Vec m a -&gt; Vec (m + (n - m)) a leftPad [c] n str = let (m, str) = length’ str in append (replicate (monus n m) [c]) str – – – – – – – id : (0 T : Type) -&gt; (a : T) -&gt; a – – – id _ x = x – – – – – main : Vec 3 Int – – – main = leftPad [0] (S (S Z)) input – – – – – – – – – – – – – – – – – data Patient = Patient (Int [Private]) – Patient id (Int [Public]) – Patient age</p>
+<p>meanAge : List (Patient [0..1]) -&gt; Int [Public] meanAge xs = meanAgeInner xs [0] [0]</p>
+<p>meanAgeInner : List (Patient [0..1]) – Patient database -&gt; Int [Public] -&gt; Int [Public] -&gt; Int [Public] meanAgeInner (ConsL [Patient [id] [age]] NilL) [acc] [n] = [div (age + acc) (n + 1)]; meanAgeInner (ConsL [Patient [id] [age]] ps) [acc] [n] = meanAgeInner ps [age + acc] [n+1]</p>
+<p>– main : Int [Public] – main = meanAge (ConsL [Patient [1] [20]] (ConsL [Patient [2] [40]] NilL)) – – –</p>
+<!-- pandoc --output popl.html --filter pandoc-citeproc popl.gr.md -→
+<div id="refs" class="references">
+<div id="ref-cs152">
+<p>1. Stephen Chong. 2016. Harvard CS152 (Programming Languages) Lecture Notes. Retrieved from <a href="https://www.seas.harvard.edu/courses/cs152/2016sp/lectures/lec17-substructural.pdf" class="uri">https://www.seas.harvard.edu/courses/cs152/2016sp/lectures/lec17-substructural.pdf</a>.</p>
+</div>
+<div id="ref-attapl">
+<p>2. Benjamin C Pierce. 2005. <em>Advanced topics in types and programming languages</em>. MIT press.</p>
+</div>
+</div>

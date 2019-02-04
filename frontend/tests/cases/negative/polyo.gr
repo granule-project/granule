@@ -1,11 +1,11 @@
-fix : forall (a : Type) . (a -> a) [Inf] -> a
+fix : ∀ {a : Type} . (a → a) [Inf] → a
 fix [f] = f (fix [f])
 
-foo : Bool -> Int
+foo : Bool → Int
 foo x =
   case x of
-    True -> 0;
-    False -> 1
+    True → 0;
+    False → 1
 
 main : Int
 main = fix [foo]

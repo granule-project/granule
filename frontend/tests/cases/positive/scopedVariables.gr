@@ -1,5 +1,5 @@
-id2 : forall (a : Type) . a -> a
+id2 : ∀ {a : Type} . a → a
 id2 x = x
 
-id : forall (a : Type) . a -> a
-id = id2 (\(x : a) -> x)
+id : ∀ {a : Type} . a → a
+id = id2 (\(x : a) → x)

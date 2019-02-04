@@ -1,14 +1,14 @@
 import Bool
 import Vec
 
-fooClient : Chan (Send Bool (Recv Int End)) -> Int <Session>
+fooClient : Chan (Send Bool (Recv Int End)) → Int <Session>
 fooClient c =
   let c      <- send c True;
       (n, c) <- recv c;
       ()     <- close c
   in pure n
 
-fooServer : Chan (Dual (Send Bool (Recv Int End))) -> () <Session>
+fooServer : Chan (Dual (Send Bool (Recv Int End))) → () <Session>
 fooServer c =
   let (b, c) <- recv c;
       c      <- if b then send c 1 else send c 0
@@ -24,8 +24,8 @@ example =
 -- but which is able to be reused 'n' times, and a vector of
 -- length 'n', then send every element of the vector on the
 -- channel
-sendVec : forall (n : Nat, a : Type) .
-   (Chan (Send a End)) [n] -> Vec n a -> () <Session>
+sendVec : ∀ {n : Nat, a : Type} .
+   (Chan (Send a End)) [n] → Vec n a → () <Session>
 
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
@@ -33,8 +33,8 @@ sendVec [c] (Cons x xs) =
            ()  <- close c'
        in sendVec [c] xs
 
-recvVec : forall (n : Nat, a : Type) .
-   N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Session>
+recvVec : ∀ {n : Nat, a : Type} .
+   N n → (Chan (Recv a End)) [n] → (Vec n a) <Session>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
        let (x, c') <- recv c;
@@ -42,10 +42,10 @@ recvVec (S n) [c] =
            xs      <- recvVec n [c]
        in pure (Cons x xs)
 
-example2 : forall (n : Nat, a : Type)
-         . N n -> Vec n a -> (Vec n a) <Session>
+example2 : ∀ {n : Nat, a : Type}
+         . N n → Vec n a → (Vec n a) <Session>
 example2 n list =
-  let c <- forkRep (\c -> sendVec c list)
+  let c <- forkRep (\c → sendVec c list)
   in recvVec n c
 
 main : (Vec 5 Int, Int) <Session>

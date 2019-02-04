@@ -1,18 +1,18 @@
-i : forall (a : Type) . a -> a
+i : ∀ {a : Type} . a → a
 i x = x
 
-b : forall (a : Type, b : Type, c : Type)
-  . (b -> c) -> (a -> b) -> a -> c
+b : ∀ {a : Type, b : Type, c : Type}
+  . (b → c) → (a → b) → a → c
 b g f x = g (f x)
 
-c : forall (a : Type, b : Type, c : Type)
-  . (a -> b -> c) -> b -> a -> c
+c : ∀ {a : Type, b : Type, c : Type}
+  . (a → b → c) → b → a → c
 c f x y = f y x
 
-k : forall (a : Type, b : Type)
-  . a -> b [0] -> a
+k : ∀ {a : Type, b : Type}
+  . a → b [0] → a
 k x [y] = x
 
-s : forall (a : Type, b : Type, c : Type)
-  . (a -> b -> c) -> (a -> b) -> a [2] -> c
+s : ∀ {a : Type, b : Type, c : Type}
+  . (a → b → c) → (a → b) → a [2] → c
 s f g [x] = f x (g x)

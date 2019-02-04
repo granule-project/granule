@@ -7,6 +7,8 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 
+
+
 protocol = kConstr $ mkId "Protocol"
 
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
@@ -14,8 +16,8 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 typeLevelConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeLevelConstructors =
     [ (mkId "()", (KType, Just 1))
-    , (mkId "(,)", (KFun KType (KFun KType KType), Just 1))
-    , (mkId "(*)", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
+    , (mkId ",", (KFun KType (KFun KType KType), Just 1))
+    , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
@@ -50,10 +52,10 @@ typeLevelConstructors =
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
     [ (mkId "()", Forall nullSpanBuiltin [] (TyCon $ mkId "()"))
-    , (mkId "(,)", Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)]
+    , (mkId ",", Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)]
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
-                 (TyApp (TyApp (TyCon (mkId "(,)")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
+                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
 
     , (mkId "ReadMode", Forall nullSpanBuiltin [] (TyCon $ mkId "IOMode"))
     , (mkId "WriteMode", Forall nullSpanBuiltin [] (TyCon $ mkId "IOMode"))
@@ -95,7 +97,7 @@ builtins =
   , (mkId "hGetChar", Forall nullSpanBuiltin [] $
                         FunTy (TyCon $ mkId "Handle")
                                (Diamond ["RW"]
-                                (TyApp (TyApp (TyCon $ mkId "(,)")
+                                (TyApp (TyApp (TyCon $ mkId ",")
                                               (TyCon $ mkId "Handle"))
                                        (TyCon $ mkId "Char"))))
   , (mkId "hPutChar", Forall nullSpanBuiltin [] $
@@ -105,7 +107,7 @@ builtins =
   , (mkId "isEOF", Forall nullSpanBuiltin [] $
                      FunTy (TyCon $ mkId "Handle")
                             (Diamond ["R"]
-                             (TyApp (TyApp (TyCon $ mkId "(,)")
+                             (TyApp (TyApp (TyCon $ mkId ",")
                                            (TyCon $ mkId "Handle"))
                                     (TyCon $ mkId "Bool"))))
   , (mkId "hClose", Forall nullSpanBuiltin [] $
@@ -119,7 +121,7 @@ builtins =
 
   , (mkId "recv", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)]
        $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
-         .-> (Diamond ["Com"] ((con "(,)" .@ (var "a")) .@ ((con "Chan") .@ (var "s")))))
+         .-> (Diamond ["Com"] ((con "," .@ (var "a")) .@ ((con "Chan") .@ (var "s")))))
 
   , (mkId "close", Forall nullSpanBuiltin [] $
                     ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))
@@ -150,13 +152,14 @@ binaryOperators =
    ,("-", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
    ,("*", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
    ,("*", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
-   ,("==", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("<=", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,("≡", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,("≤", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
    ,("<", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
    ,(">", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,(">=", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("==", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,("<=", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
+   ,("≥", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
+   ,("≡", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
+   ,("≤", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
    ,("<", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
    ,(">", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,(">=", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))) ]
+   ,("≥", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
+   ]

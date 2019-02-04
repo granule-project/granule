@@ -1,13 +1,13 @@
-dub : Int [2] -> Int
+dub : Int [2] → Int
 dub [x] = x + x
 
-foo : Int [2] -> Int [4] -> Int [2]
+foo : Int [2] → Int [4] → Int [2]
 foo [x] [y] = [x + y + y]
 
-twice : forall (c : Nat) . (Int [c] -> Int) [2] -> Int [c * 2] -> Int
+twice : ∀ {c : Nat} . (Int [c] → Int) [2] → Int [c * 2] → Int
 twice [g] [x] = g [x] + g [x]
 
-doTwice : (Int -> Int <R>) [2] -> Int [2] -> Int <R, R>
+doTwice : (Int → Int <R>) [2] → Int [2] → Int <R, R>
 doTwice [f] [x] =
   let a <- f x;
       b <- f x

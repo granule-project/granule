@@ -1,2 +1,2 @@
-dub : Int [2..2] -> Int
+dub : Int [2..2] → Int
 dub [x] = x

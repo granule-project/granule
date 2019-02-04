@@ -3,5 +3,5 @@
 import Bool
 
 -- do we want this or do we not want this?
-isZero : Int -> Bool
-isZero x = case x of 0 -> True; _ -> False
+isZero : Int → Bool
+isZero x = case x of 0 → True; _ → False

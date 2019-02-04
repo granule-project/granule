@@ -1,2 +1,2 @@
-flattenNat : forall m : Nat, n : Nat . (Int [m]) [n] -> Int [m + n]
+flattenNat : ∀ m : Nat, n : Nat . (Int [m]) [n] → Int [m + n]
 flattenNat [[x]] = [x]

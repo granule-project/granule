@@ -10,7 +10,7 @@ Uses Alex. To run the lexer in GHCi (bear in mind that the actual path may chang
 $ stack install; stack repl frontend/.stack-work/dist/x86_64-osx/Cabal-2.4.0.1/build/Language/Granule/Syntax/Lexer.hs
 [...]
 *Language.Granule.Syntax.Lexer> :t alexScanTokens
-alexScanTokens :: String -> [Token]
+alexScanTokens :: String → [Token]
 ```
 
 # Parser
