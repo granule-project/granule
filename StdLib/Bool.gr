@@ -11,7 +11,7 @@
 --- # Boolean type
 
 --- Boolean
-data Bool where False | True
+data Bool = False | True
 
 dropB : Bool -> ()
 dropB False = ();
