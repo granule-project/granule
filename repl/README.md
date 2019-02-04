@@ -160,7 +160,7 @@ The congiuration file contains various variables used for set up of the REPL
 #### Config file creation
 <a id="config-file-creation"></a>
 The configuration file needs to be created by the user.  It needs to be named
-`.granule.conf`.  This file needs to be placed in the home directory
+`.grin`.  This file needs to be placed in the home directory
 ###### Windows
 ```
 C:\Users\<username>

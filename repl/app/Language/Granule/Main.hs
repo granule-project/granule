@@ -246,8 +246,8 @@ buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
 
 getConfigFile :: IO String
 getConfigFile = do
-  hd <- getHomeDirectory           -- .granule.conf
-  let confile = hd <> (pathSeparator:".granule.conf")
+  hd <- getHomeDirectory
+  let confile = hd <> (pathSeparator:".grin")
   dfe <- doesFileExist confile
   if dfe
     then return confile

@@ -24,7 +24,7 @@ unmarkdown = lines >>> map stripEnd >>> go Markdown >>> unlines
     go GranuleCodeBlockTwiddle (x     : xs) = x  : go GranuleCodeBlockTwiddle xs
     go GranuleCodeBlockTick ("```"    : xs) = "" : go Markdown xs
     go GranuleCodeBlockTick (x        : xs) = x  : go GranuleCodeBlockTick xs
-    go _                              [] = []
+    go _ []                                 = []
 
 -- | Remove trailing whitespace (hey, should we be using @Text@?)
 stripEnd :: String -> String
