@@ -104,4 +104,26 @@ line numbers for error messages.
     d = 4
     ```
 
+
+
+### Options
+
+`gr` takes several options, run `gr --help` for more information.
+
+You can set default options in `$HOME/.granule`, e.g.:
+
+```
+$ cat ~/.granule
+Options
+  { debugging           = Nothing
+  , noColors            = Just True
+  , noEval              = Nothing
+  , suppressInfos       = Nothing
+  , suppressErrors      = Nothing
+  , timestamp           = Nothing
+  , solverTimeoutMillis = Just 2000
+  , includePath         = Just "Users/alice/granule/StdLib"
+  }
+```
+
 All contributions are welcome!
