@@ -677,7 +677,14 @@ synthExpr defs gam pol (App s _ e e') = do
         halt $ GenericError (Just s) $ "Left-hand side of application is not a function"
                    <> " but has type '" <> pretty t <> "'"
 
--- Promotion
+{- Promotion
+
+[G] |- e : t
+ ---------------------
+[G]*r |- [e] : []_r t
+
+-}
+
 synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    debugM "Synthing a promotion of " $ pretty e
 
@@ -696,6 +703,7 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy (Promote t elaboratedE)
    return (finalTy, multAll (freeVars e) (CVar var) gam', elaborated)
+
 
 -- BinOp
 synthExpr defs gam pol (Binop s _ op e1 e2) = do
@@ -750,8 +758,31 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
   else refutablePattern s p
 
+-- Abstraction, can only synthesise the types of
+-- lambda in Church style (explicit type)
+synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
+
+  tyVar <- freshTyVarInContext (mkId "t") KType
+  let sig = (TyVar tyVar)
+
+  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+
+  pIrrefutable <- isIrrefutable s sig p
+  if pIrrefutable then do
+     (tau, gam'', elaboratedE) <- synthExpr defs (bindings <> gam) pol e
+
+     -- Locally we should have this property (as we are under a binder)
+     ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
+
+     let finalTy = FunTy sig tau
+     let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
+
+     return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
+  else refutablePattern s p
+
 synthExpr _ _ _ e =
-  halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
+  halt $ GenericError (Just $ getSpan e) $ "Type cannot be calculated here for `"
+      <> pretty e <> "` try adding more type signatures."
 
 -- Check an optional type signature for equality against a type
 optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker Bool
