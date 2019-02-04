@@ -20,8 +20,9 @@ data Options (f :: * -> *)
     , timestamp           :: f Bool
     , solverTimeoutMillis :: f Integer
     , includePath         :: f FilePath
+    , ascii2unicode       :: f Bool
     }
-  
+
 -- deriving instance Show1 f => Show (Options f)
 -- deriving instance Eq1   f => Eq   (Options f)
 -- deriving instance Read1 f => Read (Options f)
@@ -41,6 +42,7 @@ defaultConfig o = Options
   , timestamp           = maybe (Identity False) Identity $ timestamp o
   , solverTimeoutMillis = maybe (Identity 5000) Identity $ solverTimeoutMillis o
   , includePath         = maybe (Identity "StdLib") Identity $ includePath o
+  , ascii2unicode       = maybe (Identity False) Identity $ ascii2unicode o
   }
 
 instance Alternative f => Semigroup (Options f) where
@@ -53,6 +55,7 @@ instance Alternative f => Semigroup (Options f) where
       , timestamp           = timestamp           o1 <|> timestamp           o2
       , solverTimeoutMillis = solverTimeoutMillis o1 <|> solverTimeoutMillis o2
       , includePath         = includePath         o1 <|> includePath         o2
+      , ascii2unicode       = ascii2unicode       o1 <|> ascii2unicode       o2
       }
 
 instance Alternative f => Monoid (Options f) where
@@ -65,6 +68,7 @@ instance Alternative f => Monoid (Options f) where
       , timestamp           = empty
       , solverTimeoutMillis = empty
       , includePath         = empty
+      , ascii2unicode       = empty
       }
 
 toGlobals :: FilePath -> Options Identity -> Utils.Globals
