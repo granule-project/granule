@@ -1,30 +1,54 @@
 data
-  Array
-    (capacity : Nat)
-    (currentSize : Nat)
-    (a : Type)
+  ArrayStack
+    : ∀ { capacity, currentSize, a }
+    . {currentSize ≤ capacity}
+    ⇒ capacity : Nat
+    → maxIndex : Nat
+    → a : Type
+    → Type
 
 push
-  : ∀ (a : Type, cap : Nat, size : Nat)
-  . size < cap
-  ⇒ Array cap size a
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . ArrayStack cap maxIndex a
   → a
-  → Array cap (size + 1) a
+  → ArrayStack cap (maxIndex + 1) a
 
 pop
-  : ∀ (a : Type, cap : Nat, size : Nat)
-  . Array cap (size + 1) a
-  → a × Array cap size a
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . maxIndex > 0
+  ⇒ ArrayStack cap maxIndex a
+  → a × ArrayStack cap (maxIndex - 1) a
 
 -- Boxed array, so we allocate cap words
 allocate
-  : ∀ (a : Type, cap : Nat)
+  : ∀ {a : Type, cap : Nat}
   . N cap
-  → Array cap 0 a
+  → ArrayStack cap 0 a
 
 swap
-  : ∀ (a : Type, cap : Nat, size : Nat)
-  . Array cap (size + 1) a
-  → Fin (size + 1)
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . ArrayStack cap (maxIndex + 1) a
+  → Fin (maxIndex + 1)
   → a
-  → a × Array cap (size + 1) a
+  → a × ArrayStack cap (maxIndex + 1) a
+
+Array
+  : n : Nat
+  → a : Type
+  → Type
+Array n a = ArrayStack n n a
+
+swap
+  : ∀ {a : Type, i : Nat, n : Nat}
+  . {i < n}
+  ⇒ Array n a
+  → N i
+  → a
+  → a × Array n a
+
+get
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . {i < n}
+  ⇒ (Array n a) [0..1]
+  → N i
+  → a
