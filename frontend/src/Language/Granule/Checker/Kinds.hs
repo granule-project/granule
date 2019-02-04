@@ -41,9 +41,16 @@ demoteKindToType _            = Nothing
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ (Forall _ quantifiedVariables ty)) = do
+kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
+
+  forM constraints (\constraint -> do
+    kind <- inferKindOfType' s quantifiedVariables constraint
+    case kind of
+      KConstraint -> return ()
+      _ -> illKindedNEq s KConstraint kind)
+
 
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of

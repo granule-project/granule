@@ -56,6 +56,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '/'  { TokenForwardSlash _ }
     '->'  { TokenArrow _ }
     '<-'  { TokenBind _ }
+    '=>'  { TokenConstrain _ }
     ','   { TokenComma _ }
     '×'   { TokenCross _ }
     '='   { TokenEq _ }
@@ -217,15 +218,25 @@ NAryConstr :: { Pattern () }
                                 in (mkSpan (getPos $1, getEnd $ last $2)) >>=
                                        \sp -> return $ PConstr sp  () (mkId x) $2 }
 
+ForallSig :: { [(Id, Kind)] }
+ : '(' VarSigs ')' { $2 }
+ | VarSigs         { $1 }
+
+Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
+ : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
+ | forall ForallSig '.' Types '=>' { (((getPos $1, getPos $5), $2), $4) }
+
+Types :: { [Type] }
+Types
+ : Type ',' Types { $1 : $3 }
+ | Type           { [$1] }
+
 TypeScheme :: { TypeScheme }
-  : Type
-        {% return $ Forall nullSpanNoFile [] $1 }
+ : Type
+       {% return $ Forall nullSpanNoFile [] [] $1 }
 
-  | forall '{' VarSigs '}' '.' Type
-        {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ Forall sp $3 $6 }
-
-  | forall VarSigs '.' Type
-        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Forall sp $2 $4 }
+ | Forall Type
+       {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ Forall sp (snd $ fst $1) (snd $1) $2 }
 
 VarSigs :: { [(Id, Kind)] }
   : VarSig ',' VarSigs        { $1 : $3 }

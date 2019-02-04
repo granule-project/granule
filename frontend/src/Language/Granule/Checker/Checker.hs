@@ -84,7 +84,7 @@ checkDataCon :: (?globals :: Globals)
   -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) =
+checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD constraints ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
 
@@ -100,14 +100,14 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
           KType -> do
             check ty
             st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
               Some ds -> do
                 put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
           KPromote (TyCon k) | internalName k == "Protocol" -> do
             check ty
             st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
               Some ds -> put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
 
@@ -133,7 +133,7 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
       Some ds -> put st { dataConstructors = ds }
       None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
   where
-    tySch = Forall sp tyVars ty
+    tySch = Forall sp tyVars [] ty
     ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
@@ -143,7 +143,7 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> MaybeT Checker (Def () Type)
-checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
+checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
@@ -177,7 +177,7 @@ checkEquation :: (?globals :: Globals) =>
   -> TypeScheme      -- Type scheme
   -> MaybeT Checker (Equation () Type)
 
-checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
+checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 

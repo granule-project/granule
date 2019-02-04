@@ -21,6 +21,7 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
+    [Type]        -- constraints
     Type          -- type
   deriving (Eq, Show, Generic)
 
@@ -44,6 +45,7 @@ data Type = FunTy Type Type           -- ^ Function type
 -- | Kinds
 data Kind = KType
           | KCoeffect
+          | KConstraint
           | KFun Kind Kind
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
@@ -54,6 +56,7 @@ kConstr = KPromote . TyCon
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
+  freshen KConstraint = return KConstraint
   freshen (KFun k1 k2) = do
     k1 <- freshen k1
     k2 <- freshen k2
@@ -273,10 +276,11 @@ instance Term Coeffect where
 
 instance Monad m => Freshenable m TypeScheme where
   freshen :: TypeScheme -> Freshener m TypeScheme
-  freshen (Forall s binds ty) = do
+  freshen (Forall s binds constraints ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
+        constraints' <- mapM freshen constraints
         ty' <- freshen ty
-        return $ Forall s binds' ty'
+        return $ Forall s binds' constraints' ty'
 
 instance Freshenable m Type where
   freshen =

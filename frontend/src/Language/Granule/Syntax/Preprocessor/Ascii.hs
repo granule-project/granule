@@ -5,7 +5,7 @@ module Language.Granule.Syntax.Preprocessor.Ascii (unAscii, unAsciiFile) where
 import System.Directory (renameFile)
 import System.FilePath (splitFileName)
 import System.IO (hClose, hPutStr, openTempFile)
-import Text.Replace (replaceWithList)
+import Text.Replace (replaceWithList, Replace(..))
 
 unAscii :: String -> String
 unAscii = replaceWithList

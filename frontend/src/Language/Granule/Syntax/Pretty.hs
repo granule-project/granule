@@ -102,14 +102,17 @@ instance Pretty Coeffect where
 instance Pretty Kind where
     prettyL l KType          = "Type"
     prettyL l KCoeffect      = "Coeffect"
+    prettyL l KConstraint    = "Constraint"
     prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
     prettyL l (KVar v)       = prettyL l v
     prettyL l (KPromote t)   = "↑" <> prettyL l t
 
 instance Pretty TypeScheme where
-    prettyL l (Forall _ [] t) = prettyL l t
-    prettyL l (Forall _ cvs t) =
-        "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". " <> prettyL l t
+    prettyL l (Forall _ [] [] t) = prettyL l t
+    prettyL l (Forall _ cvs cons t) =
+        "forall " <> intercalate ", " (map prettyKindSignatures cvs)
+                  <> intercalate ", " (map (prettyL l) cons)
+                  <> ". " <> prettyL l t
       where
        prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
 
