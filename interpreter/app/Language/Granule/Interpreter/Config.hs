@@ -21,6 +21,7 @@ data Options (f :: * -> *)
     , solverTimeoutMillis :: f Integer
     , includePath         :: f FilePath
     , ascii2unicode       :: f Bool
+    , keepBackupAscii     :: f Bool
     }
 
 -- deriving instance Show1 f => Show (Options f)
@@ -43,6 +44,7 @@ defaultConfig o = Options
   , solverTimeoutMillis = maybe (Identity 5000) Identity $ solverTimeoutMillis o
   , includePath         = maybe (Identity "StdLib") Identity $ includePath o
   , ascii2unicode       = maybe (Identity False) Identity $ ascii2unicode o
+  , keepBackupAscii     = maybe (Identity True) Identity $ keepBackupAscii o
   }
 
 instance Alternative f => Semigroup (Options f) where
@@ -56,6 +58,8 @@ instance Alternative f => Semigroup (Options f) where
       , solverTimeoutMillis = solverTimeoutMillis o1 <|> solverTimeoutMillis o2
       , includePath         = includePath         o1 <|> includePath         o2
       , ascii2unicode       = ascii2unicode       o1 <|> ascii2unicode       o2
+      , keepBackupAscii     = keepBackupAscii     o1 <|> keepBackupAscii     o2
+
       }
 
 instance Alternative f => Monoid (Options f) where
@@ -69,6 +73,7 @@ instance Alternative f => Monoid (Options f) where
       , solverTimeoutMillis = empty
       , includePath         = empty
       , ascii2unicode       = empty
+      , keepBackupAscii     = empty
       }
 
 toGlobals :: FilePath -> Options Identity -> Utils.Globals

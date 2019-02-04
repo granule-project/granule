@@ -452,17 +452,9 @@ parseError t = do
     lift $ die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
--- | Preprocess the source file based on the file extension.
-preprocess :: (?globals :: Globals) => String -> String
-preprocess = case reverse . takeWhile (/= '.') . reverse . sourceFilePath $ ?globals of
-    "md" -> unMarkdown
-    "tex" -> unLatex
-    "latex" -> unLatex
-    _ -> id
-
 parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefs input = do
-    ast <- parseDefs' (preprocess input)
+    ast <- parseDefs' input
     return $ freshenAST ast
 
 parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())

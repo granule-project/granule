@@ -124,7 +124,7 @@ Options
   , solverTimeoutMillis = Just 2000
   , includePath         = Just "Users/alice/granule/StdLib"
   , ascii2unicode       = Just True
-
+  , keepBackupAscii     = Just False
   }
 ```
 

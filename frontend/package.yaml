@@ -52,6 +52,8 @@ library:
   - Language.Granule.Syntax.Pattern
   - Language.Granule.Syntax.Pretty
   - Language.Granule.Syntax.Preprocessor.Ascii
+  - Language.Granule.Syntax.Preprocessor.Latex
+  - Language.Granule.Syntax.Preprocessor.Markdown
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
   - Language.Granule.Context
@@ -59,7 +61,6 @@ library:
   dependencies:
   - array
   - containers
-  - directory
   - mtl >=2.2.1
   - sbv >=7.5
   - transformers >=0.5

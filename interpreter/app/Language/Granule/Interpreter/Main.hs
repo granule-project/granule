@@ -32,9 +32,9 @@ import Options.Applicative
 import Language.Granule.Checker.Checker
 import Language.Granule.Eval
 import Language.Granule.Interpreter.Config
+import Language.Granule.Interpreter.Preprocess
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Pretty
-import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Utils (Globals, debugM, printInfo, printErr, green)
 import qualified Language.Granule.Utils as Utils
 import Paths_granule_interpreter (version)
@@ -65,10 +65,11 @@ main = do
                   Nothing -> p
 
             let ?globals = globals { Utils.sourceFilePath = fileName }
-            src <- if runIdentity (ascii2unicode config)
-              then unAsciiFile p
-              else readFile p
             printInfo $ "\nChecking " <> fileName <> "..."
+            src <- preprocess
+              (runIdentity $ ascii2unicode config)
+              (runIdentity $ keepBackupAscii config)
+              p
             run src
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
@@ -190,7 +191,12 @@ parseArgs = info (go <**> helper) $ briefDesc
         ascii2unicode <-
           flag Nothing (Just True)
             $ long "ascii-to-unicode"
-            <> help "Rewrite ascii symbols to their unicode equivalents (WARNING: overwrites the input file)"
+            <> help "Destructively rewrite ascii symbols to their unicode equivalents (WARNING: overwrites the input file)"
+
+        keepBackupAscii <-
+          flag Nothing (Just True)
+            $ long "keep-backup-ascii"
+            <> help "Keep a backup copy of the input file (only has an effect when destructively preprocessing with `--ascii-to-unicode`)"
 
         pure
           ( files
@@ -204,6 +210,7 @@ parseArgs = info (go <**> helper) $ briefDesc
             , solverTimeoutMillis
             , includePath
             , ascii2unicode
+            , keepBackupAscii
             }
           )
 
