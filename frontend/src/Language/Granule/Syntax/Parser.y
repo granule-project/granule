@@ -79,6 +79,8 @@ import Language.Granule.Utils hiding (mkSpan)
     '^'   { TokenCaret _ }
     ".."  { TokenDotDot _ }
     OP    { TokenOp _ _ }
+    "∨"   { TokenJoin _ }
+    "∧"   { TokenMeet _ }
 
 %right in
 %right '->'
@@ -267,8 +269,8 @@ TyJuxt :: { Type }
   | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
   | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
   | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
-  | TyAtom '/' '\\' TyAtom    { TyInfix ("/\\") $1 $4 }
-  | TyAtom '\\' '/' TyAtom    { TyInfix ("\\/") $1 $4 }
+  | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
+  | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
@@ -296,8 +298,8 @@ Coeffect :: { Coeffect }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '-' Coeffect       { CMinus $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
-  | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
+  | Coeffect "∧" Coeffect       { CMeet $1 $3 }
+  | Coeffect "∨" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
   | Coeffect ':' Type           { normalise (CSig $1 $3) }

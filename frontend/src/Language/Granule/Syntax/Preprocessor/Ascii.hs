@@ -16,6 +16,7 @@ unAscii = replaceWithList
     , "<=" ~> "≤"
     , ">=" ~> "≥"
     , "==" ~> "≡"
+    , "\\" ~> "λ"
     ]
   where
     (~>) = Replace

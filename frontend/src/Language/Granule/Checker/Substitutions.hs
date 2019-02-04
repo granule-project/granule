@@ -446,8 +446,8 @@ compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
     "*"   -> return $ CTimes t1' t2'
     "^"   -> return $ CExpon t1' t2'
     "-"   -> return $ CMinus t1' t2'
-    "\\/" -> return $ CJoin t1' t2'
-    "/\\" -> return $ CMeet t1' t2'
+    "∨" -> return $ CJoin t1' t2'
+    "∧" -> return $ CMeet t1' t2'
     _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " <> op
 compileNatKindedTypeToCoeffect _ (TyInt n) =
   return $ CNat n

@@ -33,8 +33,8 @@ typeLevelConstructors =
     , (mkId "+",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
     , (mkId "-",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
     , (mkId "*",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "/\\", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "\\/", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "∧", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "∨", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
     -- File stuff
     , (mkId "Handle", (KType, Nothing))
     , (mkId "IOMode", (KType, Nothing))

@@ -18,6 +18,6 @@ data DoorLang : Type → Type where
 
 doorOK : DoorH Closed → DoorLang (DoorH Opened)
 doorOK h = -- do
-     Action (Knock h) `ThenWith` (\(h : DoorH Closed)
-  → Action (Knock h) `ThenWith` (\(h : DoorH Closed)
+     Action (Knock h) `ThenWith` (λ(h : DoorH Closed)
+  → Action (Knock h) `ThenWith` (λ(h : DoorH Closed)
   → Action (OpenDoor h)))

@@ -18,7 +18,7 @@ hash : ∀ {l : Level} . Int [l] → Int [l]
 hash [x] = [x + x]
 
 hello : () <R, W>
-hello = let x <- read
+hello = let x ← read
         in write x
 
 main : Int [Private]

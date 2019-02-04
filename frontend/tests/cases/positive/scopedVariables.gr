@@ -2,4 +2,4 @@ id2 : ∀ {a : Type} . a → a
 id2 x = x
 
 id : ∀ {a : Type} . a → a
-id = id2 (\(x : a) → x)
+id = id2 (λ(x : a) → x)

@@ -14,13 +14,13 @@ data Functor (f : Type → Type) where
          ((a → b) → f a → f b)) → Functor f
 
 bind : ∀ (a : Type, b : Type, f : Type → Type) .
-       (Functor f) [Inf] → Free f a → (a → Free f b) → Free f b
+       (Functor f) [∞] → Free f a → (a → Free f b) → Free f b
 bind [functor] f k =
   case f of
     (Pure x)   → k x;
     (Impure d) →
       case functor of
-        (Fmap fmap) → Impure (fmap (\(x : Free f a) → bind [functor] x k) d)
+        (Fmap fmap) → Impure (fmap (λ(x : Free f a) → bind [functor] x k) d)
 
 -------------------------------------
 
@@ -44,12 +44,12 @@ unMem x =
 algIncr : ∀ {a : Type} . Incr (Mem → (a , Mem)) → (Mem → (a , Mem))
 algIncr x =
   case x of
-    (Incr n t) → \x → t (Mem (unMem x + n))
+    (Incr n t) → λx → t (Mem (unMem x + n))
 
-algRecall : ∀ {a : Type} . Recall (Mem [Inf] → (a, Mem)) → (Mem [Inf] → (a , Mem))
+algRecall : ∀ {a : Type} . Recall (Mem [∞] → (a, Mem)) → (Mem [∞] → (a , Mem))
 algRecall x =
    case x of
-    (Recall f) → \[x] → f (unMem x) [Mem (unMem x)]
+    (Recall f) → λ[x] → f (unMem x) [Mem (unMem x)]
 
 algSum : ∀ (a : Type, b : Type, f : Type → Type, g : Type → Type)
        .  (f a → a) [0..1]
