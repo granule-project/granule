@@ -221,7 +221,7 @@ NAryConstr :: { Pattern () }
                                        \sp -> return $ PConstr sp  () (mkId x) $2 }
 
 ForallSig :: { [(Id, Kind)] }
- : '(' VarSigs ')' { $2 }
+ : '{' VarSigs '}' { $2 }
  | VarSigs         { $1 }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }

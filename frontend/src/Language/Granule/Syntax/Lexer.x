@@ -57,7 +57,6 @@ tokens :-
   "→"                           { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
   "←"                           { \p s -> TokenBind p }
-  "=>"                          { \p s -> TokenConstrain p }
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
   \\                            { \p s -> TokenLambda p }
@@ -92,6 +91,9 @@ tokens :-
   ".."                          { \p s -> TokenDotDot p }
   "∨"                           { \p _ -> TokenJoin p }
   "∧"                           { \p _ -> TokenMeet p }
+  "=>"                          { \p s -> TokenConstrain p }
+  "⇒"                           { \p s -> TokenConstrain p }
+
 
 {
 
