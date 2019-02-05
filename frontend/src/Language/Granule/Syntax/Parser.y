@@ -60,6 +60,7 @@ import Language.Granule.Utils hiding (mkSpan)
     ','   { TokenComma _ }
     '×'   { TokenCross _ }
     '='   { TokenEq _ }
+    '/='  { TokenNeq _ }
     '+'   { TokenAdd _ }
     '-'   { TokenSub _ }
     '*'   { TokenMul _ }
@@ -72,6 +73,8 @@ import Language.Granule.Utils hiding (mkSpan)
     ']'   { TokenBoxRight _ }
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
+    '<='   { TokenLTE _ }
+    '>='   { TokenGTE _ }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
@@ -226,12 +229,12 @@ ForallSig :: { [(Id, Kind)] }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
  : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
- | forall ForallSig '.' '{' Types '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
+ | forall ForallSig '.' '{' Constraints '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
-Types :: { [Type] }
-Types
- : Type ',' Types { $1 : $3 }
- | Type           { [$1] }
+Constraints :: { [Type] }
+Constraints
+ : Constraint ',' Constraints { $1 : $3 }
+ | Constraint                 { [$1] }
 
 TypeScheme :: { TypeScheme }
  : Type
@@ -252,8 +255,9 @@ Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
   | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
-                                  "Type"     -> KType
-                                  "Coeffect" -> KCoeffect
+                                  "Type"      -> KType
+                                  "Coeffect"  -> KCoeffect
+                                  "Predicate" -> KPredicate
                                   s          -> kConstr $ mkId s }
   | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
   | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
@@ -277,17 +281,19 @@ TyJuxt :: { Type }
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
   | TyAtom '+' TyAtom         { TyInfix ("+") $1 $3 }
-  | TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
-  | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
-  | TyAtom '>' '=' TyAtom     { TyInfix (">=") $1 $4 }
-  | TyAtom '<' '=' TyAtom     { TyInfix ("<=") $1 $4 }
-  | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
-  | TyAtom '/' '=' TyAtom     { TyInfix ("/=") $1 $4 }
   | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
   | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
   | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
   | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
   | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
+
+Constraint :: { Type }
+  : TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
+  | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
+  | TyAtom '>=' TyAtom        { TyInfix (">=") $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix ("<=") $1 $3 }
+  | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix ("/=") $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
