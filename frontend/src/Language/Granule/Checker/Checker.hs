@@ -66,11 +66,7 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
 
 checkTyCon :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
 checkTyCon (DataDecl sp name tyVars kindAnn ds) = do
-  clash <- isJust . lookup name <$> gets typeConstructors
-  if clash
-    then halt $ NameClashError (Just sp) $ "Type constructor `" <> pretty name <> "` already defined."
-    else modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
+  registerTyCon sp name tyConKind cardin
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
@@ -148,27 +144,10 @@ checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
 checkIFaceExists :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
 checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 
-checkConstrIFaceExists :: (?globals :: Globals) => Span -> IConstr -> MaybeT Checker ()
-checkConstrIFaceExists sp (IConstr (TyApp (TyCon iname) _)) =
-  checkIFaceExists sp iname
-checkConstrIFaceExists sp (IConstr ty) =
-  halt . GenericError (Just sp) $ concat ["Couldn't match type `", pretty ty, "` with a valid constraint"]
-
--- | @checkDuplicate (ctxtf, descr) sp name@ checks if
--- | @name@ already exists in the context retrieved by
--- | @ctxtf@. If a name already exists, then the program
--- | halts with a `NameClashError`.
-checkDuplicate :: (?globals :: Globals) => ((CheckerState -> Ctxt a), String) -> Span -> Id -> MaybeT Checker ()
-checkDuplicate (ctxtf, descr) sp name = do
-  clash <- isJust . lookup name <$> gets ctxtf
-  when clash $ halt $ NameClashError (Just sp) $ concat [descr, " `", pretty name, "` already defined."]
-
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
 checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
-  checkDuplicate (ifaceContext, "Interface") sp name
-  mapM_ (checkConstrIFaceExists sp) constrs
-  modify' $ \st ->
-    st{ ifaceContext = (name, (kind, ifnames)) : ifaceContext st }
+  mapM_ (kindCheckConstr sp []) constrs
+  registerInterface sp name kind ifnames
   where
     kind = case kindAnn of Nothing -> KType; Just k -> k
     ifnames = map (\(IFaceTy _ name _) -> name) itys
@@ -199,7 +178,7 @@ checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInstHead (Instance sp iname constrs idt _) = do
   checkIFaceExists sp iname
-  mapM_ (checkConstrIFaceExists sp) constrs
+  mapM_ (kindCheckConstr sp []) constrs
   checkInstTy iname idt
 
 checkInstTy :: (?globals :: Globals) => Id -> IFaceDat -> MaybeT Checker ()

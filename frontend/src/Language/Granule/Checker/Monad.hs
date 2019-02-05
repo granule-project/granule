@@ -9,6 +9,7 @@ module Language.Granule.Checker.Monad where
 
 import Data.List (intercalate)
 import qualified Data.Map as M
+import Data.Maybe (isJust)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Identity
@@ -129,6 +130,38 @@ getInterfaceMembers = fmap (fmap snd) . getInterface
 
 getTypeScheme :: Id -> MaybeT Checker (Maybe TypeScheme)
 getTypeScheme = lookupContext defContext
+
+-- | Retrieve a kind from the type constructor scope
+getKindRequired :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
+getKindRequired sp name = do
+  ikind <- getInterfaceKind name
+  case ikind of
+    Just k -> pure (KFun k KConstraint)
+    Nothing -> fmap fst $ requireInScope (typeConstructors, "Type constructor or interface") sp name
+
+-- | @checkDuplicate (ctxtf, descr) sp name@ checks if
+-- | @name@ already exists in the context retrieved by
+-- | @ctxtf@. If a name already exists, then the program
+-- | halts with a `NameClashError`.
+checkDuplicate :: (?globals :: Globals) => ((CheckerState -> Ctxt a), String) -> Span -> Id -> MaybeT Checker ()
+checkDuplicate (ctxtf, descr) sp name = do
+  clash <- isJust . lookup name <$> gets ctxtf
+  when clash $ halt $ NameClashError (Just sp) $ concat [descr, " `", pretty name, "` already defined."]
+
+checkDuplicateTyConScope :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
+checkDuplicateTyConScope sp name = do
+  checkDuplicate (typeConstructors, "Type Constructor") sp name
+  checkDuplicate (ifaceContext,     "Type Constructor") sp name
+
+registerTyCon :: (?globals :: Globals) => Span -> Id -> Kind -> Cardinality -> MaybeT Checker ()
+registerTyCon sp name kind card = do
+  checkDuplicateTyConScope sp name
+  modify' $ \st -> st { typeConstructors = (name, (kind, card)) : typeConstructors st }
+
+registerInterface :: (?globals :: Globals) => Span -> Id -> Kind -> [Id] -> MaybeT Checker ()
+registerInterface sp name kind ifnames = do
+  checkDuplicateTyConScope sp name
+  modify' $ \st -> st { ifaceContext = (name, (kind, ifnames)) : ifaceContext st }
 
 {- | Useful if a checking procedure is needed which
      may get discarded within a wider checking, e.g., for

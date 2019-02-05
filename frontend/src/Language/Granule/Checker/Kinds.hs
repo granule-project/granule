@@ -5,6 +5,7 @@
 module Language.Granule.Checker.Kinds (
                       kindCheckDef
                     , kindCheckSig
+                    , kindCheckConstr
                     , inferKindOfType
                     , inferKindOfType'
                     , joinCoeffectTypes
@@ -40,11 +41,21 @@ demoteKindToType (KPromote t) = Just t
 demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
+-- | Kind check a constraint
+kindCheckConstr :: (?globals :: Globals) => Span -> Ctxt Kind -> IConstr -> MaybeT Checker ()
+kindCheckConstr s qvars (IConstr ty) = do
+  kind <- inferKindOfType' s qvars ty
+  case kind of
+    KConstraint -> pure ()
+    _ -> illKindedNEq s KConstraint kind
+
 -- Currently we expect that a type scheme has kind KType
 kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
-kindCheckSig s (Forall _ quantifiedVariables _ ty) = do
+kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
+
+  mapM_ (kindCheckConstr s quantifiedVariables) constraints
 
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
@@ -71,10 +82,7 @@ inferKindOfType' s quantifiedVariables t =
     kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
     kFun KType y = illKindedNEq s KType y
     kFun x _     = illKindedNEq s KType x
-    kCon conId = do
-        st <- get
-        (kind,_) <- requireInScope (typeConstructors, "Type constructor") s conId
-        return kind
+    kCon conId = getKindRequired s conId
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)

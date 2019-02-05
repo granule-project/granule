@@ -1,0 +1,3 @@
+-- interface used as constraint is not in scope
+simple : forall (a : Type) . {Simple a} => a -> a
+simple x = x
