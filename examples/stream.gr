@@ -4,7 +4,7 @@ data Stream a where
   Next : a → (() → Stream a) [0..1] → Stream a
 
 delay : ∀ a : Type .  a → (() → a)
-delay x = \() → x
+delay x = λ() → x
 
 force : ∀ a : Type . (() → a) → a
 force t = t ()
@@ -16,12 +16,12 @@ takeS : ∀ a : Type, p : Nat . N p → Stream a → Vec p a
 takeS (S Z) (Next hd [_])  = Cons hd Nil;
 takeS (S n) (Next hd [tl]) = Cons hd (takeS n (force tl))
 
-cycle : ∀ a : Type, n : Nat . (Vec (n + 1) a) [0..Inf] → Stream a
+cycle : ∀ a : Type, n : Nat . (Vec (n + 1) a) [0..∞] → Stream a
 cycle [xs] = cycleInner [xs] [xs]
 
 cycleInner
   :  ∀ a : Type, m : Nat, n : Nat
-  .  (Vec (m+1) a) [0..Inf]
+  .  (Vec (m+1) a) [0..∞]
   → (Vec (n+1) a) [0..1]
   → Stream a
 cycleInner [again] [Cons x Nil] = Next x [delay (cycleInner [again] [again])];

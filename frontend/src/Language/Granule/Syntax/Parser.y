@@ -80,6 +80,8 @@ import Language.Granule.Utils hiding (mkSpan)
     '^'   { TokenCaret _ }
     ".."  { TokenDotDot _ }
     OP    { TokenOp _ _ }
+    "∨"   { TokenJoin _ }
+    "∧"   { TokenMeet _ }
 
 %right in
 %right '->'
@@ -283,8 +285,8 @@ TyJuxt :: { Type }
   | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
   | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
   | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
-  | TyAtom '/' '\\' TyAtom    { TyInfix ("/\\") $1 $4 }
-  | TyAtom '\\' '/' TyAtom    { TyInfix ("\\/") $1 $4 }
+  | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
+  | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
@@ -312,8 +314,8 @@ Coeffect :: { Coeffect }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '-' Coeffect       { CMinus $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
-  | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
+  | Coeffect "∧" Coeffect       { CMeet $1 $3 }
+  | Coeffect "∨" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
   | Coeffect ':' Type           { normalise (CSig $1 $3) }
@@ -468,17 +470,9 @@ parseError t = do
     lift $ die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
--- | Preprocess the source file based on the file extension.
-preprocess :: (?globals :: Globals) => String -> String
-preprocess = case reverse . takeWhile (/= '.') . reverse . sourceFilePath $ ?globals of
-    "md" -> unMarkdown
-    "tex" -> unLatex
-    "latex" -> unLatex
-    _ -> id
-
 parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefs input = do
-    ast <- parseDefs' (preprocess input)
+    ast <- parseDefs' input
     return $ freshenAST ast
 
 parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())

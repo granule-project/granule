@@ -16,8 +16,8 @@ hash [x] = [x + x]
 main : Int [Private]
 main = hash secret
 
--- Flattening takes the meet (`\/`) of both Levels (see example below).
-flatten : ∀ k : Level, l : Level . (Int [k]) [l] → Int [k \/ l]
+-- Flattening takes the meet (`∨`) of both Levels (see example below).
+flatten : ∀ k : Level, l : Level . (Int [k]) [l] → Int [k ∨ l]
 flatten [[x]] = [x]
 
 xbb : (Int [Public]) [Private]

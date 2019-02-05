@@ -61,6 +61,7 @@ tokens :-
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
   \\                            { \p s -> TokenLambda p }
+  "λ"                           { \p s -> TokenLambda p }
   \[                            { \p s -> TokenBoxLeft p }
   \]                            { \p s -> TokenBoxRight p }
   [\+]                          { \p s -> TokenAdd p }
@@ -89,6 +90,8 @@ tokens :-
   \`                            { \p s -> TokenBackTick p }
   \^                            { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
+  "∨"                           { \p _ -> TokenJoin p }
+  "∧"                           { \p _ -> TokenMeet p }
 
 {
 
@@ -142,6 +145,8 @@ data Token
   | TokenOp AlexPosn String
   | TokenCaret AlexPosn
   | TokenDotDot AlexPosn
+  | TokenJoin AlexPosn
+  | TokenMeet AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String

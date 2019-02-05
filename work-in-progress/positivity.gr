@@ -7,7 +7,7 @@ data Bad : Type where
   Bad : (Bad → Void) [∞] → Bad
 
 selfApp : Bad → Void
-selfApp = \(Bad [f]) → f (Bad [f])
+selfApp = λ(Bad [f]) → f (Bad [f])
 
 absurd : Void
 absurd = selfApp (Bad [selfApp])

@@ -1,2 +1,2 @@
 idBad : ∀ {a : Type} . a → a
-idBad = \(x : Int) → x
+idBad = λ(x : Int) → x

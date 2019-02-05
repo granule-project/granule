@@ -1,4 +1,4 @@
-fix : ∀ {a : Type} . (a → a) [Inf] → a
+fix : ∀ {a : Type} . (a → a) [∞] → a
 fix [f] = f (fix [f])
 
 foo : Bool → Int

@@ -1,11 +1,8 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Language.Granule.Syntax.Preprocessor.Ascii (unAscii, unAsciiFile) where
+module Language.Granule.Syntax.Preprocessor.Ascii (unAscii) where
 
-import System.Directory (renameFile)
-import System.FilePath (splitFileName)
-import System.IO (hClose, hPutStr, openTempFile)
-import Text.Replace (replaceWithList, Replace(..))
+import Text.Replace (Replace(..), replaceWithList)
 
 unAscii :: String -> String
 unAscii = replaceWithList
@@ -19,15 +16,7 @@ unAscii = replaceWithList
     , "<=" ~> "≤"
     , ">=" ~> "≥"
     , "==" ~> "≡"
+    , "\\" ~> "λ"
     ]
   where
     (~>) = Replace
-
-unAsciiFile :: FilePath -> IO String
-unAsciiFile fp = do
-  src <- readFile fp
-  (tempFp, tempHd) <- uncurry openTempFile (splitFileName fp)
-  hPutStr tempHd (unAscii src)
-  hClose tempHd
-  renameFile tempFp fp
-  pure $ unAscii src

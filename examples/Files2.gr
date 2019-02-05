@@ -22,13 +22,13 @@ hClose' = hClose
 getMany : Int → Handle → (Handle, String) <IO>
 getMany 0 h = pure (h, "");
 getMany n h = let
-    (h, c) <- hGetChar h;
-    (h, cs) <- getMany (n - 1) h
+    (h, c) ← hGetChar h;
+    (h, cs) ← getMany (n - 1) h
     in pure (h, stringAppend (showChar c) cs)
 
 main : String <IO>
 main = let
-    h      <- openFile "LICENSE" ReadMode;
-    (h, s) <- getMany 10 h;
-    ()     <- hClose h
+    h      ← openFile "LICENSE" ReadMode;
+    (h, s) ← getMany 10 h;
+    ()     ← hClose h
     in pure s
