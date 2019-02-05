@@ -150,7 +150,7 @@ IFaceConstrns :: { [IConstr] }
   | IFaceConstrn                   { [$1] }
 
 IFaceConstrn :: { IConstr }
-  : IFaceName Type { IConstr ($1, $2) }
+  : Type { IConstr $1 }
 
 IFaceVar :: { (Id, Maybe Kind) }
   : VAR            { (mkId $ symString $1, Nothing) }

@@ -149,8 +149,10 @@ checkIFaceExists :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
 checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 
 checkConstrIFaceExists :: (?globals :: Globals) => Span -> IConstr -> MaybeT Checker ()
-checkConstrIFaceExists sp (IConstr (name,_)) =
-  checkIFaceExists sp name
+checkConstrIFaceExists sp (IConstr (TyApp (TyCon iname) _)) =
+  checkIFaceExists sp iname
+checkConstrIFaceExists sp (IConstr ty) =
+  halt . GenericError (Just sp) $ concat ["Couldn't match type `", pretty ty, "` with a valid constraint"]
 
 -- | @checkDuplicate (ctxtf, descr) sp name@ checks if
 -- | @name@ already exists in the context retrieved by
@@ -191,7 +193,7 @@ checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
       -- to get definition context from interfaces, we annotate
       -- the type schemes to include a constraint of the interface,
       -- and add a binder for the interface variable
-      let tys' = Forall fsp (binds <> [(pname, tyVarKind)]) (constrs <> [IConstr (iname, TyVar pname)]) ty
+      let tys' = Forall fsp (binds <> [(pname, tyVarKind)]) (constrs <> [IConstr (TyApp (TyCon iname) (TyVar pname))]) ty
       registerDefSig sp name tys'
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
