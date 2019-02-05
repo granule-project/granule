@@ -1,0 +1,117 @@
+data
+  DeqArray
+    (capacity    : Nat)  --- the maximum number of elements in the DeqArray
+    (lowerIndex  : Nat)  --- the lower bound of the initialised section
+    (upperIndex  : Nat)  --- the upper bound of the initialised section
+    (elementType : Type) --- the type of elements
+
+--- _D_ouble _e_nded _q_ueue array. Say "deck-array".
+
+-- alias
+--   Stack
+--     capacity
+--     upperIndex
+--     elementType
+--       = DeqArray capacity 0 upperIndex elementType
+
+
+allocate
+  : ∀ (a : Type, cap : Nat)
+  . N cap
+  → DeqArray cap 0 0 a
+
+--- Boxed array, so we allocate `cap` words
+---
+--- Example:
+--- grin> allocate 4
+--- |_|_|_|_|
+
+
+push
+  : ∀ (a : Type, cap : Nat, lower : Nat, upper : Nat)
+  . cap > upper
+  ⇒ DeqArray cap lower upper a
+  → a
+  → DeqArray cap lower (upper + 1) a
+
+--- a.k.a. "snoc"
+--- Example:
+--- grin> push |_|B|_|_| C
+--- |_|B|C|_|
+
+
+pop
+  : ∀ (a : Type, cap : Nat, upper : Nat)
+  . DeqArray cap (upper + 1) a
+  → a × DeqArray cap upper a
+
+--- a.k.a. "unsnoc", "dequeue"
+--- Example:
+--- grin> pop |_|B|C|_|
+--- C, |_|B|_|_|
+--- grin> pop |A|_|_|_|
+--- A, |_|_|_|_|
+
+
+pushLeft
+  : ∀ (a : Type, cap : Nat, lower : Nat, upper : Nat)
+  . lower > 0
+  ⇒ DeqArray cap (lower + 1) upper a
+  → a
+  → DeqArray cap lower upper a
+
+--- a.k.a. "enqueue"
+--- Example:
+--- grin> pushLeft |_|B|_|_| A
+--- |A|B|_|_|
+
+
+popLeft
+  : ∀ (a : Type, cap : Nat, lower : Nat, upper : Nat)
+  . upper > lower
+  ⇒ DeqArray cap lower upper a
+  → a × DeqArray cap (lower + 1) upper a
+
+--- grin> popLeft |A|B|_|_|
+--- A, |_|B|_|_|
+---
+--- TODO: Doesn't allow dequeueing when there is only one element in the array:
+--- grin> popLeft |A|_|_|_|
+--- Error: condition `upper > lower` is false
+
+
+swap
+  : ∀ (a : Type, cap : Nat, lower: Nat, upper : Nat)
+  . DeqArray cap lower (upper + 1) a
+  → Fin (upper + 1)
+  → a
+  → a × DeqArray cap lower (upper + 1) a
+
+--- grin> swap |A|B|C|_| 1 B'
+--- B, |A|B'|C|_|
+
+swap'
+  : ∀ (a : Type, cap : Nat, lower: Nat, upper : Nat)
+  . upper > 0
+  ⇒ i ≤ upper
+  ⇒ DeqArray cap lower upper a
+  → N i
+  → a
+  → a × DeqArray cap lower upper a
+
+--- Version of `swap` that uses predicates instead of `Fin` and `upper + 1`
+
+get
+  : ∀ (a : Type, cap : Nat, upper : Nat)
+  . (DeqArray cap (upper + 1) a) [0..1]
+  → Fin (upper + 1)
+  → a
+
+--- TODO: `Fin` doesn't allow us to do things like `<obj>[-n]` (Python) to get
+--- the `n`th element counting down from the highest index.
+---
+--- grin> get 1 [|_|B|C|_|]
+--- B
+
+
+-- `resize` can be implemented in terms of `allocate` and the other operations
