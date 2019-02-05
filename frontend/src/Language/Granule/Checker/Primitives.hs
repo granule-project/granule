@@ -1,9 +1,15 @@
 -- Provides all the type information for built-ins
+{-# LANGUAGE QuasiQuotes #-}
 
 module Language.Granule.Checker.Primitives where
 
+import Data.List (genericLength)
+import System.IO.Unsafe (unsafePerformIO)
+import Text.RawString.QQ (r)
+
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Parser (parseDefs)
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 
@@ -54,7 +60,7 @@ typeLevelConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
-    ]
+    ] ++ builtinTypeConstructors
 
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
@@ -68,29 +74,11 @@ dataConstructors =
     , (mkId "WriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
     , (mkId "AppendMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
     , (mkId "ReadWriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    ]
+    ] ++ builtinDataConstructors
 
 builtins :: [(Id, TypeScheme)]
 builtins =
-  [ ( mkId "push"
-    , Forall nullSpanBuiltin
-        [ (mkId "capacity", KType)
-        , (mkId "currentMax", KType)
-        , (mkId "a", KType)
-        ]
-        [ TyInfix "<" (var "capacity") (var "currentMax") ]
-        ( con "ArrayStack"
-          .@ var "capacity"
-          .@ var "currentMax"
-          .@ var "a"
-        .-> var "a"
-        .-> con "ArrayStack"
-          .@ var "capacity"
-          .@ (TyInfix "+" (var "currentMax") (TyInt 1))
-          .@ var "a"
-        )
-    )
-  , (mkId "div", Forall nullSpanBuiltin [] []
+  [ (mkId "div", Forall nullSpanBuiltin [] []
        (FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))))
     -- Graded monad unit operation
   , (mkId "pure", Forall nullSpanBuiltin [(mkId "a", KType)] []
@@ -167,7 +155,7 @@ builtins =
                          ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
   , (mkId "unpack", Forall nullSpanBuiltin [(mkId "s", protocol)] []
                             (FunTy ((con "Chan") .@ (var "s")) (var "s")))
-  ]
+  ] ++ builtins'
 
 binaryOperators :: [(Operator, Type)]
 binaryOperators =
@@ -188,3 +176,70 @@ binaryOperators =
    ,(">", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
    ,("≥", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
    ]
+
+
+
+builtinSrc :: String
+builtinSrc = [r|
+
+data
+  ArrayStack
+    (capacity : Nat)
+    (maxIndex : Nat)
+    (a : Type)
+  where
+
+push
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . {maxIndex < cap}
+  ⇒ ArrayStack cap maxIndex a
+  → a
+  → ArrayStack cap (maxIndex + 1) a
+push = builtin
+
+pop
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . {maxIndex > 0}
+  ⇒ ArrayStack cap maxIndex a
+  → a × ArrayStack cap (maxIndex - 1) a
+pop = builtin
+
+-- Boxed array, so we allocate cap words
+allocate
+  : ∀ {a : Type, cap : Nat}
+  . N cap
+  → ArrayStack cap 0 a
+allocate = builtin
+
+swap
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . ArrayStack cap (maxIndex + 1) a
+  → Fin (maxIndex + 1)
+  → a
+  → a × ArrayStack cap (maxIndex + 1) a
+swap = builtin
+
+|]
+
+
+builtinTypeConstructors :: [(Id, (Kind, Cardinality))]
+builtinDataConstructors :: [(Id, TypeScheme)]
+builtins' :: [(Id, TypeScheme)]
+(builtinTypeConstructors, builtinDataConstructors, builtins')
+  = unsafePerformIO $ do
+    AST types defs <- parseDefs "builtins" builtinSrc
+    let datas = map unData types
+    pure (map fst datas, concatMap snd datas, map unDef defs)
+  where
+    unDef :: Def () () -> (Id, TypeScheme)
+    unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+
+    unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, TypeScheme)])
+    unData (DataDecl _ tyConName tyVars kind dataConstrs)
+      = ( (tyConName, (maybe KType id kind, Just $ genericLength dataConstrs))
+        , map unDataConstr dataConstrs
+        )
+      where
+        unDataConstr :: DataConstr -> (Id, TypeScheme)
+        unDataConstr (DataConstrIndexed _ name tysch) = (name, tysch)
+        unDataConstr d = unDataConstr (nonIndexedToIndexedDataConstr tyConName tyVars d)

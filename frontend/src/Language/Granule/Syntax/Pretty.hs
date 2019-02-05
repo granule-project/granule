@@ -186,8 +186,8 @@ instance Pretty [DataConstr] where
     prettyL l = intercalate ";\n  " . map pretty
 
 instance Pretty DataConstr where
-    prettyL l (DataConstrG _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
-    prettyL l (DataConstrA _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
+    prettyL l (DataConstrIndexed _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
+    prettyL l (DataConstrNonIndexed _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
 
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v

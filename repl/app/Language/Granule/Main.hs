@@ -97,7 +97,7 @@ rFindMain fn rfp = forM fn $ (\x -> rFindHelper x rfp )
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
-    pf <- liftIO' $ try $ parseDefs =<< readFile pth
+    pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile pth
 
     case pf of
       Right ast -> do
@@ -172,8 +172,8 @@ makeMapBuildADT adc = M.fromList $ tempADT adc
                         where
                           tempADT :: [DataConstr] -> [(String,DataConstr)]
                           tempADT [] = []
-                          tempADT (dc@(DataConstrG _ id _):dct) = ((sourceName id),dc) : tempADT dct
-                          tempADT (dc@(DataConstrA _ _ _):dct) = tempADT dct
+                          tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceName id),dc) : tempADT dct
+                          tempADT (dc@(DataConstrNonIndexed _ _ _):dct) = tempADT dct
 
 lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
 lookupBuildADT term aMap = let lup = M.lookup term aMap in
@@ -232,8 +232,8 @@ buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) = makeCtxt dc <> buildCtxtTSDD dd
 
 buildCtxtTSDDhelper :: [DataConstr] -> Ctxt TypeScheme
 buildCtxtTSDDhelper [] = []
-buildCtxtTSDDhelper (dc@(DataConstrG _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
-buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrIndexed _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrNonIndexed _ _ _):dct) = buildCtxtTSDDhelper dct
 
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
