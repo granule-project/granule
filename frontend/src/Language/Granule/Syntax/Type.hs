@@ -34,6 +34,7 @@ Example: `List n Int` in Granule
 -}
 data Type = FunTy Type Type           -- ^ Function type
           | TyCon Id                  -- ^ Type constructor
+          | ICon Id                   -- ^ Interface type constructor
           | Box Coeffect Type         -- ^ Coeffect type
           | Diamond Effect Type       -- ^ Effect type
           | TyVar Id                  -- ^ Type variable
@@ -180,6 +181,8 @@ mFunTy :: Monad m => Type -> Type -> m Type
 mFunTy x y   = return (FunTy x y)
 mTyCon :: Monad m => Id -> m Type
 mTyCon       = return . TyCon
+mICon :: Monad m => Id -> m Type
+mICon        = return . ICon
 mBox :: Monad m => Coeffect -> Type -> m Type
 mBox c y     = return (Box c y)
 mDiamond :: Monad m => Effect -> Type -> m Type
@@ -197,6 +200,7 @@ mTyInfix op x y  = return (TyInfix op x y)
 data TypeFold m a = TypeFold
   { tfFunTy   :: a -> a        -> m a
   , tfTyCon   :: Id            -> m a
+  , tfICon    :: Id           -> m a
   , tfBox     :: Coeffect -> a -> m a
   , tfDiamond :: Effect -> a   -> m a
   , tfTyVar   :: Id            -> m a
@@ -207,7 +211,7 @@ data TypeFold m a = TypeFold
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix
+  TypeFold mFunTy mTyCon mICon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: Monad m => TypeFold m a -> Type -> m a
@@ -218,6 +222,7 @@ typeFoldM algebra = go
      t2' <- go t2
      (tfFunTy algebra) t1' t2'
    go (TyCon s) = (tfTyCon algebra) s
+   go (ICon s)  = (tfICon algebra) s
    go (Box c t) = do
      t' <- go t
      (tfBox algebra) c t'
@@ -250,6 +255,7 @@ instance Term Type where
   freeVars = runIdentity . typeFoldM TypeFold
     { tfFunTy   = \x y -> return $ x <> y
     , tfTyCon   = \_ -> return [] -- or: const (return [])
+    , tfICon    = \_ -> return []
     , tfBox     = \c t -> return $ freeVars c <> t
     , tfDiamond = \_ x -> return x
     , tfTyVar   = \v -> return [v] -- or: return . return
