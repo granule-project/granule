@@ -331,6 +331,7 @@ instance Substitutable Kind where
 
   substitute subst KType = return KType
   substitute subst KCoeffect = return KCoeffect
+  substitute subst KConstraint = return KConstraint
   substitute subst (KFun c1 c2) = do
     c1 <- substitute subst c1
     c2 <- substitute subst c2
@@ -480,11 +481,16 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
   -> TypeScheme   -- Type scheme to freshen
   -> MaybeT Checker (Type, [Id])
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds ty) = do
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
     ty <- renameType (elideEither renameMap) ty
+
+    let subst = map (\(v, var) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
+    constr' <- mapM (substitute subst) constr
+    -- TODO: then compile this to a predicate
+
     -- Return the type and all skolem variables
     return (ty, justLefts renameMap)
 
