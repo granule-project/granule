@@ -5,6 +5,3 @@ data Vec : Nat -> Type -> Type where
 headAlt : forall {a : Type, n : Nat} . {n > 0} => (Vec n Int) [0..1] -> Int
 headAlt [Nil] = 42;
 headAlt [Cons x _] = x
-
-foo : (Vec 0 Int) [0..1] -> Int
-foo x = headAlt x

@@ -15,6 +15,7 @@ import Data.List (genericLength, intercalate)
 import Data.Maybe
 import qualified Data.Text as T
 
+import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
@@ -187,6 +188,10 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
 
   -- Create conjunct to capture the pattern constraints
   newConjunct
+
+  mapM_ (\ty -> do
+    pred <- compileTypeConstraintToConstraint s ty
+    addPredicate pred) constraints
 
   -- Build the binding context for the branch pattern
   st <- get
@@ -632,7 +637,9 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
          Just tyScheme  -> do
            (ty', _, constraints) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
 
-
+           mapM_ (\ty -> do
+             pred <- compileTypeConstraintToConstraint s ty
+             addPredicate pred) constraints
 
            let elaborated = Val s ty' (Var ty' x)
            return (ty', [], elaborated)
@@ -1163,7 +1170,7 @@ checkGuardsForImpossibility s name = do
     -- Try to prove the theorem
     result <- liftIO $ provePredicate s thm tyVars kVars
 
-    let msgHead = "Pattern guard for equation of `" <> pretty name <> "``"
+    let msgHead = "Pattern guard for equation of `" <> pretty name <> "`"
 
     case result of
       QED -> return ()
