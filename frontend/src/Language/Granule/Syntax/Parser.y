@@ -164,11 +164,11 @@ DataConstrs :: { [DataConstr] }
 DataConstr :: { DataConstr }
   : CONSTR ':' TypeScheme
        {% do span <- mkSpan (getPos $1, getEnd $3)
-             return $ DataConstrG span (mkId $ constrString $1) $3 }
+             return $ DataConstrIndexed span (mkId $ constrString $1) $3 }
 
   | CONSTR TyParams
        {% do span <- mkSpan (getPosToSpan $1)
-             return $ DataConstrA span (mkId $ constrString $1) $2 }
+             return $ DataConstrNonIndexed span (mkId $ constrString $1) $2 }
 
 DataConstrNext :: { [DataConstr] }
   : '|' DataConstrs           { $2 }
@@ -471,18 +471,21 @@ parseError t = do
     lift $ die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
-parseDefs input = do
-    ast <- parseDefs' input
+parseDefs :: FilePath -> String -> IO (AST () ())
+parseDefs file input = runReaderT (defs $ scanTokens input) file
+
+parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
+parseAndDoImportsAndFreshenDefs input = do
+    ast <- parseDefsAndDoImports input
     return $ freshenAST ast
 
-parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())
-parseDefs' input = do
-    defs <- runReaderT (parse input) (sourceFilePath ?globals)
+parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
+parseDefsAndDoImports input = do
+    defs <- parseDefs (sourceFilePath ?globals) input
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
-      parseDefs' src
+      parseDefsAndDoImports src
     let allDefs = merge $ defs : importedDefs
     checkNameClashes allDefs
     checkMatchingNumberOfArgs allDefs
@@ -494,8 +497,6 @@ parseDefs' input = do
       let conc [] dds defs = AST dds defs
           conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)
        in conc xs [] []
-
-    parse = defs . scanTokens
 
     imports = map ((includePath ?globals </>) . (<> ".gr") . replace '.' '/')
               . mapMaybe (stripPrefix "import ") . lines $ input

@@ -68,8 +68,8 @@ library:
   - time
   - Glob
   - filepath
+  - raw-strings-qq
   - text-replace
-  # - raw-strings-qq (Quasiquoter for multiline, automatically escaped strings)
 
 tests:
   frontend-spec:

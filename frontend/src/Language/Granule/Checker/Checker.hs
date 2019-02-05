@@ -85,7 +85,7 @@ checkDataCon :: (?globals :: Globals)
   -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD constraints ty)) =
+checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVarsD constraints ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
 
@@ -128,17 +128,9 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD co
     check (TyApp fun arg) = check fun
     check x = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 
-checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
-    st <- get
-    case extend (dataConstructors st) dName tySch of
-      Some ds -> put st { dataConstructors = ds }
-      None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
-  where
-    tySch = Forall sp tyVars [] ty
-    ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
-    returnTy t [] = t
-    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
-
+checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
+  = checkDataCon tName kind tyVars
+    $ nonIndexedToIndexedDataConstr tName tyVars d
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
