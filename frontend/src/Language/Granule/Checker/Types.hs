@@ -10,6 +10,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List
 
+import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad

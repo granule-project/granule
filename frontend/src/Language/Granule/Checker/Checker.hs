@@ -148,6 +148,7 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty))
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
+
     elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
         -- Erase the solver predicate between equations
         modify' $ \st -> st
@@ -518,7 +519,8 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
     Just tySch -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty,_) <- freshPolymorphicInstance InstanceQ False tySch
+      (ty, _, []) <- freshPolymorphicInstance InstanceQ False tySch
+      -- TODO: allow data type constructors to have constraints
 
       let elaborated = Val s ty (Constr ty c [])
       return (ty, [], elaborated)
@@ -628,7 +630,9 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty',_) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+           (ty', _, constraints) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+
+
 
            let elaborated = Val s ty' (Var ty' x)
            return (ty', [], elaborated)

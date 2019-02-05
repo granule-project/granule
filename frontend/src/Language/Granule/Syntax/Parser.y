@@ -282,6 +282,7 @@ TyJuxt :: { Type }
   | TyAtom '>' '=' TyAtom     { TyInfix (">=") $1 $4 }
   | TyAtom '<' '=' TyAtom     { TyInfix ("<=") $1 $4 }
   | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
+  | TyAtom '/' '=' TyAtom     { TyInfix ("/=") $1 $4 }
   | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
   | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
   | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }

@@ -36,6 +36,7 @@ typeLevelConstructors =
     , (mkId "<",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
     , (mkId ">",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
     , (mkId "=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
+    , (mkId "/=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
     , (mkId "<=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
     , (mkId ">=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
     , (mkId "∧", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
