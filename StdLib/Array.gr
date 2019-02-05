@@ -52,3 +52,11 @@ get
   ⇒ (Array n a) [0..1]
   → N i
   → a
+
+switch
+  : ∀ {a : Type, i : Nat, j : Nat, n : Nat}
+  . {i < n, j < n}
+  ⇒ Array n a
+  → N i
+  → N j
+  → Array n a
