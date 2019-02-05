@@ -8,7 +8,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 
 
-
+kNat = kConstr $ mkId "Nat"
 protocol = kConstr $ mkId "Protocol"
 
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
@@ -16,6 +16,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 typeLevelConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeLevelConstructors =
     [ (mkId "()", (KType, Just 1))
+    , (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
     , (mkId ",", (KFun KType (KFun KType KType), Just 1))
     , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
@@ -71,7 +72,25 @@ dataConstructors =
 
 builtins :: [(Id, TypeScheme)]
 builtins =
-  [ (mkId "div", Forall nullSpanBuiltin [] []
+  [ ( mkId "push"
+    , Forall nullSpanBuiltin
+        [ (mkId "capacity", KType)
+        , (mkId "currentMax", KType)
+        , (mkId "a", KType)
+        ]
+        [ TyInfix "<" (var "capacity") (var "currentMax") ]
+        ( con "ArrayStack"
+          .@ var "capacity"
+          .@ var "currentMax"
+          .@ var "a"
+        .-> var "a"
+        .-> con "ArrayStack"
+          .@ var "capacity"
+          .@ (TyInfix "+" (var "currentMax") (TyInt 1))
+          .@ var "a"
+        )
+    )
+  , (mkId "div", Forall nullSpanBuiltin [] []
        (FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))))
     -- Graded monad unit operation
   , (mkId "pure", Forall nullSpanBuiltin [(mkId "a", KType)] []
