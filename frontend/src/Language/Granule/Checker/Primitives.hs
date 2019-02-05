@@ -31,17 +31,17 @@ typeLevelConstructors =
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
-    , (mkId "+",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "-",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "*",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "<",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId ">",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "/=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "<=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId ">=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "∧", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "∨", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "+",   (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "-",   (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "*",   (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "<",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId ">",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "/=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "<=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId ">=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "∧", (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "∨", (KFun kNat (KFun kNat kNat), Nothing))
     -- File stuff
     , (mkId "Handle", (KType, Nothing))
     , (mkId "IOMode", (KType, Nothing))
@@ -158,7 +158,7 @@ builtins =
                     (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
 
    -- forkRep : (c |n| -> Diamond ()) -> Diamond (c' |n|)
-  , (mkId "forkRep", Forall nullSpanBuiltin [(mkId "s", protocol), (mkId "n", kConstr $ mkId "Nat")] [] $
+  , (mkId "forkRep", Forall nullSpanBuiltin [(mkId "s", protocol), (mkId "n", kNat)] [] $
                     (Box (CVar $ mkId "n")
                        ((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
                     .->
