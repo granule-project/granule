@@ -44,7 +44,7 @@ data Type = FunTy Type Type           -- ^ Function type
 
 
 -- | Interface constraints
-newtype IConstr = IConstr (Id, Type)
+newtype IConstr = IConstr Type
   deriving (Eq, Show)
 
 
@@ -371,9 +371,9 @@ instance Freshenable m Coeffect where
     freshen (CProduct c1 c2) = CProduct <$> freshen c1 <*> freshen c2
 
 instance Freshenable m IConstr where
-    freshen (IConstr (c, v)) = do
-      v' <- freshen v
-      return (IConstr (c, v'))
+    freshen (IConstr ty) = do
+      ty' <- freshen ty
+      return $ IConstr ty'
 
 ----------------------------------------------------------------------
 
