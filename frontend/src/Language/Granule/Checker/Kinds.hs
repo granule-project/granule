@@ -42,15 +42,9 @@ demoteKindToType _            = Nothing
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
-kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
+kindCheckSig s (Forall _ quantifiedVariables _ ty) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
-
-  forM constraints (\(IConstr constraint) -> do
-    kind <- inferKindOfType' s quantifiedVariables constraint
-    case kind of
-      KConstraint -> pure ()
-      _ -> illKindedNEq s KConstraint kind)
 
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
@@ -68,7 +62,7 @@ inferKindOfType s t = do
 
 inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
 inferKindOfType' s quantifiedVariables t =
-    typeFoldM (TypeFold kFun kCon kICon kBox kDiamond kVar kApp kInt kInfix) t
+    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
   where
     kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
      | internalName c == internalName c' = return $ kConstr c
@@ -81,11 +75,6 @@ inferKindOfType' s quantifiedVariables t =
         st <- get
         (kind,_) <- requireInScope (typeConstructors, "Type constructor") s conId
         return kind
-
-    kICon conId = do
-        st <- get
-        (kind,_) <- requireInScope (ifaceContext, "Interface") s conId
-        return (KFun kind KConstraint)
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)

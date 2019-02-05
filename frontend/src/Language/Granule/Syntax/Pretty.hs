@@ -120,7 +120,6 @@ instance Pretty TypeScheme where
 instance Pretty Type where
     -- Atoms
     prettyL l (TyCon s)      =  prettyL 0 s
-    prettyL l (ICon s)       = prettyL 0 s
     prettyL l (TyVar v)      = prettyL 0 v
     prettyL l (TyInt n)      = show n
 

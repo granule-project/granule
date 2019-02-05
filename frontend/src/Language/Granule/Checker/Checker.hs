@@ -149,7 +149,7 @@ checkIFaceExists :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
 checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 
 checkConstrIFaceExists :: (?globals :: Globals) => Span -> IConstr -> MaybeT Checker ()
-checkConstrIFaceExists sp (IConstr (TyApp (ICon iname) _)) =
+checkConstrIFaceExists sp (IConstr (TyApp (TyCon iname) _)) =
   checkIFaceExists sp iname
 checkConstrIFaceExists sp (IConstr ty) =
   halt . GenericError (Just sp) $ concat ["Couldn't match type `", pretty ty, "` with a valid constraint"]
