@@ -52,6 +52,7 @@ newtype IConstr = IConstr Type
 data Kind = KType
           | KCoeffect
           | KPredicate
+          | KConstraint
           | KFun Kind Kind
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
@@ -68,6 +69,7 @@ instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
   freshen KPredicate = return KPredicate
+  freshen KConstraint = return KConstraint
   freshen (KFun k1 k2) = do
     k1 <- freshen k1
     k2 <- freshen k2
