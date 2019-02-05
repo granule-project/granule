@@ -1,3 +1,0 @@
--- 'a -> b' is not a valid constraint
-interface {a -> b} => Simple a where
-  simple : a -> a

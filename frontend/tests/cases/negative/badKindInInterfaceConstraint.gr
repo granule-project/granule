@@ -1,0 +1,5 @@
+data A = A
+
+-- 'A' is not a valid constraint
+interface {A} => Simple a where
+  simple : a -> a

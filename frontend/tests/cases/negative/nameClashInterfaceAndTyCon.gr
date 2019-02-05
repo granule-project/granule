@@ -1,0 +1,5 @@
+data A a = A
+
+-- interface name clashes with type constructor
+interface A a where
+  simple : a -> a

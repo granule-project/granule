@@ -5,6 +5,7 @@
 module Language.Granule.Checker.Kinds (
                       kindCheckDef
                     , kindCheckSig
+                    , kindCheckConstr
                     , inferKindOfType
                     , inferKindOfType'
                     , joinCoeffectTypes
@@ -41,18 +42,24 @@ demoteKindToType (KPromote t) = Just t
 demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
+-- | Kind check a constraint
+kindCheckConstr :: (?globals :: Globals) => Span -> Ctxt Kind -> IConstr -> MaybeT Checker ()
+kindCheckConstr s qvars (IConstr ty) = do
+  kind <- inferKindOfType' s qvars ty
+  case kind of
+    KConstraint -> pure ()
+    KPredicate -> pure ()
+    -- TODO: figure out whether we should be
+    -- comparing to 'KConstraint' or 'KPredicate'
+    _ -> illKindedNEq s KConstraint kind
+
 -- Currently we expect that a type scheme has kind KType
-kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
+kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
+kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
-  forM constraints (\constraint -> do
-    kind <- inferKindOfType' s quantifiedVariables constraint
-    case kind of
-      KPredicate -> return ()
-      _ -> illKindedNEq s KPredicate kind)
-
+  mapM_ (kindCheckConstr s quantifiedVariables) constraints
 
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
@@ -79,15 +86,7 @@ inferKindOfType' s quantifiedVariables t =
     kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
     kFun KType y = illKindedNEq s KType y
     kFun x _     = illKindedNEq s KType x
-    kCon conId = do
-        st <- get
-        case lookup conId (typeConstructors st) of
-          Just (kind,_) -> return kind
-          Nothing   ->
-            conTys <- requireInScope (dataConstructors, "Constructor") s conId
-            case conTys of
-              (Forall _ [] [] t, []) -> pure $ KPromote t
-              _ -> halt $ GenericError (Just s) ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId)
+    kCon conId = getKindRequired s conId
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
