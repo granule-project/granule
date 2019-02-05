@@ -224,7 +224,7 @@ ForallSig :: { [(Id, Kind)] }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
  : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
- | forall ForallSig '.' Types '=>' { (((getPos $1, getPos $5), $2), $4) }
+ | forall ForallSig '.' '{' Types '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
 Types :: { [Type] }
 Types
