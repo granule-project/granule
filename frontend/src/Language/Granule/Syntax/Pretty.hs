@@ -102,7 +102,7 @@ instance Pretty Coeffect where
 instance Pretty Kind where
     prettyL l KType          = "Type"
     prettyL l KCoeffect      = "Coeffect"
-    prettyL l KConstraint    = "Constraint"
+    prettyL l KPredicate    = "Constraint"
     prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
     prettyL l (KVar v)       = prettyL l v
     prettyL l (KPromote t)   = "↑" <> prettyL l t

@@ -48,8 +48,8 @@ kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
   forM constraints (\constraint -> do
     kind <- inferKindOfType' s quantifiedVariables constraint
     case kind of
-      KConstraint -> return ()
-      _ -> illKindedNEq s KConstraint kind)
+      KPredicate -> return ()
+      _ -> illKindedNEq s KPredicate kind)
 
 
   kind <- inferKindOfType' s quantifiedVariables ty

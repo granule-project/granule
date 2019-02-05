@@ -331,7 +331,7 @@ instance Substitutable Kind where
 
   substitute subst KType = return KType
   substitute subst KCoeffect = return KCoeffect
-  substitute subst KConstraint = return KConstraint
+  substitute subst KPredicate = return KPredicate
   substitute subst (KFun c1 c2) = do
     c1 <- substitute subst c1
     c2 <- substitute subst c2
