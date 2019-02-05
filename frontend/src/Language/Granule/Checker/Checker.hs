@@ -178,7 +178,7 @@ checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInstHead (Instance sp iname constrs idt _) = do
   checkIFaceExists sp iname
-  mapM_ (kindCheckConstr sp []) constrs
+  mapM_ (kindCheckConstr sp [(v, KType) | v <- freeVars idty]) constrs
   checkInstTy iname idt
 
 checkInstTy :: (?globals :: Globals) => Id -> IFaceDat -> MaybeT Checker ()
