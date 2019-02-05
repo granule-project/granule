@@ -146,7 +146,7 @@ checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
 checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
-  mapM_ (kindCheckConstr sp []) constrs
+  mapM_ (kindCheckConstr sp [(pname, kind)]) constrs
   registerInterface sp name kind ifnames
   where
     kind = case kindAnn of Nothing -> KType; Just k -> k
