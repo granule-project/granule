@@ -56,7 +56,7 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -- Whether to allow universal specialisation
+  -- Whether to allow universal specialisation (i.e., when doing equality in a pattern position on an indexed type)
   -> Bool
   -- Starting spec indication
   -> SpecIndicator
@@ -194,6 +194,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
     (Just (k1, BoundQ), Just (k2, ForallQ)) ->
       tyVarConstraint k1 k2 n m
 
+
     -- We can unify two instance type variables
     (Just (k1, InstanceQ), Just (k2, BoundQ)) ->
         tyVarConstraint k1 k2 n m
@@ -210,7 +211,6 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
     (Just (k1, BoundQ), Just (k2, BoundQ)) ->
         tyVarConstraint k1 k2 n m
 
-
     -- But we can unify a forall and an instance
     (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
       tyVarConstraint k1 k2 n m
@@ -218,19 +218,6 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
       tyVarConstraint k2 k1 m n
-
-    -- Trying to unify other (existential) variables
-  --  (Just (KType, _), Just (k, _)) | k /= KType -> do
-  --    k <- inferKindOfType s (TyVar m)
-  --    illKindedUnifyVar s (TyVar n) KType (TyVar m) k
-
-  --  (Just (k, _), Just (KType, _)) | k /= KType -> do
---      k <- inferKindOfType s (TyVar n)
---      illKindedUnifyVar s (TyVar n) k (TyVar m) KType
-
-    -- Otherwise
-    --(Just (k1, _), Just (k2, _)) ->
-    --  tyVarConstraint k1 k2 n m
 
     (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
               <> pretty n <> " : " <> show t1
@@ -280,6 +267,26 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 
         Just _ -> return (True, [(n, SubstT t)])
 
+    (Just (k1, ForallQ)) -> do
+       -- Infer the kind of this equality
+       --k2 <- inferKindOfType s t
+       --let kind = k1 `joinKind` k2
+       --isIndexedType kind
+
+       -- If we are in a position to specialise a universal (i.e., in a pattern match)
+       if allowUniversalSpecialisation
+         then return (True, [(n, SubstT t)])
+         else halt $ GenericError (Just s) $
+                case sp of
+                  FstIsSpec -> "Trying to match a polymorphic type '" <> pretty n
+                            <> "' with monomorphic `" <> pretty t <> "`"
+                  SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
+                  PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
+
+     --halt $ GenericError (Just s) $
+    --    "Error trying to make universal `" <> (pretty (TyVar n)) <> "` equal to `" <> pretty t <> "`"
+
+{-
     -- Unifying a forall with a concrete type may only be possible if the concrete
     -- type is exactly equal to the forall-quantified variable
     -- This can only happen for nat indexed types at the moment via the
@@ -305,10 +312,12 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
                        <> "' with monomorphic `" <> pretty t <> "`"
              SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
              PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
+-}
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " <> show (tyVarContext checkerState)))
+
 
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
