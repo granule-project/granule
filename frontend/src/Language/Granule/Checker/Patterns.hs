@@ -190,6 +190,8 @@ ctxtFromTypedPattern s t p _ = do
   halt $ PatternTypingError (Just s)
     $ "Pattern match `" <> pretty p <> "` does not match expected type `" <> pretty t <> "`"
 
+discharge :: (?globals :: Globals)
+          => Span -> Type -> Coeffect -> (Id, Assumption) -> MaybeT Checker (Id, Assumption)
 discharge _ _ c (v, Linear t) = return (v, Discharged t c)
 discharge s ct c (v, Discharged t c') = do
   ct' <- inferCoeffectType s c'
