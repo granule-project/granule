@@ -192,7 +192,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
       tyVarConstraint k2 k1 m n
 
     (Just (k1, BoundQ), Just (k2, ForallQ)) ->
-      tyVarConstraint k1 k2 n m
+      tyVarConstraint k1 k1 n m
 
 
     -- We can unify two instance type variables
@@ -267,6 +267,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 
         Just _ -> return (True, [(n, SubstT t)])
 
+    -- NEW
+    {-
     (Just (k1, ForallQ)) -> do
        -- Infer the kind of this equality
        --k2 <- inferKindOfType s t
@@ -285,8 +287,10 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 
      --halt $ GenericError (Just s) $
     --    "Error trying to make universal `" <> (pretty (TyVar n)) <> "` equal to `" <> pretty t <> "`"
+-}
 
-{-
+    -- OLD
+    
     -- Unifying a forall with a concrete type may only be possible if the concrete
     -- type is exactly equal to the forall-quantified variable
     -- This can only happen for nat indexed types at the moment via the
@@ -312,7 +316,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
                        <> "' with monomorphic `" <> pretty t <> "`"
              SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
              PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
--}
+
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"

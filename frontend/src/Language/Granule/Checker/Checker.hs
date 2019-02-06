@@ -102,13 +102,13 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
             st <- get
             case extend (dataConstructors st) dName (Forall sp tyVars ty) of
               Some ds -> do
-                put st { dataConstructors = ds }
+                put st { dataConstructors = ds, tyVarContext = [] }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
           KPromote (TyCon k) | internalName k == "Protocol" -> do
             check ty
             st <- get
             case extend (dataConstructors st) dName (Forall sp tyVars ty) of
-              Some ds -> put st { dataConstructors = ds }
+              Some ds -> put st { dataConstructors = ds, tyVarContext = [] }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
 
           _     -> illKindedNEq sp KType kind
@@ -122,7 +122,7 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
         if tC == tName
           then return ()
           else halt $ GenericError (Just sp) $ "Expected type constructor `" <> pretty tName
-                                             <> "`, but got `" <> pretty tC <> "` in  `"
+                                             <> "`, but got `" <> pretty tC <> "`"
     check (FunTy arg res) = check res
     check (TyApp fun arg) = check fun
     check x = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
