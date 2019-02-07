@@ -63,7 +63,8 @@ data DataConstr
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
 nonIndexedToIndexedDataConstr _     _      d@DataConstrIndexed{} = d
 nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params)
-    = DataConstrIndexed sp dName (Forall sp tyVars [] ty)
+    -- Don't push the parameters into the type scheme yet
+    = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
     ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t
