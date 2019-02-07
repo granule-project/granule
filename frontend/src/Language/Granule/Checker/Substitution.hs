@@ -541,6 +541,20 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
 
+instance Substitutable IConstr where
+  substitute ctxt (IConstr ty) =
+    substitute ctxt ty >>= pure . IConstr
+
+  unify (IConstr t1) (IConstr t2) = unify t1 t2
+
+instance Substitutable TypeScheme where
+  substitute ctxt (Forall s binds constrs ty) = do
+    constrs' <- mapM (substitute ctxt) constrs
+    ty' <- substitute ctxt ty
+    pure $ Forall s binds constrs' ty'
+
+  unify _ _ = error "Can't unify type schemes"
+
 instance Substitutable Pred where
   substitute ctxt =
       predFoldM

@@ -1,0 +1,9 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A | B
+
+-- instance with guards
+instance Simple A where
+  simple A = A;
+  | B = B
