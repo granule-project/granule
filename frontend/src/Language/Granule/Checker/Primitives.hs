@@ -19,8 +19,8 @@ protocol = kConstr $ mkId "Protocol"
 
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
-typeLevelConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
-typeLevelConstructors =
+typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
+typeConstructors =
     [ (mkId "()", (KType, Just 1))
     , (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
     , (mkId ",", (KFun KType (KFun KType KType), Just 1))

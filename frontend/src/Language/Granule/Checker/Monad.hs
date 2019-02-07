@@ -130,7 +130,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , kVarContext = emptyCtxt
                , guardContexts = []
                , patternConsumption = []
-               , typeConstructors = Primitives.typeLevelConstructors
+               , typeConstructors = Primitives.typeConstructors
                , dataConstructors = Primitives.dataConstructors
                , deriv = Nothing
                , derivStack = []
