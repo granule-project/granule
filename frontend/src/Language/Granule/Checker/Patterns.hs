@@ -140,8 +140,9 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
     Just tySch -> do
-      (dataConstructorTypeFresh, freshTyVars) <-
+      (dataConstructorTypeFresh, freshTyVars, []) <-
           freshPolymorphicInstance BoundQ True tySch
+      -- TODO: don't allow constraints in data constructors yet
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
 
@@ -189,6 +190,8 @@ ctxtFromTypedPattern s t p _ = do
   halt $ PatternTypingError (Just s)
     $ "Pattern match `" <> pretty p <> "` does not match expected type `" <> pretty t <> "`"
 
+discharge :: (?globals :: Globals)
+          => Span -> Type -> Coeffect -> (Id, Assumption) -> MaybeT Checker (Id, Assumption)
 discharge _ _ c (v, Linear t) = return (v, Discharged t c)
 discharge s ct c (v, Discharged t c') = do
   ct' <- inferCoeffectType s c'

@@ -75,6 +75,10 @@ compileToSBV predicate tyVarContext kVarContext =
       ps' <- mapM (buildTheorem' solverVars) ps
       return $ bAnd ps'
 
+    buildTheorem' solverVars (Disj ps) = do
+      ps' <- mapM (buildTheorem' solverVars) ps
+      return $ bOr ps'
+
     buildTheorem' solverVars (Impl [] p1 p2) = do
         p1' <- buildTheorem' solverVars p1
         p2' <- buildTheorem' solverVars p2
@@ -179,6 +183,7 @@ rewriteConstraints :: Ctxt Type -> Pred -> Pred
 rewriteConstraints ctxt =
     predFold
       Conj
+      Disj
       Impl
       (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
       NegPred
@@ -218,6 +223,13 @@ rewriteConstraints ctxt =
           (case t of
              TyVar ckindVar' | ckindVar == ckindVar' -> ckind
              _  -> t)
+
+    updateConstraint ckindVar ckind (Lt s c1 c2) =
+        Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
+    updateConstraint ckindVar ckind (Gt s c1 c2) =
+        Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
 
     -- `updateCoeffect v k c` rewrites any occurence of the kind variable
     -- `v` in the coeffect `c` with the kind `k`
@@ -330,6 +342,18 @@ compile vars (ApproximatedBy _ c1 c2 t) =
     where
       c1' = compileCoeffect c1 t vars
       c2' = compileCoeffect c2 t vars
+
+compile vars (Lt s c1 c2) =
+  return $ c1' .< c2'
+  where
+    c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
+    c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
+
+compile vars (Gt s c1 c2) =
+  return $ c1' .> c2'
+  where
+    c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
+    c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
 
 -- NonZeroPromotableTo s c means that:
 compile vars (NonZeroPromotableTo s x c t) = do
@@ -519,8 +543,12 @@ trivialUnsatisfiableConstraints cs =
     -- Only check trivial constraints in positive positions
     -- This means we don't report a branch concluding false trivially
     -- TODO: may check trivial constraints everywhere?
+
+    -- TODO: this just ignores disjunction constraints
+    -- TODO: need to check that all are unsat- but this request a different
+    --       representation here.
     positiveConstraints =
-        predFold concat (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
+        predFold concat (\_ -> []) (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
 
     unsat :: Constraint -> Bool
     unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
@@ -528,6 +556,9 @@ trivialUnsatisfiableConstraints cs =
     unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
     unsat (NonZeroPromotableTo _ _ (CZero _) _) = true
     unsat (NonZeroPromotableTo _ _ _ _) = false
+    -- TODO: look at this information
+    unsat (Lt _ c1 c2) = false
+    unsat (Gt _ c1 c2) = false
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
