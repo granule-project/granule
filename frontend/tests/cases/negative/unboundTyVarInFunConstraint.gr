@@ -1,0 +1,6 @@
+interface Simple a where
+  simple : a -> a
+
+-- 'b' is not bound in the forall
+simple1 : forall (a : Type) . {Simple b} => a -> a
+simple1 x = x
