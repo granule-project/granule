@@ -108,7 +108,7 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
           KPromote (TyCon k) | internalName k == "Protocol" -> do
             check ty
             st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
               Some ds -> put st { dataConstructors = ds, tyVarContext = [] }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
 
