@@ -149,7 +149,7 @@ letBox s pat e1 e2 =
   App s () (Val s () (Abs () (PBox s () pat) Nothing e2)) e1
 
 pair :: Span -> Expr v () -> Expr v () -> Expr v ()
-pair s e1 e2 = App s () (App s () (Val s () (Constr () (mkId "(,)") [])) e1) e2
+pair s e1 e2 = App s () (App s () (Val s () (Constr () (mkId ",") [])) e1) e2
 
 
 class Substitutable t where

@@ -6,11 +6,11 @@ data Result where
   Success : Result;
   Failure : Result
 
-isSuccess : Result -> Bool
+isSuccess : Result → Bool
 isSuccess result =
     case result of
-      Failure -> False;
-      Success -> True
+      Failure → False;
+      Success → True
 
 main : (Bool, Result)
 main = (isSuccess Failure, Success)

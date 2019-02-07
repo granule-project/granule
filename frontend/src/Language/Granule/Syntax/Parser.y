@@ -19,6 +19,7 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Preprocessor.Markdown
+import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils hiding (mkSpan)
@@ -56,7 +57,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '->'  { TokenArrow _ }
     '<-'  { TokenBind _ }
     ','   { TokenComma _ }
-    '×'   { TokenTimes _ }
+    '×'   { TokenCross _ }
     '='   { TokenEq _ }
     '+'   { TokenAdd _ }
     '-'   { TokenSub _ }
@@ -78,6 +79,8 @@ import Language.Granule.Utils hiding (mkSpan)
     '^'   { TokenCaret _ }
     ".."  { TokenDotDot _ }
     OP    { TokenOp _ _ }
+    "∨"   { TokenJoin _ }
+    "∧"   { TokenMeet _ }
 
 %right in
 %right '->'
@@ -209,7 +212,7 @@ PAtom :: { Pattern () }
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () $2 }
 
   | '(' PAtom ',' PAtom ')'
-       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () (mkId "(,)") [$2, $4] }
+       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () (mkId ",") [$2, $4] }
 
 NAryConstr :: { Pattern () }
   : CONSTR Pats               {% let TokenConstr _ x = $1
@@ -220,7 +223,7 @@ TypeScheme :: { TypeScheme }
   : Type
         {% return $ Forall nullSpanNoFile [] $1 }
 
-  | forall '(' VarSigs ')' '.' Type
+  | forall '{' VarSigs '}' '.' Type
         {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ Forall sp $3 $6 }
 
   | forall VarSigs '.' Type
@@ -248,7 +251,7 @@ Kind :: { Kind }
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
-  | Type '×' Type             { TyApp (TyApp (TyCon $ mkId "(,)") $1) $3 }
+  | Type '×' Type             { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'   { Box $3 $1 }
   | TyAtom '[' ']'            { Box (CInterval (CZero extendedNat) infinity) $1 }
 
@@ -266,15 +269,15 @@ TyJuxt :: { Type }
   | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
   | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
   | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
-  | TyAtom '/' '\\' TyAtom    { TyInfix ("/\\") $1 $4 }
-  | TyAtom '\\' '/' TyAtom    { TyInfix ("\\/") $1 $4 }
+  | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
+  | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId "(,)") $2) $4 }
+  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
@@ -295,8 +298,8 @@ Coeffect :: { Coeffect }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '-' Coeffect       { CMinus $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
-  | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
+  | Coeffect "∧" Coeffect       { CMeet $1 $3 }
+  | Coeffect "∨" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
   | Coeffect ':' Type           { normalise (CSig $1 $3) }
@@ -427,7 +430,7 @@ Atom :: { Expr () () }
                                     span2 <- (mkSpan (getPos $1, getPos $3))
                                     span3 <- (mkSpan $ getPosToSpan $3)
                                     return $ App span1 () (App span2 ()
-                                              (Val span3 () (Constr () (mkId "(,)") []))
+                                              (Val span3 () (Constr () (mkId ",") []))
                                                 $2)
                                               $4 }
   | CHAR                      {% (mkSpan $ getPosToSpan $1) >>= \sp ->
@@ -451,15 +454,9 @@ parseError t = do
     lift $ die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
--- | Preprocess the source file based on the file extension.
-preprocess :: (?globals :: Globals) => String -> String
-preprocess = case reverse . takeWhile (/= '.') . reverse . sourceFilePath $ ?globals of
-    "md" -> unmarkdown
-    _ -> id
-
 parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefs input = do
-    ast <- parseDefs' (preprocess input)
+    ast <- parseDefs' input
     return $ freshenAST ast
 
 parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())

@@ -253,7 +253,7 @@ instance Pretty Pred where
      (intercalate " ∧ ")
      (\s p q ->
          (if null s then "" else "∀ " <> intercalate "," (map sourceName s) <> " . ")
-      <> "(" <> p <> " → " <> q <> ")")
+      <> "(" <> p <> " -> " <> q <> ")")
       (prettyL l)
       (\p -> "¬(" <> p <> ")")
       (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)

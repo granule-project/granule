@@ -1,29 +1,29 @@
 import Vec
 
 data Stream a where
-  Next : a -> (() -> Stream a) [0..1] -> Stream a
+  Next : a → (() → Stream a) [0..1] → Stream a
 
-delay : forall a : Type .  a -> (() -> a)
-delay x = \() -> x
+delay : ∀ a : Type .  a → (() → a)
+delay x = λ() → x
 
-force : forall a : Type . (() -> a) -> a
+force : ∀ a : Type . (() → a) → a
 force t = t ()
 
-repeat : forall a : Type . a [1..∞] -> Stream a
+repeat : ∀ a : Type . a [1..∞] → Stream a
 repeat [x] = Next x [delay (repeat [x])]
 
-takeS : forall a : Type, p : Nat . N p -> Stream a -> Vec p a
+takeS : ∀ a : Type, p : Nat . N p → Stream a → Vec p a
 takeS (S Z) (Next hd [_])  = Cons hd Nil;
 takeS (S n) (Next hd [tl]) = Cons hd (takeS n (force tl))
 
-cycle : forall a : Type, n : Nat . (Vec (n + 1) a) [0..Inf] -> Stream a
+cycle : ∀ a : Type, n : Nat . (Vec (n + 1) a) [0..∞] → Stream a
 cycle [xs] = cycleInner [xs] [xs]
 
 cycleInner
-  :  forall a : Type, m : Nat, n : Nat
-  .  (Vec (m+1) a) [0..Inf]
-  -> (Vec (n+1) a) [0..1]
-  -> Stream a
+  :  ∀ a : Type, m : Nat, n : Nat
+  .  (Vec (m+1) a) [0..∞]
+  → (Vec (n+1) a) [0..1]
+  → Stream a
 cycleInner [again] [Cons x Nil] = Next x [delay (cycleInner [again] [again])];
 cycleInner [again] [Cons x xs]  = Next x [delay (cycleInner [again] [xs])]
 

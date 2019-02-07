@@ -116,7 +116,7 @@ isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
 isProduct :: Type -> Maybe (Type, Type)
-isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "(*)" =
+isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
 
@@ -144,8 +144,8 @@ resultType (FunTy _ t) = resultType t
 resultType t = t
 
 -- | Get the leftmost type of an application
--- >>> leftmostOfApplication $ TyCon (mkId "(,)") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
--- TyCon (Id "(,)" "(,)")
+-- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
+-- TyCon (Id "," ",")
 leftmostOfApplication :: Type -> Type
 leftmostOfApplication (TyApp t _) = leftmostOfApplication t
 leftmostOfApplication t = t

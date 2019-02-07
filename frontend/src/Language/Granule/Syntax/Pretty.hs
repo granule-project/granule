@@ -135,11 +135,11 @@ instance Pretty Type where
        parens l (prettyL (l+1) t
        <> " <" <> intercalate "," (map (prettyL l) e) <> ">")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(,)" =
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(*)" =
-      parens l ("(" <> prettyL l t1 <> " * " <> prettyL l t2 <> ")")
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "×" =
+      parens l ("(" <> prettyL l t1 <> " × " <> prettyL l t2 <> ")")
 
     prettyL l t@(TyApp (TyApp _ _) _) | appChain t =
       parens l tyAppPretty
@@ -212,7 +212,7 @@ instance Pretty v => Pretty (Value v a) where
     prettyL l (NumFloat n) = show n
     prettyL l (CharLiteral c) = show c
     prettyL l (StringLiteral s) = show s
-    prettyL l (Constr _ s vs) | internalName s == "(,)" =
+    prettyL l (Constr _ s vs) | internalName s == "," =
       "(" <> intercalate ", " (map (prettyL l) vs) <> ")"
     prettyL l (Constr _ n []) = prettyL 0 n
     prettyL l (Constr _ n vs) = intercalate " " (prettyL l n : map (parensOn (not . valueAtom)) vs)
@@ -236,7 +236,7 @@ instance Pretty Id where
 
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
-  prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "(,)" =
+  prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
     parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
   prettyL l (App _ _ e1 e2) =

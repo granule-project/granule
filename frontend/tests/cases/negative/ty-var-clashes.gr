@@ -1,2 +1,2 @@
 data Foo a b where
-  Bar : forall a : Type, b : Type . a -> b -> Foo a
+  Bar : ∀ a : Type, b : Type . a → b → Foo a

@@ -1,8 +1,8 @@
 data Vec (n : Nat) t where
   Nil  : Vec 0 t;
-  Cons : t -> Vec n t -> Vec (n+1) t
+  Cons : t → Vec n t → Vec (n+1) t
 
-last : forall (a : Type, n : Nat) . (Vec (n+1) (Int [0..1])) -> Int
+last : ∀ {a : Type, n : Nat} . (Vec (n+1) (Int [0..1])) → Int
 last Nil = 0;
 last (Cons [x] Nil)   = x;
 last (Cons [_] xs)    = last xs

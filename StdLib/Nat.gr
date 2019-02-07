@@ -13,14 +13,14 @@ data N (n : Nat) where
   S : N n -> N (n+1)
 
 --- Convert an indexed natural number to an untyped int
-natToInt : forall (n : Nat) . N n -> Int
+natToInt : forall {n : Nat} . N n -> Int
 natToInt Z = 0;
 natToInt (S m) = 1 + natToInt m
 
 --- # Arithmetic operations
 
 --- Addition
-add : forall (n : Nat, m : Nat) . N n -> N m -> N (n + m)
+add : forall {n : Nat, m : Nat} . N n -> N m -> N (n + m)
 add Z m = m;
 add (S n') m = S (add n' m)
 
@@ -30,16 +30,16 @@ monus Z (S n') = monus Z n';
 monus (S m') (S n') = monus m' n'
 
 --- Right-moded multiplication
-mult : forall (n : Nat, m : Nat) . N n -> (N m) [n] -> N (n * m)
+mult : forall {n : Nat, m : Nat} . N n -> (N m) [n] -> N (n * m)
 mult Z [m] = Z;
 mult (S n') [m] = add m (mult n' [m])
 
 --- Left-moded multiplication
-mult_r : forall (n : Nat, m : Nat) . (N n) [m] -> (N m) -> N (n * m)
+mult_r : forall {n : Nat, m : Nat} . (N n) [m] -> (N m) -> N (n * m)
 mult_r [n] Z = Z;
 mult_r [n] (S m') = add n (mult_r [n] m')
 
 --- Divide by two
-div2 : forall (n : Nat) . N (2 * n) -> N n
+div2 : forall {n : Nat} . N (2 * n) -> N n
 div2 Z = Z;
 div2 (S (S x)) = S (div2 x)

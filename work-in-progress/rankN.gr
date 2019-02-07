@@ -1,7 +1,7 @@
-data Exists (f : Type -> Type) where
-   Exists : forall (a : Type) . f a -> Exists f
+data Exists (f : Type → Type) where
+   Exists : ∀ {a : Type} . f a → Exists f
 
-unpack : forall (f : Type -> Type, a : Type) . Exists f -> (forall t : Type . f t -> a) -> a
+unpack : ∀ (f : Type → Type, a : Type) . Exists f → (∀ t : Type . f t → a) → a
 unpack e f =
   case e of
-    (Exists x) -> f x
+    (Exists x) → f x

@@ -59,39 +59,41 @@ polyShaped t = case leftmostOfApplication t of
 --      - a substitution for variables
 --           caused by pattern matching (e.g., from unification),
 --      - a consumption context explaining usage triggered by pattern matching
-ctxtFromTypedPattern :: (?globals :: Globals, Show t) => Span -> Type -> Pattern t
-  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type)
+ctxtFromTypedPattern :: (?globals :: Globals, Show t) =>
+  Span
+  -> Type
+  -> Pattern t
+  -> Consumption   -- Consumption behaviour of the patterns in this position so far
+  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern _ t (PWild s _) = do
-    -- Fresh variable to represent this (linear) value
-    --   Wildcards are allowed, but only inside boxed patterns
-    --   The following binding context will become discharged
-    wild <- freshIdentifierBase "wild"
-    let elabP = PWild s t
-    return ([(Id "_" wild, Linear t)], [], [], elabP)
-    -- return ([], [], [], elabP)
+ctxtFromTypedPattern _ t (PWild s _) cons =
+    case cons of
+      Full ->
+        -- Full consumption is allowed here
+        return ([], [], [], PWild s t, NotFull)
 
+      _ -> illLinearityMismatch s [NonLinearPattern]
 
-ctxtFromTypedPattern _ t (PVar s _ v) = do
+ctxtFromTypedPattern _ t (PVar s _ v) _ = do
     let elabP = PVar s t v
-    return ([(v, Linear t)], [], [], elabP)
+    return ([(v, Linear t)], [], [], elabP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern _ t@(TyCon c) (PInt s _ n)
+ctxtFromTypedPattern _ t@(TyCon c) (PInt s _ n) _
   | internalName c == "Int" = do
     let elabP = PInt s t n
-    return ([], [], [], elabP)
+    return ([], [], [], elabP, Full)
 
-ctxtFromTypedPattern _ t@(TyCon c) (PFloat s _ n)
+ctxtFromTypedPattern _ t@(TyCon c) (PFloat s _ n) _
   | internalName c == "Float" = do
     let elabP = PFloat s t n
-    return ([], [], [], elabP)
+    return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
+ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) _ = do
 
-    (ctx, eVars, subst, elabPinner) <- ctxtFromTypedPattern s ty p
+    (ctx, eVars, subst, elabPinner, _) <- ctxtFromTypedPattern s ty p Full
     coeffTy <- inferCoeffectType s coeff
 
     -- Check whether a unification was caused
@@ -127,9 +129,9 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) = do
 
     -- Discharge all variables bound by the inner pattern
     ctxt' <- mapM (discharge s coeffTy coeff) ctx
-    return (ctxt', eVars, subst, elabP)
+    return (ctxt', eVars, subst, elabP, NotFull)
 
-ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
+ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -142,55 +144,45 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) = do
           freshPolymorphicInstance BoundQ True tySch
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
+
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
+
           dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
-          (t,(as, bs, us, elabPs)) <- unpeel ps dataConstrutorSpecialised
+
+          (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstrutorSpecialised
           subst <- combineSubstitutions s unifiers us
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
-          -- Updated type variable context
-          {- state <- get
-          tyVars <- mapM (\(v, (k, q)) -> do
-                      k <- substitute subst k
-                      return (v, (k, q))) (tyVarContext state)
-          let kindSubst = mapMaybe (\(v, s) -> case s of
-                                                SubstK k -> Just (v, k)
-                                                _        -> Nothing) subst
-          put (state { tyVarContext = tyVars
-                    , kVarContext = kindSubst <> kVarContext state }) -}
+
           let elabP = PConstr s ty dataC elabPs
-          return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst, elabP)
+          return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst, elabP, consumptionOut)
 
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
   where
-    unpeel :: Show t => [Pattern t] -> Type -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution, [Pattern Type]))
-    unpeel = unpeel' ([],[],[],[])
+    unpeel :: Show t
+          -- A list of patterns for each part of a data constructor pattern
+            => [Pattern t]
+            -- The remaining type of the constructor
+            -> Type
+            -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution, [Pattern Type], Consumption))
+    unpeel = unpeel' ([],[],[],[],Full)
+
+    -- Tail recursive version of unpell
     unpeel' acc [] t = return (t,acc)
-    unpeel' (as,bs,us,elabPs) (p:ps) (FunTy t t') = do
-        (as',bs',us',elabP) <- ctxtFromTypedPattern s t p
+
+    unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
+        (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern s t p cons
         us <- combineSubstitutions s us us'
-        unpeel' (as<>as',bs<>bs',us,elabP:elabPs) ps t'
+        unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
+
     unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
               "Have you applied constructor `" <> sourceName dataC <>
               "` to too many arguments?"
 
-ctxtFromTypedPattern s t@(TyVar v) p = do
-  case p of
-    PVar s _ x -> do
-      let elabP = PVar s t x
-      return ([(x, Linear t)], [], [], elabP)
 
-    PWild s _  -> do
-      let elabP = PWild s t
-      return ([], [], [], elabP)
-
-    p          -> halt $ PatternTypingError (Just s)
-                   $  "Cannot unify pattern `" <> pretty p
-                   <> "` with type `" <> pretty v <> ""
-
-ctxtFromTypedPattern s t p = do
+ctxtFromTypedPattern s t p _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
@@ -209,21 +201,24 @@ ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
   => Span
   -> Type
   -> [Pattern t]
-  -> MaybeT Checker (Ctxt Assumption, Type, [Id], Substitution, [Pattern Type])
-ctxtFromTypedPatterns sp ty [] = do
+  -> [Consumption]
+  -> MaybeT Checker (Ctxt Assumption, Type, [Id], Substitution, [Pattern Type], [Consumption])
+ctxtFromTypedPatterns sp ty [] _ = do
   debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
-  return ([], ty, [], [], [])
+  return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) = do
+ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
   -- TODO: when we have dependent matching at the function clause
   -- level, we will need to pay attention to the bound variables here
-  (localGam, eVars, subst, elabP) <- ctxtFromTypedPattern s t1 pat
+  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern s t1 pat cons
 
-  (localGam', ty, eVars', substs, elabPs) <- ctxtFromTypedPatterns s t2 pats
+  (localGam', ty, eVars', substs, elabPs, consumptions) <-
+      ctxtFromTypedPatterns s t2 pats consumptionsIn
+
   substs' <- combineSubstitutions s subst substs
-  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs)
+  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
-ctxtFromTypedPatterns s ty ps = do
+ctxtFromTypedPatterns s ty ps _ = do
   -- This means we have patterns left over, but the type is not a
   -- function type, so we need to throw a type error
 

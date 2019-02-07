@@ -5,5 +5,5 @@
 
 data Foo where Bar Bar
 
-unfoo : Foo -> ()
+unfoo : Foo → ()
 unfoo Bar = ()

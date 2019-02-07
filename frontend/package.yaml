@@ -53,6 +53,9 @@ library:
   - Language.Granule.Syntax.Parser
   - Language.Granule.Syntax.Pattern
   - Language.Granule.Syntax.Pretty
+  - Language.Granule.Syntax.Preprocessor.Ascii
+  - Language.Granule.Syntax.Preprocessor.Latex
+  - Language.Granule.Syntax.Preprocessor.Markdown
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
   - Language.Granule.Context
@@ -68,6 +71,7 @@ library:
   - Glob
   - filepath
   - bifunctors
+  - text-replace
   # - raw-strings-qq (Quasiquoter for multiline, automatically escaped strings)
 
 tests:

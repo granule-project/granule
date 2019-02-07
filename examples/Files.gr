@@ -1,7 +1,7 @@
 main : String <IO>
 main =
-    let h       <- openFile "LICENSE" ReadMode;
-        (h, c)  <- hGetChar h;
-        (h, c') <- hGetChar h;
-        ()      <- hClose h
+    let h       ← openFile "LICENSE" ReadMode;
+        (h, c)  ← hGetChar h;
+        (h, c') ← hGetChar h;
+        ()      ← hClose h
     in pure (((showChar c) `stringAppend` (showChar c')))

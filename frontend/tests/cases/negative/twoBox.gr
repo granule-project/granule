@@ -1,8 +1,8 @@
 data Two a where
-  TwoBox : a [2] -> Two a
+  TwoBox : a [2] → Two a
 
-three : forall a : Type . Two a -> Vec 3 a
-three c = case c of (TwoBox [x]) -> Cons x (Cons x (Cons x Nil))
+three : ∀ a : Type . Two a → Vec 3 a
+three c = case c of (TwoBox [x]) → Cons x (Cons x (Cons x Nil))
 
 main : Vec 3 Int
 main = three (TwoBox [0])

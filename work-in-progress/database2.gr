@@ -8,23 +8,23 @@ data Patient where
     -- (String [Private]) -- Patient name
     (Int    [Public])  -- Patient age
 
-meanAge : forall n : Nat . (Vec (n + 1) Patient) -> Int
+meanAge : ∀ n : Nat . (Vec (n + 1) Patient) → Int
 meanAge xs = meanAge' xs 0 1
 
-meanAge' : forall n : Nat . (Vec (n + 1) Patient) -- Patient database
-       -> Int   -- Count
-       -> Int   -- Current age sum
-       -> Int   -- Mean age viewed public
+meanAge' : ∀ n : Nat . (Vec (n + 1) Patient) -- Patient database
+       → Int   -- Count
+       → Int   -- Current age sum
+       → Int   -- Mean age viewed public
 meanAge' xs total n =
   case xs of
-    Next (Patient [age]) Empty -> div (age + total) n;
-    Next (Patient [age]) xs  -> meanAge' xs (age + total) (n+1)
+    Next (Patient [age]) Empty → div (age + total) n;
+    Next (Patient [age]) xs  → meanAge' xs (age + total) (n+1)
 
 
 -- Can only be `Private`
--- names : List Patient -> String [Private]
+-- names : List Patient → String [Private]
 -- names xs =
 --   case xs of
---      Next (Patient [_] [name] [_]) xs) ->
+--      Next (Patient [_] [name] [_]) xs) →
 --         let [allNames] = names xs in [name `stringAppend` allNames];
---      Empty -> [""]
+--      Empty → [""]

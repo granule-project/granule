@@ -163,7 +163,7 @@ inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
 inferCoeffectType s (CProduct c1 c2)    = do
   k1 <- inferCoeffectType s c1
   k2 <- inferCoeffectType s c2
-  return $ TyApp (TyApp (TyCon $ mkId "(*)") k1) k2
+  return $ TyApp (TyApp (TyCon $ mkId "×") k1) k2
 
 inferCoeffectType s (CInterval c1 c2)    = do
   k1 <- inferCoeffectType s c1
@@ -238,7 +238,7 @@ mguCoeffectTypes s c1 c2 = do
   ck1 <- inferCoeffectType s c1
   ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
-    -- Both are poly
+    -- Both are variables
     (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
       updateCoeffectType kv1 (KVar kv2)
       return (TyVar kv2)
@@ -282,6 +282,8 @@ updateCoeffectType tyVar k = do
  where
    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
    rewriteCtxt [] = []
+   rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

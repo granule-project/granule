@@ -1,2 +1,2 @@
 data Eq : Type -> Type -> Type where
-  Refl : forall (a : Type) . Eq a a
+  Refl : forall {a : Type} . Eq a a

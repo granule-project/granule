@@ -1,4 +1,4 @@
-id : Int -> Int
+id : Int → Int
 id x = x
 
 main : Int

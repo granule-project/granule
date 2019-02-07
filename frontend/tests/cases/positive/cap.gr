@@ -1,7 +1,7 @@
 import Existential
 
 data Cap (a : Type) (p : Type) : Type where
-  Cap : a -> Cap a p
+  Cap : a → Cap a p
 
 foo : Exists (Cap Int)
 foo = Exists (Cap 1)

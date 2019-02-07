@@ -7,13 +7,13 @@ data Patient where
     (String [Private]) -- Patient name
     (Int    [Public])  -- Patient age
 
-meanAge : (List Patient) [0..1] -> Int [Public]
+meanAge : (List Patient) [0..1] → Int [Public]
 meanAge xs = meanAge' xs [0] [0]
 
 meanAge' : (List Patient) [0..1] -- Patient database
-       -> Int [Public]   -- Current age sum
-       -> Int [Public]   -- Count
-       -> Int [Public]  -- Mean age viewed public
+       → Int [Public]   -- Current age sum
+       → Int [Public]   -- Count
+       → Int [Public]  -- Mean age viewed public
 
 meanAge' [Next (Patient [_] [_] [age]) xs] [total] [n] =
    meanAge' [xs] [age + total] [n+1];
@@ -21,7 +21,7 @@ meanAge' [Next (Patient [_] [_] [age]) xs] [total] [n] =
 meanAge' [Empty] [total] [n] = [div total n]
 
 -- Rejected
--- names : (List Patient) [0..1] -> String [Public]
+-- names : (List Patient) [0..1] → String [Public]
 -- names [Next (Patient [_] [name] [_]) xs] =
 --  let [allNames] = names [xs] in [name `stringAppend` allNames];
 -- names [Empty] = [""]

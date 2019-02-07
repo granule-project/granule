@@ -1,8 +1,8 @@
 import Bool
 
 -- Not good, because we are matching on Bool exactly once and Bool is polyshaped.
-foo : Bool [∞] -> Bool [1 : Nat]
+foo : Bool [∞] → Bool [1 : Nat]
 foo x =
   case x of
-     [False] -> [False];
-     [True] -> [True]
+     [False] → [False];
+     [True] → [True]
