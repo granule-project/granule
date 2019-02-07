@@ -9,6 +9,7 @@
 {-# LANGUAGE PackageImports #-}
 module Main where
 
+import System.Exit (die)
 import System.FilePath
 import System.FilePath.Find
 import System.Directory
@@ -269,12 +270,12 @@ handleCMD s =
 
     handleLine (RunParser str) = do
       (_,_,_,f,_) <- get
-      pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens str) "interactive"
+      pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens str) "interactive"
       case pexp of
         Right ast -> liftIO $ putStrLn (show ast)
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
-          pts <- liftIO' $ try $ runReaderT (tscheme $ scanTokens str) "interactive"
+          pts <- liftIO' $ try $ either die return $ runReaderT (tscheme $ scanTokens str) "interactive"
           case pts of
             Right ts -> liftIO $ putStrLn (show ts)
             Left err -> do
@@ -364,7 +365,7 @@ handleCMD s =
 
     handleLine (Eval ev) = do
         (fvg,rp,adt,fp,m) <- get
-        pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens ev) "interactive"
+        pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens ev) "interactive"
         case pexp of
             Right exp -> do
                 let fv = freeVars exp
