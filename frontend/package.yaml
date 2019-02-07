@@ -85,10 +85,10 @@ tests:
     - mtl
     - containers
     - transformers >=0.5
-  zfrontend-doctest: # the "z" is to make them run after hspec
-    main: doctest.hs
-    source-dirs: tests
-    dependencies:
-    - doctest
-    - granule-frontend
-    ghc-options: -threaded
+#  zfrontend-doctest: # the "z" is to make them run after hspec
+#    main: doctest.hs
+#    source-dirs: tests
+#    dependencies:
+#    - doctest
+#    - granule-frontend
+#    ghc-options: -threaded
