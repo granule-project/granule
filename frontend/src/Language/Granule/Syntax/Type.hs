@@ -164,10 +164,12 @@ var = TyVar . mkId
 -- | Smart constructor for function types
 (.->) :: Type -> Type -> Type
 s .-> t = FunTy s t
+infixr 1 .->
 
 -- | Smart constructor for type application
 (.@) :: Type -> Type -> Type
 s .@ t = TyApp s t
+infixl 9 .@
 
 -- Trivially effectful monadic constructors
 mFunTy :: Monad m => Type -> Type -> m Type

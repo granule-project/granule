@@ -1,14 +1,20 @@
 -- Provides all the type information for built-ins
+{-# LANGUAGE QuasiQuotes #-}
 
 module Language.Granule.Checker.Primitives where
 
+import Data.List (genericLength)
+import System.IO.Unsafe (unsafePerformIO)
+import Text.RawString.QQ (r)
+
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Parser (parseDefs)
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 
 
-
+kNat = kConstr $ mkId "Nat"
 protocol = kConstr $ mkId "Protocol"
 
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
@@ -16,6 +22,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 typeLevelConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeLevelConstructors =
     [ (mkId "()", (KType, Just 1))
+    , (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
     , (mkId ",", (KFun KType (KFun KType KType), Just 1))
     , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
@@ -30,17 +37,17 @@ typeLevelConstructors =
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
-    , (mkId "+",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "-",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "*",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "<",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId ">",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "/=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "<=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId ">=",   (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") KPredicate), Nothing))
-    , (mkId "∧", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
-    , (mkId "∨", (KFun (kConstr $ mkId "Nat") (KFun (kConstr $ mkId "Nat") (kConstr $ mkId "Nat")), Nothing))
+    , (mkId "+",   (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "-",   (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "*",   (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "<",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId ">",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "/=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "<=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId ">=",   (KFun kNat (KFun kNat KPredicate), Nothing))
+    , (mkId "∧", (KFun kNat (KFun kNat kNat), Nothing))
+    , (mkId "∨", (KFun kNat (KFun kNat kNat), Nothing))
     -- File stuff
     , (mkId "Handle", (KType, Nothing))
     , (mkId "IOMode", (KType, Nothing))
@@ -53,7 +60,7 @@ typeLevelConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
-    ]
+    ] ++ builtinTypeConstructors
 
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
@@ -67,7 +74,7 @@ dataConstructors =
     , (mkId "WriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
     , (mkId "AppendMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
     , (mkId "ReadWriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    ]
+    ] ++ builtinDataConstructors
 
 builtins :: [(Id, TypeScheme)]
 builtins =
@@ -139,7 +146,7 @@ builtins =
                     (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
 
    -- forkRep : (c |n| -> Diamond ()) -> Diamond (c' |n|)
-  , (mkId "forkRep", Forall nullSpanBuiltin [(mkId "s", protocol), (mkId "n", kConstr $ mkId "Nat")] [] $
+  , (mkId "forkRep", Forall nullSpanBuiltin [(mkId "s", protocol), (mkId "n", kNat)] [] $
                     (Box (CVar $ mkId "n")
                        ((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
                     .->
@@ -148,7 +155,7 @@ builtins =
                          ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
   , (mkId "unpack", Forall nullSpanBuiltin [(mkId "s", protocol)] []
                             (FunTy ((con "Chan") .@ (var "s")) (var "s")))
-  ]
+  ] ++ builtins'
 
 binaryOperators :: [(Operator, Type)]
 binaryOperators =
@@ -169,3 +176,70 @@ binaryOperators =
    ,(">", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
    ,("≥", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
    ]
+
+
+
+builtinSrc :: String
+builtinSrc = [r|
+
+data
+  ArrayStack
+    (capacity : Nat)
+    (maxIndex : Nat)
+    (a : Type)
+  where
+
+push
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . {maxIndex < cap}
+  ⇒ ArrayStack cap maxIndex a
+  → a
+  → ArrayStack cap (maxIndex + 1) a
+push = builtin
+
+pop
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . {maxIndex > 0}
+  ⇒ ArrayStack cap maxIndex a
+  → a × ArrayStack cap (maxIndex - 1) a
+pop = builtin
+
+-- Boxed array, so we allocate cap words
+allocate
+  : ∀ {a : Type, cap : Nat}
+  . N cap
+  → ArrayStack cap 0 a
+allocate = builtin
+
+swap
+  : ∀ {a : Type, cap : Nat, maxIndex : Nat}
+  . ArrayStack cap (maxIndex + 1) a
+  → Fin (maxIndex + 1)
+  → a
+  → a × ArrayStack cap (maxIndex + 1) a
+swap = builtin
+
+|]
+
+
+builtinTypeConstructors :: [(Id, (Kind, Cardinality))]
+builtinDataConstructors :: [(Id, TypeScheme)]
+builtins' :: [(Id, TypeScheme)]
+(builtinTypeConstructors, builtinDataConstructors, builtins')
+  = unsafePerformIO $ do
+    AST types defs <- parseDefs "builtins" builtinSrc
+    let datas = map unData types
+    pure (map fst datas, concatMap snd datas, map unDef defs)
+  where
+    unDef :: Def () () -> (Id, TypeScheme)
+    unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+
+    unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, TypeScheme)])
+    unData (DataDecl _ tyConName tyVars kind dataConstrs)
+      = ( (tyConName, (maybe KType id kind, Just $ genericLength dataConstrs))
+        , map unDataConstr dataConstrs
+        )
+      where
+        unDataConstr :: DataConstr -> (Id, TypeScheme)
+        unDataConstr (DataConstrIndexed _ name tysch) = (name, tysch)
+        unDataConstr d = unDataConstr (nonIndexedToIndexedDataConstr tyConName tyVars d)

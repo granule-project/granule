@@ -72,7 +72,7 @@ main = do
 -}
 run :: (?globals :: Globals) => String -> IO ExitCode
 run input = do
-  result <- try $ parseDefs input
+  result <- try $ parseAndDoImportsAndFreshenDefs input
   case result of
     Left (e :: SomeException) -> do
       printErr $ ParseError $ show e

@@ -60,6 +60,7 @@ import Language.Granule.Utils hiding (mkSpan)
     ','   { TokenComma _ }
     '×'   { TokenCross _ }
     '='   { TokenEq _ }
+    '/='  { TokenNeq _ }
     '+'   { TokenAdd _ }
     '-'   { TokenSub _ }
     '*'   { TokenMul _ }
@@ -72,6 +73,8 @@ import Language.Granule.Utils hiding (mkSpan)
     ']'   { TokenBoxRight _ }
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
+    '<='   { TokenLTE _ }
+    '>='   { TokenGTE _ }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
@@ -164,11 +167,11 @@ DataConstrs :: { [DataConstr] }
 DataConstr :: { DataConstr }
   : CONSTR ':' TypeScheme
        {% do span <- mkSpan (getPos $1, getEnd $3)
-             return $ DataConstrG span (mkId $ constrString $1) $3 }
+             return $ DataConstrIndexed span (mkId $ constrString $1) $3 }
 
   | CONSTR TyParams
        {% do span <- mkSpan (getPosToSpan $1)
-             return $ DataConstrA span (mkId $ constrString $1) $2 }
+             return $ DataConstrNonIndexed span (mkId $ constrString $1) $2 }
 
 DataConstrNext :: { [DataConstr] }
   : '|' DataConstrs           { $2 }
@@ -226,12 +229,12 @@ ForallSig :: { [(Id, Kind)] }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
  : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
- | forall ForallSig '.' '{' Types '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
+ | forall ForallSig '.' '{' Constraints '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
-Types :: { [Type] }
-Types
- : Type ',' Types { $1 : $3 }
- | Type           { [$1] }
+Constraints :: { [Type] }
+Constraints
+ : Constraint ',' Constraints { $1 : $3 }
+ | Constraint                 { [$1] }
 
 TypeScheme :: { TypeScheme }
  : Type
@@ -252,8 +255,9 @@ Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
   | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
-                                  "Type"     -> KType
-                                  "Coeffect" -> KCoeffect
+                                  "Type"      -> KType
+                                  "Coeffect"  -> KCoeffect
+                                  "Predicate" -> KPredicate
                                   s          -> kConstr $ mkId s }
   | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
   | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
@@ -277,17 +281,19 @@ TyJuxt :: { Type }
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
   | TyAtom '+' TyAtom         { TyInfix ("+") $1 $3 }
-  | TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
-  | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
-  | TyAtom '>' '=' TyAtom     { TyInfix (">=") $1 $4 }
-  | TyAtom '<' '=' TyAtom     { TyInfix ("<=") $1 $4 }
-  | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
-  | TyAtom '/' '=' TyAtom     { TyInfix ("/=") $1 $4 }
   | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
   | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
   | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
   | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
   | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
+
+Constraint :: { Type }
+  : TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
+  | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
+  | TyAtom '>=' TyAtom        { TyInfix (">=") $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix ("<=") $1 $3 }
+  | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix ("/=") $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
@@ -471,18 +477,21 @@ parseError t = do
     lift $ die $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
-parseDefs input = do
-    ast <- parseDefs' input
+parseDefs :: FilePath -> String -> IO (AST () ())
+parseDefs file input = runReaderT (defs $ scanTokens input) file
+
+parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
+parseAndDoImportsAndFreshenDefs input = do
+    ast <- parseDefsAndDoImports input
     return $ freshenAST ast
 
-parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())
-parseDefs' input = do
-    defs <- runReaderT (parse input) (sourceFilePath ?globals)
+parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
+parseDefsAndDoImports input = do
+    defs <- parseDefs (sourceFilePath ?globals) input
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
-      parseDefs' src
+      parseDefsAndDoImports src
     let allDefs = merge $ defs : importedDefs
     checkNameClashes allDefs
     checkMatchingNumberOfArgs allDefs
@@ -494,8 +503,6 @@ parseDefs' input = do
       let conc [] dds defs = AST dds defs
           conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)
        in conc xs [] []
-
-    parse = defs . scanTokens
 
     imports = map ((includePath ?globals </>) . (<> ".gr") . replace '.' '/')
               . mapMaybe (stripPrefix "import ") . lines $ input
