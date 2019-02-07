@@ -26,7 +26,8 @@ import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Checker.Simplifier
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 import Language.Granule.Context
@@ -97,36 +98,54 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
         modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
         tySchKind <- inferKindOfType' sp tyVars ty
 
+        liftIO $ putStrLn $ "ty is `" ++ pretty ty ++ "` Ty vars are = " ++ pretty tyVarsT
+        subst <- checkAndGenerateSubstitution ty tyVarsT
         case tySchKind of
-          KType -> do
-            check ty
-            st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
-              Some ds -> do
-                put st { dataConstructors = ds, tyVarContext = [] }
-              None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
-          KPromote (TyCon k) | internalName k == "Protocol" -> do
-            check ty
-            st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
-              Some ds -> put st { dataConstructors = ds, tyVarContext = [] }
-              None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
+          KType ->
+            registerDataConstructor (Forall sp tyVars constraints ty) subst
+
+          KPromote (TyCon k) | internalName k == "Protocol" ->
+            registerDataConstructor (Forall sp tyVars constraints ty) subst
 
           _     -> illKindedNEq sp KType kind
+
       vs -> halt $ NameClashError (Just sp) $ mconcat
                     ["Type variable(s) ", intercalate ", " $ map (\(i,_) -> "`" <> pretty i <> "`") vs
                     ," in data constructor `", pretty dName
                     ,"` are already bound by the associated type constructor `", pretty tName
                     , "`. Choose different, unbound names."]
   where
-    check (TyCon tC) =
+    registerDataConstructor dataConstrTy subst = do
+      st <- get
+      case extend (dataConstructors st) dName (dataConstrTy, subst) of
+        Some ds -> do
+          put st { dataConstructors = ds, tyVarContext = [] }
+        None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
+
+    -- Checks that the result type of a data constructor matches the name of the type constructor
+    -- and at the same time also generates a substitution between any variable
+    checkAndGenerateSubstitution :: Type -> Ctxt Kind -> MaybeT Checker Substitution
+    checkAndGenerateSubstitution (TyCon tC) [] =
+        -- Check the name
         if tC == tName
-          then return ()
-          else halt $ GenericError (Just sp) $ "Expected type constructor `" <> pretty tName
-                                             <> "`, but got `" <> pretty tC <> "`"
-    check (FunTy arg res) = check res
-    check (TyApp fun arg) = check fun
-    check x = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
+          then return []
+          else halt $ GenericError (Just sp)
+                    $ "Expected type constructor `" <> pretty tName
+                   <> "`, but got `" <> pretty tC <> "`"
+
+    checkAndGenerateSubstitution (FunTy arg res) tyVars =
+       checkAndGenerateSubstitution res tyVars
+
+    checkAndGenerateSubstitution (TyApp fun arg) ((var, _):tyvars) = do
+      subst <- checkAndGenerateSubstitution fun tyvars
+      case arg of
+        -- Type `arg` is appears in the head of the data type and is therefore
+        -- a polymorphic type parameter
+        TyVar v | v == var -> return subst
+        -- otherwise, this means that `arg` is a type index so generation a substitution
+        _ -> return $ (var, SubstT arg) : subst
+
+    checkAndGenerateSubstitution x _ = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 
 checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
   = checkDataCon tName kind tyVars
@@ -513,7 +532,7 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
   -- Should be provided in the type checkers environment
   st <- get
   case lookup c (dataConstructors st) of
-    Just tySch -> do
+    Just (tySch, substitutions) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
       (ty, _, []) <- freshPolymorphicInstance InstanceQ False tySch

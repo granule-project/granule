@@ -6,6 +6,8 @@ module Language.Granule.Checker.Primitives where
 import Data.List (genericLength)
 import Text.RawString.QQ (r)
 
+import Language.Granule.Checker.SubstitutionContexts
+
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Parser (parseDefs)
@@ -61,18 +63,18 @@ typeConstructors =
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
     ] ++ builtinTypeConstructors
 
-dataConstructors :: [(Id, TypeScheme)]
+dataConstructors :: [(Id, (TypeScheme, Substitution))]
 dataConstructors =
-    [ (mkId "()", Forall nullSpanBuiltin [] [] (TyCon $ mkId "()"))
-    , (mkId ",", Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
+    [ (mkId "()", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "()"), []))
+    , (mkId ",", (Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
-                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
+                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))), []))
 
-    , (mkId "ReadMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    , (mkId "WriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    , (mkId "AppendMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    , (mkId "ReadWriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
+    , (mkId "ReadMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
+    , (mkId "WriteMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
+    , (mkId "AppendMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
+    , (mkId "ReadWriteMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
     ] ++ builtinDataConstructors
 
 builtins :: [(Id, TypeScheme)]
@@ -222,7 +224,7 @@ swap = builtin
 
 
 builtinTypeConstructors :: [(Id, (Kind, Cardinality))]
-builtinDataConstructors :: [(Id, TypeScheme)]
+builtinDataConstructors :: [(Id, (TypeScheme, Substitution))]
 builtins' :: [(Id, TypeScheme)]
 (builtinTypeConstructors, builtinDataConstructors, builtins') =
   (map fst datas, concatMap snd datas, map unDef defs)
@@ -233,12 +235,12 @@ builtins' :: [(Id, TypeScheme)]
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
 
-      unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, TypeScheme)])
+      unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, (TypeScheme, Substitution))])
       unData (DataDecl _ tyConName tyVars kind dataConstrs)
-        = ( (tyConName, (maybe KType id kind, Just $ genericLength dataConstrs))
+        = (( tyConName, (maybe KType id kind, (Just $ genericLength dataConstrs)))
           , map unDataConstr dataConstrs
           )
         where
-          unDataConstr :: DataConstr -> (Id, TypeScheme)
-          unDataConstr (DataConstrIndexed _ name tysch) = (name, tysch)
+          unDataConstr :: DataConstr -> (Id, (TypeScheme, Substitution))
+          unDataConstr (DataConstrIndexed _ name tysch) = (name, (tysch, []))
           unDataConstr d = unDataConstr (nonIndexedToIndexedDataConstr tyConName tyVars d)

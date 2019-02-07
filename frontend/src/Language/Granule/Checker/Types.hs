@@ -15,7 +15,8 @@ import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Identifiers
@@ -291,7 +292,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 -}
 
     -- OLD
-    
+
     -- Unifying a forall with a concrete type may only be possible if the concrete
     -- type is exactly equal to the forall-quantified variable
     -- This can only happen for nat indexed types at the moment via the

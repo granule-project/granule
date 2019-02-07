@@ -13,7 +13,8 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Context
@@ -139,7 +140,8 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
     Nothing ->
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
-    Just tySch -> do
+
+    Just (tySch, subst) -> do
       (dataConstructorTypeFresh, freshTyVars, []) <-
           freshPolymorphicInstance BoundQ True tySch
       -- TODO: don't allow constraints in data constructors yet
@@ -151,6 +153,9 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
         (True, _, unifiers) -> do
 
           dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
+
+          liftIO $ putStrLn $ pretty unifiers
+          liftIO $ putStrLn $ pretty subst
 
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstrutorSpecialised
           subst <- combineSubstitutions s unifiers us

@@ -13,6 +13,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Identity
 
+import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
@@ -112,7 +113,7 @@ data CheckerState = CS
 
             -- Data type information
             , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
-            , dataConstructors :: Ctxt TypeScheme
+            , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
             -- LaTeX derivation
             , deriv      :: Maybe Derivation

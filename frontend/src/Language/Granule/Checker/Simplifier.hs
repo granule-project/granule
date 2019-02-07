@@ -5,7 +5,8 @@ module Language.Granule.Checker.Simplifier where
 import Control.Monad.Trans.Maybe
 
 import Language.Granule.Syntax.Type
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
 
