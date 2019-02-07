@@ -24,24 +24,19 @@ import Language.Granule.Syntax.Pattern
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
 data AST v a = AST [DataDecl] [Def v a]
-
-deriving instance (Show v, Show a) => Show (AST v a)
-deriving instance (Eq v, Eq a) => Eq (AST v a)
-deriving instance Functor (AST v)
+deriving instance (Show (Def v a), Show a) => Show (AST v a)
+deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
 -- | Function definitions
 data Def v a = Def Span Id [Equation v a] TypeScheme
   deriving Generic
+deriving instance (Show v, Show a) => Show (Def v a)
+deriving instance (Eq v, Eq a) => Eq (Def v a)
 
 -- | Single equation of a function
 data Equation v a =
     Equation Span a [Pattern a] (Expr v a)
   deriving Generic
-
-deriving instance Functor (Def v)
-deriving instance Functor (Equation v)
-deriving instance (Show v, Show a) => Show (Def v a)
-deriving instance (Eq v, Eq a) => Eq (Def v a)
 deriving instance (Show v, Show a) => Show (Equation v a)
 deriving instance (Eq v, Eq a) => Eq (Equation v a)
 
@@ -56,9 +51,19 @@ instance FirstParameter DataDecl Span
 
 -- | Data constructors
 data DataConstr
-  = DataConstrG Span Id TypeScheme -- ^ GADTs
-  | DataConstrA Span Id [Type]     -- ^ ADTs
+  = DataConstrIndexed Span Id TypeScheme -- ^ GADTs
+  | DataConstrNonIndexed Span Id [Type]  -- ^ ADTs
   deriving (Eq, Show, Generic)
+
+nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
+nonIndexedToIndexedDataConstr _     _      d@DataConstrIndexed{} = d
+nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params)
+    -- Don't push the parameters into the type scheme yet
+    = DataConstrIndexed sp dName (Forall sp [] [] ty)
+  where
+    ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
+    returnTy t [] = t
+    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
 instance FirstParameter DataConstr Span
 
@@ -79,12 +84,12 @@ instance Monad m => Freshenable m DataDecl where
     return $ DataDecl s v tyVars kind ds
 
 instance Monad m => Freshenable m DataConstr where
-  freshen (DataConstrG sp v tys) = do
+  freshen (DataConstrIndexed sp v tys) = do
     tys <- freshen tys
-    return $ DataConstrG sp v tys
-  freshen (DataConstrA sp v ts) = do
+    return $ DataConstrIndexed sp v tys
+  freshen (DataConstrNonIndexed sp v ts) = do
     ts <- mapM freshen ts
-    return $ DataConstrA sp v ts
+    return $ DataConstrNonIndexed sp v ts
 
 instance Monad m => Freshenable m (Equation v a) where
   freshen (Equation s a ps e) = do

@@ -9,6 +9,7 @@
 {-# LANGUAGE PackageImports #-}
 module Main where
 
+import System.Exit (die)
 import System.FilePath
 import System.FilePath.Find
 import System.Directory
@@ -97,7 +98,7 @@ rFindMain fn rfp = forM fn $ (\x -> rFindHelper x rfp )
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
-    pf <- liftIO' $ try $ parseDefs =<< readFile pth
+    pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile pth
 
     case pf of
       Right ast -> do
@@ -172,14 +173,14 @@ makeMapBuildADT adc = M.fromList $ tempADT adc
                         where
                           tempADT :: [DataConstr] -> [(String,DataConstr)]
                           tempADT [] = []
-                          tempADT (dc@(DataConstrG _ id _):dct) = ((sourceName id),dc) : tempADT dct
-                          tempADT (dc@(DataConstrA _ _ _):dct) = tempADT dct
+                          tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceName id),dc) : tempADT dct
+                          tempADT (dc@(DataConstrNonIndexed _ _ _):dct) = tempADT dct
 
 lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
 lookupBuildADT term aMap = let lup = M.lookup term aMap in
                             case lup of
                               Nothing ->
-                                case lookup (mkId term) Primitives.typeLevelConstructors of
+                                case lookup (mkId term) Primitives.typeConstructors of
                                   Nothing -> ""
                                   Just (k, _) -> term <> " : " <> pretty k
                               Just d -> pretty d
@@ -232,12 +233,12 @@ buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) = makeCtxt dc <> buildCtxtTSDD dd
 
 buildCtxtTSDDhelper :: [DataConstr] -> Ctxt TypeScheme
 buildCtxtTSDDhelper [] = []
-buildCtxtTSDDhelper (dc@(DataConstrG _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
-buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrIndexed _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrNonIndexed _ _ _):dct) = buildCtxtTSDDhelper dct
 
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
-buildTypeScheme ty = Forall nullSpanInteractive [] ty
+buildTypeScheme ty = Forall nullSpanInteractive [] [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
@@ -269,12 +270,12 @@ handleCMD s =
 
     handleLine (RunParser str) = do
       (_,_,_,f,_) <- get
-      pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens str) "interactive"
+      pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens str) "interactive"
       case pexp of
         Right ast -> liftIO $ putStrLn (show ast)
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
-          pts <- liftIO' $ try $ runReaderT (tscheme $ scanTokens str) "interactive"
+          pts <- liftIO' $ try $ either die return $ runReaderT (tscheme $ scanTokens str) "interactive"
           case pts of
             Right ts -> liftIO $ putStrLn (show ts)
             Left err -> do
@@ -364,7 +365,7 @@ handleCMD s =
 
     handleLine (Eval ev) = do
         (fvg,rp,adt,fp,m) <- get
-        pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens ev) "interactive"
+        pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens ev) "interactive"
         case pexp of
             Right exp -> do
                 let fv = freeVars exp

@@ -59,7 +59,9 @@ tokens :-
   "←"                           { \p s -> TokenBind p }
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
+  "/="                          { \p s -> TokenNeq p }
   \\                            { \p s -> TokenLambda p }
+  "λ"                           { \p s -> TokenLambda p }
   \[                            { \p s -> TokenBoxLeft p }
   \]                            { \p s -> TokenBoxRight p }
   [\+]                          { \p s -> TokenAdd p }
@@ -70,6 +72,8 @@ tokens :-
   \{                            { \p s -> TokenLBrace p }
   \}                            { \p s -> TokenRBrace p }
   \<                            { \p s -> TokenLangle p }
+  "<="                          { \p s -> TokenLTE p }
+  ">="                          { \p s -> TokenGTE p }
   \>                            { \p s -> TokenRangle p }
   \,                            { \p s -> TokenComma p }
   \×                            { \p s -> TokenCross p }
@@ -88,6 +92,11 @@ tokens :-
   \`                            { \p s -> TokenBackTick p }
   \^                            { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
+  "∨"                           { \p _ -> TokenJoin p }
+  "∧"                           { \p _ -> TokenMeet p }
+  "=>"                          { \p s -> TokenConstrain p }
+  "⇒"                           { \p s -> TokenConstrain p }
+
 
 {
 
@@ -111,8 +120,10 @@ data Token
   | TokenFloat  AlexPosn String
   | TokenSym    AlexPosn String
   | TokenArrow  AlexPosn
+  | TokenConstrain AlexPosn
   | TokenForall AlexPosn
   | TokenEq     AlexPosn
+  | TokenNeq     AlexPosn
   | TokenAdd    AlexPosn
   | TokenSub    AlexPosn
   | TokenMul    AlexPosn
@@ -130,6 +141,8 @@ data Token
   | TokenRBrace   AlexPosn
   | TokenLangle   AlexPosn
   | TokenRangle   AlexPosn
+  | TokenLTE       AlexPosn
+  | TokenGTE       AlexPosn
   | TokenComma    AlexPosn
   | TokenCross AlexPosn
   | TokenPeriod   AlexPosn
@@ -140,6 +153,8 @@ data Token
   | TokenOp AlexPosn String
   | TokenCaret AlexPosn
   | TokenDotDot AlexPosn
+  | TokenJoin AlexPosn
+  | TokenMeet AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String

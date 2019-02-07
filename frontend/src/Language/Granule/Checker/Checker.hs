@@ -15,6 +15,7 @@ import Data.List (genericLength, intercalate)
 import Data.Maybe
 import qualified Data.Text as T
 
+import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
@@ -84,7 +85,7 @@ checkDataCon :: (?globals :: Globals)
   -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) =
+checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVarsD constraints ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
 
@@ -100,7 +101,7 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
           KType -> do
             check ty
             st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
               Some ds -> do
                 put st { dataConstructors = ds, tyVarContext = [] }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
@@ -127,27 +128,20 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
     check (TyApp fun arg) = check fun
     check x = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 
-checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
-    st <- get
-    case extend (dataConstructors st) dName tySch of
-      Some ds -> put st { dataConstructors = ds }
-      None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
-  where
-    tySch = Forall sp tyVars ty
-    ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
-    returnTy t [] = t
-    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
-
+checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
+  = checkDataCon tName kind tyVars
+    $ nonIndexedToIndexedDataConstr tName tyVars d
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> MaybeT Checker (Def () Type)
-checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
+checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
+
     elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
         -- Erase the solver predicate between equations
         modify' $ \st -> st
@@ -177,7 +171,7 @@ checkEquation :: (?globals :: Globals) =>
   -> TypeScheme      -- Type scheme
   -> MaybeT Checker (Equation () Type)
 
-checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
+checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
@@ -186,6 +180,10 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
 
   -- Create conjunct to capture the pattern constraints
   newConjunct
+
+  mapM_ (\ty -> do
+    pred <- compileTypeConstraintToConstraint s ty
+    addPredicate pred) constraints
 
   -- Build the binding context for the branch pattern
   st <- get
@@ -518,7 +516,8 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
     Just tySch -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty,_) <- freshPolymorphicInstance InstanceQ False tySch
+      (ty, _, []) <- freshPolymorphicInstance InstanceQ False tySch
+      -- TODO: allow data type constructors to have constraints
 
       let elaborated = Val s ty (Constr ty c [])
       return (ty, [], elaborated)
@@ -628,7 +627,11 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty',_) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+           (ty', _, constraints) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+
+           mapM_ (\ty -> do
+             pred <- compileTypeConstraintToConstraint s ty
+             addPredicate pred) constraints
 
            let elaborated = Val s ty' (Var ty' x)
            return (ty', [], elaborated)
@@ -1159,7 +1162,7 @@ checkGuardsForImpossibility s name = do
     -- Try to prove the theorem
     result <- liftIO $ provePredicate s thm tyVars kVars
 
-    let msgHead = "Pattern guard for equation of `" <> pretty name <> "``"
+    let msgHead = "Pattern guard for equation of `" <> pretty name <> "`"
 
     case result of
       QED -> return ()

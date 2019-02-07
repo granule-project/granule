@@ -9,6 +9,6 @@ eval : ∀ a : Type . Lam a → a
 eval e = case e of
     (Lift v)   → v;
     (Pair l r) → (eval l, eval r);
-    (Lam f)    → \x → eval (f (Lift x));
+    (Lam f)    → λx → eval (f (Lift x));
     (App f x)  → (eval f) (eval x);
     (Fix [f])  → (eval f) (eval (Fix [f]))

@@ -19,7 +19,7 @@ The `Choice` api for reference:
 ~~~ granule
 
 --- Square a number, but only if the guard is true
-squareOrIdentity : Bool -> Int [1..2] -> Int
+squareOrIdentity : Bool → Int [1..2] → Int
 squareOrIdentity g [n] = if g then n * n else n
 
 

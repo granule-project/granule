@@ -27,8 +27,8 @@ notAleak [x] = [42]
 
 doTwice : (Int <R>) [2] → Int <R, R>
 doTwice [f] =
-  let a <- f;
-      b <- f
+  let a ← f;
+      b ← f
   in pure (a + b)
 
 main : Int <R, R>

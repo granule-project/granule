@@ -18,7 +18,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
-import Language.Granule.Checker.Errors
+import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -331,6 +331,7 @@ instance Substitutable Kind where
 
   substitute subst KType = return KType
   substitute subst KCoeffect = return KCoeffect
+  substitute subst KPredicate = return KPredicate
   substitute subst (KFun c1 c2) = do
     c1 <- substitute subst c1
     c2 <- substitute subst c2
@@ -437,25 +438,6 @@ substAssumption subst (v, Discharged t c) = do
     c <- substitute subst c
     return (v, Discharged t c)
 
-compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Coeffect
-compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
-  t1' <- compileNatKindedTypeToCoeffect s t1
-  t2' <- compileNatKindedTypeToCoeffect s t2
-  case op of
-    "+"   -> return $ CPlus t1' t2'
-    "*"   -> return $ CTimes t1' t2'
-    "^"   -> return $ CExpon t1' t2'
-    "-"   -> return $ CMinus t1' t2'
-    "\\/" -> return $ CJoin t1' t2'
-    "/\\" -> return $ CMeet t1' t2'
-    _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " <> op
-compileNatKindedTypeToCoeffect _ (TyInt n) =
-  return $ CNat n
-compileNatKindedTypeToCoeffect _ (TyVar v) =
-  return $ CVar v
-compileNatKindedTypeToCoeffect s t =
-  halt $ KindError (Just s) $ "Type `" <> pretty t <> "` does not have kind `Nat`"
-
 
 -- | Apply a name map to a type to rename the type variables
 renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> MaybeT Checker Type
@@ -479,14 +461,19 @@ freshPolymorphicInstance :: (?globals :: Globals)
   => Quantifier   -- Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
   -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
   -> TypeScheme   -- Type scheme to freshen
-  -> MaybeT Checker (Type, [Id])
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds ty) = do
+  -> MaybeT Checker (Type, [Id], [Type])
+    -- Returns the type (with skolems), a list of skolem variables, and a list of constraints
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
     ty <- renameType (elideEither renameMap) ty
+
+    let subst = map (\(v, var) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
+    constr' <- mapM (substitute subst) constr
+
     -- Return the type and all skolem variables
-    return (ty, justLefts renameMap)
+    return (ty, justLefts renameMap, constr')
 
   where
     -- Freshen variables, create skolem variables
@@ -517,6 +504,7 @@ instance Substitutable Pred where
   substitute ctxt =
       predFoldM
         (return . Conj)
+        (return . Disj)
         (\ids p1 p2 -> return $ Impl ids p1 p2)
         (\c -> substitute ctxt c >>= return . Con)
         (return . NegPred)
@@ -547,5 +535,15 @@ instance Substitutable Constraint where
     c <- substitute ctxt c
     k <- substitute ctxt k
     return $ NonZeroPromotableTo s v c k
+
+  substitute ctxt (Lt s c1 c2) = do
+    c1 <- substitute ctxt c1
+    c2 <- substitute ctxt c2
+    return $ Lt s c1 c2
+
+  substitute ctxt (Gt s c1 c2) = do
+    c1 <- substitute ctxt c1
+    c2 <- substitute ctxt c2
+    return $ Gt s c1 c2
 
   unify _ _ = error "Can't unify constraints"

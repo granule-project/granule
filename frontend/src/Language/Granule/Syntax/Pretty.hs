@@ -102,14 +102,17 @@ instance Pretty Coeffect where
 instance Pretty Kind where
     prettyL l KType          = "Type"
     prettyL l KCoeffect      = "Coeffect"
+    prettyL l KPredicate     = "Predicate"
     prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
     prettyL l (KVar v)       = prettyL l v
     prettyL l (KPromote t)   = "↑" <> prettyL l t
 
 instance Pretty TypeScheme where
-    prettyL l (Forall _ [] t) = prettyL l t
-    prettyL l (Forall _ cvs t) =
-        "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". " <> prettyL l t
+    prettyL l (Forall _ [] [] t) = prettyL l t
+    prettyL l (Forall _ cvs cons t) =
+        "forall " <> intercalate ", " (map prettyKindSignatures cvs)
+                  <> intercalate ", " (map (prettyL l) cons)
+                  <> ". " <> prettyL l t
       where
        prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
 
@@ -183,8 +186,8 @@ instance Pretty [DataConstr] where
     prettyL l = intercalate ";\n  " . map pretty
 
 instance Pretty DataConstr where
-    prettyL l (DataConstrG _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
-    prettyL l (DataConstrA _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
+    prettyL l (DataConstrIndexed _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
+    prettyL l (DataConstrNonIndexed _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
 
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v

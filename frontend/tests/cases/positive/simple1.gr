@@ -1,4 +1,4 @@
 -- Example expression
 
 main : Int
-main = (\x → \y → x * y) 3 5
+main = (λx → λy → x * y) 3 5

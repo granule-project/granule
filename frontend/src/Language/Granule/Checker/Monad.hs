@@ -130,7 +130,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , kVarContext = emptyCtxt
                , guardContexts = []
                , patternConsumption = []
-               , typeConstructors = Primitives.typeLevelConstructors
+               , typeConstructors = Primitives.typeConstructors
                , dataConstructors = Primitives.dataConstructors
                , deriv = Nothing
                , derivStack = []
@@ -285,6 +285,15 @@ appendPred :: Pred -> Pred -> Pred
 appendPred p (Conj ps) = Conj (p : ps)
 appendPred p (Exists var k ps) = Exists var k (appendPred p ps)
 appendPred _ p = error $ "Cannot append a predicate to " <> show p
+
+addPredicate :: Pred -> MaybeT Checker ()
+addPredicate p = do
+  checkerState <- get
+  case predicateStack checkerState of
+    (p' : stack) ->
+      put (checkerState { predicateStack = appendPred p p' : stack })
+    stack ->
+      put (checkerState { predicateStack = Conj [p] : stack })
 
 -- | A helper for adding a constraint to the context
 addConstraint :: Constraint -> MaybeT Checker ()
