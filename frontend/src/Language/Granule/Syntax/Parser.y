@@ -31,7 +31,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %name tscheme TypeScheme
 %tokentype { Token }
 %error { parseError }
-%monad { ReaderT String IO }
+%monad { ReaderT String (Either String) }
 
 %token
     nl    { TokenNL _ }
@@ -465,19 +465,17 @@ Atom :: { Expr () () }
 
 {
 
-mkSpan :: (Pos, Pos) -> ReaderT String IO Span
+mkSpan :: (Pos, Pos) -> ReaderT String (Either String) Span
 mkSpan (start, end) = do
   filename <- ask
   return $ Span start end filename
 
-parseError :: [Token] -> ReaderT String IO a
-parseError [] = do
-    lift $ die "Premature end of file"
-parseError t = do
-    lift $ die $ show l <> ":" <> show c <> ": parse error"
+parseError :: [Token] -> ReaderT String (Either String) a
+parseError [] = lift $ Left "Premature end of file"
+parseError t  =  lift . Left $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: FilePath -> String -> IO (AST () ())
+parseDefs :: FilePath -> String -> Either String (AST () ())
 parseDefs file input = runReaderT (defs $ scanTokens input) file
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
@@ -487,7 +485,7 @@ parseAndDoImportsAndFreshenDefs input = do
 
 parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefsAndDoImports input = do
-    defs <- parseDefs (sourceFilePath ?globals) input
+    defs <- either die return $ parseDefs (sourceFilePath ?globals) input
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
@@ -517,7 +515,7 @@ parseDefsAndDoImports input = do
       then if (and $ map (\x -> x == head lengths) lengths)
             then return ()
             else
-              die $ "Syntax error: Number of arguments differs in the equations of "
+              die $ "Syntax error: Number of arguments differs in the equattypeConstructorns of "
                   <> sourceName name
       else return ()
         where

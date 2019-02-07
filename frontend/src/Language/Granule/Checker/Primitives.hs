@@ -4,7 +4,6 @@
 module Language.Granule.Checker.Primitives where
 
 import Data.List (genericLength)
-import System.IO.Unsafe (unsafePerformIO)
 import Text.RawString.QQ (r)
 
 import Language.Granule.Syntax.Def
@@ -225,21 +224,21 @@ swap = builtin
 builtinTypeConstructors :: [(Id, (Kind, Cardinality))]
 builtinDataConstructors :: [(Id, TypeScheme)]
 builtins' :: [(Id, TypeScheme)]
-(builtinTypeConstructors, builtinDataConstructors, builtins')
-  = unsafePerformIO $ do
-    AST types defs <- parseDefs "builtins" builtinSrc
-    let datas = map unData types
-    pure (map fst datas, concatMap snd datas, map unDef defs)
-  where
-    unDef :: Def () () -> (Id, TypeScheme)
-    unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+(builtinTypeConstructors, builtinDataConstructors, builtins') =
+  (map fst datas, concatMap snd datas, map unDef defs)
+    where
+      Right (AST types defs) = parseDefs "builtins" builtinSrc
+      datas = map unData types
 
-    unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, TypeScheme)])
-    unData (DataDecl _ tyConName tyVars kind dataConstrs)
-      = ( (tyConName, (maybe KType id kind, Just $ genericLength dataConstrs))
-        , map unDataConstr dataConstrs
-        )
-      where
-        unDataConstr :: DataConstr -> (Id, TypeScheme)
-        unDataConstr (DataConstrIndexed _ name tysch) = (name, tysch)
-        unDataConstr d = unDataConstr (nonIndexedToIndexedDataConstr tyConName tyVars d)
+      unDef :: Def () () -> (Id, TypeScheme)
+      unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+
+      unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, TypeScheme)])
+      unData (DataDecl _ tyConName tyVars kind dataConstrs)
+        = ( (tyConName, (maybe KType id kind, Just $ genericLength dataConstrs))
+          , map unDataConstr dataConstrs
+          )
+        where
+          unDataConstr :: DataConstr -> (Id, TypeScheme)
+          unDataConstr (DataConstrIndexed _ name tysch) = (name, tysch)
+          unDataConstr d = unDataConstr (nonIndexedToIndexedDataConstr tyConName tyVars d)
