@@ -1,0 +1,11 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A
+
+id1 : forall (a : Type) . a -> a
+id1 x = x
+
+-- we should have access to id1 here
+instance Simple A where
+  simple = id1

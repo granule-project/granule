@@ -1,0 +1,9 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A | B
+
+-- instance with pattern matching
+instance Simple A where
+  simple A = A;
+  simple B = B

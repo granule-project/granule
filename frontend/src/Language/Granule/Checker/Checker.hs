@@ -147,7 +147,7 @@ checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
 checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
   mapM_ (kindCheckConstr sp [(pname, kind)]) constrs
-  registerInterface sp name kind ifnames
+  registerInterface sp name pname kind ifnames
   where
     kind = case kindAnn of Nothing -> KType; Just k -> k
     ifnames = map (\(IFaceTy _ name _) -> name) itys
@@ -176,7 +176,7 @@ checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
       registerDefSig sp name tys'
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
-checkInstHead (Instance sp iname constrs idt _) = do
+checkInstHead (Instance sp iname constrs idt@(IFaceDat _ idty) _) = do
   checkIFaceExists sp iname
   mapM_ (kindCheckConstr sp [(v, KType) | v <- freeVars idty]) constrs
   checkInstTy iname idt
@@ -193,7 +193,7 @@ checkInstTy iname (IFaceDat sp ty) = do
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
 
 checkInstDefs :: (?globals :: Globals) => Instance () () -> MaybeT Checker ()
-checkInstDefs (Instance sp iname constrs idt ds) = do
+checkInstDefs (Instance sp iname constrs (IFaceDat _ idty) ds) = do
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
     checkInstDefName names sp name) [(sp, name) | (IDef sp (Just name) _) <- ds]
@@ -210,13 +210,22 @@ checkInstDefs (Instance sp iname constrs idt ds) = do
           let eqs = map (\(IDef _ _ eq) -> eq) dt
           in ((sp, name), eq:eqs)) nameGroupedDefs
   mapM_ (\((sp, name), eqs) -> do
-    Just tys <- getTypeScheme name
-    checkDef' sp name eqs tys) groupedEqns
+    Just tys@(Forall s binds constrs ty) <- getTypeScheme name
+    -- ensure free variables in the instance head are universally quantified
+    let tys' = Forall s (binds <> [(v, KType) | v <- freeVars idty]) constrs ty
+    tys'' <- substIFaceParam iname idty tys'
+    checkDef' sp name eqs tys'') groupedEqns
   where
     checkInstDefName names sp name = do
       unless (elem name names) (halt $ GenericError (Just sp) $
         concat ["`", pretty name, "` is not a member of interface `", pretty iname, "`"])
       pure name
+    substIFaceParam :: (?globals :: Globals) => Id -> Type -> TypeScheme -> MaybeT Checker TypeScheme
+    substIFaceParam iname ty (Forall s binds constrs fty) = do
+      Just pname <- getInterfaceParameter iname
+      -- remove universal quantification for now-bound parameter
+      let tys = Forall s (filter ((/= pname) . fst) binds) constrs fty
+      substitute [(pname, SubstT ty)] tys
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()
 checkDefTy d@(Def sp name _ tys) = do

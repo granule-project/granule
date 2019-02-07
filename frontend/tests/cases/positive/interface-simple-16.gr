@@ -1,8 +1,8 @@
 data A a b = A
 
 interface Simple (a : Type -> Type) where
-  simple : forall (b : Type) . b -> a b
+  simple : forall (b : Type) . b [0] -> a b
 
 -- kind should be okay
 instance Simple (A a) where
-  simple _ = A
+  simple [_] = A

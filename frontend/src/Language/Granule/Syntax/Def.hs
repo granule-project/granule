@@ -166,6 +166,13 @@ instance Monad m => Freshenable m (IDef v a) where
 
 instance Monad m => Freshenable m IFaceDat where
   freshen (IFaceDat sp tys) = do
+    -- TODO: temporary hack to ensure instance and
+    -- interface variables are separately freshened.
+    -- - [ ] Figure out why this helps
+    -- - [ ] Come up with a more robust method for
+    --   solving issue (we should only need to freshen
+    --   once here)
+    mapM_ (freshIdentifierBase Type) (freeVars tys)
     mapM_ (freshIdentifierBase Type) (freeVars tys)
     tys' <- freshen tys
     return $ IFaceDat sp tys'
