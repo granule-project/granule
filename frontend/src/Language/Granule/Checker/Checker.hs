@@ -305,7 +305,7 @@ checkDef' :: (?globals :: Globals)
          => Span -> Id -> [Equation () ()]
          -> TypeScheme
          -> MaybeT Checker (Def () Type)
-checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty)) = do
+checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
 
     defCtxt <- fmap defContext get
     -- Clean up knowledge shared between equations of a definition

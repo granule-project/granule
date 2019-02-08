@@ -352,11 +352,21 @@ TyAtom :: { Type }
   : TyAtomWithSpan { fst $1 }
 
 TyAtomWithSpan :: { (Type, Span) }
-  : CONSTR                    { TyCon $ mkId $ constrString $1 }
-  | VAR                       { TyVar (mkId $ symString $1) }
-  | INT                       { let TokenInt _ x = $1 in TyInt x }
-  | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
+  : CONSTR                    {
+    % mkSpan (getPosToSpan $1) >>=
+      \sp -> return (TyCon $ mkId $ constrString $1, sp) }
+  | VAR                       {
+    % mkSpan (getPosToSpan $1) >>=
+      \sp -> return (TyVar (mkId $ symString $1), sp) }
+  | INT                       {
+    % mkSpan (getPosToSpan $1) >>=
+      \sp -> return (let TokenInt _ x = $1 in TyInt x, sp) }
+  | '(' Type ')'              {
+    % mkSpan (getPos $1, getPos $3) >>=
+      \sp -> return ($2, sp) }
+  | '(' Type ',' Type ')'     {
+    % mkSpan (getPos $1, getPos $5) >>=
+      \sp -> return (TyApp (TyApp (TyCon $ mkId ",") $2) $4, sp) }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL

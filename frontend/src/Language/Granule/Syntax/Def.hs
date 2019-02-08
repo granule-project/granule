@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.Granule.Syntax.Def where
@@ -24,8 +23,8 @@ import Language.Granule.Syntax.Pattern
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
 data AST v a = AST [DataDecl] [Def v a] [IFace] [Instance v a]
-deriving instance (Show (Def v a), Show a) => Show (AST v a)
-deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
+deriving instance (Show v, Show a) => Show (AST v a)
+deriving instance (Eq v, Eq a) => Eq (AST v a)
 
 -- | Function definitions
 data Def v a = Def Span Id [Equation v a] TypeScheme
@@ -99,7 +98,6 @@ data Instance v a =
   IFaceDat   -- ^ instance type
   [IDef v a] -- ^ implementations
 
-deriving instance Functor (Instance v)
 deriving instance (Eq v, Eq a) => Eq (Instance v a)
 deriving instance (Show v, Show a) => Show (Instance v a)
 
@@ -108,7 +106,6 @@ data IDef v a = IDef Span (Maybe Id) (Equation v a)
   deriving (Generic)
 
 instance FirstParameter (IDef v a) Span
-deriving instance Functor (IDef v)
 deriving instance (Eq v, Eq a) => Eq (IDef v a)
 deriving instance (Show v, Show a) => Show (IDef v a)
 

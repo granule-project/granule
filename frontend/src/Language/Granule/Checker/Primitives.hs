@@ -238,7 +238,7 @@ builtins' :: [(Id, TypeScheme)]
 (builtinTypeConstructors, builtinDataConstructors, builtins') =
   (map fst datas, concatMap snd datas, map unDef defs)
     where
-      Right (AST types defs) = parseDefs "builtins" builtinSrc
+      Right (AST types defs _ _) = parseDefs "builtins" builtinSrc
       datas = map unData types
 
       unDef :: Def () () -> (Id, TypeScheme)
