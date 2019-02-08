@@ -99,7 +99,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
               -- Must approximate zero
               addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
 
-        return ([], [], [], PWild s t, Empty)
+        return ([], [], [], PWild s t, NotFull)
 
       _ -> illLinearityMismatch s [NonLinearPattern]
 
