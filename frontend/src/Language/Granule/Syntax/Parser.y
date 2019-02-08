@@ -341,12 +341,19 @@ TyJuxt :: { Type }
   | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
 
 Constraint :: { Type }
+  : InterfaceConstraint { $1 }
+  | PredicateConstraint { $1 }
+
+PredicateConstraint :: { Type }
   : TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
   | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
   | TyAtom '>=' TyAtom        { TyInfix (">=") $1 $3 }
   | TyAtom '<=' TyAtom        { TyInfix ("<=") $1 $3 }
   | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix ("/=") $1 $3 }
+
+InterfaceConstraint :: { TConstraint }
+  : CONSTR Type { TyApp (TyCon . mkId . constrString $ $1) $2 }
 
 TyAtom :: { Type }
   : TyAtomWithSpan { fst $1 }
