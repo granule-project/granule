@@ -171,9 +171,7 @@ popGuardContext = do
   return c
 
 allGuardContexts :: MaybeT Checker (Ctxt Assumption)
-allGuardContexts = do
-  state <- get
-  return $ concat (guardContexts state)
+allGuardContexts = concat . guardContexts <$> get
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
@@ -234,7 +232,7 @@ concludeImplication s localVars = do
            let guard' = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
            guard <- freshenPred guard'
 
-           -- Implication of p &&& negated previous guards => p'
+           -- Implication of p .&& negated previous guards => p'
            let impl = if (isTrivial prevGuardPred)
                         then Impl localVars p p'
                         else Impl localVars (Conj [p, guard]) p'

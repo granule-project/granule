@@ -1,7 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -318,7 +317,7 @@ instance Substitutable Coeffect where
 
 instance Substitutable Effect where
   -- {TODO: Make effects richer}
-  substitute subst e = return e
+  substitute subst = pure
   unify e e' =
     if e == e' then return $ Just []
                else return $ Nothing
@@ -441,9 +440,10 @@ substAssumption subst (v, Discharged t c) = do
 
 -- | Apply a name map to a type to rename the type variables
 renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> MaybeT Checker Type
-renameType subst t =
-      typeFoldM (baseTypeFold { tfBox   = renameBox subst
-                              , tfTyVar = renameTyVar subst }) t
+renameType subst = typeFoldM $ baseTypeFold
+  { tfBox   = renameBox subst
+  , tfTyVar = renameTyVar subst
+  }
   where
     renameBox renameMap c t = do
       c' <- substitute (map (\(v, var) -> (v, SubstC $ CVar var)) renameMap) c
@@ -480,8 +480,8 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     -- Left of id means a succesful skolem variable created
     -- Right of id means that this is an existential and so a skolem is not generated
     instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either Id Id)
-    instantiateVariable (var, k) = do
-      if isDataConstructor && not (var `elem` (freeVars $ resultType ty))
+    instantiateVariable (var, k) =
+      if isDataConstructor && (var `notElem` freeVars (resultType ty))
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
