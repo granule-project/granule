@@ -7,7 +7,8 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.TestUtils
 
 import Test.Hspec
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Monad
 import Control.Monad.Trans.Maybe
 import Language.Granule.Utils
