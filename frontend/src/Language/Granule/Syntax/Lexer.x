@@ -80,6 +80,8 @@ tokens :-
   \.                            { \p s -> TokenPeriod p }
   \:                            { \p s -> TokenSig p }
   @sym				                  { \p s -> TokenSym p s }
+  🍏                           { \p s -> TokenSym p "🍏" }
+  🍊                           { \p s -> TokenSym p "🍊" }
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
