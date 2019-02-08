@@ -1156,6 +1156,8 @@ checkGuardsForImpossibility s name = do
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
+    p <- simplifyPred p
+
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
 
@@ -1172,7 +1174,7 @@ checkGuardsForImpossibility s name = do
                         " is impossible. Its condition " <> msg
       NotValidTrivial unsats ->
                       halt $ GenericError (Just s) $ msgHead <>
-                        " is impossible. " <>
+                        " is impossible.\n\t" <>
                         intercalate "\n\t" (map (pretty . Neg) unsats)
       Timeout -> halt $ CheckerError (Just s) $
          "While checking plausibility of pattern guard for equation " <> pretty name

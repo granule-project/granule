@@ -69,9 +69,9 @@ ctxtFromTypedPattern :: (?globals :: Globals, Show t) =>
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern _ t (PWild s _) cons =
     case cons of
+      -- Full consumption is allowed here
       Full ->
-        -- Full consumption is allowed here
-        return ([], [], [], PWild s t, NotFull)
+        return ([], [], [], PWild s t, Empty)
 
       _ -> illLinearityMismatch s [NonLinearPattern]
 
@@ -93,8 +93,13 @@ ctxtFromTypedPattern _ t@(TyCon c) (PFloat s _ n) _
 -- Pattern match on a modal box
 ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) _ = do
 
-    (ctx, eVars, subst, elabPinner, _) <- ctxtFromTypedPattern s ty p Full
+    (ctx, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern s ty p Full
     coeffTy <- inferCoeffectType s coeff
+
+    -- If no consumption happen then our coeffect needs to subsume 0
+    case consumption of
+      Empty -> addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
+      _    -> return ()
 
     -- Check whether a unification was caused
     isPoly <- polyShaped ty

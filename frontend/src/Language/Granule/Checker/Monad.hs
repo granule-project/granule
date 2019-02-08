@@ -60,7 +60,7 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 --    foo _ = ..
 -- can be typed as foo : Int ->  because the first means
 -- consumption is linear
-data Consumption = Full | NotFull deriving (Eq, Show)
+data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 
 -- Given a set of equations, creates an intial vector to describe
 -- the consumption behaviour of the patterns (assumes that)
@@ -71,15 +71,21 @@ initialisePatternConsumptions [] = []
 initialisePatternConsumptions ((Equation _ _ pats _):_) =
   map (\_ -> NotFull) pats
 
--- Join information about consumption
+-- Join information about consumption between branches
 joinConsumption :: Consumption -> Consumption -> Consumption
 joinConsumption Full _       = Full
+joinConsumption Empty Empty  = Empty
 joinConsumption _ _          = NotFull
 
+-- Meet information about consumption, across patterns
 meetConsumption :: Consumption -> Consumption -> Consumption
 meetConsumption NotFull _ = NotFull
 meetConsumption _ NotFull = NotFull
 meetConsumption Full Full = Full
+meetConsumption Empty Empty = Empty
+meetConsumption Empty Full = NotFull
+meetConsumption Full Empty = NotFull
+
 
 data CheckerState = CS
             { -- Fresh variable id state

@@ -11,6 +11,7 @@ import Language.Granule.Checker.Monad
 
 import Language.Granule.Utils
 
+import Data.List (nub)
 import Data.Maybe (catMaybes)
 
 allCons :: [Pred] -> Bool
@@ -32,7 +33,8 @@ simplifyPred' c@(Conj ps) | allCons ps =
 
 simplifyPred' (Conj ps) = do
   ps <- mapM simplifyPred' ps
-  return $ Conj ps
+  let ps' = nub ps
+  return $ Conj ps'
 
 simplifyPred' (Disj ps) = do
   ps <- mapM simplifyPred' ps
@@ -78,7 +80,7 @@ simpl subst p = substitute subst p >>= (return . removeTrivialImpls . removeTriv
 
 removeTrivialImpls :: Pred -> Pred
 removeTrivialImpls =
-  predFold Conj Disj remImpl Con NegPred Exists
+  predFold (Conj . nub) Disj remImpl Con NegPred Exists
     where remImpl _ (Conj []) p = p
           remImpl _ (Conj ps) p | all (\p -> case p of Conj [] -> True; _ -> False) ps = p
           remImpl ids p1 p2 = Impl ids p1 p2
