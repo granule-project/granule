@@ -66,40 +66,75 @@ ctxtFromTypedPattern :: (?globals :: Globals, Show t) =>
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
 
+ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
+
+
+ctxtFromTypedPattern' :: (?globals :: Globals, Show t) =>
+     Maybe (Coeffect, Type)    -- enclosing coeffect
+  -> Span
+  -> Type
+  -> Pattern t
+  -> Consumption   -- Consumption behaviour of the patterns in this position so far
+  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
+
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern _ t (PWild s _) cons =
+ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
     case cons of
       -- Full consumption is allowed here
-      Full ->
+      Full -> do
+
+        case outerCoeff of
+          Nothing -> return ()
+          Just (coeff, coeffTy) ->
+              -- Must approximate zero
+              addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
+
         return ([], [], [], PWild s t, Empty)
 
       _ -> illLinearityMismatch s [NonLinearPattern]
 
-ctxtFromTypedPattern _ t (PVar s _ v) _ = do
+ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
     let elabP = PVar s t v
-    return ([(v, Linear t)], [], [], elabP, NotFull)
+
+    case outerCoeff of
+      Nothing -> return ([(v, Linear t)], [], [], elabP, NotFull)
+      Just (coeff, _) ->
+                 return ([(v, Discharged t coeff)], [], [], elabP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern _ t@(TyCon c) (PInt s _ n) _
+ctxtFromTypedPattern' _ _ t@(TyCon c) (PInt s _ n) _
   | internalName c == "Int" = do
     let elabP = PInt s t n
     return ([], [], [], elabP, Full)
 
-ctxtFromTypedPattern _ t@(TyCon c) (PFloat s _ n) _
+ctxtFromTypedPattern' _ _ t@(TyCon c) (PFloat s _ n) _
   | internalName c == "Float" = do
     let elabP = PFloat s t n
     return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) _ = do
+ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
 
-    (ctx, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern s ty p Full
-    coeffTy <- inferCoeffectType s coeff
+    innerBoxTy <- inferCoeffectType s coeff
+
+    (coeff, coeffTy) <- case outerBoxTy of
+                -- Case: no enclosing [ ] pattern
+                Nothing -> return (coeff, innerBoxTy)
+                -- Case: there is an enclosing [ ] pattern of type outerBoxTy
+                Just (outerCoeff, outerBoxTy) ->
+                  -- Therefore try and flatten at this point
+                  case flattenable outerBoxTy innerBoxTy of
+                    Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
+                    Nothing -> halt $ GenericError (Just s)
+                                    $ "Graded modalities of index type `" <> pretty outerBoxTy
+                                    <> "` and `" <> pretty innerBoxTy <> "` cannot be nested."
+
+    (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 
     -- If no consumption happen then our coeffect needs to subsume 0
-    case consumption of
-      Empty -> addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
-      _    -> return ()
+    --case consumption of
+    --  Empty -> addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
+    --  _    -> return ()
 
     -- Check whether a unification was caused
     isPoly <- polyShaped ty
@@ -133,10 +168,10 @@ ctxtFromTypedPattern s t@(Box coeff ty) (PBox sp _ p) _ = do
     let elabP = PBox sp t elabPinner
 
     -- Discharge all variables bound by the inner pattern
-    ctxt' <- mapM (discharge s coeffTy coeff) ctx
-    return (ctxt', eVars, subst, elabP, NotFull)
+    --ctxt' <- mapM (discharge s innerBoxTy coeff) ctx
+    return (ctxt, eVars, subst, elabP, NotFull)
 
-ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
+ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -148,8 +183,6 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
       (dataConstructorTypeFresh, freshTyVars, []) <-
           freshPolymorphicInstance BoundQ True tySch
       -- TODO: don't allow constraints in data constructors yet
-
-      debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
 
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
@@ -179,7 +212,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
     unpeel' acc [] t = return (t,acc)
 
     unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
-        (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern s t p cons
+        (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
         us <- combineSubstitutions s us us'
         unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
 
@@ -188,7 +221,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
               "` to too many arguments?"
 
 
-ctxtFromTypedPattern s t p _ = do
+ctxtFromTypedPattern' _ s t p _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
