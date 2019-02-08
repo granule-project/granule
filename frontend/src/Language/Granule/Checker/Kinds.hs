@@ -43,8 +43,8 @@ demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
 -- | Kind check a constraint
-kindCheckConstr :: (?globals :: Globals) => Span -> Ctxt Kind -> IConstr -> MaybeT Checker ()
-kindCheckConstr s qvars (IConstr ty) = do
+kindCheckConstr :: (?globals :: Globals) => Span -> Ctxt Kind -> TConstraint -> MaybeT Checker ()
+kindCheckConstr s qvars ty = do
   kind <- inferKindOfType' s qvars ty
   case kind of
     KConstraint -> pure ()

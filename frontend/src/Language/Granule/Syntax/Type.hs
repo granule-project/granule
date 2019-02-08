@@ -21,7 +21,7 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
-    [Type]        -- constraints
+    [TConstraint] -- constraints
     Type          -- type
   deriving (Eq, Show, Generic)
 
@@ -42,11 +42,7 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyInfix Operator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
-
--- | Interface constraints
-newtype IConstr = IConstr Type
-  deriving (Eq, Show)
-
+type TConstraint = Type
 
 -- | Kinds
 data Kind = KType
@@ -371,11 +367,6 @@ instance Freshenable m Coeffect where
     freshen c@CNat{}   = return c
     freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2
     freshen (CProduct c1 c2) = CProduct <$> freshen c1 <*> freshen c2
-
-instance Freshenable m IConstr where
-    freshen (IConstr ty) = do
-      ty' <- freshen ty
-      return $ IConstr ty'
 
 ----------------------------------------------------------------------
 

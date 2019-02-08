@@ -149,15 +149,8 @@ DataDecl :: { DataDecl }
 IFaceName :: { Id }
   : CONSTR { mkId $ constrString $1 }
 
-IFaceConstrained :: { [IConstr] }
-  : '{' IFaceConstrns '}' '=>' { $2 }
-
-IFaceConstrns :: { [IConstr] }
-  : IFaceConstrn ',' IFaceConstrns { $1 : $3 }
-  | IFaceConstrn                   { [$1] }
-
-IFaceConstrn :: { IConstr }
-  : Type { IConstr $1 }
+IFaceConstrained :: { [TConstraint] }
+  : '{' Constraints '}' '=>' { $2 }
 
 IFaceVar :: { (Id, Maybe Kind) }
   : VAR            { (mkId $ symString $1, Nothing) }

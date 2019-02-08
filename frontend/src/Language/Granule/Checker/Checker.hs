@@ -236,7 +236,7 @@ checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
       -- to get definition context from interfaces, we annotate
       -- the type schemes to include a constraint of the interface,
       -- and add a binder for the interface variable
-      let tys' = Forall fsp (binds <> [(pname, tyVarKind)]) (constrs <> [IConstr (TyApp (TyCon iname) (TyVar pname))]) ty
+      let tys' = Forall fsp (binds <> [(pname, tyVarKind)]) (constrs <> [TyApp (TyCon iname) (TyVar pname)]) ty
       registerDefSig sp name tys'
 
 

@@ -209,9 +209,6 @@ instance Pretty IFace where
 instance Pretty IFaceTy where
     prettyL l (IFaceTy _ name ty) = prettyColonSep l name ty
 
-instance Pretty IConstr where
-    prettyL l (IConstr ty) = prettyTy l ty
-
 instance (Pretty v, Pretty a) => Pretty (Instance v a) where
     prettyL l (Instance _ name cts idat defs) =
       unwords ["instance", ctsStr <> pretty name,
@@ -339,7 +336,7 @@ prettyColonSep l x y = prettyL l x <> " : " <> prettyL l y
 -- | The result includes a trailing space
 -- |
 -- | This variant uses curly braces
-prettyConstraintsBraces :: (?globals :: Globals) => [IConstr] -> String
+prettyConstraintsBraces :: (?globals :: Globals) => [TConstraint] -> String
 prettyConstraintsBraces = (<> " => ") . braces . prettyCommaSep 0
 
 
