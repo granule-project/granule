@@ -21,6 +21,7 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Annotated
 import Language.Granule.Utils
 import Language.Granule.TestUtils
 import System.Directory (setCurrentDirectory)
@@ -136,7 +137,7 @@ spec = do
         -- \x -> x + 1
         (AST _ (def1:_)) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
         (Just defElab, _) <- runChecker initState (runMaybeT $ checkDef [] def1)
-        getAnnotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
+        annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
 
 extractMainExpr (Def _ _ [(Equation _ _ _ e)] _) = e
