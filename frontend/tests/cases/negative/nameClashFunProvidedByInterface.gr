@@ -3,5 +3,5 @@ interface Simple a where
 
 -- 'simple' is already provided by the
 -- 'Simple' interface
-simple : forall (a : Type) . a -> a
+simple : forall {a : Type} . a -> a
 simple x = x

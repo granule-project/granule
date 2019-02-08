@@ -6,7 +6,7 @@ interface BoolI a where
 
 -- non-interface function defined only in terms
 -- of interface functions
-bXOR : forall (a : Type) . {BoolI a} => a [2] -> a [2]-> a
+bXOR : forall {a : Type} . {BoolI a} => a [2] -> a [2]-> a
 bXOR [x] [y] = bAnd (bOr x y) (bNot (bAnd x y))
 
 data BoolTy = F | T

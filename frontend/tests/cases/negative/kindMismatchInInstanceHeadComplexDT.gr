@@ -1,5 +1,5 @@
 interface Simple (a : Type -> Type) where
-  simple : forall (b : Type) . a b
+  simple : forall {b : Type} . a b
 
 data A a = A
 

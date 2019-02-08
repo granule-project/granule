@@ -5,5 +5,5 @@ interface Simple2 a where
   ignore2 : a -> a
 
 -- a function with multiple interface constraints
-simple : forall (a : Type) . {Simple1 a, Simple2 a} => a -> a
+simple : forall {a : Type} . {Simple1 a, Simple2 a} => a -> a
 simple x = x
