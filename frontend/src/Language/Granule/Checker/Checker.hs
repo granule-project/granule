@@ -95,17 +95,21 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
         let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
 
         -- Add the type variables from the data constructor into the environment
-        modify $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
+        modify $ \st -> st { tyVarContext =
+               [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
         tySchKind <- inferKindOfType' sp tyVars ty
 
-        liftIO $ putStrLn $ "ty is `" ++ pretty ty ++ "` Ty vars are = " ++ pretty tyVarsT
-        subst <- checkAndGenerateSubstitution ty tyVarsT
+        (ty', subst) <- checkAndGenerateSubstitution ty tyVarsT
+        liftIO $ putStrLn $ "ty updated is `" ++ show ty' ++ " with subst= " <> show subst
+
+        let tyVars' = tyVarsT <> tyVarsD
+
         case tySchKind of
           KType ->
-            registerDataConstructor (Forall sp tyVars constraints ty) subst
+            registerDataConstructor (Forall sp tyVars' constraints ty') subst
 
           KPromote (TyCon k) | internalName k == "Protocol" ->
-            registerDataConstructor (Forall sp tyVars constraints ty) subst
+            registerDataConstructor (Forall sp tyVars' constraints ty') subst
 
           _     -> illKindedNEq sp KType kind
 
@@ -124,26 +128,27 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
 
     -- Checks that the result type of a data constructor matches the name of the type constructor
     -- and at the same time also generates a substitution between any variable
-    checkAndGenerateSubstitution :: Type -> Ctxt Kind -> MaybeT Checker Substitution
+    checkAndGenerateSubstitution :: Type -> Ctxt Kind -> MaybeT Checker (Type, Substitution)
     checkAndGenerateSubstitution (TyCon tC) [] =
         -- Check the name
         if tC == tName
-          then return []
+          then return (TyCon tC, [])
           else halt $ GenericError (Just sp)
                     $ "Expected type constructor `" <> pretty tName
                    <> "`, but got `" <> pretty tC <> "`"
 
-    checkAndGenerateSubstitution (FunTy arg res) tyVars =
-       checkAndGenerateSubstitution res tyVars
+    checkAndGenerateSubstitution (FunTy arg res) tyVars = do
+       (res', subst) <- checkAndGenerateSubstitution res tyVars
+       return (FunTy arg res', subst)
 
     checkAndGenerateSubstitution (TyApp fun arg) ((var, _):tyvars) = do
-      subst <- checkAndGenerateSubstitution fun tyvars
+      (fun', subst) <- checkAndGenerateSubstitution fun tyvars
       case arg of
         -- Type `arg` is appears in the head of the data type and is therefore
         -- a polymorphic type parameter
-        TyVar v | v == var -> return subst
+        TyVar v | v == var -> return (TyApp fun' arg, subst)
         -- otherwise, this means that `arg` is a type index so generation a substitution
-        _ -> return $ (var, SubstT arg) : subst
+        _ -> return (TyApp fun' (TyVar var), (var, SubstT arg) : subst)
 
     checkAndGenerateSubstitution x _ = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 

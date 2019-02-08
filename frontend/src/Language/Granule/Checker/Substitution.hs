@@ -19,6 +19,7 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -79,6 +80,23 @@ instance Substitutable Substitutors where
   unify (SubstK k) (SubstK k') = unify k k'
   unify (SubstE e) (SubstE e') = unify e e'
   unify _ _ = return Nothing
+
+-- Speciale case of substituting a substition
+instance Substitutable Substitution where
+  substitute subst [] = return []
+  substitute subst ((var , s) : subst') = do
+    s <- substitute subst s
+    subst' <- substitute subst subst'
+    case lookup var subst of
+      Just (SubstT (TyVar var')) -> return $ (var', s) : subst'
+      Nothing -> return subst'
+      -- Shouldn't happen
+      t -> halt $ GenericError (Just nullSpan) $
+            "Granule bug. Cannot rewrite a substitution `s` as the substitution map `s'` = "
+              <> show subst <> " maps variable `" <> show var
+              <> "` to a non variable type: `" <> show t <> "`"
+
+  unify = error "Unification not defined for substitutions"
 
 instance Substitutable Type where
   substitute subst = typeFoldM (baseTypeFold
@@ -442,7 +460,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   => Quantifier   -- Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
   -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
   -> TypeScheme   -- Type scheme to freshen
-  -> MaybeT Checker (Type, [Id], [Type])
+  -> MaybeT Checker (Type, Ctxt Id, [Type])
     -- Returns the type (with skolems), a list of skolem variables, and a list of constraints
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
@@ -478,8 +496,8 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
             proj (v, Right a) = (v, a)
     -- Get just the lefts (used to extract just the skolems)
     justLefts = mapMaybe conv
-      where conv (_, Left a) = Just a
-            conv (_, Right _) = Nothing
+      where conv (v, Left a)  = Just (v,  a)
+            conv (v, Right _) = Nothing
 
 instance Substitutable Pred where
   substitute ctxt =

@@ -270,14 +270,14 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
         Just _ -> return (True, [(n, SubstT t)])
 
     -- NEW
-    {-
+
     (Just (k1, ForallQ)) -> do
        -- Infer the kind of this equality
        --k2 <- inferKindOfType s t
        --let kind = k1 `joinKind` k2
        --isIndexedType kind
 
-       -- If we are in a position to specialise a universal (i.e., in a pattern match)
+    {-   -- If we are in a position to specialise a universal (i.e., in a pattern match)
        if allowUniversalSpecialisation
          then return (True, [(n, SubstT t)])
          else halt $ GenericError (Just s) $
@@ -286,11 +286,12 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
                             <> "' with monomorphic `" <> pretty t <> "`"
                   SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
                   PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
-
-     --halt $ GenericError (Just s) $
-    --    "Error trying to make universal `" <> (pretty (TyVar n)) <> "` equal to `" <> pretty t <> "`"
 -}
+      halt $ GenericError (Just s) $
+         "Cannot unify a universally quantified type variable `" <> (pretty (TyVar n))
+            <> "` with a concrete type `" <> pretty t <> "`"
 
+{-
     -- OLD
 
     -- Unifying a forall with a concrete type may only be possible if the concrete
@@ -318,7 +319,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
                        <> "' with monomorphic `" <> pretty t <> "`"
              SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
              PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
-
+-}
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"

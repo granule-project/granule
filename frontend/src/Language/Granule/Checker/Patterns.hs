@@ -142,9 +142,15 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
 
     Just (tySch, subst) -> do
-      (dataConstructorTypeFresh, freshTyVars, []) <-
+      (dataConstructorTypeFresh, freshTyVarMap, []) <-
           freshPolymorphicInstance BoundQ True tySch
       -- TODO: don't allow constraints in data constructors yet
+
+      subst' <- substitute (map (\(v, v') -> (v, SubstT $ TyVar v')) freshTyVarMap) subst
+      liftIO $ putStrLn $ "subst' is:   " <> show subst'
+
+      mapM (\(var, SubstT ty) ->
+              equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
 
@@ -154,15 +160,26 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
 
           dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
 
-          liftIO $ putStrLn $ pretty unifiers
-          liftIO $ putStrLn $ pretty subst
+          liftIO $ putStrLn $ "unifiers are: " <> show unifiers
+          liftIO $ putStrLn $ "substs are:   " <> show subst
+          liftIO $ putStrLn $ "renameMap is: " <> show freshTyVarMap
+          --subst' <- substitute (map (\(v, v') -> (v, SubstT $ TyVar v')) freshTyVarMap) subst
+          --liftIO $ putStrLn $ "subst' is:   " <> show subst'
+
+          --mapM (\(var, SubstT ty) ->
+          --        equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
+
 
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstrutorSpecialised
           subst <- combineSubstitutions s unifiers us
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty dataC elabPs
-          return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst, elabP, consumptionOut)
+          return (ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
+                  (map snd freshTyVarMap) <> bs,  -- contact the set of new vars
+                  subst,                          -- returned the combined substitution
+                  elabP,                          -- elaborated pattern
+                  consumptionOut)                 -- final consumption effect
 
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
