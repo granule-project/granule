@@ -21,6 +21,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
 import Language.Granule.Checker.Errors
+import Language.Granule.Checker.Interface (getKindRequired)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 

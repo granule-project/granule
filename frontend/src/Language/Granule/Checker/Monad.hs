@@ -89,7 +89,11 @@ meetConsumption Empty Full = NotFull
 meetConsumption Full Empty = NotFull
 
 
-type IFaceCtxt = ((Id, Kind), [Id])
+data IFaceCtxt = IFaceCtxt
+  { ifaceParam :: Id
+  , ifaceParamKind :: Kind
+  , ifaceSigs :: Ctxt TypeScheme
+  } deriving (Show, Eq)
 
 data CheckerState = CS
             { -- Fresh variable id state
@@ -155,37 +159,8 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 lookupContext :: (CheckerState -> Ctxt a) -> Id -> MaybeT Checker (Maybe a)
 lookupContext ctxtf name = fmap (lookup name . ctxtf) get
 
-getInterface :: Id -> MaybeT Checker (Maybe IFaceCtxt)
-getInterface = lookupContext ifaceContext
-
-getInterfaceParameter :: Id -> MaybeT Checker (Maybe Id)
-getInterfaceParameter = fmap (fmap $ fst . fst) . getInterface
-
-getInterfaceKind :: Id -> MaybeT Checker (Maybe Kind)
-getInterfaceKind = fmap (fmap $ snd . fst) . getInterface
-
-getInterfaceMembers :: Id -> MaybeT Checker (Maybe [Id])
-getInterfaceMembers = fmap (fmap snd) . getInterface
-
 getTypeScheme :: Id -> MaybeT Checker (Maybe TypeScheme)
 getTypeScheme = lookupContext defContext
-
--- | Retrieve a kind from the type constructor scope
-getKindRequired :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
-getKindRequired sp name = do
-  ikind <- getInterfaceKind name
-  case ikind of
-    Just k -> pure (KFun k KConstraint)
-    Nothing -> do
-      tyCon <- lookupContext typeConstructors name
-      case tyCon of
-        Just (kind, _) -> pure kind
-        Nothing -> do
-          dConTys <- requireInScope (dataConstructors, "Constructor") sp name
-          case dConTys of
-            (Forall _ [] [] t, []) -> pure $ KPromote t
-            _ -> halt $ GenericError (Just s)
-                 ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name)
 
 -- | @checkDuplicate (ctxtf, descr) sp name@ checks if
 -- | @name@ already exists in the context retrieved by
@@ -206,10 +181,14 @@ registerTyCon sp name kind card = do
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { typeConstructors = (name, (kind, card)) : typeConstructors st }
 
-registerInterface :: (?globals :: Globals) => Span -> Id -> Id -> Kind -> [Id] -> MaybeT Checker ()
-registerInterface sp name pname kind ifnames = do
+registerInterface :: (?globals :: Globals) => Span -> Id -> Id -> Kind -> Ctxt TypeScheme -> MaybeT Checker ()
+registerInterface sp name pname kind sigs = do
+  let ifaceCtxt = IFaceCtxt { ifaceParam = pname
+                            , ifaceParamKind = kind
+                            , ifaceSigs = sigs
+                            }
   checkDuplicateTyConScope sp name
-  modify' $ \st -> st { ifaceContext = (name, ((pname, kind), ifnames)) : ifaceContext st }
+  modify' $ \st -> st { ifaceContext = (name, ifaceCtxt) : ifaceContext st }
 
 {- | Useful if a checking procedure is needed which
      may get discarded within a wider checking, e.g., for

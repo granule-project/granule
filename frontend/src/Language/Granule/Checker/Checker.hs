@@ -21,6 +21,12 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Exhaustivity
+import Language.Granule.Checker.Interface
+  ( getInterfaceSig
+  , getInterfaceMembers
+  , getInterfaceParameter
+  , getInterfaceKind
+  )
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
@@ -209,10 +215,10 @@ checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
 checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
   mapM_ (kindCheckConstr sp [(pname, kind)]) constrs
-  registerInterface sp name pname kind ifnames
+  registerInterface sp name pname kind ifsigs
   where
     kind = case kindAnn of Nothing -> KType; Just k -> k
-    ifnames = map (\(IFaceTy _ name _) -> name) itys
+    ifsigs = map (\(IFaceTy _ name tys) -> (name, tys)) itys
 
 
 registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
@@ -277,22 +283,21 @@ checkInstDefs (Instance sp iname constrs (IFaceDat _ idty) ds) = do
           let eqs = map (\(IDef _ _ eq) -> eq) dt
           in ((sp, name), eq:eqs)) nameGroupedDefs
   mapM_ (\((sp, name), eqs) -> do
-    Just tys@(Forall s binds constrs ty) <- getTypeScheme name
-    -- ensure free variables in the instance head are universally quantified
-    let tys' = Forall s (binds <> [(v, KType) | v <- freeVars idty]) constrs ty
-    tys'' <- substIFaceParam iname idty tys'
-    checkDef' sp name eqs tys'') groupedEqns
+    tys <- getNormalisedInterfaceSig iname name idty
+    checkDef' sp name eqs tys) groupedEqns
   where
     checkInstDefName names sp name = do
       unless (elem name names) (halt $ GenericError (Just sp) $
         concat ["`", pretty name, "` is not a member of interface `", pretty iname, "`"])
       pure name
-    substIFaceParam :: (?globals :: Globals) => Id -> Type -> TypeScheme -> MaybeT Checker TypeScheme
-    substIFaceParam iname ty (Forall s binds constrs fty) = do
-      Just pname <- getInterfaceParameter iname
-      -- remove universal quantification for now-bound parameter
-      let tys = Forall s (filter ((/= pname) . fst) binds) constrs fty
-      substitute [(pname, SubstT ty)] tys
+    getNormalisedInterfaceSig :: Id -> Id -> Type -> MaybeT Checker TypeScheme
+    getNormalisedInterfaceSig iname name instTy = do
+      Just sig <- getInterfaceSig iname name
+      Just param <- getInterfaceParameter iname
+      (Forall s binds constraints ty) <-
+        substitute [(param, SubstT instTy)] sig
+      -- ensure free variables in the instance head are universally quantified
+      pure $ Forall s (binds <> [(v, KType) | v <- freeVars instTy]) constraints ty
 
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()
