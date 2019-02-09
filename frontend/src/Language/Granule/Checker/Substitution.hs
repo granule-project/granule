@@ -1,9 +1,9 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE InstanceSigs #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Substitution where
 
@@ -398,7 +398,22 @@ combineSubstitutions sp u1 u2 = do
          case lookup v u1 of
            Nothing -> return [(v, s)]
            _       -> return []
-      return $ concat uss1 <> concat uss2
+      let uss = concat uss1 <> concat uss2
+      return $ reduceByTransitivity uss
+
+reduceByTransitivity :: Substitution -> Substitution
+reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt
+ where
+   reduceByTransitivity' :: Substitution -> Substitution -> Substitution
+   reduceByTransitivity' subst [] = subst
+
+   reduceByTransitivity' substLeft (subst@(var, SubstT (TyVar var')):substRight) =
+     case lookupAndCutout var' (substLeft ++ substRight) of
+       Just (substRest, t) -> reduceByTransitivity ((var, t) : substRest)
+       Nothing             -> reduceByTransitivity' (subst : substLeft) substRight
+
+   reduceByTransitivity' substLeft (subst:substRight) =
+     reduceByTransitivity' (subst:substLeft) substRight
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts

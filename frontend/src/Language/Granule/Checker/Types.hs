@@ -191,48 +191,47 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
 
     -- We can unify a universal a dependently bound universal
     (Just (k1, ForallQ), Just (k2, BoundQ)) ->
-      tyVarConstraint k2 k1 m n
+      tyVarConstraint (k1, n) (k2, m)
 
     (Just (k1, BoundQ), Just (k2, ForallQ)) ->
-      tyVarConstraint k1 k1 n m
-
+      tyVarConstraint (k2, m) (k1, n)
 
     -- We can unify two instance type variables
     (Just (k1, InstanceQ), Just (k2, BoundQ)) ->
-        tyVarConstraint k1 k2 n m
+        tyVarConstraint (k1, n) (k2, m)
 
     -- We can unify two instance type variables
     (Just (k1, BoundQ), Just (k2, InstanceQ)) ->
-        tyVarConstraint k1 k2 n m
+        tyVarConstraint (k1, n) (k2, m)
 
     -- We can unify two instance type variables
     (Just (k1, InstanceQ), Just (k2, InstanceQ)) ->
-      tyVarConstraint k1 k2 n m
+        tyVarConstraint (k1, n) (k2, m)
 
     -- We can unify two instance type variables
     (Just (k1, BoundQ), Just (k2, BoundQ)) ->
-        tyVarConstraint k1 k2 n m
+        tyVarConstraint (k1, n) (k2, m)
 
     -- But we can unify a forall and an instance
     (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
-      tyVarConstraint k1 k2 n m
+        tyVarConstraint (k2, m) (k1, n)
 
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
-      tyVarConstraint k2 k1 m n
+        tyVarConstraint (k1, n) (k2, m)
 
     (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
               <> pretty n <> " : " <> show t1
               <> "\n" <> pretty m <> " : " <> show t2
   where
-    tyVarConstraint k1 k2 n m = do
+    tyVarConstraint (k1, n) (k2, m) = do
       case k1 `joinKind` k2 of
         Just (KPromote (TyCon kc)) | internalName kc /= "Protocol" -> do
           -- Don't create solver constraints for sessions- deal with before SMT
           addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
-          return (True, [(n, SubstT $ TyVar m)])
+          return (True, [(m, SubstT $ TyVar n)])
         Just _ ->
-          return (True, [(n, SubstT $ TyVar m)])
+          return (True, [(m, SubstT $ TyVar n)])
         Nothing ->
           return (False, [])
 
@@ -273,9 +272,26 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 
     (Just (k1, ForallQ)) -> do
        -- Infer the kind of this equality
-       --k2 <- inferKindOfType s t
-       --let kind = k1 `joinKind` k2
-       --isIndexedType kind
+       k2 <- inferKindOfType s t
+       let kind = k1 `joinKind` k2
+
+       liftIO $ putStrLn $ show kind
+       if allowUniversalSpecialisation
+              && (kind == Just (KPromote (TyCon (Id "Nat" "Nat"))))
+         then do
+           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
+           c2 <- compileNatKindedTypeToCoeffect s t
+           addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
+           return (True, [(n, SubstT t)])
+
+         else
+           halt $ GenericError (Just s)
+             $ case sp of
+              FstIsSpec -> "Cannot unify a universally quantified type variable `"
+                         <> (pretty (TyVar n))
+                         <> "` with a concrete type `" <> pretty t <> "`"
+              SndIsSpec -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
+              PatternCtxt -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
 
     {-   -- If we are in a position to specialise a universal (i.e., in a pattern match)
        if allowUniversalSpecialisation
@@ -287,9 +303,9 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
                   SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
                   PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
 -}
-      halt $ GenericError (Just s) $
-         "Cannot unify a universally quantified type variable `" <> (pretty (TyVar n))
-            <> "` with a concrete type `" <> pretty t <> "`"
+    --  halt $ GenericError (Just s) $
+      --   "Cannot unify a universally quantified type variable `" <> (pretty (TyVar n))
+        --    <> "` with a concrete type `" <> pretty t <> "`"
 
 {-
     -- OLD

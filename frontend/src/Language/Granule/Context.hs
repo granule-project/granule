@@ -71,3 +71,11 @@ deleteVar x ((y, b) : m) | x == y = deleteVar x m
 relevantSubCtxt :: [Id] -> Ctxt t -> Ctxt t
 relevantSubCtxt vars = filter relevant
   where relevant (var, _) = var `elem` vars
+
+lookupAndCutout :: Id -> Ctxt t -> Maybe (Ctxt t, t)
+lookupAndCutout _ [] = Nothing
+lookupAndCutout v ((v', t):ctxt) | v == v' =
+   Just (ctxt, t)
+lookupAndCutout v ((v', t'):ctxt) = do
+  (ctxt', t) <- lookupAndCutout v ctxt
+  Just ((v', t') : ctxt', t)

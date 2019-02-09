@@ -100,7 +100,6 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
         tySchKind <- inferKindOfType' sp tyVars ty
 
         (ty', subst) <- checkAndGenerateSubstitution ty tyVarsT
-        liftIO $ putStrLn $ "ty updated is `" ++ show ty' ++ " with subst= " <> show subst
 
         let tyVars' = tyVarsT <> tyVarsD
 
@@ -223,7 +222,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
 
   -- Specialise the return type by the pattern generated substitution
   tau' <- substitute subst tau
-
+  
   -- Check the body
   (localGam, subst', elaboratedExpr) <-
        checkExpr defCtxt patternGam Positive True tau' expr
@@ -245,9 +244,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs
 
-
 data Polarity = Positive | Negative deriving Show
-
 
 flipPol :: Polarity -> Polarity
 flipPol Positive = Negative
@@ -271,7 +268,6 @@ checkExpr :: (?globals :: Globals)
           -> MaybeT Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Checking of constants
-
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
     let elaborated = Val s ty (NumInt n)
     return ([], [], elaborated)
@@ -311,9 +307,6 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 
        xs -> illLinearityMismatch s xs
   else refutablePattern s p
-
-
-
 
 -- Application special case for built-in 'scale'
 -- TODO: needs more thought
@@ -423,9 +416,6 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
 
            branchCtxt' <- ctxtPlus s branchCtxt  (justLinear $ (gam `intersectCtxts` specialisedGam) `intersectCtxts` localGam)
-
-           -- Probably don't want to remove specialised things in this way- we want to
-           -- invert the substitution and put these things into the context
 
            -- Check local binding use
            ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam

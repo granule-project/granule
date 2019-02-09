@@ -24,9 +24,9 @@ freshIdentifierBase s = do
   let s' = takeWhile (\c -> c /= '`') s
   case M.lookup s' vmap of
     Nothing -> do
-      let vmap' = M.insert s' 0 vmap
+      let vmap' = M.insert s' 1 vmap
       put checkerState { uniqueVarIdCounterMap = vmap' }
-      return $ s'
+      return $ s' <> "." <> show 0
 
     Just n -> do
       let vmap' = M.insert s' (n+1) vmap

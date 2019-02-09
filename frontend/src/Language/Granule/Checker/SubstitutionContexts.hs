@@ -22,3 +22,13 @@ instance Pretty Substitutors where
   prettyL l (SubstC c) = "->" <> prettyL l c
   prettyL l (SubstK k) = "->" <> prettyL l k
   prettyL l (SubstE e) = "->" <> prettyL l e
+
+-- | For substitutions which are just renaminings
+--   allow the substitution to be inverted
+flipSubstitution :: Substitution -> Substitution
+flipSubstitution [] = []
+flipSubstitution ((var, SubstT (TyVar var')):subst) =
+    (var', SubstT (TyVar var)) : flipSubstitution subst
+flipSubstitution (s:subst) =
+  error $ "Granule bug. Attempting to invert a substitution which"
+        <>  " contains " <> show s

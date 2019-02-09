@@ -142,36 +142,24 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
 
     Just (tySch, subst) -> do
+
       (dataConstructorTypeFresh, freshTyVarMap, []) <-
           freshPolymorphicInstance BoundQ True tySch
-      -- TODO: don't allow constraints in data constructors yet
+      -- TODO: we don't allow constraints in data constructors yet
 
       subst' <- substitute (map (\(v, v') -> (v, SubstT $ TyVar v')) freshTyVarMap) subst
-      liftIO $ putStrLn $ "subst' is:   " <> show subst'
-
-      mapM (\(var, SubstT ty) ->
-              equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
-
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
 
-          dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
+          dataConstructorIndexRewritten <- substitute subst' dataConstructorTypeFresh
+          dataConstructorIndexRewrittenAndSpecialised <- substitute unifiers dataConstructorIndexRewritten
 
-          liftIO $ putStrLn $ "unifiers are: " <> show unifiers
-          liftIO $ putStrLn $ "substs are:   " <> show subst
-          liftIO $ putStrLn $ "renameMap is: " <> show freshTyVarMap
-          --subst' <- substitute (map (\(v, v') -> (v, SubstT $ TyVar v')) freshTyVarMap) subst
-          --liftIO $ putStrLn $ "subst' is:   " <> show subst'
-
-          --mapM (\(var, SubstT ty) ->
-          --        equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
-
-
-          (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstrutorSpecialised
-          subst <- combineSubstitutions s unifiers us
+          (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
+          subst <- combineSubstitutions s subst' us
+          subst <- combineSubstitutions s (flipSubstitution unifiers) subst
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty dataC elabPs
