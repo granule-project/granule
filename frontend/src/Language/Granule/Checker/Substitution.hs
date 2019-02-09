@@ -333,8 +333,7 @@ instance Substitutable Kind where
 
   substitute subst KType = return KType
   substitute subst KCoeffect = return KCoeffect
-  substitute subst KPredicate = return KPredicate
-  substitute subst KConstraint = return KConstraint
+  substitute subst c@(KConstraint _) = return c
   substitute subst (KFun c1 c2) = do
     c1 <- substitute subst c1
     c2 <- substitute subst c2
@@ -490,11 +489,11 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
 
-  -> MaybeT Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
+  -> MaybeT Checker (Type, Ctxt Kind, Substitution, ([Type], [Type]), Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
-       -- a list of the (freshened) constraints for this scheme
+       -- a list of the (freshened) constraints for this scheme (as a pair (predicates, interfaces))
        -- a correspondigly freshened version of the parameter substitution
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
     -- Universal becomes an existential (via freshCoeffeVar)
@@ -505,6 +504,8 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
     let subst = map (\(v, (_, var)) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
     constr' <- mapM (substitute subst) constr
+    predicateConstraints <- filterM isPredicateConstraint constr'
+    interfaceConstraints <- filterM isInterfaceConstraint constr'
 
     -- Return the type and all instance variables
     let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
@@ -512,7 +513,9 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
     ixSubstitution' <- substitute substitution ixSubstitution
 
-    return (ty, newTyVars, substitution, constr', ixSubstitution')
+    return (ty, newTyVars, substitution,
+             (predicateConstraints, interfaceConstraints),
+             ixSubstitution')
 
   where
     -- Freshen variables, create instance variables
@@ -540,6 +543,8 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     justLefts = mapMaybe conv
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
+    isPredicateConstraint = fmap (==KConstraint Predicate) . inferKindOfType s
+    isInterfaceConstraint = fmap (==KConstraint Interface) . inferKindOfType s
 
 instance Substitutable TypeScheme where
   substitute ctxt (Forall s binds constrs ty) = do

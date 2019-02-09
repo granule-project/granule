@@ -361,9 +361,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   -- Create conjunct to capture the pattern constraints
   newConjunct
 
-  mapM_ (\ty -> do
-    pred <- compileTypeConstraintToConstraint s ty
-    addPredicate pred) constraints
+  mapM_ compileAndAddConstraint constraints
 
   -- Build the binding context for the branch pattern
   st <- get
@@ -407,6 +405,13 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
 
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs
+  where
+    compileAndAddConstraint ty = do
+      kind <- inferKindOfType s ty
+      -- TODO: handle case for interface constraints
+      when (kind == KConstraint Predicate) $ do
+        pred <- compileTypeConstraintToConstraint s ty
+        addPredicate pred
 
 data Polarity = Positive | Negative deriving Show
 
@@ -842,7 +847,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
+           (ty', _, _, (constraints, _), []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
 
            mapM_ (\ty -> do
              pred <- compileTypeConstraintToConstraint s ty

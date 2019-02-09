@@ -50,9 +50,5 @@ compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
    ">=" -> return $ Disj [Con $ Gt s c1 c2, Con $ Eq s c1 c2 (TyCon $ mkId "Nat")]
    _ -> halt $ GenericError (Just s) $ "I don't know how to compile binary operator " <> op
 
-compileTypeConstraintToConstraint s (TyApp (TyCon iface) ty) =
-  halt . GenericError (Just s) $
-    concat [ "I don't know how to compile interface constraints (yet!) (for interface `"
-           , pretty iface, "` and type '", pretty ty, "')"]
 compileTypeConstraintToConstraint s t =
   halt $ GenericError (Just s) $ "I don't know how to compile a constraint `" <> pretty t <> "`"

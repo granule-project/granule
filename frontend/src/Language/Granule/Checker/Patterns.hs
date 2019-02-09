@@ -170,7 +170,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
 
       definiteUnification s outerBoxTy ty
 
-      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, [], coercions') <-
+      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, ([], []), coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
       -- TODO: we don't allow constraints in data constructors yet
 

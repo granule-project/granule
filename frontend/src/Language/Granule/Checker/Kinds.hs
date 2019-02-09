@@ -48,11 +48,11 @@ kindCheckConstr :: (?globals :: Globals) => Span -> Ctxt Kind -> TConstraint -> 
 kindCheckConstr s qvars ty = do
   kind <- inferKindOfType' s qvars ty
   case kind of
-    KConstraint -> pure ()
-    KPredicate -> pure ()
+    (KConstraint Interface) -> pure ()
+    (KConstraint Predicate) -> pure ()
     -- TODO: figure out whether we should be
-    -- comparing to 'KConstraint' or 'KPredicate'
-    _ -> illKindedNEq s KConstraint kind
+    -- comparing to '(KConstraint Interface)' or '(KConstraint Predicate)'
+    _ -> illKindedNEq s (KConstraint Interface) kind
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()

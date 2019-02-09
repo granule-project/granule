@@ -44,11 +44,13 @@ data Type = FunTy Type Type           -- ^ Function type
 
 type TConstraint = Type
 
+data ConstraintForm = Interface | Predicate
+  deriving (Show, Ord, Eq)
+
 -- | Kinds
 data Kind = KType
           | KCoeffect
-          | KPredicate
-          | KConstraint
+          | KConstraint ConstraintForm
           | KFun Kind Kind
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
@@ -64,8 +66,7 @@ kConstr = KPromote . TyCon
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
-  freshen KPredicate = return KPredicate
-  freshen KConstraint = return KConstraint
+  freshen c@(KConstraint _) = return c
   freshen (KFun k1 k2) = do
     k1 <- freshen k1
     k2 <- freshen k2

@@ -310,7 +310,8 @@ Kind :: { Kind }
   | CONSTR                    { case constrString $1 of
                                   "Type"      -> KType
                                   "Coeffect"  -> KCoeffect
-                                  "Predicate" -> KPredicate
+                                  "Predicate" -> KConstraint Predicate
+                                  "Constraint" -> KConstraint Interface
                                   s          -> kConstr $ mkId s }
   | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
   | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
