@@ -21,7 +21,7 @@ $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
 $alphanum  = [$alpha $digit \_]
-@sym    = $lower ($alphanum | \')*
+@sym    = $lower ($alphanum | \')* | [\127815-\127827]
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
@@ -80,8 +80,6 @@ tokens :-
   \.                            { \p s -> TokenPeriod p }
   \:                            { \p s -> TokenSig p }
   @sym				                  { \p s -> TokenSym p s }
-  🍏                           { \p s -> TokenSym p "🍏" }
-  🍊                           { \p s -> TokenSym p "🍊" }
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
