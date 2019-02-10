@@ -1,5 +1,7 @@
 module Language.Granule.Codegen.BuildAST where
 import Language.Granule.Codegen.NormalisedDef
+import Language.Granule.Codegen.MarkGlobals
+import Language.Granule.Codegen.ClosureFreeDef
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
@@ -18,6 +20,12 @@ val v = Val nullSpanNoFile ty v
 var :: String -> Type -> Value ev Type
 var ident ty = Var ty (mkId ident)
 
+gvar :: String -> Type -> Value GlobalMarker Type
+gvar ident ty = Ext ty $ GlobalVar ty (mkId ident)
+
+gcfvar :: String -> Type -> ClosureFreeValue
+gcfvar ident ty = Ext ty $ Left $ GlobalVar ty (mkId ident)
+
 lit :: Int -> Value ev Type
 lit n = NumInt n
 
@@ -28,9 +36,9 @@ pint :: Int -> Pattern Type
 pint n = PInt nullSpanNoFile int n
 
 tts :: Type -> TypeScheme
-tts ty = Forall nullSpanNoFile [] ty
+tts ty = Forall nullSpanNoFile [] [] ty
 
-app :: Expr () Type -> Expr () Type -> Expr () Type
+app :: Expr ev Type -> Expr ev Type -> Expr ev Type
 app f x =
     App nullSpanNoFile retTy f x
     where (FunTy _ retTy) = annotation f
@@ -39,23 +47,23 @@ defval :: String -> Expr ev Type -> TypeScheme -> ValueDef ev Type
 defval name initexpr ts =
     ValueDef nullSpanNoFile (mkId name) initexpr ts
 
-defun :: String -> Pattern Type -> Expr () Type -> TypeScheme -> FunctionDef () Type
+defun :: String -> Pattern Type -> Expr ev Type -> TypeScheme -> FunctionDef ev Type
 defun name arg bodyexpr ts =
     FunctionDef nullSpanNoFile (mkId name) bodyexpr arg ts
 
-def :: String -> [Pattern Type] -> Expr () Type -> TypeScheme -> Def () Type
+def :: String -> [Pattern Type] -> Expr ev Type -> TypeScheme -> Def ev Type
 def name args bodyexpr ts =
     Def nullSpanNoFile (mkId name) [equation] ts
     where equation = Equation nullSpanNoFile ty args bodyexpr
-          (Forall _ [] ty) = ts
+          (Forall _ [] _ ty) = ts
 
-casedef :: String -> [([Pattern Type], Expr () Type)] -> TypeScheme -> Def () Type
+casedef :: String -> [([Pattern Type], Expr ev Type)] -> TypeScheme -> Def ev Type
 casedef name cases ts =
     Def nullSpanNoFile (mkId name) (equation <$> cases) ts
     where equation (args, bodyexpr) = Equation nullSpanNoFile ty args bodyexpr
-          (Forall _ [] ty) = ts
+          (Forall _ [] _ ty) = ts
 
-caseexpr :: Expr () Type -> [(Pattern Type, Expr () Type)] -> Expr () Type
+caseexpr :: Expr ev Type -> [(Pattern Type, Expr ev Type)] -> Expr ev Type
 caseexpr swexp cases@((p,ex):_) =
     Case nullSpanNoFile ty swexp cases
     where ty = annotation ex

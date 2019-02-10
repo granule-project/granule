@@ -13,6 +13,8 @@ import Debug.Trace
 
 import Language.Granule.Codegen.BuildAST
 
+type NormalisedDef = Either (FunctionDef () Type) (ValueDef () Type)
+
 spec :: Test.Spec
 spec = do
   describe "normalising definitions" $ do
@@ -23,12 +25,12 @@ spec = do
         let curried = (normaliseDefinition $
                            def "add" [(arg "x" int), (arg "y" int)]
                                ((val x) `plus` (val y))
-                               (tts $ int .-> int .-> int))
+                               (tts $ int .-> int .-> int)) :: NormalisedDef
         let expected = Left $
                            defun "add" (arg "x" int)
                                (lambdaexp (arg "y" int) (int .-> int)
                                     ((val x) `plus` (val y)))
-                               (tts $ int .-> int .-> int)
+                               (tts $ int .-> int .-> int) :: NormalisedDef
         curried `shouldBe` expected
     it "hoists multi-argument lambda" $ do
         let hoisted = (normaliseDefinition $
@@ -36,12 +38,12 @@ spec = do
                                (lambdaexp (arg "x" int) (int .-> int .-> int)
                                     (lambdaexp (arg "y" int) (int .-> int)
                                         ((val x) `plus` (val y))))
-                               (tts $ int .-> int .-> int))
+                               (tts $ int .-> int .-> int)) :: NormalisedDef
         let expected = Left $
                            defun "add" (arg "x" int)
                               (lambdaexp (arg "y" int) (int .-> int)
                                    ((val x) `plus` (val y)))
-                              (tts $ int .-> int .-> int)
+                              (tts $ int .-> int .-> int) :: NormalisedDef
         hoisted `shouldBe` expected
     it "desugars multple-arg, multi-equations as case" $ do
         let hoisted = (normaliseDefinition $
@@ -49,7 +51,7 @@ spec = do
                               [([pint 0, pint 0],           (val (lit 1))),
                                ([pint 1, pint 1],           (val (lit 1))),
                                ([arg "x" int, arg "y" int], (val (lit 0)))]
-                              (tts $ int .-> int .-> int))
+                              (tts $ int .-> int .-> int)) :: NormalisedDef
         let expected = Left $
                            defun "xor" (arg "x" int)
                               (lambdaexp (arg "y" int) (int .-> int)
@@ -60,5 +62,5 @@ spec = do
                                             (val (lit 1))),
                                         (ppair (arg "x" int) (arg "y" int),
                                             (val (lit 0)))]))
-                              (tts $ int .-> int .-> int)
+                              (tts $ int .-> int .-> int) :: NormalisedDef
         hoisted `shouldBe` expected

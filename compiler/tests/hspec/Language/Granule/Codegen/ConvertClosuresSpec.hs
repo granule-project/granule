@@ -19,8 +19,8 @@ import Debug.Trace
 
 import Language.Granule.Codegen.BuildAST
 
-cap :: String -> Int -> Type -> Value ClosureMarkerValue Type
-cap ident n ty = Ext ty $ CapturedVar ty (mkId ident) n
+cap :: String -> Int -> Type -> ClosureFreeValue
+cap ident n ty = Ext ty $ Right $ CapturedVar ty (mkId ident) n
 
 globals :: [String] -> [Id]
 globals = map mkId
@@ -34,7 +34,7 @@ makeClosure :: ClosureFreeFunctionDef
             -> [ClosureVariableInit]
             -> ClosureFreeExpr
 makeClosure def envName inits =
-    val $ Ext ty $ MakeClosure defIdent $ ClosureEnvironmentInit envName inits
+    val $ Ext ty $ Right $ MakeClosure defIdent $ ClosureEnvironmentInit envName inits
     where ty = definitionType def
           defIdent = definitionIdentifier def
 
@@ -51,7 +51,7 @@ closureFreeASTFromDefs functionDefs valueDefs =
 defclos  :: String
          -> Pattern Type
          -> Maybe NamedClosureEnvironmentType
-         -> Expr ClosureMarkerValue Type
+         -> ClosureFreeExpr
          -> TypeScheme
          -> ClosureFreeFunctionDef
 defclos name arg env bodyexpr ts =
@@ -77,12 +77,12 @@ spec = do
                             []
         let expected = closureFreeASTFromDefs [add, lambda0] []
                        where lambda0 =
-                                 defclos "lambda.0" (arg "y" int) (env "lambda.0.env" [int])
+                                 defclos "lambda#0" (arg "y" int) (env "env.lambda#0" [int])
                                     ((val (cap "x" 0 int)) `plus` (val (var "y" int)))
                                     (tts $ int .-> int)
                              add =
                                  defclos "add" (arg "x" int) Nothing
-                                    (makeClosure lambda0 "lambda.0.env" [local "x" int])
+                                    (makeClosure lambda0 "env.lambda#0" [local "x" int])
                                     (tts $ int .-> int .-> int)
         convertClosures original `shouldBe` expected
     it "doesn't capture globals" $ do
@@ -91,19 +91,19 @@ spec = do
                                (lambdaexp (arg "y" int) (int .-> int)
                                    ((val (var "x" int)) `plus`
                                    (val (var "y" int)) `plus`
-                                   (val (var "g" int))))
+                                   (val (gvar "g" int))))
                                    (tts $ int .-> int .-> int)]
                            [defval "g" (val (lit 10)) (tts int)]
         let expected = closureFreeASTFromDefs [add, lambda0] [g]
                        where lambda0 =
-                                 defclos "lambda.0" (arg "y" int) (env "lambda.0.env" [int])
+                                 defclos "lambda#0" (arg "y" int) (env "env.lambda#0" [int])
                                     ((val (cap "x" 0 int)) `plus`
                                      (val (var "y" int)) `plus`
-                                     (val (var "g" int)))
+                                     (val (gcfvar "g" int)))
                                     (tts $ int .-> int)
                              add =
                                  defclos "add" (arg "x" int) Nothing
-                                    (makeClosure lambda0 "lambda.0.env" [local "x" int])
+                                    (makeClosure lambda0 "env.lambda#0" [local "x" int])
                                     (tts $ int .-> int .-> int)
                              g = defval "g" (val (lit 10)) (tts int)
         convertClosures original `shouldBe` expected
@@ -118,9 +118,9 @@ spec = do
                            []
         let expected = closureFreeASTFromDefs [add, lambda0] []
                        where add = defclos "add" (arg "x" int) Nothing
-                                       (makeClosure lambda0 "lambda.0.env" [local "x" int])
+                                       (makeClosure lambda0 "env.lambda#0" [local "x" int])
                                        (tts $ int .-> int .-> int)
-                             lambda0 = defclos "lambda.0" (arg "y" int) (env "lambda.0.env" [int])
+                             lambda0 = defclos "lambda#0" (arg "y" int) (env "env.lambda#0" [int])
                                            ((val (cap "x" 0 int)) `plus`
                                             (val (cap "x" 0 int)) `plus`
                                             (val (var "y" int)))
@@ -138,12 +138,12 @@ spec = do
                            []
         let expected = closureFreeASTFromDefs [add, lambda0, lambda1] []
                        where add =     defclos "add" (arg "x" int) Nothing
-                                           (makeClosure lambda1 "lambda.1.env" [local "x" int])
+                                           (makeClosure lambda1 "env.lambda#1" [local "x" int])
                                            (tts $ int .-> int .-> int .-> int)
-                             lambda1 = defclos "lambda.1" (arg "y" int) (env "lambda.1.env" [int])
-                                           (makeClosure lambda0 "lambda.0.env" [parent "x" int 0, local "y" int])
+                             lambda1 = defclos "lambda#1" (arg "y" int) (env "env.lambda#1" [int])
+                                           (makeClosure lambda0 "env.lambda#0" [parent "x" int 0, local "y" int])
                                            (tts $ int .-> int .-> int)
-                             lambda0 = defclos "lambda.0" (arg "z" int) (env "lambda.0.env" [int, int])
+                             lambda0 = defclos "lambda#0" (arg "z" int) (env "env.lambda#0" [int, int])
                                            ((val (cap "y" 1 int)) `plus`
                                             (val (cap "x" 0 int)) `plus`
                                             (val (var "z" int)))

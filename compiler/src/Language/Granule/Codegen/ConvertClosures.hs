@@ -152,7 +152,7 @@ convertClosuresFromValue :: (Maybe [ClosureVariableInit], Maybe [ClosureVariable
 convertClosuresFromValue (_, maybeCurrentEnv, _) (AbsF ty@(FunTy _ _) arg mty expr) =
     do
         (lambdaIdent, envName) <- freshLambdaIdentifiers
-        let lambdaTypeScheme = Forall nullSpanNoFile [] ty
+        let lambdaTypeScheme = Forall nullSpanNoFile [] [] ty
         let envTy = environmentType envName maybeCurrentEnv
         let lambdaDef = ClosureFreeFunctionDef nullSpanNoFile lambdaIdent envTy expr arg lambdaTypeScheme
         lift $ tell [lambdaDef]
