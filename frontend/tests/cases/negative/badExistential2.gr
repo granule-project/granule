@@ -1,0 +1,9 @@
+data Dyn where
+  Dyn : forall a : Type . a -> Dyn
+
+-- Bad resolution of existential
+f : Dyn -> Int
+f (Dyn x) = x+1
+
+main : Int
+main = f (Dyn 'h')

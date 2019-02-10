@@ -1,0 +1,4 @@
+import Existential
+
+unpack : forall {t : Type, f : Type -> Type, a : Type} . Exists f -> (f t -> a) -> a
+unpack (Exists x) f = f x

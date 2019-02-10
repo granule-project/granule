@@ -23,12 +23,19 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils
---import Data.Maybe (mapMaybe)
 
-definitelyUnifying :: Pattern t -> Bool
-definitelyUnifying (PConstr _ _ _ _) = True
-definitelyUnifying (PInt _ _ _) = True
-definitelyUnifying _ = False
+-- | Creates a constraint when a definition unification has occured under
+--   a box pattern (or many nested box patterns)
+definiteUnification :: (?globals :: Globals)
+  => Span
+  -> Maybe (Coeffect, Type) -- Outer coeffect
+  -> Type                   -- Type of the pattern
+  -> MaybeT Checker ()
+definiteUnification _ Nothing _ = return ()
+definiteUnification s (Just (coeff, coeffTy)) ty = do
+  isPoly <- polyShaped ty
+  when isPoly $
+    addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> MaybeT Checker Bool
@@ -68,7 +75,7 @@ ctxtFromTypedPattern :: (?globals :: Globals, Show t) =>
 
 ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
-
+-- | Inner helper, which takes information about the enclosing coeffect
 ctxtFromTypedPattern' :: (?globals :: Globals, Show t) =>
      Maybe (Coeffect, Type)    -- enclosing coeffect
   -> Span
@@ -83,13 +90,16 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
       -- Full consumption is allowed here
       Full -> do
 
+        -- If the wildcard appears under one or more [ ] pattern then we must
+        -- add a constraint that 0 approaximates the effect of the enclosing
+        -- box patterns.
         case outerCoeff of
           Nothing -> return ()
           Just (coeff, coeffTy) ->
               -- Must approximate zero
               addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
 
-        return ([], [], [], PWild s t, Empty)
+        return ([], [], [], PWild s t, NotFull)
 
       _ -> illLinearityMismatch s [NonLinearPattern]
 
@@ -97,19 +107,26 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
     let elabP = PVar s t v
 
     case outerCoeff of
-      Nothing -> return ([(v, Linear t)], [], [], elabP, NotFull)
+      Nothing ->
+         return ([(v, Linear t)], [], [], elabP, NotFull)
       Just (coeff, _) ->
-                 return ([(v, Discharged t coeff)], [], [], elabP, NotFull)
+         return ([(v, Discharged t coeff)], [], [], elabP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern' _ _ t@(TyCon c) (PInt s _ n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ n) _
   | internalName c == "Int" = do
-    let elabP = PInt s t n
+
+    definiteUnification s outerCoeff ty
+
+    let elabP = PInt s' ty n
     return ([], [], [], elabP, Full)
 
-ctxtFromTypedPattern' _ _ t@(TyCon c) (PFloat s _ n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ n) _
   | internalName c == "Float" = do
-    let elabP = PFloat s t n
+
+    definiteUnification s outerCoeff ty
+
+    let elabP = PFloat s' ty n
     return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
@@ -131,44 +148,7 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 
-    -- If no consumption happen then our coeffect needs to subsume 0
-    --case consumption of
-    --  Empty -> addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
-    --  _    -> return ()
-
-    -- Check whether a unification was caused
-    isPoly <- polyShaped ty
-    when (definitelyUnifying p && isPoly) $ do
-      -- (addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
-      --addConstraintToPreviousFrame $ Eq s (COne coeffTy) coeff coeffTy
-      addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
-
-
-    --when (containsNoUnifyingUpToNextBox p) $ do
-    --  addConstraintToPreviousFrame $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
-
-      --(addConstraintToPreviousFrame $ Neq s (CZero coeffTy) coeff coeffTy)
-      --x <- freshIdentifierBase "x"
-      --addConstraintToPreviousFrame $ NonZeroPromotableTo s (mkId x) coeff coeffTy
-
-      -- An alternate idea to do with dummy/shadow vars
-    {- ctxtUnificationCoeffect <-
-        if definitelyUnifying p
-        then do
-          -- Create a dummy variable that is discharged (1) of type k
-          v <- freshIdentifierBase "guardUnif"
-          return [(mkId v, Discharged (TyCon $ mkId "()") (COne coeffTy))]
-        else return [] -}
-
-    {- Old approach
-         -- addConstraintToPreviousFrame $ ApproximatedBy s (COne k) coeff k
-        -- addConstraintToPreviousFrame $ Neq s (CZero k) coeff k
-    -}
-
     let elabP = PBox sp t elabPinner
-
-    -- Discharge all variables bound by the inner pattern
-    --ctxt' <- mapM (discharge s innerBoxTy coeff) ctx
     return (ctxt, eVars, subst, elabP, NotFull)
 
 ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
@@ -180,6 +160,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
     Just tySch -> do
+      definiteUnification s outerBoxTy ty
+
       (dataConstructorTypeFresh, freshTyVars, []) <-
           freshPolymorphicInstance BoundQ True tySch
       -- TODO: don't allow constraints in data constructors yet
@@ -227,16 +209,6 @@ ctxtFromTypedPattern' _ s t p _ = do
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   halt $ PatternTypingError (Just s)
     $ "Pattern match `" <> pretty p <> "` does not match expected type `" <> pretty t <> "`"
-
-discharge :: (?globals :: Globals)
-          => Span -> Type -> Coeffect -> (Id, Assumption) -> MaybeT Checker (Id, Assumption)
-discharge _ _ c (v, Linear t) = return (v, Discharged t c)
-discharge s ct c (v, Discharged t c') = do
-  ct' <- inferCoeffectType s c'
-  return $ case flattenable ct ct' of
-    -- Implicit flatten operation allowed on this coeffect
-    Just (flattenOp, ct'')  -> (v, Discharged t (flattenOp c c'))
-    Nothing                 -> (v, Discharged t c')
 
 ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
   => Span
