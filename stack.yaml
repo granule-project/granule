@@ -10,6 +10,8 @@ packages:
 extra-deps:
 - ConfigFile-1.1.4
 - llvm-hs-pretty-0.6.1.0
+- llvm-hs-7.0.1
+- llvm-hs-pure-7.0.0
 - text-replace-0.0.0.4
 
 # Override default flag values for local packages and extra-deps
