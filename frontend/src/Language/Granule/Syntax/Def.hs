@@ -66,7 +66,7 @@ instance Definition (Def ev a) where
 
 definitionType :: (Definition d) => d -> Type
 definitionType def =
-    ty where (Forall _ _ ty) = definitionTypeScheme def
+    ty where (Forall _ _ _ ty) = definitionTypeScheme def
 
 -- | Data type declarations
 data DataDecl = DataDecl {

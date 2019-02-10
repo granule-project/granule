@@ -162,7 +162,6 @@ var :: String -> Type
 var = TyVar . mkId
 
 -- | Smart constructor for function types
-infixr 5 .->
 (.->) :: Type -> Type -> Type
 s .-> t = FunTy s t
 infixr 1 .->
