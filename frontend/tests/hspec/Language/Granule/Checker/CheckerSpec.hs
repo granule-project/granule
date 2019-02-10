@@ -40,7 +40,7 @@ exclude :: FilePath
 exclude = ""
 
 fileExtensions :: [String]
-fileExtensions = [".gr", ".md"]
+fileExtensions = [".gr"] -- todo: .md
 
 spec :: Spec
 spec = do
@@ -54,7 +54,7 @@ spec = do
     forM_ srcFiles $ \file ->
       describe file $ it "should typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file }
-        parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
+        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right ast -> do
@@ -67,7 +67,7 @@ spec = do
     forM_ srcFiles $ \file ->
       describe file $ it "should not typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file, suppressErrors = True }
-        parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
+        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right ast -> do
@@ -135,7 +135,7 @@ spec = do
       it "simple elaborator tests" $ do
         -- Simple definitions
         -- \x -> x + 1
-        (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
+        (AST _ (def1:_)) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
         (Just defElab, _) <- runChecker initState (runMaybeT $ checkDef [] def1)
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 

@@ -8,7 +8,7 @@ import Bool
 --   k_2 = 2 :: Integer
 --   n_1 = 0 :: Integer
 -- Failed
-filter : forall a : Type, n : Nat, k : Nat
-       . (a -> Bool) [n+k] -> Vec (n + k) (a [0..2]) -> Vec n a
+filter : ∀ a : Type, n : Nat, k : Nat
+       . (a → Bool) [n+k] → Vec (n + k) (a [0..2]) → Vec n a
 filter [_] Nil = Nil;
 filter [p] (Cons [x] xs) = if p x then Cons x (filter [p] xs) else filter [p] xs

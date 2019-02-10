@@ -53,6 +53,34 @@ instance Pretty Assumption where
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
    prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
 
+-- Describes where a pattern is fully consuming, i.e. amounts
+-- to linear use and therefore triggers other patterns to be counted
+-- as linear, e.g.
+--    foo 0 = ..
+--    foo _ = ..
+-- can be typed as foo : Int ->  because the first means
+-- consumption is linear
+data Consumption = Full | NotFull deriving (Eq, Show)
+
+-- Given a set of equations, creates an intial vector to describe
+-- the consumption behaviour of the patterns (assumes that)
+-- the number of patterns is the same for each equation, which
+-- is checked elsewhere
+initialisePatternConsumptions :: [Equation v a] -> [Consumption]
+initialisePatternConsumptions [] = []
+initialisePatternConsumptions ((Equation _ _ pats _):_) =
+  map (\_ -> NotFull) pats
+
+-- Join information about consumption between branches
+joinConsumption :: Consumption -> Consumption -> Consumption
+joinConsumption Full _       = Full
+joinConsumption _ _          = NotFull
+
+-- Meet information about consumption, across patterns
+meetConsumption :: Consumption -> Consumption -> Consumption
+meetConsumption NotFull _ = NotFull
+meetConsumption _ NotFull = NotFull
+meetConsumption Full Full = Full
 
 data CheckerState = CS
             { -- Fresh variable id state
@@ -78,6 +106,11 @@ data CheckerState = CS
             -- which get promoted by branch promotions
             , guardContexts :: [Ctxt Assumption]
 
+            -- Records the amount of consumption by patterns in equation equation
+            -- used to work out whether an abstract type has been definitly unified with
+            -- and can therefore be linear
+            , patternConsumption :: [Consumption]
+
             -- Data type information
             , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
             , dataConstructors :: Ctxt TypeScheme
@@ -97,7 +130,8 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
                , guardContexts = []
-               , typeConstructors = Primitives.typeLevelConstructors
+               , patternConsumption = []
+               , typeConstructors = Primitives.typeConstructors
                , dataConstructors = Primitives.dataConstructors
                , deriv = Nothing
                , derivStack = []
@@ -138,9 +172,7 @@ popGuardContext = do
   return c
 
 allGuardContexts :: MaybeT Checker (Ctxt Assumption)
-allGuardContexts = do
-  state <- get
-  return $ concat (guardContexts state)
+allGuardContexts = concat . guardContexts <$> get
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
@@ -201,7 +233,7 @@ concludeImplication s localVars = do
            let guard' = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
            guard <- freshenPred guard'
 
-           -- Implication of p &&& negated previous guards => p'
+           -- Implication of p .&& negated previous guards => p'
            let impl = if (isTrivial prevGuardPred)
                         then Impl localVars p p'
                         else Impl localVars (Conj [p, guard]) p'
@@ -253,6 +285,15 @@ appendPred p (Conj ps) = Conj (p : ps)
 appendPred p (Exists var k ps) = Exists var k (appendPred p ps)
 appendPred _ p = error $ "Cannot append a predicate to " <> show p
 
+addPredicate :: Pred -> MaybeT Checker ()
+addPredicate p = do
+  checkerState <- get
+  case predicateStack checkerState of
+    (p' : stack) ->
+      put (checkerState { predicateStack = appendPred p p' : stack })
+    stack ->
+      put (checkerState { predicateStack = Conj [p] : stack })
+
 -- | A helper for adding a constraint to the context
 addConstraint :: Constraint -> MaybeT Checker ()
 addConstraint c = do
@@ -297,6 +338,8 @@ illLinearityMismatch sp mismatches =
       "Linear variable `" <> pretty v <> "` is never used."
     mkMsg (LinearUsedNonLinearly v) =
       "Variable `" <> pretty v <> "` is promoted but its binding is linear; its binding should be under a box."
+    mkMsg NonLinearPattern =
+      "Wildcard pattern `_` allowing a value to be discarded in a position which requires linear use."
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
 illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern t -> MaybeT Checker a

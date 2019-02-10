@@ -62,6 +62,7 @@ evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
 evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
 evalBinOp "==" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n == m)) []
 evalBinOp "<=" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n <= m)) []
+evalBinOp "≤" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n <= m)) []
 evalBinOp "<" (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n < m)) []
 evalBinOp ">=" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n >= m)) []
 evalBinOp ">" (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n > m)) []
@@ -254,7 +255,7 @@ builtIns =
              case b of
                True -> Constr () (mkId "True") []
                False -> Constr () (mkId "False") []
-        return . (Pure ()) . Val nullSpan () $ Constr () (mkId "(,)") [Ext () $ Handle h, boolflag])
+        return . (Pure ()) . Val nullSpan () $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "fork",    Ext () $ PrimitiveClosure fork)
   , (mkId "forkRep", Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
@@ -283,7 +284,7 @@ builtIns =
     recv :: (?globals :: Globals) => RValue -> IO RValue
     recv (Ext _ (Chan c)) = do
       x <- CC.readChan c
-      return $ Pure () $ valExpr $ Constr () (mkId "(,)") [x, Ext () $ Chan c]
+      return $ Pure () $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> IO RValue
@@ -324,7 +325,7 @@ builtIns =
     hGetChar :: RValue -> IO RValue
     hGetChar (Ext _ (Handle h)) = do
           c <- SIO.hGetChar h
-          return $ Pure () $ valExpr (Constr () (mkId "(,)") [Ext () $ Handle h, CharLiteral c])
+          return $ Pure () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
     hGetChar _ = error $ "Runtime exception: trying to get from a non handle value"
 
     hClose :: RValue -> IO RValue

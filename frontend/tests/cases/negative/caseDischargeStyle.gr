@@ -2,14 +2,14 @@
 -- style. The following is not well typed, because the binding
 -- of 'y' is treated as linear
 
-fooA : forall (a : Type) . (a, a) [1] -> a [1]
+fooA : ∀ {a : Type} . (a, a) [1] → a [1]
 fooA [x] =
   case x of
-    (y, b) -> [y]
+    (y, b) → [y]
 
 -- On the other hand, this is is well typed:
 
-fooB : forall (a : Type) . (a, a) [1] -> a [1]
+fooB : ∀ {a : Type} . (a, a) [1] → a [1]
 fooB x =
   case x of
-    [(y, b)] -> [y]
+    [(y, b)] → [y]

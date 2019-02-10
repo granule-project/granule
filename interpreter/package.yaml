@@ -1,5 +1,5 @@
 name: granule-interpreter
-version: '0.7.1.1'
+version: '0.7.2.0'
 synopsis: The Granule interpreter
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
@@ -31,8 +31,9 @@ executables:
     source-dirs: app
     ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:
+    - directory
+    - filepath
+    - Glob
     - granule-frontend
     - granule-interpreter
-    - directory
-    - Glob
     - optparse-applicative

@@ -1,2 +1,2 @@
-bar : Int [2] -> Int [4]
+bar : Int [2] → Int [4]
 bar [n] = [n]

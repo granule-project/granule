@@ -1,0 +1,3 @@
+foo : (Int, Int) → Int
+foo (4, 4) = 5;
+foo (5, _) = 4

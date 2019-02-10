@@ -41,9 +41,16 @@ demoteKindToType _            = Nothing
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ (Forall _ quantifiedVariables ty)) = do
+kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
+
+  forM constraints (\constraint -> do
+    kind <- inferKindOfType' s quantifiedVariables constraint
+    case kind of
+      KPredicate -> return ()
+      _ -> illKindedNEq s KPredicate kind)
+
 
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
@@ -163,7 +170,7 @@ inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
 inferCoeffectType s (CProduct c1 c2)    = do
   k1 <- inferCoeffectType s c1
   k2 <- inferCoeffectType s c2
-  return $ TyApp (TyApp (TyCon $ mkId "(*)") k1) k2
+  return $ TyApp (TyApp (TyCon $ mkId "×") k1) k2
 
 inferCoeffectType s (CInterval c1 c2)    = do
   k1 <- inferCoeffectType s c1
@@ -238,7 +245,7 @@ mguCoeffectTypes s c1 c2 = do
   ck1 <- inferCoeffectType s c1
   ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
-    -- Both are poly
+    -- Both are variables
     (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
       updateCoeffectType kv1 (KVar kv2)
       return (TyVar kv2)
@@ -282,6 +289,8 @@ updateCoeffectType tyVar k = do
  where
    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
    rewriteCtxt [] = []
+   rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

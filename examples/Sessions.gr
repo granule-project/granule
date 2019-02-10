@@ -1,22 +1,22 @@
 import Bool
 import Vec
 
-fooClient : Chan (Send Bool (Recv Int End)) -> Int <Session>
+fooClient : Chan (Send Bool (Recv Int End)) → Int <Session>
 fooClient c =
-  let c      <- send c True;
-      (n, c) <- recv c;
-      ()     <- close c
+  let c      ← send c True;
+      (n, c) ← recv c;
+      ()     ← close c
   in pure n
 
-fooServer : Chan (Dual (Send Bool (Recv Int End))) -> () <Session>
+fooServer : Chan (Dual (Send Bool (Recv Int End))) → () <Session>
 fooServer c =
-  let (b, c) <- recv c;
-      c      <- if b then send c 1 else send c 0
+  let (b, c) ← recv c;
+      c      ← if b then send c 1 else send c 0
   in close c
 
 example : Int <Session>
 example =
-  let c <- fork fooServer
+  let c ← fork fooServer
   in  fooClient c
 
 
@@ -24,33 +24,33 @@ example =
 -- but which is able to be reused 'n' times, and a vector of
 -- length 'n', then send every element of the vector on the
 -- channel
-sendVec : forall (n : Nat, a : Type) .
-   (Chan (Send a End)) [n] -> Vec n a -> () <Session>
+sendVec : ∀ {n : Nat, a : Type} .
+   (Chan (Send a End)) [n] → Vec n a → () <Session>
 
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
-       let c'  <- send c x;
-           ()  <- close c'
+       let c'  ← send c x;
+           ()  ← close c'
        in sendVec [c] xs
 
-recvVec : forall (n : Nat, a : Type) .
-   N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Session>
+recvVec : ∀ {n : Nat, a : Type} .
+   N n → (Chan (Recv a End)) [n] → (Vec n a) <Session>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
-       let (x, c') <- recv c;
-           ()      <- close c';
-           xs      <- recvVec n [c]
+       let (x, c') ← recv c;
+           ()      ← close c';
+           xs      ← recvVec n [c]
        in pure (Cons x xs)
 
-example2 : forall (n : Nat, a : Type)
-         . N n -> Vec n a -> (Vec n a) <Session>
+example2 : ∀ {n : Nat, a : Type}
+         . N n → Vec n a → (Vec n a) <Session>
 example2 n list =
-  let c <- forkRep (\c -> sendVec c list)
+  let c ← forkRep (λc → sendVec c list)
   in recvVec n c
 
 main : (Vec 5 Int, Int) <Session>
 main =
   let
-    xs <- example2 (S (S (S (S (S Z))))) (Cons 1 (Cons 1 (Cons 2 (Cons 3 (Cons 5 Nil)))));
-    a <- example
+    xs ← example2 (S (S (S (S (S Z))))) (Cons 1 (Cons 1 (Cons 2 (Cons 3 (Cons 5 Nil)))));
+    a ← example
   in pure (xs, a)

@@ -1,7 +1,0 @@
--- last checked 2019-01-07 by @buggymcbugfix
-
-import Bool
-
--- do we want this or do we not want this?
-isZero : Int -> Bool
-isZero x = case x of 0 -> True; _ -> False

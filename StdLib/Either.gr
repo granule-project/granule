@@ -10,12 +10,12 @@
 
 data Either a b where Left a | Right b
 
-pushEither : forall (a : Type, b : Type, n : Nat)
+pushEither : forall {a : Type, b : Type, n : Nat}
         . (Either a b) [1..n+1] -> Either (a [1..n+1]) (b [1..n+1])
 pushEither [Left x]  = Left [x];
 pushEither [Right y] = Right [y]
 
-pullEither : forall (a : Type, b : Type, k : Nat)
+pullEither : forall {a : Type, b : Type, k : Nat}
         . Either (a [k]) (b [k]) -> (Either a b) [k]
 pullEither (Left [y])  = [Left y];
 pullEither (Right [y]) = [Right y]

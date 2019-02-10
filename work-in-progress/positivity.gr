@@ -4,10 +4,10 @@
 data Void : Type where
 
 data Bad : Type where
-  Bad : (Bad -> Void) [∞] -> Bad
+  Bad : (Bad → Void) [∞] → Bad
 
-selfApp : Bad -> Void
-selfApp = \(Bad [f]) -> f (Bad [f])
+selfApp : Bad → Void
+selfApp = λ(Bad [f]) → f (Bad [f])
 
 absurd : Void
 absurd = selfApp (Bad [selfApp])

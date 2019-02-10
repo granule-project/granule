@@ -19,6 +19,7 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Preprocessor.Markdown
+import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils hiding (mkSpan)
@@ -30,7 +31,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %name tscheme TypeScheme
 %tokentype { Token }
 %error { parseError }
-%monad { ReaderT String IO }
+%monad { ReaderT String (Either String) }
 
 %token
     nl    { TokenNL _ }
@@ -55,9 +56,11 @@ import Language.Granule.Utils hiding (mkSpan)
     '/'  { TokenForwardSlash _ }
     '->'  { TokenArrow _ }
     '<-'  { TokenBind _ }
+    '=>'  { TokenConstrain _ }
     ','   { TokenComma _ }
-    '×'   { TokenTimes _ }
+    '×'   { TokenCross _ }
     '='   { TokenEq _ }
+    '/='  { TokenNeq _ }
     '+'   { TokenAdd _ }
     '-'   { TokenSub _ }
     '*'   { TokenMul _ }
@@ -70,6 +73,8 @@ import Language.Granule.Utils hiding (mkSpan)
     ']'   { TokenBoxRight _ }
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
+    '<='   { TokenLTE _ }
+    '>='   { TokenGTE _ }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
@@ -78,6 +83,8 @@ import Language.Granule.Utils hiding (mkSpan)
     '^'   { TokenCaret _ }
     ".."  { TokenDotDot _ }
     OP    { TokenOp _ _ }
+    "∨"   { TokenJoin _ }
+    "∧"   { TokenMeet _ }
 
 %right in
 %right '->'
@@ -160,11 +167,11 @@ DataConstrs :: { [DataConstr] }
 DataConstr :: { DataConstr }
   : CONSTR ':' TypeScheme
        {% do span <- mkSpan (getPos $1, getEnd $3)
-             return $ DataConstrG span (mkId $ constrString $1) $3 }
+             return $ DataConstrIndexed span (mkId $ constrString $1) $3 }
 
   | CONSTR TyParams
        {% do span <- mkSpan (getPosToSpan $1)
-             return $ DataConstrA span (mkId $ constrString $1) $2 }
+             return $ DataConstrNonIndexed span (mkId $ constrString $1) $2 }
 
 DataConstrNext :: { [DataConstr] }
   : '|' DataConstrs           { $2 }
@@ -209,22 +216,32 @@ PAtom :: { Pattern () }
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () $2 }
 
   | '(' PAtom ',' PAtom ')'
-       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () (mkId "(,)") [$2, $4] }
+       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () (mkId ",") [$2, $4] }
 
 NAryConstr :: { Pattern () }
   : CONSTR Pats               {% let TokenConstr _ x = $1
                                 in (mkSpan (getPos $1, getEnd $ last $2)) >>=
                                        \sp -> return $ PConstr sp  () (mkId x) $2 }
 
+ForallSig :: { [(Id, Kind)] }
+ : '{' VarSigs '}' { $2 }
+ | VarSigs         { $1 }
+
+Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
+ : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
+ | forall ForallSig '.' '{' Constraints '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
+
+Constraints :: { [Type] }
+Constraints
+ : Constraint ',' Constraints { $1 : $3 }
+ | Constraint                 { [$1] }
+
 TypeScheme :: { TypeScheme }
-  : Type
-        {% return $ Forall nullSpanNoFile [] $1 }
+ : Type
+       {% return $ Forall nullSpanNoFile [] [] $1 }
 
-  | forall '(' VarSigs ')' '.' Type
-        {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ Forall sp $3 $6 }
-
-  | forall VarSigs '.' Type
-        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Forall sp $2 $4 }
+ | Forall Type
+       {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ Forall sp (snd $ fst $1) (snd $1) $2 }
 
 VarSigs :: { [(Id, Kind)] }
   : VarSig ',' VarSigs        { $1 : $3 }
@@ -238,8 +255,9 @@ Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
   | VAR                       { KVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
-                                  "Type"     -> KType
-                                  "Coeffect" -> KCoeffect
+                                  "Type"      -> KType
+                                  "Coeffect"  -> KCoeffect
+                                  "Predicate" -> KPredicate
                                   s          -> kConstr $ mkId s }
   | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
   | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
@@ -248,7 +266,7 @@ Kind :: { Kind }
 Type :: { Type }
   : TyJuxt                    { $1 }
   | Type '->' Type            { FunTy $1 $3 }
-  | Type '×' Type             { TyApp (TyApp (TyCon $ mkId "(,)") $1) $3 }
+  | Type '×' Type             { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'   { Box $3 $1 }
   | TyAtom '[' ']'            { Box (CInterval (CZero extendedNat) infinity) $1 }
 
@@ -266,15 +284,23 @@ TyJuxt :: { Type }
   | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
   | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
   | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
-  | TyAtom '/' '\\' TyAtom    { TyInfix ("/\\") $1 $4 }
-  | TyAtom '\\' '/' TyAtom    { TyInfix ("\\/") $1 $4 }
+  | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
+  | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
+
+Constraint :: { Type }
+  : TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
+  | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
+  | TyAtom '>=' TyAtom        { TyInfix (">=") $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix ("<=") $1 $3 }
+  | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix ("/=") $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
-  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId "(,)") $2) $4 }
+  | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
@@ -295,8 +321,8 @@ Coeffect :: { Coeffect }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '-' Coeffect       { CMinus $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect '/' '\\' Coeffect  { CMeet $1 $4 }
-  | Coeffect '\\' '/' Coeffect  { CJoin $1 $4 }
+  | Coeffect "∧" Coeffect       { CMeet $1 $3 }
+  | Coeffect "∨" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
   | Coeffect ':' Type           { normalise (CSig $1 $3) }
@@ -427,7 +453,7 @@ Atom :: { Expr () () }
                                     span2 <- (mkSpan (getPos $1, getPos $3))
                                     span3 <- (mkSpan $ getPosToSpan $3)
                                     return $ App span1 () (App span2 ()
-                                              (Val span3 () (Constr () (mkId "(,)") []))
+                                              (Val span3 () (Constr () (mkId ",") []))
                                                 $2)
                                               $4 }
   | CHAR                      {% (mkSpan $ getPosToSpan $1) >>= \sp ->
@@ -439,36 +465,31 @@ Atom :: { Expr () () }
 
 {
 
-mkSpan :: (Pos, Pos) -> ReaderT String IO Span
+mkSpan :: (Pos, Pos) -> ReaderT String (Either String) Span
 mkSpan (start, end) = do
   filename <- ask
   return $ Span start end filename
 
-parseError :: [Token] -> ReaderT String IO a
-parseError [] = do
-    lift $ die "Premature end of file"
-parseError t = do
-    lift $ die $ show l <> ":" <> show c <> ": parse error"
+parseError :: [Token] -> ReaderT String (Either String) a
+parseError [] = lift $ Left "Premature end of file"
+parseError t  =  lift . Left $ show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
--- | Preprocess the source file based on the file extension.
-preprocess :: (?globals :: Globals) => String -> String
-preprocess = case reverse . takeWhile (/= '.') . reverse . sourceFilePath $ ?globals of
-    "md" -> unmarkdown
-    _ -> id
+parseDefs :: FilePath -> String -> Either String (AST () ())
+parseDefs file input = runReaderT (defs $ scanTokens input) file
 
-parseDefs :: (?globals :: Globals) => String -> IO (AST () ())
-parseDefs input = do
-    ast <- parseDefs' (preprocess input)
+parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
+parseAndDoImportsAndFreshenDefs input = do
+    ast <- parseDefsAndDoImports input
     return $ freshenAST ast
 
-parseDefs' :: (?globals :: Globals) => String -> IO (AST () ())
-parseDefs' input = do
-    defs <- runReaderT (parse input) (sourceFilePath ?globals)
+parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
+parseDefsAndDoImports input = do
+    defs <- either die return $ parseDefs (sourceFilePath ?globals) input
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
       let ?globals = ?globals { sourceFilePath = path }
-      parseDefs' src
+      parseDefsAndDoImports src
     let allDefs = merge $ defs : importedDefs
     checkNameClashes allDefs
     checkMatchingNumberOfArgs allDefs
@@ -480,8 +501,6 @@ parseDefs' input = do
       let conc [] dds defs = AST dds defs
           conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)
        in conc xs [] []
-
-    parse = defs . scanTokens
 
     imports = map ((includePath ?globals </>) . (<> ".gr") . replace '.' '/')
               . mapMaybe (stripPrefix "import ") . lines $ input
@@ -496,7 +515,7 @@ parseDefs' input = do
       then if (and $ map (\x -> x == head lengths) lengths)
             then return ()
             else
-              die $ "Syntax error: Number of arguments differs in the equations of "
+              die $ "Syntax error: Number of arguments differs in the equattypeConstructorns of "
                   <> sourceName name
       else return ()
         where

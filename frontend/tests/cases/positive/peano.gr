@@ -1,6 +1,6 @@
 data Natural where
   Zero : Natural;
-  Succ : Natural -> Natural
+  Succ : Natural → Natural
 
 three : Natural
 three = Succ (Succ (Succ Zero))

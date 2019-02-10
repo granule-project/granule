@@ -19,7 +19,7 @@ A brief introduction to the Granule programming language can be found in [this e
 Linearity means that the following is ill-typed:
 
 ```idris
-dupBroken : forall (a : Type) . a -> (a, a)
+dupBroken : forall {a : Type} . a -> (a, a)
 dupBroken x = (x, x)
 ```
 
@@ -27,7 +27,7 @@ However, a graded modality can be employed to explain exactly how many times the
 parameter here can be used:
 
 ```idris
-dup : forall (a : Type) . a [2] -> (a, a)
+dup : forall {a : Type} . a [2] -> (a, a)
 dup [x] = (x, x)
 ```
 
@@ -36,7 +36,7 @@ for the standard `map` function on sized lists ("vectors"):
 
 ```idris
 --- Map function
-map : forall (a : Type, b : Type, n : Nat)
+map : forall {a : Type, b : Type, n : Nat}
     . (a -> b) [n] -> Vec n a -> Vec n b
 map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
@@ -103,5 +103,29 @@ line numbers for error messages.
     d : Int
     d = 4
     ```
+
+
+
+### Options
+
+`gr` takes several options, run `gr --help` for more information.
+
+You can set default options in `$HOME/.granule`, e.g.:
+
+```
+$ cat ~/.granule
+Options
+  { debugging           = Nothing
+  , noColors            = Just True
+  , noEval              = Nothing
+  , suppressInfos       = Nothing
+  , suppressErrors      = Nothing
+  , timestamp           = Nothing
+  , solverTimeoutMillis = Just 2000
+  , includePath         = Just "Users/alice/granule/StdLib"
+  , ascii2unicode       = Just True
+  , keepBackupAscii     = Just False
+  }
+```
 
 All contributions are welcome!

@@ -19,6 +19,7 @@
 import Control.Exception (SomeException, try)
 import Control.Monad (forM)
 import Data.List (stripPrefix)
+import Data.Functor.Identity (runIdentity)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
@@ -31,6 +32,7 @@ import Options.Applicative
 import Language.Granule.Checker.Checker
 import Language.Granule.Eval
 import Language.Granule.Interpreter.Config
+import Language.Granule.Interpreter.Preprocess
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils (Globals, debugM, printInfo, printErr, green)
@@ -41,8 +43,8 @@ import Paths_granule_interpreter (version)
 main :: IO ()
 main = do
   (globPatterns, cmdlineOpts) <- customExecParser (prefs disambiguate) parseArgs
-  userConfig <- readUserConfig cmdlineOpts
-  let globals = toGlobals "" $ defaultConfig (cmdlineOpts <> userConfig)
+  config <- defaultConfig . (cmdlineOpts <>) <$> readUserConfig cmdlineOpts
+  let globals = toGlobals "" $ config
   let ?globals = globals in do
     if null globPatterns then let ?globals = globals { Utils.sourceFilePath = "stdin" } in do
       printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
@@ -58,14 +60,17 @@ main = do
             printErr $ GenericError $ "The glob pattern `" <> p <> "` did not match any files."
             return [(ExitFailure 1)]
           _ -> forM filePaths $ \p -> do
-            let fileName =
-                 case currentDir `stripPrefix` p of
-                   Just f  -> tail f
-                   Nothing -> p
+            let fileName = case currentDir `stripPrefix` p of
+                  Just f  -> tail f
+                  Nothing -> p
 
             let ?globals = globals { Utils.sourceFilePath = fileName }
             printInfo $ "\nChecking " <> fileName <> "..."
-            run =<< readFile p
+            src <- preprocess
+              (runIdentity $ ascii2unicode config)
+              (runIdentity $ keepBackupAscii config)
+              p
+            run src
       if all (== ExitSuccess) (concat results) then exitSuccess else exitFailure
 
   where
@@ -94,7 +99,7 @@ main = do
 -}
 run :: (?globals :: Globals) => String -> IO ExitCode
 run input = do
-  result <- try $ parseDefs input
+  result <- try $ parseAndDoImportsAndFreshenDefs input
   case result of
     Left (e :: SomeException) -> do
       printErr $ ParseError $ show e
@@ -183,6 +188,16 @@ parseArgs = info (go <**> helper) $ briefDesc
             <> help "Path to the standard library"
             <> metavar "PATH"
 
+        ascii2unicode <-
+          flag Nothing (Just True)
+            $ long "ascii-to-unicode"
+            <> help "Destructively rewrite ascii symbols to their unicode equivalents (WARNING: overwrites the input file)"
+
+        keepBackupAscii <-
+          flag Nothing (Just True)
+            $ long "keep-backup-ascii"
+            <> help "Keep a backup copy of the input file (only has an effect when destructively preprocessing with `--ascii-to-unicode`)"
+
         pure
           ( files
           , Options
@@ -194,6 +209,8 @@ parseArgs = info (go <**> helper) $ briefDesc
             , timestamp
             , solverTimeoutMillis
             , includePath
+            , ascii2unicode
+            , keepBackupAscii
             }
           )
 

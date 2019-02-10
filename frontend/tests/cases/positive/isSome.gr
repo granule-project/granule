@@ -1,14 +1,14 @@
 data Maybe a where
   None : Maybe a;
-  Some : a -> Maybe a
+  Some : a → Maybe a
 
 data Bool where
   True  : Bool;
   False : Bool
 
 --- The isSome function returns True iff its argument is of the form Some _.
-isSome : forall a : Type . Maybe (a [0]) -> Bool
+isSome : ∀ a : Type . Maybe (a [0]) → Bool
 isSome m =
   case m of
-    (Some [x]) -> True;
-    None       -> False
+    (Some [x]) → True;
+    None       → False

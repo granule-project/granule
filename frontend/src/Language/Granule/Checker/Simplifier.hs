@@ -11,6 +11,7 @@ import Language.Granule.Checker.Monad
 
 import Language.Granule.Utils
 
+import Data.List (nub)
 import Data.Maybe (catMaybes)
 
 allCons :: [Pred] -> Bool
@@ -23,7 +24,7 @@ simplifyPred p = do
   return $ flatten $ normalisePred p
   where
     normalisePred = predFold
-       Conj Impl (Con . normaliseConstraint) NegPred Exists
+       Conj Disj Impl (Con . normaliseConstraint) NegPred Exists
 
 simplifyPred' :: (?globals :: Globals)
              => Pred -> MaybeT Checker Pred
@@ -32,7 +33,12 @@ simplifyPred' c@(Conj ps) | allCons ps =
 
 simplifyPred' (Conj ps) = do
   ps <- mapM simplifyPred' ps
-  return $ Conj ps
+  let ps' = nub ps
+  return $ Conj ps'
+
+simplifyPred' (Disj ps) = do
+  ps <- mapM simplifyPred' ps
+  return $ Disj ps
 
 simplifyPred' c@(Impl ids p1 p2) = do
   let subst = collectSubst p1
@@ -52,14 +58,15 @@ simplifyPred' (Con c) = return (Con c)
 
 flatten :: Pred -> Pred
 flatten (Conj []) = Conj []
-flatten (Conj ((Conj []):ps)) =
- flatten (Conj ps)
+flatten (Conj ((Conj []):ps)) = flatten (Conj ps)
 flatten (Conj (p : ps)) =
   case flatten p of
     Conj [] -> flatten (Conj ps)
     p'      -> case flatten (Conj ps) of
                 Conj ps' -> Conj (p' : ps')
                 p'' -> Conj [p, p'']
+flatten (Disj ps) =
+  Disj (map flatten ps)
 flatten (Impl ids p1 p2) =
   Impl ids (flatten p1) (flatten p2)
 flatten (Exists v k p) = Exists v k (flatten p)
@@ -73,18 +80,23 @@ simpl subst p = substitute subst p >>= (return . removeTrivialImpls . removeTriv
 
 removeTrivialImpls :: Pred -> Pred
 removeTrivialImpls =
-  predFold Conj remImpl Con NegPred Exists
+  predFold (Conj . nub) Disj remImpl Con NegPred Exists
     where remImpl _ (Conj []) p = p
           remImpl _ (Conj ps) p | all (\p -> case p of Conj [] -> True; _ -> False) ps = p
           remImpl ids p1 p2 = Impl ids p1 p2
 
 removeTrivialIds :: Pred -> Pred
 removeTrivialIds =
-  predFold conj Impl conRemove NegPred Exists
+  predFold conj disj Impl conRemove NegPred Exists
     where removeTrivialIdCon (Con (Eq _ c c' _)) | c == c' = Nothing
           removeTrivialIdCon c = Just c
 
           conj ps = Conj $ catMaybes (map removeTrivialIdCon ps)
+          disj ps =
+            if (catMaybes (map removeTrivialIdCon ps) == ps)
+              then Disj ps
+              else Conj []
+
           conRemove c =
             case removeTrivialIdCon (Con c) of
               Nothing -> Conj []

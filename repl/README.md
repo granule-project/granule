@@ -74,7 +74,7 @@ Granule> :l Vec.gr
 S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
 
 Granule> :t head
-head : forall a : Type, n : Nat. ((Vec n + 1 a) |1|) -> a
+head : forall a : Type, n : Nat. ((Vec n + 1 a) |1|) → a
 ```
 
 #### :show <term\> (:s)
@@ -95,7 +95,7 @@ Granule> :p sum (Cons 1(Cons 2 Nil))
 App ((1,1),(1,20)) (Val ((1,1),(1,1)) (Var (Id "sum" "sum"))) (App ((1,6),(1,20)) (App ((1,6),(1,11)) (Val ((1,6),(1,6)) (Constr (Id "Cons" "Cons") [])) (Val ((1,11),(1,11)) (NumInt 1))) (App ((1,13),(1,20)) (App ((1,13),(1,18)) (Val ((1,13),(1,13)) (Constr (Id "Cons" "Cons") [])) (Val ((1,18),(1,18)) (NumInt 2))) (Val ((1,20),(1,20)) (Constr (Id "Nil" "Nil") []))))
 ```
 ```
-Granule> :p Int -> Int
+Granule> :p Int → Int
 1:5: parse error
 Input not an expression, checking for TypeScheme
 Forall ((0,0),(0,0)) [] (FunTy (TyCon (Id "Int" "Int")) (TyCon (Id "Int" "Int")))
@@ -135,7 +135,7 @@ Granule> :l example.gr
 S:\Documents\Research\granule\tests\regression\good\example.gr, interpreted
 
 Granule> :dump
-["dub : ((Int) |2|) -> Int","main : Int","trip : ((Int) |3|) -> Int","twice : forall c : Nat. ((((Int) |c|) -> Int) |2|) -> ((Int) |2 * c|) -> Int"]
+["dub : ((Int) |2|) → Int","main : Int","trip : ((Int) |3|) → Int","twice : forall c : Nat. ((((Int) |c|) → Int) |2|) → ((Int) |2 * c|) → Int"]
 ```
 
 #### :module <filepath\>(:m)
@@ -160,7 +160,7 @@ The congiuration file contains various variables used for set up of the REPL
 #### Config file creation
 <a id="config-file-creation"></a>
 The configuration file needs to be created by the user.  It needs to be named
-`.granule.conf`.  This file needs to be placed in the home directory
+`.grin`.  This file needs to be placed in the home directory
 ###### Windows
 ```
 C:\Users\<username>

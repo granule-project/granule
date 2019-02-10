@@ -1,2 +1,2 @@
-SourceId : a -> a
+SourceId : a → a
 SourceId x = x

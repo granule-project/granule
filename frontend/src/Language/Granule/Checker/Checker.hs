@@ -15,6 +15,7 @@ import Data.List (genericLength, intercalate)
 import Data.Maybe
 import qualified Data.Text as T
 
+import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
@@ -84,7 +85,7 @@ checkDataCon :: (?globals :: Globals)
   -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty)) =
+checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVarsD constraints ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
 
@@ -100,14 +101,14 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
           KType -> do
             check ty
             st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
               Some ds -> do
                 put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
           KPromote (TyCon k) | internalName k == "Protocol" -> do
             check ty
             st <- get
-            case extend (dataConstructors st) dName (Forall sp tyVars ty) of
+            case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
               Some ds -> put st { dataConstructors = ds }
               None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
 
@@ -127,26 +128,20 @@ checkDataCon tName kind tyVarsT (DataConstrG sp dName tySch@(Forall _ tyVarsD ty
     check (TyApp fun arg) = check fun
     check x = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 
-checkDataCon tName _ tyVars (DataConstrA sp dName params) = do
-    st <- get
-    case extend (dataConstructors st) dName tySch of
-      Some ds -> put st { dataConstructors = ds }
-      None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
-  where
-    tySch = Forall sp tyVars ty
-    ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
-    returnTy t [] = t
-    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
-
+checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
+  = checkDataCon tName kind tyVars
+    $ nonIndexedToIndexedDataConstr tName tyVars d
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> MaybeT Checker (Def () Type)
-checkDef defCtxt (Def s defName equations tys@(Forall _ foralls ty)) = do
+checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty)) = do
 
     -- Clean up knowledge shared between equations of a definition
-    modify (\st -> st { guardPredicates = [[]] } )
+    modify (\st -> st { guardPredicates = [[]]
+                      , patternConsumption = initialisePatternConsumptions equations } )
+
     elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
         -- Erase the solver predicate between equations
         modify' $ \st -> st
@@ -176,7 +171,7 @@ checkEquation :: (?globals :: Globals) =>
   -> TypeScheme      -- Type scheme
   -> MaybeT Checker (Equation () Type)
 
-checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
+checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
@@ -186,8 +181,18 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls ty) = do
   -- Create conjunct to capture the pattern constraints
   newConjunct
 
+  mapM_ (\ty -> do
+    pred <- compileTypeConstraintToConstraint s ty
+    addPredicate pred) constraints
+
   -- Build the binding context for the branch pattern
-  (patternGam, tau, localVars, subst, elaborated_pats) <- ctxtFromTypedPatterns s ty pats
+  st <- get
+  (patternGam, tau, localVars, subst, elaborated_pats, consumptions) <-
+     ctxtFromTypedPatterns s ty pats (patternConsumption st)
+
+  -- Update the consumption information
+  modify (\st -> st { patternConsumption =
+                         zipWith joinConsumption consumptions (patternConsumption st) } )
 
   -- Create conjunct to capture the body expression constraints
   newConjunct
@@ -262,7 +267,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
       unless eqT (halt $ GenericError (Just s) $ pretty sig <> " not equal to " <> pretty t')
       return (tau, subst)
 
-  (bindings, _, subst, elaboratedP) <- ctxtFromTypedPattern s sig p
+  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
   debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig p
@@ -340,6 +345,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
             -> True
           _ -> False
 
+
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
@@ -353,7 +359,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
     forM cases $ \(pat_i, e_i) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i) <- ctxtFromTypedPattern s guardTy pat_i
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
 
       -- Checking the case body
       newConjunct
@@ -510,7 +516,8 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
     Just tySch -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty,_) <- freshPolymorphicInstance InstanceQ False tySch
+      (ty, _, []) <- freshPolymorphicInstance InstanceQ False tySch
+      -- TODO: allow data type constructors to have constraints
 
       let elaborated = Val s ty (Constr ty c [])
       return (ty, [], elaborated)
@@ -530,7 +537,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, _, elaborated_pat_i) <- ctxtFromTypedPattern s ty pati
+      (patternGam, eVars, _, elaborated_pat_i, _) <- ctxtFromTypedPattern s ty pati NotFull
       newConjunct
       ---
       (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
@@ -573,50 +580,44 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   -- specifying effect over-approximations and type aliases
 
   (sig, gam1, elaborated1) <- synthExpr defs gam pol e1
-  case sig of
-    Diamond ["IO"] ty1 ->
-      typeLetSubject gam1 [] ty1 elaborated1
-    Diamond ["Session"] ty1 ->
-      typeLetSubject gam1 [] ty1 elaborated1
-    Diamond ef1 ty1 ->
-      typeLetSubject gam1 ef1 ty1 elaborated1
 
-    t -> halt $ GenericError (Just s)
-              $ "Expected an effect type but inferred `"
-             <> pretty t <> "` in body of let<>"
-
-   where
-      typeLetSubject gam1 ef1 ty1 elaborated1 = do
-        (binders, _, _, elaboratedP)  <- ctxtFromTypedPattern s ty1 p
-        pIrrefutable <- isIrrefutable s ty1 p
-        if not pIrrefutable
-        then refutablePattern s p
-        else do
-           (tau, gam2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
-           case tau of
-            Diamond ["IO"] ty2 ->
-              typeLetBody gam1 gam2 ef1 [] binders ty1 ty2 elaboratedP elaborated1 elaborated2
-            Diamond ["Session"] ty2 ->
-              typeLetBody gam1 gam2 ef1 [] binders ty1 ty2 elaboratedP elaborated1 elaborated2
-            Diamond ef2 ty2 ->
-                typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 elaboratedP elaborated1 elaborated2
+  (ef1, ty1) <-
+          case sig of
+            Diamond ["IO"] ty1 -> return ([], ty1)
+            Diamond ["Session"] ty1 -> return ([], ty1)
+            Diamond ef1 ty1 -> return (ef1, ty1)
             t -> halt $ GenericError (Just s)
-                      $ "Expected an effect type but got `" <> pretty t <> "`"
+                   $ "Expected an effect type but got `"
+                  <> pretty t <> "` in subject of let"
 
-      typeLetBody gam1 gam2 ef1 ef2 binders ty1 ty2 ep elt1 elt2 = do
-        optionalSigEquality s optionalTySig ty1
+  -- Type body of the let...
+  -- ...in the context of the binders from the pattern
+  (binders, _, _, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  pIrrefutable <- isIrrefutable s ty1 p
+  if not pIrrefutable
+  then refutablePattern s p
+  else do
+     (tau, gam2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+     (ef2, ty2) <-
+           case tau of
+             Diamond ["IO"] ty2 -> return ([], ty2)
+             Diamond ["Session"] ty2 -> return ([], ty2)
+             Diamond ef2 ty2 -> return (ef2, ty2)
+             t -> halt $ GenericError (Just s)
+                    $ "Expected an effect type but got `"
+                    <> pretty t <> "` in body of let"
 
-        -- Check grades on binders
-        ctxtEquals s (gam2 `intersectCtxts` binders) binders
+     optionalSigEquality s optionalTySig ty1
 
-        gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
-        -- Check linearity of locally bound variables
-        case checkLinearity binders gam2 of
-            [] ->  do
-              let t = Diamond (ef1 <> ef2) ty2
-              let elaborated = LetDiamond s t ep optionalTySig elt1 elt2
-              return (t, gamNew, elaborated)
-            xs -> illLinearityMismatch s xs
+     -- Check that usage matches the binding grades/linearity
+     -- (performs the linearity check)
+     ctxtEquals s (gam2 `intersectCtxts` binders) binders
+
+     gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
+
+     let t = Diamond (ef1 <> ef2) ty2
+     let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
+     return (t, gamNew, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
@@ -626,7 +627,11 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty',_) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+           (ty', _, constraints) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+
+           mapM_ (\ty -> do
+             pred <- compileTypeConstraintToConstraint s ty
+             addPredicate pred) constraints
 
            let elaborated = Val s ty' (Var ty' x)
            return (ty', [], elaborated)
@@ -675,7 +680,14 @@ synthExpr defs gam pol (App s _ e e') = do
         halt $ GenericError (Just s) $ "Left-hand side of application is not a function"
                    <> " but has type '" <> pretty t <> "'"
 
--- Promotion
+{- Promotion
+
+[G] |- e : t
+ ---------------------
+[G]*r |- [e] : []_r t
+
+-}
+
 synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    debugM "Synthing a promotion of " $ pretty e
 
@@ -684,10 +696,8 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    -- remember this new kind variable in the kind environment
    modify (\st -> st { kVarContext = (mkId vark, KCoeffect) : kVarContext st })
 
-   -- TODO: note that this does not of the specil hanlding that happens with Level
-
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
-   var <- freshTyVarInContext (mkId $ "prom_[" <> pretty e <> "]") (KVar $ mkId vark)
+   var <- freshTyVarInContext (mkId $ "prom_[" <> pretty e <> "]") (KPromote $ TyVar $ mkId vark)
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
@@ -696,6 +706,7 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy (Promote t elaboratedE)
    return (finalTy, multAll (freeVars e) (CVar var) gam', elaborated)
+
 
 -- BinOp
 synthExpr defs gam pol (Binop s _ op e1 e2) = do
@@ -735,7 +746,29 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
-  (bindings, _, subst, elaboratedP) <- ctxtFromTypedPattern s sig p
+  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+
+  pIrrefutable <- isIrrefutable s sig p
+  if pIrrefutable then do
+     (tau, gam'', elaboratedE) <- synthExpr defs (bindings <> gam) pol e
+
+     -- Locally we should have this property (as we are under a binder)
+     ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
+
+     let finalTy = FunTy sig tau
+     let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
+
+     return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
+  else refutablePattern s p
+
+-- Abstraction, can only synthesise the types of
+-- lambda in Church style (explicit type)
+synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
+
+  tyVar <- freshTyVarInContext (mkId "t") KType
+  let sig = (TyVar tyVar)
+
+  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
@@ -751,7 +784,8 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
   else refutablePattern s p
 
 synthExpr _ _ _ e =
-  halt $ GenericError (Just $ getSpan e) "Type cannot be calculated here; try adding more type signatures."
+  halt $ GenericError (Just $ getSpan e) $ "Type cannot be calculated here for `"
+      <> pretty e <> "` try adding more type signatures."
 
 -- Check an optional type signature for equality against a type
 optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker Bool
@@ -1122,13 +1156,15 @@ checkGuardsForImpossibility s name = do
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
+    p <- simplifyPred p
+
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
 
     -- Try to prove the theorem
     result <- liftIO $ provePredicate s thm tyVars kVars
 
-    let msgHead = "Pattern guard for equation of `" <> pretty name <> "``"
+    let msgHead = "Pattern guard for equation of `" <> pretty name <> "`"
 
     case result of
       QED -> return ()
@@ -1138,7 +1174,7 @@ checkGuardsForImpossibility s name = do
                         " is impossible. Its condition " <> msg
       NotValidTrivial unsats ->
                       halt $ GenericError (Just s) $ msgHead <>
-                        " is impossible. " <>
+                        " is impossible.\n\t" <>
                         intercalate "\n\t" (map (pretty . Neg) unsats)
       Timeout -> halt $ CheckerError (Just s) $
          "While checking plausibility of pattern guard for equation " <> pretty name

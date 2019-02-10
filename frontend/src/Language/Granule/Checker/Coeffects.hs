@@ -23,7 +23,7 @@ flattenable t1 t2
      -- TODO
 
      _ -> Nothing
- | otherwise = Just (CProduct, TyCon (mkId "(*)") .@ t1 .@ t2)
+ | otherwise = Just (CProduct, TyCon (mkId "×") .@ t1 .@ t2)
 
 -- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th

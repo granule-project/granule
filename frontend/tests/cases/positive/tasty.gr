@@ -9,22 +9,22 @@ data Salad where
   Slaw    : Salad
 
 data Meal where
-  Wrap : Salad -> Meat -> Meal;
-  Side : Salad -> Meal;
-  Meat : Meat -> Meal
+  Wrap : Salad → Meat → Meal;
+  Side : Salad → Meal;
+  Meat : Meat → Meal
 
-vegetarian : Meal [0..1] -> Bool
+vegetarian : Meal [0..1] → Bool
 vegetarian m =
     case m of
-      [Side Lettuce] -> True;
-      [Side Slaw] -> True;
-      [_] -> False
+      [Side Lettuce] → True;
+      [Side Slaw] → True;
+      [_] → False
 
-vegetarianL : Meal -> (Bool,Meal)
+vegetarianL : Meal → (Bool,Meal)
 vegetarianL m =
     case m of
-      (Side v) -> (True, Side v);
-      m -> (False, m)
+      (Side v) → (True, Side v);
+      m → (False, m)
 
 main : (Bool,Meal)
 main = vegetarianL (Wrap Slaw Chicken)

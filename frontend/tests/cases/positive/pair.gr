@@ -1,6 +1,6 @@
 import Prelude
 
-trip : Int [3] -> (Int, (Int, Int))
+trip : Int [3] → (Int, (Int, Int))
 trip [x] = (x, (x, x))
 
 main : ((Int, Int),(Int, (Int, Int)))

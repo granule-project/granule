@@ -28,13 +28,13 @@ isInf :: SNatX -> SBool
 isInf (SNatX n) = n .== -1
 
 instance Num SNatX where
-  x + y = ite (isInf x ||| isInf y)
+  x + y = ite (isInf x .|| isInf y)
               inf
               (SNatX (xVal x + xVal y))
-  x * y = ite ((isInf x &&& y ./= 0) ||| (isInf y &&& x ./= 0)) -- 0 * ∞ = ∞ * 0 = 0
+  x * y = ite ((isInf x .&& y ./= 0) .|| (isInf y .&& x ./= 0)) -- 0 * ∞ = ∞ * 0 = 0
               inf
               (SNatX (xVal x * xVal y))
-  x - y = ite (isInf x ||| isInf y)  -- ???
+  x - y = ite (isInf x .|| isInf y)  -- ???
               inf
               (ite (x .< y)          -- monus
                    0
@@ -45,8 +45,8 @@ instance EqSymbolic SNatX where
   (SNatX a) .== (SNatX b) = a .== b
 
 instance OrdSymbolic SNatX where
-  a .< b = ite (isInf a) false
-         $ ite (isInf b) true
+  a .< b = ite (isInf a) sFalse
+         $ ite (isInf b) sTrue
          $ xVal a .< xVal b
 
 representationConstraint :: SInteger -> SBool
@@ -73,7 +73,7 @@ forallSNatX nm = do
 -- main :: IO ()
 -- main = print =<< sat do
 --   [x, y, z] <- mapM freeSNatX ["x", "y", "z"]
---   return $ bAnd
+--   return $ sAnd
 --     [ x .== x+1 -- x = ∞
 --     , x .== x*y -- y ≠ 0
 --     , y .< x    -- y ≠ ∞
@@ -98,7 +98,7 @@ forallSNatX nm = do
 -- main :: IO ()
 -- main = runSMT do
 --   [x, y, z] <- mapM freeSNatX ["x", "y", "z"]
---   constrain $ bAnd
+--   constrain $ sAnd
 --     [ x .== x*y -- x must be 0 or oo, if x |-> oo, then y can't be 0
 --     , y .< x    -- nothing smaller than 0, so x |-> oo, and y > 0
 --     , z*x .== 0 -- what times oo is 0? z |-> 0

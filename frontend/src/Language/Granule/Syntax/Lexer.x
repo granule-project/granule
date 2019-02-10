@@ -21,7 +21,7 @@ $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
 $alphanum  = [$alpha $digit \_]
-@sym    = $lower ($alphanum | \')*
+@sym    = $lower ($alphanum | \')* | [\127815-\127827]
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
@@ -38,6 +38,7 @@ tokens :-
   "import".*                    ;
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
+  ∀                             { \p s -> TokenForall p }
   let                           { \p s -> TokenLet p }
   data                          { \p s -> TokenData p }
   where                         { \p s -> TokenWhere p }
@@ -53,10 +54,14 @@ tokens :-
   @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
   @stringLiteral                { \p s -> TokenStringLiteral p $ read s }
   "->"                          { \p s -> TokenArrow p }
+  "→"                           { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
+  "←"                           { \p s -> TokenBind p }
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
+  "/="                          { \p s -> TokenNeq p }
   \\                            { \p s -> TokenLambda p }
+  "λ"                           { \p s -> TokenLambda p }
   \[                            { \p s -> TokenBoxLeft p }
   \]                            { \p s -> TokenBoxRight p }
   [\+]                          { \p s -> TokenAdd p }
@@ -67,21 +72,31 @@ tokens :-
   \{                            { \p s -> TokenLBrace p }
   \}                            { \p s -> TokenRBrace p }
   \<                            { \p s -> TokenLangle p }
+  "<="                          { \p s -> TokenLTE p }
+  ">="                          { \p s -> TokenGTE p }
   \>                            { \p s -> TokenRangle p }
   \,                            { \p s -> TokenComma p }
-  \×                            { \p s -> TokenTimes p }
+  \×                            { \p s -> TokenCross p }
   \.                            { \p s -> TokenPeriod p }
   \:                            { \p s -> TokenSig p }
   @sym				                  { \p s -> TokenSym p s }
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
-  \<\=                          { \p s -> TokenOp p s }
-  \>\=                          { \p s -> TokenOp p s }
-  \=\=                          { \p s -> TokenOp p s }
+  "≤"                           { \p s -> TokenOp p s }
+  \<\=                          { \p s -> TokenOp p "≤" }
+  "≥"                           { \p s -> TokenOp p s }
+  \>\=                          { \p s -> TokenOp p "≥" }
+  "≡"                           { \p s -> TokenOp p s }
+  \=\=                          { \p s -> TokenOp p "≡" }
   \`                            { \p s -> TokenBackTick p }
   \^                            { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
+  "∨"                           { \p _ -> TokenJoin p }
+  "∧"                           { \p _ -> TokenMeet p }
+  "=>"                          { \p s -> TokenConstrain p }
+  "⇒"                           { \p s -> TokenConstrain p }
+
 
 {
 
@@ -105,8 +120,10 @@ data Token
   | TokenFloat  AlexPosn String
   | TokenSym    AlexPosn String
   | TokenArrow  AlexPosn
+  | TokenConstrain AlexPosn
   | TokenForall AlexPosn
   | TokenEq     AlexPosn
+  | TokenNeq     AlexPosn
   | TokenAdd    AlexPosn
   | TokenSub    AlexPosn
   | TokenMul    AlexPosn
@@ -124,8 +141,10 @@ data Token
   | TokenRBrace   AlexPosn
   | TokenLangle   AlexPosn
   | TokenRangle   AlexPosn
+  | TokenLTE       AlexPosn
+  | TokenGTE       AlexPosn
   | TokenComma    AlexPosn
-  | TokenTimes AlexPosn
+  | TokenCross AlexPosn
   | TokenPeriod   AlexPosn
   | TokenPipe     AlexPosn
   | TokenUnderscore AlexPosn
@@ -134,6 +153,8 @@ data Token
   | TokenOp AlexPosn String
   | TokenCaret AlexPosn
   | TokenDotDot AlexPosn
+  | TokenJoin AlexPosn
+  | TokenMeet AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String
