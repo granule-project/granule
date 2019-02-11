@@ -195,7 +195,11 @@ checkAndGenerateSubstitution' sp tName (FunTy arg res) tyVars kinds = do
 
 checkAndGenerateSubstitution' sp tName (TyApp fun arg) ((var, kind):tyvars) kinds = do
   (fun', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName fun tyvars kinds
-  return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
+  let subst' = case arg of
+        TyVar var' -> [(var', SubstT $ TyVar var), (var, SubstT arg)]
+        _          -> [(var, SubstT arg)]
+
+  return (TyApp fun' (TyVar var), subst' ++ subst, (var, kind) : tyVarsNew)
 
 checkAndGenerateSubstitution' sp tName (TyApp fun arg) [] (kind:kinds) = do
   varSymb <- freshIdentifierBase "t"
@@ -272,10 +276,10 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   newConjunct
 
   -- Specialise the return type by the pattern generated substitution
-  liftIO $ putStrLn $ "subst' " <> show subst
-  liftIO $ putStrLn $ "tau " <> show tau
+  debugM "ctxt" $ "\n\t### -- OUT -- subst' = " <> show subst
+  debugM "ctxt" $ "\n\t### -- OUT -- tau = " <> show tau
   tau' <- substitute subst tau
-  liftIO $ putStrLn $ "tau' " <> show tau'
+  debugM "ctxt" $ "\n\t### -- OUT -- tau' = " <> show tau'
 
   -- Check the body
   (localGam, subst', elaboratedExpr) <-

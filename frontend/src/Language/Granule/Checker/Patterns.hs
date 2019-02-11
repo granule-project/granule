@@ -165,6 +165,11 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
 
       debugM "ctxt" $ "### coercions' =  " <> show coercions'
 
+      st <- get
+      debugM "ctxt" $ "### tyVarContext = " <> show (tyVarContext st)
+
+      debugM "ctxt" $ "\t### eqL (res dCfresh) = " <> show (resultType dataConstructorTypeFresh) <> "\n"
+      debugM "ctxt" $ "\t### eqR (ty) = " <> show ty <> "\n"
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
@@ -183,10 +188,15 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
           debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
+          debugM "ctxt" $ "\n\t### ty = " <> show ty <> "\n"
+
 
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
-          subst <- combineSubstitutions s coercions' us
-          subst <- combineSubstitutions s (flipSubstitution unifiers) subst
+          subst <- combineSubstitutions s (flipSubstitution unifiers) us
+          subst <- combineSubstitutions s freshTyVarSubst subst
+          subst <- combineSubstitutions s coercions' subst
+
+          debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty dataC elabPs
