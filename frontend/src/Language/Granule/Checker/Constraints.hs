@@ -26,6 +26,7 @@ import Language.Granule.Checker.Constraints.Quantifiable
 import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
+import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -89,7 +90,7 @@ compileToSBV predicate tyVarContext kVarContext =
         return $ sNot p'
 
     buildTheorem' solverVars (Exists v k p) =
-      if v `elem` (vars p)
+      if v `elem` (freeVars p)
         -- optimisation
         then
 
@@ -132,7 +133,7 @@ compileToSBV predicate tyVarContext kVarContext =
 
     -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl ((v, _kind):vs) p p') =
-      if v `elem` (vars p <> vars p')
+      if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
           -- Create fresh solver variable

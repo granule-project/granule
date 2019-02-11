@@ -174,13 +174,13 @@ data Pred where
     NegPred  :: Pred -> Pred
     Exists :: Id -> Kind -> Pred -> Pred
 
-vars :: Pred -> [Id]
-vars (Conj ps) = concatMap vars ps
-vars (Disj ps) = concatMap vars ps
-vars (Impl bounds p1 p2) = (vars p1 <> vars p2) \\ map fst bounds
-vars (Con c) = varsConstraint c
-vars (NegPred p) = vars p
-vars (Exists x _ p) = vars p \\ [x]
+instance Term Pred where
+  freeVars (Conj ps) = concatMap freeVars ps
+  freeVars (Disj ps) = concatMap freeVars ps
+  freeVars (Impl bounds p1 p2) = (freeVars p1 <> freeVars p2) \\ map fst bounds
+  freeVars (Con c) = varsConstraint c
+  freeVars (NegPred p) = freeVars p
+  freeVars (Exists x _ p) = freeVars p \\ [x]
 
 instance (Monad m, MonadFail m) => Freshenable m Pred where
   freshen (Conj ps) = do

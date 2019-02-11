@@ -51,6 +51,11 @@ data Kind = KType
           | KPromote Type        -- Promoted types
     deriving (Show, Ord, Eq)
 
+instance Term Kind where
+  freeVars (KPromote t) = freeVars t
+  freeVars (KVar x)     = [x]
+  freeVars _            = []
+
 kConstr = KPromote . TyCon
 
 instance Monad m => Freshenable m Kind where
@@ -122,8 +127,6 @@ isProduct :: Type -> Maybe (Type, Type)
 isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
-
-
 
 -- | Represents effect grades
 -- TODO: Make richer
@@ -243,16 +246,16 @@ freeAtomsVars t = []
 -- Types and coeffects are terms
 
 instance Term Type where
-  freeVars = runIdentity . typeFoldM TypeFold
-    { tfFunTy   = \x y -> return $ x <> y
-    , tfTyCon   = \_ -> return [] -- or: const (return [])
-    , tfBox     = \c t -> return $ freeVars c <> t
-    , tfDiamond = \_ x -> return x
-    , tfTyVar   = \v -> return [v] -- or: return . return
-    , tfTyApp   = \x y -> return $ x <> y
-    , tfTyInt   = \_ -> return []
-    , tfTyInfix = \_ y z -> return $ y <> z
-    }
+    freeVars = runIdentity . typeFoldM TypeFold
+      { tfFunTy   = \x y -> return $ x <> y
+      , tfTyCon   = \_ -> return [] -- or: const (return [])
+      , tfBox     = \c t -> return $ freeVars c <> t
+      , tfDiamond = \_ x -> return x
+      , tfTyVar   = \v -> return [v] -- or: return . return
+      , tfTyApp   = \x y -> return $ x <> y
+      , tfTyInt   = \_ -> return []
+      , tfTyInfix = \_ y z -> return $ y <> z
+      }
 
 instance Term Coeffect where
     freeVars (CVar v) = [v]
