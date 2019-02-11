@@ -1,5 +1,4 @@
-resolver: nightly-2018-11-24
-
+resolver: nightly-2019-01-30
 packages:
 #- compiler/
 - frontend/

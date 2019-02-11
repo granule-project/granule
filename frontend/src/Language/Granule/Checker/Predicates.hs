@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE ImplicitParams #-}
 
 module Language.Granule.Checker.Predicates where
 

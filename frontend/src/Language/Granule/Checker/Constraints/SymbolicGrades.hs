@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric  #-}
 
 module Language.Granule.Checker.Constraints.SymbolicGrades where
@@ -95,26 +94,26 @@ instance Mergeable SGrade where
 
 instance OrdSymbolic SGrade where
   (SInterval lb1 ub1) .< (SInterval lb2 ub2) =
-    lb2 .< lb1 &&& ub1 .< ub2
+    lb2 .< lb1 .&& ub1 .< ub2
   (SNat n)    .< (SNat n') = n .< n'
   (SFloat n)  .< (SFloat n') = n .< n'
   (SLevel n)  .< (SLevel n') = n .< n'
   (SSet n)    .< (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .< (SExtNat n') = n .< n'
-  SPoint .< SPoint = true
-  s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (&&&) (const true) s t
+  SPoint .< SPoint = sTrue
+  s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (.&&) (const sTrue) s t
   s .< t = cannotDo ".<" s t
 
 instance EqSymbolic SGrade where
   (SInterval lb1 ub1) .== (SInterval lb2 ub2) =
-    lb2 .== lb1 &&& ub1 .== ub2
+    lb2 .== lb1 .&& ub1 .== ub2
   (SNat n)    .== (SNat n') = n .== n'
   (SFloat n)  .== (SFloat n') = n .== n'
   (SLevel n)  .== (SLevel n') = n .== n'
   (SSet n)    .== (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .== (SExtNat n') = n .== n'
-  SPoint .== SPoint = true
-  s .== t | isSProduct s || isSProduct t = applyToProducts (.==) (&&&) (const true) s t
+  SPoint .== SPoint = sTrue
+  s .== t | isSProduct s || isSProduct t = applyToProducts (.==) (.&&) (const sTrue) s t
   s .== t = cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades

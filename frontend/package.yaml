@@ -65,7 +65,7 @@ library:
   - array
   - containers
   - mtl >=2.2.1
-  - sbv >=7.5
+  - sbv >=8.0
   - transformers >=0.5
   - text
   - time
