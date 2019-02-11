@@ -100,8 +100,8 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall s tyVa
         tySchKind <- inferKindOfType' sp tyVars ty
 
         -- Freshen the data type constructors type
-        (ty, tyVarsFreshD, _, constraints) <-
-             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty)
+        (ty, tyVarsFreshD, _, constraints, []) <-
+             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
 
         -- Create a version of the data constructor that matches the data type head
         -- but with a list of coercions
@@ -581,10 +581,10 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
   -- Should be provided in the type checkers environment
   st <- get
   case lookup c (dataConstructors st) of
-    Just (tySch, substitutions) -> do
+    Just (tySch, coercions) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty, _, _, []) <- freshPolymorphicInstance InstanceQ False tySch
+      (ty, _, _, _, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
       -- TODO: allow data type constructors to have constraints
 
       let elaborated = Val s ty (Constr ty c [])
@@ -695,7 +695,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty', _, _, constraints) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+           (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
 
            mapM_ (\ty -> do
              pred <- compileTypeConstraintToConstraint s ty

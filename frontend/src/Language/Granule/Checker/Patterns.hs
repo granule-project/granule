@@ -146,21 +146,24 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
       halt $ UnboundVariableError (Just s) $
              "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
 
-    Just (tySch, subst) -> do
+    Just (tySch, coercions) -> do
 
-      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, []) <-
-          freshPolymorphicInstance BoundQ True tySch
+      debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
+                         <> "\n###\t tySch = " <> pretty tySch
+                         <> "\n###\t coercions =  " <> show coercions
+                         <> "\n###\n"
+
+      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, [], coercions') <-
+          freshPolymorphicInstance BoundQ True tySch coercions
       -- TODO: we don't allow constraints in data constructors yet
 
-      debugM "ctxt" $ "\n### FRESH POLY ###\n\t ty = "
+      debugM "ctxt" $ "\n### FRESH POLY ###\n####\t ty = "
                       <> show dataConstructorTypeFresh
                       <> "\n###\t ctxt = " <> show freshTyVarsCtxt
-                      <> "\n###\t subst = " <> show freshTyVarSubst
+                      <> "\n###\t freshTyVarSubst = " <> show freshTyVarSubst
                       <> "\n"
 
-      debugM "ctxt" $ "### subst =  " <> show subst
-      subst' <- substitute freshTyVarSubst subst
-      debugM "ctxt" $ "### subst' =  " <> show subst'
+      debugM "ctxt" $ "### coercions' =  " <> show coercions'
 
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
@@ -173,7 +176,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
 
 
           debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
-          dataConstructorIndexRewritten <- substitute subst' dataConstructorTypeFresh
+          dataConstructorIndexRewritten <- substitute coercions' dataConstructorTypeFresh
 
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           dataConstructorIndexRewrittenAndSpecialised <- substitute unifiers dataConstructorIndexRewritten
@@ -181,7 +184,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
 
 
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
-          subst <- combineSubstitutions s subst' us
+          subst <- combineSubstitutions s coercions' us
           subst <- combineSubstitutions s (flipSubstitution unifiers) subst
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 

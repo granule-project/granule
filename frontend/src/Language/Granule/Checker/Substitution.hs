@@ -472,15 +472,19 @@ renameType subst = typeFoldM $ baseTypeFold
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
 freshPolymorphicInstance :: (?globals :: Globals)
-  => Quantifier   -- Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
-  -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
-  -> TypeScheme   -- Type scheme to freshen
-  -> MaybeT Checker (Type, Ctxt Kind, Substitution, [Type])
+  => Quantifier   -- ^ Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
+  -> Bool         -- ^ Flag on whether this is a data constructor-- if true, then be careful with existentials
+  -> TypeScheme   -- ^ Type scheme to freshen
+  -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
+                  --     data constructors of indexed types) that also needs freshening
+
+  -> MaybeT Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
-       -- and a list of the (freshened) constraints for this scheme
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) = do
+       -- a list of the (freshened) constraints for this scheme
+       -- a correspondigly freshened version of the parameter substitution
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
@@ -492,7 +496,10 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     -- Return the type and all instance variables
     let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
     let substitution = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
-    return (ty, newTyVars, substitution, constr')
+
+    ixSubstitution' <- substitute substitution ixSubstitution
+
+    return (ty, newTyVars, substitution, constr', ixSubstitution')
 
   where
     -- Freshen variables, create instance variables
@@ -502,6 +509,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either (Kind, Id) (Kind, Id))
     instantiateVariable (var, k) =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
+                           && (lookup var ixSubstitution == Nothing)
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
