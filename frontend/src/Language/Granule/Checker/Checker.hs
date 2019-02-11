@@ -86,7 +86,7 @@ checkDataCon :: (?globals :: Globals)
   -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
   -> MaybeT Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
-checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVarsD constraints ty)) =
+checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) =
     case intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
 
@@ -99,34 +99,28 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
                [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
         tySchKind <- inferKindOfType' sp tyVars ty
 
-        {-
-            Checks whether the type constructor name matches the return constraint
-            of the data constructor and at the same time generate coercions for
-            any type variable parameters (coming from the head of the data type definition)
+        -- Freshen the data type constructors type
+        (ty, tyVarsFreshD, _, constraints) <-
+             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty)
 
-            e.g.
-              checkAndGenerateSubstitution Maybe (a -> Maybe a) [a]
-              > []
+        -- Create a version of the data constructor that matches the data type head
+        -- but with a list of coercions
 
-              checkAndGenerateSubstitution Other (a -> Maybe a) [a]
-              > *** fails
+        (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty tyVarsT (indexKinds kind)
 
-              checkAndGenerateSubstitution Vec (Vec 0 t) [n, t]
-              > [n |-> Subst 0]
+        -- Reconstruct the data constructor's new type scheme
+        let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
+        let tySch = Forall sp tyVarsD' constraints ty'
 
-              checkAndGenerateSubstitution Vec (a -> Vec n t -> Vec (n+1) t) [n, t]
-              > [n |-> Subst (n+1)]
-        -}
-        (ty', subst) <- checkAndGenerateSubstitution tName ty tyVarsT
-
-        let tyVars' = tyVarsT <> tyVarsD
+        --liftIO $ putStrLn $ "***" <> show tySch
+        --liftIO $ putStrLn $ "***" <> show coercions <> " \n"
 
         case tySchKind of
           KType ->
-            registerDataConstructor (Forall sp tyVars' constraints ty') subst
+            registerDataConstructor tySch coercions
 
           KPromote (TyCon k) | internalName k == "Protocol" ->
-            registerDataConstructor (Forall sp tyVars' constraints ty') subst
+            registerDataConstructor tySch coercions
 
           _     -> illKindedNEq sp KType kind
 
@@ -136,6 +130,9 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
                     ,"` are already bound by the associated type constructor `", pretty tName
                     , "`. Choose different, unbound names."]
   where
+    indexKinds (KFun k1 k2) = k1 : indexKinds k2
+    indexKinds k = []
+
     registerDataConstructor dataConstrTy subst = do
       st <- get
       case extend (dataConstructors st) dName (dataConstrTy, subst) of
@@ -143,37 +140,71 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
           put st { dataConstructors = ds, tyVarContext = [] }
         None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
 
-    -- Checks that the result type of a data constructor matches the name of the type constructor
-    -- and at the same time also generates a substitution between any variable
-    checkAndGenerateSubstitution :: Id -> Type -> Ctxt Kind -> MaybeT Checker (Type, Substitution)
-    checkAndGenerateSubstitution tName ty ctxt = checkAndGenerateSubstitution' tName ty (reverse ctxt)
-
-    checkAndGenerateSubstitution' tName (TyCon tC) [] =
-        -- Check the name
-        if tC == tName
-          then return (TyCon tC, [])
-          else halt $ GenericError (Just sp)
-                    $ "Expected type constructor `" <> pretty tName
-                   <> "`, but got `" <> pretty tC <> "`"
-
-    checkAndGenerateSubstitution' tName (FunTy arg res) tyVars = do
-       (res', subst) <- checkAndGenerateSubstitution' tName res tyVars
-       return (FunTy arg res', subst)
-
-    checkAndGenerateSubstitution' tName (TyApp fun arg) ((var, _):tyvars) = do
-      (fun', subst) <- checkAndGenerateSubstitution' tName fun tyvars
-      case arg of
-        -- Type `arg` is appears in the head of the data type and is therefore
-        -- a polymorphic type parameter
-        TyVar v | v == var -> return (TyApp fun' arg, subst)
-        -- otherwise, this means that `arg` is a type index so generation a substitution
-        _ -> return (TyApp fun' (TyVar var), (var, SubstT arg) : subst)
-
-    checkAndGenerateSubstitution' _ x _ = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
-
 checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
   = checkDataCon tName kind tyVars
     $ nonIndexedToIndexedDataConstr tName tyVars d
+
+
+{-
+    Checks whether the type constructor name matches the return constraint
+    of the data constructor and at the same time generate coercions for
+    any type variable parameters (coming from the head of the data type definition)
+    and in the case of data type defined with a higher-order kind (rather than type variables)
+    then generate fresh variables for each kind argument and create coercions from these
+
+    e.g.
+      checkAndGenerateSubstitution Maybe (a' -> Maybe a') [a : Type] []
+      > (a' -> Maybe a, [a |-> a'], [a : Type])
+
+      checkAndGenerateSubstitution Other (a' -> Maybe a') [a : Type] []
+      > *** fails
+
+      checkAndGenerateSubstitution Vec (Vec 0 t') [n : Nat, t : Type] []
+      > (Vec n t', [n |-> Subst 0, t |-> t'], [n : Type, ])
+
+      checkAndGenerateSubstitution Vec (t' -> Vec n' t' -> Vec (n'+1) t') [n : Nat, t : Type] []
+      > (t' -> Vec n' t' -> Vec n t, [n |-> Subst (n'+1), t |-> t'], [])
+
+      checkAndGenerateSubstitution Foo (Int -> Foo Int) [] [Type]
+      > (Int -> Foo t1, [t1 |-> Subst Int], [t1 : Type])
+
+-}
+
+checkAndGenerateSubstitution ::
+       (?globals :: Globals)
+    => Span                     -- ^ Location of this application
+    -> Id                       -- ^ Name of the type constructor
+    -> Type                     -- ^ Type of the data constructor
+    -> Ctxt Kind                -- ^ Type variables in the data type head
+    -> [Kind]                   -- ^ Types of the remaining data type indices
+    -> MaybeT Checker (Type, Substitution, Ctxt Kind)
+checkAndGenerateSubstitution sp tName ty ctxt ixkinds =
+    checkAndGenerateSubstitution' sp tName ty (reverse ctxt) (reverse ixkinds)
+
+checkAndGenerateSubstitution' sp tName (TyCon tC) [] _ =
+    -- Check the name
+    if tC == tName
+      then return (TyCon tC, [], [])
+      else halt $ GenericError (Just sp)
+                $ "Expected type constructor `" <> pretty tName
+               <> "`, but got `" <> pretty tC <> "`"
+
+checkAndGenerateSubstitution' sp tName (FunTy arg res) tyVars kinds = do
+   (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res tyVars kinds
+   return (FunTy arg res', subst, tyVarsNew)
+
+checkAndGenerateSubstitution' sp tName (TyApp fun arg) ((var, kind):tyvars) kinds = do
+  (fun', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName fun tyvars kinds
+  return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
+
+checkAndGenerateSubstitution' sp tName (TyApp fun arg) [] (kind:kinds) = do
+  varSymb <- freshIdentifierBase "t"
+  let var = mkId varSymb
+  (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun [] kinds
+  return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
+
+checkAndGenerateSubstitution' sp _ x _ _ =
+  halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
@@ -553,7 +584,7 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
     Just (tySch, substitutions) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty, _, []) <- freshPolymorphicInstance InstanceQ False tySch
+      (ty, _, _, []) <- freshPolymorphicInstance InstanceQ False tySch
       -- TODO: allow data type constructors to have constraints
 
       let elaborated = Val s ty (Constr ty c [])
@@ -664,7 +695,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty', _, constraints) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
+           (ty', _, _, constraints) <- freshPolymorphicInstance InstanceQ False tyScheme -- discard list of fresh type variables
 
            mapM_ (\ty -> do
              pred <- compileTypeConstraintToConstraint s ty

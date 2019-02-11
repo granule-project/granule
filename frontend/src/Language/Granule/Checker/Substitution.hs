@@ -475,36 +475,42 @@ freshPolymorphicInstance :: (?globals :: Globals)
   => Quantifier   -- Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
   -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
   -> TypeScheme   -- Type scheme to freshen
-  -> MaybeT Checker (Type, Ctxt Id, [Type])
-    -- Returns the type (with skolems), a list of skolem variables, and a list of constraints
+  -> MaybeT Checker (Type, Ctxt Kind, Substitution, [Type])
+    -- Returns the type (with new instance variables)
+       -- a context of all the instance variables kinds (and the ids they replaced)
+       -- a substitution from the visible instance variable to their originals
+       -- and a list of the (freshened) constraints for this scheme
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- mapM instantiateVariable kinds
-    ty <- renameType (elideEither renameMap) ty
+    ty <- renameType (ctxtMap snd $ elideEither renameMap) ty
 
-    let subst = map (\(v, var) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
+    let subst = map (\(v, (_, var)) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
     constr' <- mapM (substitute subst) constr
 
-    -- Return the type and all skolem variables
-    return (ty, justLefts renameMap, constr')
+    -- Return the type and all instance variables
+    let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
+    let substitution = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
+    return (ty, newTyVars, substitution, constr')
 
   where
-    -- Freshen variables, create skolem variables
-    -- Left of id means a succesful skolem variable created
-    -- Right of id means that this is an existential and so a skolem is not generated
-    instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either Id Id)
+    -- Freshen variables, create instance variables
+    -- Left of id means a succesful instance variable created
+    -- Right of id means that this is an existential and so an (externally visisble)
+     --    instance variable is not generated
+    instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either (Kind, Id) (Kind, Id))
     instantiateVariable (var, k) =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
            -- Don't return this as a fresh skolem variable
-           return (var, Right var')
+           return (var, Right (k, var'))
 
          else do
            var' <- freshTyVarInContextWithBinding var k quantifier
-           return (var, Left var')
+           return (var, Left (k, var'))
     -- Forget the Either
     elideEither = map proj
       where proj (v, Left a) = (v, a)

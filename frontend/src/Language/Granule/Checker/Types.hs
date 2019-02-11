@@ -287,11 +287,11 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
          else
            halt $ GenericError (Just s)
              $ case sp of
-              FstIsSpec -> "Cannot unify a universally quantified type variable `"
+              _ -> "Cannot unify a universally quantified type variable `"
                          <> (pretty (TyVar n))
                          <> "` with a concrete type `" <> pretty t <> "`"
-              SndIsSpec -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
-              PatternCtxt -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
+              --SndIsSpec -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
+              --PatternCtxt -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
 
     {-   -- If we are in a position to specialise a universal (i.e., in a pattern match)
        if allowUniversalSpecialisation

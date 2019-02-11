@@ -169,7 +169,7 @@ varsConstraint (Gt _ c1 c2) = freeVars c1 <> freeVars c2
 data Pred where
     Conj :: [Pred] -> Pred
     Disj :: [Pred] -> Pred
-    Impl :: [Id] -> Pred -> Pred -> Pred
+    Impl :: Ctxt Kind -> Pred -> Pred -> Pred
     Con  :: Constraint -> Pred
     NegPred  :: Pred -> Pred
     Exists :: Id -> Kind -> Pred -> Pred
@@ -177,7 +177,7 @@ data Pred where
 vars :: Pred -> [Id]
 vars (Conj ps) = concatMap vars ps
 vars (Disj ps) = concatMap vars ps
-vars (Impl bounds p1 p2) = (vars p1 <> vars p2) \\ bounds
+vars (Impl bounds p1 p2) = (vars p1 <> vars p2) \\ map fst bounds
 vars (Con c) = varsConstraint c
 vars (NegPred p) = vars p
 vars (Exists x _ p) = vars p \\ [x]
@@ -217,7 +217,7 @@ instance (Monad m, MonadFail m) => Freshenable m Pred where
     p2' <- freshen p2
     return $ Impl [] p1' p2'
 
-  freshen (Impl (v:vs) p p') = do
+  freshen (Impl ((v, kind):vs) p p') = do
     st <- get
 
     -- Freshen the variable bound here
@@ -230,7 +230,7 @@ instance (Monad m, MonadFail m) => Freshenable m Pred where
     -- Freshening now out of scope
     removeFreshenings [Id (internalName v) v']
 
-    return $ Impl ((Id (internalName v) v'):vs') pf pf'
+    return $ Impl ((Id (internalName v) v', kind):vs') pf pf'
 
   freshen (Con cons) = do
     cons' <- freshen cons
@@ -243,7 +243,7 @@ deriving instance Eq Pred
 predFold ::
      ([a] -> a)
   -> ([a] -> a)
-  -> ([Id] -> a -> a -> a)
+  -> (Ctxt Kind -> a -> a -> a)
   -> (Constraint -> a)
   -> (a -> a)
   -> (Id -> Kind -> a -> a)
@@ -251,7 +251,7 @@ predFold ::
   -> a
 predFold c d i a n e (Conj ps)   = c (map (predFold c d i a n e) ps)
 predFold c d i a n e (Disj ps)   = d (map (predFold c d i a n e) ps)
-predFold c d i a n e (Impl eVar p p') = i eVar (predFold c d i a n e p) (predFold c d i a n e p')
+predFold c d i a n e (Impl ctxt p p') = i ctxt (predFold c d i a n e p) (predFold c d i a n e p')
 predFold _ _ _ a _  _ (Con cons)  = a cons
 predFold c d i a n e (NegPred p) = n (predFold c d i a n e p)
 predFold c d i a n e (Exists x t p) = e x t (predFold c d i a n e p)
@@ -260,7 +260,7 @@ predFold c d i a n e (Exists x t p) = e x t (predFold c d i a n e p)
 predFoldM :: Monad m =>
      ([a] -> m a)
   -> ([a] -> m a)
-  -> ([Id] -> a -> a -> m a)
+  -> (Ctxt Kind -> a -> a -> m a)
   -> (Constraint -> m a)
   -> (a -> m a)
   -> (Id -> Kind -> a -> m a)
@@ -298,8 +298,8 @@ instance Pretty Pred where
     predFold
      (intercalate " ∧ ")
      (intercalate " ∨ ")
-     (\s p q ->
-         (if null s then "" else "∀ " <> intercalate "," (map sourceName s) <> " . ")
+     (\ctxt p q ->
+         (if null ctxt then "" else "∀ " <> pretty ctxt <> " . ")
       <> "(" <> p <> " -> " <> q <> ")")
       (prettyL l)
       (\p -> "¬(" <> p <> ")")

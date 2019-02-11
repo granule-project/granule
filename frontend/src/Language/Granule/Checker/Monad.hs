@@ -202,19 +202,11 @@ popCaseFrame =
 -- impliciation
 -- The first parameter is a list of any
 -- existential variables being introduced in this implication
-concludeImplication :: (?globals :: Globals) => Span -> [Id] -> MaybeT Checker ()
-concludeImplication s localVars = do
+concludeImplication :: (?globals :: Globals) => Span -> Ctxt Kind -> MaybeT Checker ()
+concludeImplication s localCtxt = do
   checkerState <- get
   case predicateStack checkerState of
     (p' : p : stack) -> do
-
-       -- Get all the kinds for the local variables
-       localCtxt <- forM localVars $ \v ->
-                      case lookup v (tyVarContext checkerState) of
-                        Just (k, _) -> return (v, k)
-                        Nothing -> error $ "I don't know the kind of "
-                                          <> pretty v <> " in "
-                                          <> pretty (tyVarContext checkerState)
 
        case guardPredicates checkerState of
 
@@ -222,7 +214,7 @@ concludeImplication s localVars = do
 
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
-          let impl = Impl localVars p p'
+          let impl = Impl localCtxt p p'
 
           -- Add the implication to the predicate stack
           modify (\st -> st { predicateStack = pushPred impl stack
@@ -241,8 +233,8 @@ concludeImplication s localVars = do
 
            -- Implication of p .&& negated previous guards => p'
            let impl = if (isTrivial prevGuardPred)
-                        then Impl localVars p p'
-                        else Impl localVars (Conj [p, guard]) p'
+                        then Impl localCtxt p p'
+                        else Impl localCtxt (Conj [p, guard]) p'
 
            let knowledge = ((localCtxt, p), s) : previousGuards
 

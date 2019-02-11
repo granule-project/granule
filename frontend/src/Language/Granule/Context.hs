@@ -37,6 +37,11 @@ replace ((name', _):ctxt) name v | name == name'
 replace (x : ctxt) name v
   = x : replace ctxt name v
 
+-- | Map over the just elements of the context (and not the keys (identifiers))
+ctxtMap :: (a -> b) -> Ctxt a -> Ctxt b
+ctxtMap f [] = []
+ctxtMap f ((v, x):ctxt) = (v, f x) : ctxtMap f ctxt
+
 -- $setup
 -- >>> import Language.Granule.Syntax.Identifiers (mkId)
 {- | Take the intersection of two contexts based on keys

@@ -131,7 +131,7 @@ compileToSBV predicate tyVarContext kVarContext =
           buildTheorem' solverVars p
 
     -- TODO: generalise this to not just Nat indices
-    buildTheorem' solverVars (Impl (v:vs) p p') =
+    buildTheorem' solverVars (Impl ((v, _kind):vs) p p') =
       if v `elem` (vars p <> vars p')
         -- If the quantified variable appears in the theorem
         then

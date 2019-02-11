@@ -55,8 +55,8 @@ polyShaped t = case leftmostOfApplication t of
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also:
---      - a list of any variables bound by the pattern
---        (e.g. for dependent matching)
+--      - a context of any variables bound by the pattern
+--        (e.g. for dependent matching) with their kinds
 --      - a substitution for variables
 --           caused by pattern matching (e.g., from unification),
 --      - a consumption context explaining usage triggered by pattern matching
@@ -65,7 +65,7 @@ ctxtFromTypedPattern :: (?globals :: Globals, Show t) =>
   -> Type
   -> Pattern t
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
+  -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern _ t (PWild s _) cons =
@@ -148,13 +148,19 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
 
     Just (tySch, subst) -> do
 
-      (dataConstructorTypeFresh, freshTyVarMap, []) <-
+      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, []) <-
           freshPolymorphicInstance BoundQ True tySch
       -- TODO: we don't allow constraints in data constructors yet
 
-      liftIO $ putStrLn $ "subst =  " <> show subst
-      subst' <- substitute (map (\(v, v') -> (v, SubstT $ TyVar v')) freshTyVarMap) subst
-      liftIO $ putStrLn $ "subst' =  " <> show subst'
+      debugM "ctxt" $ "\n### FRESH POLY ###\n\t ty = "
+                      <> show dataConstructorTypeFresh
+                      <> "\n###\t ctxt = " <> show freshTyVarsCtxt
+                      <> "\n###\t subst = " <> show freshTyVarSubst
+                      <> "\n"
+
+      debugM "ctxt" $ "### subst =  " <> show subst
+      subst' <- substitute freshTyVarSubst subst
+      debugM "ctxt" $ "### subst' =  " <> show subst'
 
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
@@ -162,16 +168,16 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
       case areEq of
         (True, _, unifiers) -> do
 
-          mapM (\(var, SubstT ty) ->
-                        equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
+          --mapM (\(var, SubstT ty) ->
+          --              equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
 
 
-          liftIO $ putStrLn $ "dfresh = " <> show dataConstructorTypeFresh
+          debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
           dataConstructorIndexRewritten <- substitute subst' dataConstructorTypeFresh
 
-          liftIO $ putStrLn $ "drewrit = " <> show dataConstructorIndexRewritten
+          debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           dataConstructorIndexRewrittenAndSpecialised <- substitute unifiers dataConstructorIndexRewritten
-          liftIO $ putStrLn $ "drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
+          debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
 
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
@@ -181,7 +187,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
 
           let elabP = PConstr s ty dataC elabPs
           return (ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
-                  (map snd freshTyVarMap) <> bs,  -- contact the set of new vars
+                  freshTyVarsCtxt <> bs,          -- concat the context of new variable kinds
                   subst,                          -- returned the combined substitution
                   elabP,                          -- elaborated pattern
                   consumptionOut)                 -- final consumption effect
@@ -194,7 +200,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
             => [Pattern t]
             -- The remaining type of the constructor
             -> Type
-            -> MaybeT Checker (Type, ([(Id, Assumption)], [Id], Substitution, [Pattern Type], Consumption))
+            -> MaybeT Checker (Type, (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption))
     unpeel = unpeel' ([],[],[],[],Full)
 
     -- Tail recursive version of unpell
@@ -232,7 +238,7 @@ ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
   -> Type
   -> [Pattern t]
   -> [Consumption]
-  -> MaybeT Checker (Ctxt Assumption, Type, [Id], Substitution, [Pattern Type], [Consumption])
+  -> MaybeT Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
 ctxtFromTypedPatterns sp ty [] _ = do
   debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
   return ([], ty, [], [], [], [])
