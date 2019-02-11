@@ -182,6 +182,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
           dataConstructorIndexRewrittenAndSpecialised <- substitute unifiers dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
+          debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
 
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
           subst <- combineSubstitutions s coercions' us

@@ -9,4 +9,4 @@ data N (n : Nat) where
 
 fibble : forall {n : Nat} . N n -> N n
 fibble Z = Z;
-fibble (S n) = S (fibble n)
+fibble (S n) = (fibble n)

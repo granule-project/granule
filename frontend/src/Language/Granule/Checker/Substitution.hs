@@ -509,7 +509,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either (Kind, Id) (Kind, Id))
     instantiateVariable (var, k) =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
-                           && (lookup var ixSubstitution == Nothing)
+                           && (var `notElem` freeVars (ixSubstitution))
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
