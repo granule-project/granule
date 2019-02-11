@@ -99,7 +99,25 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
                [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
         tySchKind <- inferKindOfType' sp tyVars ty
 
-        (ty', subst) <- checkAndGenerateSubstitution ty tyVarsT
+        {-
+            Checks whether the type constructor name matches the return constraint
+            of the data constructor and at the same time generate coercions for
+            any type variable parameters (coming from the head of the data type definition)
+
+            e.g.
+              checkAndGenerateSubstitution Maybe (a -> Maybe a) [a]
+              > []
+
+              checkAndGenerateSubstitution Other (a -> Maybe a) [a]
+              > *** fails
+
+              checkAndGenerateSubstitution Vec (Vec 0 t) [n, t]
+              > [n |-> Subst 0]
+
+              checkAndGenerateSubstitution Vec (a -> Vec n t -> Vec (n+1) t) [n, t]
+              > [n |-> Subst (n+1)]
+        -}
+        (ty', subst) <- checkAndGenerateSubstitution tName ty tyVarsT
 
         let tyVars' = tyVarsT <> tyVarsD
 
@@ -127,8 +145,10 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
 
     -- Checks that the result type of a data constructor matches the name of the type constructor
     -- and at the same time also generates a substitution between any variable
-    checkAndGenerateSubstitution :: Type -> Ctxt Kind -> MaybeT Checker (Type, Substitution)
-    checkAndGenerateSubstitution (TyCon tC) [] =
+    checkAndGenerateSubstitution :: Id -> Type -> Ctxt Kind -> MaybeT Checker (Type, Substitution)
+    checkAndGenerateSubstitution tName ty ctxt = checkAndGenerateSubstitution' tName ty (reverse ctxt)
+
+    checkAndGenerateSubstitution' tName (TyCon tC) [] =
         -- Check the name
         if tC == tName
           then return (TyCon tC, [])
@@ -136,12 +156,12 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
                     $ "Expected type constructor `" <> pretty tName
                    <> "`, but got `" <> pretty tC <> "`"
 
-    checkAndGenerateSubstitution (FunTy arg res) tyVars = do
-       (res', subst) <- checkAndGenerateSubstitution res tyVars
+    checkAndGenerateSubstitution' tName (FunTy arg res) tyVars = do
+       (res', subst) <- checkAndGenerateSubstitution' tName res tyVars
        return (FunTy arg res', subst)
 
-    checkAndGenerateSubstitution (TyApp fun arg) ((var, _):tyvars) = do
-      (fun', subst) <- checkAndGenerateSubstitution fun tyvars
+    checkAndGenerateSubstitution' tName (TyApp fun arg) ((var, _):tyvars) = do
+      (fun', subst) <- checkAndGenerateSubstitution' tName fun tyvars
       case arg of
         -- Type `arg` is appears in the head of the data type and is therefore
         -- a polymorphic type parameter
@@ -149,7 +169,7 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall _ tyVa
         -- otherwise, this means that `arg` is a type index so generation a substitution
         _ -> return (TyApp fun' (TyVar var), (var, SubstT arg) : subst)
 
-    checkAndGenerateSubstitution x _ = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
+    checkAndGenerateSubstitution' _ x _ = halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 
 checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
   = checkDataCon tName kind tyVars
@@ -221,8 +241,11 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   newConjunct
 
   -- Specialise the return type by the pattern generated substitution
+  liftIO $ putStrLn $ "subst' " <> show subst
+  liftIO $ putStrLn $ "tau " <> show tau
   tau' <- substitute subst tau
-  
+  liftIO $ putStrLn $ "tau' " <> show tau'
+
   -- Check the body
   (localGam, subst', elaboratedExpr) <-
        checkExpr defCtxt patternGam Positive True tau' expr
@@ -1182,8 +1205,15 @@ checkGuardsForImpossibility s name = do
       QED -> return ()
 
       -- Various kinds of error
-      NotValid msg -> halt $ GenericError (Just s) $ msgHead <>
-                        " is impossible. Its condition " <> msg
+      NotValid msg -> do
+        simpPred <- simplifyPred p
+        halt $ GenericError (Just s) $ msgHead
+                    <> " is impossible. Its condition "
+                    <>  if msg == "is Falsifiable\n"
+                            then  "is false. "
+                               <> "\n  That is: " <> pretty (NegPred simpPred)
+                            else msg <> "\n  thus: "  <> pretty (NegPred simpPred)
+
       NotValidTrivial unsats ->
                       halt $ GenericError (Just s) $ msgHead <>
                         " is impossible. " <>

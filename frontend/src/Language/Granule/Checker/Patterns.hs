@@ -147,15 +147,27 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
           freshPolymorphicInstance BoundQ True tySch
       -- TODO: we don't allow constraints in data constructors yet
 
+      liftIO $ putStrLn $ "subst =  " <> show subst
       subst' <- substitute (map (\(v, v') -> (v, SubstT $ TyVar v')) freshTyVarMap) subst
+      liftIO $ putStrLn $ "subst' =  " <> show subst'
+
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
 
+          mapM (\(var, SubstT ty) ->
+                        equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
+
+
+          liftIO $ putStrLn $ "dfresh = " <> show dataConstructorTypeFresh
           dataConstructorIndexRewritten <- substitute subst' dataConstructorTypeFresh
+
+          liftIO $ putStrLn $ "drewrit = " <> show dataConstructorIndexRewritten
           dataConstructorIndexRewrittenAndSpecialised <- substitute unifiers dataConstructorIndexRewritten
+          liftIO $ putStrLn $ "drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
+
 
           (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
           subst <- combineSubstitutions s subst' us
