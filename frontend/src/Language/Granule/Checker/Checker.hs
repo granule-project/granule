@@ -106,7 +106,7 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall s tyVa
         -- Create a version of the data constructor that matches the data type head
         -- but with a list of coercions
 
-        (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty tyVarsT (indexKinds kind)
+        (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty (indexKinds kind)
 
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
@@ -144,25 +144,25 @@ checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
 
 {-
     Checks whether the type constructor name matches the return constraint
-    of the data constructor and at the same time generate coercions for
-    any type variable parameters (coming from the head of the data type definition)
-    and in the case of data type defined with a higher-order kind (rather than type variables)
-    then generate fresh variables for each kind argument and create coercions from these
+    of the data constructor
+    and at the same time generate coercions for every parameter of result type type constructor
+    then generate fresh variables for parameter and coercions that are either trivial
+    variable ones or to concrete types
 
     e.g.
-      checkAndGenerateSubstitution Maybe (a' -> Maybe a') [a : Type] []
+      checkAndGenerateSubstitution Maybe (a' -> Maybe a') [Type]
       > (a' -> Maybe a, [a |-> a'], [a : Type])
 
-      checkAndGenerateSubstitution Other (a' -> Maybe a') [a : Type] []
+      checkAndGenerateSubstitution Other (a' -> Maybe a') [Type]
       > *** fails
 
-      checkAndGenerateSubstitution Vec (Vec 0 t') [n : Nat, t : Type] []
+      checkAndGenerateSubstitution Vec (Vec 0 t') [Nat, Type]
       > (Vec n t', [n |-> Subst 0, t |-> t'], [n : Type, ])
 
-      checkAndGenerateSubstitution Vec (t' -> Vec n' t' -> Vec (n'+1) t') [n : Nat, t : Type] []
+      checkAndGenerateSubstitution Vec (t' -> Vec n' t' -> Vec (n'+1) t') [Nat, Type]
       > (t' -> Vec n' t' -> Vec n t, [n |-> Subst (n'+1), t |-> t'], [])
 
-      checkAndGenerateSubstitution Foo (Int -> Foo Int) [] [Type]
+      checkAndGenerateSubstitution Foo (Int -> Foo Int) [Type]
       > (Int -> Foo t1, [t1 |-> Subst Int], [t1 : Type])
 
 -}
@@ -172,13 +172,12 @@ checkAndGenerateSubstitution ::
     => Span                     -- ^ Location of this application
     -> Id                       -- ^ Name of the type constructor
     -> Type                     -- ^ Type of the data constructor
-    -> Ctxt Kind                -- ^ Type variables in the data type head
     -> [Kind]                   -- ^ Types of the remaining data type indices
     -> MaybeT Checker (Type, Substitution, Ctxt Kind)
-checkAndGenerateSubstitution sp tName ty ctxt ixkinds =
-    checkAndGenerateSubstitution' sp tName ty (reverse ctxt) (reverse ixkinds)
+checkAndGenerateSubstitution sp tName ty ixkinds =
+    checkAndGenerateSubstitution' sp tName ty (reverse ixkinds)
 
-checkAndGenerateSubstitution' sp tName (TyCon tC) [] _ =
+checkAndGenerateSubstitution' sp tName (TyCon tC) [] =
     -- Check the name
     if tC == tName
       then return (TyCon tC, [], [])
@@ -186,28 +185,20 @@ checkAndGenerateSubstitution' sp tName (TyCon tC) [] _ =
                 $ "Expected type constructor `" <> pretty tName
                <> "`, but got `" <> pretty tC <> "`"
 
-checkAndGenerateSubstitution' sp tName (FunTy arg res) tyVars kinds = do
-   (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res tyVars kinds
+checkAndGenerateSubstitution' sp tName (FunTy arg res) kinds = do
+   (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
    return (FunTy arg res', subst, tyVarsNew)
 
-checkAndGenerateSubstitution' sp tName (TyApp fun arg) ((var, kind):tyvars) kinds = do
-  (fun', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName fun tyvars kinds
-  let subst' = case arg of
-        TyVar var' -> [(var', SubstT $ TyVar var), (var, SubstT arg)]
-        _          -> [(var, SubstT arg)]
-
-  return (TyApp fun' (TyVar var), subst' ++ subst, (var, kind) : tyVarsNew)
-
-checkAndGenerateSubstitution' sp tName (TyApp fun arg) [] (kind:kinds) = do
+checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
   varSymb <- freshIdentifierBase "t"
   let var = mkId varSymb
-  (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun [] kinds
+  (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun kinds
   let subst' = case arg of
         TyVar var' -> [(var', SubstT $ TyVar var), (var, SubstT arg)]
         _          -> [(var, SubstT arg)]
   return (TyApp fun' (TyVar var), subst' ++ subst, (var, kind) : tyVarsNew)
 
-checkAndGenerateSubstitution' sp _ x _ _ =
+checkAndGenerateSubstitution' sp _ x _ =
   halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
 
 checkDef :: (?globals :: Globals)
@@ -898,7 +889,7 @@ solveConstraints predicate s name = do
     NotValidTrivial unsats ->
        mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
     Timeout ->
-       halt $ CheckerError Nothing $
+       halt $ CheckerError (Just s) $
          "Solver timed out with limit of " <>
          show (solverTimeoutMillis ?globals) <>
          " ms. You may want to increase the timeout (see --help)."

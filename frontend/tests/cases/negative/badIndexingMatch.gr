@@ -1,0 +1,7 @@
+data Blah a where
+  Blah : a -> Blah a
+
+data Maybe a where Nothing ; Just a
+
+foo : forall {a : Type} . Blah a -> Blah Int
+foo (Blah Nothing) = Blah 4
