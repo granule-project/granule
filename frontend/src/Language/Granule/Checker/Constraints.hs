@@ -10,7 +10,7 @@
 module Language.Granule.Checker.Constraints where
 
 import Data.Foldable (foldrM)
-import Data.List (isPrefixOf, sortBy)
+import Data.List (isPrefixOf)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
@@ -32,8 +32,6 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
-
-import Debug.Trace
 
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
@@ -62,12 +60,16 @@ compileToSBV predicate tyVarContext kVarContext =
         (SBool -> SBool)
      -> (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
      -> Symbolic SBool
-    buildTheorem polarity quant =
-      (pretty (universalsFirst tyVarContext) ++ "\n" ++ (pretty tyVarContext)) `trace` do
+    buildTheorem polarity quant = do
       -- Create fresh solver variables for everything in the type variable
       -- context of the write kind
+
+      -- IMPORTANT: foldrM creates its side effects in reverse order
+      -- this is good because tyVarContext has the reverse order for our
+      -- quantifiers, so reversing order of the effects in foldrM gives us
+      -- the order we want for the predicate
         (preConstraints, constraints, solverVars) <-
-            foldrM (createFreshVar quant) (sTrue, sTrue, []) (universalsFirst tyVarContext)
+            foldrM (createFreshVar quant) (sTrue, sTrue, []) tyVarContext
 
         predC <- buildTheorem' solverVars predicate'
         return (polarity (preConstraints .=> (constraints .&& predC)))
@@ -153,12 +155,6 @@ compileToSBV predicate tyVarContext kVarContext =
 
     buildTheorem' solverVars (Con cons) =
       compile solverVars cons
-
-    universalsFirst =
-      sortBy (\(v, (t, q)) -> \(v', (t', q')) ->
-        case q of
-          ForallQ -> LT
-          _       -> GT)
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
