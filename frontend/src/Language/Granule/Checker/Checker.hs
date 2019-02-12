@@ -65,7 +65,7 @@ checkTyCon (DataDecl sp name tyVars kindAnn ds) = do
   if clash
     then halt $ NameClashError (Just sp) $ "Type constructor `" <> pretty name <> "` already defined."
     else modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
+      st { typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
@@ -276,10 +276,11 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   newConjunct
 
   -- Specialise the return type by the pattern generated substitution
-  debugM "ctxt" $ "\n\t### -- OUT -- subst' = " <> show subst
-  debugM "ctxt" $ "\n\t### -- OUT -- tau = " <> show tau
+  debugM "eqn" $ "### -- patternGam = " <> show patternGam
+  debugM "eqn" $ "### -- localVars  = " <> show localVars
+  debugM "eqn" $ "### -- tau = " <> show tau
   tau' <- substitute subst tau
-  debugM "ctxt" $ "\n\t### -- OUT -- tau' = " <> show tau'
+  debugM "eqn" $ "### -- tau' = " <> show tau'
 
   -- Check the body
   (localGam, subst', elaboratedExpr) <-

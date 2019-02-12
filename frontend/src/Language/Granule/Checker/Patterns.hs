@@ -191,11 +191,12 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
           debugM "ctxt" $ "\n\t### ty = " <> show ty <> "\n"
 
 
-          (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
+          (as, bs, us, elabPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
+
+          -- Combine the substitutions
           subst <- combineSubstitutions s (flipSubstitution unifiers) us
           subst <- combineSubstitutions s freshTyVarSubst subst
           subst <- combineSubstitutions s coercions' subst
-
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
           (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
@@ -214,11 +215,11 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
             => [Pattern t]
             -- The remaining type of the constructor
             -> Type
-            -> MaybeT Checker (Type, (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption))
+            -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
     unpeel = unpeel' ([],[],[],[],Full)
 
-    -- Tail recursive version of unpell
-    unpeel' acc [] t = return (t,acc)
+    -- Tail recursive version of unpeel
+    unpeel' acc [] t = return acc
 
     unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
         (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern s t p cons
@@ -254,17 +255,18 @@ ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
   -> [Consumption]
   -> MaybeT Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
 ctxtFromTypedPatterns sp ty [] _ = do
-  debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
   return ([], ty, [], [], [], [])
 
 ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
-  -- TODO: when we have dependent matching at the function clause
-  -- level, we will need to pay attention to the bound variables here
+
+  -- Match a pattern
   (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern s t1 pat cons
 
+  -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
       ctxtFromTypedPatterns s t2 pats consumptionsIn
 
+  -- Combine the results
   substs' <- combineSubstitutions s subst substs
   return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
