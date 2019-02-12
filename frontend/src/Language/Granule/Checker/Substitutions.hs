@@ -552,13 +552,16 @@ instance Substitutable Constraint where
   unify _ _ = error "Can't unify constraints"
 
 instance Substitutable (Equation () Type) where
-  substitute _ x = return x
+  -- TODO: recursively apply `substitute ctxt`
+  substitute ctxt x = return x
   unify _ _ = error "Can't unify equations"
 
 instance Substitutable (Expr () Type) where
-  substitute _ x = return x
+  -- TODO: recursively apply `substitute ctxt`
+  substitute ctxt x = return x
   unify _ _ = error "Can't unify equations"
 
 instance Substitutable (Pattern Type) where
-  substitute _ x = return x
+  -- TODO: recursively apply `substitute ctxt`
+  substitute ctxt x = return x
   unify _ _ = error "Can't unify equations"
