@@ -195,14 +195,14 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
 
           -- Combine the substitutions
           subst <- combineSubstitutions s (flipSubstitution unifiers) us
-          subst <- combineSubstitutions s freshTyVarSubst subst
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
-          (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
+
+          -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty dataC elabPs
-          return (ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
-                  freshTyVarsCtxt <> bs,          -- concat the context of new variable kinds
+          return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
+                  freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
                   elabP,                          -- elaborated pattern
                   consumptionOut)                 -- final consumption effect
