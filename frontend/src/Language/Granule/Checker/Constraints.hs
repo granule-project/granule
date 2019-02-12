@@ -10,7 +10,7 @@
 module Language.Granule.Checker.Constraints where
 
 import Data.Foldable (foldrM)
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, sortBy)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
@@ -64,7 +64,7 @@ compileToSBV predicate tyVarContext kVarContext =
       -- Create fresh solver variables for everything in the type variable
       -- context of the write kind
         (preConstraints, constraints, solverVars) <-
-            foldrM (createFreshVar quant) (sTrue, sTrue, []) tyVarContext
+            foldrM (createFreshVar quant) (sTrue, sTrue, []) (universalsFirst tyVarContext)
 
         predC <- buildTheorem' solverVars predicate'
         return (polarity (preConstraints .=> (constraints .&& predC)))
@@ -136,10 +136,11 @@ compileToSBV predicate tyVarContext kVarContext =
       if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
+
           -- Create fresh solver variable
           forAll [(internalName v)] $ \vSolver -> do
-            impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
-            return ((vSolver .>= literal 0) .=> impl)
+             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
+             return ((vSolver .>= literal 0) .=> impl)
 
         else
           -- An optimisation, don't bother quantifying things
@@ -149,6 +150,12 @@ compileToSBV predicate tyVarContext kVarContext =
 
     buildTheorem' solverVars (Con cons) =
       compile solverVars cons
+
+    universalsFirst =
+      sortBy (\(v, (t, q)) -> \(v', (t', q')) ->
+        case q of
+          ForallQ -> LT
+          _       -> GT)
 
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
@@ -165,14 +172,14 @@ compileToSBV predicate tyVarContext kVarContext =
     createFreshVar quant
                    (var, (kind, quantifierType))
                    (universalConstraints, existentialConstraints, ctxt) = do
-      (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
-      let (universalConstraints', existentialConstraints') =
-            case quantifierType of
-              ForallQ -> (pre .&& universalConstraints, existentialConstraints)
-              InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
-              b -> error $ "Impossible freshening a BoundQ, but this is cause above"
-          --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
-      return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
+       (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
+       let (universalConstraints', existentialConstraints') =
+             case quantifierType of
+               ForallQ -> (pre .&& universalConstraints, existentialConstraints)
+               InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
+               b -> error $ "Impossible freshening a BoundQ, but this is cause above"
+           --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
+       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- TODO: replace with use of `substitute`
 
