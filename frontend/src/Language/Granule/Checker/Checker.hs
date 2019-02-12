@@ -589,8 +589,12 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
     Just (tySch, coercions) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
-      (ty, _, _, _, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+
       -- TODO: allow data type constructors to have constraints
+      (ty, _, _, _, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+
+      -- Apply coercions
+      ty <- substitute coercions' ty
 
       let elaborated = Val s ty (Constr ty c [])
       return (ty, [], elaborated)
