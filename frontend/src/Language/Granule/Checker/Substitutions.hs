@@ -9,6 +9,7 @@ module Language.Granule.Checker.Substitutions where
 import Control.Monad
 import Control.Monad.State.Strict
 import Data.Maybe (mapMaybe)
+import Data.Bifunctor.Foldable (bicataM)
 
 import Language.Granule.Context
 import Language.Granule.Syntax.Def
@@ -552,16 +553,91 @@ instance Substitutable Constraint where
   unify _ _ = error "Can't unify constraints"
 
 instance Substitutable (Equation () Type) where
-  -- TODO: recursively apply `substitute ctxt`
-  substitute ctxt x = return x
+  substitute ctxt (Equation sp ty patterns expr) =
+      do ty' <- substitute ctxt ty
+         pat' <- mapM (substitute ctxt) patterns
+         expr' <- substitute ctxt expr
+         return $ Equation sp ty' pat' expr'
   unify _ _ = error "Can't unify equations"
 
+substituteValue :: (?globals::Globals)
+                => Substitution
+                -> ValueF ev Type (Value ev Type) (Expr ev Type)
+                -> MaybeT Checker (Value ev Type)
+substituteValue ctxt (AbsF ty arg mty expr) =
+    do  ty' <- substitute ctxt ty
+        arg' <- substitute ctxt arg
+        mty' <- mapM (substitute ctxt) mty
+        return $ Abs ty' arg' mty' expr
+substituteValue ctxt (PromoteF ty expr) =
+    do  ty' <- substitute ctxt ty
+        return $ Promote ty' expr
+substituteValue ctxt (PureF ty expr) =
+    do  ty' <- substitute ctxt ty
+        return $ Pure ty' expr
+substituteValue ctxt (ConstrF ty ident vs) =
+    do  ty' <- substitute ctxt ty
+        return $ Constr ty' ident vs
+substituteValue ctxt (ExtF ty ev) =
+    do  ty' <- substitute ctxt ty
+        return $ Ext ty' ev
+substituteValue _ other = return (ExprFix2 other)
+
+substituteExpr :: (?globals::Globals)
+               => Substitution
+               -> ExprF ev Type (Expr ev Type) (Value ev Type)
+               -> MaybeT Checker (Expr ev Type)
+substituteExpr ctxt (AppF sp ty fn arg) =
+    do  ty' <- substitute ctxt ty
+        return $ App sp ty' fn arg
+substituteExpr ctxt (BinopF sp ty op lhs rhs) =
+    do  ty' <- substitute ctxt ty
+        return $ Binop sp ty' op lhs rhs
+substituteExpr ctxt (LetDiamondF sp ty pattern mty value expr) =
+    do  ty' <- substitute ctxt ty
+        pattern' <- substitute ctxt pattern
+        mty' <- mapM (substitute ctxt) mty
+        return $ LetDiamond sp ty' pattern' mty' value expr
+substituteExpr ctxt (ValF sp ty value) =
+    do  ty' <- substitute ctxt ty
+        return $ Val sp ty' value
+substituteExpr ctxt (CaseF sp ty expr arms) =
+    do  ty' <- substitute ctxt ty
+        arms' <- mapM (mapFstM (substitute ctxt)) arms
+        return $ Case sp ty' expr arms'
+
+mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
+mapFstM fn (f, r) = do
+    f' <- fn f
+    return (f', r)
+
 instance Substitutable (Expr () Type) where
-  -- TODO: recursively apply `substitute ctxt`
-  substitute ctxt x = return x
+  substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
+  unify _ _ = error "Can't unify equations"
+
+instance Substitutable (Value () Type) where
+  substitute ctxt = bicataM (substituteValue ctxt) (substituteExpr ctxt)
   unify _ _ = error "Can't unify equations"
 
 instance Substitutable (Pattern Type) where
-  -- TODO: recursively apply `substitute ctxt`
-  substitute ctxt x = return x
+  substitute ctxt = patternFoldM
+      (\sp ann nm -> do
+          ann' <- substitute ctxt ann
+          return $ PVar sp ann' nm)
+      (\sp ann -> do
+          ann' <- substitute ctxt ann
+          return $ PWild sp ann')
+      (\sp ann pat -> do
+          ann' <- substitute ctxt ann
+          return $ PBox sp ann' pat)
+      (\sp ann int -> do
+          ann' <- substitute ctxt ann
+          return $ PInt sp ann' int)
+      (\sp ann doub -> do
+          ann' <- substitute ctxt ann
+          return $ PFloat sp ann' doub)
+      (\sp ann nm pats -> do
+          ann' <- substitute ctxt ann
+          return $ PConstr sp ann' nm pats)
+
   unify _ _ = error "Can't unify equations"
