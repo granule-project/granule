@@ -147,7 +147,11 @@ emitGlobalInitializer valueInitPairs =
         exitCode <- load (IR.ConstantOperand $ C.GlobalReference (ptr i32) (mkName "def.main")) 4
         ret exitCode
 
-emitValueDef :: (MonadState (Map Id Operand) m, MonadModuleBuilder m, MonadFix m) => ClosureFreeValueDef -> m (Operand, Operand)
+emitValueDef :: MonadState (Map Id Operand) m
+             => MonadModuleBuilder m
+             => MonadFix m
+             => ClosureFreeValueDef
+             -> m (Operand, Operand)
 emitValueDef def@(ValueDef sp ident initExpr typeScheme) =
     do
         clearLocals
@@ -347,10 +351,9 @@ llvmOperator (TyCon (MkId "Int")) "-" (TyCon (MkId "Int")) (TyCon (MkId "Int")) 
 llvmOperator (TyCon (MkId "Int")) "*" (TyCon (MkId "Int")) (TyCon (MkId "Int")) = mul
 llvmOperator (TyCon (MkId "Int")) "/" (TyCon (MkId "Int")) (TyCon (MkId "Int")) = sdiv
 llvmOperator (TyCon (MkId "Int")) cmpOp (TyCon (MkId "Int")) (TyCon (MkId "Bool"))
-    | cmpOp == "==" = icmp IP.EQ
-    | cmpOp == "/=" = icmp IP.NE
-    | cmpOp == "<=" = icmp IP.SGE
-    | cmpOp == "=>" = icmp IP.SLE
+    | cmpOp == "≡" = icmp IP.EQ
+    | cmpOp == "≤" = icmp IP.SGE
+    | cmpOp == "≥" = icmp IP.SLE
     | cmpOp == "<"  = icmp IP.SLT
     | cmpOp == ">"  = icmp IP.SGT
 llvmOperator (TyCon (MkId "Float")) "+" (TyCon (MkId "Float")) (TyCon (MkId "Float")) = fadd
@@ -358,11 +361,10 @@ llvmOperator (TyCon (MkId "Float")) "-" (TyCon (MkId "Float")) (TyCon (MkId "Flo
 llvmOperator (TyCon (MkId "Float")) "*" (TyCon (MkId "Float")) (TyCon (MkId "Float")) = fmul
 llvmOperator (TyCon (MkId "Float")) "/" (TyCon (MkId "Float")) (TyCon (MkId "Float")) = fdiv
 llvmOperator (TyCon (MkId "Float")) cmpOp (TyCon (MkId "Float")) (TyCon (MkId "Bool"))
-    | cmpOp == "==" = fcmp FPP.UEQ
-    | cmpOp == "/=" = fcmp FPP.UNE
-    | cmpOp == "<=" = fcmp FPP.UGE
-    | cmpOp == "=>" = fcmp FPP.ULE
+    | cmpOp == "≡" = fcmp FPP.UEQ
+    | cmpOp == "≤" = fcmp FPP.UGE
     | cmpOp == "<"  = fcmp FPP.ULT
+    | cmpOp == "≥" = fcmp FPP.ULE
     | cmpOp == ">"  = fcmp FPP.UGT
 
 llvmOperator leftType operator rightType returnType =
@@ -371,7 +373,10 @@ llvmOperator leftType operator rightType returnType =
           rhs = (show rightType)
           ret = (show returnType)
 
-emitValue :: (MonadFix m, MonadState (Map Id Operand) m, MonadModuleBuilder m, MonadIRBuilder m)
+emitValue :: MonadFix m
+          => MonadState (Map Id Operand) m
+          => MonadModuleBuilder m
+          => MonadIRBuilder m
           => Maybe Operand
           -> ValueF (Either GlobalMarker ClosureMarker) Type (EmitableValue, m Operand) (EmitableExpr, m Operand)
           -> m Operand
