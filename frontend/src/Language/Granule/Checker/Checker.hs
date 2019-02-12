@@ -1236,6 +1236,8 @@ checkGuardsForImpossibility s name = do
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
 
+    debugM "impossibility" $ "about to try" <> pretty thm
+
     -- Try to prove the theorem
     result <- liftIO $ provePredicate s thm tyVars kVars
 

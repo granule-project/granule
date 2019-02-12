@@ -33,6 +33,8 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
+import Debug.Trace
+
 -- | What is the SBV represnetation of a quantifier
 compileQuant :: Quantifiable a => Quantifier -> (String -> Symbolic a)
 compileQuant ForallQ   = universal
@@ -60,7 +62,8 @@ compileToSBV predicate tyVarContext kVarContext =
         (SBool -> SBool)
      -> (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
      -> Symbolic SBool
-    buildTheorem polarity quant = do
+    buildTheorem polarity quant =
+      (pretty (universalsFirst tyVarContext) ++ "\n" ++ (pretty tyVarContext)) `trace` do
       -- Create fresh solver variables for everything in the type variable
       -- context of the write kind
         (preConstraints, constraints, solverVars) <-

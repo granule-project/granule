@@ -27,7 +27,7 @@ not False = True;
 --- Logical and
 --- NB: non-strict in second argument
 and : Bool -> Bool [0..1] -> Bool
-and True [y] = y;
+and True  [y] = y;
 |   False [_] = False
 
 --- Logical and (linear)
@@ -42,8 +42,8 @@ and' False False = False;
 --- Inclusive or
 --- NB: non-strict in second argument
 or : Bool -> Bool [0..1] -> Bool
-or True [_] = True;
-|  False [y] = y
+or False [y] = y;
+|   True [_] = True
 
 --- Inclusive or (linear)
 or' : Bool -> Bool -> Bool

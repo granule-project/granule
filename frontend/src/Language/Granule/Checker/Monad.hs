@@ -231,14 +231,14 @@ concludeImplication s localCtxt = do
            let (Impl freshPrevGuardCxt _ freshPrevGuardPred) = freshenedPrevGuardPred
 
            -- Implication of p .&& negated previous guards => p'
-           let impl = if (isTrivial prevGuardPred)
-                        then Impl localCtxt p p'
-                        else
-                          Impl (localCtxt <> freshPrevGuardCxt)
-                               (Conj [p, freshPrevGuardPred]) p'
+           let impl@(Impl implCtxt implAntecedent _) =
+                -- TODO: turned off this feature for now by putting True in the guard here
+                if True -- isTrivial freshPrevGuardPred
+                  then (Impl localCtxt p p')
+                  else (Impl (localCtxt <> freshPrevGuardCxt)
+                                 (Conj [p, freshPrevGuardPred]) p')
 
-           let knowledge = ((localCtxt <> freshPrevGuardCxt,
-                             Conj [p, freshPrevGuardPred]), s) : previousGuards
+           let knowledge = ((implCtxt, implAntecedent), s) : previousGuards
 
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
