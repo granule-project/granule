@@ -11,6 +11,9 @@ import Control.Monad.State.Strict
 import Data.Maybe (mapMaybe)
 
 import Language.Granule.Context
+import Language.Granule.Syntax.Def
+import Language.Granule.Syntax.Expr hiding (Substitutable)
+import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
@@ -547,3 +550,15 @@ instance Substitutable Constraint where
     return $ Gt s c1 c2
 
   unify _ _ = error "Can't unify constraints"
+
+instance Substitutable (Equation () Type) where
+  substitute _ x = return x
+  unify _ _ = error "Can't unify equations"
+
+instance Substitutable (Expr () Type) where
+  substitute _ x = return x
+  unify _ _ = error "Can't unify equations"
+
+instance Substitutable (Pattern Type) where
+  substitute _ x = return x
+  unify _ _ = error "Can't unify equations"
