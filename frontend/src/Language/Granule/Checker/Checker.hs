@@ -214,9 +214,10 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
 
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
-      ty' <- substitute subst'' ty
-      let elab = Equation s ty' elaborated_pats elaboratedExpr
-      return elab
+      let elab = Equation s ty elaborated_pats elaboratedExpr
+
+      elab' <- substitute subst'' elab
+      return elab'
 
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs
