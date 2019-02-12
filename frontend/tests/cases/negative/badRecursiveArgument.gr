@@ -2,11 +2,6 @@ data N (n : Nat) where
   Z : N 0;
   S : N n -> N (n+1)
 
---- Addition
---add : forall {n : Nat, m : Nat} . N n -> N m -> N (n + m)
---add Z m = m;
---add (S n') m = S (add n' m)
-
 fibble : forall {n : Nat} . N n -> N n
 fibble Z = Z;
 fibble (S n) = (fibble n)

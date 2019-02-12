@@ -199,7 +199,7 @@ popCaseFrame =
   modify (\st -> st { guardPredicates = tail (guardPredicates st) })
 
 -- | Takes the top two conjunction frames and turns them into an
--- impliciation
+-- implication
 -- The first parameter is a list of any
 -- existential variables being introduced in this implication
 concludeImplication :: (?globals :: Globals) => Span -> Ctxt Kind -> MaybeT Checker ()
@@ -227,16 +227,18 @@ concludeImplication s localCtxt = do
            let previousGuardCtxt = concatMap (fst . fst) previousGuards
            let prevGuardPred = Conj (map (snd . fst) previousGuards)
 
-           -- negation of the previous guard
-           let guard' = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
-           guard <- freshenPred guard'
+           freshenedPrevGuardPred <- freshenPred $ Impl previousGuardCtxt (Conj []) (NegPred prevGuardPred)
+           let (Impl freshPrevGuardCxt _ freshPrevGuardPred) = freshenedPrevGuardPred
 
            -- Implication of p .&& negated previous guards => p'
            let impl = if (isTrivial prevGuardPred)
                         then Impl localCtxt p p'
-                        else Impl localCtxt (Conj [p, guard]) p'
+                        else
+                          Impl (localCtxt <> freshPrevGuardCxt)
+                               (Conj [p, freshPrevGuardPred]) p'
 
-           let knowledge = ((localCtxt, p), s) : previousGuards
+           let knowledge = ((localCtxt <> freshPrevGuardCxt,
+                             Conj [p, freshPrevGuardPred]), s) : previousGuards
 
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
@@ -247,16 +249,6 @@ concludeImplication s localCtxt = do
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
-freshenPred :: Pred -> MaybeT Checker Pred
-freshenPred pred = do
-    st <- get
-    -- Run the freshener using the checkers unique variable id
-    let (pred', freshenerState) =
-         runIdentity $ runStateT (freshen pred)
-          (FreshenerState { counter = 1 + uniqueVarIdCounter st, varMap = [], tyMap = []})
-    -- Update the unique counter in the checker
-    put (st { uniqueVarIdCounter = counter freshenerState })
-    return pred'
 {-
 -- Create a local existential scope
 -- NOTE: leaving this here, but this approach is not used and is incompataible
@@ -395,3 +387,14 @@ instance MonadState CheckerState Checker where
 
 instance MonadIO Checker where
   liftIO = Checker . lift
+
+freshenPred :: Pred -> MaybeT Checker Pred
+freshenPred pred = do
+    st <- get
+    -- Run the freshener using the checkers unique variable id
+    let (pred', freshenerState) =
+         runIdentity $ runStateT (freshen pred)
+          (FreshenerState { counter = 1 + uniqueVarIdCounter st, varMap = [], tyMap = []})
+    -- Update the unique counter in the checker
+    put (st { uniqueVarIdCounter = counter freshenerState })
+    return pred'
