@@ -47,6 +47,6 @@ flipSubstitution :: Substitution -> Substitution
 flipSubstitution [] = []
 flipSubstitution ((var, SubstT (TyVar var')):subst) =
     (var', SubstT (TyVar var)) : flipSubstitution subst
-flipSubstitution (s:subst) =
-  error $ "Granule bug. Attempting to invert a substitution which"
-        <>  " contains " <> show s
+
+-- Can't flip the substitution so ignore it
+flipSubstitution (s:subst) = flipSubstitution subst

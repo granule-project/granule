@@ -275,7 +275,6 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
        k2 <- inferKindOfType s t
        let kind = k1 `joinKind` k2
 
-       liftIO $ putStrLn $ show kind
        -- If the kind if nat then set up and equation as there might be a
        -- pausible equation involving the quantified variable
        if (kind == Just (KPromote (TyCon (Id "Nat" "Nat"))))
@@ -290,7 +289,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
              $ case sp of
               _ -> "Cannot unify a universally quantified type variable `"
                          <> (pretty (TyVar n))
-                         <> "` of kind `" <> "`with a concrete type `" <> pretty t <> "`"
+                         <> "` of kind `" <> pretty kind <> "` with a concrete type `" <> pretty t <> "`"
               --SndIsSpec -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
               --PatternCtxt -> "`" <> pretty t <> "` is not unifiable with `" <> pretty (TyVar n) <> "`"
 

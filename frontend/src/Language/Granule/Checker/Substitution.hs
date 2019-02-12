@@ -379,14 +379,14 @@ combineSubstitutions sp u1 u2 = do
         case lookupMany v u2 of
           -- Unifier in u1 but not in u2
           [] -> return [(v, s)]
-          -- Possible unificaitons in each part
+          -- Possible unifications in each part
           alts -> do
               unifs <-
                 forM alts $ \s' -> do
                    --(us, t) <- unifiable v t t' t t'
                    us <- unify s s'
                    case us of
-                     Nothing -> error "Cannot unify"
+                     Nothing -> error $ "Cannot unify: " <> show v <> " to both " <> show s <> " and " <> show s'
                      Just us -> do
                        sUnified <- substitute us s
                        combineSubstitutions sp [(v, sUnified)] us

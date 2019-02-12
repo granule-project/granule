@@ -112,9 +112,6 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall s tyVa
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
 
-        --liftIO $ putStrLn $ "***" <> show tySch
-        --liftIO $ putStrLn $ "***" <> show coercions <> " \n"
-
         case tySchKind of
           KType ->
             registerDataConstructor tySch coercions
@@ -205,7 +202,10 @@ checkAndGenerateSubstitution' sp tName (TyApp fun arg) [] (kind:kinds) = do
   varSymb <- freshIdentifierBase "t"
   let var = mkId varSymb
   (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun [] kinds
-  return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
+  let subst' = case arg of
+        TyVar var' -> [(var', SubstT $ TyVar var), (var, SubstT arg)]
+        _          -> [(var, SubstT arg)]
+  return (TyApp fun' (TyVar var), subst' ++ subst, (var, kind) : tyVarsNew)
 
 checkAndGenerateSubstitution' sp _ x _ _ =
   halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."

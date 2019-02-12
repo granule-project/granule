@@ -157,7 +157,7 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
           freshPolymorphicInstance BoundQ True tySch coercions
       -- TODO: we don't allow constraints in data constructors yet
 
-      debugM "ctxt" $ "\n### FRESH POLY ###\n####\t ty = "
+      debugM "ctxt" $ "\n### FRESH POLY ###\n####\t dConTyFresh = "
                       <> show dataConstructorTypeFresh
                       <> "\n###\t ctxt = " <> show freshTyVarsCtxt
                       <> "\n###\t freshTyVarSubst = " <> show freshTyVarSubst
@@ -176,8 +176,11 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
       case areEq of
         (True, _, unifiers) -> do
 
+          -- Register coercions as equalities
           mapM (\(var, SubstT ty) ->
                         equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) coercions'
+
+          debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
 
 
           debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
@@ -187,8 +190,6 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
           dataConstructorIndexRewrittenAndSpecialised <- substitute unifiers dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
-          debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
-          debugM "ctxt" $ "\n\t### ty = " <> show ty <> "\n"
 
 
           (as, bs, us, elabPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
