@@ -176,8 +176,8 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
       case areEq of
         (True, _, unifiers) -> do
 
-          --mapM (\(var, SubstT ty) ->
-          --              equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) subst'
+          mapM (\(var, SubstT ty) ->
+                        equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) coercions'
 
 
           debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
