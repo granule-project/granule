@@ -172,13 +172,13 @@ ctxtFromTypedPattern _ ty p@(PConstr s _ dataC ps) cons = do
       debugM "ctxt" $ "\t### eqR (ty) = " <> show ty <> "\n"
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
-      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
+      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
 
           -- Register coercions as equalities
           mapM (\(var, SubstT ty) ->
-                        equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (TyVar var) ty) coercions'
+                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) ty) coercions'
 
           debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
 
