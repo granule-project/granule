@@ -83,7 +83,7 @@ ctxtFromTypedPattern' :: (?globals :: Globals, Show t) =>
   -> Type
   -> Pattern t
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> MaybeT Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
+  -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
