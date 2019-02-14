@@ -3,8 +3,8 @@ data Vec : Nat -> Type -> Type where
   Cons : forall {a : Type, n : Nat} . a -> Vec n a -> Vec (n+1) a
 
 headAlt : forall {a : Type, n : Nat} . {n > 0} => (Vec n Int) [0..1] -> Int
-headAlt [Nil] = 42;
 headAlt [Cons x _] = x
 
+-- Type checking shold fail at this usage
 foo : (Vec 0 Int) [0..1] -> Int
 foo x = headAlt x
