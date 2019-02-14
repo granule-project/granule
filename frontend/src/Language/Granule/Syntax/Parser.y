@@ -73,8 +73,8 @@ import Language.Granule.Utils hiding (mkSpan)
     ']'   { TokenBoxRight _ }
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
-    '<='   { TokenLTE _ }
-    '>='   { TokenGTE _ }
+    '<='   { TokenOp _ "≤" }
+    '>='   { TokenOp _ "≥" }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }

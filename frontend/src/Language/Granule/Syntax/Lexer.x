@@ -73,8 +73,6 @@ tokens :-
   \{                            { \p s -> TokenLBrace p }
   \}                            { \p s -> TokenRBrace p }
   \<                            { \p s -> TokenLangle p }
-  "<="                          { \p s -> TokenLTE p }
-  ">="                          { \p s -> TokenGTE p }
   \>                            { \p s -> TokenRangle p }
   \,                            { \p s -> TokenComma p }
   \×                            { \p s -> TokenCross p }
@@ -142,8 +140,6 @@ data Token
   | TokenRBrace   AlexPosn
   | TokenLangle   AlexPosn
   | TokenRangle   AlexPosn
-  | TokenLTE       AlexPosn
-  | TokenGTE       AlexPosn
   | TokenComma    AlexPosn
   | TokenCross AlexPosn
   | TokenPeriod   AlexPosn
