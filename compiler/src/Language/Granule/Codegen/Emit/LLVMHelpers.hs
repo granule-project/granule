@@ -1,4 +1,4 @@
-module Language.Granule.Codegen.LLVMHelpers where
+module Language.Granule.Codegen.Emit.LLVMHelpers where
 
 import Data.Traversable
 
