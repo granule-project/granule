@@ -26,7 +26,21 @@ data TypeScheme =
   deriving (Eq, Show, Generic)
 
 -- Constructors and operators are just strings
-type Operator = String
+data TypeOperator
+  = TyOpLesser
+  | TyOpLesserEq
+  | TyOpGreater
+  | TyOpGreaterEq
+  | TyOpEq
+  | TyOpNotEq
+  | TyOpPlus
+  | TyOpTimes
+  | TyOpMinus
+  | TyOpExpon
+  | TyOpMeet
+  | TyOpJoin
+  deriving (Eq, Ord, Show)
+
 
 {-| Types.
 Example: `List n Int` in Granule
@@ -39,7 +53,7 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyVar Id                  -- ^ Type variable
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
-          | TyInfix Operator Type Type  -- ^ Infix type operator
+          | TyInfix TypeOperator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
 -- | Kinds
@@ -186,7 +200,7 @@ mTyApp :: Monad m => Type -> Type -> m Type
 mTyApp x y   = return (TyApp x y)
 mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
-mTyInfix :: Monad m => Operator -> Type -> Type -> m Type
+mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 
 -- Monadic algebra for types
@@ -198,7 +212,7 @@ data TypeFold m a = TypeFold
   , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: Operator -> a -> a -> m a }
+  , tfTyInfix :: TypeOperator  -> a -> a -> m a }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
