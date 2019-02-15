@@ -1,0 +1,4 @@
+data Bool = True ; False
+
+and : Bool [1] -> Bool [1] -> Bool
+and [_] [_] = False
