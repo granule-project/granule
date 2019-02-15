@@ -7,7 +7,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Codegen.NormalisedDef
 import Language.Granule.Codegen.TopsortDefinitions
 import Language.Granule.Codegen.ConvertClosures
-import Language.Granule.Codegen.EmitLLVM
+import Language.Granule.Codegen.Emit.EmitLLVM
 import Language.Granule.Codegen.MarkGlobals
 import Language.Granule.Utils
 import qualified LLVM.AST as IR

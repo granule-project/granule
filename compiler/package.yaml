@@ -22,9 +22,7 @@ library:
   - Language.Granule.Codegen.TopsortDefinitions
   - Language.Granule.Codegen.ClosureFreeDef
   - Language.Granule.Codegen.ConvertClosures
-  - Language.Granule.Codegen.LLVMHelpers
-  - Language.Granule.Codegen.EmitLLVM
-  - Language.Granule.Codegen.MarkGlobals
+  - Language.Granule.Codegen.Emit.EmitLLVM
   - Language.Granule.Codegen.Compile
   dependencies:
   - mtl
