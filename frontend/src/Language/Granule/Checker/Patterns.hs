@@ -87,22 +87,27 @@ ctxtFromTypedPattern' :: (?globals :: Globals, Show t) =>
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
-    case cons of
+    -- DESIGN DECISION: We've turned off the checks that our linearity for ints
+    -- when preceded by other concrete matches. (15/02/19) - DAO
+    -- But we want to think about this more in the future
+
+    --case cons of
       -- Full consumption is allowed here
-      Full -> do
+    --  Full -> do
 
         -- If the wildcard appears under one or more [ ] pattern then we must
         -- add a constraint that 0 approaximates the effect of the enclosing
         -- box patterns.
         case outerCoeff of
-          Nothing -> return ()
-          Just (coeff, coeffTy) ->
+          -- Cannot have a wildcard not under a box
+          Nothing -> illLinearityMismatch s [NonLinearPattern]
+          Just (coeff, coeffTy) -> do
               -- Must approximate zero
               addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
 
-        return ([], [], [], PWild s t, NotFull)
+              return ([], [], [], PWild s t, NotFull)
 
-      _ -> illLinearityMismatch s [NonLinearPattern]
+  --  _ -> illLinearityMismatch s [NonLinearPattern]
 
 ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
     let elabP = PVar s t v
