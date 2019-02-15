@@ -106,6 +106,44 @@ llvmType (TyCon (MkId "Bool")) = i1
 llvmType (Box coeffect ty) = llvmType ty
 llvmType ty = error $ "Cannot lower the type " ++ show ty
 
+mangleTypeName :: Type -> String
+mangleTypeName (FunTy from to) =
+    "fun#" ++ (mangleTypeName from) ++ "#to#" ++ (mangleTypeName to) ++ "#"
+mangleTypeName (TyApp (TyApp (TyCon (MkId "(,)")) left) right) =
+    "pair#" ++ (mangleTypeName leftPart) ++ "#,#"
+        ++ (mangleTypeName rightPart) ++ "#"
+mangleTypeName (TyCon (Id _ internal)) = internal
+mangleTypeName (Box coeffect ty) = "box#" ++ (mangleTypeName ty)
+
+makePairBuiltin :: (MonadModuleBuilder m) => Type -> m Operand
+makePairBuiltin returnType@(TyApp (TyApp (TyCon (MkId "(,)")) left) right) =
+    do
+        let functionName = mkName $ "make#" ++ (mangleTypeName ty) ++ "#right"
+        let functionName = mkName $ "make#" ++ (mangleTypeName ty) ++ "#left"
+        let (leftType, rightType) = (llvmType left, llvmType right)
+
+        makeSnd <- privateFunction [(ptr i8, mkPName "env"),
+                         (rightType, mkPName "snd")]
+                        (llvmType returnType) $ \[env, second] -> do
+            leftVoidPtr <- mallocEnvironment leftType
+
+        privateFunction [(ptr i8,    mkPName "env")
+                         (leftType,  mkPName "fst")]
+                         $ \[_, fstArg] -> do
+            fstVoidPtr <- mallocEnvironment leftType
+            fstPtr <- bitcast leftVoidPtr
+            store fstPtr 4 fstArg
+
+        {-let undefClosure = IR.ConstantOperand $ C.Undef closureType
+        let functionPtr  = IR.ConstantOperand $ makePointerToFunction ident ty
+            closure  <- insertValue undefClosure functionPtr [0]
+            closure' <- insertValue closure environmentPtr   [1]
+            ret (fstVoidPtr, makeSnd)-}
+
+
+makePairBuiltin _ = error "Type is not a builtin pair"
+
+
 llvmTopLevelType :: GrType -> IrType
 llvmTopLevelType (FunTy from to) = llvmTypeForFunction (llvmType from) (llvmType to)
 llvmTopLevelType other = llvmType other
