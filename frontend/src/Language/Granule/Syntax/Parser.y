@@ -60,6 +60,7 @@ import Language.Granule.Utils hiding (mkSpan)
     ','   { TokenComma _ }
     '×'   { TokenCross _ }
     '='   { TokenEq _ }
+    '=='  { TokenEquiv _ }
     '/='  { TokenNeq _ }
     '+'   { TokenAdd _ }
     '-'   { TokenSub _ }
@@ -73,24 +74,23 @@ import Language.Granule.Utils hiding (mkSpan)
     ']'   { TokenBoxRight _ }
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
-    OP    { TokenOp _ _ }
-    '<='   { TokenOp _ "≤" }
-    '>='   { TokenOp _ "≥" }
+    '<='  { TokenLesserEq _ }
+    '>='  { TokenGreaterEq _ }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
-    ".."  { TokenDotDot _ }
-    "∨"   { TokenJoin _ }
-    "∧"   { TokenMeet _ }
+    '..'  { TokenDotDot _ }
+    "\\/" { TokenJoin _ }
+    "/\\" { TokenMeet _ }
 
 %right in
 %right '->'
 %left ':'
 %right '×'
-%left ".."
+%left '..'
 %left '+' '-'
 %left '*'
 %left '^'
@@ -280,20 +280,20 @@ TyJuxt :: { Type }
   : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
-  | TyAtom '+' TyAtom         { TyInfix ("+") $1 $3 }
-  | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
-  | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
-  | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
-  | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
-  | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
+  | TyAtom '+' TyAtom         { TyInfix TyOpPlus $1 $3 }
+  | TyAtom '-' TyAtom         { TyInfix TyOpMinus $1 $3 }
+  | TyAtom '*' TyAtom         { TyInfix TyOpTimes $1 $3 }
+  | TyAtom '^' TyAtom         { TyInfix TyOpExpon $1 $3 }
+  | TyAtom "/\\" TyAtom       { TyInfix TyOpMeet $1 $3 }
+  | TyAtom "\\/" TyAtom       { TyInfix TyOpJoin $1 $3 }
 
 Constraint :: { Type }
-  : TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
-  | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
-  | TyAtom '>=' TyAtom        { TyInfix (">=") $1 $3 }
-  | TyAtom '<=' TyAtom        { TyInfix ("<=") $1 $3 }
-  | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
-  | TyAtom '/=' TyAtom        { TyInfix ("/=") $1 $3 }
+  : TyAtom '>' TyAtom         { TyInfix TyOpGreater $1 $3 }
+  | TyAtom '<' TyAtom         { TyInfix TyOpLesser $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
+  | TyAtom '>=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
@@ -316,13 +316,13 @@ Coeffect :: { Coeffect }
                                     "Inf" -> infinity
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
-  | Coeffect ".." Coeffect      { CInterval $1 $3 }
+  | Coeffect '..' Coeffect      { CInterval $1 $3 }
   | Coeffect '+' Coeffect       { CPlus $1 $3 }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '-' Coeffect       { CMinus $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect "∧" Coeffect       { CMeet $1 $3 }
-  | Coeffect "∨" Coeffect       { CJoin $1 $3 }
+  | Coeffect "/\\" Coeffect       { CMeet $1 $3 }
+  | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
   | Coeffect ':' Type           { normalise (CSig $1 $3) }
@@ -426,7 +426,7 @@ Form :: { Expr () () }
   | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () "*" $1 $3 }
   | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () "<" $1 $3 }
   | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () ">" $1 $3 }
-  | Form OP  Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () (symString $2) $1 $3 }
+--  | Form OP  Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () (symString $2) $1 $3 }
   | Juxt           { $1 }
 
 Juxt :: { Expr () () }

@@ -84,7 +84,7 @@ pattern Ext a extv = (ExprFix2 (ExtF a extv))
 -- | and annotations `a`).
 data ExprF ev a expr value =
     AppF Span a expr expr
-  | BinopF Span a Operator expr expr
+  | BinopF Span a String expr expr
   | LetDiamondF Span a (Pattern a) (Maybe Type) expr expr
      -- Graded monadic composition (like Haskell do)
      -- let p : t <- e1 in e2

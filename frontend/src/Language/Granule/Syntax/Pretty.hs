@@ -2,12 +2,12 @@
 --  It is not especially pretty.
 -- Useful in debugging and error messages
 
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Granule.Syntax.Pretty where
 
@@ -155,7 +155,23 @@ instance Pretty Type where
       parens l (prettyL l t1 <> " " <> prettyL (l+1) t2)
 
     prettyL l (TyInfix op t1 t2) =
-      parens l (prettyL (l+1) t1 <> " " <> op <> " " <>  prettyL (l+1) t2)
+      parens l (prettyL (l+1) t1 <> " " <> prettyL l op <> " " <>  prettyL (l+1) t2)
+
+instance Pretty TypeOperator where
+  prettyL _ = \case
+   TyOpLesser          -> "<"
+   TyOpLesserEq        -> "≤"
+   TyOpGreater         -> ">"
+   TyOpGreaterEq       -> "≥"
+   TyOpEq              -> "≡"
+   TyOpNotEq           -> "≠"
+   TyOpPlus            -> "+"
+   TyOpTimes           -> "*"
+   TyOpMinus           -> "-"
+   TyOpExpon           -> "^"
+   TyOpMeet            -> "∧"
+   TyOpJoin            -> "∨"
+
 
 appChain :: Type -> Bool
 appChain (TyApp (TyApp t1 t2) _) = appChain (TyApp t1 t2)
