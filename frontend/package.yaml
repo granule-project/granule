@@ -10,15 +10,14 @@ dependencies:
 
 library:
   source-dirs: src
-  ghc-options: -O0 -W -Werror -Wno-unused-matches
-  # ghc-options: >
-  #   -O0
-  #   -Wall
-  #   -Werror
-  #   -Wcompat
-  #   -Wincomplete-record-updates
-  #   -Wincomplete-uni-patterns
-  #   -Wredundant-constraints
+  ghc-options: >
+    -O0
+    -Wall
+    -Werror
+    -Wcompat
+    -Wincomplete-record-updates
+    -Wincomplete-uni-patterns
+    -Wredundant-constraints
 
   # when:
   # - condition: flag(dev)
