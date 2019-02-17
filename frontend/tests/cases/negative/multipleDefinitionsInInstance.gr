@@ -1,0 +1,11 @@
+interface Simple a where
+  simple1 : a;
+  simple2 : a -> a
+
+data A = A | B
+
+-- definitions for 'simple1' are separated
+instance Simple A where
+  simple1 A = A;
+  simple2 x = x;
+  simple1 B = B
