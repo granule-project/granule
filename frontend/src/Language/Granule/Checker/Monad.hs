@@ -126,6 +126,7 @@ data CheckerState = CS
 
             -- Interface information
             , ifaceContext :: Ctxt IFaceCtxt
+            , instanceContext :: Ctxt [Type]
 
             -- context of definition types
             , defContext :: Ctxt TypeScheme
@@ -148,6 +149,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , typeConstructors = Primitives.typeConstructors
                , dataConstructors = Primitives.dataConstructors
                , ifaceContext = []
+               , instanceContext = []
                , defContext = []
                , deriv = Nothing
                , derivStack = []
@@ -189,6 +191,7 @@ registerInterface sp name pname kind sigs = do
                             }
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { ifaceContext = (name, ifaceCtxt) : ifaceContext st }
+
 
 {- | Useful if a checking procedure is needed which
      may get discarded within a wider checking, e.g., for

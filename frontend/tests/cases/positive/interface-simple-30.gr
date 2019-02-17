@@ -1,0 +1,14 @@
+-- multiple distinct instances of an interface
+
+data A = A
+
+data B = B
+
+interface Simple a where
+  simple : a -> a
+
+instance Simple A where
+  simple x = x
+
+instance Simple B where
+  simple y = y

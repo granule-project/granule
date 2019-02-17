@@ -251,6 +251,25 @@ checkInstHead (Instance sp iname constrs idt@(IFaceDat _ idty) _) = do
   checkIFaceExists sp iname
   mapM_ (kindCheckConstr sp [(v, KType) | v <- freeVars idty]) constrs
   checkInstTy iname idt
+  -- we take it on faith that the instance methods are well-typed
+  -- at this point. If an issue arises it will be caught before we
+  -- check top-level definitions
+  registerInstance sp iname idty
+      where registerInstance :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker ()
+            registerInstance sp iname instTy = do
+              maybeInstances <- lookupContext instanceContext iname
+              case maybeInstances of
+                Nothing -> modify' $ \st -> st { instanceContext = (iname, [instTy]) : instanceContext st }
+                Just instances -> do
+                  clash <- fmap or $ mapM (unifiable instTy) instances
+                  if clash
+                  then (halt . NameClashError (Just sp) $ concat
+                        ["Duplicate instance '", pretty instTy, "' for interface `", pretty iname, "`."])
+                  else modify' $ \st -> st { instanceContext = (iname, instTy:instances)
+                                                               : filter ((/=iname) . fst) (instanceContext st) }
+            unifiable :: Type -> Type -> MaybeT Checker Bool
+            unifiable t1 t2 = unify t1 t2 >>= pure . isJust
+
 
 
 checkInstTy :: (?globals :: Globals) => Id -> IFaceDat -> MaybeT Checker ()

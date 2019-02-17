@@ -1,0 +1,11 @@
+data A a = A
+
+interface Simple a where
+  simple : a -> a
+
+-- duplicate instance for a (polymorphic) tyCon
+instance Simple (A a) where
+  simple x = x
+
+instance Simple (A b) where
+  simple y = y

@@ -1,0 +1,11 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A
+
+-- duplicate instance for a type
+instance Simple A where
+  simple x = x
+
+instance Simple A where
+  simple y = y
