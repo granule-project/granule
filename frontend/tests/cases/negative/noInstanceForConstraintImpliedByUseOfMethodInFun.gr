@@ -1,0 +1,7 @@
+interface Simple b where
+  simple : b -> b
+
+-- we use 'simple' without specifying the
+-- required constraint
+simple1 : forall {a : Type} . a -> a
+simple1 x = simple x

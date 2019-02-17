@@ -1,0 +1,12 @@
+interface Simple a where
+  simple : a -> a
+
+interface Simple2 a where
+  simple2 : a -> a
+
+data A = A
+
+-- the use of 'simple' implies that 'A' should
+-- also be an instance of 'Simple', but it is not
+instance Simple2 A where
+  simple2 = simple

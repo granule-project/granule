@@ -11,7 +11,7 @@ module Language.Granule.Checker.Checker where
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import Data.List (genericLength, groupBy, intercalate)
+import Data.List (genericLength, groupBy, intercalate, (\\))
 import Data.Maybe
 import qualified Data.Text as T
 
@@ -246,6 +246,19 @@ checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
       registerDefSig sp name tys'
 
 
+getInstance :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker (Maybe ())
+getInstance sp iname instTy = do
+  maybeInstances <- lookupContext instanceContext iname
+  case maybeInstances of
+    Nothing -> pure Nothing
+    Just instances -> do
+      exists <- fmap or $ mapM (unifiable instTy) instances
+      pure $ if exists then Just () else Nothing
+    where
+      unifiable :: Type -> Type -> MaybeT Checker Bool
+      unifiable t1 t2 = unify t1 t2 >>= pure . isJust
+
+
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInstHead (Instance sp iname constrs idt@(IFaceDat _ idty) _) = do
   checkIFaceExists sp iname
@@ -257,18 +270,15 @@ checkInstHead (Instance sp iname constrs idt@(IFaceDat _ idty) _) = do
   registerInstance sp iname idty
       where registerInstance :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker ()
             registerInstance sp iname instTy = do
-              maybeInstances <- lookupContext instanceContext iname
-              case maybeInstances of
-                Nothing -> modify' $ \st -> st { instanceContext = (iname, [instTy]) : instanceContext st }
-                Just instances -> do
-                  clash <- fmap or $ mapM (unifiable instTy) instances
-                  if clash
-                  then (halt . NameClashError (Just sp) $ concat
-                        ["Duplicate instance '", pretty instTy, "' for interface `", pretty iname, "`."])
-                  else modify' $ \st -> st { instanceContext = (iname, instTy:instances)
-                                                               : filter ((/=iname) . fst) (instanceContext st) }
-            unifiable :: Type -> Type -> MaybeT Checker Bool
-            unifiable t1 t2 = unify t1 t2 >>= pure . isJust
+              maybeInstance <- getInstance sp iname instTy
+              case maybeInstance of
+                Just _ ->
+                    halt . NameClashError (Just sp) $ concat
+                             ["Duplicate instance '", pretty instTy, "' for interface `", pretty iname, "`."]
+                Nothing -> do
+                    maybeInstances <- lookupContext instanceContext iname
+                    modify' $ \st -> st { instanceContext = (iname, instTy:fromMaybe [] maybeInstances)
+                                                            : filter ((/=iname) . fst) (instanceContext st) }
 
 
 
@@ -351,6 +361,8 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
         let predStack = Conj $ predicateStack checkerState
         debugM "Solver predicate" $ pretty predStack
         solveConstraints predStack (getSpan equation) defName
+        constrStack <- getIConstraints
+        solveIConstraints constrStack (getSpan equation) defName
         pure elaboratedEq
 
     checkGuardsForImpossibility s defName
@@ -415,6 +427,9 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
       -- Conclude the implication
       concludeImplication s localVars
 
+      iconstraints <- getIConstraints
+      substituteIConstraints subst' iconstraints
+
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
       let elab = Equation s ty elaborated_pats elaboratedExpr
@@ -427,10 +442,13 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   where
     compileAndAddConstraint ty = do
       kind <- inferKindOfType s ty
-      -- TODO: handle case for interface constraints
       when (kind == KConstraint Predicate) $ do
         pred <- compileTypeConstraintToConstraint s ty
         addPredicate pred
+      when (kind == KConstraint Interface) $ do
+        addIConstraint ty
+    substituteIConstraints s icons =
+      mapM (substitute s) icons >>= putIcons
 
 data Polarity = Positive | Negative deriving Show
 
@@ -866,11 +884,12 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
          Just tyScheme  -> do
-           (ty', _, _, (constraints, _), []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
+           (ty', _, _, (constraints, iconstraints), []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
 
            mapM_ (\ty -> do
              pred <- compileTypeConstraintToConstraint s ty
              addPredicate pred) constraints
+           mapM_ addIConstraint iconstraints
 
            let elaborated = Val s ty' (Var ty' x)
            return (ty', [], [], elaborated)
@@ -1090,6 +1109,23 @@ solveConstraints predicate s name = do
          " ms. You may want to increase the timeout (see --help)."
     Error msg ->
        halt msg
+
+
+solveIConstraints :: (?globals :: Globals) => [Type] -> Span -> Id -> MaybeT Checker ()
+solveIConstraints itys sp defName = do
+  Just (Forall _ _ topLevelConstraints _) <- getTypeScheme defName
+  let remaining = itys \\ topLevelConstraints
+  mapM_ solveIConstraint remaining
+    where solveIConstraint t@(TyApp (TyCon iface) ty) =
+              verifyInstanceExists sp iface ty
+          solveIConstraint t = halt $ GenericError (Just sp)
+                               $ concat ["Attempt to resolve '", pretty t, "' as an interface constraint"]
+          verifyInstanceExists sp iname ty = do
+              inst <- getInstance sp iname ty
+              case inst of
+                Nothing -> halt $ GenericError (Just sp) $ concat ["No instance for '", pretty iname, " ", pretty ty, "'"]
+                Just _ -> pure ()
+
 
 -- Rewrite an error message coming from the solver
 rewriteMessage :: String -> MaybeT Checker String

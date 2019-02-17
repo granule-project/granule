@@ -7,7 +7,7 @@
 
 module Language.Granule.Checker.Monad where
 
-import Data.List (intercalate)
+import Data.List (intercalate, nub)
 import qualified Data.Map as M
 import Data.Maybe (isJust)
 import Control.Monad.State.Strict
@@ -127,6 +127,8 @@ data CheckerState = CS
             -- Interface information
             , ifaceContext :: Ctxt IFaceCtxt
             , instanceContext :: Ctxt [Type]
+            -- Context of interface constraints
+            , iconsContext :: [Type]
 
             -- context of definition types
             , defContext :: Ctxt TypeScheme
@@ -150,6 +152,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , dataConstructors = Primitives.dataConstructors
                , ifaceContext = []
                , instanceContext = []
+               , iconsContext = []
                , defContext = []
                , deriv = Nothing
                , derivStack = []
@@ -191,6 +194,20 @@ registerInterface sp name pname kind sigs = do
                             }
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { ifaceContext = (name, ifaceCtxt) : ifaceContext st }
+
+
+-- | Get the set of interface constraints in scope.
+getIConstraints :: (?globals :: Globals) => MaybeT Checker [Type]
+getIConstraints = fmap iconsContext get
+
+
+putIcons :: [Type] -> MaybeT Checker ()
+putIcons ts = modify' $ \st -> st { iconsContext = nub ts }
+
+
+addIConstraint :: Type -> MaybeT Checker ()
+addIConstraint ty =
+  modify' $ \st -> st { iconsContext = nub $ ty : iconsContext st }
 
 
 {- | Useful if a checking procedure is needed which
