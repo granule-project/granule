@@ -12,6 +12,12 @@ import Result
 
 data List a where Empty; Next a (List a)
 
+map : forall a : Type, b : Type
+    . (a -> b) [0..∞] -> List a -> List b
+map [f] Empty = Empty;
+map [f] (Next x xs) = Next (f x) (map [f] xs)
+
+
 length_list : forall a : Type . List (a [0]) -> Int
 length_list xs =
   case xs of
