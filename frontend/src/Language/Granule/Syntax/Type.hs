@@ -66,6 +66,7 @@ data Kind = KType
     deriving (Show, Ord, Eq)
 
 kConstr = KPromote . TyCon
+kNat = kConstr $ mkId "Nat"
 
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType

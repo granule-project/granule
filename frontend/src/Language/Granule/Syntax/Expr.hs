@@ -84,7 +84,7 @@ pattern Ext a extv = (ExprFix2 (ExtF a extv))
 -- | and annotations `a`).
 data ExprF ev a expr value =
     AppF Span a expr expr
-  | BinopF Span a String expr expr
+  | BinopF Span a Operator expr expr
   | LetDiamondF Span a (Pattern a) (Maybe Type) expr expr
      -- Graded monadic composition (like Haskell do)
      -- let p : t <- e1 in e2
@@ -93,6 +93,18 @@ data ExprF ev a expr value =
   | ValF Span a value
   | CaseF Span a expr [(Pattern a, expr)]
   deriving (Generic, Eq)
+
+data Operator
+  = OpLesser
+  | OpLesserEq
+  | OpGreater
+  | OpGreaterEq
+  | OpEq
+  | OpNotEq
+  | OpPlus
+  | OpTimes
+  | OpMinus
+  deriving (Generic, Eq, Ord, Show)
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ExprF ev a value expr)

@@ -20,6 +20,7 @@ import Control.Monad.Trans.Maybe
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Primitives (tyOps)
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
@@ -107,17 +108,10 @@ inferKindOfType' s quantifiedVariables t =
 
     kInt _ = return $ kConstr $ mkId "Nat"
 
-    kInfix op k1 k2 = do
-      st <- get
-      case lookup (mkId op) (typeConstructors st) of
-       Just (KFun k1' (KFun k2' kr), _) ->
-         if k1 `hasLub` k1'
-          then if k2 `hasLub` k2'
-               then return kr
-               else illKindedNEq s k2' k2
-          else illKindedNEq s k1' k1
-       Just (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
-       Nothing   -> halt $ UnboundVariableError (Just s) (pretty op <> " operator.")
+    kInfix (tyOps -> (k1exp, k2exp, kret)) k1act k2act
+      | not (k1act `hasLub` k1exp) = illKindedNEq s k1exp k1act
+      | not (k2act `hasLub` k2exp) = illKindedNEq s k2exp k2act
+      | otherwise                  = pure kret
 
 -- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe Kind
