@@ -16,6 +16,8 @@
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE LambdaCase #-}
 
+module Language.Granule.Interpreter where
+
 import Control.Exception (SomeException, try)
 import Control.Monad (forM)
 import Data.List (stripPrefix)
@@ -30,7 +32,7 @@ import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 
 import Language.Granule.Checker.Checker
-import Language.Granule.Eval
+import Language.Granule.Interpreter.Eval
 import Language.Granule.Interpreter.Config
 import Language.Granule.Interpreter.Preprocess
 import Language.Granule.Syntax.Parser
@@ -97,7 +99,7 @@ main = do
 
 {-| Run the input through the type checker and evaluate.
 -}
-run :: (?globals :: Globals) => String -> IO ExitCode
+run :: (?globals :: Globals) => String -> IO (Either )
 run input = do
   result <- try $ parseAndDoImportsAndFreshenDefs input
   case result of
