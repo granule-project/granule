@@ -36,7 +36,7 @@ import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Eval
+import Language.Granule.Interpreter.Eval
 import Language.Granule.Context
 --import qualified Language.Granule.Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex

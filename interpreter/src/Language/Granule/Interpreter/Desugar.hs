@@ -1,6 +1,6 @@
 -- Provides the desugaring step of the language
 
-module Language.Granule.Desugar where
+module Language.Granule.Interpreter.Desugar where
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr

@@ -7,6 +7,13 @@ license: BSD3
 github: dorchard/granule
 dependencies:
 - base >=4.10 && <5
+- directory
+- filepath
+- Glob
+- granule-frontend
+- mtl >=2.2.1
+- optparse-applicative
+- text
 
 library:
   source-dirs: src
@@ -27,22 +34,36 @@ library:
   #   else:
   #     ghc-options: -O3 -w
   exposed-modules:
-  - Language.Granule.Eval
-  - Language.Granule.Desugar
-  dependencies:
-  - granule-frontend
-  - mtl >=2.2.1
-  - text
+  - Language.Granule.Interpreter
+  - Language.Granule.Interpreter.Eval
+  - Language.Granule.Interpreter.Desugar
 
 executables:
   gr:
-    main: Language/Granule/Interpreter/Main.hs
-    source-dirs: app
-    ghc-options: -O0 -W -Werror -Wno-unused-matches
+    main: Language/Granule/Interpreter.hs
+    source-dirs: src
+    ghc-options: >
+      -O0
+      -Wall
+      -Werror
+      -Wcompat
+      -Wincomplete-record-updates
+      -Wincomplete-uni-patterns
+      -Wredundant-constraints
+      -Wno-unused-matches
+      -Wno-name-shadowing
+      -main-is Language.Granule.Interpreter
     dependencies:
-    - directory
-    - filepath
-    - Glob
-    - granule-frontend
     - granule-interpreter
-    - optparse-applicative
+
+tests:
+  gr-golden:
+    main: Golden.hs
+    source-dirs: tests
+    dependencies:
+    - granule-interpreter
+    - tasty
+    - tasty-golden
+    - silently
+    - bytestring
+

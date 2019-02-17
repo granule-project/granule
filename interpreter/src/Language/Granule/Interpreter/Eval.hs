@@ -7,9 +7,9 @@
 
 {-# options_ghc -Wno-incomplete-uni-patterns #-}
 
-module Language.Granule.Eval where
+module Language.Granule.Interpreter.Eval where
 
-import Language.Granule.Desugar
+import Language.Granule.Interpreter.Desugar
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
