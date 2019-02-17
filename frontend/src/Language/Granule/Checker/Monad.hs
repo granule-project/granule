@@ -167,7 +167,9 @@ pushGuardContext ctxt = do
 popGuardContext :: MaybeT Checker (Ctxt Assumption)
 popGuardContext = do
   state <- get
-  let (c:cs) = guardContexts state
+  let (c, cs) = case guardContexts state of
+                  (c:cs) -> (c,cs)
+                  [] -> error "Internal error. Empty guard context."
   put (state { guardContexts = cs })
   return c
 

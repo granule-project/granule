@@ -42,7 +42,7 @@ instance (GFirstParameter a e, GFirstParameter b e) => GFirstParameter (a :+: b)
   setFirstParameter' e (L1 a) = L1 $ setFirstParameter' e a
   setFirstParameter' e (R1 a) = R1 $ setFirstParameter' e a
 
-instance (GFirstParameter a e, GFirstParameter b e) => GFirstParameter (a :*: b) e where
+instance GFirstParameter a e => GFirstParameter (a :*: b) e where
   getFirstParameter' (a :*: _) = getFirstParameter' a
   setFirstParameter' e (a :*: b) = (setFirstParameter' e a :*: b)
 

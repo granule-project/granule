@@ -82,6 +82,7 @@ equalTypesRelatedCoeffectsAndUnify s rel allowUniversalSpecialisation spec t1 t2
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
 
+flipIndicator :: SpecIndicator -> SpecIndicator
 flipIndicator FstIsSpec = SndIsSpec
 flipIndicator SndIsSpec = FstIsSpec
 flipIndicator PatternCtxt = PatternCtxt

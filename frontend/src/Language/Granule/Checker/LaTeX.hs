@@ -11,6 +11,7 @@ instance Show Derivation where
   show (Node c premises) =
     "\\dfrac{" <> intercalate " \\quad " (map show premises) <> "}{" <> c <> "}"
 
+mkDocument :: String -> String
 mkDocument doc =
  "\\documentclass{article}\
  \\\usepackage{amsmath}\

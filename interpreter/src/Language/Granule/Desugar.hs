@@ -25,7 +25,7 @@ import Control.Monad.State.Strict
    Note that the explicit typing from the type signature is pushed
    inside of the definition to give an explicit typing on the coeffect-let
    binding. -}
-desugar :: Show v => Def v () -> Def v ()
+desugar :: Def v () -> Def v ()
 -- desugar adt@ADT{} = adt
 desugar (Def s var eqs tys@(Forall _ _ _ ty)) =
   Def s var [typeDirectedDesugarEquation (mkSingleEquation eqs)] tys

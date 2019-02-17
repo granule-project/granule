@@ -39,7 +39,7 @@ unpeel _ (TyCon c) _ = checkCardinality c
 unpeel _ _ _ = return False
 
 -- | Get the number of data constructors, only irrefutable if = `Just 1`
-checkCardinality :: (?globals :: Globals) => Id -> MaybeT Checker Bool
+checkCardinality :: Id -> MaybeT Checker Bool
 checkCardinality tyCon = do
     st <- get
     case lookup tyCon (typeConstructors st) of

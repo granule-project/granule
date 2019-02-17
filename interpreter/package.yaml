@@ -18,6 +18,8 @@ library:
     -Wincomplete-record-updates
     -Wincomplete-uni-patterns
     -Wredundant-constraints
+    -Wno-unused-matches
+    -Wno-name-shadowing
   # when:
   # - condition: flag(dev)
   #   then:

@@ -65,8 +65,12 @@ data Kind = KType
           | KPromote Type        -- Promoted types
     deriving (Show, Ord, Eq)
 
+kConstr :: Id -> Kind
 kConstr = KPromote . TyCon
+
+kNat, protocol :: Kind
 kNat = kConstr $ mkId "Nat"
+protocol = kConstr $ mkId "Protocol"
 
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
@@ -125,8 +129,11 @@ publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
 publicRepresentation  = 0
 
+nat, extendedNat :: Type
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
+
+infinity :: Coeffect
 infinity = CInfinity (Just extendedNat)
 
 isInterval :: Type -> Maybe Type
@@ -291,8 +298,8 @@ instance Term Coeffect where
 ----------------------------------------------------------------------
 -- Freshenable instances
 
-instance Monad m => Freshenable m TypeScheme where
-  freshen :: TypeScheme -> Freshener m TypeScheme
+instance Freshenable m TypeScheme where
+  freshen :: Monad m => TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds constraints ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
         constraints' <- mapM freshen constraints

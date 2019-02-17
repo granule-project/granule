@@ -5,6 +5,8 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 
+{-# options_ghc -Wno-incomplete-uni-patterns #-}
+
 module Language.Granule.Eval where
 
 import Language.Granule.Desugar
@@ -53,7 +55,7 @@ instance Show (Runtime a) where
 instance Show (Runtime a) => Pretty (Runtime a) where
   prettyL _ = show
 
-evalBinOp :: (?globals :: Globals) => Operator -> RValue -> RValue -> RValue
+evalBinOp :: Operator -> RValue -> RValue -> RValue
 evalBinOp op v1 v2 = case op of
     OpPlus -> case (v1, v2) of
       (NumInt n1, NumInt n2) -> NumInt (n1 + n2)
@@ -244,6 +246,7 @@ pmatch _ ((PFloat _ _ n, e):_) (NumFloat m) | n == m =
 
 pmatch ctxt (_:ps) val = pmatch ctxt ps val
 
+valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile ()
 
 builtIns :: (?globals :: Globals) => Ctxt RValue
@@ -286,7 +289,7 @@ builtIns =
     fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     fork ctxt e@Abs{} = do
       c <- CC.newChan
-      C.forkIO $
+      _ <- C.forkIO $
          evalIn ctxt (App nullSpan () (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
       return $ Pure () $ valExpr $ Ext () $ Chan c
     fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
@@ -294,7 +297,7 @@ builtIns =
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkRep ctxt e@Abs{} = do
       c <- CC.newChan
-      C.forkIO $
+      _ <- C.forkIO $
          evalIn ctxt (App nullSpan ()
                         (valExpr e)
                         (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()

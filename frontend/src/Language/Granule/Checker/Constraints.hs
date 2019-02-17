@@ -255,6 +255,7 @@ rewriteConstraints ctxt =
 
 
 -- | Symbolic coeffect representing 0..Inf
+zeroToInfinity :: SGrade
 zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
 
 
