@@ -93,6 +93,7 @@ data IFaceCtxt = IFaceCtxt
   { ifaceParam :: Id
   , ifaceParamKind :: Kind
   , ifaceSigs :: Ctxt TypeScheme
+  , ifaceConstraints :: [Type]
   } deriving (Show, Eq)
 
 data CheckerState = CS
@@ -186,11 +187,12 @@ registerTyCon sp name kind card = do
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { typeConstructors = (name, (kind, card)) : typeConstructors st }
 
-registerInterface :: (?globals :: Globals) => Span -> Id -> Id -> Kind -> Ctxt TypeScheme -> MaybeT Checker ()
-registerInterface sp name pname kind sigs = do
+registerInterface :: (?globals :: Globals) => Span -> Id -> Id -> Kind -> [Type] -> Ctxt TypeScheme -> MaybeT Checker ()
+registerInterface sp name pname kind constrs sigs = do
   let ifaceCtxt = IFaceCtxt { ifaceParam = pname
                             , ifaceParamKind = kind
                             , ifaceSigs = sigs
+                            , ifaceConstraints = constrs
                             }
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { ifaceContext = (name, ifaceCtxt) : ifaceContext st }

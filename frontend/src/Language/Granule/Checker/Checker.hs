@@ -26,6 +26,7 @@ import Language.Granule.Checker.Interface
   , getInterfaceMembers
   , getInterfaceParameter
   , getInterfaceKind
+  , getInterfaceConstraints
   )
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
@@ -215,7 +216,7 @@ checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
 checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
   mapM_ (kindCheckConstr sp [(pname, kind)]) constrs
-  registerInterface sp name pname kind ifsigs
+  registerInterface sp name pname kind constrs ifsigs
   where
     kind = case kindAnn of Nothing -> KType; Just k -> k
     ifsigs = map (\(IFaceTy _ name tys) -> (name, tys)) itys
@@ -352,6 +353,7 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
             { predicateStack = []
             , tyVarContext = []
             , guardContexts = []
+            , iconsContext = []
             }
         elaboratedEq <- checkEquation defCtxt defName equation tys
 
@@ -1114,17 +1116,31 @@ solveConstraints predicate s name = do
 solveIConstraints :: (?globals :: Globals) => [Type] -> Span -> Id -> MaybeT Checker ()
 solveIConstraints itys sp defName = do
   Just (Forall _ _ topLevelConstraints _) <- getTypeScheme defName
-  let remaining = itys \\ topLevelConstraints
+  topLevelExpanded <- expandIConstraints topLevelConstraints
+  let remaining = itys \\ topLevelExpanded
   mapM_ solveIConstraint remaining
     where solveIConstraint t@(TyApp (TyCon iface) ty) =
               verifyInstanceExists sp iface ty
-          solveIConstraint t = halt $ GenericError (Just sp)
-                               $ concat ["Attempt to resolve '", pretty t, "' as an interface constraint"]
+          solveIConstraint t = badResolve t
           verifyInstanceExists sp iname ty = do
               inst <- getInstance sp iname ty
               case inst of
                 Nothing -> halt $ GenericError (Just sp) $ concat ["No instance for '", pretty iname, " ", pretty ty, "'"]
                 Just _ -> pure ()
+          expandIConstraints icons = fmap concat $ mapM expandIConstraint icons
+          expandIConstraint c@(TyApp (TyCon iname) ty) = do
+              parents <- getInterfaceDependenciesFlattened c
+              parents' <- mapM (\t@(TyApp (TyCon i) (TyVar v)) -> substitute [(v, SubstT ty)] t) parents
+              pure (c : parents')
+          expandIConstraint t = badResolve t
+          getInterfaceDependenciesFlattened (TyApp (TyCon iname) ty) = do
+              Just parents <- getInterfaceConstraints iname
+              parentsFlat <- fmap concat $ mapM getInterfaceDependenciesFlattened parents
+              pure $ parents <> parentsFlat
+          getInterfaceDependenciesFlattened t = badResolve t
+          badResolve t =
+              halt $ GenericError (Just sp)
+                       $ concat ["Attempt to resolve '", pretty t, "' as an interface constraint"]
 
 
 -- Rewrite an error message coming from the solver

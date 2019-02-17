@@ -6,6 +6,7 @@ module Language.Granule.Checker.Interface
   , getInterfaceParameter
   , getInterfaceSig
   , getInterfaceKind
+  , getInterfaceConstraints
   ) where
 
 
@@ -48,6 +49,10 @@ getInterfaceMembers = fmap (fmap ifaceCtxtNames) . getInterface
 
 getInterfaceSig :: Id -> Id -> MaybeT Checker (Maybe TypeScheme)
 getInterfaceSig iname name = fmap join $ fmap (fmap $ lookup name) (getInterfaceSigs iname)
+
+
+getInterfaceConstraints :: Id -> MaybeT Checker (Maybe [Type])
+getInterfaceConstraints = fmap (fmap ifaceConstraints) . getInterface
 
 
 -- | Retrieve a kind from the type constructor scope
