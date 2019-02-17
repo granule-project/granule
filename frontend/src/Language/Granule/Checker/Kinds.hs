@@ -46,7 +46,7 @@ kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
-  forM constraints (\constraint -> do
+  forM_ constraints (\constraint -> do
     kind <- inferKindOfType' s quantifiedVariables constraint
     case kind of
       KPredicate -> return ()

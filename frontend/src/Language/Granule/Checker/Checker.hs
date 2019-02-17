@@ -73,10 +73,11 @@ checkTyCon (DataDecl sp name tyVars kindAnn ds) = do
     mkKind (v:vs) = KFun v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
-checkDataCons (DataDecl _ name tyVars _ dataConstrs) =
-     do
+checkDataCons (DataDecl _ name tyVars _ dataConstrs) = do
     st <- get
-    let Just (kind,_) = lookup name (typeConstructors st) -- can't fail, tyCon must be in checker state
+    let kind = case lookup name (typeConstructors st) of
+                Just (kind,_) -> kind
+                Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
 
@@ -428,8 +429,8 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   debugM "pred so after branches" (pretty (predicateStack st))
 
   -- Pop from stacks related to case
-  popGuardContext
-  popCaseFrame
+  _ <- popGuardContext
+  _ <- popCaseFrame
 
   -- Find the upper-bound contexts
   let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
@@ -790,11 +791,11 @@ synthExpr _ _ _ e =
       <> pretty e <> "` try adding more type signatures."
 
 -- Check an optional type signature for equality against a type
-optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker Bool
-optionalSigEquality _ Nothing _ = return True
+optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker ()
+optionalSigEquality _ Nothing _ = pure ()
 optionalSigEquality s (Just t) t' = do
-    (eq, _, _) <- equalTypes s t' t
-    return eq
+  _ <- equalTypes s t' t
+  pure ()
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
 solveConstraints predicate s name = do
@@ -856,6 +857,8 @@ rewriteMessage msg = do
              else line'
        in line''
 
+justCoeffectTypesConverted :: (?globals::Globals)
+  => Span -> [(a, (Kind, b))] -> MaybeT Checker [(a, (Type, b))]
 justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (KPromote t, q)) = do
@@ -869,7 +872,8 @@ justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
         KCoeffect -> return $ Just (var, (TyVar v, q))
         _         -> return Nothing
     convert _ = return Nothing
-
+justCoeffectTypesConvertedVars :: (?globals::Globals)
+  => Span -> [(Id, Kind)] -> MaybeT Checker (Ctxt Type)
 justCoeffectTypesConvertedVars s env = do
   let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
   env' <- justCoeffectTypesConverted s implicitUniversalMadeExplicit
@@ -1130,6 +1134,7 @@ fold1M :: Monad m => (a -> a -> m a) -> [a] -> m a
 fold1M _ []     = error "Must have at least one case"
 fold1M f (x:xs) = foldM f x xs
 
+justLinear :: [(a, Assumption)] -> [(a, Assumption)]
 justLinear [] = []
 justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
 justLinear ((x, _) : xs) = justLinear xs
@@ -1137,14 +1142,14 @@ justLinear ((x, _) : xs) = justLinear xs
 checkGuardsForExhaustivity :: (?globals :: Globals)
   => Span -> Id -> Type -> [Equation () ()] -> MaybeT Checker ()
 checkGuardsForExhaustivity s name ty eqs = do
-  -- TODO:
+  debugM "Guard exhaustivity" "todo"
   return ()
 
 checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
 checkGuardsForImpossibility s name = do
   -- Get top of guard predicate stack
   st <- get
-  let ps : _ = guardPredicates st
+  let ps = head $ guardPredicates st
 
   -- Convert all universal variables to existential
   let tyVarContextExistential =

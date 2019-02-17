@@ -10,6 +10,8 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TypeFamilies #-}
 
+{-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
+
 module Language.Granule.Syntax.Expr where
 
 import GHC.Generics (Generic)
@@ -123,7 +125,7 @@ pattern Val sp a val = (ExprFix2 (ValF sp a val))
 pattern Case sp a swexp arms = (ExprFix2 (CaseF sp a swexp arms))
 {-# COMPLETE App, Binop, LetDiamond, Val, Case #-}
 
-instance (Bifunctor (f ev a), Bifunctor (g ev a))
+instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
     project = unExprFix
 

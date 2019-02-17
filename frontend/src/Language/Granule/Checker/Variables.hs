@@ -14,7 +14,6 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Context
-import Language.Granule.Utils
 
 -- | Generate a fresh alphanumeric identifier name string
 freshIdentifierBase :: String -> MaybeT Checker String
@@ -35,14 +34,13 @@ freshIdentifierBase s = do
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
-freshTyVarInContext :: (?globals :: Globals) => Id -> Kind -> MaybeT Checker Id
+freshTyVarInContext :: Id -> Kind -> MaybeT Checker Id
 freshTyVarInContext cvar k = do
     freshTyVarInContextWithBinding cvar k InstanceQ
 
 -- | Helper for creating a few (existential) coeffect variable of a particular
 --   coeffect type.
-freshTyVarInContextWithBinding ::
-   (?globals :: Globals) => Id -> Kind -> Quantifier -> MaybeT Checker Id
+freshTyVarInContextWithBinding :: Id -> Kind -> Quantifier -> MaybeT Checker Id
 freshTyVarInContextWithBinding var k q = do
     freshName <- freshIdentifierBase (internalName var)
     let var' = mkId freshName
@@ -50,8 +48,7 @@ freshTyVarInContextWithBinding var k q = do
     return var'
 
 -- | Helper for registering a new coeffect variable in the checker
-registerTyVarInContext ::
-   (?globals :: Globals) => Id -> Kind -> Quantifier -> MaybeT Checker ()
+registerTyVarInContext :: Id -> Kind -> Quantifier -> MaybeT Checker ()
 registerTyVarInContext v k q = do
   modify (\st -> st { tyVarContext = (v, (k, q)) : tyVarContext st })
 

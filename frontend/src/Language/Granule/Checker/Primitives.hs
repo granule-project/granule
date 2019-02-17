@@ -15,9 +15,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Expr (Operator(..))
 
-
-protocol = kConstr $ mkId "Protocol"
-
+nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
@@ -248,7 +246,9 @@ builtins' :: [(Id, TypeScheme)]
 (builtinTypeConstructors, builtinDataConstructors, builtins') =
   (map fst datas, concatMap snd datas, map unDef defs)
     where
-      Right (AST types defs) = parseDefs "builtins" builtinSrc
+      AST types defs = case parseDefs "builtins" builtinSrc of
+        Right ast -> ast
+        Left err -> error err
       datas = map unData types
 
       unDef :: Def () () -> (Id, TypeScheme)
