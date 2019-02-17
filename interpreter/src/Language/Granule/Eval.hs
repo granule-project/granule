@@ -53,25 +53,24 @@ instance Show (Runtime a) where
 instance Show (Runtime a) => Pretty (Runtime a) where
   prettyL _ = show
 
-evalBinOp :: String -> RValue -> RValue -> RValue
-evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
-evalBinOp "*" (NumInt n1) (NumInt n2) = NumInt (n1 * n2)
-evalBinOp "-" (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
-evalBinOp "+" (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
-evalBinOp "*" (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
-evalBinOp "-" (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
-evalBinOp "≡" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n == m)) []
-evalBinOp "≤" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n <= m)) []
-evalBinOp "<" (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n < m)) []
-evalBinOp "≥" (NumInt n) (NumInt m) = Constr () (mkId . show $ (n >= m)) []
-evalBinOp ">" (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n > m)) []
-evalBinOp "≡" (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n == m)) []
-evalBinOp "≤" (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n <= m)) []
-evalBinOp "<" (NumFloat n) (NumFloat m)  = Constr () (mkId . show $ (n < m)) []
-evalBinOp ">" (NumFloat n) (NumFloat m)  = Constr () (mkId . show $ (n > m)) []
-evalBinOp "≥" (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n >= m)) []
-evalBinOp op v1 v2 = error $ "Unknown operator " <> op
-                             <> " on " <> show v1 <> " and " <> show v2
+evalBinOp :: (?globals :: Globals) => Operator -> RValue -> RValue -> RValue
+evalBinOp OpPlus (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
+evalBinOp OpTimes (NumInt n1) (NumInt n2) = NumInt (n1 * n2)
+evalBinOp OpMinus (NumInt n1) (NumInt n2) = NumInt (n1 - n2)
+evalBinOp OpPlus (NumFloat n1) (NumFloat n2) = NumFloat (n1 + n2)
+evalBinOp OpTimes (NumFloat n1) (NumFloat n2) = NumFloat (n1 * n2)
+evalBinOp OpMinus (NumFloat n1) (NumFloat n2) = NumFloat (n1 - n2)
+evalBinOp OpEq (NumInt n) (NumInt m) = Constr () (mkId . show $ (n == m)) []
+evalBinOp OpLesserEq (NumInt n) (NumInt m) = Constr () (mkId . show $ (n <= m)) []
+evalBinOp OpLesser (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n < m)) []
+evalBinOp OpGreaterEq (NumInt n) (NumInt m) = Constr () (mkId . show $ (n >= m)) []
+evalBinOp OpGreater (NumInt n) (NumInt m)  = Constr () (mkId . show $ (n > m)) []
+evalBinOp OpEq (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n == m)) []
+evalBinOp OpLesserEq (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n <= m)) []
+evalBinOp OpLesser (NumFloat n) (NumFloat m)  = Constr () (mkId . show $ (n < m)) []
+evalBinOp OpGreater (NumFloat n) (NumFloat m)  = Constr () (mkId . show $ (n > m)) []
+evalBinOp OpGreaterEq (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n >= m)) []
+evalBinOp op v1 v2 = error $ concat [pretty op, " on ", pretty v1, pretty v2]
 
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue

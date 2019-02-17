@@ -262,7 +262,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
     parens l $ prettyL (l+1) e1 <> " " <> prettyL l e2
 
   prettyL l (Binop _ _ op e1 e2) =
-    parens l $ prettyL (l+1) e1 <> " " <> op <> " " <> prettyL (l+1) e2
+    parens l $ prettyL (l+1) e1 <> " " <> prettyL l op <> " " <> prettyL (l+1) e2
 
   prettyL l (LetDiamond _ _ v t e1 e2) =
     parens l $ "let " <> prettyL l v <> " :" <> prettyL l t <> " <- "
@@ -272,6 +272,19 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
   prettyL l (Case _ _ e ps) = "\n    (case " <> prettyL l e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> prettyL l p
                       <> " -> " <> prettyL l e') ps) <> ")"
+
+
+instance Pretty Operator where
+  prettyL _ = \case
+    OpLesser          -> "<"
+    OpLesserEq        -> "≤"
+    OpGreater         -> ">"
+    OpGreaterEq       -> "≥"
+    OpEq              -> "≡"
+    OpNotEq           -> "≠"
+    OpPlus            -> "+"
+    OpTimes           -> "*"
+    OpMinus           -> "-"
 
 parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
 parensOn p t = prettyL (if p t then 0 else 1) t

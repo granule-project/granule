@@ -1,9 +1,11 @@
 -- Provides all the type information for built-ins
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Language.Granule.Checker.Primitives where
 
 import Data.List (genericLength)
+import Data.List.NonEmpty (NonEmpty(..))
 import Text.RawString.QQ (r)
 
 import Language.Granule.Syntax.Def
@@ -11,9 +13,9 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Parser (parseDefs)
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Expr (Operator(..))
 
 
-kNat = kConstr $ mkId "Nat"
 protocol = kConstr $ mkId "Protocol"
 
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
@@ -36,17 +38,6 @@ typeConstructors =
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
-    , (mkId "+",   (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "-",   (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "*",   (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "<",   (KFun kNat (KFun kNat KPredicate), Nothing))
-    , (mkId ">",   (KFun kNat (KFun kNat KPredicate), Nothing))
-    , (mkId "=",   (KFun kNat (KFun kNat KPredicate), Nothing))
-    , (mkId "/=",   (KFun kNat (KFun kNat KPredicate), Nothing))
-    , (mkId "<=",   (KFun kNat (KFun kNat KPredicate), Nothing))
-    , (mkId ">=",   (KFun kNat (KFun kNat KPredicate), Nothing))
-    , (mkId "∧", (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "∨", (KFun kNat (KFun kNat kNat), Nothing))
     -- File stuff
     , (mkId "Handle", (KType, Nothing))
     , (mkId "IOMode", (KType, Nothing))
@@ -60,6 +51,21 @@ typeConstructors =
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
     ] ++ builtinTypeConstructors
+
+tyOps :: TypeOperator -> (Kind, Kind, Kind)
+tyOps = \case
+    TyOpLesser -> (kNat, kNat, KPredicate)
+    TyOpLesserEq -> (kNat, kNat, KPredicate)
+    TyOpGreater -> (kNat, kNat, KPredicate)
+    TyOpGreaterEq -> (kNat, kNat, KPredicate)
+    TyOpEq -> (kNat, kNat, KPredicate)
+    TyOpNotEq -> (kNat, kNat, KPredicate)
+    TyOpPlus -> (kNat, kNat, kNat)
+    TyOpTimes -> (kNat, kNat, kNat)
+    TyOpMinus -> (kNat, kNat, kNat)
+    TyOpExpon -> (kNat, kNat, kNat)
+    TyOpMeet -> (kNat, kNat, kNat)
+    TyOpJoin -> (kNat, kNat, kNat)
 
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
@@ -156,26 +162,35 @@ builtins =
                             (FunTy ((con "Chan") .@ (var "s")) (var "s")))
   ] ++ builtins'
 
-binaryOperators :: [(Operator, Type)]
-binaryOperators =
-  [ ("+", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
-   ,("+", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
-   ,("-", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
-   ,("-", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
-   ,("*", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
-   ,("*", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
-   ,("≡", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("≤", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("<", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,(">", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("≥", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("≡", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,("≤", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,("<", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,(">", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,("≥", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ]
-
+binaryOperators :: Operator -> NonEmpty Type
+binaryOperators = \case
+    OpPlus ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+    OpMinus ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+    OpTimes ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+    OpEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpNotEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpLesserEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpLesser ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpGreater ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpGreaterEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
 
 
 builtinSrc :: String

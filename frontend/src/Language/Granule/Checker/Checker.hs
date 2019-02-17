@@ -12,6 +12,7 @@ import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List (genericLength, intercalate)
+import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
 
@@ -716,19 +717,19 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
     (t2, gam2, elaboratedR) <- synthExpr defs gam pol e2
     -- Look through the list of operators (of which there might be
     -- multiple matching operators)
-    case lookupMany op Primitives.binaryOperators of
-      [] -> halt $ UnboundVariableError (Just s) $ "Binary operator " <> op
-      ops -> do
-        returnType <- selectFirstByType t1 t2 ops
-        gamOut <- ctxtPlus s gam1 gam2
-
-        let elaborated = Binop s returnType op elaboratedL elaboratedR
-        return (returnType, gamOut, elaborated)
+    returnType <-
+      selectFirstByType t1 t2
+      . NonEmpty.toList
+      . Primitives.binaryOperators
+      $ op
+    gamOut <- ctxtPlus s gam1 gam2
+    let elaborated = Binop s returnType op elaboratedL elaboratedR
+    return (returnType, gamOut, elaborated)
 
   where
     -- No matching type were found (meaning there is a type error)
     selectFirstByType t1 t2 [] =
-      halt $ GenericError (Just s) $ "Could not resolve operator " <> op <> " at type: "
+      halt $ GenericError (Just s) $ "Could not resolve operator " <> pretty op <> " at type: "
          <> pretty (FunTy t1 (FunTy t2 (TyVar $ mkId "...")))
 
     selectFirstByType t1 t2 ((FunTy opt1 (FunTy opt2 resultTy)):ops) = do
