@@ -1,0 +1,2 @@
+-- interface without any methods
+interface Simple a

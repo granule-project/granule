@@ -152,9 +152,9 @@ IFaceName :: { Id }
 IFaceConstrained :: { [TConstraint] }
   : '{' Constraints '}' '=>' { $2 }
 
-IFaceVar :: { (Id, Maybe Kind) }
-  : VAR            { (mkId $ symString $1, Nothing) }
-  | '(' VarSig ')' { (fst $2, Just (snd $2)) }
+IFaceVar :: { (Span, (Id, Maybe Kind)) }
+  : VAR            { % mkSpan (getPosToSpan $1)      >>= \sp -> return $ (sp, (mkId $ symString $1, Nothing)) }
+  | '(' VarSig ')' { % mkSpan (getPos $1, getPos $3) >>= \sp -> return $ (sp, (fst $2, Just (snd $2))) }
 
 IFaceSigs :: { [IFaceTy] }
   : Sig ';' IFaceSigs
@@ -164,9 +164,13 @@ IFaceSigs :: { [IFaceTy] }
 
 IFaceDecl :: { IFace }
   : interface IFaceName IFaceVar where IFaceSigs
-    { % mkSpan (getPos $1, lastSpan' $5) >>= \sp -> return $ IFace sp $2 [] (snd $3) (fst $3) $5 }
+  { % mkSpan (getPos $1, lastSpan' $5) >>= \sp -> return $ IFace sp $2 [] (snd (snd $3)) (fst (snd $3)) $5 }
   | interface IFaceConstrained IFaceName IFaceVar where IFaceSigs
-    { % mkSpan (getPos $1, lastSpan' $6) >>= \sp -> return $ IFace sp $3 $2 (snd $4) (fst $4) $6 }
+  { % mkSpan (getPos $1, lastSpan' $6) >>= \sp -> return $ IFace sp $3 $2 (snd (snd $4)) (fst (snd $4)) $6 }
+  | interface IFaceName IFaceVar
+  { % mkSpan (getPos $1, endPos (fst $3)) >>= \sp -> return $ IFace sp $2 [] (snd (snd $3)) (fst (snd $3)) [] }
+  | interface IFaceConstrained IFaceName IFaceVar
+  { % mkSpan (getPos $1, endPos (fst $4)) >>= \sp -> return $ IFace sp $3 $2 (snd (snd $4)) (fst (snd $4)) [] }
 
 InstBinds :: { [IDef () ()] }
   : Binding ';' InstBinds

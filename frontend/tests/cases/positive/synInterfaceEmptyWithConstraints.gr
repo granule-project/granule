@@ -1,0 +1,4 @@
+-- empty interface with constraints
+interface Simple a
+
+interface {Simple a} => Simple2 a
