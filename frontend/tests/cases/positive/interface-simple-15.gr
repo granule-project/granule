@@ -12,11 +12,13 @@ bXOR [x] [y] = bAnd (bOr x y) (bNot (bAnd x y))
 data BoolTy = F | T
 
 instance BoolI BoolTy where
-  bAnd T T = T;
-  bAnd _ _ = F;
+  bAnd T x = x;
+  bAnd F F = F;
+  bAnd F T = F;
 
-  bOr F F = F;
-  bOr _ _ = T;
+  bOr T T = T;
+  bOr T F = T;
+  bOr F x = x;
 
   bNot T = F;
-  bNot _ = T
+  bNot F = T

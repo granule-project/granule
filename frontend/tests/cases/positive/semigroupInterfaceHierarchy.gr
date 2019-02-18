@@ -13,8 +13,9 @@ mconcat (Cons x xs) = op x (mconcat xs)
 data BoolAnd = F | T
 
 instance Semigroup BoolAnd where
-  op T T = T;
-  op _ _ = F
+  op T x = x;
+  op F F = F;
+  op F T = F
 
 instance Monoid BoolAnd where
   unit = T
