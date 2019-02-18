@@ -196,7 +196,7 @@ instance Pretty DataConstr where
 
 instance Pretty IFace where
     prettyL l (IFace _ iName constrs kind paramName tys) =
-      concat ["interface ", constrStr, pretty iName, " ", pStr, " where\n", tyStr]
+      concat ["interface ", constrStr, pretty iName, " ", pStr, sigStr]
       where
         constrStr =
           case constrs of
@@ -204,6 +204,9 @@ instance Pretty IFace where
             cs -> prettyConstraintsBraces cs
         pStr = maybe (pretty paramName)
           (\k -> parens' $ prettyColonSep 0 paramName k) kind
+        sigStr = case tys of
+                   [] -> ""
+                   _  -> "where\n" <> tyStr
         tyStr = "  " ++ prettySemiSep 0 tys
 
 instance Pretty IFaceTy where
