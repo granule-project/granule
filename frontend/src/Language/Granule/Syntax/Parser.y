@@ -186,6 +186,10 @@ InstDecl :: { Instance () ()  }
     { % mkSpan (getPos $1, getEnd . last $ $5) >>= \sp -> return $ Instance sp $2 [] $3 $5 }
   | instance IFaceConstrained IFaceName InstVar where InstBinds
     { % mkSpan (getPos $1, getEnd . last $ $6) >>= \sp -> return $ Instance sp $3 $2 $4 $6 }
+  | instance IFaceName InstVar
+    { % mkSpan (getPos $1, getEnd $3) >>= \sp -> return $ Instance sp $2 [] $3 [] }
+  | instance IFaceConstrained IFaceName InstVar
+    { % mkSpan (getPos $1, getEnd $4) >>= \sp -> return $ Instance sp $3 $2 $4 [] }
 
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }

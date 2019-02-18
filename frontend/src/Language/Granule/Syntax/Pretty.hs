@@ -213,13 +213,17 @@ instance Pretty IFaceTy where
     prettyL l (IFaceTy _ name ty) = prettyColonSep l name ty
 
 instance (Pretty v, Pretty a) => Pretty (Instance v a) where
-    prettyL l (Instance _ name cts idat defs) =
+    prettyL _ (Instance _ name cts idat defs) =
       unwords ["instance", ctsStr <> pretty name,
-               pretty idat, "where\n  " <> prettySemiSep 0 defs]
+               pretty idat, defStr]
       where ctsStr =
               case cts of
                 [] -> ""
                 _ -> prettyConstraintsBraces cts
+            defStr =
+                case defs of
+                  [] -> ""
+                  _  -> "where\n  " <> prettySemiSep 0 defs
 
 instance Pretty IFaceDat where
     prettyL l (IFaceDat _ ty) = prettyTy l ty

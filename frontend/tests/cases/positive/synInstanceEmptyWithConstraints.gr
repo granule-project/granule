@@ -1,0 +1,6 @@
+-- empty instance with constraints
+data A a = A
+
+interface Simple a
+
+instance {Simple a} => Simple (A a)

@@ -1,0 +1,7 @@
+-- instance without any implementations
+
+data A = A
+
+interface Simple a
+
+instance Simple A
