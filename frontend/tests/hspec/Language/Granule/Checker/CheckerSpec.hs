@@ -1,11 +1,11 @@
-{-# LANGUAGE PartialTypeSignatures #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
 
 module Language.Granule.Checker.CheckerSpec where
 
 import Control.Exception (SomeException, try)
 import Control.Monad (forM_, liftM2)
-import Data.Maybe (fromJust, isJust)
+import Data.Either (isLeft, isRight, fromRight)
 
 import System.FilePath.Find
 import Test.Hspec
@@ -14,7 +14,6 @@ import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
-import Control.Monad.Trans.Maybe
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Def
@@ -54,27 +53,27 @@ spec = do
     forM_ srcFiles $ \file ->
       describe file $ it "should typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file }
-        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs :: IO (Either SomeException _)
+        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs
         case parsed of
-          Left ex -> expectationFailure (show ex) -- parse error
+          Left (ex :: SomeException) -> expectationFailure (show ex) -- parse error
           Right ast -> do
-            result <- try (check ast) :: IO (Either SomeException _)
+            result <- try (check ast)
             case result of
-                Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldSatisfy` isJust
+                Left (ex :: SomeException) -> expectationFailure (show ex) -- an exception was thrown
+                Right checked -> checked `shouldSatisfy` isRight
     -- Negative tests: things which should fail to check
     srcFiles <- runIO illTypedFiles
     forM_ srcFiles $ \file ->
       describe file $ it "should not typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file, suppressErrors = True }
-        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs :: IO (Either SomeException _)
+        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs
         case parsed of
-          Left ex -> expectationFailure (show ex) -- parse error
+          Left (ex :: SomeException) -> expectationFailure (show ex) -- parse error
           Right ast -> do
-            result <- try (check ast) :: IO (Either SomeException _)
+            result <- try (check ast)
             case result of
-                Left ex -> expectationFailure (show ex) -- an exception was thrown
-                Right checked -> checked `shouldBe` Nothing
+                Left (ex :: SomeException) -> expectationFailure (show ex) -- an exception was thrown
+                Right checked -> checked `shouldSatisfy` isLeft
 
     let tyVarK = TyVar $ mkId "k"
     let varA = mkId "a"
@@ -136,15 +135,21 @@ spec = do
         -- Simple definitions
         -- \x -> x + 1
         (AST _ (def1:_)) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
-        (Just defElab, _) <- runChecker initState (runMaybeT $ checkDef [] def1)
+        (Right defElab, _) <- runChecker initState (checkDef [] def1)
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
 
 extractMainExpr (Def _ _ [(Equation _ _ _ e)] _) = e
 
-runCtxts f a b =
-       runChecker initState (runMaybeT (f nullSpan a b))
-          >>= (\(x, state) -> return (fromJust x, predicateStack state))
+runCtxts
+  :: (?globals::Globals)
+  => (Span -> a -> a -> Checker a)
+  -> a
+  -> a
+  -> IO (a, [Pred])
+runCtxts f a b = do
+  (Right res, state) <- runChecker initState (f nullSpan a b)
+  pure (res, predicateStack state)
 
 exampleFiles = foldr1 (liftM2 (<>)) $ do
     fileExtension <- fileExtensions

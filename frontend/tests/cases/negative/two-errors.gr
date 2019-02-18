@@ -1,0 +1,7 @@
+-- ensure that we report both errors
+
+foo : Int
+foo = ()
+
+bar : ()
+bar = 1

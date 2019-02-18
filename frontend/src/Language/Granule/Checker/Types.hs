@@ -7,11 +7,10 @@
 module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
 import Data.List
 
 import Language.Granule.Checker.Constraints.Compile
-import Language.Granule.Checker.Errors
+
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -26,23 +25,23 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> SpecIndicator ->Type -> Type -> Checker (Bool, Type, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False pol
 
 equalTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq False pol
 
 lEqualTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy False SndIsSpec
 
 equalTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq False SndIsSpec
 
 equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq True SndIsSpec
 
 {- | Check whether two types are equal, and at the same time
@@ -69,7 +68,7 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   --    * a boolean of the equality
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier
-  -> MaybeT Checker (Bool, Type, Substitution)
+  -> Checker (Bool, Type, Substitution)
 equalTypesRelatedCoeffectsAndUnify s rel allowUniversalSpecialisation spec t1 t2 = do
 
    (eq, unif) <- equalTypesRelatedCoeffects s rel allowUniversalSpecialisation t1 t2 spec
@@ -99,7 +98,7 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Type
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
-  -> MaybeT Checker (Bool, Substitution)
+  -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1' t1 (flipIndicator sp)
@@ -146,8 +145,7 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef1 t1) (Diamond ef2 t2) sp = do
         if (nub ef1 == ["Com"] && nub ef2 == ["Com"])
         then return (eq, unif)
         else
-          halt $ GradingError (Just s) $
-            "Effect mismatch: `" <> pretty ef1 <> "` not equal to `" <> pretty ef2 <> "`"
+          throw EffectMismatch{ errLoc = s, effExpected = ef1, effActual = ef2 }
 
 equalTypesRelatedCoeffects s rel uS x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages
@@ -159,9 +157,7 @@ equalTypesRelatedCoeffects s rel uS x@(Box c t) y@(Box c' t') sp = do
   case sp of
     SndIsSpec -> addConstraint (rel s c c' kind)
     FstIsSpec -> addConstraint (rel s c' c kind)
-    _ -> halt $ GenericError (Just s) $ "Trying to unify `"
-                <> pretty x <> "` and `"
-                <> pretty y <> "` but in a context where unification is not allowed."
+    _ -> throw UnificationDisallowed { errLoc = s, errTy1 = x, errTy2 = y }
 
   equalTypesRelatedCoeffects s rel uS t t' sp
   --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp
@@ -175,7 +171,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) _ | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
-    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " <> pretty n)
+    Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   checkerState <- get
@@ -272,7 +268,8 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
     (Just (k1, q)) | q == InstanceQ || q == BoundQ -> do
       k2 <- inferKindOfType s t
       case k1 `joinKind` k2 of
-        Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
+        Nothing -> throw UnificationKindError
+          { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = k2 }
 
         -- If the kind is Nat, then create a solver constraint
         Just (KPromote (TyCon (internalName -> "Nat"))) -> do
@@ -296,21 +293,15 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
           c2 <- compileNatKindedTypeToCoeffect s t
           addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
           return (True, [(n, SubstT t)])
-        x ->
-          if allowUniversalSpecialisation
-            then
-              return (True, [(n, SubstT t)])
-            else
-            halt $ GenericError (Just s)
-            $ case sp of
-             FstIsSpec -> "Trying to match a polymorphic type '" <> pretty n
-                       <> "' with monomorphic `" <> pretty t <> "`"
-             SndIsSpec -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
-             PatternCtxt -> pretty t <> " is not unifiable with " <> pretty (TyVar n)
+        x | allowUniversalSpecialisation -> return (True, [(n, SubstT t)])
+          | sp == FstIsSpec -> throw
+              MonoUnificationFail{ errLoc = s, errVar = n, errTy = t }
+          | otherwise -> throw
+              UnificationFail{ errLoc = s, errVar = n, errTy = t }
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " <> show (tyVarContext checkerState)))
+    Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
 
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
@@ -341,7 +332,7 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals)
     => Span
     -> Type
     -> Type
-    -> MaybeT Checker (Bool, Substitution)
+    -> Checker (Bool, Substitution)
 equalOtherKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
@@ -356,19 +347,17 @@ equalOtherKindedTypesGeneric s t1 t2 = do
       KPromote (TyCon (internalName -> "Protocol")) ->
         sessionInequality s t1 t2
 
-      KType -> nonUnifiable s t1 t2
+      KType -> throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
 
       _ ->
-       halt $ KindError (Just s) $ "Equality is not defined between kinds "
-                 <> pretty k1 <> " and " <> pretty k2
-                 <> "\t\n from equality "
-                 <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
-  else nonUnifiable s t1 t2
+       throw UndefinedEqualityKindError
+        { errLoc = s, errTy1 = t1, errK1 = k1, errTy2 = t2, errK2 = k2 }
+  else throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
 sessionInequality :: (?globals :: Globals)
-    => Span -> Type -> Type -> MaybeT Checker (Bool, Substitution)
+    => Span -> Type -> Type -> Checker (Bool, Substitution)
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
   (g, _, u) <- equalTypes s t t'
@@ -383,9 +372,7 @@ sessionInequality s (TyCon c) (TyCon c')
   | internalName c == "End" && internalName c' == "End" =
   return (True, [])
 
-sessionInequality s t1 t2 =
-  halt $ GenericError (Just s)
-       $ "Session type '" <> pretty t1 <> "' is not equal to '" <> pretty t2 <> "'"
+sessionInequality s t1 t2 = throw TypeError{ errLoc = s, tyExpected = t1, tyActual = t2 }
 
 isDualSession :: (?globals :: Globals)
     => Span
@@ -396,7 +383,7 @@ isDualSession :: (?globals :: Globals)
     -> Type
     -- Indicates whether the first type or second type is a specification
     -> SpecIndicator
-    -> MaybeT Checker (Bool, Substitution)
+    -> Checker (Bool, Substitution)
 isDualSession sp rel uS (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
@@ -415,13 +402,12 @@ isDualSession sp rel uS t (TyVar v) ind =
 isDualSession sp rel uS (TyVar v) t ind =
   equalTypesRelatedCoeffects sp rel uS (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind
 
-isDualSession sp _ _ t1 t2 _ =
-  halt $ GenericError (Just sp)
-       $ "Session type '" <> pretty t1 <> "' is not dual to '" <> pretty t2 <> "'"
+isDualSession sp _ _ t1 t2 _ = throw
+  SessionDualityError{ errLoc = sp, errTy1 = t1, errTy2 = t2 }
 
 
 -- Essentially equality on types but join on any coeffects
-joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type
+joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
 joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
   t1j <- joinTypes s t1' t1 -- contravariance
   t2j <- joinTypes s t2 t2'
@@ -436,8 +422,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
     else
       if ef' `isPrefixOf` ef
       then return (Diamond ef tj)
-      else halt $ GradingError (Just s) $
-        "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
+      else throw EffectMismatch{ errLoc = s, effExpected = ef, effActual = ef' }
 
 joinTypes s (Box c t) (Box c' t') = do
   coeffTy <- mguCoeffectTypes s c c'
@@ -478,7 +463,5 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t2'' <- joinTypes s t2 t2'
   return (TyApp t1'' t2'')
 
-joinTypes s t1 t2 = do
-  halt $ GenericError (Just s)
-    $ "Type '" <> pretty t1 <> "' and '"
-               <> pretty t2 <> "' have no upper bound"
+joinTypes s t1 t2 = throw
+  NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }

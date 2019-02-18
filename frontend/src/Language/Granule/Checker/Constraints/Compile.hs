@@ -4,11 +4,10 @@
 
 module Language.Granule.Checker.Constraints.Compile where
 
-import Control.Monad.Trans.Maybe
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Errors
+
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
@@ -17,7 +16,7 @@ import Language.Granule.Syntax.Span
 
 import Language.Granule.Utils
 
-compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Coeffect
+compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> Checker Coeffect
 compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
   t1' <- compileNatKindedTypeToCoeffect s t1
   t2' <- compileNatKindedTypeToCoeffect s t2
@@ -35,10 +34,10 @@ compileNatKindedTypeToCoeffect _ (TyInt n) =
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
 compileNatKindedTypeToCoeffect s t =
-  halt $ KindError (Just s) $ "Type `" <> pretty t <> "` does not have kind `Nat`"
+  throw $ KindError{errLoc = s, errTy = t, errK = kNat }
 
 compileTypeConstraintToConstraint ::
-    (?globals :: Globals) => Span -> Type -> MaybeT Checker Pred
+    (?globals :: Globals) => Span -> Type -> Checker Pred
 compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   c1 <- compileNatKindedTypeToCoeffect s t1
   c2 <- compileNatKindedTypeToCoeffect s t2
@@ -49,7 +48,7 @@ compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
     TyOpGreater -> return $ Con (Gt s c1 c2)
     TyOpLesserEq -> return $ Disj [Con $ Lt s c1 c2, Con $ Eq s c1 c2 (TyCon $ mkId "Nat")]
     TyOpGreaterEq -> return $ Disj [Con $ Gt s c1 c2, Con $ Eq s c1 c2 (TyCon $ mkId "Nat")]
-    _ -> halt $ GenericError (Just s) $ "I don't know how to compile binary operator " <> pretty op
+    _ -> error $ pretty s <> ": I don't know how to compile binary operator " <> pretty op
 
 compileTypeConstraintToConstraint s t =
-  halt $ GenericError (Just s) $ "I don't know how to compile a constraint `" <> pretty t <> "`"
+  error $ pretty s <> ": I don't know how to compile a constraint `" <> pretty t <> "`"
