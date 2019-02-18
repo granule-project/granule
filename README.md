@@ -1,12 +1,12 @@
 ```
-                                     ___             
-                                    /\_ \            
-   __   _  _    __      ___   __  __\//\ \      __   
+                                     ___
+                                    /\_ \
+   __   _  _    __      ___   __  __\//\ \      __
  / _  \/\`'__\/ __ \  /' _ `\/\ \/\ \ \ \ \   /'__`\
 /\ \_\ \ \ \//\ \_\ \_/\ \/\ \ \ \_\ \ \_\ \_/\  __/
 \ \____ \ \_\\ \__/ \_\ \_\ \_\ \____/ /\____\ \____\
  \/___L\ \/_/ \/__/\/_/\/_/\/_/\/___/  \/____/\/____/
-   /\____/                                           
+   /\____/
    \_/__/
 ```
 
@@ -117,6 +117,7 @@ $ cat ~/.granule
 Options
   { debugging           = Nothing
   , noColors            = Just True
+  , alternativeColors   = Nothing
   , noEval              = Nothing
   , suppressInfos       = Nothing
   , suppressErrors      = Nothing
@@ -127,5 +128,8 @@ Options
   , keepBackupAscii     = Just False
   }
 ```
+
+`Nothing` denotes that the default will be used and `Just x` means that the
+default value gets overridden by `x`.
 
 All contributions are welcome!

@@ -26,15 +26,8 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Variables (freshTyVarInContextWithBinding)
 
-import Control.Monad.Trans.Maybe
 import Language.Granule.Utils
 
--- For doctest:
--- $setup
--- >>> import Language.Granule.Syntax.Identifiers (mkId)
--- >>> import Language.Granule.Syntax.Pattern
--- >>> import Language.Granule.Utils
--- >>> :set -XImplicitParams
 
 {-| Substitutions map from variables to type-level things as defined by
     substitutors -}
@@ -58,10 +51,10 @@ instance Pretty Substitutors where
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
   substitute :: (?globals :: Globals)
-             => Substitution -> t -> MaybeT Checker t
+             => Substitution -> t -> Checker t
 
   unify :: (?globals :: Globals)
-        => t -> t -> MaybeT Checker (Maybe Substitution)
+        => t -> t -> Checker (Maybe Substitution)
 
 -- Instances for the main representation of things in the types
 
@@ -364,7 +357,7 @@ instance Substitutable t => Substitutable (Maybe t) where
 
 -- | Combine substitutions wrapped in Maybe
 (<<>>) :: (?globals :: Globals)
-  => Maybe Substitution -> Maybe Substitution -> MaybeT Checker (Maybe Substitution)
+  => Maybe Substitution -> Maybe Substitution -> Checker (Maybe Substitution)
 xs <<>> ys =
   case (xs, ys) of
     (Just xs', Just ys') ->
@@ -375,7 +368,7 @@ xs <<>> ys =
 -- | substitutions
 combineSubstitutions ::
     (?globals :: Globals)
-    => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
+    => Span -> Substitution -> Substitution -> Checker Substitution
 combineSubstitutions sp u1 u2 = do
       -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
       -- check whether things can be unified, i.e. exactly
@@ -420,7 +413,7 @@ instance Substitutable (Ctxt Assumption) where
   unify = error "Unify not implemented for contexts"
 
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
-  -> MaybeT Checker (Ctxt Assumption, Ctxt Assumption)
+  -> Checker (Ctxt Assumption, Ctxt Assumption)
 substCtxt _ [] = return ([], [])
 substCtxt subst ((v, x):ctxt) = do
   (substituteds, unsubstituteds) <- substCtxt subst ctxt
@@ -431,7 +424,7 @@ substCtxt subst ((v, x):ctxt) = do
     else return ((v, x') : substituteds, unsubstituteds)
 
 substAssumption :: (?globals :: Globals) => Substitution -> (Id, Assumption)
-  -> MaybeT Checker (Id, Assumption)
+  -> Checker (Id, Assumption)
 substAssumption subst (v, Linear t) = do
     t <- substitute subst t
     return (v, Linear t)
@@ -442,7 +435,7 @@ substAssumption subst (v, Discharged t c) = do
 
 
 -- | Apply a name map to a type to rename the type variables
-renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> MaybeT Checker Type
+renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> Checker Type
 renameType subst = typeFoldM $ baseTypeFold
   { tfBox   = renameBox subst
   , tfTyVar = renameTyVar subst
@@ -464,7 +457,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   => Quantifier   -- Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
   -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
   -> TypeScheme   -- Type scheme to freshen
-  -> MaybeT Checker (Type, [Id], [Type])
+  -> Checker (Type, [Id], [Type])
     -- Returns the type (with skolems), a list of skolem variables, and a list of constraints
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) = do
     -- Universal becomes an existential (via freshCoeffeVar)
@@ -482,7 +475,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     -- Freshen variables, create skolem variables
     -- Left of id means a succesful skolem variable created
     -- Right of id means that this is an existential and so a skolem is not generated
-    instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either Id Id)
+    instantiateVariable :: (Id, Kind) -> Checker (Id, Either Id Id)
     instantiateVariable (var, k) =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
          then do

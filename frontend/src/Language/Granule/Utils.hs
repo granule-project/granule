@@ -28,6 +28,7 @@ data Globals =
   { debugging :: Bool
   , sourceFilePath :: String
   , noColors :: Bool
+  , alternativeColors :: Bool
   , noEval :: Bool
   , suppressInfos :: Bool
   , suppressErrors :: Bool
@@ -42,6 +43,7 @@ defaultGlobals =
     { debugging = False
     , sourceFilePath = ""
     , noColors = False
+    , alternativeColors = False
     , noEval = False
     , suppressInfos = False
     , suppressErrors = False
@@ -52,10 +54,10 @@ defaultGlobals =
 
 class UserMsg a where
   title :: a -> String
-  location :: a -> Maybe Span
-  msg :: a -> String -- short for `message`, not `monosodium glutamate`
+  location :: (?globals :: Globals) => a -> Span
+  msg :: (?globals :: Globals) => a -> String
 
-  location _ = Nothing
+  location _ = nullSpan
 
 mkSpan :: (?globals :: Globals) => (Pos, Pos) -> Span
 mkSpan (start, end) = Span start end (sourceFilePath ?globals)
@@ -71,46 +73,52 @@ debugM explanation message =
 -- | Print to terminal when debugging e.g.:
 -- foo x y = x + y `debug` "foo" $ "given " <> show x <> " and " <> show y
 debug :: (?globals :: Globals) => a -> String -> a
-debug x message =
-    if debugging ?globals
-      then ((unsafePerformIO getTimeString) <> (bold $ magenta $ "Debug: ") <> message <> "\n")
-           `trace` x
-      else x
+debug x message
+  | debugging ?globals
+    = ((unsafePerformIO getTimeString) <> (bold $ magenta $ "Debug: ") <> message <> "\n") `trace` x
+  | otherwise
+    = x
 
--- | Append a debug message to a string, which will only get printed when debugging
-(<?>) :: (?globals :: Globals) => String -> String -> String
-infixr 6 <?>
-str <?> msg =
-    if debugging ?globals
-      then str <> (bold $ magenta $ " Debug { ") <> msg <> (bold $ magenta $ " }")
-      else str
+printError :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
+printError message = when (not $ suppressErrors ?globals) $
+  hPutStrLn stderr $ formatError message
 
-printErr :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
-printErr err = when (not $ suppressErrors ?globals) $ do
-    time <- getTimeString
-    hPutStrLn stderr $
-      time
-      <> (bold $ red $ title err <> ": ")
-      <> sourceFile <> lineCol <> "\n"
-      <> indent (msg err)
-      <> "\n"
-  where
-    sourceFile =
-        case location err of -- sourceFilePath ?globals
-          Nothing -> ""
-          Just (filename -> "") -> ""
-          Just (filename -> p)  -> p <> ":"
-    lineCol =
-        case location err of
-          Nothing -> ""
-          Just (Span (0,0) (0,0) _) -> ""
-          Just (Span (line,col) _ fileName) -> show line <> ":" <> show col <> ":"
+printSuccess :: (?globals :: Globals) => String -> IO ()
+printSuccess message = when (not $ suppressInfos ?globals)
+  (putStrLn . (if alternativeColors ?globals then blue else green) $ message)
 
 printInfo :: (?globals :: Globals) => String -> IO ()
-printInfo message =
-    when (not $ suppressInfos ?globals) $ do
-      time <- getTimeString
-      putStrLn $ time <> message
+printInfo message = when (not $ suppressInfos ?globals) (putStrLn message)
+
+-- printInfo :: (?globals :: Globals) => String -> IO ()
+-- printInfo message =
+--     when (not $ suppressInfos ?globals) $ do
+--       time <- getTimeString
+--       putStr $ time <> message
+
+formatError :: (?globals :: Globals, UserMsg msg) => msg -> String
+formatError = formatMessage (bold . red)
+-- | Given a function to format the title of a message, format the message
+-- and its body. e.g. @formatMessage (bold . red)@ for errors.
+formatMessage :: (?globals :: Globals, UserMsg msg)
+  => (String -> String) -> msg -> String
+formatMessage titleStyle message
+  = (titleStyle $ title message <> ": ")
+    <> sourceFile <> lineCol <> "\n"
+    <> indent (msg message)
+  where
+    sourceFile = case filename $ location message of -- sourceFilePath ?globals
+      "" -> ""
+      p  -> p <> ":"
+    lineCol = case location message of
+      (Span (0,0) (0,0) _) -> ""
+      (Span (line,col) _ _) -> show line <> ":" <> show col <> ":"
+
+formatMessageTime :: (?globals :: Globals, UserMsg msg)
+  => (String -> String) -> msg -> IO String
+formatMessageTime titleStyle message = do
+    time <- getTimeString
+    pure $ time <> formatMessage titleStyle message
 
 -- backgColor colorCode = txtColor (colorCode + 10)
 bold :: (?globals :: Globals) => String -> String

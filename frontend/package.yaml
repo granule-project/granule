@@ -8,6 +8,12 @@ github: granule-project/granule
 dependencies:
 - base >=4.10 && <5
 
+default-extensions:
+- RecordWildCards
+- ImplicitParams
+- ViewPatterns
+- LambdaCase
+
 library:
   source-dirs: src
   ghc-options: >
@@ -20,6 +26,7 @@ library:
     -Wredundant-constraints
     -Wno-unused-matches
     -Wno-name-shadowing
+    -Wno-type-defaults
 
   # when:
   # - condition: flag(dev)
