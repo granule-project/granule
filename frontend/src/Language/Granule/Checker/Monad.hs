@@ -10,10 +10,12 @@
 
 module Language.Granule.Checker.Monad where
 
+import Data.Either (partitionEithers)
 import Data.List (intercalate)
-import Data.List.NonEmpty (NonEmpty)
+import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as M
+import Data.Semigroup (sconcat)
 import Control.Monad.State.Strict
 import Control.Monad.Except
 import Control.Monad.Fail (MonadFail)
@@ -55,12 +57,23 @@ evalChecker initialState (Checker k) = evalStateT (runExceptT k) initialState
 runChecker :: CheckerState -> Checker a -> IO (CheckerResult a, CheckerState)
 runChecker initialState (Checker k) = runStateT (runExceptT k) initialState
 
-runCheckers :: CheckerState -> [Checker a] -> IO ([CheckerResult a], CheckerState)
-runCheckers st [] = pure ([], st)
-runCheckers st (c:cs) = do
-  (r, st) <- runChecker st c
-  (rs,st) <- runCheckers st cs
-  pure (r:rs, st)
+-- | Repeat a checker action for every input value and only fail at the end if
+-- any action failed.
+runAll :: (a -> Checker b) -> [a] -> Checker [b]
+runAll f xs = do
+  st <- get
+  (results, st) <- liftIO $ runAllCheckers st (map f xs)
+  case partitionEithers results of
+    ([], successes) -> put st *> pure successes
+    -- everything succeeded, so `put` the state and carry on
+    (err:errs, _) -> throwError $ sconcat (err:|errs)
+    -- combine all errors and fail
+  where
+    runAllCheckers st [] = pure ([], st)
+    runAllCheckers st (c:cs) = do
+      (r, st) <- runChecker st c
+      (rs,st) <- runAllCheckers st cs
+      pure (r:rs, st)
 
 -- | Types of discharged coeffects
 data Assumption
