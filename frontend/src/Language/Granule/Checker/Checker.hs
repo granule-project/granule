@@ -49,10 +49,10 @@ check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
 check (AST dataDecls defs) = evalChecker initState $ do
-    _         <- mapM checkTyCon dataDecls
-    dataDecls <- mapM checkDataCons dataDecls
-    _         <- mapM kindCheckDef defs
-    defs      <- mapM (checkDef defCtxt) defs
+    _         <- runAll checkTyCon dataDecls
+    dataDecls <- runAll checkDataCons dataDecls
+    _         <- runAll kindCheckDef defs
+    defs      <- runAll (checkDef defCtxt) defs
     pure $ AST dataDecls defs
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
