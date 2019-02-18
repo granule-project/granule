@@ -2,9 +2,7 @@ data A = A
 
 data B = B
 
-interface Simple a where
-  simple : a -> a
+interface Simple a
 
 -- 'B' is not a valid constraint
-instance {B} => Simple A where
-  simple x = x
+instance {B} => Simple A

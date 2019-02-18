@@ -1,7 +1,6 @@
 data SimpleDT = SDT
 
-interface Simple a where
-  simple : a -> a
+interface Simple a
 
-instance Simple (SimpleDT A) where
-  simple x = x
+-- 'A' is not in scope
+instance Simple (SimpleDT A)

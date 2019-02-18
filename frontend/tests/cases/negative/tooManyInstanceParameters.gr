@@ -1,6 +1,4 @@
-interface Simple a where
-  simple : a -> a
+interface Simple a
 
 -- too many parameters to instance
-instance Simple a a where
-  simple x = x
+instance Simple a a

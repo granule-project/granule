@@ -1,5 +1,4 @@
-data A a = A
+data A = A
 
 -- interface name clashes with type constructor
-interface A a where
-  simple : a -> a
+interface A a

@@ -2,9 +2,7 @@ data A a = A
 
 data B b = B
 
-interface Simple a where
-  simple : a -> a
+interface Simple a
 
 -- correct version would be (A (B b))
-instance Simple (A B) where
-  simple x = x
+instance Simple (A B)

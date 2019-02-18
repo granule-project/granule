@@ -1,3 +1,2 @@
 -- use of an interface that hasn't been defined
-instance Foo Bool where
-  simple x = x
+instance Foo Bool

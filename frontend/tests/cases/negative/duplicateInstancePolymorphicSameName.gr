@@ -1,9 +1,6 @@
-interface Simple a where
-  simple : a -> a
+interface Simple a
 
 -- duplicate instance for a (polymorphic) type
-instance Simple a where
-  simple x = x
+instance Simple a
 
-instance Simple a where
-  simple y = y
+instance Simple a

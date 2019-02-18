@@ -1,8 +1,6 @@
-interface Simple (a : Type -> Type) where
-  simple : a -> a
+interface Simple (a : Type -> Type)
 
 data A a b = A
 
 -- (A a b) has wrong kind
-instance Simple (A a b) where
-  simple x = A
+instance Simple (A a b)
