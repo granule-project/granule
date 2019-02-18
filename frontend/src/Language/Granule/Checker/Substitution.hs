@@ -602,7 +602,7 @@ instance Substitutable Constraint where
 
   unify _ _ = error "Can't unify constraints"
 
-instance Substitutable (Equation () Type) where
+instance Substitutable (Equation v Type) where
   substitute ctxt (Equation sp ty patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
@@ -661,7 +661,7 @@ mapFstM fn (f, r) = do
     f' <- fn f
     return (f', r)
 
-instance Substitutable (Expr () Type) where
+instance Substitutable (Expr v Type) where
   substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
   unify _ _ = error "Can't unify equations"
 

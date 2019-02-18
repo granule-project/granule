@@ -52,7 +52,7 @@ import Language.Granule.Utils
 --import Debug.Trace
 
 -- Checking (top-level)
-check :: (?globals :: Globals) => AST () () -> IO (Maybe (AST () Type))
+check :: (?globals :: Globals, Pretty v) => AST v () -> IO (Maybe (AST v Type))
 check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
@@ -295,7 +295,7 @@ checkInstTy iname (IFaceDat sp ty) = do
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
 
 
-checkInstDefs :: (?globals :: Globals) => Instance () () -> MaybeT Checker ()
+checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker ()
 checkInstDefs (Instance sp iname constrs (IFaceDat _ idty) ds) = do
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
@@ -336,10 +336,10 @@ checkDefTy d@(Def sp name _ tys) = do
   registerDefSig sp name tys
 
 
-checkDef' :: (?globals :: Globals)
-         => Span -> Id -> [Equation () ()]
+checkDef' :: (?globals :: Globals, Pretty v)
+         => Span -> Id -> [Equation v ()]
          -> TypeScheme
-         -> MaybeT Checker (Def () Type)
+         -> MaybeT Checker (Def v Type)
 checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
 
     defCtxt <- fmap defContext get
@@ -347,7 +347,7 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
 
-    elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
+    elaboratedEquations :: [Equation v Type] <- forM equations $ \equation -> do
         -- Erase the solver predicate between equations
         modify' $ \st -> st
             { predicateStack = []
@@ -371,18 +371,18 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
     checkGuardsForExhaustivity s defName ty equations
     pure $ Def s defName elaboratedEquations tys
 
-checkDef :: (?globals :: Globals)
-         => Def () ()        -- definition
-         -> MaybeT Checker (Def () Type)
+checkDef :: (?globals :: Globals, Pretty v)
+         => Def v ()        -- definition
+         -> MaybeT Checker (Def v Type)
 checkDef (Def s defName equations tys@(Forall _ foralls _ ty)) =
   checkDef' s defName equations tys
 
-checkEquation :: (?globals :: Globals) =>
+checkEquation :: (?globals :: Globals, Pretty v) =>
      Ctxt TypeScheme -- context of top-level definitions
   -> Id              -- Name of the definition
-  -> Equation () ()  -- Equation
+  -> Equation v ()  -- Equation
   -> TypeScheme      -- Type scheme
-  -> MaybeT Checker (Equation () Type)
+  -> MaybeT Checker (Equation v Type)
 
 checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
@@ -466,14 +466,14 @@ flipPol Negative = Positive
 --  (which explains the exact coeffect demands)
 --  or `Nothing` if the typing does not match.
 
-checkExpr :: (?globals :: Globals)
+checkExpr :: (?globals :: Globals, Pretty v)
           => Ctxt TypeScheme   -- context of top-level definitions
           -> Ctxt Assumption   -- local typing context
           -> Polarity         -- polarity of <= constraints
           -> Bool             -- whether we are top-level or not
           -> Type             -- type
-          -> Expr () ()       -- expression
-          -> MaybeT Checker (Ctxt Assumption, Substitution, Expr () Type)
+          -> Expr v ()       -- expression
+          -> MaybeT Checker (Ctxt Assumption, Substitution, Expr v Type)
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
@@ -719,12 +719,12 @@ checkExpr defs gam pol topLevel tau e = do
 
 -- | Synthesise the 'Type' of expressions.
 -- See <https://en.wikipedia.org/w/index.php?title=Bidirectional_type_checking&redirect=no>
-synthExpr :: (?globals :: Globals)
+synthExpr :: (?globals :: Globals, Pretty v)
           => Ctxt TypeScheme   -- ^ Context of top-level definitions
           -> Ctxt Assumption   -- ^ Local typing context
           -> Polarity          -- ^ Polarity of subgrading
-          -> Expr () ()        -- ^ Expression
-          -> MaybeT Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
+          -> Expr v ()         -- ^ Expression
+          -> MaybeT Checker (Type, Ctxt Assumption, Substitution, Expr v Type)
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do
@@ -1444,7 +1444,7 @@ justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
 justLinear ((x, _) : xs) = justLinear xs
 
 checkGuardsForExhaustivity :: (?globals :: Globals)
-  => Span -> Id -> Type -> [Equation () ()] -> MaybeT Checker ()
+  => Span -> Id -> Type -> [Equation v ()] -> MaybeT Checker ()
 checkGuardsForExhaustivity s name ty eqs = do
   -- TODO:
   return ()
