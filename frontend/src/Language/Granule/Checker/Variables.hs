@@ -26,7 +26,7 @@ freshIdentifierBase s = do
     Nothing -> do
       let vmap' = M.insert s' 1 vmap
       put checkerState { uniqueVarIdCounterMap = vmap' }
-      return $ s' <> "." <> show 0
+      return $ s' <> ".0"
 
     Just n -> do
       let vmap' = M.insert s' (n+1) vmap
