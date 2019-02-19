@@ -343,7 +343,8 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
     -- Check the body in the extended context
-    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau' e
+    tau'' <- substitute subst tau'
+    (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
        [] -> do
