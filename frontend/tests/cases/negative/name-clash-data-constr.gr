@@ -1,0 +1,7 @@
+data Type1 = A | B | C
+
+data Type2 = A
+
+data Type3 where
+  A : Type3;
+  B : Type3

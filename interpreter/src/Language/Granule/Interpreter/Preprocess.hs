@@ -20,10 +20,10 @@ preprocess :: Bool -> Bool -> FilePath -> IO String
 preprocess performAsciiToUnicodeOnFile keepOldFile file
   = case lookup extension preprocessors of
     Just (stripNonGranule, asciiToUnicode) -> do
-      src <- asciiToUnicode <$> readFile file
+      src <- readFile file
       when performAsciiToUnicodeOnFile $ do
         (tempFile, tempHd) <- uncurry openTempFile (splitFileName file)
-        try (hPutStr tempHd src) >>= \case
+        try (hPutStr tempHd (asciiToUnicode src)) >>= \case
           Right () -> do
             hClose tempHd
             when keepOldFile (renameFile file (file <> ".bak"))

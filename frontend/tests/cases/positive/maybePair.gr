@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 import Maybe
 
 maybePair : ∀ {a : Type, b : Type} . Maybe (a, b [0]) → a [0..1] → a

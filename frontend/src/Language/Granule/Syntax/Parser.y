@@ -4,13 +4,12 @@
 
 module Language.Granule.Syntax.Parser where
 
-import Control.Monad (forM)
+import Control.Monad (forM, when, unless)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
 import Data.List ((\\), intercalate, nub, stripPrefix)
 import Data.Maybe (mapMaybe)
 import Numeric
-import System.Exit (die)
 import System.FilePath ((</>))
 
 import Language.Granule.Syntax.Identifiers
@@ -488,14 +487,14 @@ parseAndDoImportsAndFreshenDefs input = do
 
 parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefsAndDoImports input = do
-    defs <- either die return $ parseDefs (sourceFilePath ?globals) input
+    defs <- either error return $ parseDefs sourceFilePath input
     importedDefs <- forM imports $ \path -> do
       src <- readFile path
-      let ?globals = ?globals { sourceFilePath = path }
+      let ?globals = ?globals { globalsSourceFilePath = Just path }
       parseDefsAndDoImports src
     let allDefs = merge $ defs : importedDefs
-    checkNameClashes allDefs
-    checkMatchingNumberOfArgs allDefs
+    -- checkNameClashes allDefs
+    -- checkMatchingNumberOfArgs allDefs
     return allDefs
 
   where
@@ -505,34 +504,24 @@ parseDefsAndDoImports input = do
           conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)
        in conc xs [] []
 
-    imports = map ((includePath ?globals </>) . (<> ".gr") . replace '.' '/')
+    imports = map ((includePath </>) . (<> ".gr") . replace '.' '/')
               . mapMaybe (stripPrefix "import ") . lines $ input
 
     replace from to = map (\c -> if c == from then to else c)
 
-    checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
-      mapM checkMatchingNumberOfArgs' defs
+    -- the following check doesn't seem to be needed because this comes up during type checking @buggymcbugfix
+    -- checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
+    --   mapM checkMatchingNumberOfArgs' defs
 
-    checkMatchingNumberOfArgs' (Def _ name eqs _) =
-      if length eqs >= 1
-      then if (and $ map (\x -> x == head lengths) lengths)
-            then return ()
-            else
-              die $ "Syntax error: Number of arguments differs in the equattypeConstructorns of "
-                  <> sourceName name
-      else return ()
-        where
-          lengths = map (\(Equation _ _ pats _) -> length pats) eqs
+    -- checkMatchingNumberOfArgs' (Def _ name eqs _) =
+    --     when (length eqs >= 1 && any (/= head lengths) lengths)
+    --       ( error $ "Syntax error: Number of arguments differs in the equations of `"
+    --         <> sourceName name <> "`"
+    --       )
+        -- where
+        --   lengths = map (\(Equation _ _ pats _) -> length pats) eqs
 
 
-    checkNameClashes ds@(AST dataDecls defs) =
-        if null clashes
-	        then return ()
-          else die $ "Error: Name clash: " <> intercalate ", " (map sourceName clashes)
-      where
-        clashes = names \\ nub names
-        names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
-                <> (`map` defs) (\(Def _ name _ _) -> name)
 
 lastSpan [] = fst $ nullSpanLocs
 lastSpan xs = getEnd . snd . last $ xs

@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data Balanced (diff : Nat) where
   Init : Balanced 0;
   Open : Balanced diff → Balanced (diff + 1);

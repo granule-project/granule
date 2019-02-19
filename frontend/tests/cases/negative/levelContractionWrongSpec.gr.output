@@ -1,0 +1,3 @@
+Type checking failed: 
+  Grading error: 4:1:
+  Private value cannot be moved to level Public

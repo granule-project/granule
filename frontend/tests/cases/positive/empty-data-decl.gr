@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data Zero where
 
 data Succ a where

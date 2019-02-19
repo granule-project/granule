@@ -1,6 +1,38 @@
 import Vec
 
-leftPad : ∀ {n : Nat, m : Nat}
-        . Char [n] → N n → Vec m Char → Vec (n + m) Char
-leftPad [_] Z     str = str;
-leftPad [c] (S n) str = Cons c (leftPad [c] n str)
+leftPad
+  : ∀ {a : Type, n : Nat, m : Nat}
+  . N n
+  → a [n]
+  → Vec m a
+  → Vec (n + m) a
+leftPad n x xs = (replicate n x) `append` xs
+
+rightPad
+  : ∀ {a : Type, n : Nat, m : Nat}
+  . N n
+  → a [n]
+  → Vec m a
+  → Vec (n + m) a
+rightPad n x xs = xs `append` (replicate n x)
+
+length'
+  : ∀ {a : Type, n : Nat}
+  . Vec n a
+  → (N n, Vec n a)
+length' Nil = (Z, Nil);
+length' (Cons x xs) = let (n, xs') = length' xs in (S n, Cons x xs')
+
+leftPadTo
+  : ∀ {a : Type, m : Nat, n : Nat}
+  . a [n - m]
+  → N n
+  → Vec m a
+  → Vec (m + (n - m)) a
+leftPadTo [c] n str = let
+  (m, str) = length' str
+  in append (replicate (monus n m) [c]) str
+
+main : Vec 8 Char
+main = leftPad (S (S (S (S (S Z))))) [' '] (Cons 'a' (Cons 'b' (Cons 'c' Nil)))
+-- main = let xB : Int [5] ← readInt in let [x] = xB in leftPad (S (S (S (S (S Z))))) x (Cons 1 (Cons 2 (Cons 3 Nil)))

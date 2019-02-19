@@ -1,0 +1,3 @@
+Type checking failed: 
+  Linearity error: 3:5:
+  Wildcard pattern `_` allowing a value to be discarded

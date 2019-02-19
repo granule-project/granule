@@ -1,0 +1,3 @@
+Type checking failed: 
+  Grading error: 9:6:
+  1 is not approximatable by 0 for type Nat because Nat denotes precise usage.

@@ -1,0 +1,3 @@
+Type checking failed: 
+  Operator resolution failed: 6:14:
+  Could not resolve operator `+` at type `a -> Int -> ..`

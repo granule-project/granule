@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data Cake  where Cake  : Cake
 data Happy where Happy : Happy
 

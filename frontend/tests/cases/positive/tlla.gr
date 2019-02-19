@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 -- Hello TLLA
 dub : Int [2] → Int
 dub [x] = x + x

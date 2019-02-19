@@ -118,7 +118,7 @@ instance Pretty (Neg Constraint) where
       "Actual grade `" <> prettyL l c1 <>
       "` is not equal to specified grade `" <> prettyL l c2 <> "`"
 
-    prettyL l (Neg (ApproximatedBy _ c1 c2 (TyCon k))) | internalName k == "Level" =
+    prettyL l (Neg (ApproximatedBy _ c1 c2 (TyCon k))) | internalId k == "Level" =
       prettyL l c2 <> " value cannot be moved to level " <> prettyL l c1
 
     prettyL l (Neg (ApproximatedBy _ c1 c2 k)) =
@@ -199,18 +199,18 @@ instance (Monad m, MonadFail m) => Freshenable m Pred where
     st <- get
 
     -- Create a new binding name for v
-    let v' = internalName v <> "-e" <> show (counter st)
+    let v' = internalId v <> "-e" <> show (counter st)
 
     -- Updated freshener state
-    put (st { tyMap = (internalName v, v') : tyMap st
+    put (st { tyMap = (internalId v, v') : tyMap st
           , counter = counter st + 1 })
 
     -- Freshen the rest of the predicate
     p' <- freshen p
     -- Freshening now out of scope
-    removeFreshenings [Id (internalName v) v']
+    removeFreshenings [Id (internalId v) v']
 
-    return $ Exists (Id (internalName v) v') k p'
+    return $ Exists (Id (internalId v) v') k p'
 
   freshen (Impl [] p1 p2) = do
     p1' <- freshen p1
@@ -221,16 +221,16 @@ instance (Monad m, MonadFail m) => Freshenable m Pred where
     st <- get
 
     -- Freshen the variable bound here
-    let v' = internalName v <> "-" <> show (counter st)
-    put (st { tyMap = (internalName v, v') : tyMap st
+    let v' = internalId v <> "-" <> show (counter st)
+    put (st { tyMap = (internalId v, v') : tyMap st
             , counter = counter st + 1 })
 
     -- Freshen the rest
     (Impl vs' pf pf') <- freshen (Impl vs p p')
     -- Freshening now out of scope
-    removeFreshenings [Id (internalName v) v']
+    removeFreshenings [Id (internalId v) v']
 
-    return $ Impl ((Id (internalName v) v'):vs') pf pf'
+    return $ Impl ((Id (internalId v) v'):vs') pf pf'
 
   freshen (Con cons) = do
     cons' <- freshen cons
@@ -299,7 +299,7 @@ instance Pretty Pred where
      (intercalate " ∧ ")
      (intercalate " ∨ ")
      (\s p q ->
-         (if null s then "" else "∀ " <> intercalate "," (map sourceName s) <> " . ")
+         (if null s then "" else "∀ " <> intercalate "," (map sourceId s) <> " . ")
       <> "(" <> p <> " -> " <> q <> ")")
       (prettyL l)
       (\p -> "¬(" <> p <> ")")

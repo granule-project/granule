@@ -1,2 +1,4 @@
+-- gr --no-eval
+
 const : ∀ {a : Type, b : Type} . a → b [] → a
 const x [y] = x

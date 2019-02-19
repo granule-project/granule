@@ -114,18 +114,23 @@ You can set default options in `$HOME/.granule`, e.g.:
 
 ```
 $ cat ~/.granule
-Options
-  { debugging           = Nothing
-  , noColors            = Just True
-  , alternativeColors   = Nothing
-  , noEval              = Nothing
-  , suppressInfos       = Nothing
-  , suppressErrors      = Nothing
-  , timestamp           = Nothing
-  , solverTimeoutMillis = Just 2000
-  , includePath         = Just "Users/alice/granule/StdLib"
-  , ascii2unicode       = Just True
-  , keepBackupAscii     = Just False
+GrConfig
+  { grAsciiToUnicode             = Just True
+  , grKeepBackup                 = Nothing
+  , grGlobals                    = Globals
+    { globalsDebugging           = Nothing
+    , globalsNoColors            = Just True
+    , globalsAlternativeColors   = Nothing
+    , globalsNoEval              = Nothing
+    , globalsSuppressInfos       = Nothing
+    , globalsSuppressErrors      = Nothing
+    , globalsTesting             = Nothing
+    , globalsTimestamp           = Nothing
+    , globalsSolverTimeoutMillis = Just 2000
+    , globalsIncludePath         = Just "/Users/vl200/github/granule-project/granule/
+    StdLib"
+    , globalsSourceFilePath      = Nothing
+    }
   }
 ```
 

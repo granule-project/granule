@@ -20,6 +20,9 @@ meanAge' [Next (Patient [_] [_] [age]) xs] [total] [n] =
 
 meanAge' [Empty] [total] [n] = [div total n]
 
+main : Int [Public]
+main = meanAge [Next (Patient [1] ["Alice"] [32]) (Next (Patient [2] ["Bob"] [16]) Empty)]
+
 -- Rejected
 -- names : (List Patient) [0..1] → String [Public]
 -- names [Next (Patient [_] [name] [_]) xs] =

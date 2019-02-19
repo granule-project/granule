@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 import Result
 
 data List a where Empty; Next a (List a)

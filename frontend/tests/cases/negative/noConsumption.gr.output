@@ -1,0 +1,5 @@
+Type checking failed: 
+  Pattern unreachable: 4:1:
+  Pattern guard for equation of `and` is impossible.
+	0 is not approximatable by 1 for type Nat because Nat denotes precise usage.
+	0 is not approximatable by 1 for type Nat because Nat denotes precise usage.

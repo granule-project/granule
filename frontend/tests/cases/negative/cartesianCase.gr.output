@@ -1,0 +1,4 @@
+Type checking failed: 
+  Falsifiable theorem: 5:1:
+  The following theorem associated with `foo` is falsifiable:
+	(1 ≤ ∞) ∧ (1 ≤ ∞)

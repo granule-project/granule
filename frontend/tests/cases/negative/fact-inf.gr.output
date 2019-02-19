@@ -1,0 +1,4 @@
+Type checking failed: 
+  Counter example: 4:1:
+  The following theorem associated with `fact` is falsifiable:
+	(1..1 ≤ ∞..∞)

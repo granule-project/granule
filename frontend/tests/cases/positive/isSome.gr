@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data Maybe a where
   None : Maybe a;
   Some : a → Maybe a
