@@ -307,4 +307,4 @@ instance Pretty Pred where
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
-isTrivial = predFold and or (\_ lhs rhs -> lhs && rhs) (const False) id (\_ _ p -> p)
+isTrivial = predFold and or (\_ lhs rhs -> rhs) (const False) id (\_ _ p -> p)
