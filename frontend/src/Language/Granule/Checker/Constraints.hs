@@ -42,9 +42,9 @@ compileQuant BoundQ    = existential
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type, Quantifier) -> Ctxt Type
+  => Pred -> Ctxt (Type, Quantifier)
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
-compileToSBV predicate tyVarContext kVarContext =
+compileToSBV predicate tyVarContext =
   (buildTheorem id compileQuant
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
@@ -54,7 +54,7 @@ compileToSBV predicate tyVarContext kVarContext =
     -- flipQuant InstanceQ = ForallQ
     -- flipQuant BoundQ    = BoundQ
 
-    predicate' = rewriteConstraints kVarContext predicate
+    predicate' = rewriteConstraints tyVarContext predicate
 
     buildTheorem ::
         (SBool -> SBool)
@@ -185,7 +185,7 @@ compileToSBV predicate tyVarContext kVarContext =
 -- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
-rewriteConstraints :: Ctxt Type -> Pred -> Pred
+rewriteConstraints :: Ctxt (Type, Quantifier) -> Pred -> Pred
 rewriteConstraints ctxt =
     predFold
       Conj
@@ -200,40 +200,40 @@ rewriteConstraints ctxt =
       Exists var k' p
         where
           k' = case lookup kvar ctxt of
-                  Just ty -> KPromote ty
+                  Just (ty, _) -> KPromote ty
                   Nothing -> KVar kvar
     existsCase var k p = Exists var k p
 
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`
-    updateConstraint :: Id -> Type -> Constraint -> Constraint
-    updateConstraint ckindVar ckind (Eq s c1 c2 k) =
+    updateConstraint :: Id -> (Type, Quantifier) -> Constraint -> Constraint
+    updateConstraint ckindVar (ckind, _) (Eq s c1 c2 k) =
       Eq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _ -> k)
-    updateConstraint ckindVar ckind (Neq s c1 c2 k) =
+    updateConstraint ckindVar (ckind, _) (Neq s c1 c2 k) =
             Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
               (case k of
                 TyVar ckindVar' | ckindVar == ckindVar' -> ckind
                 _ -> k)
 
-    updateConstraint ckindVar ckind (ApproximatedBy s c1 c2 k) =
+    updateConstraint ckindVar (ckind, _) (ApproximatedBy s c1 c2 k) =
       ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)
 
-    updateConstraint ckindVar ckind (NonZeroPromotableTo s x c t) =
+    updateConstraint ckindVar (ckind, _) (NonZeroPromotableTo s x c t) =
        NonZeroPromotableTo s x (updateCoeffect ckindVar ckind c)
           (case t of
              TyVar ckindVar' | ckindVar == ckindVar' -> ckind
              _  -> t)
 
-    updateConstraint ckindVar ckind (Lt s c1 c2) =
+    updateConstraint ckindVar (ckind, _) (Lt s c1 c2) =
         Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
-    updateConstraint ckindVar ckind (Gt s c1 c2) =
+    updateConstraint ckindVar (ckind, _) (Gt s c1 c2) =
         Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
 
@@ -323,7 +323,6 @@ freshCVar quant name t q | t == extendedNat = do
 --  infinity value (since this satisfies all the semiring properties on the nose)
 freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
--- TODO: possibly this can now be removed
   return (sTrue, SPoint)
 
 freshCVar _ _ t _ =
@@ -599,16 +598,15 @@ provePredicate :: (?globals :: Globals) =>
      Span
   -> Pred                    -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
-  -> Ctxt Type               -- Free variable kinds
   -> IO SolverResult
-provePredicate s predicate vars kvars =
+provePredicate s predicate vars =
   if isTrivial predicate
     then do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return QED
 
     else do
-      let (sbvTheorem, _, unsats) = compileToSBV predicate vars kvars
+      let (sbvTheorem, _, unsats) = compileToSBV predicate vars
 
       ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
         case solverTimeoutMillis ?globals of

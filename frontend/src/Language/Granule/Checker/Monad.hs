@@ -103,10 +103,6 @@ data CheckerState = CS
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
             , tyVarContext   :: Ctxt (Kind, Quantifier)
-            -- Context of kind variables and their resolved kind
-            -- (used just before solver, to resolve any kind
-            -- variables that appear in constraints)
-            , kVarContext   :: Ctxt Kind
 
             -- Guard contexts (all the guards in scope)
             -- which get promoted by branch promotions
@@ -134,7 +130,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , predicateStack = []
                , guardPredicates = [[]]
                , tyVarContext = emptyCtxt
-               , kVarContext = emptyCtxt
                , guardContexts = []
                , patternConsumption = []
                , typeConstructors = Primitives.typeConstructors

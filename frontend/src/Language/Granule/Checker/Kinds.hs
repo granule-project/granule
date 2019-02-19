@@ -94,11 +94,11 @@ inferKindOfType' s quantifiedVariables t =
         Just kind -> return kind
         Nothing   -> do
           st <- get
-          case lookup tyVar (kVarContext st) of
-            Just kind -> return kind
+          case lookup tyVar (tyVarContext st) of
+            Just (kind, _) -> return kind
             Nothing ->
               halt $ UnboundVariableError (Just s) $
-                       "Type variable `" <> pretty tyVar
+                       "Type variable `" <> show tyVar
                     <> "` is unbound (not quantified)."
                     <?> show quantifiedVariables
 
@@ -234,6 +234,11 @@ checkKindIsCoeffect span ty = do
       case kind' of
         KCoeffect -> return ty
         _         -> illKindedNEq span KCoeffect kind
+    KVar v -> do
+      st <- get
+      case lookup v (tyVarContext st) of
+        Just (KCoeffect, _) -> return ty
+        _                   -> illKindedNEq span KCoeffect kind
 
     _         -> illKindedNEq span KCoeffect kind
 
@@ -278,14 +283,12 @@ mguCoeffectTypes s c1 c2 = do
                <> "' for coeffects `" <> pretty c1 <> "` and `" <> pretty c2 <> "`"
 
 -- Given a coeffect type variable and a coeffect kind,
--- replace any occurence of that variable in an context
--- and update the current solver predicate as well
-updateCoeffectType :: Id -> Kind -> MaybeT Checker ()
+-- replace any occurence of that variable in a context
+updateCoeffectType :: (?globals :: Globals) => Id -> Kind -> MaybeT Checker ()
 updateCoeffectType tyVar k = do
    modify (\checkerState ->
     checkerState
-     { tyVarContext = rewriteCtxt (tyVarContext checkerState),
-       kVarContext = replace (kVarContext checkerState) tyVar k })
+     { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
  where
    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
    rewriteCtxt [] = []

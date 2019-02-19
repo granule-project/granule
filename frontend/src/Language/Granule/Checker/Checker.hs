@@ -216,7 +216,6 @@ checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty))
         modify' $ \st -> st
             { predicateStack = []
             , tyVarContext = []
-            , kVarContext = []
             , guardContexts = []
             }
         elaboratedEq <- checkEquation defCtxt defName equation tys
@@ -763,7 +762,7 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    -- Create a fresh kind variable for this coeffect
    vark <- freshIdentifierBase $ "kprom_" <> [head (pretty e)]
    -- remember this new kind variable in the kind environment
-   modify (\st -> st { kVarContext = (mkId vark, KCoeffect) : kVarContext st })
+   modify (\st -> st { tyVarContext = (mkId vark, (KCoeffect, InstanceQ)) : tyVarContext st })
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
    var <- freshTyVarInContext (mkId $ "prom_[" <> pretty e <> "]") (KPromote $ TyVar $ mkId vark)
@@ -869,11 +868,9 @@ solveConstraints predicate s name = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
-  let ctxtCkVar = kVarContext checkerState
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
-  coeffectKVars <- justCoeffectTypesConvertedVars s ctxtCkVar
 
-  result <- liftIO $ provePredicate s predicate coeffectVars coeffectKVars
+  result <- liftIO $ provePredicate s predicate coeffectVars
 
   case result of
     QED -> return ()
@@ -1220,7 +1217,6 @@ checkGuardsForImpossibility s name = do
                          BoundQ -> Nothing
                          _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
   tyVars <- justCoeffectTypesConverted s tyVarContextExistential
-  kVars <- justCoeffectTypesConvertedVars s (kVarContext st)
 
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
@@ -1233,7 +1229,7 @@ checkGuardsForImpossibility s name = do
     debugM "impossibility" $ "about to try" <> pretty thm
 
     -- Try to prove the theorem
-    result <- liftIO $ provePredicate s thm tyVars kVars
+    result <- liftIO $ provePredicate s thm tyVars
 
     let msgHead = "Pattern guard for equation of `" <> pretty name <> "`"
 
