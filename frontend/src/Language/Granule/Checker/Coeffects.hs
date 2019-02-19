@@ -15,11 +15,11 @@ import Language.Granule.Syntax.Type
 flattenable :: Type -> Type -> Maybe ((Coeffect -> Coeffect -> Coeffect), Type)
 flattenable t1 t2
  | t1 == t2 = case t1 of
-     TyCon (internalName -> "Nat")   -> Just (CTimes, t1)
-     TyCon (internalName -> "Level") -> Just (CJoin, t1)
+     TyCon (internalId -> "Nat")   -> Just (CTimes, t1)
+     TyCon (internalId -> "Level") -> Just (CJoin, t1)
 
-     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
-     TyApp (TyCon (internalName -> "Ext")) t ->  flattenable t t
+     TyApp (TyCon (internalId -> "Interval")) t ->  flattenable t t
+     TyApp (TyCon (internalId -> "Ext")) t ->  flattenable t t
      -- TODO
 
      _ -> Nothing

@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 import Vec
 
 data Bool where True; False

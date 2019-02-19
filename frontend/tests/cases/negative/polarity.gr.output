@@ -1,0 +1,7 @@
+Type checking failed: 
+  Unification failed: 3:40:
+  Trying to match a polymorphic type  `a` with monomorphic type `a [0]`
+
+Falsifiable theorem: 7:1:
+  The following theorem associated with `secondOrderAlt` is falsifiable:
+	(prom_[x] ≤ 0) ∧ (prom_[x] ≤ 1)

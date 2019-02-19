@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 import Bool
 
 data X a b where

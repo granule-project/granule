@@ -1,0 +1,3 @@
+Type checking failed: 
+  Pattern unreachable: 6:1:
+  Pattern guard for equation of `headAlt` is impossible. Its condition is Falsifiable

@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 -- Church numerals have graded types that explain what they encode
 
 zero : ∀ {a : Type} . (a → a) [0] → a → a

@@ -218,10 +218,10 @@ instance Monad m => Freshenable m (Value v a) where
     freshen (Var a v) = do
       v' <- lookupVar Value v
       case v' of
-         Just v' -> return (Var a $ Id (sourceName v) v')
+         Just v' -> return (Var a $ Id (sourceId v) v')
          -- This case happens if we are referring to a defined
          -- function which does not get its name freshened
-         Nothing -> return (Var a $ Id (sourceName v) (sourceName v))
+         Nothing -> return (Var a $ Id (sourceId v) (sourceId v))
 
     freshen v@NumInt{}   = return v
     freshen v@NumFloat{} = return v

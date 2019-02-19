@@ -22,7 +22,7 @@ import Language.Granule.Utils
 
 prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
-  let ?globals = ?globals { debugging = True }
+  let ?globals = ?globals { globalsDebugging = Just True }
   in prettyL 0 x
 
 pretty :: (?globals :: Globals, Pretty t) => t -> String
@@ -32,10 +32,12 @@ type Level = Int
 
 parens :: Level -> String -> String
 parens l x | l <= 0 = x
-parens n x =
-  if head x == '(' && last x == ')'
-    then x
-    else "(" <> x <> ")"
+parens n x = "(" <> x <> ")"
+
+-- The code below seems to be wrong, consider `f ((g x) (h y))`, @buggymcbugfix
+  -- if head x == '(' && last x == ')'
+  --   then x
+  --   else "(" <> x <> ")"
 
 -- The pretty printer class
 class Pretty t where
@@ -138,10 +140,10 @@ instance Pretty Type where
        parens l (prettyL (l+1) t
        <> " <" <> intercalate "," (map (prettyL l) e) <> ">")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceId x == "," =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "×" =
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceId x == "×" =
       parens l ("(" <> prettyL l t1 <> " × " <> prettyL l t2 <> ")")
 
     prettyL l t@(TyApp (TyApp _ _) _) | appChain t =
@@ -211,7 +213,7 @@ instance Pretty (Pattern a) where
     prettyL l (PBox _ _ p)     = "[" <> prettyL l p <> "]"
     prettyL l (PInt _ _ n)     = show n
     prettyL l (PFloat _ _ n)   = show n
-    prettyL l (PConstr _ _ name args)  = intercalate " " (prettyL l name : map (prettyL l) args)
+    prettyL l (PConstr _ _ name args)  = intercalate " " (prettyL l name : map (prettyL (l + 1)) args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     prettyL l [] = ""
@@ -231,23 +233,17 @@ instance Pretty v => Pretty (Value v a) where
     prettyL l (NumFloat n) = show n
     prettyL l (CharLiteral c) = show c
     prettyL l (StringLiteral s) = show s
-    prettyL l (Constr _ s vs) | internalName s == "," =
+    prettyL l (Constr _ s vs) | internalId s == "," =
       "(" <> intercalate ", " (map (prettyL l) vs) <> ")"
     prettyL l (Constr _ n []) = prettyL 0 n
-    prettyL l (Constr _ n vs) = intercalate " " (prettyL l n : map (parensOn (not . valueAtom)) vs)
-      where
-        -- Syntactically atomic values
-        valueAtom (NumInt _)    = True
-        valueAtom (NumFloat _)  = True
-        valueAtom (Constr _ _ []) = True
-        valueAtom _             = False
+    prettyL l (Constr _ n vs) = parens l . intercalate " " $ prettyL 0 n : map (prettyL (l + 1)) vs
     prettyL l (Ext _ v) = prettyL l v
 
 instance Pretty Id where
   prettyL l
-    = if debugging ?globals
-        then internalName
-        else (stripMarker '`') . (stripMarker '.') . sourceName
+    = if debugging
+        then internalId
+        else (stripMarker '`') . (stripMarker '.') . sourceId
     where
       stripMarker c [] = []
       stripMarker c (c':cs) | c == c' = cs
@@ -255,7 +251,7 @@ instance Pretty Id where
 
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
-  prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
+  prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceId x == "," =
     parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
   prettyL l (App _ _ e1 e2) =
@@ -293,4 +289,10 @@ instance Pretty Int where
   prettyL l = show
 
 instance Pretty Span where
-  prettyL _ (Span start end fileName) = "(" <> pretty start <> ":" <> pretty end <> ")"
+  prettyL _
+    | testing = const "(location redacted)"
+    | otherwise = \case
+      Span (0,0) _ "" -> "(unknown location)"
+      Span (0,0) _ f  -> f
+      Span (l,c) _ f  -> f <> ":" <> show l <> ":" <> show c
+

@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data A where
   A : A
 data B where

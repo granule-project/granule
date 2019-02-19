@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 import Maybe
 
 data BFLevel (c : Nat) a where

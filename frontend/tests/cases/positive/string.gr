@@ -1,4 +1,4 @@
-main : () <W>
-main = write "Hello world!
+main : String
+main = "Hello world!
 Yes, strings can be multiline.
 🤔"

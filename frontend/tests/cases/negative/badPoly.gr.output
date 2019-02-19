@@ -1,0 +1,3 @@
+Type checking failed: 
+  Type error: 2:14:
+  Expected `a -> a -> (a, b)` but got `a -> b -> (a, b)`

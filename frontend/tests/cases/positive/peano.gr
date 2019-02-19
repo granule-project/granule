@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data Natural where
   Zero : Natural;
   Succ : Natural → Natural

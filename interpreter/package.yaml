@@ -1,5 +1,5 @@
 name: granule-interpreter
-version: '0.7.2.0'
+version: '0.7.3.0'
 synopsis: The Granule interpreter
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
@@ -8,12 +8,17 @@ github: dorchard/granule
 dependencies:
 - base >=4.10 && <5
 - directory
+- extra
 - filepath
 - Glob
 - granule-frontend
 - mtl >=2.2.1
 - optparse-applicative
 - text
+default-extensions:
+- LambdaCase
+- RecordWildCards
+- ImplicitParams
 
 library:
   source-dirs: src
@@ -64,6 +69,5 @@ tests:
     - granule-interpreter
     - tasty
     - tasty-golden
-    - silently
-    - bytestring
+    - utf8-string
 

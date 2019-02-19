@@ -51,7 +51,7 @@ kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
     KType -> modify (\st -> st { tyVarContext = [] })
-    KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
+    KPromote (TyCon k) | internalId k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> throw KindMismatch{ errLoc = s, kExpected = KType, kActual = kind }
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> Checker Kind
@@ -64,10 +64,10 @@ inferKindOfType' s quantifiedVariables t =
     typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
   where
     kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
-     | internalName c == internalName c' = return $ kConstr c
+     | internalId c == internalId c' = return $ kConstr c
 
     kFun KType KType = return KType
-    kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
+    kFun KType (KPromote (TyCon (internalId -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
     kFun KType y = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = y }
     kFun x _     = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = x }
     kCon conId = do
@@ -126,16 +126,16 @@ joinCoeffectTypes t1 t2 = case (t1, t2) of
   (t, t') | t == t' -> Just t
 
   -- `Nat` can unify with `Q` to `Q`
-  (TyCon (internalName -> "Q"), TyCon (internalName -> "Nat")) ->
+  (TyCon (internalId -> "Q"), TyCon (internalId -> "Nat")) ->
         Just $ TyCon $ mkId "Q"
 
-  (TyCon (internalName -> "Nat"), TyCon (internalName -> "Q")) ->
+  (TyCon (internalId -> "Nat"), TyCon (internalId -> "Q")) ->
         Just $ TyCon $ mkId "Q"
 
   -- `Nat` can unify with `Ext Nat` to `Ext Nat`
-  (t, TyCon (internalName -> "Nat")) | t == extendedNat ->
+  (t, TyCon (internalId -> "Nat")) | t == extendedNat ->
         Just extendedNat
-  (TyCon (internalName -> "Nat"), t) | t == extendedNat ->
+  (TyCon (internalId -> "Nat"), t) | t == extendedNat ->
         Just extendedNat
 
   (TyApp t1 t2, TyApp t1' t2') ->

@@ -1,0 +1,3 @@
+Type checking failed: 
+  Type error: 4:23:
+  Expected `f t -> a` but got `f a -> a`

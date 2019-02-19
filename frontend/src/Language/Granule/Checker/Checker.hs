@@ -44,11 +44,57 @@ import Language.Granule.Utils
 
 --import Debug.Trace
 
+-- | Check if there are name clashes within namespaces
+checkNameClashes :: AST () () -> Checker ()
+checkNameClashes (AST dataDecls defs) =
+    case concat [typeConstructorErrs, dataConstructorErrs, defErrs] of
+      [] -> pure ()
+      (d:ds) -> throwError (d:|ds)
+  where
+    typeConstructorErrs
+      = fmap mkTypeConstructorErr
+      . duplicatesBy (sourceId . dataDeclId)
+      $ dataDecls
+
+    mkTypeConstructorErr (x2, xs)
+      = NameClashTypeConstructors
+          { errLoc = dataDeclSpan x2
+          , errDataDecl = x2
+          , otherDataDecls = xs
+          }
+
+    dataConstructorErrs
+      = fmap mkDataConstructorErr                -- make errors for duplicates
+      . duplicatesBy (sourceId . dataConstrId)   -- get the duplicates by source id
+      . concatMap dataDeclDataConstrs            -- get data constructor definitions
+      $ dataDecls                                -- from data declarations
+
+    mkDataConstructorErr (x2, xs)
+      = NameClashDataConstructors
+          { errLoc = dataConstrSpan x2
+          , errDataConstructor = x2
+          , otherDataConstructors = xs
+          }
+
+    defErrs
+      = fmap mkDuplicateDefErr
+      . duplicatesBy (sourceId . defId)
+      $ defs
+
+    mkDuplicateDefErr (x2, xs)
+      = NameClashDefs
+          { errLoc = defSpan x2
+          , errDef = x2
+          , otherDefs = xs
+          }
+
+
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
-check (AST dataDecls defs) = evalChecker initState $ do
+check ast@(AST dataDecls defs) = evalChecker initState $ do
+    _         <- checkNameClashes ast
     _         <- runAll checkTyCon dataDecls
     dataDecls <- runAll checkDataCons dataDecls
     _         <- runAll kindCheckDef defs
@@ -106,15 +152,15 @@ checkDataCon
             check ty
             st <- get
             case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
-              Some ds -> do
+              Just ds -> do
                 put st { dataConstructors = ds }
-              None _ -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
-          KPromote (TyCon k) | internalName k == "Protocol" -> do
+              Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
+          KPromote (TyCon k) | internalId k == "Protocol" -> do
             check ty
             st <- get
             case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
-              Some ds -> put st { dataConstructors = ds }
-              None _ -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
+              Just ds -> put st { dataConstructors = ds }
+              Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
 
           _ -> throw KindMismatch{ errLoc = sp, kExpected = KType, kActual = kind }
       (v:vs) -> throwError $ fmap (DataConstructorTypeVariableNameClash sp dName tName) (v:|vs)
@@ -249,11 +295,11 @@ checkExpr :: (?globals :: Globals)
 
 -- Checking of constants
 
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
+checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalId c == "Int" = do
     let elaborated = Val s ty (NumInt n)
     return ([], [], elaborated)
 
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalName c == "Float" = do
+checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalId c == "Float" = do
     let elaborated = Val s ty (NumFloat n)
     return ([], [], elaborated)
 
@@ -295,7 +341,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 -- Application special case for built-in 'scale'
 -- TODO: needs more thought
 {- checkExpr defs gam pol topLevel tau
-          (App s _ (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ x))) e) | internalName v == "scale" = do
+          (App s _ (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ x))) e) | internalId v == "scale" = do
     equalTypes s (TyCon $ mkId "Float") tau
     checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon $ mkId "Float")) e
 -}
@@ -339,10 +385,10 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
     isLevelKinded (_, as) = do
         ty <- inferCoeffectTypeAssumption s as
         return $ case ty of
-          Just (TyCon (internalName -> "Level"))
+          Just (TyCon (internalId -> "Level"))
             -> True
-          Just (TyApp (TyCon (internalName -> "Interval"))
-                      (TyCon (internalName -> "Level")))
+          Just (TyApp (TyCon (internalId -> "Interval"))
+                      (TyCon (internalId -> "Level")))
             -> True
           _ -> False
 
@@ -503,7 +549,7 @@ synthExpr _ _ _ (Val s _ (StringLiteral c)) = do
 
 -- Secret syntactic weakening
 synthExpr defs gam pol
-  (App s _ (Val _ _ (Var _ (sourceName -> "weak__"))) v@(Val _ _ (Var _ x))) = do
+  (App s _ (Val _ _ (Var _ (sourceId -> "weak__"))) v@(Val _ _ (Var _ x))) = do
 
   (t, _, elabE) <- synthExpr defs gam pol v
 
@@ -650,7 +696,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
 {-
 TODO: needs thought
 synthExpr defs gam pol
-      (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ r))) | internalName v == "scale" = do
+      (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ r))) | internalId v == "scale" = do
   let float = TyCon $ mkId "Float"
   return (FunTy (Box (CFloat (toRational r)) float) float, [])
 -}
@@ -808,7 +854,7 @@ solveConstraints predicate s name = do
     NotValidTrivial unsats ->
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout ->
-       throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis ?globals }
+       throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis }
     OtherSolverError msg -> throw SolverError{ errLoc = s, errMsg = msg }
     SolverProofError msg -> error msg
 
@@ -825,12 +871,12 @@ rewriteMessage msg = do
   where
     convertLine line (v, (k, _)) =
         -- Try to replace line variables in the line
-       let line' = T.replace (T.pack (internalName v)) (T.pack (sourceName v)) line
+       let line' = T.replace (T.pack (internalId v)) (T.pack (sourceId v)) line
        -- If this succeeds we might want to do some other replacements
            line'' =
              if line /= line' then
                case k of
-                 KPromote (TyCon (internalName -> "Level")) ->
+                 KPromote (TyCon (internalId -> "Level")) ->
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
                        (T.replace (T.pack "Integer") (T.pack "Level") line'))
@@ -1059,7 +1105,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
     toFreshVar (var, Discharged t c) = do
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
-      freshName <- freshIdentifierBase (internalName var)
+      freshName <- freshIdentifierBase (internalId var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
@@ -1175,7 +1221,7 @@ checkGuardsForImpossibility s name = do
         , errMsg
             = "While checking plausibility of pattern guard for equation "
             <> pretty name <> "the solver timed out with limit of " <>
-            show (solverTimeoutMillis ?globals) <>
+            show solverTimeoutMillis <>
             " ms. You may want to increase the timeout (see --help)."
         }
 

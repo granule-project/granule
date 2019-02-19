@@ -1,0 +1,3 @@
+Type checking failed: 
+  Grading error: 6:13:
+  1..1 is not approximatable by 2..2 for type Interval Nat

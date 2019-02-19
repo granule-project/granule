@@ -15,7 +15,7 @@ spec :: Spec
 spec = do
   describe "unification" $
     it "unif test" $ do
-      let ?globals = defaultGlobals
+      let ?globals = mempty{ globalsTesting = Just True }
       Right us <- evalChecker initState $
              unify (Box (CVar $ mkId "x") (TyCon $ mkId "Bool"))
                    (Box (COne (TyCon $ mkId "Nat")) (TyVar $ mkId "a"))

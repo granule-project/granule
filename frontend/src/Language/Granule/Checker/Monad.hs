@@ -11,9 +11,9 @@
 module Language.Granule.Checker.Monad where
 
 import Data.Either (partitionEithers)
+import Data.Foldable (toList)
 import Data.List (intercalate)
 import Data.List.NonEmpty (NonEmpty(..))
-import qualified Data.List.NonEmpty as NonEmpty
 import qualified Data.Map as M
 import Data.Semigroup (sconcat)
 import Control.Monad.State.Strict
@@ -358,12 +358,8 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 
 {- Helpers for error messages and checker control flow -}
 data CheckerError
-  = CheckerError
-    { errLoc :: Span, msg :: String }
-  | TypeError
+  = TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
-  | GenericError
-    { errLoc :: Span, msg :: String }
   | GradingError
     { errLoc :: Span, errConstraint :: Neg Constraint }
   | KindMismatch
@@ -386,7 +382,7 @@ data CheckerError
     { errLoc :: Span, errId :: Id }
   | RefutablePatternError
     { errLoc :: Span, errPat :: Pattern () }
-  | TypeConstructorNameClash
+  | TypeConstructorNameClash -- TODO: duplicate?
     { errLoc :: Span, errId :: Id }
   | DuplicatePatternError
     { errLoc :: Span, duplicateBinder :: String }
@@ -401,7 +397,7 @@ data CheckerError
   | CoeffectUnificationError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type, errC1 :: Coeffect, errC2 :: Coeffect }
   | DataConstructorTypeVariableNameClash
-    { errLoc :: Span, errDataConstructor :: Id, errTypeConstructor :: Id, errVar :: Id }
+    { errLoc :: Span, errDataConstructorId :: Id, errTypeConstructor :: Id, errVar :: Id }
   | DataConstructorNameClashError
     { errLoc :: Span, errId :: Id }
   | EffectMismatch
@@ -446,16 +442,21 @@ data CheckerError
     { errLoc :: Span, errSolverTimeoutMillis :: Integer }
   | UnifyGradedLinear
     { errLoc :: Span, errGraded :: Id, errLinear :: Id }
-  | PatternUnreachable
+  | PatternUnreachable -- TODO: make proper structured error once this has been implemented for real
     { errLoc :: Span, errMsg :: String }
+  | NameClashTypeConstructors -- we arbitrarily use the second thing that clashed as the error location
+    { errLoc :: Span, errDataDecl :: DataDecl, otherDataDecls :: NonEmpty DataDecl }
+  | NameClashDataConstructors -- we arbitrarily use the second thing that clashed as the error location
+    { errLoc :: Span, errDataConstructor :: DataConstr, otherDataConstructors :: NonEmpty DataConstr }
+  | NameClashDefs -- we arbitrarily use the second thing that clashed as the error location
+    { errLoc :: Span, errDef :: Def () (), otherDefs :: NonEmpty (Def () ()) }
   deriving (Show, Eq)
+
 
 instance UserMsg CheckerError where
   location = errLoc
 
-  title CheckerError{} = "Checker error"
   title TypeError{} = "Type error"
-  title GenericError{} = "Error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
   title KindError{} = "Kind error"
@@ -498,14 +499,13 @@ instance UserMsg CheckerError where
   title SolverTimeout{} = "Solver timeout"
   title UnifyGradedLinear{} = "Type error"
   title PatternUnreachable{} = "Pattern unreachable"
-
-  msg (CheckerError _ m) = m
+  title NameClashTypeConstructors{} = "Type constructor name clash"
+  title NameClashDataConstructors{} = "Data constructor name clash"
+  title NameClashDefs{} = "Definition name clash"
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
     else "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "`"
-
-  msg (GenericError _ m) = m
 
   msg GradingError{..} = pretty errConstraint
 
@@ -567,7 +567,7 @@ instance UserMsg CheckerError where
     [ "Type variable "
     , pretty errVar
     , " in data constructor `"
-    , pretty errDataConstructor
+    , pretty errDataConstructorId
     , "` are already bound by the associated type constructor `"
     , pretty errTypeConstructor
     , "`. Choose different, unbound names."
@@ -642,7 +642,7 @@ instance UserMsg CheckerError where
     <> "` against a type of the form `"
     <> pretty tyActual
     <> "` implied by the remaining patterns\n\t"
-    <> (intercalate ", " . map pretty . NonEmpty.toList) errPats
+    <> (intercalate ", " . map pretty . toList) errPats
 
   msg DataConstructorReturnTypeError{..}
     = "Expected type constructor `" <> pretty idExpected
@@ -667,12 +667,12 @@ instance UserMsg CheckerError where
     <> pretty errExpr <> "`"
 
   msg SolverErrorCounterExample{..}
-    =  "The associated theorem for `" <> pretty errDefId
-    <> "` is falsifiable, consider:\n\t"
+    =  "The following theorem associated with `" <> pretty errDefId
+    <> "` is falsifiable:\n\t"
     <> pretty errPred
 
   msg SolverErrorFalsifiableTheorem{..}
-    =  "The following associated theorem for `" <> pretty errDefId
+    =  "The following theorem associated with `" <> pretty errDefId
     <> "` is falsifiable:\n\t"
     <> pretty errPred
 
@@ -688,6 +688,18 @@ instance UserMsg CheckerError where
     <> "\n  with\n\t(linear) " <> pretty errLinear
 
   msg PatternUnreachable{..} = errMsg
+
+  msg NameClashTypeConstructors{..}
+    = "`" <> pretty (dataDeclId errDataDecl) <> "` already defined at\n\t"
+    <> (intercalate "\n\t" . map (pretty . dataDeclSpan) . toList) otherDataDecls
+
+  msg NameClashDataConstructors{..}
+    = "`" <> pretty (dataConstrId errDataConstructor) <> "` already defined at\n\t"
+    <> (intercalate "\n\t" . map (pretty . dataConstrSpan) . toList) otherDataConstructors
+
+  msg NameClashDefs{..}
+    = "`" <> pretty (defId errDef) <> "` already defined at\n\t"
+    <> (intercalate "\n\t" . map (pretty . defSpan) . toList) otherDefs
 
 data LinearityMismatch
   = LinearNotUsed Id

@@ -1,0 +1,4 @@
+Type checking failed: 
+  Falsifiable theorem: 4:1:
+  The following theorem associated with `main` is falsifiable:
+	(2 = 1)

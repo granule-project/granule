@@ -11,6 +11,7 @@ module Language.Granule.Syntax.Def where
 import Data.List ((\\), delete)
 import GHC.Generics (Generic)
 
+import Language.Granule.Context (Ctxt)
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
@@ -28,8 +29,14 @@ deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
 -- | Function definitions
-data Def v a = Def Span Id [Equation v a] TypeScheme
+data Def v a = Def
+  { defSpan :: Span
+  , defId :: Id
+  , defEquations :: [Equation v a]
+  , defTypeScheme :: TypeScheme
+  }
   deriving Generic
+
 deriving instance (Show v, Show a) => Show (Def v a)
 deriving instance (Eq v, Eq a) => Eq (Def v a)
 
@@ -44,15 +51,23 @@ instance FirstParameter (Def v a) Span
 instance FirstParameter (Equation v a) Span
 
 -- | Data type declarations
-data DataDecl = DataDecl Span Id [(Id,Kind)] (Maybe Kind) [DataConstr]
+data DataDecl = DataDecl
+  { dataDeclSpan :: Span
+  , dataDeclId :: Id
+  , dataDeclTyVarCtxt :: Ctxt Kind
+  , dataDeclKindAnn :: Maybe Kind
+  , dataDeclDataConstrs :: [DataConstr]
+  }
   deriving (Generic, Show, Eq)
 
 instance FirstParameter DataDecl Span
 
 -- | Data constructors
 data DataConstr
-  = DataConstrIndexed Span Id TypeScheme -- ^ GADTs
-  | DataConstrNonIndexed Span Id [Type]  -- ^ ADTs
+  = DataConstrIndexed
+    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrTypeScheme :: TypeScheme } -- ^ GADTs
+  | DataConstrNonIndexed
+    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
   deriving (Eq, Show, Generic)
 
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr

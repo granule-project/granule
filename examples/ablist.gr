@@ -11,3 +11,8 @@ abmap : ∀ {a : Type, b : Type, c : Type, d : Type, n : Nat, m : Nat} .
 abmap [_] [_] Nil = Nil;
 |     [f] [g] (Acons a xs) = Acons (f a) (abmap [f] [g] xs);
 |     [f] [g] (Bcons b xs) = Bcons (g b) (abmap [f] [g] xs)
+
+import Bool
+
+main : ABList Bool Int 1 2
+main = abmap [not] [λx → x + 1] (Bcons 1 (Acons True (Bcons 0 Nil)))

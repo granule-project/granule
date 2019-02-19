@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 i : ∀ {a : Type} . a → a
 i x = x
 

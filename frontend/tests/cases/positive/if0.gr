@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 if0 : ∀ {a : Type} . Int [0..1] → a [0..1] → a [0..1] → a
 if0 [0] [x] [y] = x;
 if0 [_] [x] [y] = y

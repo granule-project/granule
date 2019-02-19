@@ -106,13 +106,13 @@ readToQueue pth = do
             debugM "Pretty-printed AST:" $ pretty ast
             checked <-  liftIO' $ check ast
             case checked of
-                Just _ -> do
+                Right _ -> do
                     let (AST dd def) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd<>adt),f,m)
                     liftIO $ printInfo $ green $ pth<>", interpreted"
-                Nothing -> do
+                Left errs -> do
                   (_,_,_,f,_) <- get
                   Ex.throwError (TypeCheckError pth f)
       Left e -> do
@@ -138,8 +138,8 @@ dumpStateAux m = pDef (M.toList m)
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
-extractFreeVars i (x:xs) = if sourceName x == internalName x && sourceName x /= sourceName i
-                           then sourceName x : extractFreeVars i xs
+extractFreeVars i (x:xs) = if sourceId x == internalId x && sourceId x /= sourceId i
+                           then sourceId x : extractFreeVars i xs
                            else extractFreeVars i xs
 
 makeUnique ::[String] -> [String]
@@ -173,7 +173,7 @@ makeMapBuildADT adc = M.fromList $ tempADT adc
                         where
                           tempADT :: [DataConstr] -> [(String,DataConstr)]
                           tempADT [] = []
-                          tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceName id),dc) : tempADT dct
+                          tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceId id),dc) : tempADT dct
                           tempADT (dc@(DataConstrNonIndexed _ _ _):dct) = tempADT dct
 
 lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
@@ -196,7 +196,7 @@ printType trm m = let v = M.lookup trm m in
 
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
-buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
+buildForEval (x:xs) m = buildAST (sourceId x) m <> buildForEval xs m
 
 synType :: (?globals::Globals) => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption, Expr () Type))
 synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr empty empty Positive exp

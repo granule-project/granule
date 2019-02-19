@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data Dyn where
   Dyn : ∀ a : Type . a → Dyn
 

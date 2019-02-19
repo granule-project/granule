@@ -6,10 +6,14 @@
 
 module Language.Granule.Utils where
 
+import Control.Applicative ((<|>))
 import Control.Exception (SomeException, catch, try)
 import Control.Monad (when, forM)
-import Data.List ((\\), nub)
-import Data.Semigroup ((<>))
+import Data.List ((\\), nub, sortBy)
+import Data.List.NonEmpty (NonEmpty(..))
+import qualified Data.List.NonEmpty as NonEmpty
+import Data.Maybe (fromMaybe, mapMaybe)
+import Data.Ord
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.LocalTime (getTimeZone, utc, utcToLocalTime)
 import Debug.Trace (trace, traceM)
@@ -19,76 +23,117 @@ import "Glob" System.FilePath.Glob (glob)
 
 import Language.Granule.Syntax.Span
 
--- | A result data type to be used pretty much like `Maybe`, but with an explanation as to why
--- no result was returned
-data Result a = Some a | None [String]
+-- | Flags that change Granule's behaviour
+data Globals = Globals
+  { globalsDebugging           :: Maybe Bool
+  , globalsNoColors            :: Maybe Bool
+  , globalsAlternativeColors   :: Maybe Bool
+  , globalsNoEval              :: Maybe Bool
+  , globalsSuppressInfos       :: Maybe Bool
+  , globalsSuppressErrors      :: Maybe Bool
+  , globalsTimestamp           :: Maybe Bool
+  , globalsTesting             :: Maybe Bool -- ^ whether we are currently running a test (e.g. for pretty printing)
+  , globalsSolverTimeoutMillis :: Maybe Integer
+  , globalsIncludePath         :: Maybe FilePath
+  , globalsSourceFilePath      :: Maybe FilePath
+  } deriving (Read, Show)
 
-data Globals =
-  Globals
-  { debugging :: Bool
-  , sourceFilePath :: String
-  , noColors :: Bool
-  , alternativeColors :: Bool
-  , noEval :: Bool
-  , suppressInfos :: Bool
-  , suppressErrors :: Bool
-  , timestamp :: Bool
-  , solverTimeoutMillis :: Integer
-  , includePath :: FilePath
-  } deriving Show
+-- | Accessors for global flags with default values
+debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
+  timestamp, testing :: (?globals :: Globals) => Bool
+debugging         = fromMaybe False $ globalsDebugging ?globals
+noColors          = fromMaybe False $ globalsNoColors ?globals
+alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
+noEval            = fromMaybe False $ globalsNoEval ?globals
+suppressInfos     = fromMaybe False $ globalsSuppressInfos ?globals
+suppressErrors    = fromMaybe False $ globalsSuppressErrors ?globals
+timestamp         = fromMaybe False $ globalsTimestamp ?globals
+testing           = fromMaybe False $ globalsTesting ?globals
 
-defaultGlobals :: Globals
-defaultGlobals =
-    Globals
-    { debugging = False
-    , sourceFilePath = ""
-    , noColors = False
-    , alternativeColors = False
-    , noEval = False
-    , suppressInfos = False
-    , suppressErrors = False
-    , timestamp = False
-    , solverTimeoutMillis = 5000
-    , includePath = "StdLib"
+-- | Accessor for the solver timeout with a default value
+solverTimeoutMillis :: (?globals :: Globals) => Integer
+solverTimeoutMillis = fromMaybe 5000 $ globalsSolverTimeoutMillis ?globals
+
+-- | Accessors for global file paths with default values
+includePath, sourceFilePath :: (?globals :: Globals) => FilePath
+includePath         = fromMaybe "StdLib" $ globalsIncludePath ?globals
+sourceFilePath      = fromMaybe ""       $ globalsSourceFilePath ?globals
+
+-- | Merge two 'Globals', giving preference to the settings of the left one
+instance Semigroup Globals where
+  g1 <> g2 = Globals
+      { globalsDebugging           = globalsDebugging           g1 <|> globalsDebugging           g2
+      , globalsNoColors            = globalsNoColors            g1 <|> globalsNoColors            g2
+      , globalsAlternativeColors   = globalsAlternativeColors   g1 <|> globalsAlternativeColors   g2
+      , globalsNoEval              = globalsNoEval              g1 <|> globalsNoEval              g2
+      , globalsSuppressInfos       = globalsSuppressInfos       g1 <|> globalsSuppressInfos       g2
+      , globalsSuppressErrors      = globalsSuppressErrors      g1 <|> globalsSuppressErrors      g2
+      , globalsTimestamp           = globalsTimestamp           g1 <|> globalsTimestamp           g2
+      , globalsSolverTimeoutMillis = globalsSolverTimeoutMillis g1 <|> globalsSolverTimeoutMillis g2
+      , globalsIncludePath         = globalsIncludePath         g1 <|> globalsIncludePath         g2
+      , globalsSourceFilePath      = globalsSourceFilePath      g1 <|> globalsSourceFilePath      g2
+      , globalsTesting             = globalsTesting             g1 <|> globalsTesting             g2
+      }
+
+instance Monoid Globals where
+  mempty = Globals
+    { globalsDebugging           = Nothing
+    , globalsNoColors            = Nothing
+    , globalsAlternativeColors   = Nothing
+    , globalsNoEval              = Nothing
+    , globalsSuppressInfos       = Nothing
+    , globalsSuppressErrors      = Nothing
+    , globalsTimestamp           = Nothing
+    , globalsSolverTimeoutMillis = Nothing
+    , globalsIncludePath         = Nothing
+    , globalsSourceFilePath      = Nothing
+    , globalsTesting             = Nothing
     }
 
+-- | A class for messages that are shown to the user. TODO: make more general
 class UserMsg a where
+  -- | The title of the message
   title :: a -> String
-  location :: (?globals :: Globals) => a -> Span
-  msg :: (?globals :: Globals) => a -> String
 
+  -- | The location (defaults to 'nullSpan')
+  location :: (?globals :: Globals) => a -> Span
   location _ = nullSpan
 
-mkSpan :: (?globals :: Globals) => (Pos, Pos) -> Span
-mkSpan (start, end) = Span start end (sourceFilePath ?globals)
+  -- | The body of the message
+  msg :: (?globals :: Globals) => a -> String
 
+
+-- | Make a span from a pair of positions
+mkSpan :: (?globals :: Globals) => (Pos, Pos) -> Span
+mkSpan (start, end) = Span start end sourceFilePath
+
+-- | When a source location is not applicable
 nullSpan :: (?globals :: Globals) => Span
-nullSpan = Span (0, 0) (0, 0) (sourceFilePath ?globals)
+nullSpan = Span (0, 0) (0, 0) sourceFilePath
+
 
 debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM explanation message =
-    when (debugging ?globals) $ traceM $
+    when debugging $ traceM $
       ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
 -- | Print to terminal when debugging e.g.:
 -- foo x y = x + y `debug` "foo" $ "given " <> show x <> " and " <> show y
 debug :: (?globals :: Globals) => a -> String -> a
 debug x message
-  | debugging ?globals
-    = ((unsafePerformIO getTimeString) <> (bold $ magenta $ "Debug: ") <> message <> "\n") `trace` x
-  | otherwise
-    = x
+  | debugging = ((unsafePerformIO getTimeString) <> (bold $ magenta $ "Debug: ") <> message <> "\n") `trace` x
+  | otherwise = x
 
 printError :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
-printError message = when (not $ suppressErrors ?globals) $
+printError message = when (not suppressErrors) $
   hPutStrLn stderr $ formatError message
 
 printSuccess :: (?globals :: Globals) => String -> IO ()
-printSuccess message = when (not $ suppressInfos ?globals)
-  (putStrLn . (if alternativeColors ?globals then blue else green) $ message)
+printSuccess message = when (not suppressInfos)
+  (putStrLn . (if alternativeColors then blue else green) $ message)
 
 printInfo :: (?globals :: Globals) => String -> IO ()
-printInfo message = when (not $ suppressInfos ?globals) (putStrLn message)
+printInfo message = when (not suppressInfos) (putStrLn message)
 
 -- printInfo :: (?globals :: Globals) => String -> IO ()
 -- printInfo message =
@@ -136,7 +181,7 @@ white = txtColor "37"
 
 txtColor :: (?globals :: Globals) => String -> String -> String
 txtColor colorCode message =
-    if noColors ?globals
+    if noColors
       then message
       else "\ESC[" <> colorCode <> ";1m" <> message <> reset
   where
@@ -147,7 +192,7 @@ indent message = "  " <> message
 
 getTimeString :: (?globals :: Globals) => IO String
 getTimeString =
-    if timestamp ?globals == False then return ""
+    if not timestamp then return ""
     else do
       time <- try getCurrentTime
       case time of
@@ -183,3 +228,19 @@ lookupMany a' (_:xs)                = lookupMany a' xs
 -- [2,3]
 duplicates :: Eq a => [a] -> [a]
 duplicates xs = nub (xs \\ nub xs)
+
+-- | Using a projection function to get a partial order on elements, return the
+-- groups of duplicates according to the projection. Useful for instance for
+-- finding duplicate definitions by projecting on their source names.
+--
+-- >>> duplicatesBy fst [("alice",1), ("bob",2), ("alice",3), ("alice", 4)]
+-- [(("alice",3),("alice",1) :| [("alice",4)])]
+--
+-- Observe that the second occurrence is the 'fst' element, since we can say
+-- that this is the first offending case. The types ensure that we actually
+-- have at least 2 instances of the thing we want to duplicate check.
+duplicatesBy :: Ord b => (a -> b) -> [a] -> [(a,NonEmpty a)]
+duplicatesBy proj
+  = mapMaybe (\case x1 :| x2 : xs -> Just (x2, x1 :| xs); _ -> Nothing)
+  . NonEmpty.groupBy (\x1 x2 -> proj x1 == proj x2)
+  . sortBy (comparing proj)

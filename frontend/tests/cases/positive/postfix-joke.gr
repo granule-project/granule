@@ -1,7 +1,0 @@
-import Prelude
-
-thisSuitIsBlack : Bool
-thisSuitIsBlack = False
-
-main : () <W>
-main = if thisSuitIsBlack `not` then "Great success!" `write` else "I am sad." `write`

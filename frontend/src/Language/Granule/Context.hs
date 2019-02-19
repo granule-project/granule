@@ -8,8 +8,7 @@ module Language.Granule.Context where
 
 import Data.Maybe (isJust)
 import Data.List (sortBy)
-import Language.Granule.Syntax.Identifiers (Id, sourceName)
-import Language.Granule.Utils
+import Language.Granule.Syntax.Identifiers (Id)
 
 -- | Type of contexts
 type Ctxt t = [(Id, t)]
@@ -19,10 +18,10 @@ extendShadow :: Ctxt a -> Id -> a -> Ctxt a
 extendShadow ctxt i v = (i, v) : ctxt
 
 -- | Extend an context with a new value, ensure that the name is not in the context
-extend :: Ctxt a -> Id -> a -> Result (Ctxt a)
+extend :: Ctxt a -> Id -> a -> Maybe (Ctxt a)
 extend ctxt i v = case lookup i ctxt of
-  Nothing -> Some $ (i, v) : ctxt
-  _ -> None ["Name clash: `" <> sourceName i <> "` was already in the context."]
+  Nothing -> Just ((i, v) : ctxt)
+  _ -> Nothing
 
 -- | Empty context
 empty :: Ctxt a

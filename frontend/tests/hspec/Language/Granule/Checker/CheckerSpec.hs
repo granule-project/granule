@@ -48,11 +48,11 @@ spec = do
     -- imports to work
 
     -- Integration tests based on the fixtures
-    let ?globals = defaultGlobals { suppressInfos = True }
+    let ?globals = defaultGlobals { globalsSuppressInfos = Just True }
     srcFiles <- runIO exampleFiles
     forM_ srcFiles $ \file ->
       describe file $ it "should typecheck" $ do
-        let ?globals = ?globals { sourceFilePath = file }
+        let ?globals = ?globals { globalsSourceFilePath = file }
         parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs
         case parsed of
           Left (ex :: SomeException) -> expectationFailure (show ex) -- parse error
@@ -154,7 +154,7 @@ runCtxts f a b = do
 exampleFiles = foldr1 (liftM2 (<>)) $ do
     fileExtension <- fileExtensions
     id [ find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
-       , find always (extension ==? fileExtension) (includePath defaultGlobals)
+       , find always (extension ==? fileExtension) includePath
        , find always (extension ==? fileExtension) pathToRegressionTests
        ] -- `id` in order to indent list, otherwise it doesn't parse in `do` notation
 
