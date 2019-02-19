@@ -660,7 +660,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
   -- Type body of the let...
   -- ...in the context of the binders from the pattern
-  (binders, _, _, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  (binders, _, subst, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
   if not pIrrefutable
   then refutablePattern s p
@@ -684,8 +684,10 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
      gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
      let t = Diamond (ef1 <> ef2) ty2
+
+     t' <- substitute subst t
      let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
-     return (t, gamNew, elaborated)
+     return (t', gamNew, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
