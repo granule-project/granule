@@ -330,6 +330,8 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
 
+  newConjunct
+
   (tau', subst1) <- case t of
     Nothing -> return (tau, [])
     Just t' -> do
@@ -337,13 +339,16 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
       unless eqT (halt $ GenericError (Just s) $ pretty sig <> " not equal to " <> pretty t')
       return (tau, subst)
 
-  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
   debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
     -- Check the body in the extended context
     tau'' <- substitute subst tau'
+
+    newConjunct
+
     (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
@@ -352,6 +357,8 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 
           -- Locally we should have this property (as we are under a binder)
           ctxtEquals s (gam' `intersectCtxts` bindings) bindings
+
+          concludeImplication s localVars
 
           let elaborated = Val s ty (Abs ty elaboratedP t elaboratedE)
           return (gam' `subtractCtxt` bindings, subst, elaborated)
@@ -370,12 +377,12 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
-    (argTy, gam2, elaboratedR) <- synthExpr defs gam pol e2
-    (gam1, subst, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
-    gam <- ctxtPlus s gam1 gam2
+   (argTy, gam2, elaboratedR) <- synthExpr defs gam pol e2
+   (gam1, subst, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
+   gam <- ctxtPlus s gam1 gam2
 
-    let elaborated = App s tau elaboratedL elaboratedR
-    return (gam, subst, elaborated)
+   let elaborated = App s tau elaboratedL elaboratedR
+   return (gam, subst, elaborated)
 
 {-
 
@@ -817,7 +824,12 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
-  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+
+  newConjunct
+
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+
+  newConjunct
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
@@ -829,17 +841,26 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
-     return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
+     finalTy' <- substitute subst finalTy
+
+     concludeImplication s localVars
+
+     return (finalTy', gam'' `subtractCtxt` bindings, elaborated)
+
   else refutablePattern s p
 
 -- Abstraction, can only synthesise the types of
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
 
+  newConjunct
+
   tyVar <- freshTyVarInContext (mkId "t") KType
   let sig = (TyVar tyVar)
 
-  (bindings, _, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+
+  newConjunct
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
@@ -850,6 +871,8 @@ synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
+
+     concludeImplication s localVars
 
      return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
   else refutablePattern s p
