@@ -617,6 +617,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
      gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
      let t = Diamond (ef1 <> ef2) ty2
+
      let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
      return (t, gamNew, elaborated)
 
