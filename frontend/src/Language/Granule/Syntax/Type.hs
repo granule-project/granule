@@ -351,7 +351,8 @@ instance Freshenable m Coeffect where
        return $ CSet cs'
     freshen (CSig c k) = do
       c' <- freshen c
-      return $ CSig c' k
+      k' <- freshen k
+      return $ CSig c' k'
     freshen c@CInfinity{} = return c
     freshen c@CFloat{} = return c
     freshen c@CZero{}  = return c
