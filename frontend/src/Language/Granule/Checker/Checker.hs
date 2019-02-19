@@ -693,7 +693,10 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
      let t = Diamond (ef1 <> ef2) ty2
 
+<<<<<<< HEAD
      t' <- substitute subst t
+=======
+>>>>>>> rename list map to not clash with vec map
      let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
      return (t', gamNew, elaborated)
 
