@@ -282,7 +282,9 @@ instance Term Coeffect where
 instance Monad m => Freshenable m TypeScheme where
   freshen :: TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds constraints ty) = do
-        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
+        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v;
+                                        k' <- freshen k;
+                                        return (v', k') }) binds
         constraints' <- mapM freshen constraints
         ty' <- freshen ty
         return $ Forall s binds' constraints' ty'
