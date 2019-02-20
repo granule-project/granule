@@ -285,6 +285,9 @@ instance Pretty Operator where
 parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
 parensOn p t = prettyL (if p t then 0 else 1) t
 
+ticks :: String -> String
+ticks x = "`" <> x <> "`"
+
 instance Pretty Int where
   prettyL l = show
 
