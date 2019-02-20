@@ -23,6 +23,7 @@ import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.NameClash
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
@@ -44,51 +45,6 @@ import Language.Granule.Utils
 
 --import Debug.Trace
 
--- | Check if there are name clashes within namespaces
-checkNameClashes :: AST () () -> Checker ()
-checkNameClashes (AST dataDecls defs) =
-    case concat [typeConstructorErrs, dataConstructorErrs, defErrs] of
-      [] -> pure ()
-      (d:ds) -> throwError (d:|ds)
-  where
-    typeConstructorErrs
-      = fmap mkTypeConstructorErr
-      . duplicatesBy (sourceId . dataDeclId)
-      $ dataDecls
-
-    mkTypeConstructorErr (x2, xs)
-      = NameClashTypeConstructors
-          { errLoc = dataDeclSpan x2
-          , errDataDecl = x2
-          , otherDataDecls = xs
-          }
-
-    dataConstructorErrs
-      = fmap mkDataConstructorErr                -- make errors for duplicates
-      . duplicatesBy (sourceId . dataConstrId)   -- get the duplicates by source id
-      . concatMap dataDeclDataConstrs            -- get data constructor definitions
-      $ dataDecls                                -- from data declarations
-
-    mkDataConstructorErr (x2, xs)
-      = NameClashDataConstructors
-          { errLoc = dataConstrSpan x2
-          , errDataConstructor = x2
-          , otherDataConstructors = xs
-          }
-
-    defErrs
-      = fmap mkDuplicateDefErr
-      . duplicatesBy (sourceId . defId)
-      $ defs
-
-    mkDuplicateDefErr (x2, xs)
-      = NameClashDefs
-          { errLoc = defSpan x2
-          , errDef = x2
-          , otherDefs = xs
-          }
-
-
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
@@ -102,6 +58,7 @@ check ast@(AST dataDecls defs) = evalChecker initState $ do
     pure $ AST dataDecls defs
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+
 
 checkTyCon :: DataDecl -> Checker ()
 checkTyCon (DataDecl sp name tyVars kindAnn ds)
