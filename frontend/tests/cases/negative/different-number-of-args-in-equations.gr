@@ -1,6 +1,6 @@
--- foo : Int -> Int
--- foo 1 = 2;
--- foo 1 2 = 3
+foo : Int -> Int
+foo 1 = 2;
+foo 1 2 = 3
 
 bar : Int -> Int -> Int
 bar 0 = \x -> x;

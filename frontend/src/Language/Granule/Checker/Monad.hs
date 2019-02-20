@@ -641,8 +641,8 @@ instance UserMsg CheckerError where
     <> pretty tyExpected
     <> "` against a type of the form `"
     <> pretty tyActual
-    <> "` implied by the remaining patterns\n\t"
-    <> (intercalate ", " . map pretty . toList) errPats
+    <> "` implied by the remaining pattern(s)\n\t"
+    <> (intercalate "\n\t" . map (ticks . pretty) . toList) errPats
 
   msg DataConstructorReturnTypeError{..}
     = "Expected type constructor `" <> pretty idExpected
