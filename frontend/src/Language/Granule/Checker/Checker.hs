@@ -59,7 +59,8 @@ check ast@(AST dataDecls defs) = evalChecker initState $ do
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
 
-
+-- TODO: we are checking for name clashes again here. Where is the best place
+-- to do this check?
 checkTyCon :: DataDecl -> Checker ()
 checkTyCon (DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
