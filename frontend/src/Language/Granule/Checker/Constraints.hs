@@ -93,26 +93,26 @@ compileToSBV predicate tyVarContext kVarContext =
 
           case demoteKindToType k of
             Just t | t == extendedNat ->
-                  forSome [internalId v] $ \solverVar -> do
+                  forSome [internalName v] $ \solverVar -> do
                     pred' <- buildTheorem' ((v, SExtNat (SNatX solverVar)) : solverVars) p
                     return ((SNatX.representationConstraint solverVar) .&& pred')
 
             Just (TyCon k) ->
-                  case internalId k of
+                  case internalName k of
                     "Q" ->
-                      forSome [internalId v] $ \solverVar ->
+                      forSome [internalName v] $ \solverVar ->
                         buildTheorem' ((v, SFloat solverVar) : solverVars) p
 
                     -- Esssentially a stub for sets at this point
                     "Set" -> buildTheorem' ((v, SSet S.empty) : solverVars) p
 
                     "Nat" ->
-                      forSome [(internalId v)] $ \solverVar -> do
+                      forSome [(internalName v)] $ \solverVar -> do
                         pred' <- buildTheorem' ((v, SNat solverVar) : solverVars) p
                         return (solverVar .>= 0 .&& pred')
 
                     "Level" ->
-                       forSome [(internalId v)] $ \solverVar -> do
+                       forSome [(internalName v)] $ \solverVar -> do
                          pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
                          return ((solverVar .== literal privateRepresentation
                               .|| solverVar .== literal publicRepresentation) .&& pred')
@@ -134,7 +134,7 @@ compileToSBV predicate tyVarContext kVarContext =
         -- If the quantified variable appears in the theorem
         then
           -- Create fresh solver variable
-          forAll [(internalId v)] $ \vSolver -> do
+          forAll [(internalName v)] $ \vSolver -> do
             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
             return ((vSolver .>= literal 0) .=> impl)
 
@@ -162,7 +162,7 @@ compileToSBV predicate tyVarContext kVarContext =
     createFreshVar quant
                    (var, (kind, quantifierType))
                    (universalConstraints, existentialConstraints, ctxt) = do
-      (pre, symbolic) <- freshCVar quant (internalId var) kind quantifierType
+      (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
       let (universalConstraints', existentialConstraints') =
             case quantifierType of
               ForallQ -> (pre .&& universalConstraints, existentialConstraints)
@@ -280,7 +280,7 @@ freshCVar quant name (isProduct -> Just (t1, t2)) q = do
   return (sTrue, SProduct solverVarFst solverVarSnd)
 
 freshCVar quant name (TyCon k) q =
-  case internalId k of
+  case internalName k of
     -- Floats (rationals)
     "Q" -> do
       solverVar <- quant q name
@@ -291,7 +291,7 @@ freshCVar quant name (TyCon k) q =
 
     _ -> do -- Otherwise it must be an SInteger-like constraint:
       solverVar <- quant q name
-      case internalId k of
+      case internalName k of
         "Nat"       -> do
           -- constrain (solverVar .>= 0)
           return (solverVar .>= 0, SNat solverVar)
@@ -313,7 +313,7 @@ freshCVar quant name t q | t == extendedNat = do
 
 -- A poly typed coeffect variable compiled into the
 --  infinity value (since this satisfies all the semiring properties on the nose)
-freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalId v = do
+freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 -- TODO: possibly this can now be removed
   return (sTrue, SPoint)
@@ -356,7 +356,7 @@ compile vars (Gt s c1 c2) =
 -- NonZeroPromotableTo s c means that:
 compile vars (NonZeroPromotableTo s x c t) = do
   -- exists x .
-  (req, xVar) <- freshCVar compileQuant (internalId x) t InstanceQ
+  (req, xVar) <- freshCVar compileQuant (internalName x) t InstanceQ
 
   -- x != 0
   nonZero <- compile ((x, xVar) : vars) (Neq s (CZero t) (CVar x) t)
@@ -376,15 +376,15 @@ compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalId v = SPoint
+compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v = SPoint
 
-compileCoeffect (Level n) (TyCon k) _ | internalId k == "Level" =
+compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
   SLevel . fromInteger . toInteger $ n
 
-compileCoeffect (Level n) (isProduct -> Just (TyCon k, t2)) vars | internalId k == "Level" =
+compileCoeffect (Level n) (isProduct -> Just (TyCon k, t2)) vars | internalName k == "Level" =
   SProduct (SLevel . fromInteger . toInteger $ n) (compileCoeffect (COne t2) t2 vars)
 
-compileCoeffect (Level n) (isProduct -> Just (t1, TyCon k)) vars | internalId k == "Level" =
+compileCoeffect (Level n) (isProduct -> Just (t1, TyCon k)) vars | internalName k == "Level" =
   SProduct (compileCoeffect (COne t1) t1 vars) (SLevel . fromInteger . toInteger $ n)
 
 -- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
@@ -400,10 +400,10 @@ compileCoeffect (CNat n) k _ | k == nat =
 compileCoeffect (CNat n) k _ | k == extendedNat =
   SExtNat . fromInteger . toInteger $ n
 
-compileCoeffect (CFloat r) (TyCon k) _ | internalId k == "Q" =
+compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
   SFloat  . fromRational $ r
 
-compileCoeffect (CSet xs) (TyCon k) _ | internalId k == "Set" =
+compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
   SSet . S.fromList $ map (first mkId) xs
 
 compileCoeffect (CVar v) _ vars =
@@ -436,8 +436,8 @@ compileCoeffect c@(CInterval lb ub) (isInterval -> Just t) vars =
 
 compileCoeffect (CZero k') k vars  =
   case (k', k) of
-    (TyCon k', TyCon k) -> assert (internalId k' == internalId k) $
-      case internalId k' of
+    (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
+      case internalName k' of
         "Level"     -> SLevel $ literal privateRepresentation
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
@@ -459,8 +459,8 @@ compileCoeffect (CZero k') k vars  =
 
 compileCoeffect (COne k') k vars =
   case (k', k) of
-    (TyCon k', TyCon k) -> assert (internalId k' == internalId k) $
-      case internalId k' of
+    (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
+      case internalName k' of
         "Level"     -> SLevel $ literal privateRepresentation
         "Nat"       -> SNat 1
         "Q"         -> SFloat (fromRational 1)

@@ -236,7 +236,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
-        Just (KPromote (TyCon kc)) | internalId kc /= "Protocol" -> do
+        Just (KPromote (TyCon kc)) | internalName kc /= "Protocol" -> do
           -- Don't create solver constraints for sessions- deal with before SMT
           addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, [(n, SubstT $ TyVar m)])
@@ -248,12 +248,12 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
 
 -- Duality is idempotent (left)
 equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d') (TyApp (TyCon d) t)) t' sp
-  | internalId d == "Dual" && internalId d' == "Dual" =
+  | internalName d == "Dual" && internalName d' == "Dual" =
   equalTypesRelatedCoeffects s rel uS t t' sp
 
 -- Duality is idempotent (right)
 equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d') (TyApp (TyCon d) t')) sp
-  | internalId d == "Dual" && internalId d' == "Dual" =
+  | internalName d == "Dual" && internalName d' == "Dual" =
   equalTypesRelatedCoeffects s rel uS t t' sp
 
 equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = do
@@ -272,7 +272,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
           { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = k2 }
 
         -- If the kind is Nat, then create a solver constraint
-        Just (KPromote (TyCon (internalId -> "Nat"))) -> do
+        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
           nat <- compileNatKindedTypeToCoeffect s t
           addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
           return (True, [(n, SubstT t)])
@@ -288,7 +288,7 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
       k1 <- inferKindOfType s (TyVar n)
       k2 <- inferKindOfType s t
       case k1 `joinKind` k2 of
-        Just (KPromote (TyCon (internalId -> "Nat"))) -> do
+        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
           c2 <- compileNatKindedTypeToCoeffect s t
           addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
@@ -308,10 +308,10 @@ equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
 
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d) t) t' sp
-  | internalId d == "Dual" = isDualSession s rel uS t t' sp
+  | internalName d == "Dual" = isDualSession s rel uS t t' sp
 
 equalTypesRelatedCoeffects s rel uS t (TyApp (TyCon d) t') sp
-  | internalId d == "Dual" = isDualSession s rel uS t t' sp
+  | internalName d == "Dual" = isDualSession s rel uS t t' sp
 
 -- Equality on type application
 equalTypesRelatedCoeffects s rel uS (TyApp t1 t2) (TyApp t1' t2') sp = do
@@ -338,13 +338,13 @@ equalOtherKindedTypesGeneric s t1 t2 = do
   k2 <- inferKindOfType s t2
   if k1 == k2 then
     case k1 of
-      KPromote (TyCon (internalId -> "Nat")) -> do
+      KPromote (TyCon (internalName -> "Nat")) -> do
         c1 <- compileNatKindedTypeToCoeffect s t1
         c2 <- compileNatKindedTypeToCoeffect s t2
         addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
         return (True, [])
 
-      KPromote (TyCon (internalId -> "Protocol")) ->
+      KPromote (TyCon (internalName -> "Protocol")) ->
         sessionInequality s t1 t2
 
       KType -> throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
@@ -359,17 +359,17 @@ equalOtherKindedTypesGeneric s t1 t2 = do
 sessionInequality :: (?globals :: Globals)
     => Span -> Type -> Type -> Checker (Bool, Substitution)
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
-  | internalId c == "Send" && internalId c' == "Send" = do
+  | internalName c == "Send" && internalName c' == "Send" = do
   (g, _, u) <- equalTypes s t t'
   return (g, u)
 
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
-  | internalId c == "Recv" && internalId c' == "Recv" = do
+  | internalName c == "Recv" && internalName c' == "Recv" = do
   (g, _, u) <- equalTypes s t t'
   return (g, u)
 
 sessionInequality s (TyCon c) (TyCon c')
-  | internalId c == "End" && internalId c' == "End" =
+  | internalName c == "End" && internalName c' == "End" =
   return (True, [])
 
 sessionInequality s t1 t2 = throw TypeError{ errLoc = s, tyExpected = t1, tyActual = t2 }
@@ -385,15 +385,15 @@ isDualSession :: (?globals :: Globals)
     -> SpecIndicator
     -> Checker (Bool, Substitution)
 isDualSession sp rel uS (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
-  |  (internalId c == "Send" && internalId c' == "Recv")
-  || (internalId c == "Recv" && internalId c' == "Send") = do
+  |  (internalName c == "Send" && internalName c' == "Recv")
+  || (internalName c == "Recv" && internalName c' == "Send") = do
   (eq1, u1) <- equalTypesRelatedCoeffects sp rel uS t t' ind
   (eq2, u2) <- isDualSession sp rel uS s s' ind
   u <- combineSubstitutions sp u1 u2
   return (eq1 && eq2, u)
 
 isDualSession _ _ _ (TyCon c) (TyCon c') _
-  | internalId c == "End" && internalId c' == "End" =
+  | internalName c == "End" && internalName c' == "End" =
   return (True, [])
 
 isDualSession sp rel uS t (TyVar v) ind =

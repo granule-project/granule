@@ -85,7 +85,7 @@ instance Substitutable Substitutors where
     k <- inferKindOfType nullSpan t
     k' <- inferCoeffectType nullSpan c'
     case joinKind k (KPromote k') of
-      Just (KPromote (TyCon k)) | internalId k == "Nat" -> do
+      Just (KPromote (TyCon k)) | internalName k == "Nat" -> do
              c <- compileNatKindedTypeToCoeffect nullSpan t
              unify c c'
       _ -> return Nothing
@@ -138,7 +138,7 @@ instance Substitutable Type where
     k <- inferKindOfType nullSpan t
     k' <- inferKindOfType nullSpan t
     case joinKind k k' of
-      Just (KPromote (TyCon (internalId -> "Nat"))) -> do
+      Just (KPromote (TyCon (internalName -> "Nat"))) -> do
         c  <- compileNatKindedTypeToCoeffect nullSpan t
         c' <- compileNatKindedTypeToCoeffect nullSpan t'
         addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
@@ -214,7 +214,7 @@ instance Substitutable Coeffect where
           k <- inferKindOfType nullSpan t
           k' <- inferCoeffectType nullSpan (CVar v)
           case joinKind k (promoteTypeToKind k') of
-            Just (KPromote (TyCon (internalId -> "Nat"))) ->
+            Just (KPromote (TyCon (internalName -> "Nat"))) ->
               compileNatKindedTypeToCoeffect nullSpan t
             _ -> return (CVar v)
 

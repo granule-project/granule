@@ -98,14 +98,14 @@ evalBinOp op v1 v2 = case op of
 
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
-evalIn _ (Val s _ (Var _ v)) | internalId v == "read" = do
+evalIn _ (Val s _ (Var _ v)) | internalName v == "read" = do
     when testing (error "trying to `read` while testing")
     putStr "> "
     hFlush stdout
     val <- Text.getLine
     return $ Pure () (Val s () (StringLiteral val))
 
-evalIn _ (Val s _ (Var _ v)) | internalId v == "readInt" = do
+evalIn _ (Val s _ (Var _ v)) | internalName v == "readInt" = do
     when testing (error "trying to `readInt` while testing")
     putStr "> "
     hFlush stdout
@@ -155,7 +155,7 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
 -- Hard-coded 'scale', removed for now
 
 
-evalIn _ (Val _ (Var v)) | internalId v == "scale" = return
+evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
     (Abs (PVar nullSpan $ mkId " y") Nothing (
       letBox nullSpan (PVar nullSpan $ mkId " ye")
@@ -168,7 +168,7 @@ evalIn ctxt (Val _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
-      Nothing  -> fail $ "Variable '" <> sourceId x <> "' is undefined in context."
+      Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalIn ctxt (Val s _ (Pure _ e)) = do
   v <- evalIn ctxt e
@@ -331,7 +331,7 @@ builtIns =
       Ext () $ Primitive (\x ->
         case x of
            (Constr _ m []) -> do
-               let mode = (read (internalId m)) :: SIO.IOMode
+               let mode = (read (internalName m)) :: SIO.IOMode
                h <- SIO.openFile (unpack s) mode
                return $ Pure () $ valExpr $ Ext () $ Handle h
            rval -> error $ "Runtime exception: trying to open with a non-mode value")
@@ -365,7 +365,7 @@ evalDefs ctxt (Def _ var [Equation _ _ [] e] _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
-      Nothing -> error $ "Name clash: `" <> sourceId var <> "` was already in the context."
+      Nothing -> error $ "Name clash: `" <> sourceName var <> "` was already in the context."
 evalDefs ctxt (d : defs) = do
     let d' = desugar d
     evalDefs ctxt (d' : defs)

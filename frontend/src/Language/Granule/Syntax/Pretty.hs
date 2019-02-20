@@ -140,10 +140,10 @@ instance Pretty Type where
        parens l (prettyL (l+1) t
        <> " <" <> intercalate "," (map (prettyL l) e) <> ">")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceId x == "," =
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceId x == "×" =
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "×" =
       parens l ("(" <> prettyL l t1 <> " × " <> prettyL l t2 <> ")")
 
     prettyL l t@(TyApp (TyApp _ _) _) | appChain t =
@@ -233,7 +233,7 @@ instance Pretty v => Pretty (Value v a) where
     prettyL l (NumFloat n) = show n
     prettyL l (CharLiteral c) = show c
     prettyL l (StringLiteral s) = show s
-    prettyL l (Constr _ s vs) | internalId s == "," =
+    prettyL l (Constr _ s vs) | internalName s == "," =
       "(" <> intercalate ", " (map (prettyL l) vs) <> ")"
     prettyL l (Constr _ n []) = prettyL 0 n
     prettyL l (Constr _ n vs) = parens l . intercalate " " $ prettyL 0 n : map (prettyL (l + 1)) vs
@@ -242,8 +242,8 @@ instance Pretty v => Pretty (Value v a) where
 instance Pretty Id where
   prettyL l
     = if debugging
-        then internalId
-        else (stripMarker '`') . (stripMarker '.') . sourceId
+        then internalName
+        else (stripMarker '`') . (stripMarker '.') . sourceName
     where
       stripMarker c [] = []
       stripMarker c (c':cs) | c == c' = cs
@@ -251,7 +251,7 @@ instance Pretty Id where
 
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
-  prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceId x == "," =
+  prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
     parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
   prettyL l (App _ _ e1 e2) =
