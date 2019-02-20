@@ -118,7 +118,9 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
               case result of
                 Left (e :: SomeException) ->
                   return . Left . EvalError $ displayException e
-                Right Nothing -> return $ Left NoMain
+                Right Nothing -> if testing
+                  then return $ Right NoEval
+                  else return $ Left NoMain
                 Right (Just result) -> do
                   return . Right $ InterpreterResult result
 

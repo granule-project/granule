@@ -19,6 +19,7 @@ default-extensions:
 - LambdaCase
 - RecordWildCards
 - ImplicitParams
+- ScopedTypeVariables
 
 library:
   source-dirs: src
