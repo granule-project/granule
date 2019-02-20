@@ -41,7 +41,7 @@ freshTyVarInContext cvar k = do
 --   coeffect type.
 freshTyVarInContextWithBinding :: Id -> Kind -> Quantifier -> Checker Id
 freshTyVarInContextWithBinding var k q = do
-    freshName <- freshIdentifierBase (internalId var)
+    freshName <- freshIdentifierBase (internalName var)
     let var' = mkId freshName
     registerTyVarInContext var' k q
     return var'

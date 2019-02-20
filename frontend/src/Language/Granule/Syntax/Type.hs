@@ -84,10 +84,10 @@ instance Monad m => Freshenable m Kind where
   freshen (KVar v) = do
     v' <- lookupVar Type v
     case v' of
-       Just v' -> return (KVar $ Id (sourceId v) v')
+       Just v' -> return (KVar $ Id (sourceName v) v')
        -- This case happens if we are referring to a defined
        -- function which does not get its name freshened
-       Nothing -> return (KVar $ mkId (sourceId v))
+       Nothing -> return (KVar $ mkId (sourceName v))
 
   freshen (KPromote ty) = do
      ty <- freshen ty
@@ -137,11 +137,11 @@ infinity :: Coeffect
 infinity = CInfinity (Just extendedNat)
 
 isInterval :: Type -> Maybe Type
-isInterval (TyApp (TyCon c) t) | internalId c == "Interval" = Just t
+isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
 isProduct :: Type -> Maybe (Type, Type)
-isProduct (TyApp (TyApp (TyCon c) t) t') | internalId c == "×" =
+isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
 
@@ -319,16 +319,16 @@ instance Freshenable m Type where
       freshenTyVar v = do
         v' <- lookupVar Type v
         case v' of
-           Just v' -> return (TyVar $ Id (sourceId v) v')
+           Just v' -> return (TyVar $ Id (sourceName v) v')
            -- This case happens if we are referring to a defined
            -- function which does not get its name freshened
-           Nothing -> return (TyVar $ mkId (sourceId v))
+           Nothing -> return (TyVar $ mkId (sourceName v))
 
 instance Freshenable m Coeffect where
     freshen (CVar v) = do
       v' <- lookupVar Type v
       case v' of
-        Just v' -> return $ CVar $ Id (sourceId v) v'
+        Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar v
 
     freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do

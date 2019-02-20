@@ -113,7 +113,7 @@ checkDataCon
               Just ds -> do
                 put st { dataConstructors = ds }
               Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
-          KPromote (TyCon k) | internalId k == "Protocol" -> do
+          KPromote (TyCon k) | internalName k == "Protocol" -> do
             check ty
             st <- get
             case extend (dataConstructors st) dName (Forall sp tyVars constraints ty) of
@@ -253,11 +253,11 @@ checkExpr :: (?globals :: Globals)
 
 -- Checking of constants
 
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalId c == "Int" = do
+checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
     let elaborated = Val s ty (NumInt n)
     return ([], [], elaborated)
 
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalId c == "Float" = do
+checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalName c == "Float" = do
     let elaborated = Val s ty (NumFloat n)
     return ([], [], elaborated)
 
@@ -299,7 +299,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 -- Application special case for built-in 'scale'
 -- TODO: needs more thought
 {- checkExpr defs gam pol topLevel tau
-          (App s _ (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ x))) e) | internalId v == "scale" = do
+          (App s _ (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ x))) e) | internalName v == "scale" = do
     equalTypes s (TyCon $ mkId "Float") tau
     checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon $ mkId "Float")) e
 -}
@@ -343,10 +343,10 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
     isLevelKinded (_, as) = do
         ty <- inferCoeffectTypeAssumption s as
         return $ case ty of
-          Just (TyCon (internalId -> "Level"))
+          Just (TyCon (internalName -> "Level"))
             -> True
-          Just (TyApp (TyCon (internalId -> "Interval"))
-                      (TyCon (internalId -> "Level")))
+          Just (TyApp (TyCon (internalName -> "Interval"))
+                      (TyCon (internalName -> "Level")))
             -> True
           _ -> False
 
@@ -507,7 +507,7 @@ synthExpr _ _ _ (Val s _ (StringLiteral c)) = do
 
 -- Secret syntactic weakening
 synthExpr defs gam pol
-  (App s _ (Val _ _ (Var _ (sourceId -> "weak__"))) v@(Val _ _ (Var _ x))) = do
+  (App s _ (Val _ _ (Var _ (sourceName -> "weak__"))) v@(Val _ _ (Var _ x))) = do
 
   (t, _, elabE) <- synthExpr defs gam pol v
 
@@ -653,7 +653,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
 {-
 TODO: needs thought
 synthExpr defs gam pol
-      (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ r))) | internalId v == "scale" = do
+      (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ r))) | internalName v == "scale" = do
   let float = TyCon $ mkId "Float"
   return (FunTy (Box (CFloat (toRational r)) float) float, [])
 -}
@@ -828,12 +828,12 @@ rewriteMessage msg = do
   where
     convertLine line (v, (k, _)) =
         -- Try to replace line variables in the line
-       let line' = T.replace (T.pack (internalId v)) (T.pack (sourceId v)) line
+       let line' = T.replace (T.pack (internalName v)) (T.pack (sourceName v)) line
        -- If this succeeds we might want to do some other replacements
            line'' =
              if line /= line' then
                case k of
-                 KPromote (TyCon (internalId -> "Level")) ->
+                 KPromote (TyCon (internalName -> "Level")) ->
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
                        (T.replace (T.pack "Integer") (T.pack "Level") line'))
@@ -1062,7 +1062,7 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
     toFreshVar (var, Discharged t c) = do
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
-      freshName <- freshIdentifierBase (internalId var)
+      freshName <- freshIdentifierBase (internalName var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })

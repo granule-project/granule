@@ -138,8 +138,8 @@ dumpStateAux m = pDef (M.toList m)
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
-extractFreeVars i (x:xs) = if sourceId x == internalId x && sourceId x /= sourceId i
-                           then sourceId x : extractFreeVars i xs
+extractFreeVars i (x:xs) = if sourceName x == internalName x && sourceName x /= sourceName i
+                           then sourceName x : extractFreeVars i xs
                            else extractFreeVars i xs
 
 makeUnique ::[String] -> [String]
@@ -173,7 +173,7 @@ makeMapBuildADT adc = M.fromList $ tempADT adc
                         where
                           tempADT :: [DataConstr] -> [(String,DataConstr)]
                           tempADT [] = []
-                          tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceId id),dc) : tempADT dct
+                          tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceName id),dc) : tempADT dct
                           tempADT (dc@(DataConstrNonIndexed _ _ _):dct) = tempADT dct
 
 lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
@@ -196,7 +196,7 @@ printType trm m = let v = M.lookup trm m in
 
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
-buildForEval (x:xs) m = buildAST (sourceId x) m <> buildForEval xs m
+buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
 
 synType :: (?globals::Globals)
   => Expr () ()

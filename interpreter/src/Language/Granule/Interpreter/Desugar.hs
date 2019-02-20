@@ -42,7 +42,7 @@ desugar (Def s var eqs tys@(Forall _ _ _ ty)) =
     -- Error cases
     typeDirectedDesugar (Equation s _ pats@(_ : _) e) t =
       error $ "(" <> show s
-           <> "): Equation of " <> sourceId var <> " expects at least " <> show (length pats)
+           <> "): Equation of " <> sourceName var <> " expects at least " <> show (length pats)
            <> " arguments, but signature specifies: " <> show (arity t)
 
     -- Fold function equations into a single case expression

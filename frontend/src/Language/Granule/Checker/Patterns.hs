@@ -118,7 +118,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
 
 -- Pattern matching on constarints
 ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ n) _
-  | internalId c == "Int" = do
+  | internalName c == "Int" = do
 
     definiteUnification s outerCoeff ty
 
@@ -126,7 +126,7 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ n) _
     return ([], [], [], elabP, Full)
 
 ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ n) _
-  | internalId c == "Float" = do
+  | internalName c == "Float" = do
 
     definiteUnification s outerCoeff ty
 
@@ -252,7 +252,7 @@ duplicateBinderCheck s ps = case duplicateBinders of
   where
     duplicateBinders = duplicates . concatMap getBinders $ ps
     getBinders = patternFold
-      (\_ _ id -> [sourceId id])
+      (\_ _ id -> [sourceName id])
       (\_ _ -> [])
       (\_ _ bs -> bs)
       (\_ _ _ -> [])

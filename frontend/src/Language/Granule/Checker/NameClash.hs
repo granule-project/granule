@@ -16,7 +16,7 @@ checkNameClashes (AST dataDecls defs) =
   where
     typeConstructorErrs
       = fmap mkTypeConstructorErr
-      . duplicatesBy (sourceId . dataDeclId)
+      . duplicatesBy (sourceName . dataDeclId)
       $ dataDecls
 
     mkTypeConstructorErr (x2, xs)
@@ -28,7 +28,7 @@ checkNameClashes (AST dataDecls defs) =
 
     dataConstructorErrs
       = fmap mkDataConstructorErr                -- make errors for duplicates
-      . duplicatesBy (sourceId . dataConstrId)   -- get the duplicates by source id
+      . duplicatesBy (sourceName . dataConstrId)   -- get the duplicates by source id
       . concatMap dataDeclDataConstrs            -- get data constructor definitions
       $ dataDecls                                -- from data declarations
 
@@ -41,7 +41,7 @@ checkNameClashes (AST dataDecls defs) =
 
     defErrs
       = fmap mkDuplicateDefErr
-      . duplicatesBy (sourceId . defId)
+      . duplicatesBy (sourceName . defId)
       $ defs
 
     mkDuplicateDefErr (x2, xs)

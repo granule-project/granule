@@ -66,18 +66,18 @@ removeFreshenings (x:xs) = do
            , tyMap = delete x' (tyMap st) }
     removeFreshenings xs
   where
-    x' = (sourceId x, internalId x)
+    x' = (sourceName x, internalName x)
 
 -- Helper in the Freshener monad, creates a fresh id (and
 -- remembers the mapping).
 freshIdentifierBase :: Monad m => IdSyntacticCategory -> Id -> Freshener m Id
 freshIdentifierBase cat var = do
     st <- get
-    let var' = sourceId var <> "`" <> show (counter st)
+    let var' = sourceName var <> "`" <> show (counter st)
     case cat of
-      Value -> put st { counter = (counter st) + 1, varMap = (sourceId var, var') : (varMap st) }
-      Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceId var, var') :  (tyMap st) }
-    return var { internalId = var' }
+      Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
+      Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
+    return var { internalName = var' }
 
 -- | Look up a variable in the freshener state.
 -- If @Nothing@ then the variable name shouldn't change
@@ -85,8 +85,8 @@ lookupVar :: Monad m => IdSyntacticCategory -> Id -> Freshener m (Maybe String)
 lookupVar cat v = do
   st <- get
   case cat of
-    Value -> return . lookup (sourceId v) . varMap $ st
-    Type  -> return . lookup (sourceId v) .  tyMap $ st
+    Value -> return . lookup (sourceName v) . varMap $ st
+    Type  -> return . lookup (sourceName v) .  tyMap $ st
 
 instance MonadFail Identity where
   fail = error
