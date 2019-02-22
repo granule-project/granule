@@ -98,6 +98,7 @@ tokens :-
   "/\\"                         { \p _ -> TokenMeet p }
   "=>"                          { \p s -> TokenConstrain p }
   "⇒"                           { \p s -> TokenConstrain p }
+  "∘"                           { \p _ -> TokenRing p }
 
 
 {
@@ -157,6 +158,7 @@ data Token
   | TokenDotDot AlexPosn
   | TokenJoin AlexPosn
   | TokenMeet AlexPosn
+  | TokenRing AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String

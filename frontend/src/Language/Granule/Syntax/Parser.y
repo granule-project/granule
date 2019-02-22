@@ -84,7 +84,9 @@ import Language.Granule.Utils hiding (mkSpan)
     '..'  { TokenDotDot _ }
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
+    '∘'   { TokenRing _ }
 
+%right '∘'
 %right in
 %right '->'
 %left ':'
@@ -384,6 +386,10 @@ LetBind :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
       { (getStart $1, $1, Just $3, $5) }
   | PAtom '=' Expr
       { (getStart $1, $1, Nothing, $3) }
+  | NAryConstr ':' Type '=' Expr
+      { (getStart $1, $1, Just $3, $5) }
+  | NAryConstr '=' Expr
+      { (getStart $1, $1, Nothing, $3) }
 
 MultiLet :: { Expr () () }
 MultiLet
@@ -430,6 +436,7 @@ Form :: { Expr () () }
   | Form '>=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpGreaterEq $1 $3 }
   | Form '==' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpEq $1 $3 }
   | Form '/=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpNotEq $1 $3 }
+  | Form '∘'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () (App sp () (Val sp () (Var () (mkId "compose"))) $1) $3 }
   | Juxt           { $1 }
 
 Juxt :: { Expr () () }
@@ -475,7 +482,9 @@ mkSpan (start, end) = do
 
 parseError :: [Token] -> ReaderT String (Either String) a
 parseError [] = lift $ Left "Premature end of file"
-parseError t  =  lift . Left $ show l <> ":" <> show c <> ": parse error"
+parseError t  =  do
+    file <- ask
+    lift . Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
 parseDefs :: FilePath -> String -> Either String (AST () ())
