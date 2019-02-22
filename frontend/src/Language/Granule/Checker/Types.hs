@@ -251,7 +251,7 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
-    (Just (k1, q)) | q == InstanceQ || q == BoundQ -> do
+    (Just (k1, q)) | (q == InstanceQ || q == BoundQ) && sp /= PatternCtxt -> do
       k2 <- inferKindOfType s t
       case k1 `joinKind` k2 of
         Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
