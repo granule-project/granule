@@ -1,0 +1,17 @@
+interface Magma m where
+  op : m -> m -> m
+
+interface {Magma l} => LeftUnit l where
+  leftUnit : l
+
+interface {Magma r} => RightUnit r where
+  rightUnit : r
+
+-- 'a' has both a left and right unit
+interface {LeftUnit lr, RightUnit lr} => LeftAndRightUnit lr
+
+data Side = Left | Right
+
+idWithUnit : forall {a : Type} . {LeftAndRightUnit a} => Side -> a -> a
+idWithUnit Left x = op leftUnit x;
+idWithUnit Right x = op x rightUnit
