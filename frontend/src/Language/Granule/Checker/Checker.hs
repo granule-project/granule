@@ -377,12 +377,14 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
-   (argTy, gam2, elaboratedR) <- synthExpr defs gam pol e2
-   (gam1, subst, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
-   gam <- ctxtPlus s gam1 gam2
+    (argTy, gam2, subst', elaboratedR) <- synthExpr defs gam pol e2
+    (gam1, subst, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
+    gam <- ctxtPlus s gam1 gam2
 
-   let elaborated = App s tau elaboratedL elaboratedR
-   return (gam, subst, elaborated)
+    subst <- combineSubstitutions s subst' subst
+
+    let elaborated = App s tau elaboratedL elaboratedR
+    return (gam, subst, elaborated)
 
 {-
 
@@ -424,7 +426,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
 -- Dependent pattern-matching case (only at the top level)
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
-  (guardTy, guardGam, elaboratedGuard) <- synthExpr defs gam pol guardExpr
+  (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   pushGuardContext guardGam
 
   newCaseFrame
@@ -515,12 +517,14 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   debugM "pred at end of case" (pretty (predicateStack st))
 
   let elaborated = Case s tau elaboratedGuard elaboratedCases
-  return (g, concat substs, elaborated)
+
+  subst <- combineManySubstitutions s substs -- previously concat substs
+  return (g, subst, elaborated)
 
 -- All other expressions must be checked using synthesis
 checkExpr defs gam pol topLevel tau e = do
 
-  (tau', gam', elaboratedE) <- synthExpr defs gam pol e
+  (tau', gam', subst', elaboratedE) <- synthExpr defs gam pol e
 
   (tyEq, _, subst) <-
     case pol of
@@ -540,7 +544,9 @@ checkExpr defs gam pol topLevel tau e = do
           else lEqualTypesWithPolarity (getSpan e) FstIsSpec tau' tau
 
   if tyEq
-    then return (gam', subst, elaboratedE)
+    then do
+      substFinal <- combineSubstitutions (getSpan e) subst subst'
+      return (gam', substFinal, elaboratedE)
     else do
       case pol of
         Positive -> typeClash (getSpan e) tau tau'
@@ -553,32 +559,32 @@ synthExpr :: (?globals :: Globals)
           -> Ctxt Assumption   -- ^ Local typing context
           -> Polarity          -- ^ Polarity of subgrading
           -> Expr () ()        -- ^ Expression
-          -> MaybeT Checker (Type, Ctxt Assumption, Expr () Type)
+          -> MaybeT Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do
   let t = TyCon $ mkId "Int"
-  return (t, [], Val s t (NumInt n))
+  return (t, [], [], Val s t (NumInt n))
 
 synthExpr _ _ _ (Val s _ (NumFloat n)) = do
   let t = TyCon $ mkId "Float"
-  return (t, [], Val s t (NumFloat n))
+  return (t, [], [], Val s t (NumFloat n))
 
 synthExpr _ _ _ (Val s _ (CharLiteral c)) = do
   let t = TyCon $ mkId "Char"
-  return (t, [], Val s t (CharLiteral c))
+  return (t, [], [], Val s t (CharLiteral c))
 
 synthExpr _ _ _ (Val s _ (StringLiteral c)) = do
   let t = TyCon $ mkId "String"
-  return (t, [], Val s t (StringLiteral c))
+  return (t, [], [], Val s t (StringLiteral c))
 
 -- Secret syntactic weakening
 synthExpr defs gam pol
   (App s _ (Val _ _ (Var _ (sourceName -> "weak__"))) v@(Val _ _ (Var _ x))) = do
 
-  (t, _, elabE) <- synthExpr defs gam pol v
+  (t, _, subst, elabE) <- synthExpr defs gam pol v
 
-  return (t, [(x, Discharged t (CZero (TyCon $ mkId "Level")))], elabE)
+  return (t, [(x, Discharged t (CZero (TyCon $ mkId "Level")))], subst, elabE)
 
 -- Constructors
 synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
@@ -596,7 +602,7 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
       ty <- substitute coercions' ty
 
       let elaborated = Val s ty (Constr ty c [])
-      return (ty, [], elaborated)
+      return (ty, [], [], elaborated)
 
     Nothing -> halt $ UnboundVariableError (Just s) $
               "Data constructor `" <> pretty c <> "`" <?> show (dataConstructors st)
@@ -604,19 +610,19 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
 -- Case synthesis
 synthExpr defs gam pol (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
-  (ty, guardGam, elaboratedGuard) <- synthExpr defs gam pol guardExpr
+  (ty, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   -- then synthesise the types of the branches
 
   newCaseFrame
 
-  branchTysAndCtxts <-
+  branchTysAndCtxtsAndSubsts <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, _, elaborated_pat_i, _) <- ctxtFromTypedPattern s ty pati NotFull
       newConjunct
       ---
-      (tyCase, localGam, elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
+      (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
       concludeImplication (getSpan pati) eVars
 
       ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
@@ -626,13 +632,14 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       case checkLinearity patternGam gamSoFar of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
-         [] -> return (tyCase, localGam `subtractCtxt` patternGam,
+         [] -> return (tyCase, (localGam `subtractCtxt` patternGam, subst'),
                         (elaborated_pat_i, elaborated_i))
          xs -> illLinearityMismatch s xs
 
   popCaseFrame
 
-  let (branchTys, branchCtxts, elaboratedCases) = unzip3 branchTysAndCtxts
+  let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
+  let (branchCtxts, branchSubsts) = unzip branchCtxtsAndSubsts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
   -- Finds the upper-bound return type between all branches
   branchType <- foldM (\ty2 (ty1, sp) -> joinTypes sp ty1 ty2)
@@ -647,15 +654,18 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
 
   debugM "*** synth branchesGam" (pretty branchesGam)
 
+  subst <- combineManySubstitutions s branchSubsts
+  subst <- combineSubstitutions s substG subst
+
   let elaborated = Case s branchType elaboratedGuard elaboratedCases
-  return (branchType, gamNew, elaborated)
+  return (branchType, gamNew, subst, elaborated)
 
 -- Diamond cut
 synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   -- TODO: refactor this once we get a proper mechanism for
   -- specifying effect over-approximations and type aliases
 
-  (sig, gam1, elaborated1) <- synthExpr defs gam pol e1
+  (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
   (ef1, ty1) <-
           case sig of
@@ -668,12 +678,12 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
   -- Type body of the let...
   -- ...in the context of the binders from the pattern
-  (binders, _, subst, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
   if not pIrrefutable
   then refutablePattern s p
   else do
-     (tau, gam2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+     (tau, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
      (ef2, ty2) <-
            case tau of
              Diamond ["IO"] ty2 -> return ([], ty2)
@@ -693,12 +703,11 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
      let t = Diamond (ef1 <> ef2) ty2
 
-<<<<<<< HEAD
+     subst <- combineManySubstitutions s [substP, subst1, subst2]
      t' <- substitute subst t
-=======
->>>>>>> rename list map to not clash with vec map
+
      let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
-     return (t', gamNew, elaborated)
+     return (t', gamNew, subst, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
@@ -715,7 +724,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
              addPredicate pred) constraints
 
            let elaborated = Val s ty' (Var ty' x)
-           return (ty', [], elaborated)
+           return (ty', [], [], elaborated)
 
          -- Couldn't find it
          Nothing  -> halt $ UnboundVariableError (Just s) $ pretty x <?> "synthExpr on variables"
@@ -727,12 +736,12 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
      -- In the local context
      Just (Linear ty)       -> do
        let elaborated = Val s ty (Var ty x)
-       return (ty, [(x, Linear ty)], elaborated)
+       return (ty, [(x, Linear ty)], [], elaborated)
 
      Just (Discharged ty c) -> do
        k <- inferCoeffectType s c
        let elaborated = Val s ty (Var ty x)
-       return (ty, [(x, Discharged ty (COne k))], elaborated)
+       return (ty, [(x, Discharged ty (COne k))], [], elaborated)
 
 -- Specialised application for scale
 {-
@@ -745,16 +754,19 @@ synthExpr defs gam pol
 
 -- Application
 synthExpr defs gam pol (App s _ e e') = do
-    (fTy, gam1, elaboratedL) <- synthExpr defs gam pol e
+    (fTy, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
-         (gam2, subst, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
+         (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
+
+         subst <- combineSubstitutions s subst1 subst2
+
          tau    <- substitute subst tau
 
          let elaborated = App s tau elaboratedL elaboratedR
-         return (tau, gamNew, elaborated)
+         return (tau, gamNew, subst, elaborated)
 
       -- Not a function type
       t ->
@@ -782,17 +794,17 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
-   (t, gam', elaboratedE) <- synthExpr defs gamF pol e
+   (t, gam', subst, elaboratedE) <- synthExpr defs gamF pol e
 
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy (Promote t elaboratedE)
-   return (finalTy, multAll (freeVars e) (CVar var) gam', elaborated)
+   return (finalTy, multAll (freeVars e) (CVar var) gam', subst, elaborated)
 
 
 -- BinOp
 synthExpr defs gam pol (Binop s _ op e1 e2) = do
-    (t1, gam1, elaboratedL) <- synthExpr defs gam pol e1
-    (t2, gam2, elaboratedR) <- synthExpr defs gam pol e2
+    (t1, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e1
+    (t2, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
     -- Look through the list of operators (of which there might be
     -- multiple matching operators)
     case lookupMany op Primitives.binaryOperators of
@@ -801,8 +813,10 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
         returnType <- selectFirstByType t1 t2 ops
         gamOut <- ctxtPlus s gam1 gam2
 
+        subst <- combineSubstitutions s subst1 subst2
+
         let elaborated = Binop s returnType op elaboratedL elaboratedR
-        return (returnType, gamOut, elaborated)
+        return (returnType, gamOut, subst, elaborated)
 
   where
     -- No matching type were found (meaning there is a type error)
@@ -830,13 +844,13 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
 
   newConjunct
 
-  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
   newConjunct
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
-     (tau, gam'', elaboratedE) <- synthExpr defs (bindings <> gam) pol e
+     (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
      ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
@@ -844,11 +858,12 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
-     finalTy' <- substitute subst finalTy
+     substFinal <- combineSubstitutions s substP subst
+     finalTy' <- substitute substFinal finalTy
 
      concludeImplication s localVars
 
-     return (finalTy', gam'' `subtractCtxt` bindings, elaborated)
+     return (finalTy', gam'' `subtractCtxt` bindings, substFinal, elaborated)
 
   else refutablePattern s p
 
@@ -861,13 +876,13 @@ synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
   tyVar <- freshTyVarInContext (mkId "t") KType
   let sig = (TyVar tyVar)
 
-  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
   newConjunct
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
-     (tau, gam'', elaboratedE) <- synthExpr defs (bindings <> gam) pol e
+     (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
      ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
@@ -877,7 +892,9 @@ synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
 
      concludeImplication s localVars
 
-     return (finalTy, gam'' `subtractCtxt` bindings, elaborated)
+     subst <- combineSubstitutions s substP subst
+
+     return (finalTy, gam'' `subtractCtxt` bindings, subst, elaborated)
   else refutablePattern s p
 
 synthExpr _ _ _ e =
