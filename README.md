@@ -118,6 +118,7 @@ GrConfig
   { grAsciiToUnicode             = Just True
   , grKeepBackup                 = Nothing
   , grGlobals                    = Globals
+  , grLiterateEnvName            = Nothing
     { globalsDebugging           = Nothing
     , globalsNoColors            = Just True
     , globalsAlternativeColors   = Nothing
@@ -127,8 +128,7 @@ GrConfig
     , globalsTesting             = Nothing
     , globalsTimestamp           = Nothing
     , globalsSolverTimeoutMillis = Just 2000
-    , globalsIncludePath         = Just "/Users/vl200/github/granule-project/granule/
-    StdLib"
+    , globalsIncludePath         = Just "/Users/alice/granule/StdLib"
     , globalsSourceFilePath      = Nothing
     }
   }

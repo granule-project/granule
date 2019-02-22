@@ -64,7 +64,7 @@ runGrOnFiles globPatterns config = do
           let fileName = if pwd `isPrefixOf` path then takeFileName path else path
           let ?globals = (grGlobals config){ globalsSourceFilePath = Just fileName } in do
             printInfo $ "Checking " <> fileName <> "..."
-            src <- preprocess (asciiToUnicode config) (keepBackup config) path
+            src <- preprocess (asciiToUnicode config) (keepBackup config) path (literateEnvName config)
             result <- run src
             printResult result
             return result
@@ -133,27 +133,33 @@ getEmbeddedGrFlags src = do
   snd <$> (getParseResult . execParserPure defaultPrefs parseGrConfig . words . takeWhile (/= '\n') $ src)
 
 data GrConfig = GrConfig
-  { grAsciiToUnicode :: Maybe Bool
-  , grKeepBackup     :: Maybe Bool
-  , grGlobals        :: Globals
+  { grAsciiToUnicode  :: Maybe Bool
+  , grKeepBackup      :: Maybe Bool
+  , grLiterateEnvName :: Maybe String
+  , grGlobals         :: Globals
   } deriving (Read, Show)
 
 asciiToUnicode, keepBackup :: GrConfig -> Bool
 asciiToUnicode = fromMaybe False . grAsciiToUnicode
 keepBackup     = fromMaybe False . grKeepBackup
 
+literateEnvName :: GrConfig -> String
+literateEnvName = fromMaybe "granule" . grLiterateEnvName
+
 instance Semigroup GrConfig where
   c1 <> c2 = GrConfig
-    { grAsciiToUnicode = grAsciiToUnicode c1 <|> grAsciiToUnicode c2
-    , grKeepBackup     = grKeepBackup     c1 <|> grKeepBackup     c2
-    , grGlobals        = grGlobals        c1 <>  grGlobals        c2
+    { grAsciiToUnicode  = grAsciiToUnicode  c1 <|> grAsciiToUnicode  c2
+    , grKeepBackup      = grKeepBackup      c1 <|> grKeepBackup      c2
+    , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
+    , grGlobals         = grGlobals         c1 <>  grGlobals         c2
     }
 
 instance Monoid GrConfig where
   mempty = GrConfig
-    { grAsciiToUnicode = Nothing
-    , grKeepBackup     = Nothing
-    , grGlobals        = mempty
+    { grAsciiToUnicode  = Nothing
+    , grKeepBackup      = Nothing
+    , grLiterateEnvName = Nothing
+    , grGlobals         = mempty
     }
 
 getGrConfig :: IO ([FilePath], GrConfig)
@@ -253,11 +259,17 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "keep-backup"
             <> help "Keep a backup copy of the input file (only has an effect when destructively preprocessing with `--ascii-to-unicode`)"
 
+        grLiterateEnvName <-
+          optional $ strOption
+            $ long "literate-env-name"
+            <> help ("Name of the code environment to check in literate files. Defaults to \"" <> literateEnvName mempty <> "\"")
+
         pure
           ( globPatterns
           , GrConfig
             { grAsciiToUnicode
             , grKeepBackup
+            , grLiterateEnvName
             , grGlobals = Globals
               { globalsDebugging
               , globalsNoColors
