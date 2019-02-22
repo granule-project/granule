@@ -15,58 +15,58 @@ data Bool = False | True
 
 dropB : Bool -> ()
 dropB False = ();
-|     True = ()
+dropB True = ()
 
 --- # Boolean algebra
 
 --- Logical negation
 not : Bool -> Bool
 not False = True;
-|   True = False
+not True = False
 
 --- Logical and
 --- NB: non-strict in second argument
 and : Bool -> Bool [0..1] -> Bool
 and True [y] = y;
-|   False [_] = False
+and False [_] = False
 
 --- Logical and (linear)
 --- NB: consumes both arguments
 and' : Bool -> Bool -> Bool
 and' False False = False;
-|    False True = False;
-|    True False = False;
-|    True True = True
+and' False True = False;
+and' True False = False;
+and' True True = True
 
 
 --- Inclusive or
 --- NB: non-strict in second argument
 or : Bool -> Bool [0..1] -> Bool
 or True [_] = True;
-|  False [y] = y
+or False [y] = y
 
 --- Inclusive or (linear)
 or' : Bool -> Bool -> Bool
 or' False False = False;
-|   False True = True;
-|   True False = True;
-|   True True = True
+or' False True = True;
+or' True False = True;
+or' True True = True
 
 --- Exclusive or
 xor : Bool -> Bool -> Bool
 xor True y = not y;
-|   False y = y
+xor False y = y
 
 --- Logical implication
 --- NB: non-strict in second argument
 impl : Bool -> Bool [0..1] -> Bool
 impl True [y] = y;
-|    False [_] = True
+impl False [_] = True
 
 --- Logical implication (linear)
 --- NB: strict in both arguments
 impl' : Bool -> Bool -> Bool
 impl' False False = True;
-|     False True = True;
-|     True False = False;
-|     True True = True
+impl' False True = True;
+impl' True False = False;
+impl' True True = True
