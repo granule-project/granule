@@ -1,0 +1,28 @@
+-- see also interface-simple-15.gr
+-- this is the same, except we expect
+-- variables to be used once
+
+-- boolean-like interface
+interface BoolI a where
+  bAnd : a [1] -> a [1] -> a;
+  bOr  : a [1] -> a [1] -> a;
+  bNot : a [1] -> a
+
+-- non-interface function defined only in terms
+-- of interface functions
+bXOR : forall {a : Type} . {BoolI a} => a [2] -> a [2] -> a
+bXOR [x] [y] = bAnd [bOr [x] [y]] [bNot [bAnd [x] [y]]]
+
+data BoolTy = F | T
+
+instance BoolI BoolTy where
+  bAnd [T] [x] = x;
+  bAnd [x] [T] = x;
+  bAnd [F] [F] = F;
+
+  bOr [F] [x] = x;
+  bOr [x] [F] = x;
+  bOr [F] [F] = F;
+
+  bNot [T] = F;
+  bNot [F] = T
