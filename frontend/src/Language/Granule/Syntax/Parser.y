@@ -154,10 +154,11 @@ Binding :: { (Maybe String, Equation () ()) }
           span <- mkSpan (getPos $1, getEnd $4)
           return (Just $ symString $1, Equation span () $2 $4) }
 
-  | '|' Pats '=' Expr
-      {% do
-          span <- mkSpan (getPos $1, getEnd $4)
-          return (Nothing, Equation span () $2 $4) }
+-- this was probably a silly idea @buggymcbugfix
+  -- | '|' Pats '=' Expr
+  --     {% do
+  --         span <- mkSpan (getPos $1, getEnd $4)
+  --         return (Nothing, Equation span () $2 $4) }
 
 DataConstrs :: { [DataConstr] }
   : DataConstr DataConstrNext { $1 : $2 }
