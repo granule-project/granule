@@ -194,6 +194,20 @@ binaryOperators = \case
 builtinSrc :: String
 builtinSrc = [r|
 
+--------------------------------------------------------------------------------
+-- String manipulation
+--------------------------------------------------------------------------------
+
+unConsString : String → Maybe (Char, String)
+unConsString = builtin
+
+consString : Char → String → String
+consString = builtin
+
+--------------------------------------------------------------------------------
+-- Arrays
+--------------------------------------------------------------------------------
+
 data
   ArrayStack
     (capacity : Nat)

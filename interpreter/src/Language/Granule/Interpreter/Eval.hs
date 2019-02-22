@@ -19,7 +19,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Context
 import Language.Granule.Utils
 
-import Data.Text (pack, unpack, append)
+import Data.Text (cons, pack, uncons, unpack)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, zipWithM)
 
@@ -273,7 +273,16 @@ builtIns =
         Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
   , (mkId "stringAppend",
         Ext () $ Primitive $ \(StringLiteral s) -> return $
-          Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s `append` t)
+          Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s <> t)
+  , ( mkId "unConsString"
+    , Ext () $ Primitive $ \(StringLiteral s) -> case uncons s of
+        Just (c, s) -> return $ Constr () (mkId "Some") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
+        Nothing     -> return $ Constr () (mkId "None") []
+    )
+  , ( mkId "consString"
+    , Ext () $ Primitive $ \(CharLiteral c) -> return $
+        Ext () $ Primitive $ \(StringLiteral s) -> return $ StringLiteral (cons c s)
+    )
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> do
         b <- SIO.isEOF
         let boolflag =
