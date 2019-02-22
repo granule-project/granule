@@ -97,8 +97,13 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
         -- add a constraint that 0 approaximates the effect of the enclosing
         -- box patterns.
         case outerCoeff of
-          -- Cannot have a wildcard not under a box
-          Nothing -> illLinearityMismatch s (pure NonLinearPattern)
+          -- Can only have a wildcard under a box if the type of the pattern is unishaped
+          Nothing -> do
+            isPoly <- polyShaped t
+            if isPoly
+              then illLinearityMismatch s (pure NonLinearPattern)
+              else return ([], [], [], PWild s t, Full)
+
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
               addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
