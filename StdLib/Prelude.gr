@@ -25,10 +25,11 @@ flip f x y = f y x
 const : forall a : Type, b : Type . a -> b [0] -> a
 const x [y] = x
 
---- linear function composition (use infix ``g `o` f``)
-o : forall a : Type, b : Type, c : Type
+--- linear function composition (the composition operator `g ∘ f` resolves
+--- to whatever is bound to `compose`)
+compose : forall a : Type, b : Type, c : Type
   . (b -> c) -> (a -> b) -> (a -> c)
-o g f = \x -> g (f x)
+compose g f = \x -> g (f x)
 
 --- Apply f to x until p holds
 until : forall a : Type
