@@ -16,8 +16,8 @@ import Language.Granule.Syntax.Preprocessor.Markdown
 
 
 -- | Preprocess the source file based on the file extension.
-preprocess :: Bool -> Bool -> FilePath -> IO String
-preprocess performAsciiToUnicodeOnFile keepOldFile file
+preprocess :: Bool -> Bool -> String -> FilePath -> IO String
+preprocess performAsciiToUnicodeOnFile keepOldFile file env
   = case lookup extension preprocessors of
     Just (stripNonGranule, asciiToUnicode) -> do
       src <- readFile file
@@ -43,8 +43,8 @@ preprocess performAsciiToUnicodeOnFile keepOldFile file
     extension = reverse . takeWhile (/= '.') . reverse $ file
 
     preprocessors =
-      [ ("gr",    (id,         unAscii))
-      , ("md",    (unMarkdown, processGranuleMarkdown unAscii id))
-      , ("tex",   (unLatex,    processGranuleLatex unAscii id))
-      , ("latex", (unLatex,    processGranuleLatex unAscii id))
+      [ ("gr",    (id,             unAscii))
+      , ("md",    (unMarkdown env, processGranuleMarkdown unAscii id env))
+      , ("tex",   (unLatex env,    processGranuleLatex unAscii id env))
+      , ("latex", (unLatex env,    processGranuleLatex unAscii id env))
       ]
