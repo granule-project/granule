@@ -429,8 +429,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
       -- Conclude the implication
       concludeImplication s localVars
 
-      iconstraints <- getIConstraints
-      substituteIConstraints subst' iconstraints
+      substituteIConstraints subst'
 
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
@@ -449,8 +448,6 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
         addPredicate pred
       when (kind == KConstraint Interface) $ do
         addIConstraint ty
-    substituteIConstraints s icons =
-      mapM (substitute s) icons >>= putIcons
 
 data Polarity = Positive | Negative deriving Show
 
@@ -935,6 +932,8 @@ synthExpr defs gam pol (App s _ e e') = do
 
          -- Synth subst
          tau    <- substitute subst2 tau
+
+         substituteIConstraints subst
 
          let elaborated = App s tau elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
@@ -1501,3 +1500,17 @@ checkGuardsForImpossibility s name = do
          " ms. You may want to increase the timeout (see --help)."
 
       Error msg -> halt msg
+
+
+-------------------
+----- Helpers -----
+-------------------
+
+
+-- TODO: move this into Checker.Monad or Checker.Interface (these depend
+--       on Checker.Substitutions, so there is a recursive import
+--       - GuiltyDolphin (2019-02-22)
+-- | Perform a substitution on the current interface constraint context.
+substituteIConstraints :: (?globals :: Globals) => Substitution -> MaybeT Checker ()
+substituteIConstraints subst =
+  getIConstraints >>= mapM (substitute subst) >>= putIcons

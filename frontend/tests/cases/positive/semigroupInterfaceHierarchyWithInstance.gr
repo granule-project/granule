@@ -9,3 +9,17 @@ interface {Semigroup c} => Monoid c where
 mconcat : forall {d : Type} . {Monoid d} => (List d) -> d
 mconcat Nil = unit;
 mconcat (Cons x xs) = op x (mconcat xs)
+
+data BoolOr = F | T
+
+instance Semigroup BoolOr where
+  op F x = x;
+  op x F = x;
+  op T T = T
+
+instance Monoid BoolOr where
+  unit = F
+
+-- should be T
+main : BoolOr
+main = mconcat (Cons F (Cons T (Cons F (Cons T Nil))))
