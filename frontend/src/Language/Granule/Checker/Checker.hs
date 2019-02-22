@@ -11,7 +11,7 @@ module Language.Granule.Checker.Checker where
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import Data.List (genericLength, groupBy, intercalate, (\\))
+import Data.List (genericLength, groupBy, intercalate, nub, (\\))
 import Data.Maybe
 import qualified Data.Text as T
 
@@ -1126,7 +1126,7 @@ solveIConstraints itys sp defName = do
               case inst of
                 Nothing -> halt $ GenericError (Just sp) $ concat ["No instance for '", pretty iname, " ", pretty ty, "'"]
                 Just _ -> pure ()
-          expandIConstraints icons = fmap concat $ mapM expandIConstraint icons
+          expandIConstraints icons = fmap (nub . concat) $ mapM expandIConstraint icons
           expandIConstraint c@(TyApp (TyCon iname) ty) = do
               parents <- getInterfaceDependenciesFlattened c
               parents' <- mapM (\t@(TyApp (TyCon i) (TyVar v)) -> substitute [(v, SubstT ty)] t) parents
