@@ -206,7 +206,7 @@ instance Pretty IFace where
           (\k -> parens' $ prettyColonSep 0 paramName k) kind
         sigStr = case tys of
                    [] -> ""
-                   _  -> " where\n" <> tyStr
+                   _  -> "where\n" <> tyStr
         tyStr = "  " ++ prettySemiSep 0 tys
 
 instance Pretty IFaceTy where
@@ -223,7 +223,7 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
             defStr =
                 case defs of
                   [] -> ""
-                  _  -> " where\n  " <> prettySemiSep 0 defs
+                  _  -> "where\n  " <> prettySemiSep 0 defs
 
 instance Pretty IFaceDat where
     prettyL l (IFaceDat _ ty) = prettyTy l ty
