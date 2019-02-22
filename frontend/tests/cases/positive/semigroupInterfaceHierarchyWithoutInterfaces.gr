@@ -1,0 +1,47 @@
+-- the same as 'semigroupInterfaceHierarchy.gr',
+-- but without interfaces
+--
+-- this should be similar to the intermediate
+-- representation of (Granule - interfaces), except
+-- lambdas have been named for clarity
+-- (e.g., with 'opBoolAnd')
+data List a = Nil | Cons a (List a)
+
+data SemigroupDict b =
+  MkSemigroupDict (b -> b -> b)
+
+op : forall {m : Type} . SemigroupDict m -> m -> m -> m
+op (MkSemigroupDict op') = op'
+
+data MonoidDict c =
+  MkMonoidDict ((SemigroupDict c) []) (c [])
+
+monoidToSemigroup : forall {m : Type} . MonoidDict m -> SemigroupDict m
+monoidToSemigroup (MkMonoidDict [d] [_]) = d
+
+unit : forall {m : Type} . MonoidDict m -> m
+unit (MkMonoidDict [_] [u]) = u
+
+mconcat : forall {d : Type} . (MonoidDict d) [] -> List d -> d
+mconcat [d] Nil = unit d;
+mconcat [d] (Cons x xs) = op (monoidToSemigroup d) x (mconcat [d] xs)
+
+data BoolOr = F' | T'
+
+opBoolOr : BoolOr -> BoolOr -> BoolOr
+opBoolOr F' x = x;
+opBoolOr x F' = x;
+opBoolOr T' T' = T'
+
+semigroupBoolOrDict : SemigroupDict BoolOr
+semigroupBoolOrDict = MkSemigroupDict opBoolOr
+
+unitBoolOr : BoolOr
+unitBoolOr = F'
+
+monoidBoolOrDict : MonoidDict BoolOr
+monoidBoolOrDict = MkMonoidDict [semigroupBoolOrDict] [unitBoolOr]
+
+-- Should be T'
+main : BoolOr
+main = mconcat [monoidBoolOrDict] (Cons F' (Cons T' (Cons F' (Cons T' Nil))))
