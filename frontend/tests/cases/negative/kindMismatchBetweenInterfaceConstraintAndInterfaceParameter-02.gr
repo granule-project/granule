@@ -1,0 +1,5 @@
+interface Simple (a : Type -> Type)
+
+-- 'a' needs to have kind 'Type -> Type'
+-- for 'Simple', but 'Type' for Simple2
+interface {Simple a} => Simple2 (a : Type)
