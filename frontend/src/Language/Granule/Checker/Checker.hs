@@ -704,10 +704,11 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
      let t = Diamond (ef1 <> ef2) ty2
 
      subst <- combineManySubstitutions s [substP, subst1, subst2]
-     t' <- substitute subst t
+     -- Synth subst
+     t' <- substitute substP t
 
      let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
-     return (t', gamNew, subst, elaborated)
+     return (t, gamNew, subst, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
@@ -763,7 +764,8 @@ synthExpr defs gam pol (App s _ e e') = do
 
          subst <- combineSubstitutions s subst1 subst2
 
-         tau    <- substitute subst tau
+         -- Synth subst
+         tau    <- substitute subst2 tau
 
          let elaborated = App s tau elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
@@ -859,7 +861,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
      substFinal <- combineSubstitutions s substP subst
-     finalTy' <- substitute substFinal finalTy
+     finalTy' <- substitute substP finalTy
 
      concludeImplication s localVars
 
@@ -889,12 +891,13 @@ synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
+     finalTy' <- substitute substP finalTy
 
      concludeImplication s localVars
 
      subst <- combineSubstitutions s substP subst
 
-     return (finalTy, gam'' `subtractCtxt` bindings, subst, elaborated)
+     return (finalTy', gam'' `subtractCtxt` bindings, subst, elaborated)
   else refutablePattern s p
 
 synthExpr _ _ _ e =
