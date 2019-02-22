@@ -1,0 +1,22 @@
+import Vec
+
+data Vecx a where
+  Vecx : ∀ {n : Nat} . Vec n a → Vecx a
+
+import List
+
+listToVecx : ∀ {a : Type} . List a → Vecx a
+listToVecx Empty = Vecx Nil;
+listToVecx (Next x xs) = let (Vecx xs) = listToVecx xs in Vecx (Cons x xs)
+
+vecxToList : ∀ {a : Type} . Vecx a → List a
+vecxToList (Vecx Nil) = Empty;
+vecxToList (Vecx (Cons x xs)) = Next x (vecxToList (Vecx xs))
+
+-- last checked on 2019-02-22 by @buggymcbugfix
+
+-- Checking work-in-progress/vecx.gr...
+-- Fatal error: work-in-progress/vecx.gr:
+--   Looking up a variable '(Id "n.84" "n.84")' in [((Id "n.86" "n.86"),SNat <symbolic> :: SInteger),((Id "n.87" "n.87"),SNat <symbolic> :: SInteger),((Id "n.85" "n.85"),SNat <symbolic> :: SInteger)]
+-- CallStack (from HasCallStack):
+--   error, called at src/Language/Granule/Checker/Constraints.hs:412:10 in granule-frontend-0.7.3.0-GNqvizCPJs1ELcvko7Wqc5:Language.Granule.Checker.Constraints
