@@ -377,11 +377,11 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
-    (argTy, gam2, subst', elaboratedR) <- synthExpr defs gam pol e2
-    (gam1, subst, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
+    (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
+    (gam1, subst1, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
     gam <- ctxtPlus s gam1 gam2
 
-    subst <- combineSubstitutions s subst' subst
+    subst <- combineSubstitutions s subst1 subst2
 
     let elaborated = App s tau elaboratedL elaboratedR
     return (gam, subst, elaborated)
