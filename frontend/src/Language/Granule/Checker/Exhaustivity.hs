@@ -3,6 +3,10 @@
 
 module Language.Granule.Checker.Exhaustivity (isIrrefutable) where
 
+isIrrefutable :: Applicative f => a -> b -> c -> f Bool
+isIrrefutable _ _ _ = pure True
+
+{-
 import Control.Monad.State.Strict
 
 import Language.Granule.Checker.Monad
@@ -44,3 +48,4 @@ checkCardinality tyCon = do
     case lookup tyCon (typeConstructors st) of
       Just (_,Just 1) -> return True
       _               -> return False
+-}
