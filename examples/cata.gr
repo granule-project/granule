@@ -15,4 +15,4 @@ map_expr [f] e = case e of
   Abs i e → Abs i (f e)
 
 cata : ∀ a : Type . (Expr a → a) [∞] → Fix Expr → a
-cata [alg] = alg `o` (map_expr [cata [alg]]) `o` unfix
+cata [alg] = alg ∘ map_expr [cata [alg]] ∘ unfix
