@@ -429,11 +429,11 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
       -- Conclude the implication
       concludeImplication s localVars
 
-      substituteIConstraints subst'
-
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
       let elab = Equation s ty elaborated_pats elaboratedExpr
+
+      substituteIConstraints subst''
 
       elab' <- substitute subst'' elab
       return elab'
