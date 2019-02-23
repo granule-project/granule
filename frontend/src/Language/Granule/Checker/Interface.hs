@@ -7,12 +7,16 @@ module Language.Granule.Checker.Interface
   , getInterfaceSig
   , getInterfaceKind
   , getInterfaceConstraints
+  , registerInstanceSig
   ) where
 
 
 import Control.Monad (join)
+import Control.Monad.State (modify')
 import Control.Monad.Trans.Maybe (MaybeT)
+import qualified Data.Map as M
 
+import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers (Id)
 import Language.Granule.Syntax.Span (Span)
 import Language.Granule.Syntax.Type
@@ -71,3 +75,11 @@ getKindRequired sp name = do
             (Forall _ [] [] t, []) -> pure $ KPromote t
             _ -> halt $ GenericError (Just s)
                  ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name)
+
+
+-- | Register an instantiated typescheme for an instance method.
+registerInstanceSig :: Id -> IFaceDat -> Id -> TypeScheme -> MaybeT Checker ()
+registerInstanceSig iname (IFaceDat _ ity) meth methTys =
+    -- we lookup instances by the type application of the interface
+    let finTy = TyApp (TyCon iname) ity
+    in modify' $ \s -> s { instanceSigs = M.insert (finTy, meth) methTys (instanceSigs s) }

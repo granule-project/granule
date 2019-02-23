@@ -30,6 +30,8 @@ import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 
 import Language.Granule.Checker.Checker
+import Language.Granule.Checker.Rewrite (rewriteWithoutInterfaces)
+import qualified Language.Granule.Checker.Rewrite.Type as RT
 import Language.Granule.Eval
 import Language.Granule.Interpreter.Config
 import Language.Granule.Interpreter.Preprocess
@@ -110,32 +112,38 @@ run input = do
       debugM "Pretty-printed AST:" $ pretty ast
       debugM "Raw AST:" $ show ast
       -- Check and evaluate
-      checked <- try $ check ast
-      case checked of
+      maybeCheckedAst <- try $ check ast
+      case maybeCheckedAst of
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e
           return (ExitFailure 1)
         Right Nothing -> do
           printInfo "Failed" -- specific errors have already been printed
           return (ExitFailure 1)
-        Right (Just _) -> do
+        Right (Just (renv, _checkedAst)) -> do
           if Utils.noEval ?globals then do
             printInfo $ green "Ok"
             return ExitSuccess
           else do
             printInfo $ green "Ok, evaluating..."
-            result <- try $ eval ast
-            case result of
-              Left (e :: SomeException) -> do
-                printErr $ EvalError $ show e
-                return (ExitFailure 1)
-              Right Nothing -> do
-                printInfo "There is no `main` definition."
-                return ExitSuccess
-              Right (Just result) -> do
-                printInfo "`main` returned:"
-                putStrLn (pretty result)
-                return ExitSuccess
+            let maybeRewrittenAst = rewriteWithoutInterfaces renv ast
+            case maybeRewrittenAst of
+              Left err -> do
+                printErr $ RewriterError $ show err
+                pure (ExitFailure 1)
+              Right rewrittenAst -> do
+                result <- try $ eval rewrittenAst
+                case result of
+                  Left (e :: SomeException) -> do
+                    printErr $ EvalError $ show e
+                    return (ExitFailure 1)
+                  Right Nothing -> do
+                    printInfo "There is no `main` definition."
+                    return ExitSuccess
+                  Right (Just result) -> do
+                    printInfo "`main` returned:"
+                    putStrLn (pretty result)
+                    return ExitSuccess
 
 
 parseArgs :: ParserInfo ([FilePath], Options Maybe)
@@ -219,13 +227,16 @@ data RuntimeError
   | CheckerError String
   | EvalError String
   | GenericError String
+  | RewriterError RT.RewriterError
 
 instance Utils.UserMsg RuntimeError where
   title ParseError {} = "Error during parsing"
   title CheckerError {} = "Error during type checking"
   title EvalError {} = "Error during evaluation"
   title GenericError {} = "Error"
+  title RewriterError {} = "Error during rewriting"
   msg (ParseError m) = m
   msg (CheckerError m) = m
   msg (EvalError m) = m
   msg (GenericError m) = m
+  msg (RewriterError e) = show e

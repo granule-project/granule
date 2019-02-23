@@ -19,6 +19,7 @@ import Language.Granule.Checker.Errors
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Checker.Rewrite.Type (RewriteEnv, buildRewriterEnv)
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
@@ -128,6 +129,7 @@ data CheckerState = CS
             -- Interface information
             , ifaceContext :: Ctxt IFaceCtxt
             , instanceContext :: Ctxt [Type]
+            , instanceSigs :: M.Map (Type, Id) TypeScheme
             -- Context of interface constraints
             , iconsContext :: [Type]
 
@@ -139,6 +141,7 @@ data CheckerState = CS
             , derivStack :: [Derivation]
             }
   deriving (Show, Eq) -- for debugging
+
 
 -- | Initial checker context state
 initState :: CheckerState
@@ -153,12 +156,19 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , dataConstructors = Primitives.dataConstructors
                , ifaceContext = []
                , instanceContext = []
+               , instanceSigs = M.empty
                , iconsContext = []
                , defContext = []
                , deriv = Nothing
                , derivStack = []
                }
   where emptyCtxt = []
+
+
+-- | Extract useful information for the rewriter from the checker state.
+checkerStateToRewriterEnv :: CheckerState -> RewriteEnv
+checkerStateToRewriterEnv cs = buildRewriterEnv (M.toList $ instanceSigs cs)
+
 
 -- *** Various helpers for manipulating the context
 

@@ -42,6 +42,7 @@ library:
   - Language.Granule.Checker.Predicates
   - Language.Granule.Checker.Primitives
   - Language.Granule.Checker.Rewrite
+  - Language.Granule.Checker.Rewrite.Type
   - Language.Granule.Checker.SubstitutionContexts
   - Language.Granule.Checker.Substitution
   - Language.Granule.Checker.Types

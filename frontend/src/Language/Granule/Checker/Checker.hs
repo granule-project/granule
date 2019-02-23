@@ -27,11 +27,13 @@ import Language.Granule.Checker.Interface
   , getInterfaceParameter
   , getInterfaceKind
   , getInterfaceConstraints
+  , registerInstanceSig
   )
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
+import Language.Granule.Checker.Rewrite.Type (RewriteEnv)
 import Language.Granule.Checker.Simplifier
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
@@ -52,7 +54,7 @@ import Language.Granule.Utils
 --import Debug.Trace
 
 -- Checking (top-level)
-check :: (?globals :: Globals, Pretty v) => AST v () -> IO (Maybe (AST v Type))
+check :: (?globals :: Globals, Pretty v) => AST v () -> IO (Maybe (RewriteEnv, (AST v Type)))
 check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rs1 <- mapM (runMaybeT . checkTyCon) dataDecls
     rs2 <- mapM (runMaybeT . checkDataCons) dataDecls
@@ -63,15 +65,18 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
     rsInstDefs <- mapM (runMaybeT . checkInstDefs) insts
     rs4 <- mapM (runMaybeT . checkDef) defs
 
-    return $
+    renv <- fmap checkerStateToRewriterEnv get
+
+    pure $
       if all isJust (rs1 <> rs2
                      <> rsIFHeads
                      <> rsIFTys
                      <> rsInstHeads
                      <> rsInstDefs
                      <> rs3 <> (map (fmap (const ())) rs4))
-        then Just (AST dataDecls (catMaybes rs4) [] [])
+        then Just (renv, AST dataDecls (catMaybes rs4) [] [])
         else Nothing
+
 
 checkTyCon :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
 checkTyCon (DataDecl sp name tyVars kindAnn ds) = do
@@ -296,7 +301,7 @@ checkInstTy iname (IFaceDat sp ty) = do
 
 
 checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker ()
-checkInstDefs (Instance sp iname constrs (IFaceDat _ idty) ds) = do
+checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
     checkInstDefName names sp name) [(sp, name) | (IDef sp (Just name) _) <- ds]
@@ -314,6 +319,7 @@ checkInstDefs (Instance sp iname constrs (IFaceDat _ idty) ds) = do
           in ((sp, name), eq:eqs)) nameGroupedDefs
   mapM_ (\((sp, name), eqs) -> do
     tys <- getNormalisedInterfaceSig iname name idty
+    registerInstanceSig iname idat name tys
     checkDef' sp name eqs tys) groupedEqns
   where
     checkInstDefName names sp name = do
