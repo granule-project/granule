@@ -1,12 +1,12 @@
-import Control.Exception
-import Control.Monad (forM_, unless, when)
-import Data.List ((\\))
-import Data.Maybe (isJust)
-import Data.ByteString.Lazy.UTF8 (ByteString, fromString)
+import Control.Monad (unless)
+import Data.Algorithm.Diff (getGroupedDiff)
+import Data.Algorithm.DiffOutput (ppDiff)
 import Test.Tasty (defaultMain, TestTree, testGroup)
-import Test.Tasty.Golden (goldenVsString, findByExtension)
-import System.Directory (removeFile, setCurrentDirectory)
-import System.FilePath (dropExtension, takeFileName, replaceExtension)
+import Test.Tasty.Golden (findByExtension)
+import Test.Tasty.Golden.Advanced (goldenTest)
+import System.Directory (setCurrentDirectory)
+import System.FilePath (dropExtension)
+import qualified System.IO.Strict as Strict (readFile)
 
 import Language.Granule.Interpreter (InterpreterResult(..), InterpreterError(..))
 import qualified Language.Granule.Interpreter as Interpreter
@@ -19,17 +19,7 @@ main = do
   setCurrentDirectory "../"
   negative <- goldenTestsNegative
   positive <- goldenTestsPositive
-  runTestsAndCleanUp $ testGroup "Golden tests" [negative, positive]
-
--- | Run tests and remove all empty outfiles
-runTestsAndCleanUp :: TestTree -> IO ()
-runTestsAndCleanUp tests = do
-  defaultMain tests `catch` (\(e :: SomeException) -> do
-    outfiles <- findByExtension [".output"] "."
-    forM_ outfiles $ \outfile -> do
-      contents <- readFile outfile
-      when (null contents) (removeFile outfile)
-    throwIO e)
+  defaultMain $ testGroup "Golden tests" [negative, positive]
 
 goldenTestsNegative :: IO TestTree
 goldenTestsNegative = do
@@ -38,21 +28,16 @@ goldenTestsNegative = do
 
   -- ensure we don't have spurious output files without associated tests
   outfiles <- findByExtension [".output"] "frontend/tests/cases/negative"
-  forM_ outfiles $ \outfile ->
-    unless (dropExtension outfile `elem` files)
-      (error $ "Orphan output file: " <> outfile)
+  failOnOrphanOutfiles files outfiles
 
-  return $ testGroup "negative test cases"
-    [ goldenVsString
-        file -- test name
-        (file <> ".output") -- golden file path
-        (formatResult <$> runGr file) -- action whose result is tested
-    | file <- files
-    ]
+  return $ testGroup
+    "Golden examples, StdLib and positive regressions"
+    (map (grGolden formatResult) files)
+
   where
-    formatResult :: Either InterpreterError InterpreterResult -> ByteString
+    formatResult :: Either InterpreterError InterpreterResult -> String
     formatResult = let ?globals = goldenGlobals in \case
-        Left err -> fromString $ formatError err
+        Left err -> formatError err
         Right x -> error $ "Negative test passed!\n" <> show x
 
 
@@ -67,29 +52,52 @@ goldenTestsPositive = do
   -- ensure we don't have spurious output files without associated tests
   exampleOutfiles  <- findByExtension [".output"] "examples"
   positiveOutfiles <- findByExtension [".output"] "frontend/tests/cases/positive"
-  forM_ (exampleOutfiles <> positiveOutfiles) $ \outfile ->
-    unless (dropExtension outfile `elem` files)
-      (error $ "Orphan output file: " <> outfile)
+  let outfiles = exampleOutfiles <> positiveOutfiles
+  failOnOrphanOutfiles files outfiles
 
-  return $ testGroup "positive type checking and evaluation cases"
-    [ goldenVsString
-        file -- test name
-        (file <> ".output") -- golden file path
-        (formatResult <$> runGr file) -- action whose result is tested
-    | file <- files
-    ]
+  return $ testGroup
+    "Golden examples, StdLib and positive regressions"
+    (map (grGolden formatResult) files)
+
   where
-    formatResult :: Either InterpreterError InterpreterResult -> ByteString
+    formatResult :: Either InterpreterError InterpreterResult -> String
     formatResult = let ?globals = goldenGlobals in \case
-        Right (InterpreterResult val) -> fromString $ pretty val
+        Right (InterpreterResult val) -> pretty val
         Left err -> error $ formatError err
         Right NoEval -> mempty
 
-runGr :: FilePath -> IO (Either InterpreterError InterpreterResult)
-runGr fp = do
-  src <- readFile fp
-  let ?globals = goldenGlobals
-  Interpreter.run src
+grGolden
+  :: (Either InterpreterError InterpreterResult -> String)
+  -> FilePath
+  -> TestTree
+grGolden formatResult file = goldenTest
+    file
+    (Strict.readFile (file <> ".output"))
+    (formatResult <$> runGr file)
+    checkDifference
+    (\actual -> unless (null actual) (writeFile file actual))
+  where
+    checkDifference :: String -> String -> IO (Maybe String)
+    checkDifference exp act = if exp == act
+      then return Nothing
+      else return . Just $ unlines
+        [ "Expected (<) and actual (>) output differ:"
+        , ppDiff $ getGroupedDiff (lines exp) (lines act)
+        ]
+
+    runGr :: FilePath -> IO (Either InterpreterError InterpreterResult)
+    runGr fp = do
+      src <- readFile fp
+      let ?globals = goldenGlobals
+      Interpreter.run src
+
+failOnOrphanOutfiles :: [FilePath] -> [FilePath] -> IO ()
+failOnOrphanOutfiles files outfiles
+  = case filter (\outfile -> dropExtension outfile `notElem` files) outfiles of
+    [] -> return ()
+    orphans -> error . red $ "Orphan output files:\n" <> unlines orphans
+  where
+    red x = "\ESC[31;1m" <> x <> "\ESC[0m"
 
 granuleFileExtensions :: [String]
 granuleFileExtensions = [".gr", ".gr.md"]
@@ -100,3 +108,19 @@ goldenGlobals = mempty
   , globalsSuppressInfos = Just True
   , globalsTesting = Just True
   }
+
+{-
+-- This was used to clean up after running tests, previously. Keeping it around
+-- here in case we need something like this in future. @buggymcbugfix
+
+-- | Run tests and remove all empty outfiles
+runTestsAndCleanUp :: TestTree -> IO ()
+runTestsAndCleanUp tests = do
+  defaultMain tests `catch` (\(e :: SomeException) -> do
+    outfiles <- findByExtension [".output"] "."
+    forM_ outfiles $ \outfile -> do
+      contents <- readFile outfile
+      when (null contents) (removeFile outfile)
+    throwIO e)
+
+-}

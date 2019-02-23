@@ -20,19 +20,20 @@ default-extensions:
 - RecordWildCards
 - ImplicitParams
 - ScopedTypeVariables
+ghc-options: >
+  -O0
+  -Wall
+  -Werror
+  -Wcompat
+  -Wincomplete-record-updates
+  -Wincomplete-uni-patterns
+  -Wredundant-constraints
+  -Wno-unused-matches
+  -Wno-name-shadowing
+  -Wno-type-defaults
 
 library:
   source-dirs: src
-  ghc-options: >
-    -O0
-    -Wall
-    -Werror
-    -Wcompat
-    -Wincomplete-record-updates
-    -Wincomplete-uni-patterns
-    -Wredundant-constraints
-    -Wno-unused-matches
-    -Wno-name-shadowing
   # when:
   # - condition: flag(dev)
   #   then:
@@ -67,8 +68,9 @@ tests:
     main: Golden.hs
     source-dirs: tests
     dependencies:
+    - Diff
     - granule-interpreter
+    - strict
     - tasty
     - tasty-golden
-    - utf8-string
 
