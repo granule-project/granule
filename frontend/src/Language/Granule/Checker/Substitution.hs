@@ -116,9 +116,22 @@ instance Substitutable Type where
         mDiamond e t
 
       varSubst v =
-         case lookup v subst of
-           Just (SubstT t) -> return t
-           _               -> mTyVar v
+         let finalSub = lookupWithTransitive v
+         in case finalSub of
+              (SubstT t) -> pure t
+              _          -> mTyVar v
+      lookupWithTransitive var = do
+          case lookup var subst of
+            -- variable doesn't point anywhere, so this is a name substitution
+            Nothing -> SubstT (TyVar var)
+            -- points to a variable, so try and resolve it as much as possible
+            Just vs@(SubstT (TyVar v2)) ->
+                -- make sure we don't infinitely recurse when a
+                -- variable substitutes to itself
+                if var == v2 then vs
+                else lookupWithTransitive v2
+            -- points to something other than a variable
+            Just s -> s
 
   unify (TyVar v) t = return $ Just [(v, SubstT t)]
   unify t (TyVar v) = return $ Just [(v, SubstT t)]
