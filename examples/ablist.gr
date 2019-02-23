@@ -9,8 +9,8 @@ data ABList (a : Type) (b : Type) : Nat → Nat → Type where
 abmap : ∀ {a : Type, b : Type, c : Type, d : Type, n : Nat, m : Nat} .
     (a → b) [m] → (c → d) [n] → ABList a c m n → ABList b d m n
 abmap [_] [_] Nil = Nil;
-|     [f] [g] (Acons a xs) = Acons (f a) (abmap [f] [g] xs);
-|     [f] [g] (Bcons b xs) = Bcons (g b) (abmap [f] [g] xs)
+abmap [f] [g] (Acons a xs) = Acons (f a) (abmap [f] [g] xs);
+abmap [f] [g] (Bcons b xs) = Bcons (g b) (abmap [f] [g] xs)
 
 import Bool
 

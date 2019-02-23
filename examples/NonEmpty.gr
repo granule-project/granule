@@ -4,7 +4,7 @@ data NonEmpty a where
 
 head : ∀ a : Type . (NonEmpty a) [0..1] → a
 head [Next x _] = x;
-|    [NonEmpty x] = x
+head [NonEmpty x] = x
 
 main : Int
 main = head [NonEmpty 1]
