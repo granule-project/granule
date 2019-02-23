@@ -933,8 +933,6 @@ synthExpr defs gam pol (App s _ e e') = do
          -- Synth subst
          tau    <- substitute subst2 tau
 
-         substituteIConstraints subst
-
          let elaborated = App s tau elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
 
