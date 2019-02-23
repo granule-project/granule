@@ -1,3 +1,0 @@
-Type checking failed: 
-  Pattern is refutable: 2:7:
-  Pattern match 2 can fail; only irrefutable patterns allowed in this context
