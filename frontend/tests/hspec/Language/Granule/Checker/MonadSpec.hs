@@ -7,12 +7,10 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.Monad
 import Control.Monad.State.Strict
-import Control.Monad.Reader.Class
 
 import Data.Maybe (fromJust)
 import qualified Data.Map as M
 
-import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.LaTeX
 

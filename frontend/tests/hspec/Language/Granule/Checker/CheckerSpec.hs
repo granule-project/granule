@@ -6,7 +6,6 @@ module Language.Granule.Checker.CheckerSpec where
 import Test.Hspec
 
 import Language.Granule.Checker.Checker
-import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
 import Language.Granule.Syntax.Parser
@@ -17,7 +16,6 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Annotated
 import Language.Granule.Utils
-import Language.Granule.TestUtils
 
 
 spec :: Spec
@@ -85,8 +83,9 @@ spec = let ?globals = mempty in do
         (Right defElab, _) <- runChecker initState (checkDef [] def1)
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
-
+extractMainExpr :: Def v a -> Expr v a
 extractMainExpr (Def _ _ [(Equation _ _ _ e)] _) = e
+extractMainExpr _ = undefined
 
 runCtxts
   :: (?globals::Globals)
@@ -98,6 +97,9 @@ runCtxts f a b = do
   (Right res, state) <- runChecker initState (f nullSpan a b)
   pure (res, predicateStack state)
 
+cNatOrdered  :: Int -> Coeffect
 cNatOrdered x = CSig (CNat x) natInterval
+
+natInterval :: Type
 natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")
 

@@ -8,26 +8,27 @@ github: granule-project/granule
 dependencies:
 - base >=4.10 && <5
 
+ghc-options:
+- -O0
+- -Wall
+- -Werror
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+- -Wno-unused-matches
+- -Wno-name-shadowing
+- -Wno-type-defaults
+
 default-extensions:
 - RecordWildCards
 - ImplicitParams
 - ViewPatterns
 - LambdaCase
 
+
 library:
   source-dirs: src
-  ghc-options: >
-    -O0
-    -Wall
-    -Werror
-    -Wcompat
-    -Wincomplete-record-updates
-    -Wincomplete-uni-patterns
-    -Wredundant-constraints
-    -Wno-unused-matches
-    -Wno-name-shadowing
-    -Wno-type-defaults
-
   # when:
   # - condition: flag(dev)
   #   then:
@@ -88,8 +89,8 @@ tests:
     source-dirs: tests/hspec
     ghc-options: -fno-warn-partial-type-signatures
     dependencies:
-    - filemanip
-    - directory
+    # - filemanip
+    # - directory
     - granule-frontend
     - hspec
     - QuickCheck
