@@ -556,7 +556,7 @@ instance Substitutable (Equation () Type) where
 substituteValue :: (?globals::Globals)
                 => Substitution
                 -> ValueF ev Type (Value ev Type) (Expr ev Type)
-                -> MaybeT Checker (Value ev Type)
+                -> Checker (Value ev Type)
 substituteValue ctxt (AbsF ty arg mty expr) =
     do  ty' <- substitute ctxt ty
         arg' <- substitute ctxt arg
@@ -579,7 +579,7 @@ substituteValue _ other = return (ExprFix2 other)
 substituteExpr :: (?globals::Globals)
                => Substitution
                -> ExprF ev Type (Expr ev Type) (Value ev Type)
-               -> MaybeT Checker (Expr ev Type)
+               -> Checker (Expr ev Type)
 substituteExpr ctxt (AppF sp ty fn arg) =
     do  ty' <- substitute ctxt ty
         return $ App sp ty' fn arg
