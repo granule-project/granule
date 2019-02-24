@@ -16,6 +16,7 @@ module Language.Granule.Checker.Rewrite
 import Control.Arrow ((***))
 import Control.Monad.State (evalState)
 import Data.List (foldl', groupBy)
+import Data.Maybe (fromMaybe)
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
@@ -40,9 +41,14 @@ getDictTyCon :: (?globals :: Globals) => Id -> Type
 getDictTyCon n = TyCon n
 
 
--- | Get the name of the dictionary data constructor for the interface.
-getDictDataCon :: (?globals :: Globals) => Id -> Expr v ()
-getDictDataCon n = Val nullSpanNoFile () $ Constr () (mkId $ "$Mk" <> pretty n) []
+-- | Get the id of the data constructor for the interface.
+ifaceConId :: (?globals :: Globals) => Id -> Id
+ifaceConId = mkId . ("$Mk"<>) . pretty
+
+
+-- | Get the data constructor for the interface.
+ifaceDataCon :: (?globals :: Globals) => Id -> Expr v ()
+ifaceDataCon n = Val nullSpanNoFile () $ Constr () (ifaceConId n) []
 
 
 ------------------------
@@ -54,9 +60,13 @@ getDictDataCon n = Val nullSpanNoFile () $ Constr () (mkId $ "$Mk" <> pretty n) 
 -- | representation without interfaces.
 rewriteWithoutInterfaces :: (?globals :: Globals, Pretty v) => RewriteEnv -> AST v a -> Either RewriterError (AST v ())
 rewriteWithoutInterfaces renv ast =
-    let (AST dds defs _ insts) = forgetAnnotations ast
-    in runNewRewriter (do instsToDefs <- mapM mkInst insts
-                          pure $ AST dds (instsToDefs <> defs) [] []) renv
+    let (AST dds defs ifaces insts) = forgetAnnotations ast
+    in runNewRewriter (do
+      let ifaces' = fmap mkIFace ifaces
+          ifaceDDS = fmap fst ifaces'
+          ifaceDefs = concat $ fmap snd ifaces'
+      instsToDefs <- mapM mkInst insts
+      pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs) [] []) renv
 
 
 -- | Forget the AST's annotations.
@@ -105,6 +115,51 @@ mapAnnotations f (AST dds defs ifaces insts) =
           mapIDefAnnotations (IDef s n eq) = IDef s n (mapEquationAnnotations eq)
 
 
+-- | Rewrite an interface to its intermediate representation.
+--
+-- @
+--   interface {Foo a} => Bar a where
+--     bar1 : a -> a
+--     bar2 : a
+-- @
+--
+-- becomes:
+--
+-- @
+--   data Bar a = MkBar ((Foo a) []) ((a -> a) []) (a [])
+--
+--   barToFoo : forall {a : Type} . Bar a -> Foo a
+--   barToFoo (MkBar [d] [_] [_]) = d
+--
+--   bar1 : forall {a : Type} . Bar a -> a -> a
+--   bar1 (MkBar [_] [m] [_]) = f
+--
+--   bar2 : forall {a : Type} . Bar a -> a
+--   bar2 (MkBar [_] [_] [m]) = m
+-- @
+mkIFace :: (?globals :: Globals) => IFace -> (DataDecl, [Def v ()])
+mkIFace (IFace sp iname _constrs kind pname itys) =
+    let numMethods = length itys
+        dname = ifaceConId iname
+        dcon = DataConstrNonIndexed sp dname typs
+        ddcl = DataDecl sp iname [(pname, fromMaybe KType kind)] Nothing [dcon]
+        typs = fmap ityToTy itys
+        defs = fmap ityToDef (zip itys [1..])
+        dty = TyApp (TyCon iname) (TyVar pname)
+        matchVar = mkId "$match"
+        mkPat i =
+            let wildMatches = replicate numMethods (PWild nullSpanNoFile ())
+                (wbefore, wafter) = splitAt i wildMatches
+                pats = tail wbefore <> [PVar nullSpanNoFile () matchVar] <> wafter
+            in PConstr nullSpanNoFile () dname pats
+        ityToDef ((IFaceTy sp' n (Forall _ q c ty)), i) =
+            Def sp' n [Equation sp' () [mkPat i]
+                                    (Val sp' () (Var () matchVar))]
+                    (Forall sp' q c (FunTy dty ty))
+    in (ddcl, defs)
+    where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = ty;
+
+
 -- | Rewrite an instance to its intermediate representation.
 --
 -- @
@@ -147,7 +202,7 @@ getInstanceGrouped inst@(Instance _ _ _ _ ds) = do
 constructIDict :: (?globals :: Globals) => Instance v () -> Rewriter (Expr v ())
 constructIDict inst@(Instance _ iname _ _ _) = do
   grouped <- getInstanceGrouped inst
-  let idictDataCon = getDictDataCon iname
+  let idictDataCon = ifaceDataCon iname
       lambdas = fmap desugarIdef grouped
       dictApp = foldl' (App nullSpanNoFile ()) idictDataCon lambdas
   pure dictApp
