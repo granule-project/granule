@@ -31,18 +31,18 @@ import Language.Granule.Checker.Rewrite.Type
 
 
 -- | Generate a fresh dictionary variable for an instance.
-freshDictName :: (?globals :: Globals) => Id -> IFaceDat -> Rewriter Id
-freshDictName name idat = pure . mkId $ "$" <> pretty name <> "(" <> pretty idat <> ")"
+freshDictName :: (?globals :: Globals) => Id -> IFaceDat -> Id
+freshDictName name idat = mkId $ "$" <> pretty name <> "(" <> pretty idat <> ")"
 
 
 -- | Get the name of the dictionary type constructor for the interface.
-getDictTyCon :: (?globals :: Globals) => Id -> Rewriter Type
-getDictTyCon n = pure $ TyCon n
+getDictTyCon :: (?globals :: Globals) => Id -> Type
+getDictTyCon n = TyCon n
 
 
 -- | Get the name of the dictionary data constructor for the interface.
-getDictDataCon :: (?globals :: Globals) => Id -> Rewriter (Expr v ())
-getDictDataCon n = pure $ Val nullSpanNoFile () $ Constr () (mkId $ "$Mk" <> pretty n) []
+getDictDataCon :: (?globals :: Globals) => Id -> Expr v ()
+getDictDataCon n = Val nullSpanNoFile () $ Constr () (mkId $ "$Mk" <> pretty n) []
 
 
 ------------------------
@@ -121,12 +121,11 @@ mapAnnotations f (AST dds defs ifaces insts) =
 -- @
 mkInst :: (?globals :: Globals, Pretty v) => Instance v () -> Rewriter (Def v ())
 mkInst inst@(Instance sp iname _constrs idt@(IFaceDat _ ty) _) = do
-    dictName <- freshDictName iname idt
-    idictTyCon <- getDictTyCon iname
     idictConstructed <- constructIDict inst
-    let tys = Forall sp [] [] (TyApp idictTyCon ty)
-        def = Def sp dictName [Equation sp () [] idictConstructed] tys
-    pure def
+    let dictName = freshDictName iname idt
+        idictTyCon = getDictTyCon iname
+        tys = Forall sp [] [] (TyApp idictTyCon ty)
+    pure $ Def sp dictName [Equation sp () [] idictConstructed] tys
 
 
 getInstanceGrouped :: Instance v a -> Rewriter [(Id, TypeScheme, [Equation v a])]
@@ -147,10 +146,9 @@ getInstanceGrouped inst@(Instance _ _ _ _ ds) = do
 -- | instance for the interface.
 constructIDict :: (?globals :: Globals) => Instance v () -> Rewriter (Expr v ())
 constructIDict inst@(Instance _ iname _ _ _) = do
-  idictDataCon <- getDictDataCon iname
-
   grouped <- getInstanceGrouped inst
-  let lambdas = fmap desugarIdef grouped
+  let idictDataCon = getDictDataCon iname
+      lambdas = fmap desugarIdef grouped
       dictApp = foldl' (App nullSpanNoFile ()) idictDataCon lambdas
   pure dictApp
     where
