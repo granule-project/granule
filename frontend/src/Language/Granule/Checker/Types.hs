@@ -401,6 +401,9 @@ isDualSession sp _ t1 t2 _ =
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type
+
+joinTypes s t t' | t == t' = return t
+
 joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
   t1j <- joinTypes s t1' t1 -- contravariance
   t2j <- joinTypes s t2 t2'
@@ -427,8 +430,6 @@ joinTypes s (Box c t) (Box c' t') = do
   addConstraint (ApproximatedBy s c' (CVar topVar) coeffTy)
   tUpper <- joinTypes s t t'
   return $ Box (CVar topVar) tUpper
-
-joinTypes _ (TyInt n) (TyInt m) | n == m = return $ TyInt n
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable

@@ -441,6 +441,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
 
+
       -- Checking the case body
       newConjunct
       -- Specialise the return type and the incoming environment using the
