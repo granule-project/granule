@@ -178,8 +178,7 @@ instance (Pretty (Value v a), Pretty v) => Pretty (Def v a) where
     prettyL l (Def _ v eqs t) = prettyColonSep l v t <> "\n" <>
                                 intercalate "\n" (map prettyEq eqs)
       where
-        prettyEq (Equation _ _ ps e) =
-          prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
+        prettyEq e = unwords [prettyL l v, prettyL l e]
 
 instance Pretty DataDecl where
     prettyL l (DataDecl _ tyCon tyVars kind dataConstrs) =
@@ -228,11 +227,14 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
 instance Pretty IFaceDat where
     prettyL l (IFaceDat _ ty) = prettyTy l ty
 
+
 instance (Pretty v, Pretty a) => Pretty (IDef v a) where
-    prettyL l (IDef _ v eq) = prettyEq eq
-      where
-        prettyEq (Equation _ _ ps e) =
-          prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
+    prettyL l (IDef _ v eq) = unwords [prettyL l v, prettyL l eq]
+
+
+instance (Pretty v) => Pretty (Equation v a) where
+    prettyL l (Equation _ _ ps e) = prettyL l ps <> "= " <> prettyL l e
+
 
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v
