@@ -1,0 +1,9 @@
+data State s a = State (s → a × s)
+
+get
+  : ∀ {s : Type}
+  . State (s [2]) s
+get = State oopsie
+
+oopsie : forall {s : Type} . s [2] -> (s, s)
+oopsie = \[s] -> (s, s)
