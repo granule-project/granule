@@ -361,6 +361,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
           concludeImplication s localVars
 
           let elaborated = Val s ty (Abs ty elaboratedP t elaboratedE)
+
           return (gam' `subtractCtxt` bindings, subst, elaborated)
 
        xs -> illLinearityMismatch s xs
@@ -1270,13 +1271,12 @@ checkGuardsForImpossibility s name = do
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
-    p <- simplifyPred p
+    -- p <- simplifyPred p
 
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
 
     debugM "impossibility" $ "about to try" <> pretty thm
-
     -- Try to prove the theorem
     result <- liftIO $ provePredicate s thm tyVars
 

@@ -69,7 +69,7 @@ compileToSBV predicate tyVarContext =
       -- quantifiers, so reversing order of the effects in foldrM gives us
       -- the order we want for the predicate
         (preConstraints, constraints, solverVars) <-
-            foldrM (createFreshVar quant) (sTrue, sTrue, []) tyVarContext
+            foldrM (createFreshVar quant predicate) (sTrue, sTrue, []) tyVarContext
 
         predC <- buildTheorem' solverVars predicate'
         return (polarity (preConstraints .=> (constraints .&& predC)))
@@ -160,25 +160,32 @@ compileToSBV predicate tyVarContext =
     -- with an associated refinement predicate
     createFreshVar
       :: (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
+      -> Pred
       -> (Id, (Type, Quantifier))
       -> (SBool, SBool, Ctxt SGrade)
       -> Symbolic (SBool, SBool, Ctxt SGrade)
     -- Ignore variables coming from a dependent pattern match because
     -- they get created elsewhere
 
-    createFreshVar _ (_, (_, BoundQ)) x = return x
+    createFreshVar _ _ (_, (_, BoundQ)) x = return x
 
-    createFreshVar quant
+    createFreshVar quant predicate
                    (var, (kind, quantifierType))
-                   (universalConstraints, existentialConstraints, ctxt) = do
-       (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
-       let (universalConstraints', existentialConstraints') =
-             case quantifierType of
-               ForallQ -> (pre .&& universalConstraints, existentialConstraints)
-               InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
-               b -> error $ "Impossible freshening a BoundQ, but this is cause above"
-           --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
-       return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
+                   (universalConstraints, existentialConstraints, ctxt) =
+      if not (var `elem` (freeVars predicate))
+        -- If the variable is not in the predicate, then don't create a new var
+        then return (universalConstraints, existentialConstraints, ctxt)
+
+        -- Otherwise...
+        else do
+         (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
+         let (universalConstraints', existentialConstraints') =
+               case quantifierType of
+                 ForallQ -> (pre .&& universalConstraints, existentialConstraints)
+                 InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
+                 b -> error $ "Impossible freshening a BoundQ, but this is cause above"
+             --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
+         return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- TODO: replace with use of `substitute`
 

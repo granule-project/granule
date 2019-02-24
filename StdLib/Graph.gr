@@ -23,7 +23,7 @@ vertices = foldr_list [Overlay `o` Vertex] EmptyG
 edge : forall a : Type . a -> a -> Graph a
 edge x y = Connect (Vertex x) (Vertex y)
 
-mapG : forall a : Type, b : Type . (a -> b) [∞] -> Graph a -> Graph b
+mapG : forall a : Type, b : Type . (a -> b) [0..∞] -> Graph a -> Graph b
 mapG [f] g = case g of
   EmptyG -> EmptyG;
   Vertex a -> Vertex (f a);

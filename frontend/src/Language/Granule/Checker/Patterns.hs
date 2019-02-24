@@ -35,8 +35,8 @@ definiteUnification :: (?globals :: Globals)
 definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
-  when isPoly $
-    addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+  when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
+    addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> MaybeT Checker Bool
