@@ -192,7 +192,7 @@ instance Pretty [DataConstr] where
 
 instance Pretty DataConstr where
     prettyL l (DataConstrIndexed _ name typeScheme) = prettyColonSep l name typeScheme
-    prettyL l (DataConstrNonIndexed _ name params) = unwords $ prettyL l name : map (prettyL l) params
+    prettyL l (DataConstrNonIndexed _ name params) = unwords $ prettyL l name : map (prettyL (l+1)) params
 
 instance Pretty IFace where
     prettyL l (IFace _ iName constrs kind paramName tys) =
