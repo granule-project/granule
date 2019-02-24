@@ -502,6 +502,9 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   st <- get
   debugM "pred so after branches" (pretty (predicateStack st))
 
+  -- All branches must be possible
+  checkGuardsForImpossibility s $ mkId "case"
+
   -- Pop from stacks related to case
   popGuardContext
   popCaseFrame
@@ -638,6 +641,9 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
          [] -> return (tyCase, (localGam `subtractCtxt` patternGam, subst'),
                         (elaborated_pat_i, elaborated_i))
          xs -> illLinearityMismatch s xs
+
+  -- All branches must be possible
+  checkGuardsForImpossibility s $ mkId "case"
 
   popCaseFrame
 
