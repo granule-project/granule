@@ -278,6 +278,8 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
 
   case checkLinearity patternGam localGam of
     [] -> do
+      localGam <- substitute subst localGam
+
       -- Check that our consumption context approximations the binding
       ctxtApprox s localGam patternGam
 
