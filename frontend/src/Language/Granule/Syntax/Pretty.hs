@@ -240,7 +240,9 @@ instance Pretty (Pattern a) where
     prettyL l (PBox _ _ p)     = "[" <> prettyL l p <> "]"
     prettyL l (PInt _ _ n)     = show n
     prettyL l (PFloat _ _ n)   = show n
-    prettyL l (PConstr _ _ name args)  = intercalate " " (prettyL l name : map (prettyL l) args)
+    prettyL l (PConstr _ _ name args)  =
+        if null args then prettyL l name
+        else parens 1 $ unwords $ prettyL l name : map (prettyL l) args
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     prettyL l [] = ""
