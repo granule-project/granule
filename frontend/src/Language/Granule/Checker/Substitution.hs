@@ -498,6 +498,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
+
     renameMap <- mapM instantiateVariable kinds
     ty <- renameType (ctxtMap snd $ elideEither renameMap) ty
 

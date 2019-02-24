@@ -193,10 +193,7 @@ checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
   varSymb <- freshIdentifierBase "t"
   let var = mkId varSymb
   (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun kinds
-  let subst' = case arg of
-        TyVar var' -> [(var', SubstT $ TyVar var), (var, SubstT arg)]
-        _          -> [(var, SubstT arg)]
-  return (TyApp fun' (TyVar var), subst' ++ subst, (var, kind) : tyVarsNew)
+  return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
 
 checkAndGenerateSubstitution' sp _ x _ =
   halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
@@ -379,9 +376,11 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
-
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
-    (gam1, subst1, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel (FunTy argTy tau) e1
+
+    funTy <- substitute subst2 (FunTy argTy tau)
+    (gam1, subst1, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel funTy e1
+
     gam <- ctxtPlus s gam1 gam2
 
     subst <- combineSubstitutions s subst1 subst2

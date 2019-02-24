@@ -184,6 +184,9 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
                       <> "\n###\t ctxt = " <> show freshTyVarsCtxt
                       <> "\n###\t freshTyVarSubst = " <> show freshTyVarSubst
                       <> "\n###\t coercions' =  " <> show coercions'
+
+      dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+
       st <- get
       debugM "ctxt" $ "### tyVarContext = " <> show (tyVarContext st)
       debugM "ctxt" $ "\t### eqL (res dCfresh) = " <> show (resultType dataConstructorTypeFresh) <> "\n"
@@ -198,8 +201,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
           mapM (\(var, SubstT ty) ->
                         equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) ty) coercions'
 
-          dataConstructorIndexRewritten <- substitute coercions' dataConstructorTypeFresh
-          dataConstructorIndexRewrittenAndSpecialised <- substitute unifiers dataConstructorIndexRewritten
+          dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
+          dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
 
           -- Debugging
           debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
