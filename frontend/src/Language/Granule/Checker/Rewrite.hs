@@ -37,12 +37,12 @@ freshDictName name idat = pure . mkId $ "$" <> pretty name <> "(" <> pretty idat
 
 -- | Get the name of the dictionary type constructor for the interface.
 getDictTyCon :: (?globals :: Globals) => Id -> Rewriter Type
-getDictTyCon n = pure $ TyCon (mkId $ "$" <> pretty n <> "Dict")
+getDictTyCon n = pure $ TyCon n
 
 
 -- | Get the name of the dictionary data constructor for the interface.
 getDictDataCon :: (?globals :: Globals) => Id -> Rewriter (Expr v ())
-getDictDataCon n = pure $ Val nullSpanNoFile () $ Constr () (mkId $ "$Mk" <> pretty n <> "Dict") []
+getDictDataCon n = pure $ Val nullSpanNoFile () $ Constr () (mkId $ "$Mk" <> pretty n) []
 
 
 ------------------------
@@ -116,8 +116,8 @@ mapAnnotations f (AST dds defs ifaces insts) =
 -- becomes:
 --
 -- @
---   barA : BarDict A
---   barA = MkBarDict [fooA] [\Av -> Av] [Av]
+--   barA : Bar A
+--   barA = MkBar [fooA] [\Av -> Av] [Av]
 -- @
 mkInst :: (?globals :: Globals, Pretty v) => Instance v () -> Rewriter (Def v ())
 mkInst inst@(Instance sp iname _constrs idt@(IFaceDat _ ty) _) = do
