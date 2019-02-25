@@ -19,7 +19,7 @@
 module Language.Granule.Interpreter where
 
 import Control.Exception (SomeException, displayException, try)
-import Control.Monad (forM)
+import Control.Monad ((<=<), forM)
 import Data.Char (isSpace)
 import Data.Either (isRight)
 import Data.List (intercalate, isPrefixOf, stripPrefix)
@@ -29,7 +29,6 @@ import Data.Maybe (fromMaybe)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
-import Text.Read (readMaybe)
 
 import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import System.FilePath (takeFileName)
@@ -128,9 +127,19 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
 -- | Get the flags embedded in the first line of a file, e.g.
 -- "-- gr --no-eval"
 getEmbeddedGrFlags :: String -> Maybe GrConfig
-getEmbeddedGrFlags src = do
-  src <- stripPrefix "-- gr " . dropWhile isSpace $ src
-  snd <$> (getParseResult . execParserPure defaultPrefs parseGrConfig . words . takeWhile (/= '\n') $ src)
+getEmbeddedGrFlags = foldr (<|>) Nothing . map getEmbeddedGrFlagsLine . lines
+  where
+    getEmbeddedGrFlagsLine
+      = parseGrFlags . dropWhile isSpace
+      <=< stripPrefix "gr" . dropWhile isSpace
+      <=< stripPrefix "--" . dropWhile isSpace
+
+
+parseGrFlags :: String -> Maybe GrConfig
+parseGrFlags
+  = pure . snd
+  <=< getParseResult . execParserPure defaultPrefs parseGrConfig . words
+
 
 data GrConfig = GrConfig
   { grAsciiToUnicode  :: Maybe Bool
@@ -177,13 +186,15 @@ getGrConfig = do
           debugM "Read user config" $ show e
           pure mempty
         Right configFile ->
-          try (readMaybe @GrConfig <$> readFile configFile) >>= \case
+          try (parseGrFlags <$> readFile configFile) >>= \case
             Left (e :: SomeException) -> do
               debugM "Read user config" $ show e
               pure mempty
             Right Nothing -> do
-              printInfo $ "Couldn't parse granule configuration file at "
-                        <> configFile
+              printInfo . red . unlines $
+                [ "Couldn't parse granule configuration file at " <> configFile
+                , "Run `gr --help` to see a list of accepted flags."
+                ]
               pure mempty
             Right (Just config) -> pure config
 
@@ -199,8 +210,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
   where
     go = do
         globPatterns <-
-          many $ argument str $ metavar "SOURCE_FILES"
-          <> help "Glob pattern for Granule source files. If the file extension is `.md`/`.tex`, the markdown/TeX preprocessor will be used."
+          many $ argument str $ metavar "GLOB_PATTERNS"
+          <> (help . unwords)
+            [ "Glob pattern for Granule source files. If the file extension is `.md`/`.tex`, the markdown/TeX preprocessor will be used."
+            , "If none are given, input will be read from stdin."
+            ]
 
         globalsDebugging <-
           flag Nothing (Just True)
@@ -238,10 +252,13 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help "Print timestamp in info and error messages"
 
         globalsSolverTimeoutMillis <-
-          optional $ option (auto @Integer) (
-            long "solver-timeout"
-            <> help "SMT solver timeout in milliseconds (negative for unlimited)"
-            )
+          (optional . option (auto @Integer))
+            $ long "solver-timeout"
+            <> (help . unwords)
+            [ "SMT solver timeout in milliseconds (negative for unlimited)"
+            , "Defaults to"
+            , show (globalsSolverTimeoutMillis mempty) <> "ms."
+            ]
 
         globalsIncludePath <-
           optional $ strOption
