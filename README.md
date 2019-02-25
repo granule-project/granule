@@ -5,14 +5,18 @@
  / _  \/\`'__\/ __ \  /' _ `\/\ \/\ \ \ \ \   /'__`\
 /\ \_\ \ \ \//\ \_\ \_/\ \/\ \ \ \_\ \ \_\ \_/\  __/
 \ \____ \ \_\\ \__/ \_\ \_\ \_\ \____/ /\____\ \____\
- \/___L\ \/_/ \/__/\/_/\/_/\/_/\/___/  \/____/\/____/
+ \/___/\ \/_/ \/__/\/_/\/_/\/_/\/___/  \/____/\/____/
    /\____/
    \_/__/
 ```
 
-A functional programming language with a linear type system and fine-grained effects and coeffects via **graded modal types**.
+Granule is a functional programming language with a linear type system and
+fine-grained effects and coeffects via **graded modal types**.
 
-A brief introduction to the Granule programming language can be found in [this extended abstract](http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf) presented at TLLA'17. The type system is partly based on the one in ["Combining effects and coeffects via grading" (Gaboardi et al. 2016)](https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf).
+A brief introduction to the Granule programming language can be found in [this
+extended abstract](http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf)
+presented at TLLA'17. The type system is partly based on the one in ["Combining
+effects and coeffects via grading" (Gaboardi et al. 2016)](https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf).
 
 ## Example
 
@@ -42,19 +46,29 @@ map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
 ```
 
-This type explains that the parameter function `f` is used exactly `n` times, where `n` is the size
-of the incoming list. Linearity ensures that the entire list is consumed exactly
-once to the produce the result.
+This type explains that the parameter function `f` is used exactly `n` times,
+where `n` is the size of the incoming list. Linearity ensures that the entire
+list is consumed exactly once to the produce the result.
 
 ## Installation
 
-Make sure you have [Z3](https://github.com/Z3Prover/z3) and [Stack](https://docs.haskellstack.org/en/stable/README/) on your system.
+Binary releases are currently available for MacOS only. If you need a newer
+[release](https://github.com/granule-project/granule/releases) than is available
+then please open an issue.
+
+To build Granule from source, make sure you have
+[Z3](https://github.com/Z3Prover/z3) and
+[Stack](https://docs.haskellstack.org/en/stable/README/) on your system.
 
 Now run
 
-    $ git clone https://github.com/granule-project/granule && cd granule && stack setup && stack install --test
+    git clone https://github.com/granule-project/granule \
+    && cd granule \
+    && stack setup \
+    && stack install --test
 
-More details about how to install can be found on the [wiki page](https://github.com/granule-project/granule/wiki/Installing-Granule).
+More details about how to install can be found on the [wiki
+page](https://github.com/granule-project/granule/wiki/Installing-Granule).
 
 ## Running the Interpreter
 
@@ -62,79 +76,124 @@ Granule program files have file extension `.gr`. Use the `gr` command to run the
 
     $ gr examples/NonEmpty.gr
     Checking examples/NonEmpty.gr...
-    Ok, evaluating...
-    `main` returned:
+    OK, evaluating...
     1
 
 See the `examples` directory for more sample programs, or `frontend/tests/cases`
 if you dare.
 
-### Literate Granule Files
+Run `gr` with the `--help` flag for an overview of flags. Flags can be set
+
+  1. in `~/.granule` (the same way as on the command line)
+  2. on the command line
+  3. at the top of the file (prepended with `-- gr `)
+
+and have precedence in that order, e.g. flags set on the command line will
+override flags in the config.
+
+### Multi-Byte Unicode
+
+The following operators are interchangeable.
+
+| ASCII | Unicode |
+|:---:|:---:|
+| `forall` | `∀` |
+| `Inf` | `∞` |
+| `->` | `→` |
+| `=>` | `⇒` |
+| `<-` | `←` |
+| `/\` | `∧` |
+| `\/` | `∨` |
+| `<=` | `≤` |
+| `>=` | `≥` |
+| `==` | `≡` |
+| `\` | `λ` |
+
+Usages of the operator `∘` get parsed as an application of `compose`.
+
+### Literate Granule
+
+Granule has some basic support for literate programs with Markdown and TeX.
+By default code in `granule` code environments will be run. This can be
+overridden with the flag `--literate-env-name`.
+
+#### Markdown
 
 The interpreter also takes markdown files with the extension `.md`, in which
 case all fenced code blocks labelled with `granule` will get parsed as the input
 source code. All other lines are ignored, but counted as whitespace to retain
 line numbers for error messages.
 
-    # Example literate granule (markdown) file
+~~~~ markdown
+# Example literate granule (markdown) file
 
-    Code blocks can be fenced with twiddles...
+Code blocks can be fenced with twiddles...
 
-    ~~~ granule
-    a : Int
-    a = 1
-    ~~~
+~~~ granule
+a : Int
+a = 1
+~~~
 
-    ... or backticks.
+... or backticks.
 
-    ```granule
-    b : Int
-    b = 2
-    ```
-
-    The following code blocks will get ignored.
-
-    ~~~
-    c : Int
-    c = 3
-    ~~~
-
-    ```not granule
-    d : Int
-    d = 4
-    ```
-
-
-
-### Options
-
-`gr` takes several options, run `gr --help` for more information.
-
-You can set default options in `$HOME/.granule`, e.g.:
-
-```
-$ cat ~/.granule
-GrConfig
-  { grAsciiToUnicode             = Just True
-  , grKeepBackup                 = Nothing
-  , grGlobals                    = Globals
-  , grLiterateEnvName            = Nothing
-    { globalsDebugging           = Nothing
-    , globalsNoColors            = Just True
-    , globalsAlternativeColors   = Nothing
-    , globalsNoEval              = Nothing
-    , globalsSuppressInfos       = Nothing
-    , globalsSuppressErrors      = Nothing
-    , globalsTesting             = Nothing
-    , globalsTimestamp           = Nothing
-    , globalsSolverTimeoutMillis = Just 2000
-    , globalsIncludePath         = Just "/Users/alice/granule/StdLib"
-    , globalsSourceFilePath      = Nothing
-    }
-  }
+```granule
+b : Int
+b = 2
 ```
 
-`Nothing` denotes that the default will be used and `Just x` means that the
-default value gets overridden by `x`.
+The following code blocks will get ignored.
 
-All contributions are welcome!
+~~~
+int c = 3;
+~~~
+
+```haskell
+d :: Int
+d = 4
+```
+~~~~
+
+#### TeX
+
+You can run Granule on the TeX file below with `gr --literate-env-name verbatim`.
+You can use XeLaTeX to properly display multi-byte Unicode characters.
+
+~~~ tex
+\documentclass{article}
+
+\title{Literate Granule (\TeX{}) Example}
+\begin{document}
+\author{Grampy Granule}
+\maketitle
+
+Writing things here.
+
+\begin{verbatim}
+import Prelude
+
+foo : String
+foo = "running code here"
+\end{verbatim}
+\end{document}
+~~~
+
+
+## Caveats
+
+Granule is a research project to help us gain intuitions about using linearity
+and graded modalities in programming. It is licensed under a permissive licence,
+so you can use it for whatever, but please don't write your next spaceship
+controller in Granule just yet. The interface is not stable (and nor is the
+code). You have been warned...
+
+~~~
+            ( All contributions are welcome! )
+      __//   /
+    /.__.\
+    \ \/ /
+ '__/    \
+  \-      )
+   \_____/
+_____|_|______________________________________
+     " "
+~~~
