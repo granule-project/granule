@@ -138,7 +138,7 @@ getEmbeddedGrFlags = foldr (<|>) Nothing . map getEmbeddedGrFlagsLine . lines
 parseGrFlags :: String -> Maybe GrConfig
 parseGrFlags
   = pure . snd
-  <=< getParseResult . execParserPure defaultPrefs parseGrConfig . words
+  <=< getParseResult . execParserPure (prefs disambiguate) parseGrConfig . words
 
 
 data GrConfig = GrConfig
@@ -234,11 +234,13 @@ parseGrConfig = info (go <**> helper) $ briefDesc
         globalsNoColors <-
           flag Nothing (Just True)
             $ long "no-color"
+            <> long "no-colour"
             <> help "Turn off colors in terminal output"
 
         globalsAlternativeColors <-
           flag Nothing (Just True)
             $ long "alternative-colors"
+            <> long "alternative-colours"
             <> help "Print success messages in blue instead of green (may help with color blindness)"
 
         globalsNoEval <-

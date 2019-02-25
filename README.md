@@ -18,8 +18,8 @@ A brief introduction to the Granule programming language can be found in the
 the one in ["Combining effects and coeffects via grading" (Gaboardi et al.
 2016)][2].
 
-[1]: https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf).
-[2]: http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf)
+[1]: https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf
+[2]: http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf
 
 ## Example
 
@@ -112,6 +112,17 @@ $ cat ~/.granule
 --include-path /Users/alice/granule/StdLib
 --solver-timeout 2000
 ~~~
+
+### Accessibility
+
+We aim to make Granule as inclusive as possible. If you experience any
+accessibility hurdles, please open an issue.
+
+#### Alternative Colours
+
+The `--alternative-colors`/`--alternative-colours` flag will cause success messages to be printed in blue instead of green, which may help with colour blindness.
+
+The `--no-color`/`--no-colour` flag will turn off colours altogether.
 
 ### Multi-Byte Unicode
 
