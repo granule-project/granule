@@ -40,6 +40,7 @@ import Language.Granule.Checker.Monad (CheckerError)
 import Language.Granule.Interpreter.Eval
 import Language.Granule.Interpreter.Preprocess
 import Language.Granule.Syntax.Parser
+import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils
 import Paths_granule_interpreter (version)
@@ -63,7 +64,11 @@ runGrOnFiles globPatterns config = do
           let fileName = if pwd `isPrefixOf` path then takeFileName path else path
           let ?globals = (grGlobals config){ globalsSourceFilePath = Just fileName } in do
             printInfo $ "Checking " <> fileName <> "..."
-            src <- preprocess (asciiToUnicode config) (keepBackup config) path (literateEnvName config)
+            src <- preprocess
+              (rewriter config)
+              (keepBackup config)
+              path
+              (literateEnvName config)
             result <- run src
             printResult result
             return result
@@ -142,22 +147,24 @@ parseGrFlags
 
 
 data GrConfig = GrConfig
-  { grAsciiToUnicode  :: Maybe Bool
+  { grRewriter    :: Maybe (String -> String)
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
   , grGlobals         :: Globals
-  } deriving (Read, Show)
+  }
 
-asciiToUnicode, keepBackup :: GrConfig -> Bool
-asciiToUnicode = fromMaybe False . grAsciiToUnicode
-keepBackup     = fromMaybe False . grKeepBackup
+rewriter :: GrConfig -> Maybe (String -> String)
+rewriter c = grRewriter c <|> Nothing
+
+keepBackup :: GrConfig -> Bool
+keepBackup = fromMaybe False . grKeepBackup
 
 literateEnvName :: GrConfig -> String
 literateEnvName = fromMaybe "granule" . grLiterateEnvName
 
 instance Semigroup GrConfig where
   c1 <> c2 = GrConfig
-    { grAsciiToUnicode  = grAsciiToUnicode  c1 <|> grAsciiToUnicode  c2
+    { grRewriter    = grRewriter    c1 <|> grRewriter  c2
     , grKeepBackup      = grKeepBackup      c1 <|> grKeepBackup      c2
     , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
     , grGlobals         = grGlobals         c1 <>  grGlobals         c2
@@ -165,7 +172,7 @@ instance Semigroup GrConfig where
 
 instance Monoid GrConfig where
   mempty = GrConfig
-    { grAsciiToUnicode  = Nothing
+    { grRewriter    = Nothing
     , grKeepBackup      = Nothing
     , grLiterateEnvName = Nothing
     , grGlobals         = mempty
@@ -206,7 +213,7 @@ parseGrConfig :: ParserInfo ([FilePath], GrConfig)
 parseGrConfig = info (go <**> helper) $ briefDesc
     <> header ("Granule " <> showVersion version)
     <> footer "\n\nThis software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
-              \Consult the LICENSE for further information."
+              \ Consult the LICENSE for further information."
   where
     go = do
         globPatterns <-
@@ -259,34 +266,39 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> (help . unwords)
             [ "SMT solver timeout in milliseconds (negative for unlimited)"
             , "Defaults to"
-            , show (globalsSolverTimeoutMillis mempty) <> "ms."
+            , show solverTimeoutMillis <> "ms."
             ]
 
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"
-            <> help "Path to the standard library"
+            <> help ("Path to the standard library. Defaults to "
+                    <> show includePath)
             <> metavar "PATH"
 
-        grAsciiToUnicode <-
-          flag Nothing (Just True)
-            $ long "ascii-to-unicode"
-            <> help "Destructively rewrite ascii symbols to their unicode equivalents (WARNING: overwrites the input file)"
+        grRewriter
+          <- flag'
+            (Just asciiToUnicode)
+            (long "ascii-to-unicode" <> help "WARNING: Destructively overwrite ascii characters to multi-byte unicode.")
+          <|> flag Nothing
+            (Just unicodeToAscii)
+            (long "unicode-to-ascii" <> help "WARNING: Destructively overwrite multi-byte unicode to ascii.")
 
         grKeepBackup <-
           flag Nothing (Just True)
             $ long "keep-backup"
-            <> help "Keep a backup copy of the input file (only has an effect when destructively preprocessing with `--ascii-to-unicode`)"
+            <> help "Keep a backup copy of the input file (only has an effect when destructively preprocessing.)"
 
         grLiterateEnvName <-
           optional $ strOption
             $ long "literate-env-name"
-            <> help ("Name of the code environment to check in literate files. Defaults to \"" <> literateEnvName mempty <> "\"")
+            <> help ("Name of the code environment to check in literate files. Defaults to "
+                    <> show (literateEnvName mempty))
 
         pure
           ( globPatterns
           , GrConfig
-            { grAsciiToUnicode
+            { grRewriter
             , grKeepBackup
             , grLiterateEnvName
             , grGlobals = Globals
@@ -304,6 +316,8 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               }
             }
           )
+      where
+        ?globals = mempty @Globals
 
 data InterpreterError
   = ParseError String

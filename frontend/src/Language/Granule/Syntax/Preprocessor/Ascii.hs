@@ -1,15 +1,22 @@
 {-# LANGUAGE OverloadedStrings #-}
 
-module Language.Granule.Syntax.Preprocessor.Ascii (unAscii, asciiUnicodeTableMarkdown) where
+module Language.Granule.Syntax.Preprocessor.Ascii
+  ( asciiToUnicode
+  , unicodeToAscii
+  , asciiUnicodeTableMarkdown
+  ) where
 
-import Control.Arrow (first)
+import Control.Arrow (first, second)
 import Data.String (fromString)
 import Text.Replace (Replace(..), replaceWithList)
 
-unAscii :: String -> String
-unAscii = replaceWithList $ map (uncurry Replace . first fromString) asciiUnicodeTable
+asciiToUnicode :: String -> String
+asciiToUnicode = replaceWithList $ map (uncurry Replace . first fromString) asciiUnicodeTable
 
--- NOTE: Update the documentation if you touch this.
+unicodeToAscii :: String -> String
+unicodeToAscii = replaceWithList $ map (uncurry (flip Replace) . second fromString) asciiUnicodeTable
+
+-- NOTE: Update the documentation with 'asciiUnicodeTableMarkdown' if you touch this.
 asciiUnicodeTable :: [(String,String)]
 asciiUnicodeTable =
     [ ("forall" , "∀")

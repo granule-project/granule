@@ -10,41 +10,48 @@ import System.Directory (removeFile, renameFile)
 import System.FilePath (splitFileName)
 import System.IO (hClose, hPutStr, openTempFile)
 
-import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Preprocessor.Markdown
 
 
 -- | Preprocess the source file based on the file extension.
-preprocess :: Bool -> Bool -> String -> FilePath -> IO String
-preprocess performAsciiToUnicodeOnFile keepOldFile file env
-  = case lookup extension preprocessors of
-    Just (stripNonGranule, asciiToUnicode) -> do
-      src <- readFile file
-      when performAsciiToUnicodeOnFile $ do
-        (tempFile, tempHd) <- uncurry openTempFile (splitFileName file)
-        try (hPutStr tempHd (asciiToUnicode src)) >>= \case
-          Right () -> do
-            hClose tempHd
-            when keepOldFile (renameFile file (file <> ".bak"))
-            renameFile tempFile file
-          Left (e :: SomeException) -> do
-            hClose tempHd
-            removeFile tempFile
-            throwIO e
-      return $ stripNonGranule src
-    Nothing -> error
-      $ "Unrecognised file extension: "
-      <> extension
-      <> ". Expected one of "
-      <> intercalate ", " (map fst preprocessors)
-      <> "."
+preprocess :: Maybe (String -> String) -> Bool -> String -> FilePath -> IO String
+preprocess mbRewriter keepOldFile file env
+  = case lookup extension acceptedFormats of
+      Just (stripNonGranule, preprocessOnlyGranule) -> do
+        src <- readFile file
+        case mbRewriter of
+          Just rewriter -> do
+            let processedSrc = preprocessOnlyGranule rewriter src
+            -- open a temporary file
+            (tempFile, tempHd) <- uncurry openTempFile (splitFileName file)
+            -- write the processed source to the temporary file
+            try (hPutStr tempHd processedSrc) >>= \case
+              Right () -> do
+                hClose tempHd
+                -- if we are keeping the original source file, then rename it
+                when keepOldFile (renameFile file (file <> ".bak"))
+                -- move the temp file to the original source file path
+                renameFile tempFile file
+                return $ stripNonGranule processedSrc
+              Left (e :: SomeException) -> do
+                hClose tempHd
+                removeFile tempFile
+                throwIO e
+          Nothing -> return $ stripNonGranule src
+      Nothing -> error
+        $ "Unrecognised file extension: "
+        <> extension
+        <> ". Expected one of "
+        <> intercalate ", " (map fst acceptedFormats)
+        <> "."
   where
     extension = reverse . takeWhile (/= '.') . reverse $ file
 
-    preprocessors =
-      [ ("gr",    (id,             unAscii))
-      , ("md",    (unMarkdown env, processGranuleMarkdown unAscii id env))
-      , ("tex",   (unLatex env,    processGranuleLatex unAscii id env))
-      , ("latex", (unLatex env,    processGranuleLatex unAscii id env))
+    -- (file extension, (stripNonGranule, destructive preprocessor))
+    acceptedFormats =
+      [ ("gr",    (id,             id))
+      , ("md",    (unMarkdown env, processGranuleMarkdown id env))
+      , ("tex",   (unLatex env,    processGranuleLatex id env))
+      , ("latex", (unLatex env,    processGranuleLatex id env))
       ]

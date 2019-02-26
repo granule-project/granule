@@ -12,20 +12,20 @@ data DocType
   | GranuleBlockTwiddle
   | GranuleBlockTick
 
--- | Extract fenced code blocks labeled  "" <> env <> "" from markdown files on a
+-- | Extract fenced code blocks from markdown files on a
 -- line-by-line basis. Maps other lines to the empty string, such that line
 -- numbers are preserved.
 unMarkdown :: String -> (String -> String)
-unMarkdown = processGranuleMarkdown id (const "")
+unMarkdown env = processGranuleMarkdown (const "") env id
 
 -- | Transform the input by the given processing functions for Granule and
 -- Markdown (currently operating on a line-by-line basis)
 processGranuleMarkdown
-  :: (String -> String) -- the processing function to apply to each line of " <> env <> " code
-  -> (String -> String) -- the processing function to apply to each line of markdown
-  -> String
+  :: (String -> String) -- the processing function to apply to each line of markdown
+  -> String             -- the name of the code env, e.g. "granule"
+  -> (String -> String) -- the processing function to apply to each line of granule code
   -> (String -> String)
-processGranuleMarkdown fGr fMd env = lines >>> (`zip` [1..]) >>> go Markdown >>> unlines
+processGranuleMarkdown fMd env fGr = lines >>> (`zip` [1..]) >>> go Markdown >>> unlines
   where
     go :: DocType -> [(String, Int)] -> [String]
     go Markdown ((line, lineNumber) : ls)

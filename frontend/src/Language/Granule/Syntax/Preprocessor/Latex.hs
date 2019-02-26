@@ -14,17 +14,17 @@ data DocType
 -- | Extract @\begin{env}@ code blocks @\end{env}@ from tex files on a
 -- line-by-line basis, where @env@ is the name of the relevant environment. Maps
 -- other lines to the empty string, such that line numbers are preserved.
-unLatex :: String -> String -> String
-unLatex = processGranuleLatex id (const "")
+unLatex :: String -> (String -> String)
+unLatex env = processGranuleLatex (const "") env id
 
 -- | Transform the input by the given processing functions for Granule and Latex
 -- (currently operating on a line-by-line basis)
 processGranuleLatex
-  :: (String -> String) -- ^ the processing function to apply to each line of granule code
-  -> (String -> String) -- ^ the processing function to apply to each line of latex
+  :: (String -> String) -- ^ the processing function to apply to each line of latex
   -> String             -- ^ the name of the environment to check
+  -> (String -> String) -- ^ the processing function to apply to each line of granule code
   -> (String -> String)
-processGranuleLatex fGr fTex env = lines >>> (`zip` [1..]) >>> go Latex >>> unlines
+processGranuleLatex fTex env fGr = lines >>> (`zip` [1..]) >>> go Latex >>> unlines
   where
     go :: DocType -> [(String, Int)] -> [String]
     go Latex ((line, lineNumber) : ls)

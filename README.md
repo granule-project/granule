@@ -120,13 +120,18 @@ accessibility hurdles, please open an issue.
 
 #### Alternative Colours
 
-The `--alternative-colors`/`--alternative-colours` flag will cause success messages to be printed in blue instead of green, which may help with colour blindness.
+The `--alternative-colors`/`--alternative-colours` flag will cause success
+messages to be printed in blue instead of green, which may help with colour
+blindness.
 
 The `--no-color`/`--no-colour` flag will turn off colours altogether.
 
 ### Multi-Byte Unicode
 
-The following operators are interchangeable.
+The following symbols are interchangeable. You can destructively rewrite all
+occurrences in your source file by passing
+`--ascii-to-unicode`/`--unicode-to-ascii`. `--keep-backup` will save a backup of
+the most recent copy of the input file with `.bak` appended.
 
 | ASCII | Unicode |
 |:---:|:---:|
