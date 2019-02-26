@@ -236,9 +236,13 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint k1 k2 n m = do
       case k1 `joinKind` k2 of
-        Just (KPromote (TyCon kc)) | internalName kc /= "Protocol" -> do
-          -- Don't create solver constraints for sessions- deal with before SMT
-          addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
+        Just (KPromote (TyCon kc)) -> do
+
+          k <- inferKindOfType s (TyCon kc)
+          -- Create solver vars for coeffects
+          case k of
+            KCoeffect -> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
+            _         -> return ()
           return (True, [(n, SubstT $ TyVar m)])
         Just _ ->
           return (True, [(n, SubstT $ TyVar m)])

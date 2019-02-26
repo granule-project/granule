@@ -21,6 +21,7 @@ import Language.Granule.Checker.Primitives (tyOps)
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Context
@@ -74,7 +75,10 @@ inferKindOfType' s quantifiedVariables t =
         st <- get
         case lookup conId (typeConstructors st) of
           Just (kind,_) -> return kind
-          Nothing   -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
+          Nothing   -> case lookup conId (dataConstructors st) of
+            Just (Forall _ [] [] t) -> return $ KPromote t
+            Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
+            Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)

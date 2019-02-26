@@ -1,0 +1,12 @@
+data Bool = True | False
+
+data InOrOut : Bool -> Type -> Type where
+  In : forall {a : Type} . a -> InOrOut True a;
+  Out : forall {a : Type} . InOrOut False a
+
+test : forall {b : Bool} . InOrOut b Int -> InOrOut b Int
+test (In x) = In (x * 2);
+test Out = Out
+
+lala : forall {b : Bool} . InOrOut True Int -> Int
+lala (In x) = x
