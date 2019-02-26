@@ -1163,11 +1163,7 @@ discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars c
   where
     toFreshVar (var, Discharged t c) = do
       coeffTy <- mguCoeffectTypes s c coeffect
-
-      -- Create a fresh variable
-      cvar  <- freshTyVarInContext var (promoteTypeToKind coeffTy)
-      -- Return the freshened var-type mapping
-      return (var, Discharged t (CVar cvar))
+      return (var, Discharged t (COne coeffTy))
 
     toFreshVar (var, Linear t) = do
       coeffTy <- inferCoeffectType s coeffect
