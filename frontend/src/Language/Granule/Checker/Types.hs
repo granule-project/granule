@@ -138,7 +138,7 @@ equalTypesRelatedCoeffects s rel uS (Diamond ef1 t1) (Diamond ef2 t2) sp = do
     then return (eq, unif)
     else
       -- Effect approximation
-      if (ef1 `isPrefixOf` ef2)
+      if all (`elem` ef2) ef1
       then return (eq, unif)
       else
         -- Communication effect analysis is idempotent
