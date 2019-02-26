@@ -78,7 +78,11 @@ inferKindOfType' s quantifiedVariables t =
         st <- get
         case lookup conId (typeConstructors st) of
           Just (kind,_) -> return kind
-          Nothing   -> halt $ UnboundVariableError (Just s) (pretty conId <> " constructor.")
+          Nothing   ->
+            case lookup conId (dataConstructors st) of
+              Just (Forall _ [] [] t, []) -> return $ KPromote t
+              Just _ -> halt $ GenericError (Just s) ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId)
+              Nothing -> halt $ UnboundVariableError (Just s) (pretty conId <> " constructor.")
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
