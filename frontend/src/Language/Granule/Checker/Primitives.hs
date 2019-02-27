@@ -20,8 +20,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeConstructors =
-    [ (mkId "()", (KType, Just 1))
-    , (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
+    [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
     , (mkId ",", (KFun KType (KFun KType KType), Just 1))
     , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
@@ -37,8 +36,6 @@ typeConstructors =
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
     -- File stuff
-    , (mkId "Handle", (KType, Nothing))
-    , (mkId "IOMode", (KType, Nothing))
     -- Channels and protocol types
     , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing))
     , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing))
@@ -67,16 +64,10 @@ tyOps = \case
 
 dataConstructors :: [(Id, TypeScheme)]
 dataConstructors =
-    [ (mkId "()", Forall nullSpanBuiltin [] [] (TyCon $ mkId "()"))
-    , (mkId ",", Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
+    [ (mkId ",", Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
                  (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
-
-    , (mkId "ReadMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    , (mkId "WriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    , (mkId "AppendMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
-    , (mkId "ReadWriteMode", Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"))
     ] ++ builtinDataConstructors
 
 builtins :: [(Id, TypeScheme)]
@@ -105,30 +96,7 @@ builtins =
   , (mkId "showInt", Forall nullSpanBuiltin [] [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "String"))
 
-    -- File stuff
-  , (mkId "openFile", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "String")
-                          (FunTy (TyCon $ mkId "IOMode")
-                                (Diamond ["O"] (TyCon $ mkId "Handle"))))
-  , (mkId "hGetChar", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "Handle")
-                               (Diamond ["RW"]
-                                (TyApp (TyApp (TyCon $ mkId ",")
-                                              (TyCon $ mkId "Handle"))
-                                       (TyCon $ mkId "Char"))))
-  , (mkId "hPutChar", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "Handle")
-                         (FunTy (TyCon $ mkId "Char")
-                           (Diamond ["W"] (TyCon $ mkId "Handle"))))
-  , (mkId "isEOF", Forall nullSpanBuiltin [] [] $
-                     FunTy (TyCon $ mkId "Handle")
-                            (Diamond ["R"]
-                             (TyApp (TyApp (TyCon $ mkId ",")
-                                           (TyCon $ mkId "Handle"))
-                                    (TyCon $ mkId "Bool"))))
-  , (mkId "hClose", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "Handle")
-                               (Diamond ["C"] (TyCon $ mkId "()")))
+
     -- protocol typed primitives
   , (mkId "send", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)] []
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
@@ -190,19 +158,66 @@ binaryOperators = \case
       FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
       :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
 
-
+-- TODO make a proper quasi quoter that parses this at compile time
 builtinSrc :: String
 builtinSrc = [r|
 
+data () = ()
+
+
+
+--------------------------------------------------------------------------------
+-- File Handles
+--------------------------------------------------------------------------------
+
+data Handle : HandleType -> Type
+  = BUILTIN
+
+-- TODO: with type level sets we could index a handle by a set of capabilities
+-- then we wouldn't need readChar and readChar' etc.
+data IOMode : HandleType -> Type where
+  ReadMode : IOMode R;
+  WriteMode : IOMode W;
+  AppendMode : IOMode A;
+  ReadWriteMode : IOMode RW
+
+data HandleType = R | W | A | RW
+
+openHandle
+  : forall {m : HandleType}
+  . String
+  -> IOMode m
+  -> (Maybe (Handle m)) <O>
+openHandle = BUILTIN
+
+-- Returns `None` on EOF
+readChar : Handle R -> (Handle R, Maybe Char) <R>
+readChar = BUILTIN
+
+-- Returns `None` on EOF
+readChar' : Handle RW -> (Handle RW, Maybe Char) <R>
+readChar' = BUILTIN
+
+appendChar : Handle A -> Char -> (Handle A) <W>
+appendChar = BUILTIN
+
+writeChar : Handle W -> Char -> (Handle W) <W>
+writeChar = BUILTIN
+
+writeChar' : Handle RW -> Char -> (Handle RW) <W>
+writeChar' = BUILTIN
+
+closeHandle : forall {m : HandleType} . Handle m -> () <C>
+closeHandle = BUILTIN
 --------------------------------------------------------------------------------
 -- String manipulation
 --------------------------------------------------------------------------------
 
 unConsString : String → Maybe (Char, String)
-unConsString = builtin
+unConsString = BUILTIN
 
 consString : Char → String → String
-consString = builtin
+consString = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Arrays
@@ -221,21 +236,21 @@ push
   ⇒ ArrayStack cap maxIndex a
   → a
   → ArrayStack cap (maxIndex + 1) a
-push = builtin
+push = BUILTIN
 
 pop
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
   . {maxIndex > 0}
   ⇒ ArrayStack cap maxIndex a
   → a × ArrayStack cap (maxIndex - 1) a
-pop = builtin
+pop = BUILTIN
 
 -- Boxed array, so we allocate cap words
 allocate
   : ∀ {a : Type, cap : Nat}
   . N cap
   → ArrayStack cap 0 a
-allocate = builtin
+allocate = BUILTIN
 
 swap
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
@@ -243,13 +258,13 @@ swap
   → Fin (maxIndex + 1)
   → a
   → a × ArrayStack cap (maxIndex + 1) a
-swap = builtin
+swap = BUILTIN
 
 copy
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
-copy = builtin
+copy = BUILTIN
 
 |]
 

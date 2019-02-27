@@ -1,18 +1,22 @@
-import Bool
+import Maybe
 
-readFile : String -> String <IO>
+
+readFile : String -> (Maybe String) <O,R,C>
 readFile filename =
-  let h       <- openFile filename ReadMode;
-      (h, cs) <- getCharsUntilEnd h;
-      ()      <- hClose h
-  in pure cs
+  let o <- openHandle filename ReadMode in
+  case o of
+    None -> pure None;
+    Some h ->
+      let (h, cs) <- readUntilEnd h;
+          _ <- closeHandle h
+      in pure (Some cs)
 
-getCharsUntilEnd : Handle -> (Handle, String) <IO>
-getCharsUntilEnd h =
-    let (h, b) <- isEOF h
-    in case b of
-        True -> pure (h, "");
-        False ->
-            let (h, c) <- hGetChar h;
-                (h, cs) <- getCharsUntilEnd h
-            in pure (h, stringAppend (showChar c) cs)
+readUntilEnd : Handle R -> (Handle R, String) <R>
+readUntilEnd h =
+  let (h, mc) <- readChar h in
+  case mc of
+    Some c ->
+      let (h, str) <- readUntilEnd h
+      in pure (h, consString c str);
+    None -> (h, "")
+
