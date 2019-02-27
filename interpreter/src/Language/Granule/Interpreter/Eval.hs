@@ -265,21 +265,25 @@ builtIns =
                               when testing (error "trying to `write` while testing")
                               Text.putStrLn s
                               return $ Pure () (Val nullSpan () (Constr () (mkId "()") [])))
-  , (mkId "openFile", Ext () $ Primitive openFile)
-  , (mkId "hGetChar", Ext () $ Primitive hGetChar)
-  , (mkId "hPutChar", Ext () $ Primitive hPutChar)
-  , (mkId "hClose",   Ext () $ Primitive hClose)
+  , (mkId "openHandle", Ext () $ Primitive openHandle)
+  , (mkId "readChar", Ext () $ Primitive readChar)
+  , (mkId "writeChar", Ext () $ Primitive writeChar)
+  , (mkId "closeHandle",   Ext () $ Primitive closeHandle)
   , (mkId "showChar",
         Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral $ pack [c])
+  , (mkId "charToInt",
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ NumInt $ fromEnum c)
+  , (mkId "charFromInt",
+        Ext () $ Primitive $ \(NumInt c) -> return $ CharLiteral $ toEnum c)
   , (mkId "stringAppend",
         Ext () $ Primitive $ \(StringLiteral s) -> return $
           Ext () $ Primitive $ \(StringLiteral t) -> return $ StringLiteral $ s <> t)
-  , ( mkId "unConsString"
+  , ( mkId "stringUncons"
     , Ext () $ Primitive $ \(StringLiteral s) -> case uncons s of
         Just (c, s) -> return $ Constr () (mkId "Some") [Constr () (mkId ",") [CharLiteral c, StringLiteral s]]
         Nothing     -> return $ Constr () (mkId "None") []
     )
-  , ( mkId "consString"
+  , ( mkId "stringCons"
     , Ext () $ Primitive $ \(CharLiteral c) -> return $
         Ext () $ Primitive $ \(StringLiteral s) -> return $ StringLiteral (cons c s)
     )
@@ -335,8 +339,8 @@ builtIns =
     cast :: Int -> Double
     cast = fromInteger . toInteger
 
-    openFile :: RValue -> IO RValue
-    openFile (StringLiteral s) = return $
+    openHandle :: RValue -> IO RValue
+    openHandle (StringLiteral s) = return $
       Ext () $ Primitive (\x ->
         case x of
            (Constr _ m []) -> do
@@ -344,29 +348,29 @@ builtIns =
                h <- SIO.openFile (unpack s) mode
                return $ Pure () $ valExpr $ Ext () $ Handle h
            rval -> error $ "Runtime exception: trying to open with a non-mode value")
-    openFile _ = error $ "Runtime exception: trying to open from a non string filename"
+    openHandle _ = error $ "Runtime exception: trying to open from a non string filename"
 
-    hPutChar :: RValue -> IO RValue
-    hPutChar (Ext _ (Handle h)) = return $
+    writeChar :: RValue -> IO RValue
+    writeChar (Ext _ (Handle h)) = return $
       Ext () $ Primitive (\c ->
         case c of
           (CharLiteral c) -> do
             SIO.hPutChar h c
             return $ Pure () $ valExpr $ Ext () $ Handle h
           _ -> error $ "Runtime exception: trying to put a non character value")
-    hPutChar _ = error $ "Runtime exception: trying to put from a non handle value"
+    writeChar _ = error $ "Runtime exception: trying to put from a non handle value"
 
-    hGetChar :: RValue -> IO RValue
-    hGetChar (Ext _ (Handle h)) = do
+    readChar :: RValue -> IO RValue
+    readChar (Ext _ (Handle h)) = do
           c <- SIO.hGetChar h
           return $ Pure () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
-    hGetChar _ = error $ "Runtime exception: trying to get from a non handle value"
+    readChar _ = error $ "Runtime exception: trying to get from a non handle value"
 
-    hClose :: RValue -> IO RValue
-    hClose (Ext _ (Handle h)) = do
+    closeHandle :: RValue -> IO RValue
+    closeHandle (Ext _ (Handle h)) = do
          SIO.hClose h
          return $ Pure () $ valExpr (Constr () (mkId "()") [])
-    hClose _ = error $ "Runtime exception: trying to close a non handle value"
+    closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
@@ -410,7 +414,7 @@ instance RuntimeRep Value where
   toRuntimeRep (NumFloat x) = NumFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
-eval (AST dataDecls defs) = do
+eval (AST dataDecls defs _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing

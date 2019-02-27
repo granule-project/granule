@@ -132,7 +132,11 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
 -- | Get the flags embedded in the first line of a file, e.g.
 -- "-- gr --no-eval"
 getEmbeddedGrFlags :: String -> Maybe GrConfig
-getEmbeddedGrFlags = foldr (<|>) Nothing . map getEmbeddedGrFlagsLine . lines
+getEmbeddedGrFlags
+  = foldr (<|>) Nothing
+  . map getEmbeddedGrFlagsLine
+  . take 3 -- only check for flags within the top 3 lines (so they are visible and at the top)
+  . lines
   where
     getEmbeddedGrFlagsLine
       = parseGrFlags . dropWhile isSpace

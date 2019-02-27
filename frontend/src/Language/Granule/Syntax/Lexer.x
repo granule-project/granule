@@ -26,8 +26,9 @@ $fruit = [\127815-\127827] -- 🍇🍈🍉🍊🍋🍌🍍🍎🍏🍐🍑🍒�
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
-@charLiteral = \' ([\\.] | . ) \'
+@charLiteral = \' ([\\.]|[^\']| . ) \'
 @stringLiteral = \"(\\.|[^\"]|\n)*\"
+@importFilePath = ($alphanum | \' | \.)*
 
 tokens :-
 
@@ -36,7 +37,7 @@ tokens :-
   $white+                       ;
   "--".*                        ;
   "{-" (\\.|[^\{\-]|\n)* "-}"   ;
-  "import".*                    ;
+  import$white+@importFilePath  { \p s -> TokenImport p s }
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   ∀                             { \p s -> TokenForall p }
@@ -159,6 +160,7 @@ data Token
   | TokenJoin AlexPosn
   | TokenMeet AlexPosn
   | TokenRing AlexPosn
+  | TokenImport AlexPosn String
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String

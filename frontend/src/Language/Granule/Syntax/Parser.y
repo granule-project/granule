@@ -7,8 +7,11 @@ module Language.Granule.Syntax.Parser where
 import Control.Monad (forM, when, unless)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
-import Data.List ((\\), intercalate, nub, stripPrefix)
+import Data.Char (isSpace)
+import Data.Foldable (toList)
+import Data.List (intercalate, nub, stripPrefix)
 import Data.Maybe (mapMaybe)
+import Data.Set (Set, (\\), fromList, insert, singleton)
 import Numeric
 import System.FilePath ((</>))
 
@@ -43,6 +46,7 @@ import Language.Granule.Utils hiding (mkSpan)
     else  { TokenElse _ }
     case  { TokenCase _ }
     of    { TokenOf _ }
+    import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -100,15 +104,21 @@ import Language.Granule.Utils hiding (mkSpan)
 %%
 
 Defs :: { AST () () }
-  : Def                       { AST [] [$1] }
-  | DataDecl                  { AST [$1] [] }
-  | DataDecl NL Defs          { let (AST dds defs) = $3 in AST ($1 : dds) defs }
-  | Def NL Defs               { let (AST dds defs) = $3 in AST dds ($1 : defs) }
-  -- | NL                        { AST [] [] }
+  : Def                       { AST [] [$1] mempty }
+  | DataDecl                  { AST [$1] [] mempty }
+  | Import                    { AST [] [] (singleton $1) }
+  | DataDecl NL Defs          { let (AST dds defs imprts) = $3 in AST ($1 : dds) defs imprts }
+  | Def NL Defs               { let (AST dds defs imprts) = $3 in AST dds ($1 : defs) imprts }
+  | Import NL Defs            { let (AST dds defs imprts) = $3 in AST dds defs (insert $1 imprts) }
 
 NL :: { () }
-  : nl NL                    { }
-  | nl                       { }
+  : nl NL                     { }
+  | nl                        { }
+
+Import :: { Import }
+  : import                    { let TokenImport _ ('i':'m':'p':'o':'r':'t':path) = $1
+                                in dropWhile isSpace path <> ".gr"
+                              }
 
 Def :: { Def () () }
   : Sig NL Bindings
@@ -217,8 +227,12 @@ PAtom :: { Pattern () }
   | '[' NAryConstr ']'
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () $2 }
 
-  | '(' PAtom ',' PAtom ')'
+  | '(' PMolecule ',' PMolecule ')'
        {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () (mkId ",") [$2, $4] }
+
+PMolecule :: { Pattern () }
+  : NAryConstr                { $1 }
+  | PAtom                     { $1 }
 
 NAryConstr :: { Pattern () }
   : CONSTR Pats               {% let TokenConstr _ x = $1
@@ -497,27 +511,22 @@ parseAndDoImportsAndFreshenDefs input = do
 
 parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefsAndDoImports input = do
-    defs <- either error return $ parseDefs sourceFilePath input
-    importedDefs <- forM imports $ \path -> do
-      src <- readFile path
-      let ?globals = ?globals { globalsSourceFilePath = Just path }
-      parseDefsAndDoImports src
-    let allDefs = merge $ defs : importedDefs
-    -- checkNameClashes allDefs
-    -- checkMatchingNumberOfArgs allDefs
-    return allDefs
-
+    AST dds defs imports <- either error return $ parseDefs sourceFilePath input
+    doImportsRecursively imports (AST dds defs mempty)
   where
-    merge :: [AST () ()] -> AST () ()
-    merge xs =
-      let conc [] dds defs = AST dds defs
-          conc ((AST dds defs):xs) ddsAcc defsAcc = conc xs (dds <> ddsAcc) (defs <> defsAcc)
-       in conc xs [] []
-
-    imports = map ((includePath </>) . (<> ".gr") . replace '.' '/')
-              . mapMaybe (stripPrefix "import ") . lines $ input
-
-    replace from to = map (\c -> if c == from then to else c)
+    -- Get all (transitive) dependencies. TODO: blows up when the file imports itself
+    doImportsRecursively :: Set Import -> AST () () -> IO (AST () ())
+    doImportsRecursively todo ast@(AST dds defs done) = do
+      case toList (todo \\ done) of
+        [] -> return ast
+        (i:todo) ->
+          let path = includePath </> i in
+          let ?globals = ?globals { globalsSourceFilePath = Just path } in do
+            src <- readFile path
+            let AST dds' defs' imports' = either error id (parseDefs path src)
+            doImportsRecursively
+              (fromList todo <> imports')
+              (AST (dds <> dds') (defs <> defs') (insert i done))
 
     -- the following check doesn't seem to be needed because this comes up during type checking @buggymcbugfix
     -- checkMatchingNumberOfArgs ds@(AST dataDecls defs) =

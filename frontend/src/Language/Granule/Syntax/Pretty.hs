@@ -11,6 +11,7 @@
 
 module Language.Granule.Syntax.Pretty where
 
+import Data.Foldable (toList)
 import Data.List
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
@@ -181,7 +182,10 @@ appChain (TyApp t1 t2)           = True
 appChain _                       = False
 
 instance Pretty v => Pretty (AST v a) where
-    prettyL l (AST dataDecls defs) = pretty' dataDecls <> "\n\n" <> pretty' defs
+    prettyL l (AST dataDecls defs imprts)
+        = (unlines . map ("import " <>) . toList) imprts
+        <> "\n\n" <> pretty' dataDecls
+        <> "\n\n" <> pretty' defs
       where
         pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty

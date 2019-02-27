@@ -79,8 +79,6 @@ builtins =
        $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
 
     -- String stuff
-  , (mkId "stringAppend", Forall nullSpanBuiltin [] []
-      $ (FunTy (TyCon $ mkId "String") (FunTy (TyCon $ mkId "String") (TyCon $ mkId "String"))))
   , (mkId "showChar", Forall nullSpanBuiltin [] []
       $ (FunTy (TyCon $ mkId "Char") (TyCon $ mkId "String")))
 
@@ -209,15 +207,33 @@ writeChar' = BUILTIN
 
 closeHandle : forall {m : HandleType} . Handle m -> () <C>
 closeHandle = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Char
+--------------------------------------------------------------------------------
+
+-- module Char
+
+charToInt : Char -> Int
+charToInt = BUILTIN
+
+charFromInt : Int -> Char
+charFromInt = BUILTIN
+
+
+
 --------------------------------------------------------------------------------
 -- String manipulation
 --------------------------------------------------------------------------------
 
-unConsString : String → Maybe (Char, String)
-unConsString = BUILTIN
+stringAppend : String → String → String
+stringAppend = BUILTIN
 
-consString : Char → String → String
-consString = BUILTIN
+stringUncons : String → Maybe (Char, String)
+stringUncons = BUILTIN
+
+stringCons : Char → String → String
+stringCons = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Arrays
@@ -275,7 +291,7 @@ builtins' :: [(Id, TypeScheme)]
 (builtinTypeConstructors, builtinDataConstructors, builtins') =
   (map fst datas, concatMap snd datas, map unDef defs)
     where
-      AST types defs = case parseDefs "builtins" builtinSrc of
+      AST types defs _ = case parseDefs "builtins" builtinSrc of
         Right ast -> ast
         Left err -> error err
       datas = map unData types

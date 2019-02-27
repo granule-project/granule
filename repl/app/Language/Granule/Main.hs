@@ -63,7 +63,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   in fmap Ex.runExceptT $ f run'
 
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
-replEval val (AST dataDecls defs) = do
+replEval val (AST dataDecls defs _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId (" repl"<>(show val))) bindings of
       Nothing -> return Nothing
@@ -107,7 +107,7 @@ readToQueue pth = let ?globals = ?globals{ globalsSourceFilePath = Just pth } in
             checked <-  liftIO' $ check ast
             case checked of
                 Right _ -> do
-                    let (AST dd def) = ast
+                    let (AST dd def _) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd<>adt),f,m)
@@ -362,7 +362,7 @@ handleCMD s =
             _ -> liftIO $ putStrLn xtx
         ast -> do
           -- TODO: use the type that comes out of the checker to return the type
-          checked <- liftIO' $ check (AST adt ast)
+          checked <- liftIO' $ check (AST adt ast mempty)
           case checked of
             Right _ -> liftIO $ putStrLn (printType trm m)
             Left err -> Ex.throwError (TypeCheckerError err)
@@ -388,10 +388,10 @@ handleCMD s =
                         typer <- synTypeBuilder exp ast adt
                         let ndef = buildDef fvg (buildTypeScheme typer) exp
                         put ((fvg+1),rp,adt,fp,m)
-                        checked <- liftIO' $ check (AST adt (ast<>(ndef:[])))
+                        checked <- liftIO' $ check (AST adt (ast<>(ndef:[])) mempty)
                         case checked of
                             Right _ -> do
-                                result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])))
+                                result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])) mempty)
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "if here fix"

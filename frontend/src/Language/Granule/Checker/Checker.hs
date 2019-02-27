@@ -49,13 +49,13 @@ import Language.Granule.Utils
 check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
-check ast@(AST dataDecls defs) = evalChecker initState $ do
+check ast@(AST dataDecls defs imports) = evalChecker initState $ do
     _         <- checkNameClashes ast
     _         <- runAll checkTyCon dataDecls
     dataDecls <- runAll checkDataCons dataDecls
     _         <- runAll kindCheckDef defs
     defs      <- runAll (checkDef defCtxt) defs
-    pure $ AST dataDecls defs
+    pure $ AST dataDecls defs imports
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
 

@@ -9,7 +9,7 @@ import Language.Granule.Utils
 
 -- | Check if there are name clashes within namespaces
 checkNameClashes :: AST () () -> Checker ()
-checkNameClashes (AST dataDecls defs) =
+checkNameClashes (AST dataDecls defs _) =
     case concat [typeConstructorErrs, dataConstructorErrs, defErrs] of
       [] -> pure ()
       (d:ds) -> throwError (d:|ds)

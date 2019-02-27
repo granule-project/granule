@@ -1,0 +1,14 @@
+import Bool
+
+isDigit : Char -> (Char, Bool)
+isDigit '0' = ('0', True);
+isDigit '1' = ('1', True);
+isDigit '2' = ('2', True);
+isDigit '3' = ('3', True);
+isDigit '4' = ('4', True);
+isDigit '5' = ('5', True);
+isDigit '6' = ('6', True);
+isDigit '7' = ('7', True);
+isDigit '8' = ('8', True);
+isDigit '9' = ('9', True);
+isDigit c = (c, False)

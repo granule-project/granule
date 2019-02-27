@@ -467,5 +467,9 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t2'' <- joinTypes s t2 t2'
   return (TyApp t1'' t2'')
 
+-- TODO: Create proper substitutions
+joinTypes s (TyVar _) t = return t
+joinTypes s t (TyVar _) = return t
+
 joinTypes s t1 t2 = throw
   NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
