@@ -65,8 +65,9 @@ rewriteWithoutInterfaces renv ast =
       let ifaces' = fmap mkIFace ifaces
           ifaceDDS = fmap fst ifaces'
           ifaceDefs = concat $ fmap snd ifaces'
+          defs' = fmap rewriteDef defs
       instsToDefs <- mapM mkInst insts
-      pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs) [] []) renv
+      pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs') [] []) renv
 
 
 -- | Forget the AST's annotations.
@@ -243,3 +244,22 @@ desugar eqs (Forall _ _ _ ty) =
         -- case for each equation
         cases = map (\(Equation _ _ pats expr) ->
            (foldl (ppair nullSpanNoFile) (PWild nullSpanNoFile ()) pats, expr)) eqs
+
+
+rewriteDef :: Def v a -> Def v a
+rewriteDef (Def sp n eqns tys) = Def sp n eqns' tys'
+    where eqns' = fmap rewriteEquation eqns
+          tys'  = rewriteTypeScheme tys
+
+
+rewriteEquation :: Equation v a -> Equation v a
+rewriteEquation = id
+
+
+-- | Rewrite a typescheme without interface constraints.
+-- |
+-- | Interface constraints simply become standard types.
+rewriteTypeScheme :: TypeScheme -> TypeScheme
+rewriteTypeScheme (Forall sp binds constrs ty) =
+    Forall sp binds [] funty
+    where funty = foldr FunTy ty constrs
