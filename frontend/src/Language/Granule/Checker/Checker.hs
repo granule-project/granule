@@ -682,7 +682,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
             Diamond ["Session"] ty1 -> return ([], ty1)
             Diamond ef1 ty1 -> return (ef1, ty1)
             t -> halt $ GenericError (Just s)
-                   $ "Expected an effect type but got `"
+                   $ "Expected a graded effect type of the form `t <e>` type but got `"
                   <> pretty t <> "` in subject of let"
 
   -- Type body of the let...
@@ -699,7 +699,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
              Diamond ["Session"] ty2 -> return ([], ty2)
              Diamond ef2 ty2 -> return (ef2, ty2)
              t -> halt $ GenericError (Just s)
-                    $ "Expected an effect type but got `"
+                    $ "Expecting a graded effect type of the form `t <e>` but got `"
                     <> pretty t <> "` in body of let"
 
      optionalSigEquality s optionalTySig ty1
