@@ -166,7 +166,14 @@ symGradeTimes (SLevel lev1) (SLevel lev2) = SLevel $ lev1 `smin` lev2
 symGradeTimes (SFloat n1) (SFloat n2) = SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = SExtNat (x * y)
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
-    SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
+    --SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
+    SInterval (comb symGradeMeet) (comb symGradeJoin)
+     where
+      comb f = ((lb1lb2 `f` lb1ub2) `f` lb2ub1) `f` ub1ub2
+      lb1lb2 = lb1 `symGradeTimes` lb2
+      lb1ub2 = lb1 `symGradeTimes` ub2
+      lb2ub1 = lb2 `symGradeTimes` ub1
+      ub1ub2 = ub1 `symGradeTimes` ub2
 symGradeTimes SPoint SPoint = SPoint
 symGradeTimes s t | isSProduct s || isSProduct t =
   applyToProducts symGradeTimes SProduct id s t
