@@ -72,10 +72,11 @@ check (AST dataDecls defs ifaces insts) = evalChecker initState $ do
                      <> rsIFHeads
                      <> rsIFTys
                      <> rsInstHeads
-                     <> rsInstDefs
-                     <> rs3 <> (map (fmap (const ())) rs4))
-        then Just (renv, AST dataDecls (catMaybes rs4) [] [])
+                     <> forgetRes rsInstDefs
+                     <> rs3 <> forgetRes rs4)
+        then Just (renv, AST dataDecls (catMaybes rs4) ifaces (catMaybes rsInstDefs))
         else Nothing
+    where forgetRes = fmap (fmap (const ()))
 
 
 checkTyCon :: (?globals :: Globals) => DataDecl -> MaybeT Checker ()
@@ -300,7 +301,7 @@ checkInstTy iname (IFaceDat sp ty) = do
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
 
 
-checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker ()
+checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker (Instance v Type)
 checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
@@ -317,10 +318,11 @@ checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
         (\((IDef sp (Just name) eq):dt) ->
           let eqs = map (\(IDef _ _ eq) -> eq) dt
           in ((sp, name), eq:eqs)) nameGroupedDefs
-  mapM_ (\((sp, name), eqs) -> do
-    tys <- getNormalisedInterfaceSig iname name idty
-    registerInstanceSig iname idat name tys
-    checkDef' sp name eqs tys) groupedEqns
+  ds' <- mapM (\((sp, name), eqs) -> do
+                 tys <- getNormalisedInterfaceSig iname name idty
+                 registerInstanceSig iname idat name tys
+                 checkDef' sp name eqs tys) groupedEqns
+  pure $ Instance sp iname constrs idat (concat $ fmap defToIDefs ds')
   where
     checkInstDefName names sp name = do
       unless (elem name names) (halt $ GenericError (Just sp) $
@@ -334,6 +336,7 @@ checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
         substitute [(param, SubstT instTy)] sig
       -- ensure free variables in the instance head are universally quantified
       pure $ Forall s (binds <> [(v, KType) | v <- freeVars instTy]) constraints ty
+    defToIDefs (Def sp n eqns ty) = fmap (IDef sp (Just n)) eqns
 
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()
