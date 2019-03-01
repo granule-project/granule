@@ -265,7 +265,13 @@ VarSigs :: { [(Id, Kind)] }
 
 VarSig :: { [(Id, Kind)] }
   : VAR ':' Kind              { [(mkId $ symString $1, $3)] }
-  | VAR                       { [(mkId $ symString $1, KType)] }-- KVar $ mkId ("k" <> symString $1))}
+  -- Temporary poor man's kind inference
+  | VAR                       { let x = symString $1 in
+                                [(mkId x, if x == "n" || x == "m" || x == "k"
+                                            then kNat
+                                            else KType)
+                                ]
+                              }-- KVar $ mkId ("k" <> symString $1))}
   | VAR VarSig                { (mkId $ symString $1, snd . head $ $2) : $2 }
 
 Kind :: { Kind }
