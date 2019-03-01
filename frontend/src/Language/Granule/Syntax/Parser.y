@@ -260,13 +260,13 @@ TypeScheme :: { TypeScheme }
        {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ Forall sp (snd $ fst $1) (snd $1) $2 }
 
 VarSigs :: { [(Id, Kind)] }
-  : VarSig ',' VarSigs        { $1 : $3 }
-  | VarSig                    { [$1] }
+  : VarSig ',' VarSigs        { $1 <> $3 }
+  | VarSig                    { $1 }
 
-VarSig :: { (Id, Kind) }
-  : VAR ':' Kind              { (mkId $ symString $1, $3) }
-  | VAR                       { (mkId $ symString $1, KType) }-- KVar $ mkId ("k" <> symString $1))}
-
+VarSig :: { [(Id, Kind)] }
+  : VAR ':' Kind              { [(mkId $ symString $1, $3)] }
+  | VAR                       { [(mkId $ symString $1, KType)] }-- KVar $ mkId ("k" <> symString $1))}
+  | VAR VarSig                { (mkId $ symString $1, snd . head $ $2) : $2 }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
