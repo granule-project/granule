@@ -20,6 +20,8 @@ default-extensions:
 - RecordWildCards
 - ImplicitParams
 - ScopedTypeVariables
+- OverloadedStrings
+
 ghc-options:
 - -O0
 - -Wall

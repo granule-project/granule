@@ -1,12 +1,1 @@
-import File
-
-main : String <IO>
-main =
-    let [mh]    = [openFile "LICENSE" ReadMode] in
-    let h       ← mh;
-        h'      ← mh;
-        ()      ← hClose h';
-        (h, c)  ← hGetChar h;
-        (h, c') ← hGetChar h;
-        ()      ← hClose h
-    in pure ((showChar c) `stringAppend` (showChar c'))
+"CCo"

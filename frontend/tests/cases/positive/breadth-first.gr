@@ -38,4 +38,4 @@ exLast : Int
 exLast = fromMaybe [42] (last ex0)
 
 main : () <W>
-main = write (showInt exLast)
+main = toStdout (showInt exLast)

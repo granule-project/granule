@@ -29,6 +29,11 @@ monus m Z = m;
 monus Z (S n') = monus Z n';
 monus (S m') (S n') = monus m' n'
 
+sub : ∀ {n : Nat, m : Nat} . {n ≥ m} ⇒  N n → N m → N (n - m)
+sub m Z = m;
+sub (S m') (S n') = sub m' n'
+
+
 --- Right-moded multiplication
 mult : forall {n : Nat, m : Nat} . N n -> (N m) [n] -> N (n * m)
 mult Z [m] = Z;
@@ -43,3 +48,12 @@ mult_r [n] (S m') = add n (mult_r [n] m')
 div2 : forall {n : Nat} . N (2 * n) -> N n
 div2 Z = Z;
 div2 (S (S x)) = S (div2 x)
+
+--- Existential nat
+data NX where
+  NX : ∀ {n : Nat} . N n → NX
+
+
+natToNX : Int → NX
+natToNX 0 = NX Z;
+natToNX n = let (NX m) = natToNX (n - 1) in NX (S m)

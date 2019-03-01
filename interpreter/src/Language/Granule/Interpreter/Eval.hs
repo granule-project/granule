@@ -19,15 +19,15 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Context
 import Language.Granule.Utils
 
-import Data.Text (cons, pack, uncons, unpack)
+import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, zipWithM)
 
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
 
-import System.IO (hFlush, stdout)
-import qualified System.IO as SIO (Handle, hGetChar, hPutChar, hClose, openFile, IOMode, isEOF)
+import System.IO (hFlush, stdout, stderr)
+import qualified System.IO as SIO
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -98,19 +98,19 @@ evalBinOp op v1 v2 = case op of
 
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
-evalIn _ (Val s _ (Var _ v)) | internalName v == "read" = do
-    when testing (error "trying to `read` while testing")
+evalIn _ (Val s _ (Var _ v)) | internalName v == "fromStdin" = do
+    when testing (error "trying to read `fromStdin` while testing")
     putStr "> "
     hFlush stdout
     val <- Text.getLine
     return $ Pure () (Val s () (StringLiteral val))
 
-evalIn _ (Val s _ (Var _ v)) | internalName v == "readInt" = do
-    when testing (error "trying to `readInt` while testing")
-    putStr "> "
-    hFlush stdout
-    val <- readLn
-    return $ Pure () (Val s () (NumInt val))
+-- evalIn _ (Val s _ (Var _ v)) | internalName v == "readInt" = do
+--     when testing (error "trying to `readInt` while testing")
+--     putStr "> "
+--     hFlush stdout
+--     val <- readLn
+--     return $ Pure () (Val s () (NumInt val))
 
 evalIn _ (Val _ _ (Abs _ p t e)) = return $ Abs () p t e
 
@@ -148,7 +148,7 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
          case p of
            Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
            Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
-       other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
+       other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
 {-
@@ -261,9 +261,14 @@ builtIns =
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
                               NumInt n -> return . StringLiteral . pack . show $ n
                               n        -> error $ show n)
-  , (mkId "write", Ext () $ Primitive $ \(StringLiteral s) -> do
-                              when testing (error "trying to `write` while testing")
-                              Text.putStrLn s
+  , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) -> do
+                              when testing (error "trying to write `toStdout` while testing")
+                              Text.putStr s
+                              return $ Pure () (Val nullSpan () (Constr () (mkId "()") [])))
+  , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) -> do
+                              when testing (error "trying to write `toStderr` while testing")
+                              let red x = "\ESC[31;1m" <> x <> "\ESC[0m"
+                              Text.hPutStr stderr $ red s
                               return $ Pure () (Val nullSpan () (Constr () (mkId "()") [])))
   , (mkId "openHandle", Ext () $ Primitive openHandle)
   , (mkId "readChar", Ext () $ Primitive readChar)
@@ -286,6 +291,15 @@ builtIns =
   , ( mkId "stringCons"
     , Ext () $ Primitive $ \(CharLiteral c) -> return $
         Ext () $ Primitive $ \(StringLiteral s) -> return $ StringLiteral (cons c s)
+    )
+  , ( mkId "stringUnsnoc"
+    , Ext () $ Primitive $ \(StringLiteral s) -> case unsnoc s of
+        Just (s, c) -> return $ Constr () (mkId "Some") [Constr () (mkId ",") [StringLiteral s, CharLiteral c]]
+        Nothing     -> return $ Constr () (mkId "None") []
+    )
+  , ( mkId "stringSnoc"
+    , Ext () $ Primitive $ \(StringLiteral s) -> return $
+        Ext () $ Primitive $ \(CharLiteral c) -> return $ StringLiteral (snoc s c)
     )
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> do
         b <- SIO.isEOF
@@ -340,15 +354,22 @@ builtIns =
     cast = fromInteger . toInteger
 
     openHandle :: RValue -> IO RValue
-    openHandle (StringLiteral s) = return $
+    openHandle (Constr _ m []) = return $
       Ext () $ Primitive (\x ->
         case x of
-           (Constr _ m []) -> do
-               let mode = (read (internalName m)) :: SIO.IOMode
-               h <- SIO.openFile (unpack s) mode
-               return $ Pure () $ valExpr $ Ext () $ Handle h
-           rval -> error $ "Runtime exception: trying to open with a non-mode value")
-    openHandle _ = error $ "Runtime exception: trying to open from a non string filename"
+          (StringLiteral s) -> do
+            h <- SIO.openFile (unpack s) mode
+            return $ Pure () $ valExpr $ Ext () $ Handle h
+          rval -> error $ "Runtime exception: trying to open from a non string filename" <> show rval)
+      where
+        mode = case internalName m of
+            "ReadMode" -> SIO.ReadMode
+            "WriteMode" -> SIO.WriteMode
+            "AppendMode" -> SIO.AppendMode
+            "ReadWriteMode" -> SIO.ReadWriteMode
+            x -> error $ show x
+
+    openHandle x = error $ "Runtime exception: trying to open with a non-mode value" <> show x
 
     writeChar :: RValue -> IO RValue
     writeChar (Ext _ (Handle h)) = return $

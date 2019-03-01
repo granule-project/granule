@@ -1,23 +1,27 @@
 import Maybe
 
+readMany : Int → Handle R → (Handle R, String) <IO>
+readMany 0 h = pure (h, "");
+readMany n h =
+  let (h, c)  ← readChar h;
+      (h, cs) ← readMany (n - 1) h
+  in pure (h, stringCons c cs)
 
-readFile : String -> (Maybe String) <O,R,C>
+readFile : String -> String <Open,Read,Close,IOExcept>
 readFile filename =
-  let o <- openHandle filename ReadMode in
-  case o of
-    None -> pure None;
-    Some h ->
-      let (h, cs) <- readUntilEnd h;
-          _ <- closeHandle h
-      in pure (Some cs)
+  let h       <- openHandle ReadMode filename;
+      (h, cs) <- readUntilEnd h;
+      _       <- closeHandle h
+  in pure cs
 
-readUntilEnd : Handle R -> (Handle R, String) <R>
+readUntilEnd : Handle R -> (Handle R, String) <Read,IOExcept>
 readUntilEnd h =
-  let (h, mc) <- readChar h in
-  case mc of
-    None -> pure (h, "");
-    Some c ->
-      let (h, str) <- readUntilEnd h
-      in pure (h, consString c str)
+  let (h, eof) <- isEOF h in
+    case eof of
+      True -> pure (h, "");
+      False ->
+        let (h, c) <- readChar h;
+            (h, str) <- readUntilEnd h
+        in pure (h, stringCons c str)
 
 

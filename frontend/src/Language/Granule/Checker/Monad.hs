@@ -652,7 +652,8 @@ instance UserMsg CheckerError where
     = "`" <> pretty errTy <> "` not valid in a data constructor definition"
 
   msg ExpectedEffectType{..}
-    = "Expected an effect type but got `" <> pretty errTy <> "` in subject of let"
+    = "Expected an type of the form `a <eff>` but got `"
+    <> pretty errTy <> "` in subject of let"
 
   msg LhsOfApplicationNotAFunction{..}
     = "Expected a function type on the left-hand side of an application, but got `"

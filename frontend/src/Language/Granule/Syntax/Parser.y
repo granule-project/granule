@@ -265,6 +265,7 @@ VarSigs :: { [(Id, Kind)] }
 
 VarSig :: { (Id, Kind) }
   : VAR ':' Kind              { (mkId $ symString $1, $3) }
+  | VAR                       { (mkId $ symString $1, KType) }-- KVar $ mkId ("k" <> symString $1))}
 
 
 Kind :: { Kind }
@@ -463,7 +464,7 @@ Atom :: { Expr () () }
   | INT                       {% let (TokenInt _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
                                     >>= \sp -> return $ Val sp () $ NumInt x }
-
+  -- | '<' Expr '>'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ App sp () (Val sp () (Var () (mkId "pure"))) $2 }
   | FLOAT                     {% let (TokenFloat _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
                                      >>= \sp -> return $ Val sp () $ NumFloat $ read x }
@@ -526,7 +527,7 @@ parseDefsAndDoImports input = do
             let AST dds' defs' imports' = either error id (parseDefs path src)
             doImportsRecursively
               (fromList todo <> imports')
-              (AST (dds <> dds') (defs <> defs') (insert i done))
+              (AST (dds' <> dds) (defs' <> defs) (insert i done))
 
     -- the following check doesn't seem to be needed because this comes up during type checking @buggymcbugfix
     -- checkMatchingNumberOfArgs ds@(AST dataDecls defs) =

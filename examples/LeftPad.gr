@@ -16,13 +16,6 @@ rightPad
   → Vec (n + m) a
 rightPad n x xs = xs `append` (replicate n x)
 
-length'
-  : ∀ {a : Type, n : Nat}
-  . Vec n a
-  → (N n, Vec n a)
-length' Nil = (Z, Nil);
-length' (Cons x xs) = let (n, xs') = length' xs in (S n, Cons x xs')
-
 leftPadTo
   : ∀ {a : Type, m : Nat, n : Nat}
   . a [n - m]

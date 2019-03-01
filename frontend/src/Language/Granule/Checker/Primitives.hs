@@ -83,8 +83,10 @@ builtins =
       $ (FunTy (TyCon $ mkId "Char") (TyCon $ mkId "String")))
 
     -- Effectful primitives
-  , (mkId "read", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "String"))
-  , (mkId "write", Forall nullSpanBuiltin [] [] $
+  , (mkId "fromStdin", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "String"))
+  , (mkId "toStdout", Forall nullSpanBuiltin [] [] $
+       FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
+  , (mkId "toStderr", Forall nullSpanBuiltin [] [] $
        FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
   , (mkId "readInt", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "Int"))
     -- Other primitives
@@ -160,6 +162,8 @@ binaryOperators = \case
 builtinSrc :: String
 builtinSrc = [r|
 
+import Prelude
+
 data () = ()
 
 
@@ -183,31 +187,38 @@ data HandleType = R | W | A | RW
 
 openHandle
   : forall {m : HandleType}
-  . String
-  -> IOMode m
-  -> (Maybe (Handle m)) <O>
+  . IOMode m
+  -> String
+  -> (Handle m) <Open,IOExcept>
 openHandle = BUILTIN
 
--- Returns `None` on EOF
-readChar : Handle R -> (Handle R, Maybe Char) <R>
+readChar : Handle R -> (Handle R, Char) <Read,IOExcept>
 readChar = BUILTIN
 
--- Returns `None` on EOF
-readChar' : Handle RW -> (Handle RW, Maybe Char) <R>
+readChar' : Handle RW -> (Handle RW, Char) <Read,IOExcept>
 readChar' = BUILTIN
 
-appendChar : Handle A -> Char -> (Handle A) <W>
+appendChar : Handle A -> Char -> (Handle A) <Write,IOExcept>
 appendChar = BUILTIN
 
-writeChar : Handle W -> Char -> (Handle W) <W>
+writeChar : Handle W -> Char -> (Handle W) <Write,IOExcept>
 writeChar = BUILTIN
 
-writeChar' : Handle RW -> Char -> (Handle RW) <W>
+writeChar' : Handle RW -> Char -> (Handle RW) <Write,IOExcept>
 writeChar' = BUILTIN
 
-closeHandle : forall {m : HandleType} . Handle m -> () <C>
+closeHandle : forall {m : HandleType} . Handle m -> () <Close,IOExcept>
 closeHandle = BUILTIN
 
+isEOF : Handle R -> (Handle R, Bool) <Read,IOExcept>
+isEOF = BUILTIN
+
+isEOF' : Handle RW -> (Handle RW, Bool) <Read,IOExcept>
+isEOF' = BUILTIN
+
+-- ???
+-- evalIO : forall {a : Type, e : Effect} . (a [0..1]) <IOExcept, e> -> (Maybe a) <e>
+-- catch = BUILTIN
 --------------------------------------------------------------------------------
 -- Char
 --------------------------------------------------------------------------------
@@ -234,6 +245,12 @@ stringUncons = BUILTIN
 
 stringCons : Char → String → String
 stringCons = BUILTIN
+
+stringUnsnoc : String → Maybe (String, Char)
+stringUnsnoc = BUILTIN
+
+stringSnoc : String → Char → String
+stringSnoc = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Arrays

@@ -79,7 +79,7 @@ spec = let ?globals = mempty in do
       it "simple elaborator tests" $ do
         -- Simple definitions
         -- \x -> x + 1
-        (AST _ (def1:_)) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
+        (AST _ (def1:_) _) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
         (Right defElab, _) <- runChecker initState (checkDef [] def1)
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
