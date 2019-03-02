@@ -51,6 +51,80 @@ ifaceDataCon :: (?globals :: Globals) => Id -> Expr v ()
 ifaceDataCon n = Val nullSpanNoFile () $ Constr () (ifaceConId n) []
 
 
+------------------------------
+----- Annotation Helpers -----
+------------------------------
+
+
+-- | Forget the AST's annotations.
+forgetAnnotations :: AST v a -> AST v ()
+forgetAnnotations = mapAnnotations (const ())
+
+
+-- | Map over an AST's annotations.
+mapAnnotations :: (a -> b) -> AST v a -> AST v b
+mapAnnotations f (AST dds defs ifaces insts) =
+    AST dds    (fmap (mapDefAnnotation f)      defs)
+        ifaces (fmap (mapInstanceAnnotation f) insts)
+
+
+mapInstanceAnnotation :: (a -> b) -> Instance v a -> Instance v b
+mapInstanceAnnotation f (Instance s n constrs idat idefs) =
+    Instance s n constrs idat (fmap (mapIDefAnnotation f) idefs)
+
+
+mapIDefAnnotation :: (a -> b) -> IDef v a -> IDef v b
+mapIDefAnnotation f (IDef s n eq) = IDef s n (mapEquationAnnotation f eq)
+
+
+mapDefAnnotation :: (a -> b) -> Def v a -> Def v b
+mapDefAnnotation f (Def s n eqs tys) = Def s n (fmap (mapEquationAnnotation f) eqs) tys
+
+
+mapEquationAnnotation :: (a -> b) -> Equation v a -> Equation v b
+mapEquationAnnotation f (Equation s ann pats expr) =
+    Equation s (f ann) (fmap (mapPatternAnnotation f) pats) (mapExprAnnotation f expr)
+
+
+mapExprAnnotation :: (a -> b) -> Expr v a -> Expr v b
+mapExprAnnotation f (App s ann e1 e2) =
+    App s (f ann) (mapExprAnnotation f e1) (mapExprAnnotation f e2)
+mapExprAnnotation f (Binop s ann op l r) =
+    Binop s (f ann) op (mapExprAnnotation f l) (mapExprAnnotation f r)
+mapExprAnnotation f (LetDiamond s ann pat mty e1 e2) =
+    LetDiamond s (f ann) (mapPatternAnnotation f pat) mty (mapExprAnnotation f e1) (mapExprAnnotation f e2)
+mapExprAnnotation f (Val s ann v) = Val s (f ann) (mapValueAnnotation f v)
+mapExprAnnotation f (Case s ann sw ar) =
+    Case s (f ann) (mapExprAnnotation f sw) (fmap (mapPatternAnnotation f *** mapExprAnnotation f) ar)
+
+
+mapValueAnnotation :: (a -> b) -> Value v a -> Value v b
+mapValueAnnotation f (Abs ann pat t expr) =
+    Abs (f ann) (mapPatternAnnotation f pat) t (mapExprAnnotation f expr)
+mapValueAnnotation f (Promote ann expr) =
+    Promote (f ann) (mapExprAnnotation f expr)
+mapValueAnnotation f (Pure ann expr) =
+    Pure (f ann) (mapExprAnnotation f expr)
+mapValueAnnotation f (Constr ann n vs) =
+    Constr (f ann) n (fmap (mapValueAnnotation f) vs)
+mapValueAnnotation f (Var ann n) = Var (f ann) n
+mapValueAnnotation _ (NumInt n) = NumInt n
+mapValueAnnotation _ (NumFloat n) = NumFloat n
+mapValueAnnotation _ (CharLiteral c) = CharLiteral c
+mapValueAnnotation _ (StringLiteral s) = StringLiteral s
+mapValueAnnotation f (Ext ann extv) = Ext (f ann) extv
+
+
+mapPatternAnnotation :: (a -> b) -> Pattern a -> Pattern b
+mapPatternAnnotation f (PVar    s ann n)   = PVar s (f ann) n
+mapPatternAnnotation f (PWild   s ann)     = PWild s (f ann)
+mapPatternAnnotation f (PBox    s ann pat) = PBox s (f ann) (mapPatternAnnotation f pat)
+mapPatternAnnotation f (PInt    s ann v)   = PInt s (f ann) v
+mapPatternAnnotation f (PFloat  s ann v)   = PFloat s (f ann) v
+mapPatternAnnotation f (PConstr s ann n pats) =
+    PConstr s (f ann) n (fmap (mapPatternAnnotation f) pats)
+
+
 ------------------------
 ----- AST Rewriter -----
 ------------------------
@@ -68,52 +142,6 @@ rewriteWithoutInterfaces renv ast =
           defs' = fmap rewriteDef defs
       instsToDefs <- mapM mkInst insts
       pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs') [] []) renv
-
-
--- | Forget the AST's annotations.
-forgetAnnotations :: AST v a -> AST v ()
-forgetAnnotations = mapAnnotations (const ())
-
-
--- | Map over an AST's annotations.
-mapAnnotations :: (a -> b) -> AST v a -> AST v b
-mapAnnotations f (AST dds defs ifaces insts) =
-    AST dds (fmap mapDefAnnotations defs) ifaces (fmap mapInstanceAnnotations insts)
-    where mapDefAnnotations (Def s n eqs tys) = Def s n (fmap mapEquationAnnotations eqs) tys
-
-          mapEquationAnnotations (Equation s ann pats expr) =
-              Equation s (f ann) (fmap mapPatternAnnotations pats) (mapExprAnnotations expr)
-
-          mapPatternAnnotations (PVar s ann n) = PVar s (f ann) n
-          mapPatternAnnotations (PWild s ann) = PWild s (f ann)
-          mapPatternAnnotations (PBox s ann pat) = PBox s (f ann) (mapPatternAnnotations pat)
-          mapPatternAnnotations (PInt s ann v) = PInt s (f ann) v
-          mapPatternAnnotations (PFloat s ann v) = PFloat s (f ann) v
-          mapPatternAnnotations (PConstr s ann n pats) = PConstr s (f ann) n (fmap mapPatternAnnotations pats)
-
-          mapExprAnnotations (App s ann e1 e2) = App s (f ann) (mapExprAnnotations e1) (mapExprAnnotations e2)
-          mapExprAnnotations (Binop s ann op l r) = Binop s (f ann) op (mapExprAnnotations l) (mapExprAnnotations r)
-          mapExprAnnotations (LetDiamond s ann pat mty e1 e2) =
-              LetDiamond s (f ann) (mapPatternAnnotations pat) mty (mapExprAnnotations e1) (mapExprAnnotations e2)
-          mapExprAnnotations (Val s ann v) = Val s (f ann) (mapValueAnnotations v)
-          mapExprAnnotations (Case s ann sw ar) =
-              Case s (f ann) (mapExprAnnotations sw) (fmap (mapPatternAnnotations *** mapExprAnnotations) ar)
-
-          mapValueAnnotations (Abs ann pat t expr) = Abs (f ann) (mapPatternAnnotations pat) t (mapExprAnnotations expr)
-          mapValueAnnotations (Promote ann expr) = Promote (f ann) (mapExprAnnotations expr)
-          mapValueAnnotations (Pure ann expr) = Pure (f ann) (mapExprAnnotations expr)
-          mapValueAnnotations (Constr ann n vs) = Constr (f ann) n (fmap mapValueAnnotations vs)
-          mapValueAnnotations (Var ann n) = Var (f ann) n
-          mapValueAnnotations (NumInt n) = NumInt n
-          mapValueAnnotations (NumFloat n) = NumFloat n
-          mapValueAnnotations (CharLiteral c) = CharLiteral c
-          mapValueAnnotations (StringLiteral s) = StringLiteral s
-          mapValueAnnotations (Ext ann extv) = Ext (f ann) extv
-
-          mapInstanceAnnotations (Instance s n constrs idat idefs) =
-              Instance s n constrs idat (fmap mapIDefAnnotations idefs)
-
-          mapIDefAnnotations (IDef s n eq) = IDef s n (mapEquationAnnotations eq)
 
 
 -- | Rewrite an interface to its intermediate representation.
