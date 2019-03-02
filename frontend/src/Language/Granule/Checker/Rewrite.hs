@@ -274,9 +274,7 @@ constructIDict :: (?globals :: Globals) => Instance () Type -> Rewriter (ExprRW 
 constructIDict inst@(Instance _ iname _ _ _) = do
   grouped <- getInstanceGrouped inst
   lambdas <- mapM desugarIdef grouped
-  let idictDataCon = ifaceDataCon iname
-      dictApp = mkFap idictDataCon lambdas
-  pure dictApp
+  pure $ mkFap (ifaceDataCon iname) lambdas
     where
       desugarIdef (_, t, eqns) = do
         let (t', constrs) = rewriteTypeScheme t
