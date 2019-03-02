@@ -278,8 +278,8 @@ constructIDict inst@(Instance _ iname _ _ _) = do
   lambdas <- mapM desugarIdef grouped
   pure $ mkFap (ifaceDataCon iname) lambdas
     where
-      desugarIdef (_, t, eqns) = do
-        let (t', constrs) = rewriteTypeScheme t
+      desugarIdef (n, t, eqns) = do
+        (t', constrs) <- rewriteTypeScheme n t False
         eqns' <- mapM (rewriteEquation constrs) eqns
         pure $ desugar eqns' t'
 
@@ -321,11 +321,11 @@ desugar eqs (Forall _ _ _ ty) =
 
 rewriteDef :: (?globals :: Globals) => Def () Type -> Rewriter (DefRW ())
 rewriteDef (Def sp n eqns tys) = do
+  (tys', cts) <- rewriteTypeScheme n tys True
   eqns' <- mapM (rewriteEquation cts) eqns
   let newDef = Def sp n eqns' tys'
   registerDef newDef
   pure newDef
-    where (tys', cts) = rewriteTypeScheme tys
 
 
 rewriteEquation :: (?globals :: Globals, Pretty v) => [Type] -> Equation v Type -> Rewriter (Equation v ())
@@ -424,10 +424,11 @@ rewriteValue v = pure . mapValueAnnotation (const ()) $ v
 -- | Rewrite a typescheme without interface constraints.
 -- |
 -- | Interface constraints simply become standard types.
-rewriteTypeScheme :: TypeScheme -> (TypeScheme, [Type])
-rewriteTypeScheme (Forall sp binds constrs ty) =
-    (Forall sp binds [] funty, constrs)
-    where funty = foldr FunTy ty constrs
+rewriteTypeScheme :: Id -> TypeScheme -> Bool -> Rewriter (TypeScheme, [Type])
+rewriteTypeScheme n (Forall sp binds cts ty) doExpand = do
+  constrs <- if doExpand then expandConstraints n else pure cts
+  let funty = foldr FunTy ty constrs
+  pure (Forall sp binds [] funty, constrs)
 
 
 ---------------------

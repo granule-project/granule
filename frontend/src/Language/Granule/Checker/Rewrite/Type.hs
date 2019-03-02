@@ -26,6 +26,7 @@ module Language.Granule.Checker.Rewrite.Type
     , getInstanceMethTys
     , registerDef
     , lookupDef
+    , expandConstraints
     ) where
 
 
@@ -96,10 +97,11 @@ mkInstanceId :: Instance v a -> InstanceId
 mkInstanceId (Instance _ iname _ (IFaceDat _ ty) _) = TyApp (TyCon iname) ty
 
 
-newtype RewriteEnv = RewriteEnv {
+data RewriteEnv = RewriteEnv {
       -- ^ Instantiated type signatures for instances.
       instanceSignatures :: [((InstanceId, Id), TypeScheme)]
-      }
+    , expandedConstraints :: Ctxt [Type]
+    }
 
 
 type RewriterError = String
@@ -132,7 +134,7 @@ runNewRewriter r renv = execRewriter r renv startRewriteState
 
 
 -- | Build an environment for the rewriter.
-buildRewriterEnv :: [((InstanceId, Id), TypeScheme)] -> RewriteEnv
+buildRewriterEnv :: [((InstanceId, Id), TypeScheme)] -> Ctxt [Type] -> RewriteEnv
 buildRewriterEnv = RewriteEnv
 
 
@@ -179,3 +181,13 @@ registerInterface iname = modifyInterfaces (iname:)
 -- | True if the given id represents an interface in scope.
 isInterfaceVar :: Id -> Rewriter Bool
 isInterfaceVar n = fmap (elem n) getInterfaces
+
+
+getExpandedConstraints :: Rewriter (Ctxt [Type])
+getExpandedConstraints = fmap expandedConstraints ask
+
+
+expandConstraints :: Id -> Rewriter [Type]
+expandConstraints n = do
+  exps <- getExpandedConstraints
+  maybe illFormedEnvError pure (lookup n exps)

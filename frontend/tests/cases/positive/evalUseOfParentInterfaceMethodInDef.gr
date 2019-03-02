@@ -1,0 +1,19 @@
+-- EXPECTED: C
+interface Parent a where
+  parentFn : a -> a
+
+interface {Parent a} => Child a
+
+doParent : forall {a : Type} . {Child a} => a -> a
+doParent = parentFn
+
+data A = B | C
+
+instance Parent A where
+  parentFn B = C;
+  parentFn C = B
+
+instance Child A
+
+main : A
+main = doParent B

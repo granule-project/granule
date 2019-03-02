@@ -229,8 +229,10 @@ checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
 
 
 registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
-registerDefSig sp name tys = do
+registerDefSig sp name tys@(Forall _ _ constrs _) = do
   checkDuplicate (defContext, "Definition") sp name
+  expanded <- expandIConstraints sp constrs
+  registerExpandedConstraints sp name expanded
   modify' $ \st -> st { defContext = [(name, tys)] <> defContext st }
 
 
@@ -1122,31 +1124,17 @@ solveConstraints predicate s name = do
 solveIConstraints :: (?globals :: Globals) => [Type] -> Span -> Id -> MaybeT Checker ()
 solveIConstraints itys sp defName = do
   Just (Forall _ _ topLevelConstraints _) <- getTypeScheme defName
-  topLevelExpanded <- expandIConstraints topLevelConstraints
+  topLevelExpanded <- getConstraintsExpanded sp defName
   let remaining = itys \\ topLevelExpanded
   mapM_ solveIConstraint remaining
     where solveIConstraint t@(TyApp (TyCon iface) ty) =
               verifyInstanceExists sp iface ty
-          solveIConstraint t = badResolve t
+          solveIConstraint t = badResolve sp t
           verifyInstanceExists sp iname ty = do
               inst <- getInstance sp iname ty
               case inst of
                 Nothing -> halt $ GenericError (Just sp) $ concat ["No instance for '", pretty iname, " ", pretty ty, "'"]
                 Just _ -> pure ()
-          expandIConstraints icons = fmap (nub . concat) $ mapM expandIConstraint icons
-          expandIConstraint c@(TyApp (TyCon iname) ty) = do
-              parents <- getInterfaceDependenciesFlattened c
-              parents' <- mapM (\t@(TyApp (TyCon i) (TyVar v)) -> substitute [(v, SubstT ty)] t) parents
-              pure (c : parents')
-          expandIConstraint t = badResolve t
-          getInterfaceDependenciesFlattened (TyApp (TyCon iname) ty) = do
-              Just parents <- getInterfaceConstraints iname
-              parentsFlat <- fmap concat $ mapM getInterfaceDependenciesFlattened parents
-              pure $ parents <> parentsFlat
-          getInterfaceDependenciesFlattened t = badResolve t
-          badResolve t =
-              halt $ GenericError (Just sp)
-                       $ concat ["Attempt to resolve '", pretty t, "' as an interface constraint"]
 
 
 -- Rewrite an error message coming from the solver
@@ -1521,3 +1509,23 @@ checkGuardsForImpossibility s name = do
 substituteIConstraints :: (?globals :: Globals) => Substitution -> MaybeT Checker ()
 substituteIConstraints subst =
   getIConstraints >>= mapM (substitute subst) >>= putIcons
+
+
+badResolve :: (?globals :: Globals) => Span -> Type -> MaybeT Checker a
+badResolve sp t =
+  halt . GenericError (Just sp)
+    $ concat ["Attempt to resolve '", pretty t, "' as an interface constraint"]
+
+
+expandIConstraints :: (?globals :: Globals) => Span -> [Type] -> MaybeT Checker [Type]
+expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
+  where expandIConstraint c@(TyApp (TyCon iname) ty) = do
+          parents <- getInterfaceDependenciesFlattened c
+          parents' <- mapM (\t@(TyApp (TyCon i) (TyVar v)) -> substitute [(v, SubstT ty)] t) parents
+          pure (c : parents')
+        expandIConstraint t = badResolve sp t
+        getInterfaceDependenciesFlattened (TyApp (TyCon iname) ty) = do
+          Just parents <- getInterfaceConstraints iname
+          parentsFlat <- fmap concat $ mapM getInterfaceDependenciesFlattened parents
+          pure $ parents <> parentsFlat
+        getInterfaceDependenciesFlattened t = badResolve sp t

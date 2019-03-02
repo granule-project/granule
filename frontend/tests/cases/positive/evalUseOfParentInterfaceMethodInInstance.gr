@@ -1,0 +1,25 @@
+-- EXPECTED: C
+
+interface Parent a where
+  parentFn : a -> a
+
+interface Child a where
+  childFn : a
+
+
+data A = B | C
+
+
+instance Parent A where
+  parentFn B = C;
+  parentFn C = B
+
+
+-- we use one of the Parent methods
+-- in our instance for Child
+instance Child A where
+  childFn = parentFn B
+
+
+main : A
+main = childFn

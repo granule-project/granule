@@ -130,6 +130,7 @@ data CheckerState = CS
             , ifaceContext :: Ctxt IFaceCtxt
             , instanceContext :: Ctxt [Type]
             , instanceSigs :: M.Map (Type, Id) TypeScheme
+            , expandedConstraints :: Ctxt [Type]
             -- Context of interface constraints
             , iconsContext :: [Type]
 
@@ -157,6 +158,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , ifaceContext = []
                , instanceContext = []
                , instanceSigs = M.empty
+               , expandedConstraints = []
                , iconsContext = []
                , defContext = []
                , deriv = Nothing
@@ -167,7 +169,10 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- | Extract useful information for the rewriter from the checker state.
 checkerStateToRewriterEnv :: CheckerState -> RewriteEnv
-checkerStateToRewriterEnv cs = buildRewriterEnv (M.toList $ instanceSigs cs)
+checkerStateToRewriterEnv cs =
+    buildRewriterEnv
+      (M.toList $ instanceSigs cs)
+      (expandedConstraints cs)
 
 
 -- *** Various helpers for manipulating the context
@@ -206,6 +211,19 @@ registerInterface sp name pname kind constrs sigs = do
                             }
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { ifaceContext = (name, ifaceCtxt) : ifaceContext st }
+
+
+registerExpandedConstraints :: Span -> Id -> [Type] -> MaybeT Checker ()
+registerExpandedConstraints sp name constrs =
+    modify' $ \st -> st { expandedConstraints = (name, constrs) : expandedConstraints st }
+
+
+getConstraintsExpanded :: (?globals :: Globals) => Span -> Id -> MaybeT Checker [Type]
+getConstraintsExpanded sp n = do
+    maybeConstrs <- lookupContext expandedConstraints n
+    maybe (halt . GenericError (Just sp) $
+                    "internal error: attempted to look up expanded constraints for '"
+                    <> pretty n <> "' before it has been registered") pure maybeConstrs
 
 
 -- | Get the set of interface constraints in scope.
