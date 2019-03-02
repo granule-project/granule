@@ -1,0 +1,17 @@
+-- EXPECTED: S S S Z
+
+
+interface Semigroup a where
+  op : a -> a -> a
+
+data NatPlus = Z | S NatPlus
+
+-- 'op' is defined recursively, but
+-- this should still be resolved
+-- correctly by the rewriter
+instance Semigroup NatPlus where
+  op Z x = x;
+  op (S n) x = S (op n x)
+
+main : NatPlus
+main = op (S (S Z)) (S Z)

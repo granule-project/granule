@@ -167,8 +167,7 @@ type DefRW v = Def () ()
 -- | representation without interfaces.
 rewriteWithoutInterfaces :: (?globals :: Globals) => RewriteEnv -> AST () Type -> IO (Either RewriterError (AST () ()))
 rewriteWithoutInterfaces renv ast =
-    let (AST dds _ ifaces insts) = forgetAnnotations ast
-        (AST _ defs _ _) = ast
+    let (AST dds defs ifaces insts) = ast
     in runNewRewriter (do
       ifaces' <- mapM mkIFace ifaces
       defs' <- mapM rewriteDef defs
@@ -238,7 +237,7 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
 --   barA : Bar A
 --   barA = MkBar [fooA] [\Av -> Av] [Av]
 -- @
-mkInst :: (?globals :: Globals, Pretty v) => Instance v () -> Rewriter (Def v ())
+mkInst :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
 mkInst inst@(Instance sp iname _constrs idt@(IFaceDat _ ty) _) = do
     idictConstructed <- constructIDict inst
     let dictName = freshDictName iname idt
@@ -263,15 +262,18 @@ getInstanceGrouped inst@(Instance _ _ _ _ ds) = do
 
 -- | Construct an expression that builds an appropriate dictionary
 -- | instance for the interface.
-constructIDict :: (?globals :: Globals) => Instance v () -> Rewriter (ExprRW v)
+constructIDict :: (?globals :: Globals) => Instance () Type -> Rewriter (ExprRW ())
 constructIDict inst@(Instance _ iname _ _ _) = do
   grouped <- getInstanceGrouped inst
+  lambdas <- mapM desugarIdef grouped
   let idictDataCon = ifaceDataCon iname
-      lambdas = fmap desugarIdef grouped
       dictApp = mkFap idictDataCon lambdas
   pure dictApp
     where
-      desugarIdef (_, t, eqns) = desugar eqns t
+      desugarIdef (_, t, eqns) = do
+        let (t', constrs) = rewriteTypeScheme t
+        eqns' <- mapM (rewriteEquation constrs) eqns
+        pure $ desugar eqns' t'
 
 
 -- | Produce a lambda expression from a set of equations and a typescheme.
