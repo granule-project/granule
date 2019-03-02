@@ -1,0 +1,17 @@
+-- EXPECTED: B
+
+interface Simple a where
+  simple1 : a -> a;
+  simple2 : a
+
+data A = A | B
+
+-- the 'Simple' methods are given
+-- in a different order to the interface
+instance Simple A where
+  simple2 = A;
+  simple1 B = A;
+  simple1 A = B
+
+main : A
+main = simple1 simple2

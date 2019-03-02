@@ -21,7 +21,8 @@ import Control.Arrow ((***))
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (evalState)
 import Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
-import Data.List (foldl', groupBy)
+import Data.Function (on)
+import Data.List (foldl', groupBy, sortBy)
 import Data.Maybe (fromMaybe)
 
 import Language.Granule.Syntax.Def
@@ -213,7 +214,7 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
         dcon = DataConstrNonIndexed sp dname typs
         ddcl = DataDecl sp iname [(pname, fromMaybe KType kind)] Nothing [dcon]
         typs = fmap ityToTy itys
-        defs = fmap ityToDef (zip itys [1..])
+        defs = fmap ityToDef (zip (sortBy (compare `on` ityName) itys) [1..])
         dty = TyApp (TyCon iname) (TyVar pname)
         matchVar = mkId "$match"
         mkPat i =
@@ -229,6 +230,7 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
     registerInterface iname
     pure (ddcl, defs)
     where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = ty;
+          ityName (IFaceTy _ n _) = n
 
 
 -- | Rewrite an instance to its intermediate representation.
@@ -259,7 +261,7 @@ getInstanceGrouped inst@(Instance _ _ _ _ ds) = do
   let nameGroupedDefs = groupBy
         (\(IDef _ name1 _) (IDef _ name2 _) ->
           name1 == name2 || name2 == Nothing) ds
-      groupedEqns = map
+      groupedEqns = sortBy (compare `on` fst) $ map
         (\((IDef _ (Just name) eq):dt) ->
           let eqs = map (\(IDef _ _ eqn) -> eqn) dt
           in (name, eq:eqs)) nameGroupedDefs
