@@ -46,6 +46,13 @@ mkDictVar :: (?globals :: Globals) => Id -> Type -> Id
 mkDictVar name ty = mkId $ "$" <> pretty name <> "(" <> pretty ty <> ")"
 
 
+-- | Return a unique (in scope) variable representing the interface
+-- | dictionary at the given type.
+mkDictVarFromCon :: (?globals :: Globals) => Type -> Id
+mkDictVarFromCon (TyApp (TyCon iname) ty) = mkDictVar iname ty
+mkDictVarFromCon t = error $ "attempt to make a dict var from type: " <> pretty t
+
+
 -- | Generate a fresh dictionary variable for an instance.
 freshDictName :: (?globals :: Globals) => Id -> IFaceDat -> Id
 freshDictName name (IFaceDat _ ty) = mkDictVar name ty
@@ -326,7 +333,7 @@ rewriteEquation ts (Equation sp _ pats expr) = do
     expr' <- rewriteExpr expr
     pure $ Equation sp () (constrPats <> pats') expr'
     where constrPats = fmap mkVpat ts
-          mkVpat t = PVar nullSpanNoFile () (mkId $ "$pf(" <> pretty t <> ")")
+          mkVpat t = PVar nullSpanNoFile () (mkDictVarFromCon t)
 
 
 rewriteExpr :: (?globals :: Globals, Pretty v) => Expr v Type -> Rewriter (ExprRW v)
