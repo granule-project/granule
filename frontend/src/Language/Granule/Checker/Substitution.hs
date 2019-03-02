@@ -396,6 +396,7 @@ combineManySubstitutions s (subst:ss) = do
 combineSubstitutions ::
     (?globals :: Globals)
     => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
+combineSubstitutions _ u1 u2 | u1 == u2 = pure u1
 combineSubstitutions sp u1 u2 = do
       -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
       -- check whether things can be unified, i.e. exactly
