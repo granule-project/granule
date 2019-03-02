@@ -10,6 +10,10 @@ without interfaces.
 {-# LANGUAGE ImplicitParams #-}
 module Language.Granule.Checker.Rewrite
     ( rewriteWithoutInterfaces
+
+      -- ** Annotation helpers
+    , mapAnnotations
+    , forgetAnnotations
     ) where
 
 
