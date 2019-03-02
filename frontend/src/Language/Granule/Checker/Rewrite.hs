@@ -14,7 +14,9 @@ module Language.Granule.Checker.Rewrite
 
 
 import Control.Arrow ((***))
-import Control.Monad.State (evalState)
+import Control.Monad.IO.Class (liftIO)
+import Control.Monad.State (evalState, get)
+import Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
 import Data.List (foldl', groupBy)
 import Data.Maybe (fromMaybe)
 
@@ -28,12 +30,21 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Utils
 
+import qualified Language.Granule.Checker.Monad as C
+import qualified Language.Granule.Checker.Substitutions as Sub
+
 import Language.Granule.Checker.Rewrite.Type
+
+
+-- | Return a unique (in scope) variable representing the interface
+-- | dictionary at the given type.
+mkDictVar :: (?globals :: Globals) => Id -> Type -> Id
+mkDictVar name ty = mkId $ "$" <> pretty name <> "(" <> pretty ty <> ")"
 
 
 -- | Generate a fresh dictionary variable for an instance.
 freshDictName :: (?globals :: Globals) => Id -> IFaceDat -> Id
-freshDictName name idat = mkId $ "$" <> pretty name <> "(" <> pretty idat <> ")"
+freshDictName name (IFaceDat _ ty) = mkDictVar name ty
 
 
 -- | Get the name of the dictionary type constructor for the interface.
@@ -125,21 +136,40 @@ mapPatternAnnotation f (PConstr s ann n pats) =
     PConstr s (f ann) n (fmap (mapPatternAnnotation f) pats)
 
 
+--------------------------------------------
+----- Helpers for working with Checker -----
+--------------------------------------------
+
+
+-- TODO: remove use of unsafePerformIO (perhaps have the Checker Monad
+-- switch to use MonadIO, or the Rewriter could use MonadIO and use liftIO)
+runMaybeTCheckerInRewriter :: MaybeT C.Checker a -> Rewriter (Maybe a)
+runMaybeTCheckerInRewriter =
+  liftIO . C.evalChecker C.initState . runMaybeT
+
+
 ------------------------
 ----- AST Rewriter -----
 ------------------------
 
 
+type ValueRW v = Value v ()
+type ExprRW  v = Expr  v ()
+type PatternRW = Pattern ()
+type DefRW v = Def () ()
+
+
 -- | Rewrite a type-annotated AST to an intermediate
 -- | representation without interfaces.
-rewriteWithoutInterfaces :: (?globals :: Globals, Pretty v) => RewriteEnv -> AST v a -> Either RewriterError (AST v ())
+rewriteWithoutInterfaces :: (?globals :: Globals) => RewriteEnv -> AST () Type -> IO (Either RewriterError (AST () ()))
 rewriteWithoutInterfaces renv ast =
-    let (AST dds defs ifaces insts) = forgetAnnotations ast
+    let (AST dds _ ifaces insts) = forgetAnnotations ast
+        (AST _ defs _ _) = ast
     in runNewRewriter (do
-      let ifaces' = fmap mkIFace ifaces
-          ifaceDDS = fmap fst ifaces'
+      ifaces' <- mapM mkIFace ifaces
+      defs' <- mapM rewriteDef defs
+      let ifaceDDS = fmap fst ifaces'
           ifaceDefs = concat $ fmap snd ifaces'
-          defs' = fmap rewriteDef defs
       instsToDefs <- mapM mkInst insts
       pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs') [] []) renv
 
@@ -166,8 +196,8 @@ rewriteWithoutInterfaces renv ast =
 --   bar2 : forall {a : Type} . Bar a -> a
 --   bar2 (MkBar [_] [_] [m]) = m
 -- @
-mkIFace :: (?globals :: Globals) => IFace -> (DataDecl, [Def v ()])
-mkIFace (IFace sp iname _constrs kind pname itys) =
+mkIFace :: (?globals :: Globals) => IFace -> Rewriter (DataDecl, [Def v ()])
+mkIFace (IFace sp iname _constrs kind pname itys) = do
     let numMethods = length itys
         dname = ifaceConId iname
         dcon = DataConstrNonIndexed sp dname typs
@@ -185,7 +215,8 @@ mkIFace (IFace sp iname _constrs kind pname itys) =
             Def sp' n [Equation sp' () [mkPat i]
                                     (Val sp' () (Var () matchVar))]
                     (Forall sp' q c (FunTy dty ty))
-    in (ddcl, defs)
+    mapM_ registerDef defs
+    pure (ddcl, defs)
     where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = ty;
 
 
@@ -228,19 +259,19 @@ getInstanceGrouped inst@(Instance _ _ _ _ ds) = do
 
 -- | Construct an expression that builds an appropriate dictionary
 -- | instance for the interface.
-constructIDict :: (?globals :: Globals) => Instance v () -> Rewriter (Expr v ())
+constructIDict :: (?globals :: Globals) => Instance v () -> Rewriter (ExprRW v)
 constructIDict inst@(Instance _ iname _ _ _) = do
   grouped <- getInstanceGrouped inst
   let idictDataCon = ifaceDataCon iname
       lambdas = fmap desugarIdef grouped
-      dictApp = foldl' (App nullSpanNoFile ()) idictDataCon lambdas
+      dictApp = mkFap idictDataCon lambdas
   pure dictApp
     where
       desugarIdef (_, t, eqns) = desugar eqns t
 
 
 -- | Produce a lambda expression from a set of equations and a typescheme.
-desugar :: [Equation v ()] -> TypeScheme -> Expr v ()
+desugar :: [Equation v ()] -> TypeScheme -> ExprRW v
 desugar eqs (Forall _ _ _ ty) =
   typeDirectedDesugarEquation mkSingleEquation
   where
@@ -274,20 +305,117 @@ desugar eqs (Forall _ _ _ ty) =
            (foldl (ppair nullSpanNoFile) (PWild nullSpanNoFile ()) pats, expr)) eqs
 
 
-rewriteDef :: Def v a -> Def v a
-rewriteDef (Def sp n eqns tys) = Def sp n eqns' tys'
-    where eqns' = fmap rewriteEquation eqns
-          tys'  = rewriteTypeScheme tys
+rewriteDef :: (?globals :: Globals) => Def () Type -> Rewriter (DefRW ())
+rewriteDef (Def sp n eqns tys) = do
+  eqns' <- mapM (rewriteEquation cts) eqns
+  let newDef = Def sp n eqns' tys'
+  registerDef newDef
+  pure newDef
+    where (tys', cts) = rewriteTypeScheme tys
 
 
-rewriteEquation :: Equation v a -> Equation v a
-rewriteEquation = id
+rewriteEquation :: (?globals :: Globals, Pretty v) => [Type] -> Equation v Type -> Rewriter (Equation v ())
+rewriteEquation ts (Equation sp _ pats expr) = do
+    pats' <- mapM rewritePattern pats
+    expr' <- rewriteExpr expr
+    pure $ Equation sp () (constrPats <> pats') expr'
+    where constrPats = fmap mkVpat ts
+          mkVpat t = PVar nullSpanNoFile () (mkId $ "$pf(" <> pretty t <> ")")
+
+
+rewriteExpr :: (?globals :: Globals, Pretty v) => Expr v Type -> Rewriter (ExprRW v)
+rewriteExpr (App s _ e1 e2) = do
+  e1' <- rewriteExpr e1
+  e2' <- rewriteExpr e2
+  pure $ App s () e1' e2'
+rewriteExpr (Binop s _ op l r) = do
+  l' <- rewriteExpr l
+  r' <- rewriteExpr r
+  pure $ Binop s () op l' r'
+rewriteExpr (LetDiamond s _ pat mty e1 e2) = do
+    pat' <- rewritePattern pat
+    e1' <- rewriteExpr e1
+    e2' <- rewriteExpr e2
+    pure $ LetDiamond s () pat' mty e1' e2'
+rewriteExpr (Val s ann v@(Var _ n)) = do
+  v' <- rewriteValue v
+  maybeDef <- lookupDef n
+  case maybeDef of
+    Just def -> rewriteDefCall def ann
+    Nothing -> pure $ Val s () v'
+rewriteExpr (Val s _ v) = fmap (Val s ()) $ rewriteValue v
+rewriteExpr (Case s _ sw ar) = do
+  sw' <- rewriteExpr sw
+  ar' <- mapM rewriteAr ar
+  pure $ Case s () sw' ar'
+    where rewriteAr (p,e) = do
+            p' <- rewritePattern p
+            e' <- rewriteExpr e
+            pure (p', e')
+
+
+rewriteDefCall :: (?globals :: Globals) => Def () () -> Type -> Rewriter (Expr v ())
+rewriteDefCall (Def _ n _ tys) callTy = do
+  (Forall _ _ _ ty) <- instantiate tys callTy
+  dictArgs <- dictArgsFromTy ty
+  pure $ mkFap (Val nullSpanNoFile () $ Var () n) dictArgs
+
+
+-- | Instantiate the typescheme with the given type.
+-- | The typescheme should already have interface constraints rewritten as types.
+-- |
+-- | This will fail if the typescheme cannot be instantiated with the given type.
+instantiate :: (?globals :: Globals) => TypeScheme -> Type -> Rewriter TypeScheme
+instantiate sig@(Forall _ _ _ ty) ity = do
+  let tyNoI = rewriteTypeWithoutInterfaces ty
+  res <- runMaybeTCheckerInRewriter $ do
+           subst <- Sub.unify tyNoI ity
+           maybe (pure sig) (`Sub.substitute` sig) subst
+  maybe (genericRewriterError $ concat ["error when instantiating '", pretty sig, "' with '", pretty ity, "'"]) pure res
+  where rewriteTypeWithoutInterfaces (FunTy (TyApp (TyCon _) _) t) =
+            rewriteTypeWithoutInterfaces t
+        rewriteTypeWithoutInterfaces t = t
+
+
+-- | Convert a type to a list of dictionary expressions to apply to the
+-- | associated expression.
+dictArgsFromTy :: (?globals :: Globals) => Type -> Rewriter [Expr v ()]
+dictArgsFromTy (FunTy (TyApp (TyCon iname) ity) ts) =
+    fmap (Val nullSpanNoFile () (Var () dname):) $ dictArgsFromTy ts
+    where dname = mkDictVar iname ity
+dictArgsFromTy _ = pure []
+
+
+rewritePattern :: Pattern a -> Rewriter PatternRW
+rewritePattern (PBox s _ pat)       = fmap (PBox    s ())   $ rewritePattern pat
+rewritePattern (PConstr s _ n pats) = fmap (PConstr s () n) $ mapM rewritePattern pats
+rewritePattern p = pure . mapPatternAnnotation (const ())   $ p
+
+
+rewriteValue :: (?globals :: Globals, Pretty v) => Value v Type -> Rewriter (ValueRW v)
+rewriteValue (Abs _ pat t expr) = do
+  pat'  <- rewritePattern pat
+  expr' <- rewriteExpr expr
+  pure $ Abs () pat' t expr'
+rewriteValue (Promote _ expr) = fmap (Promote ())  $ rewriteExpr expr
+rewriteValue (Pure    _ expr) = fmap (Pure ())     $ rewriteExpr expr
+rewriteValue (Constr  _ n vs) = fmap (Constr () n) $ mapM rewriteValue vs
+rewriteValue v = pure . mapValueAnnotation (const ()) $ v
 
 
 -- | Rewrite a typescheme without interface constraints.
 -- |
 -- | Interface constraints simply become standard types.
-rewriteTypeScheme :: TypeScheme -> TypeScheme
+rewriteTypeScheme :: TypeScheme -> (TypeScheme, [Type])
 rewriteTypeScheme (Forall sp binds constrs ty) =
-    Forall sp binds [] funty
+    (Forall sp binds [] funty, constrs)
     where funty = foldr FunTy ty constrs
+
+
+---------------------
+----- Utilities -----
+---------------------
+
+
+mkFap :: Expr v () -> [Expr v ()] -> Expr v ()
+mkFap = foldl' (App nullSpanNoFile ())

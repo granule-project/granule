@@ -126,7 +126,7 @@ run input = do
             return ExitSuccess
           else do
             printInfo $ green "Ok, evaluating..."
-            let maybeRewrittenAst = rewriteWithoutInterfaces renv checkedAst
+            maybeRewrittenAst <- rewriteWithoutInterfaces renv checkedAst
             case maybeRewrittenAst of
               Left err -> do
                 printErr $ RewriterError $ show err

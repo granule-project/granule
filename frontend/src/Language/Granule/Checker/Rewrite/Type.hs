@@ -18,16 +18,22 @@ module Language.Granule.Checker.Rewrite.Type
     , mkInstanceId
       -- * Error system
     , RewriterError
+    , genericRewriterError
     , illFormedEnvError
       -- * Helpers
     , getInstanceMethTys
+    , registerDef
+    , lookupDef
     ) where
 
 
 import Control.Monad.Except (MonadError, ExceptT, runExceptT, throwError)
+import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
-import Control.Monad.State (MonadState, State, evalState)
+import Control.Monad.State (MonadState, StateT, evalStateT, get, modify')
 
+import Language.Granule.Context (Ctxt)
+import qualified Language.Granule.Context as Ctxt
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
@@ -38,11 +44,28 @@ import Language.Granule.Syntax.Type
 --------------------------
 
 
-type RewriteState = String
+-----------
+-- State --
+-----------
+
+
+type DefMap = Ctxt (Def () ())
+
+
+type RewriteState = DefMap
 
 
 startRewriteState :: RewriteState
-startRewriteState = ""
+startRewriteState = Ctxt.empty
+
+
+modifyDefs :: (DefMap -> DefMap) -> Rewriter ()
+modifyDefs = modify'
+
+
+-----------------
+-- Environment --
+-----------------
 
 
 -- | Unique identifier for an instance.
@@ -65,23 +88,29 @@ newtype RewriteEnv = RewriteEnv {
 type RewriterError = String
 
 
--- newtype Rewriter v = Rewriter { unRewriter :: State RewriteState v }
+-- TODO: Remove IO from the Rewriter (GuiltyDolphin --- 2019-03-02)
+-- - this only has IO so that we can run some Checker stuff
+--   (such as substitutions) inside the rewriter - if we remove
+--   the need for IO from the Checker, or generalise substitutions
+--   so that they don't rely upon the checker, then we should be
+--   able to remove IO from this)
 newtype Rewriter v = Rewriter
     { unRewriter :: ExceptT RewriterError
                     (ReaderT RewriteEnv
-                     (State RewriteState)) v }
+                     (StateT RewriteState IO)) v }
     deriving (Functor, Applicative, Monad,
               MonadError RewriterError,
               MonadReader RewriteEnv,
-              MonadState RewriteState)
+              MonadState RewriteState,
+              MonadIO)
 
 
-execRewriter :: Rewriter v -> RewriteEnv -> RewriteState -> Either RewriterError v
-execRewriter r = evalState . runReaderT (runExceptT (unRewriter r))
+execRewriter :: Rewriter v -> RewriteEnv -> RewriteState -> IO (Either RewriterError v)
+execRewriter r = evalStateT . runReaderT (runExceptT (unRewriter r))
 
 
 -- | Run a new rewriter with the given input environment.
-runNewRewriter :: Rewriter v -> RewriteEnv -> Either RewriterError v
+runNewRewriter :: Rewriter v -> RewriteEnv -> IO (Either RewriterError v)
 runNewRewriter r renv = execRewriter r renv startRewriteState
 
 
@@ -95,8 +124,12 @@ buildRewriterEnv = RewriteEnv
 ------------
 
 
+genericRewriterError :: String -> Rewriter a
+genericRewriterError = throwError
+
+
 illFormedEnvError :: Rewriter a
-illFormedEnvError = throwError "rewriter received an illformed environment"
+illFormedEnvError = genericRewriterError "rewriter received an illformed environment"
 
 
 -------------------
@@ -112,3 +145,11 @@ getInstanceMethTys :: InstanceId -> Id -> Rewriter TypeScheme
 getInstanceMethTys instId methName = do
   allSigs <- getInstanceSignatures
   maybe illFormedEnvError pure (lookup (instId, methName) allSigs)
+
+
+registerDef :: Def () () -> Rewriter ()
+registerDef def@(Def _ n _ _) = modifyDefs ((n,def):)
+
+
+lookupDef :: Id -> Rewriter (Maybe (Def () ()))
+lookupDef n = fmap (lookup n) get
