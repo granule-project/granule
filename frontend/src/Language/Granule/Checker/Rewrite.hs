@@ -226,6 +226,7 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
                                     (Val sp' () (Var () matchVar))]
                     (Forall sp' q c (FunTy dty ty))
     mapM_ registerDef defs
+    registerInterface iname
     pure (ddcl, defs)
     where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = ty;
 
@@ -380,21 +381,25 @@ rewriteDefCall (Def _ n _ tys) callTy = do
 -- | This will fail if the typescheme cannot be instantiated with the given type.
 instantiate :: (?globals :: Globals) => TypeScheme -> Type -> Rewriter TypeScheme
 instantiate sig@(Forall _ _ _ ty) ity = do
-  let tyNoI = rewriteTypeWithoutInterfaces ty
+  tyNoI <- rewriteTypeWithoutInterfaces ty
   res <- runMaybeTCheckerInRewriter $ do
            subst <- Sub.unify tyNoI ity
            maybe (pure sig) (`Sub.substitute` sig) subst
   maybe (genericRewriterError $ concat ["error when instantiating '", pretty sig, "' with '", pretty ity, "'"]) pure res
-  where rewriteTypeWithoutInterfaces (FunTy (TyApp (TyCon _) _) t) =
-            rewriteTypeWithoutInterfaces t
-        rewriteTypeWithoutInterfaces t = t
+  where rewriteTypeWithoutInterfaces ta@(FunTy (TyApp (TyCon n) _) t) = do
+            isIface <- isInterfaceVar n
+            if isIface then rewriteTypeWithoutInterfaces t
+            else pure ta
+        rewriteTypeWithoutInterfaces t = pure t
 
 
 -- | Convert a type to a list of dictionary expressions to apply to the
 -- | associated expression.
 dictArgsFromTy :: (?globals :: Globals) => Type -> Rewriter [Expr v ()]
-dictArgsFromTy (FunTy (TyApp (TyCon iname) ity) ts) =
-    fmap (Val nullSpanNoFile () (Var () dname):) $ dictArgsFromTy ts
+dictArgsFromTy (FunTy (TyApp (TyCon iname) ity) ts) = do
+    isIface <- isInterfaceVar iname
+    if isIface then fmap ((Val nullSpanNoFile () (Var () dname)):) (dictArgsFromTy ts)
+    else pure []
     where dname = mkDictVar iname ity
 dictArgsFromTy _ = pure []
 

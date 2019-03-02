@@ -21,6 +21,8 @@ module Language.Granule.Checker.Rewrite.Type
     , genericRewriterError
     , illFormedEnvError
       -- * Helpers
+    , registerInterface
+    , isInterfaceVar
     , getInstanceMethTys
     , registerDef
     , lookupDef
@@ -52,15 +54,30 @@ import Language.Granule.Syntax.Type
 type DefMap = Ctxt (Def () ())
 
 
-type RewriteState = DefMap
+data RewriteState = RewriteState {
+      rsDefMap :: DefMap
+    , rsIFaces :: [Id]
+    }
 
 
 startRewriteState :: RewriteState
-startRewriteState = Ctxt.empty
+startRewriteState = RewriteState Ctxt.empty []
 
 
 modifyDefs :: (DefMap -> DefMap) -> Rewriter ()
-modifyDefs = modify'
+modifyDefs f = modify' $ \s -> s { rsDefMap = f (rsDefMap s) }
+
+
+getDefMap :: Rewriter DefMap
+getDefMap = fmap rsDefMap get
+
+
+modifyInterfaces :: ([Id] -> [Id]) -> Rewriter ()
+modifyInterfaces f = modify' $ \s -> s { rsIFaces = f (rsIFaces s) }
+
+
+getInterfaces :: Rewriter [Id]
+getInterfaces = fmap rsIFaces get
 
 
 -----------------
@@ -152,4 +169,13 @@ registerDef def@(Def _ n _ _) = modifyDefs ((n,def):)
 
 
 lookupDef :: Id -> Rewriter (Maybe (Def () ()))
-lookupDef n = fmap (lookup n) get
+lookupDef n = fmap (lookup n) getDefMap
+
+
+registerInterface :: Id -> Rewriter ()
+registerInterface iname = modifyInterfaces (iname:)
+
+
+-- | True if the given id represents an interface in scope.
+isInterfaceVar :: Id -> Rewriter Bool
+isInterfaceVar n = fmap (elem n) getInterfaces

@@ -1,0 +1,27 @@
+-- EXPECTED: S S S S S Z
+
+data Maybe a = Nothing | Just a
+
+interface Semigroup a where
+  op : a -> a -> a
+
+-- maybeSemi has a mixture of interfaces and type
+-- constructors in its signature
+maybeSemi : forall {a : Type} . {Semigroup a} => Maybe a -> a -> a
+maybeSemi (Just x) y = op x y;
+maybeSemi Nothing  y = y
+
+data NatPlus = Z | S NatPlus
+
+instance Semigroup NatPlus where
+  op Z x = x;
+  op (S n) x = S (op n x)
+
+two : NatPlus
+two = S (S Z)
+
+three : NatPlus
+three = S two
+
+main : NatPlus
+main = maybeSemi (Just two) three
