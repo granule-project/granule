@@ -19,7 +19,7 @@ module Language.Granule.Checker.Rewrite
 
 import Control.Arrow ((***))
 import Control.Monad.IO.Class (liftIO)
-import Control.Monad.State (evalState, get)
+import Control.Monad.State (evalState)
 import Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
 import Data.List (foldl', groupBy)
 import Data.Maybe (fromMaybe)
