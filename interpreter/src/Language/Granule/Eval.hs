@@ -1,6 +1,7 @@
 -- Granule interpreter
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -20,6 +21,9 @@ import Language.Granule.Utils
 import Data.Text (pack, unpack, append)
 import qualified Data.Text.IO as Text
 import Control.Monad (zipWithM)
+import Control.Monad.Fail (MonadFail)
+import Control.Monad.IO.Class (MonadIO, liftIO)
+import Control.Monad.State (MonadState, StateT, evalStateT, get, modify')
 
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
@@ -27,6 +31,7 @@ import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Ch
 import System.IO (hFlush, stdout)
 import qualified System.IO as SIO (Handle, hGetChar, hPutChar, hClose, openFile, IOMode, isEOF)
 
+type RuntimeDef = Def (Runtime ()) ()
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
 
@@ -53,6 +58,126 @@ instance Show (Runtime a) where
 instance Show (Runtime a) => Pretty (Runtime a) where
   prettyL _ = show
 
+
+---------------------------
+----- Evaluator Monad -----
+---------------------------
+
+
+---------------------
+-- Evaluator State --
+---------------------
+
+
+type DefMap = Ctxt RuntimeDef
+
+
+data EvalState = EvalState {
+      currentContext :: Ctxt RValue
+    , tlds :: DefMap
+    }
+
+
+initState :: EvalState
+initState = EvalState [] []
+
+
+initStateWithContext :: Ctxt RValue -> EvalState
+initStateWithContext ctxt = initState { currentContext = ctxt }
+
+
+--------------------
+-- Evaluator Type --
+--------------------
+
+
+newtype Evaluator a = Evaluator { unEvaluator :: StateT EvalState IO a }
+    deriving (Functor, Applicative, Monad,
+              MonadState EvalState,
+              MonadIO, MonadFail)
+
+
+execEvaluator :: Evaluator a -> EvalState -> IO a
+execEvaluator = evalStateT . unEvaluator
+
+
+execChild :: Evaluator a -> Evaluator (IO a)
+execChild e = do
+  st <- get
+  pure $ execEvaluator e st
+
+
+runWithContext :: Ctxt RValue -> Evaluator a -> IO a
+runWithContext c r = execEvaluator r $ initStateWithContext c
+
+
+-------------
+-- Helpers --
+-------------
+
+
+buildDefMap :: [RuntimeDef] -> Evaluator ()
+buildDefMap des =
+  let dmap = foldr (\d@(Def _ n _ _) acc -> (n, d) : acc) [] des
+  in putDefMap dmap
+
+
+putDefMap :: DefMap -> Evaluator ()
+putDefMap dmap = modify' $ \s -> s { tlds = dmap }
+
+
+getDefMap :: Evaluator DefMap
+getDefMap = fmap tlds get
+
+
+lookupInDefMap :: Id -> Evaluator (Maybe RuntimeDef)
+lookupInDefMap n = fmap (lookup n) getDefMap
+
+
+getCurrentContext :: Evaluator (Ctxt RValue)
+getCurrentContext = fmap currentContext get
+
+
+putContext :: Ctxt RValue -> Evaluator ()
+putContext c = modify' $ \s -> s { currentContext = c }
+
+
+lookupInCurrentContext :: Id -> Evaluator (Maybe RValue)
+lookupInCurrentContext n = fmap (lookup n) getCurrentContext
+
+
+--------
+-- IO --
+--------
+
+
+writeStr :: String -> Evaluator ()
+writeStr = liftIO . putStr
+
+
+flushStdout :: Evaluator ()
+flushStdout = liftIO $ hFlush stdout
+
+
+runPrimitive :: (RValue -> IO a) -> RValue -> Evaluator a
+runPrimitive f = liftIO . f
+
+
+runInnerIO :: Evaluator (IO a) -> Evaluator a
+runInnerIO e = do
+  action <- e
+  liftIO action
+
+
+runIOAction :: (IO a -> IO b) -> Evaluator a -> Evaluator b
+runIOAction f e = runInnerIO (fmap f (execChild e))
+
+
+------------------------------
+----- Bulk of evaluation -----
+------------------------------
+
+
 evalBinOp :: String -> RValue -> RValue -> RValue
 evalBinOp "+" (NumInt n1) (NumInt n2) = NumInt (n1 + n2)
 evalBinOp "*" (NumInt n1) (NumInt n2) = NumInt (n1 * n2)
@@ -73,56 +198,57 @@ evalBinOp "≥" (NumFloat n) (NumFloat m) = Constr () (mkId . show $ (n >= m)) [
 evalBinOp op v1 v2 = error $ "Unknown operator " <> op
                              <> " on " <> show v1 <> " and " <> show v2
 
--- Call-by-value big step semantics
-evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
 
-evalIn _ (Val s _ (Var _ v)) | internalName v == "read" = do
-    putStr "> "
-    hFlush stdout
-    val <- Text.getLine
+-- Call-by-value big step semantics
+evalExpr :: (?globals :: Globals) => RExpr -> Evaluator RValue
+
+evalExpr (Val s _ (Var _ v)) | internalName v == "read" = do
+    writeStr "> "
+    flushStdout
+    val <- liftIO Text.getLine
     return $ Pure () (Val s () (StringLiteral val))
 
-evalIn _ (Val s _ (Var _ v)) | internalName v == "readInt" = do
-    putStr "> "
-    hFlush stdout
-    val <- readLn
+evalExpr (Val s _ (Var _ v)) | internalName v == "readInt" = do
+    writeStr "> "
+    flushStdout
+    val <- liftIO readLn
     return $ Pure () (Val s () (NumInt val))
 
-evalIn _ (Val _ _ (Abs _ p t e)) = return $ Abs () p t e
+evalExpr (Val _ _ (Abs _ p t e)) = return $ Abs () p t e
 
-evalIn ctxt (App s _ e1 e2) = do
-    v1 <- evalIn ctxt e1
+evalExpr (App s _ e1 e2) = do
+    v1 <- evalExpr e1
     case v1 of
       (Ext _ (Primitive k)) -> do
-        v2 <- evalIn ctxt e2
-        k v2
+        v2 <- evalExpr e2
+        runPrimitive k v2
 
       Abs _ p _ e3 -> do
-        p <- pmatchTop ctxt [(p, e3)] e2
+        p <- pmatchTop [(p, e3)] e2
         case p of
-          Just (e3, bindings) -> evalIn ctxt (applyBindings bindings e3)
+          Just (e3, bindings) -> evalExpr (applyBindings bindings e3)
           _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
-        v2 <- evalIn ctxt e2
+        v2 <- evalExpr e2
         return $ Constr () c (vs <> [v2])
 
       _ -> error $ show v1
       -- _ -> error "Cannot apply value"
 
-evalIn ctxt (Binop _ _ op e1 e2) = do
-     v1 <- evalIn ctxt e1
-     v2 <- evalIn ctxt e2
+evalExpr (Binop _ _ op e1 e2) = do
+     v1 <- evalExpr e1
+     v2 <- evalExpr e2
      return $ evalBinOp op v1 v2
 
-evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
-     v1 <- evalIn ctxt e1
+evalExpr (LetDiamond s _ p _ e1 e2) = do
+     v1 <- evalExpr e1
      case v1 of
        Pure _ e -> do
-         v1' <- evalIn ctxt e
-         p  <- pmatch ctxt [(p, e2)] v1'
+         v1' <- evalExpr e
+         p  <- pmatch [(p, e2)] v1'
          case p of
-           Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
+           Just (e2, bindings) -> evalExpr (applyBindings bindings e2)
            Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
        other -> fail $ "Runtime exception: Expecting a diamonad value bug got: "
                       <> prettyDebug other
@@ -131,7 +257,7 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
 -- Hard-coded 'scale', removed for now
 
 
-evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
+evalExpr (Val _ (Var v)) | internalName v == "scale" = return
   (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
     (Abs (PVar nullSpan $ mkId " y") Nothing (
       letBox nullSpan (PVar nullSpan $ mkId " ye")
@@ -140,22 +266,24 @@ evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
            "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
 -}
 
-evalIn ctxt (Val _ _ (Var _ x)) =
-    case lookup x ctxt of
-      Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
+evalExpr (Val _ _ (Var _ x)) = do
+  maybeVal <- tryResolveVarOrEvalTLD x
+  case maybeVal of
+      Just val@(Ext _ (PrimitiveClosure f)) ->
+        fmap (Ext () . Primitive . f) getCurrentContext
       Just val -> return val
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
-evalIn ctxt (Val s _ (Pure _ e)) = do
-  v <- evalIn ctxt e
+evalExpr (Val s _ (Pure _ e)) = do
+  v <- evalExpr e
   return $ Pure () (Val s () v)
 
-evalIn _ (Val _ _ v) = return v
+evalExpr (Val _ _ v) = return v
 
-evalIn ctxt (Case _ _ guardExpr cases) = do
-    p <- pmatchTop ctxt cases guardExpr
+evalExpr (Case _ _ guardExpr cases) = do
+    p <- pmatchTop cases guardExpr
     case p of
-      Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
+      Just (ei, bindings) -> evalExpr (applyBindings bindings ei)
       Nothing             ->
         error $ "Incomplete pattern match:\n  cases: "
              <> pretty cases <> "\n  expr: " <> pretty guardExpr
@@ -170,58 +298,56 @@ applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
     expression e_i and a list of bindings in scope -}
 pmatchTop ::
   (?globals :: Globals)
-  => Ctxt RValue
-  -> [(Pattern (), RExpr)]
+  => [(Pattern (), RExpr)]
   -> RExpr
-  -> IO (Maybe (RExpr, Ctxt RExpr))
+  -> Evaluator (Maybe (RExpr, Ctxt RExpr))
 
-pmatchTop ctxt ((PBox _ _ (PVar _ _ var), branchExpr):_) guardExpr = do
-  Promote _ e <- evalIn ctxt guardExpr
+pmatchTop ((PBox _ _ (PVar _ _ var), branchExpr):_) guardExpr = do
+  Promote _ e <- evalExpr guardExpr
   return (Just (subst e var branchExpr, []))
 
-pmatchTop ctxt ((PBox _ _ (PWild _ _), branchExpr):_) guardExpr = do
-  Promote _ _ <- evalIn ctxt guardExpr
+pmatchTop ((PBox _ _ (PWild _ _), branchExpr):_) guardExpr = do
+  Promote _ _ <- evalExpr guardExpr
   return (Just (branchExpr, []))
 
-pmatchTop ctxt ps guardExpr = do
-  val <- evalIn ctxt guardExpr
-  pmatch ctxt ps val
+pmatchTop ps guardExpr = do
+  val <- evalExpr guardExpr
+  pmatch ps val
 
 pmatch ::
   (?globals :: Globals)
-  => Ctxt RValue
-  -> [(Pattern (), RExpr)]
+  => [(Pattern (), RExpr)]
   -> RValue
-  -> IO (Maybe (RExpr, Ctxt RExpr))
-pmatch _ [] _ =
+  -> Evaluator (Maybe (RExpr, Ctxt RExpr))
+pmatch [] _ =
    return Nothing
 
-pmatch _ ((PWild _ _, e):_)  _ =
+pmatch ((PWild _ _, e):_)  _ =
    return $ Just (e, [])
 
-pmatch ctxt ((PConstr _ _ s innerPs, e):ps) (Constr _ s' vs) | s == s' = do
-   matches <- zipWithM (\p v -> pmatch ctxt [(p, e)] v) innerPs vs
+pmatch ((PConstr _ _ s innerPs, e):ps) (Constr _ s' vs) | s == s' = do
+   matches <- zipWithM (\p v -> pmatch [(p, e)] v) innerPs vs
    case sequence matches of
      Just ebindings -> return $ Just (e, concat $ map snd ebindings)
-     Nothing        -> pmatch ctxt ps (Constr () s' vs)
+     Nothing        -> pmatch ps (Constr () s' vs)
 
-pmatch _ ((PVar _ _ var, e):_) val =
+pmatch ((PVar _ _ var, e):_) val =
    return $ Just (e, [(var, Val nullSpan () val)])
 
-pmatch ctxt ((PBox _ _ p, e):ps) (Promote _ e') = do
-  v <- evalIn ctxt e'
-  match <- pmatch ctxt [(p, e)] v
+pmatch ((PBox _ _ p, e):ps) (Promote _ e') = do
+  v <- evalExpr e'
+  match <- pmatch [(p, e)] v
   case match of
     Just (_, bindings) -> return $ Just (e, bindings)
-    Nothing -> pmatch ctxt ps (Promote () e')
+    Nothing -> pmatch ps (Promote () e')
 
-pmatch _ ((PInt _ _ n, e):_)   (NumInt m)   | n == m  =
+pmatch ((PInt _ _ n, e):_)   (NumInt m)   | n == m  =
    return $ Just (e, [])
 
-pmatch _ ((PFloat _ _ n, e):_) (NumFloat m) | n == m =
+pmatch ((PFloat _ _ n, e):_) (NumFloat m) | n == m =
    return $ Just (e, [])
 
-pmatch ctxt (_:ps) val = pmatch ctxt ps val
+pmatch (_:ps) val = pmatch ps val
 
 valExpr = Val nullSpanNoFile ()
 
@@ -267,19 +393,19 @@ builtIns =
     fork ctxt e@Abs{} = do
       c <- CC.newChan
       C.forkIO $
-         evalIn ctxt (App nullSpan () (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
+         runWithContext ctxt $ evalExpr (App nullSpan () (valExpr e) (valExpr $ Ext () $ Chan c)) >> pure ()
       return $ Pure () $ valExpr $ Ext () $ Chan c
-    fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+    fork _ e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
     forkRep ctxt e@Abs{} = do
       c <- CC.newChan
-      C.forkIO $
-         evalIn ctxt (App nullSpan ()
-                        (valExpr e)
-                        (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
+      C.forkIO $ runWithContext ctxt $
+         evalExpr (App nullSpan ()
+                   (valExpr e)
+                   (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
       return $ Pure () $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
-    forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+    forkRep _ e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     recv :: (?globals :: Globals) => RValue -> IO RValue
     recv (Ext _ (Chan c)) = do
@@ -334,16 +460,41 @@ builtIns =
          return $ Pure () $ valExpr (Constr () (mkId "()") [])
     hClose _ = error $ "Runtime exception: trying to close a non handle value"
 
-evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
-evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var [Equation _ _ [] e] _ : defs) = do
-    val <- evalIn ctxt e
-    case extend ctxt var val of
-      Some ctxt -> evalDefs ctxt defs
-      None msgs -> error $ unlines msgs
-evalDefs ctxt (d : defs) = do
-    let d' = desugar d
-    evalDefs ctxt (d' : defs)
+evalDefs :: (?globals :: Globals) => [Def (Runtime ()) ()] -> Evaluator ()
+evalDefs defs = do
+  let desugared = fmap desugarDef defs
+  buildDefMap desugared
+  mapM_ evalDef desugared
+  where desugarDef def@(Def _ _ [Equation _ _ [] _] _) = def
+        desugarDef def = desugar def
+
+
+evalDef :: (?globals :: Globals) => Def (Runtime ()) () -> Evaluator RValue
+evalDef (Def _ var [Equation _ _ [] e] _) = do
+  existing <- lookupInCurrentContext var
+  case existing of
+    -- we've already evaluated this definition
+    Just v -> pure v
+    Nothing -> do
+      val <- evalExpr e
+      ctxt <- getCurrentContext
+      case extend ctxt var val of
+        Some ctxt' -> putContext ctxt' >> pure val
+        None msgs -> error $ unlines msgs
+evalDef _ = fail "received a non-desugared definition in evaluation"
+
+
+tryResolveVarOrEvalTLD :: (?globals :: Globals) => Id -> Evaluator (Maybe RValue)
+tryResolveVarOrEvalTLD n = do
+  maybeVal <- lookupInCurrentContext n
+  case maybeVal of
+    Just v -> pure . pure $ v
+    Nothing -> do
+      -- if we can't find an already-evaluated name, then
+      -- try and find a TLD with the given name, and evaluate it
+      def <- lookupInDefMap n
+      maybe (pure Nothing) (fmap Just . evalDef) def
+
 
 -- Maps an AST from the parser into the interpreter version with runtime values
 class RuntimeRep t where
@@ -376,12 +527,13 @@ instance RuntimeRep Value where
   toRuntimeRep (NumFloat x) = NumFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
-eval (AST dataDecls defs ifaces insts) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs)
+eval (AST dataDecls defs ifaces insts) = execEvaluator (do
+    evalDefs (map toRuntimeRep defs)
+    bindings <- getCurrentContext
     case lookup (mkId "main") bindings of
       Nothing -> return Nothing
       -- Evaluate inside a promotion of pure if its at the top-level
-      Just (Pure _ e)    -> fmap Just (evalIn bindings e)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just (Pure _ e)    -> fmap Just (evalExpr e)
+      Just (Promote _ e) -> fmap Just (evalExpr e)
       -- ... or a regular value came out of the interpreter
-      Just val           -> return $ Just val
+      Just val           -> return $ Just val) (initStateWithContext builtIns)

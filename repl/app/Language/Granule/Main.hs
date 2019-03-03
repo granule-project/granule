@@ -65,11 +65,11 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
 
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
 replEval val (AST dataDecls defs ifaces insts) = do
-    bindings <- evalDefs builtIns (map toRuntimeRep defs)
+    bindings <- runWithContext builtIns (evalDefs (map toRuntimeRep defs) >> getCurrentContext)
     case lookup (mkId (" repl"<>(show val))) bindings of
       Nothing -> return Nothing
-      Just (Pure _ e)    -> fmap Just (evalIn bindings e)
-      Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just (Pure _ e)    -> fmap Just (runWithContext bindings (evalExpr e))
+      Just (Promote _ e) -> fmap Just (runWithContext bindings (evalExpr e))
       Just val           -> return $ Just val
 
 liftIO' :: IO a -> REPLStateIO a
@@ -388,7 +388,7 @@ handleCMD s =
                         case typ of
                             Just (t,a, _) -> return ()
                             Nothing -> Ex.throwError (TypeCheckError ev fp)
-                        result <- liftIO' $ try $ evalIn builtIns (toRuntimeRep exp)
+                        result <- liftIO' $ try $ runWithContext builtIns $ evalExpr (toRuntimeRep exp)
                         case result of
                             Right r -> liftIO $ putStrLn (pretty r)
                             Left e -> Ex.throwError (EvalError e)

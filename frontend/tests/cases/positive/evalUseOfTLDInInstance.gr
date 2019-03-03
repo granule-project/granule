@@ -1,0 +1,18 @@
+-- EXPECTED: S S S Z
+interface Semigroup a where
+  op : a -> a -> a
+
+
+data Nat1 = Z | S Nat1
+
+plus : Nat1 -> Nat1 -> Nat1
+plus Z y = y;
+plus (S x) y = S (plus x y)
+
+-- we define the 'op' method using
+-- an existing TLD
+instance Semigroup Nat1 where
+  op = plus
+
+main : Nat1
+main = op (S (S Z)) (S Z)
