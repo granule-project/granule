@@ -27,6 +27,8 @@ module Language.Granule.Checker.Rewrite.Type
     , registerDef
     , lookupDef
     , expandConstraints
+    , registerIFun
+    , lookupIfaceIfuns
     ) where
 
 
@@ -34,6 +36,7 @@ import Control.Monad.Except (MonadError, ExceptT, runExceptT, throwError)
 import Control.Monad.IO.Class (MonadIO)
 import Control.Monad.Reader (MonadReader, ReaderT, ask, runReaderT)
 import Control.Monad.State (MonadState, StateT, evalStateT, get, modify')
+import qualified Data.Map as M
 
 import Language.Granule.Context (Ctxt)
 import qualified Language.Granule.Context as Ctxt
@@ -55,14 +58,20 @@ import Language.Granule.Syntax.Type
 type DefMap = Ctxt (Def () ())
 
 
+-- | A mapping from interface names to their
+-- | dictionary instances.
+type IFunMap = M.Map Id [(Type, Def () ())]
+
+
 data RewriteState = RewriteState {
       rsDefMap :: DefMap
     , rsIFaces :: [Id]
+    , rsInstFuns :: IFunMap
     }
 
 
 startRewriteState :: RewriteState
-startRewriteState = RewriteState Ctxt.empty []
+startRewriteState = RewriteState Ctxt.empty [] M.empty
 
 
 modifyDefs :: (DefMap -> DefMap) -> Rewriter ()
@@ -79,6 +88,10 @@ modifyInterfaces f = modify' $ \s -> s { rsIFaces = f (rsIFaces s) }
 
 getInterfaces :: Rewriter [Id]
 getInterfaces = fmap rsIFaces get
+
+
+modifyInstFuns :: (IFunMap -> IFunMap) -> Rewriter ()
+modifyInstFuns f = modify' $ \s -> s { rsInstFuns = f (rsInstFuns s) }
 
 
 -----------------
@@ -191,3 +204,11 @@ expandConstraints :: Id -> Rewriter [Type]
 expandConstraints n = do
   exps <- getExpandedConstraints
   maybe illFormedEnvError pure (lookup n exps)
+
+
+registerIFun :: Id -> Type -> Def () () -> Rewriter ()
+registerIFun n ty def = modifyInstFuns (M.insertWith (<>) n [(ty, def)])
+
+
+lookupIfaceIfuns :: Id -> Rewriter (Maybe [(Type, Def () ())])
+lookupIfaceIfuns n = fmap (M.lookup n . rsInstFuns) get

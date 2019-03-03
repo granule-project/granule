@@ -1,0 +1,27 @@
+-- EXPECTED: Just C
+interface Parent a where
+  parentFn : a -> a
+
+interface Child a where
+  childFn : a
+
+data Maybe a = Nothing | Just a
+
+instance {Child a} => Child (Maybe a) where
+  childFn = Just childFn
+
+data A = B | C
+
+instance Parent A where
+  parentFn B = C;
+  parentFn C = B
+
+instance Child A where
+  childFn = parentFn B
+
+
+-- we use 'childFn : Maybe A', which means that the
+-- rewriter needs to be able to resolve the
+-- constraints in the instance head
+main : Maybe A
+main = childFn

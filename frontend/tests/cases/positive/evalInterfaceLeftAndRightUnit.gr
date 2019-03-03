@@ -1,0 +1,28 @@
+-- EXPECTED: (B, C)
+interface LeftUnit a where
+  leftUnit : a
+
+interface RightUnit a where
+  rightUnit : a
+
+
+interface LeftAndRightUnit a where
+  laruLeft : a;
+  laruRight : a
+
+-- the rewriter should be able to cope with (constrained)
+-- (fully) polymorphic instances
+instance {LeftUnit a, RightUnit a} => LeftAndRightUnit a where
+  laruLeft = leftUnit;
+  laruRight = rightUnit
+
+data A = B | C
+
+instance LeftUnit A where
+  leftUnit = B
+
+instance RightUnit A where
+  rightUnit = C
+
+main : (A, A)
+main = (laruLeft, laruRight)

@@ -18,6 +18,7 @@ module Language.Granule.Checker.Rewrite
 
 
 import Control.Arrow ((***))
+import Control.Monad (join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (evalState)
 import Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
@@ -178,10 +179,10 @@ rewriteWithoutInterfaces renv ast =
     let (AST dds defs ifaces insts) = ast
     in runNewRewriter (do
       ifaces' <- mapM mkIFace ifaces
+      instsToDefs <- mapM mkInst insts
       defs' <- mapM rewriteDef defs
       let ifaceDDS = fmap fst ifaces'
           ifaceDefs = concat $ fmap snd ifaces'
-      instsToDefs <- mapM mkInst insts
       pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs') [] []) renv
 
 
@@ -248,12 +249,17 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
 --   barA = MkBar [fooA] [\Av -> Av] [Av]
 -- @
 mkInst :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
-mkInst inst@(Instance sp iname _constrs idt@(IFaceDat _ ty) _) = do
+mkInst inst@(Instance sp iname iconstrs idt@(IFaceDat _ ty) _) = do
     idictConstructed <- constructIDict inst
+    pats <- rewriteWithConstrPats iconstrs []
     let dictName = freshDictName iname idt
         idictTyCon = getDictTyCon iname
-        tys = Forall sp [] [] (TyApp idictTyCon ty)
-    pure $ Def sp dictName [Equation sp () [] idictConstructed] tys
+        constrsTys = mkFunFap (TyApp idictTyCon ty) iconstrs
+        tys = Forall sp [] [] constrsTys
+        eqn = Equation sp () pats idictConstructed
+        def = Def sp dictName [eqn] tys
+    registerIFun iname ty def
+    pure def
 
 
 getInstanceGrouped :: Instance v a -> Rewriter [(Id, TypeScheme, [Equation v a])]
@@ -328,16 +334,22 @@ rewriteDef (Def sp n eqns tys) = do
   pure newDef
 
 
-rewriteEquation :: (?globals :: Globals, Pretty v) => [Type] -> Equation v Type -> Rewriter (Equation v ())
-rewriteEquation ts (Equation sp _ pats expr) = do
+rewriteWithConstrPats :: (?globals :: Globals) => [Type] -> [Pattern a] -> Rewriter [Pattern ()]
+rewriteWithConstrPats ts pats = do
     pats' <- mapM rewritePattern pats
-    expr' <- rewriteExpr expr
-    pure $ Equation sp () (constrPats <> pats') expr'
+    pure $ constrPats <> pats'
     where constrPats = fmap mkVpat ts
           mkVpat t = PVar nullSpanNoFile () (mkDictVarFromCon t)
 
 
-rewriteExpr :: (?globals :: Globals, Pretty v) => Expr v Type -> Rewriter (ExprRW v)
+rewriteEquation :: (?globals :: Globals) => [Type] -> Equation v Type -> Rewriter (Equation v ())
+rewriteEquation ts (Equation sp _ pats expr) = do
+    expr' <- rewriteExpr expr
+    pats' <- rewriteWithConstrPats ts pats
+    pure $ Equation sp () pats' expr'
+
+
+rewriteExpr :: (?globals :: Globals) => Expr v Type -> Rewriter (ExprRW v)
 rewriteExpr (App s _ e1 e2) = do
   e1' <- rewriteExpr e1
   e2' <- rewriteExpr e2
@@ -398,10 +410,48 @@ instantiate sig@(Forall _ _ _ ty) ity = do
 dictArgsFromTy :: (?globals :: Globals) => Type -> Rewriter [Expr v ()]
 dictArgsFromTy (FunTy (TyApp (TyCon iname) ity) ts) = do
     isIface <- isInterfaceVar iname
-    if isIface then fmap ((Val nullSpanNoFile () (Var () dname)):) (dictArgsFromTy ts)
+    if isIface then do
+                 dexp <- (do
+                      d <- getConcreteInstExpr iname ity
+                      -- we must assume that the arg comes from a passed
+                      -- argument if the result is 'Nothing'
+                      pure $ fromMaybe (Val nullSpanNoFile () (Var () dname)) d)
+                 fmap (dexp:) (dictArgsFromTy ts)
     else pure []
     where dname = mkDictVar iname ity
 dictArgsFromTy _ = pure []
+
+
+getConcreteInstExpr :: (?globals :: Globals) => Id -> Type -> Rewriter (Maybe (Expr v ()))
+getConcreteInstExpr iname ity = do
+    instFun <- lookupFirstInstFun iname ity
+    maybe (pure Nothing) (fmap Just . extractInstFun) instFun
+    where extractInstFun (Concrete dname) =
+            pure $ Val nullSpanNoFile () (Var () dname)
+          extractInstFun (Constrained n ty) = do
+            dictArgs <- dictArgsFromTy ty
+            pure $ mkFap (Val nullSpanNoFile () $ Var () n) dictArgs
+
+
+-- | An instance of an interface dictionary is either concrete, or
+-- | is constrained by the given type.
+data IDictFun = Concrete Id | Constrained Id Type
+
+
+lookupFirstInstFun :: (?globals :: Globals) => Id -> Type -> Rewriter (Maybe IDictFun)
+-- TODO: add support for fully polymorphic instances (GuiltyDolphin - 2019-03-03)
+lookupFirstInstFun _ (TyVar _) = pure Nothing
+lookupFirstInstFun iname ty = do
+  instFuns <- lookupIfaceIfuns iname
+  maybe (pure Nothing) firstUnifyingFun instFuns
+  where firstUnifyingFun [] = pure Nothing
+        firstUnifyingFun ((t, (Def _ dname _ dtys)):xs) = do
+            if (t == ty) then pure . Just $ Concrete dname
+            else do
+              unif <- fmap join $ runMaybeTCheckerInRewriter (Sub.unify t ty)
+              maybe (firstUnifyingFun xs) (\sbst -> do
+                maybeDTys <- runMaybeTCheckerInRewriter (Sub.substitute sbst dtys)
+                pure $ fmap (\(Forall _ _ _ dty) -> Constrained dname dty) maybeDTys) unif
 
 
 rewritePattern :: Pattern a -> Rewriter PatternRW
@@ -410,7 +460,7 @@ rewritePattern (PConstr s _ n pats) = fmap (PConstr s () n) $ mapM rewritePatter
 rewritePattern p = pure . mapPatternAnnotation (const ())   $ p
 
 
-rewriteValue :: (?globals :: Globals, Pretty v) => Value v Type -> Rewriter (ValueRW v)
+rewriteValue :: (?globals :: Globals) => Value v Type -> Rewriter (ValueRW v)
 rewriteValue (Abs _ pat t expr) = do
   pat'  <- rewritePattern pat
   expr' <- rewriteExpr expr
@@ -427,7 +477,7 @@ rewriteValue v = pure . mapValueAnnotation (const ()) $ v
 rewriteTypeScheme :: Id -> TypeScheme -> Bool -> Rewriter (TypeScheme, [Type])
 rewriteTypeScheme n (Forall sp binds cts ty) doExpand = do
   constrs <- if doExpand then expandConstraints n else pure cts
-  let funty = foldr FunTy ty constrs
+  let funty = mkFunFap ty constrs
   pure (Forall sp binds [] funty, constrs)
 
 
@@ -438,3 +488,7 @@ rewriteTypeScheme n (Forall sp binds cts ty) doExpand = do
 
 mkFap :: Expr v () -> [Expr v ()] -> Expr v ()
 mkFap = foldl' (App nullSpanNoFile ())
+
+
+mkFunFap :: Type -> [Type] -> Type
+mkFunFap ty = foldr FunTy ty
