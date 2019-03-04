@@ -1519,7 +1519,7 @@ badResolve sp t =
 
 expandIConstraints :: (?globals :: Globals) => Span -> [Type] -> MaybeT Checker [Type]
 expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
-  where expandIConstraint c@(TyApp (TyCon iname) ty) = do
+  where expandIConstraint c@(TyApp (TyCon _) ty) = do
           parents <- getInterfaceDependenciesFlattened c
           parents' <- mapM (\t ->
                               let fvs = freeVars t
