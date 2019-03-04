@@ -294,6 +294,11 @@ checkInstHead (Instance sp iname constrs idt@(IFaceDat _ idty) _) = do
 checkInstTy :: (?globals :: Globals) => Id -> IFaceDat -> MaybeT Checker ()
 checkInstTy iname (IFaceDat sp ty) = do
   Just iKind <- getInterfaceKind iname
+  Just icons <- getInterfaceConstraints iname
+
+  -- Make sure the instance satisfies any constraints
+  -- on the interface
+  mapM_ (\c -> verifyConstraint sp c ty) icons
 
   kVarContextInit <- fmap kVarContext get
   modify $ \st -> st { kVarContext = [(v, KType) | v <- freeVars ty] <> kVarContext st }
@@ -1127,14 +1132,8 @@ solveIConstraints itys sp defName = do
   topLevelExpanded <- getConstraintsExpanded sp defName
   let remaining = itys \\ topLevelExpanded
   mapM_ solveIConstraint remaining
-    where solveIConstraint t@(TyApp (TyCon iface) ty) =
-              verifyInstanceExists sp iface ty
+    where solveIConstraint t@(TyApp (TyCon iface) ty) = verifyInstanceExists sp iface ty
           solveIConstraint t = badResolve sp t
-          verifyInstanceExists sp iname ty = do
-              inst <- getInstance sp iname ty
-              case inst of
-                Nothing -> halt $ GenericError (Just sp) $ concat ["No instance for '", pretty iname, " ", pretty ty, "'"]
-                Just _ -> pure ()
 
 
 -- Rewrite an error message coming from the solver
@@ -1521,12 +1520,7 @@ expandIConstraints :: (?globals :: Globals) => Span -> [Type] -> MaybeT Checker 
 expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
   where expandIConstraint c@(TyApp (TyCon _) ty) = do
           parents <- getInterfaceDependenciesFlattened c
-          parents' <- mapM (\t ->
-                              let fvs = freeVars t
-                              in case fvs of
-                                   []  -> genErr "no free variables in constraint"
-                                   [v] -> substitute [(v, SubstT ty)] t
-                                   _   -> genErr "too many free variables in constraint") parents
+          parents' <- mapM (\t -> substituteConstraint sp t ty) parents
           pure (c : parents')
         expandIConstraint t = badResolve sp t
         getInterfaceDependenciesFlattened (TyApp (TyCon iname) ty) = do
@@ -1534,4 +1528,31 @@ expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
           parentsFlat <- fmap concat $ mapM getInterfaceDependenciesFlattened parents
           pure $ parents <> parentsFlat
         getInterfaceDependenciesFlattened t = badResolve sp t
-        genErr = halt . GenericError (Just sp)
+
+
+verifyInstanceExists :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker ()
+verifyInstanceExists sp iname ty = do
+  inst <- getInstance sp iname ty
+  case inst of
+    Nothing -> halt $ GenericError (Just sp) $ concat ["No instance for '", pretty iname, " ", pretty ty, "'"]
+    Just _ -> pure ()
+
+
+-- | Get the type of the constraint (first type) after substituting the
+-- | second type in for its parameter.
+substituteConstraint :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type
+substituteConstraint sp cty ivarty =
+  let fvs = freeVars cty
+  in case fvs of
+       []  -> genErr "no free variables in constraint"
+       [v] -> substitute [(v, SubstT ivarty)] cty
+       _   -> genErr "too many free variables in constraint"
+    where genErr = halt . GenericError (Just sp)
+
+
+-- | Verify that the constraint is valid and satisfiable for the
+-- | given type.
+verifyConstraint :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker ()
+verifyConstraint sp cty ivarty = do
+  (TyApp (TyCon iname) reqInst) <- substituteConstraint sp cty ivarty
+  verifyInstanceExists sp iname reqInst

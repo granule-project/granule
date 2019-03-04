@@ -1,0 +1,8 @@
+interface Simple a
+
+interface {Simple a} => Simple2 a
+
+data A = A
+
+-- 'A' is not an instance of 'Simple'
+instance Simple2 A
