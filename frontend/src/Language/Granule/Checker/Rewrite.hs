@@ -359,10 +359,10 @@ rewriteExpr (Binop s _ op l r) = do
   r' <- rewriteExpr r
   pure $ Binop s () op l' r'
 rewriteExpr (LetDiamond s _ pat mty e1 e2) = do
-    pat' <- rewritePattern pat
-    e1' <- rewriteExpr e1
-    e2' <- rewriteExpr e2
-    pure $ LetDiamond s () pat' mty e1' e2'
+  pat' <- rewritePattern pat
+  e1' <- rewriteExpr e1
+  e2' <- rewriteExpr e2
+  pure $ LetDiamond s () pat' mty e1' e2'
 rewriteExpr (Val s ann v@(Var _ n)) = do
   v' <- rewriteValue v
   maybeDef <- lookupDef n
