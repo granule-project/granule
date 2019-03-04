@@ -15,23 +15,30 @@ import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
+--import Language.Granule.Syntax.Pretty
 
 -- | Check whether a given pattern match will always succeed
 -- NB: This is work in progress.
 isIrrefutable :: (?globals :: Globals) => Span -> Type -> Pattern t -> Checker Bool
 isIrrefutable s t (PVar _ _ _) = return True
 isIrrefutable s t (PWild _ _)  = return True
-isIrrefutable s (Box _ t) (PBox _ _ p) = isIrrefutable s t p
-isIrrefutable s t@(TyVar _) (PBox _ _ p) = isIrrefutable s t p
-isIrrefutable s (TyCon c) _ = checkCardinality c
-isIrrefutable s t@(TyApp t1 t2) (PConstr _ _ name ps) = unpeel s t (reverse ps)
-isIrrefutable s t@(TyVar _) (PConstr _ _ (internalName -> "(,)") [p1, p2]) = do
-  i1 <- isIrrefutable s t p1 -- somewhat of a cheat but type information is not important here
-  i2 <- isIrrefutable s t p2 -- somewhat of a cheat but type info is not important here
+isIrrefutable s t (PBox _ _ p) = isIrrefutable s t p
+
+-- TODO: Get rid of types and lookup cardinality through the
+-- environment based on the constructor name
+isIrrefutable s (TyCon c) (PConstr _ _ _ ps) = do
+  irrefutables <- mapM (isIrrefutable s (TyCon c)) ps
+  singleton <- checkCardinality c
+  return $ singleton && and irrefutables
+
+isIrrefutable s t (PConstr _ _ (internalName -> ",") [p1, p2]) = do
+  i1 <- isIrrefutable s t p1
+  i2 <- isIrrefutable s t p2
   return (i1 && i2)
 
 isIrrefutable s _ _ = return False
 
+{-
 -- | Check if every sub-pattern of a type application is also irrefutable
 -- (reverse the patterns coming out of a PConstr before calling this)
 unpeel :: (?globals :: Globals) => Span -> Type -> [Pattern t] -> Checker Bool
@@ -40,6 +47,7 @@ unpeel s (TyApp t1 t2) (p:ps) = do
     if irrefutable then unpeel s t1 ps else return False
 unpeel _ (TyCon c) _ = checkCardinality c
 unpeel _ _ _ = return False
+-}
 
 -- | Get the number of data constructors, only irrefutable if = `Just 1`
 checkCardinality :: Id -> Checker Bool

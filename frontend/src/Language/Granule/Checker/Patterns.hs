@@ -12,7 +12,8 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Context
@@ -33,8 +34,8 @@ definiteUnification :: (?globals :: Globals)
 definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
-  when isPoly $
-    addConstraintToPreviousFrame $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+  when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
+    addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
@@ -60,8 +61,8 @@ polyShaped t = case leftmostOfApplication t of
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also:
---      - a list of any variables bound by the pattern
---        (e.g. for dependent matching)
+--      - a context of any variables bound by the pattern
+--        (e.g. for dependent matching) with their kinds
 --      - a substitution for variables
 --           caused by pattern matching (e.g., from unification),
 --      - a consumption context explaining usage triggered by pattern matching
@@ -70,7 +71,7 @@ ctxtFromTypedPattern :: (?globals :: Globals) =>
   -> Type
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
@@ -81,7 +82,7 @@ ctxtFromTypedPattern' :: (?globals :: Globals) =>
   -> Type
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, [Id], Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
@@ -169,22 +170,65 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
     Just tySch -> do
       definiteUnification s outerBoxTy ty
 
-      (dataConstructorTypeFresh, freshTyVars, []) <-
-          freshPolymorphicInstance BoundQ True tySch
-      -- TODO: don't allow constraints in data constructors yet
+    Just (tySch, coercions) -> do
 
-      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq True PatternCtxt (resultType dataConstructorTypeFresh) ty
+      definiteUnification s outerBoxTy ty
+
+      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, [], coercions') <-
+          freshPolymorphicInstance BoundQ True tySch coercions
+      -- TODO: we don't allow constraints in data constructors yet
+
+      -- Debugging
+      debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
+                         <> "\n###\t tySch = " <> pretty tySch
+                         <> "\n###\t coercions =  " <> show coercions
+                         <> "\n###\n"
+      debugM "ctxt" $ "\n### FRESH POLY ###\n####\t dConTyFresh = "
+                      <> show dataConstructorTypeFresh
+                      <> "\n###\t ctxt = " <> show freshTyVarsCtxt
+                      <> "\n###\t freshTyVarSubst = " <> show freshTyVarSubst
+                      <> "\n###\t coercions' =  " <> show coercions'
+
+      dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+
+      st <- get
+      debugM "ctxt" $ "### tyVarContext = " <> show (tyVarContext st)
+      debugM "ctxt" $ "\t### eqL (res dCfresh) = " <> show (resultType dataConstructorTypeFresh) <> "\n"
+      debugM "ctxt" $ "\t### eqR (ty) = " <> show ty <> "\n"
+
+      debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
+      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
         (True, _, unifiers) -> do
 
-          dataConstrutorSpecialised <- substitute unifiers dataConstructorTypeFresh
+          -- Register coercions as equalities
+          mapM (\(var, SubstT ty) ->
+                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) ty) coercions'
 
-          (t,(as, bs, us, elabPs, consumptionOut)) <- unpeel ps dataConstrutorSpecialised
-          subst <- combineSubstitutions s unifiers us
-          (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
+          dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
+          dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
+
+          -- Debugging
+          debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
+          debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
+          debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
+          debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
+
+          (as, bs, us, elabPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
+
+          -- Combine the substitutions
+          subst <- combineSubstitutions s (flipSubstitution unifiers) us
+          subst <- combineSubstitutions s coercions' subst
+          debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
+
+          -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty dataC elabPs
-          return (ctxtSubbed <> ctxtUnsubbed, freshTyVars<>bs, subst, elabP, consumptionOut)
+          return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
+                  freshTyVarsCtxt <> bs,          -- concat the context of new type variables
+                  subst,                          -- returned the combined substitution
+                  elabP,                          -- elaborated pattern
+                  consumptionOut)                 -- final consumption effect
 
         _ -> throw PatternTypingMismatch
               { errLoc = s
@@ -193,16 +237,16 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
               , tyActual = ty
               }
   where
-    unpeel
-      -- A list of patterns for each part of a data constructor pattern
-      :: [Pattern ()]
-      -- The remaining type of the constructor
-      -> Type
-      -> Checker (Type, ([(Id, Assumption)], [Id], Substitution, [Pattern Type], Consumption))
+    unpeel :: Show t
+          -- A list of patterns for each part of a data constructor pattern
+            => [Pattern t]
+            -- The remaining type of the constructor
+            -> Type
+            -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
     unpeel = unpeel' ([],[],[],[],Full)
 
-    -- Tail recursive version of unpell
-    unpeel' acc [] t = return (t,acc)
+    -- Tail recursive version of unpeel
+    unpeel' acc [] t = return acc
 
     unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
         (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
@@ -221,19 +265,20 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
   -> Type
   -> [Pattern ()]
   -> [Consumption]
-  -> Checker (Ctxt Assumption, Type, [Id], Substitution, [Pattern Type], [Consumption])
+  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
 ctxtFromTypedPatterns sp ty [] _ = do
-  debugM "Patterns.ctxtFromTypedPatterns" $ "Called with span: " <> show sp <> "\ntype: " <> show ty
   return ([], ty, [], [], [], [])
 
 ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
-  -- TODO: when we have dependent matching at the function clause
-  -- level, we will need to pay attention to the bound variables here
+
+  -- Match a pattern
   (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern s t1 pat cons
 
+  -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
       ctxtFromTypedPatterns s t2 pats consumptionsIn
 
+  -- Combine the results
   substs' <- combineSubstitutions s subst substs
   return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 

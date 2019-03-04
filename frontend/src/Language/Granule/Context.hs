@@ -36,6 +36,11 @@ replace ((name', _):ctxt) name v | name == name'
 replace (x : ctxt) name v
   = x : replace ctxt name v
 
+-- | Map over the just elements of the context (and not the keys (identifiers))
+ctxtMap :: (a -> b) -> Ctxt a -> Ctxt b
+ctxtMap f [] = []
+ctxtMap f ((v, x):ctxt) = (v, f x) : ctxtMap f ctxt
+
 -- $setup
 -- >>> import Language.Granule.Syntax.Identifiers (mkId)
 {- | Take the intersection of two contexts based on keys
@@ -70,3 +75,11 @@ deleteVar x ((y, b) : m) | x == y = deleteVar x m
 relevantSubCtxt :: [Id] -> Ctxt t -> Ctxt t
 relevantSubCtxt vars = filter relevant
   where relevant (var, _) = var `elem` vars
+
+lookupAndCutout :: Id -> Ctxt t -> Maybe (Ctxt t, t)
+lookupAndCutout _ [] = Nothing
+lookupAndCutout v ((v', t):ctxt) | v == v' =
+   Just (ctxt, t)
+lookupAndCutout v ((v', t'):ctxt) = do
+  (ctxt', t) <- lookupAndCutout v ctxt
+  Just ((v', t') : ctxt', t)

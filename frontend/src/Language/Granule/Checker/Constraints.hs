@@ -25,6 +25,7 @@ import Language.Granule.Checker.Constraints.Quantifiable
 import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
+import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
@@ -39,9 +40,9 @@ compileQuant BoundQ    = existential
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type, Quantifier) -> Ctxt Type
+  => Pred -> Ctxt (Type, Quantifier)
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
-compileToSBV predicate tyVarContext kVarContext =
+compileToSBV predicate tyVarContext =
   (buildTheorem id compileQuant
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
@@ -51,7 +52,7 @@ compileToSBV predicate tyVarContext kVarContext =
     -- flipQuant InstanceQ = ForallQ
     -- flipQuant BoundQ    = BoundQ
 
-    predicate' = rewriteConstraints kVarContext predicate
+    predicate' = rewriteConstraints tyVarContext predicate
 
     buildTheorem ::
         (SBool -> SBool)
@@ -60,8 +61,13 @@ compileToSBV predicate tyVarContext kVarContext =
     buildTheorem polarity quant = do
       -- Create fresh solver variables for everything in the type variable
       -- context of the write kind
+
+      -- IMPORTANT: foldrM creates its side effects in reverse order
+      -- this is good because tyVarContext has the reverse order for our
+      -- quantifiers, so reversing order of the effects in foldrM gives us
+      -- the order we want for the predicate
         (preConstraints, constraints, solverVars) <-
-            foldrM (createFreshVar quant) (sTrue, sTrue, []) tyVarContext
+            foldrM (createFreshVar quant predicate) (sTrue, sTrue, []) tyVarContext
 
         predC <- buildTheorem' solverVars predicate'
         return (polarity (preConstraints .=> (constraints .&& predC)))
@@ -87,7 +93,7 @@ compileToSBV predicate tyVarContext kVarContext =
         return $ sNot p'
 
     buildTheorem' solverVars (Exists v k p) =
-      if v `elem` (vars p)
+      if v `elem` (freeVars p)
         -- optimisation
         then
 
@@ -129,14 +135,15 @@ compileToSBV predicate tyVarContext kVarContext =
           buildTheorem' solverVars p
 
     -- TODO: generalise this to not just Nat indices
-    buildTheorem' solverVars (Impl (v:vs) p p') =
-      if v `elem` (vars p <> vars p')
+    buildTheorem' solverVars (Impl ((v, _kind):vs) p p') =
+      if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
+
           -- Create fresh solver variable
           forAll [(internalName v)] $ \vSolver -> do
-            impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
-            return ((vSolver .>= literal 0) .=> impl)
+             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
+             return ((vSolver .>= literal 0) .=> impl)
 
         else
           -- An optimisation, don't bother quantifying things
@@ -151,32 +158,39 @@ compileToSBV predicate tyVarContext kVarContext =
     -- with an associated refinement predicate
     createFreshVar
       :: (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
+      -> Pred
       -> (Id, (Type, Quantifier))
       -> (SBool, SBool, Ctxt SGrade)
       -> Symbolic (SBool, SBool, Ctxt SGrade)
     -- Ignore variables coming from a dependent pattern match because
     -- they get created elsewhere
 
-    createFreshVar _ (_, (_, BoundQ)) x = return x
+    createFreshVar _ _ (_, (_, BoundQ)) x = return x
 
-    createFreshVar quant
+    createFreshVar quant predicate
                    (var, (kind, quantifierType))
-                   (universalConstraints, existentialConstraints, ctxt) = do
-      (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
-      let (universalConstraints', existentialConstraints') =
-            case quantifierType of
-              ForallQ -> (pre .&& universalConstraints, existentialConstraints)
-              InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
-              b -> error $ "Impossible freshening a BoundQ, but this is cause above"
-          --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
-      return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
+                   (universalConstraints, existentialConstraints, ctxt) =
+      if not (var `elem` (freeVars predicate))
+        -- If the variable is not in the predicate, then don't create a new var
+        then return (universalConstraints, existentialConstraints, ctxt)
+
+        -- Otherwise...
+        else do
+         (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
+         let (universalConstraints', existentialConstraints') =
+               case quantifierType of
+                 ForallQ -> (pre .&& universalConstraints, existentialConstraints)
+                 InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
+                 b -> error $ "Impossible freshening a BoundQ, but this is cause above"
+             --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
+         return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- TODO: replace with use of `substitute`
 
 -- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
-rewriteConstraints :: Ctxt Type -> Pred -> Pred
+rewriteConstraints :: Ctxt (Type, Quantifier) -> Pred -> Pred
 rewriteConstraints ctxt =
     predFold
       Conj
@@ -191,40 +205,40 @@ rewriteConstraints ctxt =
       Exists var k' p
         where
           k' = case lookup kvar ctxt of
-                  Just ty -> KPromote ty
+                  Just (ty, _) -> KPromote ty
                   Nothing -> KVar kvar
     existsCase var k p = Exists var k p
 
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`
-    updateConstraint :: Id -> Type -> Constraint -> Constraint
-    updateConstraint ckindVar ckind (Eq s c1 c2 k) =
+    updateConstraint :: Id -> (Type, Quantifier) -> Constraint -> Constraint
+    updateConstraint ckindVar (ckind, _) (Eq s c1 c2 k) =
       Eq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _ -> k)
-    updateConstraint ckindVar ckind (Neq s c1 c2 k) =
+    updateConstraint ckindVar (ckind, _) (Neq s c1 c2 k) =
             Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
               (case k of
                 TyVar ckindVar' | ckindVar == ckindVar' -> ckind
                 _ -> k)
 
-    updateConstraint ckindVar ckind (ApproximatedBy s c1 c2 k) =
+    updateConstraint ckindVar (ckind, _) (ApproximatedBy s c1 c2 k) =
       ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)
 
-    updateConstraint ckindVar ckind (NonZeroPromotableTo s x c t) =
+    updateConstraint ckindVar (ckind, _) (NonZeroPromotableTo s x c t) =
        NonZeroPromotableTo s x (updateCoeffect ckindVar ckind c)
           (case t of
              TyVar ckindVar' | ckindVar == ckindVar' -> ckind
              _  -> t)
 
-    updateConstraint ckindVar ckind (Lt s c1 c2) =
+    updateConstraint ckindVar (ckind, _) (Lt s c1 c2) =
         Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
-    updateConstraint ckindVar ckind (Gt s c1 c2) =
+    updateConstraint ckindVar (ckind, _) (Gt s c1 c2) =
         Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
 
@@ -315,7 +329,6 @@ freshCVar quant name t q | t == extendedNat = do
 --  infinity value (since this satisfies all the semiring properties on the nose)
 freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
--- TODO: possibly this can now be removed
   return (sTrue, SPoint)
 
 freshCVar _ _ t _ =
@@ -592,14 +605,13 @@ provePredicate
   :: (?globals :: Globals)
   => Pred                    -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
-  -> Ctxt Type               -- Free variable kinds
   -> IO SolverResult
-provePredicate predicate vars kvars
+provePredicate predicate vars
   | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return QED
   | otherwise = do
-      let (sbvTheorem, _, unsats) = compileToSBV predicate vars kvars
+      let (sbvTheorem, _, unsats) = compileToSBV predicate vars
       ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
         case solverTimeoutMillis of
           n | n <= 0 -> return ()

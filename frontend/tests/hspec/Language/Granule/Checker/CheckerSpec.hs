@@ -29,19 +29,19 @@ spec = let ?globals = mempty in do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged tyVarK (CSig (CNat 5) natInterval))]
               [(varA, Discharged tyVarK (cNatOrdered 10))]
-       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a")))]
+       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a")) natInterval)
-              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a")) natInterval)]]
+         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
+              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged (tyVarK) (cNatOrdered 5))]
               []
-       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a")))]
+       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a")) natInterval)
-               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a")) natInterval)]]
+         [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
+               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
 
     describe "intersectCtxtsWithWeaken" $ do

@@ -21,6 +21,7 @@ import Control.Monad.Except
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.Identity
 
+import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
@@ -95,7 +96,7 @@ instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
 --    foo _ = ..
 -- can be typed as foo : Int ->  because the first means
 -- consumption is linear
-data Consumption = Full | NotFull deriving (Eq, Show)
+data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 
 -- Given a set of equations, creates an intial vector to describe
 -- the consumption behaviour of the patterns (assumes that)
@@ -109,6 +110,7 @@ initialisePatternConsumptions ((Equation _ _ pats _):_) =
 -- Join information about consumption between branches
 joinConsumption :: Consumption -> Consumption -> Consumption
 joinConsumption Full _       = Full
+joinConsumption Empty Empty  = Empty
 joinConsumption _ _          = NotFull
 
 -- Meet information about consumption, across patterns
@@ -116,6 +118,10 @@ meetConsumption :: Consumption -> Consumption -> Consumption
 meetConsumption NotFull _ = NotFull
 meetConsumption _ NotFull = NotFull
 meetConsumption Full Full = Full
+meetConsumption Empty Empty = Empty
+meetConsumption Empty Full = NotFull
+meetConsumption Full Empty = NotFull
+
 
 data CheckerState = CS
             { -- Fresh variable id state
@@ -132,10 +138,6 @@ data CheckerState = CS
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
             , tyVarContext   :: Ctxt (Kind, Quantifier)
-            -- Context of kind variables and their resolved kind
-            -- (used just before solver, to resolve any kind
-            -- variables that appear in constraints)
-            , kVarContext   :: Ctxt Kind
 
             -- Guard contexts (all the guards in scope)
             -- which get promoted by branch promotions
@@ -148,7 +150,7 @@ data CheckerState = CS
 
             -- Data type information
             , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
-            , dataConstructors :: Ctxt TypeScheme
+            , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
@@ -166,7 +168,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , predicateStack = []
                , guardPredicates = [[]]
                , tyVarContext = []
-               , kVarContext = []
                , guardContexts = []
                , patternConsumption = []
                , typeConstructors = Primitives.typeConstructors
@@ -226,22 +227,14 @@ popCaseFrame =
   modify (\st -> st { guardPredicates = tail (guardPredicates st) })
 
 -- | Takes the top two conjunction frames and turns them into an
--- impliciation
+-- implication
 -- The first parameter is a list of any
 -- existential variables being introduced in this implication
-concludeImplication :: (?globals :: Globals) => Span -> [Id] -> Checker ()
-concludeImplication s localVars = do
+concludeImplication :: (?globals :: Globals) => Span -> Ctxt Kind -> Checker ()
+concludeImplication s localCtxt = do
   checkerState <- get
   case predicateStack checkerState of
     (p' : p : stack) -> do
-
-       -- Get all the kinds for the local variables
-       localCtxt <- forM localVars $ \v ->
-                      case lookup v (tyVarContext checkerState) of
-                        Just (k, _) -> return (v, k)
-                        Nothing -> error $ "I don't know the kind of "
-                                          <> pretty v <> " in "
-                                          <> pretty (tyVarContext checkerState)
 
        case guardPredicates checkerState of
 
@@ -249,7 +242,7 @@ concludeImplication s localVars = do
 
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
-          let impl = Impl localVars p p'
+          let impl = Impl localCtxt p p'
 
           -- Add the implication to the predicate stack
           modify (\st -> st { predicateStack = pushPred impl stack
@@ -262,16 +255,18 @@ concludeImplication s localVars = do
            let previousGuardCtxt = concatMap (fst . fst) previousGuards
            let prevGuardPred = Conj (map (snd . fst) previousGuards)
 
-           -- negation of the previous guard
-           let guard' = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
-           guard <- freshenPred guard'
+           freshenedPrevGuardPred <- freshenPred $ Impl previousGuardCtxt (Conj []) (NegPred prevGuardPred)
+           let (Impl freshPrevGuardCxt _ freshPrevGuardPred) = freshenedPrevGuardPred
 
            -- Implication of p .&& negated previous guards => p'
-           let impl = if (isTrivial prevGuardPred)
-                        then Impl localVars p p'
-                        else Impl localVars (Conj [p, guard]) p'
+           let impl@(Impl implCtxt implAntecedent _) =
+                -- TODO: turned off this feature for now by putting True in the guard here
+                if True -- isTrivial freshPrevGuardPred
+                  then (Impl localCtxt p p')
+                  else (Impl (localCtxt <> freshPrevGuardCxt)
+                                 (Conj [p, freshPrevGuardPred]) p')
 
-           let knowledge = ((localCtxt, p), s) : previousGuards
+           let knowledge = ((implCtxt, implAntecedent), s) : previousGuards
 
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
@@ -282,16 +277,6 @@ concludeImplication s localVars = do
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
-freshenPred :: Pred -> Checker Pred
-freshenPred pred = do
-    st <- get
-    -- Run the freshener using the checkers unique variable id
-    let (pred', freshenerState) =
-         runIdentity $ runStateT (freshen pred)
-          (FreshenerState { counter = 1 + uniqueVarIdCounter st, varMap = [], tyMap = []})
-    -- Update the unique counter in the checker
-    put (st { uniqueVarIdCounter = counter freshenerState })
-    return pred'
 {-
 -- Create a local existential scope
 -- NOTE: leaving this here, but this approach is not used and is incompataible
@@ -404,10 +389,8 @@ data CheckerError
     { errLoc :: Span, effExpected :: Effect, effActual :: Effect }
   | UnificationDisallowed
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
-  | MonoUnificationFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type }
   | UnificationFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type }
+    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
   | SessionDualityError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | NoUpperBoundError
@@ -439,11 +422,13 @@ data CheckerError
   | SolverError
     { errLoc :: Span, errMsg :: String }
   | SolverTimeout
-    { errLoc :: Span, errSolverTimeoutMillis :: Integer }
+    { errLoc :: Span, errSolverTimeoutMillis :: Integer, errDefId :: Id, errContext :: String }
   | UnifyGradedLinear
     { errLoc :: Span, errGraded :: Id, errLinear :: Id }
-  | PatternUnreachable -- TODO: make proper structured error once this has been implemented for real
-    { errLoc :: Span, errMsg :: String }
+  | ImpossiblePatternMatch -- TODO: make proper structured error once this has been implemented for real
+    { errLoc :: Span, errEquationName :: Name, errPredicate :: Pred }
+  | ImpossiblePatternMatchTrivial
+    { errLoc :: Span, errEquationName :: Name }
   | NameClashTypeConstructors -- we arbitrarily use the second thing that clashed as the error location
     { errLoc :: Span, errDataDecl :: DataDecl, otherDataDecls :: NonEmpty DataDecl }
   | NameClashDataConstructors -- we arbitrarily use the second thing that clashed as the error location
@@ -480,7 +465,6 @@ instance UserMsg CheckerError where
   title EffectMismatch{} = "Effect mismatch"
   title UnificationDisallowed{} = "Unification disallowed"
   title UnificationFail{} = "Unification failed"
-  title MonoUnificationFail{} = "Unification failed"
   title SessionDualityError{} = "Session duality error"
   title NoUpperBoundError{} = "Type upper bound"
   title DisallowedCoeffectNesting{} = "Bad coeffect nesting"
@@ -498,7 +482,7 @@ instance UserMsg CheckerError where
   title SolverError{} = "Solver error"
   title SolverTimeout{} = "Solver timeout"
   title UnifyGradedLinear{} = "Type error"
-  title PatternUnreachable{} = "Pattern unreachable"
+  title ImpossiblePatternMatch{} = "Pattern match impossible"
   title NameClashTypeConstructors{} = "Type constructor name clash"
   title NameClashDataConstructors{} = "Data constructor name clash"
   title NameClashDefs{} = "Definition name clash"
@@ -614,10 +598,8 @@ instance UserMsg CheckerError where
     <> pretty errTy2 <> "` but in a context where unification is not allowed."
 
   msg UnificationFail{..}
-    = "Type `" <> pretty errTy <> "` is not unifiable with `" <> pretty errVar <> "`"
-
-  msg MonoUnificationFail{..}
-    = "Trying to match a polymorphic type  `" <> pretty errVar <> "` with monomorphic type `" <> pretty errTy <> "`"
+    = "Cannot unify universally quantified type variable `" <> pretty errVar <> "`"
+    <> "` of kind `" <> pretty errKind <> "` with a concrete type `" <> pretty errTy <> "`"
 
   msg SessionDualityError{..}
     = "Session type `" <> pretty errTy1 <> "` is not dual to `" <> pretty errTy2 <> "`"
@@ -652,7 +634,7 @@ instance UserMsg CheckerError where
     = "`" <> pretty errTy <> "` not valid in a data constructor definition"
 
   msg ExpectedEffectType{..}
-    = "Expected an type of the form `a <eff>` but got `"
+    = "Expected a type of the form `a <eff>` but got `"
     <> pretty errTy <> "` in subject of let"
 
   msg LhsOfApplicationNotAFunction{..}
@@ -679,16 +661,17 @@ instance UserMsg CheckerError where
 
   msg SolverError{..} = errMsg
 
-  msg SolverTimeout{..}
+  msg SolverTimeout{errSolverTimeoutMillis, errDefId, errContext}
     = "Solver timed out with limit of " <> show errSolverTimeoutMillis
-    <> " ms. You may want to increase the timeout (see --help)."
+    <> "ms while checking the " <> errContext <> " of definition `" <> errDefId
+    <> "`. You may want to increase the timeout (see --help)."
 
   msg UnifyGradedLinear{..}
     = "Can't unify free-variable types:\n\t"
     <> "(graded) " <> pretty errGraded
     <> "\n  with\n\t(linear) " <> pretty errLinear
 
-  msg PatternUnreachable{..} = errMsg
+  msg ImpossiblePatternMatch{errMsg, errPredicate} = errMsg
 
   msg NameClashTypeConstructors{..}
     = "`" <> pretty (dataDeclId errDataDecl) <> "` already defined at\n\t"
@@ -708,3 +691,14 @@ data LinearityMismatch
   | NonLinearPattern
   | LinearUsedMoreThanOnce Id
   deriving (Eq, Show) -- for debugging
+
+freshenPred :: Pred -> MaybeT Checker Pred
+freshenPred pred = do
+    st <- get
+    -- Run the freshener using the checkers unique variable id
+    let (pred', freshenerState) =
+         runIdentity $ runStateT (freshen pred)
+          (FreshenerState { counter = 1 + uniqueVarIdCounter st, varMap = [], tyMap = []})
+    -- Update the unique counter in the checker
+    put (st { uniqueVarIdCounter = counter freshenerState })
+    return pred'

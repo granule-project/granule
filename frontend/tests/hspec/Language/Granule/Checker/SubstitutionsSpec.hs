@@ -6,7 +6,8 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 
 import Test.Hspec
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Monad
 import Language.Granule.Utils
 
@@ -18,5 +19,5 @@ spec = do
       Right us <- evalChecker initState $
              unify (Box (CVar $ mkId "x") (TyCon $ mkId "Bool"))
                    (Box (COne (TyCon $ mkId "Nat")) (TyVar $ mkId "a"))
-      us `shouldBe` (Just [(mkId "x", SubstC $ COne (TyCon $ mkId "Nat"))
-                         , (mkId "a", SubstT $ TyCon $ mkId "Bool")])
+      us `shouldBe` (Just [(mkId "a", SubstT $ TyCon $ mkId "Bool")
+                          , (mkId "x", SubstC $ COne (TyCon $ mkId "Nat"))])

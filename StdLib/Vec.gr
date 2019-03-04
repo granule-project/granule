@@ -35,10 +35,10 @@ map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
 
 -- Safe random-access indexing from a vector
-index : forall a : Type, n : Nat
-      . Fin (n + 1) -> (Vec (n + 1) a) [0..1] -> a
-index FZ     [Cons x _]   = x;
-index (FS k) [Cons _ xs'] = index k [xs']
+-- index : forall a : Type, n : Nat
+--      . Fin (n + 1) -> (Vec (n + 1) a) [0..1] -> a
+--index FZ     [Cons x _]   = x;
+--index (FS k) [Cons _ xs'] = index k [xs']
 
 -- Standard foldr on vectors
 foldr : forall {a : Type, b : Type, n : Nat}
@@ -86,16 +86,16 @@ tail : forall {a : Type, n : Nat}
 tail [Cons _ xs] = xs
 
 --- Get the last item of a Vector
-last : forall {a : Type, n : Nat}
-     . (Vec (n + 1) a) [0..1] -> a
-last [Cons x Nil] = x;
-last [Cons _ xs] = last [xs]
+--last : forall {a : Type, n : Nat}
+--     . (Vec (n + 1) a) [0..1] -> a
+--last [Cons x Nil] = x;
+--last [Cons _ xs] = last [xs]
 
 ---
-init : forall {a : Type, n : Nat}
-     . (Vec (n + 1) a) [0..1] -> Vec n a
-init [Cons _ Nil] = Nil;
-init [Cons x xs] = Cons x (init [xs])
+--init : forall {a : Type, n : Nat}
+--     . (Vec (n + 1) a) [0..1] -> Vec n a
+--init [Cons _ Nil] = Nil;
+--init [Cons x xs] = Cons x (init [xs])
 
 uncons : forall a : Type, n : Nat
        . Vec (n + 1) a -> (a, Vec n a)

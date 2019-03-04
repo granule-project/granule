@@ -47,6 +47,5 @@ peekCheckerSpec = do
     transformState st =
       st { uniqueVarIdCounterMap  = M.insertWith (+) "x" 1 (uniqueVarIdCounterMap st)
          , tyVarContext = [(mkId "inner", (KType, ForallQ))]
-         , kVarContext  = [(mkId "innerk", KType)]
          , deriv        = Just $ Leaf "testing"
          , derivStack   = [Leaf "unit test"] }

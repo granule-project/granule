@@ -2,9 +2,9 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE ViewPatterns #-}
 
-module Language.Granule.Checker.Substitutions where
+module Language.Granule.Checker.Substitution where
 
 import Control.Monad
 import Control.Monad.State.Strict
@@ -17,11 +17,12 @@ import Language.Granule.Syntax.Expr hiding (Substitutable)
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
+import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -29,25 +30,6 @@ import Language.Granule.Checker.Variables (freshTyVarInContextWithBinding)
 
 import Language.Granule.Utils
 
-
-{-| Substitutions map from variables to type-level things as defined by
-    substitutors -}
-type Substitution = Ctxt Substitutors
-
-{-| Substitutors are things we want to substitute in... they may be one
-     of several things... -}
-data Substitutors =
-    SubstT  Type
-  | SubstC  Coeffect
-  | SubstK  Kind
-  | SubstE  Effect
-  deriving (Eq, Show)
-
-instance Pretty Substitutors where
-  prettyL l (SubstT t) = "->" <> prettyL l t
-  prettyL l (SubstC c) = "->" <> prettyL l c
-  prettyL l (SubstK k) = "->" <> prettyL l k
-  prettyL l (SubstE e) = "->" <> prettyL l e
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
@@ -94,6 +76,23 @@ instance Substitutable Substitutors where
   unify (SubstK k) (SubstK k') = unify k k'
   unify (SubstE e) (SubstE e') = unify e e'
   unify _ _ = return Nothing
+
+-- Speciale case of substituting a substition
+instance Substitutable Substitution where
+  substitute subst [] = return []
+  substitute subst ((var , s) : subst') = do
+    s <- substitute subst s
+    subst' <- substitute subst subst'
+    case lookup var subst of
+      Just (SubstT (TyVar var')) -> return $ (var', s) : subst'
+      Nothing -> return subst'
+      -- Shouldn't happen
+      t -> halt $ GenericError (Just nullSpan) $
+            "Granule bug. Cannot rewrite a substitution `s` as the substitution map `s'` = "
+              <> show subst <> " maps variable `" <> show var
+              <> "` to a non variable type: `" <> show t <> "`"
+
+  unify = error "Unification not defined for substitutions"
 
 instance Substitutable Type where
   substitute subst = typeFoldM (baseTypeFold
@@ -365,6 +364,13 @@ xs <<>> ys =
          combineSubstitutions nullSpan xs' ys' >>= (return . Just)
     _ -> return Nothing
 
+combineManySubstitutions :: (?globals :: Globals)
+    => Span -> [Substitution]  -> MaybeT Checker Substitution
+combineManySubstitutions s [] = return []
+combineManySubstitutions s (subst:ss) = do
+  ss' <- combineManySubstitutions s ss
+  combineSubstitutions s subst ss'
+
 -- | Combines substitutions which may fail if there are conflicting
 -- | substitutions
 combineSubstitutions ::
@@ -377,14 +383,14 @@ combineSubstitutions sp u1 u2 = do
         case lookupMany v u2 of
           -- Unifier in u1 but not in u2
           [] -> return [(v, s)]
-          -- Possible unificaitons in each part
+          -- Possible unifications in each part
           alts -> do
               unifs <-
                 forM alts $ \s' -> do
                    --(us, t) <- unifiable v t t' t t'
                    us <- unify s s'
                    case us of
-                     Nothing -> error "Cannot unify"
+                     Nothing -> error $ "Cannot unify: " <> show v <> " to both " <> show s <> " and " <> show s'
                      Just us -> do
                        sUnified <- substitute us s
                        combineSubstitutions sp [(v, sUnified)] us
@@ -395,7 +401,22 @@ combineSubstitutions sp u1 u2 = do
          case lookup v u1 of
            Nothing -> return [(v, s)]
            _       -> return []
-      return $ concat uss1 <> concat uss2
+      let uss = concat uss1 <> concat uss2
+      return $ reduceByTransitivity uss
+
+reduceByTransitivity :: Substitution -> Substitution
+reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt
+ where
+   reduceByTransitivity' :: Substitution -> Substitution -> Substitution
+   reduceByTransitivity' subst [] = subst
+
+   reduceByTransitivity' substLeft (subst@(var, SubstT (TyVar var')):substRight) =
+     case lookupAndCutout var' (substLeft ++ substRight) of
+       Just (substRest, t) -> reduceByTransitivity ((var, t) : substRest)
+       Nothing             -> reduceByTransitivity' (subst : substLeft) substRight
+
+   reduceByTransitivity' substLeft (subst:substRight) =
+     reduceByTransitivity' (subst:substLeft) substRight
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)
   apply the substitution returning a pair of contexts, one for parts
@@ -455,47 +476,62 @@ renameType subst = typeFoldM $ baseTypeFold
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
 freshPolymorphicInstance :: (?globals :: Globals)
-  => Quantifier   -- Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
-  -> Bool         -- Flag on whether this is a data constructor-- if true, then be careful with existentials
-  -> TypeScheme   -- Type scheme to freshen
-  -> Checker (Type, [Id], [Type])
-    -- Returns the type (with skolems), a list of skolem variables, and a list of constraints
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) = do
+  => Quantifier   -- ^ Variety of quantifier to resolve universals into (InstanceQ or BoundQ)
+  -> Bool         -- ^ Flag on whether this is a data constructor-- if true, then be careful with existentials
+  -> TypeScheme   -- ^ Type scheme to freshen
+  -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
+                  --     data constructors of indexed types) that also needs freshening
+
+  -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
+    -- Returns the type (with new instance variables)
+       -- a context of all the instance variables kinds (and the ids they replaced)
+       -- a substitution from the visible instance variable to their originals
+       -- a list of the (freshened) constraints for this scheme
+       -- a correspondigly freshened version of the parameter substitution
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    renameMap <- mapM instantiateVariable kinds
-    ty <- renameType (elideEither renameMap) ty
 
-    let subst = map (\(v, var) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
+    renameMap <- mapM instantiateVariable kinds
+    ty <- renameType (ctxtMap snd $ elideEither renameMap) ty
+
+    let subst = map (\(v, (_, var)) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
     constr' <- mapM (substitute subst) constr
 
-    -- Return the type and all skolem variables
-    return (ty, justLefts renameMap, constr')
+    -- Return the type and all instance variables
+    let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
+    let substitution = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
+
+    ixSubstitution' <- substitute substitution ixSubstitution
+
+    return (ty, newTyVars, substitution, constr', ixSubstitution')
 
   where
-    -- Freshen variables, create skolem variables
-    -- Left of id means a succesful skolem variable created
-    -- Right of id means that this is an existential and so a skolem is not generated
-    instantiateVariable :: (Id, Kind) -> Checker (Id, Either Id Id)
+    -- Freshen variables, create instance variables
+    -- Left of id means a succesful instance variable created
+    -- Right of id means that this is an existential and so an (externally visisble)
+     --    instance variable is not generated
+    instantiateVariable :: (Id, Kind) -> Checker (Id, Either (Kind, Id) (Kind, Id))
     instantiateVariable (var, k) =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
+                           && (var `notElem` freeVars (ixSubstitution))
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
            -- Don't return this as a fresh skolem variable
-           return (var, Right var')
+           return (var, Right (k, var'))
 
          else do
            var' <- freshTyVarInContextWithBinding var k quantifier
-           return (var, Left var')
+           return (var, Left (k, var'))
     -- Forget the Either
     elideEither = map proj
       where proj (v, Left a) = (v, a)
             proj (v, Right a) = (v, a)
     -- Get just the lefts (used to extract just the skolems)
     justLefts = mapMaybe conv
-      where conv (_, Left a) = Just a
-            conv (_, Right _) = Nothing
+      where conv (v, Left a)  = Just (v,  a)
+            conv (v, Right _) = Nothing
 
 instance Substitutable Pred where
   substitute ctxt =

@@ -35,6 +35,7 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
+import Language.Granule.Checker.Substitution
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Interpreter.Eval
 import Language.Granule.Context
@@ -203,8 +204,10 @@ synType :: (?globals::Globals)
   -> Ctxt TypeScheme
   -> Checker.CheckerState
   -> IO (Either (NonEmpty Checker.CheckerError) (Type, Ctxt Checker.Assumption, Expr () Type))
-synType exp [] cs = liftIO $ Checker.evalChecker cs $ synthExpr empty empty Positive exp
-synType exp cts cs = liftIO $ Checker.evalChecker cs $ synthExpr cts empty Positive exp
+synType exp cts cs = liftIO $ Checker.evalChecker cs $ do
+  (ty, ctxt, subst, elab) <- synthExpr cts empty Positive exp
+  ty <- substitute subst ty
+  return (ty, ctxt, elab)
 
 synTypeBuilder :: (?globals::Globals) => Expr () () -> [Def () ()] -> [DataDecl] -> REPLStateIO Type
 synTypeBuilder exp ast adt = do
