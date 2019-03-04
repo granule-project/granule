@@ -173,7 +173,13 @@ IFaceDecl :: { IFace }
   { % mkSpan (getPos $1, endPos (fst $4)) >>= \sp -> return $ IFace sp $3 $2 (snd (snd $4)) (fst (snd $4)) [] }
 
 InstBinds :: { [IDef () ()] }
-  : Binding ';' InstBinds
+  : NamedBinding ';' InstBindsRest
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ IDef sp (fmap mkId $ fst $ fst $1) (snd $1) : $3 }
+  | NamedBinding
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
+
+InstBindsRest :: { [IDef () ()] }
+  : Binding ';' InstBindsRest
     { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ IDef sp (fmap mkId $ fst $ fst $1) (snd $1) : $3 }
   | Binding
     { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
@@ -206,6 +212,10 @@ Bindings :: { (Maybe String, [Equation () ()]) }
   | Binding                   { case $1 of ((v, _), bind) -> (v, [bind]) }
 
 Binding :: { ((Maybe String, Pos), Equation () ()) }
+  : NamedBinding { $1 }
+  | GuardBinding { $1 }
+
+NamedBinding :: { ((Maybe String, Pos), Equation () ()) }
   : VAR '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $3)
@@ -216,7 +226,8 @@ Binding :: { ((Maybe String, Pos), Equation () ()) }
           span <- mkSpan (getPos $1, getEnd $4)
           return ((Just $ symString $1, getPos $1), Equation span () $2 $4) }
 
-  | '|' Pats '=' Expr
+GuardBinding :: { ((Maybe String, Pos), Equation () ()) }
+  : '|' Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
           return ((Nothing, getPos $1), Equation span () $2 $4) }

@@ -1,0 +1,13 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A
+
+-- The first instance method has no name,
+-- so we don't know what interface method
+-- this would apply to.
+--
+-- This is a syntax error.
+instance Simple A where
+  | A = A;
+  simple x = x
