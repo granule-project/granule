@@ -38,6 +38,8 @@ import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Substitution
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Eval
+import Language.Granule.Eval.Type
+    (RValue, getCurrentContext, runWithContext, toRuntimeRep)
 import Language.Granule.Context
 --import qualified Language.Granule.Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex

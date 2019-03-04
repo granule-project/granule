@@ -1,10 +1,5 @@
 -- Granule interpreter
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
-{-# LANGUAGE FlexibleInstances #-}
 
 module Language.Granule.Eval where
 
@@ -21,156 +16,14 @@ import Language.Granule.Utils
 import Data.Text (pack, unpack, append)
 import qualified Data.Text.IO as Text
 import Control.Monad (zipWithM)
-import Control.Monad.Fail (MonadFail)
-import Control.Monad.IO.Class (MonadIO, liftIO)
-import Control.Monad.State (MonadState, StateT, evalStateT, get, modify')
+import Control.Monad.IO.Class (liftIO)
 
 import qualified Control.Concurrent as C (forkIO)
-import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
+import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan)
 
-import System.IO (hFlush, stdout)
-import qualified System.IO as SIO (Handle, hGetChar, hPutChar, hClose, openFile, IOMode, isEOF)
+import qualified System.IO as SIO (hGetChar, hPutChar, hClose, openFile, IOMode, isEOF)
 
-type RuntimeDef = Def (Runtime ()) ()
-type RValue = Value (Runtime ()) ()
-type RExpr = Expr (Runtime ()) ()
-
--- | Runtime values only used in the interpreter
-data Runtime a =
-  -- | Primitive functions (builtins)
-    Primitive ((Value (Runtime a) a) -> IO (Value (Runtime a) a))
-
-  -- | Primitive operations that also close over the context
-  | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> (Value (Runtime a) a) -> IO (Value (Runtime a) a))
-
-  -- | File handler
-  | Handle SIO.Handle
-
-  -- | Channels
-  | Chan (CC.Chan (Value (Runtime a) a))
-
-instance Show (Runtime a) where
-  show (Chan _) = "Some channel"
-  show (Primitive _) = "Some primitive"
-  show (PrimitiveClosure _) = "Some primitive closure"
-  show (Handle _) = "Some handle"
-
-instance Show (Runtime a) => Pretty (Runtime a) where
-  prettyL _ = show
-
-
----------------------------
------ Evaluator Monad -----
----------------------------
-
-
----------------------
--- Evaluator State --
----------------------
-
-
-type DefMap = Ctxt RuntimeDef
-
-
-data EvalState = EvalState {
-      currentContext :: Ctxt RValue
-    , tlds :: DefMap
-    }
-
-
-initState :: EvalState
-initState = EvalState [] []
-
-
-initStateWithContext :: Ctxt RValue -> EvalState
-initStateWithContext ctxt = initState { currentContext = ctxt }
-
-
---------------------
--- Evaluator Type --
---------------------
-
-
-newtype Evaluator a = Evaluator { unEvaluator :: StateT EvalState IO a }
-    deriving (Functor, Applicative, Monad,
-              MonadState EvalState,
-              MonadIO, MonadFail)
-
-
-execEvaluator :: Evaluator a -> EvalState -> IO a
-execEvaluator = evalStateT . unEvaluator
-
-
-execChild :: Evaluator a -> Evaluator (IO a)
-execChild e = do
-  st <- get
-  pure $ execEvaluator e st
-
-
-runWithContext :: Ctxt RValue -> Evaluator a -> IO a
-runWithContext c r = execEvaluator r $ initStateWithContext c
-
-
--------------
--- Helpers --
--------------
-
-
-buildDefMap :: [RuntimeDef] -> Evaluator ()
-buildDefMap des =
-  let dmap = foldr (\d@(Def _ n _ _) acc -> (n, d) : acc) [] des
-  in putDefMap dmap
-
-
-putDefMap :: DefMap -> Evaluator ()
-putDefMap dmap = modify' $ \s -> s { tlds = dmap }
-
-
-getDefMap :: Evaluator DefMap
-getDefMap = fmap tlds get
-
-
-lookupInDefMap :: Id -> Evaluator (Maybe RuntimeDef)
-lookupInDefMap n = fmap (lookup n) getDefMap
-
-
-getCurrentContext :: Evaluator (Ctxt RValue)
-getCurrentContext = fmap currentContext get
-
-
-putContext :: Ctxt RValue -> Evaluator ()
-putContext c = modify' $ \s -> s { currentContext = c }
-
-
-lookupInCurrentContext :: Id -> Evaluator (Maybe RValue)
-lookupInCurrentContext n = fmap (lookup n) getCurrentContext
-
-
---------
--- IO --
---------
-
-
-writeStr :: String -> Evaluator ()
-writeStr = liftIO . putStr
-
-
-flushStdout :: Evaluator ()
-flushStdout = liftIO $ hFlush stdout
-
-
-runPrimitive :: (RValue -> IO a) -> RValue -> Evaluator a
-runPrimitive f = liftIO . f
-
-
-runInnerIO :: Evaluator (IO a) -> Evaluator a
-runInnerIO e = do
-  action <- e
-  liftIO action
-
-
-runIOAction :: (IO a -> IO b) -> Evaluator a -> Evaluator b
-runIOAction f e = runInnerIO (fmap f (execChild e))
+import Language.Granule.Eval.Type
 
 
 ------------------------------
@@ -495,36 +348,6 @@ tryResolveVarOrEvalTLD n = do
       def <- lookupInDefMap n
       maybe (pure Nothing) (fmap Just . evalDef) def
 
-
--- Maps an AST from the parser into the interpreter version with runtime values
-class RuntimeRep t where
-  toRuntimeRep :: t () () -> t (Runtime ()) ()
-
-instance RuntimeRep Def where
-  toRuntimeRep (Def s i eqs tys) = Def s i (map toRuntimeRep eqs) tys
-
-instance RuntimeRep Equation where
-  toRuntimeRep (Equation s a ps e) = Equation s a ps (toRuntimeRep e)
-
-instance RuntimeRep Expr where
-  toRuntimeRep (Val s a v) = Val s a (toRuntimeRep v)
-  toRuntimeRep (App s a e1 e2) = App s a (toRuntimeRep e1) (toRuntimeRep e2)
-  toRuntimeRep (Binop s a o e1 e2) = Binop s a o (toRuntimeRep e1) (toRuntimeRep e2)
-  toRuntimeRep (LetDiamond s a p t e1 e2) = LetDiamond s a p t (toRuntimeRep e1) (toRuntimeRep e2)
-  toRuntimeRep (Case s a e ps) = Case s a (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
-
-instance RuntimeRep Value where
-  toRuntimeRep (Ext a ()) = error "Bug: Parser generated an extended value case when it shouldn't have"
-  toRuntimeRep (Abs a p t e) = Abs a p t (toRuntimeRep e)
-  toRuntimeRep (Promote a e) = Promote a (toRuntimeRep e)
-  toRuntimeRep (Pure a e) = Pure a (toRuntimeRep e)
-  toRuntimeRep (Constr a i vs) = Constr a i (map toRuntimeRep vs)
-  -- identity cases
-  toRuntimeRep (CharLiteral c) = CharLiteral c
-  toRuntimeRep (StringLiteral c) = StringLiteral c
-  toRuntimeRep (Var a x) = Var a x
-  toRuntimeRep (NumInt x) = NumInt x
-  toRuntimeRep (NumFloat x) = NumFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval (AST dataDecls defs ifaces insts) = execEvaluator (do
