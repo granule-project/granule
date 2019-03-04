@@ -1521,7 +1521,12 @@ expandIConstraints :: (?globals :: Globals) => Span -> [Type] -> MaybeT Checker 
 expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
   where expandIConstraint c@(TyApp (TyCon iname) ty) = do
           parents <- getInterfaceDependenciesFlattened c
-          parents' <- mapM (\t@(TyApp (TyCon i) (TyVar v)) -> substitute [(v, SubstT ty)] t) parents
+          parents' <- mapM (\t ->
+                              let fvs = freeVars t
+                              in case fvs of
+                                   []  -> genErr "no free variables in constraint"
+                                   [v] -> substitute [(v, SubstT ty)] t
+                                   _   -> genErr "too many free variables in constraint") parents
           pure (c : parents')
         expandIConstraint t = badResolve sp t
         getInterfaceDependenciesFlattened (TyApp (TyCon iname) ty) = do
@@ -1529,3 +1534,4 @@ expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
           parentsFlat <- fmap concat $ mapM getInterfaceDependenciesFlattened parents
           pure $ parents <> parentsFlat
         getInterfaceDependenciesFlattened t = badResolve sp t
+        genErr = halt . GenericError (Just sp)
