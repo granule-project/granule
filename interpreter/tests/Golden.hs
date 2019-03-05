@@ -72,11 +72,12 @@ grGolden
   -> TestTree
 grGolden formatResult file = goldenTest
     file
-    (Strict.readFile (file <> ".output"))
+    (Strict.readFile outfile)
     (formatResult <$> runGr file)
     checkDifference
-    (\actual -> unless (null actual) (writeFile file actual))
+    (\actual -> unless (null actual) (writeFile outfile actual))
   where
+    outfile = file <> ".output"
     checkDifference :: String -> String -> IO (Maybe String)
     checkDifference exp act = if exp == act
       then return Nothing
