@@ -283,7 +283,7 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
            addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
            return (True, [(n, SubstT t)])
 
-         else throw UnificationFail{ errLoc = s, errVar = n, errKind = kind, errTy = t }
+         else throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t }
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -369,7 +369,7 @@ isDualSession :: (?globals :: Globals)
     -> Type
     -- Indicates whether the first type or second type is a specification
     -> SpecIndicator
-    -> MaybeT Checker (Bool, Substitution)
+    -> Checker (Bool, Substitution)
 isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
@@ -388,7 +388,7 @@ isDualSession sp rel t (TyVar v) ind =
 isDualSession sp rel (TyVar v) t ind =
   equalTypesRelatedCoeffects sp rel (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind
 
-isDualSession sp _ _ t1 t2 _ = throw
+isDualSession sp _ t1 t2 _ = throw
   SessionDualityError{ errLoc = sp, errTy1 = t1, errTy2 = t2 }
 
 

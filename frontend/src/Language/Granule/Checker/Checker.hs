@@ -11,7 +11,7 @@ module Language.Granule.Checker.Checker where
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
-import Data.List (genericLength, intercalate)
+import Data.List (genericLength)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
@@ -51,11 +51,11 @@ check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
 check ast@(AST dataDecls defs imports) = evalChecker initState $ do
-    _         <- checkNameClashes ast
-    _         <- runAll checkTyCon dataDecls
-    dataDecls <- runAll checkDataCons dataDecls
-    _         <- runAll kindCheckDef defs
-    defs      <- runAll (checkDef defCtxt) defs
+    _    <- checkNameClashes ast
+    _    <- runAll checkTyCon dataDecls
+    _    <- runAll checkDataCons dataDecls
+    _    <- runAll kindCheckDef defs
+    defs <- runAll (checkDef defCtxt) defs
     pure $ AST dataDecls defs imports
   where
     defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
@@ -74,22 +74,21 @@ checkTyCon (DataDecl sp name tyVars kindAnn ds)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals) => DataDecl -> Checker DataDecl
+checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
                 Just (kind,_) -> kind
                 Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    dataConstrs <- mapM (checkDataCon name kind tyVars) dataConstrs
-    pure (DataDecl sp name tyVars k dataConstrs)
+    mapM_ (checkDataCon name kind tyVars) dataConstrs
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
-  -> Checker DataConstr -- ^ Return @Just ()@ on success, @Nothing@ on failure
+  -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
 checkDataCon
   tName
   kind
@@ -127,13 +126,9 @@ checkDataCon
           KPromote (TyCon k) | internalName k == "Protocol" ->
             registerDataConstructor tySch coercions
 
-          _     -> illKindedNEq sp KType kind
+          _ -> throw KindMismatch{ errLoc = sp, kExpected = KType, kActual = kind }
 
-      vs -> halt $ NameClashError (Just sp) $ mconcat
-                    ["Type variable(s) ", intercalate ", " $ map (\(i,_) -> "`" <> pretty i <> "`") vs
-                    ," in data constructor `", pretty dName
-                    ,"` are already bound by the associated type constructor `", pretty tName
-                    , "`. Choose different, unbound names."]
+      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
     indexKinds (KFun k1 k2) = k1 : indexKinds k2
     indexKinds k = []
@@ -141,9 +136,15 @@ checkDataCon
     registerDataConstructor dataConstrTy subst = do
       st <- get
       case extend (dataConstructors st) dName (dataConstrTy, subst) of
-        Some ds -> do
-          put st { dataConstructors = ds, tyVarContext = [] }
-        None _ -> halt $ NameClashError (Just sp) $ "Data constructor `" <> pretty dName <> "` already defined."
+        Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
+        Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
+
+    mkTyVarNameClashErr v = DataConstructorTypeVariableNameClash
+        { errLoc = sp
+        , errDataConstructorId = dName
+        , errTypeConstructor = tName
+        , errVar = v
+        }
 
 checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
   = checkDataCon tName kind tyVars
@@ -176,35 +177,31 @@ checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
 -}
 
 checkAndGenerateSubstitution ::
-       (?globals :: Globals)
-    => Span                     -- ^ Location of this application
+       Span                     -- ^ Location of this application
     -> Id                       -- ^ Name of the type constructor
     -> Type                     -- ^ Type of the data constructor
     -> [Kind]                   -- ^ Types of the remaining data type indices
-    -> MaybeT Checker (Type, Substitution, Ctxt Kind)
+    -> Checker (Type, Substitution, Ctxt Kind)
 checkAndGenerateSubstitution sp tName ty ixkinds =
     checkAndGenerateSubstitution' sp tName ty (reverse ixkinds)
+  where
+    checkAndGenerateSubstitution' sp tName (TyCon tC) []
+        | tC == tName = return (TyCon tC, [], [])
+        | otherwise = throw UnexpectedTypeConstructor
+          { errLoc = sp, tyConActual = tC, tyConExpected = tName }
 
-checkAndGenerateSubstitution' sp tName (TyCon tC) [] =
-    -- Check the name
-    if tC == tName
-      then return (TyCon tC, [], [])
-      else halt $ GenericError (Just sp)
-                $ "Expected type constructor `" <> pretty tName
-               <> "`, but got `" <> pretty tC <> "`"
+    checkAndGenerateSubstitution' sp tName (FunTy arg res) kinds = do
+      (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
+      return (FunTy arg res', subst, tyVarsNew)
 
-checkAndGenerateSubstitution' sp tName (FunTy arg res) kinds = do
-   (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
-   return (FunTy arg res', subst, tyVarsNew)
+    checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
+      varSymb <- freshIdentifierBase "t"
+      let var = mkId varSymb
+      (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun kinds
+      return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
 
-checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
-  varSymb <- freshIdentifierBase "t"
-  let var = mkId varSymb
-  (fun', subst, tyVarsNew) <-  checkAndGenerateSubstitution' sp tName fun kinds
-  return (TyApp fun' (TyVar var), (var, SubstT arg) : subst, (var, kind) : tyVarsNew)
-
-checkAndGenerateSubstitution' sp _ x _ =
-  halt $ GenericError (Just sp) $ "`" <> pretty x <> "` not valid in a datatype definition."
+    checkAndGenerateSubstitution' sp _ t _ =
+      throw InvalidTypeDefinition { errLoc = sp, errTy = t }
 
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
@@ -928,16 +925,16 @@ solveConstraints predicate s name = do
     QED -> return ()
     NotValid msg -> do
       msg' <- rewriteMessage msg
-      simpPred <- simplifyPred predicate
+      -- simpPred <- simplifyPred predicate
       if msg' == "is Falsifiable\n"
         then throw SolverErrorFalsifiableTheorem
-          { errLoc = s, errDefId = name, errPred = simpPred }
+          { errLoc = s, errDefId = name, errPred = predicate }
         else throw SolverErrorCounterExample
-          { errLoc = s, errDefId = name, errPred = simpPred }
+          { errLoc = s, errDefId = name, errPred = predicate }
     NotValidTrivial unsats ->
-       mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
+       mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = c }) unsats
     Timeout ->
-        throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis, errDefId = name, errContext = "grading" }
+        throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis, errDefId = name, errContext = "grading", errPred = predicate }
     OtherSolverError msg -> throw SolverError{ errLoc = s, errMsg = msg }
     SolverProofError msg -> error msg
 
@@ -1278,8 +1275,6 @@ checkGuardsForImpossibility s name = do
     -- Try to prove the theorem
     result <- liftIO $ provePredicate thm tyVars
 
-    let msgHead = "Pattern guard for equation of `" <> pretty name <> "`"
-
     case result of
       QED -> return ()
 
@@ -1287,27 +1282,26 @@ checkGuardsForImpossibility s name = do
       -- TODO make errors better
       NotValid msg -> throw ImpossiblePatternMatch
         { errLoc = s
-        , errEquationName = name
-        , errMsg = msg
-        , errPredicate = p
+        , errId = name
+        , errPred = p
         }
       NotValidTrivial unsats -> throw ImpossiblePatternMatchTrivial
         { errLoc = s
-        , errEquationName = name
+        , errId = name
         , errUnsats = unsats
         }
-      Timeout -> throw
+      Timeout -> throw SolverTimeout
         { errLoc = s
         , errDefId = name
+        , errSolverTimeoutMillis = solverTimeoutMillis
         , errContext = "pattern match of an equation"
-        , errPredicate = p
+        , errPred = p
         }
 
       OtherSolverError msg -> throw ImpossiblePatternMatch
         { errLoc = s
-        , errEquationName = name
-        , errMsg = msg
-        , errPredicate = p
+        , errId = name
+        , errPred = p
         }
 
       SolverProofError msg -> error msg

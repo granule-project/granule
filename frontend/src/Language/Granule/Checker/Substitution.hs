@@ -22,7 +22,6 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Constraints.Compile
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -87,10 +86,10 @@ instance Substitutable Substitution where
       Just (SubstT (TyVar var')) -> return $ (var', s) : subst'
       Nothing -> return subst'
       -- Shouldn't happen
-      t -> halt $ GenericError (Just nullSpan) $
-            "Granule bug. Cannot rewrite a substitution `s` as the substitution map `s'` = "
-              <> show subst <> " maps variable `" <> show var
-              <> "` to a non variable type: `" <> show t <> "`"
+      t -> error
+        $ "Granule bug. Cannot rewrite a substitution `s` as the substitution map `s'` = "
+        <> show subst <> " maps variable `" <> show var
+        <> "` to a non variable type: `" <> show t <> "`"
 
   unify = error "Unification not defined for substitutions"
 
@@ -365,7 +364,7 @@ xs <<>> ys =
     _ -> return Nothing
 
 combineManySubstitutions :: (?globals :: Globals)
-    => Span -> [Substitution]  -> MaybeT Checker Substitution
+    => Span -> [Substitution] -> Checker Substitution
 combineManySubstitutions s [] = return []
 combineManySubstitutions s (subst:ss) = do
   ss' <- combineManySubstitutions s ss

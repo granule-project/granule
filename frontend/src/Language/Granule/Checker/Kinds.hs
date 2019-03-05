@@ -76,7 +76,7 @@ inferKindOfType' s quantifiedVariables t =
         case lookup conId (typeConstructors st) of
           Just (kind,_) -> return kind
           Nothing   -> case lookup conId (dataConstructors st) of
-            Just (Forall _ [] [] t) -> return $ KPromote t
+            Just (Forall _ [] [] t, _) -> return $ KPromote t
             Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
             Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
@@ -226,7 +226,7 @@ checkKindIsCoeffect span ty = do
       kind' <- inferKindOfType span k
       case kind' of
         KCoeffect -> return ty
-        _         -> illKindedNEq span KCoeffect kind
+        _ -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
     KVar v -> do
       st <- get
       case lookup v (tyVarContext st) of

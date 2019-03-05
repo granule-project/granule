@@ -21,11 +21,11 @@ ghc-options:
 - -Wno-type-defaults
 
 default-extensions:
-- RecordWildCards
 - ImplicitParams
 - ViewPatterns
 - LambdaCase
-
+- TupleSections
+- NamedFieldPuns
 
 library:
   source-dirs: src

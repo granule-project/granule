@@ -66,14 +66,16 @@ tyOps = \case
 
 dataConstructors :: [(Id, (TypeScheme, Substitution))]
 dataConstructors =
-    [ (mkId ",", Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
+    [ ( mkId ",", (Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
-                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))))
+                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))), [])
+      )
     ] ++ builtinDataConstructors
 
-builtins :: [(Id, (TypeScheme, Substitution))]
+builtins :: [(Id, TypeScheme)]
 builtins =
+  builtins' <>
   [ (mkId "div", Forall nullSpanBuiltin [] []
        (FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))))
     -- Graded monad unit operation
@@ -128,7 +130,7 @@ builtins =
                          ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
   , (mkId "unpack", Forall nullSpanBuiltin [(mkId "s", protocol)] []
                             (FunTy ((con "Chan") .@ (var "s")) (var "s")))
-  ] ++ builtins'
+  ]
 
 binaryOperators :: Operator -> NonEmpty Type
 binaryOperators = \case

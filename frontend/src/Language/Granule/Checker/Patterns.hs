@@ -1,5 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
 
@@ -167,9 +168,6 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
   st <- get
   case lookup dataC (dataConstructors st) of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just tySch -> do
-      definiteUnification s outerBoxTy ty
-
     Just (tySch, coercions) -> do
 
       definiteUnification s outerBoxTy ty
@@ -202,7 +200,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
         (True, _, unifiers) -> do
 
           -- Register coercions as equalities
-          mapM (\(var, SubstT ty) ->
+          mapM_ (\(var, SubstT ty) ->
                         equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) ty) coercions'
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
@@ -237,11 +235,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
               , tyActual = ty
               }
   where
-    unpeel :: Show t
-          -- A list of patterns for each part of a data constructor pattern
-            => [Pattern t]
-            -- The remaining type of the constructor
-            -> Type
+    unpeel :: [Pattern ()] -- A list of patterns for each part of a data constructor pattern
+            -> Type -- The remaining type of the constructor
             -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
     unpeel = unpeel' ([],[],[],[],Full)
 

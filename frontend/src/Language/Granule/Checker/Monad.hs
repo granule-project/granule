@@ -7,6 +7,9 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE RecordWildCards #-}
+
+{-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Monad where
 
@@ -230,7 +233,7 @@ popCaseFrame =
 -- implication
 -- The first parameter is a list of any
 -- existential variables being introduced in this implication
-concludeImplication :: (?globals :: Globals) => Span -> Ctxt Kind -> Checker ()
+concludeImplication :: Span -> Ctxt Kind -> Checker ()
 concludeImplication s localCtxt = do
   checkerState <- get
   case predicateStack checkerState of
@@ -335,6 +338,7 @@ addConstraintToPreviousFrame c = do
           stack ->
             put (checkerState { predicateStack = Conj [Con c] : stack })
 
+-- | Convenience function for throwing a single error
 throw :: CheckerError -> Checker a
 throw = throwError . pure
 
@@ -346,7 +350,7 @@ data CheckerError
   = TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
-    { errLoc :: Span, errConstraint :: Neg Constraint }
+    { errLoc :: Span, errConstraint :: Constraint }
   | KindMismatch
     { errLoc :: Span, kExpected :: Kind, kActual :: Kind }
   | KindError
@@ -422,19 +426,23 @@ data CheckerError
   | SolverError
     { errLoc :: Span, errMsg :: String }
   | SolverTimeout
-    { errLoc :: Span, errSolverTimeoutMillis :: Integer, errDefId :: Id, errContext :: String }
+    { errLoc :: Span, errSolverTimeoutMillis :: Integer, errDefId :: Id, errContext :: String, errPred :: Pred }
   | UnifyGradedLinear
     { errLoc :: Span, errGraded :: Id, errLinear :: Id }
-  | ImpossiblePatternMatch -- TODO: make proper structured error once this has been implemented for real
-    { errLoc :: Span, errEquationName :: Name, errPredicate :: Pred }
+  | ImpossiblePatternMatch
+    { errLoc :: Span, errId :: Id, errPred :: Pred }
   | ImpossiblePatternMatchTrivial
-    { errLoc :: Span, errEquationName :: Name }
+    { errLoc :: Span, errId :: Id, errUnsats :: [Constraint] }
   | NameClashTypeConstructors -- we arbitrarily use the second thing that clashed as the error location
     { errLoc :: Span, errDataDecl :: DataDecl, otherDataDecls :: NonEmpty DataDecl }
   | NameClashDataConstructors -- we arbitrarily use the second thing that clashed as the error location
     { errLoc :: Span, errDataConstructor :: DataConstr, otherDataConstructors :: NonEmpty DataConstr }
   | NameClashDefs -- we arbitrarily use the second thing that clashed as the error location
     { errLoc :: Span, errDef :: Def () (), otherDefs :: NonEmpty (Def () ()) }
+  | UnexpectedTypeConstructor
+    { errLoc :: Span, tyConExpected :: Id, tyConActual :: Id }
+  | InvalidTypeDefinition
+    { errLoc :: Span, errTy :: Type }
   deriving (Show, Eq)
 
 
@@ -483,15 +491,18 @@ instance UserMsg CheckerError where
   title SolverTimeout{} = "Solver timeout"
   title UnifyGradedLinear{} = "Type error"
   title ImpossiblePatternMatch{} = "Pattern match impossible"
+  title ImpossiblePatternMatchTrivial{} = "Pattern match impossible"
   title NameClashTypeConstructors{} = "Type constructor name clash"
   title NameClashDataConstructors{} = "Data constructor name clash"
   title NameClashDefs{} = "Definition name clash"
+  title UnexpectedTypeConstructor{} = "Unexpected type constructor"
+  title InvalidTypeDefinition{} = "Invalid type definition"
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
     else "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "`"
 
-  msg GradingError{..} = pretty errConstraint
+  msg GradingError{..} = "Trying to prove " <> pretty errConstraint
 
   msg KindMismatch{..}
     = "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
@@ -661,17 +672,27 @@ instance UserMsg CheckerError where
 
   msg SolverError{..} = errMsg
 
-  msg SolverTimeout{errSolverTimeoutMillis, errDefId, errContext}
+  msg SolverTimeout{errSolverTimeoutMillis, errDefId, errContext, errPred}
     = "Solver timed out with limit of " <> show errSolverTimeoutMillis
-    <> "ms while checking the " <> errContext <> " of definition `" <> errDefId
-    <> "`. You may want to increase the timeout (see --help)."
+    <> "ms while checking the " <> errContext <> " of definition `" <> pretty errDefId
+    <> "` with the following theorem:\n"
+    <> pretty errPred
+    <> "\nYou may want to increase the timeout (see --help)."
 
   msg UnifyGradedLinear{..}
     = "Can't unify free-variable types:\n\t"
     <> "(graded) " <> pretty errGraded
     <> "\n  with\n\t(linear) " <> pretty errLinear
 
-  msg ImpossiblePatternMatch{errMsg, errPredicate} = errMsg
+  msg ImpossiblePatternMatch{ errId, errPred }
+    = "Pattern match in an equation of `" <> pretty errId
+    <> "` is impossible as it implies the unsatisfiable condition "
+    <> pretty errPred
+
+  msg ImpossiblePatternMatchTrivial{ errId, errUnsats }
+    = "Pattern match in an equation of `" <> pretty errId
+    <> "` is impossible as it implies the unsatisfiable condition "
+    <> unlines (map pretty errUnsats)
 
   msg NameClashTypeConstructors{..}
     = "`" <> pretty (dataDeclId errDataDecl) <> "` already defined at\n\t"
@@ -685,6 +706,13 @@ instance UserMsg CheckerError where
     = "`" <> pretty (defId errDef) <> "` already defined at\n\t"
     <> (intercalate "\n\t" . map (pretty . defSpan) . toList) otherDefs
 
+  msg UnexpectedTypeConstructor{ tyConActual, tyConExpected }
+    = "Expected type constructor `" <> pretty tyConExpected
+               <> "`, but got `" <> pretty tyConActual <> "`"
+
+  msg InvalidTypeDefinition{ errTy }
+    = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
+
 data LinearityMismatch
   = LinearNotUsed Id
   | LinearUsedNonLinearly Id
@@ -692,7 +720,7 @@ data LinearityMismatch
   | LinearUsedMoreThanOnce Id
   deriving (Eq, Show) -- for debugging
 
-freshenPred :: Pred -> MaybeT Checker Pred
+freshenPred :: Pred -> Checker Pred
 freshenPred pred = do
     st <- get
     -- Run the freshener using the checkers unique variable id
