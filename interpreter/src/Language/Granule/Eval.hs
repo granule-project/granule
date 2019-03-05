@@ -257,6 +257,7 @@ builtIns =
         return . (Pure ()) . Val nullSpan () $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "fork",    Ext () $ PrimitiveClosure fork)
   , (mkId "forkRep", Ext () $ PrimitiveClosure forkRep)
+  , (mkId "forkC", Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)

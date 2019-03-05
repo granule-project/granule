@@ -183,6 +183,9 @@ binaryOperators =
 builtinSrc :: String
 builtinSrc = [r|
 
+forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Com>) -> ((Chan (Dual s)) [c]) <Com>
+forkC = builtin
+
 data
   ArrayStack
     (capacity : Nat)
