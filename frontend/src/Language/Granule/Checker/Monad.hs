@@ -350,7 +350,7 @@ data CheckerError
   = TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
-    { errLoc :: Span, errConstraint :: Constraint }
+    { errLoc :: Span, errConstraint :: Neg Constraint }
   | KindMismatch
     { errLoc :: Span, kExpected :: Kind, kActual :: Kind }
   | KindError
@@ -495,14 +495,14 @@ instance UserMsg CheckerError where
   title NameClashTypeConstructors{} = "Type constructor name clash"
   title NameClashDataConstructors{} = "Data constructor name clash"
   title NameClashDefs{} = "Definition name clash"
-  title UnexpectedTypeConstructor{} = "Unexpected type constructor"
+  title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
     else "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "`"
 
-  msg GradingError{..} = "Trying to prove " <> pretty errConstraint
+  msg GradingError{ errConstraint } = pretty errConstraint
 
   msg KindMismatch{..}
     = "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"

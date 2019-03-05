@@ -925,14 +925,14 @@ solveConstraints predicate s name = do
     QED -> return ()
     NotValid msg -> do
       msg' <- rewriteMessage msg
-      -- simpPred <- simplifyPred predicate
+      simplPred <- simplifyPred predicate
       if msg' == "is Falsifiable\n"
         then throw SolverErrorFalsifiableTheorem
-          { errLoc = s, errDefId = name, errPred = predicate }
+          { errLoc = s, errDefId = name, errPred = simplPred }
         else throw SolverErrorCounterExample
-          { errLoc = s, errDefId = name, errPred = predicate }
+          { errLoc = s, errDefId = name, errPred = simplPred }
     NotValidTrivial unsats ->
-       mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = c }) unsats
+       mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout ->
         throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis, errDefId = name, errContext = "grading", errPred = predicate }
     OtherSolverError msg -> throw SolverError{ errLoc = s, errMsg = msg }
