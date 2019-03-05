@@ -1275,7 +1275,7 @@ checkGuardsForImpossibility s name = do
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
-    -- p <- simplifyPred p
+    p <- simplifyPred p
 
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
