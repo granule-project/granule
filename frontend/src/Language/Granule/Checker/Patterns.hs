@@ -67,21 +67,21 @@ polyShaped t = case leftmostOfApplication t of
 --      - a substitution for variables
 --           caused by pattern matching (e.g., from unification),
 --      - a consumption context explaining usage triggered by pattern matching
-ctxtFromTypedPattern :: (?globals :: Globals, Show t) =>
+ctxtFromTypedPattern :: (?globals :: Globals) =>
   Span
   -> Type
-  -> Pattern t
+  -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
 -- | Inner helper, which takes information about the enclosing coeffect
-ctxtFromTypedPattern' :: (?globals :: Globals, Show t) =>
+ctxtFromTypedPattern' :: (?globals :: Globals) =>
      Maybe (Coeffect, Type)    -- enclosing coeffect
   -> Span
   -> Type
-  -> Pattern t
+  -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
@@ -229,9 +229,9 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
         _ -> halt $ PatternTypingError (Just s) $
                   "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
   where
-    unpeel :: Show t
+    unpeel ::
           -- A list of patterns for each part of a data constructor pattern
-            => [Pattern t]
+               [Pattern ()]
             -- The remaining type of the constructor
             -> Type
             -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
@@ -256,10 +256,10 @@ ctxtFromTypedPattern' _ s t p _ = do
   halt $ PatternTypingError (Just s)
     $ "Pattern match `" <> pretty p <> "` does not match expected type `" <> pretty t <> "`"
 
-ctxtFromTypedPatterns :: (?globals :: Globals, Show t)
+ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
   -> Type
-  -> [Pattern t]
+  -> [Pattern ()]
   -> [Consumption]
   -> MaybeT Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
 ctxtFromTypedPatterns sp ty [] _ = do
