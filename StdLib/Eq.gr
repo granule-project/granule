@@ -1,0 +1,28 @@
+------
+--- Module: Eq
+--- Description: Equality
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+import Bool
+
+
+-- | Interface for types that have boolean equality.
+interface Eq a where
+  -- | Compare the two arguments for equality.
+  equal : a -> a -> Bool
+
+
+-- | Compare the two arguments for inequality.
+notEqual : forall {a : Type} . {Eq a} => a -> a -> Bool
+notEqual x y = not (equal x y)
+
+
+instance Eq Bool where
+  equal True  x = x;
+  equal False x = not x
