@@ -1,0 +1,14 @@
+------
+--- Module: Contravariant
+--- Description: Contravariant functors.
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+-- | Contravariant functors.
+interface Contravariant (f : Type -> Type) where
+  contramap : forall {a : Type, b : Type, n : Nat} . (a [n] -> b [n]) -> f (b [n]) -> f (a [n])
