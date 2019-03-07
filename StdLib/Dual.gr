@@ -1,0 +1,26 @@
+------
+--- Module: Dual
+--- Description: Dual function arrows.
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+import Category
+import Contravariant
+
+
+-- | Dual function arrows.
+data Op a b = Op (b -> a)
+
+
+instance Category Op where
+  id = Op (\x -> x);
+  following (Op f) (Op g) = Op (\x -> g (f x))
+
+
+instance Contravariant (Op a) where
+  contramap f (Op g) = Op (\x -> g (f x))
