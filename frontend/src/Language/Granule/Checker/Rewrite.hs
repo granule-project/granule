@@ -306,23 +306,29 @@ desugar eqs (Forall _ _ _ ty) =
     typeDirectedDesugar _ _ _ = error "internal error: Rewriter.desugar"
     -- Fold function equations into a single case expression
     mkSingleEquation =
-      Equation nullSpanNoFile () (map (PVar nullSpanNoFile ()) vars)
-        (Case nullSpanNoFile () guard cases)
+      Equation nullSpanNoFile () (map (PVar nullSpanNoFile ()) vars) rhs
 
       where
-        numArgs = case head eqs of Equation _ _ ps _ -> length ps
+        rhs = if numArgs == 0
+              -- when we have no arguments we can just reuse the (sole)
+              -- RHS expression
+              then let [Equation _ _ _ expr] = eqs in expr
+              -- otherwise we make a case expression to cover all of the
+              -- patterns
+              else
+                  let -- Guard expression
+                      guard = foldl1 (pair nullSpanNoFile) guardVars
+                      guardVars = map (\i -> Val nullSpanNoFile () (Var () i)) vars
 
+                      -- case for each equation
+                      cases = map (\(Equation _ _ pats expr) ->
+                        (foldl1 (ppair nullSpanNoFile) pats, expr)) eqs
+                  in (Case nullSpanNoFile () guard cases)
+
+        numArgs = case head eqs of Equation _ _ ps _ -> length ps
         -- List of variables to represent each argument
         vars = [mkId ("$internal" ++ show i) | i <- [1..numArgs]]
 
-        -- Guard expression
-        guard = foldl (pair nullSpanNoFile) unitVal guardVars
-        unitVal = Val nullSpanNoFile () (Constr () (mkId "()") [])
-        guardVars = map (\i -> Val nullSpanNoFile () (Var () i)) vars
-
-        -- case for each equation
-        cases = map (\(Equation _ _ pats expr) ->
-           (foldl (ppair nullSpanNoFile) (PWild nullSpanNoFile ()) pats, expr)) eqs
 
 
 rewriteDef :: (?globals :: Globals) => Def () Type -> Rewriter (DefRW ())
