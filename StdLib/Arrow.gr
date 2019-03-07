@@ -1,0 +1,68 @@
+------
+--- Module: Arrow
+--- Description: Arrows
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+import Category
+
+
+interface {Category a} => Arrow (a : Type -> Type -> Type) where
+  -- | Lift a function to an arrow.
+  arr : forall {b : Type, c : Type} . (b -> c) -> a b c;
+
+  -- | Send the first component of the input through the arrow, with
+  -- | the rest passing through to the output unchanged.
+  first : forall {b : Type, c : Type, d : Type}
+          . a b c -> a (b, d) (c, d)
+
+
+swap : forall {a : Type, b : Type} . (a, b) -> (b, a)
+swap (x, y) = (y, x)
+
+
+dup : forall {a : Type} . a [2] -> (a, a)
+dup [x] = (x, x)
+
+
+-- | Send the second component of the input through the arrow,
+-- | with the rest passing through to the output unchanged.
+second : forall {a : Type -> Type -> Type, b : Type, c : Type, d : Type}
+         . {Arrow a} => a c d -> a (b, c) (b, d)
+second f = arr swap `following` (first f `following` (arr swap))
+
+
+
+-- | Split the input between the two argument arrows and combine their output.
+split : forall {a : Type -> Type -> Type, b : Type, c : Type, b' : Type, c' : Type}
+        . {Arrow a} => a b c -> a b' c' -> a (b, b') (c, c')
+split f g = first f `before` (arr swap `before` (first g `before` (arr swap)))
+
+
+-- | Send the input through both arrows and combine their output.
+fanout : forall {a : Type -> Type -> Type, b : Type, c : Type, c' : Type}
+         . {Arrow a} => a b c -> a b c' -> a (b [2]) (c, c')
+fanout f g = arr dup `before` (split f g)
+
+
+-- | The identity arrow.
+return : forall {a : Type -> Type -> Type, b : Type}
+         . {Arrow a} => a b b
+return = id
+
+
+-- | Precomposition with a pure function.
+precomposed : forall {a : Type -> Type -> Type, b : Type, c : Type, d : Type}
+              . {Arrow a} => (b -> c) -> a c d -> a b d
+precomposed f g = arr f `before` g
+
+
+-- | Postcomposition with a pure function.
+postcomposed : forall {a : Type -> Type -> Type, b : Type, c : Type, d : Type}
+              . {Arrow a} => a b c -> (c -> d) -> a b d
+postcomposed f g = arr g `following` f
