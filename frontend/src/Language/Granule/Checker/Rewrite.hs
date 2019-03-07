@@ -179,8 +179,8 @@ rewriteWithoutInterfaces :: (?globals :: Globals) => RewriteEnv -> AST () Type -
 rewriteWithoutInterfaces renv ast =
     let (AST dds defs ifaces insts) = ast
     in runNewRewriter (do
-      ifaces' <- mapM mkIFace ifaces
-      instsToDefs <- mapM mkInst insts
+      ifaces' <- mapM rewriteInterface ifaces
+      instsToDefs <- mapM rewriteInstance insts
       defs' <- mapM rewriteDef defs
       let ifaceDDS = fmap fst ifaces'
           ifaceDefs = concat $ fmap snd ifaces'
@@ -209,8 +209,8 @@ rewriteWithoutInterfaces renv ast =
 --   bar2 : forall {a : Type} . Bar a -> a
 --   bar2 (MkBar [_] [_] [m]) = m
 -- @
-mkIFace :: (?globals :: Globals) => IFace -> Rewriter (DataDecl, [Def v ()])
-mkIFace (IFace sp iname _constrs kind pname itys) = do
+rewriteInterface :: (?globals :: Globals) => IFace -> Rewriter (DataDecl, [Def v ()])
+rewriteInterface (IFace sp iname _constrs kind pname itys) = do
     let numMethods = length itys
         dname = ifaceConId iname
         dcon = case collectMethodBindings itys of
@@ -261,8 +261,8 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
 --   barA : Bar A
 --   barA = MkBar [fooA] [\Av -> Av] [Av]
 -- @
-mkInst :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
-mkInst inst@(Instance sp iname iconstrs idt@(IFaceDat _ ty) _) = do
+rewriteInstance :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
+rewriteInstance inst@(Instance sp iname iconstrs idt@(IFaceDat _ ty) _) = do
     idictConstructed <- constructIDict inst
     let iconstrs' = fmap mkInfBoxTy iconstrs
     pats <- rewriteWithConstrPats iconstrs' []
