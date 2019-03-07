@@ -17,17 +17,18 @@ module Language.Granule.Checker.Rewrite
     ) where
 
 
-import Control.Arrow ((***))
+import Control.Arrow ((***), (&&&))
 import Control.Monad (join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (evalState)
 import Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
 import Data.Function (on)
-import Data.List (foldl', groupBy, sortBy)
+import Data.List (foldl', groupBy, nub, sortBy)
 import Data.Maybe (fromMaybe)
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Type
@@ -214,24 +215,29 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
         dname = ifaceConId iname
         dcon = DataConstrNonIndexed sp dname typs
         ddcl = DataDecl sp iname [(pname, fromMaybe KType kind)] Nothing [dcon]
-        typs = fmap ityToTy itys
+        typs = let typs1 = fmap (ityName &&& ityToTy) itys
+               in fmap snd $ sortBy (compare `on` fst) typs1
         defs = fmap ityToDef (zip (sortBy (compare `on` ityName) itys) [1..])
         dty = TyApp (TyCon iname) (TyVar pname)
         matchVar = mkId "$match"
         mkPat i =
-            let wildMatches = replicate numMethods (PWild nullSpanNoFile ())
+            let wildMatches = replicate numMethods
+                              (mkBoxedPat (PWild nullSpanNoFile ()))
                 (wbefore, wafter) = splitAt i wildMatches
-                pats = tail wbefore <> [PVar nullSpanNoFile () matchVar] <> wafter
+                pats = tail wbefore <> [mkBoxedVar matchVar] <> wafter
             in PConstr nullSpanNoFile () dname pats
         ityToDef ((IFaceTy sp' n (Forall _ q c ty)), i) =
-            Def sp' n [Equation sp' () [mkPat i]
-                                    (Val sp' () (Var () matchVar))]
-                    (Forall sp' q c (FunTy dty ty))
+            let binds = nub $ q <> fmap (\v -> (v, KType)) (freeVars ty')
+                ty' = FunTy dty ty
+            in Def sp' n [Equation sp' () [mkPat i]
+                                       (Val sp' () (Var () matchVar))]
+                   (Forall sp' binds c ty')
     mapM_ registerDef defs
     registerInterface iname
     pure (ddcl, defs)
-    where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = ty;
+    where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = Box (CInterval (CNat 0) (CNat 1)) ty;
           ityName (IFaceTy _ n _) = n
+          mkBoxedVar = mkBoxedPat . PVar nullSpanNoFile ()
 
 
 -- | Rewrite an instance to its intermediate representation.
@@ -251,11 +257,13 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
 mkInst :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
 mkInst inst@(Instance sp iname iconstrs idt@(IFaceDat _ ty) _) = do
     idictConstructed <- constructIDict inst
-    pats <- rewriteWithConstrPats iconstrs []
+    let iconstrs' = fmap mkInfBoxTy iconstrs
+    pats <- rewriteWithConstrPats iconstrs' []
     let dictName = freshDictName iname idt
         idictTyCon = getDictTyCon iname
-        constrsTys = mkFunFap (TyApp idictTyCon ty) iconstrs
-        tys = Forall sp [] [] constrsTys
+        constrsTys = mkFunFap (TyApp idictTyCon ty) iconstrs'
+        binds = fmap (\v -> (v, KType)) (nub $ freeVars constrsTys)
+        tys = Forall sp binds [] constrsTys
         eqn = Equation sp () pats idictConstructed
         def = Def sp dictName [eqn] tys
     registerIFun iname ty def
@@ -287,7 +295,7 @@ constructIDict inst@(Instance _ iname _ _ _) = do
       desugarIdef (n, t, eqns) = do
         (t', constrs) <- rewriteTypeScheme n t False
         eqns' <- mapM (rewriteEquation constrs) eqns
-        pure $ desugar eqns' t'
+        pure $ boxExpr (desugar eqns' t')
 
 
 -- | Produce a lambda expression from a set of equations and a typescheme.
@@ -345,6 +353,7 @@ rewriteWithConstrPats ts pats = do
     pats' <- mapM rewritePattern pats
     pure $ constrPats <> pats'
     where constrPats = fmap mkVpat ts
+          mkVpat (Box _ t) = mkBoxedPat $ mkVpat t
           mkVpat t = PVar nullSpanNoFile () (mkDictVarFromCon t)
 
 
@@ -404,27 +413,28 @@ instantiate sig@(Forall _ _ _ ty) ity = do
            subst <- Sub.unify tyNoI ity
            maybe (pure sig) (`Sub.substitute` sig) subst
   maybe (genericRewriterError $ concat ["error when instantiating '", pretty sig, "' with '", pretty ity, "'"]) pure res
-  where rewriteTypeWithoutInterfaces ta@(FunTy (TyApp (TyCon n) _) t) = do
-            isIface <- isInterfaceVar n
-            if isIface then rewriteTypeWithoutInterfaces t
-            else pure ta
+  where rewriteTypeWithoutInterfaces ta@(FunTy t1 t2) = do
+            isIface <- maybe False (const True) <$> extractIFaceTy t1
+            if isIface then rewriteTypeWithoutInterfaces t2 else pure ta
         rewriteTypeWithoutInterfaces t = pure t
 
 
 -- | Convert a type to a list of dictionary expressions to apply to the
 -- | associated expression.
 dictArgsFromTy :: (?globals :: Globals) => Type -> Rewriter [Expr v ()]
-dictArgsFromTy (FunTy (TyApp (TyCon iname) ity) ts) = do
-    isIface <- isInterfaceVar iname
-    if isIface then do
-                 dexp <- (do
-                      d <- getConcreteInstExpr iname ity
-                      -- we must assume that the arg comes from a passed
-                      -- argument if the result is 'Nothing'
-                      pure $ fromMaybe (Val nullSpanNoFile () (Var () dname)) d)
-                 fmap (dexp:) (dictArgsFromTy ts)
-    else pure []
-    where dname = mkDictVar iname ity
+dictArgsFromTy (FunTy t ts) = do
+    iface <- extractIFaceTy t
+    case iface of
+      Nothing -> pure []
+      Just (isBoxed, iname, ity) -> do
+        dexp <- (do
+             d <- getConcreteInstExpr iname ity
+             -- we must assume that the arg comes from a passed
+             -- argument if the result is 'Nothing'
+             let dname = mkDictVar iname ity
+             pure . (if isBoxed then boxExpr else id)
+                      $ fromMaybe (mkVarExpr dname) d)
+        fmap (dexp:) (dictArgsFromTy ts)
 dictArgsFromTy _ = pure []
 
 
@@ -482,7 +492,7 @@ rewriteValue v = pure . mapValueAnnotation (const ()) $ v
 -- | Interface constraints simply become standard types.
 rewriteTypeScheme :: Id -> TypeScheme -> Bool -> Rewriter (TypeScheme, [Type])
 rewriteTypeScheme n (Forall sp binds cts ty) doExpand = do
-  constrs <- if doExpand then expandConstraints n else pure cts
+  constrs <- if doExpand then fmap (fmap mkInfBoxTy) (expandConstraints n) else pure cts
   let funty = mkFunFap ty constrs
   pure (Forall sp binds [] funty, constrs)
 
@@ -498,3 +508,39 @@ mkFap = foldl' (App nullSpanNoFile ())
 
 mkFunFap :: Type -> [Type] -> Type
 mkFunFap ty = foldr FunTy ty
+
+
+mkVar :: Id -> Value v ()
+mkVar = Var ()
+
+
+mkVal :: Value v () -> Expr v ()
+mkVal = Val nullSpanNoFile ()
+
+
+mkVarExpr :: Id -> Expr v ()
+mkVarExpr = mkVal . mkVar
+
+
+mkBoxedPat :: Pattern () -> Pattern ()
+mkBoxedPat = PBox nullSpanNoFile ()
+
+
+boxExpr :: Expr v () -> Expr v ()
+boxExpr = Val nullSpanNoFile () . Promote ()
+
+
+mkInfBoxTy :: Type -> Type
+mkInfBoxTy = Box (CInterval (CZero extendedNat) infinity)
+
+
+-- | Attempt to extract interface information from the type.
+-- |
+-- | Returns (isBoxed, name, instTy) if successful, Nothing otherwise.
+extractIFaceTy :: Type -> Rewriter (Maybe (Bool, Id, Type))
+extractIFaceTy (Box _ t) =
+    fmap (fmap (\(_,n,ty) -> (True, n, ty))) $ extractIFaceTy t
+extractIFaceTy (TyApp (TyCon n) ty) = do
+    isIface <- isInterfaceVar n
+    pure $ if isIface then Just (False, n, ty) else Nothing
+extractIFaceTy _ = pure Nothing
