@@ -1,0 +1,30 @@
+------
+--- Module: Monad
+--- Description: Monads and related interfaces
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+interface Functor (f : Type -> Type) where
+  map : forall {a : Type, b : Type} . (a -> b) [] -> f a -> f b
+
+
+interface {Functor f} => Applicative (f : Type -> Type) where
+  -- | Lift a value into the type.
+  pure : forall {a : Type} . a -> f a;
+  -- | Sequential application.
+  ap : forall {a : Type, b : Type} . (f (a -> b)) [] -> (f a) [] -> f b
+
+
+interface {Applicative m} => Monad (m : Type -> Type) where
+  -- | Bind the result of a previous computation.
+  bind : forall {a : Type, b : Type} . m a -> (a -> m b) [] -> m b
+
+
+-- | Remove one level of monadic structure.
+join : forall {a : Type, m : Type -> Type} . {Monad m} => m (m a) -> m a
+join x = bind x [\x -> x]
