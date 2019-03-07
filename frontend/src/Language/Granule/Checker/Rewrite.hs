@@ -217,7 +217,9 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
                  [] -> DataConstrNonIndexed sp dname typs
                  binds -> DataConstrIndexed sp dname
                    (mkSig binds . mkFunFap1 $ typs <> [dty])
-        ddcl = DataDecl sp iname [(pname, fromMaybe KType kind)] Nothing [dcon]
+        pKind = fromMaybe KType kind
+        pBind = (pname, pKind)
+        ddcl = DataDecl sp iname [pBind] Nothing [dcon]
         typs = let typs1 = fmap (ityName &&& ityToTy) itys
                in fmap snd $ sortBy (compare `on` fst) typs1
         defs = fmap ityToDef (zip (sortBy (compare `on` ityName) itys) [1..])
@@ -230,7 +232,7 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
                 pats = tail wbefore <> [mkBoxedVar matchVar] <> wafter
             in PConstr nullSpanNoFile () dname pats
         ityToDef ((IFaceTy sp' n (Forall _ q c ty)), i) =
-            let binds = nub $ q <> fmap (\v -> (v, KType)) (freeVars ty')
+            let binds = nub $ q <> [pBind]
                 ty' = FunTy dty ty
             in Def sp' n [Equation sp' () [mkPat i]
                                        (Val sp' () (Var () matchVar))]
