@@ -213,7 +213,10 @@ mkIFace :: (?globals :: Globals) => IFace -> Rewriter (DataDecl, [Def v ()])
 mkIFace (IFace sp iname _constrs kind pname itys) = do
     let numMethods = length itys
         dname = ifaceConId iname
-        dcon = DataConstrNonIndexed sp dname typs
+        dcon = case collectMethodBindings itys of
+                 [] -> DataConstrNonIndexed sp dname typs
+                 binds -> DataConstrIndexed sp dname
+                   (mkSig binds . mkFunFap1 $ typs <> [dty])
         ddcl = DataDecl sp iname [(pname, fromMaybe KType kind)] Nothing [dcon]
         typs = let typs1 = fmap (ityName &&& ityToTy) itys
                in fmap snd $ sortBy (compare `on` fst) typs1
@@ -238,6 +241,8 @@ mkIFace (IFace sp iname _constrs kind pname itys) = do
     where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = Box (CInterval (CNat 0) (CNat 1)) ty;
           ityName (IFaceTy _ n _) = n
           mkBoxedVar = mkBoxedPat . PVar nullSpanNoFile ()
+          ityBinds (IFaceTy _ _ (Forall _ binds _ _)) = binds
+          collectMethodBindings = nub . foldr (<>) [] . fmap ityBinds
 
 
 -- | Rewrite an instance to its intermediate representation.
@@ -510,6 +515,10 @@ mkFunFap :: Type -> [Type] -> Type
 mkFunFap ty = foldr FunTy ty
 
 
+mkFunFap1 :: [Type] -> Type
+mkFunFap1 tys = foldr1 FunTy tys
+
+
 mkVar :: Id -> Value v ()
 mkVar = Var ()
 
@@ -532,6 +541,16 @@ boxExpr = Val nullSpanNoFile () . Promote ()
 
 mkInfBoxTy :: Type -> Type
 mkInfBoxTy = Box (CInterval (CZero extendedNat) infinity)
+
+
+-- | Create a typescheme supported by the intermediate language.
+-- |
+-- | This is the same as a regular typescheme, but without support
+-- | for constraints.
+mkSig :: [(Id, Kind)] -> Type -> TypeScheme
+mkSig binds ty = Forall nullSpanNoFile binds [] ty
+-- TODO: make sure this plays well with predicate constraints
+--       (GuiltyDolphin - 2019-03-07)
 
 
 -- | Attempt to extract interface information from the type.
