@@ -1,0 +1,19 @@
+-- Example of Ord with no Instances
+
+
+data Bool = True | False
+
+
+interface Eq a where
+  equal : a -> a -> Bool
+
+
+interface {Eq a} => Ord a where
+  lessThan : a -> a -> Bool
+
+
+data Ordering = LT | EQ | GT
+
+
+compare : forall {a : Type} . {Ord a} => a [1..2] -> a [1..2] -> Ordering
+compare [x] [y] = if lessThan x y then LT else if equal x y then EQ else GT
