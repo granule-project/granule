@@ -72,7 +72,7 @@ getKindRequired sp name = do
       case tyCon of
         Just (kind, _) -> pure kind
         Nothing -> do
-          dConTys <- requireInScope (dataConstructors, "Constructor") sp name
+          dConTys <- requireInScope (dataConstructors, "Interface or constructor") sp name
           case dConTys of
             (Forall _ [] [] t, []) -> pure $ KPromote t
             _ -> halt $ GenericError (Just sp)
