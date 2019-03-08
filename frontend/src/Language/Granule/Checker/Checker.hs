@@ -116,7 +116,7 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall s tyVa
         tySchKind <- inferKindOfType' sp tyVars ty
 
         -- Freshen the data type constructors type
-        (ty, tyVarsFreshD, _, constraints, []) <-
+        (ty, tyVarsFreshD, _, (predConstrs, iConstrs), []) <-
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
 
         -- Create a version of the data constructor that matches the data type head
@@ -126,7 +126,7 @@ checkDataCon tName kind tyVarsT (DataConstrIndexed sp dName tySch@(Forall s tyVa
 
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
-        let tySch = Forall sp tyVarsD' constraints ty'
+        let tySch = Forall sp tyVarsD' (predConstrs <> iConstrs) ty'
 
         case tySchKind of
           KType ->
@@ -238,10 +238,10 @@ registerDefSig sp name tys@(Forall _ _ constrs _) = do
 
 checkIFaceTys :: (?globals :: Globals) => IFace -> MaybeT Checker ()
 checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
-  initKVarContext <- fmap kVarContext get
-  modify' $ \st -> st { kVarContext = [(pname, tyVarKind)] <> initKVarContext }
+  initTyVarContext <- fmap tyVarContext get
+  modify' $ \st -> st { tyVarContext = [(pname, (tyVarKind, ForallQ))] <> initTyVarContext }
   mapM_ checkIFaceTy tys
-  modify' $ \st -> st { kVarContext = initKVarContext }
+  modify' $ \st -> st { tyVarContext = initTyVarContext }
   where
     checkIFaceTy (IFaceTy sp name tys) = do
       kindCheckSig sp tys
@@ -300,10 +300,10 @@ checkInstTy iname (IFaceDat sp ty) = do
   -- on the interface
   mapM_ (\c -> verifyConstraint sp c ty) icons
 
-  kVarContextInit <- fmap kVarContext get
-  modify $ \st -> st { kVarContext = [(v, KType) | v <- freeVars ty] <> kVarContext st }
+  tyVarContextInit <- fmap tyVarContext get
+  modify $ \st -> st { tyVarContext = [(v, (KType, ForallQ)) | v <- freeVars ty] <> tyVarContext st }
   tyKind <- inferKindOfType sp ty
-  modify $ \st -> st { kVarContext = kVarContextInit }
+  modify $ \st -> st { tyVarContext = tyVarContextInit }
 
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
 

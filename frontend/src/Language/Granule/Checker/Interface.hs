@@ -18,12 +18,14 @@ import qualified Data.Map as M
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers (Id)
+import Language.Granule.Syntax.Pretty (pretty)
 import Language.Granule.Syntax.Span (Span)
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Context (Ctxt)
 import Language.Granule.Utils (Globals)
 
+import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Monad
 
 
@@ -73,7 +75,7 @@ getKindRequired sp name = do
           dConTys <- requireInScope (dataConstructors, "Constructor") sp name
           case dConTys of
             (Forall _ [] [] t, []) -> pure $ KPromote t
-            _ -> halt $ GenericError (Just s)
+            _ -> halt $ GenericError (Just sp)
                  ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name)
 
 

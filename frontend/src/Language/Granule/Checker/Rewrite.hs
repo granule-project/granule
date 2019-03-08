@@ -38,7 +38,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Utils
 
 import qualified Language.Granule.Checker.Monad as C
-import qualified Language.Granule.Checker.Substitutions as Sub
+import qualified Language.Granule.Checker.Substitution as Sub
 
 import Language.Granule.Checker.Rewrite.Type
 
