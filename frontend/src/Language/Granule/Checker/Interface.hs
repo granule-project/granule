@@ -61,4 +61,13 @@ getKindRequired sp name = do
   ikind <- getInterfaceKind name
   case ikind of
     Just k -> pure (KFun k (KConstraint Interface))
-    Nothing -> fmap fst $ requireInScope (typeConstructors, "Type constructor or interface") sp name
+    Nothing -> do
+      tyCon <- lookupContext typeConstructors name
+      case tyCon of
+        Just (kind, _) -> pure kind
+        Nothing -> do
+          dConTys <- requireInScope (dataConstructors, "Constructor") sp name
+          case dConTys of
+            (Forall _ [] [] t, []) -> pure $ KPromote t
+            _ -> halt $ GenericError (Just s)
+                 ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name)
