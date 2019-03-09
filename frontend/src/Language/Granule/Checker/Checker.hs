@@ -236,23 +236,25 @@ registerDefSig sp name tys@(Forall _ _ constrs _) = do
   modify' $ \st -> st { defContext = [(name, tys)] <> defContext st }
 
 
+-- | Check an interface's method signatures.
 checkIFaceTys :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkIFaceTys (IFace sp iname _ kindAnn pname tys) = do
-  initTyVarContext <- fmap tyVarContext get
-  modify' $ \st -> st { tyVarContext = [(pname, (tyVarKind, ForallQ))] <> initTyVarContext }
-  mapM_ checkIFaceTy tys
-  modify' $ \st -> st { tyVarContext = initTyVarContext }
+checkIFaceTys (IFace sp iname _ kindAnn pname itys) = do
+  mapM_ (checkMethodSig iname (pname, pkind)) itys
   where
-    checkIFaceTy (IFaceTy sp name tys) = do
-      kindCheckSig sp tys
-      mkIFaceTyBind sp name tys
-    tyVarKind = case kindAnn of Just k -> k; Nothing -> KType
-    mkIFaceTyBind sp name (Forall fsp binds constrs ty) = do
-      -- to get definition context from interfaces, we annotate
-      -- the type schemes to include a constraint of the interface,
-      -- and add a binder for the interface variable
-      let tys' = Forall fsp (binds <> [(pname, tyVarKind)]) (constrs <> [TyApp (TyCon iname) (TyVar pname)]) ty
-      registerDefSig sp name tys'
+    pkind = case kindAnn of Just k -> k; Nothing -> KType
+
+
+-- | Typecheck an interface method signature, and register it.
+checkMethodSig :: (?globals :: Globals) => Id -> (Id, Kind) -> IFaceTy -> MaybeT Checker ()
+checkMethodSig iname param@(pname, _) (IFaceTy sp name tys) = do
+  let tys' = tysWithParam tys
+  kindCheckSig sp tys'
+  registerDefSig sp name tys'
+  where
+    -- | Inject the interface parameter and constraint into the
+    -- | bindings and constraints of the typescheme.
+    tysWithParam (Forall fsp binds constrs ty) =
+        Forall fsp (binds <> [param]) (constrs <> [TyApp (TyCon iname) (TyVar pname)]) ty
 
 
 getInstance :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker (Maybe ())
