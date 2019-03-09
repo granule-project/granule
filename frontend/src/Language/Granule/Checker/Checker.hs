@@ -382,8 +382,8 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
         debugM "Solver predicate" $ pretty predStack
         solveConstraints predStack (getSpan equation) defName
         constrStack <- getIConstraints
-        pure elaboratedEq
         solveIConstraints subst constrStack (getSpan equation) defName
+        pure elaboratedEq
 
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
