@@ -679,7 +679,7 @@ instance Substitutable (Expr v Type) where
   substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
   unify _ _ = error "Can't unify equations"
 
-instance Substitutable (Value () Type) where
+instance Substitutable (Value v Type) where
   substitute ctxt = bicataM (substituteValue ctxt) (substituteExpr ctxt)
   unify _ _ = error "Can't unify equations"
 
