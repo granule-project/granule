@@ -949,7 +949,7 @@ synthExpr defs gam pol (App s _ e e') = do
          subst <- combineSubstitutions s subst1 subst2
 
          -- Synth subst
-         tau    <- substitute subst2 tau
+         tau    <- substitute subst tau
 
          substituteIConstraints subst
 
