@@ -1,0 +1,10 @@
+interface Semigroup a where
+  op : a -> a -> a
+
+interface {Semigroup a} => Monoid a where
+  unit : a
+
+-- the use of 'op' and both uses of 'unit' should
+-- all resolve to the same 'a'
+f : forall {a : Type} . {Monoid a} => a
+f = op unit unit

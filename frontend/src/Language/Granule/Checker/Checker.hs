@@ -953,7 +953,7 @@ synthExpr defs gam pol (App s _ e e') = do
 
          substituteIConstraints subst
 
-         let elaborated = App s tau elaboratedL elaboratedR
+         elaborated <- substitute subst (App s tau elaboratedL elaboratedR)
          return (tau, gamNew, subst, elaborated)
 
       -- Not a function type
@@ -1132,8 +1132,9 @@ solveConstraints predicate s name = do
 
 solveIConstraints :: (?globals :: Globals) => Substitution -> [Type] -> Span -> Id -> MaybeT Checker ()
 solveIConstraints coercions itys sp defName = do
+  itys' <- mapM (substitute coercions) itys
   topLevelExpanded <- mapM (substitute coercions) =<< getConstraintsExpanded sp defName
-  let remaining = itys \\ topLevelExpanded
+  let remaining = itys' \\ topLevelExpanded
   mapM_ solveIConstraint remaining
     where solveIConstraint t@(TyApp (TyCon iface) ty) = verifyInstanceExists sp iface ty
           solveIConstraint t = badResolve sp t
