@@ -373,7 +373,7 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
             , guardContexts = []
             , iconsContext = []
             }
-        elaboratedEq <- checkEquation defCtxt defName equation tys
+        (elaboratedEq, subst) <- checkEquation defCtxt defName equation tys
 
         -- Solve the generated constraints
         checkerState <- get
@@ -382,8 +382,8 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
         debugM "Solver predicate" $ pretty predStack
         solveConstraints predStack (getSpan equation) defName
         constrStack <- getIConstraints
-        solveIConstraints constrStack (getSpan equation) defName
         pure elaboratedEq
+        solveIConstraints subst constrStack (getSpan equation) defName
 
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
@@ -400,7 +400,7 @@ checkEquation :: (?globals :: Globals, Pretty v) =>
   -> Id              -- Name of the definition
   -> Equation v ()  -- Equation
   -> TypeScheme      -- Type scheme
-  -> MaybeT Checker (Equation v Type)
+  -> MaybeT Checker (Equation v Type, Substitution)
 
 checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
@@ -454,7 +454,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
       substituteIConstraints subst''
 
       elab' <- substitute subst'' elab
-      return elab'
+      return (elab', subst'')
 
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs
@@ -1130,10 +1130,9 @@ solveConstraints predicate s name = do
        halt msg
 
 
-solveIConstraints :: (?globals :: Globals) => [Type] -> Span -> Id -> MaybeT Checker ()
-solveIConstraints itys sp defName = do
-  Just (Forall _ _ topLevelConstraints _) <- getTypeScheme defName
-  topLevelExpanded <- getConstraintsExpanded sp defName
+solveIConstraints :: (?globals :: Globals) => Substitution -> [Type] -> Span -> Id -> MaybeT Checker ()
+solveIConstraints coercions itys sp defName = do
+  topLevelExpanded <- mapM (substitute coercions) =<< getConstraintsExpanded sp defName
   let remaining = itys \\ topLevelExpanded
   mapM_ solveIConstraint remaining
     where solveIConstraint t@(TyApp (TyCon iface) ty) = verifyInstanceExists sp iface ty
