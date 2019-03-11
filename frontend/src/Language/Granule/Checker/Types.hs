@@ -197,11 +197,12 @@ equalTypesAndUnify s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
 equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker EqualityResult
-equalTypes s t1 t2 = equalTypesRelatedCoeffects s Eq t1 t2 SndIsSpec
+equalTypes s = equalTypesRelatedCoeffects s Eq SndIsSpec
 
 equalTypesWithUniversalSpecialisationAndUnify :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
-equalTypesWithUniversalSpecialisationAndUnify s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
+equalTypesWithUniversalSpecialisationAndUnify s =
+  equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and unify the
@@ -227,7 +228,7 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   --    * the unifier
   -> MaybeT Checker EqualityResultWithType
 equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 =
-  toCurrentForm t2 $ equalTypesRelatedCoeffects s rel t1 t2 spec
+  toCurrentForm t2 $ equalTypesRelatedCoeffects s rel spec t1 t2
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
@@ -243,55 +244,55 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -> Type
-  -> Type
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
+  -> Type
+  -> Type
   -> MaybeT Checker EqualityResult
-equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
+equalTypesRelatedCoeffects s rel sp (FunTy t1 t2) (FunTy t1' t2') = do
   -- contravariant position (always approximate)
-  eq1 <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp)
+  eq1 <- equalTypesRelatedCoeffects s ApproximatedBy (flipIndicator sp) t1' t1
   eq2 <- eqSubproof eq1 $ \eqres -> do
            let u1 = equalityProofSubstitution eqres
            -- covariant position (depends: is not always over approximated)
            t2 <- substitute u1 t2
            t2' <- substitute u1 t2'
-           equalTypesRelatedCoeffects s rel t2 t2' sp
+           equalTypesRelatedCoeffects s rel sp t2 t2'
   combinedEqualities s eq1 eq2
 
-equalTypesRelatedCoeffects s _ (TyCon con1) (TyCon con2) _ =
+equalTypesRelatedCoeffects s _ _ (TyCon con1) (TyCon con2) =
   directEqualityTest "Type constructors" s con1 con2
 
 -- THE FOLLOWING FOUR CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
 
 -- Over approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ef t1) (Diamond ["IO"] t2) sp
-    = equalTypesRelatedCoeffects s rel t1 t2 sp
+equalTypesRelatedCoeffects s rel sp (Diamond ef t1) (Diamond ["IO"] t2)
+    = equalTypesRelatedCoeffects s rel sp t1 t2
 
 -- Under approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ["IO"] t1) (Diamond ef t2) sp
-    = equalTypesRelatedCoeffects s rel t1 t2 sp
+equalTypesRelatedCoeffects s rel sp (Diamond ["IO"] t1) (Diamond ef t2)
+    = equalTypesRelatedCoeffects s rel sp t1 t2
 
 -- Over approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ef t1) (Diamond ["Session"] t2) sp
+equalTypesRelatedCoeffects s rel sp (Diamond ef t1) (Diamond ["Session"] t2)
     | "Com" `elem` ef || null ef
-      = equalTypesRelatedCoeffects s rel t1 t2 sp
+      = equalTypesRelatedCoeffects s rel sp t1 t2
 
 -- Under approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ["Session"] t1) (Diamond ef t2) sp
+equalTypesRelatedCoeffects s rel sp (Diamond ["Session"] t1) (Diamond ef t2)
     | "Com" `elem` ef || null ef
-      = equalTypesRelatedCoeffects s rel t1 t2 sp
+      = equalTypesRelatedCoeffects s rel sp t1 t2
 
-equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
+equalTypesRelatedCoeffects s rel sp (Diamond ef1 t1) (Diamond ef2 t2) = do
   if ( ef1 == ef2
      -- Effect approximation
      || ef1 `isPrefixOf` ef2
      -- Communication effect analysis is idempotent
      || (nub ef1 == ["Com"] && nub ef2 == ["Com"]))
-  then equalTypesRelatedCoeffects s rel t1 t2 sp
+  then equalTypesRelatedCoeffects s rel sp t1 t2
   else effectMismatch s ef1 ef2
 
-equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
+equalTypesRelatedCoeffects s rel sp x@(Box c t) y@(Box c' t') = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
@@ -304,16 +305,16 @@ equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
     FstIsSpec -> do
       pure $ equalWith ([rel s c' c kind], [])
     _ -> contextDoesNotAllowUnification s x y
-  eq2 <- equalTypesRelatedCoeffects s rel t t' sp
+  eq2 <- equalTypesRelatedCoeffects s rel sp t t'
   combinedEqualities s eq1 eq2
 
-equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) _ | n == m = do
+equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> trivialEquality
     Nothing -> miscErr $ UnboundVariableError (Just s) ("Type variable " <> pretty n)
 
-equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
+equalTypesRelatedCoeffects s _ sp (TyVar n) (TyVar m) = do
   checkerState <- get
   debugM "variable equality" $ pretty n <> " ~ " <> pretty m <> " where "
                             <> pretty (lookup n (tyVarContext checkerState)) <> " and "
@@ -377,16 +378,16 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
 
 
 -- Duality is idempotent (left)
-equalTypesRelatedCoeffects s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' sp
+equalTypesRelatedCoeffects s rel sp (TyApp (TyCon d') (TyApp (TyCon d) t)) t'
   | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffects s rel t t' sp
+  equalTypesRelatedCoeffects s rel sp t t'
 
 -- Duality is idempotent (right)
-equalTypesRelatedCoeffects s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) sp
+equalTypesRelatedCoeffects s rel sp t (TyApp (TyCon d') (TyApp (TyCon d) t'))
   | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffects s rel t t' sp
+  equalTypesRelatedCoeffects s rel sp t t'
 
-equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
+equalTypesRelatedCoeffects s rel sp (TyVar n) t = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffects on TyVar"
           $ "span: " <> show s
@@ -428,28 +429,28 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
     Nothing -> miscErr $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " <> show (tyVarContext checkerState)))
 
 
-equalTypesRelatedCoeffects s rel t (TyVar n) sp =
-  equalTypesRelatedCoeffects s rel (TyVar n) t (flipIndicator sp)
+equalTypesRelatedCoeffects s rel sp t (TyVar n) =
+  equalTypesRelatedCoeffects s rel (flipIndicator sp) (TyVar n) t
 
 -- Do duality check (left) [special case of TyApp rule]
-equalTypesRelatedCoeffects s rel (TyApp (TyCon d) t) t' sp
-  | internalName d == "Dual" = isDualSession s rel t t' sp
+equalTypesRelatedCoeffects s rel sp (TyApp (TyCon d) t) t'
+  | internalName d == "Dual" = isDualSession s rel sp t t'
 
-equalTypesRelatedCoeffects s rel t (TyApp (TyCon d) t') sp
-  | internalName d == "Dual" = isDualSession s rel t t' sp
+equalTypesRelatedCoeffects s rel sp t (TyApp (TyCon d) t')
+  | internalName d == "Dual" = isDualSession s rel sp t t'
 
 -- Equality on type application
-equalTypesRelatedCoeffects s rel (TyApp t1 t2) (TyApp t1' t2') sp = do
-  eq1 <- equalTypesRelatedCoeffects s rel t1 t1' sp
+equalTypesRelatedCoeffects s rel sp (TyApp t1 t2) (TyApp t1' t2') = do
+  eq1 <- equalTypesRelatedCoeffects s rel sp t1 t1'
   eq2 <- eqSubproof eq1 (\eqres -> do
            let u1 = equalityProofSubstitution eqres
            t2 <- substitute u1 t2
            t2' <- substitute u1 t2'
-           equalTypesRelatedCoeffects s rel t2 t2' sp)
+           equalTypesRelatedCoeffects s rel sp t2 t2')
   combinedEqualities s eq1 eq2
 
 
-equalTypesRelatedCoeffects s rel t1 t2 t = do
+equalTypesRelatedCoeffects s rel _ t1 t2 = do
   debugM "equalTypesRelatedCoeffects" $ "called on: " <> show t1 <> "\nand:\n" <> show t2
   equalOtherKindedTypesGeneric s t1 t2
 
@@ -499,29 +500,29 @@ isDualSession :: (?globals :: Globals)
     => Span
        -- Explain how coeffects should be related by a solver constraint
     -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-    -> Type
-    -> Type
     -- Indicates whether the first type or second type is a specification
     -> SpecIndicator
+    -> Type
+    -> Type
     -> MaybeT Checker EqualityResult
-isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
+isDualSession sp rel ind (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s')
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
-  eq1 <- equalTypesRelatedCoeffects sp rel t t' ind
-  eq2 <- isDualSession sp rel s s' ind
+  eq1 <- equalTypesRelatedCoeffects sp rel ind t t'
+  eq2 <- isDualSession sp rel ind s s'
   combinedEqualities sp eq1 eq2
 
-isDualSession _ _ (TyCon c) (TyCon c') _
+isDualSession _ _ _ (TyCon c) (TyCon c')
   | internalName c == "End" && internalName c' == "End" =
   trivialEquality
 
-isDualSession sp rel t (TyVar v) ind =
-  equalTypesRelatedCoeffects sp rel (TyApp (TyCon $ mkId "Dual") t) (TyVar v) ind
+isDualSession sp rel ind t (TyVar v) =
+  equalTypesRelatedCoeffects sp rel ind (TyApp (TyCon $ mkId "Dual") t) (TyVar v)
 
-isDualSession sp rel (TyVar v) t ind =
-  equalTypesRelatedCoeffects sp rel (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind
+isDualSession sp rel ind (TyVar v) t =
+  equalTypesRelatedCoeffects sp rel ind (TyVar v) (TyApp (TyCon $ mkId "Dual") t)
 
-isDualSession sp _ t1 t2 _ = sessionsNotDual sp t1 t2
+isDualSession sp _ _ t1 t2 = sessionsNotDual sp t1 t2
 
 
 -- Essentially equality on types but join on any coeffects
