@@ -26,6 +26,60 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
+
+------------------------------
+----- Inequality Reasons -----
+------------------------------
+
+
+type InequalityReason = CheckerError
+
+
+equalityErr :: (?globals :: Globals) => InequalityReason -> MaybeT Checker a
+equalityErr = halt
+
+
+effectMismatch s ef1 ef2 = equalityErr $
+  GradingError (Just s) $
+    concat ["Effect mismatch: ", prettyQuoted ef1, " not equal to ", prettyQuoted ef2]
+
+
+unequalSessionTypes s t1 t2 = equalityErr $
+  GenericError (Just s) $
+    concat ["Session type ", prettyQuoted t1, " is not equal to ", prettyQuoted t2]
+
+
+sessionsNotDual s t1 t2 = equalityErr $
+  GenericError (Just s) $
+    concat ["Session type ", prettyQuoted t1, " is not dual to ", prettyQuoted t2]
+
+
+kindEqualityIsUndefined s k1 k2 t1 t2 = equalityErr $
+  KindError (Just s) $
+    concat [ "Equality is not defined between kinds "
+           , pretty k1, " and ", pretty k2
+           , "\t\n from equality "
+           , prettyQuoted t2, " and ", prettyQuoted t1 <> " equal."]
+
+
+contextDoesNotAllowUnification s x y = equalityErr $
+  GenericError (Just s) $
+  concat [ "Trying to unify ", prettyQuoted x, " and ", prettyQuoted y
+         , " but in a context where unification is not allowed."]
+
+
+cannotUnifyUniversalWithConcrete s n kind t = equalityErr $
+  GenericError (Just s) $
+    concat [ "Cannot unify a universally quantified type variable "
+           , prettyQuoted (TyVar n), " of kind ", prettyQuoted kind
+           , " with a concrete type " <> prettyQuoted t]
+
+
+---------------------------------
+----- Bulk of equality code -----
+---------------------------------
+
+
 lEqualTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
@@ -142,9 +196,7 @@ equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
         -- Communication effect analysis is idempotent
         if (nub ef1 == ["Com"] && nub ef2 == ["Com"])
         then return (eq, unif)
-        else
-          halt $ GradingError (Just s) $
-            "Effect mismatch: `" <> pretty ef1 <> "` not equal to `" <> pretty ef2 <> "`"
+        else effectMismatch s ef1 ef2
 
 equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages
@@ -156,9 +208,7 @@ equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
   case sp of
     SndIsSpec -> addConstraint (rel s c c' kind)
     FstIsSpec -> addConstraint (rel s c' c kind)
-    _ -> halt $ GenericError (Just s) $ "Trying to unify `"
-                <> pretty x <> "` and `"
-                <> pretty y <> "` but in a context where unification is not allowed."
+    _ -> contextDoesNotAllowUnification s x y
 
   equalTypesRelatedCoeffects s rel t t' sp
   --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp
@@ -286,12 +336,7 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
            addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
            return (True, [(n, SubstT t)])
 
-         else
-           halt $ GenericError (Just s)
-             $ case sp of
-              _ -> "Cannot unify a universally quantified type variable `"
-                         <> (pretty (TyVar n))
-                         <> "` of kind `" <> pretty kind <> "` with a concrete type `" <> pretty t <> "`"
+         else cannotUnifyUniversalWithConcrete s n kind t
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -344,11 +389,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
 
       KType -> nonUnifiable s t1 t2
 
-      _ ->
-       halt $ KindError (Just s) $ "Equality is not defined between kinds "
-                 <> pretty k1 <> " and " <> pretty k2
-                 <> "\t\n from equality "
-                 <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
+      _ -> kindEqualityIsUndefined s k1 k2 t1 t2
   else nonUnifiable s t1 t2
 
 -- Essentially use to report better error messages when two session type
@@ -369,9 +410,7 @@ sessionInequality s (TyCon c) (TyCon c')
   | internalName c == "End" && internalName c' == "End" =
   return (True, [])
 
-sessionInequality s t1 t2 =
-  halt $ GenericError (Just s)
-       $ "Session type '" <> pretty t1 <> "' is not equal to '" <> pretty t2 <> "'"
+sessionInequality s t1 t2 = unequalSessionTypes s t1 t2
 
 isDualSession :: (?globals :: Globals)
     => Span
@@ -400,9 +439,7 @@ isDualSession sp rel t (TyVar v) ind =
 isDualSession sp rel (TyVar v) t ind =
   equalTypesRelatedCoeffects sp rel (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind
 
-isDualSession sp _ t1 t2 _ =
-  halt $ GenericError (Just sp)
-       $ "Session type '" <> pretty t1 <> "' is not dual to '" <> pretty t2 <> "'"
+isDualSession sp _ t1 t2 _ = sessionsNotDual sp t1 t2
 
 
 -- Essentially equality on types but join on any coeffects
@@ -424,8 +461,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
     else
       if ef' `isPrefixOf` ef
       then return (Diamond ef tj)
-      else halt $ GradingError (Just s) $
-        "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
+      else effectMismatch s ef ef'
 
 joinTypes s (Box c t) (Box c' t') = do
   coeffTy <- mguCoeffectTypes s c c'

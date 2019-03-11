@@ -28,6 +28,24 @@ prettyDebug x =
 pretty :: (?globals :: Globals, Pretty t) => t -> String
 pretty = prettyL 0
 
+
+-- | Return the pretty-printed representation of a value, enclosed
+-- | within the given delimiters.
+prettyWithin :: (?globals :: Globals, Pretty t) => Char -> Char -> t -> String
+prettyWithin c1 c2 x = [c1] <> pretty x <> [c2]
+
+
+-- | Return the pretty-printed representation of a value, enclosed
+-- | within the given delimiter.
+prettyQuotedDelim :: (?globals :: Globals, Pretty t) => Char -> t -> String
+prettyQuotedDelim c = prettyWithin c c
+
+
+-- | Pretty-print the value within backticks.
+prettyQuoted :: (?globals :: Globals, Pretty t) => t -> String
+prettyQuoted = prettyQuotedDelim '`'
+
+
 type Level = Int
 
 parens :: Level -> String -> String
