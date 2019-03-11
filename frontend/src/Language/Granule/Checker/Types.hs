@@ -179,29 +179,29 @@ equalWith = Right
 ---------------------------------
 
 
-lEqualTypesWithPolarity :: (?globals :: Globals)
+lEqualTypesWithPolarityAndUnify :: (?globals :: Globals)
   => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker EqualityResultWithType
-lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
+lEqualTypesWithPolarityAndUnify s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
 
-equalTypesWithPolarity :: (?globals :: Globals)
+equalTypesWithPolarityAndUnify :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker EqualityResultWithType
-equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
+equalTypesWithPolarityAndUnify s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
 
-lEqualTypes :: (?globals :: Globals)
+lEqualTypesAndUnify :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
-lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy SndIsSpec
+lEqualTypesAndUnify s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy SndIsSpec
+
+equalTypesAndUnify :: (?globals :: Globals)
+  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
+equalTypesAndUnify s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
 equalTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
-equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
-
-equalTypes' :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker EqualityResult
-equalTypes' s t1 t2 = equalTypesRelatedCoeffects s Eq t1 t2 SndIsSpec
+equalTypes s t1 t2 = equalTypesRelatedCoeffects s Eq t1 t2 SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
+equalTypesWithUniversalSpecialisationAndUnify :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
-equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
+equalTypesWithUniversalSpecialisationAndUnify s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and unify the
@@ -483,11 +483,11 @@ sessionInequality :: (?globals :: Globals)
     => Span -> Type -> Type -> MaybeT Checker EqualityResult
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
-  equalTypes' s t t'
+  equalTypes s t t'
 
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Recv" && internalName c' == "Recv" = do
-  equalTypes' s t t'
+  equalTypes s t t'
 
 sessionInequality s (TyCon c) (TyCon c')
   | internalName c == "End" && internalName c' == "End" =
