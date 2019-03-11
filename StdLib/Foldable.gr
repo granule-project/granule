@@ -1,0 +1,12 @@
+------
+--- Module: Foldable
+--- Description: Foldable interface
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+interface Foldable (t : Type -> Type) where
+  foldr : forall {a : Type, b : Type} . (a -> b -> b) -> b -> t a -> b
