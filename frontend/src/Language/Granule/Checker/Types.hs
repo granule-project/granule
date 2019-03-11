@@ -35,8 +35,8 @@ import Language.Granule.Utils
 type InequalityReason = CheckerError
 
 
-equalityErr :: (?globals :: Globals) => InequalityReason -> MaybeT Checker a
-equalityErr = halt
+equalityErr :: (?globals :: Globals, Monad m) => InequalityReason -> m EqualityResult
+equalityErr = pure . Left
 
 
 effectMismatch s ef1 ef2 = equalityErr $
@@ -64,8 +64,8 @@ kindEqualityIsUndefined s k1 k2 t1 t2 = equalityErr $
 
 contextDoesNotAllowUnification s x y = equalityErr $
   GenericError (Just s) $
-  concat [ "Trying to unify ", prettyQuoted x, " and ", prettyQuoted y
-         , " but in a context where unification is not allowed."]
+    concat [ "Trying to unify ", prettyQuoted x, " and ", prettyQuoted y
+           , " but in a context where unification is not allowed."]
 
 
 cannotUnifyUniversalWithConcrete s n kind t = equalityErr $
@@ -75,29 +75,132 @@ cannotUnifyUniversalWithConcrete s n kind t = equalityErr $
            , " with a concrete type " <> prettyQuoted t]
 
 
+twoUniversallyQuantifiedVariablesAreUnequal s v1 v2 = equalityErr $
+  GenericError (Just s) $
+    concat [ quoteTyVar v1, " and ", quoteTyVar v2
+           , " are both universally quantified, and thus cannot be equal."]
+  where quoteTyVar = prettyQuoted . TyVar
+
+
+-- | Generic inequality for when a more specific reason is not known.
+unequalNotSpecified s v1 v2 = equalityErr $
+  GenericError (Just s) $
+    concat [ quoteTyVar v1, " and ", quoteTyVar v2
+           , " are not equal."]
+  where quoteTyVar = prettyQuoted . TyVar
+
+
+-- | Test @x@ and @y@ for boolean equality. If they are
+-- | equal then return a trivial proof of equality, otherwise
+-- | use @desc@ to provide a descriptive reason for inequality.
+directEqualityTest desc s x y =
+  if x == y then trivialEquality else equalityErr $
+  GenericError (Just s) $
+    concat [desc, " ", prettyQuoted x, " and ", prettyQuoted y
+           , " are not equal."]
+
+
+miscErr :: (?globals :: Globals) => CheckerError -> MaybeT Checker EqualityResult
+miscErr = equalityErr
+
+
+--------------------------
+----- Equality types -----
+--------------------------
+
+
+-- | A proof of equality.
+type EqualityProof = ([Constraint], Substitution)
+
+
+-- | Get the substitution from a proof of equality.
+equalityProofSubstitution :: EqualityProof -> Substitution
+equalityProofSubstitution = snd
+
+
+-- | Get the constraints from a proof of equality.
+equalityProofConstraints :: EqualityProof -> [Constraint]
+equalityProofConstraints = fst
+
+
+type EqualityResult = Either InequalityReason EqualityProof
+
+
+-- | The current form.
+type EqualityResultWithType = (Bool, Type, Substitution)
+
+
+
+-- | Wrangle an EqualityResult into the form currently used by other modules.
+toCurrentForm :: (?globals :: Globals) => Type -> MaybeT Checker EqualityResult -> MaybeT Checker EqualityResultWithType
+toCurrentForm t em = do
+  e <- em
+  withTy <- eqSubproof e $ (\(c,u) -> do
+                              t' <- substitute u t
+                              pure . pure $ (t', c, u))
+  either (const $ pure (False, t, [])) (\(t', cs, u) -> mapM_ addConstraint cs >> pure (True, t', u)) withTy
+
+
+-- | Get the substitution from an equality result.
+equalitySubstitution :: EqualityResult -> Either InequalityReason Substitution
+equalitySubstitution = fmap equalityProofSubstitution
+
+
+-- | Equality where nothing needs to be done.
+trivialEquality :: MaybeT Checker EqualityResult
+trivialEquality = pure $ Right ([], [])
+
+
+-- | Attempt to prove equality using the result of a previous proof.
+eqSubproof :: (Monad m) => EqualityResult -> (EqualityProof -> m (Either InequalityReason a)) -> m (Either InequalityReason a)
+eqSubproof e f = either (pure . Left) f e
+
+
+-- | Require that two proofs of equality hold, and if so, combine them.
+combinedEqualities :: (?globals :: Globals) => Span -> EqualityResult -> EqualityResult -> MaybeT Checker EqualityResult
+combinedEqualities s e1 e2 =
+  eqSubproof e1 $ \eq1res -> do
+    eqSubproof e2 $ \eq2res -> do
+      let u1 = equalityProofSubstitution eq1res
+          u2 = equalityProofSubstitution eq2res
+          cs = equalityProofConstraints eq1res
+               <> equalityProofConstraints eq2res
+      uf <- combineSubstitutions s u1 u2
+      pure . pure $ (cs, uf)
+
+
+-- | An equality under the given proof.
+equalWith :: EqualityProof -> EqualityResult
+equalWith = Right
+
+
 ---------------------------------
 ----- Bulk of equality code -----
 ---------------------------------
 
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker EqualityResultWithType
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
 
 equalTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker EqualityResultWithType
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
 
 lEqualTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy SndIsSpec
 
 equalTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
+equalTypes' :: (?globals :: Globals)
+  => Span -> Type -> Type -> MaybeT Checker EqualityResult
+equalTypes' s t1 t2 = equalTypesRelatedCoeffects s Eq t1 t2 SndIsSpec
+
 equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker (Bool, Type, Substitution)
+  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
 {- | Check whether two types are equal, and at the same time
@@ -122,15 +225,9 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   --    * a boolean of the equality
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier
-  -> MaybeT Checker (Bool, Type, Substitution)
-equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 = do
-
-   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 spec
-   if eq
-     then do
-        t2 <- substitute unif t2
-        return (eq, t2, unif)
-     else return (eq, t1, [])
+  -> MaybeT Checker EqualityResultWithType
+equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 =
+  toCurrentForm t2 $ equalTypesRelatedCoeffects s rel t1 t2 spec
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
@@ -150,19 +247,20 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Type
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
-  -> MaybeT Checker (Bool, Substitution)
+  -> MaybeT Checker EqualityResult
 equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp)
-   -- covariant position (depends: is not always over approximated)
-  t2 <- substitute u1 t2
-  t2' <- substitute u1 t2'
-  (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
-  unifiers <- combineSubstitutions s u1 u2
-  return (eq1 && eq2, unifiers)
+  eq1 <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp)
+  eq2 <- eqSubproof eq1 $ \eqres -> do
+           let u1 = equalityProofSubstitution eqres
+           -- covariant position (depends: is not always over approximated)
+           t2 <- substitute u1 t2
+           t2' <- substitute u1 t2'
+           equalTypesRelatedCoeffects s rel t2 t2' sp
+  combinedEqualities s eq1 eq2
 
-equalTypesRelatedCoeffects _ _ (TyCon con1) (TyCon con2) _ =
-  return (con1 == con2, [])
+equalTypesRelatedCoeffects s _ (TyCon con1) (TyCon con2) _ =
+  directEqualityTest "Type constructors" s con1 con2
 
 -- THE FOLLOWING FOUR CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
 
@@ -185,18 +283,13 @@ equalTypesRelatedCoeffects s rel (Diamond ["Session"] t1) (Diamond ef t2) sp
       = equalTypesRelatedCoeffects s rel t1 t2 sp
 
 equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp
-  if ef1 == ef2
-    then return (eq, unif)
-    else
-      -- Effect approximation
-      if (ef1 `isPrefixOf` ef2)
-      then return (eq, unif)
-      else
-        -- Communication effect analysis is idempotent
-        if (nub ef1 == ["Com"] && nub ef2 == ["Com"])
-        then return (eq, unif)
-        else effectMismatch s ef1 ef2
+  if ( ef1 == ef2
+     -- Effect approximation
+     || ef1 `isPrefixOf` ef2
+     -- Communication effect analysis is idempotent
+     || (nub ef1 == ["Com"] && nub ef2 == ["Com"]))
+  then equalTypesRelatedCoeffects s rel t1 t2 sp
+  else effectMismatch s ef1 ef2
 
 equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages
@@ -205,24 +298,20 @@ equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
   -- Unify the coeffect kinds of the two coeffects
   kind <- mguCoeffectTypes s c c'
   -- subst <- unify c c'
-  case sp of
-    SndIsSpec -> addConstraint (rel s c c' kind)
-    FstIsSpec -> addConstraint (rel s c' c kind)
+  eq1 <- case sp of
+    SndIsSpec -> do
+      pure $ equalWith ([rel s c c' kind], [])
+    FstIsSpec -> do
+      pure $ equalWith ([rel s c' c kind], [])
     _ -> contextDoesNotAllowUnification s x y
-
-  equalTypesRelatedCoeffects s rel t t' sp
-  --(eq, subst') <- equalTypesRelatedCoeffects s rel uS t t' sp
-  --case subst of
-  --  Just subst -> do
---      substFinal <- combineSubstitutions s subst subst'
---      return (eq, substFinal)
-  --  Nothing -> return (False, [])
+  eq2 <- equalTypesRelatedCoeffects s rel t t' sp
+  combinedEqualities s eq1 eq2
 
 equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) _ | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
-    Just _ -> return (True, [])
-    Nothing -> halt $ UnboundVariableError (Just s) ("Type variable " <> pretty n)
+    Just _ -> trivialEquality
+    Nothing -> miscErr $ UnboundVariableError (Just s) ("Type variable " <> pretty n)
 
 equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
   checkerState <- get
@@ -232,9 +321,8 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
 
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
-    -- Two universally quantified variables are unequal
     (Just (_, ForallQ), Just (_, ForallQ)) ->
-        return (False, [])
+        twoUniversallyQuantifiedVariablesAreUnequal s n m
 
     -- We can unify a universal a dependently bound universal
     (Just (k1, ForallQ), Just (k2, BoundQ)) ->
@@ -282,11 +370,10 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
             KCoeffect -> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
             _         -> return ()
 
-          return (True, [(m, SubstT $ TyVar n)])
+          pure $ equalWith ([], [(m, SubstT $ TyVar n)])
         Just _ ->
-          return (True, [(m, SubstT $ TyVar n)])
-        Nothing ->
-          return (False, [])
+          pure $ equalWith ([], [(m, SubstT $ TyVar n)])
+        Nothing -> unequalNotSpecified s n m
 
 
 -- Duality is idempotent (left)
@@ -315,10 +402,9 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
         -- If the kind is Nat, then create a solver constraint
         Just (KPromote (TyCon (internalName -> "Nat"))) -> do
           nat <- compileNatKindedTypeToCoeffect s t
-          addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
-          return (True, [(n, SubstT t)])
+          pure $ equalWith ([Eq s (CVar n) nat (TyCon $ mkId "Nat")], [(n, SubstT t)])
 
-        Just _ -> return (True, [(n, SubstT t)])
+        Just _ -> pure $ equalWith ([], [(n, SubstT t)])
 
     -- NEW
 
@@ -333,14 +419,13 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
          then do
            c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
            c2 <- compileNatKindedTypeToCoeffect s t
-           addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
-           return (True, [(n, SubstT t)])
+           pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [(n, SubstT t)])
 
          else cannotUnifyUniversalWithConcrete s n kind t
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    Nothing -> halt $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " <> show (tyVarContext checkerState)))
+    Nothing -> miscErr $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " <> show (tyVarContext checkerState)))
 
 
 equalTypesRelatedCoeffects s rel t (TyVar n) sp =
@@ -355,12 +440,13 @@ equalTypesRelatedCoeffects s rel t (TyApp (TyCon d) t') sp
 
 -- Equality on type application
 equalTypesRelatedCoeffects s rel (TyApp t1 t2) (TyApp t1' t2') sp = do
-  (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp
-  t2  <- substitute u1 t2
-  t2' <- substitute u1 t2'
-  (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
-  unifiers <- combineSubstitutions s u1 u2
-  return (one && two, unifiers)
+  eq1 <- equalTypesRelatedCoeffects s rel t1 t1' sp
+  eq2 <- eqSubproof eq1 (\eqres -> do
+           let u1 = equalityProofSubstitution eqres
+           t2 <- substitute u1 t2
+           t2' <- substitute u1 t2'
+           equalTypesRelatedCoeffects s rel t2 t2' sp)
+  combinedEqualities s eq1 eq2
 
 
 equalTypesRelatedCoeffects s rel t1 t2 t = do
@@ -372,7 +458,7 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals)
     => Span
     -> Type
     -> Type
-    -> MaybeT Checker (Bool, Substitution)
+    -> MaybeT Checker EqualityResult
 equalOtherKindedTypesGeneric s t1 t2 = do
   k1 <- inferKindOfType s t1
   k2 <- inferKindOfType s t2
@@ -381,8 +467,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
       KPromote (TyCon (internalName -> "Nat")) -> do
         c1 <- compileNatKindedTypeToCoeffect s t1
         c2 <- compileNatKindedTypeToCoeffect s t2
-        addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
-        return (True, [])
+        pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [])
 
       KPromote (TyCon (internalName -> "Protocol")) ->
         sessionInequality s t1 t2
@@ -395,20 +480,18 @@ equalOtherKindedTypesGeneric s t1 t2 = do
 -- Essentially use to report better error messages when two session type
 -- are not equality
 sessionInequality :: (?globals :: Globals)
-    => Span -> Type -> Type -> MaybeT Checker (Bool, Substitution)
+    => Span -> Type -> Type -> MaybeT Checker EqualityResult
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
-  (g, _, u) <- equalTypes s t t'
-  return (g, u)
+  equalTypes' s t t'
 
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Recv" && internalName c' == "Recv" = do
-  (g, _, u) <- equalTypes s t t'
-  return (g, u)
+  equalTypes' s t t'
 
 sessionInequality s (TyCon c) (TyCon c')
   | internalName c == "End" && internalName c' == "End" =
-  return (True, [])
+  trivialEquality
 
 sessionInequality s t1 t2 = unequalSessionTypes s t1 t2
 
@@ -420,18 +503,17 @@ isDualSession :: (?globals :: Globals)
     -> Type
     -- Indicates whether the first type or second type is a specification
     -> SpecIndicator
-    -> MaybeT Checker (Bool, Substitution)
+    -> MaybeT Checker EqualityResult
 isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
-  (eq1, u1) <- equalTypesRelatedCoeffects sp rel t t' ind
-  (eq2, u2) <- isDualSession sp rel s s' ind
-  u <- combineSubstitutions sp u1 u2
-  return (eq1 && eq2, u)
+  eq1 <- equalTypesRelatedCoeffects sp rel t t' ind
+  eq2 <- isDualSession sp rel s s' ind
+  combinedEqualities sp eq1 eq2
 
 isDualSession _ _ (TyCon c) (TyCon c') _
   | internalName c == "End" && internalName c' == "End" =
-  return (True, [])
+  trivialEquality
 
 isDualSession sp rel t (TyVar v) ind =
   equalTypesRelatedCoeffects sp rel (TyApp (TyCon $ mkId "Dual") t) (TyVar v) ind
@@ -461,7 +543,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
     else
       if ef' `isPrefixOf` ef
       then return (Diamond ef tj)
-      else effectMismatch s ef ef'
+      else effectMismatch s ef ef' >>= either halt (pure . const t')
 
 joinTypes s (Box c t) (Box c' t') = do
   coeffTy <- mguCoeffectTypes s c c'
