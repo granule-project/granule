@@ -1,0 +1,5 @@
+interface Simple a
+
+-- we apply an interface constraint to an interface
+foo : forall {a : Type} . {Simple (Simple a)} => a -> a
+foo x = x

@@ -1,0 +1,13 @@
+data A a = B
+
+-- shouldn't be able to use a type constructor as
+-- a constraint
+--
+-- depending on whether we are allowing interfaces
+-- and type constructors with the same name to coexist
+-- in the same scope, this should either fail with
+-- a scope error (missing interface 'A'), or another
+-- error indicating a kind mismatch ("Constraint",
+-- versus "Type")
+interface {A a} => Simple a where
+  simple : a -> a

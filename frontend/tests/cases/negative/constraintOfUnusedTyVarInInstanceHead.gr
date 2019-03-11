@@ -1,0 +1,8 @@
+interface Simple a where
+  simple : a -> a
+
+data A = A
+
+-- type variable 'a' is unused (unbound)
+instance {Simple a} => Simple A where
+  simple x = x

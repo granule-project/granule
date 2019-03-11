@@ -1,0 +1,3 @@
+-- 'a -> b' is not a syntactically valid constraint
+foo : forall {a : Type, b : Type} . {(a -> b)} => a -> a
+foo x = x

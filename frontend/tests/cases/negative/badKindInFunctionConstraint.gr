@@ -1,3 +1,7 @@
--- 'a -> b' is not a valid constraint
-foo : forall {a : Type, b : Type} . {a -> b} => a -> a
+interface Simple (a : Type -> Type)
+
+
+-- we expect 'a' to have kind 'Type -> Type' for Simple,
+-- but instead have kind 'Type'
+foo : forall {a : Type} . {Simple a} => a -> a
 foo x = x

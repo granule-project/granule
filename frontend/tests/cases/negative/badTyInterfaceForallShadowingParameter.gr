@@ -1,0 +1,9 @@
+interface Simple a where
+  simple : forall {a : Type} . a -> a
+
+data A = A
+
+-- implementation of 'simple' isn't general
+-- enough
+instance Simple A where
+  simple A = A

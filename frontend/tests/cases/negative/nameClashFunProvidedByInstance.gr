@@ -1,0 +1,7 @@
+interface Simple a where
+  simple : a -> a
+
+-- 'simple' is already provided by the
+-- 'Simple' interface
+simple : forall {a : Type} . a -> a
+simple x = x
