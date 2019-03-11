@@ -508,8 +508,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
   (tau', subst1) <- case t of
     Nothing -> return (tau, [])
     Just t' -> do
-      (eqT, unifiedType, subst) <- equalTypesAndUnify s sig t'
-      unless eqT (halt $ GenericError (Just s) $ pretty sig <> " not equal to " <> pretty t')
+      subst <- fmap equalityProofSubstitution (requireEqualTypes s sig t')
       return (tau, subst)
 
   (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
@@ -706,28 +705,29 @@ checkExpr defs gam pol topLevel tau e = do
 
   (tau', gam', subst', elaboratedE) <- synthExpr defs gam pol e
 
-  (tyEq, _, subst) <-
+  eq <-
     case pol of
       Positive -> do
         debugM "+ Compare for equality " $ pretty tau' <> " = " <> pretty tau
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypesWithPolarityAndUnify (getSpan e) SndIsSpec tau' tau
-          else lEqualTypesWithPolarityAndUnify (getSpan e) SndIsSpec tau' tau
+          then checkEquality (equalTypesWithPolarity (getSpan e) SndIsSpec tau') tau
+          else checkEquality (lEqualTypesWithPolarity (getSpan e) SndIsSpec tau') tau
 
       -- i.e., this check is from a synth
       Negative -> do
         debugM "- Compare for equality " $ pretty tau <> " = " <> pretty tau'
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypesWithPolarityAndUnify (getSpan e) FstIsSpec tau' tau
-          else lEqualTypesWithPolarityAndUnify (getSpan e) FstIsSpec tau' tau
+          then checkEquality (equalTypesWithPolarity (getSpan e) FstIsSpec tau') tau
+          else checkEquality (lEqualTypesWithPolarity (getSpan e) FstIsSpec tau') tau
 
-  if tyEq
-    then do
+  case eq of
+    Right eqres -> do
+      let subst = equalityProofSubstitution eqres
       substFinal <- combineSubstitutions (getSpan e) subst subst'
       return (gam', substFinal, elaboratedE)
-    else do
+    _ -> do
       case pol of
         Positive -> typeClash (getSpan e) tau tau'
         Negative -> typeClash (getSpan e) tau' tau
@@ -1015,8 +1015,8 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
     selectFirstByType t1 t2 ((FunTy opt1 (FunTy opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- localChecking $ do
-         (eq1, _, _) <- equalTypesAndUnify s t1 opt1
-         (eq2, _, _) <- equalTypesAndUnify s t2 opt2
+         eq1 <- typesAreEqualWithCheck s t1 opt1
+         eq2 <- typesAreEqualWithCheck s t2 opt2
          return (eq1 && eq2)
       -- If successful then return this local computation
       case result of
@@ -1093,9 +1093,7 @@ synthExpr _ _ _ e =
 -- Check an optional type signature for equality against a type
 optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> MaybeT Checker Bool
 optionalSigEquality _ Nothing _ = return True
-optionalSigEquality s (Just t) t' = do
-    (eq, _, _) <- equalTypesAndUnify s t' t
-    return eq
+optionalSigEquality s (Just t) t' = typesAreEqualWithCheck s t' t
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
 solveConstraints predicate s name = do

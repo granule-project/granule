@@ -8,13 +8,13 @@ import Control.Monad.State.Strict
 import Data.List (intercalate)
 
 import Language.Granule.Checker.Errors
-import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Context
@@ -193,13 +193,14 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
       debugM "ctxt" $ "\t### eqR (ty) = " <> show ty <> "\n"
 
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
-      areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) ty
-      case areEq of
-        (True, _, unifiers) -> do
+      eqp <- checkEquality (equalTypesRelatedCoeffects s Eq PatternCtxt (resultType dataConstructorTypeFresh)) ty
+      case eqp of
+        Right eqres -> do
+          let unifiers = equalityProofSubstitution eqres
 
           -- Register coercions as equalities
-          mapM (\(var, SubstT ty) ->
-                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) ty) coercions'
+          mapM_ (\(var, SubstT ty) ->
+                    requireEqualTypesRelatedCoeffects s Eq PatternCtxt (TyVar var) ty) coercions'
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten

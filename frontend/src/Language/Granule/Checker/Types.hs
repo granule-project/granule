@@ -4,7 +4,36 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
 
-module Language.Granule.Checker.Types where
+module Language.Granule.Checker.Types
+    (
+    -- ** Equality proofs
+      equalityProofSubstitution
+    , equalityProofConstraints
+
+    -- ** Specification indicators
+    , SpecIndicator(..)
+
+    -- ** Equality tests
+    , checkEquality
+
+    , requireEqualTypes
+    , requireEqualTypesRelatedCoeffects
+
+    , typesAreEqual
+    , typesAreEqualWithCheck
+
+    , equalTypesRelatedCoeffects
+
+    , equalTypes
+    , lEqualTypes
+
+    , equalTypesWithPolarity
+    , lEqualTypesWithPolarity
+
+    , equalTypesWithUniversalSpecialisation
+
+    , joinTypes
+    ) where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -126,26 +155,6 @@ equalityProofConstraints = fst
 type EqualityResult = Either InequalityReason EqualityProof
 
 
--- | The current form.
-type EqualityResultWithType = (Bool, Type, Substitution)
-
-
-
--- | Wrangle an EqualityResult into the form currently used by other modules.
-toCurrentForm :: (?globals :: Globals) => Type -> MaybeT Checker EqualityResult -> MaybeT Checker EqualityResultWithType
-toCurrentForm t em = do
-  e <- em
-  withTy <- eqSubproof e $ (\(c,u) -> do
-                              t' <- substitute u t
-                              pure . pure $ (t', c, u))
-  either (const $ pure (False, t, [])) (\(t', cs, u) -> mapM_ addConstraint cs >> pure (True, t', u)) withTy
-
-
--- | Get the substitution from an equality result.
-equalitySubstitution :: EqualityResult -> Either InequalityReason Substitution
-equalitySubstitution = fmap equalityProofSubstitution
-
-
 -- | Equality where nothing needs to be done.
 trivialEquality :: MaybeT Checker EqualityResult
 trivialEquality = pure $ Right ([], [])
@@ -174,61 +183,91 @@ equalWith :: EqualityProof -> EqualityResult
 equalWith = Right
 
 
+-- | Update the state with information from the equality proof.
+enactEquality :: (?globals :: Globals) => Type -> EqualityProof -> MaybeT Checker ()
+enactEquality t eqres = do
+  let u = equalityProofSubstitution eqres
+      cs = equalityProofConstraints eqres
+  substitute u t
+  mapM_ addConstraint cs
+
+
+-- | Check for equality, and update the checker state.
+checkEquality :: (?globals :: Globals)
+  => (Type -> MaybeT Checker EqualityResult) -> Type -> MaybeT Checker EqualityResult
+checkEquality eqm t = do
+  eq <- eqm t
+  case eq of
+    Right eqres -> enactEquality t eqres
+    Left _ -> pure ()
+  pure eq
+
+
+-- | Require that an equality holds, and perform a unification
+-- | to reflect this equality in the checker.
+requireEqualityResult :: (?globals :: Globals)
+  => Type -> MaybeT Checker EqualityResult -> MaybeT Checker EqualityProof
+requireEqualityResult t = (>>= either halt (\r -> enactEquality t r >> pure r))
+
+
 ---------------------------------
 ----- Bulk of equality code -----
 ---------------------------------
 
 
-lEqualTypesWithPolarityAndUnify :: (?globals :: Globals)
-  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker EqualityResultWithType
-lEqualTypesWithPolarityAndUnify s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
+-- | True if the two types are equal.
+typesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
+typesAreEqual s t1 t2 = fmap (either (const False) (const True)) $ equalTypes s t1 t2
 
-equalTypesWithPolarityAndUnify :: (?globals :: Globals)
-  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker EqualityResultWithType
-equalTypesWithPolarityAndUnify s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
 
-lEqualTypesAndUnify :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
-lEqualTypesAndUnify s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy SndIsSpec
+-- | True if the two types are equal.
+typesAreEqualWithCheck :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
+typesAreEqualWithCheck s t1 t2 =
+  fmap (either (const False) (const True)) $ checkEquality (equalTypes s t1) t2
 
-equalTypesAndUnify :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
-equalTypesAndUnify s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
+
+requireEqualTypes :: (?globals :: Globals)
+  => Span -> Type -> Type -> MaybeT Checker EqualityProof
+requireEqualTypes s t1 t2 =
+    requireEqualityResult t2 $ equalTypes s t1 t2
+
+
+requireEqualTypesRelatedCoeffects :: (?globals :: Globals)
+  => Span
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> SpecIndicator
+  -> Type
+  -> Type
+  -> MaybeT Checker EqualityProof
+requireEqualTypesRelatedCoeffects s rel spec t1 t2 =
+    requireEqualityResult t2 $ equalTypesRelatedCoeffects s rel spec t1 t2
+
+
+lEqualTypesWithPolarity :: (?globals :: Globals)
+  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker EqualityResult
+lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffects s ApproximatedBy pol
+
+
+equalTypesWithPolarity :: (?globals :: Globals)
+  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker EqualityResult
+equalTypesWithPolarity s pol = equalTypesRelatedCoeffects s Eq pol
+
+
+lEqualTypes :: (?globals :: Globals)
+  => Span -> Type -> Type -> MaybeT Checker EqualityResult
+lEqualTypes s = equalTypesRelatedCoeffects s ApproximatedBy SndIsSpec
+
 
 equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> MaybeT Checker EqualityResult
 equalTypes s = equalTypesRelatedCoeffects s Eq SndIsSpec
 
-equalTypesWithUniversalSpecialisationAndUnify :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityResultWithType
-equalTypesWithUniversalSpecialisationAndUnify s =
-  equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
-{- | Check whether two types are equal, and at the same time
-     generate coeffect equality constraints and unify the
-     two types
+equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
+  => Span -> Type -> Type -> MaybeT Checker EqualityResult
+equalTypesWithUniversalSpecialisation s =
+  equalTypesRelatedCoeffects s Eq SndIsSpec
 
-     The first argument is taken to be possibly approximated by the second
-     e.g., the first argument is inferred, the second is a specification
-     being checked against
--}
-equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
-  => Span
-  -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -- Starting spec indication
-  -> SpecIndicator
-  -- Left type (usually the inferred)
-  -> Type
-  -- Right type (usually the specified)
-  -> Type
-  -- Result is a effectful, producing:
-  --    * a boolean of the equality
-  --    * the most specialised type (after the unifier is applied)
-  --    * the unifier
-  -> MaybeT Checker EqualityResultWithType
-equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 =
-  toCurrentForm t2 $ equalTypesRelatedCoeffects s rel spec t1 t2
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
