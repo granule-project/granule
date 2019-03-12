@@ -111,6 +111,12 @@ twoUniversallyQuantifiedVariablesAreUnequal s v1 v2 = equalityErr $
   where quoteTyVar = prettyQuoted . TyVar
 
 
+nonUnifiable s t1 t2 = equalityErr $
+  let addendum = if pretty t1 == pretty t2 then " coming from a different binding" else ""
+  in GenericError (Just s) $
+       concat ["Type ", prettyQuoted t1, " is not unifiable with the type ", prettyQuoted t2, addendum]
+
+
 -- | Generic inequality for when a more specific reason is not known.
 unequalNotSpecified s v1 v2 = equalityErr $
   GenericError (Just s) $
