@@ -326,7 +326,7 @@ checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
   ds' <- mapM (\((sp, name), eqs) -> do
                  tys <- getNormalisedInterfaceSig iname name idty
                  registerInstanceSig iname idat name tys
-                 checkDef' sp name eqs tys) groupedEqns
+                 checkDef' sp name eqs (tysWithConstrs constrs tys)) groupedEqns
   pure $ Instance sp iname constrs idat (concat $ fmap defToIDefs ds')
   where
     checkInstDefName names sp name = do
@@ -1568,3 +1568,9 @@ withFreeVarsBound ty q c = do
   tyVarContextInit <- fmap tyVarContext get
   modify $ \st -> st { tyVarContext = [(v, (KType, q)) | v <- freeVars ty] <> tyVarContext st }
   c <* modify (\st -> st { tyVarContext = tyVarContextInit })
+
+
+-- | Add a set of constraints to the typescheme.
+tysWithConstrs :: [Type] -> TypeScheme -> TypeScheme
+tysWithConstrs constrs' (Forall sp binds constrs ty) =
+  Forall sp binds (constrs <> constrs') ty

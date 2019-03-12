@@ -1,0 +1,18 @@
+interface LeftUnit l where
+  leftUnit : l
+
+interface RightUnit r where
+  rightUnit : r
+
+interface LeftAndRightUnit a where
+  laruLeft  : a;
+  laruRight : a
+
+data Either e a = Left e | Right a
+
+-- the definitions for 'laruLeft' and 'laruRight' require that the
+-- typechecker recognises that we are in a context where 'LeftUnit l' and
+-- 'RightUnit r' are accessible
+instance {LeftUnit l, RightUnit r} => LeftAndRightUnit (Either l r) where
+  laruLeft = Left leftUnit;
+  laruRight = Right rightUnit
