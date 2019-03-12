@@ -345,7 +345,8 @@ checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
       (Forall s binds constraints ty) <-
         substitute [(param, SubstT instTy)] sig
       -- ensure free variables in the instance head are universally quantified
-      pure $ Forall s (binds <> [(v, KType) | v <- freeVars instTy]) constraints ty
+      freeInstVarKinds <- getInstanceFreeVarKinds sp iname instTy
+      pure $ Forall s (binds <> freeInstVarKinds) constraints ty
     defToIDefs (Def sp n eqns ty) = fmap (IDef sp (Just n)) eqns
 
 
