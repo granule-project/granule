@@ -1,0 +1,9 @@
+interface TypeToType (t : Type -> Type)
+
+interface TypeToTypeToType (t : Type -> Type -> Type)
+
+data Foo (a : Type -> Type) b c = Foo (a b) c
+
+-- the typechecker needs to be able to infer that 'a'
+-- has kind 'Type -> Type'
+instance {TypeToType a} => TypeToTypeToType (Foo a)

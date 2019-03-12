@@ -277,7 +277,8 @@ getInstance sp iname instTy = do
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInstHead (Instance sp iname constrs idt@(IFaceDat _ idty) _) = do
   checkIFaceExists sp iname
-  mapM_ (kindCheckConstr sp [(v, KType) | v <- freeVars idty]) constrs
+  freeVarKinds <- getInstanceFreeVarKinds sp iname idty
+  mapM_ (kindCheckConstr sp freeVarKinds) constrs
   checkInstTy iname idt
   -- we take it on faith that the instance methods are well-typed
   -- at this point. If an issue arises it will be caught before we
@@ -306,7 +307,7 @@ checkInstTy iname (IFaceDat sp ty) = do
   -- on the interface
   mapM_ (\c -> verifyConstraint sp c ty) icons
 
-  tyKind <- withFreeVarsBound ty ForallQ $ inferKindOfType sp ty
+  tyKind <- withInstanceContext sp iname ty $ inferKindOfType sp ty
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
 
 
@@ -1578,7 +1579,10 @@ withFreeVarsBound ty q c = do
 withInstanceContext :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker a -> MaybeT Checker a
 withInstanceContext sp iname ity c = do
   context <- getInstanceContext sp iname ity
-  withFreeVarsBound (combinedType ity context) InstanceQ c
+  tyVarContextInit <- fmap tyVarContext get
+  tyVars <- getInstanceFreeVarKinds sp iname ity
+  modify $ \st -> st { tyVarContext = fmap (\(v,k) -> (v, (k, InstanceQ))) tyVars <> tyVarContext st }
+  c <* modify (\st -> st { tyVarContext = tyVarContextInit })
 
 
 -- | Get the constraint context available to a particular instance.
@@ -1587,9 +1591,7 @@ getInstanceContext sp iname ity = do
   maybeInstances <- lookupContext instanceContext iname
   let maybeContext = maybeInstances >>= lookup ity
   case maybeContext of
-    -- shouldn't happen, if we are calling this correctly
-    Nothing -> halt $ GenericError (Just sp)
-               $ concat ["could not retrieve context for instance ", prettyQuoted $ TyApp (TyCon iname) ity]
+    Nothing -> pure mempty
     Just context -> pure context
 
 
@@ -1607,3 +1609,34 @@ tysWithConstrs constrs' (Forall sp binds constrs ty) =
 -- | Get the kind of the interface's parameter.
 interfaceParameterKind :: IFace -> Kind
 interfaceParameterKind (IFace _ _ _ kindAnn _ _) = fromMaybe KType kindAnn
+
+
+getInstanceFreeVarKinds :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker [(Id, Kind)]
+getInstanceFreeVarKinds sp iname ity =
+  fmap (`getConstructorKinds` ity) $ inferKindSigOfParameter sp iname ity
+  where
+    -- | Given a kind (e.g., of a type constructor) and a type
+    -- | (possibly a partial application of the constructor), get the kinds of
+    -- | free variables in the type.
+    getConstructorKinds :: Kind -> Type -> [(Id, Kind)]
+    getConstructorKinds (KFun k _) (TyVar v) = [(v, k)]
+    getConstructorKinds (KFun k ks) (FunTy t ts) = getConstructorKinds k t <> getConstructorKinds ks ts
+    getConstructorKinds (KFun k1 ks) (TyApp (TyVar v) ts) = (v, k1) : getConstructorKinds ks ts
+    getConstructorKinds ks (TyApp (TyCon _) ts) = getConstructorKinds ks ts
+    getConstructorKinds (KFun k1 (KFun k2 k3)) (TyApp (TyApp (TyCon _) t1) t2)
+        = getConstructorKinds k1 t1 <> getConstructorKinds k2 t2
+    getConstructorKinds k (TyVar v) = [(v, k)]
+    getConstructorKinds _ (TyCon _) = []
+    getConstructorKinds k (Box _ t) = getConstructorKinds k t
+    getConstructorKinds k (Diamond _ t) = getConstructorKinds k t
+    getConstructorKinds k t =
+      error $ "getConstructorKinds called with: '" <> show k <> "' and '" <> show t <> "'"
+
+    -- | Attempt to get the most specific kind signature of the interface, where
+    -- | for variables, this is the parameter kind, but for type constructors
+    -- | (and applications of) this is the kind signature of the constructor.
+    inferKindSigOfParameter _ iname (TyVar v) = fmap fromJust $ getInterfaceKind iname
+    inferKindSigOfParameter sp _ (TyCon name) = getTyConKind sp name
+    inferKindSigOfParameter sp iname (TyApp t _) = inferKindSigOfParameter sp iname t
+    inferKindSigOfParameter _ iname t =
+      error $ "inferKindSigOfParameter called with: '" <> show iname <> "' and '" <> show t <> "'"

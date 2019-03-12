@@ -202,6 +202,14 @@ registerTyCon sp name kind card = do
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { typeConstructors = (name, (kind, card)) : typeConstructors st }
 
+
+-- | Get the kind of a type constructor.
+-- |
+-- | This requires that the type constructor is in scope.
+getTyConKind :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
+getTyConKind sp name = fmap fst $ requireInScope (typeConstructors, "Type constructor") sp name
+
+
 registerInterface :: (?globals :: Globals) => Span -> Id -> Id -> Kind -> [Type] -> Ctxt TypeScheme -> MaybeT Checker ()
 registerInterface sp name pname kind constrs sigs = do
   let ifaceCtxt = IFaceCtxt { ifaceParam = pname
