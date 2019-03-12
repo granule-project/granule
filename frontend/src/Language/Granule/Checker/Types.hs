@@ -21,6 +21,7 @@ module Language.Granule.Checker.Types
 
     , typesAreEqual
     , typesAreEqualWithCheck
+    , lTypesAreEqual
 
     , equalTypesRelatedCoeffects
 
@@ -161,6 +162,11 @@ equalityProofConstraints = fst
 type EqualityResult = Either InequalityReason EqualityProof
 
 
+-- | True if the check for equality was successful.
+equalityResultIsSuccess :: EqualityResult -> Bool
+equalityResultIsSuccess = either (const False) (const True)
+
+
 -- | Equality where nothing needs to be done.
 trivialEquality :: MaybeT Checker EqualityResult
 trivialEquality = pure $ Right ([], [])
@@ -223,13 +229,18 @@ requireEqualityResult t = (>>= either halt (\r -> enactEquality t r >> pure r))
 
 -- | True if the two types are equal.
 typesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
-typesAreEqual s t1 t2 = fmap (either (const False) (const True)) $ equalTypes s t1 t2
+typesAreEqual s t1 t2 =
+  fmap equalityResultIsSuccess $ equalTypes s t1 t2
 
 
 -- | True if the two types are equal.
 typesAreEqualWithCheck :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
 typesAreEqualWithCheck s t1 t2 =
-  fmap (either (const False) (const True)) $ checkEquality (equalTypes s t1) t2
+  fmap equalityResultIsSuccess $ checkEquality (equalTypes s t1) t2
+
+
+lTypesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
+lTypesAreEqual s t1 t2 = fmap (either (const False) (const True)) $ lEqualTypes s t1 t2
 
 
 requireEqualTypes :: (?globals :: Globals)
