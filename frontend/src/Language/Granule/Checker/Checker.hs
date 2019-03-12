@@ -378,7 +378,7 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
         debugM "Solver predicate" $ pretty predStack
         solveConstraints predStack (getSpan equation) defName
         constrStack <- getIConstraints
-        solveIConstraints subst constrStack (getSpan equation) defName
+        solveIConstraints subst constrStack (getSpan equation) tys
         pure elaboratedEq
 
     checkGuardsForImpossibility s defName
@@ -1124,10 +1124,10 @@ solveConstraints predicate s name = do
        halt msg
 
 
-solveIConstraints :: (?globals :: Globals) => Substitution -> [Type] -> Span -> Id -> MaybeT Checker ()
-solveIConstraints coercions itys sp defName = do
+solveIConstraints :: (?globals :: Globals) => Substitution -> [Type] -> Span -> TypeScheme -> MaybeT Checker ()
+solveIConstraints coercions itys sp tys = do
   itys' <- mapM (substitute coercions) itys
-  topLevelExpanded <- mapM (substitute coercions) =<< getConstraintsExpanded sp defName
+  topLevelExpanded <- mapM (substitute coercions) =<< getExpandedContext sp tys
   let remaining = itys' \\ topLevelExpanded
   mapM_ solveIConstraint remaining
     where solveIConstraint t@(TyApp (TyCon iface) ty) = verifyInstanceExists sp iface ty
@@ -1526,6 +1526,11 @@ expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
           parentsFlat <- fmap concat $ mapM getInterfaceDependenciesFlattened parents
           pure $ parents <> parentsFlat
         getInterfaceDependenciesFlattened t = badResolve sp t
+
+
+-- | Retrieve the expanded interface context from the typescheme.
+getExpandedContext :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker [Type]
+getExpandedContext sp (Forall _ _ cs _) = expandIConstraints sp cs
 
 
 verifyInstanceExists :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker ()
