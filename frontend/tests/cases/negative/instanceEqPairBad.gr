@@ -1,0 +1,13 @@
+data Bool = True | False
+
+and : Bool -> Bool -> Bool
+and True x = x;
+and False False = False;
+and False True = False
+
+interface Eq a where
+  equal : a -> a -> Bool
+
+-- no instance for {Eq a} or {Eq b}
+instance Eq (a, b) where
+  equal (x1,y1) (x2,y2) = (equal x1 x2) `and` (equal y1 y2)

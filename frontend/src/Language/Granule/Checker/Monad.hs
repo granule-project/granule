@@ -128,7 +128,7 @@ data CheckerState = CS
 
             -- Interface information
             , ifaceContext :: Ctxt IFaceCtxt
-            , instanceContext :: Ctxt [Type]
+            , instanceContext :: Ctxt [(Type, [Type])]
             , instanceSigs :: M.Map (Type, Id) TypeScheme
             , expandedConstraints :: Ctxt [Type]
             -- Context of interface constraints

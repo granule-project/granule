@@ -1,0 +1,18 @@
+data Bool = True | False
+
+and : Bool -> Bool -> Bool
+and True x = x;
+and False False = False;
+and False True = False
+
+interface Eq a where
+  equal : a -> a -> Bool
+
+data Either e a = Left e | Right a
+
+-- no instance for {Eq a}
+instance {Eq b} => Eq (Either (a [0..1]) (b [0..1])) where
+  equal (Left [x])  (Left [y])  = equal x y;
+  equal (Right [x]) (Right [y]) = equal x y;
+  equal (Left [_])  (Right [_]) = False;
+  equal (Right [_]) (Left [_])  = False

@@ -257,17 +257,21 @@ checkMethodSig iname param@(pname, _) (IFaceTy sp name tys) = do
         Forall fsp (binds <> [param]) (constrs <> [TyApp (TyCon iname) (TyVar pname)]) ty
 
 
-getInstance :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker (Maybe ())
+getInstance :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker (Maybe (Type, [Type]))
 getInstance sp iname instTy = do
   maybeInstances <- lookupContext instanceContext iname
   case maybeInstances of
     Nothing -> pure Nothing
-    Just instances -> do
-      exists <- fmap or $ mapM (unifiable instTy) instances
-      pure $ if exists then Just () else Nothing
+    Just instances -> findM (unifiableWithInstance . fst) instances
     where
-      unifiable :: Type -> Type -> MaybeT Checker Bool
-      unifiable t1 t2 = unify t1 t2 >>= pure . isJust
+      findM :: (Monad m) => (a -> m Bool) -> [a] -> m (Maybe a)
+      findM _ [] = pure Nothing
+      findM f (x:xs) =
+        f x >>= (\t -> if t then pure (Just x) else findM f xs)
+      unifiableWithInstance :: Type -> MaybeT Checker Bool
+      unifiableWithInstance ity =
+          withInstanceContext sp iname ity $
+            withFreeVarsBound instTy ForallQ $ typesAreEqual sp instTy ity
 
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
@@ -288,7 +292,7 @@ checkInstHead (Instance sp iname constrs idt@(IFaceDat _ idty) _) = do
                              ["Duplicate instance '", pretty instTy, "' for interface `", pretty iname, "`."]
                 Nothing -> do
                     maybeInstances <- lookupContext instanceContext iname
-                    modify' $ \st -> st { instanceContext = (iname, instTy:fromMaybe [] maybeInstances)
+                    modify' $ \st -> st { instanceContext = (iname, (instTy,constrs):fromMaybe [] maybeInstances)
                                                             : filter ((/=iname) . fst) (instanceContext st) }
 
 
@@ -1568,6 +1572,30 @@ withFreeVarsBound ty q c = do
   tyVarContextInit <- fmap tyVarContext get
   modify $ \st -> st { tyVarContext = [(v, (KType, q)) | v <- freeVars ty] <> tyVarContext st }
   c <* modify (\st -> st { tyVarContext = tyVarContextInit })
+
+
+-- | Execute a checker with context from the instance head in scope.
+withInstanceContext :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker a -> MaybeT Checker a
+withInstanceContext sp iname ity c = do
+  context <- getInstanceContext sp iname ity
+  withFreeVarsBound (combinedType ity context) InstanceQ c
+
+
+-- | Get the constraint context available to a particular instance.
+getInstanceContext :: (?globals :: Globals) => Span -> Id -> Type -> MaybeT Checker [Type]
+getInstanceContext sp iname ity = do
+  maybeInstances <- lookupContext instanceContext iname
+  let maybeContext = maybeInstances >>= lookup ity
+  case maybeContext of
+    -- shouldn't happen, if we are calling this correctly
+    Nothing -> halt $ GenericError (Just sp)
+               $ concat ["could not retrieve context for instance ", prettyQuoted $ TyApp (TyCon iname) ity]
+    Just context -> pure context
+
+
+-- | Collapse a series of types into a single type.
+combinedType :: Type -> [Type] -> Type
+combinedType = foldl FunTy
 
 
 -- | Add a set of constraints to the typescheme.
