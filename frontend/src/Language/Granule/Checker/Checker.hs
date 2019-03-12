@@ -302,11 +302,7 @@ checkInstTy iname (IFaceDat sp ty) = do
   -- on the interface
   mapM_ (\c -> verifyConstraint sp c ty) icons
 
-  tyVarContextInit <- fmap tyVarContext get
-  modify $ \st -> st { tyVarContext = [(v, (KType, ForallQ)) | v <- freeVars ty] <> tyVarContext st }
-  tyKind <- inferKindOfType sp ty
-  modify $ \st -> st { tyVarContext = tyVarContextInit }
-
+  tyKind <- withFreeVarsBound ty ForallQ $ inferKindOfType sp ty
   when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind
 
 
@@ -1558,3 +1554,12 @@ verifyConstraint :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Chec
 verifyConstraint sp cty ivarty = do
   (TyApp (TyCon iname) reqInst) <- substituteConstraint sp cty ivarty
   verifyInstanceExists sp iname reqInst
+
+
+-- | @withFreeVarsBound ty q c@ executes the checker @c@, but with
+-- | free variables in @ty@ bound with quantifier @q@.
+withFreeVarsBound :: (?globals :: Globals) => Type -> Quantifier -> MaybeT Checker a -> MaybeT Checker a
+withFreeVarsBound ty q c = do
+  tyVarContextInit <- fmap tyVarContext get
+  modify $ \st -> st { tyVarContext = [(v, (KType, q)) | v <- freeVars ty] <> tyVarContext st }
+  c <* modify (\st -> st { tyVarContext = tyVarContextInit })
