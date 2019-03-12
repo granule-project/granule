@@ -220,11 +220,11 @@ checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 
 
 checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkIFaceHead (IFace sp name constrs kindAnn pname itys) = do
+checkIFaceHead iface@(IFace sp name constrs _ pname itys) = do
   mapM_ (kindCheckConstr sp [(pname, kind)]) constrs
   registerInterface sp name pname kind constrs ifsigs
   where
-    kind = case kindAnn of Nothing -> KType; Just k -> k
+    kind = interfaceParameterKind iface
     ifsigs = map (\(IFaceTy _ name tys) -> (name, tys)) itys
 
 
@@ -238,10 +238,10 @@ registerDefSig sp name tys@(Forall _ _ constrs _) = do
 
 -- | Check an interface's method signatures.
 checkIFaceTys :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkIFaceTys (IFace sp iname _ kindAnn pname itys) = do
+checkIFaceTys iface@(IFace sp iname _ _ pname itys) = do
   mapM_ (checkMethodSig iname (pname, pkind)) itys
   where
-    pkind = case kindAnn of Just k -> k; Nothing -> KType
+    pkind = interfaceParameterKind iface
 
 
 -- | Typecheck an interface method signature, and register it.
@@ -1602,3 +1602,8 @@ combinedType = foldl FunTy
 tysWithConstrs :: [Type] -> TypeScheme -> TypeScheme
 tysWithConstrs constrs' (Forall sp binds constrs ty) =
   Forall sp binds (constrs <> constrs') ty
+
+
+-- | Get the kind of the interface's parameter.
+interfaceParameterKind :: IFace -> Kind
+interfaceParameterKind (IFace _ _ _ kindAnn _ _) = fromMaybe KType kindAnn
