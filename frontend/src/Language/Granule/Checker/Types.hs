@@ -394,6 +394,8 @@ isDualSession sp _ t1 t2 _ = throw
 
 -- Essentially equality on types but join on any coeffects
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
+joinTypes s t t' | t == t' = return t
+
 joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
   t1j <- joinTypes s t1' t1 -- contravariance
   t2j <- joinTypes s t2 t2'
