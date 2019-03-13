@@ -1,4 +1,4 @@
 Type checking failed: 
   Counter example: 2:1:
   The following theorem associated with `flatten` is falsifiable:
-	(m * n = m * n)
+	( -> ( -> (1 = n) ∧ ( -> ((m * n) * 1 = m))))

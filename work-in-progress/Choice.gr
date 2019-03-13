@@ -40,5 +40,11 @@
 data Choice : Type -> Type -> Nat -> Type where
   MkChoice : forall {a : Type, b : Type,  m : Nat,  n : Nat}. a [0..m] -> b [0..n] -> Choice a b (m + n)
 
-chooseA : forall {a : Type, b : Type,  m : Nat,  n : Nat}. Choice a b (n + 1) -> (a, Choice a b n)
+chooseA : forall {a : Type, b : Type, n : Nat}. Choice a b (n + 1) -> (a, Choice a b n)
 chooseA (MkChoice [a] [b]) = (a, MkChoice [a] [b])
+
+chooseLeft : forall {a : Type, b : Type,  m : Nat,  n : Nat}. Choice a b 1 -> a
+chooseLeft (MkChoice [a] [_]) = a
+
+chooseRight : forall {a : Type, b : Type,  m : Nat,  n : Nat}. Choice a b 1 -> b
+chooseRight (MkChoice [_] [b]) = b

@@ -48,12 +48,3 @@ mult_r [n] (S m') = add n (mult_r [n] m')
 div2 : forall {n : Nat} . N (2 * n) -> N n
 div2 Z = Z;
 div2 (S (S x)) = S (div2 x)
-
---- Existential nat
-data NX where
-  NX : ∀ {n : Nat} . N n → NX
-
-
-natToNX : Int → NX
-natToNX 0 = NX Z;
-natToNX n = let (NX m) = natToNX (n - 1) in NX (S m)

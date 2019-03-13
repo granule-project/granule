@@ -1,4 +1,2 @@
-Type checking failed: 
-  Counter example: 5:1:
-  The following theorem associated with `foo` is falsifiable:
-	(0 ≤ n) ∧ ∀ n.80,t.53 . ((0 ≤ 0) ∧ (n = n80 + 1) ∧ ∃ t52 : Type . ¬((n = 0)) -> (0 ≤ n) ∧ (n81 + 1 ≤ n) ∧ (0 ≤ 0) ∧ (n80 = n81)) ∧ ∀ t.52 . ((n = 0) -> (0 ≤ n))
+Parse error: 
+  lexical error at line 4, column 61
