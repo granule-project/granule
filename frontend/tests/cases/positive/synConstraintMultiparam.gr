@@ -1,0 +1,4 @@
+interface Multiparam a b
+
+-- Constraint with multi-parameter application
+instance {Multiparam b a} => Multiparam a b

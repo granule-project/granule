@@ -3,7 +3,9 @@
 module Language.Granule.Checker.Interface
   ( getKindRequired
   , getInterfaceMembers
-  , getInterfaceParameter
+  , getInterfaceParameters
+  , getInterfaceParameterNames
+  , getInterfaceParameterKinds
   , getInterfaceSig
   , getInterfaceKind
   , getInterfaceConstraints
@@ -26,6 +28,7 @@ import Language.Granule.Context (Ctxt)
 import Language.Granule.Utils (Globals)
 
 import Language.Granule.Checker.Errors
+import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Monad
 
 
@@ -37,12 +40,22 @@ getInterface :: Id -> MaybeT Checker (Maybe IFaceCtxt)
 getInterface = lookupContext ifaceContext
 
 
-getInterfaceParameter :: Id -> MaybeT Checker (Maybe Id)
-getInterfaceParameter = fmap (fmap ifaceParam) . getInterface
+getInterfaceParameters :: Id -> MaybeT Checker (Maybe [(Id, Kind)])
+getInterfaceParameters = fmap (fmap ifaceParams) . getInterface
+
+
+getInterfaceParameterNames :: Id -> MaybeT Checker (Maybe [Id])
+getInterfaceParameterNames = fmap (fmap (fmap fst)) . getInterfaceParameters
+
+
+getInterfaceParameterKinds :: Id -> MaybeT Checker (Maybe [Kind])
+getInterfaceParameterKinds = fmap (fmap (fmap snd)) . getInterfaceParameters
 
 
 getInterfaceKind :: Id -> MaybeT Checker (Maybe Kind)
-getInterfaceKind = fmap (fmap $ ifaceParamKind) . getInterface
+getInterfaceKind iname = do
+  paramKinds <- fmap (fmap $ fmap snd) $ getInterfaceParameters iname
+  pure $ fmap (\pkinds -> foldr1 KFun (pkinds <> [KConstraint Interface])) paramKinds
 
 
 getInterfaceSigs :: Id -> MaybeT Checker (Maybe (Ctxt TypeScheme))
@@ -57,7 +70,7 @@ getInterfaceSig :: Id -> Id -> MaybeT Checker (Maybe TypeScheme)
 getInterfaceSig iname name = fmap join $ fmap (fmap $ lookup name) (getInterfaceSigs iname)
 
 
-getInterfaceConstraints :: Id -> MaybeT Checker (Maybe [Type])
+getInterfaceConstraints :: Id -> MaybeT Checker (Maybe [Inst])
 getInterfaceConstraints = fmap (fmap ifaceConstraints) . getInterface
 
 
@@ -66,7 +79,7 @@ getKindRequired :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
 getKindRequired sp name = do
   ikind <- getInterfaceKind name
   case ikind of
-    Just k -> pure (KFun k (KConstraint Interface))
+    Just k -> pure k
     Nothing -> do
       tyCon <- lookupContext typeConstructors name
       case tyCon of
@@ -83,5 +96,5 @@ getKindRequired sp name = do
 registerInstanceSig :: Id -> IFaceDat -> Id -> TypeScheme -> MaybeT Checker ()
 registerInstanceSig iname (IFaceDat _ ity) meth methTys =
     -- we lookup instances by the type application of the interface
-    let finTy = TyApp (TyCon iname) ity
+    let finTy = mkInst iname ity
     in modify' $ \s -> s { instanceSigs = M.insert (finTy, meth) methTys (instanceSigs s) }

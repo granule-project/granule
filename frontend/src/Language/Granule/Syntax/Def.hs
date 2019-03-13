@@ -76,8 +76,7 @@ data IFace =
   Span
   Id           -- ^ interface name
   [TConstraint] -- ^ constraints
-  (Maybe Kind) -- ^ kind of parameter
-  Id           -- ^ name of parameter
+  [(Id, Maybe Kind)] -- ^ parameters
   [IFaceTy]
   deriving (Show, Eq)
 
@@ -111,7 +110,7 @@ deriving instance (Show v, Show a) => Show (IDef v a)
 
 
 -- | Instance type
-data IFaceDat = IFaceDat Span Type
+data IFaceDat = IFaceDat Span [Type]
   deriving (Show, Generic, Eq)
 
 instance FirstParameter IFaceDat Span
@@ -142,12 +141,12 @@ instance Monad m => Freshenable m DataConstr where
     return $ DataConstrNonIndexed sp v ts
 
 instance Monad m => Freshenable m IFace where
-  freshen (IFace sp iname constrs kind pname itys) = do
-    pname' <- freshIdentifierBase Type pname
+  freshen (IFace sp iname constrs params itys) = do
+    params' <- mapM (both (freshIdentifierBase Type) freshen) params
     constrs' <- mapM freshen constrs
     itys' <- mapM freshen itys
-    kind' <- freshen kind
-    return $ IFace sp iname constrs' kind' pname' itys'
+    return $ IFace sp iname constrs' params' itys'
+    where both x y (z1,z2) = x z1 >>= (\z1' -> fmap ((,) z1') (y z2))
 
 instance Monad m => Freshenable m IFaceTy where
   freshen (IFaceTy sp name tys) = do
@@ -168,7 +167,7 @@ instance Monad m => Freshenable m (IDef v a) where
 
 instance Monad m => Freshenable m IFaceDat where
   freshen (IFaceDat sp tys) = do
-    mapM_ (freshIdentifierBase Type) (freeVars tys)
+    mapM_ (freshIdentifierBase Type) (concatMap freeVars tys)
     tys' <- freshen tys
     return $ IFaceDat sp tys'
 

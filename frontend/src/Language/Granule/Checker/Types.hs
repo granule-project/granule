@@ -34,6 +34,10 @@ module Language.Granule.Checker.Types
     , equalTypesWithUniversalSpecialisation
 
     , joinTypes
+
+    -- *** Instance Equality
+    , equalInstances
+    , instancesAreEqual
     ) where
 
 import Control.Monad.State.Strict
@@ -42,6 +46,7 @@ import Data.List
 
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
+import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -167,9 +172,14 @@ equalityResultIsSuccess :: EqualityResult -> Bool
 equalityResultIsSuccess = either (const False) (const True)
 
 
+-- | A proof of a trivial equality ('x' and 'y' are equal because we say so).
+trivialEquality' :: EqualityResult
+trivialEquality' = pure ([], [])
+
+
 -- | Equality where nothing needs to be done.
 trivialEquality :: MaybeT Checker EqualityResult
-trivialEquality = pure $ Right ([], [])
+trivialEquality = pure trivialEquality'
 
 
 -- | Attempt to prove equality using the result of a previous proof.
@@ -643,3 +653,21 @@ joinTypes s t1 t2 = do
   halt $ GenericError (Just s)
     $ "Type '" <> pretty t1 <> "' and '"
                <> pretty t2 <> "' have no upper bound"
+
+
+----------------------------
+----- Instance Helpers -----
+----------------------------
+
+
+-- | Prove or disprove the equality of two instances in the current context.
+equalInstances :: (?globals :: Globals) => Span -> Inst -> Inst -> MaybeT Checker EqualityResult
+equalInstances sp instx insty =
+  let ts1 = instParams instx
+      ts2 = instParams insty
+  in foldM (\eq (t1,t2) -> equalTypes sp t1 t2 >>= combinedEqualities sp eq) trivialEquality' (zip ts1 ts2)
+
+
+-- | True if the two instances can be proven to be equal in the current context.
+instancesAreEqual :: (?globals :: Globals) => Span -> Inst -> Inst -> MaybeT Checker Bool
+instancesAreEqual s t1 t2 = fmap equalityResultIsSuccess $ equalInstances s t1 t2

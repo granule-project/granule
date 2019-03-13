@@ -1,0 +1,5 @@
+interface Multiparam a b
+
+data A = A
+
+instance Multiparam A A

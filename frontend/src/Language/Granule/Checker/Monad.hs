@@ -16,6 +16,7 @@ import Control.Monad.Identity
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Errors
+import Language.Granule.Checker.Instance (Inst)
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
@@ -91,10 +92,9 @@ meetConsumption Full Empty = NotFull
 
 
 data IFaceCtxt = IFaceCtxt
-  { ifaceParam :: Id
-  , ifaceParamKind :: Kind
+  { ifaceParams :: [(Id, Kind)]
   , ifaceSigs :: Ctxt TypeScheme
-  , ifaceConstraints :: [Type]
+  , ifaceConstraints :: [Inst]
   } deriving (Show, Eq)
 
 data CheckerState = CS
@@ -128,11 +128,11 @@ data CheckerState = CS
 
             -- Interface information
             , ifaceContext :: Ctxt IFaceCtxt
-            , instanceContext :: Ctxt [(Type, [Type])]
-            , instanceSigs :: M.Map (Type, Id) TypeScheme
-            , expandedConstraints :: Ctxt [Type]
+            , instanceContext :: Ctxt [(Inst, [Type])]
+            , instanceSigs :: M.Map (Inst, Id) TypeScheme
+            , expandedConstraints :: Ctxt [Inst]
             -- Context of interface constraints
-            , iconsContext :: [Type]
+            , iconsContext :: [Inst]
 
             -- context of definition types
             , defContext :: Ctxt TypeScheme
@@ -210,10 +210,9 @@ getTyConKind :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
 getTyConKind sp name = fmap fst $ requireInScope (typeConstructors, "Type constructor") sp name
 
 
-registerInterface :: (?globals :: Globals) => Span -> Id -> Id -> Kind -> [Type] -> Ctxt TypeScheme -> MaybeT Checker ()
-registerInterface sp name pname kind constrs sigs = do
-  let ifaceCtxt = IFaceCtxt { ifaceParam = pname
-                            , ifaceParamKind = kind
+registerInterface :: (?globals :: Globals) => Span -> Id -> [(Id, Kind)] -> [Inst] -> Ctxt TypeScheme -> MaybeT Checker ()
+registerInterface sp name params constrs sigs = do
+  let ifaceCtxt = IFaceCtxt { ifaceParams = params
                             , ifaceSigs = sigs
                             , ifaceConstraints = constrs
                             }
@@ -221,12 +220,12 @@ registerInterface sp name pname kind constrs sigs = do
   modify' $ \st -> st { ifaceContext = (name, ifaceCtxt) : ifaceContext st }
 
 
-registerExpandedConstraints :: Span -> Id -> [Type] -> MaybeT Checker ()
+registerExpandedConstraints :: Span -> Id -> [Inst] -> MaybeT Checker ()
 registerExpandedConstraints sp name constrs =
     modify' $ \st -> st { expandedConstraints = (name, constrs) : expandedConstraints st }
 
 
-getConstraintsExpanded :: (?globals :: Globals) => Span -> Id -> MaybeT Checker [Type]
+getConstraintsExpanded :: (?globals :: Globals) => Span -> Id -> MaybeT Checker [Inst]
 getConstraintsExpanded sp n = do
     maybeConstrs <- lookupContext expandedConstraints n
     maybe (halt . GenericError (Just sp) $
@@ -235,15 +234,15 @@ getConstraintsExpanded sp n = do
 
 
 -- | Get the set of interface constraints in scope.
-getIConstraints :: (?globals :: Globals) => MaybeT Checker [Type]
+getIConstraints :: (?globals :: Globals) => MaybeT Checker [Inst]
 getIConstraints = fmap iconsContext get
 
 
-putIcons :: [Type] -> MaybeT Checker ()
+putIcons :: [Inst] -> MaybeT Checker ()
 putIcons ts = modify' $ \st -> st { iconsContext = nub ts }
 
 
-addIConstraint :: Type -> MaybeT Checker ()
+addIConstraint :: Inst -> MaybeT Checker ()
 addIConstraint ty =
   modify' $ \st -> st { iconsContext = nub $ ty : iconsContext st }
 

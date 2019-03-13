@@ -8,7 +8,8 @@ module Language.Granule.Checker.Substitution where
 
 import Control.Monad
 import Control.Monad.State.Strict
-import Data.Maybe (mapMaybe)
+import Data.Function (on)
+import Data.Maybe (catMaybes, mapMaybe)
 import Data.Bifunctor.Foldable (bicataM)
 
 import Language.Granule.Context
@@ -23,6 +24,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
+import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -489,7 +491,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
 
-  -> MaybeT Checker (Type, Ctxt Kind, Substitution, ([Type], [Type]), Substitution)
+  -> MaybeT Checker (Type, Ctxt Kind, Substitution, ([Type], [Inst]), Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
@@ -505,7 +507,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     let subst = map (\(v, (_, var)) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
     constr' <- mapM (substitute subst) constr
     predicateConstraints <- filterM isPredicateConstraint constr'
-    interfaceConstraints <- filterM isInterfaceConstraint constr'
+    interfaceConstraints <- fmap (catMaybes . fmap instFromTy) $ filterM isInterfaceConstraint constr'
 
     -- Return the type and all instance variables
     let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
@@ -691,3 +693,13 @@ instance Substitutable (Pattern Type) where
           return $ PConstr sp ann' nm pats)
 
   unify _ _ = error "Can't unify equations"
+
+
+instance Substitutable Inst where
+  substitute ctxt inst = do
+    let iname = instIFace inst
+        params = instParams inst
+    params' <- mapM (substitute ctxt) params
+    pure $ mkInst iname params'
+
+  unify = unify `on` tyFromInst

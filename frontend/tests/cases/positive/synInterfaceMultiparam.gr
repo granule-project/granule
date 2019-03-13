@@ -1,0 +1,2 @@
+-- An interface with multiple parameters
+interface Multiparam a b

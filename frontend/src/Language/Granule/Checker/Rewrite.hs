@@ -37,6 +37,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Utils
 
+import Language.Granule.Checker.Instance
 import qualified Language.Granule.Checker.Monad as C
 import qualified Language.Granule.Checker.Substitution as Sub
 
@@ -44,26 +45,21 @@ import Language.Granule.Checker.Rewrite.Type
 
 
 -- | Return a unique (in scope) variable representing the interface
--- | dictionary at the given type.
-mkDictVar :: (?globals :: Globals) => Id -> Type -> Id
-mkDictVar name ty = mkId $ "$" <> pretty name <> "(" <> pretty ty <> ")"
+-- | dictionary at the given instance.
+mkDictVar :: (?globals :: Globals) => Id -> [Type] -> Id
+mkDictVar name idt = mkId $ "$" <> pretty name <> "(" <> pretty idt <> ")"
+
+
+-- | Return the name of the dictionary variable for an instance.
+dictVarFromInst :: (?globals :: Globals) => Inst -> Id
+dictVarFromInst inst = mkId $ "$(" <> pretty inst <> ")"
 
 
 -- | Return a unique (in scope) variable representing the interface
 -- | dictionary at the given type.
 mkDictVarFromCon :: (?globals :: Globals) => Type -> Id
-mkDictVarFromCon (TyApp (TyCon iname) ty) = mkDictVar iname ty
+mkDictVarFromCon (TyApp (TyCon iname) ty) = mkDictVar iname [ty]
 mkDictVarFromCon t = error $ "attempt to make a dict var from type: " <> pretty t
-
-
--- | Generate a fresh dictionary variable for an instance.
-freshDictName :: (?globals :: Globals) => Id -> IFaceDat -> Id
-freshDictName name (IFaceDat _ ty) = mkDictVar name ty
-
-
--- | Get the name of the dictionary type constructor for the interface.
-getDictTyCon :: (?globals :: Globals) => Id -> Type
-getDictTyCon n = TyCon n
 
 
 -- | Get the id of the data constructor for the interface.
@@ -210,20 +206,19 @@ rewriteWithoutInterfaces renv ast =
 --   bar2 (MkBar [_] [_] [m]) = m
 -- @
 rewriteInterface :: (?globals :: Globals) => IFace -> Rewriter (DataDecl, [Def v ()])
-rewriteInterface (IFace sp iname _constrs kind pname itys) = do
+rewriteInterface (IFace sp iname _constrs params itys) = do
     let numMethods = length itys
         dname = ifaceConId iname
         dcon = case collectMethodBindings itys of
                  [] -> DataConstrNonIndexed sp dname typs
                  binds -> DataConstrIndexed sp dname
                    (mkSig binds . mkFunFap1 $ typs <> [dty])
-        pKind = fromMaybe KType kind
-        pBind = (pname, pKind)
-        ddcl = DataDecl sp iname [pBind] Nothing [dcon]
+        pBinds = fmap (\(n,k) -> (n, fromMaybe KType k)) params
+        ddcl = DataDecl sp iname pBinds Nothing [dcon]
         typs = let typs1 = fmap (ityName &&& ityToTy) itys
                in fmap snd $ sortBy (compare `on` fst) typs1
         defs = fmap ityToDef (zip (sortBy (compare `on` ityName) itys) [1..])
-        dty = TyApp (TyCon iname) (TyVar pname)
+        dty = mkTyApp (TyCon iname) (fmap (TyVar . fst) params)
         matchVar = mkId "$match"
         mkPat i =
             let wildMatches = replicate numMethods
@@ -232,7 +227,7 @@ rewriteInterface (IFace sp iname _constrs kind pname itys) = do
                 pats = tail wbefore <> [mkBoxedVar matchVar] <> wafter
             in PConstr nullSpanNoFile () dname pats
         ityToDef ((IFaceTy sp' n (Forall _ q c ty)), i) =
-            let binds = nub $ q <> [pBind]
+            let binds = nub $ q <> pBinds
                 ty' = FunTy dty ty
             in Def sp' n [Equation sp' () [mkPat i]
                                        (Val sp' () (Var () matchVar))]
@@ -262,18 +257,18 @@ rewriteInterface (IFace sp iname _constrs kind pname itys) = do
 --   barA = MkBar [fooA] [\Av -> Av] [Av]
 -- @
 rewriteInstance :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
-rewriteInstance inst@(Instance sp iname iconstrs idt@(IFaceDat _ ty) _) = do
+rewriteInstance inst@(Instance sp iname iconstrs idt@(IFaceDat _ idtys) _) = do
     idictConstructed <- constructIDict inst
     let iconstrs' = fmap mkInfBoxTy iconstrs
+        instc = mkInst iname idtys
     pats <- rewriteWithConstrPats iconstrs' []
-    let dictName = freshDictName iname idt
-        idictTyCon = getDictTyCon iname
-        constrsTys = mkFunFap (TyApp idictTyCon ty) iconstrs'
+    let dictName = dictVarFromInst instc
+        constrsTys = mkFunFap (tyFromInst instc) iconstrs'
         binds = fmap (\v -> (v, KType)) (nub $ freeVars constrsTys)
         tys = Forall sp binds [] constrsTys
         eqn = Equation sp () pats idictConstructed
         def = Def sp dictName [eqn] tys
-    registerIFun iname ty def
+    registerIFun iname idt def
     pure def
 
 
@@ -433,21 +428,21 @@ dictArgsFromTy (FunTy t ts) = do
     iface <- extractIFaceTy t
     case iface of
       Nothing -> pure []
-      Just (isBoxed, iname, ity) -> do
+      Just (isBoxed, inst) -> do
         dexp <- (do
-             d <- getConcreteInstExpr iname ity
+             d <- getConcreteInstExpr inst
              -- we must assume that the arg comes from a passed
              -- argument if the result is 'Nothing'
-             let dname = mkDictVar iname ity
+             let dname = dictVarFromInst inst
              pure . (if isBoxed then boxExpr else id)
                       $ fromMaybe (mkVarExpr dname) d)
         fmap (dexp:) (dictArgsFromTy ts)
 dictArgsFromTy _ = pure []
 
 
-getConcreteInstExpr :: (?globals :: Globals) => Id -> Type -> Rewriter (Maybe (Expr v ()))
-getConcreteInstExpr iname ity = do
-    instFun <- lookupFirstInstFun iname ity
+getConcreteInstExpr :: (?globals :: Globals) => Inst -> Rewriter (Maybe (Expr v ()))
+getConcreteInstExpr inst = do
+    instFun <- lookupFirstInstFun inst
     maybe (pure Nothing) (fmap Just . extractInstFun) instFun
     where extractInstFun (Concrete dname) =
             pure $ Val nullSpanNoFile () (Var () dname)
@@ -461,17 +456,18 @@ getConcreteInstExpr iname ity = do
 data IDictFun = Concrete Id | Constrained Id Type
 
 
-lookupFirstInstFun :: (?globals :: Globals) => Id -> Type -> Rewriter (Maybe IDictFun)
+lookupFirstInstFun :: (?globals :: Globals) => Inst -> Rewriter (Maybe IDictFun)
 -- TODO: add support for fully polymorphic instances (GuiltyDolphin - 2019-03-03)
-lookupFirstInstFun _ (TyVar _) = pure Nothing
-lookupFirstInstFun iname ty = do
+lookupFirstInstFun inst | isFullyPolymorphicInstance inst = pure Nothing
+lookupFirstInstFun inst = do
+  let iname = instIFace inst
   instFuns <- lookupIfaceIfuns iname
   maybe (pure Nothing) firstUnifyingFun instFuns
   where firstUnifyingFun [] = pure Nothing
-        firstUnifyingFun ((t, (Def _ dname _ dtys)):xs) = do
-            if (t == ty) then pure . Just $ Concrete dname
+        firstUnifyingFun ((i, (Def _ dname _ dtys)):xs) = do
+            if (i == inst) then pure . Just $ Concrete dname
             else do
-              unif <- fmap join $ runMaybeTCheckerInRewriter (Sub.unify t ty)
+              unif <- fmap join $ runMaybeTCheckerInRewriter (Sub.unify i inst)
               maybe (firstUnifyingFun xs) (\sbst -> do
                 maybeDTys <- runMaybeTCheckerInRewriter (Sub.substitute sbst dtys)
                 pure $ fmap (\(Forall _ _ _ dty) -> Constrained dname dty) maybeDTys) unif
@@ -499,7 +495,7 @@ rewriteValue v = pure . mapValueAnnotation (const ()) $ v
 -- | Interface constraints simply become standard types.
 rewriteTypeScheme :: Id -> TypeScheme -> Bool -> Rewriter (TypeScheme, [Type])
 rewriteTypeScheme n (Forall sp binds cts ty) doExpand = do
-  constrs <- if doExpand then fmap (fmap mkInfBoxTy) (expandConstraints n) else pure cts
+  constrs <- if doExpand then fmap (fmap (mkInfBoxTy . tyFromInst)) (expandConstraints n) else pure cts
   let funty = mkFunFap ty constrs
   pure (Forall sp binds [] funty, constrs)
 
@@ -511,6 +507,10 @@ rewriteTypeScheme n (Forall sp binds cts ty) doExpand = do
 
 mkFap :: Expr v () -> [Expr v ()] -> Expr v ()
 mkFap = foldl' (App nullSpanNoFile ())
+
+
+mkTyApp :: Type -> [Type] -> Type
+mkTyApp = foldl' TyApp
 
 
 mkFunFap :: Type -> [Type] -> Type
@@ -555,13 +555,16 @@ mkSig binds ty = Forall nullSpanNoFile binds [] ty
 --       (GuiltyDolphin - 2019-03-07)
 
 
--- | Attempt to extract interface information from the type.
+-- | Attempt to extract instance information from the type.
 -- |
--- | Returns (isBoxed, name, instTy) if successful, Nothing otherwise.
-extractIFaceTy :: Type -> Rewriter (Maybe (Bool, Id, Type))
+-- | Returns (isBoxed, inst) if successful, Nothing otherwise.
+extractIFaceTy :: Type -> Rewriter (Maybe (Bool, Inst))
 extractIFaceTy (Box _ t) =
-    fmap (fmap (\(_,n,ty) -> (True, n, ty))) $ extractIFaceTy t
-extractIFaceTy (TyApp (TyCon n) ty) = do
-    isIface <- isInterfaceVar n
-    pure $ if isIface then Just (False, n, ty) else Nothing
-extractIFaceTy _ = pure Nothing
+  fmap (fmap (\(_,inst) -> (True, inst))) $ extractIFaceTy t
+extractIFaceTy t =
+  case instFromTy t of
+    Nothing -> pure Nothing
+    Just inst -> do
+      let n = instIFace inst
+      isIface <- isInterfaceVar n
+      pure $ if isIface then Just (False, inst) else Nothing

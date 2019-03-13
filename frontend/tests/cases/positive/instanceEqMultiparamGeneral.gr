@@ -1,0 +1,9 @@
+data Bool = True | False
+
+interface Eq a b where
+  equal : a -> b -> Bool
+
+
+-- Polymorphic instance that flips parameters
+instance {Eq a b} => Eq b a where
+  equal x y = equal y x

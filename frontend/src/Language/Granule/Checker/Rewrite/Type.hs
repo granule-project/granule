@@ -44,6 +44,8 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 
+import Language.Granule.Checker.Instance
+
 
 --------------------------
 ----- Rewriter Monad -----
@@ -60,7 +62,7 @@ type DefMap = Ctxt (Def () ())
 
 -- | A mapping from interface names to their
 -- | dictionary instances.
-type IFunMap = M.Map Id [(Type, Def () ())]
+type IFunMap = M.Map Id [(Inst, Def () ())]
 
 
 data RewriteState = RewriteState {
@@ -103,17 +105,17 @@ modifyInstFuns f = modify' $ \s -> s { rsInstFuns = f (rsInstFuns s) }
 -- |
 -- | This is the application of an interface type
 -- | constructor to an instance type.
-type InstanceId = Type
+type InstanceId = Inst
 
 
 mkInstanceId :: Instance v a -> InstanceId
-mkInstanceId (Instance _ iname _ (IFaceDat _ ty) _) = TyApp (TyCon iname) ty
+mkInstanceId (Instance _ iname _ (IFaceDat _ idt) _) = mkInst iname idt
 
 
 data RewriteEnv = RewriteEnv {
       -- ^ Instantiated type signatures for instances.
       instanceSignatures :: [((InstanceId, Id), TypeScheme)]
-    , expandedConstraints :: Ctxt [Type]
+    , expandedConstraints :: Ctxt [Inst]
     }
 
 
@@ -147,7 +149,7 @@ runNewRewriter r renv = execRewriter r renv startRewriteState
 
 
 -- | Build an environment for the rewriter.
-buildRewriterEnv :: [((InstanceId, Id), TypeScheme)] -> Ctxt [Type] -> RewriteEnv
+buildRewriterEnv :: [((InstanceId, Id), TypeScheme)] -> Ctxt [Inst] -> RewriteEnv
 buildRewriterEnv = RewriteEnv
 
 
@@ -196,19 +198,19 @@ isInterfaceVar :: Id -> Rewriter Bool
 isInterfaceVar n = fmap (elem n) getInterfaces
 
 
-getExpandedConstraints :: Rewriter (Ctxt [Type])
+getExpandedConstraints :: Rewriter (Ctxt [Inst])
 getExpandedConstraints = fmap expandedConstraints ask
 
 
-expandConstraints :: Id -> Rewriter [Type]
+expandConstraints :: Id -> Rewriter [Inst]
 expandConstraints n = do
   exps <- getExpandedConstraints
   maybe illFormedEnvError pure (lookup n exps)
 
 
-registerIFun :: Id -> Type -> Def () () -> Rewriter ()
-registerIFun n ty def = modifyInstFuns (M.insertWith (<>) n [(ty, def)])
+registerIFun :: Id -> IFaceDat -> Def () () -> Rewriter ()
+registerIFun n (IFaceDat _ idt) def = modifyInstFuns (M.insertWith (<>) n [(mkInst n idt, def)])
 
 
-lookupIfaceIfuns :: Id -> Rewriter (Maybe [(Type, Def () ())])
+lookupIfaceIfuns :: Id -> Rewriter (Maybe [(Inst, Def () ())])
 lookupIfaceIfuns n = fmap (M.lookup n . rsInstFuns) get

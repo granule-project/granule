@@ -212,15 +212,17 @@ instance Pretty DataConstr where
     prettyL l (DataConstrNonIndexed _ name params) = unwords $ prettyL l name : map (prettyL (l+1)) params
 
 instance Pretty IFace where
-    prettyL l (IFace _ iName constrs kind paramName tys) =
+    prettyL l (IFace _ iName constrs params tys) =
       concat ["interface ", constrStr, pretty iName, " ", pStr, sigStr]
       where
         constrStr =
           case constrs of
             [] -> ""
             cs -> prettyConstraintsBraces cs
-        pStr = maybe (pretty paramName)
-          (\k -> parens' $ prettyColonSep 0 paramName k) kind
+        pStr = unwords $ fmap (\(paramName, kind) ->
+                           maybe (pretty paramName)
+                                 (parens' . prettyColonSep 0 paramName)
+                                 kind) params
         sigStr = case tys of
                    [] -> ""
                    _  -> "where\n" <> tyStr
@@ -243,7 +245,7 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
                   _  -> "where\n  " <> prettySemiSep 0 defs
 
 instance Pretty IFaceDat where
-    prettyL l (IFaceDat _ ty) = prettyTy l ty
+    prettyL l (IFaceDat _ ty) = unwords (fmap (prettyTy l) ty)
 
 
 instance (Pretty v, Pretty a) => Pretty (IDef v a) where
