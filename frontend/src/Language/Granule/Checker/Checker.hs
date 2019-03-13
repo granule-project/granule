@@ -928,9 +928,9 @@ solveConstraints predicate s name = do
       simplPred <- simplifyPred predicate
       if msg' == "is Falsifiable\n"
         then throw SolverErrorFalsifiableTheorem
-          { errLoc = s, errDefId = name, errPred = simplPred }
+          { errLoc = s, errDefId = name, errPred = predicate }
         else throw SolverErrorCounterExample
-          { errLoc = s, errDefId = name, errPred = simplPred }
+          { errLoc = s, errDefId = name, errPred = predicate }
     NotValidTrivial unsats ->
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout ->
@@ -1266,7 +1266,7 @@ checkGuardsForImpossibility s name = do
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
-    p <- simplifyPred p
+    -- p <- simplifyPred p
 
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
