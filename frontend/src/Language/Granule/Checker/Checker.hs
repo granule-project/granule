@@ -362,7 +362,7 @@ checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()
 checkDefTy d@(Def sp name _ tys) = do
-  kindCheckDef d
+  kindCheckSig sp tys
   registerDefSig sp name tys
 
 

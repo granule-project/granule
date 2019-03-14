@@ -3,8 +3,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Kinds (
-                      kindCheckDef
-                    , kindCheckSig
+                      kindCheckSig
                     , kindCheckConstr
                     , inferKindOfType
                     , inferKindOfType'
@@ -29,7 +28,6 @@ import Language.Granule.Checker.Interface (getKindRequired)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 
-import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -58,6 +56,7 @@ kindCheckConstr s qvars ty = do
     -- comparing to '(KConstraint Interface)' or '(KConstraint Predicate)'
     _ -> illKindedNEq s (KConstraint Interface) kind
 
+
 -- Currently we expect that a type scheme has kind KType
 kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
 kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
@@ -71,9 +70,6 @@ kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
     KType -> modify (\st -> st { tyVarContext = [] })
     KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> illKindedNEq s KType kind
-
-kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ f) = kindCheckSig s f
 
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
