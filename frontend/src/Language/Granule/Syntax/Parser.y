@@ -313,8 +313,8 @@ TyJuxt :: { Type }
 Constraint :: { Type }
   : TyAtom '>' TyAtom         { TyInfix TyOpGreater $1 $3 }
   | TyAtom '<' TyAtom         { TyInfix TyOpLesser $1 $3 }
-  | TyAtom '<=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
-  | TyAtom '>=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '>=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
 

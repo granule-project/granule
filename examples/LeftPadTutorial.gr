@@ -1,0 +1,114 @@
+-- The following demonstrates the interaction between linear, indexed,
+-- and graded modal types in Granule via the function `leftPad`
+
+-- `leftPad` takes a vector and a value and pads the vector to a
+-- desired length with that value
+
+-- First, let's start by defining some indexed types, which in
+-- Granule follow Haskell's GADT syntax.
+
+-- The following gives the data types for sized-indexed vectors
+
+data Vec (n : Nat) (a : Type) where
+  Nil : Vec 0 a;
+  Cons : a -> Vec n a -> Vec (n + 1) a
+
+-- And the "singleton" representation for indexed naturals:
+
+data N (n : Nat) where
+  Z : N 0;
+  S : N n -> N (n + 1)
+
+-- We can then define the standard kinds of functions on size-indexed
+-- vectors, e.g., append
+
+append : forall {t : Type, n : Nat, m : Nat} . Vec n t -> Vec m t -> Vec (n + m) t
+append Nil ys = ys;
+append (Cons x xs) ys = Cons x (append xs ys)
+
+-- Indexed types give us the useful property that the length of the
+-- output list is indeed the sum of the length of the inputs. But
+-- because Granule is linear we also get the additional guarantee
+-- that: every element from the inputs must appear in the output. In a
+-- nonlinear setting, the implementation of this type could drop and
+-- copy values, as long as the output has the correct length.
+
+-- The length function on a vector ignores the elements in the
+-- vector. Thus in Granule, we can leverage the graded modal types
+-- to explain that `length` uses the elements of a vector precisely
+-- 0 times:
+
+length : forall {t : Type, n : Nat} . Vec n (t [0]) -> N n
+length Nil = Z;
+length (Cons [_] xs) = S (length xs)
+
+-- Alternatively, we can reconstruct the vector and return it
+-- whilst also building the length:
+
+length' : forall {t : Type, n : Nat} . Vec n t -> (N n, Vec n t)
+length' Nil = (Z, Nil);
+length' (Cons x xs) =
+  let (n, xs) = length' xs in (S n, Cons x xs)
+
+-- Granule brings graded and indexed types together so that we
+-- can have graded modal types that explain how the usage of a
+-- value depends on other values. For example, when we replicate
+-- a value to create a vector of a particular size, we consume
+-- that value exactly the number of times as the desired length
+-- of the output vector:
+
+replicate : forall {t : Type, n : Nat} . N n -> t [n] -> Vec n t
+replicate Z [c] = Nil;
+replicate (S n) [c] = Cons c (replicate n [c])
+
+-- We can now define left pad with one further helper combinator
+-- that subtracts two indexed naturals:
+
+sub : forall {m : Nat, n : Nat} . {m >= n} => N m -> N n -> N (m - n)
+sub m Z = m;
+sub (S m') (S n') = sub m' n'
+
+-- Note that this also shows off Granule's "refinement type" style
+-- predicates, where before => in the type we have a precondition
+-- that `m` is greater than or equal to `n`.
+
+-- Finally we can put all these together to give the definition
+-- of `leftPad`:
+
+leftPad : forall {t : Type, m : Nat, n : Nat}
+        . {m >= n} => Vec n t -> t [m - n] -> N m -> Vec m t
+leftPad str [c] n =
+  let (m, str) = length' str
+  in append (replicate (sub n m) [c]) str
+
+-- The type says that given a target length an input vector of length `n`
+-- and a target length `m` that is greater than or equal to `m`, then we
+-- must consume the padding element of type `t` exactly `m - n` times to
+-- produce the output vector of the target `m`.
+
+-- In Granule this type alone implies the specification---modulo reorderings---via:
+--  * Parametric polymorphism: ensuring that the implementation cannot depend
+--   on the concrete padding items provided or the items of the input list (hence we
+--   use lists instead of strings;
+-- * Indexed types ensuring the correct size and explaining the exact
+--    usage of the padding element;
+-- * Graded linearity: ensuring that every item in the input list appears
+--   exactly once in the output. The type `t [m - n]` of the padding element
+--   reveals its exact usage.
+
+-- The type of \granin{leftPad} in Granule is superficially similar to what we could
+-- write in GHC Haskell or a fully dependently-typed language, except for the
+-- nonlinearity of the padding element, a minor syntactic addition. However the
+-- extra guarantees we get in a graded linear system like Granule's means we get
+-- properties for free which we would otherwise have to prove ourselves.
+
+-- Let's run it!
+-- e.g., take an `input` vector of length 3 containing integers...
+
+input : Vec 3 Int
+input = Cons 1 (Cons 2 (Cons 3 Nil))
+
+-- ... pad it on the "left" of the vector with the value 0 until it a vector length 6
+
+main : Vec 6 Int
+main = leftPad input [0] (S (S (S (S (S (S Z))))))
