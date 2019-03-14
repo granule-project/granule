@@ -145,6 +145,15 @@ miscErr :: (?globals :: Globals) => CheckerError -> MaybeT Checker EqualityResul
 miscErr = equalityErr
 
 
+-- | Infer a kind for the given type (promoting any errors to the inequality reason),
+-- | and run the prover on the kind.
+withInferredKind :: (?globals :: Globals) => Span -> Type
+                 -> (Kind -> MaybeT Checker EqualityResult)
+                 -> MaybeT Checker EqualityResult
+withInferredKind sp t c =
+  inferKindOfTypeSafe sp t >>= either miscErr c
+
+
 --------------------------
 ----- Equality types -----
 --------------------------
@@ -431,13 +440,12 @@ equalTypesRelatedCoeffects s _ sp (TyVar n) (TyVar m) = do
       case k1 `joinKind` k2 of
         Just (KPromote (TyCon kc)) -> do
 
-          k <- inferKindOfType s (TyCon kc)
+          withInferredKind s (TyCon kc) $ \k -> do
           -- Create solver vars for coeffects
-          case k of
-            KCoeffect -> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
-            _         -> return ()
-
-          pure $ equalWith ([], [(m, SubstT $ TyVar n)])
+          let constrs = case k of
+                          KCoeffect -> [Eq s (CVar n) (CVar m) (TyCon kc)]
+                          _ -> []
+          pure $ equalWith (constrs, [(m, SubstT $ TyVar n)])
         Just _ ->
           pure $ equalWith ([], [(m, SubstT $ TyVar n)])
         Nothing -> unequalNotSpecified s n m
@@ -462,33 +470,33 @@ equalTypesRelatedCoeffects s rel sp (TyVar n) t = do
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ && sp /= PatternCtxt) -> do
-      k2 <- inferKindOfType s t
-      case k1 `joinKind` k2 of
-        Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
+      withInferredKind s t $ \k2 ->
+        case k1 `joinKind` k2 of
+          Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
 
-        -- If the kind is Nat, then create a solver constraint
-        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
-          nat <- compileNatKindedTypeToCoeffect s t
-          pure $ equalWith ([Eq s (CVar n) nat (TyCon $ mkId "Nat")], [(n, SubstT t)])
+          -- If the kind is Nat, then create a solver constraint
+          Just (KPromote (TyCon (internalName -> "Nat"))) -> do
+            nat <- compileNatKindedTypeToCoeffect s t
+            pure $ equalWith ([Eq s (CVar n) nat (TyCon $ mkId "Nat")], [(n, SubstT t)])
 
-        Just _ -> pure $ equalWith ([], [(n, SubstT t)])
+          Just _ -> pure $ equalWith ([], [(n, SubstT t)])
 
     -- NEW
 
     (Just (k1, ForallQ)) -> do
        -- Infer the kind of this equality
-       k2 <- inferKindOfType s t
-       let kind = k1 `joinKind` k2
+       withInferredKind s t $ \k2 -> do
+         let kind = k1 `joinKind` k2
 
-       -- If the kind if nat then set up and equation as there might be a
-       -- pausible equation involving the quantified variable
-       if (kind == Just (KPromote (TyCon (Id "Nat" "Nat"))))
-         then do
-           c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
-           c2 <- compileNatKindedTypeToCoeffect s t
-           pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [(n, SubstT t)])
+         -- If the kind if nat then set up and equation as there might be a
+         -- pausible equation involving the quantified variable
+         if (kind == Just (KPromote (TyCon (Id "Nat" "Nat"))))
+           then do
+             c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
+             c2 <- compileNatKindedTypeToCoeffect s t
+             pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [(n, SubstT t)])
 
-         else cannotUnifyUniversalWithConcrete s n kind t
+           else cannotUnifyUniversalWithConcrete s n kind t
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -527,22 +535,21 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals)
     -> Type
     -> MaybeT Checker EqualityResult
 equalOtherKindedTypesGeneric s t1 t2 = do
-  k1 <- inferKindOfType s t1
-  k2 <- inferKindOfType s t2
-  if k1 == k2 then
-    case k1 of
-      KPromote (TyCon (internalName -> "Nat")) -> do
-        c1 <- compileNatKindedTypeToCoeffect s t1
-        c2 <- compileNatKindedTypeToCoeffect s t2
-        pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [])
+  withInferredKind s t1 $ \k1 -> withInferredKind s t2 $ \k2 ->
+    if k1 == k2 then
+      case k1 of
+        KPromote (TyCon (internalName -> "Nat")) -> do
+          c1 <- compileNatKindedTypeToCoeffect s t1
+          c2 <- compileNatKindedTypeToCoeffect s t2
+          pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [])
 
-      KPromote (TyCon (internalName -> "Protocol")) ->
-        sessionInequality s t1 t2
+        KPromote (TyCon (internalName -> "Protocol")) ->
+          sessionInequality s t1 t2
 
-      KType -> nonUnifiable s t1 t2
+        KType -> nonUnifiable s t1 t2
 
-      _ -> kindEqualityIsUndefined s k1 k2 t1 t2
-  else nonUnifiable s t1 t2
+        _ -> kindEqualityIsUndefined s k1 k2 t1 t2
+    else nonUnifiable s t1 t2
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
