@@ -86,21 +86,26 @@ leftPad str [c] n =
 -- must consume the padding element of type `t` exactly `m - n` times to
 -- produce the output vector of the target `m`.
 
--- In Granule this type alone implies the specification---modulo reorderings---via:
---  * Parametric polymorphism: ensuring that the implementation cannot depend
---   on the concrete padding items provided or the items of the input list (hence we
---   use lists instead of strings;
+-- In Granule this type alone implies the specification---modulo
+-- reordering of elements---via:
+--
+--  * Parametric polymorphism: ensuring that the implementation cannot
+--   depend on the concrete padding items provided or the items of the
+--   input list (hence we use lists instead of strings;
+--
 -- * Indexed types ensuring the correct size and explaining the exact
---    usage of the padding element;
--- * Graded linearity: ensuring that every item in the input list appears
---   exactly once in the output. The type `t [m - n]` of the padding element
---   reveals its exact usage.
+-- usage of the padding element;
+--
+-- * Graded linearity: ensuring that every item in the input list
+-- appears exactly once in the output. The type `t [m - n]` of the
+-- padding element reveals its exact usage.
 
--- The type of \granin{leftPad} in Granule is superficially similar to what we could
--- write in GHC Haskell or a fully dependently-typed language, except for the
--- nonlinearity of the padding element, a minor syntactic addition. However the
--- extra guarantees we get in a graded linear system like Granule's means we get
--- properties for free which we would otherwise have to prove ourselves.
+-- The type of `leftPad` in Granule is superficially similar to what
+-- we could write in GHC Haskell or a fully dependently-typed
+-- language, except for the nonlinearity of the padding element, a
+-- minor syntactic addition. However the extra guarantees we get in a
+-- graded linear system like Granule's means we get properties for
+-- free which we would otherwise have to prove ourselves.
 
 -- Let's run it!
 -- e.g., take an `input` vector of length 3 containing integers...
@@ -108,7 +113,8 @@ leftPad str [c] n =
 input : Vec 3 Int
 input = Cons 1 (Cons 2 (Cons 3 Nil))
 
--- ... pad it on the "left" of the vector with the value 0 until it a vector length 6
+-- ... pad it on the "left" of the vector with the value 0 until it a
+-- vector length 6
 
 main : Vec 6 Int
 main = leftPad input [0] (S (S (S (S (S (S Z))))))
