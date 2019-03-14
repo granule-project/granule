@@ -441,11 +441,11 @@ equalTypesRelatedCoeffects s _ sp (TyVar n) (TyVar m) = do
         Just (KPromote (TyCon kc)) -> do
 
           withInferredKind s (TyCon kc) $ \k -> do
-          -- Create solver vars for coeffects
-          let constrs = case k of
-                          KCoeffect -> [Eq s (CVar n) (CVar m) (TyCon kc)]
-                          _ -> []
-          pure $ equalWith (constrs, [(m, SubstT $ TyVar n)])
+            -- Create solver vars for coeffects
+            let constrs = case k of
+                            KCoeffect -> [Eq s (CVar n) (CVar m) (TyCon kc)]
+                            _ -> []
+            pure $ equalWith (constrs, [(m, SubstT $ TyVar n)])
         Just _ ->
           pure $ equalWith ([], [(m, SubstT $ TyVar n)])
         Nothing -> unequalNotSpecified s n m
