@@ -1,5 +1,10 @@
 -- The following demonstrates the interaction between linear, indexed,
--- and graded modal types in Granule via the function `leftPad`
+-- and graded modal types in Granule via the function `leftPad`.
+
+-- The syntax of Granule is similar to Haskell, but Granule is
+-- eager (call-by-value) and is linear-by-default, that is, every
+-- variable must be used exactly once, unless it is wrapped
+-- in a "graded modal type". We'll see these as we go:
 
 -- `leftPad` takes a vector and a value and pads the vector to a
 -- desired length with that value
@@ -42,6 +47,11 @@ length : forall {t : Type, n : Nat} . Vec n (t [0]) -> N n
 length Nil = Z;
 length (Cons [_] xs) = S (length xs)
 
+-- The type `t [0]` represents values of type `t` wrapped in a
+-- "graded modality" whose "grade" (index) states that the value
+-- is used 0 times. This non-linear behaviour is then access by
+-- the "unboxing" pattern match in the second equation of `length`.
+
 -- Alternatively, we can reconstruct the vector and return it
 -- whilst also building the length:
 
@@ -60,6 +70,14 @@ length' (Cons x xs) =
 replicate : forall {t : Type, n : Nat} . N n -> t [n] -> Vec n t
 replicate Z [c] = Nil;
 replicate (S n) [c] = Cons c (replicate n [c])
+
+-- Note again the graded modal type `t [n]` here providing the
+-- ability to use `t` exactly `n` times. In the second equation,
+-- with `n` equal to `m + 1` for some `m : Nat`,
+-- we pattern match on the graded modality, meaning we can use
+-- the variable `c` exactly `m+1` times, where it is used once
+-- to build a `Cons` cell and then it is "reboxed" to provide
+-- the capability to be used `m` times in the recursive call.
 
 -- We can now define left pad with one further helper combinator
 -- that subtracts two indexed naturals:
