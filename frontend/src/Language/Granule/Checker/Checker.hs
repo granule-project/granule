@@ -313,8 +313,11 @@ checkInstTy sp inst = do
   Just kinds <- getInterfaceParameterKinds (instIFace inst)
   let expectedKindPairs = zip kinds (instParams inst)
   forM_ expectedKindPairs (\(iKind, ity) -> do
-    tyKind <- withInstanceContext sp inst $ inferKindOfType sp ity
-    when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
+    inferred <- withInstanceContext sp inst $ inferKindOfTypeSafe sp ity
+    case inferred of
+      Left{} -> halt $ KindError (Just sp) $
+                "Could not infer a kind for " <> prettyQuoted ity
+      Right tyKind -> when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
 
 
 checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker (Instance v Type)
@@ -1594,7 +1597,8 @@ iconsFromTys sp (Forall _ binds constrs _) = iconsFromBindsAndTys sp binds const
 iconsFromBindsAndTys :: (?globals :: Globals) => Span -> [(Id, Kind)] -> [Type] -> MaybeT Checker [Inst]
 iconsFromBindsAndTys sp binds constrs =
   withBindings binds ForallQ . fmap constrsToIcons $ filterM isInterfaceConstraint constrs
-  where isInterfaceConstraint = fmap (==KConstraint Interface) . inferKindOfType sp
+  where isInterfaceConstraint c =
+          fmap (either (const False) (==KConstraint Interface)) (inferKindOfTypeSafe sp c)
 
 
 constrsToIcons :: [Type] -> [Inst]
