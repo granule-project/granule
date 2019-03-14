@@ -154,6 +154,15 @@ withInferredKind sp t c =
   inferKindOfTypeSafe sp t >>= either miscErr c
 
 
+-- | Execute the prover with the most general unifier of
+-- | the two coeffects as an argument.
+withMguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect
+                     -> (Type -> MaybeT Checker EqualityResult)
+                     -> MaybeT Checker EqualityResult
+withMguCoeffectTypes sp c c' pf =
+  mguCoeffectTypesSafe sp c c' >>= either miscErr pf
+
+
 --------------------------
 ----- Equality types -----
 --------------------------
@@ -372,16 +381,15 @@ equalTypesRelatedCoeffects s rel sp x@(Box c t) y@(Box c' t') = do
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
   -- Unify the coeffect kinds of the two coeffects
-  kind <- mguCoeffectTypes s c c'
-  -- subst <- unify c c'
-  eq1 <- case sp of
-    SndIsSpec -> do
-      pure $ equalWith ([rel s c c' kind], [])
-    FstIsSpec -> do
-      pure $ equalWith ([rel s c' c kind], [])
-    _ -> contextDoesNotAllowUnification s x y
-  eq2 <- equalTypesRelatedCoeffects s rel sp t t'
-  combinedEqualities s eq1 eq2
+  withMguCoeffectTypes s c c' $ \kind -> do
+    eq1 <- case sp of
+      SndIsSpec -> do
+        pure $ equalWith ([rel s c c' kind], [])
+      FstIsSpec -> do
+        pure $ equalWith ([rel s c' c kind], [])
+      _ -> contextDoesNotAllowUnification s x y
+    eq2 <- equalTypesRelatedCoeffects s rel sp t t'
+    combinedEqualities s eq1 eq2
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get

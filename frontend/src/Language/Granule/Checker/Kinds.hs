@@ -15,9 +15,10 @@ module Language.Granule.Checker.Kinds (
                     , mguCoeffectTypes
                     , promoteTypeToKind
                     , demoteKindToType
-                      -- ** 'Safe' kind inference
+                      -- ** 'Safe' inference
                     , inferKindOfTypeSafe
                     , inferKindOfTypeSafe'
+                    , mguCoeffectTypesSafe
                     ) where
 
 import Control.Monad.State.Strict
@@ -287,45 +288,53 @@ checkKindIsCoeffect span ty = do
 
     _         -> illKindedNEq span KCoeffect kind
 
+
+mguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> MaybeT Checker Type
+mguCoeffectTypes s c1 c2 = mguCoeffectTypesSafe s c1 c2 >>= either halt pure
+
+
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
-mguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> MaybeT Checker Type
-mguCoeffectTypes s c1 c2 = do
+mguCoeffectTypesSafe :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> MaybeT Checker (Either IllKindedReason Type)
+mguCoeffectTypesSafe s c1 c2 = do
   ck1 <- inferCoeffectType s c1
   ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
     -- Both are variables
     (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
       updateCoeffectType kv1 (KVar kv2)
-      return (TyVar kv2)
+      okay (TyVar kv2)
 
-    (t, t') | t == t' -> return t
+    (t, t') | t == t' -> okay t
 
    -- Linear-hand side is a poly variable, but right is concrete
     (TyVar kv1, ck2') -> do
       updateCoeffectType kv1 (promoteTypeToKind ck2')
-      return ck2'
+      okay ck2'
 
     -- Right-hand side is a poly variable, but Linear is concrete
     (ck1', TyVar kv2) -> do
       updateCoeffectType kv2 (promoteTypeToKind ck1')
-      return ck1'
+      okay ck1'
 
-    (TyCon k1, TyCon k2) | k1 == k2 -> return $ TyCon k1
+    (TyCon k1, TyCon k2) | k1 == k2 -> okay $ TyCon k1
 
     -- Try to unify coeffect types
-    (t, t') | Just tj <- joinCoeffectTypes t t' -> return tj
+    (t, t') | Just tj <- joinCoeffectTypes t t' -> okay tj
 
     -- Unifying a product of (t, t') with t yields (t, t') [and the symmetric version]
-    (isProduct -> Just (t1, t2), t) | t1 == t -> return $ ck1
-    (isProduct -> Just (t1, t2), t) | t2 == t -> return $ ck1
-    (t, isProduct -> Just (t1, t2)) | t1 == t -> return $ ck2
-    (t, isProduct -> Just (t1, t2)) | t2 == t -> return $ ck2
+    (isProduct -> Just (t1, t2), t) | t1 == t -> okay ck1
+    (isProduct -> Just (t1, t2), t) | t2 == t -> okay ck1
+    (t, isProduct -> Just (t1, t2)) | t1 == t -> okay ck2
+    (t, isProduct -> Just (t1, t2)) | t2 == t -> okay ck2
 
-    (k1, k2) -> halt $ KindError (Just s) $ "Cannot unify coeffect types '"
-               <> pretty k1 <> "' and '" <> pretty k2
-               <> "' for coeffects `" <> pretty c1 <> "` and `" <> pretty c2 <> "`"
+    (k1, k2) -> nope $ KindError (Just s) $ "Cannot unify coeffect types '"
+                 <> pretty k1 <> "' and '" <> pretty k2
+                 <> "' for coeffects `" <> pretty c1 <> "` and `" <> pretty c2 <> "`"
+    where okay = pure . pure
+          nope = pure . Left
+
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
