@@ -15,7 +15,11 @@ module Language.Granule.Checker.Kinds (
                     , inferCoeffectTypeAssumption
                     , mguCoeffectTypes
                     , promoteTypeToKind
-                    , demoteKindToType) where
+                    , demoteKindToType
+                      -- ** 'Safe' kind inference
+                    , inferKindOfTypeSafe
+                    , inferKindOfTypeSafe'
+                    ) where
 
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
@@ -71,50 +75,85 @@ kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
 kindCheckDef (Def s _ _ f) = kindCheckSig s f
 
+
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
 inferKindOfType s t = do
     checkerState <- get
     inferKindOfType' s (stripQuantifiers $ tyVarContext checkerState) t
 
-inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
-inferKindOfType' s quantifiedVariables t =
-    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
-  where
-    kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
-     | internalName c == internalName c' = return $ kConstr c
 
-    kFun KType KType = return KType
-    kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
+inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
+inferKindOfType' s quantifiedVariables t = do
+  res <- inferKindOfTypeSafe' s quantifiedVariables t
+  case res of
+    Left err -> halt err
+    Right res -> pure res
+
+
+type IllKindedReason = CheckerError
+
+
+inferKindOfTypeSafe :: (?globals :: Globals) => Span -> Type -> MaybeT Checker (Either IllKindedReason Kind)
+inferKindOfTypeSafe s t = do
+    checkerState <- get
+    inferKindOfTypeSafe' s (stripQuantifiers $ tyVarContext checkerState) t
+
+
+inferKindOfTypeSafe' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker (Either IllKindedReason Kind)
+inferKindOfTypeSafe' s quantifiedVariables t =
+    typeFoldM (TypeFold (weither2 kFun)
+                        kCon
+                        (weither1 . kBox)
+                        (weither1 . kDiamond)
+                        kVar
+                        (weither2 kApp)
+                        kInt
+                        (weither2 . kInfix)) t
+  where
+    weither2 c t t2 = do
+      let r = ((,) <$> t <*> t2)
+      case r of
+        Left err -> pure (Left err)
+        Right (k1, k2) -> c k1 k2
+    weither1 c t = either (pure . Left) c t
+    illKindedNEq sp k1 k2 = pure . Left $
+      KindError (Just sp) $ concat ["Expected kind ", prettyQuoted k1, " but got ", prettyQuoted k2]
+    wellKinded = pure . pure
+    kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
+     | internalName c == internalName c' = pure $ pure $ kConstr c
+
+    kFun KType KType = wellKinded KType
+    kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = wellKinded $ KPromote (TyCon (mkId "Protocol"))
     kFun KType y = illKindedNEq s KType y
     kFun x _     = illKindedNEq s KType x
-    kCon conId = getKindRequired s conId
+    kCon conId = fmap Right $ getKindRequired s conId
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
        _ <- inferCoeffectType s c
-       return KType
+       wellKinded KType
     kBox _ x = illKindedNEq s KType x
 
-    kDiamond _ KType = return KType
+    kDiamond _ KType = wellKinded KType
     kDiamond _ x     = illKindedNEq s KType x
 
     kVar tyVar =
       case lookup tyVar quantifiedVariables of
-        Just kind -> return kind
+        Just kind -> wellKinded kind
         Nothing   -> do
           st <- get
           case lookup tyVar (tyVarContext st) of
-            Just (kind, _) -> return kind
+            Just (kind, _) -> wellKinded kind
             Nothing ->
               halt $ UnboundVariableError (Just s) $
                        "Type variable `" <> show tyVar
                     <> "` is unbound (not quantified)."
                     <?> show quantifiedVariables
 
-    kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
+    kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = wellKinded k2
     kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "....")) k
 
-    kInt _ = return $ kConstr $ mkId "Nat"
+    kInt _ = wellKinded $ kConstr $ mkId "Nat"
 
     kInfix op k1 k2 = do
       st <- get
@@ -123,10 +162,11 @@ inferKindOfType' s quantifiedVariables t =
        (KFun k1' (KFun k2' kr), _) ->
          if k1 `hasLub` k1'
           then if k2 `hasLub` k2'
-               then return kr
+               then wellKinded kr
                else illKindedNEq s k2' k2
           else illKindedNEq s k1' k1
        (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
+
 
 -- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe Kind
