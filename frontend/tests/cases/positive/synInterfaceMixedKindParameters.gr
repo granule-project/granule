@@ -1,0 +1,2 @@
+-- An interface with mixed kind parameters
+interface Simple a (b : Coeffect) (c : b) (n : Nat)
