@@ -257,7 +257,7 @@ rewriteInterface (Interface sp iname _constrs params itys) = do
 --   barA = MkBar [fooA] [\Av -> Av] [Av]
 -- @
 rewriteInstance :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
-rewriteInstance inst@(Instance sp iname iconstrs idt@(IFaceDat _ idtys) _) = do
+rewriteInstance inst@(Instance sp iname iconstrs idt@(InstanceTypes _ idtys) _) = do
     idictConstructed <- constructIDict inst
     let iconstrs' = fmap mkInfBoxTy iconstrs
         instc = mkInst iname idtys

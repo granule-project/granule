@@ -93,8 +93,8 @@ getKindRequired sp name = do
 
 
 -- | Register an instantiated typescheme for an instance method.
-registerInstanceSig :: Id -> IFaceDat -> Id -> TypeScheme -> MaybeT Checker ()
-registerInstanceSig iname (IFaceDat _ ity) meth methTys =
+registerInstanceSig :: Id -> InstanceTypes -> Id -> TypeScheme -> MaybeT Checker ()
+registerInstanceSig iname (InstanceTypes _ ity) meth methTys =
     -- we lookup instances by the type application of the interface
     let finTy = mkInst iname ity
     in modify' $ \s -> s { instanceSigs = M.insert (finTy, meth) methTys (instanceSigs s) }

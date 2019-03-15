@@ -277,7 +277,7 @@ getInstance sp inst = do
 
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
-checkInstHead (Instance sp iname constrs idt@(IFaceDat sp2 idty) _) = do
+checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
   checkIFaceExists sp iname
   let inst = mkInst iname idty
   freeVarKinds <- getInstanceFreeVarKinds sp inst
@@ -321,7 +321,7 @@ checkInstTy sp inst = do
 
 
 checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker (Instance v Type)
-checkInstDefs (Instance sp iname constrs idat@(IFaceDat _ idty) ds) = do
+checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
   let inst = mkInst iname idty
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->

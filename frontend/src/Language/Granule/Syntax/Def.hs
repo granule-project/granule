@@ -94,7 +94,7 @@ data Instance v a =
   Span
   Id         -- ^ interface name
   [TConstraint] -- ^ constraints
-  IFaceDat   -- ^ instance type
+  InstanceTypes   -- ^ instance type
   [IDef v a] -- ^ implementations
 
 deriving instance (Eq v, Eq a) => Eq (Instance v a)
@@ -110,10 +110,10 @@ deriving instance (Show v, Show a) => Show (IDef v a)
 
 
 -- | Instance type
-data IFaceDat = IFaceDat Span [Type]
+data InstanceTypes = InstanceTypes Span [Type]
   deriving (Show, Generic, Eq)
 
-instance FirstParameter IFaceDat Span
+instance FirstParameter InstanceTypes Span
 
 
 -- | Fresh a whole AST
@@ -165,11 +165,11 @@ instance Monad m => Freshenable m (IDef v a) where
     eqn' <- freshen eqn
     return $ IDef sp name eqn'
 
-instance Monad m => Freshenable m IFaceDat where
-  freshen (IFaceDat sp tys) = do
+instance Monad m => Freshenable m InstanceTypes where
+  freshen (InstanceTypes sp tys) = do
     mapM_ (freshIdentifierBase Type) (concatMap freeVars tys)
     tys' <- freshen tys
-    return $ IFaceDat sp tys'
+    return $ InstanceTypes sp tys'
 
 instance Monad m => Freshenable m (Equation v a) where
   freshen (Equation s a ps e) = do

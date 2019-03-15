@@ -195,8 +195,8 @@ InstTys :: { (Span, [Type]) }
 InstTy :: { (Span, Type) }
   : TyAtomWithSpan { (snd $1, fst $1) }
 
-InstForm :: { IFaceDat }
-  : InstTys { IFaceDat (fst $1) (snd $1) }
+InstForm :: { InstanceTypes }
+  : InstTys { InstanceTypes (fst $1) (snd $1) }
 
 InstDecl :: { Instance () ()  }
   : instance IFaceName InstForm where InstBinds

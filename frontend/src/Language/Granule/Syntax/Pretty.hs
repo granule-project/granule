@@ -244,8 +244,8 @@ instance (Pretty v, Pretty a) => Pretty (Instance v a) where
                   [] -> ""
                   _  -> "where\n  " <> prettySemiSep 0 defs
 
-instance Pretty IFaceDat where
-    prettyL l (IFaceDat _ ty) = unwords (fmap (prettyTy l) ty)
+instance Pretty InstanceTypes where
+    prettyL l (InstanceTypes _ ty) = unwords (fmap (prettyTy l) ty)
 
 
 instance (Pretty v, Pretty a) => Pretty (IDef v a) where

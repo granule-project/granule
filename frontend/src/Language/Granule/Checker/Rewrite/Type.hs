@@ -109,7 +109,7 @@ type InstanceId = Inst
 
 
 mkInstanceId :: Instance v a -> InstanceId
-mkInstanceId (Instance _ iname _ (IFaceDat _ idt) _) = mkInst iname idt
+mkInstanceId (Instance _ iname _ (InstanceTypes _ idt) _) = mkInst iname idt
 
 
 data RewriteEnv = RewriteEnv {
@@ -208,8 +208,8 @@ expandConstraints n = do
   maybe illFormedEnvError pure (lookup n exps)
 
 
-registerIFun :: Id -> IFaceDat -> Def () () -> Rewriter ()
-registerIFun n (IFaceDat _ idt) def = modifyInstFuns (M.insertWith (<>) n [(mkInst n idt, def)])
+registerIFun :: Id -> InstanceTypes -> Def () () -> Rewriter ()
+registerIFun n (InstanceTypes _ idt) def = modifyInstFuns (M.insertWith (<>) n [(mkInst n idt, def)])
 
 
 lookupIfaceIfuns :: Id -> Rewriter (Maybe [(Inst, Def () ())])
