@@ -77,15 +77,15 @@ data Interface =
   Id           -- ^ interface name
   [TConstraint] -- ^ constraints
   [(Id, Maybe Kind)] -- ^ parameters
-  [IFaceTy]
+  [InterfaceMethod]
   deriving (Show, Eq)
 
 
 -- | Interface types
-data IFaceTy = IFaceTy Span Id TypeScheme
+data InterfaceMethod = InterfaceMethod Span Id TypeScheme
   deriving (Generic, Show, Eq)
 
-instance FirstParameter IFaceTy Span
+instance FirstParameter InterfaceMethod Span
 
 
 -- | Instances
@@ -148,10 +148,10 @@ instance Monad m => Freshenable m Interface where
     return $ Interface sp iname constrs' params' itys'
     where both x y (z1,z2) = x z1 >>= (\z1' -> fmap ((,) z1') (y z2))
 
-instance Monad m => Freshenable m IFaceTy where
-  freshen (IFaceTy sp name tys) = do
+instance Monad m => Freshenable m InterfaceMethod where
+  freshen (InterfaceMethod sp name tys) = do
     tys' <- freshen tys
-    return $ IFaceTy sp name tys'
+    return $ InterfaceMethod sp name tys'
 
 instance Monad m => Freshenable m (Instance v a) where
   freshen (Instance sp name constrs idat defs) = do

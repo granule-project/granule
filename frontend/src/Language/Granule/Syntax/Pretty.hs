@@ -228,8 +228,8 @@ instance Pretty Interface where
                    _  -> "where\n" <> tyStr
         tyStr = "  " ++ prettySemiSep 0 tys
 
-instance Pretty IFaceTy where
-    prettyL l (IFaceTy _ name ty) = prettyColonSep l name ty
+instance Pretty InterfaceMethod where
+    prettyL l (InterfaceMethod _ name ty) = prettyColonSep l name ty
 
 instance (Pretty v, Pretty a) => Pretty (Instance v a) where
     prettyL _ (Instance _ name cts idat defs) =

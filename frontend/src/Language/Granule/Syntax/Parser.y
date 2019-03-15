@@ -160,11 +160,11 @@ IFaceVar :: { (Span, (Id, Maybe Kind)) }
   : VAR            { % mkSpan (getPosToSpan $1)      >>= \sp -> return $ (sp, (mkId $ symString $1, Nothing)) }
   | '(' VarSig ')' { % mkSpan (getPos $1, getPos $3) >>= \sp -> return $ (sp, (fst $2, Just (snd $2))) }
 
-IFaceSigs :: { [IFaceTy] }
+IFaceSigs :: { [InterfaceMethod] }
   : Sig ';' IFaceSigs
-    { % mkSpan (thd3 $1, getEnd $ snd3 $1) >>= \sp -> return $ IFaceTy sp (mkId $ fst3 $1) (snd3 $1) : $3 }
+    { % mkSpan (thd3 $1, getEnd $ snd3 $1) >>= \sp -> return $ InterfaceMethod sp (mkId $ fst3 $1) (snd3 $1) : $3 }
   | Sig
-    { % mkSpan (thd3 $1, getEnd $ snd3 $1) >>= \sp -> return $ [IFaceTy sp (mkId $ fst3 $1) (snd3 $1)] }
+    { % mkSpan (thd3 $1, getEnd $ snd3 $1) >>= \sp -> return $ [InterfaceMethod sp (mkId $ fst3 $1) (snd3 $1)] }
 
 IFaceDecl :: { Interface }
   : interface IFaceName IFaceVars where IFaceSigs

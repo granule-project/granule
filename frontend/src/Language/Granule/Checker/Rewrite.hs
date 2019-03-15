@@ -226,7 +226,7 @@ rewriteInterface (Interface sp iname _constrs params itys) = do
                 (wbefore, wafter) = splitAt i wildMatches
                 pats = tail wbefore <> [mkBoxedVar matchVar] <> wafter
             in PConstr nullSpanNoFile () dname pats
-        ityToDef ((IFaceTy sp' n (Forall _ q c ty)), i) =
+        ityToDef ((InterfaceMethod sp' n (Forall _ q c ty)), i) =
             let binds = nub $ q <> pBinds
                 ty' = FunTy dty ty
             in Def sp' n [Equation sp' () [mkPat i]
@@ -235,10 +235,10 @@ rewriteInterface (Interface sp iname _constrs params itys) = do
     mapM_ registerDef defs
     registerInterface iname
     pure (ddcl, defs)
-    where ityToTy (IFaceTy _ _ (Forall _ _ _ ty)) = Box (CInterval (CNat 0) (CNat 1)) ty;
-          ityName (IFaceTy _ n _) = n
+    where ityToTy (InterfaceMethod _ _ (Forall _ _ _ ty)) = Box (CInterval (CNat 0) (CNat 1)) ty;
+          ityName (InterfaceMethod _ n _) = n
           mkBoxedVar = mkBoxedPat . PVar nullSpanNoFile ()
-          ityBinds (IFaceTy _ _ (Forall _ binds _ _)) = binds
+          ityBinds (InterfaceMethod _ _ (Forall _ binds _ _)) = binds
           collectMethodBindings = nub . foldr (<>) [] . fmap ityBinds
 
 

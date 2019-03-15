@@ -227,7 +227,7 @@ checkIFaceHead iface@(Interface sp name constrs params itys) = do
   registerInterface sp name params' (constrsToIcons constrs) ifsigs
   where
     params' = fmap normaliseParameterKind params
-    ifsigs = map (\(IFaceTy _ name tys) -> (name, tys)) itys
+    ifsigs = map (\(InterfaceMethod _ name tys) -> (name, tys)) itys
 
 
 registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
@@ -246,8 +246,8 @@ checkIFaceTys iface@(Interface sp iname _ params itys) = do
 
 
 -- | Typecheck an interface method signature, and register it.
-checkMethodSig :: (?globals :: Globals) => Id -> [(Id, Kind)] -> IFaceTy -> MaybeT Checker ()
-checkMethodSig iname params (IFaceTy sp name tys) = do
+checkMethodSig :: (?globals :: Globals) => Id -> [(Id, Kind)] -> InterfaceMethod -> MaybeT Checker ()
+checkMethodSig iname params (InterfaceMethod sp name tys) = do
   let tys' = tysWithParams tys
   kindCheckSig sp tys'
   registerDefSig sp name tys'
