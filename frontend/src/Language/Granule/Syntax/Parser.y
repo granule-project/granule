@@ -188,15 +188,15 @@ InstBindsRest :: { [IDef () ()] }
   | Binding
     { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
 
-InstVars :: { (Span, [Type]) }
-  : InstVar InstVars { % mkSpan (getStart $1, getEnd $2) >>= \sp -> pure (sp, snd $1 : snd $2) }
-  | InstVar { (fst $1, [snd $1]) }
+InstTys :: { (Span, [Type]) }
+  : InstTy InstTys { % mkSpan (getStart $1, getEnd $2) >>= \sp -> pure (sp, snd $1 : snd $2) }
+  | InstTy { (fst $1, [snd $1]) }
 
-InstVar :: { (Span, Type) }
+InstTy :: { (Span, Type) }
   : TyAtomWithSpan { (snd $1, fst $1) }
 
 InstForm :: { IFaceDat }
-  : InstVars { IFaceDat (fst $1) (snd $1) }
+  : InstTys { IFaceDat (fst $1) (snd $1) }
 
 InstDecl :: { Instance () ()  }
   : instance IFaceName InstForm where InstBinds
