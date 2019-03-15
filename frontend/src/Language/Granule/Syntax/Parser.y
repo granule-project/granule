@@ -166,15 +166,15 @@ IFaceSigs :: { [IFaceTy] }
   | Sig
     { % mkSpan (thd3 $1, getEnd $ snd3 $1) >>= \sp -> return $ [IFaceTy sp (mkId $ fst3 $1) (snd3 $1)] }
 
-IFaceDecl :: { IFace }
+IFaceDecl :: { Interface }
   : interface IFaceName IFaceVars where IFaceSigs
-  { % mkSpan (getPos $1, lastSpan' $5) >>= \sp -> return $ IFace sp $2 [] (snd $3) $5 }
+  { % mkSpan (getPos $1, lastSpan' $5) >>= \sp -> return $ Interface sp $2 [] (snd $3) $5 }
   | interface IFaceConstrained IFaceName IFaceVars where IFaceSigs
-  { % mkSpan (getPos $1, lastSpan' $6) >>= \sp -> return $ IFace sp $3 $2 (snd $4) $6 }
+  { % mkSpan (getPos $1, lastSpan' $6) >>= \sp -> return $ Interface sp $3 $2 (snd $4) $6 }
   | interface IFaceName IFaceVars
-  { % mkSpan (getPos $1, endPos (fst $3)) >>= \sp -> return $ IFace sp $2 [] (snd $3) [] }
+  { % mkSpan (getPos $1, endPos (fst $3)) >>= \sp -> return $ Interface sp $2 [] (snd $3) [] }
   | interface IFaceConstrained IFaceName IFaceVars
-  { % mkSpan (getPos $1, endPos (fst $4)) >>= \sp -> return $ IFace sp $3 $2 (snd $4) [] }
+  { % mkSpan (getPos $1, endPos (fst $4)) >>= \sp -> return $ Interface sp $3 $2 (snd $4) [] }
 
 InstBinds :: { [IDef () ()] }
   : NamedBinding ';' InstBindsRest
@@ -341,7 +341,7 @@ Kind :: { Kind }
                                   "Type"      -> KType
                                   "Coeffect"  -> KCoeffect
                                   "Predicate" -> KConstraint Predicate
-                                  "Constraint" -> KConstraint Interface
+                                  "Constraint" -> KConstraint InterfaceC
                                   s          -> kConstr $ mkId s }
   | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
   | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }

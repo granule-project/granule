@@ -22,7 +22,7 @@ import Language.Granule.Syntax.Pattern
 -- | Comprise a list of data type declarations and a list
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
-data AST v a = AST [DataDecl] [Def v a] [IFace] [Instance v a]
+data AST v a = AST [DataDecl] [Def v a] [Interface] [Instance v a]
 deriving instance (Show v, Show a) => Show (AST v a)
 deriving instance (Eq v, Eq a) => Eq (AST v a)
 
@@ -71,8 +71,8 @@ type Cardinality = Maybe Nat
 
 
 -- | Interfaces
-data IFace =
-  IFace
+data Interface =
+  Interface
   Span
   Id           -- ^ interface name
   [TConstraint] -- ^ constraints
@@ -140,12 +140,12 @@ instance Monad m => Freshenable m DataConstr where
     ts <- mapM freshen ts
     return $ DataConstrNonIndexed sp v ts
 
-instance Monad m => Freshenable m IFace where
-  freshen (IFace sp iname constrs params itys) = do
+instance Monad m => Freshenable m Interface where
+  freshen (Interface sp iname constrs params itys) = do
     params' <- mapM (both (freshIdentifierBase Type) freshen) params
     constrs' <- mapM freshen constrs
     itys' <- mapM freshen itys
-    return $ IFace sp iname constrs' params' itys'
+    return $ Interface sp iname constrs' params' itys'
     where both x y (z1,z2) = x z1 >>= (\z1' -> fmap ((,) z1') (y z2))
 
 instance Monad m => Freshenable m IFaceTy where

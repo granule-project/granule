@@ -55,7 +55,7 @@ getInterfaceParameterKinds = fmap (fmap (fmap snd)) . getInterfaceParameters
 getInterfaceKind :: Id -> MaybeT Checker (Maybe Kind)
 getInterfaceKind iname = do
   paramKinds <- fmap (fmap $ fmap snd) $ getInterfaceParameters iname
-  pure $ fmap (\pkinds -> foldr1 KFun (pkinds <> [KConstraint Interface])) paramKinds
+  pure $ fmap (\pkinds -> foldr1 KFun (pkinds <> [KConstraint InterfaceC])) paramKinds
 
 
 getInterfaceSigs :: Id -> MaybeT Checker (Maybe (Ctxt TypeScheme))

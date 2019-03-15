@@ -121,7 +121,7 @@ instance Pretty Kind where
     prettyL l KType          = "Type"
     prettyL l KCoeffect      = "Coeffect"
     prettyL l (KConstraint Predicate) = "Predicate constraint"
-    prettyL l (KConstraint Interface) = "Interface constraint"
+    prettyL l (KConstraint InterfaceC) = "Interface constraint"
     prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
     prettyL l (KVar v)       = prettyL l v
     prettyL l (KPromote t)   = "↑" <> prettyL l t
@@ -211,8 +211,8 @@ instance Pretty DataConstr where
     prettyL l (DataConstrIndexed _ name typeScheme) = prettyColonSep l name typeScheme
     prettyL l (DataConstrNonIndexed _ name params) = unwords $ prettyL l name : map (prettyL (l+1)) params
 
-instance Pretty IFace where
-    prettyL l (IFace _ iName constrs params tys) =
+instance Pretty Interface where
+    prettyL l (Interface _ iName constrs params tys) =
       concat ["interface ", constrStr, pretty iName, " ", pStr, sigStr]
       where
         constrStr =

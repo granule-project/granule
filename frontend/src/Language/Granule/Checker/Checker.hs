@@ -221,8 +221,8 @@ checkIFaceExists :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
 checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 
 
-checkIFaceHead :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkIFaceHead iface@(IFace sp name constrs params itys) = do
+checkIFaceHead :: (?globals :: Globals) => Interface -> MaybeT Checker ()
+checkIFaceHead iface@(Interface sp name constrs params itys) = do
   mapM_ (kindCheckConstr sp params') constrs
   registerInterface sp name params' (constrsToIcons constrs) ifsigs
   where
@@ -240,8 +240,8 @@ registerDefSig sp name tys = do
 
 
 -- | Check an interface's method signatures.
-checkIFaceTys :: (?globals :: Globals) => IFace -> MaybeT Checker ()
-checkIFaceTys iface@(IFace sp iname _ params itys) = do
+checkIFaceTys :: (?globals :: Globals) => Interface -> MaybeT Checker ()
+checkIFaceTys iface@(Interface sp iname _ params itys) = do
   mapM_ (checkMethodSig iname (fmap normaliseParameterKind params)) itys
 
 
@@ -476,7 +476,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
       when (kind == KConstraint Predicate) $ do
         pred <- compileTypeConstraintToConstraint s ty
         addPredicate pred
-      when (kind == KConstraint Interface) $ do
+      when (kind == KConstraint InterfaceC) $ do
         addIConstraint (fromJust $ instFromTy ty)
 
 data Polarity = Positive | Negative deriving Show
@@ -1598,7 +1598,7 @@ iconsFromBindsAndTys :: (?globals :: Globals) => Span -> [(Id, Kind)] -> [Type] 
 iconsFromBindsAndTys sp binds constrs =
   withBindings binds ForallQ . fmap constrsToIcons $ filterM isInterfaceConstraint constrs
   where isInterfaceConstraint c =
-          fmap (either (const False) (==KConstraint Interface)) (inferKindOfTypeSafe sp c)
+          fmap (either (const False) (==KConstraint InterfaceC)) (inferKindOfTypeSafe sp c)
 
 
 constrsToIcons :: [Type] -> [Inst]

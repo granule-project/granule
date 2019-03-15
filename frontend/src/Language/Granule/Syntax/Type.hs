@@ -44,7 +44,7 @@ data Type = FunTy Type Type           -- ^ Function type
 
 type TConstraint = Type
 
-data ConstraintForm = Interface | Predicate
+data ConstraintForm = InterfaceC | Predicate
   deriving (Show, Ord, Eq)
 
 -- | Kinds

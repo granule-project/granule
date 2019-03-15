@@ -205,8 +205,8 @@ rewriteWithoutInterfaces renv ast =
 --   bar2 : forall {a : Type} . Bar a -> a
 --   bar2 (MkBar [_] [_] [m]) = m
 -- @
-rewriteInterface :: (?globals :: Globals) => IFace -> Rewriter (DataDecl, [Def v ()])
-rewriteInterface (IFace sp iname _constrs params itys) = do
+rewriteInterface :: (?globals :: Globals) => Interface -> Rewriter (DataDecl, [Def v ()])
+rewriteInterface (Interface sp iname _constrs params itys) = do
     let numMethods = length itys
         dname = ifaceConId iname
         dcon = case collectMethodBindings itys of

@@ -546,7 +546,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
     isPredicateConstraint = fmap (==KConstraint Predicate) . inferKindOfType s
-    isInterfaceConstraint = fmap (==KConstraint Interface) . inferKindOfType s
+    isInterfaceConstraint = fmap (==KConstraint InterfaceC) . inferKindOfType s
 
 instance Substitutable TypeScheme where
   substitute ctxt (Forall s binds constrs ty) = do

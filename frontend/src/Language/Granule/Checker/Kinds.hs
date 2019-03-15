@@ -51,11 +51,11 @@ kindCheckConstr :: (?globals :: Globals) => Span -> Ctxt Kind -> TConstraint -> 
 kindCheckConstr s qvars ty = do
   kind <- inferKindOfType' s qvars ty
   case kind of
-    (KConstraint Interface) -> pure ()
+    (KConstraint InterfaceC) -> pure ()
     (KConstraint Predicate) -> pure ()
     -- TODO: figure out whether we should be
     -- comparing to '(KConstraint Interface)' or '(KConstraint Predicate)'
-    _ -> illKindedNEq s (KConstraint Interface) kind
+    _ -> illKindedNEq s (KConstraint InterfaceC) kind
 
 
 -- Currently we expect that a type scheme has kind KType
