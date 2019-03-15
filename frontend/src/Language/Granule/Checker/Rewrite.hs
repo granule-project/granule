@@ -94,8 +94,8 @@ mapInstanceAnnotation f (Instance s n constrs idat idefs) =
     Instance s n constrs idat (fmap (mapIDefAnnotation f) idefs)
 
 
-mapIDefAnnotation :: (a -> b) -> IDef v a -> IDef v b
-mapIDefAnnotation f (IDef s n eq) = IDef s n (mapEquationAnnotation f eq)
+mapIDefAnnotation :: (a -> b) -> InstanceEquation v a -> InstanceEquation v b
+mapIDefAnnotation f (InstanceEquation s n eq) = InstanceEquation s n (mapEquationAnnotation f eq)
 
 
 mapDefAnnotation :: (a -> b) -> Def v a -> Def v b
@@ -275,11 +275,11 @@ rewriteInstance inst@(Instance sp iname iconstrs idt@(InstanceTypes _ idtys) _) 
 getInstanceGrouped :: Instance v a -> Rewriter [(Id, TypeScheme, [Equation v a])]
 getInstanceGrouped inst@(Instance _ _ _ _ ds) = do
   let nameGroupedDefs = groupBy
-        (\(IDef _ name1 _) (IDef _ name2 _) ->
+        (\(InstanceEquation _ name1 _) (InstanceEquation _ name2 _) ->
           name1 == name2 || name2 == Nothing) ds
       groupedEqns = sortBy (compare `on` fst) $ map
-        (\((IDef _ (Just name) eq):dt) ->
-          let eqs = map (\(IDef _ _ eqn) -> eqn) dt
+        (\((InstanceEquation _ (Just name) eq):dt) ->
+          let eqs = map (\(InstanceEquation _ _ eqn) -> eqn) dt
           in (name, eq:eqs)) nameGroupedDefs
   mapM (\(name, eqns) -> do
           ty <- getInstanceMethTys (mkInstanceId inst) name

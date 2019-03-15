@@ -176,17 +176,17 @@ IFaceDecl :: { Interface }
   | interface IFaceConstrained IFaceName IFaceVars
   { % mkSpan (getPos $1, endPos (fst $4)) >>= \sp -> return $ Interface sp $3 $2 (snd $4) [] }
 
-InstBinds :: { [IDef () ()] }
+InstBinds :: { [InstanceEquation () ()] }
   : NamedBinding ';' InstBindsRest
-    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ IDef sp (fmap mkId $ fst $ fst $1) (snd $1) : $3 }
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ InstanceEquation sp (fmap mkId $ fst $ fst $1) (snd $1) : $3 }
   | NamedBinding
-    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [InstanceEquation sp (fmap mkId $ fst $ fst $1) (snd $1)] }
 
-InstBindsRest :: { [IDef () ()] }
+InstBindsRest :: { [InstanceEquation () ()] }
   : Binding ';' InstBindsRest
-    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ IDef sp (fmap mkId $ fst $ fst $1) (snd $1) : $3 }
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return $ InstanceEquation sp (fmap mkId $ fst $ fst $1) (snd $1) : $3 }
   | Binding
-    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [IDef sp (fmap mkId $ fst $ fst $1) (snd $1)] }
+    { % mkSpan (snd $ fst $1, getEnd $ snd $1) >>= \sp -> return [InstanceEquation sp (fmap mkId $ fst $ fst $1) (snd $1)] }
 
 InstTys :: { (Span, [Type]) }
   : InstTy InstTys { % mkSpan (getStart $1, getEnd $2) >>= \sp -> pure (sp, snd $1 : snd $2) }

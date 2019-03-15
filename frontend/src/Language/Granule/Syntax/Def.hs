@@ -95,18 +95,18 @@ data Instance v a =
   Id         -- ^ interface name
   [TConstraint] -- ^ constraints
   InstanceTypes   -- ^ instance type
-  [IDef v a] -- ^ implementations
+  [InstanceEquation v a] -- ^ implementations
 
 deriving instance (Eq v, Eq a) => Eq (Instance v a)
 deriving instance (Show v, Show a) => Show (Instance v a)
 
--- | Instance implementation
-data IDef v a = IDef Span (Maybe Id) (Equation v a)
+-- | A single equation in an instance.
+data InstanceEquation v a = InstanceEquation Span (Maybe Id) (Equation v a)
   deriving (Generic)
 
-instance FirstParameter (IDef v a) Span
-deriving instance (Eq v, Eq a) => Eq (IDef v a)
-deriving instance (Show v, Show a) => Show (IDef v a)
+instance FirstParameter (InstanceEquation v a) Span
+deriving instance (Eq v, Eq a) => Eq (InstanceEquation v a)
+deriving instance (Show v, Show a) => Show (InstanceEquation v a)
 
 
 -- | Instance type
@@ -160,10 +160,10 @@ instance Monad m => Freshenable m (Instance v a) where
     defs' <- mapM freshen defs
     return $ Instance sp name constrs' idat' defs'
 
-instance Monad m => Freshenable m (IDef v a) where
-  freshen (IDef sp name eqn) = do
+instance Monad m => Freshenable m (InstanceEquation v a) where
+  freshen (InstanceEquation sp name eqn) = do
     eqn' <- freshen eqn
-    return $ IDef sp name eqn'
+    return $ InstanceEquation sp name eqn'
 
 instance Monad m => Freshenable m InstanceTypes where
   freshen (InstanceTypes sp tys) = do

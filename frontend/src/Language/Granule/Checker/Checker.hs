@@ -325,18 +325,18 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
   let inst = mkInst iname idty
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
-    checkInstDefName names sp name) [(sp, name) | (IDef sp (Just name) _) <- ds]
+    checkInstDefName names sp name) [(sp, name) | (InstanceEquation sp (Just name) _) <- ds]
   forM_ (filter (`notElem` defnames) names)
     (\name -> halt $ GenericError (Just sp) $
       concat ["No implementation given for `", pretty name
              , "` which is a required member of interface `"
              , pretty iname, "`"])
   let nameGroupedDefs = groupBy
-        (\(IDef _ name1 _) (IDef _ name2 _) ->
+        (\(InstanceEquation _ name1 _) (InstanceEquation _ name2 _) ->
           name1 == name2 || name2 == Nothing) ds
       groupedEqns = map
-        (\((IDef sp (Just name) eq):dt) ->
-          let eqs = map (\(IDef _ _ eq) -> eq) dt
+        (\((InstanceEquation sp (Just name) eq):dt) ->
+          let eqs = map (\(InstanceEquation _ _ eq) -> eq) dt
           in ((sp, name), eq:eqs)) nameGroupedDefs
   ds' <- mapM (\((sp, name), eqs) -> do
                  tys <- (getNormalisedInterfaceSig inst) name
@@ -357,7 +357,7 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
       -- ensure free variables in the instance head are universally quantified
       freeInstVarKinds <- getInstanceFreeVarKinds sp inst
       pure $ Forall s (binds <> freeInstVarKinds) constraints ty
-    defToIDefs (Def sp n eqns ty) = fmap (IDef sp (Just n)) eqns
+    defToIDefs (Def sp n eqns ty) = fmap (InstanceEquation sp (Just n)) eqns
 
 
 checkDefTy :: (?globals :: Globals) => Def v a -> MaybeT Checker ()

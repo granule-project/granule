@@ -248,8 +248,8 @@ instance Pretty InstanceTypes where
     prettyL l (InstanceTypes _ ty) = unwords (fmap (prettyTy l) ty)
 
 
-instance (Pretty v, Pretty a) => Pretty (IDef v a) where
-    prettyL l (IDef _ v eq) = unwords [prettyL l v, prettyL l eq]
+instance (Pretty v, Pretty a) => Pretty (InstanceEquation v a) where
+    prettyL l (InstanceEquation _ v eq) = unwords [prettyL l v, prettyL l eq]
 
 
 instance (Pretty v) => Pretty (Equation v a) where
