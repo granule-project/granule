@@ -105,7 +105,8 @@ inferKindOfTypeSafe' s quantifiedVariables t =
                         kVar
                         (weither2 kApp)
                         kInt
-                        (weither2 . kInfix)) t
+                        (weither2 . kInfix)
+                        kCoeffect) t
   where
     weither2 c t t2 = do
       let r = ((,) <$> t <*> t2)
@@ -163,6 +164,7 @@ inferKindOfTypeSafe' s quantifiedVariables t =
                else illKindedNEq s k2' k2
           else illKindedNEq s k1' k1
        (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
+    kCoeffect _ = wellKinded $ kConstr $ mkId "Coeffect"
 
 
 -- | Compute the join of two kinds, if it exists

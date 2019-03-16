@@ -40,6 +40,7 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
           | TyInfix Operator Type Type  -- ^ Infix type operator
+          | TyCoeffect Coeffect         -- ^ Promoted coeffect
     deriving (Eq, Ord, Show)
 
 type TConstraint = Type
@@ -196,6 +197,8 @@ mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
 mTyInfix :: Monad m => Operator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
+mTyCoeffect :: Monad m => Coeffect -> m Type
+mTyCoeffect = pure . TyCoeffect
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
@@ -206,12 +209,13 @@ data TypeFold m a = TypeFold
   , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: Operator -> a -> a -> m a }
+  , tfTyInfix :: Operator -> a -> a -> m a
+  , tfTyCoeffect :: Coeffect -> m a }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix
+  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTyCoeffect
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: Monad m => TypeFold m a -> Type -> m a
@@ -238,6 +242,7 @@ typeFoldM algebra = go
      t1' <- go t1
      t2' <- go t2
      (tfTyInfix algebra) op t1' t2'
+   go (TyCoeffect c) = (tfTyCoeffect algebra) c
 
 instance FirstParameter TypeScheme Span
 
@@ -260,6 +265,7 @@ instance Term Type where
       , tfTyApp   = \x y -> return $ x <> y
       , tfTyInt   = \_ -> return []
       , tfTyInfix = \_ y z -> return $ y <> z
+      , tfTyCoeffect = \_ -> pure []
       }
 
 instance Term Coeffect where

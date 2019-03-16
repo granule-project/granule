@@ -141,6 +141,7 @@ instance Pretty Type where
     prettyL l (TyCon s)      =  prettyL 0 s
     prettyL l (TyVar v)      = prettyL 0 v
     prettyL l (TyInt n)      = show n
+    prettyL _ (TyCoeffect c) = prettyL 0 c
 
     -- Non atoms
     prettyL l (FunTy t1 t2)  =
