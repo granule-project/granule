@@ -417,7 +417,7 @@ TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
   |                           { [] }
 
-CoeffectWithSpan :: { (Span, Coeffect) }
+CoeffectAtomWithSpan :: { (Span, Coeffect) }
   : INT
     { % withPosToSpan $1 $ let TokenInt _ x = $1 in CNat x }
   | '∞'
@@ -433,16 +433,19 @@ CoeffectWithSpan :: { (Span, Coeffect) }
           x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR
     { % mkSpan (getPosToSpan $1) >>= \sp -> pure (sp, CVar (mkId $ symString $1)) }
-  | CoeffectWithSpan ".." CoeffectWithSpan { % binaryCoeff CInterval $1 $3 }
+  | '(' Coeffect ')' { % withPos2 $1 $3 $2 }
+  | '{' Set '}'      { % withPos2 $1 $3 (CSet $2) }
+
+CoeffectWithSpan :: { (Span, Coeffect) }
+  : CoeffectWithSpan ".." CoeffectWithSpan { % binaryCoeff CInterval $1 $3 }
   | CoeffectWithSpan '+'  CoeffectWithSpan { % binaryCoeff CPlus  $1 $3 }
   | CoeffectWithSpan '*'  CoeffectWithSpan { % binaryCoeff CTimes $1 $3 }
   | CoeffectWithSpan '-'  CoeffectWithSpan { % binaryCoeff CMinus $1 $3 }
   | CoeffectWithSpan '^'  CoeffectWithSpan { % binaryCoeff CExpon $1 $3 }
   | CoeffectWithSpan "∧"  CoeffectWithSpan { % binaryCoeff CMeet  $1 $3 }
   | CoeffectWithSpan "∨"  CoeffectWithSpan { % binaryCoeff CJoin  $1 $3 }
-  | '(' Coeffect ')' { % withPos2 $1 $3 $2 }
-  | '{' Set '}'      { % withPos2 $1 $3 (CSet $2) }
   | CoeffectWithSpan ':' TypeWithSpan  { % binaryCoeff (\x y -> normalise $ CSig x y) $1 $3 }
+  | CoeffectAtomWithSpan { $1 }
 
 Coeffect :: { Coeffect }
   : CoeffectWithSpan { snd $1 }
