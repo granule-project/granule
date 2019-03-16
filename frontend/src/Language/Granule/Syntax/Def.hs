@@ -70,7 +70,7 @@ instance FirstParameter DataConstr Span
 type Cardinality = Maybe Nat
 
 
--- | Interfaces
+-- | Interfaces.
 data Interface =
   Interface
   Span
@@ -81,14 +81,14 @@ data Interface =
   deriving (Show, Eq)
 
 
--- | Interface types
+-- | Interface methods (method type signatures).
 data InterfaceMethod = InterfaceMethod Span Id TypeScheme
   deriving (Generic, Show, Eq)
 
 instance FirstParameter InterfaceMethod Span
 
 
--- | Instances
+-- | Instances.
 data Instance v a =
   Instance
   Span
@@ -109,7 +109,7 @@ deriving instance (Eq v, Eq a) => Eq (InstanceEquation v a)
 deriving instance (Show v, Show a) => Show (InstanceEquation v a)
 
 
--- | Instance type
+-- | The parameters of an instance.
 data InstanceTypes = InstanceTypes Span [Type]
   deriving (Show, Generic, Eq)
 
