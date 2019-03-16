@@ -1,6 +1,7 @@
 {
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE TupleSections #-}
 
 module Language.Granule.Syntax.Parser where
 
@@ -17,6 +18,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.FirstParameter (FirstParameter)
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Preprocessor.Markdown
 import Language.Granule.Syntax.Preprocessor.Latex
@@ -193,7 +195,7 @@ InstTys :: { (Span, [Type]) }
   | InstTy { (fst $1, [snd $1]) }
 
 InstTy :: { (Span, Type) }
-  : TyAtomWithSpan { (snd $1, fst $1) }
+  : TyAtomWithSpan { $1 }
 
 InstForm :: { InstanceTypes }
   : InstTys { InstanceTypes (fst $1) (snd $1) }
@@ -347,29 +349,34 @@ Kind :: { Kind }
   | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
 
 
-Type :: { Type }
-  : TyJuxt                    { $1 }
-  | Type '->' Type            { FunTy $1 $3 }
-  | Type '×' Type             { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
-  | TyAtom '[' Coeffect ']'   { Box $3 $1 }
-  | TyAtom '[' ']'            { Box (CInterval (CZero extendedNat) infinity) $1 }
+TypeWithSpan :: { (Span, Type) }
+  : TyJuxtWithSpan                  { $1 }
+  | TypeWithSpan '->' TypeWithSpan  { % binaryType FunTy $1 $3 }
+  | TypeWithSpan '×' TypeWithSpan   { % binaryType (\t1 t2 -> TyApp (TyApp (TyCon (mkId ",")) t1) t2) $1 $3 }
+  | TyAtomWithSpan '[' Coeffect ']' { % mkBox $1 $3 $4 }
+  | TyAtomWithSpan '[' ']'          { % mkBox $1 (CInterval (CZero extendedNat) infinity) $3 }
+  | TyAtomWithSpan '<' Effect '>'   { % mkDiamond $1 $3 $4 }
 
-  | TyAtom '<' Effect '>'     { Diamond $3 $1 }
+Type :: { Type }
+  : TypeWithSpan { snd $1 }
 
 TyApp :: { Type }
  : TyJuxt TyAtom              { TyApp $1 $2 }
  | TyAtom                     { $1 }
 
 TyJuxt :: { Type }
-  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
-  | TyJuxt TyAtom             { TyApp $1 $2 }
-  | TyAtom                    { $1 }
-  | TyAtom '+' TyAtom         { TyInfix ("+") $1 $3 }
-  | TyAtom '-' TyAtom         { TyInfix "-" $1 $3 }
-  | TyAtom '*' TyAtom         { TyInfix ("*") $1 $3 }
-  | TyAtom '^' TyAtom         { TyInfix ("^") $1 $3 }
-  | TyAtom "∧" TyAtom         { TyInfix ("∧") $1 $3 }
-  | TyAtom "∨" TyAtom         { TyInfix ("∨") $1 $3 }
+  : TyJuxtWithSpan { snd $1 }
+
+TyJuxtWithSpan :: { (Span, Type) }
+  : TyJuxtWithSpan '`' TyAtom '`'     { % withStartEndSndIsTok $1 $4 $ TyApp $3 (snd $1) }
+  | TyJuxtWithSpan TyAtomWithSpan     { % binaryType TyApp $1 $2 }
+  | TyAtomWithSpan                    { $1 }
+  | TyAtomWithSpan '+' TyAtomWithSpan { % binaryType (TyInfix "+") $1 $3 }
+  | TyAtomWithSpan '-' TyAtomWithSpan { % binaryType (TyInfix "-") $1 $3 }
+  | TyAtomWithSpan '*' TyAtomWithSpan { % binaryType (TyInfix "*") $1 $3 }
+  | TyAtomWithSpan '^' TyAtomWithSpan { % binaryType (TyInfix "^") $1 $3 }
+  | TyAtomWithSpan "∧" TyAtomWithSpan { % binaryType (TyInfix "∧") $1 $3 }
+  | TyAtomWithSpan "∨" TyAtomWithSpan { % binaryType (TyInfix "∨") $1 $3 }
 
 Constraint :: { Type }
   : InterfaceConstraint { $1 }
@@ -387,49 +394,58 @@ InterfaceConstraint :: { TConstraint }
   : CONSTR TyParams { foldl TyApp (TyCon . mkId . constrString $ $1) $2 }
 
 TyAtom :: { Type }
-  : TyAtomWithSpan { fst $1 }
+  : TyAtomWithSpan { snd $1 }
 
-TyAtomWithSpan :: { (Type, Span) }
+TyAtomWithSpan :: { (Span, Type) }
   : CONSTR                    {
     % mkSpan (getPosToSpan $1) >>=
-      \sp -> return (TyCon $ mkId $ constrString $1, sp) }
+      \sp -> return (sp, TyCon $ mkId $ constrString $1) }
   | VAR                       {
     % mkSpan (getPosToSpan $1) >>=
-      \sp -> return (TyVar (mkId $ symString $1), sp) }
+      \sp -> return (sp, TyVar (mkId $ symString $1)) }
   | INT                       {
     % mkSpan (getPosToSpan $1) >>=
-      \sp -> return (let TokenInt _ x = $1 in TyInt x, sp) }
+      \sp -> return (sp, let TokenInt _ x = $1 in TyInt x) }
   | '(' Type ')'              {
     % mkSpan (getPos $1, getPos $3) >>=
-      \sp -> return ($2, sp) }
+      \sp -> return (sp, $2) }
   | '(' Type ',' Type ')'     {
     % mkSpan (getPos $1, getPos $5) >>=
-      \sp -> return (TyApp (TyApp (TyCon $ mkId ",") $2) $4, sp) }
+      \sp -> return (sp, TyApp (TyApp (TyCon $ mkId ",") $2) $4) }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
   |                           { [] }
 
+CoeffectWithSpan :: { (Span, Coeffect) }
+  : INT
+    { % withPosToSpan $1 $ let TokenInt _ x = $1 in CNat x }
+  | '∞'
+    { % withPosToSpan $1 infinity }
+  | FLOAT
+    { % withPosToSpan $1 $ let TokenFloat _ x = $1 in (CFloat $ myReadFloat x) }
+  | CONSTR
+    { % withPosToSpan $1 $
+        case (constrString $1) of
+          "Public" -> Level publicRepresentation
+          "Private" -> Level privateRepresentation
+          "Inf" -> infinity
+          x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
+  | VAR
+    { % mkSpan (getPosToSpan $1) >>= \sp -> pure (sp, CVar (mkId $ symString $1)) }
+  | CoeffectWithSpan ".." CoeffectWithSpan { % binaryCoeff CInterval $1 $3 }
+  | CoeffectWithSpan '+'  CoeffectWithSpan { % binaryCoeff CPlus  $1 $3 }
+  | CoeffectWithSpan '*'  CoeffectWithSpan { % binaryCoeff CTimes $1 $3 }
+  | CoeffectWithSpan '-'  CoeffectWithSpan { % binaryCoeff CMinus $1 $3 }
+  | CoeffectWithSpan '^'  CoeffectWithSpan { % binaryCoeff CExpon $1 $3 }
+  | CoeffectWithSpan "∧"  CoeffectWithSpan { % binaryCoeff CMeet  $1 $3 }
+  | CoeffectWithSpan "∨"  CoeffectWithSpan { % binaryCoeff CJoin  $1 $3 }
+  | '(' Coeffect ')' { % withPos2 $1 $3 $2 }
+  | '{' Set '}'      { % withPos2 $1 $3 (CSet $2) }
+  | CoeffectWithSpan ':' TypeWithSpan  { % binaryCoeff (\x y -> normalise $ CSig x y) $1 $3 }
+
 Coeffect :: { Coeffect }
-  : INT                         { let TokenInt _ x = $1 in CNat x }
-  | '∞'                         { infinity }
-  | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
-  | CONSTR                      { case (constrString $1) of
-                                    "Public" -> Level publicRepresentation
-                                    "Private" -> Level privateRepresentation
-                                    "Inf" -> infinity
-                                    x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
-  | VAR                         { CVar (mkId $ symString $1) }
-  | Coeffect ".." Coeffect      { CInterval $1 $3 }
-  | Coeffect '+' Coeffect       { CPlus $1 $3 }
-  | Coeffect '*' Coeffect       { CTimes $1 $3 }
-  | Coeffect '-' Coeffect       { CMinus $1 $3 }
-  | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect "∧" Coeffect       { CMeet $1 $3 }
-  | Coeffect "∨" Coeffect       { CJoin $1 $3 }
-  | '(' Coeffect ')'            { $2 }
-  | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  : CoeffectWithSpan { snd $1 }
 
 Set :: { [(String, Type)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
@@ -642,6 +658,19 @@ lastSpan xs = getEnd . snd . last $ xs
 
 lastSpan' [] = fst $ nullSpanLocs
 lastSpan' xs = endPos $ getSpan (last xs)
+
+withStartEnd :: (FirstParameter a Span, FirstParameter b Span) => a -> b -> c -> ReaderT String (Either String) (Span, c)
+withStartEnd x y c = fmap (,c) $ mkSpan (getStart x, getEnd y)
+withStartEndSndIsTok x y c = fmap (,c) $ mkSpan (getStart x, getPos y)
+
+withPosToSpan x c = fmap (,c) $ mkSpan (getPosToSpan x)
+withPos2 x y c = fmap (,c) $ mkSpan (getPos x, getPos y)
+binaryTerm f x y = withStartEnd x y (f (snd x) (snd y))
+binaryTermSndIsTok f ty e tok = withStartEndSndIsTok ty tok (f e (snd ty))
+binaryCoeff = binaryTerm
+binaryType = binaryTerm
+mkBox = binaryTermSndIsTok Box
+mkDiamond = binaryTermSndIsTok Diamond
 
 myReadFloat :: String -> Rational
 myReadFloat str =
