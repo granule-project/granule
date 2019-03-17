@@ -1645,6 +1645,7 @@ getInstanceFreeVarKinds sp inst = do
     getConstructorKinds k (Box _ t) = getConstructorKinds k t
     getConstructorKinds k (Diamond _ t) = getConstructorKinds k t
     getConstructorKinds _ TyCoeffect{} = []
+    getConstructorKinds _ TyInt{} = []
     getConstructorKinds k t =
       error $ "getConstructorKinds called with: '" <> show k <> "' and '" <> show t <> "'"
 
@@ -1654,6 +1655,7 @@ getInstanceFreeVarKinds sp inst = do
     inferKindSigOfParameter _ iname k (TyVar v) = pure k
     inferKindSigOfParameter sp _ _ (TyCon name) = getTyConKind sp name
     inferKindSigOfParameter sp iname k (TyApp t _) = inferKindSigOfParameter sp iname k t
+    inferKindSigOfParameter sp iname (KPromote k) _ = pure (KPromote k)
     inferKindSigOfParameter sp iname k TyCoeffect{} = pure k
     inferKindSigOfParameter _ iname k t =
       error $ concat [ "inferKindSigOfParameter called with:\n"
