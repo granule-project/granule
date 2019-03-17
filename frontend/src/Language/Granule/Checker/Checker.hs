@@ -1643,6 +1643,9 @@ getInstanceFreeVarKinds sp inst = do
     getConstructorKinds k (Box _ t) = getConstructorKinds k t
     getConstructorKinds k (Diamond _ t) = getConstructorKinds k t
     getConstructorKinds k (TyCoeffect (CVar v)) = pure (v, k)
+    getConstructorKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
+      | internalName c == "Interval" =
+        let go = getConstructorKinds (KPromote p) . TyCoeffect in go l <> go u
     getConstructorKinds _ TyCoeffect{} = []
     getConstructorKinds _ TyInt{} = []
     getConstructorKinds k t =
