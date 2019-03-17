@@ -1,0 +1,7 @@
+interface Simple (a : Nat)
+
+instance Simple 1
+
+-- have to call solver to check
+-- these aren't equal
+instance Simple 2

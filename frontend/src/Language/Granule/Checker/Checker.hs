@@ -279,7 +279,7 @@ getInstance sp inst = do
       unifiableWithInstance :: Inst -> MaybeT Checker Bool
       unifiableWithInstance ity =
           withInstanceContext sp ity $
-            withFreeVarsBound inst ForallQ $ instancesAreEqual sp inst ity
+            withFreeVarsBound inst ForallQ $ instancesAreEqual' sp inst ity
 
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
@@ -1112,9 +1112,9 @@ optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> Ma
 optionalSigEquality _ Nothing _ = return True
 optionalSigEquality s (Just t) t' = typesAreEqualWithCheck s t' t
 
-solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
-solveConstraints predicate s name = do
 
+solveConstraintsSafe :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker (Maybe [CheckerError])
+solveConstraintsSafe predicate s name = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
@@ -1123,19 +1123,19 @@ solveConstraints predicate s name = do
   result <- liftIO $ provePredicate s predicate coeffectVars
 
   case result of
-    QED -> return ()
+    QED -> success
     NotValid msg -> do
        msg' <- rewriteMessage msg
        simpPred <- simplifyPred predicate
 
-       halt $ GenericError (Just s) $ "The associated theorem for `" <> pretty name <> "` "
+       failed . pure . GenericError (Just s) $ "The associated theorem for `" <> pretty name <> "` "
           <> if msg' == "is Falsifiable\n"
               then  "is false. "
                  <> "\n  That is: " <> pretty (NegPred simpPred)
               else msg' <> "\n  thus: "  <> pretty (NegPred simpPred)
 
     NotValidTrivial unsats ->
-       mapM_ (\c -> halt $ GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
+       failed $ fmap (\c -> GradingError (Just $ getSpan c) (pretty . Neg $ c)) unsats
     Timeout ->
        halt $ CheckerError (Just s) $
          "Solver timed out with limit of " <>
@@ -1143,6 +1143,14 @@ solveConstraints predicate s name = do
          " ms. You may want to increase the timeout (see --help)."
     Error msg ->
        halt msg
+    where failed = pure . Just
+          success = pure Nothing
+
+
+solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> MaybeT Checker ()
+solveConstraints predicate s name = do
+  res <- solveConstraintsSafe predicate s name
+  maybe (pure ()) (mapM_ halt) res
 
 
 solveIConstraints :: (?globals :: Globals) => Substitution -> [Inst] -> Span -> TypeScheme -> MaybeT Checker ()
@@ -1713,6 +1721,17 @@ getInstanceSubstitution sp inst = do
               coeff <- compileNatKindedTypeToCoeffect sp param
               pure (name, SubstC coeff)
             _ -> pure (name, SubstT param)
+
+
+-- | True if the two instances can be proven to be equal in the current context.
+instancesAreEqual' :: (?globals :: Globals) => Span -> Inst -> Inst -> MaybeT Checker Bool
+instancesAreEqual' sp t1 t2 = do
+ res <- equalInstances sp t1 t2
+ case res of
+   Left{}   -> pure False
+   Right pf -> fmap (maybe True (const False)) $
+                 solveConstraintsSafe (Conj $ fmap Con $ equalityProofConstraints pf) sp
+                                        (mkId "$internal")
 
 
 unboundKindVariable :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a

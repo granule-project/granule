@@ -691,6 +691,11 @@ equalInstances sp instx insty =
   in foldM (\eq (t1,t2) -> equalTypes sp t1 t2 >>= combinedEqualities sp eq) trivialEquality' (zip ts1 ts2)
 
 
+-- TODO: update this (instancesAreEqual) to use 'solveConstraintsSafe' to
+-- determine if two instances are equal after solving.
+-- "instancesAreEqual'" (in Checker) should then be removed
+--      - GuiltyDolphin (2019-03-17)
+
 -- | True if the two instances can be proven to be equal in the current context.
 instancesAreEqual :: (?globals :: Globals) => Span -> Inst -> Inst -> MaybeT Checker Bool
 instancesAreEqual s t1 t2 = fmap equalityResultIsSuccess $ equalInstances s t1 t2
