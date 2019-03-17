@@ -1578,9 +1578,6 @@ withInterfaceContext iname c = do
   withBindings params InstanceQ c
 
 
--- | Get the constraint context available to a particular instance.
-
-
 -- | Get the interface context of a typescheme.
 iconsFromTys :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker [Inst]
 iconsFromTys sp (Forall _ binds constrs _) = iconsFromBindsAndTys sp binds constrs
