@@ -7,7 +7,7 @@
 
 module Language.Granule.Checker.Monad where
 
-import Data.List (intercalate, nub)
+import Data.List ((\\), intercalate, nub)
 import qualified Data.Map as M
 import Data.Maybe (isJust)
 import Control.Monad.State.Strict
@@ -24,7 +24,7 @@ import Language.Granule.Checker.Rewrite.Type (RewriteEnv, buildRewriterEnv)
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
-import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen)
+import Language.Granule.Syntax.Helpers (FreshenerState(..), Term, freeVars, freshen)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -247,6 +247,11 @@ addIConstraint ty =
   modify' $ \st -> st { iconsContext = nub $ ty : iconsContext st }
 
 
+-------------------------------
+----- Sub-checker helpers -----
+-------------------------------
+
+
 {- | Useful if a checking procedure is needed which
      may get discarded within a wider checking, e.g., for
      resolving overloaded types via type equality.
@@ -264,6 +269,26 @@ localChecking k = do
         put localState
         MaybeT $ return out
   return (out, reified)
+
+
+-- | @withFreeVarsBound ty q c@ executes the checker @c@, but with
+-- | free variables in @ty@ bound with quantifier @q@.
+withFreeVarsBound :: (?globals :: Globals, Term t) => t -> Quantifier -> MaybeT Checker a -> MaybeT Checker a
+withFreeVarsBound ty q c = do
+  names <- fmap (fmap fst . tyVarContext) get
+  -- make sure we don't re-bind any already-bound variables
+  let newVars = freeVars ty \\ names
+      binds = fmap (\v -> (v, KType)) newVars
+  withBindings binds q c
+
+
+-- | Run the checker with the given bindings present.
+withBindings :: [(Id, Kind)] -> Quantifier -> MaybeT Checker a -> MaybeT Checker a
+withBindings binds q c = do
+  tyVarContextInit <- fmap tyVarContext get
+  modify $ \st -> st { tyVarContext = fmap (\(v,k) -> (v, (k, q))) binds <> tyVarContext st }
+  c <* modify (\st -> st { tyVarContext = tyVarContextInit })
+
 
 pushGuardContext :: Ctxt Assumption -> MaybeT Checker ()
 pushGuardContext ctxt = do
