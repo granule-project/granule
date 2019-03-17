@@ -4,7 +4,7 @@
 
 module Language.Granule.Syntax.Helpers where
 
-import Data.List (delete)
+import Data.List (delete, nub)
 import Control.Monad.Trans.State.Strict
 import Control.Monad.Fail
 import Control.Monad.Identity
@@ -31,6 +31,9 @@ instance Freshenable m a => Freshenable m (Maybe a) where
 class Term t where
   -- Compute the free variables in an open term
   freeVars :: t -> [Id]
+
+instance {-# OVERLAPPABLE #-} (Foldable f, Term t) => Term (f t) where
+  freeVars = nub . concatMap freeVars
 
 -- Used to distinguish the value-level and type-level variables
 data IdSyntacticCategory = Value | Type
