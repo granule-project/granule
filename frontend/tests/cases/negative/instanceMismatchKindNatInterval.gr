@@ -1,0 +1,6 @@
+interface Simple a (n : Nat)
+
+data A = A
+
+-- we provide an interval, rather than a Nat
+instance Simple A [1..2]

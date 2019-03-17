@@ -229,6 +229,7 @@ instance Substitutable Coeffect where
                                                            v (promoteTypeToKind k', q) }
              _ -> return ()
            return c
+        Just (SubstT (TyCoeffect c)) -> pure c
         -- Convert a single type substitution (type variable, type pair) into a
         -- coeffect substituion
         Just (SubstT t) -> do

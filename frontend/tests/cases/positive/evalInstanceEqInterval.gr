@@ -1,0 +1,16 @@
+-- EXPECTED: (True, False)
+data Bool = True | False
+
+not : Bool -> Bool
+not True = False;
+not False = True
+
+interface Eq a (i : Interval Nat) where
+  equal : a -> a [i] -> Bool
+
+instance Eq Bool [1..1] where
+  equal True [x] = x;
+  equal False [x] = not x
+
+main : (Bool, Bool)
+main = (equal True [True], equal False [True])

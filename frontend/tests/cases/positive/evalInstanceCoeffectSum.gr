@@ -1,0 +1,7 @@
+interface Sum a (c : Nat) where
+  sum : a [c] -> a
+
+data A = A
+
+instance Sum A [n] where
+  sum [A] = A

@@ -1,0 +1,30 @@
+interface BoolTy a (c : Interval Nat) where
+  and : a -> a [c] -> a;
+  or : a -> a [c] -> a;
+  not : a -> a
+
+data Bool = True | False
+
+-- lazy variant
+instance BoolTy Bool [0..1] where
+  and True [x] = x;
+  and False [_] = False;
+
+  or False [x] = x;
+  or True [_] = True;
+
+  not False = True;
+  not True = False
+
+-- non-lazy variant
+instance BoolTy Bool [1..1] where
+  and True [x] = x;
+  and False [False] = False;
+  and False [True] = False;
+
+  or False [x] = x;
+  or True [False] = True;
+  or True [True] = True;
+
+  not False = True;
+  not True = False

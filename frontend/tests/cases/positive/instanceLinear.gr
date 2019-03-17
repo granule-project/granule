@@ -1,0 +1,8 @@
+interface Simple a (c : Nat) where
+  simple : a [c] -> a [c]
+
+data A = A
+
+-- we should be able to use a linear pattern match here
+instance Simple A [1] where
+  simple [A] = [A]

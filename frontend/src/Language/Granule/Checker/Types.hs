@@ -79,6 +79,11 @@ effectMismatch s ef1 ef2 = equalityErr $
     concat ["Effect mismatch: ", prettyQuoted ef1, " not equal to ", prettyQuoted ef2]
 
 
+coeffectMismatch s c1 c2 = equalityErr $
+  GradingError (Just s) $
+    concat ["Coeffect mismatch: ", prettyQuoted c1, " not equal to ", prettyQuoted c2]
+
+
 unequalSessionTypes s t1 t2 = equalityErr $
   GenericError (Just s) $
     concat ["Session type ", prettyQuoted t1, " is not equal to ", prettyQuoted t2]
@@ -390,6 +395,9 @@ equalTypesRelatedCoeffects s rel sp x@(Box c t) y@(Box c' t') = do
       _ -> contextDoesNotAllowUnification s x y
     eq2 <- equalTypesRelatedCoeffects s rel sp t t'
     combinedEqualities s eq1 eq2
+
+equalTypesRelatedCoeffects s rel sp (TyCoeffect c1) (TyCoeffect c2) =
+  if (c1 == c2) then trivialEquality else coeffectMismatch s c1 c2
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get

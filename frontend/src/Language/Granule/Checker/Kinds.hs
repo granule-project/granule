@@ -164,7 +164,7 @@ inferKindOfTypeSafe' s quantifiedVariables t =
                else illKindedNEq s k2' k2
           else illKindedNEq s k1' k1
        (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
-    kCoeffect _ = wellKinded $ kConstr $ mkId "Coeffect"
+    kCoeffect c = inferCoeffectType s c >>= wellKinded . KPromote
 
 
 -- | Compute the join of two kinds, if it exists

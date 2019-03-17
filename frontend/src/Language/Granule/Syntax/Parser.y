@@ -196,6 +196,7 @@ InstTys :: { (Span, [Type]) }
 
 InstTy :: { (Span, Type) }
   : TyAtomWithSpan { $1 }
+  | '[' CoeffectWithSpan ']' { (fst $2, TyCoeffect (snd $2)) }
 
 InstForm :: { InstanceTypes }
   : InstTys { InstanceTypes (fst $1) (snd $1) }
