@@ -356,11 +356,9 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
       pure name
     getNormalisedInterfaceSig :: Inst -> Id -> MaybeT Checker TypeScheme
     getNormalisedInterfaceSig inst name = do
+      subst <- getInstanceSubstitution sp inst
       Just sig <- getInterfaceSig iname name
-      Just paramNames <- getInterfaceParameterNames iname
-      (Forall s binds constraints ty) <-
-        withInterfaceContext iname
-          $ substitute (zipWith (\p t -> (p, SubstT t)) paramNames idty) sig
+      (Forall s binds constraints ty) <- withInterfaceContext iname $ substitute subst sig
       -- ensure free variables in the instance head are universally quantified
       freeInstVarKinds <- getInstanceFreeVarKinds sp inst
       pure $ Forall s (binds <> freeInstVarKinds) constraints ty
@@ -1625,7 +1623,7 @@ getInstanceFreeVarKinds :: (?globals :: Globals) => Span -> Inst -> MaybeT Check
 getInstanceFreeVarKinds sp inst = do
   let iname = instIFace inst
       itys  = instParams inst
-  Just kinds <- getInterfaceParameterKinds iname
+  kinds <- getInterfaceParameterKindsForInst inst
   let zippedKinds = zip kinds itys
   fmap concat $ mapM (\(kind, ity) -> fmap (`getConstructorKinds` ity)
                   $ inferKindSigOfParameter sp iname kind ity) zippedKinds
@@ -1677,6 +1675,19 @@ getInterfaceParameterKindsForInst inst = do
         buildBindingMap inst = do
           Just params <- getInterfaceParameterNames (instIFace inst)
           pure $ zip params (fmap SubstT (instParams inst))
+
+
+getInstanceSubstitution :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
+getInstanceSubstitution sp inst = do
+  Just names <- getInterfaceParameterNames (instIFace inst)
+  kinds <- getInterfaceParameterKindsForInst inst
+  forM (zip3 (instParams inst) names kinds) getVarSubst
+  where getVarSubst (param, name, kind) =
+          case kind of
+            KPromote (TyCon n) | internalName n == "Nat" -> do
+              coeff <- compileNatKindedTypeToCoeffect sp param
+              pure (name, SubstC coeff)
+            _ -> pure (name, SubstT param)
 
 
 unboundKindVariable :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a
