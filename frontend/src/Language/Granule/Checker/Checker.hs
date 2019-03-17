@@ -224,6 +224,11 @@ checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
 
 checkIFaceHead :: (?globals :: Globals) => Interface -> MaybeT Checker ()
 checkIFaceHead iface@(Interface sp name constrs params itys) = do
+  -- check that all of the variables used in the kinds are in scope
+  let (pnames, pkinds) = unzip params'
+      kindVars = freeVars pkinds
+      remVars = kindVars \\ pnames
+  mapM_ (unboundKindVariable sp) remVars
   mapM_ (kindCheckConstr sp params') constrs
   registerInterface sp name params' (constrsToIcons constrs) ifsigs
   where
@@ -1670,3 +1675,9 @@ getInterfaceParameterKindsForInst inst = do
         buildBindingMap inst = do
           Just params <- getInterfaceParameterNames (instIFace inst)
           pure $ zip params (fmap SubstT (instParams inst))
+
+
+unboundKindVariable :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a
+unboundKindVariable sp n =
+  halt $ UnboundVariableError (Just sp) $
+       concat ["Kind variable ", prettyQuoted n, " could not be found in context."]

@@ -1,0 +1,2 @@
+-- there is no 'c' in scope
+interface Simple (n : c) a
