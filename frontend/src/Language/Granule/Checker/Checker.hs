@@ -311,7 +311,7 @@ checkInstTy sp inst = do
 
   -- Make sure the types in the instance head are well-kinded
   -- with respect to the parameter kinds
-  Just kinds <- getInterfaceParameterKinds (instIFace inst)
+  kinds <- getInterfaceParameterKindsForInst inst
   let expectedKindPairs = zip kinds (instParams inst)
   forM_ expectedKindPairs (\(iKind, ity) -> do
     inferred <- withInstanceContext sp inst $ inferKindOfTypeSafe sp ity
@@ -1658,3 +1658,18 @@ getInstanceFreeVarKinds sp inst = do
                      , "  Interface: ", show iname, "\n"
                      , "  Default kind: ", show k, "\n"
                      , "  Type: ", show t ]
+
+
+-- | Get the resolved kinds of an interface at a particular
+-- | instance.
+-- |
+-- | This function resolves kind dependencies (e.g., (a : Kind) (b : a)).
+getInterfaceParameterKindsForInst :: (?globals :: Globals) => Inst -> MaybeT Checker [Kind]
+getInterfaceParameterKindsForInst inst = do
+  bindMap <- buildBindingMap inst
+  Just pkinds <- getInterfaceParameterKinds (instIFace inst)
+  substitute bindMap pkinds
+  where buildBindingMap :: (?globals :: Globals) => Inst -> MaybeT Checker Substitution
+        buildBindingMap inst = do
+          Just params <- getInterfaceParameterNames (instIFace inst)
+          pure $ zip params (fmap SubstT (instParams inst))
