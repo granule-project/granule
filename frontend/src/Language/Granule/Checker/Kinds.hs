@@ -1,4 +1,5 @@
 -- Mainly provides a kind checker on types
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -62,15 +63,17 @@ kindCheckConstr s qvars ty = do
 kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
 kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
   -- Set up the quantified variables in the type variable context
+  initContext <- fmap tyVarContext get
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
   mapM_ (kindCheckConstr s quantifiedVariables) constraints
 
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
-    KType -> modify (\st -> st { tyVarContext = [] })
-    KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
-    _     -> illKindedNEq s KType kind
+    KType -> resetContext initContext
+    KPromote (TyCon k) | internalName k == "Protocol" -> resetContext initContext
+    _     -> resetContext initContext >> illKindedNEq s KType kind
+  where resetContext ctxt = modify (\st -> st { tyVarContext = ctxt })
 
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
