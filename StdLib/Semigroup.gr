@@ -1,0 +1,26 @@
+------
+--- Module: Semigroup
+--- Description: Semigroups and related interfaces
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+interface Magma a where
+  op : a -> a -> a
+
+
+-- | An associative Magma
+--
+-- we don't have a way of providing types
+-- to propose associativity yet, so this is
+-- a direct subclass of 'Magma'
+interface {Magma a} => Semigroup a
+
+
+-- a Monoid is a Semigroup with unit
+interface {Semigroup a} => Monoid a where
+  unit : a
