@@ -1565,9 +1565,12 @@ verifyConstraint sp cty = verifyInstanceExists sp cty
 -- | @withFreeVarsBound ty q c@ executes the checker @c@, but with
 -- | free variables in @ty@ bound with quantifier @q@.
 withFreeVarsBound :: (?globals :: Globals, Term t) => t -> Quantifier -> MaybeT Checker a -> MaybeT Checker a
-withFreeVarsBound ty q c =
-  let binds = fmap (\v -> (v, KType)) (freeVars ty)
-  in withBindings binds q c
+withFreeVarsBound ty q c = do
+  names <- fmap (fmap fst . tyVarContext) get
+  -- make sure we don't re-bind any already bound variables
+  let newVars = freeVars ty \\ names
+      binds = fmap (\v -> (v, KType)) newVars
+  withBindings binds q c
 
 
 -- | Run the checker with the given bindings present.
