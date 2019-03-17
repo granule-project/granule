@@ -704,3 +704,8 @@ instance Substitutable Inst where
     pure $ mkInst iname params'
 
   unify = unify `on` tyFromInst
+
+
+instance {-# OVERLAPPABLE #-} (Substitutable a) => Substitutable [a] where
+  substitute ctxt = mapM (substitute ctxt)
+  unify _ _ = error "unification not defined for arbitrary lists"
