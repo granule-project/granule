@@ -1642,6 +1642,7 @@ getInstanceFreeVarKinds sp inst = do
     getConstructorKinds _ (TyCon _) = []
     getConstructorKinds k (Box _ t) = getConstructorKinds k t
     getConstructorKinds k (Diamond _ t) = getConstructorKinds k t
+    getConstructorKinds k (TyCoeffect (CVar v)) = pure (v, k)
     getConstructorKinds _ TyCoeffect{} = []
     getConstructorKinds _ TyInt{} = []
     getConstructorKinds k t =

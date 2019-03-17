@@ -1,0 +1,3 @@
+interface Simple (b : Interval Nat)
+
+instance Simple [n]
