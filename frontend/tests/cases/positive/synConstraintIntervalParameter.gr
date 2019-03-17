@@ -1,0 +1,5 @@
+interface Simple a (b : Interval Nat)
+
+-- A constraint with an application to a nat coeffect
+foo : forall {a : Type} . {Simple a [1..2]} => a -> a
+foo x = x

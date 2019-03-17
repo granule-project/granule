@@ -393,7 +393,7 @@ PredicateConstraint :: { Type }
   | TyAtom '/=' TyAtom        { TyInfix ("/=") $1 $3 }
 
 InterfaceConstraint :: { TConstraint }
-  : CONSTR TyParams { foldl TyApp (TyCon . mkId . constrString $ $1) $2 }
+  : CONSTR InstTys { foldl TyApp (TyCon . mkId . constrString $ $1) (snd $2) }
 
 TyAtom :: { Type }
   : TyAtomWithSpan { snd $1 }
