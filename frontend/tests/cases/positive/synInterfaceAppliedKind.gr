@@ -1,0 +1,3 @@
+-- 'Interval Nat' is a kind application, which
+-- should be syntactically correct
+interface Simple a (b : Interval Nat)

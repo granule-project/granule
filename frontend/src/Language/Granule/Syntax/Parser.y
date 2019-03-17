@@ -338,16 +338,17 @@ VarSig :: { (Id, Kind) }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
-  | VAR                       { KVar (mkId $ symString $1) }
-  | CONSTR                    { case constrString $1 of
-                                  "Type"      -> KType
-                                  "Coeffect"  -> KCoeffect
-                                  "Predicate" -> KConstraint Predicate
-                                  "Constraint" -> KConstraint InterfaceC
-                                  s          -> kConstr $ mkId s }
-  | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
-  | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
-
+  | TyJuxt {
+    case $1 of
+      (TyCon c) -> case internalName c of
+                     "Type"       -> KType
+                     "Coeffect"   -> KCoeffect
+                     "Predicate"  -> KConstraint Predicate
+                     "Constraint" -> KConstraint InterfaceC
+                     s            -> kConstr $ mkId s
+      (TyVar v) -> KVar v
+      t -> KPromote t
+  }
 
 TypeWithSpan :: { (Span, Type) }
   : TyJuxtWithSpan                  { $1 }
