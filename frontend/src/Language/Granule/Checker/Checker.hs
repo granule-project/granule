@@ -1656,6 +1656,9 @@ getInstanceFreeVarKinds sp inst = do
         let (n, m) = binaryCoeffComps c
             go = getConstructorKinds k . TyCoeffect
         in go n <> go m
+    getConstructorKinds p@(KPromote (TyCon c)) t
+      | internalName c == "Nat" =
+        maybe [] (getConstructorKinds p . TyCoeffect) (compileNatKindedTypeToCoeffectSafe t)
     getConstructorKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
       | internalName c == "Interval" =
         let go = getConstructorKinds (KPromote p) . TyCoeffect in go l <> go u

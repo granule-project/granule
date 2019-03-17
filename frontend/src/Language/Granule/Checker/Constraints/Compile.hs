@@ -17,24 +17,32 @@ import Language.Granule.Syntax.Span
 
 import Language.Granule.Utils
 
-compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Coeffect
-compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
-  t1' <- compileNatKindedTypeToCoeffect s t1
-  t2' <- compileNatKindedTypeToCoeffect s t2
+
+compileNatKindedTypeToCoeffectSafe :: Type -> Maybe Coeffect
+compileNatKindedTypeToCoeffectSafe (TyInfix op t1 t2) = do
+  t1' <- compileNatKindedTypeToCoeffectSafe t1
+  t2' <- compileNatKindedTypeToCoeffectSafe t2
   case op of
-    "+"   -> return $ CPlus t1' t2'
-    "*"   -> return $ CTimes t1' t2'
-    "^"   -> return $ CExpon t1' t2'
-    "-"   -> return $ CMinus t1' t2'
-    "∨" -> return $ CJoin t1' t2'
-    "∧" -> return $ CMeet t1' t2'
-    _     -> halt $ UnboundVariableError (Just s) $ "Type-level operator " <> op
-compileNatKindedTypeToCoeffect _ (TyInt n) =
-  return $ CNat n
-compileNatKindedTypeToCoeffect _ (TyVar v) =
-  return $ CVar v
+    "+"   -> pure $ CPlus t1' t2'
+    "*"   -> pure $ CTimes t1' t2'
+    "^"   -> pure $ CExpon t1' t2'
+    "-"   -> pure $ CMinus t1' t2'
+    "∨" ->   pure $ CJoin t1' t2'
+    "∧" ->   pure $ CMeet t1' t2'
+    _     -> Nothing
+compileNatKindedTypeToCoeffectSafe (TyInt n) = pure $ CNat n
+compileNatKindedTypeToCoeffectSafe (TyVar v) = pure $ CVar v
+compileNatKindedTypeToCoeffectSafe _ = Nothing
+
+
+compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Coeffect
+compileNatKindedTypeToCoeffect s tinfix@(TyInfix op _ _) = do
+  maybe (halt $ UnboundVariableError (Just s) $ "Type-level operator " <> op)
+        pure (compileNatKindedTypeToCoeffectSafe tinfix)
 compileNatKindedTypeToCoeffect s t =
-  halt $ KindError (Just s) $ "Type `" <> pretty t <> "` does not have kind `Nat`"
+  maybe (halt $ KindError (Just s) $ "Type `" <> pretty t <> "` does not have kind `Nat`")
+        pure (compileNatKindedTypeToCoeffectSafe t)
+
 
 compileTypeConstraintToConstraint ::
     (?globals :: Globals) => Span -> Type -> MaybeT Checker Pred

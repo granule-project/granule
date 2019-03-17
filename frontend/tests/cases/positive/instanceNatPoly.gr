@@ -1,0 +1,15 @@
+-- pattern matching for Nat instances
+
+-- indexed to prevent duplicate instance
+-- warning
+interface Simple (b : Nat) (a : Nat)
+
+instance Simple 1 (n+m)
+
+instance Simple 2 (n*m)
+
+instance Simple 3 (n-m)
+
+instance Simple 4 (n∧m)
+
+instance Simple 5 (n∨m)
