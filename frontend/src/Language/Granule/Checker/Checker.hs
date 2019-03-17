@@ -26,6 +26,7 @@ import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Interface
   ( getInterfaceSig
   , getInterfaceMembers
+  , getInterfaceParameters
   , getInterfaceParameterNames
   , getInterfaceParameterKinds
   , getInterfaceConstraints
@@ -353,7 +354,8 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
       Just sig <- getInterfaceSig iname name
       Just paramNames <- getInterfaceParameterNames iname
       (Forall s binds constraints ty) <-
-        substitute (zipWith (\p t -> (p, SubstT t)) paramNames idty) sig
+        withInterfaceContext iname
+          $ substitute (zipWith (\p t -> (p, SubstT t)) paramNames idty) sig
       -- ensure free variables in the instance head are universally quantified
       freeInstVarKinds <- getInstanceFreeVarKinds sp inst
       pure $ Forall s (binds <> freeInstVarKinds) constraints ty
@@ -1567,6 +1569,13 @@ withInstanceContext :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker a
 withInstanceContext sp inst c = do
   tyVars <- getInstanceFreeVarKinds sp inst
   withBindings tyVars InstanceQ c
+
+
+-- | Execute a checker with context from the interface head in scope.
+withInterfaceContext :: (?globals :: Globals) => Id -> MaybeT Checker a -> MaybeT Checker a
+withInterfaceContext iname c = do
+  Just params <- getInterfaceParameters iname
+  withBindings params InstanceQ c
 
 
 -- | Get the constraint context available to a particular instance.
