@@ -1,0 +1,20 @@
+-- tests for various coeffect pattern matching
+-- in instances
+
+interface Simple (c : Coeffect) (a : c)
+
+instance Simple Nat [n+m]
+
+instance Simple Nat [n*m]
+
+instance Simple Nat [n-m]
+
+instance Simple Nat [n^m]
+
+instance Simple Nat [n∧m]
+
+instance Simple Nat [n∨m]
+
+instance Simple (Interval Nat) [n..m]
+
+instance Simple Q [n+m]

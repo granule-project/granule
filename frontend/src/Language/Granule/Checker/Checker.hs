@@ -1643,6 +1643,11 @@ getInstanceFreeVarKinds sp inst = do
     getConstructorKinds k (Box _ t) = getConstructorKinds k t
     getConstructorKinds k (Diamond _ t) = getConstructorKinds k t
     getConstructorKinds k (TyCoeffect (CVar v)) = pure (v, k)
+    getConstructorKinds k (TyCoeffect c)
+      | isBinaryCoeff c =
+        let (n, m) = binaryCoeffComps c
+            go = getConstructorKinds k . TyCoeffect
+        in go n <> go m
     getConstructorKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
       | internalName c == "Interval" =
         let go = getConstructorKinds (KPromote p) . TyCoeffect in go l <> go u
@@ -1650,6 +1655,22 @@ getInstanceFreeVarKinds sp inst = do
     getConstructorKinds _ TyInt{} = []
     getConstructorKinds k t =
       error $ "getConstructorKinds called with: '" <> show k <> "' and '" <> show t <> "'"
+
+    isBinaryCoeff CPlus{} = True
+    isBinaryCoeff CTimes{} = True
+    isBinaryCoeff CMinus{} = True
+    isBinaryCoeff CMeet{} = True
+    isBinaryCoeff CJoin{} = True
+    isBinaryCoeff CExpon{} = True
+    isBinaryCoeff _ = False
+
+    binaryCoeffComps (CPlus x y) = (x, y)
+    binaryCoeffComps (CTimes x y) = (x, y)
+    binaryCoeffComps (CMinus x y) = (x, y)
+    binaryCoeffComps (CJoin x y) = (x, y)
+    binaryCoeffComps (CMeet x y) = (x, y)
+    binaryCoeffComps (CExpon x y) = (x, y)
+    binaryCoeffComps c = error $ "binaryCoeffComps called with: " <> show c
 
     -- | Attempt to get the most specific kind signature of the interface, where
     -- | for variables, this is the parameter kind, but for type constructors
