@@ -51,3 +51,14 @@ instance {Semigroup a, Semigroup b} => Semigroup (a, b)
 
 instance {Monoid a, Monoid b} => Monoid (a, b) where
   unit = (unit, unit)
+
+
+instance Magma String where
+  op x y = stringAppend x y
+
+
+instance Semigroup String
+
+
+instance Monoid String where
+  unit = ""
