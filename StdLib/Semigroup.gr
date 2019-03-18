@@ -24,3 +24,30 @@ interface {Magma a} => Semigroup a
 -- a Monoid is a Semigroup with unit
 interface {Semigroup a} => Monoid a where
   unit : a
+
+
+----------------------------
+-- Instances for builtins --
+----------------------------
+
+
+instance Magma () where
+  op () () = ()
+
+
+instance Semigroup ()
+
+
+instance Monoid () where
+  unit = ()
+
+
+instance {Magma a, Magma b} => Magma (a, b) where
+  op (x1, y1) (x2, y2) = (op x1 x2, op y1 y2)
+
+
+instance {Semigroup a, Semigroup b} => Semigroup (a, b)
+
+
+instance {Monoid a, Monoid b} => Monoid (a, b) where
+  unit = (unit, unit)
