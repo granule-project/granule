@@ -1,0 +1,8 @@
+interface Simple (n : Nat) a
+
+interface {Simple n a} => Simple2 (n : Nat) a
+
+instance Simple 1 Int
+
+-- there is no instance for 'Simple 1 Int'
+instance Simple2 2 Int
