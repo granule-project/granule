@@ -1,0 +1,46 @@
+------
+--- Module: StandardInstances
+--- Description: Instances for many standard types
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+import FoldableUtil
+import Monad
+
+import List
+
+
+--------------------
+-- List Instances --
+--------------------
+
+instance Foldable List (Interval (Ext Nat)) [0..∞] where
+  foldr [_] v Empty = v;
+  foldr [f] v (Next x xs) = foldr [f] (f x v) xs
+
+instance Magma (List a) where
+  -- concatenation
+  op Empty ys = ys;
+  op (Next x xs) ys = Next x (op xs ys)
+
+instance Semigroup (List a)
+
+instance Monoid (List a) where
+  unit = Empty
+
+instance Functor List (Interval (Ext Nat)) [0..∞] where
+  map [_] Empty = Empty;
+  map [f] (Next x xs) = Next (f x) (map [f] xs)
+
+instance Applicative List (Interval (Ext Nat)) [0..∞] where
+  pure x = Next x Empty;
+  -- alternative implementation could be a ziplist
+  ap [Next f fs] [xs] = op (map [f] xs) (ap [fs] [xs]);
+  ap [_] [_] = Empty
+
+instance Monad List (Interval (Ext Nat)) [0..∞] where
+  bind vs f = concat (map f vs)
