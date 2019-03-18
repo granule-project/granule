@@ -1,0 +1,17 @@
+------
+--- Module: FoldableUtil
+--- Description: Utilities for Foldable instances
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+import Foldable
+import Semigroup
+
+
+-- | Fold elements into a single element.
+concat : forall {f : Type -> Type, a : Type, c : Coeffect, i : c} . {Foldable f c i, Monoid a} => f a -> a
+concat = foldr [op] unit
