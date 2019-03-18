@@ -9,22 +9,22 @@
 ------
 
 
-interface Functor (f : Type -> Type) (c : Interval Nat) where
-  map : forall {a : Type, b : Type} . (a -> b) [c] -> f a -> f b
+interface Functor (f : Type -> Type) (c : Coeffect) (i : c) where
+  map : forall {a : Type, b : Type} . (a -> b) [i] -> f a -> f b
 
 
-interface {Functor f c} => Applicative (f : Type -> Type) (c : Interval Nat) where
+interface {Functor f c i} => Applicative (f : Type -> Type) (c : Coeffect) (i : c) where
   -- | Lift a value into the type.
   pure : forall {a : Type} . a -> f a;
   -- | Sequential application.
-  ap : forall {a : Type, b : Type} . (f (a -> b)) [c] -> (f a) [c] -> f b
+  ap : forall {a : Type, b : Type} . (f (a -> b)) [i] -> (f a) [i] -> f b
 
 
-interface {Applicative m c} => Monad (m : Type -> Type) (c : Interval Nat) where
+interface {Applicative m c i} => Monad (m : Type -> Type) (c : Coeffect) (i : c) where
   -- | Bind the result of a previous computation.
-  bind : forall {a : Type, b : Type} . m a -> (a -> m b) [c] -> m b
+  bind : forall {a : Type, b : Type} . m a -> (a -> m b) [i] -> m b
 
 
 -- | Remove one level of monadic structure.
-join : forall {a : Type, m : Type -> Type, c : Interval Nat} . {Monad m c} => m (m a) -> m a
+join : forall {a : Type, m : Type -> Type, c : Coeffect, i : c} . {Monad m c i} => m (m a) -> m a
 join x = bind x [\x -> x]
