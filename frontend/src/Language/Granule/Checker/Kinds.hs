@@ -26,7 +26,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 
 import Language.Granule.Checker.Errors
-import Language.Granule.Checker.Interface (getKindRequired)
+import Language.Granule.Checker.Interface (getInterfaceKind)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 
@@ -356,3 +356,21 @@ updateCoeffectType tyVar k = do
    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
+
+
+-- | Retrieve a kind from the type constructor scope
+getKindRequired :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
+getKindRequired sp name = do
+  ikind <- getInterfaceKind name
+  case ikind of
+    Just k -> pure k
+    Nothing -> do
+      tyCon <- lookupContext typeConstructors name
+      case tyCon of
+        Just (kind, _) -> pure kind
+        Nothing -> do
+          dConTys <- requireInScope (dataConstructors, "Interface or constructor") sp name
+          case dConTys of
+            (Forall _ [] [] t, []) -> pure $ KPromote t
+            _ -> halt $ GenericError (Just sp)
+                 ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name)

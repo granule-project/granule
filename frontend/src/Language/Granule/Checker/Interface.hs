@@ -1,8 +1,5 @@
-{-# LANGUAGE ImplicitParams #-}
-
 module Language.Granule.Checker.Interface
-  ( getKindRequired
-  , getInterfaceMembers
+  ( getInterfaceMembers
   , getInterfaceParameters
   , getInterfaceParameterNames
   , getInterfaceParameterKinds
@@ -20,14 +17,10 @@ import qualified Data.Map as M
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers (Id)
-import Language.Granule.Syntax.Pretty (pretty)
-import Language.Granule.Syntax.Span (Span)
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Context (Ctxt)
-import Language.Granule.Utils (Globals)
 
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Monad
 
@@ -72,24 +65,6 @@ getInterfaceSig iname name = fmap join $ fmap (fmap $ lookup name) (getInterface
 
 getInterfaceConstraints :: Id -> MaybeT Checker (Maybe [Inst])
 getInterfaceConstraints = fmap (fmap ifaceConstraints) . getInterface
-
-
--- | Retrieve a kind from the type constructor scope
-getKindRequired :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
-getKindRequired sp name = do
-  ikind <- getInterfaceKind name
-  case ikind of
-    Just k -> pure k
-    Nothing -> do
-      tyCon <- lookupContext typeConstructors name
-      case tyCon of
-        Just (kind, _) -> pure kind
-        Nothing -> do
-          dConTys <- requireInScope (dataConstructors, "Interface or constructor") sp name
-          case dConTys of
-            (Forall _ [] [] t, []) -> pure $ KPromote t
-            _ -> halt $ GenericError (Just sp)
-                 ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name)
 
 
 -- | Register an instantiated typescheme for an instance method.
