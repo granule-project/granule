@@ -26,9 +26,7 @@ import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Interface
   ( getInterfaceSig
   , getInterfaceMembers
-  , getInterfaceParameters
   , getInterfaceParameterNames
-  , getInterfaceParameterKinds
   , getInterfaceConstraints
   , registerInstanceSig
   , withInterfaceContext
@@ -1690,34 +1688,6 @@ getInstanceFreeVarKinds sp inst = do
                      , "  Interface: ", show iname, "\n"
                      , "  Default kind: ", show k, "\n"
                      , "  Type: ", show t ]
-
-
--- | Get the resolved kinds of an interface at a particular
--- | instance.
--- |
--- | This function resolves kind dependencies (e.g., (a : Kind) (b : a)).
-getInterfaceParameterKindsForInst :: (?globals :: Globals) => Inst -> MaybeT Checker [Kind]
-getInterfaceParameterKindsForInst inst = do
-  bindMap <- buildBindingMap inst
-  Just pkinds <- getInterfaceParameterKinds (instIFace inst)
-  substitute bindMap pkinds
-  where buildBindingMap :: (?globals :: Globals) => Inst -> MaybeT Checker Substitution
-        buildBindingMap inst = do
-          Just params <- getInterfaceParameterNames (instIFace inst)
-          pure $ zip params (fmap SubstT (instParams inst))
-
-
-getInstanceSubstitution :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
-getInstanceSubstitution sp inst = do
-  Just names <- getInterfaceParameterNames (instIFace inst)
-  kinds <- getInterfaceParameterKindsForInst inst
-  forM (zip3 (instParams inst) names kinds) getVarSubst
-  where getVarSubst (param, name, kind) =
-          case kind of
-            KPromote (TyCon n) | internalName n == "Nat" -> do
-              coeff <- compileNatKindedTypeToCoeffect sp param
-              pure (name, SubstC coeff)
-            _ -> pure (name, SubstT param)
 
 
 -- | True if the two instances can be proven to be equal in the current context.

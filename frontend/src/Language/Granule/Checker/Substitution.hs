@@ -25,6 +25,11 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Instance
+import Language.Granule.Checker.Interface
+  ( getInterfaceParameterNames
+  , getInterfaceParameterKinds
+  , buildBindingMap
+  )
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -709,3 +714,32 @@ instance Substitutable Inst where
 instance {-# OVERLAPPABLE #-} (Substitutable a) => Substitutable [a] where
   substitute ctxt = mapM (substitute ctxt)
   unify _ _ = error "unification not defined for arbitrary lists"
+
+
+---------------------------
+----- Context Helpers -----
+---------------------------
+
+
+getInstanceSubstitution :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
+getInstanceSubstitution sp inst = do
+  Just names <- getInterfaceParameterNames (instIFace inst)
+  kinds <- getInterfaceParameterKindsForInst inst
+  forM (zip3 (instParams inst) names kinds) getVarSubst
+  where getVarSubst (param, name, kind) =
+          case kind of
+            KPromote (TyCon n) | internalName n == "Nat" -> do
+              coeff <- compileNatKindedTypeToCoeffect sp param
+              pure (name, SubstC coeff)
+            _ -> pure (name, SubstT param)
+
+
+-- | Get the resolved kinds of an interface at a particular
+-- | instance.
+-- |
+-- | This function resolves kind dependencies (e.g., (a : Kind) (b : a)).
+getInterfaceParameterKindsForInst :: (?globals :: Globals) => Inst -> MaybeT Checker [Kind]
+getInterfaceParameterKindsForInst inst = do
+  bindMap <- buildBindingMap inst
+  Just pkinds <- getInterfaceParameterKinds (instIFace inst)
+  substitute bindMap pkinds

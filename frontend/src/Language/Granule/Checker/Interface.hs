@@ -8,6 +8,7 @@ module Language.Granule.Checker.Interface
   , getInterfaceConstraints
   , registerInstanceSig
   , withInterfaceContext
+  , buildBindingMap
   ) where
 
 
@@ -25,6 +26,7 @@ import Language.Granule.Context (Ctxt)
 import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates (Quantifier(InstanceQ))
+import Language.Granule.Checker.SubstitutionContexts
 
 
 ifaceCtxtNames :: IFaceCtxt -> [Id]
@@ -82,3 +84,11 @@ withInterfaceContext :: Id -> MaybeT Checker a -> MaybeT Checker a
 withInterfaceContext iname c = do
   Just params <- getInterfaceParameters iname
   withBindings params InstanceQ c
+
+
+-- | Build a substitution that maps interface parameter
+-- | variables to the instance.
+buildBindingMap :: Inst -> MaybeT Checker Substitution
+buildBindingMap inst = do
+  Just params <- getInterfaceParameterNames (instIFace inst)
+  pure $ zip params (fmap SubstT (instParams inst))
