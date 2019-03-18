@@ -7,6 +7,7 @@ module Language.Granule.Checker.Interface
   , getInterfaceKind
   , getInterfaceConstraints
   , registerInstanceSig
+  , withInterfaceContext
   ) where
 
 
@@ -23,6 +24,7 @@ import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Predicates (Quantifier(InstanceQ))
 
 
 ifaceCtxtNames :: IFaceCtxt -> [Id]
@@ -73,3 +75,10 @@ registerInstanceSig iname (InstanceTypes _ ity) meth methTys =
     -- we lookup instances by the type application of the interface
     let finTy = mkInst iname ity
     in modify' $ \s -> s { instanceSigs = M.insert (finTy, meth) methTys (instanceSigs s) }
+
+
+-- | Execute a checker with context from the interface head in scope.
+withInterfaceContext :: Id -> MaybeT Checker a -> MaybeT Checker a
+withInterfaceContext iname c = do
+  Just params <- getInterfaceParameters iname
+  withBindings params InstanceQ c

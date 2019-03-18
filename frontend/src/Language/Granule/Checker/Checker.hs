@@ -31,6 +31,7 @@ import Language.Granule.Checker.Interface
   , getInterfaceParameterKinds
   , getInterfaceConstraints
   , registerInstanceSig
+  , withInterfaceContext
   )
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
@@ -1580,13 +1581,6 @@ withInstanceContext :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker a
 withInstanceContext sp inst c = do
   tyVars <- getInstanceFreeVarKinds sp inst
   withBindings tyVars InstanceQ c
-
-
--- | Execute a checker with context from the interface head in scope.
-withInterfaceContext :: (?globals :: Globals) => Id -> MaybeT Checker a -> MaybeT Checker a
-withInterfaceContext iname c = do
-  Just params <- getInterfaceParameters iname
-  withBindings params InstanceQ c
 
 
 -- | Get the interface context of a typescheme.
