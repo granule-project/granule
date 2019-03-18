@@ -8,5 +8,5 @@
 --- Repository: https://github.com/granule-project/granule
 ------
 
-interface Foldable (t : Type -> Type) where
-  foldr : forall {a : Type, b : Type} . (a -> b -> b) -> b -> t a -> b
+interface Foldable (t : Type -> Type) (c : Coeffect) (i : c) where
+  foldr : forall {a : Type, b : Type} . (a -> b -> b) [i] -> b -> t a -> b
