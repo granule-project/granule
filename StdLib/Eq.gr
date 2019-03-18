@@ -26,3 +26,47 @@ notEqual x y = not (equal x y)
 instance Eq Bool where
   equal True  x = x;
   equal False x = not x
+
+
+----------------------------
+-- Instances for builtins --
+----------------------------
+
+
+instance {Eq a, Eq b} => Eq (a, b) where
+  equal (x1, y1) (x2, y2) = (equal x1 x2) `and'` (equal y1 y2)
+
+
+instance Eq () where
+  equal () () = True
+
+
+instance Eq Int where
+  equal x y = x ≡ y
+
+
+instance Eq Float where
+  equal x y = x ≡ y
+
+
+instance Eq IOMode where
+  equal ReadMode ReadMode           = True;
+  equal WriteMode WriteMode         = True;
+  equal AppendMode AppendMode       = True;
+  equal ReadWriteMode ReadWriteMode = True;
+
+  equal ReadMode WriteMode     = False;
+  equal ReadMode AppendMode    = False;
+  equal ReadMode ReadWriteMode = False;
+
+  equal WriteMode ReadMode      = False;
+  equal WriteMode AppendMode    = False;
+  equal WriteMode ReadWriteMode = False;
+
+  equal AppendMode ReadMode      = False;
+  equal AppendMode WriteMode     = False;
+  equal AppendMode ReadWriteMode = False;
+
+  equal ReadWriteMode ReadMode   = False;
+  equal ReadWriteMode WriteMode  = False;
+  equal ReadWriteMode AppendMode = False
