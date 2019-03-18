@@ -85,3 +85,24 @@ min [x] [y] = if lessThan x y then x else y
 -- | Compare the arguments after running them through a transformative function.
 comparing : forall {a : Type, b : Type} . {Ord a} => (b -> a [1..2]) [2] -> b -> b -> Ordering
 comparing [f] x y = compare (f x) (f y)
+
+
+----------------------------
+-- Instances for builtins --
+----------------------------
+
+
+instance Ord () where
+  lessThan () () = False
+
+
+instance Ord Int where
+  lessThan x y = x < y
+
+
+instance Ord Float where
+  lessThan x y = x < y
+
+
+instance {Ord a, Ord b} => Ord (a, b) where
+  lessThan (x1, y1) (x2, y2) = (lessThan x1 x2) `and'` (lessThan y1 y2)
