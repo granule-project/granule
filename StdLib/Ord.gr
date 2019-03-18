@@ -1,0 +1,87 @@
+------
+--- Module: Ord
+--- Description: Orderings
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+import Eq
+
+
+-- | The ordering of things.
+data Ordering = LT | EQ | GT
+
+
+instance Eq Ordering where
+  equal LT LT = True;
+  equal EQ EQ = True;
+  equal GT GT = True;
+
+  equal LT EQ = False;
+  equal LT GT = False;
+
+  equal EQ LT = False;
+  equal EQ GT = False;
+
+  equal GT LT = False;
+  equal GT EQ = False
+
+
+-- | Interface for types that have a natural ordering.
+interface {Eq a} => Ord a where
+  lessThan : a -> a -> Bool
+
+
+instance Ord Ordering where
+  lessThan LT x = notEqual x LT;
+  lessThan x EQ = equal x LT;
+  lessThan x GT = notEqual x GT
+
+
+instance Ord Bool where
+  lessThan False x = x;
+  lessThan True  x = and' x False
+
+
+-- | Compare the two arguments for ordering.
+compare : forall {a : Type} . {Ord a} => a [1..2] -> a [1..2] -> Ordering
+compare [x] [y] = if equal x y then EQ else if lessThan x y then LT else GT
+
+
+-- | True if the first argument is greater than the second.
+gt : forall {a : Type} . {Ord a} => a [1..2] -> a [1..2] -> Bool
+gt [x] [y] = equal (compare [x] [y]) GT
+
+
+-- | True if the first argument is greater than or equal to the second.
+gte : forall {a : Type} . {Ord a} => a -> a -> Bool
+gte x y = not (lessThan x y)
+
+
+-- | True if the first argument is less than the second.
+lt : forall {a : Type} . {Ord a} => a -> a -> Bool
+lt = lessThan
+
+
+-- | True if the first argument is less than or equal to the second.
+lte : forall {a : Type} . {Ord a} => a [1..2] -> a [1..2] -> Bool
+lte [x] [y] = not (gt [x] [y])
+
+
+-- | The maximum of two values.
+max : forall {a : Type} . {Ord a} => a [1..2] -> a [1..2] -> a
+max [x] [y] = if lessThan x y then y else x
+
+
+-- | The minimum of two values.
+min : forall {a : Type} . {Ord a} => a [1..2] -> a [1..2] -> a
+min [x] [y] = if lessThan x y then x else y
+
+
+-- | Compare the arguments after running them through a transformative function.
+comparing : forall {a : Type, b : Type} . {Ord a} => (b -> a [1..2]) [2] -> b -> b -> Ordering
+comparing [f] x y = compare (f x) (f y)
