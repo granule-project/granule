@@ -126,15 +126,21 @@ data CheckerState = CS
             , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
-            -- Interface information
+            -- | Mapping from interface names to detailed interface information
             , ifaceContext :: Ctxt IFaceCtxt
+            -- | Mapping from interface names to a mapping from
+            -- | instances to their constraints
             , instanceContext :: Ctxt [(Inst, [Type])]
+            -- | Map from (Instance, method name) pairs to the
+            -- | instance-specific typescheme
             , instanceSigs :: M.Map (Inst, Id) TypeScheme
+            -- | Map from definition names to their expanded constraints
             , expandedConstraints :: Ctxt [Inst]
-            -- Context of interface constraints
+            -- | The instances required to satisfy the current
+            -- | equation (i.e., its context)
             , iconsContext :: [Inst]
 
-            -- context of definition types
+            -- | Mapping from definition names to their associated typeschemes
             , defContext :: Ctxt TypeScheme
 
             -- LaTeX derivation
