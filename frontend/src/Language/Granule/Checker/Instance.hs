@@ -50,7 +50,7 @@ import Language.Granule.Syntax.Type
 
 -- | Simplified representation of instances for ease of use.
 data Inst = Inst {
-    -- ^ The interface name of an instance.
+    -- | The interface name of an instance.
     instIFace :: Id
   , instParams :: [Type]
   } deriving (Eq, Ord, Show)
