@@ -1,0 +1,6 @@
+interface Simple a
+
+instance Simple Int
+
+-- overlaps with 'Int'
+instance Simple a

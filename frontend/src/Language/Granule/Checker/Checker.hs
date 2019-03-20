@@ -278,7 +278,7 @@ getInstance sp inst = do
       unifiableWithInstance :: Inst -> MaybeT Checker Bool
       unifiableWithInstance ity =
           withInstanceContext sp ity $
-            withFreeVarsBound inst ForallQ $ instancesAreEqual' sp inst ity
+            withFreeVarsBound inst BoundQ $ instancesAreEqual' sp inst ity
 
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
@@ -296,9 +296,11 @@ checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
             registerInstance sp inst = do
               maybeInstance <- getInstance sp inst
               case maybeInstance of
-                Just _ ->
+                Just (inst',_) ->
                     halt . NameClashError (Just sp) $
-                      "Duplicate instance " <> prettyQuoted inst
+                      concat [ "The instance ", prettyQuoted inst
+                             , " overlaps with the previously defined instance "
+                             , prettyQuoted inst' ]
                 Nothing -> do
                     maybeInstances <- lookupContext instanceContext iname
                     modify' $ \st -> st { instanceContext = (iname, (inst,constrs):fromMaybe [] maybeInstances)

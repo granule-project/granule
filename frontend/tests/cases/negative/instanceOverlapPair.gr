@@ -1,0 +1,6 @@
+interface Simple a
+
+instance Simple (Int, Int)
+
+-- (Int, a) overlaps with (Int, Int)
+instance Simple (Int, a)
