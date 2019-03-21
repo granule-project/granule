@@ -14,8 +14,8 @@ interface Functor (f : Type -> Type) (c : Coeffect) (i : c) where
 
 
 interface {Functor f c i} => Applicative (f : Type -> Type) (c : Coeffect) (i : c) where
-  -- | Lift a value into the type.
-  pure : forall {a : Type} . a -> f a;
+  -- | The unit value in the functor.
+  munit : f ();
   -- | Sequential application.
   ap : forall {a : Type, b : Type} . (f (a -> b)) [i] -> (f a) [i] -> f b
 

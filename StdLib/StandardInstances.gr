@@ -37,7 +37,7 @@ instance Functor List (Interval (Ext Nat)) [0..∞] where
   map [f] (Next x xs) = Next (f x) (map [f] xs)
 
 instance Applicative List (Interval (Ext Nat)) [0..∞] where
-  pure x = Next x Empty;
+  munit = Next () Empty;
   -- alternative implementation could be a ziplist
   ap [Next f fs] [xs] = op (map [f] xs) (ap [fs] [xs]);
   ap [_] [_] = Empty
