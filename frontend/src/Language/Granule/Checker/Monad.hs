@@ -189,6 +189,17 @@ lookupContext ctxtf name = fmap (lookup name . ctxtf) get
 getTypeScheme :: Id -> MaybeT Checker (Maybe TypeScheme)
 getTypeScheme = lookupContext defContext
 
+
+-- | Get the current variable kind/quantification context.
+getTyVarContext :: MaybeT Checker (Ctxt (Kind, Quantifier))
+getTyVarContext = fmap tyVarContext get
+
+
+-- | Set the current variable kind/quantification context.
+putTyVarContext :: Ctxt (Kind, Quantifier) -> MaybeT Checker ()
+putTyVarContext tvc = modify' $ \st -> st { tyVarContext = tvc }
+
+
 -- | @checkDuplicate (ctxtf, descr) sp name@ checks if
 -- | @name@ already exists in the context retrieved by
 -- | @ctxtf@. If a name already exists, then the program
