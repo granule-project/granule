@@ -1,7 +1,7 @@
 resolver: nightly-2018-11-24
 
 packages:
-#- compiler/
+- compiler/
 - frontend/
 - interpreter/
 - repl/
