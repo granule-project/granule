@@ -37,4 +37,4 @@ local name =
         local <- gets ((Map.lookup name) . localSymbols)
         case local of
             Just op -> return op
-            Nothing -> error $ internalName name ++ " registered as a local, missing call to addLocal?\n"
+            Nothing -> error $ internalName name ++ "not registered as a local, missing call to addLocal?\n"

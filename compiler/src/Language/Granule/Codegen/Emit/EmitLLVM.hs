@@ -12,6 +12,7 @@ import qualified LLVM.AST as IR
 
 import LLVM.AST (Operand)
 import LLVM.AST.Constant (Constant(..))
+import qualified LLVM.AST.Constant as C
 import LLVM.AST.Type hiding (Type)
 import LLVM.IRBuilder.Module
 import LLVM.IRBuilder.Monad
@@ -25,6 +26,7 @@ import Language.Granule.Codegen.Emit.Names
 import Language.Granule.Codegen.Emit.LowerClosure (emitEnvironmentType, emitTrivialClosure)
 import Language.Granule.Codegen.Emit.LowerType (llvmTopLevelType, llvmType)
 import Language.Granule.Codegen.Emit.LowerExpression (emitExpression)
+import Language.Granule.Codegen.Emit.Primitives (writeInt)
 
 import Language.Granule.Codegen.ClosureFreeDef
 import Language.Granule.Codegen.NormalisedDef
@@ -74,14 +76,24 @@ makePairBuiltin returnType@(TyApp (TyApp (TyCon (MkId "(,)")) left) right) =
 makePairBuiltin _ = error "Type is not a builtin pair"
 -}
 
-
+externWriteInt = do
+    printf <- externVarArgs (mkName "printf") [ptr i8] i32
+    function "writeInt" [(i32, mkPName "n")] void $ \[n] -> do
+        globalStringPtr "%d\n" (mkName ".formatInt")
+        let addr = IR.ConstantOperand $ C.GetElementPtr True formatStr [intConstant 0, intConstant 0]
+                   where formatStr = C.GlobalReference ty ".formatInt"
+                         ty = (ptr (ArrayType 4 i8))
+        call printf [(addr, []), (n, [])]
+        retVoid
 
 emitLLVM :: String -> ClosureFreeAST -> Either SomeException IR.Module
 emitLLVM moduleName (ClosureFreeAST dataDecls functionDefs valueDefs) =
     let buildModule name m = evalState (buildModuleT name m) (EmitterState { localSymbols = Map.empty })
     in Right $ buildModule (fromString moduleName) $ do
-        malloc <- extern (mkName "malloc") [i64] (ptr i8)
-        abort <- extern (mkName "abort") [] void
+        extern (mkName "malloc") [i64] (ptr i8)
+        extern (mkName "abort") [] void
+        externWriteInt
+
         mapM_ emitDataDecl dataDecls
         mapM_ emitEnvironmentType functionDefs
         mapM_ emitFunctionDef functionDefs
@@ -96,6 +108,7 @@ emitGlobalInitializer valueInitPairs =
             value <- call initializer []
             store global 4 value) valueInitPairs
         exitCode <- load (IR.ConstantOperand $ GlobalReference (ptr i32) (mkName "def.main")) 4
+        call (IR.ConstantOperand $ writeInt) [(exitCode, [])]
         ret exitCode
 
 emitValueDef :: MonadState EmitterState m

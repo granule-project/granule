@@ -74,7 +74,8 @@ emitExpr environment (CaseF _ ty (swon, emitSwExpr) cases) =
         switchOnExpr <- emitSwExpr
 
         br tryFirstPattern
-        tryFirstPattern <- foldrM (emitCaseArm switchOnExpr resultStorage successLabel) failureLabel cases
+        let emitArm = emitCaseArm switchOnExpr resultStorage successLabel -- :: (Pattern GrType, (EmitableExpr, m Operand)) -> IR.Name -> IR.Name
+        tryFirstPattern <- foldrM emitArm failureLabel cases
 
         failureLabel <- block
         trap
@@ -106,7 +107,7 @@ emitValue :: MonadFix m
           -> ValueF (Either GlobalMarker ClosureMarker) GrType (EmitableValue, m Operand) (EmitableExpr, m Operand)
           -> m Operand
 -- TODO make normalised definitions have strings as args, eliminate patterns from lambda args.
-emitValue _ (PromoteF ty (_, emitEx)) = error "Let diamond not yet supported."
+emitValue _ (PromoteF ty (_, emitEx)) = emitEx
 emitValue _ (PureF ty (_, emitEx)) = error "Let diamond not yet supported."
 emitValue _ (VarF ty ident) = local ident
 emitValue _ (NumIntF n) = IC.int32 (toInteger n)

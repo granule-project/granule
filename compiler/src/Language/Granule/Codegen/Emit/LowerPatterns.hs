@@ -17,34 +17,41 @@ import LLVM.IRBuilder.Instruction
 import qualified LLVM.AST.IntegerPredicate as IP
 import qualified LLVM.AST as IR
 
+emitPattern :: (MonadState EmitterState m, MonadFix m, MonadIRBuilder m)
+            => Name
+            -> Name
+            -> Operand
+            -> Pattern GrType
+            -> m ()
+emitPattern successLabel failLabel matchOperand (PInt _ _ n) =
+    do
+        matches <- icmp IP.EQ (IR.ConstantOperand $ intConstant n) matchOperand
+        condBr matches successLabel failLabel
+
+emitPattern successLabel failLabel matchOperand (PVar _ _ ident) =
+    do
+        addLocal ident matchOperand
+        br successLabel
+
+emitPattern successLabel failLabel matchOperand (PBox _ ty pattern) =
+    emitPattern successLabel failLabel matchOperand pattern
+
+emitPattern _ pattern _ _ = error $ "Unsupported pattern: " ++ (show pattern)
 
 emitCaseArm :: (MonadState EmitterState m, MonadFix m, MonadIRBuilder m)
             => Operand
             -> Operand
             -> Name
-            -> Name
             -> (Pattern GrType, (EmitableExpr, m Operand))
+            -> Name
             -> m Name
-emitCaseArm switchOnExpr resultStorage successLabel failLabel =
-    emitArm
-    where emitArm (PInt _ _ n, (_, emitArmExpr)) =
-              mdo
-                  checkMatches <- block
-                  matches <- icmp IP.EQ (IR.ConstantOperand $ intConstant n) switchOnExpr
-                  condBr matches storeResult failLabel
+emitCaseArm switchOnExpr resultStorage successLabel (pat, (_, emitArmExpr)) failLabel =
+    mdo
+        caseEntry <- block
+        emitPattern storeResultLabel failLabel switchOnExpr pat
 
-                  storeResult <- block
-                  result <- emitArmExpr
-                  store resultStorage 4 result
-                  br successLabel
-                  return checkMatches
-          emitArm (PVar _ ty ident, (_, emitArmExpr)) =
-              do
-                  thisCase <- block
-                  addLocal ident switchOnExpr
-                  result <- emitArmExpr
-                  store resultStorage 4 result
-                  br successLabel
-                  return thisCase
-          emitArm (pat, _) =
-              error $ "Pattern not supported " ++ show pat
+        storeResultLabel <- block
+        result <- emitArmExpr
+        store resultStorage 4 result
+        br successLabel
+        return caseEntry

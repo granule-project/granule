@@ -114,7 +114,7 @@ run input = do
                 withHostTargetMachine $ \machine ->
                     withContext $ \context -> do
                         withModuleFromAST context irModuleAst $ \mo -> do
-                            --writeBitcodeToFile (File (moduleName ++ ".bc")) mo
+                            writeBitcodeToFile (File (moduleName ++ ".bc")) mo
                             writeObjectToFile machine (File (moduleName ++ ".o")) mo
                 printInfo "Compiled Successfully"
                 return ExitSuccess
