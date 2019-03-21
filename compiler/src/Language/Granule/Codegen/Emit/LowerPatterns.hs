@@ -25,9 +25,9 @@ emitCaseArm :: (MonadState EmitterState m, MonadFix m, MonadIRBuilder m)
             -> Name
             -> (Pattern GrType, (EmitableExpr, m Operand))
             -> m Name
-emitCaseArm switchOnExpr resultStorage successLabel =
+emitCaseArm switchOnExpr resultStorage successLabel failLabel =
     emitArm
-    where emitArm (PInt _ _ n, (_, emitArmExpr)) failLabel =
+    where emitArm (PInt _ _ n, (_, emitArmExpr)) =
               mdo
                   checkMatches <- block
                   matches <- icmp IP.EQ (IR.ConstantOperand $ intConstant n) switchOnExpr
@@ -38,7 +38,7 @@ emitCaseArm switchOnExpr resultStorage successLabel =
                   store resultStorage 4 result
                   br successLabel
                   return checkMatches
-          emitArm (PVar _ ty ident, (_, emitArmExpr)) failLabel =
+          emitArm (PVar _ ty ident, (_, emitArmExpr)) =
               do
                   thisCase <- block
                   addLocal ident switchOnExpr
@@ -46,5 +46,5 @@ emitCaseArm switchOnExpr resultStorage successLabel =
                   store resultStorage 4 result
                   br successLabel
                   return thisCase
-          emitArm (pat, _) failLabel =
+          emitArm (pat, _) =
               error $ "Pattern not supported " ++ show pat
