@@ -1,0 +1,2 @@
+foo : Int <>
+foo = let x ← pure 42 in pure 50

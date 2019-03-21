@@ -29,6 +29,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Context
 import Language.Granule.Utils
 
+
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
@@ -40,9 +41,16 @@ demoteKindToType _            = Nothing
 
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> MaybeT Checker ()
-kindCheckDef (Def s _ _ (Forall _ quantifiedVariables ty)) = do
+kindCheckDef (Def s _ _ (Forall _ quantifiedVariables constraints ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
+
+  forM constraints (\constraint -> do
+    kind <- inferKindOfType' s quantifiedVariables constraint
+    case kind of
+      KPredicate -> return ()
+      _ -> illKindedNEq s KPredicate kind)
+
 
   kind <- inferKindOfType' s quantifiedVariables ty
   case kind of
@@ -90,10 +98,12 @@ inferKindOfType' s quantifiedVariables t =
             Just kind -> return kind
             Nothing ->
               halt $ UnboundVariableError (Just s) $
-                       "Type variable `" <> pretty tyVar <> "` is unbound (not quantified)." <?> show quantifiedVariables
+                       "Type variable `" <> pretty tyVar
+                    <> "` is unbound (not quantified)."
+                    <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
-    kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "...")) k
+    kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "....")) k
 
     kInt _ = return $ kConstr $ mkId "Nat"
 
@@ -160,7 +170,7 @@ inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
 inferCoeffectType s (CProduct c1 c2)    = do
   k1 <- inferCoeffectType s c1
   k2 <- inferCoeffectType s c2
-  return $ TyApp (TyApp (TyCon $ mkId "(*)") k1) k2
+  return $ TyApp (TyApp (TyCon $ mkId "×") k1) k2
 
 inferCoeffectType s (CInterval c1 c2)    = do
   k1 <- inferCoeffectType s c1
@@ -175,6 +185,7 @@ inferCoeffectType s (CInterval c1 c2)    = do
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
+inferCoeffectType s (CMinus c c') = mguCoeffectTypes s c c'
 inferCoeffectType s (CTimes c c') = mguCoeffectTypes s c c'
 inferCoeffectType s (CMeet c c')  = mguCoeffectTypes s c c'
 inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
@@ -213,11 +224,18 @@ inferCoeffectTypeAssumption s (Discharged _ c) = do
     return $ Just t
 
 checkKindIsCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
-checkKindIsCoeffect s t = do
-  k <- inferKindOfType s t
-  case k of
-    KCoeffect -> return t
-    k         -> illKindedNEq s KCoeffect k
+checkKindIsCoeffect span ty = do
+  kind <- inferKindOfType span ty
+  case kind of
+    KCoeffect -> return ty
+    -- Came out as a promoted type, check that this is a coeffect
+    KPromote k -> do
+      kind' <- inferKindOfType span k
+      case kind' of
+        KCoeffect -> return ty
+        _         -> illKindedNEq span KCoeffect kind
+
+    _         -> illKindedNEq span KCoeffect kind
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
@@ -227,7 +245,7 @@ mguCoeffectTypes s c1 c2 = do
   ck1 <- inferCoeffectType s c1
   ck2 <- inferCoeffectType s c2
   case (ck1, ck2) of
-    -- Both are poly
+    -- Both are variables
     (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
       updateCoeffectType kv1 (KVar kv2)
       return (TyVar kv2)
@@ -271,6 +289,8 @@ updateCoeffectType tyVar k = do
  where
    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
    rewriteCtxt [] = []
+   rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

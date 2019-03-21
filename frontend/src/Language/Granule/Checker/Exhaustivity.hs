@@ -1,4 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Exhaustivity (isIrrefutable) where
 
@@ -21,6 +22,11 @@ isIrrefutable s (Box _ t) (PBox _ _ p) = isIrrefutable s t p
 isIrrefutable s t@(TyVar _) (PBox _ _ p) = isIrrefutable s t p
 isIrrefutable s (TyCon c) _ = checkCardinality c
 isIrrefutable s t@(TyApp t1 t2) (PConstr _ _ name ps) = unpeel s t (reverse ps)
+isIrrefutable s t@(TyVar _) (PConstr _ _ (internalName -> "(,)") [p1, p2]) = do
+  i1 <- isIrrefutable s t p1 -- somewhat of a cheat but type information is not important here
+  i2 <- isIrrefutable s t p2 -- somewhat of a cheat but type info is not important here
+  return (i1 && i2)
+
 isIrrefutable s _ _ = return False
 
 -- | Check if every sub-pattern of a type application is also irrefutable

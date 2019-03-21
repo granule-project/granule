@@ -5,17 +5,10 @@
 
 module Language.Granule.Checker.Coeffects where
 
-import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
-
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Monad
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
-import Language.Granule.Syntax.Pretty
-import Language.Granule.Syntax.Span
-import Language.Granule.Utils
 
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
@@ -30,17 +23,7 @@ flattenable t1 t2
      -- TODO
 
      _ -> Nothing
- | otherwise = Just (CProduct, TyCon (mkId "(*)") .@ t1 .@ t2)
-
-checkKind :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
-checkKind s k@(TyCon name) = do
-  st <- get
-  case lookup name (typeConstructors st) of
-    Just (KCoeffect,_) -> return $ TyCon name
-    Just _             -> illKindedNEq s KCoeffect (kConstr name)
-    _                  ->
-      halt $ UnboundVariableError (Just s) $ "Type `" <> pretty name <> "`"
-checkKind _ k = return k
+ | otherwise = Just (CProduct, TyCon (mkId "×") .@ t1 .@ t2)
 
 -- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th

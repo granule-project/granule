@@ -4,20 +4,20 @@ data Opened where
 
 data Closed where
 
-data DoorH : Type -> Type where
+data DoorH : Type → Type where
 
-data DoorCmd : Type -> Type where
-  OpenDoor  : DoorH Closed -> DoorCmd (DoorH Opened);
-  Knock     : DoorH Closed -> DoorCmd (DoorH Closed);
-  CloseDoor : DoorH Opened -> DoorCmd (DoorH Closed)
+data DoorCmd : Type → Type where
+  OpenDoor  : DoorH Closed → DoorCmd (DoorH Opened);
+  Knock     : DoorH Closed → DoorCmd (DoorH Closed);
+  CloseDoor : DoorH Opened → DoorCmd (DoorH Closed)
 
-data DoorLang : Type -> Type where
-  Return : forall a : Type . a -> DoorLang a;
-  Action : forall a : Type . DoorCmd a -> DoorLang a;
-  ThenWith : forall a : Type, b : Type . DoorLang a -> (a -> DoorLang b) -> DoorLang b
+data DoorLang : Type → Type where
+  Return : ∀ a : Type . a → DoorLang a;
+  Action : ∀ a : Type . DoorCmd a → DoorLang a;
+  ThenWith : ∀ a : Type, b : Type . DoorLang a → (a → DoorLang b) → DoorLang b
 
-doorOK : DoorH Closed -> DoorLang (DoorH Opened)
+doorOK : DoorH Closed → DoorLang (DoorH Opened)
 doorOK h = -- do
-     Action (Knock h) `ThenWith` (\(h : DoorH Closed)
-  -> Action (Knock h) `ThenWith` (\(h : DoorH Closed)
-  -> Action (OpenDoor h)))
+     Action (Knock h) `ThenWith` (λ(h : DoorH Closed)
+  → Action (Knock h) `ThenWith` (λ(h : DoorH Closed)
+  → Action (OpenDoor h)))

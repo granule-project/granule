@@ -1,2 +1,2 @@
-tst : Int [1 : Ext Nat] -> Int
+tst : Int [1 : Ext Nat] → Int
 tst [x] = x

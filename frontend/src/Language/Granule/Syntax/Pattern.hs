@@ -2,7 +2,6 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE LambdaCase #-}
@@ -53,6 +52,32 @@ patternFold v w b i f c = go
       PInt sp ann int -> i sp ann int
       PFloat sp ann doub -> f sp ann doub
       PConstr sp ann nm pats -> c sp ann nm (go <$> pats)
+
+patternFoldM
+  :: (Monad m)
+  => (Span -> ann -> Id -> m b)
+  -> (Span -> ann -> m b)
+  -> (Span -> ann -> b -> m b)
+  -> (Span -> ann -> Int -> m b)
+  -> (Span -> ann -> Double -> m b)
+  -> (Span -> ann -> Id -> [b] -> m b)
+  -> Pattern ann
+  -> m b
+patternFoldM v w b i f c = go
+  where
+    go = \case
+      PVar sp ann nm -> v sp ann nm
+      PWild sp ann -> w sp ann
+      PBox sp ann pat ->
+        do
+            pat' <- go pat
+            b sp ann pat'
+      PInt sp ann int -> i sp ann int
+      PFloat sp ann doub -> f sp ann doub
+      PConstr sp ann nm pats ->
+        do
+            pats' <- mapM go pats
+            c sp ann nm pats'
 
 -- | Variables bound by patterns
 boundVars :: Pattern a -> [Id]

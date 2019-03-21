@@ -1,4 +1,3 @@
-{-# LANGUAGE DeriveAnyClass #-}
 {-# LANGUAGE DeriveGeneric  #-}
 
 module Language.Granule.Checker.Constraints.SymbolicGrades where
@@ -95,26 +94,26 @@ instance Mergeable SGrade where
 
 instance OrdSymbolic SGrade where
   (SInterval lb1 ub1) .< (SInterval lb2 ub2) =
-    lb2 .< lb1 &&& ub1 .< ub2
+    lb2 .< lb1 .&& ub1 .< ub2
   (SNat n)    .< (SNat n') = n .< n'
   (SFloat n)  .< (SFloat n') = n .< n'
   (SLevel n)  .< (SLevel n') = n .< n'
   (SSet n)    .< (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .< (SExtNat n') = n .< n'
-  SPoint .< SPoint = true
-  s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (&&&) (const true) s t
+  SPoint .< SPoint = sTrue
+  s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (.&&) (const sTrue) s t
   s .< t = cannotDo ".<" s t
 
 instance EqSymbolic SGrade where
   (SInterval lb1 ub1) .== (SInterval lb2 ub2) =
-    lb2 .== lb1 &&& ub1 .== ub2
+    lb2 .== lb1 .&& ub1 .== ub2
   (SNat n)    .== (SNat n') = n .== n'
   (SFloat n)  .== (SFloat n') = n .== n'
   (SLevel n)  .== (SLevel n') = n .== n'
   (SSet n)    .== (SSet n') = error "Can't compare symbolic sets yet"
   (SExtNat n) .== (SExtNat n') = n .== n'
-  SPoint .== SPoint = true
-  s .== t | isSProduct s || isSProduct t = applyToProducts (.==) (&&&) (const true) s t
+  SPoint .== SPoint = sTrue
+  s .== t | isSProduct s || isSProduct t = applyToProducts (.==) (.&&) (const sTrue) s t
   s .== t = cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -172,6 +171,18 @@ symGradeTimes SPoint SPoint = SPoint
 symGradeTimes s t | isSProduct s || isSProduct t =
   applyToProducts symGradeTimes SProduct id s t
 symGradeTimes s t = cannotDo "times" s t
+
+-- | Minus operation on symbolic grades
+symGradeMinus :: SGrade -> SGrade -> SGrade
+symGradeMinus (SNat n1) (SNat n2) = SNat $ ite (n1 .< n2) 0 (n1 - n2)
+symGradeMinus (SSet s) (SSet t) = SSet $ s S.\\ t
+symGradeMinus (SExtNat x) (SExtNat y) = SExtNat (x - y)
+symGradeMinus (SInterval lb1 ub1) (SInterval lb2 ub2) =
+    SInterval (lb1 `symGradeMinus` lb2) (ub1 `symGradeMinus` ub2)
+symGradeMinus SPoint SPoint = SPoint
+symGradeMinus s t | isSProduct s || isSProduct t =
+  applyToProducts symGradeMinus SProduct id s t
+symGradeMinus s t = cannotDo "minus" s t
 
 cannotDo :: String -> SGrade -> SGrade -> a
 cannotDo op s t =

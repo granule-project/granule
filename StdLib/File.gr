@@ -1,13 +1,13 @@
 import Bool
 
-readFile : String -> IO String
+readFile : String -> String <IO>
 readFile filename =
   let h       <- openFile filename ReadMode;
       (h, cs) <- getCharsUntilEnd h;
       ()      <- hClose h
   in pure cs
 
-getCharsUntilEnd : Handle -> IO (Handle, String)
+getCharsUntilEnd : Handle -> (Handle, String) <IO>
 getCharsUntilEnd h =
     let (h, b) <- isEOF h
     in case b of

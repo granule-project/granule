@@ -1,24 +1,24 @@
 -- Hello TLLA
-dub : Int [2] -> Int
+dub : Int [2] → Int
 dub [x] = x + x
 
-trip : Int [3] -> Int
+trip : Int [3] → Int
 trip [x] = x + x + x
 
-flatten : forall (c : Nat, d : Nat) . (Int [c+1]) [d+1] -> Int [(c+1) * (d+1)]
+flatten : ∀ {c : Nat, d : Nat} . (Int [c+1]) [d+1] → Int [(c+1) * (d+1)]
 flatten [[x]] = [x]
 
-twice : forall (n : Nat) . (Int [n] -> Int) [2] -> Int [2 * n] -> Int
+twice : ∀ {n : Nat} . (Int [n] → Int) [2] → Int [2 * n] → Int
 twice [f] [x] = f [x] + f [x]
 
 secret : Int [Private]
 secret = [0309]
 
-hash : forall (l : Level) . Int [l] -> Int [l]
+hash : ∀ {l : Level} . Int [l] → Int [l]
 hash [x] = [x + x]
 
-hello : () <[R, W]>
-hello = let x <- read
+hello : () <R, W>
+hello = let x ← read
         in write x
 
 main : Int [Private]

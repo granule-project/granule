@@ -3,7 +3,7 @@
 pin : Int [Private]
 pin = [42]
 
-leak : Int [Private] -> Int
+leak : Int [Private] → Int
 leak [x] = x
 
 bad : Int

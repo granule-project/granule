@@ -1,0 +1,3 @@
+foo : Int → Int
+foo 0 = 1;
+foo _ = 0

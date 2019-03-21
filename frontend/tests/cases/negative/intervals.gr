@@ -2,5 +2,5 @@
 
 data Bool where True; False
 
-foo : Int -> Int [2..2] -> Int
+foo : Int → Int [2..2] → Int
 foo x [y] = if x > 5 then y else y+y

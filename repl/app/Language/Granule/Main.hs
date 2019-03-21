@@ -9,6 +9,7 @@
 {-# LANGUAGE PackageImports #-}
 module Main where
 
+import System.Exit (die)
 import System.FilePath
 import System.FilePath.Find
 import System.Directory
@@ -97,7 +98,8 @@ rFindMain fn rfp = forM fn $ (\x -> rFindHelper x rfp )
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
 readToQueue pth = do
-    pf <- liftIO' $ try $ parseDefs =<< readFile pth
+    pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile pth
+
     case pf of
       Right ast -> do
             debugM "AST" (show ast)
@@ -110,8 +112,12 @@ readToQueue pth = do
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd<>adt),f,m)
                     liftIO $ printInfo $ green $ pth<>", interpreted"
-                Nothing -> Ex.throwError (TypeCheckError pth)
-      Left e -> Ex.throwError (ParseError e)
+                Nothing -> do
+                  (_,_,_,f,_) <- get
+                  Ex.throwError (TypeCheckError pth f)
+      Left e -> do
+       (_,_,_,f,_) <- get
+       Ex.throwError (ParseError e f)
 
 
 
@@ -167,14 +173,14 @@ makeMapBuildADT adc = M.fromList $ tempADT adc
                         where
                           tempADT :: [DataConstr] -> [(String,DataConstr)]
                           tempADT [] = []
-                          tempADT (dc@(DataConstrG _ id _):dct) = ((sourceName id),dc) : tempADT dct
-                          tempADT (dc@(DataConstrA _ _ _):dct) = tempADT dct
+                          tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceName id),dc) : tempADT dct
+                          tempADT (dc@(DataConstrNonIndexed _ _ _):dct) = tempADT dct
 
 lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
 lookupBuildADT term aMap = let lup = M.lookup term aMap in
                             case lup of
                               Nothing ->
-                                case lookup (mkId term) Primitives.typeLevelConstructors of
+                                case lookup (mkId term) Primitives.typeConstructors of
                                   Nothing -> ""
                                   Just (k, _) -> term <> " : " <> pretty k
                               Just d -> pretty d
@@ -227,12 +233,12 @@ buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) = makeCtxt dc <> buildCtxtTSDD dd
 
 buildCtxtTSDDhelper :: [DataConstr] -> Ctxt TypeScheme
 buildCtxtTSDDhelper [] = []
-buildCtxtTSDDhelper (dc@(DataConstrG _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
-buildCtxtTSDDhelper (dc@(DataConstrA _ _ _):dct) = buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrIndexed _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
+buildCtxtTSDDhelper (dc@(DataConstrNonIndexed _ _ _):dct) = buildCtxtTSDDhelper dct
 
 
 buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
-buildTypeScheme ty = Forall nullSpanInteractive [] ty
+buildTypeScheme ty = Forall nullSpanInteractive [] [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
@@ -241,8 +247,8 @@ buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
 
 getConfigFile :: IO String
 getConfigFile = do
-  hd <- getHomeDirectory           -- .granule.conf
-  let confile = hd <> (pathSeparator:".granule.conf")
+  hd <- getHomeDirectory
+  let confile = hd <> (pathSeparator:".grin")
   dfe <- doesFileExist confile
   if dfe
     then return confile
@@ -263,17 +269,18 @@ handleCMD s =
       liftIO $ print $ dumpStateAux dict
 
     handleLine (RunParser str) = do
-      pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens str) "interactive"
+      (_,_,_,f,_) <- get
+      pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens str) "interactive"
       case pexp of
         Right ast -> liftIO $ putStrLn (show ast)
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
-          pts <- liftIO' $ try $ runReaderT (tscheme $ scanTokens str) "interactive"
+          pts <- liftIO' $ try $ either die return $ runReaderT (tscheme $ scanTokens str) "interactive"
           case pts of
             Right ts -> liftIO $ putStrLn (show ts)
             Left err -> do
-              Ex.throwError (ParseError err)
-              Ex.throwError (ParseError e)
+              Ex.throwError (ParseError err f)
+              Ex.throwError (ParseError e f)
 
 
     handleLine (RunLexer str) = do
@@ -332,7 +339,7 @@ handleCMD s =
 
     handleLine Reload = do
       (fvg,rp,adt,f,_) <- get
-      put (fvg,rp,adt,f, M.empty)
+      put (fvg,rp,[],f, M.empty)
       case f of
         [] -> liftIO $ putStrLn "No files to reload" >> return ()
         _ -> do
@@ -341,7 +348,7 @@ handleCMD s =
 
 
     handleLine (CheckType trm) = do
-      (_,_,adt,_,m) <- get
+      (_,_,adt,f,m) <- get
       let cked = buildAST trm m
       case cked of
         []  -> do
@@ -354,11 +361,11 @@ handleCMD s =
           checked <- liftIO' $ check (AST adt ast)
           case checked of
             Just _ -> liftIO $ putStrLn (printType trm m)
-            Nothing -> Ex.throwError (TypeCheckError trm)
+            Nothing -> Ex.throwError (TypeCheckError trm f)
 
     handleLine (Eval ev) = do
         (fvg,rp,adt,fp,m) <- get
-        pexp <- liftIO' $ try $ runReaderT (expr $ scanTokens ev) "interactive"
+        pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens ev) "interactive"
         case pexp of
             Right exp -> do
                 let fv = freeVars exp
@@ -367,7 +374,7 @@ handleCMD s =
                         typ <- liftIO $ synType exp [] Mo.initState
                         case typ of
                             Just (t,a, _) -> return ()
-                            Nothing -> Ex.throwError (TypeCheckError ev)
+                            Nothing -> Ex.throwError (TypeCheckError ev fp)
                         result <- liftIO' $ try $ evalIn builtIns (toRuntimeRep exp)
                         case result of
                             Right r -> liftIO $ putStrLn (pretty r)
@@ -386,7 +393,7 @@ handleCMD s =
                                     Right Nothing -> liftIO $ print "if here fix"
                                     Right (Just result) -> liftIO $ putStrLn (pretty result)
                             Nothing -> Ex.throwError (OtherError')
-            Left e -> Ex.throwError (ParseError e) --error from parsing (pexp)
+            Left e -> Ex.throwError (ParseError e fp) --error from parsing (pexp)
 
 helpMenu :: String
 helpMenu = unlines
@@ -446,21 +453,14 @@ main = do
                               -> liftIO $ putStrLn "Leaving Granule." >> return ()
                           | input == ":h" || input == ":help"
                               -> (liftIO $ putStrLn helpMenu) >> loop st
-                          | otherwise -> do r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = defaultGlobals in handleCMD input) st)
-                                            case r of
-                                              Right (_,st') -> loop st'
-                                              Left err -> do
-                                                 liftIO $ print err
-                                                 loop st
-       defaultGlobals :: Globals
-       defaultGlobals =
-           Globals
-           { debugging = False
-           , sourceFilePath = ""
-           , noColors = False
-           , noEval = False
-           , suppressInfos = False
-           , suppressErrors = False
-           , timestamp = False
-           , solverTimeoutMillis = Just 5000
-           }
+                          | otherwise -> do
+                             r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = defaultGlobals in handleCMD input) st)
+                             case r of
+                               Right (_,st') -> loop st'
+                               Left err -> do
+                                 liftIO $ print err
+                                 case remembersFiles err of
+                                   Just fs ->
+                                     let (fv, rpath, adts, _, map) = st
+                                     in loop (fv, rpath, adts, fs, map)
+                                   Nothing -> loop st

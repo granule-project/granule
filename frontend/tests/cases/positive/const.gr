@@ -1,5 +1,5 @@
-closure : Int -> (Int -> Int)
-closure z = \x -> x + z
+closure : Int → (Int → Int)
+closure z = λx → x + z
 
 main : Int
 main = let [f] = [closure 42]

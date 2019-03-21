@@ -1,0 +1,24 @@
+AST [] [Def {defSpan = Span {startPos = (1,1), endPos = (3,10), filename = "pairs.gr"}, 
+             defIdentifier = (Id "main" "main"), 
+             defEquations = [
+                Equation {
+                    equationSpan = Span {startPos = (2,1), endPos = (3,10), filename = "pairs.gr"}, 
+                    equationType = TyApp (TyApp (TyCon (Id "," ",")) (TyCon (Id "Int" "Int"))) (TyCon (Id "Int" "Int")), 
+                    equationArguments = [], 
+                    equationBody = (AppF (Span {startPos = (3,5), endPos = (3,10), filename = "pairs.gr"}) 
+                                         (TyApp (TyApp (TyCon (Id "," ",")) (TyCon (Id "Int" "Int"))) (TyCon (Id "Int" "Int"))) 
+                                         (AppF (Span {startPos = (3,5), endPos = (3,7), filename = "pairs.gr"}) 
+                                               (FunTy (TyCon (Id "Int" "Int")) (TyApp (TyApp (TyCon (Id "," ",")) (TyCon (Id "Int" "Int"))) (TyCon (Id "Int" "Int")))) 
+                                               (ValF (Span {startPos = (3,7), endPos = (3,7), filename = "pairs.gr"}) 
+                                                     (FunTy (TyCon (Id "Int" "Int")) (FunTy (TyCon (Id "Int" "Int")) 
+                                                            (TyApp (TyApp (TyCon (Id "," ",")) (TyCon (Id "Int" "Int"))) (TyCon (Id "Int" "Int"))))) 
+                                                     (ConstrF (FunTy (TyCon (Id "Int" "Int")) 
+                                                                     (FunTy (TyCon (Id "Int" "Int")) 
+                                                                            (TyApp (TyApp (TyCon (Id "," ",")) (TyCon (Id "Int" "Int"))) (TyCon (Id "Int" "Int"))))) 
+                                                              (Id "," ",") [])) 
+                                               (ValF (Span {startPos = (3,6), endPos = (3,6), filename = "pairs.gr"}) (TyCon (Id "Int" "Int")) (NumIntF 1))) 
+                                        (ValF (Span {startPos = (3,9), endPos = (3,9), filename = "pairs.gr"}) (TyCon (Id "Int" "Int")) (NumIntF 3)))
+                }], 
+                defTypeScheme = 
+                    Forall (Span {startPos = (0,0), endPos = (0,0), filename = ""}) [] [] 
+                           (TyApp (TyApp (TyCon (Id "," ",")) (TyCon (Id "Int" "Int"))) (TyCon (Id "Int" "Int")))}]

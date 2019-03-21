@@ -1,15 +1,21 @@
+------
+--- Module: Either
+--- Description: Coproducts
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
 data Either a b where Left a | Right b
 
-pushEither : forall (a : Type, b : Type, n : Nat)
+pushEither : forall {a : Type, b : Type, n : Nat}
         . (Either a b) [1..n+1] -> Either (a [1..n+1]) (b [1..n+1])
-pushEither x =
-  case x of
-    [Left x] -> Left [x];
-    [Right y] -> Right [y]
+pushEither [Left x]  = Left [x];
+pushEither [Right y] = Right [y]
 
-pullEither : forall (a : Type, b : Type, k : Nat)
+pullEither : forall {a : Type, b : Type, k : Nat}
         . Either (a [k]) (b [k]) -> (Either a b) [k]
-pullEither x =
-  case x of
-    (Left [y]) -> [Left y];
-    (Right [y]) -> [Right y]
+pullEither (Left [y])  = [Left y];
+pullEither (Right [y]) = [Right y]

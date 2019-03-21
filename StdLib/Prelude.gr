@@ -39,11 +39,11 @@ until [p] [f] [x] =
     True  -> until [p] [f] [f x]
 
 --- Standard fixed point
-fix : forall (a : Type) . (a -> a) [∞] -> a
+fix : forall {a : Type} . (a -> a) [∞] -> a
 fix [f] = f (fix [f])
 
 --- Specialised first-order fixed point
-fixF : forall (a : Type, b : Type)
+fixF : forall {a : Type, b : Type}
      . ((a -> b) [∞] -> (a -> b)) [∞] -> (a -> b)
 fixF [f] = f [fixF [f]]
 
@@ -77,28 +77,28 @@ e = 2.718281828459045
 --- # Combinators involving products (pairs)
 
 --- Extract the left part of a pair
-fst : forall a : Type, b : Type . (a, b [0]) -> a
+fst : forall a : Type, b : Type . a × b [0] -> a
 fst (x, [_]) = x
 
 --- Extract the right part of a pair
-snd : forall a : Type, b : Type . (a [0], b) -> b
+snd : forall a : Type, b : Type . a [0] × b -> b
 snd ([_], y) = y
 
 --- curry converts an uncurried function to a curried function
 curry : forall a : Type, b : Type, c : Type .
-        ((a, b) -> c) -> a -> b -> c
+        (a × b -> c) -> a -> b -> c
 curry f x y = f (x, y)
 
 --- uncurry converts a curried function to a function on pairs
 uncurry : forall a : Type, b : Type, c : Type .
-          (a -> b -> c) -> ((a, b) -> c)
+          (a -> b -> c) -> (a × b -> c)
 uncurry f (x, y) = f x y
 
 
 --- # Coeffect-specifc combinators
 
 --- Coeffectful composition
-comp : forall (n : Nat, m : Nat, a : Type, b : Type, c : Type) .
+comp : forall {n : Nat, m : Nat, a : Type, b : Type, c : Type} .
        (b [n] -> c) -> (a [m] -> b) [n] -> a [m * n] -> c
 comp g [f] = \[x] -> g [f [x]]
 
@@ -110,18 +110,17 @@ app : forall a : Type, b : Type, c : Nat . (a [c] -> b) -> a [c] -> b
 app f x = f x
 
 --- Flatten two boxes (with Nat grading)
-flatten : forall (a : Type, n : Nat, m : Nat) . (a [n]) [m] -> a [n * m]
+flatten : forall {a : Type, n : Nat, m : Nat} . (a [n]) [m] -> a [n * m]
 flatten [[x]] = [x]
 
 --- Expand two boxes (with Nat grading)
-unflatten : forall (a : Type, n : Nat, m : Nat) . a [n*m] -> (a [n]) [m]
+unflatten : forall {a : Type, n : Nat, m : Nat} . a [n*m] -> (a [n]) [m]
 unflatten [x] = [[x]]
 
 --- Push coeffects on a pair into the left and right elements
-push : forall (a : Type, b : Type, n : Nat) . (a, b) [n+1] -> (a [n+1], b [n+1])
+push : forall {a : Type, b : Type, n : Nat} . (a × b) [n] -> a [n] × b [n]
 push [(x, y)] = ([x], [y])
 
 --- Pull coeffects of pair elements up to the pair
-pull : forall (a : Type, b : Type, n : Nat)
-     . (a [n], b [n]) -> (a, b) [n]
+pull : forall {a : Type, b : Type, n : Nat} . a [n] × b [n] -> (a × b) [n]
 pull ([x], [y]) = [(x, y)]

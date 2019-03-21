@@ -8,6 +8,7 @@
 module Language.Granule.Checker.Monad where
 
 import Data.List (intercalate)
+import qualified Data.Map as M
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Control.Monad.Identity
@@ -52,10 +53,39 @@ instance Pretty Assumption where
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
    prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
 
+-- Describes where a pattern is fully consuming, i.e. amounts
+-- to linear use and therefore triggers other patterns to be counted
+-- as linear, e.g.
+--    foo 0 = ..
+--    foo _ = ..
+-- can be typed as foo : Int ->  because the first means
+-- consumption is linear
+data Consumption = Full | NotFull deriving (Eq, Show)
+
+-- Given a set of equations, creates an intial vector to describe
+-- the consumption behaviour of the patterns (assumes that)
+-- the number of patterns is the same for each equation, which
+-- is checked elsewhere
+initialisePatternConsumptions :: [Equation v a] -> [Consumption]
+initialisePatternConsumptions [] = []
+initialisePatternConsumptions ((Equation _ _ pats _):_) =
+  map (\_ -> NotFull) pats
+
+-- Join information about consumption between branches
+joinConsumption :: Consumption -> Consumption -> Consumption
+joinConsumption Full _       = Full
+joinConsumption _ _          = NotFull
+
+-- Meet information about consumption, across patterns
+meetConsumption :: Consumption -> Consumption -> Consumption
+meetConsumption NotFull _ = NotFull
+meetConsumption _ NotFull = NotFull
+meetConsumption Full Full = Full
 
 data CheckerState = CS
-            { -- Fresh variable id
-              uniqueVarIdCounter  :: Nat
+            { -- Fresh variable id state
+              uniqueVarIdCounterMap  :: M.Map String Nat
+            , uniqueVarIdCounter     :: Nat
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
 
@@ -76,6 +106,11 @@ data CheckerState = CS
             -- which get promoted by branch promotions
             , guardContexts :: [Ctxt Assumption]
 
+            -- Records the amount of consumption by patterns in equation equation
+            -- used to work out whether an abstract type has been definitly unified with
+            -- and can therefore be linear
+            , patternConsumption :: [Consumption]
+
             -- Data type information
             , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
             , dataConstructors :: Ctxt TypeScheme
@@ -88,13 +123,15 @@ data CheckerState = CS
 
 -- | Initial checker context state
 initState :: CheckerState
-initState = CS { uniqueVarIdCounter = 0
+initState = CS { uniqueVarIdCounterMap = M.empty
+               , uniqueVarIdCounter = 0
                , predicateStack = []
                , guardPredicates = [[]]
                , tyVarContext = emptyCtxt
                , kVarContext = emptyCtxt
                , guardContexts = []
-               , typeConstructors = Primitives.typeLevelConstructors
+               , patternConsumption = []
+               , typeConstructors = Primitives.typeConstructors
                , dataConstructors = Primitives.dataConstructors
                , deriv = Nothing
                , derivStack = []
@@ -135,9 +172,7 @@ popGuardContext = do
   return c
 
 allGuardContexts :: MaybeT Checker (Ctxt Assumption)
-allGuardContexts = do
-  state <- get
-  return $ concat (guardContexts state)
+allGuardContexts = concat . guardContexts <$> get
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: MaybeT Checker ()
@@ -198,7 +233,7 @@ concludeImplication s localVars = do
            let guard' = foldr (uncurry Exists) (NegPred prevGuardPred) previousGuardCtxt
            guard <- freshenPred guard'
 
-           -- Implication of p &&& negated previous guards => p'
+           -- Implication of p .&& negated previous guards => p'
            let impl = if (isTrivial prevGuardPred)
                         then Impl localVars p p'
                         else Impl localVars (Conj [p, guard]) p'
@@ -220,7 +255,7 @@ freshenPred pred = do
     -- Run the freshener using the checkers unique variable id
     let (pred', freshenerState) =
          runIdentity $ runStateT (freshen pred)
-          (FreshenerState { counter = uniqueVarIdCounter st, varMap = [], tyMap = []})
+          (FreshenerState { counter = 1 + uniqueVarIdCounter st, varMap = [], tyMap = []})
     -- Update the unique counter in the checker
     put (st { uniqueVarIdCounter = counter freshenerState })
     return pred'
@@ -249,6 +284,15 @@ appendPred :: Pred -> Pred -> Pred
 appendPred p (Conj ps) = Conj (p : ps)
 appendPred p (Exists var k ps) = Exists var k (appendPred p ps)
 appendPred _ p = error $ "Cannot append a predicate to " <> show p
+
+addPredicate :: Pred -> MaybeT Checker ()
+addPredicate p = do
+  checkerState <- get
+  case predicateStack checkerState of
+    (p' : stack) ->
+      put (checkerState { predicateStack = appendPred p p' : stack })
+    stack ->
+      put (checkerState { predicateStack = Conj [p] : stack })
 
 -- | A helper for adding a constraint to the context
 addConstraint :: Constraint -> MaybeT Checker ()
@@ -294,6 +338,8 @@ illLinearityMismatch sp mismatches =
       "Linear variable `" <> pretty v <> "` is never used."
     mkMsg (LinearUsedNonLinearly v) =
       "Variable `" <> pretty v <> "` is promoted but its binding is linear; its binding should be under a box."
+    mkMsg NonLinearPattern =
+      "Wildcard pattern `_` allowing a value to be discarded in a position which requires linear use."
 
 -- | A helper for raising an illtyped pattern (does pretty printing for you)
 illTypedPattern :: (?globals :: Globals) => Span -> Type -> Pattern t -> MaybeT Checker a
@@ -307,6 +353,21 @@ refutablePattern sp p =
   halt $ RefutablePatternError (Just sp) $
         "Pattern match " <> pretty p <> " can fail; only \
         \irrefutable patterns allowed in this context"
+
+-- | A helper for non unifiable types
+nonUnifiable :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker a
+nonUnifiable s t1 t2 =
+  halt $ GenericError (Just s) $
+    if pretty t1 == pretty t2
+     then "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "` coming from a different binding"
+     else "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
+
+typeClash :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker a
+typeClash s t1 t2 =
+  halt $ GenericError (Just s) $
+    if pretty t1 == pretty t2
+      then "Expected `" <> pretty t1 <> "` but got `" <> pretty t2 <> "` coming from a different binding"
+      else "Expected `" <> pretty t1 <> "` but got `" <> pretty t2 <> "`"
 
 -- | Helper for constructing error handlers
 halt :: (?globals :: Globals) => CheckerError -> MaybeT Checker a

@@ -32,7 +32,8 @@ data Globals =
   , suppressInfos :: Bool
   , suppressErrors :: Bool
   , timestamp :: Bool
-  , solverTimeoutMillis :: Maybe Integer
+  , solverTimeoutMillis :: Integer
+  , includePath :: FilePath
   } deriving Show
 
 defaultGlobals :: Globals
@@ -45,7 +46,8 @@ defaultGlobals =
     , suppressInfos = False
     , suppressErrors = False
     , timestamp = False
-    , solverTimeoutMillis = Just 5000
+    , solverTimeoutMillis = 5000
+    , includePath = "StdLib"
     }
 
 class UserMsg a where

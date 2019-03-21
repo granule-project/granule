@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.7.0.0'
+version: '0.7.2.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
@@ -10,7 +10,7 @@ dependencies:
 
 library:
   source-dirs: src
-  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
+  ghc-options: -O0 -W -Werror -Wno-unused-matches
   # ghc-options: >
   #   -O0
   #   -Wall
@@ -53,6 +53,9 @@ library:
   - Language.Granule.Syntax.Parser
   - Language.Granule.Syntax.Pattern
   - Language.Granule.Syntax.Pretty
+  - Language.Granule.Syntax.Preprocessor.Ascii
+  - Language.Granule.Syntax.Preprocessor.Latex
+  - Language.Granule.Syntax.Preprocessor.Markdown
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
   - Language.Granule.Context
@@ -61,13 +64,15 @@ library:
   - array
   - containers
   - mtl >=2.2.1
-  - sbv >=7.5
+  - sbv >=8.0
   - transformers >=0.5
   - text
   - time
   - Glob
+  - filepath
   - bifunctors
-  # - raw-strings-qq (Quasiquoter for multiline, automatically escaped strings)
+  - raw-strings-qq
+  - text-replace
 
 tests:
   frontend-spec:
@@ -81,12 +86,13 @@ tests:
     - hspec
     - QuickCheck
     - mtl
+    - containers
     - transformers >=0.5
     - bifunctors
-  zfrontend-doctest: # the "z" is to make them run after hspec
-    main: doctest.hs
-    source-dirs: tests
-    dependencies:
-    - doctest
-    - granule-frontend
-    ghc-options: -threaded
+#  zfrontend-doctest: # the "z" is to make them run after hspec
+#    main: doctest.hs
+#    source-dirs: tests
+#    dependencies:
+#    - doctest
+#    - granule-frontend
+#    ghc-options: -threaded

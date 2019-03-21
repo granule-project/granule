@@ -1,6 +1,6 @@
 data Expr a where
-  Const : a -> Expr a;
-  Div : Expr Float -> Expr Float -> Expr Float
+  Const : a → Expr a;
+  Div : Expr Float → Expr Float → Expr Float
 
 -- Not well-typed:
 -- main : Expr Int

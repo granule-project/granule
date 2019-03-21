@@ -1,6 +1,6 @@
-map : forall (n : Nat)
-    . (Int -> Int) [n] -> Vec n Int -> Vec n Int
+map : ∀ {n : Nat}
+    . (Int → Int) [n] → Vec n Int → Vec n Int
 map [f] ys =
     case ys of
-      Nil -> Nil;
-      (Cons x xs) -> Cons (f x) (Cons 5 (map [f] xs))
+      Nil → Nil;
+      (Cons x xs) → Cons (f x) (Cons 5 (map [f] xs))

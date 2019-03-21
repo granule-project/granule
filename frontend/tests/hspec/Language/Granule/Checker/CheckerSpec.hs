@@ -29,9 +29,6 @@ import System.Directory (setCurrentDirectory)
 pathToExamples :: FilePath
 pathToExamples = "examples"
 
-pathToGranuleBase :: FilePath
-pathToGranuleBase = "StdLib"
-
 pathToRegressionTests :: FilePath
 pathToRegressionTests = "frontend/tests/cases/positive"
 
@@ -42,8 +39,8 @@ pathToIlltyped = "frontend/tests/cases/negative"
 exclude :: FilePath
 exclude = ""
 
-fileExtension :: String
-fileExtension = ".gr"
+fileExtensions :: [String]
+fileExtensions = [".gr"] -- todo: .md
 
 spec :: Spec
 spec = do
@@ -57,7 +54,7 @@ spec = do
     forM_ srcFiles $ \file ->
       describe file $ it "should typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file }
-        parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
+        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right ast -> do
@@ -70,7 +67,7 @@ spec = do
     forM_ srcFiles $ \file ->
       describe file $ it "should not typecheck" $ do
         let ?globals = ?globals { sourceFilePath = file, suppressErrors = True }
-        parsed <- try $ readFile file >>= parseDefs :: IO (Either SomeException _)
+        parsed <- try $ readFile file >>= parseAndDoImportsAndFreshenDefs :: IO (Either SomeException _)
         case parsed of
           Left ex -> expectationFailure (show ex) -- parse error
           Right ast -> do
@@ -88,19 +85,19 @@ spec = do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged tyVarK (CSig (CNat 5) natInterval))]
               [(varA, Discharged tyVarK (cNatOrdered 10))]
-       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
+       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
-              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
+         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a")) natInterval)
+              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a")) natInterval)]]
 
      it "join ctxts with discharged assumption in one" $ do
        (c, pred) <- runCtxts joinCtxts
               [(varA, Discharged (tyVarK) (cNatOrdered 5))]
               []
-       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
+       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
-               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
+         [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a")) natInterval)
+               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a")) natInterval)]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
@@ -138,7 +135,7 @@ spec = do
       it "simple elaborator tests" $ do
         -- Simple definitions
         -- \x -> x + 1
-        (AST _ (def1:_)) <- parseDefs "foo : Int -> Int\nfoo x = x + 1"
+        (AST _ (def1:_)) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
         (Just defElab, _) <- runChecker initState (runMaybeT $ checkDef [] def1)
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
@@ -149,13 +146,16 @@ runCtxts f a b =
        runChecker initState (runMaybeT (f nullSpan a b))
           >>= (\(x, state) -> return (fromJust x, predicateStack state))
 
-exampleFiles = liftM2 (<>) -- TODO I tried using `liftM concat` but that didn't work
-      (liftM2 (<>) (find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples)
-      (find always (extension ==? fileExtension) pathToGranuleBase))
-      (find always (extension ==? fileExtension) pathToRegressionTests)
+exampleFiles = foldr1 (liftM2 (<>)) $ do
+    fileExtension <- fileExtensions
+    id [ find (fileName /=? exclude) (extension ==? fileExtension) pathToExamples
+       , find always (extension ==? fileExtension) (includePath defaultGlobals)
+       , find always (extension ==? fileExtension) pathToRegressionTests
+       ] -- `id` in order to indent list, otherwise it doesn't parse in `do` notation
 
 cNatOrdered x = CSig (CNat x) natInterval
 natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")
 
-illTypedFiles =
-  find always (extension ==? fileExtension) pathToIlltyped
+illTypedFiles = foldr1 (liftM2 (<>)) $ do
+      fileExtension <- fileExtensions
+      [ find always (extension ==? fileExtension) pathToIlltyped ]

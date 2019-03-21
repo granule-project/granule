@@ -10,6 +10,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
 import Data.List
 
+import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
@@ -100,7 +101,7 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> MaybeT Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   -- contravariant position (always approximate)
-  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1 t1' (flipIndicator sp)
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy uS t1' t1 (flipIndicator sp)
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
@@ -108,51 +109,44 @@ equalTypesRelatedCoeffects s rel uS (FunTy t1 t2) (FunTy t1' t2') sp = do
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
 
-equalTypesRelatedCoeffects _ _ _ (TyCon con) (TyCon con') _ =
-  return (con == con', [])
+equalTypesRelatedCoeffects _ _ _ (TyCon con1) (TyCon con2) _ =
+  return (con1 == con2, [])
 
 -- THE FOLLOWING TWO CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
 
 -- Over approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
-   | internalName con == "IO" = do
-    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-    return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ef t1) (Diamond ["IO"] t2) sp
+    = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
 -- Under approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
-   | internalName con == "IO" = do
-    (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-    return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ["IO"] t1) (Diamond ef t2) sp
+    = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
 -- Over approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (TyApp (TyCon con) t') sp
-       | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
-        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-        return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ef t1) (Diamond ["Session"] t2) sp
+    | "Com" `elem` ef || null ef
+      = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
 -- Under approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel uS (TyApp (TyCon con) t) (Diamond ef t') sp
-       | internalName con == "Session" && ("Com" `elem` ef || null ef) = do
-        (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-        return (eq, unif)
+equalTypesRelatedCoeffects s rel uS (Diamond ["Session"] t1) (Diamond ef t2) sp
+    | "Com" `elem` ef || null ef
+      = equalTypesRelatedCoeffects s rel uS t1 t2 sp
 
-
-equalTypesRelatedCoeffects s rel uS (Diamond ef t) (Diamond ef' t') sp = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel uS t t' sp
-  if ef == ef'
+equalTypesRelatedCoeffects s rel uS (Diamond ef1 t1) (Diamond ef2 t2) sp = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel uS t1 t2 sp
+  if ef1 == ef2
     then return (eq, unif)
     else
       -- Effect approximation
-      if (ef `isPrefixOf` ef')
+      if (ef1 `isPrefixOf` ef2)
       then return (eq, unif)
       else
         -- Communication effect analysis is idempotent
-        if (nub ef == ["Com"] && nub ef' == ["Com"])
+        if (nub ef1 == ["Com"] && nub ef2 == ["Com"])
         then return (eq, unif)
         else
           halt $ GradingError (Just s) $
-            "Effect mismatch: " <> pretty ef <> " not equal to " <> pretty ef'
+            "Effect mismatch: `" <> pretty ef1 <> "` not equal to `" <> pretty ef2 <> "`"
 
 equalTypesRelatedCoeffects s rel uS x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages
@@ -320,7 +314,6 @@ equalTypesRelatedCoeffects s rel allowUniversalSpecialisation (TyVar n) t sp = d
 equalTypesRelatedCoeffects s rel uS t (TyVar n) sp =
   equalTypesRelatedCoeffects s rel uS (TyVar n) t (flipIndicator sp)
 
-
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffects s rel uS (TyApp (TyCon d) t) t' sp
   | internalName d == "Dual" = isDualSession s rel uS t t' sp
@@ -362,18 +355,14 @@ equalOtherKindedTypesGeneric s t1 t2 = do
       KPromote (TyCon (internalName -> "Protocol")) ->
         sessionInequality s t1 t2
 
-      KType ->
-        halt $ GenericError (Just s) $
-           "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
+      KType -> nonUnifiable s t1 t2
 
       _ ->
        halt $ KindError (Just s) $ "Equality is not defined between kinds "
                  <> pretty k1 <> " and " <> pretty k2
                  <> "\t\n from equality "
                  <> "'" <> pretty t2 <> "' and '" <> pretty t1 <> "' equal."
-  else
-    halt $ GenericError (Just s) $
-       "Type `" <> pretty t1 <> "` is not unifiable with the type `" <> pretty t2 <> "`"
+  else nonUnifiable s t1 t2
 
 -- Essentially use to report better error messages when two session type
 -- are not equality

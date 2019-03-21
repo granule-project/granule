@@ -21,6 +21,7 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
+    [Type]        -- constraints
     Type          -- type
   deriving (Eq, Show, Generic)
 
@@ -44,6 +45,7 @@ data Type = FunTy Type Type           -- ^ Function type
 -- | Kinds
 data Kind = KType
           | KCoeffect
+          | KPredicate
           | KFun Kind Kind
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
@@ -54,6 +56,7 @@ kConstr = KPromote . TyCon
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
+  freshen KPredicate = return KPredicate
   freshen (KFun k1 k2) = do
     k1 <- freshen k1
     k2 <- freshen k2
@@ -79,6 +82,7 @@ data Coeffect = CNat      Int
               | CVar      Id
               | CPlus     Coeffect Coeffect
               | CTimes    Coeffect Coeffect
+              | CMinus    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
               | CZero     Type
@@ -89,6 +93,18 @@ data Coeffect = CNat      Int
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
+
+coeffectIsAtom :: Coeffect -> Bool
+coeffectIsAtom (CNat _) = True
+coeffectIsAtom (CFloat _) = True
+coeffectIsAtom (CInfinity _) = True
+coeffectIsAtom (CVar _) = True
+coeffectIsAtom (COne _) = True
+coeffectIsAtom (CZero _) = True
+coeffectIsAtom (Level _) = True
+coeffectIsAtom (CSet _) = True
+coeffectIsAtom _ = False
+
 
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
@@ -103,9 +119,11 @@ isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
 isProduct :: Type -> Maybe (Type, Type)
-isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "(*)" =
+isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
+
+
 
 -- | Represents effect grades
 -- TODO: Make richer
@@ -129,8 +147,8 @@ resultType (FunTy _ t) = resultType t
 resultType t = t
 
 -- | Get the leftmost type of an application
--- >>> leftmostOfApplication $ TyCon (mkId "(,)") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
--- TyCon (Id "(,)" "(,)")
+-- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
+-- TyCon (Id "," ",")
 leftmostOfApplication :: Type -> Type
 leftmostOfApplication (TyApp t _) = leftmostOfApplication t
 leftmostOfApplication t = t
@@ -144,13 +162,14 @@ var :: String -> Type
 var = TyVar . mkId
 
 -- | Smart constructor for function types
-infixr 5 .->
 (.->) :: Type -> Type -> Type
 s .-> t = FunTy s t
+infixr 1 .->
 
 -- | Smart constructor for type application
 (.@) :: Type -> Type -> Type
 s .@ t = TyApp s t
+infixl 9 .@
 
 -- Trivially effectful monadic constructors
 mFunTy :: Monad m => Type -> Type -> m Type
@@ -214,6 +233,12 @@ typeFoldM algebra = go
 
 instance FirstParameter TypeScheme Span
 
+freeAtomsVars :: Type -> [Id]
+freeAtomsVars (TyVar v) = [v]
+freeAtomsVars (TyApp t1 (TyVar v)) = v : freeAtomsVars t1
+freeAtomsVars (TyApp t1 _) = freeAtomsVars t1
+freeAtomsVars t = []
+
 ----------------------------------------------------------------------
 -- Types and coeffects are terms
 
@@ -233,6 +258,7 @@ instance Term Coeffect where
     freeVars (CVar v) = [v]
     freeVars (CPlus c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CTimes c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CMinus c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CExpon c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CMeet c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CJoin c1 c2) = freeVars c1 <> freeVars c2
@@ -252,22 +278,17 @@ instance Term Coeffect where
 
 instance Monad m => Freshenable m TypeScheme where
   freshen :: TypeScheme -> Freshener m TypeScheme
-  freshen (Forall s binds ty) = do
+  freshen (Forall s binds constraints ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
+        constraints' <- mapM freshen constraints
         ty' <- freshen ty
-        return $ Forall s binds' ty'
+        return $ Forall s binds' constraints' ty'
 
 instance Freshenable m Type where
   freshen =
-    typeFoldM (baseTypeFold { tfTyApp = rewriteTyApp,
-                              tfTyVar = freshenTyVar,
+    typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox })
     where
-      -- Rewrite type aliases of Box
-      rewriteTyApp t1@(TyCon ident) t2
-        | internalName ident == "Box" || internalName ident == "◻" =
-          return $ Box (CInterval (CZero extendedNat) infinity) t2
-      rewriteTyApp t1 t2 = return $ TyApp t1 t2
 
       freshenTyBox c t = do
         c' <- freshen c
@@ -302,6 +323,11 @@ instance Freshenable m Coeffect where
       c2' <- freshen c2
       return $ CTimes c1' c2'
 
+    freshen (CMinus c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
+      return $ CMinus c1' c2'
+
     freshen (CExpon c1 c2) = do
       c1' <- freshen c1
       c2' <- freshen c2
@@ -311,6 +337,7 @@ instance Freshenable m Coeffect where
       c1' <- freshen c1
       c2' <- freshen c2
       return $ CMeet c1' c2'
+
     freshen (CJoin c1 c2) = do
       c1' <- freshen c1
       c2' <- freshen c2

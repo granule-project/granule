@@ -3,9 +3,9 @@ import Vec
 
 --- A tree which abstracts over the branching factor.
 --- Stolen from SPJ's _Adventure with Types in Haskell_ (lecture 2)
-data FTree (f : Type -> Type) a where
-  Leaf : a -> FTree f a;
-  Branch : f (FTree f a) -> FTree f a
+data FTree (f : Type → Type) a where
+  Leaf : a → FTree f a;
+  Branch : f (FTree f a) → FTree f a
 
 -- type BinaryTree = FTree (Vec 2)
 
@@ -14,7 +14,7 @@ binaryTree = Branch (Cons (Leaf "Hello") (Cons (Leaf "World") Nil))
 
 --- An annotated homogenous pair
 data AnnPair a where
-  AnnPair : String -> a -> a -> AnnPair a
+  AnnPair : String → a → a → AnnPair a
 
 -- type AnnBinTree = FTree AnnHPair
 annBinTree : FTree AnnPair Float
@@ -31,17 +31,17 @@ roseTree =
     Empty))
 
 --- Like `FTree`, but with data in the `Branch` instead of `Leaf`
-data FTree' (f : Type -> Type) a where
+data FTree' (f : Type → Type) a where
   Empty' : FTree' f a;
-  Node' : a -> f (FTree' f a) -> FTree' f a
+  Node' : a → f (FTree' f a) → FTree' f a
 
 roseTree' : FTree' List Int
 roseTree' = Node' 1 (Empty)
 
 --- Alternative where `f` controls when the F-Tree stops, e.g. `Nil` case for `List`,
 --- `None` case for `Maybe`.
-data Multi (f : Type -> Type) a where
-  Multi : a -> f (Multi f a) -> Multi f a
+data Multi (f : Type → Type) a where
+  Multi : a → f (Multi f a) → Multi f a
 
 foo : Multi List String
 foo = Multi "Lorem" (Next (Multi "ipsum" Empty) (Next (Multi "dolor" Empty) Empty))

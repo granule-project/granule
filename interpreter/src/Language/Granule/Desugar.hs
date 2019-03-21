@@ -27,7 +27,7 @@ import Control.Monad.State.Strict
    binding. -}
 desugar :: Show v => Def v () -> Def v ()
 -- desugar adt@ADT{} = adt
-desugar (Def s var eqs tys@(Forall _ _ ty)) =
+desugar (Def s var eqs tys@(Forall _ _ _ ty)) =
   Def s var [typeDirectedDesugarEquation (mkSingleEquation eqs)] tys
   where
     typeDirectedDesugarEquation (Equation s a ps body) =

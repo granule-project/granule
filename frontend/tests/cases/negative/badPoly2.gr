@@ -1,2 +1,2 @@
-id : forall (a : Type) . a -> a
+id : ∀ {a : Type} . a → a
 id x = x + 0

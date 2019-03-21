@@ -4,7 +4,7 @@
 import Vec
 
 --- pushVec pushes in non linearity of vector into the elements
-pushVec : forall (k : Nat, n : Nat, a : Type)
-         . (Vec n a) [1..k+1] -> Vec n (a [1..k+1])
+pushVec : ∀ {k : Nat, n : Nat, a : Type}
+         . (Vec n a) [1..k+1] → Vec n (a [1..k+1])
 pushVec [Nil] = Nil;
 pushVec [Cons x xs] = Cons [x] (pushVec [xs])

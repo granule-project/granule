@@ -32,7 +32,10 @@ type Level = Int
 
 parens :: Level -> String -> String
 parens l x | l <= 0 = x
-parens n x = "(" <> x <> ")"
+parens n x =
+  if head x == '(' && last x == ')'
+    then x
+    else "(" <> x <> ")"
 
 -- The pretty printer class
 class Pretty t where
@@ -64,8 +67,10 @@ instance {-# OVERLAPS #-} Pretty Effect where
 instance Pretty Coeffect where
     prettyL l (CNat n) = show n
     prettyL l (CFloat n) = show n
-    prettyL l (COne k)  = "_1 : " <> prettyL l k
-    prettyL l (CZero k) = "_0 : " <> prettyL l k
+    prettyL l (COne k) | k == TyCon (mkId "Nat") || k == extendedNat = "1"
+    prettyL l (CZero k) | k == TyCon (mkId "Nat") || k == extendedNat = "0"
+    prettyL l (COne k)  = "1 : " <> prettyL l k
+    prettyL l (CZero k) = "0 : " <> prettyL l k
     prettyL l (Level 0) = "Public"
     prettyL l (Level _) = "Private"
     prettyL l (CExpon a b) = prettyL l a <> "^" <> prettyL l b
@@ -77,11 +82,18 @@ instance Pretty Coeffect where
     prettyL l (CPlus c d) =
       prettyL l c <> " + " <> prettyL l d
     prettyL l (CTimes c d) =
-      prettyL l c <> " * " <> prettyL l d
+      prettyLAlt l c <> " * " <> prettyLAlt l d
+        where prettyLAlt l c | coeffectIsAtom c = prettyL l c
+                             | otherwise = parens 1 (prettyL l c)
+    prettyL l (CMinus c d) =
+      "(" <> prettyL l c <> " - " <> prettyL l d <> ")"
     prettyL l (CSet xs) =
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyL l t) xs) <> "}"
     prettyL l (CSig c t) =
        parens l (prettyL (l+1) c <> " : " <> prettyL l t)
+
+    prettyL l (CInfinity (Just k))
+       | k == TyCon (mkId "Nat") || k == extendedNat = "∞"
 
     prettyL l (CInfinity k) = "∞ : " <> prettyL l k
     prettyL l (CInterval c1 c2) = prettyL l c1 <> ".." <> prettyL l c2
@@ -90,14 +102,17 @@ instance Pretty Coeffect where
 instance Pretty Kind where
     prettyL l KType          = "Type"
     prettyL l KCoeffect      = "Coeffect"
+    prettyL l KPredicate     = "Predicate"
     prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
     prettyL l (KVar v)       = prettyL l v
     prettyL l (KPromote t)   = "↑" <> prettyL l t
 
 instance Pretty TypeScheme where
-    prettyL l (Forall _ [] t) = prettyL l t
-    prettyL l (Forall _ cvs t) =
-        "forall " <> intercalate ", " (map prettyKindSignatures cvs) <> ". " <> prettyL l t
+    prettyL l (Forall _ [] [] t) = prettyL l t
+    prettyL l (Forall _ cvs cons t) =
+        "forall " <> intercalate ", " (map prettyKindSignatures cvs)
+                  <> intercalate ", " (map (prettyL l) cons)
+                  <> ". " <> prettyL l t
       where
        prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
 
@@ -110,7 +125,7 @@ instance Pretty Type where
     -- Non atoms
     prettyL l (FunTy t1 t2)  =
       parens l $ case t1 of
-        FunTy{} -> prettyL (l+1) t1 <> " -> " <> prettyL l t2
+        FunTy{} -> "(" <> prettyL l t1 <> ") -> " <> prettyL l t2
         _       ->  prettyL l t1 <> " -> " <> prettyL l t2
 
     prettyL l (Box c t)      =
@@ -120,13 +135,14 @@ instance Pretty Type where
       parens l ("Session " <> prettyL (l+1) t)
 
     prettyL l (Diamond e t)  =
-       parens l (prettyL (l+1) t <> " <" <> prettyL l e <> ">")
+       parens l (prettyL (l+1) t
+       <> " <" <> intercalate "," (map (prettyL l) e) <> ">")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(,)" =
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
 
-    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "(*)" =
-      parens l ("(" <> prettyL l t1 <> " * " <> prettyL l t2 <> ")")
+    prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "×" =
+      parens l ("(" <> prettyL l t1 <> " × " <> prettyL l t2 <> ")")
 
     prettyL l t@(TyApp (TyApp _ _) _) | appChain t =
       parens l tyAppPretty
@@ -170,8 +186,8 @@ instance Pretty [DataConstr] where
     prettyL l = intercalate ";\n  " . map pretty
 
 instance Pretty DataConstr where
-    prettyL l (DataConstrG _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
-    prettyL l (DataConstrA _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
+    prettyL l (DataConstrIndexed _ name typeScheme) = prettyL l name <> " : " <> prettyL l typeScheme
+    prettyL l (DataConstrNonIndexed _ name params) = prettyL l name <> (unwords . map (prettyL l)) params
 
 instance Pretty (Pattern a) where
     prettyL l (PVar _ _ v)     = prettyL l v
@@ -215,9 +231,17 @@ instance Pretty Id where
   prettyL l
     = if debugging ?globals
         then internalName
-        else takeWhile (\c -> c /= '.' && c /= '`') . sourceName
+        else (stripMarker '`') . (stripMarker '.') . sourceName
+    where
+      stripMarker c [] = []
+      stripMarker c (c':cs) | c == c' = cs
+                            | otherwise = c' : stripMarker c cs
+
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
+  prettyL l (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
+    parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
+
   prettyL l (App _ _ e1 e2) =
     parens l $ prettyL (l+1) e1 <> " " <> prettyL l e2
 

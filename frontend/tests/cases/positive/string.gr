@@ -1,4 +1,4 @@
-main : () <[W]>
+main : () <W>
 main = write "Hello world!
 Yes, strings can be multiline.
 🤔"
