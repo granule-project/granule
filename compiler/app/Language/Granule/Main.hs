@@ -109,7 +109,7 @@ run input = do
                 printInfo "Generated Emitable AST"
                 let llvmir = unpack $ ppllvm irModuleAst
                 let moduleName = fst $ splitExtension $ sourceFilePath ?globals
-                printInfo llvmir
+                --printInfo llvmir
                 writeFile (moduleName ++ ".ll") llvmir
                 withHostTargetMachine $ \machine ->
                     withContext $ \context -> do
