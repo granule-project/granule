@@ -1,0 +1,3 @@
+Type checking failed: 
+  Unification failed: 13:25:
+  Type variable `a6` cannot be unified with type `Lam a6` (occurs check failure; implies infinite type).

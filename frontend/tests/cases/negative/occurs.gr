@@ -1,0 +1,16 @@
+-- gr --no-eval
+
+data Lam : Type → Type where
+  Lift : ∀ a : Type           . a → Lam a;                   --- lifted value
+  Pair : ∀ a : Type, b : Type . a → b → Lam (a,b);           --- product
+  Lam  : ∀ a : Type, b : Type . (a → b) → Lam (a → b);       --- lambda abstraction
+  App  : ∀ a : Type, b : Type . Lam (a → b) → Lam a → Lam b; --- beta reduction
+  Fix  : ∀ a : Type           . (Lam (a → a)) [∞] → Lam a    --- fixed point
+
+eval : ∀ a : Type . Lam a → a
+eval e = case e of
+    (Lift v)   → v;
+    (Pair l r) → (eval l, eval r);
+    (Lam f)    → λx → eval (f (Lift x));
+    (App f x)  → (eval f) (eval x);
+    (Fix [f])  → (eval f) (eval (Fix [f]))
