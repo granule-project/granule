@@ -188,7 +188,7 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
       tyVarConstraint (k1, n) (k2, m)
 
     (Just (k1, BoundQ), Just (k2, ForallQ)) ->
-      tyVarConstraint (k2, m) (k1, n)
+      tyVarConstraint (k1, n) (k2, m)
 
 
     -- We can unify two instance type variables
@@ -209,7 +209,7 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
 
     -- But we can unify a forall and an instance
     (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
-        tyVarConstraint (k2, m) (k1, n)
+        tyVarConstraint (k1, n) (k2, m)
 
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->

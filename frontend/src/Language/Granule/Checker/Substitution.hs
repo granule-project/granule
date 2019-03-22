@@ -411,7 +411,7 @@ reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt
 
    reduceByTransitivity' substLeft (subst@(var, SubstT (TyVar var')):substRight) =
      case lookupAndCutout var' (substLeft ++ substRight) of
-       Just (substRest, t) -> reduceByTransitivity ((var, t) : substRest)
+       Just (substRest, t) -> (var, t) : reduceByTransitivity ((var', t) : substRest)
        Nothing             -> reduceByTransitivity' (subst : substLeft) substRight
 
    reduceByTransitivity' substLeft (subst:substRight) =
