@@ -395,6 +395,8 @@ data CheckerError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
     { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+  | OccursCheckFail
+    { errLoc :: Span, errVar :: Id, errTy :: Type }
   | SessionDualityError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | NoUpperBoundError
@@ -473,6 +475,7 @@ instance UserMsg CheckerError where
   title EffectMismatch{} = "Effect mismatch"
   title UnificationDisallowed{} = "Unification disallowed"
   title UnificationFail{} = "Unification failed"
+  title OccursCheckFail{} = "Unification failed"
   title SessionDualityError{} = "Session duality error"
   title NoUpperBoundError{} = "Type upper bound"
   title DisallowedCoeffectNesting{} = "Bad coeffect nesting"
@@ -574,6 +577,10 @@ instance UserMsg CheckerError where
   msg UnificationError{..} = if pretty errTy1 == pretty errTy2
     then "Type `" <> pretty errTy1 <> "` is not unifiable with the type `" <> pretty errTy2 <> "` coming from a different binding"
     else "Type `" <> pretty errTy1 <> "` is not unifiable with the type `" <> pretty errTy2 <> "`"
+
+  msg (OccursCheckFail _ var t) =
+    "Type variable `" <> pretty var <> "` cannot be unified with type `"
+        <> pretty t <> "` (occurs check failure; implies infinite type)."
 
   msg (UnificationKindError _ t1 k1 t2 k2)
     = "Trying to unify a type `"

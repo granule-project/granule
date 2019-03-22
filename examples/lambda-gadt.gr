@@ -2,8 +2,8 @@
 
 data Lam : Type → Type where
   Lift : ∀ a : Type           . a → Lam a;                   --- lifted value
-  Pair : ∀ a : Type, b : Type . a → b → Lam (a,b);           --- product
-  Lam  : ∀ a : Type, b : Type . (a → b) → Lam (a → b);       --- lambda abstraction
+  Pair : ∀ a : Type, b : Type . Lam a → Lam b → Lam (a,b);           --- product
+  Lam  : ∀ a : Type, b : Type . (Lam a → Lam b) → Lam (a → b);       --- lambda abstraction
   App  : ∀ a : Type, b : Type . Lam (a → b) → Lam a → Lam b; --- beta reduction
   Fix  : ∀ a : Type           . (Lam (a → a)) [∞] → Lam a    --- fixed point
 

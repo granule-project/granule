@@ -18,6 +18,7 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
+import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -251,10 +252,21 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
           $ "span: " <> show s
           <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
+
+  k2 <- inferKindOfType s t
+
+  -- Do an occurs check for types
+  case k2 of
+    KType ->
+       if n `elem` freeVars t
+         then throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
+         else return ()
+    _ -> return ()
+
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ && sp /= PatternCtxt) -> do
-      k2 <- inferKindOfType s t
+
       case k1 `joinKind` k2 of
         Nothing -> throw UnificationKindError
           { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = k2 }
