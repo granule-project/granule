@@ -1,0 +1,9 @@
+interface Functor (f : Type -> Type) (c : Coeffect) (i : c) where
+  map : forall {a : Type, b : Type} . (a -> b) [i] -> f a -> f b
+
+data Id a = Id a
+
+-- the typechecker needs to be able to relate i~1 and c~Nat in
+-- the 'map' method
+instance Functor Id Nat 1 where
+  map [f] (Id x) = Id (f x)
