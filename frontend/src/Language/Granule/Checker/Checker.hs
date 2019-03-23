@@ -285,6 +285,15 @@ checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
   checkIFaceExists sp iname
   let inst = mkInst iname idty
+      numParams = length idty
+
+  -- make sure the number of parameters is correct
+  Just expectedNumParams <- fmap (fmap length) (getInterfaceParameterNames iname)
+  when (numParams /= expectedNumParams) $
+    halt $ GenericError (Just sp) $
+      concat [ "Wrong number of parameters in instance ", prettyQuoted inst, "."
+             , " Expected ", show expectedNumParams, " but got ", show numParams, "."]
+
   freeVarKinds <- getInstanceFreeVarKinds sp inst
   mapM_ (kindCheckConstr sp freeVarKinds) constrs
   checkInstTy sp2 inst

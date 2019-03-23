@@ -1,0 +1,4 @@
+interface Simple a b
+
+-- too few parameters (expecting 2)
+instance Simple Int
