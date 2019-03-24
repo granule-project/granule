@@ -283,20 +283,11 @@ getInstance sp inst = do
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
 checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
-  checkIFaceExists sp iname
   let inst = mkInst iname idty
-      numParams = length idty
-
-  -- make sure the number of parameters is correct
-  Just expectedNumParams <- fmap (fmap length) (getInterfaceParameterNames iname)
-  when (numParams /= expectedNumParams) $
-    halt $ GenericError (Just sp) $
-      concat [ "Wrong number of parameters in instance ", prettyQuoted inst, "."
-             , " Expected ", show expectedNumParams, " but got ", show numParams, "."]
+  validateConstraint sp inst
 
   freeVarKinds <- getInstanceFreeVarKinds sp inst
   withBindings freeVarKinds ForallQ $ mapM_ (kindCheckConstraintType sp) constrs
-  checkInstTy sp2 inst
   -- we take it on faith that the instance methods are well-typed
   -- at this point. If an issue arises it will be caught before we
   -- check top-level definitions
@@ -314,26 +305,6 @@ checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
                     maybeInstances <- lookupContext instanceContext iname
                     modify' $ \st -> st { instanceContext = (iname, (inst,constrs):fromMaybe [] maybeInstances)
                                                             : filter ((/=iname) . fst) (instanceContext st) }
-
-
-
-checkInstTy :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
-checkInstTy sp inst = do
-  -- Make sure the instance satisfies any constraints
-  -- on the interface
-  icons <- getInterfaceConstraints' inst
-  mapM_ (verifyConstraint sp) icons
-
-  -- Make sure the types in the instance head are well-kinded
-  -- with respect to the parameter kinds
-  kinds <- getInterfaceParameterKindsForInst inst
-  let expectedKindPairs = zip kinds (instParams inst)
-  forM_ expectedKindPairs (\(iKind, ity) -> do
-    inferred <- withInstanceContext sp inst $ inferKindOfTypeSafe sp ity
-    case inferred of
-      Left{} -> halt $ KindError (Just sp) $
-                "Could not infer a kind for " <> prettyQuoted ity
-      Right tyKind -> when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
 
 
 checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker (Instance v Type)
@@ -1732,6 +1703,49 @@ unboundKindVariable sp n =
 ------------------------------
 ----- Constraint Helpers -----
 ------------------------------
+
+
+-- | A possibly-failing operation that verifies a constraint is valid
+-- | in the current context.
+-- |
+-- | The operation will fail if any of the following criteria are not met:
+-- |
+-- | - The constraint is not of a valid interface (i.e., the interface is not in scope)
+-- | - The number of constraint parameters differs from the number of interface parameters
+-- | - Any of the constraint parameters are not well-kinded with respect to the interface
+-- |   parameters
+-- | - Any of the interface's (instantiated) constraints are not satisfiable in the context
+validateConstraint :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
+validateConstraint sp inst = do
+  let iname = instIFace inst
+
+  -- verify that the associated interface is in scope
+  checkIFaceExists sp iname
+
+  -- make sure the number of parameters is correct
+  let numParams = length (instParams inst)
+  Just expectedNumParams <- fmap (fmap length) (getInterfaceParameterNames iname)
+  when (numParams /= expectedNumParams) $
+    halt $ GenericError (Just sp) $
+      concat [ "Wrong number of parameters in instance ", prettyQuoted inst, "."
+             , " Expected ", show expectedNumParams, " but got ", show numParams, "."]
+
+  -- Make sure the constraint parameters are well-kinded
+  -- with respect to the interface parameters (ensuring
+  -- kind dependencies are resolved)
+  kinds <- getInterfaceParameterKindsForInst inst
+  let expectedKindPairs = zip (instParams inst) kinds
+  forM_ expectedKindPairs (\(ity, iKind) -> do
+    inferred <- withInstanceContext sp inst $ inferKindOfTypeSafe sp ity
+    case inferred of
+      Left{} -> halt $ KindError (Just sp) $
+                "Could not infer a kind for " <> prettyQuoted ity
+      Right tyKind -> when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
+
+  -- Make sure all of the interface constraints are
+  -- satisfiable in the context
+  icons <- getInterfaceConstraints' inst
+  mapM_ (verifyConstraint sp) icons
 
 
 -- | Kind check the given type, treating it as an interface constraint.
