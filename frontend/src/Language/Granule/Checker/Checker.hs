@@ -339,14 +339,20 @@ checkInstTy sp inst = do
 checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Checker (Instance v Type)
 checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
   let inst = mkInst iname idty
+
+  -- check that every instance method is a member of the interface
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
     checkInstDefName names sp name) [(sp, name) | (InstanceEquation sp (Just name) _) <- ds]
+
+  -- check that an implementation is provided for every interface method
   forM_ (filter (`notElem` defnames) names)
     (\name -> halt $ GenericError (Just sp) $
       concat ["No implementation given for `", pretty name
              , "` which is a required member of interface `"
              , pretty iname, "`"])
+
+  -- group equations by method name
   let nameGroupedDefs = groupBy
         (\(InstanceEquation _ name1 _) (InstanceEquation _ name2 _) ->
           name1 == name2 || name2 == Nothing) ds
@@ -354,10 +360,14 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
         (\((InstanceEquation sp (Just name) eq):dt) ->
           let eqs = map (\(InstanceEquation _ _ eq) -> eq) dt
           in ((sp, name), eq:eqs)) nameGroupedDefs
+
+  -- check each implementation against the (normalised) method
+  -- signature, and register the definition-form in the state
   ds' <- mapM (\((sp, name), eqs) -> do
                  tys <- (getNormalisedInterfaceSig inst) name
                  registerInstanceSig iname idat name tys
                  checkDef' sp name eqs (tysWithConstrs constrs tys)) groupedEqns
+
   pure $ Instance sp iname constrs idat (concat $ fmap defToIDefs ds')
   where
     checkInstDefName names sp name = do
