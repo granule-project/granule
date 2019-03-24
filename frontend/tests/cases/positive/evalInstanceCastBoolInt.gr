@@ -1,0 +1,19 @@
+-- EXPECTED: (0, (Some True, None))
+data Bool = True | False
+
+data Maybe a = None | Some a
+
+interface Cast a b where
+  cast : a -> b
+
+instance Cast Bool Int where
+  cast False = 0;
+  cast True  = 1
+
+instance Cast (Int [0..1]) (Maybe Bool) where
+  cast [0] = Some False;
+  cast [1] = Some True;
+  cast [_] = None
+
+main : (Int, (Maybe Bool, Maybe Bool))
+main = (cast False, (cast [1], cast [7]))

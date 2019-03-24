@@ -1,0 +1,12 @@
+interface Cast a b where
+  cast : a -> b
+
+data Bool = True | False
+
+data Maybe a = None | Some a
+
+-- the first parameter is boxed
+instance Cast (Int [0..1]) (Maybe Bool) where
+  cast [0] = Some False;
+  cast [1] = Some True;
+  cast [_] = None

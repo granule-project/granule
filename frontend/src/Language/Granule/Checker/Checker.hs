@@ -1691,6 +1691,7 @@ getInstanceFreeVarKinds sp inst = do
     -- | (and applications of) this is the kind signature of the constructor.
     inferKindSigOfParameter _ iname k (TyVar v) = pure k
     inferKindSigOfParameter sp _ _ (TyCon name) = getTyConKind sp name
+    inferKindSigOfParameter sp iname k (Box _ t)   = inferKindSigOfParameter sp iname k t
     inferKindSigOfParameter sp iname k (TyApp t _) = inferKindSigOfParameter sp iname k t
     inferKindSigOfParameter sp iname (KPromote k) _ = pure (KPromote k)
     inferKindSigOfParameter sp iname k TyCoeffect{} = pure k
