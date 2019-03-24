@@ -228,7 +228,7 @@ checkIFaceHead iface@(Interface sp name constrs params itys) = do
       kindVars = freeVars pkinds
       remVars = kindVars \\ pnames
   mapM_ (unboundKindVariable sp) remVars
-  mapM_ (kindCheckConstr sp params') constrs
+  withBindings params' ForallQ $ mapM_ (kindCheckConstraintType sp) constrs
   registerInterface sp name params' (constrsToIcons constrs) ifsigs
   where
     params' = fmap normaliseParameterKind params
@@ -295,7 +295,7 @@ checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
              , " Expected ", show expectedNumParams, " but got ", show numParams, "."]
 
   freeVarKinds <- getInstanceFreeVarKinds sp inst
-  mapM_ (kindCheckConstr sp freeVarKinds) constrs
+  withBindings freeVarKinds ForallQ $ mapM_ (kindCheckConstraintType sp) constrs
   checkInstTy sp2 inst
   -- we take it on faith that the instance methods are well-typed
   -- at this point. If an issue arises it will be caught before we
@@ -1717,3 +1717,16 @@ unboundKindVariable :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a
 unboundKindVariable sp n =
   halt $ UnboundVariableError (Just sp) $
        concat ["Kind variable ", prettyQuoted n, " could not be found in context."]
+
+
+------------------------------
+----- Constraint Helpers -----
+------------------------------
+
+
+-- | Kind check the given type, treating it as an interface constraint.
+kindCheckConstraintType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker ()
+kindCheckConstraintType sp ty = requireKind ty (KConstraint InterfaceC)
+  where requireKind t reqKind = do
+          kind <- inferKindOfType sp t
+          when (kind /= reqKind) $ illKindedNEq sp reqKind kind
