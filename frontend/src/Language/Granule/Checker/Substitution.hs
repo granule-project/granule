@@ -731,6 +731,15 @@ getInstanceSubstitution sp inst = do
             KPromote (TyCon n) | internalName n == "Nat" -> do
               coeff <- compileNatKindedTypeToCoeffect sp param
               pure (name, SubstC coeff)
+            KPromote t -> do
+              k <- inferKindOfType sp t
+              case k of
+                KCoeffect -> pure $ case param of
+                                      -- when the parameter itself is a coeffect, we can substitute
+                                      -- the name to that coeffect
+                                      (TyCoeffect c) -> (name, SubstC c)
+                                      _ -> (name, SubstK (KPromote t))
+                _ -> pure (name, SubstT param)
             _ -> pure (name, SubstT param)
 
 
