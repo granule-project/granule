@@ -2,4 +2,4 @@ interface Simple (a : Type) (b : Coeffect) (c : b)
 
 data A = A
 
-instance Simple A Nat [1]
+instance Simple A Nat 1

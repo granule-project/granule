@@ -3,4 +3,4 @@ interface Simple a (c : Nat)
 data A = A
 
 -- An instance with a nat parameter
-instance Simple A [1]
+instance Simple A 1
