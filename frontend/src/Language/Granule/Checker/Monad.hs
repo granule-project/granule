@@ -190,6 +190,10 @@ getTypeScheme :: Id -> MaybeT Checker (Maybe TypeScheme)
 getTypeScheme = lookupContext defContext
 
 
+getDefContext :: MaybeT Checker (Ctxt TypeScheme)
+getDefContext = fmap defContext get
+
+
 -- | Get the current variable kind/quantification context.
 getTyVarContext :: MaybeT Checker (Ctxt (Kind, Quantifier))
 getTyVarContext = fmap tyVarContext get
@@ -218,6 +222,10 @@ registerTyCon :: (?globals :: Globals) => Span -> Id -> Kind -> Cardinality -> M
 registerTyCon sp name kind card = do
   checkDuplicateTyConScope sp name
   modify' $ \st -> st { typeConstructors = (name, (kind, card)) : typeConstructors st }
+
+
+getIFaceContext :: MaybeT Checker (Ctxt IFaceCtxt)
+getIFaceContext = fmap ifaceContext get
 
 
 -- | Get the kind of a type constructor.
