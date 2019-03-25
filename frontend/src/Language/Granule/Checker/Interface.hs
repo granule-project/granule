@@ -3,7 +3,7 @@ module Language.Granule.Checker.Interface
   , getInterfaceParameters
   , getInterfaceParameterNames
   , getInterfaceParameterKinds
-  , getInterfaceSig
+  , getInterfaceSigs
   , getInterfaceKind
   , getInterfaceConstraints
   , registerInstanceSig
@@ -12,7 +12,6 @@ module Language.Granule.Checker.Interface
   ) where
 
 
-import Control.Monad (join)
 import Control.Monad.State (modify')
 import Control.Monad.Trans.Maybe (MaybeT)
 import qualified Data.Map as M
@@ -61,10 +60,6 @@ getInterfaceSigs = fmap (fmap ifaceSigs) . getInterface
 
 getInterfaceMembers :: Id -> MaybeT Checker (Maybe [Id])
 getInterfaceMembers = fmap (fmap ifaceCtxtNames) . getInterface
-
-
-getInterfaceSig :: Id -> Id -> MaybeT Checker (Maybe TypeScheme)
-getInterfaceSig iname name = fmap join $ fmap (fmap $ lookup name) (getInterfaceSigs iname)
 
 
 getInterfaceConstraints :: Id -> MaybeT Checker (Maybe [Inst])

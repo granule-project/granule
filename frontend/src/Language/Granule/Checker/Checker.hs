@@ -24,7 +24,7 @@ import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Interface
-  ( getInterfaceSig
+  ( getInterfaceSigs
   , getInterfaceMembers
   , getInterfaceParameterNames
   , getInterfaceConstraints
@@ -311,6 +311,11 @@ checkInstDefs :: (?globals :: Globals, Pretty v) => Instance v () -> MaybeT Chec
 checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
   let inst = mkInst iname idty
 
+  (ifaceConstrs, methodSigs) <- instantiateInterface sp inst
+
+  -- safe because we have validated each constraint in 'checkInstHead'
+  let Just constrs' = sequence $ fmap instFromTy constrs
+
   -- check that every instance method is a member of the interface
   Just names <- getInterfaceMembers iname
   defnames <- mapM (\(sp, name) ->
@@ -334,10 +339,13 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
 
   -- check each implementation against the (normalised) method
   -- signature, and register the definition-form in the state
-  ds' <- mapM (\((sp, name), eqs) -> do
-                 tys <- (getNormalisedInterfaceSig inst) name
+  let methods = [(sp, (name, tys, eqs)) | ((sp, name), eqs) <- groupedEqns,
+                                          (name2, tys) <- methodSigs,
+                                          name == name2]
+  ds' <- mapM (\(sp, (name, tys, eqs)) -> do
+                 tys' <- constrs' |> ifaceConstrs |> pure tys
                  registerInstanceSig iname idat name tys
-                 checkDef' sp name eqs (tysWithConstrs constrs tys)) groupedEqns
+                 checkDef' sp name eqs tys') methods
 
   pure $ Instance sp iname constrs idat (concat $ fmap defToIDefs ds')
   where
@@ -345,14 +353,6 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
       unless (elem name names) (halt $ GenericError (Just sp) $
         concat ["`", pretty name, "` is not a member of interface `", pretty iname, "`"])
       pure name
-    getNormalisedInterfaceSig :: Inst -> Id -> MaybeT Checker TypeScheme
-    getNormalisedInterfaceSig inst name = do
-      subst <- getInstanceSubstitution sp inst
-      Just sig <- getInterfaceSig iname name
-      (Forall s binds constraints ty) <- withInterfaceContext iname $ substitute subst sig
-      -- ensure free variables in the instance head are universally quantified
-      freeInstVarKinds <- getInstanceFreeVarKinds sp inst
-      pure $ Forall s (binds <> freeInstVarKinds) constraints ty
     defToIDefs (Def sp n eqns ty) = fmap (InstanceEquation sp (Just n)) eqns
 
 
@@ -1594,12 +1594,6 @@ constrsFromIcons :: [Inst] -> [Type]
 constrsFromIcons = fmap tyFromInst
 
 
--- | Add a set of constraints to the typescheme.
-tysWithConstrs :: [Type] -> TypeScheme -> TypeScheme
-tysWithConstrs constrs' (Forall sp binds constrs ty) =
-  Forall sp binds (constrs <> constrs') ty
-
-
 mkIFaceApp :: Id -> [Id] -> Type
 mkIFaceApp iname = tyFromInst . mkInst iname . fmap TyVar
 
@@ -1703,6 +1697,42 @@ unboundKindVariable sp n =
 ------------------------------
 ----- Constraint Helpers -----
 ------------------------------
+
+
+-- | Constrain the typescheme with the given constraint.
+constrain :: (?globals :: Globals) => [Inst] -> TypeScheme -> MaybeT Checker TypeScheme
+constrain constrs (Forall sp binds constrs' ty) = do
+  fvks <- fmap concat $ mapM (getInstanceFreeVarKinds sp) constrs
+  pure $ Forall sp (binds <> fvks) (fmap tyFromInst constrs <> constrs') ty
+
+
+infixr 6 |>
+(|>) :: (?globals :: Globals) => [Inst] -> MaybeT Checker TypeScheme -> MaybeT Checker TypeScheme
+constrs |> tys = tys >>= constrain constrs
+
+
+-- | Get the instantiated form of an interface at the point of a constraint.
+-- |
+-- | We require that both the interface and constraint are valid at the point
+-- | of call.
+instantiateInterface :: (?globals :: Globals) => Span -> Inst
+                     -> MaybeT Checker
+                        ( [Inst]             -- ^ Instantiated constraints
+                        , [(Id, TypeScheme)] -- ^ Instantiated method signatures
+                        )
+instantiateInterface sp inst = do
+  let iname = instIFace inst
+  Just sigs <- getInterfaceSigs iname
+  subst <- getInstanceSubstitution sp inst
+  constrs <- getInterfaceConstraints' inst
+
+  -- instantiate method signatures with the constraint's parameters
+  freeInstVarKinds <- getInstanceFreeVarKinds sp inst
+  methodSigs <- mapM (\(name, sig) -> do
+                        (Forall s binds constrs ty) <- withInterfaceContext iname $ substitute subst sig
+                        -- ensure free variables in the instance head are universally quantified
+                        pure (name, Forall s (binds <> freeInstVarKinds) constrs ty)) sigs
+  pure (constrs, methodSigs)
 
 
 -- | A possibly-failing operation that verifies a constraint is valid
