@@ -384,7 +384,7 @@ checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
 
         -- Solve the generated constraints
         checkerState <- get
-        debugM "tyVarContext" (pretty $ tyVarContext checkerState)
+        debugM "tyVarContext" . pretty =<< getTyVarContext
         let predStack = Conj $ predicateStack checkerState
         debugM "Solver predicate" $ pretty predStack
         solveConstraints predStack (getSpan equation) defName
