@@ -32,9 +32,13 @@ module Language.Granule.Checker.Instance
     -- ** Converting to/from types/instances
     , tyFromInst
     , instFromTy
+
+    -- ** Partitioning constraints
+    , partitionConstraints
     ) where
 
 
+import Data.Either (partitionEithers)
 import Data.List (foldl')
 
 import Language.Granule.Syntax.Helpers (Term, freeVars)
@@ -99,3 +103,9 @@ instFromTy t = do
         apTys (TyApp (TyCon _) t) = pure $ pure t
         apTys (TyApp x t) = fmap (t:) $ apTys x
         apTys _ = Nothing
+
+
+-- | Partition a list of constraints into predicates and
+-- | interface constraints.
+partitionConstraints :: [TConstraint] -> ([Type], [Inst])
+partitionConstraints = partitionEithers . fmap (\t -> maybe (Left t) Right $ instFromTy t)

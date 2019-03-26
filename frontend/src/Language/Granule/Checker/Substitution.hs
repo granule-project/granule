@@ -9,7 +9,7 @@ module Language.Granule.Checker.Substitution where
 import Control.Monad
 import Control.Monad.State.Strict
 import Data.Function (on)
-import Data.Maybe (catMaybes, mapMaybe)
+import Data.Maybe (mapMaybe)
 import Data.Bifunctor.Foldable (bicataM)
 
 import Language.Granule.Context
@@ -512,8 +512,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
     let subst = map (\(v, (_, var)) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
     constr' <- mapM (substitute subst) constr
-    let predicateConstraints = filter isPredicateConstraint constr'
-        interfaceConstraints = catMaybes . fmap instFromTy $ constr'
+    let (predicateConstraints, interfaceConstraints) = partitionConstraints constr'
 
     -- Return the type and all instance variables
     let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
