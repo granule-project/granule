@@ -4,6 +4,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE TupleSections #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Checker where
@@ -1598,43 +1599,79 @@ normaliseParameterKind = second inferParameterKind
 
 getInstanceFreeVarKinds :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [(Id, Kind)]
 getInstanceFreeVarKinds sp inst = do
-  let iname = instIFace inst
-      itys  = instParams inst
   kinds <- getInterfaceParameterKindsForInst inst
-  let zippedKinds = zip kinds itys
-  fmap concat $ mapM (\(kind, ity) -> fmap (`getConstructorKinds` ity)
-                  $ inferKindSigOfParameter sp iname kind ity) zippedKinds
+  getParamsFreeVarKinds (zip kinds (instParams inst))
   where
-    -- | Given a kind (e.g., of a type constructor) and a type
-    -- | (possibly a partial application of the constructor), get the kinds of
-    -- | free variables in the type.
-    getConstructorKinds :: Kind -> Type -> [(Id, Kind)]
-    getConstructorKinds (KFun k _) (TyVar v) = [(v, k)]
-    getConstructorKinds (KFun k ks) (FunTy t ts) = getConstructorKinds k t <> getConstructorKinds ks ts
-    getConstructorKinds (KFun k1 ks) (TyApp (TyVar v) ts) = (v, k1) : getConstructorKinds ks ts
-    getConstructorKinds ks (TyApp (TyCon _) ts) = getConstructorKinds ks ts
-    getConstructorKinds (KFun k1 (KFun k2 k3)) (TyApp (TyApp (TyCon _) t1) t2)
-        = getConstructorKinds k1 t1 <> getConstructorKinds k2 t2
-    getConstructorKinds k (TyVar v) = [(v, k)]
-    getConstructorKinds _ (TyCon _) = []
-    getConstructorKinds k (Box _ t) = getConstructorKinds k t
-    getConstructorKinds k (Diamond _ t) = getConstructorKinds k t
-    getConstructorKinds k (TyCoeffect (CVar v)) = pure (v, k)
-    getConstructorKinds k (TyCoeffect c)
+    -- | Given a set of (parameter kind, parameter type) pairs, attempt to
+    -- | map free variables in the types to appropriate kinds.
+    getParamsFreeVarKinds :: [(Kind, Type)] -> MaybeT Checker [(Id, Kind)]
+    getParamsFreeVarKinds = fmap concat . mapM (uncurry getParamFreeVarKinds)
+
+    getParamFreeVarKinds :: Kind -> Type -> MaybeT Checker [(Id, Kind)]
+    getParamFreeVarKinds _ t | freeVars t == [] = pure []
+    getParamFreeVarKinds paramKind (TyVar v) = pure [(v, paramKind)]
+    getParamFreeVarKinds paramKind (Box c t) =
+      (<>) <$> getCoeffectFreeVarKinds c <*> getParamFreeVarKinds paramKind t
+    getParamFreeVarKinds paramKind (TyCoeffect (CVar v)) = pure [(v, paramKind)]
+    getParamFreeVarKinds paramKind t@TyApp{} =
+      let go (TyApp c@(TyCon _) _) = pure c
+          go (TyApp c@(TyVar _) _) = pure c
+          go (TyApp n _) = go n
+          go _ = Nothing
+      in case go t of
+           Just (TyCon n) -> do
+             conKind <- getTyConKind sp n
+             getParamsFreeVarKinds (getConArgKinds conKind t)
+           -- when we have a variable, infer its kind from the parameters
+           Just (TyVar v) -> do
+             pks <- getParamsFreeVarKinds (getConArgKinds paramKind t)
+             paramKinds <- withBindings pks ForallQ $ mapM (inferKindOfType sp) (getArgs t)
+             pure $ (v, foldKindsToDKind paramKind paramKinds) : pks
+           _ -> pure []
+    getParamFreeVarKinds k (TyCoeffect c)
       | isBinaryCoeff c =
         let (n, m) = binaryCoeffComps c
-            go = getConstructorKinds k . TyCoeffect
-        in go n <> go m
-    getConstructorKinds p@(KPromote (TyCon c)) t
+            go = getParamFreeVarKinds k . TyCoeffect
+        in (<>) <$> go n <*> go m
+    getParamFreeVarKinds p@(KPromote (TyCon c)) t
       | internalName c == "Nat" =
-        maybe [] (getConstructorKinds p . TyCoeffect) (compileNatKindedTypeToCoeffectSafe t)
-    getConstructorKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
+        maybe (pure []) (getParamFreeVarKinds p . TyCoeffect) (compileNatKindedTypeToCoeffectSafe t)
+    getParamFreeVarKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
       | internalName c == "Interval" =
-        let go = getConstructorKinds (KPromote p) . TyCoeffect in go l <> go u
-    getConstructorKinds _ TyCoeffect{} = []
-    getConstructorKinds _ TyInt{} = []
-    getConstructorKinds k t =
-      error $ "getConstructorKinds called with: '" <> show k <> "' and '" <> show t <> "'"
+        let go = getParamFreeVarKinds (KPromote p) . TyCoeffect in (<>) <$> go l <*> go u
+    getParamFreeVarKinds paramKind t = pure []
+
+    -- | Get the kinds of coeffect variables in a coeffect.
+    getCoeffectFreeVarKinds :: Coeffect -> MaybeT Checker [(Id, Kind)]
+    -- TODO: make sure this takes into account varying coeffect variables
+    -- e.g., in "instance {NatCo n} => Simple (A [n]) where..."
+    -- in which 'n' would have kind (KPromote (TyVar "Nat"))
+    --     - GuiltyDolphin (2019-03-26)
+    getCoeffectFreeVarKinds = pure . (fmap (,KCoeffect)) . freeVars
+
+    getArgs :: Type -> [Type]
+    getArgs TyCon{} = []
+    getArgs (TyApp TyVar{} final) = pure final
+    getArgs (TyApp TyCon{} final) = pure final
+    getArgs (TyApp (TyApp c t) final) = getArgs c <> pure t <> pure final
+    getArgs _ = []
+
+    getArgKinds :: Kind -> [Kind]
+    getArgKinds KType = []
+    getArgKinds (KFun k kArg) = pure k <> getArgKinds kArg
+    getArgKinds _ = []
+
+    -- | Fold a list of kind parameters into a KFun.
+    -- |
+    -- | The first argument is the result kind.
+    foldKindsToDKind :: Kind -> [Kind] -> Kind
+    foldKindsToDKind = foldr KFun
+
+    getConArgKinds :: Kind -> Type -> [(Kind, Type)]
+    getConArgKinds conKind conAp =
+      let argKinds = getArgKinds conKind
+          args     = getArgs conAp
+      in zip argKinds args
 
     isBinaryCoeff CPlus{} = True
     isBinaryCoeff CTimes{} = True
@@ -1651,21 +1688,6 @@ getInstanceFreeVarKinds sp inst = do
     binaryCoeffComps (CMeet x y) = (x, y)
     binaryCoeffComps (CExpon x y) = (x, y)
     binaryCoeffComps c = error $ "binaryCoeffComps called with: " <> show c
-
-    -- | Attempt to get the most specific kind signature of the interface, where
-    -- | for variables, this is the parameter kind, but for type constructors
-    -- | (and applications of) this is the kind signature of the constructor.
-    inferKindSigOfParameter _ iname k (TyVar v) = pure k
-    inferKindSigOfParameter sp _ _ (TyCon name) = getTyConKind sp name
-    inferKindSigOfParameter sp iname k (Box _ t)   = inferKindSigOfParameter sp iname k t
-    inferKindSigOfParameter sp iname k (TyApp t _) = inferKindSigOfParameter sp iname k t
-    inferKindSigOfParameter sp iname (KPromote k) _ = pure (KPromote k)
-    inferKindSigOfParameter sp iname k TyCoeffect{} = pure k
-    inferKindSigOfParameter _ iname k t =
-      error $ concat [ "inferKindSigOfParameter called with:\n"
-                     , "  Interface: ", show iname, "\n"
-                     , "  Default kind: ", show k, "\n"
-                     , "  Type: ", show t ]
 
 
 -- | True if the two instances can be proven to be equal in the current context.
