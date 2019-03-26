@@ -512,8 +512,8 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
     let subst = map (\(v, (_, var)) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
     constr' <- mapM (substitute subst) constr
-    predicateConstraints <- filterM isPredicateConstraint constr'
-    interfaceConstraints <- fmap (catMaybes . fmap instFromTy) $ filterM isInterfaceConstraint constr'
+    let predicateConstraints = filter isPredicateConstraint constr'
+        interfaceConstraints = catMaybes . fmap instFromTy $ constr'
 
     -- Return the type and all instance variables
     let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
@@ -551,8 +551,6 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     justLefts = mapMaybe conv
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
-    isPredicateConstraint = fmap (==KConstraint Predicate) . inferKindOfType s
-    isInterfaceConstraint = fmap (==KConstraint InterfaceC) . inferKindOfType s
 
 instance Substitutable TypeScheme where
   substitute ctxt (Forall s binds constrs ty) = do

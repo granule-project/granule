@@ -238,8 +238,7 @@ checkIFaceHead iface@(Interface sp name constrs params itys) = do
 registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
 registerDefSig sp name tys = do
   checkDuplicate (defContext, "Definition") sp name
-  constrs <- iconsFromTys sp tys
-  expanded <- expandIConstraints sp constrs
+  expanded <- expandIConstraints sp (iconsFromTys tys)
   registerExpandedConstraints sp name expanded
   modify' $ \st -> st { defContext = [(name, tys)] <> defContext st }
 
@@ -314,7 +313,7 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
   (ifaceConstrs, methodSigs) <- instantiateInterface sp inst
 
   -- safe because we have validated each constraint in 'checkInstHead'
-  let Just constrs' = sequence $ fmap instFromTy constrs
+  let constrs' = constrsToIcons constrs
 
   -- check that every instance method is a member of the interface
   Just names <- getInterfaceMembers iname
@@ -1540,7 +1539,7 @@ expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
 
 -- | Retrieve the expanded interface context from the typescheme.
 getExpandedContext :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker [Inst]
-getExpandedContext sp tys = iconsFromTys sp tys >>= expandIConstraints sp
+getExpandedContext sp = expandIConstraints sp . iconsFromTys
 
 
 verifyInstanceExists :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
@@ -1574,16 +1573,8 @@ withInstanceContext sp inst c = do
 
 
 -- | Get the interface context of a typescheme.
-iconsFromTys :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker [Inst]
-iconsFromTys sp (Forall _ binds constrs _) = iconsFromBindsAndTys sp binds constrs
-
-
--- | Get the interface context of a typescheme.
-iconsFromBindsAndTys :: (?globals :: Globals) => Span -> [(Id, Kind)] -> [Type] -> MaybeT Checker [Inst]
-iconsFromBindsAndTys sp binds constrs =
-  withBindings binds ForallQ . fmap constrsToIcons $ filterM isInterfaceConstraint constrs
-  where isInterfaceConstraint c =
-          fmap (either (const False) (==KConstraint InterfaceC)) (inferKindOfTypeSafe sp c)
+iconsFromTys :: TypeScheme -> [Inst]
+iconsFromTys (Forall _ _ constrs _) = constrsToIcons constrs
 
 
 constrsToIcons :: [Type] -> [Inst]

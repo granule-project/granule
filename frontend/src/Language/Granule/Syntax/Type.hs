@@ -64,6 +64,22 @@ instance Term Kind where
 
 kConstr = KPromote . TyCon
 
+
+-- | When a type is known to be a constraint,
+-- | determine if it should represent an
+-- | interface constraint (as opposed to a predicate).
+isInterfaceConstraint :: Type -> Bool
+isInterfaceConstraint TyApp{} = True
+isInterfaceConstraint _       = False
+
+
+-- | When a type is known to be a constraint,
+-- | determine if it should represent a
+-- | predicate (as opposed to an interface constraint).
+isPredicateConstraint :: Type -> Bool
+isPredicateConstraint = not . isInterfaceConstraint
+
+
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
