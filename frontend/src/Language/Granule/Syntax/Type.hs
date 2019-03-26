@@ -266,7 +266,7 @@ instance Term Type where
       , tfTyApp   = \x y -> return $ x <> y
       , tfTyInt   = \_ -> return []
       , tfTyInfix = \_ y z -> return $ y <> z
-      , tfTyCoeffect = \_ -> pure []
+      , tfTyCoeffect = \c -> pure (freeVars c)
       }
 
 instance Term Coeffect where
