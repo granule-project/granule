@@ -420,7 +420,9 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   -- Create conjunct to capture the pattern constraints
   newConjunct
 
-  mapM_ compileAndAddConstraint constraints
+  let (predConstrs, iConstrs) = partitionConstraints constraints
+  mapM_ compileAndAddPredicate predConstrs
+  mapM_ addIConstraint iConstrs
 
   -- Build the binding context for the branch pattern
   st <- get
@@ -467,13 +469,8 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs
   where
-    compileAndAddConstraint ty = do
-      kind <- inferKindOfType s ty
-      when (kind == KConstraint Predicate) $ do
-        pred <- compileTypeConstraintToConstraint s ty
-        addPredicate pred
-      when (kind == KConstraint InterfaceC) $ do
-        addIConstraint (fromJust $ instFromTy ty)
+    compileAndAddPredicate ty =
+      compileTypeConstraintToConstraint s ty >>= addPredicate
 
 data Polarity = Positive | Negative deriving Show
 
