@@ -111,4 +111,6 @@ withInterfaceContext sp iname c = do
 buildBindingMap :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
 buildBindingMap sp inst = do
   params <- getInterfaceParameterNames sp (instIFace inst)
-  pure $ zip params (fmap SubstT (instParams inst))
+  pure $ zip params (fmap (\p -> case p of
+                                   (TyVar v) -> SubstK (KVar v)
+                                   t -> SubstT t) (instParams inst))
