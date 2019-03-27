@@ -1,0 +1,2 @@
+interface DepKind a (c : Coeffect) (i : c) where
+  dk : a [i] -> a
