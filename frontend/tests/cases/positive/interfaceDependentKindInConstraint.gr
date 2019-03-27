@@ -1,0 +1,3 @@
+interface Dep (c : Coeffect) (i : c) a
+
+interface {Dep Nat 2 a} => Dep2 a

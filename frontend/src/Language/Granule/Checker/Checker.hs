@@ -229,7 +229,8 @@ checkIFaceHead iface@(Interface sp name constrs params itys) = do
       kindVars = freeVars pkinds
       remVars = kindVars \\ pnames
   mapM_ (unboundKindVariable sp) remVars
-  withBindings params' ForallQ $ mapM_ (kindCheckConstraintType sp) constrs
+  let (_, icons) = partitionConstraints constrs
+  mapM_ (kindCheckConstraint sp) icons
   registerInterface sp name params' (constrsToIcons constrs) ifsigs
   where
     params' = fmap normaliseParameterKind params
