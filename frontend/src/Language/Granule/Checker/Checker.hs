@@ -231,7 +231,7 @@ checkIFaceHead iface@(Interface sp name constrs params itys) = do
   mapM_ (unboundKindVariable sp) remVars
   let (_, icons) = partitionConstraints constrs
   mapM_ (kindCheckConstraint sp) icons
-  registerInterface sp name params' (constrsToIcons constrs) ifsigs
+  registerInterface sp name params' icons ifsigs
   where
     params' = fmap normaliseParameterKind params
     ifsigs = map (\(InterfaceMethod _ name tys) -> (name, tys)) itys
@@ -314,8 +314,7 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
 
   (ifaceConstrs, methodSigs) <- instantiateInterface sp inst
 
-  -- safe because we have validated each constraint in 'checkInstHead'
-  let constrs' = constrsToIcons constrs
+  let (_, constrs') = partitionConstraints constrs
 
   -- check that every instance method is a member of the interface
   names <- getInterfaceMembers sp iname
