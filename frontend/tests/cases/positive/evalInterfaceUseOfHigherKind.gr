@@ -1,0 +1,15 @@
+-- EXPECTED: (None, Some 2)
+interface Functor (f : Type -> Type) where
+  map : forall {a : Type, b : Type} . (a -> b) [] -> f a -> f b
+
+data Maybe a = None | Some a
+
+instance Functor Maybe where
+  map [_] None     = None;
+  map [f] (Some x) = Some (f x)
+
+plus1 : Int -> Int
+plus1 x = x + 1
+
+main : (Maybe Int, Maybe Int)
+main = (map [plus1] None, map [plus1] (Some 1))

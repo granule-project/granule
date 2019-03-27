@@ -1,0 +1,12 @@
+interface TypeToType (t : Type -> Type) where
+  tt : forall {a : Type, b : Type} . t a -> b -> t b
+
+interface TypeToTypeToType (t : Type -> Type -> Type) where
+  ttt : forall {a : Type, b : Type, c : Type} . t a b -> c -> t b c
+
+data Foo (a : Type -> Type) b c = Foo (a b) c
+
+-- the typechecker needs to be able to infer that 'a'
+-- has kind 'Type -> Type'
+instance {TypeToType a} => TypeToTypeToType (Foo a) where
+  ttt (Foo x y) z = Foo (tt x y) z

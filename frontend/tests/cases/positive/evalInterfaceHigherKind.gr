@@ -1,0 +1,12 @@
+-- EXPECTED: Some 7
+
+interface Simple (a : Type -> Type) where
+  simple : forall {b : Type} . b -> a b
+
+data Maybe a = None | Some a
+
+instance Simple Maybe where
+  simple = Some
+
+main : Maybe Int
+main = simple 7

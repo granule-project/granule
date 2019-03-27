@@ -1,0 +1,9 @@
+interface TypeToTypeType (a : Type -> Type -> Type)
+interface TypeToType (a : Type -> Type)
+
+data Foo (a : Type -> Type) b = FooCon
+
+
+-- We have a type application of a type variable
+-- inside the instance type constructor
+instance {TypeToTypeType a} => TypeToType (Foo (a b))

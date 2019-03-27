@@ -1,0 +1,17 @@
+-- lazy boolean interface
+interface BoolTyLazy a where
+  bAnd : a -> a [0..1] -> a;
+  bOr  : a -> a [0..1] -> a;
+  bNot : a -> a
+
+data Bool = T | F
+
+instance BoolTyLazy Bool where
+  bAnd F [_] = F;
+  bAnd T [x]   = x;
+
+  bOr T [_] = T;
+  bOr F [x] = x;
+
+  bNot T = F;
+  bNot F = T
