@@ -720,8 +720,8 @@ instance {-# OVERLAPPABLE #-} (Substitutable a) => Substitutable [a] where
 
 getInstanceSubstitution :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
 getInstanceSubstitution sp inst = do
-  Just names <- getInterfaceParameterNames (instIFace inst)
-  kinds <- getInterfaceParameterKindsForInst inst
+  names <- getInterfaceParameterNames sp (instIFace inst)
+  kinds <- getInterfaceParameterKindsForInst sp inst
   forM (zip3 (instParams inst) names kinds) getVarSubst
   where getVarSubst (param, name, kind) =
           case kind of
@@ -744,8 +744,8 @@ getInstanceSubstitution sp inst = do
 -- | instance.
 -- |
 -- | This function resolves kind dependencies (e.g., (a : Kind) (b : a)).
-getInterfaceParameterKindsForInst :: (?globals :: Globals) => Inst -> MaybeT Checker [Kind]
-getInterfaceParameterKindsForInst inst = do
-  bindMap <- buildBindingMap inst
-  Just pkinds <- getInterfaceParameterKinds (instIFace inst)
+getInterfaceParameterKindsForInst :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [Kind]
+getInterfaceParameterKindsForInst sp inst = do
+  bindMap <- buildBindingMap sp inst
+  pkinds <- getInterfaceParameterKinds sp (instIFace inst)
   substitute bindMap pkinds

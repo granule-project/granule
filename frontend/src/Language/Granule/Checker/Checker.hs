@@ -317,7 +317,7 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
   let constrs' = constrsToIcons constrs
 
   -- check that every instance method is a member of the interface
-  Just names <- getInterfaceMembers iname
+  names <- getInterfaceMembers sp iname
   defnames <- mapM (\(sp, name) ->
     checkInstDefName names sp name) [(sp, name) | (InstanceEquation sp (Just name) _) <- ds]
 
@@ -1530,7 +1530,7 @@ expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
           parents <- getInterfaceDependenciesFlattened c
           pure (c : parents)
         getInterfaceDependenciesFlattened c = do
-          parents <- getInterfaceConstraints' c
+          parents <- getInterfaceConstraints' sp c
           parentsFlat <- fmap concat $ mapM getInterfaceDependenciesFlattened parents
           pure $ parents <> parentsFlat
 
@@ -1548,12 +1548,12 @@ verifyInstanceExists sp inst = do
     Just _ -> pure ()
 
 
-getInterfaceConstraints' :: (?globals :: Globals) => Inst -> MaybeT Checker [Inst]
-getInterfaceConstraints' inst = do
+getInterfaceConstraints' :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [Inst]
+getInterfaceConstraints' sp inst = do
   let iname = instIFace inst
       ipars = instParams inst
-  Just params <- getInterfaceParameterNames iname
-  Just constrs <- getInterfaceConstraints iname
+  params <- getInterfaceParameterNames sp iname
+  constrs <- getInterfaceConstraints sp iname
   let subst = fmap (\(v,t) -> (v, SubstT t)) (zip params ipars)
   mapM (substitute subst) constrs
 
@@ -1596,7 +1596,7 @@ normaliseParameterKind = second inferParameterKind
 
 getInstanceFreeVarKinds :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [(Id, Kind)]
 getInstanceFreeVarKinds sp inst = do
-  kinds <- getInterfaceParameterKindsForInst inst
+  kinds <- getInterfaceParameterKindsForInst sp inst
   getParamsFreeVarKinds (zip kinds (instParams inst))
   where
     -- | Given a set of (parameter kind, parameter type) pairs, attempt to
@@ -1732,14 +1732,14 @@ instantiateInterface :: (?globals :: Globals) => Span -> Inst
                         )
 instantiateInterface sp inst = do
   let iname = instIFace inst
-  Just sigs <- getInterfaceSigs iname
+  sigs <- getInterfaceSigs sp iname
   subst <- getInstanceSubstitution sp inst
-  constrs <- getInterfaceConstraints' inst
+  constrs <- getInterfaceConstraints' sp inst
 
   -- instantiate method signatures with the constraint's parameters
   freeInstVarKinds <- getInstanceFreeVarKinds sp inst
   methodSigs <- mapM (\(name, sig) -> do
-                        (Forall s binds constrs ty) <- withInterfaceContext iname $ substitute subst sig
+                        (Forall s binds constrs ty) <- withInterfaceContext sp iname $ substitute subst sig
                         -- ensure free variables in the instance head are universally quantified
                         pure (name, Forall s (binds <> freeInstVarKinds) constrs ty)) sigs
   pure (constrs, methodSigs)
@@ -1764,7 +1764,7 @@ validateConstraint sp inst = do
 
   -- make sure the number of parameters is correct
   let numParams = length (instParams inst)
-  Just expectedNumParams <- fmap (fmap length) (getInterfaceParameterNames iname)
+  expectedNumParams <- fmap length (getInterfaceParameterNames sp iname)
   when (numParams /= expectedNumParams) $
     halt $ GenericError (Just sp) $
       concat [ "Wrong number of parameters in instance ", prettyQuoted inst, "."
@@ -1777,7 +1777,7 @@ validateConstraint sp inst = do
 
   -- Make sure all of the interface constraints are
   -- satisfiable in the context
-  icons <- getInterfaceConstraints' inst
+  icons <- getInterfaceConstraints' sp inst
   mapM_ (verifyConstraint sp) icons
 
 
@@ -1793,7 +1793,7 @@ kindCheckConstraintType sp ty = requireKind ty (KConstraint InterfaceC)
 -- | to the interface, in the current context.
 kindCheckConstraint :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
 kindCheckConstraint sp inst = do
-  kinds <- getInterfaceParameterKindsForInst inst
+  kinds <- getInterfaceParameterKindsForInst sp inst
   let expectedKindPairs = zip (instParams inst) kinds
   forM_ expectedKindPairs (\(ity, iKind) -> do
     inferred <- withInstanceContext sp inst $ inferKindOfTypeSafe sp ity

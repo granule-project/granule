@@ -1,3 +1,5 @@
+{-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE RankNTypes #-}
 module Language.Granule.Checker.Interface
   ( getInterfaceMembers
   , getInterfaceParameters
@@ -18,6 +20,7 @@ import qualified Data.Map as M
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers (Id)
+import Language.Granule.Syntax.Span (Span)
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Context (Ctxt)
@@ -27,43 +30,60 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates (Quantifier(InstanceQ))
 import Language.Granule.Checker.SubstitutionContexts
 
+import Language.Granule.Utils (Globals)
+
 
 ifaceCtxtNames :: IFaceCtxt -> [Id]
 ifaceCtxtNames = map fst . ifaceSigs
 
 
-getInterface :: Id -> MaybeT Checker (Maybe IFaceCtxt)
-getInterface = lookupContext ifaceContext
+-- | Type alias for a function that retrieves
+-- | interface information from the state.
+type RetFun a = (?globals :: Globals) => Span -> Id -> MaybeT Checker a
 
 
-getInterfaceParameters :: Id -> MaybeT Checker (Maybe [(Id, Kind)])
-getInterfaceParameters = fmap (fmap ifaceParams) . getInterface
+-- | Helper for retrieving interface information.
+retFun :: (IFaceCtxt -> a) -> RetFun a
+retFun f sp = fmap f . getInterface sp
 
 
-getInterfaceParameterNames :: Id -> MaybeT Checker (Maybe [Id])
-getInterfaceParameterNames = fmap (fmap (fmap fst)) . getInterfaceParameters
+getInterface :: RetFun IFaceCtxt
+getInterface = requireInScope (ifaceContext, "Interface")
 
 
-getInterfaceParameterKinds :: Id -> MaybeT Checker (Maybe [Kind])
-getInterfaceParameterKinds = fmap (fmap (fmap snd)) . getInterfaceParameters
+getInterfaceParameters :: RetFun [(Id, Kind)]
+getInterfaceParameters = retFun ifaceParams
 
 
-getInterfaceKind :: Id -> MaybeT Checker (Maybe Kind)
-getInterfaceKind iname = do
-  paramKinds <- fmap (fmap $ fmap snd) $ getInterfaceParameters iname
-  pure $ fmap (\pkinds -> foldr1 KFun (pkinds <> [KConstraint InterfaceC])) paramKinds
+-- | Helper for retrieving interface parameter information.
+retFunParam :: ((Id, Kind) -> a) -> RetFun [a]
+retFunParam f sp = fmap (fmap f) . getInterfaceParameters sp
 
 
-getInterfaceSigs :: Id -> MaybeT Checker (Maybe (Ctxt TypeScheme))
-getInterfaceSigs = fmap (fmap ifaceSigs) . getInterface
+getInterfaceParameterNames :: RetFun [Id]
+getInterfaceParameterNames = retFunParam fst
 
 
-getInterfaceMembers :: Id -> MaybeT Checker (Maybe [Id])
-getInterfaceMembers = fmap (fmap ifaceCtxtNames) . getInterface
+getInterfaceParameterKinds :: RetFun [Kind]
+getInterfaceParameterKinds = retFunParam snd
 
 
-getInterfaceConstraints :: Id -> MaybeT Checker (Maybe [Inst])
-getInterfaceConstraints = fmap (fmap ifaceConstraints) . getInterface
+getInterfaceKind :: RetFun Kind
+getInterfaceKind sp iname = do
+  paramKinds <- getInterfaceParameterKinds sp iname
+  pure $ foldr1 KFun (paramKinds <> [KConstraint InterfaceC])
+
+
+getInterfaceSigs :: RetFun (Ctxt TypeScheme)
+getInterfaceSigs = retFun ifaceSigs
+
+
+getInterfaceMembers :: RetFun [Id]
+getInterfaceMembers = retFun ifaceCtxtNames
+
+
+getInterfaceConstraints :: RetFun [Inst]
+getInterfaceConstraints = retFun ifaceConstraints
 
 
 -- | Register an instantiated typescheme for an instance method.
@@ -75,15 +95,15 @@ registerInstanceSig iname (InstanceTypes _ ity) meth methTys =
 
 
 -- | Execute a checker with context from the interface head in scope.
-withInterfaceContext :: Id -> MaybeT Checker a -> MaybeT Checker a
-withInterfaceContext iname c = do
-  Just params <- getInterfaceParameters iname
+withInterfaceContext :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a -> MaybeT Checker a
+withInterfaceContext sp iname c = do
+  params <- getInterfaceParameters sp iname
   withBindings params InstanceQ c
 
 
 -- | Build a substitution that maps interface parameter
 -- | variables to the instance.
-buildBindingMap :: Inst -> MaybeT Checker Substitution
-buildBindingMap inst = do
-  Just params <- getInterfaceParameterNames (instIFace inst)
+buildBindingMap :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
+buildBindingMap sp inst = do
+  params <- getInterfaceParameterNames sp (instIFace inst)
   pure $ zip params (fmap SubstT (instParams inst))
