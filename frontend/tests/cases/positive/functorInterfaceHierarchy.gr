@@ -2,14 +2,14 @@ interface Functor (f : Type -> Type) where
   map : forall {a : Type, b : Type} . (a -> b) [] -> (f a) [] -> f b
 
 interface {Functor f} => Applicative (f : Type -> Type) where
-  pure : forall {a : Type} . a [] -> f (a []);
+  pureA : forall {a : Type} . a [] -> f (a []);
   ap : forall {a : Type, b : Type} . f ((a -> b) []) -> (f a) [] -> f b
 
 interface {Applicative m} => Monad (m : Type -> Type) where
   bind : forall {a : Type, b : Type} . m a -> (a -> m b) [] -> m b
 
 liftA : forall {a : Type, b : Type, f : Type -> Type} . {Applicative f} => (a -> b) [] -> (f a) [] -> f b
-liftA [f] [x] = ap (pure [f]) [x]
+liftA [f] [x] = ap (pureA [f]) [x]
 
 id : forall {a : Type} . a -> a
 id x = x
@@ -24,7 +24,7 @@ instance Functor Maybe where
   map [f] [x] = Nothing
 
 instance Applicative Maybe where
-  pure = Just;
+  pureA = Just;
   ap (Just f) x = map f x;
   ap Nothing [_] = Nothing
 
@@ -39,7 +39,7 @@ instance Functor (Either e) where
   map [f] [Right x] = Right (f x)
 
 instance Applicative (Either e) where
-  pure = Right;
+  pureA = Right;
   ap (Right f) x = map f x;
   ap (Left x) [_] = Left x
 

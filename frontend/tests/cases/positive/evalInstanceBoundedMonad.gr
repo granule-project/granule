@@ -1,9 +1,9 @@
--- EXPECTED: Some (Id 8)
+-- EXPECTED: Some Id 8
 interface Functor (f : Type -> Type) (c : Interval Nat) where
   map : forall {a : Type, b : Type} . (a -> b) [c] -> f a -> f b
 
 interface {Functor f c} => Applicative (f : Type -> Type) (c : Interval Nat) where
-  pure : forall {a : Type} . a -> f a;
+  pureA : forall {a : Type} . a -> f a;
   ap : forall {a : Type, b : Type} . f ((a -> b) [c]) -> f (a [c]) -> f b
 
 interface {Applicative m c} => Monad (m : Type -> Type) (c : Interval Nat) where
@@ -16,7 +16,7 @@ instance Functor Id [1..1] where
   map [f] (Id x) = Id (f x)
 
 instance Applicative Id [1..1] where
-  pure = Id;
+  pureA = Id;
   ap (Id [f]) (Id [x]) = Id (f x)
 
 instance Monad Id [1..1] where
@@ -29,7 +29,7 @@ instance Functor Maybe [0..1] where
   map [f] (Some x) = Some (f x)
 
 instance Applicative Maybe [0..1] where
-  pure = Some;
+  pureA = Some;
   ap None None = None;
   ap None (Some [_]) = None;
   ap (Some [_]) None = None;
@@ -40,4 +40,4 @@ instance Monad Maybe [0..1] where
   bind (Some x) [f] = f x
 
 main : Maybe (Id Int)
-main = bind (pure (pure 7)) [\x -> pure (map [\y -> y + 1] x)]
+main = bind (pureA (pureA 7)) [\x -> pureA (map [\y -> y + 1] x)]
