@@ -286,8 +286,8 @@ checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
   let inst = mkInst iname idty
   validateConstraint sp inst
 
-  freeVarKinds <- getInstanceFreeVarKinds sp inst
-  withBindings freeVarKinds ForallQ $ mapM_ (kindCheckConstraintType sp) constrs
+  let (_, icons) = partitionConstraints constrs
+  mapM_ (kindCheckConstraint sp) icons
   -- we take it on faith that the instance methods are well-typed
   -- at this point. If an issue arises it will be caught before we
   -- check top-level definitions
@@ -1773,14 +1773,7 @@ validateConstraint sp inst = do
   -- Make sure the constraint parameters are well-kinded
   -- with respect to the interface parameters (ensuring
   -- kind dependencies are resolved)
-  kinds <- getInterfaceParameterKindsForInst inst
-  let expectedKindPairs = zip (instParams inst) kinds
-  forM_ expectedKindPairs (\(ity, iKind) -> do
-    inferred <- withInstanceContext sp inst $ inferKindOfTypeSafe sp ity
-    case inferred of
-      Left{} -> halt $ KindError (Just sp) $
-                "Could not infer a kind for " <> prettyQuoted ity
-      Right tyKind -> when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
+  kindCheckConstraint sp inst
 
   -- Make sure all of the interface constraints are
   -- satisfiable in the context
@@ -1794,3 +1787,50 @@ kindCheckConstraintType sp ty = requireKind ty (KConstraint InterfaceC)
   where requireKind t reqKind = do
           kind <- inferKindOfType sp t
           when (kind /= reqKind) $ illKindedNEq sp reqKind kind
+
+
+-- | Check that all the constraint parameters are well-kinded with respect
+-- | to the interface, in the current context.
+kindCheckConstraint :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
+kindCheckConstraint sp inst = do
+  kinds <- getInterfaceParameterKindsForInst inst
+  let expectedKindPairs = zip (instParams inst) kinds
+  forM_ expectedKindPairs (\(ity, iKind) -> do
+    inferred <- withInstanceContext sp inst $ inferKindOfTypeSafe sp ity
+    case inferred of
+      Left{} -> halt $ KindError (Just sp) $
+                "Could not infer a kind for " <> prettyQuoted ity
+      Right tyKind -> when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
+
+
+-- | Kind check a constraint in the current context.
+-- |
+-- | The constraint can be either a predicate, or an interface constraint.
+kindCheckConstr :: (?globals :: Globals) => Span -> TConstraint -> MaybeT Checker ()
+kindCheckConstr s ty = do
+  tvc <- getTyVarContext
+  case instFromTy ty of
+    -- interface constraint
+    Just inst -> kindCheckConstraint s inst
+    -- predicate
+    Nothing -> do
+      kind <- inferKindOfType s ty
+      case kind of
+        KConstraint Predicate -> pure ()
+        _ -> illKindedNEq s (KConstraint Predicate) kind
+
+
+-- | Kind-check a type scheme.
+-- |
+-- | We expect a type scheme to have kind 'KType'.
+kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
+kindCheckSig s tys@(Forall _ quantifiedVariables constraints ty) = inTysContext $ do
+  -- first, verify all the constraints are well-kinded
+  mapM_ (kindCheckConstr s) constraints
+
+  kind <- inferKindOfType s ty
+  case kind of
+    KType -> pure ()
+    KPromote (TyCon k) | internalName k == "Protocol" -> pure ()
+    _     -> illKindedNEq s KType kind
+  where inTysContext = withBindings quantifiedVariables ForallQ

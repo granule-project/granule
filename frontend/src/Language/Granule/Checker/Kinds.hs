@@ -4,9 +4,7 @@
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Kinds (
-                      kindCheckSig
-                    , kindCheckConstr
-                    , inferKindOfType
+                      inferKindOfType
                     , inferKindOfType'
                     , joinCoeffectTypes
                     , hasLub
@@ -46,34 +44,6 @@ demoteKindToType :: Kind -> Maybe Type
 demoteKindToType (KPromote t) = Just t
 demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
-
--- | Kind check a constraint
-kindCheckConstr :: (?globals :: Globals) => Span -> Ctxt Kind -> TConstraint -> MaybeT Checker ()
-kindCheckConstr s qvars ty = do
-  kind <- inferKindOfType' s qvars ty
-  case kind of
-    (KConstraint InterfaceC) -> pure ()
-    (KConstraint Predicate) -> pure ()
-    -- TODO: figure out whether we should be
-    -- comparing to '(KConstraint Interface)' or '(KConstraint Predicate)'
-    _ -> illKindedNEq s (KConstraint InterfaceC) kind
-
-
--- Currently we expect that a type scheme has kind KType
-kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
-kindCheckSig s (Forall _ quantifiedVariables constraints ty) = do
-  -- Set up the quantified variables in the type variable context
-  initContext <- fmap tyVarContext get
-  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
-
-  mapM_ (kindCheckConstr s quantifiedVariables) constraints
-
-  kind <- inferKindOfType' s quantifiedVariables ty
-  case kind of
-    KType -> resetContext initContext
-    KPromote (TyCon k) | internalName k == "Protocol" -> resetContext initContext
-    _     -> resetContext initContext >> illKindedNEq s KType kind
-  where resetContext ctxt = modify (\st -> st { tyVarContext = ctxt })
 
 
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
