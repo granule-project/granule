@@ -1820,7 +1820,6 @@ kindCheckConstraint sp inst = do
 -- | The constraint can be either a predicate, or an interface constraint.
 kindCheckConstr :: (?globals :: Globals) => Span -> TConstraint -> MaybeT Checker ()
 kindCheckConstr s ty = do
-  tvc <- getTyVarContext
   case instFromTy ty of
     -- interface constraint
     Just inst -> kindCheckConstraint s inst
