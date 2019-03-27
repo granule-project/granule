@@ -1794,6 +1794,14 @@ kindCheckConstraintType sp ty = requireKind ty (KConstraint InterfaceC)
 -- | to the interface, in the current context.
 kindCheckConstraint :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
 kindCheckConstraint sp inst = do
+  -- make sure we are dealing with an interface
+  let iname = instIFace inst
+  termKind <- getTerminalKind iname
+  when (termKind /= KConstraint InterfaceC) $
+    halt . KindError (Just sp)
+           $ prettyQuoted inst <> " does not represent an interface constraint."
+
+  -- check every parameter is well-kinded with respect to the interface
   kinds <- getInterfaceParameterKindsForInst sp inst
   let expectedKindPairs = zip (instParams inst) kinds
   forM_ expectedKindPairs (\(ity, iKind) -> do
@@ -1802,6 +1810,9 @@ kindCheckConstraint sp inst = do
       Left{} -> halt $ KindError (Just sp) $
                 "Could not infer a kind for " <> prettyQuoted ity
       Right tyKind -> when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
+  where getTerminalKind = fmap terminalKind . getKindRequired sp
+        terminalKind (KFun _ k) = terminalKind k
+        terminalKind k = k
 
 
 -- | Kind check a constraint in the current context.

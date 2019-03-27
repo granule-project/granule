@@ -8,6 +8,7 @@ module Language.Granule.Checker.Interface
   , getInterfaceSigs
   , getInterfaceKind
   , getInterfaceConstraints
+  , interfaceExists
   , registerInstanceSig
   , withInterfaceContext
   , buildBindingMap
@@ -45,6 +46,10 @@ type RetFun a = (?globals :: Globals) => Span -> Id -> MaybeT Checker a
 -- | Helper for retrieving interface information.
 retFun :: (IFaceCtxt -> a) -> RetFun a
 retFun f sp = fmap f . getInterface sp
+
+
+interfaceExists :: Id -> MaybeT Checker Bool
+interfaceExists = fmap (maybe False (const True)) . lookupContext ifaceContext
 
 
 getInterface :: RetFun IFaceCtxt
