@@ -1,14 +1,15 @@
--- last checked 2019-01-07 by @buggymcbugfix
+-- last checked 2019-02-14 by @dorchard
 
 import Vec
 import Bool
 
--- Type error: work-in-progress/filter.gr: :7:1:
---   Definition 'filter'is Falsifiable. Counter-example:
---   k_2 = 2 :: Integer
---   n_1 = 0 :: Integer
--- Failed
-filter : ∀ a : Type, n : Nat, k : Nat
-       . (a → Bool) [n+k] → Vec (n + k) (a [0..2]) → Vec n a
+-- (A very strange counter example, strangely high!)
+--  The associated theorem for `filter` is Falsifiable. Counter-example:
+--  k =   0 :: Integer
+-- m =   0 :: Integer
+--  n = 142 :: Integer
+
+filter : ∀ {a : Type, n : Nat, m : Nat, k : Nat} . {m <= n}
+         => (a → Bool) [n] → Vec n (a [0..2]) → Vec m a
 filter [_] Nil = Nil;
 filter [p] (Cons [x] xs) = if p x then Cons x (filter [p] xs) else filter [p] xs

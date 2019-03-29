@@ -372,6 +372,13 @@ xs <<>> ys =
          combineSubstitutions nullSpan xs' ys' >>= (return . Just)
     _ -> return Nothing
 
+combineManySubstitutions :: (?globals :: Globals)
+    => Span -> [Substitution]  -> MaybeT Checker Substitution
+combineManySubstitutions s [] = return []
+combineManySubstitutions s (subst:ss) = do
+  ss' <- combineManySubstitutions s ss
+  combineSubstitutions s subst ss'
+
 -- | Combines substitutions which may fail if there are conflicting
 -- | substitutions
 combineSubstitutions ::

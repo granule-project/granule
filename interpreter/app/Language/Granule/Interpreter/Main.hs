@@ -17,13 +17,15 @@
 {-# LANGUAGE LambdaCase #-}
 
 import Control.Exception (SomeException, try)
-import Control.Monad (forM)
+import Control.Monad (forM, when)
 import Data.List (stripPrefix)
 import Data.Functor.Identity (runIdentity)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 import Text.Read (readMaybe)
+import Text.Printf (printf)
+import System.CPUTime
 
 import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
@@ -110,7 +112,14 @@ run input = do
       debugM "Pretty-printed AST:" $ pretty ast
       debugM "Raw AST:" $ show ast
       -- Check and evaluate
+      startCheck <- getCPUTime
+      --
       checked <- try $ check ast
+      --
+      endCheck <- getCPUTime
+      let checkTime = computeTime startCheck endCheck
+      when (Utils.timing ?globals) $ printf "Time to type check: %0.4fs\n" checkTime
+
       case checked of
         Left (e :: SomeException) -> do
           printErr $ CheckerError $ show e
@@ -124,7 +133,14 @@ run input = do
             return ExitSuccess
           else do
             printInfo $ green "Ok, evaluating..."
+            startEval <- getCPUTime
+            --
             result <- try $ eval ast
+            --
+            endEval <- getCPUTime
+            let evalTime = computeTime startEval endEval
+            when (Utils.timing ?globals) $ printf "Time to evaluate: %0.4fs\n" evalTime
+
             case result of
               Left (e :: SomeException) -> do
                 printErr $ EvalError $ show e
@@ -137,6 +153,8 @@ run input = do
                 putStrLn (pretty result)
                 return ExitSuccess
 
+computeTime start end =
+   ((fromIntegral (end - start)) / (10^12)) :: Double
 
 parseArgs :: ParserInfo ([FilePath], Options Maybe)
 parseArgs = info (go <**> helper) $ briefDesc
@@ -146,6 +164,12 @@ parseArgs = info (go <**> helper) $ briefDesc
   where
     go = do
         files <- many $ argument str $ metavar "SOURCE_FILES..."
+
+        timing <-
+          flag Nothing (Just True)
+            $ long "timing"
+            <> help "Measure timing information"
+
         debugging <-
           flag Nothing (Just True)
             $ long "debug"
@@ -202,6 +226,7 @@ parseArgs = info (go <**> helper) $ briefDesc
           ( files
           , Options
             { debugging
+            , timing
             , noColors
             , noEval
             , suppressInfos

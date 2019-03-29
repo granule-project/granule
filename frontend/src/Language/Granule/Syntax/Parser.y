@@ -73,8 +73,9 @@ import Language.Granule.Utils hiding (mkSpan)
     ']'   { TokenBoxRight _ }
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
-    '<='   { TokenLTE _ }
-    '>='   { TokenGTE _ }
+    OP    { TokenOp _ _ }
+    '<='   { TokenOp _ "≤" }
+    '>='   { TokenOp _ "≥" }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
@@ -82,7 +83,6 @@ import Language.Granule.Utils hiding (mkSpan)
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
     ".."  { TokenDotDot _ }
-    OP    { TokenOp _ _ }
     "∨"   { TokenJoin _ }
     "∧"   { TokenMeet _ }
 

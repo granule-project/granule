@@ -35,6 +35,7 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
+import Language.Granule.Checker.Substitutions
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Eval
 import Language.Granule.Context
@@ -198,9 +199,19 @@ buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
 
-synType :: (?globals::Globals) => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState -> IO (Maybe (Type, Ctxt Mo.Assumption, Expr () Type))
-synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr empty empty Positive exp
-synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ synthExpr cts empty Positive exp
+synType :: (?globals::Globals)
+  => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState
+  -> IO (Maybe (Type, Ctxt Mo.Assumption, Expr () Type))
+synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ do
+  (ty, ctxt, subst, elab) <- synthExpr empty empty Positive exp
+  ty <- substitute subst ty
+  return (ty, ctxt, elab)
+
+synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ do
+  (ty, ctxt, subst, elab) <- synthExpr cts empty Positive exp
+  ty <- substitute subst ty
+  return (ty, ctxt, elab)
+
 
 synTypeBuilder :: (?globals::Globals) => Expr () () -> [Def () ()] -> [DataDecl] -> REPLStateIO Type
 synTypeBuilder exp ast adt = do

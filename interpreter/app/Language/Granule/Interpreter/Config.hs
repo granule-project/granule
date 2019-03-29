@@ -13,6 +13,7 @@ import qualified Language.Granule.Utils as Utils (Globals(..))
 data Options (f :: * -> *)
   = Options
     { debugging           :: f Bool
+    , timing              :: f Bool
     , noColors            :: f Bool
     , noEval              :: f Bool
     , suppressInfos       :: f Bool
@@ -36,6 +37,7 @@ deriving instance Show (Options Maybe)
 defaultConfig :: Options Maybe -> Options Identity
 defaultConfig o = Options
   { debugging           = maybe (Identity False) Identity $ debugging o
+  , timing              = maybe (Identity False) Identity $ timing o
   , noColors            = maybe (Identity False) Identity $ noColors o
   , noEval              = maybe (Identity False) Identity $ noEval o
   , suppressInfos       = maybe (Identity False) Identity $ suppressInfos o
@@ -50,6 +52,7 @@ defaultConfig o = Options
 instance Alternative f => Semigroup (Options f) where
   o1 <> o2 = Options
       { debugging           = debugging           o1 <|> debugging           o2
+      , timing              = timing              o1 <|> timing              o2
       , noColors            = noColors            o1 <|> noColors            o2
       , noEval              = noEval              o1 <|> noEval              o2
       , suppressInfos       = suppressInfos       o1 <|> suppressInfos       o2
@@ -65,6 +68,7 @@ instance Alternative f => Semigroup (Options f) where
 instance Alternative f => Monoid (Options f) where
   mempty = Options
       { debugging           = empty
+      , timing              = empty
       , noColors            = empty
       , noEval              = empty
       , suppressInfos       = empty
@@ -79,6 +83,7 @@ instance Alternative f => Monoid (Options f) where
 toGlobals :: FilePath -> Options Identity -> Utils.Globals
 toGlobals fp o = Utils.Globals
     { Utils.debugging           = runIdentity $ debugging           o
+    , Utils.timing              = runIdentity $ timing              o
     , Utils.noColors            = runIdentity $ noColors            o
     , Utils.noEval              = runIdentity $ noEval              o
     , Utils.suppressInfos       = runIdentity $ suppressInfos       o

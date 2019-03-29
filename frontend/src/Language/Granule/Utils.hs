@@ -26,6 +26,7 @@ data Result a = Some a | None [String]
 data Globals =
   Globals
   { debugging :: Bool
+  , timing :: Bool
   , sourceFilePath :: String
   , noColors :: Bool
   , noEval :: Bool
@@ -40,6 +41,7 @@ defaultGlobals :: Globals
 defaultGlobals =
     Globals
     { debugging = False
+    , timing = False
     , sourceFilePath = ""
     , noColors = False
     , noEval = False
