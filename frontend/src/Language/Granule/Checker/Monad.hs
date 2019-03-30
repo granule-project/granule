@@ -470,13 +470,6 @@ notInScope :: (?globals :: Globals) => String -> Span -> Id -> MaybeT Checker a
 notInScope desc sp name = halt $
   UnboundVariableError (Just sp) $ concat [desc, " `", pretty name, "` is not in scope."]
 
-illKindedUnifyVar :: (?globals :: Globals) => Span -> Type -> Kind -> Type -> Kind -> MaybeT Checker a
-illKindedUnifyVar sp t1 k1 t2 k2 =
-   halt $ KindError (Just sp) $
-     "Trying to unify a type `"
-     <> pretty t1 <> "` of kind " <> pretty k1
-     <> " with a type `"
-     <> pretty t2 <> "` of kind " <> pretty k2
 
 illKindedNEq :: (?globals :: Globals) => Span -> Kind -> Kind -> MaybeT Checker a
 illKindedNEq sp k1 k2 =

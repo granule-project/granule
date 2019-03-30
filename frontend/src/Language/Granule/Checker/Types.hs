@@ -147,6 +147,13 @@ cannotBeBoth s v s1 s2 =
         fromSubst (SubstE e) = prettyQuoted e
 
 
+-- | Attempt to unify a non-type variable with a type.
+illKindedUnifyVar sp (v, k1) (t, k2) = equalityErr $
+   KindError (Just sp) $
+     concat [ "Trying to unify ", prettyQuoted v, " of kind ", prettyQuoted k1
+            , " with a type ", prettyQuoted t, " of kind ", prettyQuoted k2 ]
+
+
 -- | Test @x@ and @y@ for boolean equality. If they are
 -- | equal then return a trivial proof of equality, otherwise
 -- | use @desc@ to provide a descriptive reason for inequality.
@@ -501,7 +508,7 @@ equalTypesRelatedCoeffects s rel sp (TyVar n) t = do
     (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ && sp /= PatternCtxt) -> do
       withInferredKind s t $ \k2 ->
         case k1 `joinKind` k2 of
-          Nothing -> illKindedUnifyVar s (TyVar n) k1 t k2
+          Nothing -> illKindedUnifyVar s (n, k1) (t, k2)
 
           -- If the kind is Nat, then create a solver constraint
           Just (KPromote (TyCon (internalName -> "Nat"))) -> do
