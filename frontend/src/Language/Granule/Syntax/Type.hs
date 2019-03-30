@@ -43,6 +43,29 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyCoeffect Coeffect         -- ^ Promoted coeffect
     deriving (Eq, Ord, Show)
 
+
+------------------
+-- Type Helpers --
+------------------
+
+
+-- | Get parameters of a type application, as well
+-- | as the type the parameters are applied to.
+-- |
+-- | Returns 'Nothing' if the type does not represent
+-- | a type application.
+tyAppParts :: Type -> Maybe (Type, [Type])
+tyAppParts t@(TyApp c _) = Just (appHead c, appArgs t)
+  where appHead (TyApp h _) = appHead h
+        appHead h = h
+        appArgs TyCon{} = []
+        appArgs (TyApp TyVar{} final) = pure final
+        appArgs (TyApp TyCon{} final) = pure final
+        appArgs (TyApp (TyApp h r) final) = appArgs h <> pure r <> pure final
+        appArgs _ = []
+tyAppParts _ = Nothing
+
+
 type TConstraint = Type
 
 data ConstraintForm = InterfaceC | Predicate

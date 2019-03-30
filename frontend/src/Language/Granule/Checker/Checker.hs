@@ -1648,11 +1648,7 @@ getInstanceFreeVarKinds sp inst = do
     getCoeffectFreeVarKinds = pure . (fmap (,KCoeffect)) . freeVars
 
     getArgs :: Type -> [Type]
-    getArgs TyCon{} = []
-    getArgs (TyApp TyVar{} final) = pure final
-    getArgs (TyApp TyCon{} final) = pure final
-    getArgs (TyApp (TyApp c t) final) = getArgs c <> pure t <> pure final
-    getArgs _ = []
+    getArgs = maybe [] snd . tyAppParts
 
     getArgKinds :: Kind -> [Kind]
     getArgKinds KType = []

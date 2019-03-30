@@ -1,0 +1,11 @@
+-- EXPECTED: 1
+interface Multi a b
+
+-- rewriter should be able to handle the multi-parameter constraint
+f : forall {a : Type, b : Type} . {Multi a b} => a -> a
+f x = x
+
+instance Multi x y
+
+main : Int
+main = f 1

@@ -58,8 +58,10 @@ dictVarFromInst inst = mkId $ "$(" <> pretty inst <> ")"
 -- | Return a unique (in scope) variable representing the interface
 -- | dictionary at the given type.
 mkDictVarFromCon :: (?globals :: Globals) => Type -> Id
-mkDictVarFromCon (TyApp (TyCon iname) ty) = mkDictVar iname [ty]
-mkDictVarFromCon t = error $ "attempt to make a dict var from type: " <> pretty t
+mkDictVarFromCon t =
+  case tyAppParts t of
+    Just (TyCon iname, params) -> mkDictVar iname params
+    _ -> error $ "attempt to make a dict var from type: " <> pretty t
 
 
 -- | Get the id of the data constructor for the interface.
