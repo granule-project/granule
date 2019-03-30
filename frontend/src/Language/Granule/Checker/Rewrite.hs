@@ -257,15 +257,16 @@ rewriteInterface (Interface sp iname _constrs params itys) = do
 --   barA = MkBar [fooA] [\Av -> Av] [Av]
 -- @
 rewriteInstance :: (?globals :: Globals) => Instance () Type -> Rewriter (Def () ())
-rewriteInstance inst@(Instance sp iname iconstrs idt@(InstanceTypes _ idtys) _) = do
+rewriteInstance inst@(Instance sp iname constrs idt@(InstanceTypes _ idtys) _) = do
+    let (preds, iconstrs) = partitionConstraints constrs
     idictConstructed <- constructIDict inst
-    let iconstrs' = fmap mkInfBoxTy iconstrs
+    let iconstrs' = fmap (mkInfBoxTy . tyFromInst) iconstrs
         instc = mkInst iname idtys
     pats <- rewriteWithConstrPats iconstrs' []
     let dictName = dictVarFromInst instc
         constrsTys = mkFunFap (tyFromInst instc) iconstrs'
         binds = fmap (\v -> (v, KType)) (nub $ freeVars constrsTys)
-        tys = Forall sp binds [] constrsTys
+        tys = Forall sp binds preds constrsTys
         eqn = Equation sp () pats idictConstructed
         def = Def sp dictName [eqn] tys
     registerIFun iname idt def

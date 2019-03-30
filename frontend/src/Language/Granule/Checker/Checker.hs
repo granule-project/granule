@@ -279,21 +279,30 @@ getInstance sp inst = do
       unifiableWithInstance :: Inst -> MaybeT Checker Bool
       unifiableWithInstance ity =
           withInstanceContext sp ity $
-            withFreeVarsBound inst BoundQ $ instancesAreEqual' sp inst ity
+            instancesAreEqual' sp inst ity
 
 
 checkInstHead :: (?globals :: Globals) => Instance v a -> MaybeT Checker ()
-checkInstHead (Instance sp iname constrs idt@(InstanceTypes sp2 idty) _) = do
-  let inst = mkInst iname idty
-  validateConstraint sp inst
+checkInstHead (Instance sp iname constrs (InstanceTypes sp2 idty) _) = do
+  initialTvc <- getTyVarContext
 
-  let (_, icons) = partitionConstraints constrs
-  freeVarKinds <- getInstanceFreeVarKinds sp inst
-  withBindings freeVarKinds ForallQ $ mapM_ (kindCheckConstraint sp) icons
+  let inst0 = mkInst iname idty
+      instTy = tyFromInst inst0
+
+  freeVarKinds <- getInstanceFreeVarKinds sp inst0
+  (instTy', _, _, (preds, icons), _) <- freshPolymorphicInstance ForallQ False (Forall sp freeVarKinds constrs instTy) []
+
+  let Just inst = fmap (mkInst iname . instParams) (instFromTy instTy')
+
+  validateConstraint sp inst
+  mapM_ (compileAndAddPredicate sp) preds
+  mapM_ (kindCheckConstraint sp) icons
+
   -- we take it on faith that the instance methods are well-typed
   -- at this point. If an issue arises it will be caught before we
   -- check top-level definitions
   registerInstance sp inst
+  putTyVarContext initialTvc
       where registerInstance :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
             registerInstance sp inst = do
               maybeInstance <- getInstance sp inst
@@ -315,7 +324,7 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
 
   (ifaceConstrs, methodSigs) <- instantiateInterface sp inst
 
-  let (_, constrs') = partitionConstraints constrs
+  let (preds, constrs') = partitionConstraints constrs
 
   -- check that every instance method is a member of the interface
   names <- getInterfaceMembers sp iname
@@ -344,7 +353,7 @@ checkInstDefs (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
                                           (name2, tys) <- methodSigs,
                                           name == name2]
   ds' <- mapM (\(sp, (name, tys, eqs)) -> do
-                 tys' <- constrs' |> ifaceConstrs |> pure tys
+                 tys' <- fmap (constrainTysWithPredicates preds) $ constrs' |> ifaceConstrs |> pure tys
                  registerInstanceSig iname idat name tys
                  checkDef' sp name eqs tys') methods
 
@@ -1685,9 +1694,12 @@ instancesAreEqual' sp t1 t2 = do
  res <- equalInstances sp t1 t2
  case res of
    Left{}   -> pure False
-   Right pf -> fmap (maybe True (const False)) $
-                 solveConstraintsSafe (Conj $ fmap Con $ equalityProofConstraints pf) sp
-                                        (mkId "$internal")
+   Right pf -> do
+     equalityPreds <- substitute (equalityProofSubstitution pf) (equalityProofConstraints pf)
+     preds <- get >>= (substitute (equalityProofSubstitution pf) . predicateStack)
+     let eqPred = Conj . fmap Con $ equalityPreds
+         toSolve = Conj [Conj preds, eqPred]
+     fmap (maybe True (const False)) $ solveConstraintsSafe toSolve sp (mkId "$internal")
 
 
 unboundKindVariable :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a
@@ -1846,3 +1858,8 @@ kindCheckSig s tys@(Forall _ quantifiedVariables constraints ty) = inTysContext 
 compileAndAddPredicate :: (?globals :: Globals) => Span -> Type -> MaybeT Checker ()
 compileAndAddPredicate sp ty =
   compileTypeConstraintToConstraint sp ty >>= addPredicate
+
+
+-- | Constrain the typescheme with the given predicates.
+constrainTysWithPredicates :: (?globals :: Globals) => [Type] -> TypeScheme -> TypeScheme
+constrainTysWithPredicates preds (Forall sp binds constrs ty) = Forall sp binds (constrs <> preds) ty

@@ -1,0 +1,6 @@
+interface Simple (n : Nat) (m : Nat)
+
+instance Simple 0 1
+
+-- this should overlap with the previous instance (0<1)
+instance {n<m} => Simple n m
