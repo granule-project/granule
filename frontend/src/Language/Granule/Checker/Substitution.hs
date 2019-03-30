@@ -399,38 +399,56 @@ combineManySubstitutions s (subst:ss) = do
   ss' <- combineManySubstitutions s ss
   combineSubstitutions s subst ss'
 
+
+-- | An indication that two substitutions failed to combine,
+-- | where there are conflicting substitutors for the same
+-- | identifier.
+type FailedCombination = (Id, Substitutors, Substitutors)
+
+
 -- | Combines substitutions which may fail if there are conflicting
--- | substitutions
-combineSubstitutions ::
+-- | substitutions.
+combineSubstitutionsSafe ::
     (?globals :: Globals)
-    => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
-combineSubstitutions _ u1 u2 | u1 == u2 = pure u1
-combineSubstitutions sp u1 u2 = do
+    => Span -> Substitution -> Substitution -> MaybeT Checker (Either FailedCombination Substitution)
+combineSubstitutionsSafe _ u1 u2 | u1 == u2 = pure . pure $ u1
+combineSubstitutionsSafe sp u1 u2 = do
       -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
       -- check whether things can be unified, i.e. exactly
       uss1 <- forM u1 $ \(v, s) ->
         case lookupMany v u2 of
           -- Unifier in u1 but not in u2
-          [] -> return [(v, s)]
+          [] -> pure $ pure [(v, s)]
           -- Possible unifications in each part
           alts -> do
               unifs <-
                 forM alts $ \s' -> do
-                   --(us, t) <- unifiable v t t' t t'
                    us <- unify s s'
                    case us of
-                     Nothing -> error $ "Cannot unify: " <> show v <> " to both " <> show s <> " and " <> show s'
+                     Nothing -> pure $ Left (v, s, s')
                      Just us -> do
                        sUnified <- substitute us s
-                       combineSubstitutions sp [(v, sUnified)] us
+                       combineSubstitutionsSafe sp [(v, sUnified)] us
 
-              return $ concat unifs
+              pure $ either Left (Right . concat) $ sequence unifs
       -- Any remaining unifiers that are in u2 but not u1
       uss2 <- forM u2 $ \(v, s) ->
          case lookup v u1 of
            Nothing -> return [(v, s)]
            _       -> return []
-      pure $ concat uss1 <> concat uss2
+      pure $ fmap (\uss1 -> concat uss1 <> concat uss2) (sequence uss1)
+
+
+-- | Combines substitutions which may fail if there are conflicting
+-- | substitutions
+combineSubstitutions ::
+    (?globals :: Globals)
+    => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
+combineSubstitutions sp u1 u2 = do
+  subst <- combineSubstitutionsSafe sp u1 u2
+  case subst of
+    Left (v, s, s') -> error $ concat ["Cannot unify: ", show v, " to both ", show s, " and ", show s']
+    Right res -> pure res
 
 
 {-| Take a context of 'a' and a subhstitution for 'a's (also a context)

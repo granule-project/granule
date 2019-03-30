@@ -1,0 +1,6 @@
+interface Double (n : Nat) (m : Nat)
+
+instance Double n n
+
+-- should not overlap with previous instance
+instance Double 1 2

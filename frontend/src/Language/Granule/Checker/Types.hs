@@ -136,6 +136,17 @@ unequalNotSpecified s v1 v2 = equalityErr $
   where quoteTyVar = prettyQuoted . TyVar
 
 
+cannotBeBoth s v s1 s2 =
+  let t1 = fromSubst s1
+      t2 = fromSubst s2
+  in equalityErr $ GenericError (Just s) $
+     concat [ prettyQuoted v, " cannot be equal to both ", t1, " and ", t2 ]
+  where fromSubst (SubstT t) = prettyQuoted t
+        fromSubst (SubstK k) = prettyQuoted k
+        fromSubst (SubstC c) = prettyQuoted c
+        fromSubst (SubstE e) = prettyQuoted e
+
+
 -- | Test @x@ and @y@ for boolean equality. If they are
 -- | equal then return a trivial proof of equality, otherwise
 -- | use @desc@ to provide a descriptive reason for inequality.
@@ -219,8 +230,10 @@ combinedEqualities s e1 e2 =
           u2 = equalityProofSubstitution eq2res
           cs = equalityProofConstraints eq1res
                <> equalityProofConstraints eq2res
-      uf <- combineSubstitutions s u1 u2
-      pure . pure $ (cs, uf)
+      uf <- combineSubstitutionsSafe s u1 u2
+      case uf of
+        Left (v, s1, s2) -> cannotBeBoth s v s1 s2
+        Right cuf -> pure . pure $ (cs, cuf)
 
 
 -- | An equality under the given proof.
