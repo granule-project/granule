@@ -422,7 +422,7 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   newConjunct
 
   let (predConstrs, iConstrs) = partitionConstraints constraints
-  mapM_ compileAndAddPredicate predConstrs
+  mapM_ (compileAndAddPredicate s) predConstrs
   mapM_ addIConstraint iConstrs
 
   -- Build the binding context for the branch pattern
@@ -469,9 +469,6 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
 
     -- Anything that was bound in the pattern but not used up
     xs -> illLinearityMismatch s xs
-  where
-    compileAndAddPredicate ty =
-      compileTypeConstraintToConstraint s ty >>= addPredicate
 
 data Polarity = Positive | Negative deriving Show
 
@@ -909,9 +906,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
          Just tyScheme  -> do
            (ty', _, _, (constraints, iconstraints), []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
 
-           mapM_ (\ty -> do
-             pred <- compileTypeConstraintToConstraint s ty
-             addPredicate pred) constraints
+           mapM_ (compileAndAddPredicate s) constraints
            mapM_ addIConstraint iconstraints
 
            let elaborated = Val s ty' (Var ty' x)
@@ -1841,3 +1836,13 @@ kindCheckSig s tys@(Forall _ quantifiedVariables constraints ty) = inTysContext 
     KPromote (TyCon k) | internalName k == "Protocol" -> pure ()
     _     -> illKindedNEq s KType kind
   where inTysContext = withBindings quantifiedVariables ForallQ
+
+
+-----------------------
+-- Predicate Helpers --
+-----------------------
+
+
+compileAndAddPredicate :: (?globals :: Globals) => Span -> Type -> MaybeT Checker ()
+compileAndAddPredicate sp ty =
+  compileTypeConstraintToConstraint sp ty >>= addPredicate
