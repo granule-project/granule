@@ -153,8 +153,6 @@ mapPatternAnnotation f (PConstr s ann n pats) =
 --------------------------------------------
 
 
--- TODO: remove use of unsafePerformIO (perhaps have the Checker Monad
--- switch to use MonadIO, or the Rewriter could use MonadIO and use liftIO)
 runMaybeTCheckerInRewriter :: MaybeT C.Checker a -> Rewriter (Maybe a)
 runMaybeTCheckerInRewriter =
   liftIO . C.evalChecker C.initState . runMaybeT
