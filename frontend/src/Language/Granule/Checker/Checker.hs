@@ -1615,6 +1615,9 @@ getInstanceFreeVarKinds sp inst = do
     getParamFreeVarKinds paramKind (Box c t) =
       (<>) <$> getCoeffectFreeVarKinds c <*> getParamFreeVarKinds paramKind t
     getParamFreeVarKinds paramKind (TyCoeffect (CVar v)) = pure [(v, paramKind)]
+    getParamFreeVarKinds KType (FunTy f fArg) =
+      let go = getParamFreeVarKinds KType
+      in (<>) <$> go f <*> go fArg
     getParamFreeVarKinds paramKind t@TyApp{} =
       let go (TyApp c@(TyCon _) _) = pure c
           go (TyApp c@(TyVar _) _) = pure c

@@ -1,0 +1,7 @@
+interface Cast a b where
+  cast : a -> b
+
+-- checking that we infer kinds for free variables in
+-- function types
+instance {Cast b c} => Cast (a -> b) (a -> c) where
+  cast f = (\x -> cast (f x))
