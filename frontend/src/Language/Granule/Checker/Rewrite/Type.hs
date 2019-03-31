@@ -12,10 +12,14 @@ module Language.Granule.Checker.Rewrite.Type
     ( -- * Rewriter Monad
       Rewriter
     , runNewRewriter
+      -- ** Environment
     , RewriteEnv
     , buildRewriterEnv
+    , getEnv
     , InstanceId
     , mkInstanceId
+    , typeConstructors
+    , dataConstructors
       -- * Error system
     , RewriterError
     , genericRewriterError
@@ -45,6 +49,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.Instance
+import Language.Granule.Checker.SubstitutionContexts (Substitution)
 
 
 --------------------------
@@ -112,11 +117,25 @@ mkInstanceId :: Instance v a -> InstanceId
 mkInstanceId (Instance _ iname _ (InstanceTypes _ idt) _) = mkInst iname idt
 
 
+type TyConsContext = Ctxt (Kind, Cardinality)
+
+
+type DataConsContext = Ctxt (TypeScheme, Substitution)
+
+
+-- | Environment produced from type checking.
 data RewriteEnv = RewriteEnv {
-      -- ^ Instantiated type signatures for instances.
-      instanceSignatures :: [((InstanceId, Id), TypeScheme)]
-    , expandedConstraints :: Ctxt [Inst]
-    }
+    -- ^ Instantiated type signatures for instances.
+    instanceSignatures :: [((InstanceId, Id), TypeScheme)]
+  , expandedConstraints :: Ctxt [Inst]
+  , typeConstructors :: TyConsContext
+  , dataConstructors :: DataConsContext
+  }
+
+
+-- | Retrieve the environment of the rewriter.
+getEnv :: Rewriter RewriteEnv
+getEnv = ask
 
 
 type RewriterError = String
@@ -149,7 +168,11 @@ runNewRewriter r renv = execRewriter r renv startRewriteState
 
 
 -- | Build an environment for the rewriter.
-buildRewriterEnv :: [((InstanceId, Id), TypeScheme)] -> Ctxt [Inst] -> RewriteEnv
+buildRewriterEnv :: [((InstanceId, Id), TypeScheme)]
+                 -> Ctxt [Inst]
+                 -> TyConsContext
+                 -> DataConsContext
+                 -> RewriteEnv
 buildRewriterEnv = RewriteEnv
 
 

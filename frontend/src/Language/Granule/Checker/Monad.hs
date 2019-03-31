@@ -179,6 +179,8 @@ checkerStateToRewriterEnv cs =
     buildRewriterEnv
       (M.toList $ instanceSigs cs)
       (expandedConstraints cs)
+      (typeConstructors cs)
+      (dataConstructors cs)
 
 
 -- *** Various helpers for manipulating the context

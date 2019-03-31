@@ -154,8 +154,12 @@ mapPatternAnnotation f (PConstr s ann n pats) =
 
 
 runMaybeTCheckerInRewriter :: MaybeT C.Checker a -> Rewriter (Maybe a)
-runMaybeTCheckerInRewriter =
-  liftIO . C.evalChecker C.initState . runMaybeT
+runMaybeTCheckerInRewriter c = do
+  env <- getEnv
+  let st = C.initState { C.typeConstructors = typeConstructors env
+                       , C.dataConstructors = dataConstructors env
+                       }
+  liftIO . C.evalChecker st $ runMaybeT c
 
 
 ------------------------
