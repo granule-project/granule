@@ -1,0 +1,14 @@
+data N (n : Nat) where
+  Z : N 0;
+  S : forall {m : Nat} . N m -> N (m+1)
+
+add : forall {n : Nat, m : Nat} . N n -> N m -> N (m+n)
+add Z x = x;
+add y (S x) = add (S y) x
+
+interface Magma a where
+  op : a -> a -> a
+
+-- simple instance of a Magma with Natural numbers
+instance {n < 1} => Magma (N n) where
+  op x y = add x y
