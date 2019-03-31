@@ -20,6 +20,7 @@ module Language.Granule.Checker.Rewrite.Type
     , mkInstanceId
     , typeConstructors
     , dataConstructors
+    , tyVarContext
       -- * Error system
     , RewriterError
     , genericRewriterError
@@ -49,6 +50,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.Instance
+import Language.Granule.Checker.Predicates (Quantifier)
 import Language.Granule.Checker.SubstitutionContexts (Substitution)
 
 
@@ -123,6 +125,9 @@ type TyConsContext = Ctxt (Kind, Cardinality)
 type DataConsContext = Ctxt (TypeScheme, Substitution)
 
 
+type TyVarContext = Ctxt (Kind, Quantifier)
+
+
 -- | Environment produced from type checking.
 data RewriteEnv = RewriteEnv {
     -- ^ Instantiated type signatures for instances.
@@ -130,6 +135,7 @@ data RewriteEnv = RewriteEnv {
   , expandedConstraints :: Ctxt [Inst]
   , typeConstructors :: TyConsContext
   , dataConstructors :: DataConsContext
+  , tyVarContext     :: TyVarContext
   }
 
 
@@ -172,6 +178,7 @@ buildRewriterEnv :: [((InstanceId, Id), TypeScheme)]
                  -> Ctxt [Inst]
                  -> TyConsContext
                  -> DataConsContext
+                 -> TyVarContext
                  -> RewriteEnv
 buildRewriterEnv = RewriteEnv
 

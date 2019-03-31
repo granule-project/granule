@@ -181,6 +181,7 @@ checkerStateToRewriterEnv cs =
       (expandedConstraints cs)
       (typeConstructors cs)
       (dataConstructors cs)
+      (tyVarContext cs)
 
 
 -- *** Various helpers for manipulating the context

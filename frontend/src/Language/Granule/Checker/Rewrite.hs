@@ -158,6 +158,7 @@ runMaybeTCheckerInRewriter c = do
   env <- getEnv
   let st = C.initState { C.typeConstructors = typeConstructors env
                        , C.dataConstructors = dataConstructors env
+                       , C.tyVarContext     = tyVarContext     env
                        }
   liftIO . C.evalChecker st $ runMaybeT c
 
