@@ -633,6 +633,7 @@ instance Substitutable (Equation v Type) where
          return $ Equation sp ty' pat' expr'
   unify _ _ = error "Can't unify equations"
 
+
 substituteValue :: (?globals::Globals)
                 => Substitution
                 -> ValueF ev Type (Value ev Type) (Expr ev Type)
@@ -641,20 +642,31 @@ substituteValue ctxt (AbsF ty arg mty expr) =
     do  ty' <- substitute ctxt ty
         arg' <- substitute ctxt arg
         mty' <- mapM (substitute ctxt) mty
-        return $ Abs ty' arg' mty' expr
+        expr' <- substitute ctxt expr
+        pure $ Abs ty' arg' mty' expr'
 substituteValue ctxt (PromoteF ty expr) =
     do  ty' <- substitute ctxt ty
-        return $ Promote ty' expr
+        expr' <- substitute ctxt expr
+        pure $ Promote ty' expr'
 substituteValue ctxt (PureF ty expr) =
     do  ty' <- substitute ctxt ty
-        return $ Pure ty' expr
+        expr' <- substitute ctxt expr
+        pure $ Pure ty' expr'
 substituteValue ctxt (ConstrF ty ident vs) =
     do  ty' <- substitute ctxt ty
-        return $ Constr ty' ident vs
+        vs' <- mapM (substitute ctxt) vs
+        pure $ Constr ty' ident vs'
+substituteValue ctxt (VarF ty n) = do
+    do  ty' <- substitute ctxt ty
+        pure $ Var ty' n
 substituteValue ctxt (ExtF ty ev) =
     do  ty' <- substitute ctxt ty
-        return $ Ext ty' ev
-substituteValue _ other = return (ExprFix2 other)
+        pure $ Ext ty' ev
+substituteValue _ (NumIntF n) = pure $ NumInt n
+substituteValue _ (NumFloatF n) = pure $ NumFloat n
+substituteValue _ (CharLiteralF n) = pure $ CharLiteral n
+substituteValue _ (StringLiteralF n) = pure $ StringLiteral n
+
 
 substituteExpr :: (?globals::Globals)
                => Substitution
@@ -662,22 +674,31 @@ substituteExpr :: (?globals::Globals)
                -> MaybeT Checker (Expr ev Type)
 substituteExpr ctxt (AppF sp ty fn arg) =
     do  ty' <- substitute ctxt ty
-        return $ App sp ty' fn arg
+        fn' <- substitute ctxt fn
+        arg' <- substitute ctxt arg
+        pure $ App sp ty' fn' arg'
 substituteExpr ctxt (BinopF sp ty op lhs rhs) =
     do  ty' <- substitute ctxt ty
-        return $ Binop sp ty' op lhs rhs
+        lhs' <- substitute ctxt lhs
+        rhs' <- substitute ctxt rhs
+        pure $ Binop sp ty' op lhs' rhs'
 substituteExpr ctxt (LetDiamondF sp ty pattern mty value expr) =
     do  ty' <- substitute ctxt ty
         pattern' <- substitute ctxt pattern
         mty' <- mapM (substitute ctxt) mty
-        return $ LetDiamond sp ty' pattern' mty' value expr
+        value' <- substitute ctxt value
+        expr' <- substitute ctxt expr
+        pure $ LetDiamond sp ty' pattern' mty' value' expr'
 substituteExpr ctxt (ValF sp ty value) =
     do  ty' <- substitute ctxt ty
-        return $ Val sp ty' value
+        value' <- substitute ctxt value
+        pure $ Val sp ty' value'
 substituteExpr ctxt (CaseF sp ty expr arms) =
     do  ty' <- substitute ctxt ty
         arms' <- mapM (mapFstM (substitute ctxt)) arms
-        return $ Case sp ty' expr arms'
+        expr' <- substitute ctxt expr
+        pure $ Case sp ty' expr' arms'
+
 
 mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
 mapFstM fn (f, r) = do
