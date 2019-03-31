@@ -52,7 +52,7 @@ mkDictVar name idt = mkId $ "$" <> pretty name <> "(" <> pretty idt <> ")"
 
 -- | Return the name of the dictionary variable for an instance.
 dictVarFromInst :: (?globals :: Globals) => Inst -> Id
-dictVarFromInst inst = mkId $ "$(" <> pretty inst <> ")"
+dictVarFromInst inst = mkDictVar (instIFace inst) (instParams inst)
 
 
 -- | Return a unique (in scope) variable representing the interface
