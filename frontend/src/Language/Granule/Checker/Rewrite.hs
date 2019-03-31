@@ -41,7 +41,9 @@ import Language.Granule.Checker.Instance
 import qualified Language.Granule.Checker.Monad as C
 import qualified Language.Granule.Checker.Substitution as Sub
 
+import Language.Granule.Checker.Predicates (Quantifier(BoundQ))
 import Language.Granule.Checker.Rewrite.Type
+import Language.Granule.Checker.Types
 
 
 -- | Return a unique (in scope) variable representing the interface
@@ -415,11 +417,15 @@ rewriteDefCall (Def _ n _ tys) callTy = do
 -- |
 -- | This will fail if the typescheme cannot be instantiated with the given type.
 instantiate :: (?globals :: Globals) => TypeScheme -> Type -> Rewriter TypeScheme
-instantiate sig@(Forall _ _ _ ty) ity = do
+instantiate sig@(Forall _ binds _ ty) ity = do
   tyNoI <- rewriteTypeWithoutInterfaces ty
   res <- runMaybeTCheckerInRewriter $ do
-           subst <- Sub.unify tyNoI ity
-           maybe (pure sig) (`Sub.substitute` sig) subst
+           res <- C.withBindings binds BoundQ $ equalTypes nullSpanNoFile tyNoI ity
+           case res of
+             Left err -> C.halt err
+             Right pf ->
+               let subst = equalityProofSubstitution pf
+               in Sub.substitute subst sig
   maybe (genericRewriterError $ concat ["error when instantiating '", pretty sig, "' with '", pretty ity, "'"]) pure res
   where rewriteTypeWithoutInterfaces ta@(FunTy t1 t2) = do
             isIface <- maybe False (const True) <$> extractIFaceTy t1

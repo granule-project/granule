@@ -1,0 +1,22 @@
+-- EXPECTED: Some 10
+interface Semigroup a where
+  op : a -> a -> a
+
+data Maybe a = None | Some a
+
+instance Semigroup Int where
+  op x y = x + y
+
+instance {Semigroup a} => Semigroup (Maybe a) where
+  op None x = x;
+  op x None = x;
+  op (Some x) (Some y) = Some (op x y)
+
+-- this is really just a sanity check to make sure the rewriter
+-- can handle non-trivial interface constraints (i.e., those that aren't just
+-- applied to a variable)
+op2 : forall {a : Type} . {Semigroup (Maybe a)} => Maybe a -> Maybe a -> Maybe a
+op2 = op
+
+main : Maybe Int
+main = op2 (Some 7) (Some 3)
