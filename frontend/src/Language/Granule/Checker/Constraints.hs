@@ -123,7 +123,7 @@ compileToSBV predicate tyVarContext =
                          return ((solverVar .== literal privateRepresentation
                               .|| solverVar .== literal publicRepresentation) .&& pred')
 
-                    k -> error $ "Solver error: I don't know how to create an existntial for " <> show k
+                    k -> error $ "Solver error: I don't know how to create an existential for " <> show k
             Just k -> error $ "Solver error: I don't know how to create an existntial for demotable type " <> show k
 
             Nothing ->
@@ -384,6 +384,12 @@ compile vars (NonZeroPromotableTo s x c t) = do
 compileCoeffect :: (?globals :: Globals) =>
   Coeffect -> Type -> [(Id, SGrade)] -> SGrade
 
+compileCoeffect CCode (TyCon (sourceName -> "Code")) _ = SPoint
+compileCoeffect CCode (isProduct -> Just (TyCon (sourceName -> "Code"), t2)) vars =
+  SProduct SPoint (compileCoeffect (COne t2) t2 vars)
+compileCoeffect CCode (isProduct -> Just (t1, TyCon (sourceName -> "Code"))) vars =
+  SProduct (compileCoeffect (COne t1) t1 vars) SPoint
+
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
 -- Trying to compile a coeffect from a promotion that was never
@@ -455,6 +461,7 @@ compileCoeffect (CZero k') k vars  =
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
+        "Code"      -> SPoint
         _           -> error $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
       SExtNat 0
@@ -478,6 +485,7 @@ compileCoeffect (COne k') k vars =
         "Nat"       -> SNat 1
         "Q"         -> SFloat (fromRational 1)
         "Set"       -> SSet (S.fromList [])
+        "Code"      -> SPoint
         _           -> error $ "I don't know how to compile a 1 for " <> pretty k'
 
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->

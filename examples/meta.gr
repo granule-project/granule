@@ -1,0 +1,8 @@
+import Nat
+
+power : forall n . N n -> (Int [n] -> Int) [Code]
+power Z     = [λ[_] → 1];
+power (S m) = [λ[x] → let [iter] = power m in [iter x * x]]
+
+-- cubed : Int [3] -> Int
+-- cubed xb = let [p] = power (S (S (S Z))) (code xb) in p

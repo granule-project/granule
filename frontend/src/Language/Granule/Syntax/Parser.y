@@ -317,6 +317,7 @@ Constraint :: { Type }
   | TyAtom '>=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+  | Type                      { $1 }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
@@ -337,6 +338,7 @@ Coeffect :: { Coeffect }
                                     "Public" -> Level publicRepresentation
                                     "Private" -> Level privateRepresentation
                                     "Inf" -> infinity
+                                    "Code" -> CCode
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
   | Coeffect '..' Coeffect      { CInterval $1 $3 }

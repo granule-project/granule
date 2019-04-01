@@ -116,6 +116,7 @@ data Coeffect = CNat      Int
               | CSig      Coeffect Type
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
+              | CCode
     deriving (Eq, Ord, Show)
 
 coeffectIsAtom :: Coeffect -> Bool
@@ -297,7 +298,7 @@ instance Term Coeffect where
     freeVars (CSig c _) = freeVars c
     freeVars (CInterval c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CProduct c1 c2) = freeVars c1 <> freeVars c2
-
+    freeVars CCode = []
 ----------------------------------------------------------------------
 -- Freshenable instances
 
@@ -385,7 +386,7 @@ instance Freshenable m Coeffect where
     freshen c@CNat{}   = return c
     freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2
     freshen (CProduct c1 c2) = CProduct <$> freshen c1 <*> freshen c2
-
+    freshen c@CCode  = return c
 ----------------------------------------------------------------------
 
 -- | Normalise a coeffect using the semiring laws and some

@@ -35,6 +35,7 @@ typeConstructors =
     , (mkId "Nat",  (KCoeffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
+    , (mkId "Code", (KCoeffect, Nothing))
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
     -- File stuff
@@ -171,6 +172,14 @@ import Prelude
 data () = ()
 
 
+--------------------------------------------------------------------------------
+-- Meta programming
+--------------------------------------------------------------------------------
+
+data ClosedTerm : Type -> Predicate where
+
+code : forall a. {ClosedTerm a} => a -> a [Code]
+code = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles

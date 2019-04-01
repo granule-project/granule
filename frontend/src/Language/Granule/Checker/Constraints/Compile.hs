@@ -50,5 +50,11 @@ compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
     TyOpGreaterEq -> return $ Disj [Con $ Gt s c1 c2, Con $ Eq s c1 c2 (TyCon $ mkId "Nat")]
     _ -> error $ pretty s <> ": I don't know how to compile binary operator " <> pretty op
 
+compileTypeConstraintToConstraint s (TyApp (TyCon (sourceName -> "ClosedTerm")) t) = do
+  error $ show t
+  -- compileNatKindedTypeToCoeffect s t >>= \case
+  --   TyCon ( sourceName -> "Int") -> pure $ Conj []
+  --   x -> error $ show x
+
 compileTypeConstraintToConstraint s t =
-  error $ pretty s <> ": I don't know how to compile a constraint `" <> pretty t <> "`"
+  error $ pretty s <> ": I don't know how to compile a constraint `" <> show t <> "`"

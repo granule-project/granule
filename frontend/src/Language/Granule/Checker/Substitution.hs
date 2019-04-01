@@ -242,6 +242,7 @@ instance Substitutable Coeffect where
   substitute _ c@CNat{}      = return c
   substitute _ c@CFloat{}    = return c
   substitute _ c@Level{}     = return c
+  substitute _ c@CCode       = return c
 
   unify (CVar v) c = do
     checkerState <- get

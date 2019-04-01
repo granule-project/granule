@@ -101,6 +101,7 @@ instance Pretty Coeffect where
     prettyL l (CInfinity k) = "∞ : " <> prettyL l k
     prettyL l (CInterval c1 c2) = prettyL l c1 <> ".." <> prettyL l c2
     prettyL l (CProduct c1 c2) = "(" <> prettyL l c1 <> " * " <> prettyL l c2 <> ")"
+    prettyL _ CCode = "Code"
 
 instance Pretty Kind where
     prettyL l KType          = "Type"

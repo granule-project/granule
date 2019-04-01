@@ -159,6 +159,7 @@ hasLub k1 k2 =
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker Type
 
 -- Coeffect constants have an obvious kind
+inferCoeffectType _ CCode             = return $ TyCon $ mkId "Code"
 inferCoeffectType _ (Level _)         = return $ TyCon $ mkId "Level"
 inferCoeffectType _ (CNat _)          = return $ TyCon $ mkId "Nat"
 inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
