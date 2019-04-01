@@ -1,0 +1,38 @@
+------
+--- Module: Show
+--- Description: String representations of data
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+interface Show a where
+  show : a -> String
+
+
+----------------------------
+-- Instances for builtins --
+----------------------------
+
+
+instance Show () where
+  show () = "()"
+
+
+instance Show Char where
+  show = showChar
+
+
+instance Show Int where
+  show = showInt
+
+
+instance Show String where
+  show s = stringAppend (showChar '"') (stringAppend s (showChar '"'))
+
+
+instance {Show a, Show b} => Show (a, b) where
+  show (x, y) = stringAppend "(" (stringAppend (show x) (stringAppend ", " (stringAppend (show y) ")")))
