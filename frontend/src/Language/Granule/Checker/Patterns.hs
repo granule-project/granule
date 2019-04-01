@@ -236,7 +236,9 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
             -- The remaining type of the constructor
             -> Type
             -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
-    unpeel = unpeel' ([],[],[],[],Full)
+    unpeel pats t = do
+      (ass, kc, sub, ps, c) <- unpeel' ([],[],[],[],Full) pats t
+      pure (ass, kc, sub, reverse ps, c)
 
     -- Tail recursive version of unpeel
     unpeel' acc [] t = return acc
