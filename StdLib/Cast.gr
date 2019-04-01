@@ -1,0 +1,34 @@
+------
+--- Module: Cast
+--- Description: Type coercions
+--- Authors: Ben Moon
+--- License: BSD3
+--- Copyright: (c) Authors 2019
+--- Issue-tracking: https://github.com/granule-project/granule/issues
+--- Repository: https://github.com/granule-project/granule
+------
+
+
+interface Cast a b where
+  cast : a -> b
+
+
+----------------------------
+-- Instances for builtins --
+----------------------------
+
+
+instance Cast Char String where
+  cast = showChar
+
+
+instance Cast Int Float where
+  cast = intToFloat
+
+
+instance Cast Int String where
+  cast = showInt
+
+
+instance {Cast a b, Cast c d} => Cast (a, c) (b, d) where
+  cast (x, y) = (cast x, cast y)
