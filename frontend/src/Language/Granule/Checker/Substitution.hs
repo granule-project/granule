@@ -400,6 +400,14 @@ combineManySubstitutions s (subst:ss) = do
   combineSubstitutions s subst ss'
 
 
+combineManySubstitutionsSafe :: (?globals :: Globals)
+    => Span -> [Substitution]  -> MaybeT Checker (Either FailedCombination Substitution)
+combineManySubstitutionsSafe s [] = pure . pure $ mempty
+combineManySubstitutionsSafe s (subst:ss) = do
+  r1 <- combineManySubstitutionsSafe s ss
+  either (pure . Left) (combineSubstitutionsSafe s subst) r1
+
+
 -- | An indication that two substitutions failed to combine,
 -- | where there are conflicting substitutors for the same
 -- | identifier.
