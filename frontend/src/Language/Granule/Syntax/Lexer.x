@@ -16,7 +16,7 @@ import Data.Text (Text)
 %wrapper "posn"
 
 $digit  = 0-9
-$alpha  = [a-zA-Z\_\=]
+$alpha  = [a-zA-Z\_\-\=]
 $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
