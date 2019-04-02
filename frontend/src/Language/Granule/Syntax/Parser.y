@@ -272,7 +272,12 @@ VarSig :: { [(Id, Kind)] }
                                             else KType)
                                 ]
                               }-- KVar $ mkId ("k" <> symString $1))}
-  | VAR VarSig                { (mkId $ symString $1, snd . head $ $2) : $2 }
+  | VAR VarSig                { let x = symString $1 in
+                                (mkId x, if x == "n" || x == "m" || x == "k"
+                                            then kNat
+                                            else KType) : $2
+
+                              }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
