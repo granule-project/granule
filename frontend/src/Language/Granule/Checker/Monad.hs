@@ -214,12 +214,12 @@ putTyVarContext tvc = modify' $ \st -> st { tyVarContext = tvc }
 checkDuplicate :: (?globals :: Globals) => ((CheckerState -> Ctxt a), String) -> Span -> Id -> MaybeT Checker ()
 checkDuplicate (ctxtf, descr) sp name = do
   clash <- isJust . lookup name <$> gets ctxtf
-  when clash $ halt $ NameClashError (Just sp) $ concat [descr, " `", pretty name, "` already defined."]
+  when clash $ halt $ NameClashError (Just sp) $ concat [descr, " `", pretty name, "` is already defined."]
 
 checkDuplicateTyConScope :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
 checkDuplicateTyConScope sp name = do
-  checkDuplicate (typeConstructors, "Type Constructor") sp name
-  checkDuplicate (ifaceContext,     "Type Constructor") sp name
+  checkDuplicate (typeConstructors, "A type constructor") sp name
+  checkDuplicate (ifaceContext,     "An interface") sp name
 
 registerTyCon :: (?globals :: Globals) => Span -> Id -> Kind -> Cardinality -> MaybeT Checker ()
 registerTyCon sp name kind card = do
