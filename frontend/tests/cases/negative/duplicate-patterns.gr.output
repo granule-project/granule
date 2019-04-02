@@ -1,6 +1,6 @@
 Type checking failed: 
-  Duplicate pattern: 3:1:
-  Variable `x` bound more than once
+Duplicate pattern: 3:1:
+Variable `x` bound more than once
 
 Duplicate pattern: 3:1:
-  Variable `y` bound more than once
+Variable `y` bound more than once

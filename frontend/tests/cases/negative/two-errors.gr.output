@@ -1,6 +1,6 @@
 Type checking failed: 
-  Type error: 4:7:
-  Expected `Int` but got `()`
+Type error: 4:7:
+Expected `Int` but got `()`
 
 Type error: 7:7:
-  Expected `()` but got `Int`
+Expected `()` but got `Int`

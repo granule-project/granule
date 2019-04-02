@@ -1,3 +1,3 @@
 Type checking failed: 
-  Linearity error: 2:7:
-  Linear variable `x` is never used.
+Linearity error: 2:7:
+Linear variable `x` is never used.

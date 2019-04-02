@@ -150,7 +150,7 @@ formatMessage :: (?globals :: Globals, UserMsg msg)
 formatMessage titleStyle message
   = (titleStyle $ title message <> ": ")
     <> sourceFile <> lineCol <> "\n"
-    <> indent (msg message)
+    <> msg message
   where
     sourceFile = case filename $ location message of -- sourceFilePath ?globals
       "" -> ""
@@ -186,9 +186,6 @@ txtColor colorCode message =
       else "\ESC[" <> colorCode <> ";1m" <> message <> reset
   where
     reset = "\ESC[0m"
-
-indent :: String -> String
-indent message = "  " <> message
 
 getTimeString :: (?globals :: Globals) => IO String
 getTimeString =

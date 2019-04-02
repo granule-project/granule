@@ -1,4 +1,4 @@
 Type checking failed: 
-  Falsifiable theorem: 5:1:
-  The following theorem associated with `borg` is falsifiable:
+Falsifiable theorem: 5:1:
+The following theorem associated with `borg` is falsifiable:
 	( -> (prom_[x]1 * 1 : Interval Nat + prom_[x]0 * 1 : Interval Nat ≤ 5..6) ∧ (3..4 ≤ prom_[x]0) ∧ (0..1 ≤ prom_[x]1))

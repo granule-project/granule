@@ -1,9 +1,9 @@
 Type checking failed: 
-  Linearity error: 7:3:
-  Variable `y` is promoted but its binding is linear; its binding should be under a box.
+Linearity error: 7:3:
+Variable `y` is promoted but its binding is linear; its binding should be under a box.
 
 Linearity error: 7:3:
-  Linear variable `b` is never used.
+Linear variable `b` is never used.
 
 Grading error: 14:3:
-  0 is not approximatable by 1 for type Nat because Nat denotes precise usage.
+0 is not approximatable by 1 for type Nat because Nat denotes precise usage.

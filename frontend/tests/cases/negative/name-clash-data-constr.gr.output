@@ -1,9 +1,9 @@
 Type checking failed: 
-  Data constructor name clash: 3:14:
-  `A` already defined at
+Data constructor name clash: 3:14:
+`A` already defined at
 	(location redacted)
 	(location redacted)
 
 Data constructor name clash: 7:3:
-  `B` already defined at
+`B` already defined at
 	(location redacted)
