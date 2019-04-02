@@ -1,0 +1,18 @@
+-- syntax tests for different predicate forms
+
+synLT : forall {n : Nat, m : Nat} . {n<m} => Int
+synLT = 0
+
+synGT : forall {n : Nat, m : Nat} . {n>m} => Int
+synGT = 0
+
+synLTE : forall {n : Nat, m : Nat} . {n<=m} => Int
+synLTE = 0
+
+synGTE : forall {n : Nat, m : Nat} . {n>=m} => Int
+synGTE = 0
+
+-- spacing is required around '=' as it may be used
+-- in identifiers
+synEQ : forall {n : Nat, m : Nat} . {n = m} => Int
+synEQ = 0
