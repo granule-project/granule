@@ -61,6 +61,8 @@ import Language.Granule.Utils hiding (mkSpan)
     '->'  { TokenArrow _ }
     '<-'  { TokenBind _ }
     '=>'  { TokenConstrain _ }
+    '<='   { TokenOp _ "≤" }
+    '>='   { TokenOp _ "≥" }
     ','   { TokenComma _ }
     '×'   { TokenCross _ }
     '='   { TokenEq _ }
@@ -78,8 +80,6 @@ import Language.Granule.Utils hiding (mkSpan)
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
     OP    { TokenOp _ _ }
-    '<='   { TokenOp _ "≤" }
-    '>='   { TokenOp _ "≥" }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
