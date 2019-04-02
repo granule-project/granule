@@ -123,6 +123,7 @@ inferKindOfTypeSafe' s quantifiedVariables t =
                     <?> show quantifiedVariables
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = wellKinded k2
+    kApp (KPromote (FunTy t1 t2)) kArg | KPromote t1 `hasLub` kArg = wellKinded (KPromote t2)
     kApp k kArg = illKindedNEq s (KFun kArg (KVar $ mkId "....")) k
 
     kInt _ = wellKinded $ kConstr $ mkId "Nat"

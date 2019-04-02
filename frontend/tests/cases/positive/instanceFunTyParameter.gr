@@ -1,0 +1,8 @@
+data Bool = True | False
+data BA = B Bool
+
+interface I (b : BA)
+
+-- we must be able to infer a kind for
+-- 'B True' (which gets promoted)
+instance I (B True)
