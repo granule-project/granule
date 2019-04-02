@@ -296,7 +296,9 @@ checkInstHead (Instance sp iname constrs (InstanceTypes sp2 idty) _) = do
 
   validateConstraint sp inst
   mapM_ (compileAndAddPredicate sp) preds
-  mapM_ (kindCheckConstraint sp) icons
+
+  subs <- mapM (kindCheckConstraint sp) icons
+  either (conflictingKinds sp) pure =<< combineManySubstitutionsSafe sp subs
 
   -- we take it on faith that the instance methods are well-typed
   -- at this point. If an issue arises it will be caught before we
@@ -1712,7 +1714,7 @@ kindCheckConstraintType sp ty = requireKind ty (KConstraint InterfaceC)
 
 -- | Check that all the constraint parameters are well-kinded with respect
 -- | to the interface, in the current context.
-kindCheckConstraint :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
+kindCheckConstraint :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
 kindCheckConstraint sp inst = do
   -- make sure we are dealing with an interface
   let iname = instIFace inst
@@ -1724,12 +1726,20 @@ kindCheckConstraint sp inst = do
   -- check every parameter is well-kinded with respect to the interface
   kinds <- getInterfaceParameterKindsForInst sp inst
   let expectedKindPairs = zip (instParams inst) kinds
-  forM_ expectedKindPairs (\(ity, iKind) -> do
+  subs <- forM expectedKindPairs (\(ity, iKind) -> do
     inferred <- inferKindOfTypeSafe sp ity
     case inferred of
       Left{} -> halt $ KindError (Just sp) $
                 "Could not infer a kind for " <> prettyQuoted ity
-      Right tyKind -> when (iKind /= tyKind) $ illKindedNEq sp iKind tyKind)
+      Right tyKind -> do
+        eqres <- equalKinds sp iKind tyKind
+        case eqres of
+          Right pf -> pure $ equalityProofSubstitution pf
+          Left{} -> illKindedNEq sp iKind tyKind)
+  sub <- combineManySubstitutionsSafe sp subs
+  case sub of
+    Left e -> conflictingKinds sp e
+    Right sub -> pure sub
   where getTerminalKind = fmap terminalKind . getKindRequired sp
         terminalKind (KFun _ k) = terminalKind k
         terminalKind k = k
@@ -1742,7 +1752,7 @@ kindCheckConstr :: (?globals :: Globals) => Span -> TConstraint -> MaybeT Checke
 kindCheckConstr s ty = do
   case instFromTy ty of
     -- interface constraint
-    Just inst -> kindCheckConstraint s inst
+    Just inst -> kindCheckConstraint s inst >> pure ()
     -- predicate
     Nothing -> do
       kind <- inferKindOfType s ty
@@ -1796,7 +1806,7 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
     getParamsKinds' :: [(Kind, Type)] -> MaybeT Checker (Substitution, [(Type, Kind)])
     getParamsKinds' kts = do
       (subs, fvks) <- fmap unzip $ mapM (uncurry getParamKinds) kts
-      sub <- either conflictingKinds pure =<< combineManySubstitutionsSafe sp subs
+      sub <- either (conflictingKinds sp) pure =<< combineManySubstitutionsSafe sp subs
       fvks' <- instantiateKinds sub (concat fvks) >>= simplifyBindings
       pure (sub, fvks')
     getParamKinds :: Kind -> Type -> MaybeT Checker (Substitution, [(Type, Kind)])
@@ -1911,7 +1921,7 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
     instantiateKind (v, k) kvs = do
       case lookup v (tyMapVars kvs) of
         Just k' -> do
-          sub <- either conflictingKinds pure =<< zipKindVars v k k'
+          sub <- either (conflictingKinds sp) pure =<< zipKindVars v k k'
           mapM (\(n,k) -> fmap (n,) (substitute sub k)) kvs
         _ -> pure kvs
 
@@ -1925,15 +1935,6 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
 
     simplifyBindings = pure . nub
 
-    conflictingKinds (v, k, k2) = halt $ KindError (Just sp) $
-      concat [ prettyQuoted v, " cannot have both kind "
-             , prettyQuotedS k, " and kind ", prettyQuotedS k2 ]
-
-    prettyQuotedS (SubstT t) = prettyQuoted t
-    prettyQuotedS (SubstK k) = prettyQuoted k
-    prettyQuotedS (SubstC c) = prettyQuoted c
-    prettyQuotedS (SubstE e) = prettyQuoted e
-
     inferKindOfTypePoly ret t =
       case lookup t ret of
         Nothing -> error $ "inferKindOfTypePoly called with: " <> prettyQuoted ret <> " and " <> prettyQuoted t
@@ -1946,5 +1947,15 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
       (sub2, r2) <- n
       sub <- combineSubstitutionsSafe sp sub1 sub2
       case sub of
-        Left e -> conflictingKinds e
+        Left e -> conflictingKinds sp e
         Right sub -> pure (sub, r1 <> r2)
+
+
+conflictingKinds :: (?globals :: Globals) => Span -> (Id, Substitutors, Substitutors) -> MaybeT Checker a
+conflictingKinds sp (v, k, k2) = halt $ KindError (Just sp) $
+  concat [ prettyQuoted v, " cannot have both kind "
+         , prettyQuotedS k, " and kind ", prettyQuotedS k2 ]
+  where prettyQuotedS (SubstT t) = prettyQuoted t
+        prettyQuotedS (SubstK k) = prettyQuoted k
+        prettyQuotedS (SubstC c) = prettyQuoted c
+        prettyQuotedS (SubstE e) = prettyQuoted e

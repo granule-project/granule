@@ -38,6 +38,9 @@ module Language.Granule.Checker.Types
     -- *** Instance Equality
     , equalInstances
     , instancesAreEqual
+
+    -- *** Kind Equality
+    , equalKinds
     ) where
 
 import Control.Monad.State.Strict
@@ -134,6 +137,13 @@ unequalNotSpecified s v1 v2 = equalityErr $
     concat [ quoteTyVar v1, " and ", quoteTyVar v2
            , " are not equal."]
   where quoteTyVar = prettyQuoted . TyVar
+
+
+-- | Generic inequality for when a more specific reason is not known.
+unequalKinds s k1 k2 = equalityErr $
+  KindError (Just s) $
+    concat [ prettyQuoted k1, " and ", prettyQuoted k2
+           , " are not equal."]
 
 
 cannotBeBoth s v s1 s2 =
@@ -719,3 +729,24 @@ equalInstances sp instx insty =
 -- | True if the two instances can be proven to be equal in the current context.
 instancesAreEqual :: (?globals :: Globals) => Span -> Inst -> Inst -> MaybeT Checker Bool
 instancesAreEqual s t1 t2 = fmap equalityResultIsSuccess $ equalInstances s t1 t2
+
+
+-------------------
+-- Kind equality --
+-------------------
+
+
+-- | Determine whether two kinds are equal, and under what proof.
+-- |
+-- | This is presently rather simplistic, and allows poly-kinds to
+-- | unify with anything.
+equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> MaybeT Checker EqualityResult
+equalKinds _ k1 k2 | k1 == k2 = trivialEquality
+equalKinds _ (KVar v) k = pure $ equalWith ([], [(v, SubstK k)])
+equalKinds _ k (KVar v) = pure $ equalWith ([], [(v, SubstK k)])
+equalKinds _ KType KType = trivialEquality
+equalKinds sp (KFun k1 k1Arg) (KFun k2 k2Arg) = do
+  pf1 <- equalKinds sp k1 k2
+  pf2 <- equalKinds sp k1Arg k2Arg
+  combinedEqualities sp pf1 pf2
+equalKinds sp k1 k2 = unequalKinds sp k1 k2
