@@ -1,2 +1,5 @@
 data Exists (f : Type -> Type) where
    Exists : forall {a : Type} . f a -> Exists f
+
+data SomeNat (f : Nat -> Type) where
+   SomeNat : forall n. f n -> SomeNat f

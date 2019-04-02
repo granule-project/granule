@@ -17,6 +17,19 @@ natToInt : forall {n : Nat} . N n -> Int
 natToInt Z = 0;
 natToInt (S m) = 1 + natToInt m
 
+-- data NX where
+--   NX : forall n. N n -> NX
+
+-- intToNat : Int -> NX
+-- intToNat 0 = NX Z;
+-- intToNat m = let NX n = intToNat (m - 1) in NX (S n)
+
+import Existential
+
+intToNat : Int -> SomeNat N
+intToNat 0 = SomeNat Z;
+intToNat m = let SomeNat n = intToNat (m - 1) in SomeNat (S n)
+
 --- # Arithmetic operations
 
 --- Addition
