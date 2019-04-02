@@ -1,0 +1,6 @@
+interface Kinds a (b : Type -> Type)
+
+-- a : Type -> Type
+-- b : Type -> Type
+-- c : Type
+instance Kinds (a (b c)) b

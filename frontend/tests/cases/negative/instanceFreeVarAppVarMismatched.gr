@@ -1,0 +1,4 @@
+interface Mismatch a b
+
+-- 'a' cannot have both kind 'Type' and kind 'K(b) -> Type'
+instance Mismatch (a b) a

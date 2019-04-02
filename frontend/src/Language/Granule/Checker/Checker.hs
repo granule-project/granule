@@ -1790,18 +1790,25 @@ constrainTysWithPredicates preds (Forall sp binds constrs ty) = Forall sp binds 
 -- | Given a set of (parameter kind, parameter type) pairs, attempt to
 -- | map free variables in the types to appropriate kinds.
 getParamsFreeVarKinds :: (?globals :: Globals) => Span -> [(Kind, Type)] -> MaybeT Checker [(Id, Kind)]
-getParamsFreeVarKinds sp = fmap concat . mapM (uncurry getParamFreeVarKinds)
+getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
   where
-    getParamFreeVarKinds :: Kind -> Type -> MaybeT Checker [(Id, Kind)]
-    getParamFreeVarKinds _ t | freeVars t == [] = pure []
-    getParamFreeVarKinds paramKind (TyVar v) = pure [(v, paramKind)]
-    getParamFreeVarKinds paramKind (Box c t) =
-      (<>) <$> getCoeffectFreeVarKinds c <*> getParamFreeVarKinds paramKind t
-    getParamFreeVarKinds paramKind (TyCoeffect (CVar v)) = pure [(v, paramKind)]
-    getParamFreeVarKinds KType (FunTy f fArg) =
-      let go = getParamFreeVarKinds KType
-      in (<>) <$> go f <*> go fArg
-    getParamFreeVarKinds paramKind t@TyApp{} =
+    -- | Assigns a kind to each component of the type.
+    getParamsKinds' :: [(Kind, Type)] -> MaybeT Checker (Substitution, [(Type, Kind)])
+    getParamsKinds' kts = do
+      (subs, fvks) <- fmap unzip $ mapM (uncurry getParamKinds) kts
+      sub <- either conflictingKinds pure =<< combineManySubstitutionsSafe sp subs
+      fvks' <- instantiateKinds sub (concat fvks) >>= simplifyBindings
+      pure (sub, fvks')
+    getParamKinds :: Kind -> Type -> MaybeT Checker (Substitution, [(Type, Kind)])
+    getParamKinds paramKind (TyVar v) =
+      pure ([(v, SubstK paramKind)], [(TyVar v, paramKind)])
+    getParamKinds paramKind (Box c t) =
+      getCoeffectFreeVarKinds c <*-> getParamKinds paramKind t
+    getParamKinds paramKind t@(TyCoeffect (CVar v)) = pure ([], [(t, paramKind)])
+    getParamKinds KType (FunTy f fArg) =
+      let go = getParamKinds KType
+      in go f <*-> go fArg
+    getParamKinds paramKind t@TyApp{} =
       let go (TyApp c@(TyCon _) _) = pure c
           go (TyApp c@(TyVar _) _) = pure c
           go (TyApp n _) = go n
@@ -1809,33 +1816,44 @@ getParamsFreeVarKinds sp = fmap concat . mapM (uncurry getParamFreeVarKinds)
       in case go t of
            Just (TyCon n) -> do
              conKind <- getTyConKind sp n
-             getParamsFreeVarKinds sp (getConArgKinds conKind t)
+             getParamsKinds' (getConArgKinds conKind t)
            -- when we have a variable, infer its kind from the parameters
            Just (TyVar v) -> do
-             pks <- getParamsFreeVarKinds sp (getConArgKinds paramKind t)
-             paramKinds <- withBindings pks ForallQ $ mapM (inferKindOfType sp) (getArgs t)
-             pure $ (v, foldKindsToDKind paramKind paramKinds) : pks
-           _ -> pure []
-    getParamFreeVarKinds k (TyCoeffect c)
+             let fvs = freeVars (getArgs t)
+             tvc <- getTyVarContext
+             boundNames <- fmap (fmap fst) getTyVarContext
+             argPolys <- mapM (\p -> do
+                                 vk <- freshIdentifierBase "k"
+                                 pure (p, KVar (mkId vk))) (getArgs t)
+             varPolys <- mapM (\v -> do
+                              vk <- freshIdentifierBase ("k_" <> internalName v)
+                              pure (TyVar v, KVar (mkId vk))) ((fvs \\ boundNames) \\ (fmap fst $ tyMapVars argPolys))
+             let polys = argPolys <> varPolys
+             (sub, pks) <- let swap (x,y) = (y,x) in getParamsKinds' (fmap swap polys)
+             paramKinds <- mapM (inferKindOfTypePoly polys) (getArgs t)
+             let res = (TyVar v, foldKindsToDKind paramKind paramKinds) : pks
+             pure (sub, res)
+           _ -> pure ([], [(t, paramKind)])
+    getParamKinds k (TyCoeffect c)
       | isBinaryCoeff c =
         let (n, m) = binaryCoeffComps c
-            go = getParamFreeVarKinds k . TyCoeffect
-        in (<>) <$> go n <*> go m
-    getParamFreeVarKinds p@(KPromote (TyCon c)) t
+            go = getParamKinds k . TyCoeffect
+        in go n <*-> go m
+    getParamKinds p@(KPromote (TyCon c)) t
       | internalName c == "Nat" =
-        maybe (pure []) (getParamFreeVarKinds p . TyCoeffect) (compileNatKindedTypeToCoeffectSafe t)
-    getParamFreeVarKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
+        maybe (pure ([], [])) (getParamKinds p . TyCoeffect) (compileNatKindedTypeToCoeffectSafe t)
+    getParamKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
       | internalName c == "Interval" =
-        let go = getParamFreeVarKinds (KPromote p) . TyCoeffect in (<>) <$> go l <*> go u
-    getParamFreeVarKinds paramKind t = pure []
+        let go = getParamKinds (KPromote p) . TyCoeffect in go l <*-> go u
+    getParamKinds paramKind t = pure ([], [(t, paramKind)])
 
     -- | Get the kinds of coeffect variables in a coeffect.
-    getCoeffectFreeVarKinds :: Coeffect -> MaybeT Checker [(Id, Kind)]
+    getCoeffectFreeVarKinds :: Coeffect -> MaybeT Checker (Substitution, [(Type, Kind)])
     -- TODO: make sure this takes into account varying coeffect variables
     -- e.g., in "instance {NatCo n} => Simple (A [n]) where..."
     -- in which 'n' would have kind (KPromote (TyVar "Nat"))
     --     - GuiltyDolphin (2019-03-26)
-    getCoeffectFreeVarKinds = pure . (fmap (,KCoeffect)) . freeVars
+    getCoeffectFreeVarKinds = pure . ([],) . (fmap (\v -> (TyCoeffect (CVar v), KCoeffect))) . freeVars
 
     getArgs :: Type -> [Type]
     getArgs = maybe [] snd . tyAppParts
@@ -1843,7 +1861,7 @@ getParamsFreeVarKinds sp = fmap concat . mapM (uncurry getParamFreeVarKinds)
     getArgKinds :: Kind -> [Kind]
     getArgKinds KType = []
     getArgKinds (KFun k kArg) = pure k <> getArgKinds kArg
-    getArgKinds _ = []
+    getArgKinds k = []
 
     -- | Fold a list of kind parameters into a KFun.
     -- |
@@ -1853,9 +1871,9 @@ getParamsFreeVarKinds sp = fmap concat . mapM (uncurry getParamFreeVarKinds)
 
     getConArgKinds :: Kind -> Type -> [(Kind, Type)]
     getConArgKinds conKind conAp =
-     let argKinds = getArgKinds conKind
-         args     = getArgs conAp
-     in zip argKinds args
+      let argKinds = getArgKinds conKind
+          args     = getArgs conAp
+      in zip argKinds args
 
     isBinaryCoeff CPlus{} = True
     isBinaryCoeff CTimes{} = True
@@ -1872,3 +1890,61 @@ getParamsFreeVarKinds sp = fmap concat . mapM (uncurry getParamFreeVarKinds)
     binaryCoeffComps (CMeet x y) = (x, y)
     binaryCoeffComps (CExpon x y) = (x, y)
     binaryCoeffComps c = error $ "binaryCoeffComps called with: " <> show c
+
+    zipKindVars :: Id -> Kind -> Kind -> MaybeT Checker (Either FailedCombination Substitution)
+    zipKindVars _ k (KVar v) = pure $ pure [(v, SubstK k)]
+    zipKindVars v (KFun kf kArg) (KFun vf vArg) = do
+      s1 <- zipKindVars v kf vf
+      s2 <- zipKindVars v kArg vArg
+      case (s1, s2) of
+        (Right s1, Right s2) -> combineSubstitutionsSafe sp s1 s2
+        (_, _) -> pure s1
+    zipKindVars _ KType KType = pure $ pure mempty
+    -- TODO: this seems a bit dodgy (having the substitution flipped),
+    -- is this really what we want?
+    --   - GuiltyDolphin (2019-04-02)
+    zipKindVars v (KVar v') k = pure $ pure [(v', SubstK k)]
+    zipKindVars _ (KPromote t) (KPromote t2) | t == t2 = pure $ pure mempty
+    zipKindVars v k1 k2 = pure $ Left (v, SubstK k1, SubstK k2)
+
+    instantiateKind :: (Id, Kind) -> [(Type, Kind)] -> MaybeT Checker [(Type, Kind)]
+    instantiateKind (v, k) kvs = do
+      case lookup v (tyMapVars kvs) of
+        Just k' -> do
+          sub <- either conflictingKinds pure =<< zipKindVars v k k'
+          mapM (\(n,k) -> fmap (n,) (substitute sub k)) kvs
+        _ -> pure kvs
+
+    tyMapVars :: [(Type, Kind)] -> [(Id, Kind)]
+    tyMapVars [] = []
+    tyMapVars ((TyVar v, k):xs) = (v, k) : tyMapVars xs
+    tyMapVars (_:xs) = tyMapVars xs
+
+    instantiateKinds sub vks = do
+      foldM (\vks' (v, SubstK k) -> instantiateKind (v, k) vks') vks sub
+
+    simplifyBindings = pure . nub
+
+    conflictingKinds (v, k, k2) = halt $ KindError (Just sp) $
+      concat [ prettyQuoted v, " cannot have both kind "
+             , prettyQuotedS k, " and kind ", prettyQuotedS k2 ]
+
+    prettyQuotedS (SubstT t) = prettyQuoted t
+    prettyQuotedS (SubstK k) = prettyQuoted k
+    prettyQuotedS (SubstC c) = prettyQuoted c
+    prettyQuotedS (SubstE e) = prettyQuoted e
+
+    inferKindOfTypePoly ret t =
+      case lookup t ret of
+        Nothing -> error $ "inferKindOfTypePoly called with: " <> prettyQuoted ret <> " and " <> prettyQuoted t
+        Just k -> pure k
+
+    infixl 4 <*->
+    (<*->) :: (Semigroup a) => MaybeT Checker (Substitution, a) -> MaybeT Checker (Substitution, a) -> MaybeT Checker (Substitution, a)
+    (<*->) m n = do
+      (sub1, r1) <- m
+      (sub2, r2) <- n
+      sub <- combineSubstitutionsSafe sp sub1 sub2
+      case sub of
+        Left e -> conflictingKinds e
+        Right sub -> pure (sub, r1 <> r2)

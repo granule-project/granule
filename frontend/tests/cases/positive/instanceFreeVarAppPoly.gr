@@ -1,0 +1,9 @@
+interface Simple a
+
+-- application of type variable to type variable
+--
+-- we should be able to infer that 'f' has kind 'K(x) -> Type',
+-- and 'x' has kind 'K(x)' (i.e., we allow 'x' to be poly-kinded,
+-- and only require that 'f' is something with one (remaining)
+-- parameter)
+instance Simple (f x)

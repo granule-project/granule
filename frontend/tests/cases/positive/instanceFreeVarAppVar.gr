@@ -1,0 +1,7 @@
+interface Free a (b : Type -> Type)
+
+-- in this case, we should infer the following:
+--
+-- 'a : Type -> Type' (from the second parameter)
+-- 'b : Type' (from the inferred kind for 'a')
+instance Free (a b) a

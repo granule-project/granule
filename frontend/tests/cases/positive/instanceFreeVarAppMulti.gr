@@ -1,0 +1,9 @@
+interface Simple a b c
+
+-- application of type variable to type variable
+--
+-- we should be able to infer that 'f' has kind 'Type -> Type -> Type',
+-- 'x' has kind 'Type', and 'y' has kind 'Type'
+-- (this is the only way we can satisfy this for all parameters to
+-- fit the kind of the interface)
+instance Simple (f x y) x y

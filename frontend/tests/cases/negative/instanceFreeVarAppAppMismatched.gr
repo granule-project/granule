@@ -1,0 +1,5 @@
+interface Mismatch a b
+
+-- 'b' must be of kind 'Type', but
+-- it cannot be, as it has a parameter
+instance Mismatch (a (b c)) b
