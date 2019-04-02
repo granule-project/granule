@@ -1602,93 +1602,7 @@ normaliseParameterKind = second inferParameterKind
 getInstanceFreeVarKinds :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [(Id, Kind)]
 getInstanceFreeVarKinds sp inst = do
   kinds <- getInterfaceParameterKindsForInst sp inst
-  getParamsFreeVarKinds (zip kinds (instParams inst))
-  where
-    -- | Given a set of (parameter kind, parameter type) pairs, attempt to
-    -- | map free variables in the types to appropriate kinds.
-    getParamsFreeVarKinds :: [(Kind, Type)] -> MaybeT Checker [(Id, Kind)]
-    getParamsFreeVarKinds = fmap concat . mapM (uncurry getParamFreeVarKinds)
-
-    getParamFreeVarKinds :: Kind -> Type -> MaybeT Checker [(Id, Kind)]
-    getParamFreeVarKinds _ t | freeVars t == [] = pure []
-    getParamFreeVarKinds paramKind (TyVar v) = pure [(v, paramKind)]
-    getParamFreeVarKinds paramKind (Box c t) =
-      (<>) <$> getCoeffectFreeVarKinds c <*> getParamFreeVarKinds paramKind t
-    getParamFreeVarKinds paramKind (TyCoeffect (CVar v)) = pure [(v, paramKind)]
-    getParamFreeVarKinds KType (FunTy f fArg) =
-      let go = getParamFreeVarKinds KType
-      in (<>) <$> go f <*> go fArg
-    getParamFreeVarKinds paramKind t@TyApp{} =
-      let go (TyApp c@(TyCon _) _) = pure c
-          go (TyApp c@(TyVar _) _) = pure c
-          go (TyApp n _) = go n
-          go _ = Nothing
-      in case go t of
-           Just (TyCon n) -> do
-             conKind <- getTyConKind sp n
-             getParamsFreeVarKinds (getConArgKinds conKind t)
-           -- when we have a variable, infer its kind from the parameters
-           Just (TyVar v) -> do
-             pks <- getParamsFreeVarKinds (getConArgKinds paramKind t)
-             paramKinds <- withBindings pks ForallQ $ mapM (inferKindOfType sp) (getArgs t)
-             pure $ (v, foldKindsToDKind paramKind paramKinds) : pks
-           _ -> pure []
-    getParamFreeVarKinds k (TyCoeffect c)
-      | isBinaryCoeff c =
-        let (n, m) = binaryCoeffComps c
-            go = getParamFreeVarKinds k . TyCoeffect
-        in (<>) <$> go n <*> go m
-    getParamFreeVarKinds p@(KPromote (TyCon c)) t
-      | internalName c == "Nat" =
-        maybe (pure []) (getParamFreeVarKinds p . TyCoeffect) (compileNatKindedTypeToCoeffectSafe t)
-    getParamFreeVarKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
-      | internalName c == "Interval" =
-        let go = getParamFreeVarKinds (KPromote p) . TyCoeffect in (<>) <$> go l <*> go u
-    getParamFreeVarKinds paramKind t = pure []
-
-    -- | Get the kinds of coeffect variables in a coeffect.
-    getCoeffectFreeVarKinds :: Coeffect -> MaybeT Checker [(Id, Kind)]
-    -- TODO: make sure this takes into account varying coeffect variables
-    -- e.g., in "instance {NatCo n} => Simple (A [n]) where..."
-    -- in which 'n' would have kind (KPromote (TyVar "Nat"))
-    --     - GuiltyDolphin (2019-03-26)
-    getCoeffectFreeVarKinds = pure . (fmap (,KCoeffect)) . freeVars
-
-    getArgs :: Type -> [Type]
-    getArgs = maybe [] snd . tyAppParts
-
-    getArgKinds :: Kind -> [Kind]
-    getArgKinds KType = []
-    getArgKinds (KFun k kArg) = pure k <> getArgKinds kArg
-    getArgKinds _ = []
-
-    -- | Fold a list of kind parameters into a KFun.
-    -- |
-    -- | The first argument is the result kind.
-    foldKindsToDKind :: Kind -> [Kind] -> Kind
-    foldKindsToDKind = foldr KFun
-
-    getConArgKinds :: Kind -> Type -> [(Kind, Type)]
-    getConArgKinds conKind conAp =
-      let argKinds = getArgKinds conKind
-          args     = getArgs conAp
-      in zip argKinds args
-
-    isBinaryCoeff CPlus{} = True
-    isBinaryCoeff CTimes{} = True
-    isBinaryCoeff CMinus{} = True
-    isBinaryCoeff CMeet{} = True
-    isBinaryCoeff CJoin{} = True
-    isBinaryCoeff CExpon{} = True
-    isBinaryCoeff _ = False
-
-    binaryCoeffComps (CPlus x y) = (x, y)
-    binaryCoeffComps (CTimes x y) = (x, y)
-    binaryCoeffComps (CMinus x y) = (x, y)
-    binaryCoeffComps (CJoin x y) = (x, y)
-    binaryCoeffComps (CMeet x y) = (x, y)
-    binaryCoeffComps (CExpon x y) = (x, y)
-    binaryCoeffComps c = error $ "binaryCoeffComps called with: " <> show c
+  getParamsFreeVarKinds sp (zip kinds (instParams inst))
 
 
 -- | True if the two instances can be proven to be equal in the current context.
@@ -1866,3 +1780,95 @@ compileAndAddPredicate sp ty =
 -- | Constrain the typescheme with the given predicates.
 constrainTysWithPredicates :: (?globals :: Globals) => [Type] -> TypeScheme -> TypeScheme
 constrainTysWithPredicates preds (Forall sp binds constrs ty) = Forall sp binds (constrs <> preds) ty
+
+
+----------------------------
+-- Type-inference Helpers --
+----------------------------
+
+
+-- | Given a set of (parameter kind, parameter type) pairs, attempt to
+-- | map free variables in the types to appropriate kinds.
+getParamsFreeVarKinds :: (?globals :: Globals) => Span -> [(Kind, Type)] -> MaybeT Checker [(Id, Kind)]
+getParamsFreeVarKinds sp = fmap concat . mapM (uncurry getParamFreeVarKinds)
+  where
+    getParamFreeVarKinds :: Kind -> Type -> MaybeT Checker [(Id, Kind)]
+    getParamFreeVarKinds _ t | freeVars t == [] = pure []
+    getParamFreeVarKinds paramKind (TyVar v) = pure [(v, paramKind)]
+    getParamFreeVarKinds paramKind (Box c t) =
+      (<>) <$> getCoeffectFreeVarKinds c <*> getParamFreeVarKinds paramKind t
+    getParamFreeVarKinds paramKind (TyCoeffect (CVar v)) = pure [(v, paramKind)]
+    getParamFreeVarKinds KType (FunTy f fArg) =
+      let go = getParamFreeVarKinds KType
+      in (<>) <$> go f <*> go fArg
+    getParamFreeVarKinds paramKind t@TyApp{} =
+      let go (TyApp c@(TyCon _) _) = pure c
+          go (TyApp c@(TyVar _) _) = pure c
+          go (TyApp n _) = go n
+          go _ = Nothing
+      in case go t of
+           Just (TyCon n) -> do
+             conKind <- getTyConKind sp n
+             getParamsFreeVarKinds sp (getConArgKinds conKind t)
+           -- when we have a variable, infer its kind from the parameters
+           Just (TyVar v) -> do
+             pks <- getParamsFreeVarKinds sp (getConArgKinds paramKind t)
+             paramKinds <- withBindings pks ForallQ $ mapM (inferKindOfType sp) (getArgs t)
+             pure $ (v, foldKindsToDKind paramKind paramKinds) : pks
+           _ -> pure []
+    getParamFreeVarKinds k (TyCoeffect c)
+      | isBinaryCoeff c =
+        let (n, m) = binaryCoeffComps c
+            go = getParamFreeVarKinds k . TyCoeffect
+        in (<>) <$> go n <*> go m
+    getParamFreeVarKinds p@(KPromote (TyCon c)) t
+      | internalName c == "Nat" =
+        maybe (pure []) (getParamFreeVarKinds p . TyCoeffect) (compileNatKindedTypeToCoeffectSafe t)
+    getParamFreeVarKinds (KPromote (TyApp (TyCon c) p)) (TyCoeffect (CInterval l u))
+      | internalName c == "Interval" =
+        let go = getParamFreeVarKinds (KPromote p) . TyCoeffect in (<>) <$> go l <*> go u
+    getParamFreeVarKinds paramKind t = pure []
+
+    -- | Get the kinds of coeffect variables in a coeffect.
+    getCoeffectFreeVarKinds :: Coeffect -> MaybeT Checker [(Id, Kind)]
+    -- TODO: make sure this takes into account varying coeffect variables
+    -- e.g., in "instance {NatCo n} => Simple (A [n]) where..."
+    -- in which 'n' would have kind (KPromote (TyVar "Nat"))
+    --     - GuiltyDolphin (2019-03-26)
+    getCoeffectFreeVarKinds = pure . (fmap (,KCoeffect)) . freeVars
+
+    getArgs :: Type -> [Type]
+    getArgs = maybe [] snd . tyAppParts
+
+    getArgKinds :: Kind -> [Kind]
+    getArgKinds KType = []
+    getArgKinds (KFun k kArg) = pure k <> getArgKinds kArg
+    getArgKinds _ = []
+
+    -- | Fold a list of kind parameters into a KFun.
+    -- |
+    -- | The first argument is the result kind.
+    foldKindsToDKind :: Kind -> [Kind] -> Kind
+    foldKindsToDKind = foldr KFun
+
+    getConArgKinds :: Kind -> Type -> [(Kind, Type)]
+    getConArgKinds conKind conAp =
+     let argKinds = getArgKinds conKind
+         args     = getArgs conAp
+     in zip argKinds args
+
+    isBinaryCoeff CPlus{} = True
+    isBinaryCoeff CTimes{} = True
+    isBinaryCoeff CMinus{} = True
+    isBinaryCoeff CMeet{} = True
+    isBinaryCoeff CJoin{} = True
+    isBinaryCoeff CExpon{} = True
+    isBinaryCoeff _ = False
+
+    binaryCoeffComps (CPlus x y) = (x, y)
+    binaryCoeffComps (CTimes x y) = (x, y)
+    binaryCoeffComps (CMinus x y) = (x, y)
+    binaryCoeffComps (CJoin x y) = (x, y)
+    binaryCoeffComps (CMeet x y) = (x, y)
+    binaryCoeffComps (CExpon x y) = (x, y)
+    binaryCoeffComps c = error $ "binaryCoeffComps called with: " <> show c
