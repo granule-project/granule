@@ -136,7 +136,7 @@ data RewriteEnv = RewriteEnv {
   , typeConstructors :: TyConsContext
   , dataConstructors :: DataConsContext
   , tyVarContext     :: TyVarContext
-  }
+  } deriving (Eq, Show)
 
 
 -- | Retrieve the environment of the rewriter.
