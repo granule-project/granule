@@ -20,8 +20,9 @@ import Language.Granule.Checker.Instance (Inst)
 import Language.Granule.Checker.LaTeX
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Checker.Rewrite.Type (RewriteEnv, buildRewriterEnv)
 import Language.Granule.Context
+
+import Language.Granule.Rewriter.Type (RewriteEnv, buildRewriterEnv)
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Helpers (FreshenerState(..), Term, freeVars, freshen)

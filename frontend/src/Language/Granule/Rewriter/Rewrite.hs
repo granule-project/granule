@@ -1,5 +1,5 @@
 {- |
-Module      :  Language.Granule.Checker.Rewrite
+Module      :  Language.Granule.Rewriter.Rewrite
 Description :  Rewrite a type-annotated AST to an intermediate representation
 
 Rewrites a type-annotated AST to an intermediate representation
@@ -8,7 +8,7 @@ without interfaces.
 
 
 {-# LANGUAGE ImplicitParams #-}
-module Language.Granule.Checker.Rewrite
+module Language.Granule.Rewriter.Rewrite
     ( rewriteWithoutInterfaces
 
       -- ** Annotation helpers
@@ -42,8 +42,9 @@ import qualified Language.Granule.Checker.Monad as C
 import qualified Language.Granule.Checker.Substitution as Sub
 
 import Language.Granule.Checker.Predicates (Quantifier(BoundQ))
-import Language.Granule.Checker.Rewrite.Type
 import Language.Granule.Checker.Types
+
+import Language.Granule.Rewriter.Type
 
 
 -- | Return a unique (in scope) variable representing the interface

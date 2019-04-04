@@ -1,5 +1,5 @@
 {- |
-Module      :  Language.Granule.Checker.Rewrite.Type
+Module      :  Language.Granule.Rewriter.Type
 Description :  Types for the rewriter
 
 Contains types and helpers for the rewriter.
@@ -8,7 +8,7 @@ Contains types and helpers for the rewriter.
 
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE ImplicitParams #-}
-module Language.Granule.Checker.Rewrite.Type
+module Language.Granule.Rewriter.Type
     ( -- * Rewriter Monad
       Rewriter
     , runNewRewriter

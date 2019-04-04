@@ -30,11 +30,11 @@ import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 
 import Language.Granule.Checker.Checker
-import Language.Granule.Checker.Rewrite (rewriteWithoutInterfaces)
-import qualified Language.Granule.Checker.Rewrite.Type as RT
 import Language.Granule.Eval
 import Language.Granule.Interpreter.Config
 import Language.Granule.Interpreter.Preprocess
+import Language.Granule.Rewriter.Rewrite (rewriteWithoutInterfaces)
+import qualified Language.Granule.Rewriter.Type as RT
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils (Globals, debugM, printInfo, printErr, green)

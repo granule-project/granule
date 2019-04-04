@@ -41,11 +41,11 @@ library:
   - Language.Granule.Checker.Patterns
   - Language.Granule.Checker.Predicates
   - Language.Granule.Checker.Primitives
-  - Language.Granule.Checker.Rewrite
-  - Language.Granule.Checker.Rewrite.Type
   - Language.Granule.Checker.SubstitutionContexts
   - Language.Granule.Checker.Substitution
   - Language.Granule.Checker.Types
+  - Language.Granule.Rewriter.Rewrite
+  - Language.Granule.Rewriter.Type
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
   - Language.Granule.Syntax.Helpers

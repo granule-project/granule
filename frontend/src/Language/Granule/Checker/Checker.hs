@@ -25,13 +25,14 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Checker.Rewrite.Type (RewriteEnv)
 import Language.Granule.Checker.Simplifier
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 import Language.Granule.Context
+
+import Language.Granule.Rewriter.Type (RewriteEnv)
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Helpers (freeVars)
