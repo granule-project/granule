@@ -43,7 +43,6 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
---import Debug.Trace
 
 -- Checking (top-level)
 check :: (?globals :: Globals, Pretty v) => AST v () -> IO (Maybe (RewriteEnv, (AST v Type)))
