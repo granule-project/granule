@@ -60,3 +60,18 @@ compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
 
 compileTypeConstraintToConstraint s t =
   halt $ GenericError (Just s) $ "I don't know how to compile a constraint `" <> pretty t <> "`"
+
+
+-----------------------
+-- Predicate Helpers --
+-----------------------
+
+
+compileAndAddPredicate :: (?globals :: Globals) => Span -> Type -> MaybeT Checker ()
+compileAndAddPredicate sp ty =
+  compileTypeConstraintToConstraint sp ty >>= addPredicate
+
+
+-- | Constrain the typescheme with the given predicates.
+constrainTysWithPredicates :: (?globals :: Globals) => [Type] -> TypeScheme -> TypeScheme
+constrainTysWithPredicates preds (Forall sp binds constrs ty) = Forall sp binds (constrs <> preds) ty
