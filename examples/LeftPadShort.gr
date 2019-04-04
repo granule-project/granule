@@ -1,0 +1,27 @@
+import Vec
+import Nat
+
+leftPad : forall {t : Type, m : Nat, n : Nat}
+        . Vec n t -> t [m - n] -> N m -> Vec (n ∨ m) t
+leftPad str [c] n =
+  let (m, str) = length' str
+  in append (replicate (monus n m) [c]) str
+
+-- The type says that given a target length an input vector of length
+-- `n` and a target length `m` then we must consume the padding
+-- element of type `t` exactly `m - n` times to produce the output
+-- vector of the target `m`.
+
+-- In Granule this type alone implies the specification---modulo
+-- reordering of elements---via:
+--
+--  * Parametric polymorphism: ensuring that the implementation cannot
+--   depend on the concrete padding items provided or the items of the
+--   input list (hence we use lists instead of strings;
+--
+--  * Indexed types ensuring the correct size and explaining the exact
+--   usage of the padding element;
+--
+--  * Graded linearity: ensuring that every item in the input list
+--   appears exactly once in the output. The type `t [m - n]` of the
+--   padding element reveals its exact usage.
