@@ -1,6 +1,12 @@
 import Vec
 import Nat
 
+-- Representing strings as lists of chars..
+
+leftPadString : forall { m : Nat, n : Nat}
+        . Vec n Char -> Char [m - n] -> N m -> Vec (n ∨ m) Char
+leftPadString = leftPad
+
 leftPad : forall {t : Type, m : Nat, n : Nat}
         . Vec n t -> t [m - n] -> N m -> Vec (n ∨ m) t
 leftPad str [c] n =
