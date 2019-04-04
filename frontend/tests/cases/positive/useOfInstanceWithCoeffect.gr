@@ -1,11 +1,11 @@
 interface Simple (c : Coeffect) (n : c) a where
   simple : a [n] -> a [n]
 
-data A = A
+data A = A'
 
 instance Simple Nat 1 A where
-  simple [A] = [A]
+  simple [A'] = [A']
 
 -- there is an instance for 'A 1'
 foo : A [1]
-foo = simple [A]
+foo = simple [A']

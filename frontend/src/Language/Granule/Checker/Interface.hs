@@ -16,7 +16,6 @@ module Language.Granule.Checker.Interface
 
 
 import Control.Monad.State (modify')
-import Control.Monad.Trans.Maybe (MaybeT)
 import qualified Data.Map as M
 
 import Language.Granule.Syntax.Def
@@ -31,8 +30,6 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates (Quantifier(InstanceQ))
 import Language.Granule.Checker.SubstitutionContexts
 
-import Language.Granule.Utils (Globals)
-
 
 ifaceCtxtNames :: IFaceCtxt -> [Id]
 ifaceCtxtNames = map fst . ifaceSigs
@@ -40,7 +37,7 @@ ifaceCtxtNames = map fst . ifaceSigs
 
 -- | Type alias for a function that retrieves
 -- | interface information from the state.
-type RetFun a = (?globals :: Globals) => Span -> Id -> MaybeT Checker a
+type RetFun a = Span -> Id -> Checker a
 
 
 -- | Helper for retrieving interface information.
@@ -48,12 +45,12 @@ retFun :: (IFaceCtxt -> a) -> RetFun a
 retFun f sp = fmap f . getInterface sp
 
 
-interfaceExists :: Id -> MaybeT Checker Bool
+interfaceExists :: Id -> Checker Bool
 interfaceExists = fmap (maybe False (const True)) . lookupContext ifaceContext
 
 
 getInterface :: RetFun IFaceCtxt
-getInterface = requireInScope (ifaceContext, "Interface")
+getInterface = requireInScope interfaceScope
 
 
 getInterfaceParameters :: RetFun [(Id, Kind)]
@@ -92,7 +89,7 @@ getInterfaceConstraints = retFun ifaceConstraints
 
 
 -- | Register an instantiated typescheme for an instance method.
-registerInstanceSig :: Id -> InstanceTypes -> Id -> TypeScheme -> MaybeT Checker ()
+registerInstanceSig :: Id -> InstanceTypes -> Id -> TypeScheme -> Checker ()
 registerInstanceSig iname (InstanceTypes _ ity) meth methTys =
     -- we lookup instances by the type application of the interface
     let finTy = mkInst iname ity
@@ -100,7 +97,7 @@ registerInstanceSig iname (InstanceTypes _ ity) meth methTys =
 
 
 -- | Execute a checker with context from the interface head in scope.
-withInterfaceContext :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a -> MaybeT Checker a
+withInterfaceContext :: Span -> Id -> Checker a -> Checker a
 withInterfaceContext sp iname c = do
   params <- getInterfaceParameters sp iname
   withBindings params InstanceQ c
@@ -108,7 +105,7 @@ withInterfaceContext sp iname c = do
 
 -- | Build a substitution that maps interface parameter
 -- | variables to the instance.
-buildBindingMap :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
+buildBindingMap :: Span -> Inst -> Checker Substitution
 buildBindingMap sp inst = do
   params <- getInterfaceParameterNames sp (instIFace inst)
   pure $ zip params (fmap (\p -> case p of

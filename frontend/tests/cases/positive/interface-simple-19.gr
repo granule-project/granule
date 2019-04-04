@@ -1,6 +1,6 @@
-data A a = A
+data A a = A'
 
-data B = B
+data B = B'
 
 interface Simple a where
   simple : a -> a

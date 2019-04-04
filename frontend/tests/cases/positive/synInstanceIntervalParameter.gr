@@ -1,6 +1,6 @@
 interface Simple a (c : Interval Nat)
 
-data A = A
+data A = A'
 
 -- An instance with an interval parameter
 instance Simple A [0..1]

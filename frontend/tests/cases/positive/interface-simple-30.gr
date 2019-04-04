@@ -1,8 +1,8 @@
 -- multiple distinct instances of an interface
 
-data A = A
+data A = A'
 
-data B = B
+data B = B'
 
 interface Simple a where
   simple : a -> a

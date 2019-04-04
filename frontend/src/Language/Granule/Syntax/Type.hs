@@ -26,7 +26,21 @@ data TypeScheme =
   deriving (Eq, Show, Generic)
 
 -- Constructors and operators are just strings
-type Operator = String
+data TypeOperator
+  = TyOpLesser
+  | TyOpLesserEq
+  | TyOpGreater
+  | TyOpGreaterEq
+  | TyOpEq
+  | TyOpNotEq
+  | TyOpPlus
+  | TyOpTimes
+  | TyOpMinus
+  | TyOpExpon
+  | TyOpMeet
+  | TyOpJoin
+  deriving (Eq, Ord, Show)
+
 
 {-| Types.
 Example: `List n Int` in Granule
@@ -39,7 +53,7 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyVar Id                  -- ^ Type variable
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
-          | TyInfix Operator Type Type  -- ^ Infix type operator
+          | TyInfix TypeOperator Type Type  -- ^ Infix type operator
           | TyCoeffect Coeffect         -- ^ Promoted coeffect
     deriving (Eq, Ord, Show)
 
@@ -85,8 +99,12 @@ instance Term Kind where
   freeVars (KVar x)     = [x]
   freeVars _            = []
 
+kConstr :: Id -> Kind
 kConstr = KPromote . TyCon
 
+kNat, protocol :: Kind
+kNat = kConstr $ mkId "Nat"
+protocol = kConstr $ mkId "Protocol"
 
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
@@ -145,8 +163,11 @@ publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
 publicRepresentation  = 0
 
+nat, extendedNat :: Type
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
+
+infinity :: Coeffect
 infinity = CInfinity (Just extendedNat)
 
 isInterval :: Type -> Maybe Type
@@ -219,7 +240,7 @@ mTyApp :: Monad m => Type -> Type -> m Type
 mTyApp x y   = return (TyApp x y)
 mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
-mTyInfix :: Monad m => Operator -> Type -> Type -> m Type
+mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 mTyCoeffect :: Monad m => Coeffect -> m Type
 mTyCoeffect = pure . TyCoeffect
@@ -233,7 +254,7 @@ data TypeFold m a = TypeFold
   , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: Operator -> a -> a -> m a
+  , tfTyInfix :: TypeOperator  -> a -> a -> m a
   , tfTyCoeffect :: Coeffect -> m a }
 
 -- Base monadic algebra
@@ -314,8 +335,8 @@ instance Term Coeffect where
 ----------------------------------------------------------------------
 -- Freshenable instances
 
-instance Monad m => Freshenable m TypeScheme where
-  freshen :: TypeScheme -> Freshener m TypeScheme
+instance Freshenable m TypeScheme where
+  freshen :: Monad m => TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds constraints ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v;
                                         k' <- freshen k;

@@ -8,6 +8,9 @@ This module provides type-checking for interfaces and instances.
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TupleSections #-}
+
+{-# options_ghc -fno-warn-incomplete-uni-patterns #-}
+
 module Language.Granule.Checker.Interface.Check
   (
   -- ** Context Solver
@@ -31,12 +34,10 @@ module Language.Granule.Checker.Interface.Check
 import Control.Arrow (second)
 import Control.Monad (unless)
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
 import Data.List (groupBy, nub, (\\))
 import Data.Maybe (catMaybes, fromMaybe)
 
 import Language.Granule.Checker.Constraints.Compile
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Interface
@@ -62,10 +63,10 @@ import Language.Granule.Utils
 -----------------
 
 
-type Solver = Pred -> Span -> Id -> MaybeT Checker (Maybe [CheckerError])
+type Solver = Pred -> Span -> Id -> Checker (Maybe [CheckerError])
 
 
-type CheckDef v = Span -> Id -> [Equation v ()] -> TypeScheme -> MaybeT Checker (Def v Type)
+type CheckDef v = Span -> Id -> [Equation v ()] -> TypeScheme -> Checker (Def v Type)
 
 
 --------------------------
@@ -73,7 +74,7 @@ type CheckDef v = Span -> Id -> [Equation v ()] -> TypeScheme -> MaybeT Checker 
 --------------------------
 
 
-solveIConstraints :: (?globals :: Globals) => Solver -> Substitution -> [Inst] -> Span -> TypeScheme -> MaybeT Checker ()
+solveIConstraints :: (?globals :: Globals) => Solver -> Substitution -> [Inst] -> Span -> TypeScheme -> Checker ()
 solveIConstraints solver coercions itys sp tys = do
   itys' <- mapM (substitute coercions) itys
   topLevelExpanded <- mapM (substitute coercions) =<< getExpandedContext sp tys
@@ -87,11 +88,11 @@ solveIConstraints solver coercions itys sp tys = do
 ------------------------------
 
 
-checkIFaceExists :: (?globals :: Globals) => Span -> Id -> MaybeT Checker ()
-checkIFaceExists s = void . requireInScope (ifaceContext, "Interface") s
+checkIFaceExists :: Span -> Id -> Checker ()
+checkIFaceExists s n = requireInScope interfaceScope s n >> pure ()
 
 
-checkIFaceHead :: (?globals :: Globals) => Interface -> MaybeT Checker ()
+checkIFaceHead :: (?globals :: Globals) => Interface -> Checker ()
 checkIFaceHead iface@(Interface sp name constrs params itys) = do
   -- check that all of the variables used in the kinds are in scope
   let (pnames, pkinds) = unzip params'
@@ -107,13 +108,13 @@ checkIFaceHead iface@(Interface sp name constrs params itys) = do
 
 
 -- | Check an interface's method signatures.
-checkIFaceTys :: (?globals :: Globals) => Interface -> MaybeT Checker ()
+checkIFaceTys :: (?globals :: Globals) => Interface -> Checker ()
 checkIFaceTys iface@(Interface sp iname _ params itys) = do
   mapM_ (checkMethodSig iname (fmap normaliseParameterKind params)) itys
 
 
 -- | Typecheck an interface method signature, and register it.
-checkMethodSig :: (?globals :: Globals) => Id -> [(Id, Kind)] -> InterfaceMethod -> MaybeT Checker ()
+checkMethodSig :: (?globals :: Globals) => Id -> [(Id, Kind)] -> InterfaceMethod -> Checker ()
 checkMethodSig iname params (InterfaceMethod sp name tys) = do
   let tys' = tysWithParams tys
   kindCheckSig sp tys'
@@ -130,7 +131,7 @@ checkMethodSig iname params (InterfaceMethod sp name tys) = do
 -----------------------------
 
 
-checkInstHead :: (?globals :: Globals) => Solver -> Instance v a -> MaybeT Checker ()
+checkInstHead :: (?globals :: Globals) => Solver -> Instance v a -> Checker ()
 checkInstHead solver (Instance sp iname constrs (InstanceTypes sp2 idty) _) = do
   initialTvc <- getTyVarContext
 
@@ -146,29 +147,26 @@ checkInstHead solver (Instance sp iname constrs (InstanceTypes sp2 idty) _) = do
   mapM_ (compileAndAddPredicate sp) preds
 
   subs <- mapM (kindCheckConstraint sp) icons
-  either (conflictingKinds sp) pure =<< combineManySubstitutionsSafe sp subs
+  _ <- either (conflictingKinds sp) pure =<< combineManySubstitutionsSafe sp subs
 
   -- we take it on faith that the instance methods are well-typed
   -- at this point. If an issue arises it will be caught before we
   -- check top-level definitions
   registerInstance sp inst
   putTyVarContext initialTvc
-      where registerInstance :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker ()
+      where registerInstance :: (?globals :: Globals) => Span -> Inst -> Checker ()
             registerInstance sp inst = do
               maybeInstance <- getInstance solver sp inst
               case maybeInstance of
                 Just (inst',_) ->
-                    halt . NameClashError (Just sp) $
-                      concat [ "The instance ", prettyQuoted inst
-                             , " overlaps with the previously defined instance "
-                             , prettyQuoted inst' ]
+                    throw OverlappingInstance{ errLoc = sp, errInst1 = inst, errInst2 = inst' }
                 Nothing -> do
                     maybeInstances <- lookupContext instanceContext iname
                     modify' $ \st -> st { instanceContext = (iname, (inst,constrs):fromMaybe [] maybeInstances)
                                                             : filter ((/=iname) . fst) (instanceContext st) }
 
 
-checkInstDefs :: (?globals :: Globals, Pretty v) => CheckDef v -> Instance v () -> MaybeT Checker (Instance v Type)
+checkInstDefs :: (?globals :: Globals) => CheckDef v -> Instance v () -> Checker (Instance v Type)
 checkInstDefs checkDef (Instance sp iname constrs idat@(InstanceTypes _ idty) ds) = do
   let inst = mkInst iname idty
 
@@ -183,10 +181,7 @@ checkInstDefs checkDef (Instance sp iname constrs idat@(InstanceTypes _ idty) ds
 
   -- check that an implementation is provided for every interface method
   forM_ (filter (`notElem` defnames) names)
-    (\name -> halt $ GenericError (Just sp) $
-      concat ["No implementation given for `", pretty name
-             , "` which is a required member of interface `"
-             , pretty iname, "`"])
+    (\name -> throw MissingImplementation{ errLoc = sp, errId = name, errIFace = iname })
 
   -- group equations by method name
   let nameGroupedDefs = groupBy
@@ -210,8 +205,7 @@ checkInstDefs checkDef (Instance sp iname constrs idat@(InstanceTypes _ idty) ds
   pure $ Instance sp iname constrs idat (concat $ fmap defToIDefs ds')
   where
     checkInstDefName names sp name = do
-      unless (elem name names) (halt $ GenericError (Just sp) $
-        concat ["`", pretty name, "` is not a member of interface `", pretty iname, "`"])
+      unless (elem name names) (throw MethodNotMember{ errLoc = sp, errId = name, errIFace = iname })
       pure name
     defToIDefs (Def sp n eqns ty) = fmap (InstanceEquation sp (Just n)) eqns
 
@@ -221,15 +215,14 @@ checkInstDefs checkDef (Instance sp iname constrs idat@(InstanceTypes _ idty) ds
 ---------------------
 
 
-registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> MaybeT Checker ()
+registerDefSig :: (?globals :: Globals) => Span -> Id -> TypeScheme -> Checker ()
 registerDefSig sp name tys = do
-  checkDuplicate (defContext, "Definition") sp name
   expanded <- expandIConstraints sp (iconsFromTys tys)
   registerExpandedConstraints sp name expanded
   modify' $ \st -> st { defContext = [(name, tys)] <> defContext st }
 
 
-getInstance :: (?globals :: Globals) => Solver -> Span -> Inst -> MaybeT Checker (Maybe (Inst, [Type]))
+getInstance :: (?globals :: Globals) => Solver -> Span -> Inst -> Checker (Maybe (Inst, [Type]))
 getInstance solver sp inst = do
   let iname = instIFace inst
   maybeInstances <- lookupContext instanceContext iname
@@ -241,7 +234,7 @@ getInstance solver sp inst = do
       findM _ [] = pure Nothing
       findM f (x:xs) =
         f x >>= (\t -> if t then pure (Just x) else findM f xs)
-      unifiableWithInstance :: Inst -> MaybeT Checker Bool
+      unifiableWithInstance :: Inst -> Checker Bool
       unifiableWithInstance ity =
           withInstanceContext sp ity $
             instancesAreEqual' solver sp inst ity
@@ -251,12 +244,12 @@ getInstance solver sp inst = do
 --       on Checker.Substitutions, so there is a recursive import
 --       - GuiltyDolphin (2019-02-22)
 -- | Perform a substitution on the current interface constraint context.
-substituteIConstraints :: (?globals :: Globals) => Substitution -> MaybeT Checker ()
+substituteIConstraints :: (?globals :: Globals) => Substitution -> Checker ()
 substituteIConstraints subst =
   getIConstraints >>= mapM (substitute subst) >>= putIcons
 
 
-expandIConstraints :: (?globals :: Globals) => Span -> [Inst] -> MaybeT Checker [Inst]
+expandIConstraints :: (?globals :: Globals) => Span -> [Inst] -> Checker [Inst]
 expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
   where expandIConstraint c = do
           parents <- getInterfaceDependenciesFlattened c
@@ -268,19 +261,19 @@ expandIConstraints sp icons = fmap (nub . concat) $ mapM expandIConstraint icons
 
 
 -- | Retrieve the expanded interface context from the typescheme.
-getExpandedContext :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker [Inst]
+getExpandedContext :: (?globals :: Globals) => Span -> TypeScheme -> Checker [Inst]
 getExpandedContext sp = expandIConstraints sp . iconsFromTys
 
 
-verifyInstanceExists :: (?globals :: Globals) => Solver -> Span -> Inst -> MaybeT Checker ()
+verifyInstanceExists :: (?globals :: Globals) => Solver -> Span -> Inst -> Checker ()
 verifyInstanceExists solver sp inst = do
   maybeInst <- getInstance solver sp inst
   case maybeInst of
-    Nothing -> halt $ GenericError (Just sp) $ "No instance for " <> prettyQuoted inst
+    Nothing -> throw UnsatisfiedInstance{ errLoc = sp, errInst = inst }
     Just _ -> pure ()
 
 
-getInterfaceConstraints' :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [Inst]
+getInterfaceConstraints' :: (?globals :: Globals) => Span -> Inst -> Checker [Inst]
 getInterfaceConstraints' sp inst = do
   let iname = instIFace inst
       ipars = instParams inst
@@ -291,12 +284,12 @@ getInterfaceConstraints' sp inst = do
 
 
 -- | Verify that the constraint is valid.
-verifyConstraint :: (?globals :: Globals) => Solver -> Span -> Inst -> MaybeT Checker ()
+verifyConstraint :: (?globals :: Globals) => Solver -> Span -> Inst -> Checker ()
 verifyConstraint solver sp cty = verifyInstanceExists solver sp cty
 
 
 -- | Execute a checker with context from the instance head in scope.
-withInstanceContext :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker a -> MaybeT Checker a
+withInstanceContext :: (?globals :: Globals) => Span -> Inst -> Checker a -> Checker a
 withInstanceContext sp inst c = do
   tyVars <- getInstanceFreeVarKinds sp inst
   withBindings tyVars InstanceQ c
@@ -322,14 +315,14 @@ normaliseParameterKind = second inferParameterKind
   where inferParameterKind = fromMaybe KType
 
 
-getInstanceFreeVarKinds :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [(Id, Kind)]
+getInstanceFreeVarKinds :: (?globals :: Globals) => Span -> Inst -> Checker [(Id, Kind)]
 getInstanceFreeVarKinds sp inst = do
   kinds <- getInterfaceParameterKindsForInst sp inst
   getParamsFreeVarKinds sp (zip kinds (instParams inst))
 
 
 -- | True if the two instances can be proven to be equal in the current context.
-instancesAreEqual' :: (?globals :: Globals) => Solver -> Span -> Inst -> Inst -> MaybeT Checker Bool
+instancesAreEqual' :: (?globals :: Globals) => Solver -> Span -> Inst -> Inst -> Checker Bool
 instancesAreEqual' solver sp t1 t2 = do
  res <- equalInstances sp t1 t2
  case res of
@@ -342,10 +335,9 @@ instancesAreEqual' solver sp t1 t2 = do
      fmap (maybe True (const False)) $ solver toSolve sp (mkId "$internal")
 
 
-unboundKindVariable :: (?globals :: Globals) => Span -> Id -> MaybeT Checker a
+unboundKindVariable :: Span -> Id -> Checker a
 unboundKindVariable sp n =
-  halt $ UnboundVariableError (Just sp) $
-       concat ["Kind variable ", prettyQuoted n, " could not be found in context."]
+  throw UnboundKindVariable{ errLoc = sp, errId = n }
 
 
 ------------------------------
@@ -354,14 +346,14 @@ unboundKindVariable sp n =
 
 
 -- | Constrain the typescheme with the given constraint.
-constrain :: (?globals :: Globals) => [Inst] -> TypeScheme -> MaybeT Checker TypeScheme
+constrain :: (?globals :: Globals) => [Inst] -> TypeScheme -> Checker TypeScheme
 constrain constrs (Forall sp binds constrs' ty) = do
   fvks <- fmap concat $ mapM (getInstanceFreeVarKinds sp) constrs
   pure $ Forall sp (binds <> fvks) (fmap tyFromInst constrs <> constrs') ty
 
 
 infixr 6 |>
-(|>) :: (?globals :: Globals) => [Inst] -> MaybeT Checker TypeScheme -> MaybeT Checker TypeScheme
+(|>) :: (?globals :: Globals) => [Inst] -> Checker TypeScheme -> Checker TypeScheme
 constrs |> tys = tys >>= constrain constrs
 
 
@@ -370,7 +362,7 @@ constrs |> tys = tys >>= constrain constrs
 -- | We require that both the interface and constraint are valid at the point
 -- | of call.
 instantiateInterface :: (?globals :: Globals) => Span -> Inst
-                     -> MaybeT Checker
+                     -> Checker
                         ( [Inst]             -- ^ Instantiated constraints
                         , [(Id, TypeScheme)] -- ^ Instantiated method signatures
                         )
@@ -399,7 +391,7 @@ instantiateInterface sp inst = do
 -- | - Any of the constraint parameters are not well-kinded with respect to the interface
 -- |   parameters
 -- | - Any of the interface's (instantiated) constraints are not satisfiable in the context
-validateConstraint :: (?globals :: Globals) => Solver -> Span -> Inst -> MaybeT Checker ()
+validateConstraint :: (?globals :: Globals) => Solver -> Span -> Inst -> Checker ()
 validateConstraint solver sp inst = do
   let iname = instIFace inst
 
@@ -410,14 +402,14 @@ validateConstraint solver sp inst = do
   let numParams = length (instParams inst)
   expectedNumParams <- fmap length (getInterfaceParameterNames sp iname)
   when (numParams /= expectedNumParams) $
-    halt $ GenericError (Just sp) $
-      concat [ "Wrong number of parameters in instance ", prettyQuoted inst, "."
-             , " Expected ", show expectedNumParams, " but got ", show numParams, "."]
+    throw WrongNumberOfParameters{ errLoc = sp, errInst = inst
+                                 , errParamNumExp = expectedNumParams
+                                 , errParamNumAct = numParams }
 
   -- Make sure the constraint parameters are well-kinded
   -- with respect to the interface parameters (ensuring
   -- kind dependencies are resolved)
-  withInstanceContext sp inst $ kindCheckConstraint sp inst
+  _ <- withInstanceContext sp inst $ kindCheckConstraint sp inst
 
   -- Make sure all of the interface constraints are
   -- satisfiable in the context
@@ -427,14 +419,13 @@ validateConstraint solver sp inst = do
 
 -- | Check that all the constraint parameters are well-kinded with respect
 -- | to the interface, in the current context.
-kindCheckConstraint :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
+kindCheckConstraint :: (?globals :: Globals) => Span -> Inst -> Checker Substitution
 kindCheckConstraint sp inst = do
   -- make sure we are dealing with an interface
   let iname = instIFace inst
   termKind <- getTerminalKind iname
   when (termKind /= KConstraint InterfaceC) $
-    halt . KindError (Just sp)
-           $ prettyQuoted inst <> " does not represent an interface constraint."
+    throw NotAnInterface{ errLoc = sp, errInst = inst }
 
   -- check every parameter is well-kinded with respect to the interface
   kinds <- getInterfaceParameterKindsForInst sp inst
@@ -442,13 +433,12 @@ kindCheckConstraint sp inst = do
   subs <- forM expectedKindPairs (\(ity, iKind) -> do
     inferred <- inferKindOfTypeSafe sp ity
     case inferred of
-      Left{} -> halt $ KindError (Just sp) $
-                "Could not infer a kind for " <> prettyQuoted ity
+      Left e -> throw e
       Right tyKind -> do
         eqres <- equalKinds sp iKind tyKind
         case eqres of
           Right pf -> pure $ equalityProofSubstitution pf
-          Left{} -> illKindedNEq sp iKind tyKind)
+          Left{} -> throw KindMismatch{ errLoc = sp, kExpected = iKind, kActual = tyKind })
   sub <- combineManySubstitutionsSafe sp subs
   case sub of
     Left e -> conflictingKinds sp e
@@ -461,7 +451,7 @@ kindCheckConstraint sp inst = do
 -- | Kind check a constraint in the current context.
 -- |
 -- | The constraint can be either a predicate, or an interface constraint.
-kindCheckConstr :: (?globals :: Globals) => Span -> TConstraint -> MaybeT Checker ()
+kindCheckConstr :: (?globals :: Globals) => Span -> TConstraint -> Checker ()
 kindCheckConstr s ty = do
   case instFromTy ty of
     -- interface constraint
@@ -471,13 +461,13 @@ kindCheckConstr s ty = do
       kind <- inferKindOfType s ty
       case kind of
         KConstraint Predicate -> pure ()
-        _ -> illKindedNEq s (KConstraint Predicate) kind
+        _ -> throw KindMismatch{ errLoc = s, kExpected = KConstraint Predicate, kActual = kind }
 
 
 -- | Kind-check a type scheme.
 -- |
 -- | We expect a type scheme to have kind 'KType'.
-kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> MaybeT Checker ()
+kindCheckSig :: (?globals :: Globals) => Span -> TypeScheme -> Checker ()
 kindCheckSig s tys@(Forall _ quantifiedVariables constraints ty) = inTysContext $ do
   -- first, verify all the constraints are well-kinded
   mapM_ (kindCheckConstr s) constraints
@@ -486,7 +476,7 @@ kindCheckSig s tys@(Forall _ quantifiedVariables constraints ty) = inTysContext 
   case kind of
     KType -> pure ()
     KPromote (TyCon k) | internalName k == "Protocol" -> pure ()
-    _     -> illKindedNEq s KType kind
+    _     -> throw KindMismatch{ errLoc = s, kExpected = KType, kActual = kind }
   where inTysContext = withBindings quantifiedVariables ForallQ
 
 
@@ -497,17 +487,17 @@ kindCheckSig s tys@(Forall _ quantifiedVariables constraints ty) = inTysContext 
 
 -- | Given a set of (parameter kind, parameter type) pairs, attempt to
 -- | map free variables in the types to appropriate kinds.
-getParamsFreeVarKinds :: (?globals :: Globals) => Span -> [(Kind, Type)] -> MaybeT Checker [(Id, Kind)]
+getParamsFreeVarKinds :: (?globals :: Globals) => Span -> [(Kind, Type)] -> Checker [(Id, Kind)]
 getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
   where
     -- | Assigns a kind to each component of the type.
-    getParamsKinds' :: [(Kind, Type)] -> MaybeT Checker (Substitution, [(Type, Kind)])
+    getParamsKinds' :: [(Kind, Type)] -> Checker (Substitution, [(Type, Kind)])
     getParamsKinds' kts = do
       (subs, fvks) <- fmap unzip $ mapM (uncurry getParamKinds) kts
       sub <- either (conflictingKinds sp) pure =<< combineManySubstitutionsSafe sp subs
       fvks' <- instantiateKinds sub (concat fvks) >>= simplifyBindings
       pure (sub, fvks')
-    getParamKinds :: Kind -> Type -> MaybeT Checker (Substitution, [(Type, Kind)])
+    getParamKinds :: Kind -> Type -> Checker (Substitution, [(Type, Kind)])
     getParamKinds paramKind (TyVar v) =
       pure ([(v, SubstK paramKind)], [(TyVar v, paramKind)])
     getParamKinds paramKind (Box c t) =
@@ -556,7 +546,7 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
     getParamKinds paramKind t = pure ([], [(t, paramKind)])
 
     -- | Get the kinds of coeffect variables in a coeffect.
-    getCoeffectFreeVarKinds :: Coeffect -> MaybeT Checker (Substitution, [(Type, Kind)])
+    getCoeffectFreeVarKinds :: Coeffect -> Checker (Substitution, [(Type, Kind)])
     -- TODO: make sure this takes into account varying coeffect variables
     -- e.g., in "instance {NatCo n} => Simple (A [n]) where..."
     -- in which 'n' would have kind (KPromote (TyVar "Nat"))
@@ -599,7 +589,7 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
     binaryCoeffComps (CExpon x y) = (x, y)
     binaryCoeffComps c = error $ "binaryCoeffComps called with: " <> show c
 
-    zipKindVars :: Id -> Kind -> Kind -> MaybeT Checker (Either FailedCombination Substitution)
+    zipKindVars :: Id -> Kind -> Kind -> Checker (Either FailedCombination Substitution)
     zipKindVars _ k (KVar v) = pure $ pure [(v, SubstK k)]
     zipKindVars v (KFun kf kArg) (KFun vf vArg) = do
       s1 <- zipKindVars v kf vf
@@ -615,7 +605,7 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
     zipKindVars _ (KPromote t) (KPromote t2) | t == t2 = pure $ pure mempty
     zipKindVars v k1 k2 = pure $ Left (v, SubstK k1, SubstK k2)
 
-    instantiateKind :: (Id, Kind) -> [(Type, Kind)] -> MaybeT Checker [(Type, Kind)]
+    instantiateKind :: (Id, Kind) -> [(Type, Kind)] -> Checker [(Type, Kind)]
     instantiateKind (v, k) kvs = do
       case lookup v (tyMapVars kvs) of
         Just k' -> do
@@ -639,7 +629,7 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
         Just k -> pure k
 
     infixl 4 <*->
-    (<*->) :: (Semigroup a) => MaybeT Checker (Substitution, a) -> MaybeT Checker (Substitution, a) -> MaybeT Checker (Substitution, a)
+    (<*->) :: (Semigroup a) => Checker (Substitution, a) -> Checker (Substitution, a) -> Checker (Substitution, a)
     (<*->) m n = do
       (sub1, r1) <- m
       (sub2, r2) <- n
@@ -649,11 +639,6 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
         Right sub -> pure (sub, r1 <> r2)
 
 
-conflictingKinds :: (?globals :: Globals) => Span -> (Id, Substitutors, Substitutors) -> MaybeT Checker a
-conflictingKinds sp (v, k, k2) = halt $ KindError (Just sp) $
-  concat [ prettyQuoted v, " cannot have both kind "
-         , prettyQuotedS k, " and kind ", prettyQuotedS k2 ]
-  where prettyQuotedS (SubstT t) = prettyQuoted t
-        prettyQuotedS (SubstK k) = prettyQuoted k
-        prettyQuotedS (SubstC c) = prettyQuoted c
-        prettyQuotedS (SubstE e) = prettyQuoted e
+conflictingKinds :: Span -> (Id, Substitutors, Substitutors) -> Checker a
+conflictingKinds sp (v, k, k2) = throw
+  ConflictingKinds{ errLoc = sp, errVar = v, errVal1 = k, errVal2 = k2 }

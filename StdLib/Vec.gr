@@ -23,6 +23,11 @@ length : forall {a : Type, n : Nat}
 length Nil = Z;
 length (Cons [_] xs) = S (length xs)
 
+length' : ∀ {t : Type, n : Nat}
+        . Vec n t → (N n, Vec n t)
+length' Nil = (Z, Nil);
+length' (Cons x xs) = let (n, xs) = length' xs in (S n, Cons x xs)
+
 --- Map function
 map : forall {a : Type, b : Type, n : Nat}
     . (a -> b) [n] -> Vec n a -> Vec n b
@@ -139,3 +144,14 @@ copySpine Nil = (Nil, Nil);
 copySpine (Cons x xs) = let
   (ss, xs) = copySpine xs
   in (Cons () ss, Cons x xs)
+
+data VecX a where
+  VecX : ∀ {n : Nat} . Vec n a → VecX a
+
+-- import Maybe
+
+-- stringToVecX : String → VecX Char
+-- stringToVecX s = case stringUncons s of
+--   None → VecX Nil;
+--   Some (c, s) → let VecX v = stringToVecX s in VecX (Cons c v)
+

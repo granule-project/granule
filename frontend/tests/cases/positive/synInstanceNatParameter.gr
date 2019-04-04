@@ -1,6 +1,6 @@
 interface Simple a (c : Nat)
 
-data A = A
+data A = B
 
 -- An instance with a nat parameter
 instance Simple A 1

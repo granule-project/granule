@@ -16,7 +16,6 @@ import qualified Data.Set as S
 import Control.Arrow (first)
 import Control.Exception (assert)
 
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
@@ -29,7 +28,6 @@ import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
-import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
@@ -269,6 +267,7 @@ rewriteConstraints ctxt =
 
 
 -- | Symbolic coeffect representing 0..Inf
+zeroToInfinity :: SGrade
 zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
 
 
@@ -594,29 +593,27 @@ trivialUnsatisfiableConstraints
     --   neqC lb1 lb2 || neqC ub1 ub2
     neqC _ _                   = False
 
-data SolverResult =
-    QED
+data SolverResult
+  = QED
   | NotValid String
   | NotValidTrivial [Constraint]
   | Timeout
-  | Error CheckerError
+  | SolverProofError String
+  | OtherSolverError String
 
-provePredicate :: (?globals :: Globals) =>
-     Span
-  -> Pred                    -- Predicate
+provePredicate
+  :: (?globals :: Globals)
+  => Pred                    -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
   -> IO SolverResult
-provePredicate s predicate vars =
-  if isTrivial predicate
-    then do
+provePredicate predicate vars
+  | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return QED
-
-    else do
+  | otherwise = do
       let (sbvTheorem, _, unsats) = compileToSBV predicate vars
-
       ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
-        case solverTimeoutMillis ?globals of
+        case solverTimeoutMillis of
           n | n <= 0 -> return ()
           n -> setTimeOut n
         sbvTheorem
@@ -624,14 +621,9 @@ provePredicate s predicate vars =
       return $ case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
         Unsatisfiable {} -> QED
-
-        ProofError _ msgs -> Error $ CheckerError (Just s) $ "Solver error:" <> unlines msgs
-
+        ProofError _ msgs -> SolverProofError $ unlines msgs
         Unknown _ UnknownTimeOut -> Timeout
-
-        Unknown _ reason  ->
-          Error $ CheckerError (Just s) $ "Solver says unknown: " <> show reason
-
+        Unknown _ reason  -> OtherSolverError $ show reason
         _ ->
           case getModelAssignment thmRes of
             -- Main 'Falsifiable' result
@@ -650,9 +642,5 @@ provePredicate s predicate vars =
                     Left msg -> print $ show msg
                   -}
                    NotValid $ "is " <> show (ThmResult thmRes)
-
-            Right (True, _) ->
-              NotValid "returned probable model."
-
-            Left str        ->
-              Error $ GenericError (Just s) str
+            Right (True, _) -> NotValid "returned probable model."
+            Left str -> OtherSolverError str

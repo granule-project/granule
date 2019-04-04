@@ -2,11 +2,11 @@ import File
 
 main : String <IO>
 main =
-    let [mh]    = [openFile "LICENSE" ReadMode] in
-    let h       ← mh;
-        h'      ← mh;
-        ()      ← hClose h';
-        (h, c)  ← hGetChar h;
-        (h, c') ← hGetChar h;
-        ()      ← hClose h
+    let [mh]    = [openHandle ReadMode "LICENSE"] in
+    let h       <- mh;
+        h'      <- mh;
+        ()      <- closeHandle h';
+        (h, c)  <- readChar h;
+        (h, c') <- readChar h;
+        ()      <- closeHandle h
     in pure ((showChar c) `stringAppend` (showChar c'))

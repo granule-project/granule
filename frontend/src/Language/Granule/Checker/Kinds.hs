@@ -1,7 +1,4 @@
 -- Mainly provides a kind checker on types
-{-# LANGUAGE FlexibleContexts #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Kinds (
                       inferKindOfType
@@ -22,12 +19,11 @@ module Language.Granule.Checker.Kinds (
                     ) where
 
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
 
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Interface (interfaceExists, getInterfaceKind)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Primitives (tyOps)
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
@@ -47,30 +43,30 @@ demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
 
-inferKindOfType :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Kind
+inferKindOfType :: (?globals :: Globals) => Span -> Type -> Checker Kind
 inferKindOfType s t = do
     checkerState <- get
     inferKindOfType' s (stripQuantifiers $ tyVarContext checkerState) t
 
 
-inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker Kind
+inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Kind
 inferKindOfType' s quantifiedVariables t = do
   res <- inferKindOfTypeSafe' s quantifiedVariables t
   case res of
-    Left err -> halt err
+    Left err -> throw err
     Right res -> pure res
 
 
 type IllKindedReason = CheckerError
 
 
-inferKindOfTypeSafe :: (?globals :: Globals) => Span -> Type -> MaybeT Checker (Either IllKindedReason Kind)
+inferKindOfTypeSafe :: (?globals :: Globals) => Span -> Type -> Checker (Either IllKindedReason Kind)
 inferKindOfTypeSafe s t = do
     checkerState <- get
     inferKindOfTypeSafe' s (stripQuantifiers $ tyVarContext checkerState) t
 
 
-inferKindOfTypeSafe' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> MaybeT Checker (Either IllKindedReason Kind)
+inferKindOfTypeSafe' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker (Either IllKindedReason Kind)
 inferKindOfTypeSafe' s quantifiedVariables t =
     typeFoldM (TypeFold (weither2 kFun)
                         kCon
@@ -88,8 +84,7 @@ inferKindOfTypeSafe' s quantifiedVariables t =
         Left err -> pure (Left err)
         Right (k1, k2) -> c k1 k2
     weither1 c t = either (pure . Left) c t
-    illKindedNEq sp k1 k2 = pure . Left $
-      KindError (Just sp) $ concat ["Expected kind ", prettyQuoted k1, " but got ", prettyQuoted k2]
+    illKindedNEq sp k1 k2 = pure . Left $ KindMismatch{ errLoc = sp, kExpected = k1, kActual = k2 }
     wellKinded = pure . pure
     kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
      | internalName c == internalName c' = pure $ pure $ kConstr c
@@ -117,10 +112,7 @@ inferKindOfTypeSafe' s quantifiedVariables t =
           case lookup tyVar (tyVarContext st) of
             Just (kind, _) -> wellKinded kind
             Nothing ->
-              halt $ UnboundVariableError (Just s) $
-                       "Type variable `" <> show tyVar
-                    <> "` is unbound (not quantified)."
-                    <?> show quantifiedVariables
+              throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = wellKinded k2
     kApp (KPromote (FunTy t1 t2)) kArg | KPromote t1 `hasLub` kArg = wellKinded (KPromote t2)
@@ -128,19 +120,12 @@ inferKindOfTypeSafe' s quantifiedVariables t =
 
     kInt _ = wellKinded $ kConstr $ mkId "Nat"
 
-    kInfix op k1 k2 = do
-      st <- get
-      (ka, kb) <- requireInScope (typeConstructors, "Operator") s (mkId op)
-      case (ka, kb) of
-       (KFun k1' (KFun k2' kr), _) ->
-         if k1 `hasLub` k1'
-          then if k2 `hasLub` k2'
-               then wellKinded kr
-               else illKindedNEq s k2' k2
-          else illKindedNEq s k1' k1
-       (k, _) -> illKindedNEq s (KFun k1 (KFun k2 (KVar $ mkId "?"))) k
-    kCoeffect c = inferCoeffectType s c >>= wellKinded . KPromote
+    kInfix (tyOps -> (k1exp, k2exp, kret)) k1act k2act
+      | not (k1act `hasLub` k1exp) = illKindedNEq s k1exp k1act
+      | not (k2act `hasLub` k2exp) = illKindedNEq s k2exp k2act
+      | otherwise                  = wellKinded kret
 
+    kCoeffect c = inferCoeffectType s c >>= wellKinded . KPromote
 
 -- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe Kind
@@ -183,7 +168,7 @@ hasLub k1 k2 =
 
 
 -- | Infer the type of ta coeffect term (giving its span as well)
-inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> MaybeT Checker Type
+inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker Type
 
 -- Coeffect constants have an obvious kind
 inferCoeffectType _ (Level _)         = return $ TyCon $ mkId "Level"
@@ -202,9 +187,7 @@ inferCoeffectType s (CInterval c1 c2)    = do
   case joinCoeffectTypes k1 k2 of
     Just k -> return $ TyApp (TyCon $ mkId "Interval") k
 
-    Nothing ->
-      halt $ KindError (Just s) $ "Interval grades do not match: `" <> pretty k1
-          <> "` does not match with `" <> pretty k2 <> "`"
+    Nothing -> throw IntervalGradeKindError{ errLoc = s, errTy1 = k1, errTy2 = k2 }
 
 -- Take the join for compound coeffect epxressions
 inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
@@ -218,19 +201,18 @@ inferCoeffectType s (CExpon c c') = mguCoeffectTypes s c c'
 inferCoeffectType s (CVar cvar) = do
   st <- get
   case lookup cvar (tyVarContext st) of
-     Nothing -> do
-       halt $ UnboundVariableError (Just s) $ "Tried to look up kind of `" <> pretty cvar <> "`"
-                                              <?> show (cvar,(tyVarContext st))
---       state <- get
---       let newType = TyVar $ "ck" <> show (uniqueVarId state)
-       -- We don't know what it is yet though, so don't update the coeffect kind ctxt
---       put (state { uniqueVarId = uniqueVarId state + 1 })
---       return newType
+    Nothing -> do
+      throw UnboundTypeVariable{ errLoc = s, errId = cvar }
+--      state <- get
+--      let newType = TyVar $ "ck" <> show (uniqueVarId state)
+      -- We don't know what it is yet though, so don't update the coeffect kind ctxt
+--      put (state { uniqueVarId = uniqueVarId state + 1 })
+--      return newType
 
-
-     Just (KVar   name, _) -> return $ TyVar name
-     Just (KPromote t, _)  -> checkKindIsCoeffect s t
-     Just (k, _)           -> illKindedNEq s KCoeffect k
+    Just (KVar   name, _) -> return $ TyVar name
+    Just (KPromote t, _)  -> checkKindIsCoeffect s t
+    Just (k, _)           -> throw
+      KindMismatch{ errLoc = s, kExpected = KCoeffect, kActual = k }
 
 inferCoeffectType s (CZero t) = checkKindIsCoeffect s t
 inferCoeffectType s (COne t)  = checkKindIsCoeffect s t
@@ -240,13 +222,13 @@ inferCoeffectType s (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval"
 inferCoeffectType s (CSig _ t) = checkKindIsCoeffect s t
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)
-                            => Span -> Assumption -> MaybeT Checker (Maybe Type)
+                            => Span -> Assumption -> Checker (Maybe Type)
 inferCoeffectTypeAssumption _ (Linear _) = return Nothing
 inferCoeffectTypeAssumption s (Discharged _ c) = do
     t <- inferCoeffectType s c
     return $ Just t
 
-checkKindIsCoeffect :: (?globals :: Globals) => Span -> Type -> MaybeT Checker Type
+checkKindIsCoeffect :: (?globals :: Globals) => Span -> Type -> Checker Type
 checkKindIsCoeffect span ty = do
   kind <- inferKindOfType span ty
   case kind of
@@ -256,24 +238,24 @@ checkKindIsCoeffect span ty = do
       kind' <- inferKindOfType span k
       case kind' of
         KCoeffect -> return ty
-        _         -> illKindedNEq span KCoeffect kind
+        _ -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
     KVar v -> do
       st <- get
       case lookup v (tyVarContext st) of
         Just (KCoeffect, _) -> return ty
-        _                   -> illKindedNEq span KCoeffect kind
+        _                   -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
 
-    _         -> illKindedNEq span KCoeffect kind
+    _ -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
 
 
-mguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> MaybeT Checker Type
-mguCoeffectTypes s c1 c2 = mguCoeffectTypesSafe s c1 c2 >>= either halt pure
+mguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> Checker Type
+mguCoeffectTypes s c1 c2 = mguCoeffectTypesSafe s c1 c2 >>= either throw pure
 
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
-mguCoeffectTypesSafe :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> MaybeT Checker (Either IllKindedReason Type)
+mguCoeffectTypesSafe :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> Checker (Either IllKindedReason Type)
 mguCoeffectTypesSafe s c1 c2 = do
   ck1 <- inferCoeffectType s c1
   ck2 <- inferCoeffectType s c2
@@ -306,16 +288,15 @@ mguCoeffectTypesSafe s c1 c2 = do
     (t, isProduct -> Just (t1, t2)) | t1 == t -> okay ck2
     (t, isProduct -> Just (t1, t2)) | t2 == t -> okay ck2
 
-    (k1, k2) -> nope $ KindError (Just s) $ "Cannot unify coeffect types '"
-                 <> pretty k1 <> "' and '" <> pretty k2
-                 <> "' for coeffects `" <> pretty c1 <> "` and `" <> pretty c2 <> "`"
+    (k1, k2) -> nope $ CoeffectUnificationError
+      { errLoc = s, errTy1 = k1, errTy2 = k2, errC1 = c1, errC2 = c2 }
     where okay = pure . pure
           nope = pure . Left
 
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
-updateCoeffectType :: (?globals :: Globals) => Id -> Kind -> MaybeT Checker ()
+updateCoeffectType :: Id -> Kind -> Checker ()
 updateCoeffectType tyVar k = do
    modify (\checkerState ->
     checkerState
@@ -331,7 +312,7 @@ updateCoeffectType tyVar k = do
 
 
 -- | Retrieve a kind from the type constructor scope
-getKindRequired :: (?globals :: Globals) => Span -> Id -> MaybeT Checker Kind
+getKindRequired :: (?globals :: Globals) => Span -> Id -> Checker Kind
 getKindRequired sp name = do
   ifaceExists <- interfaceExists name
   if ifaceExists
@@ -341,8 +322,10 @@ getKindRequired sp name = do
     case tyCon of
       Just (kind, _) -> pure kind
       Nothing -> do
-        dConTys <- requireInScope (dataConstructors, "Interface or constructor") sp name
+        dConTys <- maybe (throw UnboundTypeConstructor{ errLoc = sp, errId = name }) pure
+                   =<< lookupContext dataConstructors name
         case dConTys of
           (Forall _ [] [] t, []) -> pure $ KPromote t
-          _ -> halt $ GenericError (Just sp)
-               ("I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name)
+          _ -> throw NotImplemented{
+                            errLoc = sp
+                          , errDesc = "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty name }

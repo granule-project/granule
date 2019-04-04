@@ -2,6 +2,8 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE FlexibleInstances #-}
 
+{-# options_ghc -Wno-orphans #-}
+
 module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete, nub)

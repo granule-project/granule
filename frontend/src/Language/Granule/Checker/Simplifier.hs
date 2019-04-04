@@ -2,8 +2,6 @@
 
 module Language.Granule.Checker.Simplifier where
 
-import Control.Monad.Trans.Maybe
-
 import Language.Granule.Syntax.Type
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
@@ -19,7 +17,7 @@ allCons :: [Pred] -> Bool
 allCons = all (\p -> case p of Con _ -> True; _ -> False)
 
 simplifyPred :: (?globals :: Globals)
-             => Pred -> MaybeT Checker Pred
+             => Pred -> Checker Pred
 simplifyPred p = do
   p <- simplifyPred' p
   return $ flatten $ normalisePred p
@@ -28,7 +26,7 @@ simplifyPred p = do
        Conj Disj Impl (Con . normaliseConstraint) NegPred Exists
 
 simplifyPred' :: (?globals :: Globals)
-             => Pred -> MaybeT Checker Pred
+             => Pred -> Checker Pred
 simplifyPred' c@(Conj ps) | allCons ps =
   simpl subst c where subst = collectSubst c
 
@@ -76,7 +74,7 @@ flatten (Con c) = Con c
 
 
 simpl :: (?globals :: Globals)
-           => Substitution -> Pred -> MaybeT Checker Pred
+           => Substitution -> Pred -> Checker Pred
 simpl subst p = substitute subst p >>= (return . removeTrivialImpls . removeTrivialIds)
 
 removeTrivialImpls :: Pred -> Pred

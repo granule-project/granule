@@ -1,5 +1,5 @@
 interface Simple a (c : Coeffect) (i : Interval c)
 
-data A = A
+data A = B
 
 instance Simple A Nat [1..3]

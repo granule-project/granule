@@ -1,5 +1,5 @@
 name: granule-interpreter
-version: '0.7.2.0'
+version: '0.7.3.0'
 synopsis: The Granule interpreter
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
@@ -7,10 +7,35 @@ license: BSD3
 github: dorchard/granule
 dependencies:
 - base >=4.10 && <5
+- directory
+- extra
+- filepath
+- Glob
+- granule-frontend
+- mtl >=2.2.1
+- optparse-applicative
+- text
+default-extensions:
+- LambdaCase
+- RecordWildCards
+- ImplicitParams
+- ScopedTypeVariables
+- OverloadedStrings
+
+ghc-options:
+- -O0
+- -Wall
+- -Werror
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+- -Wno-unused-matches
+- -Wno-name-shadowing
+- -Wno-type-defaults
 
 library:
   source-dirs: src
-  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns
   # when:
   # - condition: flag(dev)
   #   then:
@@ -18,23 +43,26 @@ library:
   #   else:
   #     ghc-options: -O3 -w
   exposed-modules:
-  - Language.Granule.Eval
-  - Language.Granule.Eval.Type
-  - Language.Granule.Desugar
-  dependencies:
-  - granule-frontend
-  - mtl >=2.2.1
-  - text
+  - Language.Granule.Interpreter
+  - Language.Granule.Interpreter.Eval
+  - Language.Granule.Interpreter.Desugar
+  - Language.Granule.Interpreter.Type
 
 executables:
   gr:
-    main: Language/Granule/Interpreter/Main.hs
-    source-dirs: app
-    ghc-options: -O0 -W -Werror -Wno-unused-matches
+    main: Language/Granule/Interpreter.hs
+    source-dirs: src
+    ghc-options: -main-is Language.Granule.Interpreter
     dependencies:
-    - directory
-    - filepath
-    - Glob
-    - granule-frontend
     - granule-interpreter
-    - optparse-applicative
+
+tests:
+  gr-golden:
+    main: Golden.hs
+    source-dirs: tests
+    dependencies:
+    - Diff
+    - granule-interpreter
+    - strict
+    - tasty
+    - tasty-golden

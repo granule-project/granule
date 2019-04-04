@@ -1,15 +1,13 @@
--- last checked 2019-02-14 by @dorchard
+-- last checked 2019-04-03 by @dorchard
 
 import Vec
 import Bool
 
--- (A very strange counter example, strangely high!)
---  The associated theorem for `filter` is Falsifiable. Counter-example:
---  k =   0 :: Integer
--- m =   0 :: Integer
---  n = 142 :: Integer
+  -- (with z3 4.8.4)
+  -- The following theorem associated with `filter` is falsifiable:
+  --  ......
 
-filter : ∀ {a : Type, n : Nat, m : Nat, k : Nat} . {m <= n}
-         => (a → Bool) [n] → Vec n (a [0..2]) → Vec m a
+filter : ∀ {a : Type, n : Nat, m : Nat} . {m <= n}
+         => (a -> Bool) [n] -> Vec n (a [1..2]) -> Vec m a
 filter [_] Nil = Nil;
 filter [p] (Cons [x] xs) = if p x then Cons x (filter [p] xs) else filter [p] xs

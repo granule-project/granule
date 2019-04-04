@@ -1,0 +1,7 @@
+Type checking failed: 
+Unification failed: 3:40:
+Type variable `a` cannot be unified with type `a [0]` (occurs check failure; implies infinite type).
+
+Falsifiable theorem: 7:1:
+The following theorem associated with `secondOrderAlt` is falsifiable:
+	( -> (prom_[x]0 * 1 ≤ 0) ∧ (prom_[x]0 ≤ 1))

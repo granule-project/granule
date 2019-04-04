@@ -1,0 +1,28 @@
+-- last checked on 2019-02-27 by @buggymcbugfix
+import Maybe
+
+readFile : String -> (Maybe String) <O,R,C>
+readFile filename =
+  let o <- openHandle filename ReadMode in
+  case o of
+    None -> pure None;
+    Some h ->
+      let (h, cs) <- readUntilEnd h;
+          _ <- closeHandle h
+      in pure (Some cs)
+
+readUntilEnd : Handle R -> (Handle R, String) <R>
+readUntilEnd h =
+  let (h, mc) <- readChar h in
+  case mc of
+    Some c ->
+      let (h, str) <- readUntilEnd h
+      in pure (h, stringCons c str);
+    None -> pure (h, "")
+
+
+-- Type checking failed: work-in-progress/case-shadowing.gr:
+--   Unbound variable error: work-in-progress/case-shadowing.gr:21:19:
+--   `h`
+
+-- but when reordering the branches it's fine

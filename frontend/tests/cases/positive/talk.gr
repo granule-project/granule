@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 dub : Int [2] → Int
 dub [x] = x + x
 
@@ -14,7 +16,7 @@ doTwice [f] [x] =
   in pure (a + b)
 
 echo : () <R, W>
-echo = let x ← read in write x
+echo = let x ← fromStdin in toStdout x
 
 main : Int
 main = 42

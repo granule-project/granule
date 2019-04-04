@@ -38,11 +38,10 @@ instance Eq (f (Fix2 f g) (Fix2 g f)) => Eq (Fix2 f g) where
 class (Bifunctor (Base t q)) => Birecursive t q | t -> q where
     project :: t -> (Base t q) t q
 
-instance (Bifunctor f, Bifunctor g) => Birecursive (Fix2 f g) (Fix2 g f) where
+instance (Bifunctor f) => Birecursive (Fix2 f g) (Fix2 g f) where
     project = unFix
 
 bicata :: (Birecursive x z, Birecursive z x)
-       => (Bifunctor (Base x z), Bifunctor (Base z x))
        => ((Base x z) a b -> a)
        -> ((Base z x) b a -> b)
        -> x
@@ -53,7 +52,6 @@ bicata falg galg =
           gcata = galg . (bimap gcata fcata) . project
 
 bicataP :: (Birecursive x z, Birecursive z x)
-       => (Bifunctor (Base x z), Bifunctor (Base z x))
        => ((p -> (Base x z) a b -> a), x -> p -> p)
        -> ((p -> (Base z x) b a -> b), z -> p -> p)
        -> p
@@ -98,7 +96,6 @@ bicataPM (falgPM, ftop) (galgPM, gtop) =
             in (bimapM (gcataPM p') (fcataPM p') $ project fp) >>= galgPM p'
 
 bipara :: (Birecursive x z, Birecursive z x)
-       => (Bifunctor (Base x z), Bifunctor (Base z x))
        => ((Base x z) (x, a) (z, b) -> a)
        -> ((Base z x) (z, b) (x, a) -> b)
        -> x
@@ -110,13 +107,10 @@ bipara falg galg =
           gpara =
             galg . (bimap ((,) <*> gpara) ((,) <*> fpara)) . project
 
--- Is there a magic operator to get this like (,) <*> above?
-applyLeft f x = do
-    fx <- f x
-    return (x, fx)
+applyLeft :: Functor f => (a -> f b) -> a -> f (a, b)
+applyLeft f x = (,) x <$> f x
 
 biparaP :: (Birecursive x z, Birecursive z x)
-       => (Bifunctor (Base x z), Bifunctor (Base z x))
        => ((p -> (Base x z) (x, a) (z, b) -> a), x -> p -> p)
        -> ((p -> (Base z x) (z, b) (x, a) -> b), z -> p -> p)
        -> p

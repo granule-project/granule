@@ -1,0 +1,3 @@
+Type checking failed: 
+Kind mismatch: 6:3:
+Expected kind `Type` but got `Type -> Type`

@@ -5,13 +5,15 @@
 
 module Language.Granule.Syntax.Parser where
 
-import Control.Monad (forM)
+import Control.Monad (forM, when, unless)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
-import Data.List ((\\), intercalate, nub, stripPrefix)
+import Data.Char (isSpace)
+import Data.Foldable (toList)
+import Data.List (intercalate, nub, stripPrefix)
 import Data.Maybe (mapMaybe)
+import Data.Set (Set, (\\), fromList, insert, singleton)
 import Numeric
-import System.Exit (die)
 import System.FilePath ((</>))
 
 import Language.Granule.Syntax.Identifiers
@@ -48,6 +50,7 @@ import Language.Granule.Utils hiding (mkSpan)
     else  { TokenElse _ }
     case  { TokenCase _ }
     of    { TokenOf _ }
+    import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -61,11 +64,12 @@ import Language.Granule.Utils hiding (mkSpan)
     '->'  { TokenArrow _ }
     '<-'  { TokenBind _ }
     '=>'  { TokenConstrain _ }
-    '<='   { TokenOp _ "≤" }
-    '>='   { TokenOp _ "≥" }
+    '<='   { TokenLesserEq _ }
+    '>='   { TokenGreaterEq _ }
     ','   { TokenComma _ }
     '×'   { TokenCross _ }
     '='   { TokenEq _ }
+    '=='  { TokenEquiv _ }
     '/='  { TokenNeq _ }
     '+'   { TokenAdd _ }
     '-'   { TokenSub _ }
@@ -79,22 +83,23 @@ import Language.Granule.Utils hiding (mkSpan)
     ']'   { TokenBoxRight _ }
     '<'   { TokenLangle _ }
     '>'   { TokenRangle _ }
-    OP    { TokenOp _ _ }
     '|'   { TokenPipe _ }
     '_'   { TokenUnderscore _ }
     ';'   { TokenSemicolon _ }
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
-    ".."  { TokenDotDot _ }
-    "∨"   { TokenJoin _ }
-    "∧"   { TokenMeet _ }
+    '..'  { TokenDotDot _ }
+    "\\/" { TokenJoin _ }
+    "/\\" { TokenMeet _ }
+    '∘'   { TokenRing _ }
 
+%right '∘'
 %right in
 %right '->'
 %left ':'
 %right '×'
-%left ".."
+%left '..'
 %left '+' '-'
 %left '*'
 %left '^'
@@ -103,29 +108,39 @@ import Language.Granule.Utils hiding (mkSpan)
 %%
 
 Defs :: { AST () () }
-  : Def                       { AST [] [$1] [] [] }
+  : Def                       { AST [] [$1] [] [] mempty }
 
-  | DataDecl                  { AST [$1] [] [] [] }
+  | DataDecl                  { AST [$1] [] [] [] mempty }
 
-  | DataDecl NL Defs          { let (AST dds defs ifaces insts) = $3
-                                 in AST ($1 : dds) defs ifaces insts }
+  | DataDecl NL Defs          { let (AST dds defs ifaces insts imports) = $3
+                                 in AST ($1 : dds) defs ifaces insts imports }
 
-  | IFaceDecl                 { AST [] [] [$1] [] }
+  | IFaceDecl                 { AST [] [] [$1] [] mempty }
 
-  | IFaceDecl NL Defs         { let (AST dds defs ifaces insts) = $3
-                                 in AST dds defs ($1 : ifaces) insts }
+  | IFaceDecl NL Defs         { let (AST dds defs ifaces insts imports) = $3
+                                 in AST dds defs ($1 : ifaces) insts imports }
 
-  | InstDecl                  { AST [] [] [] [$1] }
+  | InstDecl                  { AST [] [] [] [$1] mempty }
 
-  | InstDecl NL Defs          { let (AST dds defs ifaces insts) = $3
-                                 in AST dds defs ifaces ($1 : insts) }
+  | InstDecl NL Defs          { let (AST dds defs ifaces insts imports) = $3
+                                 in AST dds defs ifaces ($1 : insts) imports }
 
-  | Def NL Defs               { let (AST dds defs ifaces insts) = $3
-                                 in AST dds ($1 : defs) ifaces insts }
+  | Def NL Defs               { let (AST dds defs ifaces insts imports) = $3
+                                 in AST dds ($1 : defs) ifaces insts imports }
+
+  | Import                    { AST [] [] [] [] (singleton $1) }
+
+  | Import NL Defs            { let (AST dds defs ifaces insts imports) = $3
+                                in AST dds defs ifaces insts (insert $1 imports) }
 
 NL :: { () }
-  : nl NL                    { }
-  | nl                       { }
+  : nl NL                     { }
+  | nl                        { }
+
+Import :: { Import }
+  : import                    { let TokenImport _ ('i':'m':'p':'o':'r':'t':path) = $1
+                                in dropWhile isSpace path <> ".gr"
+                              }
 
 Def :: { Def () () }
   : Sig NL Bindings
@@ -160,7 +175,10 @@ IFaceVars :: { (Span, [(Id, Maybe Kind)]) }
 
 IFaceVar :: { (Span, (Id, Maybe Kind)) }
   : VAR            { % mkSpan (getPosToSpan $1)      >>= \sp -> return $ (sp, (mkId $ symString $1, Nothing)) }
-  | '(' VarSig ')' { % mkSpan (getPos $1, getPos $3) >>= \sp -> return $ (sp, (fst $2, Just (snd $2))) }
+  | '(' IFaceVarSig ')' { % mkSpan (getPos $1, getPos $3) >>= \sp -> return $ (sp, (fst $2, Just (snd $2))) }
+
+IFaceVarSig :: { (Id, Kind) }
+  : VAR ':' Kind { (mkId $ symString $1, $3) }
 
 IFaceSigs :: { [InterfaceMethod] }
   : Sig ';' IFaceSigs
@@ -301,8 +319,12 @@ PAtom :: { Pattern () }
   | '[' NAryConstr ']'
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () $2 }
 
-  | '(' PAtom ',' PAtom ')'
+  | '(' PMolecule ',' PMolecule ')'
        {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () (mkId ",") [$2, $4] }
+
+PMolecule :: { Pattern () }
+  : NAryConstr                { $1 }
+  | PAtom                     { $1 }
 
 NAryConstr :: { Pattern () }
   : CONSTR Pats               {% let TokenConstr _ x = $1
@@ -330,12 +352,24 @@ TypeScheme :: { TypeScheme }
        {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ Forall sp (snd $ fst $1) (snd $1) $2 }
 
 VarSigs :: { [(Id, Kind)] }
-  : VarSig ',' VarSigs        { $1 : $3 }
-  | VarSig                    { [$1] }
+  : VarSig ',' VarSigs        { $1 <> $3 }
+  | VarSig                    { $1 }
 
-VarSig :: { (Id, Kind) }
-  : VAR ':' Kind              { (mkId $ symString $1, $3) }
+VarSig :: { [(Id, Kind)] }
+  : VAR ':' Kind              { [(mkId $ symString $1, $3)] }
+  -- Temporary poor man's kind inference
+  | VAR                       { let x = symString $1 in
+                                [(mkId x, if x == "n" || x == "m" || x == "k"
+                                            then kNat
+                                            else KType)
+                                ]
+                              }-- KVar $ mkId ("k" <> symString $1))}
+  | VAR VarSig                { let x = symString $1 in
+                                (mkId x, if x == "n" || x == "m" || x == "k"
+                                            then kNat
+                                            else KType) : $2
 
+                              }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }
@@ -373,24 +407,24 @@ TyJuxtWithSpan :: { (Span, Type) }
   : TyJuxtWithSpan '`' TyAtom '`'     { % withStartEndSndIsTok $1 $4 $ TyApp $3 (snd $1) }
   | TyJuxtWithSpan TyAtomWithSpan     { % binaryType TyApp $1 $2 }
   | TyAtomWithSpan                    { $1 }
-  | TyAtomWithSpan '+' TyAtomWithSpan { % binaryType (TyInfix "+") $1 $3 }
-  | TyAtomWithSpan '-' TyAtomWithSpan { % binaryType (TyInfix "-") $1 $3 }
-  | TyAtomWithSpan '*' TyAtomWithSpan { % binaryType (TyInfix "*") $1 $3 }
-  | TyAtomWithSpan '^' TyAtomWithSpan { % binaryType (TyInfix "^") $1 $3 }
-  | TyAtomWithSpan "∧" TyAtomWithSpan { % binaryType (TyInfix "∧") $1 $3 }
-  | TyAtomWithSpan "∨" TyAtomWithSpan { % binaryType (TyInfix "∨") $1 $3 }
+  | TyAtomWithSpan '+' TyAtomWithSpan { % binaryType (TyInfix TyOpPlus) $1 $3 }
+  | TyAtomWithSpan '-' TyAtomWithSpan { % binaryType (TyInfix TyOpMinus) $1 $3 }
+  | TyAtomWithSpan '*' TyAtomWithSpan { % binaryType (TyInfix TyOpTimes) $1 $3 }
+  | TyAtomWithSpan '^' TyAtomWithSpan { % binaryType (TyInfix TyOpExpon) $1 $3 }
+  | TyAtomWithSpan "/\\" TyAtomWithSpan { % binaryType (TyInfix TyOpMeet) $1 $3 }
+  | TyAtomWithSpan "\\/" TyAtomWithSpan { % binaryType (TyInfix TyOpJoin) $1 $3 }
 
 Constraint :: { Type }
   : InterfaceConstraint { $1 }
   | PredicateConstraint { $1 }
 
 PredicateConstraint :: { Type }
-  : TyAtom '>' TyAtom         { TyInfix (">") $1 $3 }
-  | TyAtom '<' TyAtom         { TyInfix ("<") $1 $3 }
-  | TyAtom '>=' TyAtom        { TyInfix (">=") $1 $3 }
-  | TyAtom '<=' TyAtom        { TyInfix ("<=") $1 $3 }
-  | TyAtom '=' TyAtom         { TyInfix ("=") $1 $3 }
-  | TyAtom '/=' TyAtom        { TyInfix ("/=") $1 $3 }
+  : TyAtom '>' TyAtom         { TyInfix TyOpGreater $1 $3 }
+  | TyAtom '<' TyAtom         { TyInfix TyOpLesser $1 $3 }
+  | TyAtom '>=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
+  | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '=' TyAtom         { TyInfix TyOpEq $1 $3 }
+  | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
 
 InterfaceConstraint :: { TConstraint }
   : CONSTR InstTys { foldl TyApp (TyCon . mkId . constrString $ $1) (snd $2) }
@@ -439,13 +473,13 @@ CoeffectAtomWithSpan :: { (Span, Coeffect) }
   | '{' Set '}'      { % withPos2 $1 $3 (CSet $2) }
 
 CoeffectWithSpan :: { (Span, Coeffect) }
-  : CoeffectWithSpan ".." CoeffectWithSpan { % binaryCoeff CInterval $1 $3 }
+  : CoeffectWithSpan '..' CoeffectWithSpan { % binaryCoeff CInterval $1 $3 }
   | CoeffectWithSpan '+'  CoeffectWithSpan { % binaryCoeff CPlus  $1 $3 }
   | CoeffectWithSpan '*'  CoeffectWithSpan { % binaryCoeff CTimes $1 $3 }
   | CoeffectWithSpan '-'  CoeffectWithSpan { % binaryCoeff CMinus $1 $3 }
   | CoeffectWithSpan '^'  CoeffectWithSpan { % binaryCoeff CExpon $1 $3 }
-  | CoeffectWithSpan "∧"  CoeffectWithSpan { % binaryCoeff CMeet  $1 $3 }
-  | CoeffectWithSpan "∨"  CoeffectWithSpan { % binaryCoeff CJoin  $1 $3 }
+  | CoeffectWithSpan "/\\"  CoeffectWithSpan { % binaryCoeff CMeet  $1 $3 }
+  | CoeffectWithSpan "\\/"  CoeffectWithSpan { % binaryCoeff CJoin  $1 $3 }
   | CoeffectWithSpan ':' TypeWithSpan  { % binaryCoeff (\x y -> normalise $ CSig x y) $1 $3 }
   | CoeffectAtomWithSpan { $1 }
 
@@ -509,6 +543,10 @@ LetBind :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
       { (getStart $1, $1, Just $3, $5) }
   | PAtom '=' Expr
       { (getStart $1, $1, Nothing, $3) }
+  | NAryConstr ':' Type '=' Expr
+      { (getStart $1, $1, Just $3, $5) }
+  | NAryConstr '=' Expr
+      { (getStart $1, $1, Nothing, $3) }
 
 MultiLet :: { Expr () () }
 MultiLet
@@ -546,12 +584,16 @@ Case :: { (Pattern (), Expr () ()) }
   | NAryConstr '->' Expr      { ($1, $3) }
 
 Form :: { Expr () () }
-  : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () "+" $1 $3 }
-  | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () "-" $1 $3 }
-  | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () "*" $1 $3 }
-  | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () "<" $1 $3 }
-  | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () ">" $1 $3 }
-  | Form OP  Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () (symString $2) $1 $3 }
+  : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpPlus $1 $3 }
+  | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpMinus $1 $3 }
+  | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpTimes $1 $3 }
+  | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesser $1 $3 }
+  | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpGreater $1 $3 }
+  | Form '<=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesserEq $1 $3 }
+  | Form '>=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpGreaterEq $1 $3 }
+  | Form '==' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpEq $1 $3 }
+  | Form '/=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpNotEq $1 $3 }
+  | Form '∘'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () (App sp () (Val sp () (Var () (mkId "compose"))) $1) $3 }
   | Juxt           { $1 }
 
 Juxt :: { Expr () () }
@@ -564,7 +606,7 @@ Atom :: { Expr () () }
   | INT                       {% let (TokenInt _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
                                     >>= \sp -> return $ Val sp () $ NumInt x }
-
+  -- | '<' Expr '>'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ App sp () (Val sp () (Var () (mkId "pure"))) $2 }
   | FLOAT                     {% let (TokenFloat _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
                                      >>= \sp -> return $ Val sp () $ NumFloat $ read x }
@@ -597,7 +639,9 @@ mkSpan (start, end) = do
 
 parseError :: [Token] -> ReaderT String (Either String) a
 parseError [] = lift $ Left "Premature end of file"
-parseError t  =  lift . Left $ show l <> ":" <> show c <> ": parse error"
+parseError t  =  do
+    file <- ask
+    lift . Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
 parseDefs :: FilePath -> String -> Either String (AST () ())
@@ -610,53 +654,35 @@ parseAndDoImportsAndFreshenDefs input = do
 
 parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefsAndDoImports input = do
-    defs <- either die return $ parseDefs (sourceFilePath ?globals) input
-    importedDefs <- forM imports $ \path -> do
-      src <- readFile path
-      let ?globals = ?globals { sourceFilePath = path }
-      parseDefsAndDoImports src
-    let allDefs = merge $ defs : importedDefs
-    checkNameClashes allDefs
-    checkMatchingNumberOfArgs allDefs
-    return allDefs
-
+    AST dds defs ifaces insts imports <- either error pure $ parseDefs sourceFilePath input
+    doImportsRecursively imports (AST dds defs ifaces insts mempty)
   where
-    merge :: [AST () ()] -> AST () ()
-    merge xs =
-      let conc [] dds defs ifaces insts = AST dds defs ifaces insts
-          conc ((AST dds defs ifaces insts):xs) ddsAcc defsAcc ifacesAcc instsAcc =
-            conc xs (dds <> ddsAcc) (defs <> defsAcc)
-                    (ifaces <> ifacesAcc) (insts <> instsAcc)
-       in conc xs [] [] [] []
+    -- Get all (transitive) dependencies. TODO: blows up when the file imports itself
+    doImportsRecursively :: Set Import -> AST () () -> IO (AST () ())
+    doImportsRecursively todo ast@(AST dds defs ifaces insts done) = do
+      case toList (todo \\ done) of
+        [] -> return ast
+        (i:todo) ->
+          let path = includePath </> i in
+          let ?globals = ?globals { globalsSourceFilePath = Just path } in do
+            src <- readFile path
+            let AST dds' defs' ifaces' insts' imports' = either error id (parseDefs path src)
+            doImportsRecursively
+              (fromList todo <> imports')
+              (AST (dds' <> dds) (defs' <> defs) (ifaces' <> ifaces) (insts' <> insts) (insert i done))
 
-    imports = map ((includePath ?globals </>) . (<> ".gr") . replace '.' '/')
-              . mapMaybe (stripPrefix "import ") . lines $ input
+    -- the following check doesn't seem to be needed because this comes up during type checking @buggymcbugfix
+    -- checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
+    --   mapM checkMatchingNumberOfArgs' defs
 
-    replace from to = map (\c -> if c == from then to else c)
+    -- checkMatchingNumberOfArgs' (Def _ name eqs _) =
+    --     when (length eqs >= 1 && any (/= head lengths) lengths)
+    --       ( error $ "Syntax error: Number of arguments differs in the equations of `"
+    --         <> sourceName name <> "`"
+    --       )
+        -- where
+        --   lengths = map (\(Equation _ _ pats _) -> length pats) eqs
 
-    checkMatchingNumberOfArgs ds@(AST dataDecls defs ifaces insts) =
-      mapM checkMatchingNumberOfArgs' defs
-
-    checkMatchingNumberOfArgs' (Def _ name eqs _) =
-      if length eqs >= 1
-      then if (and $ map (\x -> x == head lengths) lengths)
-            then return ()
-            else
-              die $ "Syntax error: Number of arguments differs in the equattypeConstructorns of "
-                  <> sourceName name
-      else return ()
-        where
-          lengths = map (\(Equation _ _ pats _) -> length pats) eqs
-
-
-    checkNameClashes ds@(AST dataDecls defs ifaces insts) =
-        if null clashes
-	        then return ()
-          else die $ "Error: Name clash: " <> intercalate ", " (map sourceName clashes)
-      where
-        clashes = names \\ nub names
-        names = (`map` dataDecls) (\(DataDecl _ name _ _ _) -> name)
-                <> (`map` defs) (\(Def _ name _ _) -> name)
 
 lastSpan [] = fst $ nullSpanLocs
 lastSpan xs = getEnd . snd . last $ xs

@@ -4,6 +4,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
 
+{-# options_ghc -fno-warn-missing-signatures #-}
+
 module Language.Granule.Checker.Types
     (
     -- ** Equality proofs
@@ -44,11 +46,9 @@ module Language.Granule.Checker.Types
     ) where
 
 import Control.Monad.State.Strict
-import Control.Monad.Trans.Maybe
 import Data.List
 
 import Language.Granule.Checker.Constraints.Compile
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
@@ -57,6 +57,7 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
+import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -69,99 +70,68 @@ import Language.Granule.Utils
 ----- Inequality Reasons -----
 ------------------------------
 
-
 type InequalityReason = CheckerError
 
 
-equalityErr :: (?globals :: Globals, Monad m) => InequalityReason -> m EqualityResult
+equalityErr :: (Monad m) => InequalityReason -> m EqualityResult
 equalityErr = pure . Left
 
 
 effectMismatch s ef1 ef2 = equalityErr $
-  GradingError (Just s) $
-    concat ["Effect mismatch: ", prettyQuoted ef1, " not equal to ", prettyQuoted ef2]
+  EffectMismatch{ errLoc = s, effExpected = ef1, effActual = ef2 }
 
 
 coeffectMismatch s c1 c2 = equalityErr $
-  GradingError (Just s) $
-    concat ["Coeffect mismatch: ", prettyQuoted c1, " not equal to ", prettyQuoted c2]
+  CoeffectEqualityMismatch{ errLoc = s, errDesc = "", errC1 = c1, errC2 = c2 }
 
 
 unequalSessionTypes s t1 t2 = equalityErr $
-  GenericError (Just s) $
-    concat ["Session type ", prettyQuoted t1, " is not equal to ", prettyQuoted t2]
+  TypeError{ errLoc = s, tyExpected = t1, tyActual = t2 }
 
 
 sessionsNotDual s t1 t2 = equalityErr $
-  GenericError (Just s) $
-    concat ["Session type ", prettyQuoted t1, " is not dual to ", prettyQuoted t2]
+  SessionDualityError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 
 kindEqualityIsUndefined s k1 k2 t1 t2 = equalityErr $
-  KindError (Just s) $
-    concat [ "Equality is not defined between kinds "
-           , pretty k1, " and ", pretty k2
-           , "\t\n from equality "
-           , prettyQuoted t2, " and ", prettyQuoted t1 <> " equal."]
+  UndefinedEqualityKindError{ errLoc = s, errTy1 = t1
+                            , errK1 = k1, errTy2 = t2, errK2 = k2 }
 
 
 contextDoesNotAllowUnification s x y = equalityErr $
-  GenericError (Just s) $
-    concat [ "Trying to unify ", prettyQuoted x, " and ", prettyQuoted y
-           , " but in a context where unification is not allowed."]
+  UnificationDisallowed { errLoc = s, errTy1 = x, errTy2 = y }
 
 
 cannotUnifyUniversalWithConcrete s n kind t = equalityErr $
-  GenericError (Just s) $
-    concat [ "Cannot unify a universally quantified type variable "
-           , prettyQuoted (TyVar n), " of kind ", prettyQuoted kind
-           , " with a concrete type " <> prettyQuoted t]
+  UnificationFail{ errLoc = s, errVar = n, errKind = kind, errTy = t }
 
 
 twoUniversallyQuantifiedVariablesAreUnequal s v1 v2 = equalityErr $
-  GenericError (Just s) $
-    concat [ quoteTyVar v1, " and ", quoteTyVar v2
-           , " are both universally quantified, and thus cannot be equal."]
-  where quoteTyVar = prettyQuoted . TyVar
+  CannotUnifyUniversalWithConcrete{ errLoc = s, errVar1 = v1, errVar2 = v2 }
 
 
 nonUnifiable s t1 t2 = equalityErr $
-  let addendum = if pretty t1 == pretty t2 then " coming from a different binding" else ""
-  in GenericError (Just s) $
-       concat ["Type ", prettyQuoted t1, " is not unifiable with the type ", prettyQuoted t2, addendum]
+  UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
 
 
 -- | Generic inequality for when a more specific reason is not known.
 unequalNotSpecified s v1 v2 = equalityErr $
-  GenericError (Just s) $
-    concat [ quoteTyVar v1, " and ", quoteTyVar v2
-           , " are not equal."]
-  where quoteTyVar = prettyQuoted . TyVar
+  EqualityMismatch{ errLoc = s, errDesc = "", errVar1 = v1, errVar2 = v2 }
 
 
--- | Generic inequality for when a more specific reason is not known.
+-- | Generic (kind) inequality for when a more specific reason is not known.
 unequalKinds s k1 k2 = equalityErr $
-  KindError (Just s) $
-    concat [ prettyQuoted k1, " and ", prettyQuoted k2
-           , " are not equal."]
+  KindEqualityMismatch{ errLoc = s, errDesc = "", errK1 = k1, errK2 = k2 }
 
 
-cannotBeBoth s v s1 s2 =
-  let t1 = fromSubst s1
-      t2 = fromSubst s2
-  in equalityErr $ GenericError (Just s) $
-     concat [ prettyQuoted v, " cannot be equal to both ", t1, " and ", t2 ]
-  where fromSubst (SubstT t) = prettyQuoted t
-        fromSubst (SubstK k) = prettyQuoted k
-        fromSubst (SubstC c) = prettyQuoted c
-        fromSubst (SubstE e) = prettyQuoted e
+cannotBeBoth s v s1 s2 = equalityErr $
+  CannotBeBoth{ errLoc = s, errVar = v, errVal1 = s1, errVal2 = s2 }
 
 
 -- | Attempt to unify a non-type variable with a type.
 illKindedUnifyVar sp (v, k1) (t, k2) = equalityErr $
-   KindError (Just sp) $
-     concat [ "Trying to unify ", prettyQuoted v, " of kind ", prettyQuoted k1
-            , " with a type ", prettyQuoted t, " of kind ", prettyQuoted k2 ]
+   UnificationKindError{ errLoc = sp, errTy1 = TyVar v
+                       , errK1 = k1, errTy2 = t, errK2 = k2 }
 
 
 -- | Test @x@ and @y@ for boolean equality. If they are
@@ -169,20 +139,18 @@ illKindedUnifyVar sp (v, k1) (t, k2) = equalityErr $
 -- | use @desc@ to provide a descriptive reason for inequality.
 directEqualityTest desc s x y =
   if x == y then trivialEquality else equalityErr $
-  GenericError (Just s) $
-    concat [desc, " ", prettyQuoted x, " and ", prettyQuoted y
-           , " are not equal."]
+  EqualityMismatch{ errLoc = s, errDesc = desc, errVar1 = x, errVar2 = y }
 
 
-miscErr :: (?globals :: Globals) => CheckerError -> MaybeT Checker EqualityResult
+miscErr :: CheckerError -> Checker EqualityResult
 miscErr = equalityErr
 
 
 -- | Infer a kind for the given type (promoting any errors to the inequality reason),
 -- | and run the prover on the kind.
 withInferredKind :: (?globals :: Globals) => Span -> Type
-                 -> (Kind -> MaybeT Checker EqualityResult)
-                 -> MaybeT Checker EqualityResult
+                 -> (Kind -> Checker EqualityResult)
+                 -> Checker EqualityResult
 withInferredKind sp t c =
   inferKindOfTypeSafe sp t >>= either miscErr c
 
@@ -190,8 +158,8 @@ withInferredKind sp t c =
 -- | Execute the prover with the most general unifier of
 -- | the two coeffects as an argument.
 withMguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect
-                     -> (Type -> MaybeT Checker EqualityResult)
-                     -> MaybeT Checker EqualityResult
+                     -> (Type -> Checker EqualityResult)
+                     -> Checker EqualityResult
 withMguCoeffectTypes sp c c' pf =
   mguCoeffectTypesSafe sp c c' >>= either miscErr pf
 
@@ -229,7 +197,7 @@ trivialEquality' = pure ([], [])
 
 
 -- | Equality where nothing needs to be done.
-trivialEquality :: MaybeT Checker EqualityResult
+trivialEquality :: Checker EqualityResult
 trivialEquality = pure trivialEquality'
 
 
@@ -239,7 +207,7 @@ eqSubproof e f = either (pure . Left) f e
 
 
 -- | Require that two proofs of equality hold, and if so, combine them.
-combinedEqualities :: (?globals :: Globals) => Span -> EqualityResult -> EqualityResult -> MaybeT Checker EqualityResult
+combinedEqualities :: (?globals :: Globals) => Span -> EqualityResult -> EqualityResult -> Checker EqualityResult
 combinedEqualities s e1 e2 =
   eqSubproof e1 $ \eq1res -> do
     eqSubproof e2 $ \eq2res -> do
@@ -259,17 +227,17 @@ equalWith = Right
 
 
 -- | Update the state with information from the equality proof.
-enactEquality :: (?globals :: Globals) => Type -> EqualityProof -> MaybeT Checker ()
+enactEquality :: (?globals :: Globals) => Type -> EqualityProof -> Checker ()
 enactEquality t eqres = do
   let u = equalityProofSubstitution eqres
       cs = equalityProofConstraints eqres
-  substitute u t
+  _ <- substitute u t
   mapM_ addConstraint cs
 
 
 -- | Check for equality, and update the checker state.
 checkEquality :: (?globals :: Globals)
-  => (Type -> MaybeT Checker EqualityResult) -> Type -> MaybeT Checker EqualityResult
+  => (Type -> Checker EqualityResult) -> Type -> Checker EqualityResult
 checkEquality eqm t = do
   eq <- eqm t
   case eq of
@@ -281,8 +249,8 @@ checkEquality eqm t = do
 -- | Require that an equality holds, and perform a unification
 -- | to reflect this equality in the checker.
 requireEqualityResult :: (?globals :: Globals)
-  => Type -> MaybeT Checker EqualityResult -> MaybeT Checker EqualityProof
-requireEqualityResult t = (>>= either halt (\r -> enactEquality t r >> pure r))
+  => Type -> Checker EqualityResult -> Checker EqualityProof
+requireEqualityResult t = (>>= either throw (\r -> enactEquality t r >> pure r))
 
 
 ---------------------------------
@@ -291,23 +259,23 @@ requireEqualityResult t = (>>= either halt (\r -> enactEquality t r >> pure r))
 
 
 -- | True if the two types are equal.
-typesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
+typesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
 typesAreEqual s t1 t2 =
   fmap equalityResultIsSuccess $ equalTypes s t1 t2
 
 
 -- | True if the two types are equal.
-typesAreEqualWithCheck :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
+typesAreEqualWithCheck :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
 typesAreEqualWithCheck s t1 t2 =
   fmap equalityResultIsSuccess $ checkEquality (equalTypes s t1) t2
 
 
-lTypesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Bool
+lTypesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
 lTypesAreEqual s t1 t2 = fmap (either (const False) (const True)) $ lEqualTypes s t1 t2
 
 
 requireEqualTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityProof
+  => Span -> Type -> Type -> Checker EqualityProof
 requireEqualTypes s t1 t2 =
     requireEqualityResult t2 $ equalTypes s t1 t2
 
@@ -318,33 +286,33 @@ requireEqualTypesRelatedCoeffects :: (?globals :: Globals)
   -> SpecIndicator
   -> Type
   -> Type
-  -> MaybeT Checker EqualityProof
+  -> Checker EqualityProof
 requireEqualTypesRelatedCoeffects s rel spec t1 t2 =
     requireEqualityResult t2 $ equalTypesRelatedCoeffects s rel spec t1 t2
 
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator ->Type -> Type -> MaybeT Checker EqualityResult
+  => Span -> SpecIndicator ->Type -> Type -> Checker EqualityResult
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffects s ApproximatedBy pol
 
 
 equalTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator -> Type -> Type -> MaybeT Checker EqualityResult
+  => Span -> SpecIndicator -> Type -> Type -> Checker EqualityResult
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffects s Eq pol
 
 
 lEqualTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityResult
+  => Span -> Type -> Type -> Checker EqualityResult
 lEqualTypes s = equalTypesRelatedCoeffects s ApproximatedBy SndIsSpec
 
 
 equalTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityResult
+  => Span -> Type -> Type -> Checker EqualityResult
 equalTypes s = equalTypesRelatedCoeffects s Eq SndIsSpec
 
 
 equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> MaybeT Checker EqualityResult
+  => Span -> Type -> Type -> Checker EqualityResult
 equalTypesWithUniversalSpecialisation s =
   equalTypesRelatedCoeffects s Eq SndIsSpec
 
@@ -352,6 +320,7 @@ equalTypesWithUniversalSpecialisation s =
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
 
+flipIndicator :: SpecIndicator -> SpecIndicator
 flipIndicator FstIsSpec = SndIsSpec
 flipIndicator SndIsSpec = FstIsSpec
 flipIndicator PatternCtxt = PatternCtxt
@@ -367,7 +336,7 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> SpecIndicator
   -> Type
   -> Type
-  -> MaybeT Checker EqualityResult
+  -> Checker EqualityResult
 equalTypesRelatedCoeffects s rel sp (FunTy t1 t2) (FunTy t1' t2') = do
   -- contravariant position (always approximate)
   eq1 <- equalTypesRelatedCoeffects s ApproximatedBy (flipIndicator sp) t1' t1
@@ -433,7 +402,7 @@ equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> trivialEquality
-    Nothing -> miscErr $ UnboundVariableError (Just s) ("Type variable " <> pretty n)
+    Nothing -> miscErr $ UnboundTypeVariable{ errLoc = s, errId = n }
 
 equalTypesRelatedCoeffects s _ sp (TyVar n) (TyVar m) = do
   checkerState <- get
@@ -451,7 +420,7 @@ equalTypesRelatedCoeffects s _ sp (TyVar n) (TyVar m) = do
       tyVarConstraint (k1, n) (k2, m)
 
     (Just (k1, BoundQ), Just (k2, ForallQ)) ->
-      tyVarConstraint (k2, m) (k1, n)
+      tyVarConstraint (k1, n) (k2, m)
 
 
     -- We can unify two instance type variables
@@ -472,7 +441,7 @@ equalTypesRelatedCoeffects s _ sp (TyVar n) (TyVar m) = do
 
     -- But we can unify a forall and an instance
     (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
-        tyVarConstraint (k2, m) (k1, n)
+        tyVarConstraint (k1, n) (k2, m)
 
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
@@ -513,6 +482,17 @@ equalTypesRelatedCoeffects s rel sp (TyVar n) t = do
           $ "span: " <> show s
           <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
+
+  k2 <- inferKindOfType s t
+
+  -- Do an occurs check for types
+  case k2 of
+    KType ->
+       if n `elem` freeVars t
+         then throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
+         else return ()
+    _ -> return ()
+
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ && sp /= PatternCtxt) -> do
@@ -536,17 +516,17 @@ equalTypesRelatedCoeffects s rel sp (TyVar n) t = do
 
          -- If the kind if nat then set up and equation as there might be a
          -- pausible equation involving the quantified variable
-         if (kind == Just (KPromote (TyCon (Id "Nat" "Nat"))))
-           then do
+         case kind of
+           Just (KPromote (TyCon (Id "Nat" "Nat"))) -> do
              c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
              c2 <- compileNatKindedTypeToCoeffect s t
              pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [(n, SubstT t)])
-
-           else cannotUnifyUniversalWithConcrete s n kind t
+           Nothing -> illKindedUnifyVar s (n, k1) (t, k2)
+           Just kind -> cannotUnifyUniversalWithConcrete s n kind t
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    Nothing -> miscErr $ UnboundVariableError (Just s) (pretty n <?> ("Types.equalTypesRelatedCoeffects: " <> show (tyVarContext checkerState)))
+    Nothing -> miscErr $ UnboundVariableError{ errLoc = s, errId = n }
 
 
 equalTypesRelatedCoeffects s rel sp t (TyVar n) =
@@ -579,7 +559,7 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals)
     => Span
     -> Type
     -> Type
-    -> MaybeT Checker EqualityResult
+    -> Checker EqualityResult
 equalOtherKindedTypesGeneric s t1 t2 = do
   withInferredKind s t1 $ \k1 -> withInferredKind s t2 $ \k2 ->
     if k1 == k2 then
@@ -600,7 +580,7 @@ equalOtherKindedTypesGeneric s t1 t2 = do
 -- Essentially use to report better error messages when two session type
 -- are not equality
 sessionInequality :: (?globals :: Globals)
-    => Span -> Type -> Type -> MaybeT Checker EqualityResult
+    => Span -> Type -> Type -> Checker EqualityResult
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
   equalTypes s t t'
@@ -623,7 +603,7 @@ isDualSession :: (?globals :: Globals)
     -> SpecIndicator
     -> Type
     -> Type
-    -> MaybeT Checker EqualityResult
+    -> Checker EqualityResult
 isDualSession sp rel ind (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s')
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
@@ -645,8 +625,7 @@ isDualSession sp _ _ t1 t2 = sessionsNotDual sp t1 t2
 
 
 -- Essentially equality on types but join on any coeffects
-joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> MaybeT Checker Type
-
+joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
 joinTypes s t t' | t == t' = return t
 
 joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
@@ -663,7 +642,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
     else
       if ef' `isPrefixOf` ef
       then return (Diamond ef tj)
-      else effectMismatch s ef ef' >>= either halt (pure . const t')
+      else effectMismatch s ef ef' >>= either throw (pure . const t')
 
 joinTypes s (Box c t) (Box c' t') = do
   coeffTy <- mguCoeffectTypes s c c'
@@ -702,10 +681,12 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t2'' <- joinTypes s t2 t2'
   return (TyApp t1'' t2'')
 
-joinTypes s t1 t2 = do
-  halt $ GenericError (Just s)
-    $ "Type '" <> pretty t1 <> "' and '"
-               <> pretty t2 <> "' have no upper bound"
+-- TODO: Create proper substitutions
+joinTypes s (TyVar _) t = return t
+joinTypes s t (TyVar _) = return t
+
+joinTypes s t1 t2 = throw
+  NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 
 ----------------------------
@@ -714,7 +695,7 @@ joinTypes s t1 t2 = do
 
 
 -- | Prove or disprove the equality of two instances in the current context.
-equalInstances :: (?globals :: Globals) => Span -> Inst -> Inst -> MaybeT Checker EqualityResult
+equalInstances :: (?globals :: Globals) => Span -> Inst -> Inst -> Checker EqualityResult
 equalInstances sp instx insty =
   let ts1 = instParams instx
       ts2 = instParams insty
@@ -727,7 +708,7 @@ equalInstances sp instx insty =
 --      - GuiltyDolphin (2019-03-17)
 
 -- | True if the two instances can be proven to be equal in the current context.
-instancesAreEqual :: (?globals :: Globals) => Span -> Inst -> Inst -> MaybeT Checker Bool
+instancesAreEqual :: (?globals :: Globals) => Span -> Inst -> Inst -> Checker Bool
 instancesAreEqual s t1 t2 = fmap equalityResultIsSuccess $ equalInstances s t1 t2
 
 
@@ -740,7 +721,7 @@ instancesAreEqual s t1 t2 = fmap equalityResultIsSuccess $ equalInstances s t1 t
 -- |
 -- | This is presently rather simplistic, and allows poly-kinds to
 -- | unify with anything.
-equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> MaybeT Checker EqualityResult
+equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker EqualityResult
 equalKinds _ k1 k2 | k1 == k2 = trivialEquality
 equalKinds _ (KVar v) k = pure $ equalWith ([], [(v, SubstK k)])
 equalKinds _ k (KVar v) = pure $ equalWith ([], [(v, SubstK k)])

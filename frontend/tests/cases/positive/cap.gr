@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 import Existential
 
 data Cap (a : Type) (p : Type) : Type where

@@ -1,9 +1,11 @@
 -- Provides all the type information for built-ins
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
 
 module Language.Granule.Checker.Primitives where
 
 import Data.List (genericLength)
+import Data.List.NonEmpty (NonEmpty(..))
 import Text.RawString.QQ (r)
 
 import Language.Granule.Checker.SubstitutionContexts
@@ -13,17 +15,14 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Parser (parseDefs)
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Expr (Operator(..))
 
-
-kNat = kConstr $ mkId "Nat"
-protocol = kConstr $ mkId "Protocol"
-
+nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeConstructors =
-    [ (mkId "()", (KType, Just 1))
-    , (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
+    [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
     , (mkId ",", (KFun KType (KFun KType KType), Just 1))
     , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
@@ -38,20 +37,7 @@ typeConstructors =
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
-    , (mkId "+",   (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "-",   (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "*",   (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "<",   (KFun kNat (KFun kNat (KConstraint Predicate)), Nothing))
-    , (mkId ">",   (KFun kNat (KFun kNat (KConstraint Predicate)), Nothing))
-    , (mkId "=",   (KFun kNat (KFun kNat (KConstraint Predicate)), Nothing))
-    , (mkId "/=",   (KFun kNat (KFun kNat (KConstraint Predicate)), Nothing))
-    , (mkId "<=",   (KFun kNat (KFun kNat (KConstraint Predicate)), Nothing))
-    , (mkId ">=",   (KFun kNat (KFun kNat (KConstraint Predicate)), Nothing))
-    , (mkId "∧", (KFun kNat (KFun kNat kNat), Nothing))
-    , (mkId "∨", (KFun kNat (KFun kNat kNat), Nothing))
     -- File stuff
-    , (mkId "Handle", (KType, Nothing))
-    , (mkId "IOMode", (KType, Nothing))
     -- Channels and protocol types
     , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing))
     , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing))
@@ -63,22 +49,33 @@ typeConstructors =
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
     ] ++ builtinTypeConstructors
 
+tyOps :: TypeOperator -> (Kind, Kind, Kind)
+tyOps = \case
+    TyOpLesser -> (kNat, kNat, (KConstraint Predicate))
+    TyOpLesserEq -> (kNat, kNat, (KConstraint Predicate))
+    TyOpGreater -> (kNat, kNat, (KConstraint Predicate))
+    TyOpGreaterEq -> (kNat, kNat, (KConstraint Predicate))
+    TyOpEq -> (kNat, kNat, (KConstraint Predicate))
+    TyOpNotEq -> (kNat, kNat, (KConstraint Predicate))
+    TyOpPlus -> (kNat, kNat, kNat)
+    TyOpTimes -> (kNat, kNat, kNat)
+    TyOpMinus -> (kNat, kNat, kNat)
+    TyOpExpon -> (kNat, kNat, kNat)
+    TyOpMeet -> (kNat, kNat, kNat)
+    TyOpJoin -> (kNat, kNat, kNat)
+
 dataConstructors :: [(Id, (TypeScheme, Substitution))]
 dataConstructors =
-    [ (mkId "()", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "()"), []))
-    , (mkId ",", (Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
+    [ ( mkId ",", (Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
-                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))), []))
-
-    , (mkId "ReadMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
-    , (mkId "WriteMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
-    , (mkId "AppendMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
-    , (mkId "ReadWriteMode", (Forall nullSpanBuiltin [] [] (TyCon $ mkId "IOMode"), []))
+                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))), [])
+      )
     ] ++ builtinDataConstructors
 
 builtins :: [(Id, TypeScheme)]
 builtins =
+  builtins' <>
   [ (mkId "div", Forall nullSpanBuiltin [] []
        (FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))))
     -- Graded monad unit operation
@@ -86,14 +83,14 @@ builtins =
        $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
 
     -- String stuff
-  , (mkId "stringAppend", Forall nullSpanBuiltin [] []
-      $ (FunTy (TyCon $ mkId "String") (FunTy (TyCon $ mkId "String") (TyCon $ mkId "String"))))
   , (mkId "showChar", Forall nullSpanBuiltin [] []
       $ (FunTy (TyCon $ mkId "Char") (TyCon $ mkId "String")))
 
     -- Effectful primitives
-  , (mkId "read", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "String"))
-  , (mkId "write", Forall nullSpanBuiltin [] [] $
+  , (mkId "fromStdin", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "String"))
+  , (mkId "toStdout", Forall nullSpanBuiltin [] [] $
+       FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
+  , (mkId "toStderr", Forall nullSpanBuiltin [] [] $
        FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
   , (mkId "readInt", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "Int"))
     -- Other primitives
@@ -103,30 +100,7 @@ builtins =
   , (mkId "showInt", Forall nullSpanBuiltin [] [] $ FunTy (TyCon $ mkId "Int")
                                                     (TyCon $ mkId "String"))
 
-    -- File stuff
-  , (mkId "openFile", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "String")
-                          (FunTy (TyCon $ mkId "IOMode")
-                                (Diamond ["O"] (TyCon $ mkId "Handle"))))
-  , (mkId "hGetChar", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "Handle")
-                               (Diamond ["RW"]
-                                (TyApp (TyApp (TyCon $ mkId ",")
-                                              (TyCon $ mkId "Handle"))
-                                       (TyCon $ mkId "Char"))))
-  , (mkId "hPutChar", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "Handle")
-                         (FunTy (TyCon $ mkId "Char")
-                           (Diamond ["W"] (TyCon $ mkId "Handle"))))
-  , (mkId "isEOF", Forall nullSpanBuiltin [] [] $
-                     FunTy (TyCon $ mkId "Handle")
-                            (Diamond ["R"]
-                             (TyApp (TyApp (TyCon $ mkId ",")
-                                           (TyCon $ mkId "Handle"))
-                                    (TyCon $ mkId "Bool"))))
-  , (mkId "hClose", Forall nullSpanBuiltin [] [] $
-                        FunTy (TyCon $ mkId "Handle")
-                               (Diamond ["C"] (TyCon $ mkId "()")))
+
     -- protocol typed primitives
   , (mkId "send", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)] []
                   $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
@@ -156,32 +130,135 @@ builtins =
                          ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
   , (mkId "unpack", Forall nullSpanBuiltin [(mkId "s", protocol)] []
                             (FunTy ((con "Chan") .@ (var "s")) (var "s")))
-  ] ++ builtins'
+  ]
 
-binaryOperators :: [(Operator, Type)]
-binaryOperators =
-  [ ("+", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
-   ,("+", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
-   ,("-", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
-   ,("-", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
-   ,("*", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int")))
-   ,("*", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float")))
-   ,("≡", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("≤", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("<", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,(">", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("≥", FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool")))
-   ,("≡", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,("≤", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,("<", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,(">", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ,("≥", FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool")))
-   ]
+binaryOperators :: Operator -> NonEmpty Type
+binaryOperators = \case
+    OpPlus ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+    OpMinus ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+    OpTimes ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+    OpEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpNotEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpLesserEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpLesser ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpGreater ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+    OpGreaterEq ->
+      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
 
-
-
+-- TODO make a proper quasi quoter that parses this at compile time
 builtinSrc :: String
 builtinSrc = [r|
+
+import Prelude
+
+data () = ()
+
+
+
+--------------------------------------------------------------------------------
+-- File Handles
+--------------------------------------------------------------------------------
+
+data Handle : HandleType -> Type
+  = BUILTIN
+
+-- TODO: with type level sets we could index a handle by a set of capabilities
+-- then we wouldn't need readChar and readChar' etc.
+data IOMode : HandleType -> Type where
+  ReadMode : IOMode R;
+  WriteMode : IOMode W;
+  AppendMode : IOMode A;
+  ReadWriteMode : IOMode RW
+
+data HandleType = R | W | A | RW
+
+openHandle
+  : forall {m : HandleType}
+  . IOMode m
+  -> String
+  -> (Handle m) <Open,IOExcept>
+openHandle = BUILTIN
+
+readChar : Handle R -> (Handle R, Char) <Read,IOExcept>
+readChar = BUILTIN
+
+readChar' : Handle RW -> (Handle RW, Char) <Read,IOExcept>
+readChar' = BUILTIN
+
+appendChar : Handle A -> Char -> (Handle A) <Write,IOExcept>
+appendChar = BUILTIN
+
+writeChar : Handle W -> Char -> (Handle W) <Write,IOExcept>
+writeChar = BUILTIN
+
+writeChar' : Handle RW -> Char -> (Handle RW) <Write,IOExcept>
+writeChar' = BUILTIN
+
+closeHandle : forall {m : HandleType} . Handle m -> () <Close,IOExcept>
+closeHandle = BUILTIN
+
+isEOF : Handle R -> (Handle R, Bool) <Read,IOExcept>
+isEOF = BUILTIN
+
+isEOF' : Handle RW -> (Handle RW, Bool) <Read,IOExcept>
+isEOF' = BUILTIN
+
+-- ???
+-- evalIO : forall {a : Type, e : Effect} . (a [0..1]) <IOExcept, e> -> (Maybe a) <e>
+-- catch = BUILTIN
+--------------------------------------------------------------------------------
+-- Char
+--------------------------------------------------------------------------------
+
+-- module Char
+
+charToInt : Char -> Int
+charToInt = BUILTIN
+
+charFromInt : Int -> Char
+charFromInt = BUILTIN
+
+
+
+--------------------------------------------------------------------------------
+-- String manipulation
+--------------------------------------------------------------------------------
+
+stringAppend : String → String → String
+stringAppend = BUILTIN
+
+stringUncons : String → Maybe (Char, String)
+stringUncons = BUILTIN
+
+stringCons : Char → String → String
+stringCons = BUILTIN
+
+stringUnsnoc : String → Maybe (String, Char)
+stringUnsnoc = BUILTIN
+
+stringSnoc : String → Char → String
+stringSnoc = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Arrays
+--------------------------------------------------------------------------------
 
 forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Com>) -> ((Chan (Dual s)) [c]) <Com>
 forkC = builtin
@@ -199,21 +276,21 @@ push
   ⇒ ArrayStack cap maxIndex a
   → a
   → ArrayStack cap (maxIndex + 1) a
-push = builtin
+push = BUILTIN
 
 pop
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
   . {maxIndex > 0}
   ⇒ ArrayStack cap maxIndex a
   → a × ArrayStack cap (maxIndex - 1) a
-pop = builtin
+pop = BUILTIN
 
 -- Boxed array, so we allocate cap words
 allocate
   : ∀ {a : Type, cap : Nat}
   . N cap
   → ArrayStack cap 0 a
-allocate = builtin
+allocate = BUILTIN
 
 swap
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
@@ -221,13 +298,13 @@ swap
   → Fin (maxIndex + 1)
   → a
   → a × ArrayStack cap (maxIndex + 1) a
-swap = builtin
+swap = BUILTIN
 
 copy
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
-copy = builtin
+copy = BUILTIN
 
 |]
 
@@ -238,7 +315,9 @@ builtins' :: [(Id, TypeScheme)]
 (builtinTypeConstructors, builtinDataConstructors, builtins') =
   (map fst datas, concatMap snd datas, map unDef defs)
     where
-      Right (AST types defs _ _) = parseDefs "builtins" builtinSrc
+      AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
+        Right ast -> ast
+        Left err -> error err
       datas = map unData types
 
       unDef :: Def () () -> (Id, TypeScheme)

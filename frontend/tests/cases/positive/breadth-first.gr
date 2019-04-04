@@ -1,14 +1,16 @@
+-- gr --no-eval
+
 import Maybe
 
 data BFLevel (c : Nat) a where
-  N : a → (BFLevel c a) [0..c] → BFLevel c a;
-  R : a → BFLevel c a
+  Node : a → (BFLevel c a) [0..c] → BFLevel c a;
+  Root : a → BFLevel c a
 
 label : ∀ {a : Type} . BFLevel 1 a → a
 label x =
   case x of
-    (N l [_]) → l;
-    (R l)     → l
+    (Node l [_]) → l;
+    (Root l)     → l
 
 --     1
 --   /  \
@@ -19,10 +21,10 @@ data BFTree a where
   Next : (BFLevel 1 a) [0..1] → BFTree a → BFTree a
 
 root : BFLevel 1 Int
-root = R 1
+root = Root 1
 
 ex0 : BFTree Int
-ex0 = Next [N 2 [root]] (Next [N 3 [root]] Empty)
+ex0 = Next [Node 2 [root]] (Next [Node 3 [root]] Empty)
 
 
 last : ∀ {a : Type} . BFTree a → Maybe a
@@ -36,4 +38,4 @@ exLast : Int
 exLast = fromMaybe [42] (last ex0)
 
 main : () <W>
-main = write (showInt exLast)
+main = toStdout (showInt exLast)

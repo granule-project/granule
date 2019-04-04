@@ -4,16 +4,16 @@ data Bool = True | False
 interface Eq a b where
   equal : a -> b -> Bool
 
-data A = A | B'
+data A = A' | B''
 
-data B = A' | B
+data B = A'' | B'
 
 instance Eq A B where
-  equal A A' = True;
-  equal B' B = True;
-  equal A B = False;
-  equal B' A' = False
+  equal A' A'' = True;
+  equal B'' B' = True;
+  equal A' B' = False;
+  equal B'' A'' = False
 
 
 main : (Bool, Bool)
-main = (equal A A', equal A B)
+main = (equal A' A'', equal A' B')

@@ -1,6 +1,6 @@
 interface Simple a (b : Coeffect) (c : b)
 
-data A a = A
+data A a = B
 
 -- A constraint with an application to a coeffect
 instance {Simple a Nat 1} => Simple (A a) Nat 1

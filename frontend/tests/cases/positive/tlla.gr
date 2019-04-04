@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 -- Hello TLLA
 dub : Int [2] → Int
 dub [x] = x + x
@@ -18,8 +20,8 @@ hash : ∀ {l : Level} . Int [l] → Int [l]
 hash [x] = [x + x]
 
 hello : () <R, W>
-hello = let x ← read
-        in write x
+hello = let x ← fromStdin
+        in toStdout x
 
 main : Int [Private]
 main =

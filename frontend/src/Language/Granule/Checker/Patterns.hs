@@ -1,13 +1,13 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
 
-import Control.Monad.Trans.Maybe
+import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
-import Data.List (intercalate)
+import Data.List.NonEmpty (NonEmpty(..))
 
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -31,7 +31,7 @@ definiteUnification :: (?globals :: Globals)
   => Span
   -> Maybe (Coeffect, Type) -- Outer coeffect
   -> Type                   -- Type of the pattern
-  -> MaybeT Checker ()
+  -> Checker ()
 definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
@@ -39,7 +39,7 @@ definiteUnification s (Just (coeff, coeffTy)) ty = do
     addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
-polyShaped :: (?globals :: Globals) => Type -> MaybeT Checker Bool
+polyShaped :: (?globals :: Globals) => Type -> Checker Bool
 polyShaped t = case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
@@ -72,7 +72,7 @@ ctxtFromTypedPattern :: (?globals :: Globals) =>
   -> Type
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
@@ -83,7 +83,7 @@ ctxtFromTypedPattern' :: (?globals :: Globals) =>
   -> Type
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
@@ -99,8 +99,13 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
         -- add a constraint that 0 approaximates the effect of the enclosing
         -- box patterns.
         case outerCoeff of
-          -- Cannot have a wildcard not under a box
-          Nothing -> illLinearityMismatch s [NonLinearPattern]
+          -- Can only have a wildcard under a box if the type of the pattern is unishaped
+          Nothing -> do
+            isPoly <- polyShaped t
+            if isPoly
+              then illLinearityMismatch s (pure NonLinearPattern)
+              else return ([], [], [], PWild s t, Full)
+
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
               addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
@@ -141,16 +146,16 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
     innerBoxTy <- inferCoeffectType s coeff
 
     (coeff, coeffTy) <- case outerBoxTy of
-                -- Case: no enclosing [ ] pattern
-                Nothing -> return (coeff, innerBoxTy)
-                -- Case: there is an enclosing [ ] pattern of type outerBoxTy
-                Just (outerCoeff, outerBoxTy) ->
-                  -- Therefore try and flatten at this point
-                  case flattenable outerBoxTy innerBoxTy of
-                    Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
-                    Nothing -> halt $ GenericError (Just s)
-                                    $ "Graded modalities of index type `" <> pretty outerBoxTy
-                                    <> "` and `" <> pretty innerBoxTy <> "` cannot be nested."
+        -- Case: no enclosing [ ] pattern
+        Nothing -> return (coeff, innerBoxTy)
+        -- Case: there is an enclosing [ ] pattern of type outerBoxTy
+        Just (outerCoeff, outerBoxTy) ->
+          -- Therefore try and flatten at this point
+          case flattenable outerBoxTy innerBoxTy of
+            Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
+            Nothing -> throw DisallowedCoeffectNesting
+              { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
+
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 
@@ -162,10 +167,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
 
   st <- get
   case lookup dataC (dataConstructors st) of
-    Nothing ->
-      halt $ UnboundVariableError (Just s) $
-             "Data constructor `" <> pretty dataC <> "`" <?> show (dataConstructors st)
-
+    Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
 
       definiteUnification s outerBoxTy ty
@@ -227,15 +229,16 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
                   elabP,                          -- elaborated pattern
                   consumptionOut)                 -- final consumption effect
 
-        _ -> halt $ PatternTypingError (Just s) $
-                  "Expected type `" <> pretty ty <> "` but got `" <> pretty dataConstructorTypeFresh <> "`"
+        _ -> throw PatternTypingMismatch
+              { errLoc = s
+              , errPat = p
+              , tyExpected = dataConstructorTypeFresh
+              , tyActual = ty
+              }
   where
-    unpeel ::
-          -- A list of patterns for each part of a data constructor pattern
-               [Pattern ()]
-            -- The remaining type of the constructor
-            -> Type
-            -> MaybeT Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
+    unpeel :: [Pattern ()] -- A list of patterns for each part of a data constructor pattern
+            -> Type -- The remaining type of the constructor
+            -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
     unpeel pats t = do
       (ass, kc, sub, ps, c) <- unpeel' ([],[],[],[],Full) pats t
       pure (ass, kc, sub, reverse ps, c)
@@ -248,23 +251,19 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
         us <- combineSubstitutions s us us'
         unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
 
-    unpeel' _ (p:_) t = halt $ PatternTypingError (Just s) $
-              "Have you applied constructor `" <> sourceName dataC <>
-              "` to too many arguments?"
+    unpeel' _ (p:_) t = throw PatternArityError{ errLoc = s, errId = dataC }
 
 ctxtFromTypedPattern' _ s t p _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
-  halt $ PatternTypingError (Just s)
-    $ "Pattern match `" <> pretty p <> "` does not match expected type `" <> pretty t <> "`"
-
+  throw PatternTypingError{ errLoc = s, errPat = p, tyExpected = t }
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
   -> Type
   -> [Pattern ()]
   -> [Consumption]
-  -> MaybeT Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
+  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
 ctxtFromTypedPatterns sp ty [] _ = do
   return ([], ty, [], [], [], [])
 
@@ -281,7 +280,7 @@ ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
   substs' <- combineSubstitutions s subst substs
   return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
-ctxtFromTypedPatterns s ty ps _ = do
+ctxtFromTypedPatterns s ty (p:ps) _ = do
   -- This means we have patterns left over, but the type is not a
   -- function type, so we need to throw a type error
 
@@ -290,15 +289,14 @@ ctxtFromTypedPatterns s ty ps _ = do
   -- p0 -> p1 -> ?
   psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
   let spuriousType = foldr FunTy (TyVar $ mkId "?") psTyVars
-  halt $ GenericError (Just s)
-     $ "Too many patterns.\n   Therefore, couldn't match expected type '"
-       <> pretty ty
-       <> "'\n   against a type of the form '" <> pretty spuriousType
-       <> "' implied by the remaining patterns"
+  throw TooManyPatternsError
+    { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }
 
-duplicateBinderCheck :: (?globals::Globals) => Span -> [Pattern a] -> MaybeT Checker ()
-duplicateBinderCheck s ps = unless (null duplicateBinders) $
-    halt $ DuplicatePatternError (Just s) $ intercalate ", " duplicateBinders
+duplicateBinderCheck :: Span -> [Pattern a] -> Checker ()
+duplicateBinderCheck s ps = case duplicateBinders of
+  [] -> pure ()
+  (d:ds) ->
+    throwError $ fmap (DuplicatePatternError s) (d :| ds)
   where
     duplicateBinders = duplicates . concatMap getBinders $ ps
     getBinders = patternFold

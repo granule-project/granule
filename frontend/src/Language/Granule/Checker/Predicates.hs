@@ -107,8 +107,8 @@ instance Monad m => Freshenable m Constraint where
     return $ Gt s c1 c2
 
 -- Used to negate constraints
-data Neg a = Neg a
-  deriving Show
+newtype Neg a = Neg a
+  deriving (Eq, Show)
 
 instance Pretty (Neg Constraint) where
     prettyL l (Neg (Neq _ c1 c2 _)) =

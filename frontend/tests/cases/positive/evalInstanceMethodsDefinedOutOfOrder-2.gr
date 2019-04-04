@@ -1,17 +1,17 @@
--- EXPECTED: B
+-- EXPECTED: C
 
 interface Simple a where
   simple2 : a;
   simple1 : a -> a
 
-data A = A | B
+data A = B | C
 
 -- the 'Simple' methods are given
 -- in a different order to the interface
 instance Simple A where
-  simple1 B = A;
-  simple1 A = B;
-  simple2 = A
+  simple1 C = B;
+  simple1 B = C;
+  simple2 = B
 
 main : A
 main = simple1 simple2

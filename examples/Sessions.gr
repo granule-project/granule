@@ -5,7 +5,7 @@ fooClient : Chan (Send Bool (Recv Int End)) → Int <Session>
 fooClient c =
   let c      ← send c True;
       (n, c) ← recv c;
-      ()     ← close c
+      _      ← close c
   in pure n
 
 fooServer : Chan (Dual (Send Bool (Recv Int End))) → () <Session>
@@ -30,7 +30,7 @@ sendVec : ∀ {n : Nat, a : Type} .
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
        let c'  ← send c x;
-           ()  ← close c'
+           _   ← close c'
        in sendVec [c] xs
 
 recvVec : ∀ {n : Nat, a : Type} .
@@ -38,7 +38,7 @@ recvVec : ∀ {n : Nat, a : Type} .
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
        let (x, c') ← recv c;
-           ()      ← close c';
+           _       ← close c';
            xs      ← recvVec n [c]
        in pure (Cons x xs)
 

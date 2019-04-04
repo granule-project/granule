@@ -1,3 +1,5 @@
+-- gr --no-eval
+
 data Bool where False : Bool; True : Bool
 
 data Pair a b where X : a → b → Pair a b

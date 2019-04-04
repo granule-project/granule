@@ -1,7 +1,7 @@
 interface Simple a where
   simple : a -> a
 
-data A a = A
+data A a = A'
 
 -- function with complex constraint
 simple1 : forall {a : Type} . {Simple (A a)} => a -> a

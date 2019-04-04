@@ -23,7 +23,6 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Constraints.Compile
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Instance
 import Language.Granule.Checker.Interface
   ( getInterfaceParameterNames
@@ -35,23 +34,16 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Variables (freshTyVarInContextWithBinding)
 
-import Control.Monad.Trans.Maybe
 import Language.Granule.Utils
 
--- For doctest:
--- $setup
--- >>> import Language.Granule.Syntax.Identifiers (mkId)
--- >>> import Language.Granule.Syntax.Pattern
--- >>> import Language.Granule.Utils
--- >>> :set -XImplicitParams
 
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
   substitute :: (?globals :: Globals)
-             => Substitution -> t -> MaybeT Checker t
+             => Substitution -> t -> Checker t
 
   unify :: (?globals :: Globals)
-        => t -> t -> MaybeT Checker (Maybe Substitution)
+        => t -> t -> Checker (Maybe Substitution)
 
 -- Instances for the main representation of things in the types
 
@@ -101,10 +93,10 @@ instance Substitutable Substitution where
       Just (SubstT (TyVar var')) -> return $ (var', s) : subst'
       Nothing -> return subst'
       -- Shouldn't happen
-      t -> halt $ GenericError (Just nullSpan) $
-            "Granule bug. Cannot rewrite a substitution `s` as the substitution map `s'` = "
-              <> show subst <> " maps variable `" <> show var
-              <> "` to a non variable type: `" <> show t <> "`"
+      t -> error
+        $ "Granule bug. Cannot rewrite a substitution `s` as the substitution map `s'` = "
+        <> show subst <> " maps variable `" <> show var
+        <> "` to a non variable type: `" <> show t <> "`"
 
   unify = error "Unification not defined for substitutions"
 
@@ -385,7 +377,7 @@ instance Substitutable t => Substitutable (Maybe t) where
 
 -- | Combine substitutions wrapped in Maybe
 (<<>>) :: (?globals :: Globals)
-  => Maybe Substitution -> Maybe Substitution -> MaybeT Checker (Maybe Substitution)
+  => Maybe Substitution -> Maybe Substitution -> Checker (Maybe Substitution)
 xs <<>> ys =
   case (xs, ys) of
     (Just xs', Just ys') ->
@@ -393,7 +385,7 @@ xs <<>> ys =
     _ -> return Nothing
 
 combineManySubstitutions :: (?globals :: Globals)
-    => Span -> [Substitution]  -> MaybeT Checker Substitution
+    => Span -> [Substitution] -> Checker Substitution
 combineManySubstitutions s [] = return []
 combineManySubstitutions s (subst:ss) = do
   ss' <- combineManySubstitutions s ss
@@ -401,7 +393,7 @@ combineManySubstitutions s (subst:ss) = do
 
 
 combineManySubstitutionsSafe :: (?globals :: Globals)
-    => Span -> [Substitution]  -> MaybeT Checker (Either FailedCombination Substitution)
+    => Span -> [Substitution]  -> Checker (Either FailedCombination Substitution)
 combineManySubstitutionsSafe s [] = pure . pure $ mempty
 combineManySubstitutionsSafe s (subst:ss) = do
   r1 <- combineManySubstitutionsSafe s ss
@@ -418,7 +410,7 @@ type FailedCombination = (Id, Substitutors, Substitutors)
 -- | substitutions.
 combineSubstitutionsSafe ::
     (?globals :: Globals)
-    => Span -> Substitution -> Substitution -> MaybeT Checker (Either FailedCombination Substitution)
+    => Span -> Substitution -> Substitution -> Checker (Either FailedCombination Substitution)
 combineSubstitutionsSafe _ u1 u2 | u1 == u2 = pure . pure $ u1
 combineSubstitutionsSafe sp u1 u2 = do
       -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
@@ -451,7 +443,7 @@ combineSubstitutionsSafe sp u1 u2 = do
 -- | substitutions
 combineSubstitutions ::
     (?globals :: Globals)
-    => Span -> Substitution -> Substitution -> MaybeT Checker Substitution
+    => Span -> Substitution -> Substitution -> Checker Substitution
 combineSubstitutions sp u1 u2 = do
   subst <- combineSubstitutionsSafe sp u1 u2
   case subst of
@@ -463,7 +455,7 @@ combineSubstitutions sp u1 u2 = do
   apply the substitution returning a pair of contexts, one for parts
   of the context where a substitution occurred, and one where substitution
   did not occur
->>> let ?globals = defaultGlobals in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", SubstT $ TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (CVar $ mkId "b"))])
+>>> let ?globals = mempty in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", SubstT $ TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (CVar $ mkId "b"))])
 Just ([((Id "y" "y"),Linear (TyInt 0))],[((Id "x" "x"),Linear (TyVar (Id "x" "x"))),((Id "z" "z"),Discharged (TyVar (Id "z" "z")) (CVar (Id "b" "b")))])
 -}
 
@@ -476,7 +468,7 @@ instance Substitutable (Ctxt Assumption) where
   unify = error "Unify not implemented for contexts"
 
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
-  -> MaybeT Checker (Ctxt Assumption, Ctxt Assumption)
+  -> Checker (Ctxt Assumption, Ctxt Assumption)
 substCtxt _ [] = return ([], [])
 substCtxt subst ((v, x):ctxt) = do
   (substituteds, unsubstituteds) <- substCtxt subst ctxt
@@ -487,7 +479,7 @@ substCtxt subst ((v, x):ctxt) = do
     else return ((v, x') : substituteds, unsubstituteds)
 
 substAssumption :: (?globals :: Globals) => Substitution -> (Id, Assumption)
-  -> MaybeT Checker (Id, Assumption)
+  -> Checker (Id, Assumption)
 substAssumption subst (v, Linear t) = do
     t <- substitute subst t
     return (v, Linear t)
@@ -498,7 +490,7 @@ substAssumption subst (v, Discharged t c) = do
 
 
 -- | Apply a name map to a type to rename the type variables
-renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> MaybeT Checker Type
+renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> Checker Type
 renameType subst = typeFoldM $ baseTypeFold
   { tfBox   = renameBox subst
   , tfTyVar = renameTyVar subst
@@ -523,7 +515,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
 
-  -> MaybeT Checker (Type, Ctxt Kind, Substitution, ([Type], [Inst]), Substitution)
+  -> Checker (Type, Ctxt Kind, Substitution, ([Type], [Inst]), Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
@@ -555,7 +547,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     -- Left of id means a succesful instance variable created
     -- Right of id means that this is an existential and so an (externally visisble)
      --    instance variable is not generated
-    instantiateVariable :: (Id, Kind) -> MaybeT Checker (Id, Either (Kind, Id) (Kind, Id))
+    instantiateVariable :: (Id, Kind) -> Checker (Id, Either (Kind, Id) (Kind, Id))
     instantiateVariable (var, k) =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
                            && (var `notElem` freeVars (ixSubstitution))
@@ -645,7 +637,7 @@ instance Substitutable (Equation v Type) where
 substituteValue :: (?globals::Globals)
                 => Substitution
                 -> ValueF ev Type (Value ev Type) (Expr ev Type)
-                -> MaybeT Checker (Value ev Type)
+                -> Checker (Value ev Type)
 substituteValue ctxt (AbsF ty arg mty expr) =
     do  ty' <- substitute ctxt ty
         arg' <- substitute ctxt arg
@@ -679,7 +671,7 @@ substituteValue _ (StringLiteralF n) = pure $ StringLiteral n
 substituteExpr :: (?globals::Globals)
                => Substitution
                -> ExprF ev Type (Expr ev Type) (Value ev Type)
-               -> MaybeT Checker (Expr ev Type)
+               -> Checker (Expr ev Type)
 substituteExpr ctxt (AppF sp ty fn arg) =
     do  ty' <- substitute ctxt ty
         fn' <- substitute ctxt fn
@@ -765,7 +757,7 @@ instance {-# OVERLAPPABLE #-} (Substitutable a) => Substitutable [a] where
 ---------------------------
 
 
-getInstanceSubstitution :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker Substitution
+getInstanceSubstitution :: (?globals :: Globals) => Span -> Inst -> Checker Substitution
 getInstanceSubstitution sp inst = do
   names <- getInterfaceParameterNames sp (instIFace inst)
   kinds <- getInterfaceParameterKindsForInst sp inst
@@ -791,7 +783,7 @@ getInstanceSubstitution sp inst = do
 -- | instance.
 -- |
 -- | This function resolves kind dependencies (e.g., (a : Kind) (b : a)).
-getInterfaceParameterKindsForInst :: (?globals :: Globals) => Span -> Inst -> MaybeT Checker [Kind]
+getInterfaceParameterKindsForInst :: (?globals :: Globals) => Span -> Inst -> Checker [Kind]
 getInterfaceParameterKindsForInst sp inst = do
   bindMap <- buildBindingMap sp inst
   pkinds <- getInterfaceParameterKinds sp (instIFace inst)

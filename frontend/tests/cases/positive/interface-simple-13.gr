@@ -1,9 +1,9 @@
 interface Simple a where
   simple : a -> a
 
-data A = A
+data A = A'
 
-data B = B
+data B = B'
 
 -- two instances
 instance Simple A where

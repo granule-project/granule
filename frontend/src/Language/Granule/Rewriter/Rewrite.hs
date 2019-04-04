@@ -6,8 +6,10 @@ Rewrites a type-annotated AST to an intermediate representation
 without interfaces.
 -}
 
-
 {-# LANGUAGE ImplicitParams #-}
+
+{-# options_ghc -fno-warn-incomplete-uni-patterns #-}
+
 module Language.Granule.Rewriter.Rewrite
     ( rewriteWithoutInterfaces
 
@@ -21,7 +23,6 @@ import Control.Arrow ((***), (&&&))
 import Control.Monad (join)
 import Control.Monad.IO.Class (liftIO)
 import Control.Monad.State (evalState)
-import Control.Monad.Trans.Maybe (MaybeT, runMaybeT)
 import Data.Function (on)
 import Data.List (foldl', groupBy, nub, sortBy)
 import Data.Maybe (fromMaybe)
@@ -89,9 +90,10 @@ forgetAnnotations = mapAnnotations (const ())
 
 -- | Map over an AST's annotations.
 mapAnnotations :: (a -> b) -> AST v a -> AST v b
-mapAnnotations f (AST dds defs ifaces insts) =
+mapAnnotations f (AST dds defs ifaces insts imports) =
     AST dds    (fmap (mapDefAnnotation f)      defs)
         ifaces (fmap (mapInstanceAnnotation f) insts)
+        imports
 
 
 mapInstanceAnnotation :: (a -> b) -> Instance v a -> Instance v b
@@ -156,14 +158,14 @@ mapPatternAnnotation f (PConstr s ann n pats) =
 --------------------------------------------
 
 
-runMaybeTCheckerInRewriter :: MaybeT C.Checker a -> Rewriter (Maybe a)
-runMaybeTCheckerInRewriter c = do
+runCheckerInRewriter :: C.Checker a -> Rewriter (Maybe a)
+runCheckerInRewriter c = do
   env <- getEnv
   let st = C.initState { C.typeConstructors = typeConstructors env
                        , C.dataConstructors = dataConstructors env
                        , C.tyVarContext     = tyVarContext     env
                        }
-  liftIO . C.evalChecker st $ runMaybeT c
+  liftIO . fmap (either (const Nothing) Just) $ C.evalChecker st c
 
 
 ------------------------
@@ -181,14 +183,14 @@ type DefRW v = Def () ()
 -- | representation without interfaces.
 rewriteWithoutInterfaces :: (?globals :: Globals) => RewriteEnv -> AST () Type -> IO (Either RewriterError (AST () ()))
 rewriteWithoutInterfaces renv ast =
-    let (AST dds defs ifaces insts) = ast
+    let (AST dds defs ifaces insts imports) = ast
     in runNewRewriter (do
       ifaces' <- mapM rewriteInterface ifaces
       instsToDefs <- mapM rewriteInstance insts
       defs' <- mapM rewriteDef defs
       let ifaceDDS = fmap fst ifaces'
           ifaceDefs = concat $ fmap snd ifaces'
-      pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs') [] []) renv
+      pure $ AST (dds <> ifaceDDS) (ifaceDefs <> instsToDefs <> defs') [] [] imports) renv
 
 
 -- | Rewrite an interface to its intermediate representation.
@@ -420,10 +422,10 @@ rewriteDefCall (Def _ n _ tys) callTy = do
 instantiate :: (?globals :: Globals) => TypeScheme -> Type -> Rewriter TypeScheme
 instantiate sig@(Forall _ binds _ ty) ity = do
   tyNoI <- rewriteTypeWithoutInterfaces ty
-  res <- runMaybeTCheckerInRewriter $ do
+  res <- runCheckerInRewriter $ do
            res <- C.withBindings binds BoundQ $ equalTypes nullSpanNoFile tyNoI ity
            case res of
-             Left err -> C.halt err
+             Left err -> C.throw err
              Right pf ->
                let subst = equalityProofSubstitution pf
                in Sub.substitute subst sig
@@ -480,9 +482,9 @@ lookupFirstInstFun inst = do
         firstUnifyingFun ((i, (Def _ dname _ dtys)):xs) = do
             if (i == inst) then pure . Just $ Concrete dname
             else do
-              unif <- fmap join $ runMaybeTCheckerInRewriter (Sub.unify i inst)
+              unif <- fmap join $ runCheckerInRewriter (Sub.unify i inst)
               maybe (firstUnifyingFun xs) (\sbst -> do
-                maybeDTys <- runMaybeTCheckerInRewriter (Sub.substitute sbst dtys)
+                maybeDTys <- runCheckerInRewriter (Sub.substitute sbst dtys)
                 pure $ fmap (\(Forall _ _ _ dty) -> Constrained dname dty) maybeDTys) unif
 
 

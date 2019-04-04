@@ -1,0 +1,9 @@
+data A where -- 1
+
+data A where -- 2 <-- complain about this one, mentioning 1 and 4
+
+data B where -- 3
+
+data A where -- 4
+
+data B where -- 5 <-- complain about this one, mentioning 3

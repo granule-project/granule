@@ -1,7 +1,7 @@
 interface Plus a (c : Nat) where
   sum : a [c] -> a
 
-data A = A
+data A = B
 
 instance Plus A (m+n) where
-  sum [A] = A
+  sum [B] = B

@@ -18,7 +18,7 @@ data Graph a where
   Connect : Graph a -> Graph a -> Graph a
 
 vertices : forall a : Type . List a -> Graph a
-vertices = foldr_list [Overlay `o` Vertex] EmptyG
+vertices = foldr_list [Overlay ∘ Vertex] EmptyG
 
 edge : forall a : Type . a -> a -> Graph a
 edge x y = Connect (Vertex x) (Vertex y)

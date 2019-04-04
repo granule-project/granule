@@ -1,0 +1,6 @@
+Type checking failed: 
+Unbound type constructor: 4:1:
+`Vec`
+
+Unbound type constructor: 7:1:
+`Vec`

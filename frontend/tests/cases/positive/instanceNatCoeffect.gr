@@ -1,6 +1,6 @@
 interface Simple a (n : Nat)
 
-data A = A
+data A = B
 
 -- use of '1' as a Nat
 instance Simple A 1

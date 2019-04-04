@@ -1,8 +1,10 @@
+-- gr --no-eval
+
 import List
 import Vec
 
 --- A tree which abstracts over the branching factor.
---- Stolen from SPJ's _Adventure with Types in Haskell_ (lecture 2)
+--- Stolen from SPJ's _Adventures with Types in Haskell_ (lecture 2)
 data FTree (f : Type → Type) a where
   Leaf : a → FTree f a;
   Branch : f (FTree f a) → FTree f a

@@ -1,7 +1,7 @@
-main : String <IO>
+main : String <Open,Read,IOExcept,Close>
 main =
-    let h       ← openFile "LICENSE" ReadMode;
-        (h, c)  ← hGetChar h;
-        (h, c') ← hGetChar h;
-        ()      ← hClose h
-    in pure (((showChar c) `stringAppend` (showChar c')))
+    let h       ← openHandle ReadMode "LICENSE";
+        (h, c1) ← readChar h;
+        (h, c2) ← readChar h;
+        ()      ← closeHandle h
+    in pure (stringCons c1 (stringCons c2 ""))

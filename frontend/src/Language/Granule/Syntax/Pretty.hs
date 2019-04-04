@@ -2,15 +2,16 @@
 --  It is not especially pretty.
 -- Useful in debugging and error messages
 
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE LambdaCase #-}
 
 module Language.Granule.Syntax.Pretty where
 
+import Data.Foldable (toList)
 import Data.List
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
@@ -22,7 +23,7 @@ import Language.Granule.Utils
 
 prettyDebug :: (?globals :: Globals) => Pretty t => t -> String
 prettyDebug x =
-  let ?globals = ?globals { debugging = True }
+  let ?globals = ?globals { globalsDebugging = Just True }
   in prettyL 0 x
 
 pretty :: (?globals :: Globals, Pretty t) => t -> String
@@ -50,10 +51,12 @@ type Level = Int
 
 parens :: Level -> String -> String
 parens l x | l <= 0 = x
-parens n x =
-  if head x == '(' && last x == ')'
-    then x
-    else "(" <> x <> ")"
+parens n x = "(" <> x <> ")"
+
+-- The code below seems to be wrong, consider `f ((g x) (h y))`, @buggymcbugfix
+  -- if head x == '(' && last x == ')'
+  --   then x
+  --   else "(" <> x <> ")"
 
 -- The pretty printer class
 class Pretty t where
@@ -80,7 +83,7 @@ instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
 -- Core prettyL l printers
 
 instance {-# OVERLAPS #-} Pretty Effect where
-   prettyL l es = "[" <> intercalate "," es <> "]"
+   prettyL l es = "[" <> intercalate "," (nub es) <> "]"
 
 instance Pretty Coeffect where
     prettyL l (CNat n) = show n
@@ -176,16 +179,33 @@ instance Pretty Type where
       parens l (prettyL l t1 <> " " <> prettyL (l+1) t2)
 
     prettyL l (TyInfix op t1 t2) =
-      parens l (prettyL (l+1) t1 <> " " <> op <> " " <>  prettyL (l+1) t2)
+      parens l (prettyL (l+1) t1 <> " " <> prettyL l op <> " " <>  prettyL (l+1) t2)
+
+instance Pretty TypeOperator where
+  prettyL _ = \case
+   TyOpLesser          -> "<"
+   TyOpLesserEq        -> "≤"
+   TyOpGreater         -> ">"
+   TyOpGreaterEq       -> "≥"
+   TyOpEq              -> "≡"
+   TyOpNotEq           -> "≠"
+   TyOpPlus            -> "+"
+   TyOpTimes           -> "*"
+   TyOpMinus           -> "-"
+   TyOpExpon           -> "^"
+   TyOpMeet            -> "∧"
+   TyOpJoin            -> "∨"
+
 
 appChain :: Type -> Bool
 appChain (TyApp (TyApp t1 t2) _) = appChain (TyApp t1 t2)
 appChain (TyApp t1 t2)           = True
 appChain _                       = False
 
-instance (Pretty v, Pretty a) => Pretty (AST v a) where
-    prettyL l (AST dataDecls defs ifaces insts) =
-      concat [pretty' dataDecls, "\n\n",
+instance (Pretty v) => Pretty (AST v a) where
+    prettyL l (AST dataDecls defs ifaces insts imports) =
+      concat [(unlines . map ("import " <>) . toList) imports, "\n\n",
+              pretty' dataDecls, "\n\n",
               pretty' ifaces, "\n\n",
               pretty' defs, "\n\n",
               pretty' insts]
@@ -193,7 +213,7 @@ instance (Pretty v, Pretty a) => Pretty (AST v a) where
         pretty' :: Pretty l => [l] -> String
         pretty' = intercalate "\n\n" . map pretty
 
-instance (Pretty (Value v a), Pretty v) => Pretty (Def v a) where
+instance (Pretty v) => Pretty (Def v a) where
     prettyL l (Def _ v eqs t) = prettyColonSep l v t <> "\n" <>
                                 intercalate "\n" (map prettyEq eqs)
       where
@@ -232,7 +252,7 @@ instance Pretty Interface where
 instance Pretty InterfaceMethod where
     prettyL l (InterfaceMethod _ name ty) = prettyColonSep l name ty
 
-instance (Pretty v, Pretty a) => Pretty (Instance v a) where
+instance (Pretty v) => Pretty (Instance v a) where
     prettyL _ (Instance _ name cts idat defs) =
       unwords ["instance", ctsStr <> pretty name,
                pretty idat, defStr]
@@ -249,7 +269,7 @@ instance Pretty InstanceTypes where
     prettyL l (InstanceTypes _ ty) = unwords (fmap (prettyTy l) ty)
 
 
-instance (Pretty v, Pretty a) => Pretty (InstanceEquation v a) where
+instance (Pretty v) => Pretty (InstanceEquation v a) where
     prettyL l (InstanceEquation _ v eq) = unwords [prettyL l v, prettyL l eq]
 
 
@@ -265,7 +285,7 @@ instance Pretty (Pattern a) where
     prettyL l (PFloat _ _ n)   = show n
     prettyL l (PConstr _ _ name args)  =
         if null args then prettyL l name
-        else parens 1 $ unwords $ prettyL l name : map (prettyL l) args
+        else parens 1 $ unwords $ prettyL l name : map (prettyL (l + 1)) args
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     prettyL l [] = ""
@@ -288,18 +308,12 @@ instance Pretty v => Pretty (Value v a) where
     prettyL l (Constr _ s vs) | internalName s == "," =
       "(" <> intercalate ", " (map (prettyL l) vs) <> ")"
     prettyL l (Constr _ n []) = prettyL 0 n
-    prettyL l (Constr _ n vs) = intercalate " " (prettyL l n : map (parensOn (not . valueAtom)) vs)
-      where
-        -- Syntactically atomic values
-        valueAtom (NumInt _)    = True
-        valueAtom (NumFloat _)  = True
-        valueAtom (Constr _ _ []) = True
-        valueAtom _             = False
+    prettyL l (Constr _ n vs) = parens l . intercalate " " $ prettyL 0 n : map (prettyL (l + 1)) vs
     prettyL l (Ext _ v) = prettyL l v
 
 instance Pretty Id where
   prettyL l
-    = if debugging ?globals
+    = if debugging
         then internalName
         else (stripMarker '`') . (stripMarker '.') . sourceName
     where
@@ -316,7 +330,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
     parens l $ prettyL (l+1) e1 <> " " <> prettyL l e2
 
   prettyL l (Binop _ _ op e1 e2) =
-    parens l $ prettyL (l+1) e1 <> " " <> op <> " " <> prettyL (l+1) e2
+    parens l $ prettyL (l+1) e1 <> " " <> prettyL l op <> " " <> prettyL (l+1) e2
 
   prettyL l (LetDiamond _ _ v t e1 e2) =
     parens l $ "let " <> prettyL l v <> " :" <> prettyL l t <> " <- "
@@ -327,6 +341,19 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
                       <> intercalate ";\n      " (map (\(p, e') -> prettyL l p
                       <> " -> " <> prettyL l e') ps) <> ")"
 
+
+instance Pretty Operator where
+  prettyL _ = \case
+    OpLesser          -> "<"
+    OpLesserEq        -> "≤"
+    OpGreater         -> ">"
+    OpGreaterEq       -> "≥"
+    OpEq              -> "≡"
+    OpNotEq           -> "≠"
+    OpPlus            -> "+"
+    OpTimes           -> "*"
+    OpMinus           -> "-"
+
 parensOn :: (?globals :: Globals) => Pretty a => (a -> Bool) -> a -> String
 parensOn p t = prettyL (if p t then 0 else 1) t
 
@@ -335,15 +362,26 @@ parensOn p t = prettyL (if p t then 0 else 1) t
 braces :: String -> String
 braces x = "{" <> x <> "}"
 
+
 -- | Surround a string with parentheses
 parens' :: String -> String
 parens' x = if head x == '(' && last x == ')' then x else "(" <> x <> ")"
+
+
+ticks :: String -> String
+ticks x = "`" <> x <> "`"
+
 
 instance Pretty Int where
   prettyL l = show
 
 instance Pretty Span where
-  prettyL _ (Span start end fileName) = "(" <> pretty start <> ":" <> pretty end <> ")"
+  prettyL _
+    | testing = const "(location redacted)"
+    | otherwise = \case
+      Span (0,0) _ "" -> "(unknown location)"
+      Span (0,0) _ f  -> f
+      Span (l,c) _ f  -> f <> ":" <> show l <> ":" <> show c
 
 
 -- | Pretty-print multiple items separated by lines and

@@ -16,7 +16,7 @@ import Data.Text (Text)
 %wrapper "posn"
 
 $digit  = 0-9
-$alpha  = [a-zA-Z\_\=]
+$alpha  = [a-zA-Z\_\-\=]
 $lower  = [a-z]
 $upper  = [A-Z]
 $eol    = [\n]
@@ -26,8 +26,9 @@ $fruit = [\127815-\127827] -- 🍇🍈🍉🍊🍋🍌🍍🍎🍏🍐🍑🍒�
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
 @int    = \-? $digit+
-@charLiteral = \' ([\\.] | . ) \'
+@charLiteral = \' ([\\.]|[^\']| . ) \'
 @stringLiteral = \"(\\.|[^\"]|\n)*\"
+@importFilePath = ($alphanum | \' | \.)*
 
 tokens :-
 
@@ -36,7 +37,7 @@ tokens :-
   $white+                       ;
   "--".*                        ;
   "{-" (\\.|[^\{\-]|\n)* "-}"   ;
-  "import".*                    ;
+  import$white+@importFilePath  { \p s -> TokenImport p s }
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   ∀                             { \p s -> TokenForall p }
@@ -63,6 +64,7 @@ tokens :-
   \;                            { \p s -> TokenSemicolon p }
   \=                            { \p s -> TokenEq p }
   "/="                          { \p s -> TokenNeq p }
+  "≠"                           { \p _ -> TokenNeq p }
   \\                            { \p s -> TokenLambda p }
   "λ"                           { \p s -> TokenLambda p }
   \[                            { \p s -> TokenBoxLeft p }
@@ -84,19 +86,22 @@ tokens :-
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
-  "≤"                           { \p s -> TokenOp p s }
-  \<\=                          { \p s -> TokenOp p "≤" }
-  "≥"                           { \p s -> TokenOp p s }
-  \>\=                          { \p s -> TokenOp p "≥" }
-  "≡"                           { \p s -> TokenOp p s }
-  \=\=                          { \p s -> TokenOp p "≡" }
-  \`                            { \p s -> TokenBackTick p }
-  \^                            { \p s -> TokenCaret p }
+  "≤"                           { \p s -> TokenLesserEq p }
+  "<="                          { \p s -> TokenLesserEq p }
+  "≥"                           { \p s -> TokenGreaterEq p }
+  ">="                          { \p s -> TokenGreaterEq p }
+  "=="                          { \p s -> TokenEquiv p }
+  "≡"                           { \p s -> TokenEquiv p }
+  "`"                           { \p s -> TokenBackTick p }
+  "^"                           { \p s -> TokenCaret p }
   ".."                          { \p s -> TokenDotDot p }
   "∨"                           { \p _ -> TokenJoin p }
+  "\\/"                         { \p _ -> TokenJoin p }
   "∧"                           { \p _ -> TokenMeet p }
+  "/\\"                         { \p _ -> TokenMeet p }
   "=>"                          { \p s -> TokenConstrain p }
   "⇒"                           { \p s -> TokenConstrain p }
+  "∘"                           { \p _ -> TokenRing p }
 
 
 {
@@ -151,16 +156,19 @@ data Token
   | TokenUnderscore AlexPosn
   | TokenSemicolon  AlexPosn
   | TokenForwardSlash AlexPosn
-  | TokenOp AlexPosn String
+  | TokenLesserEq AlexPosn
+  | TokenGreaterEq AlexPosn
+  | TokenEquiv AlexPosn
   | TokenCaret AlexPosn
   | TokenDotDot AlexPosn
   | TokenJoin AlexPosn
   | TokenMeet AlexPosn
+  | TokenRing AlexPosn
+  | TokenImport AlexPosn String
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String
 symString (TokenSym _ x) = x
-symString (TokenOp _ x)  = x
 
 constrString :: Token -> String
 constrString (TokenConstr _ x) = x

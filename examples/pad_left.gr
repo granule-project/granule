@@ -1,0 +1,15 @@
+import Vec
+
+pad_left
+  : ∀ {a : Type, m : Nat, n : Nat}
+  . a [n - m]
+  → N n
+  → Vec m a
+  → Vec (m ∨ n) a
+pad_left [c] n str = let
+  (m, str) = length' str
+  in append (replicate (monus n m) [c]) str
+
+main : Vec 5 Char
+main = let five = (S (S (S (S (S Z))))) in
+  pad_left [' ']  five (Cons 'a' (Cons 'b' (Cons 'c' Nil)))
