@@ -1,0 +1,6 @@
+interface Simple (n : Nat) (m : Interval Nat)
+
+instance Simple n [n..n]
+
+-- should overlap with previous instance
+instance Simple 0 [0..0]

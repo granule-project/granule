@@ -395,8 +395,15 @@ equalTypesRelatedCoeffects s rel sp x@(Box c t) y@(Box c' t') = do
     eq2 <- equalTypesRelatedCoeffects s rel sp t t'
     combinedEqualities s eq1 eq2
 
-equalTypesRelatedCoeffects s rel sp (TyCoeffect c1) (TyCoeffect c2) =
-  if (c1 == c2) then trivialEquality else coeffectMismatch s c1 c2
+equalTypesRelatedCoeffects s rel sp t1@(TyCoeffect c1) t2@(TyCoeffect c2) =
+  -- Unify the coeffect kinds of the two coeffects
+  withMguCoeffectTypes s c1 c2 $ \kind -> do
+    case sp of
+      SndIsSpec -> do
+        pure $ equalWith ([rel s c1 c2 kind], [])
+      FstIsSpec -> do
+        pure $ equalWith ([rel s c2 c1 kind], [])
+      _ -> contextDoesNotAllowUnification s t1 t2
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get
