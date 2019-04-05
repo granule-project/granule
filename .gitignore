@@ -23,6 +23,9 @@ cabal.sandbox.config
 cabal.project.local
 .HTF/
 
+### Testing ###
+*.output
+
 ### macOS ###
 *.DS_Store
 .AppleDouble
