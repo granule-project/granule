@@ -237,7 +237,7 @@ getInstance solver sp inst = do
       unifiableWithInstance :: Inst -> Checker Bool
       unifiableWithInstance ity =
           withInstanceContext sp ity $
-            instancesAreEqual' solver sp inst ity
+            instancesAreEqual' solver sp ity inst
 
 
 -- TODO: move this into Checker.Monad or Checker.Interface (these depend

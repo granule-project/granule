@@ -1,0 +1,4 @@
+interface Simple (n : Nat) (m : Interval Nat)
+
+-- should be fine to have the same interval here
+instance Simple n [n..n]

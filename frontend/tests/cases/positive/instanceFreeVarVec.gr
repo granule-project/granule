@@ -1,0 +1,10 @@
+data Vec (n : Nat) a where
+  Nil : Vec 0 a;
+  Cons : a -> Vec n a -> Vec (n + 1) a
+
+interface Functor (f : Type -> Type) (use : Interval Nat) where
+  map : forall {a : Type, b : Type} . (a -> b) [use] -> f a -> f b
+
+instance Functor (Vec n) [n..n] where
+  map [_] Nil = Nil;
+  map [f] (Cons x xs) = Cons (f x) (map [f] xs)
