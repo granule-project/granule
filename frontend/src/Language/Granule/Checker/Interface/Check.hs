@@ -324,15 +324,15 @@ getInstanceFreeVarKinds sp inst = do
 -- | True if the two instances can be proven to be equal in the current context.
 instancesAreEqual' :: (?globals :: Globals) => Solver -> Span -> Inst -> Inst -> Checker Bool
 instancesAreEqual' solver sp t1 t2 = do
- res <- equalInstances sp t1 t2
- case res of
-   Left{}   -> pure False
-   Right pf -> do
-     equalityPreds <- substitute (equalityProofSubstitution pf) (equalityProofConstraints pf)
-     preds <- get >>= (substitute (equalityProofSubstitution pf) . predicateStack)
-     let eqPred = Conj . fmap Con $ equalityPreds
-         toSolve = Conj [Conj preds, eqPred]
-     fmap (maybe True (const False)) $ solver toSolve sp (mkId "$internal")
+  res <- equalInstances sp t1 t2
+  case res of
+    Left{}   -> pure False
+    Right pf -> do
+      equalityPreds <- substitute (equalityProofSubstitution pf) (equalityProofConstraints pf)
+      preds <- get >>= (substitute (equalityProofSubstitution pf) . predicateStack)
+      let eqPred = Conj . fmap Con $ equalityPreds
+          toSolve = Conj [Conj preds, eqPred]
+      fmap (maybe True (const False)) $ solver toSolve sp (mkId "$internal")
 
 
 unboundKindVariable :: Span -> Id -> Checker a
