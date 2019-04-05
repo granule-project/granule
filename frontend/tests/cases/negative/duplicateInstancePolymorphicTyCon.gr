@@ -1,4 +1,4 @@
-data A a = A
+data A a = A'
 
 interface Simple a
 

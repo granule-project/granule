@@ -1,7 +1,7 @@
 interface Simple a where
   simple : a -> a
 
-data A = A
+data A = A'
 
 -- we fail to provide a definition for 'simple'
 instance Simple A

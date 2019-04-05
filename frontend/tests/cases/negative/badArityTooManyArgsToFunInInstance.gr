@@ -1,8 +1,8 @@
 interface Simple a where
   simple : a -> a
 
-data A = A
+data A = A'
 
 -- too many arguments to 'simple'
 instance Simple A where
-  simple A A = A
+  simple A' A' = A'

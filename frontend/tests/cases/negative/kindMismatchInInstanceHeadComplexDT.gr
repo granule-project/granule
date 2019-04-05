@@ -1,8 +1,8 @@
 interface Simple (a : Type -> Type)
 
-data A a = A
+data A a = A'
 
-data B = B
+data B = B'
 
 -- (A B) has wrong kind
 instance Simple (A B)

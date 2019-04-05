@@ -1,7 +1,7 @@
 interface Simple a where
   simple : a -> a
 
-data A = A
+data A = A'
 
 -- type variable 'a' is unused (unbound)
 instance {Simple a} => Simple A where

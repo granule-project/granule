@@ -1,8 +1,8 @@
 interface Simple a
 
-data A = A
+data A = A'
 
 -- 'simple' is not a member
 -- of the 'Simple' interface
 instance Simple A where
-  simple = A
+  simple = A'

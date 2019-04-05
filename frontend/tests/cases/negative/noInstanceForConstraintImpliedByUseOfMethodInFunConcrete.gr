@@ -1,7 +1,7 @@
 interface Simple a where
   simple : a -> a
 
-data A = A
+data A = A'
 
 -- 'A' is not an instance of 'Simple'
 simple1 : A -> A
