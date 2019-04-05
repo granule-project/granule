@@ -104,7 +104,8 @@ instance Substitutable Type where
   substitute subst = typeFoldM (baseTypeFold
                               { tfTyVar = varSubst
                               , tfBox = box
-                              , tfDiamond = dia })
+                              , tfDiamond = dia
+                              , tfTyCoeffect = coeffSubst })
     where
       box c t = do
         c <- substitute subst c
@@ -113,6 +114,8 @@ instance Substitutable Type where
       dia e t = do
         e <- substitute subst e
         mDiamond e t
+
+      coeffSubst c = substitute subst c >>= mTyCoeffect
 
       varSubst v =
          let finalSub = lookupWithTransitive [] v
