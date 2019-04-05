@@ -494,6 +494,7 @@ renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> Checker Type
 renameType subst = typeFoldM $ baseTypeFold
   { tfBox   = renameBox subst
   , tfTyVar = renameTyVar subst
+  , tfTyCoeffect = renameTyCoeffect subst
   }
   where
     renameBox renameMap c t = do
@@ -505,6 +506,9 @@ renameType subst = typeFoldM $ baseTypeFold
         Just v' -> return $ TyVar v'
         -- Shouldn't happen
         Nothing -> return $ TyVar v
+    renameTyCoeffect renameMap c = do
+      c' <- substitute (map (\(v, var) -> (v, SubstC $ CVar var)) renameMap) c
+      pure . TyCoeffect $ c'
 
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
