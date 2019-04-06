@@ -388,26 +388,12 @@ equalTypesRelatedCoeffects s rel sp x@(Box c t) y@(Box c' t') = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffects (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffects (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
-  -- Unify the coeffect kinds of the two coeffects
-  withMguCoeffectTypes s c c' $ \kind -> do
-    eq1 <- case sp of
-      SndIsSpec -> do
-        pure $ equalWith ([rel s c c' kind], [])
-      FstIsSpec -> do
-        pure $ equalWith ([rel s c' c kind], [])
-      _ -> contextDoesNotAllowUnification s x y
-    eq2 <- equalTypesRelatedCoeffects s rel sp t t'
-    combinedEqualities s eq1 eq2
+  eq1 <- equalCoeffects s rel sp (x, c) (y, c')
+  eq2 <- equalTypesRelatedCoeffects s rel sp t t'
+  combinedEqualities s eq1 eq2
 
 equalTypesRelatedCoeffects s rel sp t1@(TyCoeffect c1) t2@(TyCoeffect c2) =
-  -- Unify the coeffect kinds of the two coeffects
-  withMguCoeffectTypes s c1 c2 $ \kind -> do
-    case sp of
-      SndIsSpec -> do
-        pure $ equalWith ([rel s c1 c2 kind], [])
-      FstIsSpec -> do
-        pure $ equalWith ([rel s c2 c1 kind], [])
-      _ -> contextDoesNotAllowUnification s t1 t2
+  equalCoeffects s rel sp (t1, c1) (t2, c2)
 
 equalTypesRelatedCoeffects s _ _ (TyVar n) (TyVar m) | n == m = do
   checkerState <- get
@@ -721,6 +707,22 @@ equalInstances sp instx insty =
 -- | True if the two instances can be proven to be equal in the current context.
 instancesAreEqual :: (?globals :: Globals) => Span -> Inst -> Inst -> Checker Bool
 instancesAreEqual s t1 t2 = fmap equalityResultIsSuccess $ equalInstances s t1 t2
+
+
+-----------------------
+-- Coeffect equality --
+-----------------------
+
+
+equalCoeffects :: EqualityProver (Type, Coeffect) EqualityResult
+equalCoeffects s rel sp (t1, c1) (t2, c2) = do
+  withMguCoeffectTypes s c1 c2 $ \kind -> do
+    case sp of
+      SndIsSpec -> do
+        pure $ equalWith ([rel s c1 c2 kind], [])
+      FstIsSpec -> do
+        pure $ equalWith ([rel s c2 c1 kind], [])
+      _ -> contextDoesNotAllowUnification s t1 t2
 
 
 -------------------
