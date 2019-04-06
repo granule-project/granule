@@ -1,0 +1,4 @@
+interface Kinds (a : Type) (b : Nat)
+
+-- Use of same variable at different kinds
+instance Kinds n n
