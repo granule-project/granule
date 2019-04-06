@@ -52,7 +52,7 @@ instance Show (Runtime a) where
   show (PrimitiveClosure _) = "Some primitive closure"
   show (Handle _) = "Some handle"
 
-instance Show (Runtime a) => Pretty (Runtime a) where
+instance Pretty (Runtime a) where
   prettyL _ = show
 
 evalBinOp :: Operator -> RValue -> RValue -> RValue
