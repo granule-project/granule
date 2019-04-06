@@ -427,6 +427,14 @@ kindCheckConstraint sp inst = do
   when (termKind /= KConstraint InterfaceC) $
     throw NotAnInterface{ errLoc = sp, errInst = inst }
 
+  -- make sure the number of parameters is correct
+  let numParams = length (instParams inst)
+  expectedNumParams <- fmap length (getInterfaceParameterNames sp iname)
+  when (numParams /= expectedNumParams) $
+    throw WrongNumberOfParametersConstraint{ errLoc = sp, errInst = inst
+                                 , errParamNumExp = expectedNumParams
+                                 , errParamNumAct = numParams }
+
   -- check every parameter is well-kinded with respect to the interface
   kinds <- getInterfaceParameterKindsForInst sp inst
   let expectedKindPairs = zip (instParams inst) kinds

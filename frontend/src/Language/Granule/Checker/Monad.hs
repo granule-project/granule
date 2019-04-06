@@ -645,6 +645,8 @@ data CheckerError
     { errLoc :: Span, errInst1 :: Inst, errInst2 :: Inst }
   | WrongNumberOfParameters
     { errLoc :: Span, errInst :: Inst, errParamNumExp :: Int, errParamNumAct :: Int }
+  | WrongNumberOfParametersConstraint
+    { errLoc :: Span, errInst :: Inst, errParamNumExp :: Int, errParamNumAct :: Int }
   | MissingImplementation
     { errLoc :: Span, errId :: Id, errIFace :: Id }
   | UnsatisfiedInstance
@@ -720,6 +722,7 @@ instance UserMsg CheckerError where
   -- Interface-related errors
   title OverlappingInstance{} = "Overlapping instance"
   title WrongNumberOfParameters{} = "Wrong number of parameters"
+  title WrongNumberOfParametersConstraint{} = "Wrong number of parameters"
   title MissingImplementation{} = "Missing implementation"
   title UnsatisfiedInstance{} = "Unsatisfied instance"
   title MethodNotMember{} = "Bad method"
@@ -994,6 +997,10 @@ instance UserMsg CheckerError where
 
   msg WrongNumberOfParameters{..}
     = concat [ "Wrong number of parameters in instance ", prettyQuoted errInst, "."
+             , " Expected ", show errParamNumExp, " but got ", show errParamNumAct, "."]
+
+  msg WrongNumberOfParametersConstraint{..}
+    = concat [ "Wrong number of parameters in an application of an interface constraint ", prettyQuoted errInst, "."
              , " Expected ", show errParamNumExp, " but got ", show errParamNumAct, "."]
 
   msg MissingImplementation{..}

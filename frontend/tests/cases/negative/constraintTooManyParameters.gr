@@ -1,0 +1,6 @@
+interface Simple a
+
+-- 'Simple' is applied to two parameters, but it
+-- needs one
+f : forall {a : Type, b : Type} . {Simple a b} => a -> a
+f x = x
