@@ -40,6 +40,7 @@ import Language.Granule.Checker.Monad (CheckerError)
 import Language.Granule.Interpreter.Eval
 import Language.Granule.Interpreter.Preprocess
 import Language.Granule.Interpreter.Type
+import Language.Granule.Rewriter.Rewrite (rewriteWithoutInterfaces)
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
@@ -113,21 +114,26 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
         case checked of
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
           Right (Left errs) -> return . Left $ CheckerError errs
-          Right (Right ast') -> do
+          Right (Right (renv, checkedAst)) -> do
             if noEval then do
               printSuccess "OK"
               return $ Right NoEval
             else do
               printSuccess "OK, evaluating..."
-              result <- try $ eval ast
-              case result of
-                Left (e :: SomeException) ->
-                  return . Left . EvalError $ displayException e
-                Right Nothing -> if testing
-                  then return $ Right NoEval
-                  else return $ Left NoMain
-                Right (Just result) -> do
-                  return . Right $ InterpreterResult result
+              maybeRewrittenAst <- rewriteWithoutInterfaces renv checkedAst
+              case maybeRewrittenAst of
+                Left err -> do
+                  pure . Left . FatalError $ err
+                Right rewrittenAst -> do
+                  result <- try $ eval rewrittenAst
+                  case result of
+                    Left (e :: SomeException) ->
+                      pure . Left . EvalError $ displayException e
+                    Right Nothing -> if testing
+                      then pure $ Right NoEval
+                      else pure $ Left NoMain
+                    Right (Just result) -> do
+                      pure . Right $ InterpreterResult result
 
 
 -- | Get the flags embedded in the first line of a file, e.g.
