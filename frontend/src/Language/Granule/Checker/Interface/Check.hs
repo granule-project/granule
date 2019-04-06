@@ -518,7 +518,6 @@ getParamsFreeVarKinds sp = fmap (tyMapVars . snd) . getParamsKinds'
            -- when we have a variable, infer its kind from the parameters
            Just (TyVar v) -> do
              let fvs = freeVars (getArgs t)
-             tvc <- getTyVarContext
              boundNames <- fmap (fmap fst) getTyVarContext
              argPolys <- mapM (\p -> do
                                  vk <- freshIdentifierBase "k"
