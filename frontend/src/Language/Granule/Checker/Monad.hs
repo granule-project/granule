@@ -504,25 +504,6 @@ requireInScope (ctxtf, errf) sp name = do
   maybe (throw $ errf sp name) pure def
 
 
--- Various interfaces for the checker
--- instance Monad Checker where
---   return = Checker . return
---   (Checker x) >>= f = Checker (x >>= (unwrap . f))
---
--- instance Functor Checker where
---   fmap f (Checker x) = Checker (fmap f x)
---
--- instance Applicative Checker where
---   pure    = return
---   f <*> x = f >>= \f' -> x >>= \x' -> return (f' x')
---
--- instance MonadState CheckerState Checker where
---   get = Checker get
---   put s = Checker (put s)
---
--- instance MonadIO Checker where
---   liftIO = Checker . lift
-
 -- | Convenience function for throwing a single error
 throw :: CheckerError -> Checker a
 throw = throwError . pure
