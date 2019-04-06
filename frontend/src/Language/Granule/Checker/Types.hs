@@ -82,10 +82,6 @@ effectMismatch s ef1 ef2 = equalityErr $
   EffectMismatch{ errLoc = s, effExpected = ef1, effActual = ef2 }
 
 
-coeffectMismatch s c1 c2 = equalityErr $
-  CoeffectEqualityMismatch{ errLoc = s, errDesc = "", errC1 = c1, errC2 = c2 }
-
-
 unequalSessionTypes s t1 t2 = equalityErr $
   TypeError{ errLoc = s, tyExpected = t1, tyActual = t2 }
 
