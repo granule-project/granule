@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ViewPatterns #-}
 
 {-# options_ghc -fno-warn-missing-signatures #-}
@@ -253,72 +254,83 @@ requireEqualityResult :: (?globals :: Globals)
 requireEqualityResult t = (>>= either throw (\r -> enactEquality t r >> pure r))
 
 
+------------------
+-- Type helpers --
+------------------
+
+
+-- | Explains how coeffects should be related by a solver constraint.
+type Rel = (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+
+
+type EqualityProver a b = (?globals :: Globals) =>
+  Span -> Rel -> SpecIndicator -> a -> a -> Checker b
+
+
+type EqualityProver' a b = (?globals :: Globals) =>
+  Span -> a -> a -> Checker b
+
+
+type EqualityProverWithSpec a b = (?globals :: Globals) =>
+  Span -> SpecIndicator -> a -> a -> Checker b
+
+
 ---------------------------------
 ----- Bulk of equality code -----
 ---------------------------------
 
 
 -- | True if the two types are equal.
-typesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
+typesAreEqual :: EqualityProver' Type Bool
 typesAreEqual s t1 t2 =
   fmap equalityResultIsSuccess $ equalTypes s t1 t2
 
 
 -- | True if the two types are equal.
-typesAreEqualWithCheck :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
+typesAreEqualWithCheck :: EqualityProver' Type Bool
 typesAreEqualWithCheck s t1 t2 =
   fmap equalityResultIsSuccess $ checkEquality (equalTypes s t1) t2
 
 
-lTypesAreEqual :: (?globals :: Globals) => Span -> Type -> Type -> Checker Bool
+lTypesAreEqual :: EqualityProver' Type Bool
 lTypesAreEqual s t1 t2 = fmap (either (const False) (const True)) $ lEqualTypes s t1 t2
 
 
-requireEqualTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker EqualityProof
+requireEqualTypes :: EqualityProver' Type EqualityProof
 requireEqualTypes s t1 t2 =
     requireEqualityResult t2 $ equalTypes s t1 t2
 
 
-requireEqualTypesRelatedCoeffects :: (?globals :: Globals)
-  => Span
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -> SpecIndicator
-  -> Type
-  -> Type
-  -> Checker EqualityProof
+requireEqualTypesRelatedCoeffects :: EqualityProver Type EqualityProof
 requireEqualTypesRelatedCoeffects s rel spec t1 t2 =
     requireEqualityResult t2 $ equalTypesRelatedCoeffects s rel spec t1 t2
 
 
-lEqualTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator ->Type -> Type -> Checker EqualityResult
+lEqualTypesWithPolarity :: EqualityProverWithSpec Type EqualityResult
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffects s ApproximatedBy pol
 
 
-equalTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator -> Type -> Type -> Checker EqualityResult
+equalTypesWithPolarity :: EqualityProverWithSpec Type EqualityResult
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffects s Eq pol
 
 
-lEqualTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker EqualityResult
+lEqualTypes :: EqualityProver' Type EqualityResult
 lEqualTypes s = equalTypesRelatedCoeffects s ApproximatedBy SndIsSpec
 
 
-equalTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker EqualityResult
+equalTypes :: EqualityProver' Type EqualityResult
 equalTypes s = equalTypesRelatedCoeffects s Eq SndIsSpec
 
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker EqualityResult
+equalTypesWithUniversalSpecialisation :: EqualityProver' Type EqualityResult
 equalTypesWithUniversalSpecialisation s =
   equalTypesRelatedCoeffects s Eq SndIsSpec
 
 
+-- | Indicates whether the first type or second type is a specification.
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
+
 
 flipIndicator :: SpecIndicator -> SpecIndicator
 flipIndicator FstIsSpec = SndIsSpec
@@ -328,15 +340,7 @@ flipIndicator PatternCtxt = PatternCtxt
 {- | Check whether two types are equal, and at the same time
      generate coeffect equality constraints and a unifier
       Polarity indicates which -}
-equalTypesRelatedCoeffects :: (?globals :: Globals)
-  => Span
-  -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -- Indicates whether the first type or second type is a specification
-  -> SpecIndicator
-  -> Type
-  -> Type
-  -> Checker EqualityResult
+equalTypesRelatedCoeffects :: EqualityProver Type EqualityResult
 equalTypesRelatedCoeffects s rel sp (FunTy t1 t2) (FunTy t1' t2') = do
   -- contravariant position (always approximate)
   eq1 <- equalTypesRelatedCoeffects s ApproximatedBy (flipIndicator sp) t1' t1
