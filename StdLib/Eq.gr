@@ -49,24 +49,26 @@ instance Eq Float where
   equal x y = x ≡ y
 
 
-instance Eq IOMode where
-  equal ReadMode ReadMode           = True;
-  equal WriteMode WriteMode         = True;
-  equal AppendMode AppendMode       = True;
-  equal ReadWriteMode ReadWriteMode = True;
-
-  equal ReadMode WriteMode     = False;
-  equal ReadMode AppendMode    = False;
-  equal ReadMode ReadWriteMode = False;
-
-  equal WriteMode ReadMode      = False;
-  equal WriteMode AppendMode    = False;
-  equal WriteMode ReadWriteMode = False;
-
-  equal AppendMode ReadMode      = False;
-  equal AppendMode WriteMode     = False;
-  equal AppendMode ReadWriteMode = False;
-
-  equal ReadWriteMode ReadMode   = False;
-  equal ReadWriteMode WriteMode  = False;
-  equal ReadWriteMode AppendMode = False
+-- this doesn't type-check now ('ReadMode' etc.
+-- have kind 'HandleType' rather than 'Type').
+-- instance Eq IOMode where
+--   equal ReadMode ReadMode           = True;
+--   equal WriteMode WriteMode         = True;
+--   equal AppendMode AppendMode       = True;
+--   equal ReadWriteMode ReadWriteMode = True;
+--
+--   equal ReadMode WriteMode     = False;
+--   equal ReadMode AppendMode    = False;
+--   equal ReadMode ReadWriteMode = False;
+--
+--   equal WriteMode ReadMode      = False;
+--   equal WriteMode AppendMode    = False;
+--   equal WriteMode ReadWriteMode = False;
+--
+--   equal AppendMode ReadMode      = False;
+--   equal AppendMode WriteMode     = False;
+--   equal AppendMode ReadWriteMode = False;
+--
+--   equal ReadWriteMode ReadMode   = False;
+--   equal ReadWriteMode WriteMode  = False;
+--   equal ReadWriteMode AppendMode = False
