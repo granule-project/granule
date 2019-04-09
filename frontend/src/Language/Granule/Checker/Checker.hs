@@ -928,9 +928,9 @@ solveConstraints predicate s name = do
       simplPred <- simplifyPred predicate
       if msg' == "is Falsifiable\n"
         then throw SolverErrorFalsifiableTheorem
-          { errLoc = s, errDefId = name, errPred = predicate }
+          { errLoc = s, errDefId = name, errPred = simplPred }
         else throw SolverErrorCounterExample
-          { errLoc = s, errDefId = name, errPred = predicate }
+          { errLoc = s, errDefId = name, errPred = simplPred }
     NotValidTrivial unsats ->
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout ->

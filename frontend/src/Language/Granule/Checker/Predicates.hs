@@ -299,11 +299,13 @@ instance Pretty Pred where
      (intercalate " ∧ ")
      (intercalate " ∨ ")
      (\ctxt p q ->
-         (if null ctxt then "" else "∀ " <> pretty ctxt <> " . ")
+         (if null ctxt then "" else "∀ " <> pretty' ctxt <> " . ")
       <> "(" <> p <> " -> " <> q <> ")")
       (prettyL l)
       (\p -> "¬(" <> p <> ")")
       (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
+    where pretty' =
+            intercalate "," . map (\(id, k) -> pretty id <> " : " <> pretty k)
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
