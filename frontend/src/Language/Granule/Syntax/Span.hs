@@ -8,7 +8,8 @@ type Pos = (Int, Int) -- (line, column)
 
 data Span = Span { startPos :: Pos
                  , endPos :: Pos
-                 , filename :: String }
+                 , filename :: String
+                 }
   deriving (Eq, Show)
 
 nullSpanLocs :: (Pos, Pos)

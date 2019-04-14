@@ -31,25 +31,25 @@ freshIdentifierBase s = do
       put checkerState { uniqueVarIdCounterMap = vmap' }
       return $ s' <> "." <> show n
 
--- | Helper for creating a few (existential) coeffect variable of a particular
+-- | Helper for creating a new (existential) coeffect variable of a particular
 --   coeffect type.
-freshTyVarInContext :: Id -> Kind -> Checker Id
+freshTyVarInContext :: Id -> Kind -> TyVarOrigin -> Checker Id
 freshTyVarInContext cvar k = do
     freshTyVarInContextWithBinding cvar k InstanceQ
 
--- | Helper for creating a few (existential) coeffect variable of a particular
+-- | Helper for creating a new (existential) coeffect variable of a particular
 --   coeffect type.
-freshTyVarInContextWithBinding :: Id -> Kind -> Quantifier -> Checker Id
-freshTyVarInContextWithBinding var k q = do
+freshTyVarInContextWithBinding :: Id -> Kind -> Quantifier -> TyVarOrigin -> Checker Id
+freshTyVarInContextWithBinding var k q o = do
     freshName <- freshIdentifierBase (internalName var)
     let var' = mkId freshName
-    registerTyVarInContext var' k q
+    registerTyVarInContext var' k q o
     return var'
 
 -- | Helper for registering a new coeffect variable in the checker
-registerTyVarInContext :: Id -> Kind -> Quantifier -> Checker ()
-registerTyVarInContext v k q = do
-  modify (\st -> st { tyVarContext = (v, (k, q)) : tyVarContext st })
+registerTyVarInContext :: Id -> Kind -> Quantifier -> TyVarOrigin -> Checker ()
+registerTyVarInContext v k q o = do
+  modify (\st -> st { tyVarContext = (v, (k, q, o)) : tyVarContext st })
 
 -- Erase a variable from the context
 eraseVar :: Ctxt Assumption -> Id -> Ctxt Assumption

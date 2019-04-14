@@ -126,6 +126,15 @@ meetConsumption Empty Full = NotFull
 meetConsumption Full Empty = NotFull
 
 
+data TyVarOrigin
+  = FromTypeDefinition
+    { sourceLoc :: Span, typeConstructorName :: Id }
+  | FromValueConstructorDefinition
+    { sourceLoc :: Span, valueConstructorName :: Id }
+  | FromTopLevelDefinition
+    { sourceLoc :: Span, definitionName :: Id }
+  deriving (Show, Eq)
+
 data CheckerState = CS
             { -- Fresh variable id state
               uniqueVarIdCounterMap  :: M.Map String Nat
@@ -140,7 +149,7 @@ data CheckerState = CS
 
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
-            , tyVarContext   :: Ctxt (Kind, Quantifier)
+            , tyVarContext   :: Ctxt (Kind, Quantifier, TyVarOrigin)
 
             -- Guard contexts (all the guards in scope)
             -- which get promoted by branch promotions
