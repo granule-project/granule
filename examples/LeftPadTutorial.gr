@@ -95,9 +95,9 @@ sub (S m') (S n') = sub m' n'
 
 leftPad : forall {t : Type, m : Nat, n : Nat}
         . {m >= n} => Vec n t -> t [m - n] -> N m -> Vec m t
-leftPad str [c] n =
+leftPad str c n =
   let (m, str) = length' str
-  in append (replicate (sub n m) [c]) str
+  in append (replicate (sub n m) c) str
 
 -- The type says that given a target length an input vector of length `n`
 -- and a target length `m` that is greater than or equal to `m`, then we
