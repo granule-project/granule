@@ -49,7 +49,7 @@ length (Cons [_] xs) = S (length xs)
 
 -- The type `t [0]` represents values of type `t` wrapped in a
 -- "graded modality" whose "grade" (index) states that the value
--- is used 0 times. This non-linear behaviour is then access by
+-- is used 0 times. This non-linear behaviour is then accessed by
 -- the "unboxing" pattern match in the second equation of `length`.
 
 -- Alternatively, we can reconstruct the vector and return it
