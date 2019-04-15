@@ -168,3 +168,16 @@ reverse : forall {a : Type} . List a -> List a
 reverse Empty = Empty;
 reverse (Next x Empty) = Next x Empty;
 reverse (Next x (Next y ys)) = Next y (reverse (Next x ys))
+
+
+---------------------
+----- Problem 6 -----
+---------------------
+
+-- Find out whether a list is a palindrome
+
+
+-- skipping until interfaces are supported
+-- in Granule (we could define data types
+-- to represent interfaces, but we already
+-- have an implementation for these).
