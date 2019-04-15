@@ -82,7 +82,7 @@ grGolden formatResult file = goldenTest
     checkDifference exp act = if exp == act
       then return Nothing
       else return . Just $ unlines
-        [ "Expected (<) and actual (>) output differ:"
+        [ "Contents of " <> outfile <> " (<) and actual output (>) differ:"
         , ppDiff $ getGroupedDiff (lines exp) (lines act)
         ]
 

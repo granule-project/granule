@@ -950,13 +950,13 @@ solveConstraintsSafe predicate s name = do
     QED -> success
     NotValid msg -> do
        msg' <- rewriteMessage msg
-       simpPred <- simplifyPred predicate
+       simplPred <- simplifyPred predicate
 
        if msg' == "is Falsifiable\n"
          then failed $ pure SolverErrorFalsifiableTheorem
-           { errLoc = s, errDefId = name, errPred = predicate }
+           { errLoc = s, errDefId = name, errPred = simplPred }
          else failed $ pure SolverErrorCounterExample
-           { errLoc = s, errDefId = name, errPred = predicate }
+           { errLoc = s, errDefId = name, errPred = simplPred }
 
     NotValidTrivial unsats ->
        failed $ fmap (\c -> GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats

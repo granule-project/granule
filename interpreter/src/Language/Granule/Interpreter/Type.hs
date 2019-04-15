@@ -190,13 +190,16 @@ type RExpr = Expr (Runtime ()) ()
 
 -- | Runtime values only used in the interpreter.
 data Runtime a =
-  -- | Primitive functions (builtins).
+  -- | Primitive functions (builtins)
     Primitive ((Value (Runtime a) a) -> IO (Value (Runtime a) a))
-  -- | Primitive operations that also close over the context.
+
+  -- | Primitive operations that also close over the context
   | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> (Value (Runtime a) a) -> IO (Value (Runtime a) a))
-  -- | File handler.
+
+  -- | File handler
   | Handle SIO.Handle
-  -- | Channels.
+
+  -- | Channels
   | Chan (CC.Chan (Value (Runtime a) a))
 
 
@@ -207,7 +210,7 @@ instance Show (Runtime a) where
   show (Handle _)           = "Some handle"
 
 
-instance Show (Runtime a) => Pretty (Runtime a) where
+instance Pretty (Runtime a) where
   prettyL _ = show
 
 
