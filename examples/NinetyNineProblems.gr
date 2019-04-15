@@ -4,7 +4,7 @@
 ----- Problem 1 -----
 ---------------------
 
--- find the last element of a list
+-- Find the last element of a list
 
 
 -- first define what a list is:
@@ -46,7 +46,7 @@ last' (Next x xs) =
 ----- Problem 2 -----
 ---------------------
 
--- find the last but one element of a list
+-- Find the last but one element of a list
 
 
 -- very similar to the approach before, we just
