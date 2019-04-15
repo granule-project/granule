@@ -141,3 +141,30 @@ length' Empty = (Empty, Z);
 length' (Next x xs) =
   let (rest, len) = length' xs
   in (Next x rest, S len)
+
+
+---------------------
+----- Problem 5 -----
+---------------------
+
+-- Reverse a list
+
+
+-- it is interesting to note that in a linear language,
+-- such as Granule, the semantics of the type
+-- 'List a -> List a' carry the same information as the
+-- type 'Vec n a -> Vec n a', that is to say,
+-- we know that any operation 'List a -> List a' must
+-- preserve length (and elements), which is the same
+-- as for 'Vec n a -> Vec n a'.
+--
+-- it is also important to note that 'List a -> List a'
+-- has _more_ semantics in a linear language than
+-- 'Vec n a -> Vec n a' in a non-linear one. Whilst
+-- the latter does indicate that the length will stay
+-- the same, it does allow you to e.g., forget some elements
+-- whilst duplicating others. The linear version does not.
+reverse : forall {a : Type} . List a -> List a
+reverse Empty = Empty;
+reverse (Next x Empty) = Next x Empty;
+reverse (Next x (Next y ys)) = Next y (reverse (Next x ys))
