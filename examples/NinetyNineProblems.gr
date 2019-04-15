@@ -1,0 +1,25 @@
+-- 99 problems in Granule! (https://wiki.haskell.org/H-99:_Ninety-Nine_Haskell_Problems)
+
+---------------------
+----- Problem 1 -----
+---------------------
+
+-- find the last element of a list
+
+
+-- first define what a list is:
+
+data List a = Empty | Next a (List a)
+
+-- we don't always have a last element, so use a 'Maybe'
+-- type to represent this:
+
+data Maybe a = None | Some a
+
+-- we are only going to use one of the
+-- elements, so we use the grade '0..1'
+-- to indicate this
+last : forall {a : Type} . List (a [0..1]) -> Maybe a
+last Empty            = None;
+last (Next [x] Empty) = Some x;
+last (Next [_] xs)    = last xs
