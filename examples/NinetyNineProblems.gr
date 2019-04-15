@@ -181,3 +181,35 @@ reverse (Next x (Next y ys)) = Next y (reverse (Next x ys))
 -- in Granule (we could define data types
 -- to represent interfaces, but we already
 -- have an implementation for these).
+
+
+---------------------
+----- Problem 7 -----
+---------------------
+
+-- Flatten a nested list structure
+
+
+-- define the nested list structure
+data NestedList a = Elem a | NLst (List (NestedList a))
+
+
+-- we don't know the length of the list, so we must
+-- allow arbitrary use for our function
+mapList : forall {a : Type, b : Type} . (a -> b) [0..Inf] -> List a -> List b
+mapList [_] Empty = Empty;
+mapList [f] (Next x xs) = Next (f x) (mapList [f] xs)
+
+append : forall {a : Type} . List a -> List a -> List a
+append Empty xs = xs;
+append (Next x xs) ys = Next x (append xs ys)
+
+join : forall {a : Type} . List (List a) -> List a
+join Empty = Empty;
+join (Next x xs) = append x (join xs)
+
+-- nothing fancy going on here, we just need to define
+-- some helpers to make things a bit nicer
+flatten : forall {a : Type} . NestedList a -> List a
+flatten (Elem x) = Next x Empty;
+flatten (NLst xs) = join (mapList [flatten] xs)
