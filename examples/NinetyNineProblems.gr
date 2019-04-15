@@ -23,3 +23,20 @@ last : forall {a : Type} . List (a [0..1]) -> Maybe a
 last Empty            = None;
 last (Next [x] Empty) = Some x;
 last (Next [_] xs)    = last xs
+
+-- alternatively, we can rebuild the initial part of the
+-- list as we go. In this case, our result type is a pair,
+-- containing all of the list bar the last element in the
+-- first component of the pair, and a value indicating
+-- whether or not there was a last element, along with that
+-- value (if it exists), in the second.
+--
+-- notice that we no longer use the '0..1' grade, as we
+-- consume every value in the list once, as we build up
+-- the result
+last' : forall {a : Type} . List a -> (List a, Maybe a)
+last' Empty = (Empty, None);
+last' (Next x Empty) = (Empty, Some x);
+last' (Next x xs) =
+  let (init, lastElem) = last' xs
+  in (Next x init, lastElem)
