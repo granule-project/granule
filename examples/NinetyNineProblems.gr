@@ -65,3 +65,49 @@ lastButOne' (Next x (Next y Empty)) = (Next y Empty, Some x);
 lastButOne' (Next x xs) =
   let (init, lastButOneElem) = lastButOne' xs
   in (Next x init, lastButOneElem)
+
+
+---------------------
+----- Problem 3 -----
+---------------------
+
+-- Find the K'th element of a list. The first element in the list is number 1.
+
+
+-- we can first define a data type for positive naturals
+--
+-- where 'Z1' represents the number '1', and 'S1 x' represents '1 + x'
+data Nat1 = Z1 | S1 Nat1
+
+
+-- let's use that same notion of building up the list without the specified
+-- element, so that we can use every element once.
+--
+-- we give a '0..1' grade to our input number, as if it so happens that
+-- the number is greater than the length of our list, it doesn't make sense
+-- to use it
+elementAt : forall {a : Type} . List a -> Nat1 [0..1] -> (List a, Maybe a)
+elementAt Empty [_] = (Empty, None);
+elementAt (Next x xs) [Z1] = (xs, Some x);
+elementAt (Next x xs) [S1 k] =
+  let (rest, elem) = elementAt xs [k]
+  in (Next x rest, elem)
+
+
+-- What if we wanted to not do this re-building pattern? We just wanted
+-- to indicate that we might not use elements of the list?
+--
+-- Let's try an implementation, following that idea:
+--
+-- elementAt : forall {a : Type} . List (a [0..1]) -> Nat1 [0..1] -> Maybe a
+-- elementAt Empty [_] = None;
+-- elementAt (Next [x] xs) [Z1] = Some x;
+-- elementAt (Next [_] xs) [S1 k] = elementAt xs k
+--
+-- The second clause yields issue here:
+--
+-- elementAt (Next [x] xs) [Z1] = Some x
+--
+-- 'xs' has type 'List (a [0..1])', i.e., it is linear.
+-- To respect linearity, we _must_ use that 'xs', but we can't,
+-- so this definition won't work.
