@@ -40,3 +40,28 @@ last' (Next x Empty) = (Empty, Some x);
 last' (Next x xs) =
   let (init, lastElem) = last' xs
   in (Next x init, lastElem)
+
+
+---------------------
+----- Problem 2 -----
+---------------------
+
+-- find the last but one element of a list
+
+
+-- very similar to the approach before, we just
+-- adjust our pattern matching
+
+lastButOne : forall {a : Type} . List (a [0..1]) -> Maybe a
+lastButOne Empty                       = None;
+lastButOne (Next [_] Empty)            = None;
+lastButOne (Next [_] (Next [x] Empty)) = Some x;
+lastButOne (Next [_] xs)               = lastButOne xs
+
+lastButOne' : forall {a : Type} . List a -> (List a, Maybe a)
+lastButOne' Empty                   = (Empty, None);
+lastButOne' (Next x Empty)          = (Next x Empty, None);
+lastButOne' (Next x (Next y Empty)) = (Next y Empty, Some x);
+lastButOne' (Next x xs) =
+  let (init, lastButOneElem) = lastButOne' xs
+  in (Next x init, lastButOneElem)
