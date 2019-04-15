@@ -111,3 +111,33 @@ elementAt (Next x xs) [S1 k] =
 -- 'xs' has type 'List (a [0..1])', i.e., it is linear.
 -- To respect linearity, we _must_ use that 'xs', but we can't,
 -- so this definition won't work.
+
+
+---------------------
+----- Problem 4 -----
+---------------------
+
+-- Find the number of elements of a list
+
+
+-- presently, `Nat' does not have kind `Type',
+-- so we just define a simple type-level Nat:
+data Nat' = Z | S Nat'
+
+
+-- we can define a non re-building version of `length'
+-- as follows. Rather than using a '0..1' grade as in
+-- previous examples, we just use a '0' grade, indicating
+-- that we consume none of the values in our list in the
+-- production of the result.
+length : forall {a : Type} . List (a [0]) -> Nat'
+length Empty = Z;
+length (Next [_] xs) = S (length xs)
+
+-- we can define a re-building version in the same
+-- manner as before
+length' : forall {a : Type} . List a -> (List a, Nat')
+length' Empty = (Empty, Z);
+length' (Next x xs) =
+  let (rest, len) = length' xs
+  in (Next x rest, S len)
