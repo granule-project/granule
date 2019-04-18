@@ -445,16 +445,18 @@ joinTypes s (TyInt n) (TyVar m) = do
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
-  -- Create fresh variables for the two tyint variables
-  -- TODO: how do we know they are tyints? Looks suspicious
-  --let kind = TyCon $ mkId "Nat"
-  --nvar <- freshTyVarInContext n kind
-  --mvar <- freshTyVarInContext m kind
-  -- Unify the two variables into one
-  --addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
-  --return $ TyVar n
-  -- TODO: FIX. The above can't be right.
-  error $ "Trying to join two type variables: " ++ pretty n ++ " and " ++ pretty m
+
+  kind <- inferKindOfType s (TyVar n)
+  case kind of
+    KPromote t -> do
+
+      nvar <- freshTyVarInContextWithBinding n kind BoundQ
+      -- Unify the two variables into one
+      addConstraint (ApproximatedBy s (CVar n) (CVar nvar) t)
+      addConstraint (ApproximatedBy s (CVar m) (CVar nvar) t)
+      return $ TyVar nvar
+
+    _ -> error $ "Trying to join two type variables: " ++ pretty n ++ " and " ++ pretty m
 
 joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t1'' <- joinTypes s t1 t1'
