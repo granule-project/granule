@@ -10,6 +10,7 @@ dependencies:
 - directory
 - extra
 - filepath
+- gitrev
 - Glob
 - granule-frontend
 - mtl >=2.2.1

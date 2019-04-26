@@ -15,11 +15,13 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Granule.Interpreter where
 
 import Control.Exception (SomeException, displayException, try)
 import Control.Monad ((<=<), forM)
+import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
 import Data.List (intercalate, isPrefixOf, stripPrefix)
@@ -34,6 +36,7 @@ import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import System.FilePath (takeFileName)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
+import Options.Applicative.Help.Pretty (string)
 
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError)
@@ -215,8 +218,15 @@ getGrCommandLineArgs = customExecParser (prefs disambiguate) parseGrConfig
 
 parseGrConfig :: ParserInfo ([FilePath], GrConfig)
 parseGrConfig = info (go <**> helper) $ briefDesc
-    <> header ("Granule " <> showVersion version)
-    <> footer "\n\nThis software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
+    <> (headerDoc . Just . string . unlines)
+            [ "The Granule Interpreter"
+            , "version: "     <> showVersion version
+            , "branch: "      <> $(gitBranch)
+            , "commit hash: " <> $(gitHash)
+            , "commit date: " <> $(gitCommitDate)
+            , if $(gitDirty) then "(uncommitted files present)" else ""
+            ]
+    <> footer "This software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
               \ Consult the LICENSE for further information."
   where
     go = do
