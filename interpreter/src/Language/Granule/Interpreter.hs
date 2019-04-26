@@ -57,15 +57,18 @@ main = do
 
 -- | Run the checker and interpreter on a bunch of files
 runGrOnFiles :: [FilePath] -> GrConfig -> IO ()
-runGrOnFiles globPatterns config = do
+runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
     pwd <- getCurrentDirectory
     results <- forM globPatterns $ \pattern -> do
       paths <- glob pattern
       case paths of
-        [] -> return [Left $ NoMatchingFiles pattern]
+        [] -> do
+          let result = Left $ NoMatchingFiles pattern
+          printResult result
+          return [result]
         _ -> forM paths $ \path -> do
           let fileName = if pwd `isPrefixOf` path then takeFileName path else path
-          let ?globals = (grGlobals config){ globalsSourceFilePath = Just fileName } in do
+          let ?globals = ?globals{ globalsSourceFilePath = Just fileName } in do
             printInfo $ "Checking " <> fileName <> "..."
             src <- preprocess
               (rewriter config)
