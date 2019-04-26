@@ -621,7 +621,7 @@ provePredicate predicate vars
       return $ case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
         Unsatisfiable {} -> QED
-        ProofError _ msgs -> SolverProofError $ unlines msgs
+        ProofError _ msgs _ -> SolverProofError $ unlines msgs
         Unknown _ UnknownTimeOut -> Timeout
         Unknown _ reason  -> OtherSolverError $ show reason
         _ ->
