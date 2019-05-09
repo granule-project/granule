@@ -4,4 +4,4 @@ Type variable `a` cannot be unified with type `a [0]` (occurs check failure; imp
 
 Falsifiable theorem: 7:1:
 The following theorem associated with `secondOrderAlt` is falsifiable:
-	( -> (prom_[x]0 * 1 ≤ 0) ∧ (prom_[x]0 ≤ 1))
+	(prom_[x]0 ≤ 0) ∧ (prom_[x]0 ≤ 1)

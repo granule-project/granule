@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: 9:1:
 The following theorem associated with `foo` is falsifiable:
-	( -> (n1 = 0) ∧ (0..1 ≤ 0..1) ∧ (n1 > 0))
+	(0..1 ≤ 0..1) ∧ (0 > 0)
