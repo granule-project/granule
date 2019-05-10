@@ -395,6 +395,8 @@ data CheckerError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
     { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+  | UnificationFailGeneric
+    { errLoc :: Span, errSubst1 :: Substitutors, errSubst2 :: Substitutors }
   | OccursCheckFail
     { errLoc :: Span, errVar :: Id, errTy :: Type }
   | SessionDualityError
@@ -475,6 +477,7 @@ instance UserMsg CheckerError where
   title EffectMismatch{} = "Effect mismatch"
   title UnificationDisallowed{} = "Unification disallowed"
   title UnificationFail{} = "Unification failed"
+  title UnificationFailGeneric{} = "Unification failed"
   title OccursCheckFail{} = "Unification failed"
   title SessionDualityError{} = "Session duality error"
   title NoUpperBoundError{} = "Type upper bound"
@@ -614,6 +617,9 @@ instance UserMsg CheckerError where
     = "Trying to unify `"
     <> pretty errTy1 <> "` and `"
     <> pretty errTy2 <> "` but in a context where unification is not allowed."
+
+  msg UnificationFailGeneric{..}
+    = "Trying to unify `" <> pretty errSubst1 <> "` and `" <> pretty errSubst2 <> "`"
 
   msg UnificationFail{..}
     = "Cannot unify universally quantified type variable `" <> pretty errVar <> "`"

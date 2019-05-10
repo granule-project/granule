@@ -22,21 +22,17 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Constraints.Compile
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Variables (freshTyVarInContextWithBinding)
 
 import Language.Granule.Utils
 
-
 class Substitutable t where
   -- | Rewrite a 't' using a substitution
   substitute :: (?globals :: Globals)
              => Substitution -> t -> Checker t
-
-  unify :: (?globals :: Globals)
-        => t -> t -> Checker (Maybe Substitution)
 
 -- Instances for the main representation of things in the types
 
@@ -60,22 +56,6 @@ instance Substitutable Substitutors where
         e <- substitute subst e
         return $ SubstE e
 
-  unify (SubstT t) (SubstT t') = unify t t'
-  unify (SubstT t) (SubstC c') = do
-    -- We can unify a type with a coeffect, if the type is actually a Nat
-    k <- inferKindOfType nullSpan t
-    k' <- inferCoeffectType nullSpan c'
-    case joinKind k (KPromote k') of
-      Just (KPromote (TyCon k)) | internalName k == "Nat" -> do
-             c <- compileNatKindedTypeToCoeffect nullSpan t
-             unify c c'
-      _ -> return Nothing
-  unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
-  unify (SubstC c) (SubstC c') = unify c c'
-  unify (SubstK k) (SubstK k') = unify k k'
-  unify (SubstE e) (SubstE e') = unify e e'
-  unify _ _ = return Nothing
-
 -- Speciale case of substituting a substition
 instance Substitutable Substitution where
   substitute subst [] = return []
@@ -90,8 +70,6 @@ instance Substitutable Substitution where
         $ "Granule bug. Cannot rewrite a substitution `s` as the substitution map `s'` = "
         <> show subst <> " maps variable `" <> show var
         <> "` to a non variable type: `" <> show t <> "`"
-
-  unify = error "Unification not defined for substitutions"
 
 instance Substitutable Type where
   substitute subst = typeFoldM (baseTypeFold
@@ -112,210 +90,101 @@ instance Substitutable Type where
            Just (SubstT t) -> return t
            _               -> mTyVar v
 
-  unify (TyVar v) t = return $ Just [(v, SubstT t)]
-  unify t (TyVar v) = return $ Just [(v, SubstT t)]
-  unify (FunTy t1 t2) (FunTy t1' t2') = do
-    u1 <- unify t1 t1'
-    u2 <- unify t2 t2'
-    u1 <<>> u2
-  unify (TyCon c) (TyCon c') | c == c' = return $ Just []
-  unify (Box c t) (Box c' t') = do
-    u1 <- unify c c'
-    u2 <- unify t t'
-    u1 <<>> u2
-  unify (Diamond e t) (Diamond e' t') = do
-    u1 <- unify e e'
-    u2 <- unify t t'
-    u1 <<>> u2
-  unify (TyApp t1 t2) (TyApp t1' t2') = do
-    u1 <- unify t1 t1'
-    u2 <- unify t2 t2'
-    u1 <<>> u2
-  unify (TyInt i) (TyInt j) | i == j = return $ Just []
-  unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
-    k <- inferKindOfType nullSpan t
-    k' <- inferKindOfType nullSpan t
-    case joinKind k k' of
-      Just (KPromote (TyCon (internalName -> "Nat"))) -> do
-        c  <- compileNatKindedTypeToCoeffect nullSpan t
-        c' <- compileNatKindedTypeToCoeffect nullSpan t'
-        addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
-        return $ Just []
-
-      _ | o == o' -> do
-        u1 <- unify t1 t1'
-        u2 <- unify t2 t2'
-        u1 <<>> u2
-      -- No unification
-      _ -> return $ Nothing
-  -- No unification
-  unify _ _ = return $ Nothing
-
 instance Substitutable Coeffect where
 
-  substitute subst (CPlus c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CPlus c1' c2'
+    substitute subst (CPlus c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CPlus c1' c2'
 
-  substitute subst (CJoin c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CJoin c1' c2'
+    substitute subst (CJoin c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CJoin c1' c2'
 
-  substitute subst (CMeet c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CMeet c1' c2'
+    substitute subst (CMeet c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CMeet c1' c2'
 
-  substitute subst (CTimes c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CTimes c1' c2'
+    substitute subst (CTimes c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CTimes c1' c2'
 
-  substitute subst (CMinus c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CMinus c1' c2'
+    substitute subst (CMinus c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CMinus c1' c2'
 
-  substitute subst (CExpon c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CExpon c1' c2'
+    substitute subst (CExpon c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CExpon c1' c2'
 
-  substitute subst (CInterval c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CInterval c1' c2'
+    substitute subst (CInterval c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CInterval c1' c2'
 
-  substitute subst (CProduct c1 c2) = do
-      c1' <- substitute subst c1
-      c2' <- substitute subst c2
-      return $ CProduct c1' c2'
+    substitute subst (CProduct c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CProduct c1' c2'
 
-  substitute subst (CVar v) =
-      case lookup v subst of
-        Just (SubstC c) -> do
-           checkerState <- get
-           case lookup v (tyVarContext checkerState) of
-             -- If the coeffect variable has a poly kind then update it with the
-             -- kind of c
-             Just ((KVar kv), q) -> do
-                k' <- inferCoeffectType nullSpan c
-                put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                           v (promoteTypeToKind k', q) }
-             _ -> return ()
-           return c
-        -- Convert a single type substitution (type variable, type pair) into a
-        -- coeffect substituion
-        Just (SubstT t) -> do
-          k <- inferKindOfType nullSpan t
-          k' <- inferCoeffectType nullSpan (CVar v)
-          case joinKind k (promoteTypeToKind k') of
-            Just (KPromote (TyCon (internalName -> "Nat"))) ->
-              compileNatKindedTypeToCoeffect nullSpan t
-            _ -> return (CVar v)
+    substitute subst (CVar v) =
+        case lookup v subst of
+            Just (SubstC c) -> do
+                checkerState <- get
+                case lookup v (tyVarContext checkerState) of
+                    -- If the coeffect variable has a poly kind then update it with the
+                    -- kind of c
+                    Just ((KVar kv), q) -> do
+                        k' <- inferCoeffectType nullSpan c
+                        put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
+                                                                    v (promoteTypeToKind k', q) }
+                    _ -> return ()
+                return c
+            -- Convert a single type substitution (type variable, type pair) into a
+            -- coeffect substituion
+            Just (SubstT t) -> do
+                k <- inferKindOfType nullSpan t
+                k' <- inferCoeffectType nullSpan (CVar v)
+                case joinKind k (promoteTypeToKind k') of
+                    Just (KPromote (TyCon (internalName -> "Nat")), _) ->
+                        compileNatKindedTypeToCoeffect nullSpan t
+                    _ -> return (CVar v)
 
-        _               -> return $ CVar v
+            _               -> return $ CVar v
 
-  substitute subst (CInfinity k) = do
-    k <- substitute subst k
-    return $ CInfinity k
+    substitute subst (CInfinity k) = do
+        k <- substitute subst k
+        return $ CInfinity k
 
-  substitute subst (COne k) = do
-    k <- substitute subst k
-    return $ COne k
+    substitute subst (COne k) = do
+        k <- substitute subst k
+        return $ COne k
 
-  substitute subst (CZero k) = do
-    k <- substitute subst k
-    return $ CZero k
+    substitute subst (CZero k) = do
+        k <- substitute subst k
+        return $ CZero k
 
-  substitute subst (CSet tys) = do
-    tys <- mapM (\(v, t) -> substitute subst t >>= (\t' -> return (v, t'))) tys
-    return $ CSet tys
+    substitute subst (CSet tys) = do
+        tys <- mapM (\(v, t) -> substitute subst t >>= (\t' -> return (v, t'))) tys
+        return $ CSet tys
 
-  substitute subst (CSig c k) = do
-    c <- substitute subst c
-    k <- substitute subst k
-    return $ CSig c k
+    substitute subst (CSig c k) = do
+        c <- substitute subst c
+        k <- substitute subst k
+        return $ CSig c k
 
-  substitute _ c@CNat{}      = return c
-  substitute _ c@CFloat{}    = return c
-  substitute _ c@Level{}     = return c
-
-  unify (CVar v) c = do
-    checkerState <- get
-    case lookup v (tyVarContext checkerState) of
-      -- If the coeffect variable has a poly kind then update it with the
-      -- kind of c
-      Just ((KVar kv), q) -> do
-        k' <- inferCoeffectType nullSpan c
-        put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                    v (promoteTypeToKind k', q) }
-      Just (k, q) ->
-        case c of
-          CVar v' -> do
-            case lookup v' (tyVarContext checkerState) of
-              Just (KVar _, q) ->
-                -- The type of v is known and c is a variable with a poly kind
-                put $ checkerState { tyVarContext =
-                                       replace (tyVarContext checkerState)
-                                               v' (k, q) }
-              _ -> return ()
-          _ -> return ()
-      Nothing -> return ()
-    -- Standard result of unifying with a variable
-    return $ Just [(v, SubstC c)]
-
-  unify c (CVar v) = unify (CVar v) c
-  unify (CPlus c1 c2) (CPlus c1' c2') = do
-    u1 <- unify c1 c1'
-    u2 <- unify c2 c2'
-    u1 <<>> u2
-
-  unify (CTimes c1 c2) (CTimes c1' c2') = do
-    u1 <- unify c1 c1'
-    u2 <- unify c2 c2'
-    u1 <<>> u2
-
-  unify (CMeet c1 c2) (CMeet c1' c2') = do
-    u1 <- unify c1 c1'
-    u2 <- unify c2 c2'
-    u1 <<>> u2
-
-  unify (CJoin c1 c2) (CJoin c1' c2') = do
-    u1 <- unify c1 c1'
-    u2 <- unify c2 c2'
-    u1 <<>> u2
-
-  unify (CInfinity k) (CInfinity k') = do
-    unify k k'
-
-  unify (CZero k) (CZero k') = do
-    unify k k'
-
-  unify (COne k) (COne k') = do
-    unify k k'
-
-  unify (CSet tys) (CSet tys') = do
-    ums <- zipWithM (\x y -> unify (snd x) (snd y)) tys tys'
-    foldM (<<>>) (Just []) ums
-
-
-  unify (CSig c ck) (CSig c' ck') = do
-    u1 <- unify c c'
-    u2 <- unify ck ck'
-    u1 <<>> u2
-
-  unify c c' =
-    if c == c' then return $ Just [] else return Nothing
+    substitute _ c@CNat{}      = return c
+    substitute _ c@CFloat{}    = return c
+    substitute _ c@Level{}     = return c
 
 instance Substitutable Effect where
   -- {TODO: Make effects richer}
   substitute subst = pure
-  unify e e' =
-    if e == e' then return $ Just []
-               else return $ Nothing
 
 instance Substitutable Kind where
 
@@ -336,23 +205,9 @@ instance Substitutable Kind where
       Just (SubstT t) -> return $ KPromote t
       _               -> return $ KVar v
 
-  unify (KVar v) k =
-    return $ Just [(v, SubstK k)]
-  unify k (KVar v) =
-    return $ Just [(v, SubstK k)]
-  unify (KFun k1 k2) (KFun k1' k2') = do
-    u1 <- unify k1 k1'
-    u2 <- unify k2 k2'
-    u1 <<>> u2
-  unify k k' = return $ if k == k' then Just [] else Nothing
-
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
   substitute s (Just t) = substitute s t >>= return . Just
-  unify Nothing _ = return (Just [])
-  unify _ Nothing = return (Just [])
-  unify (Just x) (Just y) = unify x y
-
 
 -- | Combine substitutions wrapped in Maybe
 (<<>>) :: (?globals :: Globals)
@@ -389,7 +244,7 @@ combineSubstitutions sp u1 u2 = do
                    --(us, t) <- unifiable v t t' t t'
                    us <- unify s s'
                    case us of
-                     Nothing -> error $ "Cannot unify: " <> show v <> " to both " <> show s <> " and " <> show s'
+                     Nothing -> throw UnificationFailGeneric { errLoc = sp, errSubst1 = s, errSubst2 = s' }
                      Just us -> do
                        sUnified <- substitute us s
                        combineSubstitutions sp [(v, sUnified)] us
@@ -430,8 +285,6 @@ instance Substitutable (Ctxt Assumption) where
   substitute subst ctxt = do
     (ctxt0, ctxt1) <- substCtxt subst ctxt
     return (ctxt0 <> ctxt1)
-
-  unify = error "Unify not implemented for contexts"
 
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
   -> Checker (Ctxt Assumption, Ctxt Assumption)
@@ -542,8 +395,6 @@ instance Substitutable Pred where
         (return . NegPred)
         (\ids k p -> substitute ctxt k >>= \k' -> return $ Exists ids k' p)
 
-  unify _ _ = error "Can't unify predicates"
-
 instance Substitutable Constraint where
   substitute ctxt (Eq s c1 c2 k) = do
     c1 <- substitute ctxt c1
@@ -578,15 +429,12 @@ instance Substitutable Constraint where
     c2 <- substitute ctxt c2
     return $ Gt s c1 c2
 
-  unify _ _ = error "Can't unify constraints"
-
 instance Substitutable (Equation () Type) where
   substitute ctxt (Equation sp ty patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
          expr' <- substitute ctxt expr
          return $ Equation sp ty' pat' expr'
-  unify _ _ = error "Can't unify equations"
 
 substituteValue :: (?globals::Globals)
                 => Substitution
@@ -641,12 +489,10 @@ mapFstM fn (f, r) = do
 
 instance Substitutable (Expr () Type) where
   substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
-  unify _ _ = error "Can't unify equations"
-
+  
 instance Substitutable (Value () Type) where
   substitute ctxt = bicataM (substituteValue ctxt) (substituteExpr ctxt)
-  unify _ _ = error "Can't unify equations"
-
+  
 instance Substitutable (Pattern Type) where
   substitute ctxt = patternFoldM
       (\sp ann nm -> do
@@ -668,4 +514,151 @@ instance Substitutable (Pattern Type) where
           ann' <- substitute ctxt ann
           return $ PConstr sp ann' nm pats)
 
-  unify _ _ = error "Can't unify equations"
+class Unifiable t where
+    unify :: (?globals :: Globals) => t -> t -> Checker (Maybe Substitution)
+
+instance Unifiable Substitutors where
+    unify (SubstT t) (SubstT t') = unify t t'
+    unify (SubstT t) (SubstC c') = do
+        -- We can unify a type with a coeffect, if the type is actually a Nat
+        k <- inferKindOfType nullSpan t
+        k' <- inferCoeffectType nullSpan c'
+        case joinKind k (KPromote k') of
+            Just (KPromote (TyCon k), _) | internalName k == "Nat" -> do
+                c <- compileNatKindedTypeToCoeffect nullSpan t
+                unify c c'
+            _ -> return Nothing
+
+    unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
+    unify (SubstC c) (SubstC c') = unify c c'
+    unify (SubstK k) (SubstK k') = unify k k'
+    unify (SubstE e) (SubstE e') = unify e e'
+    unify _ _ = return Nothing
+
+instance Unifiable Type where
+    unify (TyVar v) t = return $ Just [(v, SubstT t)]
+    unify t (TyVar v) = return $ Just [(v, SubstT t)]
+    unify (FunTy t1 t2) (FunTy t1' t2') = do
+        u1 <- unify t1 t1'
+        u2 <- unify t2 t2'
+        u1 <<>> u2
+    unify (TyCon c) (TyCon c') | c == c' = return $ Just []
+    unify (Box c t) (Box c' t') = do
+        u1 <- unify c c'
+        u2 <- unify t t'
+        u1 <<>> u2
+    unify (Diamond e t) (Diamond e' t') = do
+        u1 <- unify e e'
+        u2 <- unify t t'
+        u1 <<>> u2
+    unify (TyApp t1 t2) (TyApp t1' t2') = do
+        u1 <- unify t1 t1'
+        u2 <- unify t2 t2'
+        u1 <<>> u2
+    unify (TyInt i) (TyInt j) | i == j = return $ Just []
+    unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
+        k <- inferKindOfType nullSpan t
+        k' <- inferKindOfType nullSpan t
+        case joinKind k k' of
+            Just (KPromote (TyCon (internalName -> "Nat")), _) -> do
+                c  <- compileNatKindedTypeToCoeffect nullSpan t
+                c' <- compileNatKindedTypeToCoeffect nullSpan t'
+                addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
+                return $ Just []
+        
+            _ | o == o' -> do
+                u1 <- unify t1 t1'
+                u2 <- unify t2 t2'
+                u1 <<>> u2
+            -- No unification
+            _ -> return $ Nothing
+    -- No unification
+    unify _ _ = return $ Nothing
+
+instance Unifiable Coeffect where
+    unify (CVar v) c = do
+        checkerState <- get
+        case lookup v (tyVarContext checkerState) of
+            -- If the coeffect variable has a poly kind then update it with the
+            -- kind of c
+            Just ((KVar kv), q) -> do
+                    k' <- inferCoeffectType nullSpan c
+                    put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
+                                                                    v (promoteTypeToKind k', q) }
+            Just (k, q) ->
+                case c of
+                    CVar v' ->
+                        case lookup v' (tyVarContext checkerState) of
+                            Just (KVar _, q) ->
+                                -- The type of v is known and c is a variable with a poly kind
+                                put $ checkerState 
+                                    { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
+                            _ -> return ()
+                    _ -> return ()
+            Nothing -> return ()
+        -- Standard result of unifying with a variable
+        return $ Just [(v, SubstC c)]
+    
+    unify c (CVar v) = unify (CVar v) c
+    unify (CPlus c1 c2) (CPlus c1' c2') = do
+        u1 <- unify c1 c1'
+        u2 <- unify c2 c2'
+        u1 <<>> u2
+    
+    unify (CTimes c1 c2) (CTimes c1' c2') = do
+        u1 <- unify c1 c1'
+        u2 <- unify c2 c2'
+        u1 <<>> u2
+    
+    unify (CMeet c1 c2) (CMeet c1' c2') = do
+        u1 <- unify c1 c1'
+        u2 <- unify c2 c2'
+        u1 <<>> u2
+    
+    unify (CJoin c1 c2) (CJoin c1' c2') = do
+        u1 <- unify c1 c1'
+        u2 <- unify c2 c2'
+        u1 <<>> u2
+    
+    unify (CInfinity k) (CInfinity k') = do
+        unify k k'
+    
+    unify (CZero k) (CZero k') = do
+        unify k k'
+    
+    unify (COne k) (COne k') = do
+        unify k k'
+    
+    unify (CSet tys) (CSet tys') = do
+        ums <- zipWithM (\x y -> unify (snd x) (snd y)) tys tys'
+        foldM (<<>>) (Just []) ums
+    
+    unify (CSig c ck) (CSig c' ck') = do
+        u1 <- unify c c'
+        u2 <- unify ck ck'
+        u1 <<>> u2
+    
+    unify c c' =
+        if c == c' then return $ Just [] else return Nothing
+    
+instance Unifiable Effect where
+    unify e e' =
+        if e == e' then return $ Just []
+                    else return $ Nothing
+
+instance Unifiable Kind where
+    unify (KVar v) k =
+        return $ Just [(v, SubstK k)]
+    unify k (KVar v) =
+        return $ Just [(v, SubstK k)]
+    unify (KFun k1 k2) (KFun k1' k2') = do
+        u1 <- unify k1 k1'
+        u2 <- unify k2 k2'
+        u1 <<>> u2
+    unify k k' = return $ if k == k' then Just [] else Nothing
+
+instance Unifiable t => Unifiable (Maybe t) where
+    unify Nothing _ = return (Just [])
+    unify _ Nothing = return (Just [])
+    unify (Just x) (Just y) = unify x y
+        

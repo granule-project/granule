@@ -65,6 +65,15 @@ data Kind = KType
           | KPromote Type        -- Promoted types
     deriving (Show, Ord, Eq)
 
+promoteTypeToKind :: Type -> Kind
+promoteTypeToKind (TyVar v) = KVar v
+promoteTypeToKind t = KPromote t
+
+demoteKindToType :: Kind -> Maybe Type
+demoteKindToType (KPromote t) = Just t
+demoteKindToType (KVar v)     = Just (TyVar v)
+demoteKindToType _            = Nothing
+
 instance Term Kind where
   freeVars (KPromote t) = freeVars t
   freeVars (KVar x)     = [x]

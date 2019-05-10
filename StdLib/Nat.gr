@@ -30,7 +30,7 @@ monus m Z = m;
 monus Z (S n') = monus Z n';
 monus (S m') (S n') = monus m' n'
 
-sub : ∀ n m . {n ≥ m} ⇒  N n → N m → N (n - m)
+sub : ∀ n, m . {n ≥ m} ⇒  N n → N m → N (n - m)
 sub m Z = m;
 sub (S m') (S n') = sub m' n'
 

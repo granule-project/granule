@@ -222,7 +222,7 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
   where
     tyVarConstraint (k1, n) (k2, m) = do
       case k1 `joinKind` k2 of
-        Just (KPromote (TyCon kc)) -> do
+        Just (KPromote (TyCon kc), _) -> do
 
           k <- inferKindOfType s (TyCon kc)
           -- Create solver vars for coeffects
@@ -272,7 +272,7 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
           { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = k2 }
 
         -- If the kind is Nat, then create a solver constraint
-        Just (KPromote (TyCon (internalName -> "Nat"))) -> do
+        Just (KPromote (TyCon (internalName -> "Nat")), _) -> do
           nat <- compileNatKindedTypeToCoeffect s t
           addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
           return (True, [(n, SubstT t)])
@@ -288,14 +288,14 @@ equalTypesRelatedCoeffects s rel (TyVar n) t sp = do
 
        -- If the kind if nat then set up and equation as there might be a
        -- pausible equation involving the quantified variable
-       if (kind == Just (KPromote (TyCon (Id "Nat" "Nat"))))
-         then do
+       case kind of
+         Just (KPromote (TyCon (Id "Nat" "Nat")), _) -> do
            c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
            c2 <- compileNatKindedTypeToCoeffect s t
            addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
            return (True, [(n, SubstT t)])
 
-         else throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t }
+         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t }
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
