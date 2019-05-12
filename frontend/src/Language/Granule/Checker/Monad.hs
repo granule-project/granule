@@ -373,8 +373,8 @@ data CheckerError
     { errLoc :: Span, errPat :: Pattern () }
   | TypeConstructorNameClash -- TODO: duplicate?
     { errLoc :: Span, errId :: Id }
-  | DuplicatePatternError
-    { errLoc :: Span, duplicateBinder :: String }
+  | DuplicateBindingError
+    { errLoc :: Span, duplicateBinding :: String }
   | UnificationError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationKindError
@@ -467,7 +467,7 @@ instance UserMsg CheckerError where
   title RefutablePatternError{} = "Pattern is refutable"
   title TypeConstructorNameClash{} = "Type constructor name clash"
   title DataConstructorTypeVariableNameClash{} = "Type variable name clash"
-  title DuplicatePatternError{} = "Duplicate pattern"
+  title DuplicateBindingError{} = "Duplicate binding"
   title UnificationError{} = "Unification error"
   title UnificationKindError{} = "Unification kind error"
   title TypeVariableMismatch{} = "Type variable mismatch"
@@ -574,8 +574,8 @@ instance UserMsg CheckerError where
     , "`. Choose different, unbound names."
     ]
 
-  msg DuplicatePatternError {..}
-    = "Variable `" <> duplicateBinder <> "` bound more than once"
+  msg DuplicateBindingError { errLoc, duplicateBinding }
+    = "Variable `" <> duplicateBinding <> "` bound more than once."
 
   msg UnificationError{..} = if pretty errTy1 == pretty errTy2
     then "Type `" <> pretty errTy1 <> "` is not unifiable with the type `" <> pretty errTy2 <> "` coming from a different binding"
