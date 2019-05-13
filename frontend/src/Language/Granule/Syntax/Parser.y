@@ -244,7 +244,7 @@ ForallSig :: { [(Id, Kind)] }
  | VarSigs         { $1 }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
- : forall ForallSig '.'                       { (((getPos $1, getPos $3), $2), []) }
+ : forall ForallSig '.'                          { (((getPos $1, getPos $3), $2), []) }
  | forall ForallSig '.' '{' Constraints '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
 Constraints :: { [Type] }
@@ -264,14 +264,14 @@ VarSigs :: { [(Id, Kind)] }
   | VarSig                    { $1 }
 
 VarSig :: { [(Id, Kind)] }
-  : VAR ':' Kind              { [(mkId $ symString $1, $3)] }
-  -- Temporary poor man's kind inference
-  | VAR                       { let x = symString $1
-                                in let k = mkId $ "_k" ++ x
-                                in [(mkId x, KVar k)] }
-  | VAR VarSig                 { let x = symString $1
-                                 in let  k = mkId $ "_k" ++ x
-                                 in [(mkId x, KVar k)] <> $2 }
+  : Vars1 ':' Kind            { map (\id -> (mkId id, $3)) $1 }
+  | Vars1                     { flip concatMap $1 (\id -> let k = mkId ("_k" <> id)
+                                                          in [(mkId id, KVar k)]) }
+
+-- A non-empty list of variables
+Vars1 :: { [String] }
+  : VAR                       { [symString $1] }
+  | VAR Vars1                 { symString $1 : $2 }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }

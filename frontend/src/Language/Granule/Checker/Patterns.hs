@@ -297,7 +297,7 @@ duplicateBinderCheck :: Span -> [Pattern a] -> Checker ()
 duplicateBinderCheck s ps = case duplicateBinders of
   [] -> pure ()
   (d:ds) ->
-    throwError $ fmap (DuplicatePatternError s) (d :| ds)
+    throwError $ fmap (DuplicateBindingError s) (d :| ds)
   where
     duplicateBinders = duplicates . concatMap getBinders $ ps
     getBinders = patternFold

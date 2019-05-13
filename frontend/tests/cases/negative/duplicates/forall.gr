@@ -1,0 +1,2 @@
+id : forall a a : Type . a -> a
+id x = x
