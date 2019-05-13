@@ -268,10 +268,10 @@ VarSig :: { [(Id, Kind)] }
   -- Temporary poor man's kind inference
   | VAR                       { let x = symString $1
                                 in let k = mkId $ "_k" ++ x
-                                in [(mkId x, KVar k), (k, kConstr (mkId "Kind"))] }
+                                in [(mkId x, KVar k)] }
   | VAR VarSig                 { let x = symString $1
                                  in let  k = mkId $ "_k" ++ x
-                                 in [(mkId x, KVar k), (k, kConstr (mkId "Kind"))] <> $2 }
+                                 in [(mkId x, KVar k)] <> $2 }
 
 Kind :: { Kind }
   : Kind '->' Kind            { KFun $1 $3 }

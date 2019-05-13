@@ -37,11 +37,9 @@ kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
         -- Rewrite the quantified variables with their possibly updated kinds (inferred)
         qVars <- mapM (\(v, a) -> substitute unifiers a >>= (\b -> return (v, b)))
                    quantifiedVariables
-        -- Remove anything of "kind" variales
-        let qVars' = filter (not . kindIsKind . snd) qVars
         modify (\st -> st { tyVarContext = [] })
         -- Update the def with the resolved quantifications
-        return (Def s id eqs (Forall s' qVars' constraints ty))
+        return (Def s id eqs (Forall s' qVars constraints ty))
 
     --KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> throw KindMismatch{ errLoc = s, kExpected = KType, kActual = kind }
