@@ -1,0 +1,3 @@
+Type checking failed: 
+Unification failed: 10:1:
+Trying to unify `↑Nat` and `Type`

@@ -21,6 +21,7 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.KindsImplicit
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.NameClash
@@ -54,11 +55,10 @@ check ast@(AST dataDecls defs imports) = evalChecker initState $ do
     _    <- checkNameClashes ast
     _    <- runAll checkTyCon dataDecls
     _    <- runAll checkDataCons dataDecls
-    _    <- runAll kindCheckDef defs
+    defs <- runAll kindCheckDef defs
+    let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
     defs <- runAll (checkDef defCtxt) defs
     pure $ AST dataDecls defs imports
-  where
-    defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -104,7 +104,7 @@ checkDataCon
         -- Add the type variables from the data constructor into the environment
         modify $ \st -> st { tyVarContext =
                [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
-        tySchKind <- inferKindOfType' sp tyVars ty
+        tySchKind <- inferKindOfTypeInContext sp tyVars ty
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, _, constraints, []) <-
@@ -207,7 +207,12 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName equations tys@(Forall _ foralls constraints ty)) = do
+checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty)) = do
+
+    -- duplicate forall bindings
+    case duplicates (map (sourceName . fst) foralls) of
+      [] -> pure ()
+      (d:ds) -> throwError $ fmap (DuplicateBindingError s_t) (d :| ds)
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]

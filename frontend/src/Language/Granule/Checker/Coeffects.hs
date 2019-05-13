@@ -10,6 +10,7 @@ import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 
+
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
 flattenable :: Type -> Type -> Maybe ((Coeffect -> Coeffect -> Coeffect), Type)
