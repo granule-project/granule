@@ -9,6 +9,7 @@ import Language.Granule.Checker.Primitives (tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
@@ -113,6 +114,13 @@ inferKindOfTypeImplicits s ctxt (TyApp t1 t2) = do
           k2' <- substitute u k2
           return (k2', u)
         Nothing -> throw KindMismatch{ errLoc = s, kExpected = k1, kActual = kArg }
+    KVar v -> do
+        (kArg, u2) <- inferKindOfTypeImplicits s ctxt t2
+        kResVar <- freshIdentifierBase $ "_kres"
+        let u = [(v, SubstK $ KFun (KVar $ mkId kResVar) kArg)]
+        uOut <- combineSubstitutions s u2 u
+        return (KVar $ mkId kResVar, uOut)
+
     _ -> throw KindMismatch{ errLoc = s, kExpected = KFun (KVar $ mkId "..") (KVar $ mkId ".."), kActual = k1 }
 
 inferKindOfTypeImplicits s ctxt (TyInt _) = return $ (kConstr $ mkId "Nat", [])
