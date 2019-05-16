@@ -9,21 +9,32 @@
 ------
 
 import Result
+import Maybe
+import Bool
 
 data List a where Empty; Next a (List a)
 
-lmap : forall a : Type, b : Type
-    . (a -> b) [0..∞] -> List a -> List b
-lmap [f] Empty = Empty;
-lmap [f] (Next x xs) = Next (f x) (lmap [f] xs)
-
-
+-- Length function must ignore the elements
 length_list : forall a : Type . List (a [0]) -> Int
 length_list xs =
   case xs of
     Empty         -> 0;
     (Next [_] xs) -> 1 + length_list xs
 
+-- Map function for lists
+lmap : forall a : Type, b : Type
+    . (a -> b) [0..∞] -> List a -> List b
+lmap [f] Empty = Empty;
+lmap [f] (Next x xs) = Next (f x) (lmap [f] xs)
+
+-- Lookup function
+lookupBy : forall {a : Type, b : Type}
+         . (a -> a -> Bool) [0..∞] -> a [0..∞] -> (List (a, b)) [0..1] -> Maybe b
+lookupBy [p] [k] [Empty] = None;
+lookupBy [p] [k] [Next (k', v) xs] =
+  if p k k' then Some v else lookupBy [p] [k] [xs]
+
+-- Safe head function
 head_list : forall a : Type . (List a) [0..1] -> Result a
 head_list xs =
   case xs of
