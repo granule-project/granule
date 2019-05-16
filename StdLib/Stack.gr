@@ -1,12 +1,14 @@
-data Stack : Nat -> Type -> Type where
-  Empty : forall {a : Type} . Stack 0 a;
-  Ext : forall {a : Type, n : Nat} . a [0..∞] -> Stack n a -> Stack (n+1) a
+-- Use vectors to implement stacks
+import Vec
 
-pop : forall {n : Nat, a : Type} . Stack (n+1) a -> (a [0..∞], Stack n a)
-pop (Ext x xs) = (x, xs)
+pop : forall {n : Nat, a : Type} . Vec (n+1) a -> (a, Vec n a)
+pop = uncons
 
-push : forall {n : Nat, a : Type} . a [0..∞] -> Stack n a -> Stack (n+1) a
-push x s = Ext x s
+push : forall {n : Nat, a : Type} . a -> Vec n a -> Vec (n+1) a
+push = Cons
 
-peek : forall {n : Nat, a : Type} . Stack (n+1) a -> (a, Stack (n+1) a)
-peek (Ext [x] xs) = (x, Ext [x] xs)
+peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
+peek [Cons x xs] = (x, Cons x xs)
+
+--peek' : forall {n : Nat, a : Type} . Vec (n+1) (a [1..2]) -> (a, Vec (n+1) a)
+--peek' (Cons [x] xs) = (x, case pullVec xs of [xs'] -> Cons x xs')
