@@ -1,0 +1,2 @@
+lambdaApprox : Int [0..4] -> Int
+lambdaApprox = \[x] -> x
