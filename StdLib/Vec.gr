@@ -160,7 +160,7 @@ range' (S n) [i] = Cons i (range' n [i + 1])
 
 --- pullVec pulls non linearity in elements into a non linearity on the whole vector
 pullVec
-  : forall {a : Type, k n : Nat}
+  : forall {a : Type, c : Coeffect, k : c, n : Nat}
   . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
 pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]

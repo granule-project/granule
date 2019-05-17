@@ -119,9 +119,9 @@ unflatten : forall {a : Type, n : Nat, m : Nat} . a [n*m] -> (a [n]) [m]
 unflatten [x] = [[x]]
 
 --- Push coeffects on a pair into the left and right elements
-push : forall {a : Type, b : Type, n : Nat} . (a × b) [n] -> a [n] × b [n]
+push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
 push [(x, y)] = ([x], [y])
 
 --- Pull coeffects of pair elements up to the pair
-pull : forall {a : Type, b : Type, n : Nat} . a [n] × b [n] -> (a × b) [n]
+pull : forall {a : Type, b : Type, k : Coeffect, c : k} . a [c] × b [c] -> (a × b) [c]
 pull ([x], [y]) = [(x, y)]

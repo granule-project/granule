@@ -68,8 +68,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
           st <- get
           case lookup tyVar (tyVarContext st) of
             Just (kind, _) -> return kind
-            Nothing ->
-              throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
+            Nothing -> throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
 
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = throw KindMismatch

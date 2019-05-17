@@ -331,6 +331,10 @@ freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
   return (sTrue, SPoint)
 
+freshCVar quant name (TyVar v) q = do
+  solverVar <- quant q name
+  return (sTrue, SUnknown $ Just solverVar)
+
 freshCVar _ _ t _ =
   error $ "Trying to make a fresh solver variable for a grade of type: "
    <> show t <> " but I don't know how."
@@ -468,6 +472,8 @@ compileCoeffect (CZero k') k vars  =
       SInterval
         (compileCoeffect (CZero t) t' vars)
         (compileCoeffect (CZero t) t' vars)
+
+    (TyVar _, _) -> SUnknown (Just 0)
     _ -> error $ "I don't know how to compile a 0 for " <> pretty k'
 
 compileCoeffect (COne k') k vars =
@@ -493,6 +499,8 @@ compileCoeffect (COne k') k vars =
         SInterval
           (compileCoeffect (COne t) t' vars)
           (compileCoeffect (COne t) t' vars)
+    (TyVar _, _) -> SUnknown (Just 1)
+
     _ -> error $ "I don't know how to compile a 1 for " <> pretty k'
 
 compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
@@ -516,6 +524,8 @@ eqConstraint (SExtNat x) (SExtNat y) = x .== y
 eqConstraint SPoint SPoint = sTrue
 eqConstraint s t | isSProduct s && isSProduct t =
   applyToProducts (.==) (.&&) (const sTrue) s t
+eqConstraint u@(SUnknown{}) u'@(SUnknown{}) =
+  u .== u'
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
@@ -543,6 +553,10 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
      .&& (approximatedByOrEqualConstraint ub1 ub2)
 
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
+
+approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
+     (u .== u') .|| (u .< u')
+
 approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " <> show x <> " <= " <> show y
 
