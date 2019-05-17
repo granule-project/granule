@@ -5,13 +5,12 @@ overall system.
 
 ### Interaction with data structures
 
-Graded modalities can be commuted with
-other data types, for example to pull information about consumption of
-sub-parts of data up to the whole, or
-dually to push capabilities for consumption down to sub-parts of a data
-type. Such notions are embodied by functions like the following
-for commuting products with the
-exact-usage graded modality:
+Graded modalities can be commuted with other data types, for example
+to pull information about consumption of sub-parts of data up to the
+whole, or dually to push capabilities for consumption down to
+sub-parts of a data type. Such notions are embodied by functions like
+the following for commuting products with the exact-usage graded
+modality:
 
 ~~~ granule
 pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
@@ -23,11 +22,11 @@ pullPair : forall {a : Type, b : Type, k : Coeffect, c : k} . a [c] × b [c] -> 
 pullPair ([x], [y]) = [(x, y)]
 ~~~
 
-In practice, combinators such as `pushPair` and `pullPair` are
-rarely used directly as we can instead use Granule's
-pattern matching features over graded modalities, as in the
-derivation of `pushPair`/`pullPair`. For example, for
-the safe head function on vectors can be defined:
+In practice, combinators such as `pushPair` and `pullPair` are rarely
+used directly as we can instead use Granule's pattern matching
+features over graded modalities, as in the derivation of
+`pushPair`/`pullPair`. For example, for the safe head function on
+vectors can be defined:
 
 ~~~ granule
 import Vec
@@ -48,9 +47,10 @@ inside of the unboxing pattern.
 The Granule
 [standard library](https://github.com/granule-project/granule/tree/master/StdLib)
 provides a variety of data structures including graphs, lists, stacks,
-vectors. Often we can characterise different design decisions for
-data types via their graded modal types. For example, we represent stacks with vectors with
-_pop_ and _push_ as dual linear operations corresponding to cons and uncons:
+vectors. There are often different design decisions for the interaction
+of data structures and graded modal types. For example, we represent
+stacks with vectors with _pop_ and _push_ as dual linear operations
+corresponding to cons and uncons:
 
 ~~~ granule
 pop : forall {n : Nat, a : Type} . Vec (n+1) a -> (a, Vec n a)
@@ -60,19 +60,19 @@ push : forall {n : Nat, a : Type} . a -> Vec n a -> Vec (n+1) a
 push = Cons
 ~~~
 
-The peek operation is more interesting as it is non-linear: we
-need to use the head element twice:
+The peek operation is more interesting as it is non-linear: we need to
+use the head element twice:
 
 ~~~ granule
 peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
 peek [Cons x xs] = (x, Cons x xs)
 ~~~
 
-This corresponds to a kind of implicit \emph{push}: we have the capability to
-use every component of the stack once or twice. In the case of the head
-element `x`, we use it twice, and in the case of the rest of the stack
-`xs` we use it once. An alternate definition of `peek`
-provides a linear interface for the stack structure, but with
+This corresponds to a kind of implicit \emph{push}: we have the
+capability to use every component of the stack once or twice. In the
+case of the head element `x`, we use it twice, and in the case of the
+rest of the stack `xs` we use it once. An alternate definition of
+`peek` provides a linear interface for the stack structure, but with
 non-linearity on the elements:
 
 ~~~ granule
@@ -98,7 +98,6 @@ information of different privacy levels:
 ~~~ granule
 data Patient = Patient (String [Public]) (String [Private])
 ~~~
-
 
 where the first field gives the city for a patient (public information) and
 the second field gives their name (private). We can
@@ -128,10 +127,6 @@ level information via the lattice algebra we have seen before.
 We can safely collect the cities and output a list of
 public city names in out database.
 
-$\mathsf{Flatten} \; (0..1) (\mathsf{Interval} \; \mathsf{Nat}) \;
-\mathsf{Public} \; \mathsf{Level} = (0..1, \mathsf{Public})
-: (\mathsf{Interval} \; \mathsf{Nat}) \times \mathsf{Level} ]]$.
-
 
 ~~~ grill
 import Vec
@@ -146,9 +141,13 @@ getCitiesBad : forall n. Vec n (Patient [0..1]) -> Vec n (String [Public])
 getCitiesBad Nil = Nil;
 getCitiesBad (Cons [Patient [city] [name]] ps) = Cons [name] (getCitiesBad ps)
 ~~~
+(`gr examples/further-examples.gr.md --literate-env-name grill`)
 
-The Granule interpreter gives the following type error:
+The Granule checker gives the following type error, showing the
+privacy violation:
 
+     Grading error: 3:54:
+     Private value cannot be moved to level Public.
 
 ### Session types
 
@@ -186,12 +185,8 @@ that can also be used in a way captured by the grade `c`.
 We can use these primitives to capture precisely-bounded replication
 in protocols:
 
-
-
 ~~~ granule
-sendVec : forall n a .
-        (Chan (Send a End)) [n]
-     -> Vec n a -> () <Com>
+sendVec : forall n a . (Chan (Send a End)) [n] -> Vec n a -> () <Com>
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
   let c'  <- send c x;
@@ -200,8 +195,7 @@ sendVec [c] (Cons x xs) =
 ~~~
 
 ~~~ granule
-recvVec : forall n a .
-  N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Com>
+recvVec : forall n a . N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Com>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
   let (x, c') <- recv c;
@@ -210,14 +204,12 @@ recvVec (S n) [c] =
   in pure (Cons x xs)
 ~~~
 
-On the left, `sendVec` has a channel which it can use
-exactly `n` times to send values of type `a`,
-taking a vector and sending each element on the channel.
-Dually, `recvVec` takes a size `n` and a channel
-which it uses `n` times to receive values of `a`,
-collecting the results into an output vector. We can then
-put these two processes together using `forkC`:
-
+On the left, `sendVec` has a channel which it can use exactly `n`
+times to send values of type `a`, taking a vector and sending each
+element on the channel.  Dually, `recvVec` takes a size `n` and a
+channel which it uses `n` times to receive values of `a`, collecting
+the results into an output vector. We can then put these two processes
+together using `forkC`:
 
 ~~~ granule
 example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Com>
