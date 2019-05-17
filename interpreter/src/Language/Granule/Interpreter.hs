@@ -130,7 +130,7 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
                   return . Left . EvalError $ displayException e
                 Right Nothing -> if testing
                   then return $ Right NoEval
-                  else return $ Left NoMain
+                  else return $ Left NoEntryPoint
                 Right (Just result) -> do
                   return . Right $ InterpreterResult result
 
@@ -293,6 +293,12 @@ parseGrConfig = info (go <**> helper) $ briefDesc
                     <> show includePath)
             <> metavar "PATH"
 
+        globalsEntryPoint <-
+          optional $ strOption
+            $ long "entry-point"
+            <> help ("Program entry point. Defaults to " <> show entryPoint)
+            <> metavar "ID"
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -330,6 +336,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsSolverTimeoutMillis
               , globalsIncludePath
               , globalsSourceFilePath = Nothing
+              , globalsEntryPoint
               }
             }
           )
@@ -341,7 +348,7 @@ data InterpreterError
   | CheckerError (NonEmpty CheckerError)
   | EvalError String
   | FatalError String
-  | NoMain
+  | NoEntryPoint
   | NoMatchingFiles String
   deriving Show
 
@@ -355,12 +362,12 @@ instance UserMsg InterpreterError where
   title CheckerError {} = "Type checking failed"
   title EvalError {} = "Error during evaluation"
   title FatalError{} = "Fatal error"
-  title NoMain{} = "No program entry point"
+  title NoEntryPoint{} = "No program entry point"
   title NoMatchingFiles{} = "User error"
 
   msg (ParseError m) = fst . breakOn "CallStack (from HasCallStack):" $ m -- TODO
   msg (CheckerError ms) = intercalate "\n\n" . map formatError . toList $ ms
   msg (EvalError m) = m
   msg (FatalError m) = m
-  msg NoMain = "No `main` definition found; nothing to evaluate."
+  msg NoEntryPoint = "Program entry point `" <> entryPoint <> "` not found. A different one can be specified with `--entry-point`."
   msg (NoMatchingFiles p) = "The glob pattern `" <> p <> "` did not match any files."
