@@ -1,0 +1,126 @@
+-- This is a stripped down version of `intro.md.gr` without all the explanation.
+-- But this is useful for experimenting with in `grin`, e.g.
+
+-- $ grin
+-- > :l exmaples/intro.gr
+
+-- Grin is a REPL a bit like ghci, so you can run code and inspect types, e.g.
+-- > :t id
+-- id : forall a : Type. a -> a
+-- > not True
+-- False
+
+-- Simple ADTs
+
+data Bool = False | True
+
+not : Bool -> Bool
+not False = True;
+not True = False
+
+-- Linear combinators
+
+id : forall {a : Type} . a -> a
+id x = x
+
+flip : forall {a b c : Type} . (a -> b -> c) -> b -> a -> c
+flip f y x = f x y
+
+-- Ill-typed non-linearity
+-- drop : forall {a : Type} . a -> ()
+-- drop x = ()
+
+-- copy : forall {a : Type} . a -> (a, a)
+-- copy x = (x,x)
+
+--  File handles and side effects
+firstChar : Char <IO>
+firstChar = let
+  h <- openHandle ReadMode "examples/intro.gr.md";
+  (h, c) <- readChar h;
+  () <- closeHandle h
+  in pure c
+
+-- forgetful : Char <IO>
+-- forgetful = let
+--   h <- openHandle ReadMode "examples/intro.gr.md";
+--   (h, c) <- readChar h
+--   in pure c
+
+-- outOfOrder : Char <IO>
+-- outOfOrder = let
+--  h0 <- openHandle ReadMode "examples/intro.gr.md";
+--  () <- closeHandle h0;
+--  (h1, c) <- readChar h0
+--  in pure c
+
+twoChars : (Char, Char) <IO>
+twoChars = let
+  h <- openHandle ReadMode "examples/intro.gr.md";
+  (h, c_1) <- readChar h;
+  (h, c_2) <- readChar h;
+  () <- closeHandle h
+  in pure (c_1, c_2)
+
+-- Non-linearity via modality
+drop' : forall {a : Type}. a [] -> ()
+drop' [x] = ()
+
+copy' : forall {a : Type}. a [] -> (a, a)
+copy' [x] = (x, x)
+
+-- Precise non-linearity via grading
+drop'' : forall {a : Type}. a [0] -> ()
+drop'' [x] = ()
+
+copy'' : forall {a : Type}. a [2] -> (a, a)
+copy'' [x] = (x, x)
+
+data Maybe a = None | Some a
+
+-- Interval grades
+fromMaybe : forall {a : Type} . a [0..1] -> Maybe a -> a
+fromMaybe [d] None     = d;
+fromMaybe [_] (Some x) = x
+
+-- Indexed types
+data Vec (n : Nat) (a : Type) where
+  Nil : Vec 0 a;
+  Cons : a -> Vec n a -> Vec (n + 1) a
+
+data N (n : Nat) where
+  Z : N 0;
+  S : N n -> N (n + 1)
+
+append : forall {a : Type, m n : Nat} . Vec n a -> Vec m a -> Vec (n + m) a
+append Nil ys = ys;
+append (Cons x xs) ys = Cons x (append xs ys)
+
+length : forall {a : Type, n : Nat} . Vec n a -> (N n, Vec n a)
+length Nil = (Z, Nil);
+length (Cons x xs) =
+  let (n, xs) = length xs in (S n, Cons x xs)
+
+-- Combining indexing and grading
+rep : forall {a : Type, n : Nat} . N n -> a [n] -> Vec n a
+rep Z [c]     = Nil;
+rep (S n) [c] = Cons c (rep n [c])
+
+sub : forall {m n : Nat} . {m >= n} => N m -> N n -> N (m - n)
+sub m Z = m;
+sub (S m') (S n') = sub m' n'
+
+leftPad : forall {t : Type, m n : Nat} . {m >= n} => t [m - n] -> N m -> Vec n t -> Vec m t
+leftPad [c] n str = let (m, str) = length str in append (rep (sub n m) [c]) str
+-- Privacy levels
+secret : Int [Private]
+secret = [1234]
+
+hash : forall {l : Level} . Int [l] -> Int [l]
+hash [x] = [x*x*x]
+
+good : Int [Private]
+good = hash secret
+
+-- bad : Int [Public]
+-- bad = hash secret

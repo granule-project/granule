@@ -1,5 +1,7 @@
-Having seen the details of the type system, we provide some final
-examples.
+This file is based on Section 8 of the ICFP 2019 paper _Quantitative program
+reasoning with graded modal types_.
+Please refer to the paper for the technical details and a formalisation of the
+overall system.
 
 ### Interaction with data structures
 
@@ -12,41 +14,81 @@ for commuting products with the
 exact-usage graded modality:
 
 ~~~ granule
-push : forall {a : Type, b : Type, n : Nat} . (a, b) [n] -> (a [n], b [n])
-push [(x, y)] = ([x], [y])
+pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
+pushPair [(x, y)] = ([x], [y])
 ~~~
 
 ~~~ granule
-pull : forall {a : Type, b : Type, n : Nat} . (a [n], b [n]) -> (a, b) [n]
-pull ([x], [y]) = [(x, y)]
+pullPair : forall {a : Type, b : Type, k : Coeffect, c : k} . a [c] × b [c] -> (a × b) [c]
+pullPair ([x], [y]) = [(x, y)]
 ~~~
 
-In practice, combinators such as `push` and `pull` are
+In practice, combinators such as `pushPair` and `pullPair` are
 rarely used directly as we can instead use Granule's
 pattern matching features over graded modalities, as in the
-derivation of `push`/`pull`. For example, for
+derivation of `pushPair`/`pullPair`. For example, for
 the safe head function on vectors can be defined:
 
 ~~~ granule
-head : forall {a : Type, n : Type} . (Vec (n+1) a) [0..1] -> a
-head [Cons x _] = x
+import Vec
+
+-- called `head` in the `Vec` library, but renamed here for example
+safeHead : forall {a : Type, n : Nat} . (Vec (n+1) a) [0..1] -> a
+safeHead [Cons x _] = x
 ~~~
 
-The incoming vector has the capability to be consumed either `0`
-or `1` times. By pattern matching, this capability is pushed
-down to the sub-parts of the data such that every element can be used
-`0..1` times, and every tail can be used `0..1`
-times. This is utilised in the last pattern match where the tail of
-the list (and subsequently all its elements) is discarded, as
-indicated by the wildcard pattern inside of the unboxing pattern.
+The incoming vector has the capability to be consumed either `0` or
+`1` times. By pattern matching, this capability is pushed down to the
+sub-parts of the data such that every element can be used `0..1`
+times, and every tail can be used `0..1` times. This is utilised in
+the last pattern match where the tail of the list (and subsequently
+all its elements) is discarded, as indicated by the wildcard pattern
+inside of the unboxing pattern.
 
 The Granule
 [standard library](https://github.com/granule-project/granule/tree/master/StdLib)
 provides a variety of data structures including graphs, lists, stacks,
 vectors. Often we can characterise different design decisions for
-data types via their graded modal types.
+data types via their graded modal types. For example, we represent stacks with vectors with
+_pop_ and _push_ as dual linear operations corresponding to cons and uncons:
 
-TODO: stack/peek here
+~~~ granule
+pop : forall {n : Nat, a : Type} . Vec (n+1) a -> (a, Vec n a)
+pop = uncons
+
+push : forall {n : Nat, a : Type} . a -> Vec n a -> Vec (n+1) a
+push = Cons
+~~~
+
+The peek operation is more interesting as it is non-linear: we
+need to use the head element twice:
+
+~~~ granule
+peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
+peek [Cons x xs] = (x, Cons x xs)
+~~~
+
+This corresponds to a kind of implicit \emph{push}: we have the capability to
+use every component of the stack once or twice. In the case of the head
+element `x`, we use it twice, and in the case of the rest of the stack
+`xs` we use it once. An alternate definition of `peek`
+provides a linear interface for the stack structure, but with
+non-linearity on the elements:
+
+~~~ granule
+peek' : forall m : Ext Nat, a, n . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
+peek' (Cons [x] xs) = (x, Cons [x] xs)
+~~~
+
+The type explains that we have a stack whose elements can be used
+`m` to `m+1` times and we use this capability to copy
+the head element returning a pair of the head and a stack whose
+elements can now be used `m` to `m`.  This type is
+useful for chaining together operations which operate on the elements
+of the stack non-linearly. The former `peek` definition is more
+suited to situations where the whole stack is being manipulated
+non-linearly, rather than just its elements. Exploring the design
+space and trade-offs for data structure libraries is further work.
 
 ### Grade interaction
 To illustrate the interaction between different modalities,
@@ -110,18 +152,16 @@ The Granule interpreter gives the following type error:
 
 ### Session types
 
-Granule supports *session
-  types*
-in the style of the GV calculus
-leveraging linear types to embed session types primitives.
-When combined with graded linearity, we can express novel communication
+Granule supports *session types* in the style of the GV calculus
+leveraging linear types to embed session types primitives.  When
+combined with graded linearity, we can express novel communication
 properties not supported by existing session type approaches.
-Granule's builtin library provides channel primitives,
-where `Com` is a trivial graded possibility modality for
-capturing communication effects:
+Granule's builtin library provides channel primitives, where `Com` is
+a trivial graded possibility modality for capturing communication
+effects:
 
 
-~~~ granule
+~~~
 data Protocol = Recv Type Protocol | Send Type Protocol | ...
 send : forall { a : Type, s : Protocol } . Chan (Send a s) -> a -> (Chan s) <Com>
 recv : forall { a : Type, s : Protocol } . Chan (Recv a s) -> (a, Chan s) <Com>
@@ -183,4 +223,3 @@ put these two processes together using `forkC`:
 example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Com>
 example n list = let c <- forkC (\c -> sendVec c list) in recvVec n c
 ~~~
-
