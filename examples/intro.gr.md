@@ -2,15 +2,9 @@ A taste of Granule
 ==================
 
 This tutorial is based on Section 2 of the ICFP 2019 paper _Quantitative program
-reasoning with graded modal types_ with additional complmentary exercises.
+reasoning with graded modal types_ with additional complementary exercises.
 Please refer to the paper for the technical details and a formalisation of the
 overall system.
-
-<!-- Aims:
-
-- What is linearity?
-- Safe interfaces to stateful protocols.
-- functions manipulating pure data -->
 
 Are you ready?
 --------------
@@ -120,34 +114,14 @@ Examples:
   - use a session-typed channel exactly once
 
 If we want to reason about resources at the type level, we must renounce
-*thoughtless* `drop`ping and `copy`ing. We will accomodate
+*thoughtless* `drop`ping and `copy`ing. We will accommodate
 non-linearity later using graded modalities.
 
-<!--
-
-By universally quantifying over the type of the inputs, we are
-claiming that for any type `a` we can annihilate or copy its
-values. If our types include resources (things that cannot be dropped
-or copied arbitrarily), then this statement cannot hold. In order to
-reason about---and program with---resource-like data, we must On the
-surface, this seems like an extreme restriction, but we have already
-regained considerable power: linearity aids in providing safe
-interfaces to stateful interactions with the harsh world outside of
-our own runtime. A well-known example is that of file handles, which
-must always be closed and never used thereafter.  We can easily
-support this in Granule via its linear types.  -->
 
 For now, we briefly think about why linearity on its own can be
 useful.
 
 ### Safer file handles
-
-<!-- Linearity initially seems like an extreme restriction, but we
-have already regained considerable power: linearity can be used to
-help provide safe interfaces to stateful interactions with the harsh
-world outside of our own runtime. A well-known example is that of file
-handles, which must always be closed and never used thereafter. We can
-easily support this in Granule via its linear types. -->
 
 Granule provides an interface to files, which includes the following
 operations, given here in a slightly simplified form that elides the
@@ -208,23 +182,6 @@ outOfOrder = let
 
 (`gr examples/intro.gr.md --literate-env-name grill`)
 
-
-
-<!--
-On the left, `twoChars` opens a handle, reads two characters from it and
-closes it, returning the two characters in an I/O context. The `pure`
-function here lifts a pure value
-into the `<IO>` type (akin to `return` in Haskell). On the right,
-`bad` opens two handles, then closes the first, reads from it, and returns
-the resulting character without closing the second handle. This program gets
-rejected with several linearity errors: `h_1` is used more than once and
-`h_2` is discarded. Thus, a lack of weakening and contraction already
-readily supports safe programming against stateful protocols.
-
- ill-typed, or more specifically *ill-resourced*
- definitions, meaning that there is a mismatch between the amount of linearity
- permitted by the types and the actual linearity in the implementation.
--->
 
 ### Reintroducing Nonlinearity
 
@@ -405,11 +362,6 @@ and : Bool -> Bool [0..1] -> Bool
 and False [_] = False;
 and True  [q] = q
 ~~~
-
-<!-- and' : Bool -> Bool -> Bool
-and' False False = False;
-and' False True  = False;
-and' False q     = q -->
 
 What is the technical term for the specific amount of nonlinearity denoted
 by `[0..1]`?
@@ -592,7 +544,10 @@ hash [x] = [x*x*x]
 ~~~
  -->
 
+The End... For Now!
+-------------------
 
+There is another file, `further-examples.gr.md` if you are hungry for more.
 
 Solutions
 ---------
