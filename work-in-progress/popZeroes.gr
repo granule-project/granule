@@ -1,0 +1,10 @@
+import Stack
+import Bool
+
+popZeros : forall {n : Nat, m : Nat} .
+           {m <= (n+1)} => (Vec (n+1) (Int [1..Inf])) -> Vec m (Int [1..Inf])
+popZeros s = 
+     case peek'' s of
+         (x, s) -> if x == 0
+                     then case pop s of ([_], s) -> popZeros s
+                     else s
