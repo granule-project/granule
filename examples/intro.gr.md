@@ -2,7 +2,7 @@ A taste of Granule
 ==================
 
 This tutorial is based on Section 2 of the ICFP 2019 paper _Quantitative program
-reasoning with graded modal types_ with an addition of complimentary exercises.
+reasoning with graded modal types_ with additional complmentary exercises.
 Please refer to the paper for the technical details and a formalisation of the
 overall system.
 
@@ -17,13 +17,15 @@ Are you ready?
 
 This tutorial assumes some familiarity with ML/Haskell.
 
-This Markdown document is a tutorial-style literate Granule program.
-Execute `gr taste.gr.md`
-on the command line to typecheck and run it. Specify the function you want to
-run with `--entry-point`.
+This Markdown document is a tutorial-style literate Granule program. Execute `gr
+examples/intro.gr.md` on the command line to typecheck and run it (assuming that
+you are in the granule source directory). Specify the function you want to run
+with `--entry-point`.
 
 The illtyped definitions are in a code environment called **grill** (**gr**anule
 **ill**typed), which you can run by passing the option `--literate-env grill`.
+
+Run `gr --help` to see various command line options.
 
 For help with installing `gr`, the Granule interpreter, please see the
 [installation instructions](https://github.com/granule-project/granule#installation).
@@ -38,15 +40,12 @@ if something doesn't work as expected.
 Combinators
 -----------
 
-Granule features a linear type system. This allows us to reason about data in a
-resource-like manner.
-
-Granule features a linear type system: by default, a function must use each
-argument exactly once. What does "use" mean?
-
-For concrete value constructors, we must **pattern match**. For example,
-we can define the algebraic data type for booleans and give the
-`not` function (which is linear) as:
+Granule features a linear type system. This allows us to reason about
+data in a resource-like manner. Linearity means that, by default, a
+function must use each argument exactly once. What does "use" mean?
+For concrete value constructors, we must **pattern match**. For
+example, we can define the algebraic data type for booleans and give
+the `not` function (which is linear) as:
 
 ~~~ granule
 data Bool = False | True
@@ -56,6 +55,10 @@ not : Bool -> Bool
 not False = True;
 not True = False
 ~~~
+
+Granule syntax is inspired by Haskell, but note the single colon for
+typing rather than double, and note that the function arrow -> denotes
+linear functions now.
 
 For variables, linearity means we must either **return** them unchanged or
 **pass them to a linear function**. If the variable is of a function type, then
@@ -71,14 +74,15 @@ flip : forall {a b c : Type} . (a -> b -> c) -> b -> a -> c
 flip f y x = f x y
 ~~~
 
-Polymorphic type variables are explicit, given with their kind.
-These functions are both linear: they use their inputs exactly once.
-The `id` function binds its argument to some variable `x` on the left, which it
-simply returns on the right. The `flip` function switches around the order in
-which some function `f` takes arguments `y` and `x` (lhs). The argument function
-`f` gets applied exactly once to `x` and `y` (rhs), which are use exactly once
-by the parameter function as indicated by their types. Be aware that function arrows
-denote linear functions.
+Polymorphic type variables are explicit, given with their kind.  These
+functions are both linear: they use their inputs exactly once.  The
+`id` function binds its argument to some variable `x` on the left,
+which it simply returns on the right. The `flip` function switches
+around the order in which some function `f` takes arguments `y` and
+`x` (lhs). The argument function `f` gets applied exactly once to `x`
+and `y` (rhs), which are use exactly once by the parameter function as
+indicated by their types. Be aware that function arrows denote linear
+functions.
 
 <!-- This illustrates the design decision to retain the structural rule of
 _exchange_, implicitly allowing arbitrary reordering of term variables. -->
@@ -116,35 +120,41 @@ Examples:
   - use a session-typed channel exactly once
 
 If we want to reason about resources at the type level, we must renounce
-*thoughtless* `drop`ping and `copy`ing.
+*thoughtless* `drop`ping and `copy`ing. We will accomodate
+non-linearity later using graded modalities.
 
 <!--
 
-By universally quantifying over the type of the inputs, we are claiming that for
-any type `a` we can annihilate or copy its values. If our types include
-resources (things that cannot be dropped or copied arbitrarily), then this statement cannot hold. In order to reason about---and
-program with---resource-like data, we must
-On the surface, this seems like an extreme restriction, but we have already
-regained considerable power: linearity aids in providing safe interfaces to
-stateful interactions with the harsh world outside of our own
-runtime. A well-known example is that of file handles, which must
-always be closed and never used
-thereafter.
-We can easily support this in Granule via its linear types.
--->
+By universally quantifying over the type of the inputs, we are
+claiming that for any type `a` we can annihilate or copy its
+values. If our types include resources (things that cannot be dropped
+or copied arbitrarily), then this statement cannot hold. In order to
+reason about---and program with---resource-like data, we must On the
+surface, this seems like an extreme restriction, but we have already
+regained considerable power: linearity aids in providing safe
+interfaces to stateful interactions with the harsh world outside of
+our own runtime. A well-known example is that of file handles, which
+must always be closed and never used thereafter.  We can easily
+support this in Granule via its linear types.  -->
+
+For now, we briefly think about why linearity on its own can be
+useful.
 
 ### Safer file handles
 
-<!-- Linearity initially seems like an extreme restriction, but we have already regained considerable power: linearity
-can be used to help provide safe interfaces to stateful interactions with the harsh world outside of our own
-runtime. A well-known example is that of file handles, which must always be closed and never
-used thereafter. We can easily support this in Granule via its linear types. -->
+<!-- Linearity initially seems like an extreme restriction, but we
+have already regained considerable power: linearity can be used to
+help provide safe interfaces to stateful interactions with the harsh
+world outside of our own runtime. A well-known example is that of file
+handles, which must always be closed and never used thereafter. We can
+easily support this in Granule via its linear types. -->
 
-
-Granule provides an interface to files, which includes
-the following operations, given here in a slightly simplified form that elides
-the type indexing by handle capabilities for reading, writing and appending, since
-this is orthogonal to our present narrative. The exact types can be found [here](https://github.com/granule-project/granule/blob/330682a280b8fb04305b9ad07f0b4b706afe99d1/frontend/src/Language/Granule/Checker/Primitives.hs#L176).
+Granule provides an interface to files, which includes the following
+operations, given here in a slightly simplified form that elides the
+type indexing by handle capabilities for reading, writing and
+appending, since this is orthogonal to our present narrative. The
+exact types can be found
+[here](https://github.com/granule-project/granule/blob/330682a280b8fb04305b9ad07f0b4b706afe99d1/frontend/src/Language/Granule/Checker/Primitives.hs#L176).
 
 ~~~ granule-interface
 openHandle : IOMode -> String -> Handle <IO>
@@ -176,7 +186,7 @@ firstChar = let
   in pure c
 ~~~
 
-(`gr taste.gr.md --entry-point firstChar`)
+(`gr examples/intro.gr.md --entry-point firstChar`)
 
 
 
@@ -190,13 +200,13 @@ forgetful = let
 
 outOfOrder : Char <IO>
 outOfOrder = let
-  h0 <- openHandle ReadMode "taste.gr.md";
+  h0 <- openHandle ReadMode "examples/intro.gr.md";
   () <- closeHandle h0;
   (h1, c) <- readChar h0
   in pure c
 ~~~
 
-(`gr taste.gr.md --literate-env-name grill`)
+(`gr examples/intro.gr.md --literate-env-name grill`)
 
 
 
