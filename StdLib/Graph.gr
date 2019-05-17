@@ -31,10 +31,10 @@ mapG [f] g = case g of
   Connect g1 g2 -> Connect (mapG [f] g1) (mapG [f] g2)
 
 foldG' : forall a : Type, b : Type
-      . b [∞]
-      -> (a -> b) [∞]
-      -> (b -> b -> b) [∞]
-      -> (b -> b -> b) [∞]
+      . b [0..∞]
+      -> (a -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
       -> Graph a
       -> b
 foldG' [e] [v] [o] [c] g =
@@ -47,10 +47,10 @@ foldG' [e] [v] [o] [c] g =
 
 
 foldG : forall a : Type, b : Type
-      . b [∞]
-      -> (a -> b) [∞]
-      -> (b -> b -> b) [∞]
-      -> (b -> b -> b) [∞]
+      . b [0..∞]
+      -> (a -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
       -> Graph a
       -> b
 foldG [e] [v] [o] [c] g =
