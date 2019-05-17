@@ -299,8 +299,8 @@ instance Term Coeffect where
     freeVars CNat{}  = []
     freeVars CFloat{} = []
     freeVars CInfinity{} = []
-    freeVars CZero{} = []
-    freeVars COne{} = []
+    freeVars (CZero t) = freeVars t
+    freeVars (COne t) = freeVars t
     freeVars Level{} = []
     freeVars CSet{} = []
     freeVars (CSig c k) = freeVars c <> freeVars k
