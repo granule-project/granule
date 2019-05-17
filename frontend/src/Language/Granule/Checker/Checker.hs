@@ -961,7 +961,7 @@ rewriteMessage msg = do
                  KPromote (TyCon (internalName -> "Level")) ->
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
-                       (T.replace (T.pack "Integer") (T.pack "Level") line'))
+                          (T.replace (T.pack "Integer") (T.pack "Level") line'))
                  _ -> line'
              else line'
        in line''
