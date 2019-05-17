@@ -16,8 +16,11 @@ examples/intro.gr.md` on the command line to typecheck and run it (assuming that
 you are in the granule source directory). Specify the function you want to run
 with `--entry-point`.
 
-The illtyped definitions are in a code environment called **grill** (**gr**anule
-**ill**typed), which you can run by passing the option `--literate-env grill`.
+The illtyped definitions are in a code environments called **grillN**
+(**gr**anule **ill**typed where *N* is some number), which you can
+give to the checker by passing the option `--literate-env grillN`. We
+number ill-typed blocks here so that the reader can focus on
+particular typing errors as we go through the tutorial.
 
 Run `gr --help` to see various command line options.
 
@@ -75,29 +78,27 @@ which it simply returns on the right. The `flip` function switches
 around the order in which some function `f` takes arguments `y` and
 `x` (lhs). The argument function `f` gets applied exactly once to `x`
 and `y` (rhs), which are use exactly once by the parameter function as
-indicated by their types. Be aware that function arrows denote linear
-functions.
+indicated by their types.
 
 <!-- This illustrates the design decision to retain the structural rule of
 _exchange_, implicitly allowing arbitrary reordering of term variables. -->
 
 
 Next, let us look at what happens when we write nonlinear functions.
-<!-- the structural rules _weakening_ and _contraction_, which
-let us forget or duplicate variables in the context. -->
 
-
-~~~ grill
+~~~ grill1
 drop : forall {a : Type} . a -> ()
 drop x = ()
 ~~~
 > Linearity error: Linear variable `x` is never used.
 
-~~~ grill
+~~~ grill1
 copy : forall {a : Type} . a -> (a, a)
 copy x = (x,x)
 ~~~
 > Linearity error: Linear variable `x` is used more than once.
+
+(`gr examples/intro.gr.md --literate-env-name grill1`)
 
 As you can see from the error messages following both definitions, Granule's
 type checker does not accept these definitions.
@@ -116,7 +117,6 @@ Examples:
 If we want to reason about resources at the type level, we must renounce
 *thoughtless* `drop`ping and `copy`ing. We will accommodate
 non-linearity later using graded modalities.
-
 
 For now, we briefly think about why linearity on its own can be
 useful.
@@ -163,8 +163,7 @@ firstChar = let
 (`gr examples/intro.gr.md --entry-point firstChar`)
 
 
-
-~~~ grill
+~~~ grill2
 forgetful : Char <IO>
 forgetful = let
   h <- openHandle ReadMode "examples/intro.gr.md";
@@ -180,7 +179,7 @@ outOfOrder = let
   in pure c
 ~~~
 
-(`gr examples/intro.gr.md --literate-env-name grill`)
+(`gr examples/intro.gr.md --literate-env-name grill2`)
 
 The paper also provides the example reading two characters:
 
@@ -196,10 +195,10 @@ twoChars = let
 
 (`gr examples/intro.gr.md --entry-point twoChars`)
 
-There is also the ill-typed example which has both
+There is also the ill-typed example which contains both
 the mistakes of `forgetful` and `outOfOrder` together:
 
-~~~ grill
+~~~ grill3
 bad : Char <IO>
 bad = let
   h_1 <- openHandle ReadMode "somefile";
@@ -208,11 +207,11 @@ bad = let
   (h_1, c) <- readChar h_1
   in pure c
 ~~~
-(`gr examples/intro.gr.md --literate-env-name grill`)
+(`gr examples/intro.gr.md --literate-env-name grill3`)
 
 ### Reintroducing Nonlinearity
 
-Linear world is useful, but there are programs we want to write which are
+The linear world is useful, but there are programs we want to write which are
 fundamentally non-linear, such as `drop` and `copy`. Just like in Linear Logic,
 Granule provides a type constructor for "requesting" nonlinearity. The typing
 rules will enforce that the call site can actually provide this capability. This
@@ -229,8 +228,7 @@ copy' [x] = (x, x)
 
 The “box” constructor `[]` can be thought of as the equivalent of
 linear logic's `!` exponential for unrestricted use. Our choice of syntax alludes
-to necessity (🞎) from modal logic.
-
+to necessity modality ("box") from modal logic.
 
 Since the parameters are now modal, of type `a []`, we can use an “unboxing”
 pattern to bind a variable of `x` of type `a`, which can now be discarded or
@@ -239,12 +237,13 @@ copied freely in the bodies of the functions.
 Note that a value of type `a []` is itself still subject to linearity: it must
 be used:
 
-~~~ grill
+~~~ grill4
 dropNot : forall {a : Type}. a [] -> ()
 dropNot xB = ()
 ~~~
 > Linearity error: Linear variable `xB` is never used.
 
+(`gr examples/intro.gr.md --literate-env-name grill4`)
 
 Whilst this modality provides us with a non-linear binding for `x`, it however
 gives a rather coarse-grained view: we cannot
@@ -295,7 +294,7 @@ ap f x = \ctx -> f ctx (x ctx)
 #### 1.2
 
 Consider the following definition:
-~~~ grin
+~~~ granule
 copyBool : Bool -> Bool × Bool
 copyBool False = (False, False);
 copyBool True  = (True, True)
@@ -330,7 +329,7 @@ data Maybe a = None | Some a
 ~~~
 
 <!-- Leave this for `grill`
-~~~ grill
+~~~ grill5
 data Maybe t = None | Some t
 ~~~
 -->
@@ -338,12 +337,13 @@ data Maybe t = None | Some t
 To safely unwrap a `Maybe a` value to an `a`, we need to provide a default value
 in case we actually hold a `None` in our hands.
 
-~~~ grill
+~~~ grill5
 fromMaybe : forall {a : Type} . a -> Maybe a -> a
 fromMaybe d None     = d;
 fromMaybe d (Some x) = x
 ~~~
 > Linearity error: Linear variable `d` is never used.
+(`gr examples/intro.gr.md --literate-env-name grill5`)
 
 The equivalent of `fromMaybe` would be a valid Haskell or ML program, but Granule
 rejects it and in fact this type is not inhabited in Granule. Since the `d`efault value
@@ -369,11 +369,14 @@ Granule from many other implementations of systems stemming from Linear Logic.
 At my first attempt of writing `fromMaybe`, I copy-pasted the first line and
 replaced `None` with `Some x`, but I forgot to change the right hand side:
 
-~~~ grill
+~~~ grill6
+data Maybe t = None | Some t
+
 fromMaybeNot : forall {a : Type} . a -> Maybe a -> a
 fromMaybeNot d None     = d;
 fromMaybeNot d (Some x) = d
 ~~~
+(`gr examples/intro.gr.md --literate-env-name grill6`)
 
 Granule rejects this definition with a type error. Most compilers can emit a
 warning for unused bindings, which would help track down the bug in this case.
@@ -545,10 +548,11 @@ secret : Int [Private]
 secret = [1234]
 ~~~
 
-~~~ grill
+~~~ grill7
 leak : Int [Public]
 leak = hash secret
 ~~~
+(`gr examples/intro.gr.md --literate-env-name grill7`)
 
 ~~~ granule
 hash : forall {l : Level} . Int [l] -> Int [l]
@@ -561,7 +565,7 @@ good = hash secret
 ~~~
 
 <!-- Leave for `grill`
-~~~ grill
+~~~ grill7
 secret : Int [Private]
 secret = [1234]
 
@@ -631,12 +635,13 @@ nor of enforcing linear usage of top-level definitions.
 #### 2.1
 
 One example:
-~~~ grill
+~~~ grill8
 --- Given two integers x and y, returns their sum and product resp.
 foo : Int [2] -> Int [2] -> (Int, Int)
 foo [x] [y] = (x + y, x * x)
 ~~~
 > Grading error: `1` is not approximatable by `2` for type `Nat` because `Nat` denotes precise usage.
+(`gr examples/intro.gr.md --literate-env-name grill8`)
 
 Generally unused binding warnings will only trigger when a variable is not used
 at all.
@@ -660,4 +665,3 @@ Because the function could be reordering elements, e.g. reversing the list.
 > Which structural rule could help us to reason about this?
 
 _Exchange_, which controls the order in which term-level variables can be used.
-
