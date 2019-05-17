@@ -1,0 +1,3 @@
+-- Bad, declassification
+castLevel : ∀ {a : Type} . a [Private] → a [Public]
+castLevel [x] = [x]

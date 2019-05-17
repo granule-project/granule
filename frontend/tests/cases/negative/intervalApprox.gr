@@ -1,0 +1,6 @@
+foo : forall {a : Type} . a [0..Inf] -> (a, a)
+foo [a] = (a, a)
+
+-- Bad approx (wrong way)
+intervalApprox : forall {a : Type} . a [1..2] -> (a, a)
+intervalApprox = foo
