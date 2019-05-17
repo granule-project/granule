@@ -1,4 +1,4 @@
 Type checking failed: 
 Counter example: 2:1:
 The following theorem associated with `foo` is falsifiable:
-	(2 ≤ n)
+	(2 = n)
