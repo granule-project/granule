@@ -54,6 +54,14 @@ firstChar = let
 --  (h1, c) <- readChar h0
 --  in pure c
 
+twoChars : (Char, Char) <IO>
+twoChars = let
+  h <- openHandle ReadMode "examples/intro.gr.md";
+  (h, c_1) <- readChar h;
+  (h, c_2) <- readChar h;
+  () <- closeHandle h
+  in pure (c_1, c_2)
+
 -- Non-linearity via modality
 drop' : forall {a : Type}. a [] -> ()
 drop' [x] = ()

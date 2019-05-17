@@ -182,6 +182,33 @@ outOfOrder = let
 
 (`gr examples/intro.gr.md --literate-env-name grill`)
 
+The paper also provides the example reading two characters:
+
+~~~ granule
+twoChars : (Char, Char) <IO>
+twoChars = let
+  h <- openHandle ReadMode "examples/intro.gr.md";
+  (h, c_1) <- readChar h;
+  (h, c_2) <- readChar h;
+  () <- closeHandle h
+  in pure (c_1, c_2)
+~~~
+
+(`gr examples/intro.gr.md --entry-point twoChars`)
+
+There is also the ill-typed example which has both
+the mistakes of `forgetful` and `outOfOrder` together:
+
+~~~ grill
+bad : Char <IO>
+bad = let
+  h_1 <- openHandle ReadMode "somefile";
+  h_2 <- openHandle ReadMode "another";
+  () <- closeHandle h_1;
+  (h_1, c) <- readChar h_1
+  in pure c
+~~~
+(`gr examples/intro.gr.md --literate-env-name grill`)
 
 ### Reintroducing Nonlinearity
 
@@ -519,10 +546,9 @@ secret = [1234]
 ~~~
 
 ~~~ grill
-bad : Int [Public]
-bad = hash secret
+leak : Int [Public]
+leak = hash secret
 ~~~
-
 
 ~~~ granule
 hash : forall {l : Level} . Int [l] -> Int [l]
