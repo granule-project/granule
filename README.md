@@ -82,8 +82,8 @@ Granule program files have file extension `.gr`. Use the `gr` command to run the
     OK, evaluating...
     1
 
-See the `examples` directory for more sample programs, or `frontend/tests/cases`
-if you dare.
+A good starting point for learning about Granule is the tutorial given in
+[examples/intro.gr.md](https://github.com/granule-project/granule/blob/master/examples/intro.gr.md).
 
 ### Setting the Path
 
