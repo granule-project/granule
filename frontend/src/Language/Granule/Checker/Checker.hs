@@ -365,7 +365,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
           subst <- combineSubstitutions s subst1 subst2
 
           -- Locally we should have this property (as we are under a binder)
-          ctxtEquals s (gam' `intersectCtxts` bindings) bindings
+          ctxtApprox s (gam' `intersectCtxts` bindings) bindings
 
           concludeImplication s localVars
 
@@ -861,7 +861,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
+     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
@@ -893,7 +893,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
+     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
