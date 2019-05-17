@@ -1,4 +1,4 @@
 Type checking failed: 
 Counter example: 2:1:
 The following theorem associated with `flattenNat` is falsifiable:
-	(m + n ≤ n * m)
+	(m + n = n * m)

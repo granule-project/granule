@@ -1,0 +1,9 @@
+blah : Int [2..5]
+blah = [42]
+
+-- Has some strange issue
+foo : forall n m : Nat, a : Type . a [n..m] -> a [n..m]
+foo [x] = [x]
+
+main : Int [0..10]
+main = foo blah

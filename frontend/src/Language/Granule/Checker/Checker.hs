@@ -339,14 +339,14 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
 
-  newConjunct
-
   (tau', subst1) <- case t of
     Nothing -> return (tau, [])
     Just t' -> do
       (eqT, unifiedType, subst) <- equalTypes s sig t'
       unless eqT $ throw TypeError{ errLoc = s, tyExpected = sig, tyActual = t' }
       return (tau, subst)
+
+  newConjunct
 
   (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
   debugM "binding from lam" $ pretty bindings
@@ -961,7 +961,7 @@ rewriteMessage msg = do
                  KPromote (TyCon (internalName -> "Level")) ->
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
-                       (T.replace (T.pack "Integer") (T.pack "Level") line'))
+                          (T.replace (T.pack "Integer") (T.pack "Level") line'))
                  _ -> line'
              else line'
        in line''

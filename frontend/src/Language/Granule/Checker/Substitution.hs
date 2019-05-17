@@ -225,12 +225,23 @@ combineManySubstitutions s (subst:ss) = do
   ss' <- combineManySubstitutions s ss
   combineSubstitutions s subst ss'
 
+removeReflexivePairs :: Substitution -> Substitution
+removeReflexivePairs [] = []
+removeReflexivePairs ((v, SubstT (TyVar v')):subst) | v == v' = removeReflexivePairs subst
+removeReflexivePairs ((v, SubstC (CVar v')):subst) | v == v' = removeReflexivePairs subst
+removeReflexivePairs ((v, SubstK (KVar v')):subst) | v == v' = removeReflexivePairs subst
+removeReflexivePairs ((v, e):subst) = (v, e) : removeReflexivePairs subst
+
 -- | Combines substitutions which may fail if there are conflicting
 -- | substitutions
 combineSubstitutions ::
     (?globals :: Globals)
     => Span -> Substitution -> Substitution -> Checker Substitution
 combineSubstitutions sp u1 u2 = do
+      -- Remove any substitutions that say things like `a |-> a`. This leads to infite loops
+      u1 <- return $ removeReflexivePairs u1
+      u2 <- return $ removeReflexivePairs u2
+
       -- For all things in the (possibly empty) intersection of contexts `u1` and `u2`,
       -- check whether things can be unified, i.e. exactly
       uss1 <- forM u1 $ \(v, s) ->
