@@ -299,11 +299,11 @@ instance Term Coeffect where
     freeVars CNat{}  = []
     freeVars CFloat{} = []
     freeVars CInfinity{} = []
-    freeVars CZero{} = []
-    freeVars COne{} = []
+    freeVars (CZero t) = freeVars t
+    freeVars (COne t) = freeVars t
     freeVars Level{} = []
     freeVars CSet{} = []
-    freeVars (CSig c _) = freeVars c
+    freeVars (CSig c k) = freeVars c <> freeVars k
     freeVars (CInterval c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CProduct c1 c2) = freeVars c1 <> freeVars c2
 
@@ -388,8 +388,15 @@ instance Freshenable m Coeffect where
       return $ CSig c' k'
     freshen c@CInfinity{} = return c
     freshen c@CFloat{} = return c
-    freshen c@CZero{}  = return c
-    freshen c@COne{}   = return c
+
+    freshen (CZero t)  = do
+      t' <- freshen t
+      return $ CZero t'
+
+    freshen (COne t)  = do
+      t' <- freshen t
+      return $ COne t'
+
     freshen c@Level{}  = return c
     freshen c@CNat{}   = return c
     freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2

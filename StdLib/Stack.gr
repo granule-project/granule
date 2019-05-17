@@ -10,5 +10,5 @@ push = Cons
 peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
 peek [Cons x xs] = (x, Cons x xs)
 
---peek' : forall {n : Nat, a : Type} . Vec (n+1) (a [1..2]) -> (a, Vec (n+1) a)
---peek' (Cons [x] xs) = (x, case pullVec xs of [xs'] -> Cons x xs')
+peek' : forall {n : Nat, a : Type} . Vec (n+1) (a [1..2]) -> (a, Vec (n+1) a)
+peek' (Cons [x] xs) = (x, case pullVec xs of [xs'] -> Cons x xs')
