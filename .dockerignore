@@ -1,0 +1,12 @@
+# Ignore everything
+*
+
+# Whitelist the following
+!LICENSE
+!README.md
+!StdLib
+!examples
+!frontend
+!interpreter
+!repl
+!stack.yaml
