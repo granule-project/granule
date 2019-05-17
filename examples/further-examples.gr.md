@@ -1,5 +1,7 @@
-Having seen the details of the type system, we provide some final
-examples.
+This file is based on Section 8 of the ICFP 2019 paper _Quantitative program
+reasoning with graded modal types_.
+Please refer to the paper for the technical details and a formalisation of the
+overall system.
 
 ### Interaction with data structures
 
