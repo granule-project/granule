@@ -193,10 +193,10 @@ symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     --SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
     SInterval (comb symGradeMeet) (comb symGradeJoin)
      where
-      comb f = ((lb1lb2 `f` lb1ub2) `f` lb2ub1) `f` ub1ub2
+      comb f = ((lb1lb2 `f` lb1ub2) `f` ub1lb2) `f` ub1ub2
       lb1lb2 = lb1 `symGradeTimes` lb2
       lb1ub2 = lb1 `symGradeTimes` ub2
-      lb2ub1 = lb2 `symGradeTimes` ub1
+      ub1lb2 = ub1 `symGradeTimes` lb2
       ub1ub2 = ub1 `symGradeTimes` ub2
 symGradeTimes SPoint SPoint = SPoint
 symGradeTimes s t | isSProduct s || isSProduct t =
