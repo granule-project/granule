@@ -232,7 +232,7 @@ linear logic's `!` exponential for unrestricted use. Our choice of syntax allude
 to necessity (🞎) from modal logic.
 
 
-Since the parameters are now modal, of type `a []`, we can use an ``unboxing''
+Since the parameters are now modal, of type `a []`, we can use an “unboxing”
 pattern to bind a variable of `x` of type `a`, which can now be discarded or
 copied freely in the bodies of the functions.
 
@@ -521,7 +521,7 @@ Other graded modalities
 In the file handles example we swept past the `<IO>` type
 constructor.
 This is an example of an effect-capturing
-modality (the ``diamond'' constructor alludes to modal possibility), in the
+modality (the “diamond” constructor alludes to modal possibility), in the
 spirit of Haskell's `IO` monad. However, Granule provides
 *graded monads*, which can give a
 more fine-grained account of effects.
