@@ -1,0 +1,62 @@
+-- This is a stripped down version of `further-examples.md.gr` without all the explanation.
+-- But this is useful for experimenting with in `grin`.
+
+-- $ grin
+-- > :l examples/further-examples.gr
+
+pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
+pushPair [(x, y)] = ([x], [y])
+
+pullPair : forall {a : Type, b : Type, k : Coeffect, c : k} . a [c] × b [c] -> (a × b) [c]
+pullPair ([x], [y]) = [(x, y)]
+
+import Vec
+
+-- called `head` in the `Vec` library, but renamed here for example
+safeHead : forall {a : Type, n : Nat} . (Vec (n+1) a) [0..1] -> a
+safeHead [Cons x _] = x
+
+-- Stack example (see StdLib/Stack.gr)
+
+pop : forall {n : Nat, a : Type} . Vec (n+1) a -> (a, Vec n a)
+pop = uncons
+
+push : forall {n : Nat, a : Type} . a -> Vec n a -> Vec (n+1) a
+push = Cons
+
+peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
+peek [Cons x xs] = (x, Cons x xs)
+
+peek' : forall m : Ext Nat, a, n . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
+peek' (Cons [x] xs) = (x, Cons [x] xs)
+
+-- Patient database example
+
+data Patient = Patient (String [Public]) (String [Private])
+
+getCities : forall n. Vec n (Patient [0..1])  -> Vec n (String [Public])
+getCities Nil = Nil;
+getCities (Cons [Patient [city] [name]] ps) = Cons [city] (getCities ps)
+
+-- Session types example
+
+sendVec : forall n a .
+        (Chan (Send a End)) [n]
+     -> Vec n a -> () <Com>
+sendVec [c] Nil = pure ();
+sendVec [c] (Cons x xs) =
+  let c'  <- send c x;
+      ()  <- close c'
+  in sendVec [c] xs
+
+recvVec : forall n a .
+  N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Com>
+recvVec Z [c] = pure Nil;
+recvVec (S n) [c] =
+  let (x, c') <- recv c;
+      ()      <- close c';
+      xs      <- recvVec n [c]
+  in pure (Cons x xs)
+
+example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Com>
+example n list = let c <- forkC (\c -> sendVec c list) in recvVec n c
