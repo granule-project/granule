@@ -49,6 +49,14 @@ instance OrdSymbolic SNatX where
          $ ite (isInf b) sTrue
          $ xVal a .< xVal b
 
+meetSNatX :: SNatX -> SNatX -> SNatX
+meetSNatX a@(SNatX ai) b@(SNatX bi) =
+  ite (isInf a) b $ ite (isInf b) a $ SNatX (ai `smin` bi)
+
+joinSNatX :: SNatX -> SNatX -> SNatX
+joinSNatX a@(SNatX ai) b@(SNatX bi) =
+    ite (isInf a) inf $ ite (isInf b) inf $ SNatX (ai `smax` bi)
+
 representationConstraint :: SInteger -> SBool
 representationConstraint v = v .>= -1
 
