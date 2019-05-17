@@ -438,7 +438,7 @@ instance RuntimeRep Value where
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval (AST dataDecls defs _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
-    case lookup (mkId "main") bindings of
+    case lookup (mkId entryPoint) bindings of
       Nothing -> return Nothing
       -- Evaluate inside a promotion of pure if its at the top-level
       Just (Pure _ e)    -> fmap Just (evalIn bindings e)

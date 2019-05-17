@@ -36,6 +36,7 @@ data Globals = Globals
   , globalsSolverTimeoutMillis :: Maybe Integer
   , globalsIncludePath         :: Maybe FilePath
   , globalsSourceFilePath      :: Maybe FilePath
+  , globalsEntryPoint          :: Maybe String
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
@@ -59,6 +60,10 @@ includePath, sourceFilePath :: (?globals :: Globals) => FilePath
 includePath         = fromMaybe "StdLib" $ globalsIncludePath ?globals
 sourceFilePath      = fromMaybe ""       $ globalsSourceFilePath ?globals
 
+-- | Accessor for program entry point
+entryPoint :: (?globals :: Globals) => String
+entryPoint = fromMaybe "main" $ globalsEntryPoint ?globals
+
 -- | Merge two 'Globals', giving preference to the settings of the left one
 instance Semigroup Globals where
   g1 <> g2 = Globals
@@ -73,6 +78,7 @@ instance Semigroup Globals where
       , globalsIncludePath         = globalsIncludePath         g1 <|> globalsIncludePath         g2
       , globalsSourceFilePath      = globalsSourceFilePath      g1 <|> globalsSourceFilePath      g2
       , globalsTesting             = globalsTesting             g1 <|> globalsTesting             g2
+      , globalsEntryPoint          = globalsEntryPoint          g1 <|> globalsEntryPoint          g2
       }
 
 instance Monoid Globals where
@@ -88,6 +94,7 @@ instance Monoid Globals where
     , globalsIncludePath         = Nothing
     , globalsSourceFilePath      = Nothing
     , globalsTesting             = Nothing
+    , globalsEntryPoint          = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general
