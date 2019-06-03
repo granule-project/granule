@@ -34,7 +34,7 @@ module Language.Granule.Checker.Interface.Check
 import Control.Arrow (second)
 import Control.Monad (unless)
 import Control.Monad.State.Strict
-import Data.List (groupBy, nub, (\\))
+import Data.List (groupBy, nub, union, (\\))
 import Data.Maybe (catMaybes, fromMaybe)
 
 import Language.Granule.Checker.Constraints.Compile
@@ -349,7 +349,7 @@ unboundKindVariable sp n =
 constrain :: (?globals :: Globals) => [Inst] -> TypeScheme -> Checker TypeScheme
 constrain constrs (Forall sp binds constrs' ty) = do
   fvks <- fmap concat $ mapM (getInstanceFreeVarKinds sp) constrs
-  pure $ Forall sp (binds <> fvks) (fmap tyFromInst constrs <> constrs') ty
+  pure $ Forall sp (union binds fvks) (fmap tyFromInst constrs <> constrs') ty
 
 
 infixr 6 |>
