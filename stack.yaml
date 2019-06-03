@@ -1,4 +1,4 @@
-resolver: nightly-2019-01-30
+resolver: lts-13.21
 packages:
 #- compiler/
 - frontend/
@@ -11,6 +11,7 @@ extra-deps:
 - ConfigFile-1.1.4
 - llvm-hs-pretty-0.6.1.0
 - text-replace-0.0.0.4
+- sbv-8.2
 
 # Override default flag values for local packages and extra-deps
 flags: {}

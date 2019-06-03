@@ -1,0 +1,16 @@
+import Bool
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+data SmallerVec (n : Nat) (a : Type) where
+  SV : forall {m : Nat} . {m <= n} => Vec m a -> SmallerVec n a
+
+filter : ∀ {a : Type, n : Nat} . (a -> Bool) [n] -> Vec n (a [1..2]) -> SmallerVec n a
+filter [f] Nil = SV Nil;
+filter [f] (Cons [x] xs) =
+ let (SV ys) = filter [f] xs
+ in case (f x) of
+     True -> SV (Cons x ys);
+     False -> SV ys

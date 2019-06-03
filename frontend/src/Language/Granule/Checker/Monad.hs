@@ -541,8 +541,8 @@ data CheckerError
     { errLoc :: Span, errPat :: Pattern () }
   | TypeConstructorNameClash -- TODO: duplicate?
     { errLoc :: Span, errId :: Id }
-  | DuplicatePatternError
-    { errLoc :: Span, duplicateBinder :: String }
+  | DuplicateBindingError
+    { errLoc :: Span, duplicateBinding :: String }
   | UnificationError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationKindError
@@ -563,6 +563,8 @@ data CheckerError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
     { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+  | UnificationFailGeneric
+    { errLoc :: Span, errSubst1 :: Substitutors, errSubst2 :: Substitutors }
   | OccursCheckFail
     { errLoc :: Span, errVar :: Id, errTy :: Type }
   | SessionDualityError
@@ -676,7 +678,7 @@ instance UserMsg CheckerError where
   title RefutablePatternError{} = "Pattern is refutable"
   title TypeConstructorNameClash{} = "Type constructor name clash"
   title DataConstructorTypeVariableNameClash{} = "Type variable name clash"
-  title DuplicatePatternError{} = "Duplicate pattern"
+  title DuplicateBindingError{} = "Duplicate binding"
   title UnificationError{} = "Unification error"
   title UnificationKindError{} = "Unification kind error"
   title TypeVariableMismatch{} = "Type variable mismatch"
@@ -686,6 +688,7 @@ instance UserMsg CheckerError where
   title EffectMismatch{} = "Effect mismatch"
   title UnificationDisallowed{} = "Unification disallowed"
   title UnificationFail{} = "Unification failed"
+  title UnificationFailGeneric{} = "Unification failed"
   title OccursCheckFail{} = "Unification failed"
   title SessionDualityError{} = "Session duality error"
   title NoUpperBoundError{} = "Type upper bound"
@@ -800,8 +803,8 @@ instance UserMsg CheckerError where
     , "`. Choose different, unbound names."
     ]
 
-  msg DuplicatePatternError {..}
-    = "Variable `" <> duplicateBinder <> "` bound more than once"
+  msg DuplicateBindingError { errLoc, duplicateBinding }
+    = "Variable `" <> duplicateBinding <> "` bound more than once."
 
   msg UnificationError{..} = if pretty errTy1 == pretty errTy2
     then "Type `" <> pretty errTy1 <> "` is not unifiable with the type `" <> pretty errTy2 <> "` coming from a different binding"
@@ -843,6 +846,9 @@ instance UserMsg CheckerError where
     = "Trying to unify `"
     <> pretty errTy1 <> "` and `"
     <> pretty errTy2 <> "` but in a context where unification is not allowed."
+
+  msg UnificationFailGeneric{..}
+    = "Trying to unify `" <> pretty errSubst1 <> "` and `" <> pretty errSubst2 <> "`"
 
   msg UnificationFail{..}
     = "Cannot unify universally quantified type variable `" <> pretty errVar <> "`"

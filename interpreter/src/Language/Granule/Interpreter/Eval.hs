@@ -425,7 +425,7 @@ eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval (AST dataDecls defs ifaces insts _) = execEvaluator (do
     evalDefs (map toRuntimeRep defs)
     bindings <- getCurrentContext
-    case lookup (mkId "main") bindings of
+    case lookup (mkId entryPoint) bindings of
       Nothing -> return Nothing
       -- Evaluate inside a promotion of pure if its at the top-level
       Just (Pure _ e)    -> fmap Just (evalExpr e)

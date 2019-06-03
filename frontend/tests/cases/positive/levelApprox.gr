@@ -1,0 +1,2 @@
+castLevel : ∀ {a : Type} . a [Public] → a [Private]
+castLevel [x] = [x]

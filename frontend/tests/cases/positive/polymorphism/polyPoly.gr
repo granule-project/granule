@@ -1,3 +1,9 @@
 
 polyPoly : forall {a : Type, k : Coeffect, c : k} . a [(1+1)*c] -> (a, a) [c]
 polyPoly [x] = [(x, x)]
+
+app : Int [4] -> (Int, Int) [2]
+app [x] = polyPoly [x]
+
+go : (Int, Int) [2]
+go = app [42]

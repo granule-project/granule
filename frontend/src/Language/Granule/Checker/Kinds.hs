@@ -3,14 +3,14 @@
 module Language.Granule.Checker.Kinds (
                       inferKindOfType
                     , inferKindOfType'
+                    , inferKindOfTypeInContext
                     , joinCoeffectTypes
                     , hasLub
                     , joinKind
                     , inferCoeffectType
+                    , inferCoeffectTypeInContext
                     , inferCoeffectTypeAssumption
                     , mguCoeffectTypes
-                    , promoteTypeToKind
-                    , demoteKindToType
                     , getKindRequired
                       -- ** 'Safe' inference
                     , inferKindOfTypeSafe
@@ -24,6 +24,7 @@ import Language.Granule.Checker.Interface (interfaceExists, getInterfaceKind)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (tyOps)
+import Language.Granule.Checker.SubstitutionContexts
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
@@ -33,20 +34,10 @@ import Language.Granule.Context
 import Language.Granule.Utils
 
 
-promoteTypeToKind :: Type -> Kind
-promoteTypeToKind (TyVar v) = KVar v
-promoteTypeToKind t = KPromote t
-
-demoteKindToType :: Kind -> Maybe Type
-demoteKindToType (KPromote t) = Just t
-demoteKindToType (KVar v)     = Just (TyVar v)
-demoteKindToType _            = Nothing
-
-
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> Checker Kind
 inferKindOfType s t = do
     checkerState <- get
-    inferKindOfType' s (stripQuantifiers $ tyVarContext checkerState) t
+    inferKindOfTypeInContext s (stripQuantifiers $ tyVarContext checkerState) t
 
 
 inferKindOfType' :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Kind
@@ -56,6 +47,8 @@ inferKindOfType' s quantifiedVariables t = do
     Left err -> throw err
     Right res -> pure res
 
+inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Kind
+inferKindOfTypeInContext = inferKindOfType'
 
 type IllKindedReason = CheckerError
 
@@ -128,11 +121,20 @@ inferKindOfTypeSafe' s quantifiedVariables t =
     kCoeffect c = inferCoeffectType s c >>= wellKinded . KPromote
 
 -- | Compute the join of two kinds, if it exists
-joinKind :: Kind -> Kind -> Maybe Kind
-joinKind k1 k2 | k1 == k2 = Just k1
+joinKind :: Kind -> Kind -> Maybe (Kind, Substitution)
+joinKind k1 k2 | k1 == k2 = Just (k1, [])
+joinKind (KVar v) k = Just (k, [(v, SubstK k)])
+joinKind k (KVar v) = Just (k, [(v, SubstK k)])
 joinKind (KPromote t1) (KPromote t2) =
-   fmap KPromote (joinCoeffectTypes t1 t2)
+   fmap (\k -> (KPromote k, [])) (joinCoeffectTypes t1 t2)
 joinKind _ _ = Nothing
+
+-- | Predicate on whether two kinds have a leasy upper bound
+hasLub :: Kind -> Kind -> Bool
+hasLub k1 k2 =
+  case joinKind k1 k2 of
+    Nothing -> False
+    Just _  -> True
 
 -- | Some coeffect types can be joined (have a least-upper bound). This
 -- | function computes the join if it exists.
@@ -159,30 +161,26 @@ joinCoeffectTypes t1 t2 = case (t1, t2) of
 
   _ -> Nothing
 
--- | Predicate on whether two kinds have a leasy upper bound
-hasLub :: Kind -> Kind -> Bool
-hasLub k1 k2 =
-  case joinKind k1 k2 of
-    Nothing -> False
-    Just _  -> True
-
-
 -- | Infer the type of ta coeffect term (giving its span as well)
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker Type
+inferCoeffectType s c = do
+  st <- get
+  inferCoeffectTypeInContext s (map (\(id, (k, _)) -> (id, k)) (tyVarContext st)) c
 
+inferCoeffectTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Coeffect -> Checker Type
 -- Coeffect constants have an obvious kind
-inferCoeffectType _ (Level _)         = return $ TyCon $ mkId "Level"
-inferCoeffectType _ (CNat _)          = return $ TyCon $ mkId "Nat"
-inferCoeffectType _ (CFloat _)        = return $ TyCon $ mkId "Q"
-inferCoeffectType _ (CSet _)          = return $ TyCon $ mkId "Set"
-inferCoeffectType s (CProduct c1 c2)    = do
-  k1 <- inferCoeffectType s c1
-  k2 <- inferCoeffectType s c2
+inferCoeffectTypeInContext _ _ (Level _)         = return $ TyCon $ mkId "Level"
+inferCoeffectTypeInContext _ _ (CNat _)          = return $ TyCon $ mkId "Nat"
+inferCoeffectTypeInContext _ _ (CFloat _)        = return $ TyCon $ mkId "Q"
+inferCoeffectTypeInContext _ _ (CSet _)          = return $ TyCon $ mkId "Set"
+inferCoeffectTypeInContext s ctxt (CProduct c1 c2)    = do
+  k1 <- inferCoeffectTypeInContext s ctxt c1
+  k2 <- inferCoeffectTypeInContext s ctxt c2
   return $ TyApp (TyApp (TyCon $ mkId "×") k1) k2
 
-inferCoeffectType s (CInterval c1 c2)    = do
-  k1 <- inferCoeffectType s c1
-  k2 <- inferCoeffectType s c2
+inferCoeffectTypeInContext s ctxt (CInterval c1 c2)    = do
+  k1 <- inferCoeffectTypeInContext s ctxt c1
+  k2 <- inferCoeffectTypeInContext s ctxt c2
 
   case joinCoeffectTypes k1 k2 of
     Just k -> return $ TyApp (TyCon $ mkId "Interval") k
@@ -190,17 +188,17 @@ inferCoeffectType s (CInterval c1 c2)    = do
     Nothing -> throw IntervalGradeKindError{ errLoc = s, errTy1 = k1, errTy2 = k2 }
 
 -- Take the join for compound coeffect epxressions
-inferCoeffectType s (CPlus c c')  = mguCoeffectTypes s c c'
-inferCoeffectType s (CMinus c c') = mguCoeffectTypes s c c'
-inferCoeffectType s (CTimes c c') = mguCoeffectTypes s c c'
-inferCoeffectType s (CMeet c c')  = mguCoeffectTypes s c c'
-inferCoeffectType s (CJoin c c')  = mguCoeffectTypes s c c'
-inferCoeffectType s (CExpon c c') = mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CPlus c c')  = mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CMinus c c') = mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CTimes c c') = mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CMeet c c')  = mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CJoin c c')  = mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CExpon c c') = mguCoeffectTypes s c c'
 
 -- Coeffect variables should have a type in the cvar->kind context
-inferCoeffectType s (CVar cvar) = do
+inferCoeffectTypeInContext s ctxt (CVar cvar) = do
   st <- get
-  case lookup cvar (tyVarContext st) of
+  case lookup cvar ctxt of
     Nothing -> do
       throw UnboundTypeVariable{ errLoc = s, errId = cvar }
 --      state <- get
@@ -209,17 +207,17 @@ inferCoeffectType s (CVar cvar) = do
 --      put (state { uniqueVarId = uniqueVarId state + 1 })
 --      return newType
 
-    Just (KVar   name, _) -> return $ TyVar name
-    Just (KPromote t, _)  -> checkKindIsCoeffect s t
-    Just (k, _)           -> throw
+    Just (KVar   name) -> return $ TyVar name
+    Just (KPromote t)  -> checkKindIsCoeffect s ctxt t
+    Just k             -> throw
       KindMismatch{ errLoc = s, kExpected = KCoeffect, kActual = k }
 
-inferCoeffectType s (CZero t) = checkKindIsCoeffect s t
-inferCoeffectType s (COne t)  = checkKindIsCoeffect s t
-inferCoeffectType s (CInfinity (Just t)) = checkKindIsCoeffect s t
+inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
+inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
+inferCoeffectTypeInContext s ctxt (CInfinity (Just t)) = checkKindIsCoeffect s ctxt t
 -- Unknown infinity defaults to the interval of extended nats version
-inferCoeffectType s (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat)
-inferCoeffectType s (CSig _ t) = checkKindIsCoeffect s t
+inferCoeffectTypeInContext s ctxt (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat)
+inferCoeffectTypeInContext s ctxt (CSig _ t) = checkKindIsCoeffect s ctxt t
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)
                             => Span -> Assumption -> Checker (Maybe Type)
@@ -228,22 +226,21 @@ inferCoeffectTypeAssumption s (Discharged _ c) = do
     t <- inferCoeffectType s c
     return $ Just t
 
-checkKindIsCoeffect :: (?globals :: Globals) => Span -> Type -> Checker Type
-checkKindIsCoeffect span ty = do
-  kind <- inferKindOfType span ty
+checkKindIsCoeffect :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Type
+checkKindIsCoeffect span ctxt ty = do
+  kind <- inferKindOfTypeInContext span ctxt ty
   case kind of
     KCoeffect -> return ty
     -- Came out as a promoted type, check that this is a coeffect
     KPromote k -> do
-      kind' <- inferKindOfType span k
+      kind' <- inferKindOfTypeInContext span ctxt k
       case kind' of
         KCoeffect -> return ty
         _ -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
-    KVar v -> do
-      st <- get
-      case lookup v (tyVarContext st) of
-        Just (KCoeffect, _) -> return ty
-        _                   -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
+    KVar v ->
+      case lookup v ctxt of
+        Just KCoeffect -> return ty
+        _              -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
 
     _ -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
 

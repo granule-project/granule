@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: 6:1:
+The following theorem associated with `intervalApprox` is falsifiable:
+	(0..∞ ≤ 1..2)

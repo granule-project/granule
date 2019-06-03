@@ -8,6 +8,8 @@ import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
 import Data.List.NonEmpty (NonEmpty(..))
 
+import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Types (SpecIndicator(..))
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -172,9 +174,12 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
 
       definiteUnification s outerBoxTy ty
 
-      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, ([], []), coercions') <-
+      (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, (constraints, []), coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
-      -- TODO: we don't allow constraints in data constructors yet
+
+      mapM_ (\ty -> do
+        pred <- compileTypeConstraintToConstraint s ty
+        addPredicate pred) constraints
 
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
@@ -296,7 +301,7 @@ duplicateBinderCheck :: Span -> [Pattern a] -> Checker ()
 duplicateBinderCheck s ps = case duplicateBinders of
   [] -> pure ()
   (d:ds) ->
-    throwError $ fmap (DuplicatePatternError s) (d :| ds)
+    throwError $ fmap (DuplicateBindingError s) (d :| ds)
   where
     duplicateBinders = duplicates . concatMap getBinders $ ps
     getBinders = patternFold

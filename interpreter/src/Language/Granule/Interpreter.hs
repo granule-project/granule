@@ -15,11 +15,13 @@
 {-# LANGUAGE PackageImports #-}
 {-# LANGUAGE TypeApplications #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE TemplateHaskell #-}
 
 module Language.Granule.Interpreter where
 
 import Control.Exception (SomeException, displayException, try)
 import Control.Monad ((<=<), forM)
+import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
 import Data.List (intercalate, isPrefixOf, stripPrefix)
@@ -34,6 +36,7 @@ import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import System.FilePath (takeFileName)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
+import Options.Applicative.Help.Pretty (string)
 
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError)
@@ -56,15 +59,18 @@ main = do
 
 -- | Run the checker and interpreter on a bunch of files
 runGrOnFiles :: [FilePath] -> GrConfig -> IO ()
-runGrOnFiles globPatterns config = do
+runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
     pwd <- getCurrentDirectory
     results <- forM globPatterns $ \pattern -> do
       paths <- glob pattern
       case paths of
-        [] -> return [Left $ NoMatchingFiles pattern]
+        [] -> do
+          let result = Left $ NoMatchingFiles pattern
+          printResult result
+          return [result]
         _ -> forM paths $ \path -> do
           let fileName = if pwd `isPrefixOf` path then takeFileName path else path
-          let ?globals = (grGlobals config){ globalsSourceFilePath = Just fileName } in do
+          let ?globals = ?globals{ globalsSourceFilePath = Just fileName } in do
             printInfo $ "Checking " <> fileName <> "..."
             src <- preprocess
               (rewriter config)
@@ -131,7 +137,7 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
                       pure . Left . EvalError $ displayException e
                     Right Nothing -> if testing
                       then pure $ Right NoEval
-                      else pure $ Left NoMain
+                      else pure $ Left NoEntryPoint
                     Right (Just result) -> do
                       pure . Right $ InterpreterResult result
 
@@ -222,8 +228,15 @@ getGrCommandLineArgs = customExecParser (prefs disambiguate) parseGrConfig
 
 parseGrConfig :: ParserInfo ([FilePath], GrConfig)
 parseGrConfig = info (go <**> helper) $ briefDesc
-    <> header ("Granule " <> showVersion version)
-    <> footer "\n\nThis software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
+    <> (headerDoc . Just . string . unlines)
+            [ "The Granule Interpreter"
+            , "version: "     <> showVersion version
+            , "branch: "      <> $(gitBranch)
+            , "commit hash: " <> $(gitHash)
+            , "commit date: " <> $(gitCommitDate)
+            , if $(gitDirty) then "(uncommitted files present)" else ""
+            ]
+    <> footer "This software is provided under a BSD3 license and comes with NO WARRANTY WHATSOEVER.\
               \ Consult the LICENSE for further information."
   where
     go = do
@@ -287,6 +300,12 @@ parseGrConfig = info (go <**> helper) $ briefDesc
                     <> show includePath)
             <> metavar "PATH"
 
+        globalsEntryPoint <-
+          optional $ strOption
+            $ long "entry-point"
+            <> help ("Program entry point. Defaults to " <> show entryPoint)
+            <> metavar "ID"
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -324,6 +343,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsSolverTimeoutMillis
               , globalsIncludePath
               , globalsSourceFilePath = Nothing
+              , globalsEntryPoint
               }
             }
           )
@@ -335,7 +355,7 @@ data InterpreterError
   | CheckerError (NonEmpty CheckerError)
   | EvalError String
   | FatalError String
-  | NoMain
+  | NoEntryPoint
   | NoMatchingFiles String
   deriving Show
 
@@ -349,12 +369,12 @@ instance UserMsg InterpreterError where
   title CheckerError {} = "Type checking failed"
   title EvalError {} = "Error during evaluation"
   title FatalError{} = "Fatal error"
-  title NoMain{} = "No program entry point"
+  title NoEntryPoint{} = "No program entry point"
   title NoMatchingFiles{} = "User error"
 
   msg (ParseError m) = fst . breakOn "CallStack (from HasCallStack):" $ m -- TODO
   msg (CheckerError ms) = intercalate "\n\n" . map formatError . toList $ ms
   msg (EvalError m) = m
   msg (FatalError m) = m
-  msg NoMain = "No `main` definition found; nothing to evaluate."
+  msg NoEntryPoint = "Program entry point `" <> entryPoint <> "` not found. A different one can be specified with `--entry-point`."
   msg (NoMatchingFiles p) = "The glob pattern `" <> p <> "` did not match any files."

@@ -15,8 +15,9 @@ fine-grained effects and coeffects via **graded modal types**.
 
 A brief introduction to the Granule programming language can be found in the
 [extended abstract presented at TLLA'17][1]. The type system is partly based on
-the one in ["Combining effects and coeffects via grading" (Gaboardi et al.
-2016)][2].
+the ideas in ["Combining effects and coeffects via grading" (Gaboardi et al.
+2016)][2], but with considerable extensions and novel features, reported in detail
+in an upcoming paper.
 
 [1]: https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf
 [2]: http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf
@@ -82,8 +83,8 @@ Granule program files have file extension `.gr`. Use the `gr` command to run the
     OK, evaluating...
     1
 
-See the `examples` directory for more sample programs, or `frontend/tests/cases`
-if you dare.
+A good starting point for learning about Granule is the tutorial given in
+[examples/intro.gr.md](https://github.com/granule-project/granule/blob/master/examples/intro.gr.md).
 
 ### Setting the Path
 

@@ -1,0 +1,17 @@
+-- The following is not typeable:
+-- leak : Int [Private] → Int [Public]
+-- leak [x] = [x]
+
+notALeak : (Int [Private]) [0] → Int [Public]
+notALeak [x] = [0]
+
+secret : Int [Private]
+secret = [1234]
+
+hash : ∀ l : Level . Int [l] → Int [l]
+hash [x] = [x + x]
+
+-- If `main` was of type `Int [Public]`, this wouldn't type check, i.e. the secret
+-- can't be used in a Public security environment.
+main : Int [Public]
+main = hash secret

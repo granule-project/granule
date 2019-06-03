@@ -339,7 +339,9 @@ flipIndicator PatternCtxt = PatternCtxt
 equalTypesRelatedCoeffects :: EqualityProver Type EqualityResult
 equalTypesRelatedCoeffects s rel sp (FunTy t1 t2) (FunTy t1' t2') = do
   -- contravariant position (always approximate)
-  eq1 <- equalTypesRelatedCoeffects s ApproximatedBy (flipIndicator sp) t1' t1
+  eq1 <- case sp of
+           FstIsSpec -> equalTypesRelatedCoeffects s ApproximatedBy (flipIndicator sp) t1 t1'
+           _         -> equalTypesRelatedCoeffects s ApproximatedBy (flipIndicator sp) t1' t1
   eq2 <- eqSubproof eq1 $ \eqres -> do
            let u1 = equalityProofSubstitution eqres
            -- covariant position (depends: is not always over approximated)
@@ -446,7 +448,7 @@ equalTypesRelatedCoeffects s _ sp (TyVar n) (TyVar m) = do
   where
     tyVarConstraint (k1, n) (k2, m) = do
       case k1 `joinKind` k2 of
-        Just (KPromote (TyCon kc)) -> do
+        Just (KPromote (TyCon kc), _) -> do
 
           withInferredKind s (TyCon kc) $ \k -> do
             -- Create solver vars for coeffects
@@ -489,12 +491,12 @@ equalTypesRelatedCoeffects s rel sp (TyVar n) t = do
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ && sp /= PatternCtxt) -> do
-      withInferredKind s t $ \k2 ->
+      withInferredKind s t $ \k2 -> do
         case k1 `joinKind` k2 of
           Nothing -> illKindedUnifyVar s (n, k1) (t, k2)
 
           -- If the kind is Nat, then create a solver constraint
-          Just (KPromote (TyCon (internalName -> "Nat"))) -> do
+          Just (KPromote (TyCon (internalName -> "Nat")), _) -> do
             nat <- compileNatKindedTypeToCoeffect s t
             pure $ equalWith ([Eq s (CVar n) nat (TyCon $ mkId "Nat")], [(n, SubstT t)])
 
@@ -510,12 +512,13 @@ equalTypesRelatedCoeffects s rel sp (TyVar n) t = do
          -- If the kind if nat then set up and equation as there might be a
          -- pausible equation involving the quantified variable
          case kind of
-           Just (KPromote (TyCon (Id "Nat" "Nat"))) -> do
+           Just (KPromote (TyCon (Id "Nat" "Nat")), sub) -> do
              c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
              c2 <- compileNatKindedTypeToCoeffect s t
-             pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], [(n, SubstT t)])
+             subst <- combineSubstitutions s [(n, SubstT t)] sub
+             pure $ equalWith ([Eq s c1 c2 (TyCon $ mkId "Nat")], subst)
            Nothing -> illKindedUnifyVar s (n, k1) (t, k2)
-           Just kind -> cannotUnifyUniversalWithConcrete s n kind t
+           Just (kind, _) -> cannotUnifyUniversalWithConcrete s n kind t
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -658,16 +661,18 @@ joinTypes s (TyInt n) (TyVar m) = do
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
-  -- Create fresh variables for the two tyint variables
-  -- TODO: how do we know they are tyints? Looks suspicious
-  --let kind = TyCon $ mkId "Nat"
-  --nvar <- freshTyVarInContext n kind
-  --mvar <- freshTyVarInContext m kind
-  -- Unify the two variables into one
-  --addConstraint (ApproximatedBy s (CVar nvar) (CVar mvar) kind)
-  --return $ TyVar n
-  -- TODO: FIX. The above can't be right.
-  error $ "Trying to join two type variables: " ++ pretty n ++ " and " ++ pretty m
+
+  kind <- inferKindOfType s (TyVar n)
+  case kind of
+    KPromote t -> do
+
+      nvar <- freshTyVarInContextWithBinding n kind BoundQ
+      -- Unify the two variables into one
+      addConstraint (ApproximatedBy s (CVar n) (CVar nvar) t)
+      addConstraint (ApproximatedBy s (CVar m) (CVar nvar) t)
+      return $ TyVar nvar
+
+    _ -> error $ "Trying to join two type variables: " ++ pretty n ++ " and " ++ pretty m
 
 joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
   t1'' <- joinTypes s t1 t1'

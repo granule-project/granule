@@ -1,4 +1,4 @@
 Type checking failed: 
 Counter example: 7:1:
 The following theorem associated with `fibble` is falsifiable:
-	∀ [(n0.0, ↑Nat),(t1.0, ↑Nat)] . ((t1.0 = n0.0 + 1) ∧ (t1.0 = n) -> (n1 = n1 + 1) ∧ (n0.0 = n1))
+	∀ n0.0 : ↑Nat,t1.0 : ↑Nat . ((n0.0 + 1 = n) -> (n0.0 + 1 = n0.0 + 1 + 1) ∧ (n0.0 = n0.0 + 1))

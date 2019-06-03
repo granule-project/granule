@@ -111,7 +111,7 @@ checkDataCon
         -- Add the type variables from the data constructor into the environment
         modify $ \st -> st { tyVarContext =
                [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
-        tySchKind <- inferKindOfType' sp tyVars ty
+        tySchKind <- inferKindOfTypeInContext sp tyVars ty
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, _, (predConstrs, iConstrs), []) <-
@@ -221,7 +221,12 @@ checkDef' :: (?globals :: Globals)
          => Span -> Id -> [Equation () ()]
          -> TypeScheme
          -> Checker (Def () Type)
-checkDef' s defName equations tys@(Forall _ foralls constraints ty) = do
+checkDef' s defName equations tys@(Forall s_t foralls constraints ty) = do
+
+    -- duplicate forall bindings
+    case duplicates (map (sourceName . fst) foralls) of
+      [] -> pure ()
+      (d:ds) -> throwError $ fmap (DuplicateBindingError s_t) (d :| ds)
 
     defCtxt <- fmap defContext get
     -- Clean up knowledge shared between equations of a definition
@@ -360,13 +365,13 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
 
-  newConjunct
-
   (tau', subst1) <- case t of
     Nothing -> return (tau, [])
     Just t' -> do
       subst <- fmap equalityProofSubstitution (requireEqualTypes s sig t')
       return (tau, subst)
+
+  newConjunct
 
   (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
   debugM "binding from lam" $ pretty bindings
@@ -385,7 +390,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
           subst <- combineSubstitutions s subst1 subst2
 
           -- Locally we should have this property (as we are under a binder)
-          ctxtEquals s (gam' `intersectCtxts` bindings) bindings
+          ctxtApprox s (gam' `intersectCtxts` bindings) bindings
 
           concludeImplication s localVars
 
@@ -700,50 +705,47 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   return (branchType, gamNew, subst, elaborated)
 
 -- Diamond cut
+-- let [[p]] <- [[e1 : sig]] in [[e2 : tau]]
 synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   -- TODO: refactor this once we get a proper mechanism for
   -- specifying effect over-approximations and type aliases
 
   (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
-  (ef1, ty1) <-
-          case sig of
-            Diamond ["IO"] ty1 -> return ([], ty1)
-            Diamond ["Session"] ty1 -> return ([], ty1)
-            Diamond ef1 ty1 -> return (ef1, ty1)
-            t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
+  (ef1, ty1) <- case sig of
+      Diamond ["IO"] ty1 -> return ([], ty1)
+      Diamond ["Session"] ty1 -> return ([], ty1)
+      Diamond ef1 ty1 -> return (ef1, ty1)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
   -- Type body of the let...
   -- ...in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
-  if not pIrrefutable
-  then throw RefutablePatternError{ errLoc = s, errPat = p }
-  else do
-     (tau, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
-     (ef2, ty2) <-
-           case tau of
-             Diamond ["IO"] ty2 -> return ([], ty2)
-             Diamond ["Session"] ty2 -> return ([], ty2)
-             Diamond ef2 ty2 -> return (ef2, ty2)
-             t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
+  unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
+  (tau, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+  (ef2, ty2) <- case tau of
+      Diamond ["IO"] ty2 -> return ([], ty2)
+      Diamond ["Session"] ty2 -> return ([], ty2)
+      Diamond ef2 ty2 -> return (ef2, ty2)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
-     _ <- optionalSigEquality s optionalTySig ty1
+  _ <- optionalSigEquality s optionalTySig ty1
 
-     -- Check that usage matches the binding grades/linearity
-     -- (performs the linearity check)
-     ctxtEquals s (gam2 `intersectCtxts` binders) binders
+  -- Check that usage matches the binding grades/linearity
+  -- (performs the linearity check)
+  ctxtEquals s (gam2 `intersectCtxts` binders) binders
 
-     gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
+  gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
-     let t = Diamond (ef1 <> ef2) ty2
+  let t = Diamond (ef1 <> ef2) ty2
 
-     subst <- combineManySubstitutions s [substP, subst1, subst2]
-     -- Synth subst
-     t' <- substitute substP t
+  subst <- combineManySubstitutions s [substP, subst1, subst2]
+  -- Synth subst
+  t' <- substitute substP t
 
-     let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
-     return (t, gamNew, subst, elaborated)
+  let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
+  return (t, gamNew, subst, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
@@ -883,7 +885,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
+     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
@@ -915,7 +917,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtEquals s (gam'' `intersectCtxts` bindings) bindings
+     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
@@ -996,7 +998,7 @@ rewriteMessage msg = do
                  KPromote (TyCon (internalName -> "Level")) ->
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
-                       (T.replace (T.pack "Integer") (T.pack "Level") line'))
+                          (T.replace (T.pack "Integer") (T.pack "Level") line'))
                  _ -> line'
              else line'
        in line''

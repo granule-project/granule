@@ -25,6 +25,11 @@ data SGrade =
      -- Single point coeffect (not exposed at the moment)
      | SPoint
      | SProduct { sfst :: SGrade, ssnd :: SGrade }
+
+     -- A kind of embedded uninterpreted sort which can accept some equations
+     -- Used for doing some limited solving over poly coeffect grades
+     | SUnknown (Maybe SInteger) -- Just 0 and Just 1 can be identified,
+                                 -- but if Nothing then these values are incomparable
     deriving (Show, Generic)
 
 -- Work out if two symbolic grades are of the same type
@@ -37,6 +42,7 @@ match (SExtNat _) (SExtNat _) = True
 match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
 match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
+match (SUnknown _) (SUnknown _) = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -90,6 +96,8 @@ instance Mergeable SGrade where
   symbolicMerge s sb a b | isSProduct a || isSProduct b =
     applyToProducts (symbolicMerge s sb) SProduct id a b
 
+  symbolicMerge s sb (SUnknown (Just u)) (SUnknown (Just u')) =
+    SUnknown (Just (symbolicMerge s sb u u'))
   symbolicMerge _ _ s t = cannotDo "symbolicMerge" s t
 
 instance OrdSymbolic SGrade where
@@ -102,6 +110,7 @@ instance OrdSymbolic SGrade where
   (SExtNat n) .< (SExtNat n') = n .< n'
   SPoint .< SPoint = sTrue
   s .< t | isSProduct s || isSProduct t = applyToProducts (.<) (.&&) (const sTrue) s t
+  (SUnknown (Just n)) .< (SUnknown (Just n')) = n .< n'
   s .< t = cannotDo ".<" s t
 
 instance EqSymbolic SGrade where
@@ -114,6 +123,7 @@ instance EqSymbolic SGrade where
   (SExtNat n) .== (SExtNat n') = n .== n'
   SPoint .== SPoint = sTrue
   s .== t | isSProduct s || isSProduct t = applyToProducts (.==) (.&&) (const sTrue) s t
+  (SUnknown (Just n)) .== (SUnknown (Just n')) = n .== n'
   s .== t = cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -128,6 +138,7 @@ symGradeMeet (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradeMeet SPoint SPoint = SPoint
 symGradeMeet s t | isSProduct s || isSProduct t =
   applyToProducts symGradeMeet SProduct id s t
+symGradeMeet (SUnknown (Just n)) (SUnknown (Just n')) = SUnknown (Just (n `smin` n'))
 symGradeMeet s t = cannotDo "meet" s t
 
 -- | Join operation on symbolic grades
@@ -142,6 +153,7 @@ symGradeJoin (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradeJoin SPoint SPoint = SPoint
 symGradeJoin s t | isSProduct s || isSProduct t =
   applyToProducts symGradeJoin SProduct id s t
+symGradeJoin (SUnknown (Just n)) (SUnknown (Just n')) = SUnknown (Just (n `smax` n'))
 symGradeJoin s t = cannotDo "join" s t
 
 -- | Plus operation on symbolic grades
@@ -156,6 +168,18 @@ symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradePlus SPoint SPoint = SPoint
 symGradePlus s t | isSProduct s || isSProduct t =
    applyToProducts symGradePlus SProduct id s t
+
+-- Direct encoding of addition unit
+symGradePlus (SUnknown (Just u)) (SUnknown (Just u')) =
+  ite (u .== 0) (SUnknown (Just u'))
+    (ite (u' .== 0) (SUnknown (Just u)) (SUnknown Nothing))
+
+symGradePlus (SUnknown (Just u)) (SUnknown um) =
+  ite (u .== 0) (SUnknown um) (SUnknown Nothing)
+
+symGradePlus (SUnknown um) (SUnknown (Just u)) =
+  symGradePlus (SUnknown um) (SUnknown (Just u))
+
 symGradePlus s t = cannotDo "plus" s t
 
 -- | Times operation on symbolic grades
@@ -169,14 +193,30 @@ symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     --SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
     SInterval (comb symGradeMeet) (comb symGradeJoin)
      where
-      comb f = ((lb1lb2 `f` lb1ub2) `f` lb2ub1) `f` ub1ub2
+      comb f = ((lb1lb2 `f` lb1ub2) `f` ub1lb2) `f` ub1ub2
       lb1lb2 = lb1 `symGradeTimes` lb2
       lb1ub2 = lb1 `symGradeTimes` ub2
-      lb2ub1 = lb2 `symGradeTimes` ub1
+      ub1lb2 = ub1 `symGradeTimes` lb2
       ub1ub2 = ub1 `symGradeTimes` ub2
 symGradeTimes SPoint SPoint = SPoint
 symGradeTimes s t | isSProduct s || isSProduct t =
   applyToProducts symGradeTimes SProduct id s t
+
+-- units and absorption directly encoded
+symGradeTimes (SUnknown (Just u)) (SUnknown (Just u')) =
+    ite (u .== 1) (SUnknown (Just u'))
+      (ite (u' .== 1) (SUnknown (Just u))
+        (ite (u .== 0) (SUnknown (Just 0))
+          (ite (u' .== 0) (SUnknown (Just 0))
+             (SUnknown Nothing))))
+
+symGradeTimes (SUnknown (Just u)) (SUnknown um) =
+  ite (u .== 1) (SUnknown um)
+    (ite (u .== 0) (SUnknown (Just 0)) (SUnknown Nothing))
+
+symGradeTimes (SUnknown um) (SUnknown (Just u)) =
+  symGradeTimes (SUnknown (Just u)) (SUnknown um)
+
 symGradeTimes s t = cannotDo "times" s t
 
 -- | Minus operation on symbolic grades
