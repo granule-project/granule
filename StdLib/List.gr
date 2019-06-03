@@ -21,6 +21,12 @@ length_list xs =
     Empty         -> 0;
     (Next [_] xs) -> 1 + length_list xs
 
+length_list' : forall a : Type . List a -> (Int, List a)
+length_list' Empty = (0, Empty);
+length_list' (Next x xs) =
+  let (len, xs) = length_list' xs
+  in  (len + 1, Next x xs)
+
 -- Map function for lists
 lmap : forall a : Type, b : Type
     . (a -> b) [0..∞] -> List a -> List b
