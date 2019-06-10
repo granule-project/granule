@@ -114,6 +114,18 @@ $ cat ~/.granule
 --solver-timeout 2000
 ~~~
 
+### Command line completion
+
+See [here](https://github.com/pcapriotti/optparse-applicative#bash-zsh-and-fish-completions)
+for how to install completion scripts for your shell, although we recommend
+dynamically loading the completions in your shell's startup script to account
+for changes in `gr`'s interface; e.g. for `fish` on MacOS:
+
+~~~ fish
+echo "#granule
+gr --fish-completion-script (which gr) > source" >> ~/.config/fish/config.fish
+~~~
+
 ### Accessibility
 
 We aim to make Granule as inclusive as possible. If you experience any
