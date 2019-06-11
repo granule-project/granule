@@ -123,7 +123,7 @@ for changes in `gr`'s interface; e.g. for `fish` on MacOS:
 
 ~~~ fish
 echo "#granule
-gr --fish-completion-script (which gr) > source" >> ~/.config/fish/config.fish
+gr --fish-completion-script (which gr) | source" >> ~/.config/fish/config.fish
 ~~~
 
 ### Accessibility
