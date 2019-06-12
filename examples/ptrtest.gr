@@ -1,0 +1,2 @@
+main : Int
+main = let MkPtrCap [ptr] cap = newPtr 1 in freePtr ptr cap

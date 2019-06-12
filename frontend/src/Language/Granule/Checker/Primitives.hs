@@ -176,8 +176,7 @@ data () = ()
 -- File Handles
 --------------------------------------------------------------------------------
 
-data Handle : HandleType -> Type
-  = BUILTIN
+data Handle : HandleType -> Type where
 
 -- TODO: with type level sets we could index a handle by a set of capabilities
 -- then we wouldn't need readChar and readChar' etc.
@@ -305,6 +304,34 @@ copy
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
 copy = BUILTIN
+
+
+--------------------------------------------------------------------------------
+-- L3-style pointers
+--------------------------------------------------------------------------------
+
+data Ptr (id : Type) where
+
+data Cap (id : Type) (a : Type) where
+
+data PtrCap a where
+  MkPtrCap : forall { id : Type } . (Ptr id) [] -> Cap id a -> PtrCap a
+
+newPtr
+  : forall { a : Type }
+  . a -> PtrCap a
+newPtr = BUILTIN
+
+swapPtr
+  : forall { a b : Type, id : Type }
+  . b -> Ptr id -> Cap id a -> (a × Cap id b)
+swapPtr = BUILTIN
+
+freePtr
+  : forall { a b : Type, id : Type }
+  . Ptr id -> Cap id a -> a
+freePtr = BUILTIN
+
 
 |]
 
