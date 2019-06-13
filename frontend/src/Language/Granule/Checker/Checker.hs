@@ -922,7 +922,6 @@ solveConstraints predicate s name = do
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
 
   result <- liftIO $ provePredicate predicate coeffectVars
-
   case result of
     QED -> return ()
     NotValid msg -> do
