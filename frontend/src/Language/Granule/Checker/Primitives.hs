@@ -314,9 +314,9 @@ copy = BUILTIN
 -- L3-style pointers
 --------------------------------------------------------------------------------
 
-data Ptr (id : Type) where
+data Ptr : Type -> Type where
 
-data Cap (id : Type) (a : Type) where
+data Cap : Type -> Type -> Type where
 
 data PtrCap a where
   MkPtrCap : forall { id : Type } . (Ptr id) [] -> Cap id a -> PtrCap a
