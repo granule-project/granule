@@ -53,8 +53,8 @@ check :: (?globals :: Globals)
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
 check ast@(AST dataDecls defs imports) = evalChecker initState $ do
     _    <- checkNameClashes ast
-    _    <- runAll checkTyCon dataDecls
-    _    <- runAll checkDataCons dataDecls
+    _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
+    _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
     defs <- runAll kindCheckDef defs
     let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
     defs <- runAll (checkDef defCtxt) defs

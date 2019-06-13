@@ -4,11 +4,8 @@
 
 module Language.Granule.Checker.Primitives where
 
-import Data.List (genericLength)
 import Data.List.NonEmpty (NonEmpty(..))
 import Text.RawString.QQ (r)
-
-import Language.Granule.Checker.SubstitutionContexts
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
@@ -20,11 +17,12 @@ import Language.Granule.Syntax.Expr (Operator(..))
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
+-- Type constructors which are not internally defined by a data type
+-- either because they are abstract, or because they have
+-- special data constructors (e.g. Int,Char,etc.)
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeConstructors =
-    [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
-    , (mkId ",", (KFun KType (KFun KType KType), Just 1))
-    , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
+    [ (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
     , (mkId "Int",  (KType, Nothing))
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
@@ -37,7 +35,6 @@ typeConstructors =
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
-    -- File stuff
     -- Channels and protocol types
     , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing))
     , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing))
@@ -47,7 +44,7 @@ typeConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
-    ] ++ builtinTypeConstructors
+    ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
@@ -64,18 +61,25 @@ tyOps = \case
     TyOpMeet -> (kNat, kNat, kNat)
     TyOpJoin -> (kNat, kNat, kNat)
 
-dataConstructors :: [(Id, (TypeScheme, Substitution))]
-dataConstructors =
-    [ ( mkId ",", (Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
-        (FunTy (TyVar (mkId "a"))
-          (FunTy (TyVar (mkId "b"))
-                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))), [])
-      )
-    ] ++ builtinDataConstructors
+dataTypes :: [DataDecl]
+dataTypes =
+    -- Special built-in for products (which cannot be parsed)
+    [ DataDecl
+      { dataDeclSpan = nullSpanBuiltin
+      , dataDeclId   = mkId ","
+      , dataDeclTyVarCtxt = [((mkId "a"),KType),((mkId "b"),KType)]
+      , dataDeclKindAnn = Just KType
+      , dataDeclDataConstrs = [
+        DataConstrNonIndexed
+          { dataConstrSpan = nullSpanBuiltin
+          , dataConstrId = mkId ","
+          , dataConstrParams = [TyVar (mkId "a"), TyVar (mkId "b")]
+         }]}
+    ] ++ builtinDataTypesParsed
 
 builtins :: [(Id, TypeScheme)]
 builtins =
-  builtins' <>
+  builtinsParsed <>
   [ (mkId "div", Forall nullSpanBuiltin [] []
        (FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))))
     -- Graded monad unit operation
@@ -178,6 +182,8 @@ data () = ()
 
 data Handle : HandleType -> Type where
 
+data HandleType = R | W | A | RW
+
 -- TODO: with type level sets we could index a handle by a set of capabilities
 -- then we wouldn't need readChar and readChar' etc.
 data IOMode : HandleType -> Type where
@@ -185,8 +191,6 @@ data IOMode : HandleType -> Type where
   WriteMode : IOMode W;
   AppendMode : IOMode A;
   ReadWriteMode : IOMode RW
-
-data HandleType = R | W | A | RW
 
 openHandle
   : forall {m : HandleType}
@@ -336,26 +340,14 @@ freePtr = BUILTIN
 |]
 
 
-builtinTypeConstructors :: [(Id, (Kind, Cardinality))]
-builtinDataConstructors :: [(Id, (TypeScheme, Substitution))]
-builtins' :: [(Id, TypeScheme)]
-(builtinTypeConstructors, builtinDataConstructors, builtins') =
-  (map fst datas, concatMap snd datas, map unDef defs)
+builtinDataTypesParsed :: [DataDecl]
+builtinsParsed :: [(Id, TypeScheme)]
+(builtinDataTypesParsed, builtinsParsed) =
+  (types, map unDef defs)
     where
       AST types defs _ = case parseDefs "builtins" builtinSrc of
         Right ast -> ast
         Left err -> error err
-      datas = map unData types
 
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
-
-      unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, (TypeScheme, Substitution))])
-      unData (DataDecl _ tyConName tyVars kind dataConstrs)
-        = (( tyConName, (maybe KType id kind, (Just $ genericLength dataConstrs)))
-          , map unDataConstr dataConstrs
-          )
-        where
-          unDataConstr :: DataConstr -> (Id, (TypeScheme, Substitution))
-          unDataConstr (DataConstrIndexed _ name tysch) = (name, (tysch, []))
-          unDataConstr d = unDataConstr (nonIndexedToIndexedDataConstr tyConName tyVars d)
