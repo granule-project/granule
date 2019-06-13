@@ -444,6 +444,11 @@ normalise (CTimes n m) =
   where
     n' = normalise n
     m' = normalise m
+-- Push signatures in
+normalise (CSig (CPlus c1 c2) k) = CPlus (CSig (normalise c1) k) (CSig (normalise c2) k)
+normalise (CSig (CTimes c1 c2) k) = CTimes (CSig (normalise c1) k) (CSig (normalise c2) k)
+normalise (CSig (CMeet c1 c2) k) = CMeet (CSig (normalise c1) k) (CSig (normalise c2) k)
+normalise (CSig (CJoin c1 c2) k) = CJoin (CSig (normalise c1) k) (CSig (normalise c2) k)
 normalise (CSig (CNat 0) k) = CZero k
 normalise (CSig (CZero _)  k) = CZero k
 normalise (CSig (CNat 1) k) = COne k

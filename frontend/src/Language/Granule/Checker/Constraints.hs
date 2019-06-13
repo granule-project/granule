@@ -333,7 +333,7 @@ freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 
 freshCVar quant name (TyVar v) q = do
   solverVar <- quant q name
-  return (sTrue, SUnknown $ Just solverVar)
+  return (sTrue, SUnknown $ SynLeaf $ Just solverVar)
 
 freshCVar _ _ t _ =
   error $ "Trying to make a fresh solver variable for a grade of type: "
@@ -473,8 +473,12 @@ compileCoeffect (CZero k') k vars  =
         (compileCoeffect (CZero t) t' vars)
         (compileCoeffect (CZero t) t' vars)
 
-    (TyVar _, _) -> SUnknown (Just 0)
+    (TyVar _, _) -> SUnknown (SynLeaf (Just 0))
     _ -> error $ "I don't know how to compile a 0 for " <> pretty k'
+
+
+compileCoeffect (CNat 0) (TyVar _) _ =
+    SUnknown (SynLeaf (Just 1))
 
 compileCoeffect (COne k') k vars =
   case (k', k) of
@@ -499,12 +503,22 @@ compileCoeffect (COne k') k vars =
         SInterval
           (compileCoeffect (COne t) t' vars)
           (compileCoeffect (COne t) t' vars)
-    (TyVar _, _) -> SUnknown (Just 1)
+    (TyVar _, _) -> SUnknown (SynLeaf (Just 1))
 
     _ -> error $ "I don't know how to compile a 1 for " <> pretty k'
 
 compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
   SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
+
+compileCoeffect (CNat 1) (TyVar _) _ =
+  SUnknown (SynLeaf (Just 1))
+
+compileCoeffect (CNat n) (TyVar _) _ | n > 0 =
+  SUnknown (injection n)
+    where
+      injection 0 = SynLeaf (Just 0)
+      injection 1 = SynLeaf (Just 1)
+      injection n = SynPlus (SynLeaf (Just 1)) (injection (n-1))
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c
@@ -555,7 +569,8 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
 
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
-     (u .== u') .|| (u .< u')
+     -- Note shortcircuiting version of || implemented here
+     ite (u .== u') sTrue (u .< u')
 
 approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " <> show x <> " <= " <> show y

@@ -1,0 +1,4 @@
+Fatal error: 
+Due to polymorphic grade reasoning, it is unknown whether (1 + 1) .< (1 + (1 + 1)) holds for all resource algebras.
+CallStack (from HasCallStack):
+  error, called at src/Language/Granule/Checker/Constraints/SymbolicGrades.hs:267:3 in granule-frontend-0.7.3.0-JLcnPrGgMMqLIMTBGiwzbe:Language.Granule.Checker.Constraints.SymbolicGrades
