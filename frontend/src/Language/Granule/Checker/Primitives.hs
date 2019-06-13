@@ -319,7 +319,7 @@ data Ptr : Type -> Type where
 data Cap : Type -> Type -> Type where
 
 data PtrCap a where
-  MkPtrCap : forall { id : Type } . (Ptr id) [] -> Cap id a -> PtrCap a
+  MkPtrCap : forall { id : Type } . (Ptr id) [] -> Cap a id -> PtrCap a
 
 newPtr
   : forall { a : Type }
@@ -328,12 +328,12 @@ newPtr = BUILTIN
 
 swapPtr
   : forall { a b : Type, id : Type }
-  . b -> Ptr id -> Cap id a -> (a × Cap id b)
+  . b -> Ptr id -> Cap a id -> (a × Cap b id)
 swapPtr = BUILTIN
 
 freePtr
   : forall { a b : Type, id : Type }
-  . Ptr id -> Cap id a -> a
+  . Ptr id -> Cap a id -> a
 freePtr = BUILTIN
 
 

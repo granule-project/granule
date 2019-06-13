@@ -25,9 +25,9 @@ import Control.Monad (when, zipWithM)
 
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
-import Foreign.Marshal.Alloc (free, malloc)
-import Foreign.Ptr (castPtr)
-import Foreign.Storable (peek, poke)
+-- import Foreign.Marshal.Alloc (free, malloc)
+-- import Foreign.Ptr (castPtr)
+-- import Foreign.Storable (peek, poke)
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
@@ -316,9 +316,9 @@ builtIns =
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)
-  , (mkId "newPtr", malloc)
-  , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
-  , (mkId "freePtr", free)
+  -- , (mkId "newPtr", malloc)
+  -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
+  -- , (mkId "freePtr", free)
   ]
   where
     fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> IO RValue
