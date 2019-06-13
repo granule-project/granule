@@ -264,7 +264,7 @@ symGradeMinus s t = cannotDo "minus" s t
 
 cannotDo :: String -> SGrade -> SGrade -> a
 cannotDo op (SUnknown s) (SUnknown t) =
-  error $ "Due to polymorphic grade reasoning, it is unknown whether "
+  error $ "It is unknown whether "
       <> show s <> " "
       <> op <> " "
       <> show t
