@@ -476,10 +476,6 @@ compileCoeffect (CZero k') k vars  =
     (TyVar _, _) -> SUnknown (SynLeaf (Just 0))
     _ -> error $ "I don't know how to compile a 0 for " <> pretty k'
 
-
-compileCoeffect (CNat 0) (TyVar _) _ =
-    SUnknown (SynLeaf (Just 1))
-
 compileCoeffect (COne k') k vars =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
@@ -510,9 +506,9 @@ compileCoeffect (COne k') k vars =
 compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
   SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
 
-compileCoeffect (CNat 1) (TyVar _) _ =
-  SUnknown (SynLeaf (Just 1))
-
+-- For grade-polymorphic coeffects, that have come from a nat
+-- expression (sometimes this is just from a compounded expression of 1s),
+-- perform the injection from Natural numbers to arbitrary semirings
 compileCoeffect (CNat n) (TyVar _) _ | n > 0 =
   SUnknown (injection n)
     where
