@@ -21,7 +21,7 @@ import Language.Granule.Utils
 
 import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
-import Control.Monad (when, zipWithM)
+import Control.Monad (when, foldM)
 
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
@@ -122,9 +122,9 @@ evalIn ctxt (App s _ e1 e2) = do
         k v2
 
       Abs _ p _ e3 -> do
-        p <- pmatchTop ctxt [(p, e3)] e2
-        case p of
-          Just (e3, bindings) -> evalIn ctxt (applyBindings bindings e3)
+        pResult <- pmatch ctxt [(p, e3)] e2
+        case pResult of
+          Just e3' -> evalIn ctxt e3'
           _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
@@ -144,9 +144,9 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
      case v1 of
        Pure _ e -> do
          v1' <- evalIn ctxt e
-         p  <- pmatch ctxt [(p, e2)] v1'
-         case p of
-           Just (e2, bindings) -> evalIn ctxt (applyBindings bindings e2)
+         pResult  <- pmatch ctxt [(p, e2)] (Val s () v1')
+         case pResult of
+           Just e2' -> evalIn ctxt e2'
            Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
        other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
@@ -174,12 +174,20 @@ evalIn ctxt (Val s _ (Pure _ e)) = do
   v <- evalIn ctxt e
   return $ Pure () (Val s () v)
 
+{- BAD
+evalIn ctxt (Val s _ (Promote _ e)) = do
+  v <- evalIn ctxt e
+  return $ Promote () (Val s () v)
+-}
+
 evalIn _ (Val _ _ v) = return v
 
+
+
 evalIn ctxt (Case _ _ guardExpr cases) = do
-    p <- pmatchTop ctxt cases guardExpr
+    p <- pmatch ctxt cases guardExpr
     case p of
-      Just (ei, bindings) -> evalIn ctxt (applyBindings bindings ei)
+      Just ei -> evalIn ctxt ei
       Nothing             ->
         error $ "Incomplete pattern match:\n  cases: "
              <> pretty cases <> "\n  expr: " <> pretty guardExpr
@@ -192,60 +200,63 @@ applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
     a list of cases (pattern-expression pairs) and the guard expression.
     If there is a matching pattern p_i then return Just of the branch
     expression e_i and a list of bindings in scope -}
-pmatchTop ::
-  (?globals :: Globals)
-  => Ctxt RValue
-  -> [(Pattern (), RExpr)]
-  -> RExpr
-  -> IO (Maybe (RExpr, Ctxt RExpr))
-
-pmatchTop ctxt ((PBox _ _ (PVar _ _ var), branchExpr):_) guardExpr = do
-  Promote _ e <- evalIn ctxt guardExpr
-  return (Just (subst e var branchExpr, []))
-
-pmatchTop ctxt ((PBox _ _ (PWild _ _), branchExpr):_) guardExpr = do
-  Promote _ _ <- evalIn ctxt guardExpr
-  return (Just (branchExpr, []))
-
-pmatchTop ctxt ps guardExpr = do
-  val <- evalIn ctxt guardExpr
-  pmatch ctxt ps val
-
 pmatch ::
   (?globals :: Globals)
   => Ctxt RValue
   -> [(Pattern (), RExpr)]
-  -> RValue
-  -> IO (Maybe (RExpr, Ctxt RExpr))
+  -> RExpr
+  -> IO (Maybe RExpr)
 pmatch _ [] _ =
    return Nothing
 
 pmatch _ ((PWild _ _, e):_)  _ =
-   return $ Just (e, [])
+   return $ Just e
 
-pmatch ctxt ((PConstr _ _ s innerPs, e):ps) (Constr _ s' vs) | s == s' = do
-   matches <- zipWithM (\p v -> pmatch ctxt [(p, e)] v) innerPs vs
-   case sequence matches of
-     Just ebindings -> return $ Just (e, concat $ map snd ebindings)
-     Nothing        -> pmatch ctxt ps (Constr () s' vs)
+pmatch ctxt ((PConstr _ _ id innerPs, t0):ps) e = do
 
-pmatch _ ((PVar _ _ var, e):_) val =
-   return $ Just (e, [(var, Val nullSpan () val)])
+    v <- evalIn ctxt e
+    case v of
+      Constr _ id' vs | id == id' && length innerPs == length vs -> do
 
-pmatch ctxt ((PBox _ _ p, e):ps) (Promote _ e') = do
-  v <- evalIn ctxt e'
-  match <- pmatch ctxt [(p, e)] v
-  case match of
-    Just (_, bindings) -> return $ Just (e, bindings)
-    Nothing -> pmatch ctxt ps (Promote () e')
+        -- Fold over the inner patterns
+        tLastM <- foldM (\tiM (pi, vi) -> case tiM of
+                                            Nothing -> return Nothing
+                                            Just ti -> pmatch ctxt [(pi, ti)] (Val nullSpan () vi)) (Just t0) (zip innerPs vs)
 
-pmatch _ ((PInt _ _ n, e):_)   (NumInt m)   | n == m  =
-   return $ Just (e, [])
+        case tLastM of
+          Just tLast -> return $ Just tLast
+          -- There was a failure somewhere
+          Nothing  -> pmatch ctxt ps e
 
-pmatch _ ((PFloat _ _ n, e):_) (NumFloat m) | n == m =
-   return $ Just (e, [])
+      _ -> pmatch ctxt ps e
 
-pmatch ctxt (_:ps) val = pmatch ctxt ps val
+pmatch _ ((PVar _ _ var, e):_) e' =
+  return $ Just $ subst e' var e
+
+pmatch ctxt ((PBox _ _ p, e):ps) t = do
+  v <- evalIn ctxt t
+  case v of
+    (Promote _ e') -> do
+      match <- pmatch ctxt [(p, e)] e'
+      case match of
+        Just e -> return $ Just e
+        Nothing -> pmatch ctxt ps t
+
+    _ -> error "Irrefutable pattern error"
+
+pmatch ctxt ((PInt _ _ n, e):ps) en = do
+  v <- evalIn ctxt en
+  case v of
+    NumInt m | n == m -> return $ Just e
+    _ -> pmatch ctxt ps en
+
+pmatch ctxt ((PFloat _ _ n, e):ps) en = do
+  v <- evalIn ctxt en
+  case v of
+    NumFloat m | n == m -> return $ Just e
+    _ -> pmatch ctxt ps en
+
+--pmatch ctxt (_:ps) t = pmatch ctxt ps t
 
 valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile ()
