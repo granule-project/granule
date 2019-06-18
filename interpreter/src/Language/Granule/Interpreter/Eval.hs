@@ -113,20 +113,25 @@ evalBinOp op v1 v2 = case op of
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
 evalIn ctxt (App s _ e1 e2) = do
+    -- (cf. APP_L)
     v1 <- evalIn ctxt e1
     case v1 of
       (Ext _ (Primitive k)) -> do
+        -- (cf. APP_R)
         v2 <- evalIn ctxt e2
         return $ k v2
 
       Abs _ p _ e3 -> do
+        -- (cf. APP_R)
         v2 <- evalIn ctxt e2
+        -- (cf. P_BETA)
         pResult <- pmatch ctxt [(p, e3)] v2
         case pResult of
           Just e3' -> evalIn ctxt e3'
           _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
+        -- (cf. APP_R)
         v2 <- evalIn ctxt e2
         return $ Constr () c (vs <> [v2])
 
@@ -139,12 +144,15 @@ evalIn ctxt (Binop _ _ op e1 e2) = do
      return $ evalBinOp op v1 v2
 
 evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
+  -- (cf. LET_1)
   v1 <- evalIn ctxt e1
   case v1 of
     (isDiaConstr -> Just e) -> do
         -- Do the delayed side effect
         eInner <- e
+        -- (cf. LET_2)
         v1' <- evalIn ctxt eInner
+        -- (cf. LET_BETA)
         pResult  <- pmatch ctxt [(p, e2)] v1'
         case pResult of
           Just e2' -> evalIn ctxt e2'
@@ -171,6 +179,7 @@ evalIn ctxt (Val _ _ (Var _ x)) =
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalIn ctxt (Val s _ (Promote _ e)) = do
+  -- (cf. Box)
   v <- evalIn ctxt e
   return $ Promote () (Val s () v)
 
