@@ -39,15 +39,6 @@ until [p] [f] [x] =
     False -> x;
     True  -> until [p] [f] [f x]
 
---- Standard fixed point
-fix : forall {a : Type} . (a -> a) [∞] -> a
-fix [f] = f (fix [f])
-
---- Specialised first-order fixed point
-fixF : forall {a : Type, b : Type}
-     . ((a -> b) [∞] -> (a -> b)) [∞] -> (a -> b)
-fixF [f] = f [fixF [f]]
-
 --- Conditional on integers
 --- Returns `x` if `g` is zero, else returns `y`
 if0 : forall a : Type . Int [0..1] -> a [0..1] -> a [0..1] -> a
