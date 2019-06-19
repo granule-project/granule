@@ -1,0 +1,8 @@
+foo : Int [(2, 1..2)] -> Int
+foo [x] = x + x
+
+test : Int [(4, 2..4)] -> Int
+test [x] = foo [x] + foo [x]
+
+main : Int
+main = test [42]
