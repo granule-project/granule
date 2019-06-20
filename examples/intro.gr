@@ -110,8 +110,9 @@ sub : forall {m n : Nat} . {m >= n} => N m -> N n -> N (m - n)
 sub m Z = m;
 sub (S m') (S n') = sub m' n'
 
-leftPad : forall {t : Type, m n : Nat} . {m >= n} => t [m - n] -> N m -> Vec n t -> Vec m t
-leftPad [c] n str = let (m, str) = length str in append (rep (sub n m) [c]) str
+leftPad : forall {t : Type, m n : Nat} . {m >= n} => N m -> Vec n t -> t [m - n] -> Vec m t
+leftPad n str c = let (m, str) = length str in append (rep (sub n m) c) str
+
 -- Privacy levels
 secret : Int [Private]
 secret = [1234]
