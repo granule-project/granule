@@ -140,7 +140,10 @@ coeffectIsAtom _ = False
 
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
-publicRepresentation  = 0
+publicRepresentation  = 2
+
+unusedRepresentation :: Integer
+unusedRepresentation = 0
 
 nat, extendedNat :: Type
 nat = TyCon $ mkId "Nat"
