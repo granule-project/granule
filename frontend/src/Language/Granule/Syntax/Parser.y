@@ -335,6 +335,7 @@ Coeffect :: { Coeffect }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level publicRepresentation
                                     "Private" -> Level privateRepresentation
+                                    "Unused" -> Level unusedRepresentation
                                     "Inf" -> infinity
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }

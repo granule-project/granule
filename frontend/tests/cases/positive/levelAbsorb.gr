@@ -1,0 +1,6 @@
+der : forall {a : Type}
+     . a [Public] -> a
+der [x] = x
+
+test : forall {a : Type} . a [0:Level] -> a [0:Level]
+test [x] = [der [x]]

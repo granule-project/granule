@@ -74,7 +74,11 @@ instance Pretty Coeffect where
     prettyL l (CZero k) | k == TyCon (mkId "Nat") || k == extendedNat = "0"
     prettyL l (COne k)  = "1 : " <> prettyL l k
     prettyL l (CZero k) = "0 : " <> prettyL l k
-    prettyL l (Level x) = if x == privateRepresentation then "Private" else "Public"
+    prettyL l (Level x) = if x == privateRepresentation
+                             then "Private"
+                             else if x == publicRepresentation
+                                  then "Public"
+                                  else "Unused"
     prettyL l (CExpon a b) = prettyL l a <> "^" <> prettyL l b
     prettyL l (CVar c) = prettyL l c
     prettyL l (CMeet c d) =

@@ -121,7 +121,8 @@ compileToSBV predicate tyVarContext =
                        forSome [(internalName v)] $ \solverVar -> do
                          pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
                          return ((solverVar .== literal privateRepresentation
-                              .|| solverVar .== literal publicRepresentation) .&& pred')
+                              .|| solverVar .== literal publicRepresentation
+                              .|| solverVar .== literal unusedRepresentation) .&& pred')
 
                     k -> error $ "Solver error: I don't know how to create an existntial for " <> show k
             Just k -> error $ "Solver error: I don't know how to create an existntial for demotable type " <> show k
@@ -313,7 +314,8 @@ freshCVar quant name (TyCon k) q =
         "Level"     -> do
           -- constrain (solverVar .== 0 .|| solverVar .== 1)
           return (solverVar .== literal privateRepresentation
-              .|| solverVar .== literal publicRepresentation, SLevel solverVar)
+              .|| solverVar .== literal publicRepresentation
+              .|| solverVar .== literal unusedRepresentation, SLevel solverVar)
 
         k -> do
            error $ "I don't know how to make a fresh solver variable of type " <> show k
@@ -455,7 +457,7 @@ compileCoeffect (CZero k') k vars  =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> SLevel $ literal privateRepresentation
+        "Level"     -> SLevel $ literal unusedRepresentation
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
@@ -545,7 +547,8 @@ approximatedByOrEqualConstraint (SNat n) (SNat m) = n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     -- Private <= Public
-    ite (l .== literal privateRepresentation) sTrue
+    ite (l .== literal unusedRepresentation) sTrue
+      $ ite (l .== literal privateRepresentation) sTrue
         $ ite (k .== literal publicRepresentation) sTrue sFalse
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then sTrue else sFalse
@@ -605,7 +608,7 @@ trivialUnsatisfiableConstraints
     -- Attempt to see if one coeffect is trivially greater than the other
     approximatedByC :: Coeffect -> Coeffect -> Bool
     approximatedByC (CNat n) (CNat m) = n /= m
-    approximatedByC (Level n) (Level m)   = n < m
+    approximatedByC (Level n) (Level m)   = n > m
     approximatedByC (CFloat n) (CFloat m) = n > m
     -- Nat like intervals
     approximatedByC (CInterval (CNat lb1) (CNat ub1)) (CInterval (CNat lb2) (CNat ub2)) =
