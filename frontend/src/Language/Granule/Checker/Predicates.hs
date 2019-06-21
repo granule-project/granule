@@ -146,8 +146,6 @@ instance Pretty Constraint where
 
     prettyL l (ApproximatedBy _ c1 c2 k) =
       case k of
-        -- Security levels look opposite
-        TyCon (internalName -> "Level") -> "(" <> prettyL l c2 <> " ≤ " <> prettyL l c1 <> ")"
         -- Nat is discrete
         TyCon (internalName -> "Nat") -> "(" <> prettyL l c1 <> " = " <> prettyL l c2 <> ")"
         _ -> "(" <> prettyL l c1 <> " ≤ " <> prettyL l c2 <> ")" -- @" <> show s
