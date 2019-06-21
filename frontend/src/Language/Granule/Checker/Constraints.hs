@@ -543,7 +543,10 @@ eqConstraint x y =
 approximatedByOrEqualConstraint :: SGrade -> SGrade -> SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m) = n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
-approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
+approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
+    -- Private <= Public
+    ite (l .== literal privateRepresentation) sTrue
+        $ ite (k .== literal publicRepresentation) sTrue sFalse
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then sTrue else sFalse
 approximatedByOrEqualConstraint SPoint SPoint = sTrue

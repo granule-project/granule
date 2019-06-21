@@ -138,7 +138,6 @@ coeffectIsAtom (Level _) = True
 coeffectIsAtom (CSet _) = True
 coeffectIsAtom _ = False
 
-
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
 publicRepresentation  = 0
