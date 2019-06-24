@@ -25,8 +25,7 @@ length
 length Nil = Z;
 length (Cons [_] xs) = S (length xs)
 
--- Length of an indexed vector into an indexed nat
--- copying the spine of the lists and preserinv the elements
+-- Length of a `Vec` into an indexed `N`, preserving the elements
 length'
   : forall {a : Type, n : Nat}
   . Vec n a -> (N n, Vec n a)

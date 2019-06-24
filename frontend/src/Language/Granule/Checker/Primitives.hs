@@ -223,9 +223,7 @@ isEOF = BUILTIN
 isEOF' : Handle RW -> (Handle RW, Bool) <Read,IOExcept>
 isEOF' = BUILTIN
 
--- ???
--- evalIO : forall {a : Type, e : Effect} . (a [0..1]) <IOExcept, e> -> (Maybe a) <e>
--- catch = BUILTIN
+
 --------------------------------------------------------------------------------
 -- Char
 --------------------------------------------------------------------------------
