@@ -46,8 +46,8 @@ compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
     TyOpNotEq -> return $ Con (Neq s c1 c2 (TyCon $ mkId "Nat"))
     TyOpLesser -> return $ Con (Lt s c1 c2)
     TyOpGreater -> return $ Con (Gt s c1 c2)
-    TyOpLesserEq -> return $ Disj [Con $ Lt s c1 c2, Con $ Eq s c1 c2 (TyCon $ mkId "Nat")]
-    TyOpGreaterEq -> return $ Disj [Con $ Gt s c1 c2, Con $ Eq s c1 c2 (TyCon $ mkId "Nat")]
+    TyOpLesserEq -> return $ Con (LtEq s c1 c2)
+    TyOpGreaterEq -> return $ Con (GtEq s c1 c2)
     _ -> error $ pretty s <> ": I don't know how to compile binary operator " <> pretty op
 
 compileTypeConstraintToConstraint s t =

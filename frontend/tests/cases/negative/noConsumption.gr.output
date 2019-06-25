@@ -1,4 +1,4 @@
 Type checking failed: 
-Pattern match impossible: 4:1:
+Impossible pattern match: 4:1:
 Pattern match in an equation of `and` is impossible as it implies the unsatisfiable condition (0 = 1)
 (0 = 1)

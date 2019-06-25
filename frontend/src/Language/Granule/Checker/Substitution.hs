@@ -440,6 +440,9 @@ instance Substitutable Constraint where
     c2 <- substitute ctxt c2
     return $ Gt s c1 c2
 
+  substitute ctxt (LtEq s c1 c2) = LtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
+  substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
+
 instance Substitutable (Equation () Type) where
   substitute ctxt (Equation sp ty patterns expr) =
       do ty' <- substitute ctxt ty
@@ -500,10 +503,10 @@ mapFstM fn (f, r) = do
 
 instance Substitutable (Expr () Type) where
   substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
-  
+
 instance Substitutable (Value () Type) where
   substitute ctxt = bicataM (substituteValue ctxt) (substituteExpr ctxt)
-  
+
 instance Substitutable (Pattern Type) where
   substitute ctxt = patternFoldM
       (\sp ann nm -> do
@@ -576,7 +579,7 @@ instance Unifiable Type where
                 c' <- compileNatKindedTypeToCoeffect nullSpan t'
                 addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
                 return $ Just []
-        
+
             _ | o == o' -> do
                 u1 <- unify t1 t1'
                 u2 <- unify t2 t2'
@@ -602,56 +605,56 @@ instance Unifiable Coeffect where
                         case lookup v' (tyVarContext checkerState) of
                             Just (KVar _, q) ->
                                 -- The type of v is known and c is a variable with a poly kind
-                                put $ checkerState 
+                                put $ checkerState
                                     { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
                             _ -> return ()
                     _ -> return ()
             Nothing -> return ()
         -- Standard result of unifying with a variable
         return $ Just [(v, SubstC c)]
-    
+
     unify c (CVar v) = unify (CVar v) c
     unify (CPlus c1 c2) (CPlus c1' c2') = do
         u1 <- unify c1 c1'
         u2 <- unify c2 c2'
         u1 <<>> u2
-    
+
     unify (CTimes c1 c2) (CTimes c1' c2') = do
         u1 <- unify c1 c1'
         u2 <- unify c2 c2'
         u1 <<>> u2
-    
+
     unify (CMeet c1 c2) (CMeet c1' c2') = do
         u1 <- unify c1 c1'
         u2 <- unify c2 c2'
         u1 <<>> u2
-    
+
     unify (CJoin c1 c2) (CJoin c1' c2') = do
         u1 <- unify c1 c1'
         u2 <- unify c2 c2'
         u1 <<>> u2
-    
+
     unify (CInfinity k) (CInfinity k') = do
         unify k k'
-    
+
     unify (CZero k) (CZero k') = do
         unify k k'
-    
+
     unify (COne k) (COne k') = do
         unify k k'
-    
+
     unify (CSet tys) (CSet tys') = do
         ums <- zipWithM (\x y -> unify (snd x) (snd y)) tys tys'
         foldM (<<>>) (Just []) ums
-    
+
     unify (CSig c ck) (CSig c' ck') = do
         u1 <- unify c c'
         u2 <- unify ck ck'
         u1 <<>> u2
-    
+
     unify c c' =
         if c == c' then return $ Just [] else return Nothing
-    
+
 instance Unifiable Effect where
     unify e e' =
         if e == e' then return $ Just []
@@ -672,4 +675,3 @@ instance Unifiable t => Unifiable (Maybe t) where
     unify Nothing _ = return (Just [])
     unify _ Nothing = return (Just [])
     unify (Just x) (Just y) = unify x y
-        

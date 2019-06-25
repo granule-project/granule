@@ -119,8 +119,8 @@ removeTrivialIds =
 
 collectSubst :: Pred -> Substitution
 collectSubst (Conj ps) = concatMap collectSubst ps
--- For a pair of variables, make a two way substitution (unification which is symmetric)
-collectSubst (Con (Eq _ (CVar v) (CVar v') _)) = [(v, SubstC (CVar v'))] -- , (v', SubstC (CVar v))]
+-- For a pair of variables, substitute the right for the left
+collectSubst (Con (Eq _ (CVar v1) (CVar v2) _)) = [(v1, SubstC (CVar v2))]
 collectSubst (Con (Eq _ (CVar v) c _)) = [(v, SubstC c)]
 collectSubst (Con (Eq _ c (CVar v) _)) = [(v, SubstC c)]
 collectSubst _ = []

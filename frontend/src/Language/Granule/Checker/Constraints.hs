@@ -242,6 +242,11 @@ rewriteConstraints ctxt =
     updateConstraint ckindVar (ckind, _) (Gt s c1 c2) =
         Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
+    updateConstraint ckindVar (ckind, _) (GtEq s c1 c2) =
+        GtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
+    updateConstraint ckindVar (ckind, _) (LtEq s c1 c2) =
+        LtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
     -- `updateCoeffect v k c` rewrites any occurence of the kind variable
     -- `v` in the coeffect `c` with the kind `k`
@@ -371,6 +376,19 @@ compile vars (Gt s c1 c2) =
   where
     c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
     c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
+
+compile vars (LtEq s c1 c2) =
+  return $ c1' .<= c2'
+  where
+    c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
+    c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
+
+compile vars (GtEq s c1 c2) =
+  return $ c1' .>= c2'
+  where
+    c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
+    c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
+
 
 -- NonZeroPromotableTo s c means that:
 compile vars (NonZeroPromotableTo s x c t) = do
@@ -604,6 +622,8 @@ trivialUnsatisfiableConstraints
     -- TODO: look at this information
     unsat (Lt _ c1 c2) = []
     unsat (Gt _ c1 c2) = []
+    unsat (LtEq _ c1 c2) = []
+    unsat (GtEq _ c1 c2) = []
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
