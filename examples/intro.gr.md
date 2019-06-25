@@ -478,8 +478,8 @@ Finally, we can put the above functions together and define our left pad
 function:
 
 ~~~ granule
-leftPad : forall {t : Type, m n : Nat} . {m >= n} => t [m - n] -> N m -> Vec n t -> Vec m t
-leftPad [c] n str = let (m, str) = length str in append (rep (sub n m) [c]) str
+leftPad : forall {t : Type, m n : Nat} . {m >= n} => N m -> Vec n t -> t [m - n] -> Vec m t
+leftPad n str c = let (m, str) = length str in append (rep (sub n m) c) str
 ~~~
 
 

@@ -1,4 +1,3 @@
 Type checking failed: 
-Falsifiable theorem: 17:1:
-The following theorem associated with `main` is falsifiable:
-	(Private ≤ Public)
+Grading error: 17:8:
+Private value cannot be moved to level Public

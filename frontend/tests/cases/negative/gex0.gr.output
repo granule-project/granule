@@ -1,4 +1,3 @@
 Type checking failed: 
-Falsifiable theorem: 4:1:
-The following theorem associated with `main` is falsifiable:
-	(2 = 1)
+Grading error: 4:39:
+2 is not approximatable by 1 for type Nat because Nat denotes precise usage.

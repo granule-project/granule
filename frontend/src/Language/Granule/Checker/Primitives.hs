@@ -77,65 +77,6 @@ dataTypes =
          }]}
     ] ++ builtinDataTypesParsed
 
-builtins :: [(Id, TypeScheme)]
-builtins =
-  builtinsParsed <>
-  [ (mkId "div", Forall nullSpanBuiltin [] []
-       (FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))))
-    -- Graded monad unit operation
-  , (mkId "pure", Forall nullSpanBuiltin [(mkId "a", KType)] []
-       $ (FunTy (TyVar $ mkId "a") (Diamond [] (TyVar $ mkId "a"))))
-
-    -- String stuff
-  , (mkId "showChar", Forall nullSpanBuiltin [] []
-      $ (FunTy (TyCon $ mkId "Char") (TyCon $ mkId "String")))
-
-    -- Effectful primitives
-  , (mkId "fromStdin", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "String"))
-  , (mkId "toStdout", Forall nullSpanBuiltin [] [] $
-       FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
-  , (mkId "toStderr", Forall nullSpanBuiltin [] [] $
-       FunTy (TyCon $ mkId "String") (Diamond ["W"] (TyCon $ mkId "()")))
-  , (mkId "readInt", Forall nullSpanBuiltin [] [] $ Diamond ["R"] (TyCon $ mkId "Int"))
-    -- Other primitives
-  , (mkId "intToFloat", Forall nullSpanBuiltin [] [] $ FunTy (TyCon $ mkId "Int")
-                                                    (TyCon $ mkId "Float"))
-
-  , (mkId "showInt", Forall nullSpanBuiltin [] [] $ FunTy (TyCon $ mkId "Int")
-                                                    (TyCon $ mkId "String"))
-
-
-    -- protocol typed primitives
-  , (mkId "send", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)] []
-                  $ ((con "Chan") .@ (((con "Send") .@ (var "a")) .@  (var "s")))
-                      .-> ((var "a")
-                        .-> (Diamond ["Com"] ((con "Chan") .@ (var "s")))))
-
-  , (mkId "recv", Forall nullSpanBuiltin [(mkId "a", KType), (mkId "s", protocol)] []
-       $ ((con "Chan") .@ (((con "Recv") .@ (var "a")) .@  (var "s")))
-         .-> (Diamond ["Com"] ((con "," .@ (var "a")) .@ ((con "Chan") .@ (var "s")))))
-
-  , (mkId "close", Forall nullSpanBuiltin []  [] $
-                    ((con "Chan") .@ (con "End")) .-> (Diamond ["Com"] (con "()")))
-
-  -- fork : (c -> Diamond ()) -> Diamond c'
-  , (mkId "fork", Forall nullSpanBuiltin [(mkId "s", protocol)]  [] $
-                    (((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
-                    .->
-                    (Diamond ["Com"] ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s")))))
-
-   -- forkRep : (c |n| -> Diamond ()) -> Diamond (c' |n|)
-  , (mkId "forkRep", Forall nullSpanBuiltin [(mkId "s", protocol), (mkId "n", kNat)] [] $
-                    (Box (CVar $ mkId "n")
-                       ((con "Chan") .@ (TyVar $ mkId "s")) .-> (Diamond ["Com"] (con "()")))
-                    .->
-                    (Diamond ["Com"]
-                       (Box (CVar $ mkId "n")
-                         ((con "Chan") .@ ((TyCon $ mkId "Dual") .@ (TyVar $ mkId "s"))))))
-  , (mkId "unpack", Forall nullSpanBuiltin [(mkId "s", protocol)] []
-                            (FunTy ((con "Chan") .@ (var "s")) (var "s")))
-  ]
-
 binaryOperators :: Operator -> NonEmpty Type
 binaryOperators = \case
     OpPlus ->
@@ -174,7 +115,82 @@ import Prelude
 
 data () = ()
 
+--------------------------------------------------------------------------------
+-- Arithmetic
+--------------------------------------------------------------------------------
 
+div : Int -> Int -> Int
+div = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Graded Possiblity
+--------------------------------------------------------------------------------
+
+pure
+  : forall {a : Type}
+  . a -> a <>
+pure = BUILTIN
+
+--------------------------------------------------------------------------------
+-- I/O
+--------------------------------------------------------------------------------
+
+fromStdin : String <R>
+fromStdin = BUILTIN
+
+toStdout : String -> () <W>
+toStdout = BUILTIN
+
+toStderr : String -> () <W>
+toStderr = BUILTIN
+
+readInt : Int <R>
+readInt = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Conversions
+--------------------------------------------------------------------------------
+
+showChar : Char -> String
+showChar = BUILTIN
+
+intToFloat : Int -> Float
+intToFloat = BUILTIN
+
+showInt : Int -> String
+showInt = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Thread / Sessions
+--------------------------------------------------------------------------------
+
+fork
+  : forall {s : Protocol, k : Coeffect, c : k}
+  . ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
+fork = BUILTIN
+
+forkLinear
+  : forall {s : Protocol}
+  . (Chan s -> () <Session>) -> (Chan (Dual s)) <Session>
+forkLinear = BUILTIN
+
+send
+  : forall {a : Type, s : Protocol}
+  . Chan (Send a s) -> a -> (Chan s) <Session>
+send = BUILTIN
+
+recv
+  : forall {a : Type, s : Protocol}
+  . Chan (Recv a s) -> (a, Chan s) <Session>
+recv = BUILTIN
+
+close : Chan End -> () <Session>
+close = BUILTIN
+
+unpackChan
+  : forall {s : Protocol}
+  . Chan s -> s
+unpackChan = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles
@@ -261,9 +277,6 @@ stringSnoc = BUILTIN
 -- Arrays
 --------------------------------------------------------------------------------
 
-forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Com>) -> ((Chan (Dual s)) [c]) <Com>
-forkC = builtin
-
 data
   ArrayStack
     (capacity : Nat)
@@ -339,8 +352,8 @@ freePtr = BUILTIN
 
 
 builtinDataTypesParsed :: [DataDecl]
-builtinsParsed :: [(Id, TypeScheme)]
-(builtinDataTypesParsed, builtinsParsed) =
+builtins :: [(Id, TypeScheme)]
+(builtinDataTypesParsed, builtins) =
   (types, map unDef defs)
     where
       AST types defs _ = case parseDefs "builtins" builtinSrc of

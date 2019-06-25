@@ -101,32 +101,30 @@ data Patient = Patient (String [Public]) (String [Private])
 
 where the first field gives the city for a patient (public information) and
 the second field gives their name (private). We can
-then define a function that extracts a list of cities
+then define a function that, e.g., extracts a sample of cities
 from a list of patients:
 
 
 ~~~ granule
 import Vec  -- Granule's standard vector library
-getCities : forall n. Vec n (Patient [0..1])  -> Vec n (String [Public])
-getCities Nil = Nil;
-getCities (Cons [Patient [city] [name]] ps) = Cons [city] (getCities ps)
+sampleCities : forall n k . N k -> (Vec (n+k) Patient) [0..1] -> Vec k (String [Public])
+sampleCities Z [_] = Nil;
+sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities n [ps])
 ~~~
 
+Since we do not use all of the information in the vector, we declare
+the input as affine using an `Interval Nat` modality with `0..1`. The
+base case (`Nil`) is straightfoward.
 
-Since we do not use all of the information in the patient record, we
-declare the input as affine using an `Interval Nat` modality
-with `0..1`. The base case (`Nil`) is
-simple to understand, but in the inductive case
-we see that the head of the input is `[Patient [city] [name]]`. Let us
-remind ourselves of the meaning of these nested boxes by looking at the types:
-the elements of the list are of type `Patient [0..1]` so the outer box
-is tracking variable usage via `Nat` intervals; the elements of
-the `Patient` value constructor are of type `String [Public]` and
-`String [Private]` respectively, so both inner boxes are tracking security
-level information via the lattice algebra we have seen before.
-We can safely collect the cities and output a list of
-public city names in out database.
-
+This demonstrates the use of different nested graded modalities.  The
+outer modality declares that the input vector is affine, since we do
+not necessarily use all its elements, given by an `Interval Nat`
+modality with `0..1`.  The inner modalities provide the security
+levels of patient information.  In the inductive case, we thus get
+`ps` graded by `0..1` and by flattening `city` and `name` are graded
+by products `(0..1, Public)` and `(0..1, Private)` respectively.  We
+can safely collect the cities and output a list of public city names
+in out database.
 
 ~~~ grill
 import Vec
@@ -155,17 +153,17 @@ Granule supports *session types* in the style of the GV calculus
 leveraging linear types to embed session types primitives.  When
 combined with graded linearity, we can express novel communication
 properties not supported by existing session type approaches.
-Granule's builtin library provides channel primitives, where `Com` is
+Granule's builtin library provides channel primitives, where `Session` is
 a trivial graded possibility modality for capturing communication
 effects:
 
 
 ~~~
 data Protocol = Recv Type Protocol | Send Type Protocol | ...
-send : forall { a : Type, s : Protocol } . Chan (Send a s) -> a -> (Chan s) <Com>
-recv : forall { a : Type, s : Protocol } . Chan (Recv a s) -> (a, Chan s) <Com>
-forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Com>)
-                                                 -> ((Chan (Dual s)) [c]) <Com>
+send : forall { a : Type, s : Protocol } . Chan (Send a s) -> a -> (Chan s) <Session>
+recv : forall { a : Type, s : Protocol } . Chan (Recv a s) -> (a, Chan s) <Session>
+forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Session>)
+                                                 -> ((Chan (Dual s)) [c]) <Session>
 ~~~
 
 where `Dual : Protocol -> Protocol` computes the dual of a protocol.
@@ -186,7 +184,7 @@ We can use these primitives to capture precisely-bounded replication
 in protocols:
 
 ~~~ granule
-sendVec : forall n a . (Chan (Send a End)) [n] -> Vec n a -> () <Com>
+sendVec : forall n a . (Chan (Send a End)) [n] -> Vec n a -> () <Session>
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
   let c'  <- send c x;
@@ -195,7 +193,7 @@ sendVec [c] (Cons x xs) =
 ~~~
 
 ~~~ granule
-recvVec : forall n a . N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Com>
+recvVec : forall n a . N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Session>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
   let (x, c') <- recv c;
@@ -212,6 +210,6 @@ the results into an output vector. We can then put these two processes
 together using `forkC`:
 
 ~~~ granule
-example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Com>
+example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Session>
 example n list = let c <- forkC (\c -> sendVec c list) in recvVec n c
 ~~~

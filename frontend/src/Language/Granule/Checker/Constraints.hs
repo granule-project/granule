@@ -121,7 +121,8 @@ compileToSBV predicate tyVarContext =
                        forSome [(internalName v)] $ \solverVar -> do
                          pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
                          return ((solverVar .== literal privateRepresentation
-                              .|| solverVar .== literal publicRepresentation) .&& pred')
+                              .|| solverVar .== literal publicRepresentation
+                              .|| solverVar .== literal unusedRepresentation) .&& pred')
 
                     k -> error $ "Solver error: I don't know how to create an existntial for " <> show k
             Just k -> error $ "Solver error: I don't know how to create an existntial for demotable type " <> show k
@@ -313,7 +314,8 @@ freshCVar quant name (TyCon k) q =
         "Level"     -> do
           -- constrain (solverVar .== 0 .|| solverVar .== 1)
           return (solverVar .== literal privateRepresentation
-              .|| solverVar .== literal publicRepresentation, SLevel solverVar)
+              .|| solverVar .== literal publicRepresentation
+              .|| solverVar .== literal unusedRepresentation, SLevel solverVar)
 
         k -> do
            error $ "I don't know how to make a fresh solver variable of type " <> show k
@@ -455,7 +457,7 @@ compileCoeffect (CZero k') k vars  =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> SLevel $ literal privateRepresentation
+        "Level"     -> SLevel $ literal unusedRepresentation
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
@@ -510,9 +512,9 @@ compileCoeffect (COne k') k vars =
 compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
   SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
 
-compileCoeffect (CNat 1) (TyVar _) _ =
-  SUnknown (SynLeaf (Just 1))
-
+-- For grade-polymorphic coeffects, that have come from a nat
+-- expression (sometimes this is just from a compounded expression of 1s),
+-- perform the injection from Natural numbers to arbitrary semirings
 compileCoeffect (CNat n) (TyVar _) _ | n > 0 =
   SUnknown (injection n)
     where
@@ -547,7 +549,11 @@ eqConstraint x y =
 approximatedByOrEqualConstraint :: SGrade -> SGrade -> SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m) = n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
-approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
+approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
+    -- Private <= Public
+    ite (l .== literal unusedRepresentation) sTrue
+      $ ite (l .== literal privateRepresentation) sTrue
+        $ ite (k .== literal publicRepresentation) sTrue sFalse
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then sTrue else sFalse
 approximatedByOrEqualConstraint SPoint SPoint = sTrue
@@ -578,7 +584,7 @@ approximatedByOrEqualConstraint x y =
 
 trivialUnsatisfiableConstraints :: Pred -> [Constraint]
 trivialUnsatisfiableConstraints
-    = filter unsat
+    = concatMap unsat
     . map normaliseConstraint
     . positiveConstraints
   where
@@ -592,26 +598,39 @@ trivialUnsatisfiableConstraints
     positiveConstraints =
         predFold concat (\_ -> []) (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
 
-    unsat :: Constraint -> Bool
-    unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
-    unsat (Neq _ c1 c2 _) = not (c1 `neqC` c2)
-    unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
-    unsat (NonZeroPromotableTo _ _ (CZero _) _) = True
-    unsat (NonZeroPromotableTo _ _ _ _) = False
+    -- All the unsatisfiable constraints
+    unsat :: Constraint -> [Constraint]
+    unsat c@(Eq _ c1 c2 _)  = if (c1 `neqC` c2) then [c] else []
+    unsat c@(Neq _ c1 c2 _) = if (c1 `neqC` c2) then [] else [c]
+    unsat c@(ApproximatedBy{}) = approximatedByC c
+    unsat c@(NonZeroPromotableTo _ _ (CZero _) _) = [c]
+    unsat (NonZeroPromotableTo _ _ _ _) = []
     -- TODO: look at this information
-    unsat (Lt _ c1 c2) = False
-    unsat (Gt _ c1 c2) = False
+    unsat (Lt _ c1 c2) = []
+    unsat (Gt _ c1 c2) = []
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
-    approximatedByC :: Coeffect -> Coeffect -> Bool
-    approximatedByC (CNat n) (CNat m) = n /= m
-    approximatedByC (Level n) (Level m)   = n < m
-    approximatedByC (CFloat n) (CFloat m) = n > m
+    approximatedByC :: Constraint -> [Constraint]
+    approximatedByC c@(ApproximatedBy _ (CNat n) (CNat m) _) | n /= m = [c]
+    approximatedByC c@(ApproximatedBy _ (Level n) (Level m) _) | n > m = [c]
+    approximatedByC c@(ApproximatedBy _ (CFloat n) (CFloat m) _) | n > m = [c]
     -- Nat like intervals
-    approximatedByC (CInterval (CNat lb1) (CNat ub1)) (CInterval (CNat lb2) (CNat ub2)) =
-        not $ (lb2 <= lb1) && (ub1 <= ub2)
-    approximatedByC _ _                   = False
+    approximatedByC c@(ApproximatedBy _
+                        (CInterval (CNat lb1) (CNat ub1))
+                        (CInterval (CNat lb2) (CNat ub2)) _)
+        | not $ (lb2 <= lb1) && (ub1 <= ub2) = [c]
+
+    approximatedByC (ApproximatedBy s (CProduct c1 c2) (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c1 d1 t1)) ++ (approximatedByC (ApproximatedBy s c2 d2 t2))
+
+    approximatedByC (ApproximatedBy s c (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c d1 t1)) ++ (approximatedByC (ApproximatedBy s c d2 t2))
+
+    approximatedByC (ApproximatedBy s (CProduct c1 c2) d (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c1 d t1)) ++ (approximatedByC (ApproximatedBy s c2 d t2))
+
+    approximatedByC _ = []
 
     -- Attempt to see if one coeffect is trivially not equal to the other
     neqC :: Coeffect -> Coeffect -> Bool

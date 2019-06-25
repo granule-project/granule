@@ -19,7 +19,7 @@ flattenable t1 t2
      t1 | t1 == extendedNat -> Just (CTimes, t1)
 
      TyCon (internalName -> "Nat")   -> Just (CTimes, t1)
-     TyCon (internalName -> "Level") -> Just (CJoin, t1)
+     TyCon (internalName -> "Level") -> Just (CMeet, t1)
 
      -- TODO
      TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t

@@ -88,6 +88,7 @@ removeTrivialIds :: Pred -> Pred
 removeTrivialIds =
   predFold conj disj Impl conRemove NegPred Exists
     where removeTrivialIdCon (Con (Eq _ c c' _)) | c == c' = Nothing
+          -- removeTrivialIdCon (Con (ApproximatedBy _ c c' _)) | c == c' = Nothing
           removeTrivialIdCon c = Just c
 
           conj ps = Conj $ catMaybes (map removeTrivialIdCon ps)

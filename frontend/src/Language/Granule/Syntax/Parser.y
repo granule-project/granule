@@ -335,6 +335,7 @@ Coeffect :: { Coeffect }
   | CONSTR                      { case (constrString $1) of
                                     "Public" -> Level publicRepresentation
                                     "Private" -> Level privateRepresentation
+                                    "Unused" -> Level unusedRepresentation
                                     "Inf" -> infinity
                                     x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                         { CVar (mkId $ symString $1) }
@@ -348,6 +349,7 @@ Coeffect :: { Coeffect }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
   | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
 
 Set :: { [(String, Type)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
