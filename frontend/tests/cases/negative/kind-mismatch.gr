@@ -1,0 +1,7 @@
+-- correct:
+-- push : forall {a b : Type, k : Coeffect, c : k}
+
+-- bad:
+push : forall {a b : Type, c : Coeffect}
+       . (a, b) [c] -> (a [c], b [c])
+push [(x, y)] = ([x], [y])

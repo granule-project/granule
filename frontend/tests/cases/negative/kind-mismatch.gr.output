@@ -1,0 +1,3 @@
+Type checking failed: 
+Kind mismatch: 5:1:
+Expected kind `↑coeffectType` but got `Coeffect`
