@@ -176,7 +176,7 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
     Just (KVar   name) -> return $ TyVar name
     Just (KPromote t)  -> checkKindIsCoeffect s ctxt t
     Just k             -> throw
-      KindMismatch{ errLoc = s, kExpected = KCoeffect, kActual = k }
+      KindMismatch{ errLoc = s, kExpected = KPromote (TyVar $ mkId "coeffectType"), kActual = k }
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
