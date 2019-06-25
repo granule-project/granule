@@ -318,9 +318,9 @@ builtIns =
                True -> Constr () (mkId "True") []
                False -> Constr () (mkId "False") []
         return . Val nullSpan () $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
-  , (mkId "fork",    Ext () $ PrimitiveClosure fork)
+  , (mkId "forkLinear", Ext () $ PrimitiveClosure fork)
   , (mkId "forkRep", Ext () $ PrimitiveClosure forkRep)
-  , (mkId "forkC", Ext () $ PrimitiveClosure forkRep)
+  , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)

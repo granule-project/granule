@@ -35,6 +35,10 @@ parens :: Level -> String -> String
 parens l x | l <= 0 = x
 parens n x = "(" <> x <> ")"
 
+-- infixr 6 <+>
+-- (<+>) :: String -> String -> String
+-- s1 <+> s2 = s1 <> " " <> s2
+
 -- The code below seems to be wrong, consider `f ((g x) (h y))`, @buggymcbugfix
   -- if head x == '(' && last x == ')'
   --   then x
@@ -114,13 +118,13 @@ instance Pretty Kind where
     prettyL l (KPromote t)   = "↑" <> prettyL l t
 
 instance Pretty TypeScheme where
-    prettyL l (Forall _ [] [] t) = prettyL l t
-    prettyL l (Forall _ cvs cons t) =
-        "forall " <> intercalate ", " (map prettyKindSignatures cvs)
-                  <> intercalate ", " (map (prettyL l) cons)
-                  <> ". " <> prettyL l t
+    prettyL l (Forall _ vs cs t) = kVars vs <> constraints cs <> prettyL l t
       where
-       prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
+        kVars [] = ""
+        kVars vs = "\n  forall {" <> intercalate ", " (map prettyKindSignatures vs) <> "}\n  . "
+        prettyKindSignatures (var, kind) = prettyL l var <> " : " <> prettyL l kind
+        constraints [] = ""
+        constraints cs = "\n  {" <> intercalate ", " (map (prettyL l) cs) <> "}\n  => "
 
 instance Pretty Type where
     -- Atoms
@@ -194,12 +198,14 @@ instance Pretty v => Pretty (AST v a) where
         pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
-    prettyL l (Def _ v eqs t) =
-        prettyL l v <> " : " <> prettyL l t <> "\n"
-                    <> intercalate "\n" (map prettyEq eqs)
-      where
-        prettyEq (Equation _ _ ps e) =
-          prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
+    prettyL l (Def _ v eqs (Forall _ [] [] t))
+      = prettyL l v <> " : " <> prettyL l t <> "\n" <> intercalate "\n" (map (prettyEqn v) eqs)
+    prettyL l (Def _ v eqs tySch)
+      = prettyL l v <> "\n  : " <> prettyL l tySch <> "\n" <> intercalate "\n" (map (prettyEqn v) eqs)
+
+prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
+prettyEqn v (Equation _ _ ps e) =
+  prettyL 0 v <> " " <> prettyL 0 ps <> "= " <> prettyL 0 e
 
 instance Pretty DataDecl where
     prettyL l (DataDecl _ tyCon tyVars kind dataConstrs) =

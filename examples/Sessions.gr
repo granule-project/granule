@@ -16,7 +16,7 @@ fooServer c =
 
 example : Int <Session>
 example =
-  let c ← fork fooServer
+  let c ← forkLinear fooServer
   in  fooClient c
 
 
@@ -45,7 +45,7 @@ recvVec (S n) [c] =
 example2 : ∀ {n : Nat, a : Type}
          . N n → Vec n a → (Vec n a) <Session>
 example2 n list =
-  let c ← forkC (λc → sendVec c list)
+  let c ← fork (λc → sendVec c list)
   in recvVec n c
 
 main : (Vec 5 Int, Int) <Session>

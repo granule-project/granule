@@ -63,4 +63,4 @@ recvVec (S n) [c] =
   in pure (Cons x xs)
 
 example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Com>
-example n list = let c <- forkC (\c -> sendVec c list) in recvVec n c
+example n list = let c <- fork (\c -> sendVec c list) in recvVec n c

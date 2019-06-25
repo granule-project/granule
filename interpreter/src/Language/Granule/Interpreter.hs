@@ -234,7 +234,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
   where
     go = do
         globPatterns <-
-          many $ argument str $ metavar "GLOB_PATTERNS"
+          many $ argument str $ metavar "GLOB_PATTERNS" <> action "file"
           <> (help . unwords)
             [ "Glob pattern for Granule source files. If the file extension is `.md`/`.tex`, the markdown/TeX preprocessor will be used."
             , "If none are given, input will be read from stdin."
