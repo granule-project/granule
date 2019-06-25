@@ -153,17 +153,17 @@ Granule supports *session types* in the style of the GV calculus
 leveraging linear types to embed session types primitives.  When
 combined with graded linearity, we can express novel communication
 properties not supported by existing session type approaches.
-Granule's builtin library provides channel primitives, where `Com` is
+Granule's builtin library provides channel primitives, where `Session` is
 a trivial graded possibility modality for capturing communication
 effects:
 
 
 ~~~
 data Protocol = Recv Type Protocol | Send Type Protocol | ...
-send : forall { a : Type, s : Protocol } . Chan (Send a s) -> a -> (Chan s) <Com>
-recv : forall { a : Type, s : Protocol } . Chan (Recv a s) -> (a, Chan s) <Com>
-forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Com>)
-                                                 -> ((Chan (Dual s)) [c]) <Com>
+send : forall { a : Type, s : Protocol } . Chan (Send a s) -> a -> (Chan s) <Session>
+recv : forall { a : Type, s : Protocol } . Chan (Recv a s) -> (a, Chan s) <Session>
+forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Session>)
+                                                 -> ((Chan (Dual s)) [c]) <Session>
 ~~~
 
 where `Dual : Protocol -> Protocol` computes the dual of a protocol.
@@ -184,7 +184,7 @@ We can use these primitives to capture precisely-bounded replication
 in protocols:
 
 ~~~ granule
-sendVec : forall n a . (Chan (Send a End)) [n] -> Vec n a -> () <Com>
+sendVec : forall n a . (Chan (Send a End)) [n] -> Vec n a -> () <Session>
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
   let c'  <- send c x;
@@ -193,7 +193,7 @@ sendVec [c] (Cons x xs) =
 ~~~
 
 ~~~ granule
-recvVec : forall n a . N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Com>
+recvVec : forall n a . N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Session>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
   let (x, c') <- recv c;
@@ -210,6 +210,6 @@ the results into an output vector. We can then put these two processes
 together using `forkC`:
 
 ~~~ granule
-example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Com>
+example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Session>
 example n list = let c <- forkC (\c -> sendVec c list) in recvVec n c
 ~~~

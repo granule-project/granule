@@ -162,25 +162,25 @@ showInt = BUILTIN
 
 fork
   : forall {s : Protocol, k : Coeffect, c : k}
-  . ((Chan s) [c] -> () <Com>) -> ((Chan (Dual s)) [c]) <Com>
+  . ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
 fork = BUILTIN
 
 forkLinear
   : forall {s : Protocol}
-  . (Chan s -> () <Com>) -> (Chan (Dual s)) <Com>
+  . (Chan s -> () <Session>) -> (Chan (Dual s)) <Session>
 forkLinear = BUILTIN
 
 send
   : forall {a : Type, s : Protocol}
-  . Chan (Send a s) -> a -> (Chan s) <Com>
+  . Chan (Send a s) -> a -> (Chan s) <Session>
 send = BUILTIN
 
 recv
   : forall {a : Type, s : Protocol}
-  . Chan (Recv a s) -> (a, Chan s) <Com>
+  . Chan (Recv a s) -> (a, Chan s) <Session>
 recv = BUILTIN
 
-close : Chan End -> () <Com>
+close : Chan End -> () <Session>
 close = BUILTIN
 
 unpackChan

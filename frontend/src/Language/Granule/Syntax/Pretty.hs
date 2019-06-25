@@ -141,7 +141,7 @@ instance Pretty Type where
     prettyL l (Box c t)      =
        parens l (prettyL (l+1) t <> " [" <> prettyL l c <> "]")
 
-    prettyL l (Diamond e t) | e == ["Com"] =
+    prettyL l (Diamond e t) | e == ["Session"] =
       parens l ("Session " <> prettyL (l+1) t)
 
     prettyL l (Diamond e t)  =

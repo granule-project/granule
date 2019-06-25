@@ -46,7 +46,7 @@ sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities
 
 sendVec : forall n a .
         (Chan (Send a End)) [n]
-     -> Vec n a -> () <Com>
+     -> Vec n a -> () <Session>
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
   let c'  <- send c x;
@@ -54,7 +54,7 @@ sendVec [c] (Cons x xs) =
   in sendVec [c] xs
 
 recvVec : forall n a .
-  N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Com>
+  N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Session>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
   let (x, c') <- recv c;
@@ -62,5 +62,5 @@ recvVec (S n) [c] =
       xs      <- recvVec n [c]
   in pure (Cons x xs)
 
-example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Com>
+example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Session>
 example n list = let c <- fork (\c -> sendVec c list) in recvVec n c

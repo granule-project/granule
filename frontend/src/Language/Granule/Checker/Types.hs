@@ -125,12 +125,12 @@ equalTypesRelatedCoeffects s rel (Diamond ["IO"] t1) (Diamond ef t2) sp
 
 -- Over approximation by 'Session' "monad"
 equalTypesRelatedCoeffects s rel (Diamond ef t1) (Diamond ["Session"] t2) sp
-    | "Com" `elem` ef || null ef
+    | "Session" `elem` ef || null ef
       = equalTypesRelatedCoeffects s rel t1 t2 sp
 
 -- Under approximation by 'Session' "monad"
 equalTypesRelatedCoeffects s rel (Diamond ["Session"] t1) (Diamond ef t2) sp
-    | "Com" `elem` ef || null ef
+    | "Session" `elem` ef || null ef
       = equalTypesRelatedCoeffects s rel t1 t2 sp
 
 equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
@@ -143,7 +143,7 @@ equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
       then return (eq, unif)
       else
         -- Communication effect analysis is idempotent
-        if (nub ef1 == ["Com"] && nub ef2 == ["Com"])
+        if (nub ef1 == ["Session"] && nub ef2 == ["Session"])
         then return (eq, unif)
         else
           throw EffectMismatch{ errLoc = s, effExpected = ef1, effActual = ef2 }
