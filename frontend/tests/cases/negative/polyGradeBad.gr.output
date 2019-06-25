@@ -1,4 +1,4 @@
-Fatal error:
+Fatal error: 
 It is unknown whether (1 + 1) .< (1 + (1 + 1)) holds for all resource algebras.
 CallStack (from HasCallStack):
   error, called at src/Language/Granule/Checker/Constraints/SymbolicGrades.hs:272:3 in granule-frontend-0.7.3.0-8LHMhyz94OFIJpW97nFhDD:Language.Granule.Checker.Constraints.SymbolicGrades
