@@ -580,7 +580,7 @@ approximatedByOrEqualConstraint x y =
 
 trivialUnsatisfiableConstraints :: Pred -> [Constraint]
 trivialUnsatisfiableConstraints
-    = filter unsat
+    = concatMap unsat
     . map normaliseConstraint
     . positiveConstraints
   where
@@ -594,26 +594,39 @@ trivialUnsatisfiableConstraints
     positiveConstraints =
         predFold concat (\_ -> []) (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
 
-    unsat :: Constraint -> Bool
-    unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
-    unsat (Neq _ c1 c2 _) = not (c1 `neqC` c2)
-    unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
-    unsat (NonZeroPromotableTo _ _ (CZero _) _) = True
-    unsat (NonZeroPromotableTo _ _ _ _) = False
+    -- All the unsatisfiable constraints
+    unsat :: Constraint -> [Constraint]
+    unsat c@(Eq _ c1 c2 _)  = if (c1 `neqC` c2) then [c] else []
+    unsat c@(Neq _ c1 c2 _) = if (c1 `neqC` c2) then [] else [c]
+    unsat c@(ApproximatedBy{}) = approximatedByC c
+    unsat c@(NonZeroPromotableTo _ _ (CZero _) _) = [c]
+    unsat (NonZeroPromotableTo _ _ _ _) = []
     -- TODO: look at this information
-    unsat (Lt _ c1 c2) = False
-    unsat (Gt _ c1 c2) = False
+    unsat (Lt _ c1 c2) = []
+    unsat (Gt _ c1 c2) = []
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
-    approximatedByC :: Coeffect -> Coeffect -> Bool
-    approximatedByC (CNat n) (CNat m) = n /= m
-    approximatedByC (Level n) (Level m)   = n > m
-    approximatedByC (CFloat n) (CFloat m) = n > m
+    approximatedByC :: Constraint -> [Constraint]
+    approximatedByC c@(ApproximatedBy _ (CNat n) (CNat m) _) | n /= m = [c]
+    approximatedByC c@(ApproximatedBy _ (Level n) (Level m) _) | n > m = [c]
+    approximatedByC c@(ApproximatedBy _ (CFloat n) (CFloat m) _) | n > m = [c]
     -- Nat like intervals
-    approximatedByC (CInterval (CNat lb1) (CNat ub1)) (CInterval (CNat lb2) (CNat ub2)) =
-        not $ (lb2 <= lb1) && (ub1 <= ub2)
-    approximatedByC _ _                   = False
+    approximatedByC c@(ApproximatedBy _
+                        (CInterval (CNat lb1) (CNat ub1))
+                        (CInterval (CNat lb2) (CNat ub2)) _)
+        | not $ (lb2 <= lb1) && (ub1 <= ub2) = [c]
+
+    approximatedByC (ApproximatedBy s (CProduct c1 c2) (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c1 d1 t1)) ++ (approximatedByC (ApproximatedBy s c2 d2 t2))
+
+    approximatedByC (ApproximatedBy s c (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c d1 t1)) ++ (approximatedByC (ApproximatedBy s c d2 t2))
+
+    approximatedByC (ApproximatedBy s (CProduct c1 c2) d (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c1 d t1)) ++ (approximatedByC (ApproximatedBy s c2 d t2))
+
+    approximatedByC _ = []
 
     -- Attempt to see if one coeffect is trivially not equal to the other
     neqC :: Coeffect -> Coeffect -> Bool

@@ -922,16 +922,23 @@ solveConstraints predicate s name = do
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
 
   result <- liftIO $ provePredicate predicate coeffectVars
+
   case result of
     QED -> return ()
     NotValid msg -> do
       msg' <- rewriteMessage msg
       simplPred <- simplifyPred predicate
-      if msg' == "is Falsifiable\n"
-        then throw SolverErrorFalsifiableTheorem
-          { errLoc = s, errDefId = name, errPred = simplPred }
-        else throw SolverErrorCounterExample
-          { errLoc = s, errDefId = name, errPred = simplPred }
+
+      -- try trivial unsats again
+      let unsats' = trivialUnsatisfiableConstraints simplPred
+      if not (null unsats')
+        then mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats'
+        else
+          if msg' == "is Falsifiable\n"
+            then throw SolverErrorFalsifiableTheorem
+              { errLoc = s, errDefId = name, errPred = simplPred }
+            else throw SolverErrorCounterExample
+              { errLoc = s, errDefId = name, errPred = simplPred }
     NotValidTrivial unsats ->
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout ->
