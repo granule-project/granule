@@ -1274,14 +1274,14 @@ checkGuardsForImpossibility s name = do
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
-    -- p <- simplifyPred p
-
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
     result <- liftIO $ provePredicate thm tyVars
+
+    p <- simplifyPred thm
 
     case result of
       QED -> return ()

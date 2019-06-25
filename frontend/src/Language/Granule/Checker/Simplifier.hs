@@ -3,6 +3,7 @@
 module Language.Granule.Checker.Simplifier where
 
 import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Predicates
@@ -18,22 +19,32 @@ allCons = all (\p -> case p of Con _ -> True; _ -> False)
 
 simplifyPred :: (?globals :: Globals)
              => Pred -> Checker Pred
-simplifyPred p = do
-  p <- simplifyPred' p
-  return $ flatten $ normalisePred p
+simplifyPred p = go 10 p
   where
+    -- Bounded fixed-point (don't go for ever, in case things are non-converging somehow)
+    go 0 p = return p
+    go n p = do
+      p <- simplifyPred' p
+      let p' = flatten $ normalisePred p
+      if (p == p') then return p' else go (n-1) p'
+
     normalisePred = predFold
        Conj Disj Impl (Con . normaliseConstraint) NegPred Exists
 
 simplifyPred' :: (?globals :: Globals)
              => Pred -> Checker Pred
-simplifyPred' c@(Conj ps) | allCons ps =
-  simpl subst c where subst = collectSubst c
 
 simplifyPred' (Conj ps) = do
-  ps <- mapM simplifyPred' ps
-  let ps' = nub ps
-  return $ Conj ps'
+  -- Collect any substitutions implied by the constraints
+  let subst = collectSubst (Conj ps)
+  -- Apply these subsitutions to the conjunction
+  (Conj ps') <- simpl subst (Conj ps)
+  -- Then recursively apply the simplification to each subpart
+  ps' <- mapM simplifyPred' ps'
+  -- Remove any duplications
+  let ps'' = nub ps'
+  -- Output the final conjunction
+  return $ Conj ps''
 
 simplifyPred' (Disj ps) = do
   ps <- mapM simplifyPred' ps
@@ -47,8 +58,12 @@ simplifyPred' c@(Impl ids p1 p2) = do
   p2'' <- simpl subst' p2'
   return $ removeTrivialImpls . removeTrivialIds $ (Impl ids p1' p2'')
 
-simplifyPred' c@(Exists id k p) =
-  simplifyPred' p >>= return . Exists id k
+simplifyPred' c@(Exists id k p) = do
+  p' <- simplifyPred' p
+  -- Strip quantifications that are no longer used
+  if id `elem` (freeVars p')
+    then return $ Exists id k p'
+    else return p'
 
 simplifyPred' c@(NegPred p) =
   simplifyPred' p >>= return . NegPred
