@@ -1,0 +1,31 @@
+data Void where
+
+data Ptr (id : Void) = MkPtr
+
+data Cap (id : Void) (a : Type) = MkCap
+
+data PtrCap a where
+  MkPtrCap : forall { id : Void } . (Ptr id) [] -> Cap id a -> PtrCap a
+
+new
+  : forall { a : Type }
+  . a -> PtrCap a
+new = new
+
+swap
+  : forall { a b : Type, id : Void }
+  . b -> Ptr id -> Cap id a -> (a × Cap id b)
+swap = swap
+
+free
+  : forall { a b : Type, id : Void }
+  . Ptr id -> Cap id a -> a
+free = free
+
+main : Int
+main = let
+  MkPtrCap [ptr1] cap1 = new 1;
+  MkPtrCap [ptr2] cap2 = new 2;
+  n = free ptr1 cap2;  -- oops
+  m = free ptr2 cap1   -- 'nother oops
+  in n + m
