@@ -34,9 +34,13 @@ peek' (Cons [x] xs) = (x, Cons [x] xs)
 
 data Patient = Patient (String [Public]) (String [Private])
 
-getCities : forall n. Vec n (Patient [0..1])  -> Vec n (String [Public])
-getCities Nil = Nil;
-getCities (Cons [Patient [city] [name]] ps) = Cons [city] (getCities ps)
+sampleCities : forall n k . N k -> (Vec (n+k) Patient) [0..1] -> Vec k (String [Public])
+sampleCities Z [_] = Nil;
+sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities n [ps])
+
+-- getCitiesBad : forall n. Vec n (Patient [0..1])  -> Vec n (String [Public])
+-- getCitiesBad Nil = Nil;
+-- getCitiesBad (Cons [Patient [city] [name]] ps) = Cons [name] (getCitiesBad ps)
 
 -- Session types example
 
