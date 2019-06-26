@@ -162,7 +162,7 @@ effects:
 data Protocol = Recv Type Protocol | Send Type Protocol | ...
 send : forall { a : Type, s : Protocol } . Chan (Send a s) -> a -> (Chan s) <Session>
 recv : forall { a : Type, s : Protocol } . Chan (Recv a s) -> (a, Chan s) <Session>
-forkC : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Session>)
+fork : forall { s : Protocol, k : Coeffect, c : k } . ((Chan s) [c] -> () <Session>)
                                                  -> ((Chan (Dual s)) [c]) <Session>
 ~~~
 
@@ -173,7 +173,7 @@ Thus,  `send` takes a channel on which an `a` can be
 sent, returning a channel on which behaviour `s` can then
 be carried out. Similarly, `recv` takes a channel
 on which one can receive an `a` value, getting back (in a pair)
-the continuation channel `Chan n`. The `forkC`
+the continuation channel `Chan n`. The `fork`
 primitive is higher-order, taking a function that uses a
 channel in a way captured by some graded modality with grade
 `c`, producing
@@ -207,9 +207,9 @@ times to send values of type `a`, taking a vector and sending each
 element on the channel.  Dually, `recvVec` takes a size `n` and a
 channel which it uses `n` times to receive values of `a`, collecting
 the results into an output vector. We can then put these two processes
-together using `forkC`:
+together using `fork`:
 
 ~~~ granule
 example : forall {n : Nat, a : Type} . N n -> Vec n a -> (Vec n a) <Session>
-example n list = let c <- forkC (\c -> sendVec c list) in recvVec n c
+example n list = let c <- fork (\c -> sendVec c list) in recvVec n c
 ~~~
