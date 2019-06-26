@@ -13,14 +13,12 @@
 Granule is a functional programming language with a linear type system and
 fine-grained effects and coeffects via **graded modal types**.
 
-A brief introduction to the Granule programming language can be found in the
-[extended abstract presented at TLLA'17][1]. The type system is partly based on
-the ideas in ["Combining effects and coeffects via grading" (Gaboardi et al.
-2016)][2], but with considerable extensions and novel features, reported in detail
-in an upcoming paper.
+An introduction to Granule can be found in our paper [Quantitative
+program reasoning with graded modal types][1]. More details of the project
+can be found on the [project website][2].
 
-[1]: https://www.cs.kent.ac.uk/people/staff/dao7/publ/combining-effects-and-coeffects-icfp16.pdf
-[2]: http://www.cs.ox.ac.uk/conferences/fscd2017/preproceedings_unprotected/TLLA_Orchard.pdf
+[1]: https://www.cs.kent.ac.uk/people/staff/dao7/publ/granule-icfp19.pdf
+[2]: https://granule-project.github.io/
 
 ## Example
 
