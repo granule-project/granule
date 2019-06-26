@@ -32,8 +32,9 @@ compose : forall a : Type, b : Type, c : Type
 compose g f = \x -> g (f x)
 
 --- Apply f to x until p holds
-until : forall a : Type
-      . (a -> Bool) [∞] -> (a -> a) [∞] -> a [∞] -> a
+until
+  : forall a : Type
+  . (a -> Bool) [1..∞] -> (a -> a) [0..∞] -> a [2..∞] -> a
 until [p] [f] [x] =
   case p x of
     False -> x;
