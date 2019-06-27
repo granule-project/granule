@@ -7,7 +7,7 @@ module Language.Granule.Checker.Constraints.Compile where
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-
+import Language.Granule.Checker.Kinds
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
@@ -33,6 +33,9 @@ compileNatKindedTypeToCoeffect _ (TyInt n) =
   return $ CNat n
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
+compileNatKindedTypeToCoeffect _ (TyCon (internalName -> "Inf")) =
+  -- todo: generalise so other things can be top-completed
+  return $ CInfinity (Just extendedNat)
 compileNatKindedTypeToCoeffect s t =
   throw $ KindError{errLoc = s, errTy = t, errK = kNat }
 

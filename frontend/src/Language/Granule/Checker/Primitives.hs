@@ -47,6 +47,8 @@ typeConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
+    -- Todo: make polymorphic
+    , (mkId "Inf", (KPromote (TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")), Nothing))
     ] ++ builtinTypeConstructors
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
