@@ -44,9 +44,11 @@ compileTypeConstraintToConstraint ::
 compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   c1 <- compileNatKindedTypeToCoeffect s t1
   c2 <- compileNatKindedTypeToCoeffect s t2
+  (KPromote kt1) <- inferKindOfType s t1
+  --(KPromote kt2) <- inferKindOfType s t2
   case op of
-    TyOpEq -> return $ Con (Eq s c1 c2 (TyCon $ mkId "Nat"))
-    TyOpNotEq -> return $ Con (Neq s c1 c2 (TyCon $ mkId "Nat"))
+    TyOpEq -> return $ Con (Eq s c1 c2 kt1)
+    TyOpNotEq -> return $ Con (Neq s c1 c2 kt1)
     TyOpLesser -> return $ Con (Lt s c1 c2)
     TyOpGreater -> return $ Con (Gt s c1 c2)
     TyOpLesserEq -> return $ Con (LtEq s c1 c2)
