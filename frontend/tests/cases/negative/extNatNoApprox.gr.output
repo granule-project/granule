@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: 5:1:
+The following theorem associated with `bad` is falsifiable:
+	(y0 ≤ ∞) ∧ (x0 ≤ ∞) ∧ (1 + 1 ≤ y0) ∧ (0 ≤ x0) ∧ (0 ≤ y0) ∧ (1 ≤ x0) ∧ (1 + 1 ≤ ∞) ∧ (0 ≤ ∞) ∧ (0 ≤ ∞) ∧ (1 ≤ ∞)

@@ -1,0 +1,8 @@
+data Bool = True | False
+
+--- Apply f to x until p holds
+bad : Int [∞] -> Int [∞] -> Int
+bad [x] [y] =
+  case True p of
+    False -> x;
+    True  -> y + y

@@ -1,0 +1,2 @@
+foo : forall x : Ext Nat . {x == Inf} => Int [x] -> Int
+foo [x] = foo [x]
