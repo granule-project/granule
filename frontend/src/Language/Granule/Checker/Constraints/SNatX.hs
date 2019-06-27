@@ -60,22 +60,14 @@ joinSNatX a@(SNatX ai) b@(SNatX bi) =
 representationConstraint :: SInteger -> SBool
 representationConstraint v = v .>= -1
 
-freeSNatX :: String -> Symbolic SNatX
-freeSNatX nm = do
-  v <- sInteger $ nm <> "_xVal"
-  constrain $ representationConstraint v
-  return $ SNatX v
-
 existsSNatX :: String -> Symbolic SNatX
 existsSNatX nm = do
   v <- exists $ nm <> "_xVal"
-  constrain $ representationConstraint v
   return $ SNatX v
 
 forallSNatX :: String -> Symbolic SNatX
 forallSNatX nm = do
   v <- forall $ nm <> "_xVal"
-  constrain $ representationConstraint v
   return $ SNatX v
 
 -- main :: IO ()

@@ -328,7 +328,6 @@ freshCVar quant name (TyCon k) q =
 -- Extended nat
 freshCVar quant name t q | t == extendedNat = do
   solverVar <- quant q name
-  -- constrain (SNatX.representationConstraint $ SNatX.xVal solverVar)
   return (SNatX.representationConstraint $ SNatX.xVal solverVar
         , SExtNat solverVar)
 
