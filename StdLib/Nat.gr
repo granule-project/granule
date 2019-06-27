@@ -22,8 +22,7 @@ natToInt (S m) = 1 + natToInt m
 --- # Arithmetic operations
 
 --- Addition
-add
-  : forall {m n : Nat}
+add : forall {m n : Nat}
   . N n -> N m -> N (n + m)
 add Z m = m;
 add (S n') m = S (add n' m)

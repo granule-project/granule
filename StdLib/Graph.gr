@@ -47,10 +47,10 @@ foldG' [e] [v] [o] [c] g =
 
 
 foldG : forall a : Type, b : Type
-      . b [0..∞]
-      -> (a -> b) [0..∞]
-      -> (b -> b -> b) [0..∞]
-      -> (b -> b -> b) [0..∞]
+      . b [0..∞]                 -- empty
+      -> (a -> b) [0..∞]         -- vertex
+      -> (b -> b -> b) [0..∞]    -- overlay
+      -> (b -> b -> b) [0..∞]    -- connect
       -> Graph a
       -> b
 foldG [e] [v] [o] [c] g =
@@ -78,10 +78,9 @@ toList = foldG [Empty] [singleton_list] [append_list] [append_list]
 transpose : forall a : Type . Graph a -> Graph a
 transpose = foldG [EmptyG] [Vertex] [Overlay] [flip Connect]
 
-import Nat
 --- Count number of leaves of the graph expression
-size : forall a : Type, n : Nat . Graph (a [0]) -> N n
-size = foldG [S Z] [const (S Z)] [add] [add]
+size : forall a : Type . Graph (a [0]) -> Int
+size = foldG [0] [const 1] [\x -> \y -> x + y] [\x -> \y -> x + y]
 
-vertexcount : forall a : Type, n : Nat . Graph (a [0]) -> N n
-vertexcount = foldG [Z] [const (S Z)] [add] [add]
+vertexcount : forall a : Type . Graph (a [0]) -> Int
+vertexcount = foldG [0] [const 1] [\x -> \y -> x + y] [\x -> \y -> x + y]
