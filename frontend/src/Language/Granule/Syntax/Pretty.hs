@@ -310,5 +310,7 @@ instance Pretty Span where
     | otherwise = \case
       Span (0,0) _ "" -> "(unknown location)"
       Span (0,0) _ f  -> f
-      Span (l,c) _ f  -> f <> ":" <> show l <> ":" <> show c
+      Span pos   _ f  -> f <> ":" <> pretty pos
 
+instance Pretty Pos where
+    prettyL _ (l, c) = show l <> ":" <> show c
