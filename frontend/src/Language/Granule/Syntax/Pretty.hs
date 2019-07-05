@@ -281,7 +281,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
   prettyL l (Case _ _ e ps) = "\n    (case " <> prettyL l e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> prettyL l p
                       <> " -> " <> prettyL l e') ps) <> ")"
-
+  prettyL l (Hole _ _) = "?"
 
 instance Pretty Operator where
   prettyL _ = \case

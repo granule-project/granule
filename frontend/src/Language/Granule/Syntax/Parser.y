@@ -89,6 +89,7 @@ import Language.Granule.Utils hiding (mkSpan)
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
     '∘'   { TokenRing _ }
+    '?'   { TokenHole _ }
 
 %right '∘'
 %right in
@@ -494,6 +495,8 @@ Atom :: { Expr () () }
   | STRING                    {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () $
                                       case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
+  | '?'
+    {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp () }
 
 {
 

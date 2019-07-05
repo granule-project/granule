@@ -109,6 +109,10 @@ class UserMsg a where
   -- | The body of the message
   msg :: (?globals :: Globals) => a -> String
 
+  color :: a -> MessageColor
+  color _ = Red
+
+data MessageColor = Red | Green | Yellow | Blue | Magenta | Cyan | White
 
 -- | Make a span from a pair of positions
 mkSpan :: (?globals :: Globals) => (Pos, Pos) -> Span
@@ -149,7 +153,7 @@ printInfo message = when (not suppressInfos) (putStrLn message)
 --       putStr $ time <> message
 
 formatError :: (?globals :: Globals, UserMsg msg) => msg -> String
-formatError = formatMessage (bold . red)
+formatError msg = formatMessage (bold . (chooseColor . color $ msg)) $ msg
 -- | Given a function to format the title of a message, format the message
 -- and its body. e.g. @formatMessage (bold . red)@ for errors.
 formatMessage :: (?globals :: Globals, UserMsg msg)
@@ -185,6 +189,15 @@ blue = txtColor "34"
 magenta = txtColor "35"
 cyan = txtColor "36"
 white = txtColor "37"
+
+chooseColor :: (?globals :: Globals) => MessageColor -> (String -> String)
+chooseColor Red = red
+chooseColor Green = green
+chooseColor Yellow = yellow
+chooseColor Blue = blue
+chooseColor Magenta = magenta
+chooseColor Cyan = cyan
+chooseColor White = white
 
 txtColor :: (?globals :: Globals) => String -> String -> String
 txtColor colorCode message =

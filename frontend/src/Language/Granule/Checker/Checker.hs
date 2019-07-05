@@ -36,7 +36,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Helpers (freeVars)
+import Language.Granule.Syntax.Helpers (freeVars, hasHole)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pretty
@@ -326,6 +326,12 @@ checkExpr :: (?globals :: Globals)
           -> Expr () ()       -- expression
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
+-- Hit an unfilled holed
+checkExpr _ ctxt _ _ t (Hole s _) = do
+  st <- get
+  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
+  throw $ HoleMessage s (Just t) ctxt varContext
+
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
     let elaborated = Val s ty (NumInt n)
@@ -408,7 +414,13 @@ checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
 -- Promotion
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
-    let vars = freeVars e -- map fst gam
+    let vars =
+          if hasHole e
+            -- If we are promoting soemthing with a hole, then put all free variables in scope
+            then map fst gam
+            -- Otherwise we need to discharge only things that get used
+            else freeVars e
+
     gamF    <- discToFreshVarsIn s vars gam demand
     (gam', subst, elaboratedE) <- checkExpr defs gamF pol False tau e
 
@@ -576,6 +588,12 @@ synthExpr :: (?globals :: Globals)
           -> Polarity          -- ^ Polarity of subgrading
           -> Expr () ()        -- ^ Expression
           -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
+
+-- Hit an unfilled holed
+synthExpr _ ctxt _ (Hole s _) = do
+  st <- get
+  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
+  throw $ HoleMessage s Nothing ctxt varContext
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do
