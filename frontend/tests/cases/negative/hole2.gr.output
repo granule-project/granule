@@ -9,6 +9,8 @@ Found a goal: 11:40:
      xs : .[Vec n0.0 t3.0]. 1
 
    Type context:
+     b0 : Type
+     a0 : Type
      t3.0 : Type
      n0.0 : ↑Nat
      a : Type
