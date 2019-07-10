@@ -110,9 +110,9 @@ ppair s annotation left right =
 -- PVar ((0,0),(0,0)) (Id "x" "x_0")
 
 -- | Freshening for patterns
-instance Monad m => Freshenable m (Pattern a) where
+instance Freshenable m (Pattern a) where
 
-  freshen :: Pattern a -> Freshener m (Pattern a)
+  freshen :: Monad m => Pattern a -> Freshener m (Pattern a)
   freshen (PVar s a var) = do
       var' <- freshIdentifierBase Value var
       return $ PVar s a var'

@@ -1,0 +1,9 @@
+Type checking failed: 
+Type constructor name clash: 1:1:
+Type constructor `Int` already defined
+
+Type constructor name clash: 3:1:
+Type constructor `Float` already defined
+
+Type constructor name clash: 5:1:
+Type constructor `()` already defined

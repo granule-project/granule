@@ -1,0 +1,4 @@
+data Fix (f : Type -> Type) = Fix (f (Fix f))
+
+unfix : forall f . Fix f -> f (Fix f)
+unfix (Fix x) = x

@@ -1,0 +1,8 @@
+import Nat
+
+subBad
+  : forall {m n : Nat}
+  . {n ≥ m} => N n -> N m -> N (n - m)
+subBad m Z = m;
+subBad Z (S n') = subBad Z n'; -- impossible
+subBad (S m') (S n') = subBad m' n'

@@ -10,8 +10,10 @@
 module Language.Granule.Syntax.Def where
 
 import Data.List ((\\), delete)
+import Data.Set (Set)
 import GHC.Generics (Generic)
 
+import Language.Granule.Context (Ctxt)
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
@@ -24,25 +26,21 @@ import Language.Granule.Syntax.Pattern
 -- | Comprise a list of data type declarations and a list
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
-data AST v a = AST [DataDecl] [Def v a]
+data AST v a = AST [DataDecl] [Def v a] (Set Import)
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
-class Definition d where
-    definitionSpan :: d -> Span
-    definitionIdentifier :: d -> Id
-    definitionTypeScheme :: d -> TypeScheme
+type Import = FilePath
 
 -- | Function definitions
-data Def v a =
-    Def {
-        defSpan :: Span,
-        defIdentifier :: Id,
-        defEquations :: [Equation v a],
-        defTypeScheme :: TypeScheme }
-    deriving Generic
+data Def v a = Def
+  { defSpan :: Span
+  , defId :: Id
+  , defEquations :: [Equation v a]
+  , defTypeScheme :: TypeScheme
+  }
+  deriving Generic
 
-instance FirstParameter (Def v a) Span
 deriving instance (Eq v, Eq a) => Eq (Def v a)
 deriving instance (Show v, Show a) => Show (Def v a)
 
@@ -59,30 +57,28 @@ deriving instance (Eq v, Eq a) => Eq (Equation v a)
 deriving instance (Show v, Show a) => Show (Equation v a)
 instance FirstParameter (Equation v a) Span
 
-instance Definition (Def ev a) where
-    definitionSpan = getSpan
-    definitionIdentifier = defIdentifier
-    definitionTypeScheme = defTypeScheme
-
-definitionType :: (Definition d) => d -> Type
-definitionType def =
-    ty where (Forall _ _ _ ty) = definitionTypeScheme def
+definitionType :: Def v a -> Type
+definitionType Def { defTypeScheme = ts } =
+    ty where (Forall _ _ _ ty) = ts
 
 -- | Data type declarations
-data DataDecl = DataDecl {
-    dataDeclSpan :: Span,
-    dataDeclName :: Id,
-    dataDeclMembers :: [(Id,Kind)],
-    dataDeclKind :: (Maybe Kind),
-    dataDeclConstructors :: [DataConstr] }
-    deriving (Generic, Show, Eq)
+data DataDecl = DataDecl
+  { dataDeclSpan :: Span
+  , dataDeclId :: Id
+  , dataDeclTyVarCtxt :: Ctxt Kind
+  , dataDeclKindAnn :: Maybe Kind
+  , dataDeclDataConstrs :: [DataConstr]
+  }
+  deriving (Generic, Show, Eq)
 
 instance FirstParameter DataDecl Span
 
 -- | Data constructors
 data DataConstr
-  = DataConstrIndexed Span Id TypeScheme -- ^ GADTs
-  | DataConstrNonIndexed Span Id [Type]  -- ^ ADTs
+  = DataConstrIndexed
+    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrTypeScheme :: TypeScheme } -- ^ GADTs
+  | DataConstrNonIndexed
+    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
   deriving (Eq, Show, Generic)
 
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
@@ -102,8 +98,8 @@ type Cardinality = Maybe Nat
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
-freshenAST (AST dds defs) =
-  AST dds' defs'
+freshenAST (AST dds defs imports) =
+  AST dds' defs' imports
     where (dds', defs') = (map runFreshener dds, map runFreshener defs)
 
 instance Monad m => Freshenable m DataDecl where

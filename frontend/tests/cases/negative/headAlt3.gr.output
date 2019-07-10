@@ -1,0 +1,4 @@
+Type checking failed: 
+Counter example: 9:1:
+The following theorem associated with `headAlt'` is falsifiable:
+	((n > 0) -> (0..1 ≤ 0..1) ∧ (n1 > 1))

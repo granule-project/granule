@@ -14,11 +14,11 @@ import System.FilePath
 import System.FilePath.Find
 import System.Directory
 import qualified Data.Map as M
-import qualified Language.Granule.Checker.Monad as Mo
+import qualified Language.Granule.Checker.Monad as Checker
 import qualified Data.ConfigFile as C
+import Data.List.NonEmpty (NonEmpty)
 import Control.Exception (try)
 import Control.Monad.State
-import Control.Monad.Trans.Maybe
 import Control.Monad.Trans.Reader
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
@@ -35,9 +35,9 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Checker.Substitution
 import qualified Language.Granule.Checker.Primitives as Primitives
-import Language.Granule.Eval
+import Language.Granule.Interpreter.Eval
 import Language.Granule.Context
 --import qualified Language.Granule.Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex
@@ -64,7 +64,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   in fmap Ex.runExceptT $ f run'
 
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
-replEval val (AST dataDecls defs) = do
+replEval val (AST dataDecls defs _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId (" repl"<>(show val))) bindings of
       Nothing -> return Nothing
@@ -98,7 +98,7 @@ rFindMain :: [String] -> [FilePath] -> IO [[FilePath]]
 rFindMain fn rfp = forM fn $ (\x -> rFindHelper x rfp )
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
-readToQueue pth = do
+readToQueue pth = let ?globals = ?globals{ globalsSourceFilePath = Just pth } in do
     pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile pth
 
     case pf of
@@ -107,15 +107,15 @@ readToQueue pth = do
             debugM "Pretty-printed AST:" $ pretty ast
             checked <-  liftIO' $ check ast
             case checked of
-                Just _ -> do
-                    let (AST dd def) = ast
+                Right _ -> do
+                    let (AST dd def _) = ast
                     forM def $ \idef -> loadInQueue idef
                     (fvg,rp,adt,f,m) <- get
                     put (fvg,rp,(dd<>adt),f,m)
                     liftIO $ printInfo $ green $ pth<>", interpreted"
-                Nothing -> do
+                Left errs -> do
                   (_,_,_,f,_) <- get
-                  Ex.throwError (TypeCheckError pth f)
+                  Ex.throwError (TypeCheckerError errs)
       Left e -> do
        (_,_,_,f,_) <- get
        Ex.throwError (ParseError e f)
@@ -200,34 +200,30 @@ buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
 
 synType :: (?globals::Globals)
-  => Expr () () -> Ctxt TypeScheme -> Mo.CheckerState
-  -> IO (Maybe (Type, Ctxt Mo.Assumption, Expr () Type))
-synType exp [] cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ do
-  (ty, ctxt, subst, elab) <- synthExpr empty empty Positive exp
-  ty <- substitute subst ty
-  return (ty, ctxt, elab)
-
-synType exp cts cs = liftIO $ Mo.evalChecker cs $ runMaybeT $ do
+  => Expr () ()
+  -> Ctxt TypeScheme
+  -> Checker.CheckerState
+  -> IO (Either (NonEmpty Checker.CheckerError) (Type, Ctxt Checker.Assumption, Expr () Type))
+synType exp cts cs = liftIO $ Checker.evalChecker cs $ do
   (ty, ctxt, subst, elab) <- synthExpr cts empty Positive exp
   ty <- substitute subst ty
   return (ty, ctxt, elab)
 
-
 synTypeBuilder :: (?globals::Globals) => Expr () () -> [Def () ()] -> [DataDecl] -> REPLStateIO Type
 synTypeBuilder exp ast adt = do
   let ddts = buildCtxtTSDD adt
-  (_,cs) <- liftIO $ Mo.runChecker Mo.initState $ buildCheckerState adt
+  (_,cs) <- liftIO $ Checker.runChecker Checker.initState $ buildCheckerState adt
   ty <- liftIO $ synType exp ((buildCtxtTS ast) <> ddts) cs
   --liftIO $ print $ show ty
   case ty of
-    Just (t,a,_) -> return t
-    Nothing -> Ex.throwError OtherError'
+    Right (t,a,_) -> return t
+    Left err -> Ex.throwError (TypeCheckerError err)
 
 
-buildCheckerState :: (?globals::Globals) => [DataDecl] -> Mo.Checker ()
-buildCheckerState dd = do
-    let checkDataDecls = runMaybeT (mapM_ checkTyCon dd *> mapM_ checkDataCons dd)
-    somethine <- checkDataDecls
+buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
+buildCheckerState dataDecls = do
+    _ <- Checker.runAll checkTyCon dataDecls
+    _ <- Checker.runAll checkDataCons dataDecls
     return ()
 
 buildCtxtTS :: (?globals::Globals) => [Def () ()] -> Ctxt TypeScheme
@@ -326,11 +322,11 @@ handleCMD s =
       case lfp of
         [] -> do
           put (fvg,rp,[],ptr,M.empty)
-          ecs <- processFilesREPL ptr (let ?globals = ?globals {debugging = True } in readToQueue)
+          ecs <- processFilesREPL ptr (let ?globals = ?globals {globalsDebugging = Just True } in readToQueue)
           return ()
         _ -> do
           put (fvg,rp,[],lfp,M.empty)
-          ecs <- processFilesREPL lfp (let ?globals = ?globals {debugging = True } in readToQueue)
+          ecs <- processFilesREPL lfp (let ?globals = ?globals {globalsDebugging = Just True } in readToQueue)
           return ()
 
 
@@ -369,10 +365,10 @@ handleCMD s =
             _ -> liftIO $ putStrLn xtx
         ast -> do
           -- TODO: use the type that comes out of the checker to return the type
-          checked <- liftIO' $ check (AST adt ast)
+          checked <- liftIO' $ check (AST adt ast mempty)
           case checked of
-            Just _ -> liftIO $ putStrLn (printType trm m)
-            Nothing -> Ex.throwError (TypeCheckError trm f)
+            Right _ -> liftIO $ putStrLn (printType trm m)
+            Left err -> Ex.throwError (TypeCheckerError err)
 
     handleLine (Eval ev) = do
         (fvg,rp,adt,fp,m) <- get
@@ -382,10 +378,10 @@ handleCMD s =
                 let fv = freeVars exp
                 case fv of
                     [] -> do -- simple expressions
-                        typ <- liftIO $ synType exp [] Mo.initState
+                        typ <- liftIO $ synType exp [] Checker.initState
                         case typ of
-                            Just (t,a, _) -> return ()
-                            Nothing -> Ex.throwError (TypeCheckError ev fp)
+                            Right (t,a, _) -> return ()
+                            Left err -> Ex.throwError (TypeCheckerError err)
                         result <- liftIO' $ try $ evalIn builtIns (toRuntimeRep exp)
                         case result of
                             Right r -> liftIO $ putStrLn (pretty r)
@@ -395,15 +391,15 @@ handleCMD s =
                         typer <- synTypeBuilder exp ast adt
                         let ndef = buildDef fvg (buildTypeScheme typer) exp
                         put ((fvg+1),rp,adt,fp,m)
-                        checked <- liftIO' $ check (AST adt (ast<>(ndef:[])))
+                        checked <- liftIO' $ check (AST adt (ast<>(ndef:[])) mempty)
                         case checked of
-                            Just _ -> do
-                                result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])))
+                            Right _ -> do
+                                result <- liftIO' $ try $ replEval fvg (AST adt (ast<>(ndef:[])) mempty)
                                 case result of
                                     Left e -> Ex.throwError (EvalError e)
                                     Right Nothing -> liftIO $ print "if here fix"
                                     Right (Just result) -> liftIO $ putStrLn (pretty result)
-                            Nothing -> Ex.throwError (OtherError')
+                            Left err -> Ex.throwError (TypeCheckerError err)
             Left e -> Ex.throwError (ParseError e fp) --error from parsing (pexp)
 
 helpMenu :: String
@@ -465,7 +461,7 @@ main = do
                           | input == ":h" || input == ":help"
                               -> (liftIO $ putStrLn helpMenu) >> loop st
                           | otherwise -> do
-                             r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = defaultGlobals in handleCMD input) st)
+                             r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = mempty in handleCMD input) st)
                              case r of
                                Right (_,st') -> loop st'
                                Left err -> do

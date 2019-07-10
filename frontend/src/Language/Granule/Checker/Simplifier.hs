@@ -2,10 +2,10 @@
 
 module Language.Granule.Checker.Simplifier where
 
-import Control.Monad.Trans.Maybe
-
 import Language.Granule.Syntax.Type
-import Language.Granule.Checker.Substitutions
+import Language.Granule.Syntax.Helpers (freeVars)
+import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
 
@@ -18,23 +18,33 @@ allCons :: [Pred] -> Bool
 allCons = all (\p -> case p of Con _ -> True; _ -> False)
 
 simplifyPred :: (?globals :: Globals)
-             => Pred -> MaybeT Checker Pred
-simplifyPred p = do
-  p <- simplifyPred' p
-  return $ flatten $ normalisePred p
+             => Pred -> Checker Pred
+simplifyPred p = go 10 p
   where
+    -- Bounded fixed-point (don't go for ever, in case things are non-converging somehow)
+    go 0 p = return p
+    go n p = do
+      p <- simplifyPred' p
+      let p' = flatten $ normalisePred p
+      if (p == p') then return p' else go (n-1) p'
+
     normalisePred = predFold
        Conj Disj Impl (Con . normaliseConstraint) NegPred Exists
 
 simplifyPred' :: (?globals :: Globals)
-             => Pred -> MaybeT Checker Pred
-simplifyPred' c@(Conj ps) | allCons ps =
-  simpl subst c where subst = collectSubst c
+             => Pred -> Checker Pred
 
 simplifyPred' (Conj ps) = do
-  ps <- mapM simplifyPred' ps
-  let ps' = nub ps
-  return $ Conj ps'
+  -- Collect any substitutions implied by the constraints
+  let subst = collectSubst (Conj ps)
+  -- Apply these subsitutions to the conjunction
+  (Conj ps') <- simpl subst (Conj ps)
+  -- Then recursively apply the simplification to each subpart
+  ps' <- mapM simplifyPred' ps'
+  -- Remove any duplications
+  let ps'' = nub ps'
+  -- Output the final conjunction
+  return $ Conj ps''
 
 simplifyPred' (Disj ps) = do
   ps <- mapM simplifyPred' ps
@@ -48,8 +58,12 @@ simplifyPred' c@(Impl ids p1 p2) = do
   p2'' <- simpl subst' p2'
   return $ removeTrivialImpls . removeTrivialIds $ (Impl ids p1' p2'')
 
-simplifyPred' c@(Exists id k p) =
-  simplifyPred' p >>= return . Exists id k
+simplifyPred' c@(Exists id k p) = do
+  p' <- simplifyPred' p
+  -- Strip quantifications that are no longer used
+  if id `elem` (freeVars p')
+    then return $ Exists id k p'
+    else return p'
 
 simplifyPred' c@(NegPred p) =
   simplifyPred' p >>= return . NegPred
@@ -75,7 +89,7 @@ flatten (Con c) = Con c
 
 
 simpl :: (?globals :: Globals)
-           => Substitution -> Pred -> MaybeT Checker Pred
+           => Substitution -> Pred -> Checker Pred
 simpl subst p = substitute subst p >>= (return . removeTrivialImpls . removeTrivialIds)
 
 removeTrivialImpls :: Pred -> Pred
@@ -89,6 +103,7 @@ removeTrivialIds :: Pred -> Pred
 removeTrivialIds =
   predFold conj disj Impl conRemove NegPred Exists
     where removeTrivialIdCon (Con (Eq _ c c' _)) | c == c' = Nothing
+          -- removeTrivialIdCon (Con (ApproximatedBy _ c c' _)) | c == c' = Nothing
           removeTrivialIdCon c = Just c
 
           conj ps = Conj $ catMaybes (map removeTrivialIdCon ps)
@@ -104,8 +119,8 @@ removeTrivialIds =
 
 collectSubst :: Pred -> Substitution
 collectSubst (Conj ps) = concatMap collectSubst ps
--- For a pair of variables, make a two way substitution (unification which is symmetric)
-collectSubst (Con (Eq _ (CVar v) (CVar v') _)) = [(v, SubstC (CVar v')), (v', SubstC (CVar v))]
+-- For a pair of variables, substitute the right for the left
+collectSubst (Con (Eq _ (CVar v1) (CVar v2) _)) = [(v1, SubstC (CVar v2))]
 collectSubst (Con (Eq _ (CVar v) c _)) = [(v, SubstC c)]
 collectSubst (Con (Eq _ c (CVar v) _)) = [(v, SubstC c)]
 collectSubst _ = []

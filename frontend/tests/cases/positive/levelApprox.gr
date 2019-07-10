@@ -1,0 +1,8 @@
+castLevel : ∀ {a : Type} . a [Public] → a [Private]
+castLevel [x] = [x]
+
+ok : Int [Private] -> Int
+ok [x] = x
+
+approxOk : Int [Public] -> Int
+approxOk = ok

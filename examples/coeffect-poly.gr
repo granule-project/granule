@@ -1,0 +1,9 @@
+-- gr --no-eval
+
+-- works on any coeffect
+cp : forall {a : Type, c : Coeffect} . a [(1 + 1):c] -> (a × a)
+cp [x] = (x, x)
+
+-- equivalent
+cp2 : forall {a : Type, c : Coeffect} . a [2:c] -> (a × a)
+cp2 [x] = (x,x)

@@ -1,0 +1,6 @@
+Type checking failed: 
+Unbound variable error: 2:10:
+`scale`
+
+Unbound variable error: 5:20:
+`scale`

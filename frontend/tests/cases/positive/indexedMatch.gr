@@ -1,0 +1,7 @@
+data Indexed a where
+  Inty : Int -> Indexed Int;
+  Chary : Char -> Indexed Char
+
+ofo : forall {a : Type} . Indexed a -> a
+ofo (Inty i) = i;
+ofo (Chary c) = c

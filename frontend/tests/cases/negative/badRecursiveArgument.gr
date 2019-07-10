@@ -1,0 +1,7 @@
+data N (n : Nat) where
+  Z : N 0;
+  S : N n -> N (n+1)
+
+fibble : forall {n : Nat} . N n -> N n
+fibble Z = Z;
+fibble (S n) = (fibble n)

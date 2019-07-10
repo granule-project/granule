@@ -1,0 +1,8 @@
+bar : String <R>
+bar = fromStdin --- reads but doesn't do anything with that result
+
+foo : () → String <R>
+foo = λ() → fromStdin
+
+main : () <IO>
+main = let userInp ← foo () in toStdout userInp

@@ -1,0 +1,15 @@
+-- gr --no-eval
+
+data Dyn where
+  Dyn : ∀ a : Type . a → Dyn
+
+-- Wrapping and rewrapping an existential is okay
+idE : Dyn → Dyn
+idE (Dyn x) = Dyn x
+
+-- Also works with other kinds
+data Dyn2 where
+  Dyn2 : ∀ {a : Type, n : Nat} . a [n] → Dyn2
+
+idF : Dyn2 → Dyn2
+idF (Dyn2 [n]) = Dyn2 [n]

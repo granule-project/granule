@@ -1,0 +1,12 @@
+import File
+
+main : String <IO>
+main =
+    let [[mh]]    = [[openHandle ReadMode "LICENSE"]] in
+    let h       <- mh;
+        h'      <- mh;
+        ()      <- closeHandle h';
+        (h, c)  <- readChar h;
+        (h, c') <- readChar h;
+        ()      <- closeHandle h
+    in pure ((showChar c) `stringAppend` (showChar c'))

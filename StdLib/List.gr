@@ -9,21 +9,32 @@
 ------
 
 import Result
+import Maybe
+import Bool
 
 data List a where Empty; Next a (List a)
 
-lmap : forall a : Type, b : Type
-    . (a -> b) [0..∞] -> List a -> List b
-lmap [f] Empty = Empty;
-lmap [f] (Next x xs) = Next (f x) (lmap [f] xs)
-
-
+-- Length function must ignore the elements
 length_list : forall a : Type . List (a [0]) -> Int
 length_list xs =
   case xs of
     Empty         -> 0;
     (Next [_] xs) -> 1 + length_list xs
 
+-- Map function for lists
+lmap : forall a : Type, b : Type
+    . (a -> b) [0..∞] -> List a -> List b
+lmap [f] Empty = Empty;
+lmap [f] (Next x xs) = Next (f x) (lmap [f] xs)
+
+-- Lookup function
+lookupBy : forall {a : Type, b : Type}
+         . (a -> a -> Bool) [0..∞] -> a [0..∞] -> (List (a, b)) [0..1] -> Maybe b
+lookupBy [p] [k] [Empty] = None;
+lookupBy [p] [k] [Next (k', v) xs] =
+  if p k k' then Some v else lookupBy [p] [k] [xs]
+
+-- Safe head function
 head_list : forall a : Type . (List a) [0..1] -> Result a
 head_list xs =
   case xs of
@@ -31,19 +42,19 @@ head_list xs =
     [(Next x _)] -> Ok x
 
 foldr_list : forall {a : Type, b : Type}
-      . (a -> b -> b) [∞] -> b -> List a -> b
+      . (a -> b -> b) [0..∞] -> b -> List a -> b
 foldr_list [f] z xs =
   case xs of
     Empty -> z;
     Next x xs -> f x (foldr_list [f] z xs)
 
-pushList : forall {k : Nat, a : Type}
-         . (List a) [1..k+1] -> List (a [1..k+1])
+pushList : forall {k : Coeffect, c : k, a : Type}
+         . (List a) [c+1] -> List (a [c+1])
 pushList [Empty]     = Empty;
 pushList [Next x xs] = Next [x] (pushList [xs])
 
-pullList : forall {k : Nat, a : Type}
-         . List (a [k]) -> (List a) [k]
+pullList : forall {k : Coeffect, c : k, a : Type}
+         . List (a [c]) -> (List a) [c]
 pullList xs =
     case xs of
        Empty -> [Empty];

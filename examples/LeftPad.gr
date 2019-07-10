@@ -1,6 +1,0 @@
-import Vec
-
-leftPad : ∀ {n : Nat, m : Nat}
-        . Char [n] → N n → Vec m Char → Vec (n + m) Char
-leftPad [_] Z     str = str;
-leftPad [c] (S n) str = Cons c (leftPad [c] n str)

@@ -60,3 +60,6 @@ Temporary Items
 
 # Compiler Examples
 compiler-examples/
+
+# VSCode
+.vscode

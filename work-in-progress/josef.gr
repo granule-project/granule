@@ -1,0 +1,19 @@
+data N (n : Nat) where
+  Z : N 0;
+  S : N n -> N (n+1)
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+foldr
+  : forall {a b : Type, n : Nat}
+  . (a -> b -> b) [n] -> b -> Vec n a -> b
+foldr [_] z Nil = z;
+foldr [f] z (Cons x xs) = f x (foldr [f] z xs)
+
+foldr' : forall a b n. (a [] -> b [] -> b []) [n] -> b [] -> Vec n (a []) -> b []
+foldr' = foldr
+
+main : Int []
+main = foldr' [\[x] -> \[y] -> [x + x + y + y]] [0] (Cons [1] (Cons [2] Nil))

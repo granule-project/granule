@@ -1,6 +1,8 @@
 {-# LANGUAGE PatternSynonyms #-}
 {-# LANGUAGE TemplateHaskell #-}
 
+{-# options_ghc -Wno-missing-pattern-synonym-signatures #-}
+
 module Data.Bifunctor.FoldableSpec where
 
 import Test.Hspec hiding (Spec)

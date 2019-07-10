@@ -1,0 +1,12 @@
+-- Our analysis is call-by-name at the moment.
+
+foo : Int [4] -> Int
+foo [x] = x * x * x * x
+
+bar : Int [2] -> Int
+bar [x] = let [y] = [x * x] in y * y
+
+-- Type checking failed: work-in-progress/call-by-value-analysis.gr:
+--   Falsifiable theorem: work-in-progress/call-by-value-analysis.gr:5:1:
+--   The following theorem associated with `bar` is falsifiable:
+--         (2 * 2 ≤ 2)

@@ -1,0 +1,9 @@
+foo : forall a b c. (a -> a) [] -> (b × c) -> (b × c)
+foo [f] (x,y) = (f x, f y)
+
+id : forall a. a -> a
+id x = x
+
+bar : forall d e. (d × e) -> (d × e)
+bar = foo [id]
+

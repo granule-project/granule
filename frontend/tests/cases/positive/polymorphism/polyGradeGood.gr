@@ -1,0 +1,3 @@
+-- Correct grade generic function
+cp : forall {a : Type, c : Coeffect} . a [(1 + 1):c] -> (a × a)
+cp [x] = (x, x)

@@ -85,11 +85,6 @@ data ValueDef v a =
 deriving instance (Show a, Show v) => Show (ValueDef v a)
 deriving instance (Eq a, Eq v) => Eq (ValueDef v a)
 
-instance Definition (ValueDef v a) where
-    definitionSpan = valueDefSpan
-    definitionIdentifier = valueDefIdentifier
-    definitionTypeScheme = valueDefTypeScheme
-
 data FunctionDef v a =
     FunctionDef {
         functionDefSpan :: Span,

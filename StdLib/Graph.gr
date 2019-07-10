@@ -18,44 +18,39 @@ data Graph a where
   Connect : Graph a -> Graph a -> Graph a
 
 vertices : forall a : Type . List a -> Graph a
-vertices = foldr_list [Overlay `o` Vertex] EmptyG
+vertices = foldr_list [Overlay ∘ Vertex] EmptyG
 
 edge : forall a : Type . a -> a -> Graph a
 edge x y = Connect (Vertex x) (Vertex y)
 
-mapG : forall a : Type, b : Type . (a -> b) [∞] -> Graph a -> Graph b
+mapG : forall a : Type, b : Type . (a -> b) [0..∞] -> Graph a -> Graph b
 mapG [f] g = case g of
   EmptyG -> EmptyG;
   Vertex a -> Vertex (f a);
   Overlay g1 g2 -> Overlay (mapG [f] g1) (mapG [f] g2);
   Connect g1 g2 -> Connect (mapG [f] g1) (mapG [f] g2)
 
--- foldG : forall a : Type, b : Type
---       . b [∞]
---       -> (a -> b) [∞]
---       -> (b -> b -> b) [∞]
---       -> (b -> b -> b) [∞]
---       -> Graph a
---       -> b
--- foldG [e] [v] [o] [c] g =
---   let [rec] = [foldG [e] [v] [o] [c]] in
---   case g of
---     EmptyG -> e;
---     Vertex a -> v a;
---     Overlay g1 g2 -> o (rec g1) (rec g2);
---     Connect g1 g2 -> c (rec g1) (rec g2)
+foldG' : forall a : Type, b : Type
+      . b [0..∞]
+      -> (a -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
+      -> Graph a
+      -> b
+foldG' [e] [v] [o] [c] g =
+  let [rec] = [foldG' [e] [v] [o] [c]] in
+  case g of
+    EmptyG -> e;
+    Vertex a -> v a;
+    Overlay g1 g2 -> o (rec g1) (rec g2);
+    Connect g1 g2 -> c (rec g1) (rec g2)
 
--- Error during type checking: StdLib/Graph.gr:
---   Trying to join two type variables: b and b
--- CallStack (from HasCallStack):
---   error, called at src/Language/Granule/Checker/Types.hs:478:3 in granule-frontend-0.6.1.0-39lWg9n8iVuFNWgIo
--- DxNvA:Language.Granule.Checker.Types
 
 foldG : forall a : Type, b : Type
-      . b [∞]
-      -> (a -> b) [∞]
-      -> (b -> b -> b) [∞]
-      -> (b -> b -> b) [∞]
+      . b [0..∞]
+      -> (a -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
+      -> (b -> b -> b) [0..∞]
       -> Graph a
       -> b
 foldG [e] [v] [o] [c] g =

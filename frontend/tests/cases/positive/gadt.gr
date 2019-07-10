@@ -1,14 +1,16 @@
-data A where
-  A : A
-data B where
-  B : B
+-- gr --no-eval
+
+data Bar where
+  Bar : Bar
+data Boo where
+  Boo : Boo
 
 data Foo a where
-  MkA : A → Foo A;
-  MkB : B → Foo B
+  MkBar : Bar → Foo Bar;
+  MkBoo : Boo → Foo Boo
 
 unwrap : ∀ {a : Type} . Foo a → a
 unwrap x =
   case x of
-    (MkA x) → x;
-    (MkB x) → x
+    (MkBar x) → x;
+    (MkBoo x) → x

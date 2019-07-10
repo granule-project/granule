@@ -26,7 +26,21 @@ data TypeScheme =
   deriving (Eq, Show, Generic)
 
 -- Constructors and operators are just strings
-type Operator = String
+data TypeOperator
+  = TyOpLesser
+  | TyOpLesserEq
+  | TyOpGreater
+  | TyOpGreaterEq
+  | TyOpEq
+  | TyOpNotEq
+  | TyOpPlus
+  | TyOpTimes
+  | TyOpMinus
+  | TyOpExpon
+  | TyOpMeet
+  | TyOpJoin
+  deriving (Eq, Ord, Show)
+
 
 {-| Types.
 Example: `List n Int` in Granule
@@ -39,7 +53,7 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyVar Id                  -- ^ Type variable
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
-          | TyInfix Operator Type Type  -- ^ Infix type operator
+          | TyInfix TypeOperator Type Type  -- ^ Infix type operator
     deriving (Eq, Ord, Show)
 
 -- | Kinds
@@ -51,7 +65,26 @@ data Kind = KType
           | KPromote Type        -- Promoted types
     deriving (Show, Ord, Eq)
 
+promoteTypeToKind :: Type -> Kind
+promoteTypeToKind (TyVar v) = KVar v
+promoteTypeToKind t = KPromote t
+
+demoteKindToType :: Kind -> Maybe Type
+demoteKindToType (KPromote t) = Just t
+demoteKindToType (KVar v)     = Just (TyVar v)
+demoteKindToType _            = Nothing
+
+instance Term Kind where
+  freeVars (KPromote t) = freeVars t
+  freeVars (KVar x)     = [x]
+  freeVars _            = []
+
+kConstr :: Id -> Kind
 kConstr = KPromote . TyCon
+
+kNat, protocol :: Kind
+kNat = kConstr $ mkId "Nat"
+protocol = kConstr $ mkId "Protocol"
 
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
@@ -105,13 +138,18 @@ coeffectIsAtom (Level _) = True
 coeffectIsAtom (CSet _) = True
 coeffectIsAtom _ = False
 
-
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
-publicRepresentation  = 0
+publicRepresentation  = 2
 
+unusedRepresentation :: Integer
+unusedRepresentation = 0
+
+nat, extendedNat :: Type
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
+
+infinity :: Coeffect
 infinity = CInfinity (Just extendedNat)
 
 isInterval :: Type -> Maybe Type
@@ -122,8 +160,6 @@ isProduct :: Type -> Maybe (Type, Type)
 isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
-
-
 
 -- | Represents effect grades
 -- TODO: Make richer
@@ -186,7 +222,7 @@ mTyApp :: Monad m => Type -> Type -> m Type
 mTyApp x y   = return (TyApp x y)
 mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
-mTyInfix :: Monad m => Operator -> Type -> Type -> m Type
+mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 
 -- Monadic algebra for types
@@ -198,7 +234,7 @@ data TypeFold m a = TypeFold
   , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: Operator -> a -> a -> m a }
+  , tfTyInfix :: TypeOperator  -> a -> a -> m a }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
@@ -243,16 +279,16 @@ freeAtomsVars t = []
 -- Types and coeffects are terms
 
 instance Term Type where
-  freeVars = runIdentity . typeFoldM TypeFold
-    { tfFunTy   = \x y -> return $ x <> y
-    , tfTyCon   = \_ -> return [] -- or: const (return [])
-    , tfBox     = \c t -> return $ freeVars c <> t
-    , tfDiamond = \_ x -> return x
-    , tfTyVar   = \v -> return [v] -- or: return . return
-    , tfTyApp   = \x y -> return $ x <> y
-    , tfTyInt   = \_ -> return []
-    , tfTyInfix = \_ y z -> return $ y <> z
-    }
+    freeVars = runIdentity . typeFoldM TypeFold
+      { tfFunTy   = \x y -> return $ x <> y
+      , tfTyCon   = \_ -> return [] -- or: const (return [])
+      , tfBox     = \c t -> return $ freeVars c <> t
+      , tfDiamond = \_ x -> return x
+      , tfTyVar   = \v -> return [v] -- or: return . return
+      , tfTyApp   = \x y -> return $ x <> y
+      , tfTyInt   = \_ -> return []
+      , tfTyInfix = \_ y z -> return $ y <> z
+      }
 
 instance Term Coeffect where
     freeVars (CVar v) = [v]
@@ -265,21 +301,23 @@ instance Term Coeffect where
     freeVars CNat{}  = []
     freeVars CFloat{} = []
     freeVars CInfinity{} = []
-    freeVars CZero{} = []
-    freeVars COne{} = []
+    freeVars (CZero t) = freeVars t
+    freeVars (COne t) = freeVars t
     freeVars Level{} = []
     freeVars CSet{} = []
-    freeVars (CSig c _) = freeVars c
+    freeVars (CSig c k) = freeVars c <> freeVars k
     freeVars (CInterval c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CProduct c1 c2) = freeVars c1 <> freeVars c2
 
 ----------------------------------------------------------------------
 -- Freshenable instances
 
-instance Monad m => Freshenable m TypeScheme where
-  freshen :: TypeScheme -> Freshener m TypeScheme
+instance Freshenable m TypeScheme where
+  freshen :: Monad m => TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds constraints ty) = do
-        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v; return (v', k) }) binds
+        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v;
+                                        k' <- freshen k;
+                                        return (v', k') }) binds
         constraints' <- mapM freshen constraints
         ty' <- freshen ty
         return $ Forall s binds' constraints' ty'
@@ -348,11 +386,19 @@ instance Freshenable m Coeffect where
        return $ CSet cs'
     freshen (CSig c k) = do
       c' <- freshen c
-      return $ CSig c' k
+      k' <- freshen k
+      return $ CSig c' k'
     freshen c@CInfinity{} = return c
     freshen c@CFloat{} = return c
-    freshen c@CZero{}  = return c
-    freshen c@COne{}   = return c
+
+    freshen (CZero t)  = do
+      t' <- freshen t
+      return $ CZero t'
+
+    freshen (COne t)  = do
+      t' <- freshen t
+      return $ COne t'
+
     freshen c@Level{}  = return c
     freshen c@CNat{}   = return c
     freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2
@@ -400,6 +446,11 @@ normalise (CTimes n m) =
   where
     n' = normalise n
     m' = normalise m
+-- Push signatures in
+normalise (CSig (CPlus c1 c2) k) = CPlus (CSig (normalise c1) k) (CSig (normalise c2) k)
+normalise (CSig (CTimes c1 c2) k) = CTimes (CSig (normalise c1) k) (CSig (normalise c2) k)
+normalise (CSig (CMeet c1 c2) k) = CMeet (CSig (normalise c1) k) (CSig (normalise c2) k)
+normalise (CSig (CJoin c1 c2) k) = CJoin (CSig (normalise c1) k) (CSig (normalise c2) k)
 normalise (CSig (CNat 0) k) = CZero k
 normalise (CSig (CZero _)  k) = CZero k
 normalise (CSig (CNat 1) k) = COne k

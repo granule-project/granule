@@ -1,18 +1,27 @@
-import Bool
+import Maybe
 
-readFile : String -> String <IO>
+readMany : Int → Handle R → (Handle R, String) <IO>
+readMany 0 h = pure (h, "");
+readMany n h =
+  let (h, c)  ← readChar h;
+      (h, cs) ← readMany (n - 1) h
+  in pure (h, stringCons c cs)
+
+readFile : String -> String <Open,Read,Close,IOExcept>
 readFile filename =
-  let h       <- openFile filename ReadMode;
-      (h, cs) <- getCharsUntilEnd h;
-      ()      <- hClose h
+  let h       <- openHandle ReadMode filename;
+      (h, cs) <- readUntilEnd h;
+      _       <- closeHandle h
   in pure cs
 
-getCharsUntilEnd : Handle -> (Handle, String) <IO>
-getCharsUntilEnd h =
-    let (h, b) <- isEOF h
-    in case b of
-        True -> pure (h, "");
-        False ->
-            let (h, c) <- hGetChar h;
-                (h, cs) <- getCharsUntilEnd h
-            in pure (h, stringAppend (showChar c) cs)
+readUntilEnd : Handle R -> (Handle R, String) <Read,IOExcept>
+readUntilEnd h =
+  let (h, eof) <- isEOF h in
+    case eof of
+      True -> pure (h, "");
+      False ->
+        let (h, c) <- readChar h;
+            (h, str) <- readUntilEnd h
+        in pure (h, stringCons c str)
+
+

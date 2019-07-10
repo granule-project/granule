@@ -45,12 +45,6 @@ data ClosureFreeFunctionDef = ClosureFreeFunctionDef {
 
 type ClosureFreeExpr = Expr (Either GlobalMarker ClosureMarker) Type
 type ClosureFreeValue = Value (Either GlobalMarker ClosureMarker) Type
-
-instance Definition ClosureFreeFunctionDef where
-    definitionSpan = closureFreeDefSpan
-    definitionIdentifier = closureFreeDefIdentifier
-    definitionTypeScheme = closureFreeDefTypeScheme
-
 type ClosureFreeValueDef = ValueDef (Either GlobalMarker ClosureMarker) Type
 
 data ClosureMarker =

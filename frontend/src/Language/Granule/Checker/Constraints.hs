@@ -16,7 +16,6 @@ import qualified Data.Set as S
 import Control.Arrow (first)
 import Control.Exception (assert)
 
-import Language.Granule.Checker.Errors
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
@@ -26,9 +25,9 @@ import Language.Granule.Checker.Constraints.Quantifiable
 import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
+import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
-import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
@@ -41,9 +40,9 @@ compileQuant BoundQ    = existential
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type, Quantifier) -> Ctxt Type
+  => Pred -> Ctxt (Type, Quantifier)
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
-compileToSBV predicate tyVarContext kVarContext =
+compileToSBV predicate tyVarContext =
   (buildTheorem id compileQuant
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
@@ -53,7 +52,7 @@ compileToSBV predicate tyVarContext kVarContext =
     -- flipQuant InstanceQ = ForallQ
     -- flipQuant BoundQ    = BoundQ
 
-    predicate' = rewriteConstraints kVarContext predicate
+    predicate' = rewriteConstraints tyVarContext predicate
 
     buildTheorem ::
         (SBool -> SBool)
@@ -62,8 +61,13 @@ compileToSBV predicate tyVarContext kVarContext =
     buildTheorem polarity quant = do
       -- Create fresh solver variables for everything in the type variable
       -- context of the write kind
+
+      -- IMPORTANT: foldrM creates its side effects in reverse order
+      -- this is good because tyVarContext has the reverse order for our
+      -- quantifiers, so reversing order of the effects in foldrM gives us
+      -- the order we want for the predicate
         (preConstraints, constraints, solverVars) <-
-            foldrM (createFreshVar quant) (sTrue, sTrue, []) tyVarContext
+            foldrM (createFreshVar quant predicate) (sTrue, sTrue, []) tyVarContext
 
         predC <- buildTheorem' solverVars predicate'
         return (polarity (preConstraints .=> (constraints .&& predC)))
@@ -89,7 +93,7 @@ compileToSBV predicate tyVarContext kVarContext =
         return $ sNot p'
 
     buildTheorem' solverVars (Exists v k p) =
-      if v `elem` (vars p)
+      if v `elem` (freeVars p)
         -- optimisation
         then
 
@@ -117,7 +121,8 @@ compileToSBV predicate tyVarContext kVarContext =
                        forSome [(internalName v)] $ \solverVar -> do
                          pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
                          return ((solverVar .== literal privateRepresentation
-                              .|| solverVar .== literal publicRepresentation) .&& pred')
+                              .|| solverVar .== literal publicRepresentation
+                              .|| solverVar .== literal unusedRepresentation) .&& pred')
 
                     k -> error $ "Solver error: I don't know how to create an existntial for " <> show k
             Just k -> error $ "Solver error: I don't know how to create an existntial for demotable type " <> show k
@@ -131,14 +136,15 @@ compileToSBV predicate tyVarContext kVarContext =
           buildTheorem' solverVars p
 
     -- TODO: generalise this to not just Nat indices
-    buildTheorem' solverVars (Impl (v:vs) p p') =
-      if v `elem` (vars p <> vars p')
+    buildTheorem' solverVars (Impl ((v, _kind):vs) p p') =
+      if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
+
           -- Create fresh solver variable
           forAll [(internalName v)] $ \vSolver -> do
-            impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
-            return ((vSolver .>= literal 0) .=> impl)
+             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
+             return ((vSolver .>= literal 0) .=> impl)
 
         else
           -- An optimisation, don't bother quantifying things
@@ -153,32 +159,39 @@ compileToSBV predicate tyVarContext kVarContext =
     -- with an associated refinement predicate
     createFreshVar
       :: (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
+      -> Pred
       -> (Id, (Type, Quantifier))
       -> (SBool, SBool, Ctxt SGrade)
       -> Symbolic (SBool, SBool, Ctxt SGrade)
     -- Ignore variables coming from a dependent pattern match because
     -- they get created elsewhere
 
-    createFreshVar _ (_, (_, BoundQ)) x = return x
+    createFreshVar _ _ (_, (_, BoundQ)) x = return x
 
-    createFreshVar quant
+    createFreshVar quant predicate
                    (var, (kind, quantifierType))
-                   (universalConstraints, existentialConstraints, ctxt) = do
-      (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
-      let (universalConstraints', existentialConstraints') =
-            case quantifierType of
-              ForallQ -> (pre .&& universalConstraints, existentialConstraints)
-              InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
-              b -> error $ "Impossible freshening a BoundQ, but this is cause above"
-          --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
-      return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
+                   (universalConstraints, existentialConstraints, ctxt) =
+      if not (var `elem` (freeVars predicate))
+        -- If the variable is not in the predicate, then don't create a new var
+        then return (universalConstraints, existentialConstraints, ctxt)
+
+        -- Otherwise...
+        else do
+         (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
+         let (universalConstraints', existentialConstraints') =
+               case quantifierType of
+                 ForallQ -> (pre .&& universalConstraints, existentialConstraints)
+                 InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
+                 b -> error $ "Impossible freshening a BoundQ, but this is cause above"
+             --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
+         return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 
 -- TODO: replace with use of `substitute`
 
 -- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
-rewriteConstraints :: Ctxt Type -> Pred -> Pred
+rewriteConstraints :: Ctxt (Type, Quantifier) -> Pred -> Pred
 rewriteConstraints ctxt =
     predFold
       Conj
@@ -193,42 +206,47 @@ rewriteConstraints ctxt =
       Exists var k' p
         where
           k' = case lookup kvar ctxt of
-                  Just ty -> KPromote ty
+                  Just (ty, _) -> KPromote ty
                   Nothing -> KVar kvar
     existsCase var k p = Exists var k p
 
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`
-    updateConstraint :: Id -> Type -> Constraint -> Constraint
-    updateConstraint ckindVar ckind (Eq s c1 c2 k) =
+    updateConstraint :: Id -> (Type, Quantifier) -> Constraint -> Constraint
+    updateConstraint ckindVar (ckind, _) (Eq s c1 c2 k) =
       Eq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _ -> k)
-    updateConstraint ckindVar ckind (Neq s c1 c2 k) =
+    updateConstraint ckindVar (ckind, _) (Neq s c1 c2 k) =
             Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
               (case k of
                 TyVar ckindVar' | ckindVar == ckindVar' -> ckind
                 _ -> k)
 
-    updateConstraint ckindVar ckind (ApproximatedBy s c1 c2 k) =
+    updateConstraint ckindVar (ckind, _) (ApproximatedBy s c1 c2 k) =
       ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)
 
-    updateConstraint ckindVar ckind (NonZeroPromotableTo s x c t) =
+    updateConstraint ckindVar (ckind, _) (NonZeroPromotableTo s x c t) =
        NonZeroPromotableTo s x (updateCoeffect ckindVar ckind c)
           (case t of
              TyVar ckindVar' | ckindVar == ckindVar' -> ckind
              _  -> t)
 
-    updateConstraint ckindVar ckind (Lt s c1 c2) =
+    updateConstraint ckindVar (ckind, _) (Lt s c1 c2) =
         Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
-    updateConstraint ckindVar ckind (Gt s c1 c2) =
+    updateConstraint ckindVar (ckind, _) (Gt s c1 c2) =
         Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
+    updateConstraint ckindVar (ckind, _) (GtEq s c1 c2) =
+        GtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
+    updateConstraint ckindVar (ckind, _) (LtEq s c1 c2) =
+        LtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
 
     -- `updateCoeffect v k c` rewrites any occurence of the kind variable
     -- `v` in the coeffect `c` with the kind `k`
@@ -255,6 +273,7 @@ rewriteConstraints ctxt =
 
 
 -- | Symbolic coeffect representing 0..Inf
+zeroToInfinity :: SGrade
 zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
 
 
@@ -300,7 +319,8 @@ freshCVar quant name (TyCon k) q =
         "Level"     -> do
           -- constrain (solverVar .== 0 .|| solverVar .== 1)
           return (solverVar .== literal privateRepresentation
-              .|| solverVar .== literal publicRepresentation, SLevel solverVar)
+              .|| solverVar .== literal publicRepresentation
+              .|| solverVar .== literal unusedRepresentation, SLevel solverVar)
 
         k -> do
            error $ "I don't know how to make a fresh solver variable of type " <> show k
@@ -316,8 +336,11 @@ freshCVar quant name t q | t == extendedNat = do
 --  infinity value (since this satisfies all the semiring properties on the nose)
 freshCVar quant name (TyVar v) q | "kprom" `isPrefixOf` internalName v = do
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
--- TODO: possibly this can now be removed
   return (sTrue, SPoint)
+
+freshCVar quant name (TyVar v) q = do
+  solverVar <- quant q name
+  return (sTrue, SUnknown $ SynLeaf $ Just solverVar)
 
 freshCVar _ _ t _ =
   error $ "Trying to make a fresh solver variable for a grade of type: "
@@ -353,6 +376,19 @@ compile vars (Gt s c1 c2) =
   where
     c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
     c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
+
+compile vars (LtEq s c1 c2) =
+  return $ c1' .<= c2'
+  where
+    c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
+    c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
+
+compile vars (GtEq s c1 c2) =
+  return $ c1' .>= c2'
+  where
+    c1' = compileCoeffect c1 (TyCon $ mkId "Nat") vars
+    c2' = compileCoeffect c2 (TyCon $ mkId "Nat") vars
+
 
 -- NonZeroPromotableTo s c means that:
 compile vars (NonZeroPromotableTo s x c t) = do
@@ -439,7 +475,7 @@ compileCoeffect (CZero k') k vars  =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> SLevel $ literal privateRepresentation
+        "Level"     -> SLevel $ literal unusedRepresentation
         "Nat"       -> SNat 0
         "Q"         -> SFloat (fromRational 0)
         "Set"       -> SSet (S.fromList [])
@@ -456,6 +492,8 @@ compileCoeffect (CZero k') k vars  =
       SInterval
         (compileCoeffect (CZero t) t' vars)
         (compileCoeffect (CZero t) t' vars)
+
+    (TyVar _, _) -> SUnknown (SynLeaf (Just 0))
     _ -> error $ "I don't know how to compile a 0 for " <> pretty k'
 
 compileCoeffect (COne k') k vars =
@@ -481,10 +519,22 @@ compileCoeffect (COne k') k vars =
         SInterval
           (compileCoeffect (COne t) t' vars)
           (compileCoeffect (COne t) t' vars)
+    (TyVar _, _) -> SUnknown (SynLeaf (Just 1))
+
     _ -> error $ "I don't know how to compile a 1 for " <> pretty k'
 
 compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
   SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
+
+-- For grade-polymorphic coeffects, that have come from a nat
+-- expression (sometimes this is just from a compounded expression of 1s),
+-- perform the injection from Natural numbers to arbitrary semirings
+compileCoeffect (CNat n) (TyVar _) _ | n > 0 =
+  SUnknown (injection n)
+    where
+      injection 0 = SynLeaf (Just 0)
+      injection 1 = SynLeaf (Just 1)
+      injection n = SynPlus (SynLeaf (Just 1)) (injection (n-1))
 
 compileCoeffect c (TyVar _) _ =
    error $ "Trying to compile a polymorphically kinded " <> pretty c
@@ -504,6 +554,8 @@ eqConstraint (SExtNat x) (SExtNat y) = x .== y
 eqConstraint SPoint SPoint = sTrue
 eqConstraint s t | isSProduct s && isSProduct t =
   applyToProducts (.==) (.&&) (const sTrue) s t
+eqConstraint u@(SUnknown{}) u'@(SUnknown{}) =
+  u .== u'
 eqConstraint x y =
    error $ "Kind error trying to generate equality " <> show x <> " = " <> show y
 
@@ -511,7 +563,11 @@ eqConstraint x y =
 approximatedByOrEqualConstraint :: SGrade -> SGrade -> SBool
 approximatedByOrEqualConstraint (SNat n) (SNat m) = n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)   = n .<= m
-approximatedByOrEqualConstraint (SLevel l) (SLevel k) = l .>= k
+approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
+    -- Private <= Public
+    ite (l .== literal unusedRepresentation) sTrue
+      $ ite (l .== literal privateRepresentation) sTrue
+        $ ite (k .== literal publicRepresentation) sTrue sFalse
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   if s == t then sTrue else sFalse
 approximatedByOrEqualConstraint SPoint SPoint = sTrue
@@ -531,13 +587,18 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
      .&& (approximatedByOrEqualConstraint ub1 ub2)
 
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = x .== y
+
+approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
+     -- Note shortcircuiting version of || implemented here
+     ite (u .== u') sTrue (u .< u')
+
 approximatedByOrEqualConstraint x y =
    error $ "Kind error trying to generate " <> show x <> " <= " <> show y
 
 
 trivialUnsatisfiableConstraints :: Pred -> [Constraint]
 trivialUnsatisfiableConstraints
-    = filter unsat
+    = concatMap unsat
     . map normaliseConstraint
     . positiveConstraints
   where
@@ -551,26 +612,41 @@ trivialUnsatisfiableConstraints
     positiveConstraints =
         predFold concat (\_ -> []) (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
 
-    unsat :: Constraint -> Bool
-    unsat (Eq _ c1 c2 _)  = c1 `neqC` c2
-    unsat (Neq _ c1 c2 _) = not (c1 `neqC` c2)
-    unsat (ApproximatedBy _ c1 c2 _) = c1 `approximatedByC` c2
-    unsat (NonZeroPromotableTo _ _ (CZero _) _) = True
-    unsat (NonZeroPromotableTo _ _ _ _) = False
+    -- All the unsatisfiable constraints
+    unsat :: Constraint -> [Constraint]
+    unsat c@(Eq _ c1 c2 _)  = if (c1 `neqC` c2) then [c] else []
+    unsat c@(Neq _ c1 c2 _) = if (c1 `neqC` c2) then [] else [c]
+    unsat c@(ApproximatedBy{}) = approximatedByC c
+    unsat c@(NonZeroPromotableTo _ _ (CZero _) _) = [c]
+    unsat (NonZeroPromotableTo _ _ _ _) = []
     -- TODO: look at this information
-    unsat (Lt _ c1 c2) = False
-    unsat (Gt _ c1 c2) = False
+    unsat (Lt _ c1 c2) = []
+    unsat (Gt _ c1 c2) = []
+    unsat (LtEq _ c1 c2) = []
+    unsat (GtEq _ c1 c2) = []
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
-    approximatedByC :: Coeffect -> Coeffect -> Bool
-    approximatedByC (CNat n) (CNat m) = n /= m
-    approximatedByC (Level n) (Level m)   = n < m
-    approximatedByC (CFloat n) (CFloat m) = n > m
+    approximatedByC :: Constraint -> [Constraint]
+    approximatedByC c@(ApproximatedBy _ (CNat n) (CNat m) _) | n /= m = [c]
+    approximatedByC c@(ApproximatedBy _ (Level n) (Level m) _) | n > m = [c]
+    approximatedByC c@(ApproximatedBy _ (CFloat n) (CFloat m) _) | n > m = [c]
     -- Nat like intervals
-    approximatedByC (CInterval (CNat lb1) (CNat ub1)) (CInterval (CNat lb2) (CNat ub2)) =
-        not $ (lb2 <= lb1) && (ub1 <= ub2)
-    approximatedByC _ _                   = False
+    approximatedByC c@(ApproximatedBy _
+                        (CInterval (CNat lb1) (CNat ub1))
+                        (CInterval (CNat lb2) (CNat ub2)) _)
+        | not $ (lb2 <= lb1) && (ub1 <= ub2) = [c]
+
+    approximatedByC (ApproximatedBy s (CProduct c1 c2) (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c1 d1 t1)) ++ (approximatedByC (ApproximatedBy s c2 d2 t2))
+
+    approximatedByC (ApproximatedBy s c (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c d1 t1)) ++ (approximatedByC (ApproximatedBy s c d2 t2))
+
+    approximatedByC (ApproximatedBy s (CProduct c1 c2) d (isProduct -> Just (t1, t2))) =
+      (approximatedByC (ApproximatedBy s c1 d t1)) ++ (approximatedByC (ApproximatedBy s c2 d t2))
+
+    approximatedByC _ = []
 
     -- Attempt to see if one coeffect is trivially not equal to the other
     neqC :: Coeffect -> Coeffect -> Bool
@@ -581,30 +657,27 @@ trivialUnsatisfiableConstraints
     --   neqC lb1 lb2 || neqC ub1 ub2
     neqC _ _                   = False
 
-data SolverResult =
-    QED
+data SolverResult
+  = QED
   | NotValid String
   | NotValidTrivial [Constraint]
   | Timeout
-  | Error CheckerError
+  | SolverProofError String
+  | OtherSolverError String
 
-provePredicate :: (?globals :: Globals) =>
-     Span
-  -> Pred                    -- Predicate
+provePredicate
+  :: (?globals :: Globals)
+  => Pred                    -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
-  -> Ctxt Type               -- Free variable kinds
   -> IO SolverResult
-provePredicate s predicate vars kvars =
-  if isTrivial predicate
-    then do
+provePredicate predicate vars
+  | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return QED
-
-    else do
-      let (sbvTheorem, _, unsats) = compileToSBV predicate vars kvars
-
+  | otherwise = do
+      let (sbvTheorem, _, unsats) = compileToSBV predicate vars
       ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
-        case solverTimeoutMillis ?globals of
+        case solverTimeoutMillis of
           n | n <= 0 -> return ()
           n -> setTimeOut n
         sbvTheorem
@@ -612,14 +685,9 @@ provePredicate s predicate vars kvars =
       return $ case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
         Unsatisfiable {} -> QED
-
-        ProofError _ msgs -> Error $ CheckerError (Just s) $ "Solver error:" <> unlines msgs
-
+        ProofError _ msgs _ -> SolverProofError $ unlines msgs
         Unknown _ UnknownTimeOut -> Timeout
-
-        Unknown _ reason  ->
-          Error $ CheckerError (Just s) $ "Solver says unknown: " <> show reason
-
+        Unknown _ reason  -> OtherSolverError $ show reason
         _ ->
           case getModelAssignment thmRes of
             -- Main 'Falsifiable' result
@@ -638,9 +706,5 @@ provePredicate s predicate vars kvars =
                     Left msg -> print $ show msg
                   -}
                    NotValid $ "is " <> show (ThmResult thmRes)
-
-            Right (True, _) ->
-              NotValid "returned probable model."
-
-            Left str        ->
-              Error $ GenericError (Just s) str
+            Right (True, _) -> NotValid "returned probable model."
+            Left str -> OtherSolverError str

@@ -1,0 +1,3 @@
+Type checking failed: 
+Duplicate binding: 1:6:
+Variable `a` bound more than once.

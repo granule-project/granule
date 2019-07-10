@@ -1,0 +1,2 @@
+copy : ∀ {a : Type, n : Nat} . a [n+1] -> a × a [n]
+copy [x] = (x, [x])

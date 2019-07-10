@@ -3,14 +3,11 @@ import Vec
 data Stream a where
   Next : a → (() → Stream a) [0..1] → Stream a
 
-delay : ∀ a : Type .  a → (() → a)
-delay x = λ() → x
-
 force : ∀ a : Type . (() → a) → a
 force t = t ()
 
 repeat : ∀ a : Type . a [1..∞] → Stream a
-repeat [x] = Next x [delay (repeat [x])]
+repeat [x] = Next x [λ() → (repeat [x])]
 
 takeS : ∀ a : Type, p : Nat . N p → Stream a → Vec p a
 takeS (S Z) (Next hd [_])  = Cons hd Nil;
@@ -24,8 +21,8 @@ cycleInner
   .  (Vec (m+1) a) [0..∞]
   → (Vec (n+1) a) [0..1]
   → Stream a
-cycleInner [again] [Cons x Nil] = Next x [delay (cycleInner [again] [again])];
-cycleInner [again] [Cons x xs]  = Next x [delay (cycleInner [again] [xs])]
+cycleInner [again] [Cons x Nil] = Next x [λ() → (cycleInner [again] [again])];
+cycleInner [again] [Cons x xs]  = Next x [λ() → (cycleInner [again] [xs])]
 
 main : Vec 7 Int
 main = takeS (S (S (S (S (S (S (S Z))))))) (cycle [Cons 1 (Cons 2 (Cons 3 Nil))])

@@ -1,0 +1,2 @@
+# Use Agda syntax hightlighting for Granule
+*.gr linguist-language=Agda

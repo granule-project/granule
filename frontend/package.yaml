@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.7.2.0'
+version: '0.7.3.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018 authors
@@ -8,18 +8,27 @@ github: granule-project/granule
 dependencies:
 - base >=4.10 && <5
 
+ghc-options:
+- -O0
+- -Wall
+- -Werror
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+- -Wno-unused-matches
+- -Wno-name-shadowing
+- -Wno-type-defaults
+
+default-extensions:
+- ImplicitParams
+- ViewPatterns
+- LambdaCase
+- TupleSections
+- NamedFieldPuns
+
 library:
   source-dirs: src
-  ghc-options: -O0 -W -Werror -Wno-unused-matches
-  # ghc-options: >
-  #   -O0
-  #   -Wall
-  #   -Werror
-  #   -Wcompat
-  #   -Wincomplete-record-updates
-  #   -Wincomplete-uni-patterns
-  #   -Wredundant-constraints
-
   # when:
   # - condition: flag(dev)
   #   then:
@@ -41,7 +50,8 @@ library:
   - Language.Granule.Checker.Patterns
   - Language.Granule.Checker.Predicates
   - Language.Granule.Checker.Primitives
-  - Language.Granule.Checker.Substitutions
+  - Language.Granule.Checker.SubstitutionContexts
+  - Language.Granule.Checker.Substitution
   - Language.Granule.Checker.Types
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
@@ -80,8 +90,8 @@ tests:
     source-dirs: tests/hspec
     ghc-options: -fno-warn-partial-type-signatures
     dependencies:
-    - filemanip
-    - directory
+    # - filemanip
+    # - directory
     - granule-frontend
     - hspec
     - QuickCheck
