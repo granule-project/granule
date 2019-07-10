@@ -23,7 +23,7 @@ import System.Exit
 
 import System.Directory (getCurrentDirectory)
 import "Glob" System.FilePath.Glob (glob)
-import System.FilePath (splitExtension)
+import System.FilePath.Posix (takeBaseName)
 import Options.Applicative
 
 import Language.Granule.Checker.Checker
@@ -108,7 +108,7 @@ run input = do
               Right irModuleAst -> do
                 printInfo "Generated Emitable AST"
                 let llvmir = unpack $ ppllvm irModuleAst
-                let moduleName = fst $ splitExtension $ sourceFilePath ?globals
+                let moduleName = takeBaseName $ sourceFilePath ?globals
                 --printInfo llvmir
                 writeFile (moduleName ++ ".ll") llvmir
                 withHostTargetMachine $ \machine ->

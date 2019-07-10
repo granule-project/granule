@@ -12,14 +12,13 @@ import Language.Granule.Codegen.MarkGlobals
 import Language.Granule.Utils
 import qualified LLVM.AST as IR
 --import Language.Granule.Syntax.Pretty
-import Debug.Trace
+--import Debug.Trace
 
 compile :: String -> AST () Type -> Either SomeException IR.Module
 compile moduleName typedAST =
     let ?globals       = defaultGlobals in
-    let normalised     = trace (show typedAST) (normaliseDefinitions typedAST)
+    let normalised     = {-trace (show typedAST)-} (normaliseDefinitions typedAST)
         markedGlobals  = markGlobals normalised
         (Ok topsorted) = topologicallySortDefinitions markedGlobals
         closureFree    = convertClosures topsorted
     in emitLLVM moduleName closureFree
-    -- NOTE Closures have the wrong type

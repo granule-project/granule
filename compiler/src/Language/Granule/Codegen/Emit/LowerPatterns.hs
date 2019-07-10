@@ -14,7 +14,9 @@ import Language.Granule.Codegen.Emit.Types
 import LLVM.AST (Operand, Name)
 import LLVM.IRBuilder.Monad
 import LLVM.IRBuilder.Instruction
+import qualified LLVM.IRBuilder.Constant as IC
 import qualified LLVM.AST.IntegerPredicate as IP
+import qualified LLVM.AST.FloatingPointPredicate as FPP
 import qualified LLVM.AST as IR
 
 emitPattern :: (MonadState EmitterState m, MonadFix m, MonadIRBuilder m)
@@ -26,6 +28,11 @@ emitPattern :: (MonadState EmitterState m, MonadFix m, MonadIRBuilder m)
 emitPattern successLabel failLabel matchOperand (PInt _ _ n) =
     do
         matches <- icmp IP.EQ (IR.ConstantOperand $ intConstant n) matchOperand
+        condBr matches successLabel failLabel
+emitPattern successLabel failLabel matchOperand (PFloat _ _ n) =
+    do
+        v <- IC.double n
+        matches <- fcmp FPP.UEQ v matchOperand
         condBr matches successLabel failLabel
 
 emitPattern successLabel failLabel matchOperand (PVar _ _ ident) =
