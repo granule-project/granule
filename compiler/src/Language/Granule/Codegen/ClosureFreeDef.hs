@@ -1,4 +1,3 @@
-{-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
@@ -70,13 +69,13 @@ instance Pretty ClosureFreeFunctionDef where
 
 instance Pretty ClosureMarker where
     prettyL l (CapturedVar _ty ident _n) =
-        "env(" ++ (prettyL l ident) ++ ")"
+        "env(" ++ prettyL l ident ++ ")"
     prettyL l (MakeClosure ident env) =
         let prettyEnvVar (FromParentEnv ident ty _) =
-                "parent-env(" ++ (prettyL l ident) ++ ") : " ++ (prettyL l ty)
+                "parent-env(" ++ prettyL l ident ++ ") : " ++ prettyL l ty
             prettyEnvVar (FromLocalScope ident ty) =
-                (prettyL l ident) ++ " : " ++ (prettyL l ty)
+                prettyL l ident ++ " : " ++ prettyL l ty
             prettyEnv (ClosureEnvironmentInit envName varInits) =
-                "env(ident = \"" ++ envName ++ "\", " ++ (intercalate ", " $ map prettyEnvVar varInits) ++ ")"
-        in "make-closure(" ++ (prettyL l ident) ++ ", " ++ (prettyEnv env) ++ ")"
+                "env(ident = \"" ++ envName ++ "\", " ++ intercalate ", " (map prettyEnvVar varInits) ++ ")"
+        in "make-closure(" ++ prettyL l ident ++ ", " ++ prettyEnv env ++ ")"
     prettyL l (MakeTrivialClosure ident) = prettyL l ident

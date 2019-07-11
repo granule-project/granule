@@ -7,16 +7,26 @@ license: BSD3
 github: dorchard/granule
 dependencies:
 - base >=4.10 && <5
+default-extensions:
+- LambdaCase
+- RecordWildCards
+- ImplicitParams
+- ScopedTypeVariables
+- OverloadedStrings
+
+ghc-options:
+- -O0
+- -Wall
+- -Werror
+- -Wcompat
+- -Wredundant-constraints
+- -Wno-unused-matches
+- -Wno-name-shadowing
+- -Wno-type-defaults
+- -fmax-pmcheck-iterations=10000000
 
 library:
   source-dirs: src
-  ghc-options: -O0 -W -Werror -Wno-unused-matches -Wwarn=incomplete-patterns -fmax-pmcheck-iterations=10000000
-  # when:
-  # - condition: flag(dev)
-  #   then:
-  #     ghc-options: -O0 -W -Werror -Wno-unused-matches
-  #   else:
-  #     ghc-options: -O3 -w
   exposed-modules:
   - Language.Granule.Codegen.NormalisedDef
   - Language.Granule.Codegen.TopsortDefinitions
@@ -34,20 +44,21 @@ library:
 
 executables:
   grc:
-    main: Language/Granule/Main.hs
+    main: Main.hs
     source-dirs: app
-    ghc-options: -O0 -W -Werror -Wno-unused-matches
     dependencies:
-    - directory
-    - Glob
     - granule-frontend
     - granule-compiler
-    - optparse-applicative
     - text
     - llvm-hs-pure >= 6.0
     - llvm-hs >= 6.0
-    - llvm-hs-pretty
     - filepath
+    - directory
+    - gitrev
+    - extra
+    - Glob
+    - optparse-applicative
+#    - llvm-hs-pretty
 
 tests:
   compiler-spec:

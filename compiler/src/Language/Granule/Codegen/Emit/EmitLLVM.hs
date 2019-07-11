@@ -1,16 +1,13 @@
 {-# LANGUAGE OverloadedStrings #-}
-{-# LANGUAGE RecursiveDo #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE FlexibleContexts #-}
 module Language.Granule.Codegen.Emit.EmitLLVM where
 
 import LLVM.AST.Type (i8, i32, i64, ptr, void)
-import LLVM.AST (mkName)
 --import LLVM.AST.Typed
 import qualified LLVM.AST as IR
 --import qualified LLVM.AST.Float as F
 
-import LLVM.AST (Operand)
+import LLVM.AST (Operand, mkName)
 import LLVM.AST.Constant (Constant(..))
 import qualified LLVM.AST.Constant as C
 import LLVM.AST.Type hiding (Type)
@@ -33,73 +30,41 @@ import Language.Granule.Codegen.NormalisedDef
 
 import Language.Granule.Syntax.Pattern (boundVars, Pattern)
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Def (DataDecl)
 import Language.Granule.Syntax.Type hiding (Type)
-import Language.Granule.Syntax.Def
 
 import Data.String (fromString)
 import qualified Data.Map.Strict as Map
 
-import Control.Exception (SomeException)
 import Control.Monad.Fix
 import Control.Monad.State.Strict hiding (void)
 --import Debug.Trace
 
 
-
-
-{-
-makePairBuiltin :: (MonadModuleBuilder m) => Type -> m Operand
-makePairBuiltin returnType@(TyApp (TyApp (TyCon (MkId "(,)")) left) right) =
-    do
-        let functionName = mkName $ "constr." ++ (mangleTypeName ty) ++ ".right"
-        let functionName = mkName $ "constr." ++ (mangleTypeName ty) ++ ".left"
-        let (leftType, rightType) = (llvmType left, llvmType right)
-
-        makeSnd <- privateFunction [(ptr i8, mkPName "env"),
-                         (rightType, mkPName "snd")]
-                        (llvmType returnType) $ \[env, second] -> do
-            leftVoidPtr <- mallocEnvironment leftType
-
-        privateFunction [(ptr i8,    mkPName "env")
-                         (leftType,  mkPName "fst")]
-                         $ \[_, fstArg] -> do
-            fstVoidPtr <- mallocEnvironment leftType
-            fstPtr <- bitcast leftVoidPtr
-            store fstPtr 4 fstArg
-
-        {-let undefClosure = IR.ConstantOperand $ Undef closureType
-        let functionPtr  = IR.ConstantOperand $ makePointerToFunction ident ty
-            closure  <- insertValue undefClosure functionPtr [0]
-            closure' <- insertValue closure environmentPtr   [1]
-            ret (fstVoidPtr, makeSnd)-}
-
-makePairBuiltin _ = error "Type is not a builtin pair"
--}
-
+externWriteInt :: (MonadModuleBuilder m) => m Operand
 externWriteInt = do
-    printf <- externVarArgs (mkName "printf") [ptr i8] i32
-    function "writeInt" [(i32, mkPName "n")] void $ \[n] -> do
-        globalStringPtr "%d\n" (mkName ".formatInt")
-        let addr = IR.ConstantOperand $ C.GetElementPtr True formatStr [intConstant 0, intConstant 0]
-                   where formatStr = C.GlobalReference ty ".formatInt"
-                         ty = (ptr (ArrayType 4 i8))
-        call printf [(addr, []), (n, [])]
-        retVoid
+  printf <- externVarArgs (mkName "printf") [ptr i8] i32
+  function "writeInt" [(i32, mkPName "n")] void $ \[n] -> do
+    _ <- globalStringPtr "%d\n" (mkName ".formatInt")
+    let addr = IR.ConstantOperand $ C.GetElementPtr True formatStr [intConstant 0, intConstant 0]
+               where formatStr = C.GlobalReference ty ".formatInt"
+                     ty = ptr (ArrayType 4 i8)
+    _ <- call printf [(addr, []), (n, [])]
+    retVoid
 
-emitLLVM :: String -> ClosureFreeAST -> Either SomeException IR.Module
+emitLLVM :: String -> ClosureFreeAST -> Either String IR.Module
 emitLLVM moduleName (ClosureFreeAST dataDecls functionDefs valueDefs) =
     let buildModule name m = evalState (buildModuleT name m) (EmitterState { localSymbols = Map.empty })
     in Right $ buildModule (fromString moduleName) $ do
-        extern (mkName "malloc") [i64] (ptr i8)
-        extern (mkName "abort") [] void
-        externWriteInt
+        _ <- extern (mkName "malloc") [i64] (ptr i8)
+        _ <- extern (mkName "abort") [] void
+        _ <- externWriteInt
 
         mapM_ emitDataDecl dataDecls
         mapM_ emitEnvironmentType functionDefs
         mapM_ emitFunctionDef functionDefs
         valueInitPairs <- mapM emitValueDef valueDefs
         emitGlobalInitializer valueInitPairs
-
 
 emitGlobalInitializer :: (MonadModuleBuilder m) => [(Operand, Operand)] -> m Operand
 emitGlobalInitializer valueInitPairs =
@@ -108,7 +73,7 @@ emitGlobalInitializer valueInitPairs =
             value <- call initializer []
             store global 4 value) valueInitPairs
         exitCode <- load (IR.ConstantOperand $ GlobalReference (ptr i32) (mkName "def.main")) 4
-        call (IR.ConstantOperand $ writeInt) [(exitCode, [])]
+        _ <- call (IR.ConstantOperand writeInt) [(exitCode, [])]
         ret exitCode
 
 emitValueDef :: MonadState EmitterState m
@@ -120,13 +85,15 @@ emitValueDef def@(ValueDef sp ident initExpr typeScheme) =
     do
         clearLocals
         let name = definitionNameFromId ident
-        let valueType = llvmTopLevelType (definitionType def)
-        let initializerName = mkName $ "init." ++ (internalName ident)
+        let valueType = llvmTopLevelType (type_ def)
+        let initializerName = mkName $ "init." ++ internalName ident
         initializer <- privateFunction initializerName [] valueType $ \[] -> do
             returnValue <- emitExpression Nothing initExpr
             ret returnValue
         value <- global name valueType (Undef valueType)
         return (value, initializer)
+    where
+      type_ ValueDef { valueDefTypeScheme = (Forall _ _ _ ty) } = ty
 
 maybeEnvironment :: Maybe NamedClosureEnvironmentType -> Maybe IrType
 maybeEnvironment = fmap (\(name, _) -> NamedTypeReference (mkName name))
@@ -138,9 +105,11 @@ emitFunctionDef def@(ClosureFreeFunctionDef sp ident environment body argument t
     do
         clearLocals
         let maybeEnvironmentType = maybeEnvironment environment -- maybeEmitEnvironmentType environment
-        function <- emitFunction ident maybeEnvironmentType body argument (definitionType def)
-        trivialClosure <- emitTrivialClosure (ident, definitionType def)
+        function <- emitFunction ident maybeEnvironmentType body argument (type_ def)
+        trivialClosure <- emitTrivialClosure (ident, type_ def)
         return (trivialClosure, function)
+    where
+      type_ ClosureFreeFunctionDef { closureFreeDefTypeScheme = (Forall _ _ _ ty) } = ty
 
 emitFunction :: (MonadState EmitterState m, MonadModuleBuilder m, MonadFix m)
              => Id
@@ -169,10 +138,11 @@ maybeBitcastEnvironment :: (MonadIRBuilder m)
                         => Operand
                         -> Maybe IrType
                         -> m (Maybe Operand)
-maybeBitcastEnvironment environmentPointerUntyped maybeEnvironmentType =
-    mapM emitBitcast maybeEnvironmentType
-    where emitBitcast environmentType =
-              bitcast environmentPointerUntyped (ptr environmentType)
+maybeBitcastEnvironment environmentPointerUntyped =
+    traverse emitBitcast
+    where
+      emitBitcast environmentType =
+        bitcast environmentPointerUntyped (ptr environmentType)
 
-
+emitDataDecl :: {-(MonadModuleBuilder m) =>-} DataDecl -> m ()
 emitDataDecl = error "Cannot emit data decls yet!"

@@ -1,10 +1,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
-{-# LANGUAGE FunctionalDependencies #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.Granule.Syntax.Def where
@@ -50,7 +48,7 @@ data Equation v a =
         equationSpan :: Span,
         equationType :: a,
         equationArguments :: [Pattern a],
-        equationBody :: (Expr v a) }
+        equationBody :: Expr v a }
     deriving Generic
 
 deriving instance (Eq v, Eq a) => Eq (Equation v a)
@@ -88,8 +86,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
     ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
-    returnTy t [] = t
-    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
+    returnTy t vs = foldl (\t v -> returnTy (TyApp t ((TyVar . fst) v)) vs) t vs
 
 instance FirstParameter DataConstr Span
 

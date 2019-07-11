@@ -9,10 +9,12 @@ import LLVM.AST (Operand)
 import Data.Map (Map, insertWith)
 import qualified Data.Map as Map
 
-data EmitterState = EmitterState {
-    localSymbols :: Map Id Operand
-}
+data EmitterState = EmitterState { localSymbols :: Map Id Operand }
 
+addLocal :: (MonadState EmitterState m)
+         => Id
+         -> Operand
+         -> m ()
 addLocal name operand =
     modify $ \s -> s { localSymbols =
                            insertWith (\_ _ -> error "Unexpected name shadowing")

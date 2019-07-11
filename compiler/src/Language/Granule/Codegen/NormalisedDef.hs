@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
-{-# LANGUAGE LambdaCase #-}
 
 {-| This transform makes every definition have a 0-1
     arguments via currying, using lambdas where appropriate.
@@ -65,7 +64,7 @@ import GHC.Generics
 data NormalisedAST v a =
     NormalisedAST [DataDecl] [FunctionDef v a] [ValueDef v a]
 
-instance (Pretty v, Pretty a) => Pretty (NormalisedAST a v) where
+instance (Pretty a) => Pretty (NormalisedAST a v) where
     prettyL l (NormalisedAST dataDecls functionDefs valueDefs) =
         pretty' dataDecls <> "\n\n" <> pretty' functionDefs <> pretty' valueDefs
         where
@@ -79,7 +78,7 @@ data ValueDef v a =
     ValueDef {
         valueDefSpan :: Span,
         valueDefIdentifier :: Id,
-        valueDefInitializer :: (Expr v a),
+        valueDefInitializer :: Expr v a,
         valueDefTypeScheme :: TypeScheme }
     deriving Generic
 deriving instance (Show a, Show v) => Show (ValueDef v a)
@@ -96,11 +95,6 @@ data FunctionDef v a =
 deriving instance (Show a, Show v) => Show (FunctionDef v a)
 deriving instance (Eq a, Eq v) => Eq (FunctionDef v a)
 
-instance Definition (FunctionDef v a) where
-    definitionSpan = functionDefSpan
-    definitionIdentifier = functionDefIdentifier
-    definitionTypeScheme = functionDefTypeScheme
-
 instance (Pretty v) => Pretty (ValueDef v a) where
     prettyL l (ValueDef _ v e t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
                                    prettyL l v <> " = " <> prettyL l e
@@ -112,7 +106,7 @@ instance Pretty v => Pretty (FunctionDef v a) where
 instance FirstParameter (ValueDef v a) Span
 
 normaliseDefinitions :: AST ev Type -> NormalisedAST ev Type
-normaliseDefinitions (AST dd defs) =
+normaliseDefinitions (AST dd defs imports) =
     let normalisedDefs = map normaliseDefinition defs
     in NormalisedAST dd (lefts normalisedDefs) (rights normalisedDefs)
 
@@ -124,6 +118,7 @@ normaliseDefinition def  =
     in case normalisedDef of
            d | isValueDef d    -> Right $ toValueDef normalisedDef
            d | isFunctionDef d -> Left  $ toFunctionDef normalisedDef
+           _ -> error "Unrecognised Def"
 
 isFunctionDef :: Def v a -> Bool
 isFunctionDef = not . isValueDef
@@ -140,6 +135,7 @@ toValueDef (Def sp ident [equation] ts) =
         valueDefIdentifier = ident,
         valueDefInitializer = equationBody equation,
         valueDefTypeScheme = ts }
+toValueDef _ = error "toValueDef requires Def with one equation"
 
 toFunctionDef :: Def ev a -> FunctionDef ev a
 toFunctionDef (Def sp ident [caseEquation] ts) =
@@ -149,6 +145,7 @@ toFunctionDef (Def sp ident [caseEquation] ts) =
         functionDefBody = equationBody caseEquation,
         functionDefArgument = head $ equationArguments caseEquation,
         functionDefTypeScheme = ts }
+toFunctionDef _ = error "toFunctionDef requires Def with one equation"
 
 isTriviallyIrrefutable :: Pattern Type -> Bool
 isTriviallyIrrefutable
@@ -205,11 +202,13 @@ mergePatterns (firstPattern:remainingPatterns) =
     foldl patternPair firstPattern remainingPatterns
     where patternPair left right = ppair nullSpanNoFile (pairType (annotation left) (annotation right)) left right
           patternPair :: Pattern Type -> Pattern Type -> Pattern Type
+mergePatterns [] = error "One or more patterns required"
 
 mergeArguments :: [(Type, Id)] -> Value ev Type
 mergeArguments argumentsIds =
-    let firstArg:otherArgs = map (\(ty, ident) -> Var ty ident) argumentsIds
-    in foldl typedPair firstArg otherArgs
+  case map (\(ty, ident) -> Var ty ident) argumentsIds of
+    firstArg:otherArgs -> foldl typedPair firstArg otherArgs
+    _ -> error "Cannot merge less than two arguments"
 
 normaliseEquation :: Equation ev Type -> Equation ev Type
 normaliseEquation eq@Equation { equationArguments = [] } = tryHoistLambda eq
@@ -223,15 +222,17 @@ tryHoistLambda def = def
 
 curryEquation :: Equation ev Type -> Equation ev Type
 curryEquation eq =
-    let (eqArg:otherArgs) = equationArguments eq
-        body = equationBody eq
-        body' = argsToLambda otherArgs body (equationType eq)
-    in eq { equationArguments = [eqArg], equationBody = body' }
+    case equationArguments eq of
+      eqArg:otherArgs ->
+        let body = equationBody eq
+            body' = argsToLambda otherArgs body (equationType eq)
+        in eq { equationArguments = [eqArg], equationBody = body' }
+      [] -> error "Cannot curry no-arg equation"
 
 argsToLambda :: [Pattern Type] -> Expr ev Type -> Type -> Expr ev Type
 argsToLambda args originalBody ty =
     foldr wrapInLambda originalBody args
     where sp = getSpan originalBody
           wrapInLambda arg body = let bodyType = annotation body
-                                      absType = (FunTy (annotation arg) bodyType)
+                                      absType = FunTy (annotation arg) bodyType
                                   in Val sp absType (Abs absType arg Nothing body)

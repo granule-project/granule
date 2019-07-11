@@ -4,7 +4,6 @@ module Language.Granule.Codegen.ConvertClosures where
 import Language.Granule.Codegen.ClosureFreeDef
 import Language.Granule.Codegen.NormalisedDef
 import Language.Granule.Codegen.MarkGlobals
-import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Identifiers
@@ -23,7 +22,7 @@ import Control.Monad.Writer
 
 convertClosures :: NormalisedAST GlobalMarker Type -> ClosureFreeAST
 convertClosures (NormalisedAST dataDecl functionDefs valueDefs) =
-    let globals = (definitionIdentifier <$> functionDefs) ++ (definitionIdentifier <$> valueDefs)
+    let globals = (functionDefIdentifier <$> functionDefs) ++ (valueDefIdentifier <$> valueDefs)
         ((functionDefs', valueDefs'), lambdaDefs) =
             evalLiftLambda $ do
                 values <- mapM (convertClosuresInValueDef globals) valueDefs

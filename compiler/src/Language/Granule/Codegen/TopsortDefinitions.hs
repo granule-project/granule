@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 module Language.Granule.Codegen.TopsortDefinitions where
 
-import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Codegen.NormalisedDef
@@ -26,20 +25,20 @@ data TopsortResult ev a =
 deriving instance (Show ev, Show a) => Show (TopsortResult ev a)
 deriving instance (Eq ev, Eq a) => Eq (TopsortResult ev a)
 
-topologicallySortDefinitions :: (Show a) =>  NormalisedAST GlobalMarker a -> TopsortResult GlobalMarker a
+topologicallySortDefinitions ::  NormalisedAST GlobalMarker a -> TopsortResult GlobalMarker a
 topologicallySortDefinitions (NormalisedAST dataDefs functionDefs valueDefs)
-    | any isRecursiveValue valueDefs =
-        RecursiveValues $ filter isRecursiveValue valueDefs
-    | otherwise =
-        case topSortValueDefinitions functionDefs valueDefs of
-            Right (cyclicalFunctionDefs, cyclicalValueDefs) ->
-                InitializationCycle cyclicalFunctionDefs cyclicalValueDefs
-            Left sortedValueDefs ->
-                Ok $ NormalisedAST dataDefs functionDefs (reverse sortedValueDefs)
+  | any isRecursiveValue valueDefs =
+      RecursiveValues $ filter isRecursiveValue valueDefs
+  | otherwise =
+      case topSortValueDefinitions functionDefs valueDefs of
+        Right (cyclicalFunctionDefs, cyclicalValueDefs) ->
+          InitializationCycle cyclicalFunctionDefs cyclicalValueDefs
+        Left sortedValueDefs ->
+          Ok $ NormalisedAST dataDefs functionDefs (reverse sortedValueDefs)
 
 type BadDefs a = ([FunctionDef GlobalMarker a], [ValueDef GlobalMarker a])
 
-topSortValueDefinitions :: (Show a) => [FunctionDef GlobalMarker a]
+topSortValueDefinitions :: [FunctionDef GlobalMarker a]
                         -> [ValueDef GlobalMarker a]
                         -> Either [ValueDef GlobalMarker a] (BadDefs a)
 topSortValueDefinitions functionDefs valueDefs =
@@ -48,20 +47,20 @@ topSortValueDefinitions functionDefs valueDefs =
         cycles = [vertexToNode <$> cyc | cyc <- sccs, cyc `longerThan` 1]
         forbiddenCycles = filter (any isRight) cycles
     in
-        case forbiddenCycles of
-            [] -> Left $ rights (vertexToNode <$> topSort depGraph)
-            (badDefs:_) -> Right (lefts badDefs, rights badDefs)
+      case forbiddenCycles of
+        [] -> Left $ rights (vertexToNode <$> topSort depGraph)
+        (badDefs:_) -> Right (lefts badDefs, rights badDefs)
 
-dependencyGraph :: (Show a)
-                => [FunctionDef GlobalMarker a]
+dependencyGraph :: [FunctionDef GlobalMarker a]
                 -> [ValueDef GlobalMarker a]
                 -> (Graph, Vertex -> Either (FunctionDef GlobalMarker a) (ValueDef GlobalMarker a), Id -> Maybe Vertex)
 dependencyGraph functionDefs valueDefs =
-    let graph = graphFromEdges $ (map functionNode functionDefs) ++ (map valueNode valueDefs)
-                where functionNode def = (Left def,  definitionIdentifier def, edges $ functionDefBody def)
-                      valueNode    def = (Right def, definitionIdentifier def, edges $ valueDefInitializer def)
-                      edges        expr = Set.toList $ expressionDependencies definitionIds expr
-                      definitionIds    = allDefinitionIds functionDefs valueDefs
+    let graph = graphFromEdges $ map functionNode functionDefs ++ map valueNode valueDefs
+                where
+                  functionNode def = (Left def,  functionDefIdentifier def, edges $ functionDefBody def)
+                  valueNode    def = (Right def, valueDefIdentifier def, edges $ valueDefInitializer def)
+                  edges        expr = Set.toList $ expressionDependencies definitionIds expr
+                  definitionIds    = allDefinitionIds functionDefs valueDefs
     in let (g, vertexToNode, keyToVertex) = graph
        in (g, (\(~(n, _, _)) -> n) . vertexToNode, keyToVertex)
 
@@ -74,15 +73,15 @@ referencedDefinitions ex defIds =
     Set.filter (`elem` defIds) $ bicata exprDeps valueDeps ex
     where valueDeps (ExtF _ (GlobalVar _ ident)) = Set.singleton ident
           valueDeps other = bifold other
-          exprDeps other = bifold other
+          exprDeps = bifold
 
 longerThan :: [a] -> Int -> Bool
-longerThan list count = (length list) > count
+longerThan list count = length list > count
 
 allDefinitionIds :: [FunctionDef GlobalMarker a] -> [ValueDef GlobalMarker a] -> [Id]
 allDefinitionIds functionDefs valueDefs =
-    (map definitionIdentifier functionDefs) ++ (map definitionIdentifier valueDefs)
+    map functionDefIdentifier functionDefs ++ map valueDefIdentifier valueDefs
 
 isRecursiveValue :: ValueDef GlobalMarker a -> Bool
 isRecursiveValue def =
-    not $ Set.null $ expressionDependencies [definitionIdentifier def] (valueDefInitializer def)
+    not $ Set.null $ expressionDependencies [valueDefIdentifier def] (valueDefInitializer def)

@@ -17,8 +17,6 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE TemplateHaskell #-}
 
-module Language.Granule.Interpreter where
-
 import Control.Exception (SomeException, displayException, try)
 import Control.Monad ((<=<), forM)
 import Development.GitRev
@@ -34,19 +32,24 @@ import System.Exit
 
 import System.Directory (getAppUserDataDirectory, getCurrentDirectory)
 import System.FilePath (takeFileName)
+import System.FilePath.Posix (takeBaseName)
 import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 import Options.Applicative.Help.Pretty (string)
 
+import LLVM.Target
+import LLVM.Module
+import LLVM.Internal.Context
+
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError)
-import Language.Granule.Interpreter.Eval
+import Language.Granule.Codegen.Compile (compile)
 import Language.Granule.Syntax.Preprocessor
-import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
+import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils
-import Paths_granule_interpreter (version)
+import Paths_granule_compiler (version)
 
 main :: IO ()
 main = do
@@ -92,19 +95,18 @@ runGrOnStdIn GrConfig{..}
 -- print the result of running the checker and interpreter
 printResult
   :: (?globals :: Globals)
-  => Either InterpreterError InterpreterResult
+  => Either CompileError CompileResult
   -> IO ()
 printResult = \case
     Left err -> printError err
-    Right (InterpreterResult val) -> putStrLn $ pretty val
-    Right NoEval -> pure ()
+    Right CompileSuccess -> printSuccess "Compiled!"
 
 {-| Run the input through the type checker and evaluate.
 -}
 run
   :: (?globals :: Globals)
   => String
-  -> IO (Either InterpreterError InterpreterResult)
+  -> IO (Either CompileError CompileResult)
 run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
     result <- try $ parseAndDoImportsAndFreshenDefs input
     case result of
@@ -119,20 +121,18 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
           Right (Left errs) -> return . Left $ CheckerError errs
           Right (Right ast') -> do
-            if noEval then do
-              printSuccess "OK"
-              return $ Right NoEval
-            else do
-              printSuccess "OK, evaluating..."
-              result <- try $ eval ast
-              case result of
-                Left (e :: SomeException) ->
-                  return . Left . EvalError $ displayException e
-                Right Nothing -> if testing
-                  then return $ Right NoEval
-                  else return $ Left NoEntryPoint
-                Right (Just result) -> do
-                  return . Right $ InterpreterResult result
+            printSuccess "OK, compiling..."
+            let moduleName = takeBaseName $ sourceFilePath
+            case compile moduleName ast' of
+              Left (e :: String) ->
+                return $ Left $ CompileError e
+              Right moduleAST -> do
+                withHostTargetMachine $ \machine ->
+                  withContext $ \context ->
+                    withModuleFromAST context moduleAST $ \mo -> do
+                      writeBitcodeToFile (File (moduleName ++ ".bc")) mo
+                      writeObjectToFile machine (File (moduleName ++ ".o")) mo
+                return $ Right $ CompileSuccess
 
 
 -- | Get the flags embedded in the first line of a file, e.g.
@@ -343,31 +343,28 @@ parseGrConfig = info (go <**> helper) $ briefDesc
       where
         ?globals = mempty @Globals
 
-data InterpreterError
+data CompileResult = CompileSuccess
+
+data CompileError
   = ParseError String
   | CheckerError (NonEmpty CheckerError)
-  | EvalError String
+  | CompileError String
   | FatalError String
   | NoEntryPoint
   | NoMatchingFiles String
   deriving Show
 
-data InterpreterResult
-  = NoEval
-  | InterpreterResult RValue
-  deriving Show
-
-instance UserMsg InterpreterError where
+instance UserMsg CompileError where
   title ParseError {} = "Parse error"
   title CheckerError {} = "Type checking failed"
-  title EvalError {} = "Error during evaluation"
+  title CompileError {} = "Error during compilation"
   title FatalError{} = "Fatal error"
   title NoEntryPoint{} = "No program entry point"
   title NoMatchingFiles{} = "User error"
 
   msg (ParseError m) = fst . breakOn "CallStack (from HasCallStack):" $ m -- TODO
   msg (CheckerError ms) = intercalate "\n\n" . map formatError . toList $ ms
-  msg (EvalError m) = m
+  msg (CompileError m) = m
   msg (FatalError m) = m
   msg NoEntryPoint = "Program entry point `" <> entryPoint <> "` not found. A different one can be specified with `--entry-point`."
   msg (NoMatchingFiles p) = "The glob pattern `" <> p <> "` did not match any files."

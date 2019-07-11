@@ -66,6 +66,9 @@ instance Pretty () where
 instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
    prettyL l xs = "[" <> intercalate "," (map (prettyL l) xs) <> "]"
 
+instance (Pretty a, Pretty b) => Pretty (Either a b) where
+  prettyL l (Left a) = prettyL l a
+  prettyL l (Right b) = prettyL l b
 -- Core prettyL l printers
 
 instance {-# OVERLAPS #-} Pretty Effect where

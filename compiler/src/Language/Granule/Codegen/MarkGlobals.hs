@@ -2,9 +2,9 @@ module Language.Granule.Codegen.MarkGlobals where
 import Language.Granule.Codegen.NormalisedDef
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
-import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Codegen.NormalisedDef (functionDefIdentifier, valueDefIdentifier)
 import Data.Bifunctor.Foldable
 
 data GlobalMarker =
@@ -16,7 +16,7 @@ instance Pretty GlobalMarker where
 
 markGlobals :: NormalisedAST () Type -> NormalisedAST GlobalMarker Type
 markGlobals (NormalisedAST dataDecls functionDefs valueDefs) =
-    let globals = (definitionIdentifier <$> functionDefs) ++ (definitionIdentifier <$> valueDefs)
+    let globals = (functionDefIdentifier <$> functionDefs) ++ (valueDefIdentifier <$> valueDefs)
         functionDefs' = map (markGlobalsInFunctionDef globals) functionDefs
         valueDefs'    = map (markGlobalsInValueDef globals) valueDefs
     in NormalisedAST dataDecls functionDefs' valueDefs'
