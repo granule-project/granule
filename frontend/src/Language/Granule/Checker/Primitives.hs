@@ -23,7 +23,13 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setMembers means that PY is an alias for the powerset of Y.
 setMembers :: [(Kind, Type)]
-setMembers = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+setMembers = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")
+            , (KPromote $ TyCon $ mkId "SessElem", TyCon $ mkId "Session")]
+
+setLike :: Id -> Bool
+setLike (internalName -> "IO") = True
+setLike (internalName -> "Session") = True
+setLike _ = False
 
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeConstructors =
@@ -34,8 +40,6 @@ typeConstructors =
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
     , (mkId "String", (KType, Nothing))
-    , (mkId "IO", (KFun KType KType, Nothing))
-    , (mkId "Session", (KFun KType KType, Nothing))
     , (mkId "Protocol", (KType, Nothing))
     , (mkId "Nat",  (KCoeffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
@@ -52,7 +56,8 @@ typeConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
-    -- Effect graes
+    -- Effect grade types
+    , (mkId "Session", (KEffect, Nothing))
     , (mkId "IO", (KEffect, Nothing))
     , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing))

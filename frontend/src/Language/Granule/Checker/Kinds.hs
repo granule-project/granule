@@ -44,29 +44,46 @@ inferKindOfTypeInContext s quantifiedVariables t =
 
     kFun KType KType = return KType
     kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
-    kFun KType y = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = y }
-    kFun x _     = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = x }
+    kFun KType y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = y }
+    kFun x _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
+
+    kCon (internalName -> "Pure") = do
+      -- Create a fresh type variable
+      var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
+      return $ KPromote $ TyVar var
     kCon conId = do
         st <- get
-        case lookup conId (typeConstructors st) of
-          Just (kind,_) -> return kind
-          Nothing   -> case lookup conId (dataConstructors st) of
-            Just (Forall _ [] [] t, _) -> return $ KPromote t
-            Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
-            Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
+        -- Check to see if we are using an alias for a powerset
+        case lookup (TyCon conId) (map swap setMembers) of
+            Just k -> return k
+            -- otherwise
+            Nothing ->
+                case lookup conId (typeConstructors st) of
+                Just (kind,_) -> return kind
+                Nothing   -> case lookup conId (dataConstructors st) of
+                    Just (Forall _ [] [] t, _) -> return $ KPromote t
+                    Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
+                    Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
+      where swap (a, b) = (b, a)
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
        _ <- inferCoeffectType s c
        return KType
-    kBox _ x = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = x }
+    kBox _ x = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
-    kDiamond ek KType = do
-      case ek of
-        KEffect -> return KType
-        otherk  -> throw KindMismatch { errLoc = s, kExpected = KEffect, kActual = otherk }
+    kDiamond effK KType = do
+      case effK of
+        KPromote t -> do
+            effTyK <- inferKindOfType s t
+            case effTyK of
+                KEffect -> return KType
+                otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = KEffect, kActual = otherk }
+        -- TODO: create a custom error message for this
+        otherk  -> throw KindMismatch { errLoc = s, tyActualK = Nothing, kExpected = KPromote (TyVar $ mkId "effectType"), kActual = otherk }
 
-    kDiamond _ x     = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = x }
+
+    kDiamond _ x     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
     kVar tyVar =
       case lookup tyVar quantifiedVariables of
@@ -80,6 +97,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
     kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
     kApp k kArg = throw KindMismatch
         { errLoc = s
+        , tyActualK = Nothing
         , kExpected = (KFun kArg (KVar $ mkId "..."))
         , kActual = k
         }
@@ -88,9 +106,9 @@ inferKindOfTypeInContext s quantifiedVariables t =
 
     kInfix (tyOps -> (k1exp, k2exp, kret)) k1act k2act
       | not (k1act `hasLub` k1exp) = throw
-        KindMismatch{ errLoc = s, kExpected = k1exp, kActual = k1act}
+        KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = k1exp, kActual = k1act}
       | not (k2act `hasLub` k2exp) = throw
-        KindMismatch{ errLoc = s, kExpected = k2exp, kActual = k2act}
+        KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = k2exp, kActual = k2act}
       | otherwise                  = pure kret
 
     kSet ks =
@@ -123,7 +141,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
                            Nothing -> throw $ KindCannotFormSet s (head ks)
 
             -- Find the first occurence of a change in kind:
-            else throw $ KindMismatch { errLoc = s , kExpected = head left, kActual = head right }
+            else throw $ KindMismatch { errLoc = s , tyActualK = Nothing, kExpected = head left, kActual = head right }
                     where (left, right) = partition (\x -> (head ks) == x) ks
 
 -- | Compute the join of two kinds, if it exists
@@ -216,7 +234,7 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
     Just (KVar   name) -> return $ TyVar name
     Just (KPromote t)  -> checkKindIsCoeffect s ctxt t
     Just k             -> throw
-      KindMismatch{ errLoc = s, kExpected = KPromote (TyVar $ mkId "coeffectType"), kActual = k }
+      KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = KPromote (TyVar $ mkId "coeffectType"), kActual = k }
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
@@ -242,13 +260,13 @@ checkKindIsCoeffect span ctxt ty = do
       kind' <- inferKindOfTypeInContext span ctxt k
       case kind' of
         KCoeffect -> return ty
-        _ -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
+        _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
     KVar v ->
       case lookup v ctxt of
         Just KCoeffect -> return ty
-        _              -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
+        _              -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
 
-    _ -> throw KindMismatch{ errLoc = span, kExpected = KCoeffect, kActual = kind }
+    _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind

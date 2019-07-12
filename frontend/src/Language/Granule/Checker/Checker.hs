@@ -127,7 +127,7 @@ checkDataCon
           KPromote (TyCon k) | internalName k == "Protocol" ->
             registerDataConstructor tySch coercions
 
-          _ -> throw KindMismatch{ errLoc = sp, kExpected = KType, kActual = kind }
+          _ -> throw KindMismatch{ errLoc = sp, tyActualK = Just ty, kExpected = KType, kActual = kind }
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where

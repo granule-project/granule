@@ -411,9 +411,9 @@ joinTypes _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
 joinTypes s (Diamond ef t) (Diamond ef' t') = do
   tj <- joinTypes s t t'
-  ej <- joinTypes s ef ef' 
+  ej <- joinTypes s ef ef'
   return (Diamond ej tj)
-      
+
 joinTypes s (Box c t) (Box c' t') = do
   coeffTy <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
@@ -458,7 +458,7 @@ joinTypes s (TyVar _) t = return t
 joinTypes s t (TyVar _) = return t
 
 -- TODO: make this more powerful
-joinTypes s t1@(TySet ts1) t2@(TySet ts2) = 
+joinTypes s t1@(TySet ts1) t2@(TySet ts2) =
   if ts1 `isPrefixOf` ts2
     then return t2
     else if ts2 `isPrefixOf` ts1
@@ -467,3 +467,20 @@ joinTypes s t1@(TySet ts1) t2@(TySet ts2) =
 
 joinTypes s t1 t2 = throw
   NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+
+equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker (Bool, Kind, Substitution)
+equalKinds sp k1 k2 | k1 == k2 = return (True, k1, [])
+equalKinds sp (KPromote t1) (KPromote t2) = do
+    (eq, t, u) <- equalTypes sp t1 t2
+    return (eq, KPromote t, u)
+equalKinds sp (KFun k1 k1') (KFun k2 k2') = do
+    (eq, k, u) <- equalKinds sp k1 k2
+    (eq', k', u') <- equalKinds sp k1' k2'
+    u2 <- combineSubstitutions sp u u'
+    return $ (eq && eq', KFun k k', u2)
+equalKinds sp (KVar v) k = do
+    return (True, k, [(v, SubstK k)])
+equalKinds sp k (KVar v) = do
+    return (True, k, [(v, SubstK k)])
+equalKinds sp k1 k2 = do
+    throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }

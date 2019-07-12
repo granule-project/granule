@@ -352,11 +352,13 @@ data CheckerError
   | GradingError
     { errLoc :: Span, errConstraint :: Neg Constraint }
   | KindMismatch
-    { errLoc :: Span, kExpected :: Kind, kActual :: Kind }
+    { errLoc :: Span, tyActualK :: Maybe Type, kExpected :: Kind, kActual :: Kind }
   | KindError
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | KindCannotFormSet
     { errLoc :: Span, errK :: Kind }
+  | KindsNotEqual
+    { errLoc :: Span, errK1 :: Kind, errK2 :: Kind }
   | IntervalGradeKindError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | LinearityError
@@ -462,6 +464,7 @@ instance UserMsg CheckerError where
   title KindMismatch{} = "Kind mismatch"
   title KindError{} = "Kind error"
   title KindCannotFormSet{} = "Kind error"
+  title KindsNotEqual{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
   title PatternTypingError{} = "Pattern typing error"
@@ -517,7 +520,9 @@ instance UserMsg CheckerError where
   msg GradingError{ errConstraint } = pretty errConstraint
 
   msg KindMismatch{..}
-    = "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
+    = case tyActualK of
+        Nothing -> "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
+        Just ty -> "Type `" <> pretty ty <> "` has expected kind `" <> pretty kExpected <> "` but actually is of kind `" <> pretty kActual <> "`"
 
   msg KindError{..}
     = "Type `" <> pretty errTy
@@ -525,6 +530,9 @@ instance UserMsg CheckerError where
 
   msg KindCannotFormSet{..}
     = "Types of kind `" <> pretty errK <> "` cannot be used in a type-level set."
+
+  msg KindsNotEqual{..}
+    = "Kind `" <> pretty errK1 <> "` is not equal to `" <> pretty errK2 <> "`"
 
   msg IntervalGradeKindError{..}
    = "Interval grade mismatch `" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
