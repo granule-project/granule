@@ -1,4 +1,4 @@
-{- Deals with compilation of coeffects into symbolic representations of SBV -}
+{- Deals with coeffect algebras -}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}

@@ -113,25 +113,26 @@ equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
 equalTypesRelatedCoeffects _ _ (TyCon con1) (TyCon con2) _ =
   return (con1 == con2, [])
 
--- THE FOLLOWING FOUR CASES ARE TEMPORARY UNTIL WE MAKE 'Effect' RICHER
+-- TODO:
+-- Set equality is fairly basic at the moment (just looks for exact
+-- syntactic equality on elements) because a general version with
+-- unification is quite involved (needs a lot of disjunctive
+-- constraints).
+equalTypesRelatedCoeffects s rel t1@(TySet ts1) t2@(TySet ts2) sp = do
+    -- ts1 can be a subset of ts2 (approximation)
+    return (all (`elem` ts2) ts1, [])
 
--- Over approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ef t1) (Diamond ["IO"] t2) sp
-    = equalTypesRelatedCoeffects s rel t1 t2 sp
+-- Over approximation by the name of the powerset (treated as the universe)
+equalTypesRelatedCoeffects s rel t1@(TySet ts) t2 sp = do
+    -- If the type set is empty, then the unification is ok
+    -- TODO: actually you should cause a unification here.
+    k <- inferKindOfType s t1
+    case k of
+        KPromote t -> equalTypesRelatedCoeffects s rel t t2 sp
+        _ -> throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
 
--- Under approximation by 'IO' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ["IO"] t1) (Diamond ef t2) sp
-    = equalTypesRelatedCoeffects s rel t1 t2 sp
-
--- Over approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ef t1) (Diamond ["Session"] t2) sp
-    | "Session" `elem` ef || null ef
-      = equalTypesRelatedCoeffects s rel t1 t2 sp
-
--- Under approximation by 'Session' "monad"
-equalTypesRelatedCoeffects s rel (Diamond ["Session"] t1) (Diamond ef t2) sp
-    | "Session" `elem` ef || null ef
-      = equalTypesRelatedCoeffects s rel t1 t2 sp
+equalTypesRelatedCoeffects s rel t1 t2@(TySet ts) sp =
+    equalTypesRelatedCoeffects s rel t2 t1 sp
 
 equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp

@@ -19,6 +19,7 @@ import qualified Data.Text as T
 
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
+import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.KindsImplicit
@@ -681,14 +682,10 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
 -- Diamond cut
 -- let [[p]] <- [[e1 : sig]] in [[e2 : tau]]
 synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
-  -- TODO: refactor this once we get a proper mechanism for
-  -- specifying effect over-approximations and type aliases
-
   (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
+  -- Check that a graded possibility type was inferred
   (ef1, ty1) <- case sig of
-      Diamond ["IO"] ty1 -> return ([], ty1)
-      Diamond ["Session"] ty1 -> return ([], ty1)
       Diamond ef1 ty1 -> return (ef1, ty1)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
@@ -698,9 +695,9 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   pIrrefutable <- isIrrefutable s ty1 p
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
   (tau, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+
+  -- Check that a graded possibility type was inferred
   (ef2, ty2) <- case tau of
-      Diamond ["IO"] ty2 -> return ([], ty2)
-      Diamond ["Session"] ty2 -> return ([], ty2)
       Diamond ef2 ty2 -> return (ef2, ty2)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
@@ -712,7 +709,8 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
-  let t = Diamond (ef1 <> ef2) ty2
+  ef <- effectMult s ef1 ef2
+  let t = Diamond ef ty2
 
   subst <- combineManySubstitutions s [substP, subst1, subst2]
   -- Synth subst

@@ -355,6 +355,8 @@ data CheckerError
     { errLoc :: Span, kExpected :: Kind, kActual :: Kind }
   | KindError
     { errLoc :: Span, errTy :: Type, errK :: Kind }
+  | KindCannotFormSet
+    { errLoc :: Span, errK :: Kind }
   | IntervalGradeKindError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | LinearityError
@@ -447,6 +449,8 @@ data CheckerError
     { errLoc :: Span, tyConExpected :: Id, tyConActual :: Id }
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
+  | UnknownResourceAlgebra
+    { errLoc :: Span, errK :: Kind }
   deriving (Show, Eq)
 
 
@@ -457,6 +461,7 @@ instance UserMsg CheckerError where
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
   title KindError{} = "Kind error"
+  title KindCannotFormSet{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
   title PatternTypingError{} = "Pattern typing error"
@@ -503,6 +508,7 @@ instance UserMsg CheckerError where
   title NameClashDefs{} = "Definition name clash"
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
+  title UnknownResourceAlgebra{} = "Type error"
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
@@ -516,6 +522,9 @@ instance UserMsg CheckerError where
   msg KindError{..}
     = "Type `" <> pretty errTy
     <> "` does not have expected kind `" <> pretty errK <> "`"
+
+  msg KindCannotFormSet{..}
+    = "Types of kind `" <> pretty errK <> "` cannot be used in a type-level set."
 
   msg IntervalGradeKindError{..}
    = "Interval grade mismatch `" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
@@ -725,6 +734,9 @@ instance UserMsg CheckerError where
 
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
+
+  msg UnknownResourceAlgebra{ errK }
+    = "There is no resource algebra defined for `" <> pretty errK <> "`. Probably a bug in Granule (please report)."
 
 data LinearityMismatch
   = LinearNotUsed Id

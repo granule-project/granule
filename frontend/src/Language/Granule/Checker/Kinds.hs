@@ -17,7 +17,7 @@ import Control.Monad.State.Strict
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Primitives (tyOps)
+import Language.Granule.Checker.Primitives (tyOps, setMembers)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 
@@ -62,7 +62,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
     kBox _ x = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = x }
 
     kDiamond ek KType = do
-      case ek of 
+      case ek of
         KEffect -> return KType
         otherk  -> throw KindMismatch { errLoc = s, kExpected = KEffect, kActual = otherk }
 
@@ -93,17 +93,35 @@ inferKindOfTypeInContext s quantifiedVariables t =
         KindMismatch{ errLoc = s, kExpected = k2exp, kActual = k2act}
       | otherwise                  = pure kret
 
-    kSet ks = 
-      -- If the set is empty, then it could have any kind
+    kSet ks =
+      -- If the set is empty, then it could have any kind, so we need to make
+      -- a kind which is `KPromote (Set a)` for some type variable `a` of unknown kind
       if null ks
         then do
-          -- create fresh polymorphic variable
-          vark <- freshIdentifierBase $ "set"
-          return $ KVar $ mkId vark
+            -- create fresh polymorphic kind variable for this type
+            vark <- freshIdentifierBase $ "set_elemk"
+            -- remember this new kind variable in the kind environment
+            modify (\st -> st { tyVarContext = (mkId vark, (KType, InstanceQ))
+                                   : tyVarContext st })
+            -- Create a fresh type variable
+            var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (KPromote $ TyVar $ mkId vark)
+            return $ KPromote $ TyApp (TyCon $ mkId "Set") (TyVar var)
+
         -- Otherwise, everything in the set has to have the same kind
         else
           if foldr (\x r -> (x == head ks) && r) True ks
-            then return (head ks)
+
+            then  -- check if there is an alias for sets of this kind
+                case lookup (head ks) setMembers of
+                    -- Lift this alias to the kind level
+                    Just t -> return $ KPromote t
+                    Nothing ->
+                        -- Otherwise return a set type lifted to a kind
+                        case demoteKindToType (head ks) of
+                           Just t -> return $ KPromote $ TyApp (TyCon $ mkId "Set") t
+                           -- If the kind cannot be demoted then we shouldn't be making a set
+                           Nothing -> throw $ KindCannotFormSet s (head ks)
+
             -- Find the first occurence of a change in kind:
             else throw $ KindMismatch { errLoc = s , kExpected = head left, kActual = head right }
                     where (left, right) = partition (\x -> (head ks) == x) ks

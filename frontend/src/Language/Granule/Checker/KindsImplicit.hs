@@ -95,6 +95,7 @@ inferKindOfTypeImplicits s ctxt (Diamond e t) = do
           u3 <- combineSubstitutions s u u'
           u4 <- combineSubstitutions s u3 u''
           return (KType, u4)
+        _ -> throw KindMismatch{ errLoc = s, kExpected = KEffect, kActual = k }
     _ -> throw KindMismatch{ errLoc = s, kExpected = KType, kActual = k }
 
 inferKindOfTypeImplicits s ctxt (TyVar tyVar) =
@@ -143,3 +144,8 @@ inferKindOfTypeImplicits s ctxt (TyInfix (tyOps -> (k1exp, k2exp, kret)) t1 t2) 
         Nothing -> throw KindMismatch{ errLoc = s, kExpected = k2exp, kActual = k2act}
     Nothing -> throw KindMismatch{ errLoc = s, kExpected = k1exp, kActual = k1act}
 
+-- Fall back to regular kind infererence for now
+inferKindOfTypeImplicits s ctxt (TySet ts) = do
+    -- ks <- mapM (inferKindOfTypeImplicits s ctxt) ts
+    k <- inferKindOfTypeInContext s ctxt (TySet ts)
+    return (k, [])

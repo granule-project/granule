@@ -20,6 +20,11 @@ import Language.Granule.Syntax.Expr (Operator(..))
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
+-- Given a name to the powerset of a set of particular elements,
+-- where (Y, PY) in setMembers means that PY is an alias for the powerset of Y.
+setMembers :: [(Kind, Type)]
+setMembers = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeConstructors =
     [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
@@ -47,6 +52,13 @@ typeConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
+    -- Effect graes
+    , (mkId "IO", (KEffect, Nothing))
+    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     ] ++ builtinTypeConstructors
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
@@ -212,28 +224,28 @@ openHandle
   -> (Handle m) <Open,IOExcept>
 openHandle = BUILTIN
 
-readChar : Handle R -> (Handle R, Char) <Read,IOExcept>
+readChar : Handle R -> (Handle R, Char) <{Read,IOExcept}>
 readChar = BUILTIN
 
-readChar' : Handle RW -> (Handle RW, Char) <Read,IOExcept>
+readChar' : Handle RW -> (Handle RW, Char) <{Read,IOExcept}>
 readChar' = BUILTIN
 
-appendChar : Handle A -> Char -> (Handle A) <Write,IOExcept>
+appendChar : Handle A -> Char -> (Handle A) <{Write,IOExcept}>
 appendChar = BUILTIN
 
-writeChar : Handle W -> Char -> (Handle W) <Write,IOExcept>
+writeChar : Handle W -> Char -> (Handle W) <{Write,IOExcept}>
 writeChar = BUILTIN
 
-writeChar' : Handle RW -> Char -> (Handle RW) <Write,IOExcept>
+writeChar' : Handle RW -> Char -> (Handle RW) <{Write,IOExcept}>
 writeChar' = BUILTIN
 
-closeHandle : forall {m : HandleType} . Handle m -> () <Close,IOExcept>
+closeHandle : forall {m : HandleType} . Handle m -> () <{Close,IOExcept}>
 closeHandle = BUILTIN
 
-isEOF : Handle R -> (Handle R, Bool) <Read,IOExcept>
+isEOF : Handle R -> (Handle R, Bool) <{Read,IOExcept}>
 isEOF = BUILTIN
 
-isEOF' : Handle RW -> (Handle RW, Bool) <Read,IOExcept>
+isEOF' : Handle RW -> (Handle RW, Bool) <{Read,IOExcept}>
 isEOF' = BUILTIN
 
 -- ???
