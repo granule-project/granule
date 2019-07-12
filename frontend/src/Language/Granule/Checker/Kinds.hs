@@ -19,6 +19,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (tyOps)
 import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
@@ -27,6 +28,8 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Context
 import Language.Granule.Utils
 
+import Data.List (partition)
+
 inferKindOfType :: (?globals :: Globals) => Span -> Type -> Checker Kind
 inferKindOfType s t = do
     checkerState <- get
@@ -34,7 +37,7 @@ inferKindOfType s t = do
 
 inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Kind
 inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix) t
+    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet) t
   where
     kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
      | internalName c == internalName c' = return $ kConstr c
@@ -58,7 +61,11 @@ inferKindOfTypeInContext s quantifiedVariables t =
        return KType
     kBox _ x = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = x }
 
-    kDiamond _ KType = return KType
+    kDiamond ek KType = do
+      case ek of 
+        KEffect -> return KType
+        otherk  -> throw KindMismatch { errLoc = s, kExpected = KEffect, kActual = otherk }
+
     kDiamond _ x     = throw KindMismatch{ errLoc = s, kExpected = KType, kActual = x }
 
     kVar tyVar =
@@ -85,6 +92,21 @@ inferKindOfTypeInContext s quantifiedVariables t =
       | not (k2act `hasLub` k2exp) = throw
         KindMismatch{ errLoc = s, kExpected = k2exp, kActual = k2act}
       | otherwise                  = pure kret
+
+    kSet ks = 
+      -- If the set is empty, then it could have any kind
+      if null ks
+        then do
+          -- create fresh polymorphic variable
+          vark <- freshIdentifierBase $ "set"
+          return $ KVar $ mkId vark
+        -- Otherwise, everything in the set has to have the same kind
+        else
+          if foldr (\x r -> (x == head ks) && r) True ks
+            then return (head ks)
+            -- Find the first occurence of a change in kind:
+            else throw $ KindMismatch { errLoc = s , kExpected = head left, kActual = head right }
+                    where (left, right) = partition (\x -> (head ks) == x) ks
 
 -- | Compute the join of two kinds, if it exists
 joinKind :: Kind -> Kind -> Maybe (Kind, Substitution)

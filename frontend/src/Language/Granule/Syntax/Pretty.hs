@@ -111,6 +111,7 @@ instance Pretty Coeffect where
 
 instance Pretty Kind where
     prettyL l KType          = "Type"
+    prettyL l KEffect      = "Effect"
     prettyL l KCoeffect      = "Coeffect"
     prettyL l KPredicate     = "Predicate"
     prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
@@ -141,12 +142,8 @@ instance Pretty Type where
     prettyL l (Box c t)      =
        parens l (prettyL (l+1) t <> " [" <> prettyL l c <> "]")
 
-    prettyL l (Diamond e t) | e == ["Session"] =
-      parens l ("Session " <> prettyL (l+1) t)
-
-    prettyL l (Diamond e t)  =
-       parens l (prettyL (l+1) t
-       <> " <" <> intercalate "," (map (prettyL l) e) <> ">")
+    prettyL l (Diamond e t) =
+      parens l (prettyL (l+1) t <> " <" <> prettyL l e <> ">")
 
     prettyL l (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       parens l ("(" <> prettyL l t1 <> ", " <> prettyL l t2 <> ")")
@@ -166,6 +163,9 @@ instance Pretty Type where
 
     prettyL l (TyInfix op t1 t2) =
       parens l (prettyL (l+1) t1 <> " " <> prettyL l op <> " " <>  prettyL (l+1) t2)
+
+    prettyL l (TySet ts) = 
+      parens l ("{" <> intercalate ", " (map (prettyL l) ts) <> "}")
 
 instance Pretty TypeOperator where
   prettyL _ = \case

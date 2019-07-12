@@ -86,11 +86,15 @@ inferKindOfTypeImplicits s ctxt (Box c t) = do
       _ -> throw KindMismatch{ errLoc = s, kExpected = KType, kActual = k }
 
 inferKindOfTypeImplicits s ctxt (Diamond e t) = do
+  (ke, u') <- inferKindOfTypeImplicits s ctxt e
   (k, u) <- inferKindOfTypeImplicits s ctxt t
   case joinKind k KType of
     Just (k, u') -> do
-      u'' <- combineSubstitutions s u u'
-      return (KType, u'')
+      case joinKind ke KEffect of
+        Just (ke, u'') -> do
+          u3 <- combineSubstitutions s u u'
+          u4 <- combineSubstitutions s u3 u''
+          return (KType, u4)
     _ -> throw KindMismatch{ errLoc = s, kExpected = KType, kActual = k }
 
 inferKindOfTypeImplicits s ctxt (TyVar tyVar) =

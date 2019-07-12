@@ -355,16 +355,16 @@ Set :: { [(String, Type)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
   | VAR ':' Type              { [(symString $1, $3)] }
 
-Effect :: { Effect }
-  : Effs                 { $1 }
-  | {-empty-}            { [] }
+Effect :: { Type }
+  : '{' EffSet '}'            { TySet $2 }
+  | TyJuxt                    { $1 }
 
-Effs :: { [String] }
-  : Eff ',' Effs              { $1 : $3 }
-  | Eff                       { [$1] }
+EffSet :: { [Type] }
+  : Eff ',' EffSet         { $1 : $3 }
+  | Eff                    { [$1] }
 
-Eff :: { String }
-  : CONSTR                    { constrString $1 }
+Eff :: { Type }
+  : CONSTR                  { TyCon $ mkId $ constrString $1 }
 
 Expr :: { Expr () () }
   : let LetBind MultiLet

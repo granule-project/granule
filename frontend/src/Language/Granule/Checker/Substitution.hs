@@ -193,6 +193,7 @@ instance Substitutable Kind where
       return $ KPromote t
 
   substitute subst KType = return KType
+  substitute subst KEffect = return KEffect
   substitute subst KCoeffect = return KCoeffect
   substitute subst KPredicate = return KPredicate
   substitute subst (KFun c1 c2) = do

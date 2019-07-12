@@ -135,18 +135,9 @@ equalTypesRelatedCoeffects s rel (Diamond ["Session"] t1) (Diamond ef t2) sp
 
 equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp
-  if ef1 == ef2
-    then return (eq, unif)
-    else
-      -- Effect approximation
-      if all (`elem` ef2) ef1
-      then return (eq, unif)
-      else
-        -- Communication effect analysis is idempotent
-        if (nub ef1 == ["Session"] && nub ef2 == ["Session"])
-        then return (eq, unif)
-        else
-          throw EffectMismatch{ errLoc = s, effExpected = ef1, effActual = ef2 }
+  (eq', unif') <- equalTypesRelatedCoeffects s rel ef1 ef2 sp
+  unif'' <- combineSubstitutions s unif unif'
+  return (eq && eq', unif'')
 
 equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages
@@ -419,13 +410,9 @@ joinTypes _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
 joinTypes s (Diamond ef t) (Diamond ef' t') = do
   tj <- joinTypes s t t'
-  if ef `isPrefixOf` ef'
-    then return (Diamond ef' tj)
-    else
-      if ef' `isPrefixOf` ef
-      then return (Diamond ef tj)
-      else throw EffectMismatch{ errLoc = s, effExpected = ef, effActual = ef' }
-
+  ej <- joinTypes s ef ef' 
+  return (Diamond ej tj)
+      
 joinTypes s (Box c t) (Box c' t') = do
   coeffTy <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
@@ -468,6 +455,14 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
 -- TODO: Create proper substitutions
 joinTypes s (TyVar _) t = return t
 joinTypes s t (TyVar _) = return t
+
+-- TODO: make this more powerful
+joinTypes s t1@(TySet ts1) t2@(TySet ts2) = 
+  if ts1 `isPrefixOf` ts2
+    then return t2
+    else if ts2 `isPrefixOf` ts1
+         then return t1
+         else throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 joinTypes s t1 t2 = throw
   NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
