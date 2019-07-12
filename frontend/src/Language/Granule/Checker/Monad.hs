@@ -392,7 +392,7 @@ data CheckerError
   | DataConstructorNameClashError
     { errLoc :: Span, errId :: Id }
   | EffectMismatch
-    { errLoc :: Span, effExpected :: Effect, effActual :: Effect }
+    { errLoc :: Span, effExpected :: Type, effActual :: Type }
   | UnificationDisallowed
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail

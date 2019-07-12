@@ -76,6 +76,10 @@ demoteKindToType (KPromote t) = Just t
 demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
+isPure :: Type -> Bool
+isPure (TyCon c) = internalName c == "Pure"
+isPure _ = False
+
 instance Term Kind where
   freeVars (KPromote t) = freeVars t
   freeVars (KVar x)     = [x]

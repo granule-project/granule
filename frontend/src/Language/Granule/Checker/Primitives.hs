@@ -54,8 +54,9 @@ typeConstructors =
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
     -- Effect graes
     , (mkId "IO", (KEffect, Nothing))
-    , (mkId "R", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "W", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing))
@@ -145,16 +146,16 @@ pure = BUILTIN
 -- I/O
 --------------------------------------------------------------------------------
 
-fromStdin : String <{R}>
+fromStdin : String <{Stdin}>
 fromStdin = BUILTIN
 
-toStdout : String -> () <{W}>
+toStdout : String -> () <{Stdout}>
 toStdout = BUILTIN
 
-toStderr : String -> () <{W}>
+toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
-readInt : Int <{R}>
+readInt : Int <{Stdout}>
 readInt = BUILTIN
 
 --------------------------------------------------------------------------------
@@ -223,7 +224,7 @@ openHandle
   : forall {m : HandleType}
   . IOMode m
   -> String
-  -> (Handle m) <Open,IOExcept>
+  -> (Handle m) <{Open,IOExcept}>
 openHandle = BUILTIN
 
 readChar : Handle R -> (Handle R, Char) <{Read,IOExcept}>

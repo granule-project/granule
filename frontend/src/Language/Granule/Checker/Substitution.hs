@@ -52,10 +52,6 @@ instance Substitutable Substitutors where
         k <- substitute subst k
         return $ SubstK k
 
-      SubstE e -> do
-        e <- substitute subst e
-        return $ SubstE e
-
 -- Speciale case of substituting a substition
 instance Substitutable Substitution where
   substitute subst [] = return []
@@ -181,10 +177,6 @@ instance Substitutable Coeffect where
     substitute _ c@CNat{}      = return c
     substitute _ c@CFloat{}    = return c
     substitute _ c@Level{}     = return c
-
-instance Substitutable Effect where
-  -- {TODO: Make effects richer}
-  substitute subst = pure
 
 instance Substitutable Kind where
 
@@ -547,7 +539,6 @@ instance Unifiable Substitutors where
     unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
     unify (SubstC c) (SubstC c') = unify c c'
     unify (SubstK k) (SubstK k') = unify k k'
-    unify (SubstE e) (SubstE e') = unify e e'
     unify _ _ = return Nothing
 
 instance Unifiable Type where
@@ -655,11 +646,6 @@ instance Unifiable Coeffect where
 
     unify c c' =
         if c == c' then return $ Just [] else return Nothing
-
-instance Unifiable Effect where
-    unify e e' =
-        if e == e' then return $ Just []
-                    else return $ Nothing
 
 instance Unifiable Kind where
     unify (KVar v) k =

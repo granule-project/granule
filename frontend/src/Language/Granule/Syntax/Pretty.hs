@@ -68,9 +68,6 @@ instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
 
 -- Core prettyL l printers
 
-instance {-# OVERLAPS #-} Pretty Effect where
-   prettyL l es = "[" <> intercalate "," (nub es) <> "]"
-
 instance Pretty Coeffect where
     prettyL l (CNat n) = show n
     prettyL l (CFloat n) = show n

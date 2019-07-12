@@ -357,6 +357,7 @@ Set :: { [(String, Type)] }
 
 Effect :: { Type }
   : '{' EffSet '}'            { TySet $2 }
+  | {- EMPTY -}               { TyCon $ mkId "Pure" }
   | TyJuxt                    { $1 }
 
 EffSet :: { [Type] }
