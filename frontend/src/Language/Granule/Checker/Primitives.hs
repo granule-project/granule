@@ -54,6 +54,8 @@ typeConstructors =
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
     -- Effect graes
     , (mkId "IO", (KEffect, Nothing))
+    , (mkId "R", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "W", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing))
@@ -143,16 +145,16 @@ pure = BUILTIN
 -- I/O
 --------------------------------------------------------------------------------
 
-fromStdin : String <R>
+fromStdin : String <{R}>
 fromStdin = BUILTIN
 
-toStdout : String -> () <W>
+toStdout : String -> () <{W}>
 toStdout = BUILTIN
 
-toStderr : String -> () <W>
+toStderr : String -> () <{W}>
 toStderr = BUILTIN
 
-readInt : Int <R>
+readInt : Int <{R}>
 readInt = BUILTIN
 
 --------------------------------------------------------------------------------
