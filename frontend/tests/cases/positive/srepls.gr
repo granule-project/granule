@@ -27,7 +27,7 @@ notAleak [x] = [42]
 -- main : Int [Private]
 -- main = hash secret
 
-doTwice : (Int <R>) [2] → Int <R, R>
+doTwice : (Int <{R}>) [2] → Int <{R, R}>
 doTwice [f] =
   let a ← f;
       b ← f

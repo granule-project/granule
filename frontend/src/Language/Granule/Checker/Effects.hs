@@ -33,7 +33,11 @@ effectMult sp t1 t2 = do
               KPromote (TyCon (internalName -> "Nat")) ->
                 return $ TyInfix TyOpPlus t1 t2
 
-              -- IO effects
+              -- Com (Session), so far just a singleton
+              KPromote (TyCon (internalName -> "Com")) ->
+                return $ TyCon $ mkId "Session"
+
+              -- Any union-set effects, like IO
               KPromote (TyCon c) | setLike c ->
                 case (t1, t2) of
                   -- Actual sets, take the union

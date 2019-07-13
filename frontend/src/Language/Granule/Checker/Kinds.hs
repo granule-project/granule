@@ -17,7 +17,7 @@ import Control.Monad.State.Strict
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Primitives (tyOps, setMembers)
+import Language.Granule.Checker.Primitives (tyOps, setAliases)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 
@@ -53,18 +53,12 @@ inferKindOfTypeInContext s quantifiedVariables t =
       return $ KPromote $ TyVar var
     kCon conId = do
         st <- get
-        -- Check to see if we are using an alias for a powerset
-        case lookup (TyCon conId) (map swap setMembers) of
-            Just k -> return k
-            -- otherwise
-            Nothing ->
-                case lookup conId (typeConstructors st) of
-                Just (kind,_) -> return kind
-                Nothing   -> case lookup conId (dataConstructors st) of
-                    Just (Forall _ [] [] t, _) -> return $ KPromote t
-                    Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
-                    Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
-      where swap (a, b) = (b, a)
+        case lookup conId (typeConstructors st) of
+            Just (kind,_) -> return kind
+            Nothing   -> case lookup conId (dataConstructors st) of
+                Just (Forall _ [] [] t, _) -> return $ KPromote t
+                Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
+                Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
@@ -130,11 +124,11 @@ inferKindOfTypeInContext s quantifiedVariables t =
           if foldr (\x r -> (x == head ks) && r) True ks
 
             then  -- check if there is an alias for sets of this kind
-                case lookup (head ks) setMembers of
+                case lookup (head ks) setAliases of
                     -- Lift this alias to the kind level
                     Just t -> return $ KPromote t
                     Nothing ->
-                        -- Otherwise return a set type lifted to a kind
+                        -- Return a set type lifted to a kind
                         case demoteKindToType (head ks) of
                            Just t -> return $ KPromote $ TyApp (TyCon $ mkId "Set") t
                            -- If the kind cannot be demoted then we shouldn't be making a set

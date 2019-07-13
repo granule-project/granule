@@ -5,7 +5,7 @@ import Control.Monad.State.Strict
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Primitives (tyOps)
+import Language.Granule.Checker.Primitives (tyOps, synonyms)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Kinds
@@ -18,6 +18,8 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Context
 import Language.Granule.Utils
+
+import Data.Functor.Identity (runIdentity)
 
 -- | Check the kind of a definition
 -- Currently we expect that a type scheme has kind KType
@@ -32,6 +34,7 @@ kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
       KPredicate -> return ()
       _ -> throw KindMismatch{ errLoc = s, tyActualK = Just constraint, kExpected = KPredicate, kActual = kind }
 
+  ty <- return $ replaceSynonyms ty
   (kind, unifiers) <- inferKindOfTypeImplicits s quantifiedVariables ty
   case kind of
     KType -> do
@@ -48,6 +51,16 @@ kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
 kindIsKind :: Kind -> Bool
 kindIsKind (KPromote (TyCon (internalName -> "Kind"))) = True
 kindIsKind _ = False
+
+-- Replace any constructor Ids with their type synonym counterpart
+replaceSynonyms :: Type -> Type
+replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
+  where
+    conCase conId =
+      case lookup conId synonyms of
+        Just ty -> return ty
+        Nothing -> return $ TyCon conId
+
 
 -- Infers the kind of a type, but also allows some of the type variables to have poly kinds
 -- which get automatically resolved
@@ -92,14 +105,12 @@ inferKindOfTypeImplicits s ctxt (Box c t) = do
 
 inferKindOfTypeImplicits s ctxt (Diamond e t) = do
   (ke, u') <- inferKindOfTypeImplicits s ctxt e
-  liftIO $ putStrLn $ " ke = " <> pretty ke <> " e = " <> pretty e
   (k, u) <- inferKindOfTypeImplicits s ctxt t
   case joinKind k KType of
     Just (k, u2) -> do
       case ke of
         KPromote effTy -> do
             (effTyK, u3) <- inferKindOfTypeImplicits s ctxt effTy
-            liftIO $ putStrLn $ "effTyK = " <> pretty effTyK <> " effTy " <> pretty effTy
             case joinKind effTyK KEffect of
               Just (_, u4) -> do
                 u5 <- combineManySubstitutions s [u, u', u2, u3, u4]

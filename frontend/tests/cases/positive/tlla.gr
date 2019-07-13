@@ -19,7 +19,7 @@ secret = [0309]
 hash : ∀ {l : Level} . Int [l] → Int [l]
 hash [x] = [x + x]
 
-hello : () <R, W>
+hello : () <{R, W}>
 hello = let x ← fromStdin
         in toStdout x
 
