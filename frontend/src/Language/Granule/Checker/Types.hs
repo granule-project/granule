@@ -231,9 +231,9 @@ equalTypesRelatedCoeffects s _ (TyVar n) (TyVar m) sp = do
 
           k <- inferKindOfType s (TyCon kc)
           -- Create solver vars for coeffects
-          case k of
-            KCoeffect -> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
-            _         -> return ()
+          if isCoeffectKind k
+            then addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
+            else return ()
           return (True, [(n, SubstT $ TyVar m)])
         Just _ ->
           return (True, [(m, SubstT $ TyVar n)])

@@ -12,7 +12,9 @@ module Language.Granule.Checker.Kinds (
                     , mguCoeffectTypes
                     , promoteTypeToKind
                     , demoteKindToType
-                    , isEffectType) where
+                    , isEffectType
+                    , isEffectKind
+                    , isCoeffectKind) where
 
 import Control.Monad.State.Strict
 
@@ -68,15 +70,10 @@ inferKindOfTypeInContext s quantifiedVariables t =
     kBox _ x = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
     kDiamond effK KType = do
-      case effK of
-        KPromote t -> do
-            effTyK <- inferKindOfType s t
-            case effTyK of
-                KEffect -> return KType
-                otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = KEffect, kActual = otherk }
-        -- TODO: create a custom error message for this
-        otherk  -> throw KindMismatch { errLoc = s, tyActualK = Nothing, kExpected = KPromote (TyVar $ mkId "effectType"), kActual = otherk }
-
+      effTyM <- isEffectTypeFromKind s effK
+      case effTyM of
+        Right effTy -> return KType
+        Left otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = KEffect, kActual = otherk }
 
     kDiamond _ x     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
@@ -146,6 +143,17 @@ joinKind (KVar v) k = Just (k, [(v, SubstK k)])
 joinKind k (KVar v) = Just (k, [(v, SubstK k)])
 joinKind (KPromote t1) (KPromote t2) =
    fmap (\k -> (KPromote k, [])) (joinCoeffectTypes t1 t2)
+
+joinKind (KUnion k1 k2) k =
+  case joinKind k k1 of
+    Nothing ->
+        case joinKind k k2 of
+            Nothing -> Nothing
+            Just (k2', u) -> Just (KUnion k1 k2', u)
+    Just (k1', u) -> Just (KUnion k1' k2, u)
+
+joinKind k (KUnion k1 k2) = joinKind (KUnion k1 k2) k
+
 joinKind _ _ = Nothing
 
 -- | Predicate on whether two kinds have a leasy upper bound
@@ -249,16 +257,16 @@ checkKindIsCoeffect :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Che
 checkKindIsCoeffect span ctxt ty = do
   kind <- inferKindOfTypeInContext span ctxt ty
   case kind of
-    KCoeffect -> return ty
+    k | isCoeffectKind k -> return ty
     -- Came out as a promoted type, check that this is a coeffect
     KPromote k -> do
       kind' <- inferKindOfTypeInContext span ctxt k
-      case kind' of
-        KCoeffect -> return ty
-        _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
+      if isCoeffectKind kind'
+        then return ty
+        else throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
     KVar v ->
       case lookup v ctxt of
-        Just KCoeffect -> return ty
+        Just k | isCoeffectKind k -> return ty
         _              -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
 
     _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
@@ -324,10 +332,26 @@ updateCoeffectType tyVar k = do
 isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
 isEffectType s ty = do
     kind <- inferKindOfType s ty
+    isEffectTypeFromKind s kind
+
+isEffectTypeFromKind :: (?globals :: Globals) => Span -> Kind -> Checker (Either Kind Type)
+isEffectTypeFromKind s kind =
     case kind of
         KPromote effTy -> do
             kind' <- inferKindOfType s effTy
-            case kind' of
-                KEffect -> return $ Right effTy
-                _       -> return $ Left kind
+            if isEffectKind kind'
+                then return $ Right effTy
+                else return $ Left kind
         _ -> return $ Left kind
+
+isEffectKind :: Kind -> Bool
+isEffectKind KEffect = True
+isEffectKind (KUnion _ KEffect) = True
+isEffectKind (KUnion KEffect _) = True
+isEffectKind _ = False
+
+isCoeffectKind :: Kind -> Bool
+isCoeffectKind KCoeffect = True
+isCoeffectKind (KUnion _ KCoeffect) = True
+isCoeffectKind (KUnion KCoeffect _) = True
+isCoeffectKind _ = False

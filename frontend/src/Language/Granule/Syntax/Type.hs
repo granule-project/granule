@@ -65,6 +65,7 @@ data Kind = KType
           | KFun Kind Kind
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
+          | KUnion Kind Kind
     deriving (Show, Ord, Eq)
 
 promoteTypeToKind :: Type -> Kind
@@ -113,6 +114,11 @@ instance Monad m => Freshenable m Kind where
   freshen (KPromote ty) = do
      ty <- freshen ty
      return $ KPromote ty
+
+  freshen (KUnion k1 k2) = do
+    k1' <- freshen k1
+    k2' <- freshen k2
+    return $ KUnion k1' k2'
 
 -- | Represents coeffect grades
 data Coeffect = CNat      Int

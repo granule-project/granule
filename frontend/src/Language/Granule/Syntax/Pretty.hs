@@ -114,6 +114,7 @@ instance Pretty Kind where
     prettyL l (KFun k1 k2)   = prettyL l k1 <> " -> " <> prettyL l k2
     prettyL l (KVar v)       = prettyL l v
     prettyL l (KPromote t)   = "↑" <> prettyL l t
+    prettyL l (KUnion k1 k2) = "(" <> prettyL l k1 <> " ∪ " <> prettyL l k2 <> ")"
 
 instance Pretty TypeScheme where
     prettyL l (Forall _ vs cs t) = kVars vs <> constraints cs <> prettyL l t

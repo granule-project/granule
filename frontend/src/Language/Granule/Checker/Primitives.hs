@@ -46,7 +46,7 @@ typeConstructors =
     , (mkId "Char", (KType, Nothing))
     , (mkId "String", (KType, Nothing))
     , (mkId "Protocol", (KType, Nothing))
-    , (mkId "Nat",  (KCoeffect, Nothing))
+    , (mkId "Nat",  (KUnion KCoeffect KEffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
@@ -166,7 +166,7 @@ toStdout = BUILTIN
 toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
-readInt : Int <{Stdout}>
+readInt : Int <{Stdin}>
 readInt = BUILTIN
 
 --------------------------------------------------------------------------------
@@ -344,6 +344,13 @@ copy
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
 copy = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Cost
+--------------------------------------------------------------------------------
+
+tick : () <1>
+tick = BUILTIN
 
 |]
 

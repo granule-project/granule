@@ -978,14 +978,14 @@ justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (KPromote t, q)) = do
       k <- inferKindOfType s t
-      case k of
-        KCoeffect -> return $ Just (var, (t, q))
-        _         -> return Nothing
+      if isCoeffectKind k
+        then return $ Just (var, (t, q))
+        else return Nothing
     convert (var, (KVar v, q)) = do
       k <- inferKindOfType s (TyVar v)
-      case k of
-        KCoeffect -> return $ Just (var, (TyVar v, q))
-        _         -> return Nothing
+      if isCoeffectKind k
+        then return $ Just (var, (TyVar v, q))
+        else return Nothing
     convert _ = return Nothing
 justCoeffectTypesConvertedVars :: (?globals::Globals)
   => Span -> [(Id, Kind)] -> Checker (Ctxt Type)

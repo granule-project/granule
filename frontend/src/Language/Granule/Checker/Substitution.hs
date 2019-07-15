@@ -197,6 +197,10 @@ instance Substitutable Kind where
       Just (SubstK k) -> return k
       Just (SubstT t) -> return $ KPromote t
       _               -> return $ KVar v
+  substitute subst (KUnion k1 k2) = do
+    k1' <- substitute subst k1
+    k2' <- substitute subst k2
+    return $ KUnion k1' k2'
 
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
