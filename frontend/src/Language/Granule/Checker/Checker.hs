@@ -709,8 +709,8 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
-  mefTy1 <- isEffectType s ty1
-  mefTy2 <- isEffectType s ty2
+  mefTy1 <- isEffectType s ef1
+  mefTy2 <- isEffectType s ef2
   case mefTy1 of
     Just efTy1 ->
       case mefTy2 of
@@ -728,9 +728,9 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
             let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
             return (t, gamNew, subst, elaborated)
-          else throw $ KindMismatch { errLoc = s, tyActualK = Just ty1, kExpected = KPromote efTy1, kActual = KPromote efTy1 }
-        Nothing -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ty2 }
-    Nothing -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ty1 }
+          else throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = KPromote efTy1, kActual = KPromote efTy2 }
+        Nothing -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = efTy2 }
+    Nothing -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = efTy1 }
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
