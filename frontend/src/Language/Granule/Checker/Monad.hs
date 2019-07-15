@@ -452,7 +452,7 @@ data CheckerError
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
   | UnknownResourceAlgebra
-    { errLoc :: Span, errK :: Kind }
+    { errLoc :: Span, errTy :: Type }
   deriving (Show, Eq)
 
 
@@ -743,8 +743,8 @@ instance UserMsg CheckerError where
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
 
-  msg UnknownResourceAlgebra{ errK }
-    = "There is no resource algebra defined for `" <> pretty errK <> "`. Probably a bug in Granule (please report)."
+  msg UnknownResourceAlgebra{ errTy }
+    = "There is no resource algebra defined for `" <> pretty errTy <> "`. Probably a bug in Granule (please report)."
 
 data LinearityMismatch
   = LinearNotUsed Id

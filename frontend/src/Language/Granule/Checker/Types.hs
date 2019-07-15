@@ -11,6 +11,7 @@ import Data.List
 
 import Language.Granule.Checker.Constraints.Compile
 
+import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -109,6 +110,17 @@ equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
   (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
+
+equalTypesRelatedCoeffects s rel (TyCon (internalName -> "Pure")) t sp = do
+    mEffTy <- isEffectType s t
+    case mEffTy of
+        Just effTy -> do
+            eq <- isEffUnit s effTy t
+            return (eq, [])
+        Nothing -> throw $ KindError s t KEffect
+
+equalTypesRelatedCoeffects s rel t t'@(TyCon (internalName -> "Pure")) sp = do
+    equalTypesRelatedCoeffects s rel t' t sp
 
 equalTypesRelatedCoeffects _ _ (TyCon con1) (TyCon con2) _ =
   return (con1 == con2, [])
@@ -439,6 +451,7 @@ joinTypes s (TyVar n) (TyVar m) = do
   kind <- inferKindOfType s (TyVar n)
   case kind of
     KPromote t -> do
+
 
       nvar <- freshTyVarInContextWithBinding n kind BoundQ
       -- Unify the two variables into one

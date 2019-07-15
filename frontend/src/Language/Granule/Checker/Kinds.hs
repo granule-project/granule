@@ -11,7 +11,8 @@ module Language.Granule.Checker.Kinds (
                     , inferCoeffectTypeAssumption
                     , mguCoeffectTypes
                     , promoteTypeToKind
-                    , demoteKindToType) where
+                    , demoteKindToType
+                    , isEffectType) where
 
 import Control.Monad.State.Strict
 
@@ -316,3 +317,14 @@ updateCoeffectType tyVar k = do
    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
+
+isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Maybe Type)
+isEffectType s ty = do
+    kind <- inferKindOfType s ty
+    case kind of
+        KPromote effTy -> do
+            kind' <- inferKindOfType s effTy
+            case kind' of
+                KEffect -> return $ Just effTy
+                _       -> return Nothing
+        _ -> return Nothing

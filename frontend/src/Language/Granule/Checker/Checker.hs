@@ -709,15 +709,28 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
-  ef <- effectMult s ef1 ef2
-  let t = Diamond ef ty2
+  mefTy1 <- isEffectType s ty1
+  mefTy2 <- isEffectType s ty2
+  case mefTy1 of
+    Just efTy1 ->
+      case mefTy2 of
+        Just efTy2 -> do
+          -- Check that the types of the effect terms match
+          (eq, _, u) <- equalTypes s efTy1 efTy2
+          if eq then do
+            -- Multiply the effects
+            ef <- effectMult s efTy1 ef1 ef2
+            let t = Diamond ef ty2
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2]
-  -- Synth subst
-  t' <- substitute substP t
+            subst <- combineManySubstitutions s [substP, subst1, subst2, u]
+            -- Synth subst
+            t' <- substitute substP t
 
-  let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
-  return (t, gamNew, subst, elaborated)
+            let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
+            return (t, gamNew, subst, elaborated)
+          else throw $ KindMismatch { errLoc = s, tyActualK = Just ty1, kExpected = KPromote efTy1, kActual = KPromote efTy1 }
+        Nothing -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ty2 }
+    Nothing -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ty1 }
 
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
