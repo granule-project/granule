@@ -522,7 +522,7 @@ instance UserMsg CheckerError where
   msg KindMismatch{..}
     = case tyActualK of
         Nothing -> "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
-        Just ty -> "Type `" <> pretty ty <> "` has expected kind `" <> pretty kExpected <> "` but actually is of kind `" <> pretty kActual <> "`"
+        Just ty -> "Expected kind `" <> pretty kExpected <> "` for type `" <> pretty ty <> "` but actual kind is `" <> pretty kActual <> "`"
 
   msg KindError{..}
     = "Type `" <> pretty errTy

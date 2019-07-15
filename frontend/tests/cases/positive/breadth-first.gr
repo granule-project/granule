@@ -37,5 +37,5 @@ last x =
 exLast : Int
 exLast = fromMaybe [42] (last ex0)
 
-main : () <W>
+main : () <{Stdout}>
 main = toStdout (showInt exLast)
