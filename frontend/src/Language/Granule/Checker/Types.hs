@@ -110,13 +110,13 @@ equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
 
-equalTypesRelatedCoeffects s rel (TyCon (internalName -> "Pure")) t sp = do
-    mEffTy <- isEffectType s t
+equalTypesRelatedCoeffects s rel t1@(TyCon (internalName -> "Pure")) t2 sp = do
+    mEffTy <- isEffectType s t2
     case mEffTy of
         Right effTy -> do
-            eq <- isEffUnit s effTy t
+            eq <- effApproximates s effTy t1 t2
             return (eq, [])
-        Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = t , errK = k }
+        Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = t2 , errK = k }
 
 equalTypesRelatedCoeffects s rel t t'@(TyCon (internalName -> "Pure")) sp = do
     equalTypesRelatedCoeffects s rel t' t sp
@@ -129,6 +129,7 @@ equalTypesRelatedCoeffects _ _ (TyCon con1) (TyCon con2) _ =
 -- syntactic equality on elements) because a general version with
 -- unification is quite involved (needs a lot of disjunctive
 -- constraints).
+-- TODO: this is overlapped by functioanlity in `effApproximates`
 equalTypesRelatedCoeffects s rel t1@(TySet ts1) t2@(TySet ts2) sp = do
     -- ts1 can be a subset of ts2 (approximation)
     return (all (`elem` ts2) ts1, [])

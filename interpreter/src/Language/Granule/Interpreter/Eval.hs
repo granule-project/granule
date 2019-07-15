@@ -250,7 +250,7 @@ builtIns =
   [
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
-  , (mkId "pure",       Ext () $ Val nullSpan () (Constr () (mkId "()") []))
+  , (mkId "pure",       Constr () (mkId "()") [])
   , (mkId "tick",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () v))
   , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> NumFloat (cast n))
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
