@@ -1,7 +1,7 @@
 -- gr --no-eval
 
-dubInput : () <{R, W}>
+dubInput : () <{Stdout, Stdin}>
 dubInput = let x ← readInt in toStdout (showInt (x * 2))
 
-main : () <{R, W}>
+main : () <{Stdout, Stdin}>
 main = dubInput

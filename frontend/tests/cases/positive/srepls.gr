@@ -27,11 +27,11 @@ notAleak [x] = [42]
 -- main : Int [Private]
 -- main = hash secret
 
-doTwice : (Int <{R}>) [2] → Int <{R, R}>
+doTwice : (Int <{Stdin}>) [2] → Int <{Stdin}>
 doTwice [f] =
   let a ← f;
       b ← f
   in pure (a + b)
 
-main : Int <R, R>
+main : Int <{Stdin}>
 main = doTwice [readInt]
