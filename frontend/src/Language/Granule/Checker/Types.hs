@@ -7,7 +7,6 @@
 module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
-import Data.List
 
 import Language.Granule.Checker.Constraints.Compile
 
@@ -114,10 +113,10 @@ equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
 equalTypesRelatedCoeffects s rel (TyCon (internalName -> "Pure")) t sp = do
     mEffTy <- isEffectType s t
     case mEffTy of
-        Just effTy -> do
+        Right effTy -> do
             eq <- isEffUnit s effTy t
             return (eq, [])
-        Nothing -> throw $ KindError s t KEffect
+        Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = t , errK = k }
 
 equalTypesRelatedCoeffects s rel t t'@(TyCon (internalName -> "Pure")) sp = do
     equalTypesRelatedCoeffects s rel t' t sp
@@ -452,7 +451,6 @@ joinTypes s (TyVar n) (TyVar m) = do
   case kind of
     KPromote t -> do
 
-
       nvar <- freshTyVarInContextWithBinding n kind BoundQ
       -- Unify the two variables into one
       addConstraint (ApproximatedBy s (CVar n) (CVar nvar) t)
@@ -470,16 +468,22 @@ joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
 joinTypes s (TyVar _) t = return t
 joinTypes s t (TyVar _) = return t
 
--- TODO: make this more powerful
-joinTypes s t1@(TySet ts1) t2@(TySet ts2) =
-  if ts1 `isPrefixOf` ts2
-    then return t2
-    else if ts2 `isPrefixOf` ts1
-         then return t1
-         else throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
-
-joinTypes s t1 t2 = throw
-  NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+joinTypes s t1 t2 = do
+    -- See if the two types are actually effects and if so do the join
+    mefTy1 <- isEffectType s t1
+    mefTy2 <- isEffectType s t2
+    case mefTy1 of
+        Right efTy1 ->
+          case mefTy2 of
+            Right efTy2 -> do
+                -- Check that the types of the effect terms match
+                (eq, _, u) <- equalTypes s efTy1 efTy2
+                -- If equal, do the upper bound
+                if eq
+                    then do effectUpperBound s efTy1 t1 t2
+                    else throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = KPromote efTy1, kActual = KPromote efTy2 }
+            Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+        Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker (Bool, Kind, Substitution)
 equalKinds sp k1 k2 | k1 == k2 = return (True, k1, [])
@@ -497,3 +501,19 @@ equalKinds sp k (KVar v) = do
     return (True, k, [(v, SubstK k)])
 equalKinds sp k1 k2 = do
     throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
+
+twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
+twoEqualEffectTypes s ef1 ef2 = do
+    mefTy1 <- isEffectType s ef1
+    mefTy2 <- isEffectType s ef2
+    case mefTy1 of
+      Right efTy1 ->
+        case mefTy2 of
+          Right efTy2 -> do
+            -- Check that the types of the effect terms match
+            (eq, _, u) <- equalTypes s efTy1 efTy2
+            if eq then do
+              return (efTy1, u)
+            else throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = KPromote efTy1, kActual = KPromote efTy2 }
+          Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
+      Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }

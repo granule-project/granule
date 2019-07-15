@@ -9,6 +9,7 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (setLike)
+import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
@@ -38,7 +39,7 @@ isEffUnit s effTy eff =
                 (TySet []) -> return True
                 _          -> return False
         -- Unknown
-        _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = effTy }
+        _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
 
 effectMult :: Span -> Type -> Type -> Type -> Checker Type
 effectMult sp effTy t1 t2 = do
@@ -63,4 +64,36 @@ effectMult sp effTy t1 t2 = do
             _ -> throw $
                   TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
         _ -> throw $
-               UnknownResourceAlgebra { errLoc = sp, errTy = effTy }
+               UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = KPromote effTy }
+
+effectUpperBound :: (?globals :: Globals) => Span -> Type -> Type -> Type -> Checker Type
+effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
+    nvar <- freshTyVarInContextWithBinding (mkId "n") (KPromote t) BoundQ
+    -- Unify the two variables into one
+    nat1 <- compileNatKindedTypeToCoeffect s t1
+    nat2 <- compileNatKindedTypeToCoeffect s t2
+    addConstraint (ApproximatedBy s nat1 (CVar nvar) t)
+    addConstraint (ApproximatedBy s nat2 (CVar nvar) t)
+    return $ TyVar nvar
+
+effectUpperBound _ t@(TyCon (internalName -> "Com")) t1 t2 = do
+    return $ TyCon $ mkId "Session"
+
+effectUpperBound s t@(TyCon c) t1 t2 | setLike c = do
+    case t1 of
+        TySet efs1 ->
+            case t2 of
+                TySet efs2 ->
+                    -- Both sets, take the union
+                    return $ TySet (nub (efs1 ++ efs2))
+                -- Unit right
+                TyCon (internalName -> "Pure") ->
+                    return t1
+                _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+        -- Unift left
+        TyCon (internalName -> "Pure") ->
+            return t2
+        _ ->  throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+
+effectUpperBound s effTy t1 t2 =
+    throw UnknownResourceAlgebra{ errLoc = s, errTy = t1, errK = KPromote effTy }

@@ -318,13 +318,16 @@ updateCoeffectType tyVar k = do
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 
-isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Maybe Type)
+-- Given a type term, works out if its kind is actually an effect type (promoted)
+-- if so, returns `Right effTy` where `effTy` is the effect type
+-- otherwise, returns `Left k` where `k` is the kind of the original type term
+isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
 isEffectType s ty = do
     kind <- inferKindOfType s ty
     case kind of
         KPromote effTy -> do
             kind' <- inferKindOfType s effTy
             case kind' of
-                KEffect -> return $ Just effTy
-                _       -> return Nothing
-        _ -> return Nothing
+                KEffect -> return $ Right effTy
+                _       -> return $ Left kind
+        _ -> return $ Left kind

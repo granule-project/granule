@@ -33,6 +33,8 @@ compileNatKindedTypeToCoeffect _ (TyInt n) =
   return $ CNat n
 compileNatKindedTypeToCoeffect _ (TyVar v) =
   return $ CVar v
+compileNatKindedTypeToCoeffect _ (TyCon (internalName -> "Pure")) =
+  return $ CNat 0
 compileNatKindedTypeToCoeffect s t =
   throw $ KindError{errLoc = s, errTy = t, errK = kNat }
 
