@@ -141,7 +141,8 @@ getEmbeddedGrFlags :: String -> Maybe GrConfig
 getEmbeddedGrFlags
   = foldr (<|>) Nothing
   . map getEmbeddedGrFlagsLine
-  . take 3 -- only check for flags within the top 3 lines (so they are visible and at the top)
+  . take 3 -- only check for flags within the top 3 lines
+  . filter (not . all isSpace)
   . lines
   where
     getEmbeddedGrFlagsLine
