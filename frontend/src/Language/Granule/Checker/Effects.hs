@@ -8,7 +8,7 @@ module Language.Granule.Checker.Effects where
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Primitives (setLike)
+import qualified Language.Granule.Checker.Primitives as P (setElements, typeConstructors)
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Identifiers
@@ -18,6 +18,12 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Utils
 
 import Data.List (nub)
+import Data.Maybe (mapMaybe)
+
+-- Describe all effect types that are based on a union-emptyset monoid
+unionSetLike :: Id -> Bool
+unionSetLike (internalName -> "IO") = True
+unionSetLike _ = False
 
 -- `isEffUnit sp effTy eff` checks whether `eff` of effect type `effTy`
 -- is equal to the unit element of the algebra.
@@ -34,7 +40,7 @@ isEffUnit s effTy eff =
             return True
         -- IO set case
         -- Any union-set effects, like IO
-        TyCon c | setLike c ->
+        TyCon c | unionSetLike c ->
             case eff of
                 (TySet []) -> return True
                 _          -> return False
@@ -57,7 +63,7 @@ effApproximates s effTy eff1 eff2 =
             return True
         -- IO set case
         -- Any union-set effects, like IO
-        TyCon c | setLike c ->
+        TyCon c | unionSetLike c ->
             case eff1 of
                 (TyCon (internalName -> "Pure")) -> return True
                 (TySet efs1) ->
@@ -85,7 +91,7 @@ effectMult sp effTy t1 t2 = do
           return $ TyCon $ mkId "Session"
 
         -- Any union-set effects, like IO
-        TyCon c | setLike c ->
+        TyCon c | unionSetLike c ->
           case (t1, t2) of
             -- Actual sets, take the union
             (TySet ts1, TySet ts2) ->
@@ -108,7 +114,7 @@ effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
 effectUpperBound _ t@(TyCon (internalName -> "Com")) t1 t2 = do
     return $ TyCon $ mkId "Session"
 
-effectUpperBound s t@(TyCon c) t1 t2 | setLike c = do
+effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
     case t1 of
         TySet efs1 ->
             case t2 of
@@ -126,3 +132,23 @@ effectUpperBound s t@(TyCon c) t1 t2 | setLike c = do
 
 effectUpperBound s effTy t1 t2 =
     throw UnknownResourceAlgebra{ errLoc = s, errTy = t1, errK = KPromote effTy }
+
+-- "Top" element of the effect
+effectTop :: Type -> Maybe Type
+effectTop (TyCon (internalName -> "Nat")) = Nothing
+effectTop (TyCon (internalName -> "Com")) = Just $ TyCon $ mkId "Session"
+-- Otherwise
+-- Based on an effect type, provide its top-element, which for set-like effects
+-- like IO can later be aliased to the name of effect type,
+-- i.e., a <IO> is an alias for a <{Read, Write, ... }>
+effectTop t = do
+    -- Compute the full-set of elements based on the the kinds of elements
+    -- in the primitives
+    elemKind <- lookup t (map swap P.setElements)
+    return (TySet (map TyCon (allConstructorsMatchingElemKind elemKind)))
+  where
+    swap (a, b) = (b, a)
+    -- find all elements of the matching element type
+    allConstructorsMatchingElemKind elemKind = mapMaybe (go elemKind) P.typeConstructors
+    go elemKind (con, (k, _)) =
+        if k == elemKind then Just con else Nothing

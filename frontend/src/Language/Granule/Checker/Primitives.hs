@@ -21,20 +21,9 @@ nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 -- Given a name to the powerset of a set of particular elements,
--- where (Y, PY) in setAliases means that PY is an alias for the powerset of Y.
-setAliases :: [(Kind, Type)]
-setAliases = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")
-            , (KPromote $ TyCon $ mkId "SessElem", TyCon $ mkId "Session")]
-
-setLike :: Id -> Bool
-setLike (internalName -> "IO") = True
-setLike _ = False
-
-synonyms :: [(Id, Type)]
-synonyms = [(mkId "IO",
-              TySet (map (TyCon . mkId)
-                      ["Stdout", "Stdin", "Stderr",
-                       "Open", "Read", "Write", "IOExcept", "Close"]))]
+-- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
+setElements :: [(Kind, Type)]
+setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeConstructors =
@@ -61,9 +50,10 @@ typeConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
-    -- Effect grade types
+    -- Effect grade types - Sessions
     , (mkId "Session", (KPromote (TyCon $ mkId "Com"), Nothing))
     , (mkId "Com", (KEffect, Nothing))
+    -- Effect grade types - IO
     , (mkId "IO", (KEffect, Nothing))
     , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing))

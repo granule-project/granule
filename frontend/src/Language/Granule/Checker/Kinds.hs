@@ -20,7 +20,7 @@ import Control.Monad.State.Strict
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Primitives (tyOps, setAliases)
+import Language.Granule.Checker.Primitives (tyOps, setElements)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 
@@ -121,8 +121,8 @@ inferKindOfTypeInContext s quantifiedVariables t =
         else
           if foldr (\x r -> (x == head ks) && r) True ks
 
-            then  -- check if there is an alias for sets of this kind
-                case lookup (head ks) setAliases of
+            then  -- check if there is an alias (name) for sets of this kind
+                case lookup (head ks) setElements of
                     -- Lift this alias to the kind level
                     Just t -> return $ KPromote t
                     Nothing ->

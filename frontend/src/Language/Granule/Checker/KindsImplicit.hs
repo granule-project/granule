@@ -3,9 +3,10 @@ module Language.Granule.Checker.KindsImplicit where
 
 import Control.Monad.State.Strict
 
+import Language.Granule.Checker.Effects (effectTop)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Primitives (tyOps, synonyms)
+import Language.Granule.Checker.Primitives (tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Kinds
@@ -52,12 +53,13 @@ kindIsKind :: Kind -> Bool
 kindIsKind (KPromote (TyCon (internalName -> "Kind"))) = True
 kindIsKind _ = False
 
--- Replace any constructor Ids with their type synonym counterpart
+-- Replace any constructor Ids with their top-element
+-- (i.e., IO gets replaces with the set of all effects as an alias)
 replaceSynonyms :: Type -> Type
 replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
   where
     conCase conId =
-      case lookup conId synonyms of
+      case effectTop (TyCon conId) of
         Just ty -> return ty
         Nothing -> return $ TyCon conId
 
