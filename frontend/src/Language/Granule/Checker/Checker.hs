@@ -390,7 +390,7 @@ checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
 
     funTy <- substitute subst2 (FunTy argTy tau)
-    (gam1, subst1, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel funTy e1
+    (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
 
     gam <- ctxtPlus s gam1 gam2
 
