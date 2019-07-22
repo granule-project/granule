@@ -295,7 +295,7 @@ instance Term Type where
       { tfFunTy   = \x y -> return $ x <> y
       , tfTyCon   = \_ -> return [] -- or: const (return [])
       , tfBox     = \c t -> return $ freeVars c <> t
-      , tfDiamond = \_ x -> return x
+      , tfDiamond = \e t -> return $ e <> t
       , tfTyVar   = \v -> return [v] -- or: return . return
       , tfTyApp   = \x y -> return $ x <> y
       , tfTyInt   = \_ -> return []
