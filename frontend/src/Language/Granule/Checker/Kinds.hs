@@ -13,6 +13,7 @@ module Language.Granule.Checker.Kinds (
                     , promoteTypeToKind
                     , demoteKindToType
                     , isEffectType
+                    , isEffectTypeFromKind
                     , isEffectKind
                     , isCoeffectKind) where
 

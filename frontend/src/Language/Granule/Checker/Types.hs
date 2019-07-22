@@ -137,16 +137,24 @@ equalTypesRelatedCoeffects s rel t1 t2@(TySet ts) sp =
 
 equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp
-  k <- inferKindOfType s ef1
-  case k of
-    KPromote effTy -> do
-      -- Trigger equality (approximation) on effects
-      eq' <- case sp of
-                SndIsSpec -> effApproximates s effTy ef1 ef2
-                _         -> effApproximates s effTy ef2 ef1
-      return (eq && eq', unif)
+  -- Effect kinds
+  k1 <- inferKindOfType s ef1
+  k2 <- inferKindOfType s ef2
+  -- Check the kinds are equal
+  (eq', effK, unif') <- equalKinds s k1 k2
+  -- ..and check that they are both effect typed
+  effTyM <- isEffectTypeFromKind s effK
+  case effTyM of
+    Right effTy -> do
+      -- Trigger equality (and possible approximation) on effects
+      eq'' <- case sp of
+                FstIsSpec -> effApproximates s effTy ef2 ef1
+                _         -> effApproximates s effTy ef1 ef2
 
-    _ -> throw UnknownResourceAlgebra { errLoc = s, errTy = ef1, errK = k }
+      u <- combineSubstitutions s unif unif'
+      return (eq && eq' && eq'', u)
+
+    Left k -> throw UnknownResourceAlgebra { errLoc = s, errTy = ef1, errK = k }
 
 equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages

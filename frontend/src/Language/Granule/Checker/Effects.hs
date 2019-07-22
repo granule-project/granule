@@ -76,7 +76,7 @@ effApproximates s effTy eff1 eff2 =
                                 return $ all (\ef1 -> ef1 `elem` efs2) efs1
                             _ -> return False
                     _ -> return False
-            -- Unknown
+            -- Unknown effect resource algebra
             _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = KPromote effTy }
 
 effectMult :: Span -> Type -> Type -> Type -> Checker Type
