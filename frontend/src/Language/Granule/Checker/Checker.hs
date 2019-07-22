@@ -612,8 +612,11 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      -- TODO: allow data type constructors to have constraints
-      (ty, _, _, _, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+
+      mapM_ (\ty -> do
+        pred <- compileTypeConstraintToConstraint s ty
+        addPredicate pred) constraints
 
       -- Apply coercions
       ty <- substitute coercions' ty
