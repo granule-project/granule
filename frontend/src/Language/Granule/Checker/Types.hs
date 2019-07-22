@@ -110,17 +110,6 @@ equalTypesRelatedCoeffects s rel (FunTy t1 t2) (FunTy t1' t2') sp = do
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
 
-equalTypesRelatedCoeffects s rel t1@(TyCon (internalName -> "Pure")) t2 sp = do
-    mEffTy <- isEffectType s t2
-    case mEffTy of
-        Right effTy -> do
-            eq <- effApproximates s effTy t1 t2
-            return (eq, [])
-        Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = t2 , errK = k }
-
-equalTypesRelatedCoeffects s rel t t'@(TyCon (internalName -> "Pure")) sp = do
-    equalTypesRelatedCoeffects s rel t' t sp
-
 equalTypesRelatedCoeffects _ _ (TyCon con1) (TyCon con2) _ =
   return (con1 == con2, [])
 
@@ -148,9 +137,14 @@ equalTypesRelatedCoeffects s rel t1 t2@(TySet ts) sp =
 
 equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp
-  (eq', unif') <- equalTypesRelatedCoeffects s rel ef1 ef2 sp
-  unif'' <- combineSubstitutions s unif unif'
-  return (eq && eq', unif'')
+  k <- inferKindOfType s ef1
+  case k of
+    KPromote effTy -> do
+      -- Trigger equality (approximation) on effects
+      eq' <- effApproximates s effTy ef1 ef2
+      return (eq && eq', unif)
+
+    _ -> throw UnknownResourceAlgebra { errLoc = s, errTy = ef1, errK = k }
 
 equalTypesRelatedCoeffects s rel x@(Box c t) y@(Box c' t') sp = do
   -- Debugging messages

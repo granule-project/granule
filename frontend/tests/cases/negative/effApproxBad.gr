@@ -1,0 +1,3 @@
+-- Should have type <3>
+tick' : () <2>
+tick' = let () <- tick; () <- tick; () <- tick in pure ()

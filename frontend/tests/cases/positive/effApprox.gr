@@ -1,0 +1,2 @@
+tick' : () <2>
+tick' = tick

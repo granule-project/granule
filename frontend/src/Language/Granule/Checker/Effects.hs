@@ -51,30 +51,33 @@ isEffUnit s effTy eff =
 -- resource algebra
 effApproximates :: (?globals :: Globals) => Span -> Type -> Type -> Type -> Checker Bool
 effApproximates s effTy eff1 eff2 =
-    case effTy of
-        -- Nat case
-        TyCon (internalName -> "Nat") -> do
-            nat1 <- compileNatKindedTypeToCoeffect s eff1
-            nat2 <- compileNatKindedTypeToCoeffect s eff2
-            addConstraint (ApproximatedBy s nat1 nat2 (TyCon $ mkId "Nat"))
-            return True
-        -- Session singleton case
-        TyCon (internalName -> "Com") -> do
-            return True
-        -- IO set case
-        -- Any union-set effects, like IO
-        TyCon c | unionSetLike c ->
-            case eff1 of
-                (TyCon (internalName -> "Pure")) -> return True
-                (TySet efs1) ->
-                    case eff2 of
-                        (TySet efs2) ->
-                            -- eff1 is a subset of eff2
-                            return $ all (\ef1 -> ef1 `elem` efs2) efs1
-                        _ -> return False
-                _ -> return False
-        -- Unknown
-        _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = KPromote effTy }
+    -- as 1 <= e for all e
+    if isPure eff1 then return True
+    else
+        case effTy of
+            -- Nat case
+            TyCon (internalName -> "Nat") -> do
+                nat1 <- compileNatKindedTypeToCoeffect s eff1
+                nat2 <- compileNatKindedTypeToCoeffect s eff2
+                addConstraint (LtEq s nat1 nat2)
+                return True
+            -- Session singleton case
+            TyCon (internalName -> "Com") -> do
+                return True
+            -- IO set case
+            -- Any union-set effects, like IO
+            TyCon c | unionSetLike c ->
+                case eff1 of
+                    (TyCon (internalName -> "Pure")) -> return True
+                    (TySet efs1) ->
+                        case eff2 of
+                            (TySet efs2) ->
+                                -- eff1 is a subset of eff2
+                                return $ all (\ef1 -> ef1 `elem` efs2) efs1
+                            _ -> return False
+                    _ -> return False
+            -- Unknown
+            _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = KPromote effTy }
 
 effectMult :: Span -> Type -> Type -> Type -> Checker Type
 effectMult sp effTy t1 t2 = do
@@ -152,3 +155,7 @@ effectTop t = do
     allConstructorsMatchingElemKind elemKind = mapMaybe (go elemKind) P.typeConstructors
     go elemKind (con, (k, _)) =
         if k == elemKind then Just con else Nothing
+
+isPure :: Type -> Bool
+isPure (TyCon c) = internalName c == "Pure"
+isPure _ = False
