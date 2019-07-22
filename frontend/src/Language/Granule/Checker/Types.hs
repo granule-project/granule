@@ -141,7 +141,9 @@ equalTypesRelatedCoeffects s rel (Diamond ef1 t1) (Diamond ef2 t2) sp = do
   case k of
     KPromote effTy -> do
       -- Trigger equality (approximation) on effects
-      eq' <- effApproximates s effTy ef1 ef2
+      eq' <- case sp of
+                SndIsSpec -> effApproximates s effTy ef1 ef2
+                _         -> effApproximates s effTy ef2 ef1
       return (eq && eq', unif)
 
     _ -> throw UnknownResourceAlgebra { errLoc = s, errTy = ef1, errK = k }
