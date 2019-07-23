@@ -32,7 +32,7 @@ import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr (Operator, Expr)
-import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen)
+import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen, Term(..))
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -84,6 +84,10 @@ data Assumption
   = Linear Type
   | Discharged Type Coeffect
     deriving (Eq, Show)
+
+instance Term Assumption where
+  freeVars (Linear t) = freeVars t
+  freeVars (Discharged t c) = freeVars t ++ freeVars c
 
 instance Pretty Assumption where
     prettyL l (Linear ty) = prettyL l ty
@@ -347,7 +351,9 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 
 {- Helpers for error messages and checker control flow -}
 data CheckerError
-  = TypeError
+  = HoleMessage
+    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier) }
+  | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
     { errLoc :: Span, errConstraint :: Neg Constraint }
@@ -459,6 +465,7 @@ data CheckerError
 instance UserMsg CheckerError where
   location = errLoc
 
+  title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
@@ -512,6 +519,22 @@ instance UserMsg CheckerError where
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
   title UnknownResourceAlgebra{} = "Type error"
+
+  msg HoleMessage{..} =
+    (case holeTy of
+      Nothing -> "\n   Hole occurs in synthesis position so the type is not yet known"
+      Just ty -> "\n   Expected type is: `" <> pretty ty <> "`")
+    <>
+    -- Print the context if there is anything to use
+    (if null context
+      then ""
+      else "\n\n   Context:" <> (concatMap (\x -> "\n     " ++ pretty x) context))
+    <>
+    (if null tyContext
+      then ""
+      else "\n\n   Type context:" <> (concatMap (\(v, (t , _)) ->  "\n     "
+                                                <> pretty v
+                                                <> " : " <> pretty t) tyContext) <> "\n")
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
@@ -745,6 +768,11 @@ instance UserMsg CheckerError where
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+
+  color HoleMessage{} = Blue
+  color _ = Red
+
+
 data LinearityMismatch
   = LinearNotUsed Id
   | LinearUsedNonLinearly Id

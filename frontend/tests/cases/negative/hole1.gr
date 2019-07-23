@@ -1,0 +1,2 @@
+foo : forall n : Nat, m : Nat . Int [m] -> Int [n] -> Int [n*m]
+foo [x] [y] = ?

@@ -492,6 +492,7 @@ substituteExpr ctxt (CaseF sp ty expr arms) =
     do  ty' <- substitute ctxt ty
         arms' <- mapM (mapFstM (substitute ctxt)) arms
         return $ Case sp ty' expr arms'
+substituteExpr ctxt (HoleF s a) = return $ Hole s a
 
 mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
 mapFstM fn (f, r) = do

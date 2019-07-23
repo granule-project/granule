@@ -100,6 +100,7 @@ tokens :-
   "=>"                          { \p s -> TokenConstrain p }
   "⇒"                           { \p s -> TokenConstrain p }
   "∘"                           { \p _ -> TokenRing p }
+  "?"                           { \p _ -> TokenHole p }
 
 
 {
@@ -161,6 +162,7 @@ data Token
   | TokenMeet AlexPosn
   | TokenRing AlexPosn
   | TokenImport AlexPosn String
+  | TokenHole AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String
