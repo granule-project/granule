@@ -86,7 +86,8 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     = DataConstrIndexed sp dName (Forall sp [] [] ty)
   where
     ty = foldr FunTy (returnTy (TyCon tName) tyVars) params
-    returnTy t vs = foldl (\t v -> returnTy (TyApp t ((TyVar . fst) v)) vs) t vs
+    returnTy t [] = t
+    returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
 instance FirstParameter DataConstr Span
 
