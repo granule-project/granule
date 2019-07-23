@@ -136,6 +136,106 @@ data Coeffect = CNat      Int
               | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
 
+-- Algebra for coeffects
+data CoeffectFold a = CoeffectFold
+  { cNat   :: Int -> a
+  , cFloat :: Rational -> a
+  , cInf   :: Maybe Type -> a
+  , cInterval :: a -> a -> a
+  , cVar   :: Id -> a
+  , cPlus  :: a -> a -> a
+  , cTimes :: a -> a -> a
+  , cMinus :: a -> a -> a
+  , cMeet  :: a -> a -> a
+  , cJoin  :: a -> a -> a
+  , cZero  :: Type -> a
+  , cOne   :: Type -> a
+  , cLevel :: Integer -> a
+  , cSet   :: [(String, Type)] -> a
+  , cSig   :: a -> Type -> a
+  , cExpon :: a -> a -> a
+  , cProd  :: a -> a -> a }
+
+-- Base monadic algebra
+baseCoeffectFold :: CoeffectFold Coeffect
+baseCoeffectFold =
+  CoeffectFold
+    { cNat = CNat
+    , cFloat = CFloat
+    , cInf = CInfinity
+    , cInterval = CInterval
+    , cVar = CVar
+    , cPlus = CPlus
+    , cTimes = CTimes
+    , cMinus = CMinus
+    , cMeet = CMeet
+    , cJoin = CJoin
+    , cZero = CZero
+    , cOne = COne
+    , cLevel = Level
+    , cSet = CSet
+    , cSig = CSig
+    , cExpon = CExpon
+    , cProd = CProduct
+    }
+
+-- | Fold on a `coeffect` type
+coeffectFold :: CoeffectFold a -> Coeffect -> a
+coeffectFold algebra = go
+  where
+    go (CNat n) =
+      (cNat algebra) n
+    go (CFloat r) =
+      (cFloat algebra) r
+    go (CInfinity i) =
+      (cInf algebra) i
+    go (CInterval l u) = let
+      l' = go l
+      u' = go u
+      in (cInterval algebra) l' u'
+    go (CVar v) =
+      (cVar algebra) v
+    go (CPlus c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cPlus algebra) c1' c2'
+    go (CTimes c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cTimes algebra) c1' c2'
+    go (CMinus c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cMinus algebra) c1' c2'
+    go (CMeet c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cMeet algebra) c1' c2'
+    go (CJoin c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cJoin algebra) c1' c2'
+    go (CZero t) =
+      (cZero algebra) t
+    go (COne t) =
+      (cOne algebra) t
+    go (Level l) =
+      (cLevel algebra) l
+    go (CSet set) =
+      (cSet algebra) set
+    go (CSig c t) = let
+      c' = go c
+      in (cSig algebra) c' t
+    go (CExpon c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cExpon algebra) c1' c2'
+    go (CProduct c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cProd algebra) c1' c2'
+
+
 coeffectIsAtom :: Coeffect -> Bool
 coeffectIsAtom (CNat _) = True
 coeffectIsAtom (CFloat _) = True

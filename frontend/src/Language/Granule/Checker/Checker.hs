@@ -419,7 +419,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
     -- (the guard contexts come from a special context in the solver)
     guardGam <- allGuardContexts
     guardGam' <- filterM isLevelKinded guardGam
-    let gam'' = multAll (vars <> map fst guardGam') demand (gam' <> guardGam')
+    gam'' <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
 
     let elaborated = Val s ty (Promote tau elaboratedE)
     return (gam'', subst, elaborated)
@@ -808,7 +808,9 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
 
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy (Promote t elaboratedE)
-   return (finalTy, multAll (freeVars e) (CVar var) gam', subst, elaborated)
+
+   gam'' <- multAll s (freeVars e) (CVar var) gam'
+   return (finalTy, gam'', subst, elaborated)
 
 
 -- BinOp
@@ -1149,8 +1151,8 @@ relateByAssumption _ _ (_, Linear _) (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
 relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
-  kind <- mguCoeffectTypes s c1 c2
-  addConstraint (rel s c1 c2 kind)
+  (kind, (inj1, inj2)) <- mguCoeffectTypes s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
 
 relateByAssumption s _ x y =
   throw UnifyGradedLinear{ errLoc = s, errGraded = fst x, errLinear = fst y }
@@ -1164,7 +1166,7 @@ discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption ->
 discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      coeffTy <- mguCoeffectTypes s c coeffect
+      (coeffTy, _) <- mguCoeffectTypes s c coeffect
       return (var, Discharged t (CSig c coeffTy))
 
     toFreshVar (var, Linear t) = do

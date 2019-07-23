@@ -143,7 +143,7 @@ joinKind k1 k2 | k1 == k2 = Just (k1, [])
 joinKind (KVar v) k = Just (k, [(v, SubstK k)])
 joinKind k (KVar v) = Just (k, [(v, SubstK k)])
 joinKind (KPromote t1) (KPromote t2) =
-   fmap (\k -> (KPromote k, [])) (joinCoeffectTypes t1 t2)
+   fmap (\k -> (KPromote $ fst k, [])) (joinCoeffectTypes t1 t2)
 
 joinKind (KUnion k1 k2) k =
   case joinKind k k1 of
@@ -166,26 +166,27 @@ hasLub k1 k2 =
 
 -- | Some coeffect types can be joined (have a least-upper bound). This
 -- | function computes the join if it exists.
-joinCoeffectTypes :: Type -> Type -> Maybe Type
+joinCoeffectTypes :: Type -> Type -> Maybe (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect))
 joinCoeffectTypes t1 t2 = case (t1, t2) of
   -- Equal things unify to the same thing
-  (t, t') | t == t' -> Just t
+  (t, t') | t == t' -> Just (t, (id, id))
 
   -- `Nat` can unify with `Q` to `Q`
   (TyCon (internalName -> "Q"), TyCon (internalName -> "Nat")) ->
-        Just $ TyCon $ mkId "Q"
+    Just $ (TyCon $ mkId "Q", (id, inj))
+      where inj = coeffectFold $ baseCoeffectFold
+                     { cNat = \x -> CFloat (fromInteger . toInteger $ x) }
 
   (TyCon (internalName -> "Nat"), TyCon (internalName -> "Q")) ->
-        Just $ TyCon $ mkId "Q"
+    Just $ (TyCon $ mkId "Q", (inj, id))
+      where inj = coeffectFold $ baseCoeffectFold
+                    { cNat = \x -> CFloat (fromInteger . toInteger $ x) }
 
   -- `Nat` can unify with `Ext Nat` to `Ext Nat`
   (t, TyCon (internalName -> "Nat")) | t == extendedNat ->
-        Just extendedNat
+        Just (extendedNat, (id, id))
   (TyCon (internalName -> "Nat"), t) | t == extendedNat ->
-        Just extendedNat
-
-  (TyApp t1 t2, TyApp t1' t2') ->
-    TyApp <$> joinCoeffectTypes t1 t1' <*> joinCoeffectTypes t2 t2'
+        Just (extendedNat, (id, id))
 
   _ -> Nothing
 
@@ -211,17 +212,17 @@ inferCoeffectTypeInContext s ctxt (CInterval c1 c2)    = do
   k2 <- inferCoeffectTypeInContext s ctxt c2
 
   case joinCoeffectTypes k1 k2 of
-    Just k -> return $ TyApp (TyCon $ mkId "Interval") k
+    Just (k, _) -> return $ TyApp (TyCon $ mkId "Interval") k
 
     Nothing -> throw IntervalGradeKindError{ errLoc = s, errTy1 = k1, errTy2 = k2 }
 
 -- Take the join for compound coeffect epxressions
-inferCoeffectTypeInContext s _ (CPlus c c')  = mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CMinus c c') = mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CTimes c c') = mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CMeet c c')  = mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CJoin c c')  = mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CExpon c c') = mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CPlus c c')  = fmap fst $ mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CMinus c c') = fmap fst $ mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CTimes c c') = fmap fst $ mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CMeet c c')  = fmap fst $ mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CJoin c c')  = fmap fst $ mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CExpon c c') = fmap fst $ mguCoeffectTypes s c c'
 
 -- Coeffect variables should have a type in the cvar->kind context
 inferCoeffectTypeInContext s ctxt (CVar cvar) = do
@@ -275,41 +276,103 @@ checkKindIsCoeffect span ctxt ty = do
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
-mguCoeffectTypes :: (?globals :: Globals) => Span -> Coeffect -> Coeffect -> Checker Type
+mguCoeffectTypes :: (?globals :: Globals)
+                 => Span -> Coeffect -> Coeffect -> Checker (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect))
 mguCoeffectTypes s c1 c2 = do
-  ck1 <- inferCoeffectType s c1
-  ck2 <- inferCoeffectType s c2
-  case (ck1, ck2) of
-    -- Both are variables
-    (TyVar kv1, TyVar kv2) | kv1 /= kv2 -> do
-      updateCoeffectType kv1 (KVar kv2)
-      return (TyVar kv2)
+  coeffTy1 <- inferCoeffectType s c1
+  coeffTy2 <- inferCoeffectType s c2
+  upper <- mguCoeffectTypes' s coeffTy1 coeffTy2
+  case upper of
+    Just x -> return x
+    -- Cannot unify so form a product
+    Nothing -> return
+      (TyApp (TyApp (TyCon (mkId "×")) coeffTy1) coeffTy2,
+                  (\x -> CProduct x (COne coeffTy2), \x -> CProduct (COne coeffTy1) x))
 
-    (t, t') | t == t' -> return t
+-- Inner definition which does not throw its error, and which operates on just the types
+mguCoeffectTypes' :: (?globals :: Globals)
+  => Span -> Type -> Type -> Checker (Maybe (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
 
-   -- Linear-hand side is a poly variable, but right is concrete
-    (TyVar kv1, ck2') -> do
-      updateCoeffectType kv1 (promoteTypeToKind ck2')
-      return ck2'
+-- Trivial case
+mguCoeffectTypes' s t t' | t == t' = return $ Just (t, (id, id))
 
-    -- Right-hand side is a poly variable, but Linear is concrete
-    (ck1', TyVar kv2) -> do
-      updateCoeffectType kv2 (promoteTypeToKind ck1')
-      return ck1'
+-- Both are variables
+mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
+  updateCoeffectType kv1 (KVar kv2)
+  return $ Just (TyVar kv2, (id, id))
 
-    (TyCon k1, TyCon k2) | k1 == k2 -> return $ TyCon k1
+-- Left-hand side is a poly variable, but Just is concrete
+mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
+  updateCoeffectType kv1 (promoteTypeToKind coeffTy2)
+  return $ Just (coeffTy2, (id, id))
 
-    -- Try to unify coeffect types
-    (t, t') | Just tj <- joinCoeffectTypes t t' -> return tj
+-- Right-hand side is a poly variable, but Linear is concrete
+mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
+  updateCoeffectType kv2 (promoteTypeToKind coeffTy1)
+  return $ Just (coeffTy1, (id, id))
 
-    -- Unifying a product of (t, t') with t yields (t, t') [and the symmetric version]
-    (isProduct -> Just (t1, t2), t) | t1 == t -> return $ ck1
-    (isProduct -> Just (t1, t2), t) | t2 == t -> return $ ck1
-    (t, isProduct -> Just (t1, t2)) | t1 == t -> return $ ck2
-    (t, isProduct -> Just (t1, t2)) | t2 == t -> return $ ck2
+-- Try to unify coeffect types
+mguCoeffectTypes' s t t' | Just (tj, injs) <- joinCoeffectTypes t t' =
+  return $ Just (tj, injs)
 
-    (k1, k2) -> throw CoeffectUnificationError
-      { errLoc = s, errTy1 = k1, errTy2 = k2, errC1 = c1, errC2 = c2 }
+-- Unifying a product of (t, t') with t yields (t, t') [and the symmetric versions]
+mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t1 == coeffTy2 =
+  return $ Just (coeffTy1, (id, \x -> CProduct x (COne t2)))
+
+mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t2 == coeffTy2 =
+  return $ Just (coeffTy1, (id, \x -> CProduct (COne t1) x))
+
+mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t1 == coeffTy1 =
+  return $ Just (coeffTy2, (\x -> CProduct x (COne t2), id))
+
+mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t2 == coeffTy1 =
+  return $ Just (coeffTy2, (\x -> CProduct (COne t1) x, id))
+
+-- Unifying with an interval
+mguCoeffectTypes' s coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =
+  return $ Just (coeffTy2, (\x -> CInterval x x, id))
+mguCoeffectTypes' s coeffTy1@(isInterval -> Just t') coeffTy2 | coeffTy2 == t' =
+  return $ Just (coeffTy1, (id, \x -> CInterval x x))
+
+-- Unifying inside an interval (recursive case)
+
+-- Both intervals
+mguCoeffectTypes' s (isInterval -> Just t) (isInterval -> Just t') = do
+-- See if we can recursively unify inside an interval
+  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, (inj1, inj2)) ->
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, (inj1', inj2'))
+            where
+              inj1' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj1 c1) (inj1 c2) }
+              inj2' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj2 c1) (inj2 c2) }
+    Nothing -> return Nothing
+
+mguCoeffectTypes' s t (isInterval -> Just t') = do
+  -- See if we can recursively unify inside an interval
+  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, (inj1, inj2)) ->
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, (\x -> CInterval (inj1 x) (inj1 x), inj2'))
+            where inj2' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj2 c1) (inj2 c2) }
+
+    Nothing -> return Nothing
+
+mguCoeffectTypes' s (isInterval -> Just t') t = do
+  -- See if we can recursively unify inside an interval
+  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
+  coeffecTyUpper <- mguCoeffectTypes' s t' t
+  case coeffecTyUpper of
+    Just (upperTy, (inj1, inj2)) ->
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, (inj1', \x -> CInterval (inj2 x) (inj2 x)))
+            where inj1' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj1 c1) (inj1 c2) }
+
+    Nothing -> return Nothing
+
+-- No way to unify (outer function will take the product)
+mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
