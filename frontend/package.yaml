@@ -44,7 +44,8 @@ library:
   - Language.Granule.Checker.Coeffects
   - Language.Granule.Checker.Constraints
   - Language.Granule.Checker.Constraints.SNatX
-  - Language.Granule.Checker.Kinds
+  - Language.Granule.Checker.Flatten
+  - Language.Granule.Checker.KindsHelpers
   - Language.Granule.Checker.LaTeX
   - Language.Granule.Checker.Monad
   - Language.Granule.Checker.Patterns

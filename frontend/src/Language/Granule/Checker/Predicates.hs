@@ -207,6 +207,14 @@ instance Term Pred where
   freeVars (NegPred p) = freeVars p
   freeVars (Exists x _ p) = freeVars p \\ [x]
 
+boundVars :: Pred -> [Id]
+boundVars (Conj ps) = concatMap boundVars ps
+boundVars (Disj ps) = concatMap boundVars ps
+boundVars (Impl bounds p1 p2) = map fst bounds ++ (boundVars p1 ++ boundVars p2)
+boundVars (NegPred p) = boundVars p
+boundVars (Exists x _ p) = x : boundVars p
+boundVars (Con _) = []
+
 instance (Monad m, MonadFail m) => Freshenable m Pred where
   freshen (Conj ps) = do
     ps' <- mapM freshen ps
@@ -335,3 +343,88 @@ instance Pretty Pred where
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
 isTrivial = predFold and or (\_ lhs rhs -> rhs) (const False) id (\_ _ p -> p)
+
+-- TODO: replace with use of `substitute`
+
+-- given an context mapping coeffect type variables to coeffect typ,
+-- then rewrite a set of constraints so that any occruences of the kind variable
+-- are replaced with the coeffect type
+rewriteBindersInPredicate :: Ctxt (Type, Quantifier) -> Pred -> Pred
+rewriteBindersInPredicate ctxt =
+    predFold
+      Conj
+      Disj
+      Impl
+      (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
+      NegPred
+      existsCase
+  where
+    existsCase :: Id -> Kind -> Pred -> Pred
+    existsCase var (KVar kvar) p =
+      Exists var k' p
+        where
+          k' = case lookup kvar ctxt of
+                  Just (ty, _) -> KPromote ty
+                  Nothing -> KVar kvar
+    existsCase var k p = Exists var k p
+
+    -- `updateConstraint v k c` rewrites any occurence of the kind variable
+    -- `v` in the constraint `c` with the kind `k`
+    updateConstraint :: Id -> (Type, Quantifier) -> Constraint -> Constraint
+    updateConstraint ckindVar (ckind, _) (Eq s c1 c2 k) =
+      Eq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+        (case k of
+          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
+          _ -> k)
+    updateConstraint ckindVar (ckind, _) (Neq s c1 c2 k) =
+            Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+              (case k of
+                TyVar ckindVar' | ckindVar == ckindVar' -> ckind
+                _ -> k)
+
+    updateConstraint ckindVar (ckind, _) (ApproximatedBy s c1 c2 k) =
+      ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+        (case k of
+          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
+          _  -> k)
+
+    updateConstraint ckindVar (ckind, _) (NonZeroPromotableTo s x c t) =
+       NonZeroPromotableTo s x (updateCoeffect ckindVar ckind c)
+          (case t of
+             TyVar ckindVar' | ckindVar == ckindVar' -> ckind
+             _  -> t)
+
+    updateConstraint ckindVar (ckind, _) (Lt s c1 c2) =
+        Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
+    updateConstraint ckindVar (ckind, _) (Gt s c1 c2) =
+        Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
+    updateConstraint ckindVar (ckind, _) (GtEq s c1 c2) =
+        GtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
+    updateConstraint ckindVar (ckind, _) (LtEq s c1 c2) =
+        LtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+
+    -- `updateCoeffect v k c` rewrites any occurence of the kind variable
+    -- `v` in the coeffect `c` with the kind `k`
+    updateCoeffect :: Id -> Type -> Coeffect -> Coeffect
+    updateCoeffect ckindVar ckind (CZero (TyVar ckindVar'))
+      | ckindVar == ckindVar' = CZero ckind
+    updateCoeffect ckindVar ckind (COne (TyVar ckindVar'))
+      | ckindVar == ckindVar' = COne ckind
+    updateCoeffect ckindVar ckind (CMeet c1 c2) =
+      CMeet (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CJoin c1 c2) =
+      CJoin (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CPlus c1 c2) =
+      CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CTimes c1 c2) =
+      CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CMinus c1 c2) =
+      CMinus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CExpon c1 c2) =
+      CExpon (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect ckindVar ckind (CInterval c1 c2) =
+      CInterval (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect _ _ c = c

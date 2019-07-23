@@ -21,7 +21,7 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
-import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.KindsHelpers
 import Language.Granule.Checker.KindsImplicit
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
@@ -795,7 +795,7 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    debugM "Synthing a promotion of " $ pretty e
 
    -- Create a fresh kind variable for this coeffect
-   vark <- freshIdentifierBase $ "kprom_" <> [head (pretty e)]
+   vark <- freshIdentifierBase $ "kprom_[" <> pretty (startPos s) <> "]"
    -- remember this new kind variable in the kind environment
    modify (\st -> st { tyVarContext = (mkId vark, (KCoeffect, InstanceQ)) : tyVarContext st })
 
@@ -923,6 +923,8 @@ solveConstraints predicate s name = do
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
+  -- remove any variables bound already in the preciate
+  coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
 
   result <- liftIO $ provePredicate predicate coeffectVars
 

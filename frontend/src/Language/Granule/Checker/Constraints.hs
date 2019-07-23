@@ -1,4 +1,5 @@
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE RankNTypes #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -9,7 +10,7 @@
 
 module Language.Granule.Checker.Constraints where
 
-import Data.Foldable (foldrM)
+--import Data.Foldable (foldrM)
 import Data.List (isPrefixOf)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
@@ -17,7 +18,6 @@ import Control.Arrow (first)
 import Control.Exception (assert)
 
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Kinds
 import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
@@ -37,13 +37,17 @@ compileQuant ForallQ   = universal
 compileQuant InstanceQ = existential
 compileQuant BoundQ    = existential
 
+compileQuantScoped :: QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
+compileQuantScoped ForallQ = universalScoped
+compileQuantScoped _ = existentialScoped
+
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
   => Pred -> Ctxt (Type, Quantifier)
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
 compileToSBV predicate tyVarContext =
-  (buildTheorem id compileQuant
+  (buildTheoremNew (reverse tyVarContext) []
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
 
@@ -52,8 +56,20 @@ compileToSBV predicate tyVarContext =
     -- flipQuant InstanceQ = ForallQ
     -- flipQuant BoundQ    = BoundQ
 
-    predicate' = rewriteConstraints tyVarContext predicate
+    predicate' = rewriteBindersInPredicate tyVarContext predicate
 
+    buildTheoremNew :: Ctxt (Type, Quantifier) -> Ctxt SGrade -> Symbolic SBool
+    buildTheoremNew [] solverVars =
+      buildTheorem' solverVars predicate
+
+    buildTheoremNew ((v, (t, q)) : ctxt) solverVars =
+      freshCVarScoped compileQuantScoped (internalName v) t q
+         (\(varPred, solverVar) -> do
+             pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
+             case q of
+              ForallQ -> return $ varPred .=> pred
+              _       -> return $ varPred .&& pred)
+{-
     buildTheorem ::
         (SBool -> SBool)
      -> (forall a. Quantifiable a => Quantifier -> (String -> Symbolic a))
@@ -71,7 +87,7 @@ compileToSBV predicate tyVarContext =
 
         predC <- buildTheorem' solverVars predicate'
         return (polarity (preConstraints .=> (constraints .&& predC)))
-
+-}
     -- Build the theorem, doing local creation of universal variables
     -- when needed (see Impl case)
     buildTheorem' :: Ctxt SGrade -> Pred -> Symbolic SBool
@@ -96,36 +112,12 @@ compileToSBV predicate tyVarContext =
       if v `elem` (freeVars p)
         -- optimisation
         then
-
           case demoteKindToType k of
-            Just t | t == extendedNat ->
-                  forSome [internalName v] $ \solverVar -> do
-                    pred' <- buildTheorem' ((v, SExtNat (SNatX solverVar)) : solverVars) p
-                    return ((SNatX.representationConstraint solverVar) .&& pred')
-
-            Just (TyCon k) ->
-                  case internalName k of
-                    "Q" ->
-                      forSome [internalName v] $ \solverVar ->
-                        buildTheorem' ((v, SFloat solverVar) : solverVars) p
-
-                    -- Esssentially a stub for sets at this point
-                    "Set" -> buildTheorem' ((v, SSet S.empty) : solverVars) p
-
-                    "Nat" ->
-                      forSome [(internalName v)] $ \solverVar -> do
-                        pred' <- buildTheorem' ((v, SNat solverVar) : solverVars) p
-                        return (solverVar .>= 0 .&& pred')
-
-                    "Level" ->
-                       forSome [(internalName v)] $ \solverVar -> do
-                         pred' <- buildTheorem' ((v, SLevel solverVar) : solverVars) p
-                         return ((solverVar .== literal privateRepresentation
-                              .|| solverVar .== literal publicRepresentation
-                              .|| solverVar .== literal unusedRepresentation) .&& pred')
-
-                    k -> error $ "Solver error: I don't know how to create an existntial for " <> show k
-            Just k -> error $ "Solver error: I don't know how to create an existntial for demotable type " <> show k
+            Just t ->
+              freshCVarScoped compileQuantScoped (internalName v) t InstanceQ
+                (\(varPred, solverVar) -> do
+                  pred' <- buildTheorem' ((v, solverVar) : solverVars) p
+                  return (varPred .&& pred'))
 
             Nothing ->
               case k of
@@ -136,15 +128,21 @@ compileToSBV predicate tyVarContext =
           buildTheorem' solverVars p
 
     -- TODO: generalise this to not just Nat indices
-    buildTheorem' solverVars (Impl ((v, _kind):vs) p p') =
+    buildTheorem' solverVars (Impl ((v, k):vs) p p') =
       if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
-
-          -- Create fresh solver variable
-          forAll [(internalName v)] $ \vSolver -> do
-             impl <- buildTheorem' ((v, SNat vSolver) : solverVars) (Impl vs p p')
-             return ((vSolver .>= literal 0) .=> impl)
+          case demoteKindToType k of
+            Just t ->
+              freshCVarScoped compileQuantScoped (internalName v) t ForallQ
+                (\(varPred, solverVar) -> do
+                  pred' <- buildTheorem' ((v, solverVar) : solverVars) (Impl vs p p')
+                  return (varPred .=> pred'))
+            Nothing ->
+                    case k of
+                      KType -> buildTheorem' solverVars p
+                      _ -> error $ "Trying to make a fresh universal solver variable for a grade of kind: "
+                                   <> show k <> " but I don't know how."
 
         else
           -- An optimisation, don't bother quantifying things
@@ -154,7 +152,7 @@ compileToSBV predicate tyVarContext =
 
     buildTheorem' solverVars (Con cons) =
       compile solverVars cons
-
+{-
     -- Create a fresh solver variable of the right kind and
     -- with an associated refinement predicate
     createFreshVar
@@ -185,97 +183,70 @@ compileToSBV predicate tyVarContext =
                  b -> error $ "Impossible freshening a BoundQ, but this is cause above"
              --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
          return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
-
--- TODO: replace with use of `substitute`
-
--- given an context mapping coeffect type variables to coeffect typ,
--- then rewrite a set of constraints so that any occruences of the kind variable
--- are replaced with the coeffect type
-rewriteConstraints :: Ctxt (Type, Quantifier) -> Pred -> Pred
-rewriteConstraints ctxt =
-    predFold
-      Conj
-      Disj
-      Impl
-      (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
-      NegPred
-      existsCase
-  where
-    existsCase :: Id -> Language.Granule.Syntax.Type.Kind -> Pred -> Pred
-    existsCase var (KVar kvar) p =
-      Exists var k' p
-        where
-          k' = case lookup kvar ctxt of
-                  Just (ty, _) -> KPromote ty
-                  Nothing -> KVar kvar
-    existsCase var k p = Exists var k p
-
-    -- `updateConstraint v k c` rewrites any occurence of the kind variable
-    -- `v` in the constraint `c` with the kind `k`
-    updateConstraint :: Id -> (Type, Quantifier) -> Constraint -> Constraint
-    updateConstraint ckindVar (ckind, _) (Eq s c1 c2 k) =
-      Eq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-        (case k of
-          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-          _ -> k)
-    updateConstraint ckindVar (ckind, _) (Neq s c1 c2 k) =
-            Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-              (case k of
-                TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-                _ -> k)
-
-    updateConstraint ckindVar (ckind, _) (ApproximatedBy s c1 c2 k) =
-      ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-        (case k of
-          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-          _  -> k)
-
-    updateConstraint ckindVar (ckind, _) (NonZeroPromotableTo s x c t) =
-       NonZeroPromotableTo s x (updateCoeffect ckindVar ckind c)
-          (case t of
-             TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-             _  -> t)
-
-    updateConstraint ckindVar (ckind, _) (Lt s c1 c2) =
-        Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    updateConstraint ckindVar (ckind, _) (Gt s c1 c2) =
-        Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    updateConstraint ckindVar (ckind, _) (GtEq s c1 c2) =
-        GtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    updateConstraint ckindVar (ckind, _) (LtEq s c1 c2) =
-        LtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    -- `updateCoeffect v k c` rewrites any occurence of the kind variable
-    -- `v` in the coeffect `c` with the kind `k`
-    updateCoeffect :: Id -> Type -> Coeffect -> Coeffect
-    updateCoeffect ckindVar ckind (CZero (TyVar ckindVar'))
-      | ckindVar == ckindVar' = CZero ckind
-    updateCoeffect ckindVar ckind (COne (TyVar ckindVar'))
-      | ckindVar == ckindVar' = COne ckind
-    updateCoeffect ckindVar ckind (CMeet c1 c2) =
-      CMeet (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CJoin c1 c2) =
-      CJoin (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CPlus c1 c2) =
-      CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CTimes c1 c2) =
-      CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CMinus c1 c2) =
-      CMinus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CExpon c1 c2) =
-      CExpon (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CInterval c1 c2) =
-      CInterval (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect _ _ c = c
-
+-}
 
 -- | Symbolic coeffect representing 0..Inf
 zeroToInfinity :: SGrade
 zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
 
+freshCVarScoped ::
+    (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
+  -> String
+  -> Type
+  -> Quantifier
+  -> ((SBool, SGrade) -> Symbolic SBool)
+  -> Symbolic SBool
+freshCVarScoped quant name (isInterval -> Just t) q k =
+
+  freshCVarScoped quant (name <> ".lower") t q
+   (\(predLb, solverVarLb) ->
+      freshCVarScoped quant (name <> ".upper") t q
+       (\(predUb, solverVarUb) ->
+          -- Respect the meaning of intervals
+          k ( predLb .&& predUb .&& solverVarUb .>= solverVarLb
+            , SInterval solverVarLb solverVarUb
+          )))
+
+freshCVarScoped quant name (isProduct -> Just (t1, t2)) q k =
+
+  freshCVarScoped quant (name <> ".fst") t1 q
+    (\(predFst, solverVarFst) ->
+      freshCVarScoped quant (name <> ".snd") t2 q
+        (\(predSnd, solverVarSnd) ->
+          k (predFst .&& predSnd, SProduct solverVarFst solverVarSnd)))
+
+freshCVarScoped quant name (TyCon (internalName -> "Q")) q k =
+  -- Floats (rationals)
+    quant q name (\solverVar -> k (sTrue, SFloat solverVar))
+
+freshCVarScoped quant name (TyCon conName) q k =
+    -- Integer based
+    quant q name (\solverVar ->
+      case internalName conName of
+        "Nat"    -> k (solverVar .>= 0, SNat solverVar)
+        "Level"  -> k (solverVar .== literal privateRepresentation
+                  .|| solverVar .== literal publicRepresentation
+                  .|| solverVar .== literal unusedRepresentation
+                    , SLevel solverVar)
+        k -> error $ "I don't know how to make a fresh solver variable of type " <> show conName)
+
+freshCVarScoped quant name t q k | t == extendedNat = do
+  quant q name (\solverVar ->
+    k (SNatX.representationConstraint solverVar
+     , SExtNat (SNatX solverVar)))
+
+-- A poly typed coeffect variable compiled into the
+--  infinity value (since this satisfies all the semiring properties on the nose)
+freshCVarScoped quant name (TyVar v) q k | "kprom" `isPrefixOf` internalName v =
+-- future TODO: resolve polymorphism to free coeffect (uninterpreted)
+  k (sTrue, SPoint)
+
+freshCVarScoped quant name (TyVar v) q k =
+  quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
+
+freshCVarScoped _ _ t _ _ =
+  error $ "Trying to make a fresh solver variable for a grade of type: "
+      <> show t <> " but I don't know how."
 
 -- | Generate a solver variable of a particular kind, along with
 -- a refinement predicate

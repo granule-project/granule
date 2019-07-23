@@ -13,13 +13,25 @@ class Quantifiable a where
   universal :: String -> Symbolic a
   existential :: String -> Symbolic a
 
+class QuantifiableScoped a where
+  universalScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
+  existentialScoped :: String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
+
 instance Quantifiable SInteger where
   universal = forall
   existential = exists
 
+instance QuantifiableScoped Integer where
+  universalScoped v = forAll [v]
+  existentialScoped v = forAll [v]
+
 instance Quantifiable SFloat where
   universal = forall
   existential = exists
+
+instance QuantifiableScoped Float where
+  universalScoped v = forAll [v]
+  existentialScoped v = forAll [v]
 
 instance Quantifiable SNatX where
   universal = forallSNatX

@@ -10,10 +10,9 @@ import Data.List.NonEmpty (NonEmpty(..))
 
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
-import Language.Granule.Checker.Coeffects
+import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables

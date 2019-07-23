@@ -181,7 +181,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- *** Various helpers for manipulating the context
 
-
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
 discarded, the rhs result computation must be run! This is useful for
@@ -280,12 +279,12 @@ concludeImplication s localCtxt = do
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
-{-
+
 -- Create a local existential scope
 -- NOTE: leaving this here, but this approach is not used and is incompataible
 -- with the way that existential variables are generated in the solver
 --
-existential :: (?globals :: Globals) => Id -> Kind -> Checker ()
+existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of
     -- No need to add variables of kind Type to the predicate
@@ -295,7 +294,8 @@ existential var k = do
       case predicateStack checkerState of
         (p : stack) -> do
           put (checkerState { predicateStack = Exists var k p : stack })
--}
+        [] ->
+          put (checkerState { predicateStack = [Exists var k (Conj [])] })
 
 pushPred :: Pred -> [Pred] -> [Pred]
 pushPred p (p' : stack) = appendPred p p' : stack

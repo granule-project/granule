@@ -72,6 +72,9 @@ deleteVar _ [] = []
 deleteVar x ((y, b) : m) | x == y = deleteVar x m
                          | otherwise = (y, b) : deleteVar x m
 
+deleteVars :: Ctxt t -> [Id] -> Ctxt t
+deleteVars = foldr deleteVar
+
 relevantSubCtxt :: [Id] -> Ctxt t -> Ctxt t
 relevantSubCtxt vars = filter relevant
   where relevant (var, _) = var `elem` vars
