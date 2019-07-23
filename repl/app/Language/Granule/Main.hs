@@ -466,6 +466,8 @@ main = do
                                Right (_,st') -> loop st'
                                Left err -> do
                                  liftIO $ print err
+                                 -- And leave a space
+                                 liftIO $ putStrLn ""
                                  case remembersFiles err of
                                    Just fs ->
                                      let (fv, rpath, adts, _, map) = st

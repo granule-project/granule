@@ -137,7 +137,7 @@ debug x message
 
 printError :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
 printError message = when (not suppressErrors) $
-  hPutStrLn stderr $ formatError message
+  hPutStrLn stderr $ formatError message <> "\n"
 
 printSuccess :: (?globals :: Globals) => String -> IO ()
 printSuccess message = when (not suppressInfos)
