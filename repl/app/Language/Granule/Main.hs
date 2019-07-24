@@ -45,6 +45,10 @@ import qualified Control.Monad.Except as Ex
 import Language.Granule.ReplError
 import Language.Granule.ReplParser
 
+import Data.Version (showVersion)
+import Paths_granule_repl (version)
+
+
 nullSpanInteractive = Span (0,0) (0,0) "interactive"
 
 type ReplPATH = [FilePath]
@@ -448,6 +452,7 @@ main :: IO ()
 main = do
   someP <- configFileGetPath
   let drp = (lines someP)
+  putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grin). Version " <> showVersion version <> "\ESC[0m"
   runInputT defaultSettings (loop (0,drp,[],[],M.empty))
    where
        loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def () (), [String])) -> InputT IO ()
