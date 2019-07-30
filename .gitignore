@@ -58,5 +58,8 @@ Temporary Items
 # Cabal files, because we are using hpack
 *.cabal
 
+# Compiler Examples
+compiler-examples/
+
 # VSCode
 .vscode

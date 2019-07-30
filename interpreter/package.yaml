@@ -66,4 +66,3 @@ tests:
     - strict
     - tasty
     - tasty-golden
-

@@ -162,9 +162,20 @@ letBox :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
 letBox s pat e1 e2 =
   App s () (Val s () (Abs () (PBox s () pat) Nothing e2)) e1
 
-pair :: Span -> Expr v () -> Expr v () -> Expr v ()
-pair s e1 e2 = App s () (App s () (Val s () (Constr () (mkId ",") [])) e1) e2
+pair :: Expr v () -> Expr v () -> Expr v ()
+pair e1 e2 = App s () (App s () (Val s () (Constr () (mkId "(,)") [])) e1) e2
+             where s = nullSpanNoFile
 
+typedPair :: Value v Type -> Value v Type -> Value v Type
+typedPair left right =
+    Constr ty (mkId "(,)") [left, right]
+    where ty = pairType leftType rightType
+          leftType = annotation left
+          rightType = annotation right
+
+pairType :: Type -> Type -> Type
+pairType leftType rightType =
+    TyApp (TyApp (TyCon (Id "," ",")) leftType) rightType
 
 class Substitutable t where
   -- Syntactic substitution of a term into an expression
