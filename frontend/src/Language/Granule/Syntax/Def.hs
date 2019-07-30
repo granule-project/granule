@@ -3,7 +3,6 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.Granule.Syntax.Def where
@@ -40,18 +39,25 @@ data Def v a = Def
   }
   deriving Generic
 
-deriving instance (Show v, Show a) => Show (Def v a)
 deriving instance (Eq v, Eq a) => Eq (Def v a)
+deriving instance (Show v, Show a) => Show (Def v a)
 
 -- | Single equation of a function
 data Equation v a =
-    Equation Span a [Pattern a] (Expr v a)
-  deriving Generic
-deriving instance (Show v, Show a) => Show (Equation v a)
-deriving instance (Eq v, Eq a) => Eq (Equation v a)
+    Equation {
+        equationSpan :: Span,
+        equationType :: a,
+        equationArguments :: [Pattern a],
+        equationBody :: Expr v a }
+    deriving Generic
 
-instance FirstParameter (Def v a) Span
+deriving instance (Eq v, Eq a) => Eq (Equation v a)
+deriving instance (Show v, Show a) => Show (Equation v a)
 instance FirstParameter (Equation v a) Span
+
+definitionType :: Def v a -> Type
+definitionType Def { defTypeScheme = ts } =
+    ty where (Forall _ _ _ ty) = ts
 
 -- | Data type declarations
 data DataDecl = DataDecl

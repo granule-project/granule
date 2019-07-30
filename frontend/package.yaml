@@ -63,6 +63,7 @@ library:
   - Language.Granule.Syntax.Parser
   - Language.Granule.Syntax.Pattern
   - Language.Granule.Syntax.Pretty
+  - Language.Granule.Syntax.Preprocessor
   - Language.Granule.Syntax.Preprocessor.Ascii
   - Language.Granule.Syntax.Preprocessor.Latex
   - Language.Granule.Syntax.Preprocessor.Markdown
@@ -83,6 +84,7 @@ library:
   - bifunctors
   - raw-strings-qq
   - text-replace
+  - directory
 
 tests:
   frontend-spec:
