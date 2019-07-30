@@ -11,7 +11,7 @@ RUN wget https://github.com/Z3Prover/z3/releases/download/z3-4.8.4/z3-4.8.4.d6df
 # Get a stripped down ubuntu 16.04 for a lean distribution image
 FROM ubuntu:xenial-20190515
 WORKDIR /granule
-COPY --from=build /usr/bin/gr /usr/bin/grin /usr/bin/z3 /usr/bin/
+COPY --from=build /usr/bin/gr /usr/bin/grepl /usr/bin/z3 /usr/bin/
 COPY --from=build /granule /granule
 RUN apt-get update
 # for GHC

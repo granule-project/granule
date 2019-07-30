@@ -1,7 +1,7 @@
 -- This is a stripped down version of `further-examples.md.gr` without all the explanation.
--- But this is useful for experimenting with in `grin`.
+-- But this is useful for experimenting with in `grepl`.
 
--- $ grin
+-- $ grepl
 -- > :l examples/further-examples.gr
 
 pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]

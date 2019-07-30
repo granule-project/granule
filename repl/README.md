@@ -1,4 +1,4 @@
-# `grin`—Granule Interactive
+# `grepl` — Granule repl
 
 A REPL for the Granule language
 
@@ -23,14 +23,14 @@ A REPL for the Granule language
 
 ## Getting Started
 
-To install `grin`, run
+To install `grepl`, run
 ```
 $ stack install
 ```
 
 To launch, run
 ```
-$ grin
+$ grepl
 ```
 
 ## REPL Commands and Use
@@ -160,7 +160,7 @@ The congiuration file contains various variables used for set up of the REPL
 #### Config file creation
 <a id="config-file-creation"></a>
 The configuration file needs to be created by the user.  It needs to be named
-`.grin`.  This file needs to be placed in the home directory
+`.grepl`.  This file needs to be placed in the home directory
 ###### Windows
 ```
 C:\Users\<username>

@@ -9,7 +9,7 @@ dependencies:
 - base >=4.10 && <5
 
 executables:
-  grin:
+  grepl:
     main: Language/Granule/Main.hs
     source-dirs: app
     ghc-options: -O3 -W -Werror -Wno-unused-matches
