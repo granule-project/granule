@@ -20,6 +20,11 @@ import Language.Granule.Syntax.Expr (Operator(..))
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
+-- Given a name to the powerset of a set of particular elements,
+-- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
+setElements :: [(Kind, Type)]
+setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+
 typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
 typeConstructors =
     [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
@@ -29,10 +34,8 @@ typeConstructors =
     , (mkId "Float", (KType, Nothing))
     , (mkId "Char", (KType, Nothing))
     , (mkId "String", (KType, Nothing))
-    , (mkId "IO", (KFun KType KType, Nothing))
-    , (mkId "Session", (KFun KType KType, Nothing))
     , (mkId "Protocol", (KType, Nothing))
-    , (mkId "Nat",  (KCoeffect, Nothing))
+    , (mkId "Nat",  (KUnion KCoeffect KEffect, Nothing))
     , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing)) -- Security level
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
@@ -47,6 +50,19 @@ typeConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), Nothing))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
+    -- Effect grade types - Sessions
+    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), Nothing))
+    , (mkId "Com", (KEffect, Nothing))
+    -- Effect grade types - IO
+    , (mkId "IO", (KEffect, Nothing))
+    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     ] ++ builtinTypeConstructors
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
@@ -131,16 +147,16 @@ pure = BUILTIN
 -- I/O
 --------------------------------------------------------------------------------
 
-fromStdin : String <R>
+fromStdin : String <{Stdin}>
 fromStdin = BUILTIN
 
-toStdout : String -> () <W>
+toStdout : String -> () <{Stdout}>
 toStdout = BUILTIN
 
-toStderr : String -> () <W>
+toStderr : String -> () <{Stderr}>
 toStderr = BUILTIN
 
-readInt : Int <R>
+readInt : Int <{Stdin}>
 readInt = BUILTIN
 
 --------------------------------------------------------------------------------
@@ -209,31 +225,31 @@ openHandle
   : forall {m : HandleType}
   . IOMode m
   -> String
-  -> (Handle m) <Open,IOExcept>
+  -> (Handle m) <{Open,IOExcept}>
 openHandle = BUILTIN
 
-readChar : Handle R -> (Handle R, Char) <Read,IOExcept>
+readChar : Handle R -> (Handle R, Char) <{Read,IOExcept}>
 readChar = BUILTIN
 
-readChar' : Handle RW -> (Handle RW, Char) <Read,IOExcept>
+readChar' : Handle RW -> (Handle RW, Char) <{Read,IOExcept}>
 readChar' = BUILTIN
 
-appendChar : Handle A -> Char -> (Handle A) <Write,IOExcept>
+appendChar : Handle A -> Char -> (Handle A) <{Write,IOExcept}>
 appendChar = BUILTIN
 
-writeChar : Handle W -> Char -> (Handle W) <Write,IOExcept>
+writeChar : Handle W -> Char -> (Handle W) <{Write,IOExcept}>
 writeChar = BUILTIN
 
-writeChar' : Handle RW -> Char -> (Handle RW) <Write,IOExcept>
+writeChar' : Handle RW -> Char -> (Handle RW) <{Write,IOExcept}>
 writeChar' = BUILTIN
 
-closeHandle : forall {m : HandleType} . Handle m -> () <Close,IOExcept>
+closeHandle : forall {m : HandleType} . Handle m -> () <{Close,IOExcept}>
 closeHandle = BUILTIN
 
-isEOF : Handle R -> (Handle R, Bool) <Read,IOExcept>
+isEOF : Handle R -> (Handle R, Bool) <{Read,IOExcept}>
 isEOF = BUILTIN
 
-isEOF' : Handle RW -> (Handle RW, Bool) <Read,IOExcept>
+isEOF' : Handle RW -> (Handle RW, Bool) <{Read,IOExcept}>
 isEOF' = BUILTIN
 
 -- ???
@@ -318,6 +334,13 @@ copy
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
 copy = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Cost
+--------------------------------------------------------------------------------
+
+tick : () <1>
+tick = BUILTIN
 
 |]
 

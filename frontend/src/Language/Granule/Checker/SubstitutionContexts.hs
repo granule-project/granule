@@ -18,14 +18,12 @@ data Substitutors =
     SubstT  Type
   | SubstC  Coeffect
   | SubstK  Kind
-  | SubstE  Effect
   deriving (Eq, Show)
 
 instance Pretty Substitutors where
   prettyL l (SubstT t) = prettyL l t
   prettyL l (SubstC c) = prettyL l c
   prettyL l (SubstK k) = prettyL l k
-  prettyL l (SubstE e) = prettyL l e
 
 instance Term Substitution where
   freeVars [] = []
@@ -35,11 +33,6 @@ instance Term Substitution where
     freeVars c ++ freeVars subst
   freeVars ((v, SubstK k):subst) =
     freeVars k ++ freeVars subst
-  freeVars ((v, SubstE e):subst) =
-    -- freeVars e ++
-    -- TODO: when effects become terms we can do something here
-    freeVars subst
-
 
 -- | For substitutions which are just renaminings
 --   allow the substitution to be inverted

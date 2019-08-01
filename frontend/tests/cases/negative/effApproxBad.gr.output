@@ -1,0 +1,4 @@
+Type checking failed: 
+Falsifiable theorem: 3:1:
+The following theorem associated with `tick'` is falsifiable:
+	(3 ≤ 2)

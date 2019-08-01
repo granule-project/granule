@@ -94,6 +94,7 @@ data ExprF ev a expr value =
      -- let p <- e1 in e2
   | ValF Span a value
   | CaseF Span a expr [(Pattern a, expr)]
+  | HoleF Span a
   deriving (Generic, Eq)
 
 data Operator
@@ -123,7 +124,8 @@ pattern Binop sp a op lhs rhs = (ExprFix2 (BinopF sp a op lhs rhs))
 pattern LetDiamond sp a pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a pat mty nowexp nextexp))
 pattern Val sp a val = (ExprFix2 (ValF sp a val))
 pattern Case sp a swexp arms = (ExprFix2 (CaseF sp a swexp arms))
-{-# COMPLETE App, Binop, LetDiamond, Val, Case #-}
+pattern Hole sp a = ExprFix2 (HoleF sp a)
+{-# COMPLETE App, Binop, LetDiamond, Val, Case, Hole #-}
 
 instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
@@ -182,7 +184,6 @@ class Substitutable t where
   -- (assuming variables are all unique to avoid capture)
   subst :: Expr ev a -> Id -> t ev a -> Expr ev a
 
-
 instance Term (Value ev a) where
     freeVars (Abs _ p _ e) = freeVars e \\ boundVars p
     freeVars (Var _ x)     = [x]
@@ -194,6 +195,11 @@ instance Term (Value ev a) where
     freeVars CharLiteral{}   = []
     freeVars StringLiteral{} = []
     freeVars Ext{} = []
+
+    hasHole (Abs _ _ _ e) = hasHole e
+    hasHole (Pure _ e)    = hasHole e
+    hasHole (Promote _ e) = hasHole e
+    hasHole _             = False
 
 instance Substitutable Value where
     subst es v (Abs a w t e)      = Val (nullSpanInFile $ getSpan es) a $ Abs a w t (subst es v e)
@@ -248,6 +254,14 @@ instance Term (Expr v a) where
     freeVars (Val _ _ e)                = freeVars e
     freeVars (Case _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
+    freeVars Hole{} = []
+
+    hasHole (App _ _ e1 e2) = hasHole e1 || hasHole e2
+    hasHole (Binop _ _ _ e1 e2) = hasHole e1 || hasHole e2
+    hasHole (LetDiamond _ _ p _ e1 e2) = hasHole e1 || hasHole e2
+    hasHole (Val _ _ e) = hasHole e
+    hasHole (Case _ _ e cases) = hasHole e || (or (map (hasHole . snd) cases))
+    hasHole Hole{} = True
 
 instance Substitutable Expr where
     subst es v (App s a e1 e2) =
@@ -265,6 +279,8 @@ instance Substitutable Expr where
     subst es v (Case s a expr cases) =
       Case s a (subst es v expr)
                (map (second (subst es v)) cases)
+
+    subst es _ v@Hole{} = v
 
 instance Monad m => Freshenable m (Expr v a) where
     freshen (App s a e1 e2) = do
@@ -298,3 +314,5 @@ instance Monad m => Freshenable m (Expr v a) where
     freshen (Val s a v) = do
      v <- freshen v
      return (Val s a v)
+
+    freshen v@Hole{} = return v

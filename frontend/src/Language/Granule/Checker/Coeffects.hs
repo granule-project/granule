@@ -1,15 +1,19 @@
-{- Deals with compilation of coeffects into symbolic representations of SBV -}
+{- Deals with coeffect algebras -}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Coeffects where
 
+import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Context
+
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
+import Language.Granule.Utils
 
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
@@ -32,18 +36,25 @@ flattenable t1 t2
 
         _ -> Just (CProduct, TyCon (mkId "×") .@ t1 .@ t2)
 
--- | Multiply an context by a coeffect
---   (Derelict and promote all variables which are not discharged and are in th
+-- | Multiply an context by a coeffect (algorithmic-style)
+--   (Derelict and promote all variables which are not discharged and are in the
 --    set of used variables, (first param))
-multAll :: [Id] -> Coeffect -> Ctxt Assumption -> Ctxt Assumption
+multAll :: (?globals :: Globals) => Span -> [Id] -> Coeffect -> Ctxt Assumption -> Checker (Ctxt Assumption)
 
-multAll _ _ [] = []
+multAll _ _ _ [] = return []
 
-multAll vars c ((name, Linear t) : ctxt) | name `elem` vars
-    = (name, Discharged t c) : multAll vars c ctxt
+multAll s vars c ((name, Linear t) : ctxt) | name `elem` vars = do
+    ctxt' <- multAll s vars c ctxt
+    return $ (name, Discharged t c) : ctxt'
 
-multAll vars c ((name, Discharged t c') : ctxt) | name `elem` vars
-    = (name, Discharged t (c `CTimes` c')) : multAll vars c ctxt
+multAll s vars c ((name, Discharged t c') : ctxt) | name `elem` vars = do
+    ctxt' <- multAll s vars c ctxt
+    (_, (inj1, inj2)) <- mguCoeffectTypes s c c'
+    return $ (name, Discharged t ((inj1 c) `CTimes` (inj2 c'))) : ctxt'
 
-multAll vars c ((_, Linear _) : ctxt) = multAll vars c ctxt
-multAll vars c ((_, Discharged _ _) : ctxt) = multAll vars c ctxt
+-- Ignore linear and non-relevant variables
+multAll s vars c ((_, Linear _) : ctxt) =
+    multAll s vars c ctxt
+
+multAll s vars c ((_, Discharged _ _) : ctxt) =
+    multAll s vars c ctxt

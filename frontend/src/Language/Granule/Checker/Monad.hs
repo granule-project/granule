@@ -32,7 +32,7 @@ import Language.Granule.Context
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr (Operator, Expr)
-import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen)
+import Language.Granule.Syntax.Helpers (FreshenerState(..), freshen, Term(..))
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
@@ -84,6 +84,10 @@ data Assumption
   = Linear Type
   | Discharged Type Coeffect
     deriving (Eq, Show)
+
+instance Term Assumption where
+  freeVars (Linear t) = freeVars t
+  freeVars (Discharged t c) = freeVars t ++ freeVars c
 
 instance Pretty Assumption where
     prettyL l (Linear ty) = prettyL l ty
@@ -347,14 +351,20 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 
 {- Helpers for error messages and checker control flow -}
 data CheckerError
-  = TypeError
+  = HoleMessage
+    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier) }
+  | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
     { errLoc :: Span, errConstraint :: Neg Constraint }
   | KindMismatch
-    { errLoc :: Span, kExpected :: Kind, kActual :: Kind }
+    { errLoc :: Span, tyActualK :: Maybe Type, kExpected :: Kind, kActual :: Kind }
   | KindError
     { errLoc :: Span, errTy :: Type, errK :: Kind }
+  | KindCannotFormSet
+    { errLoc :: Span, errK :: Kind }
+  | KindsNotEqual
+    { errLoc :: Span, errK1 :: Kind, errK2 :: Kind }
   | IntervalGradeKindError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | LinearityError
@@ -390,7 +400,7 @@ data CheckerError
   | DataConstructorNameClashError
     { errLoc :: Span, errId :: Id }
   | EffectMismatch
-    { errLoc :: Span, effExpected :: Effect, effActual :: Effect }
+    { errLoc :: Span, effExpected :: Type, effActual :: Type }
   | UnificationDisallowed
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
@@ -447,16 +457,21 @@ data CheckerError
     { errLoc :: Span, tyConExpected :: Id, tyConActual :: Id }
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
+  | UnknownResourceAlgebra
+    { errLoc :: Span, errTy :: Type, errK :: Kind }
   deriving (Show, Eq)
 
 
 instance UserMsg CheckerError where
   location = errLoc
 
+  title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
   title KindError{} = "Kind error"
+  title KindCannotFormSet{} = "Kind error"
+  title KindsNotEqual{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
   title PatternTypingError{} = "Pattern typing error"
@@ -503,6 +518,23 @@ instance UserMsg CheckerError where
   title NameClashDefs{} = "Definition name clash"
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
+  title UnknownResourceAlgebra{} = "Type error"
+
+  msg HoleMessage{..} =
+    (case holeTy of
+      Nothing -> "\n   Hole occurs in synthesis position so the type is not yet known"
+      Just ty -> "\n   Expected type is: `" <> pretty ty <> "`")
+    <>
+    -- Print the context if there is anything to use
+    (if null context
+      then ""
+      else "\n\n   Context:" <> (concatMap (\x -> "\n     " ++ pretty x) context))
+    <>
+    (if null tyContext
+      then ""
+      else "\n\n   Type context:" <> (concatMap (\(v, (t , _)) ->  "\n     "
+                                                <> pretty v
+                                                <> " : " <> pretty t) tyContext) <> "\n")
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
@@ -511,11 +543,19 @@ instance UserMsg CheckerError where
   msg GradingError{ errConstraint } = pretty errConstraint
 
   msg KindMismatch{..}
-    = "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
+    = case tyActualK of
+        Nothing -> "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
+        Just ty -> "Expected kind `" <> pretty kExpected <> "` for type `" <> pretty ty <> "` but actual kind is `" <> pretty kActual <> "`"
 
   msg KindError{..}
     = "Type `" <> pretty errTy
     <> "` does not have expected kind `" <> pretty errK <> "`"
+
+  msg KindCannotFormSet{..}
+    = "Types of kind `" <> pretty errK <> "` cannot be used in a type-level set."
+
+  msg KindsNotEqual{..}
+    = "Kind `" <> pretty errK1 <> "` is not equal to `" <> pretty errK2 <> "`"
 
   msg IntervalGradeKindError{..}
    = "Interval grade mismatch `" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
@@ -725,6 +765,13 @@ instance UserMsg CheckerError where
 
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
+
+  msg UnknownResourceAlgebra{ errK, errTy }
+    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+
+  color HoleMessage{} = Blue
+  color _ = Red
+
 
 data LinearityMismatch
   = LinearNotUsed Id

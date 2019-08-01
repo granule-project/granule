@@ -7,14 +7,14 @@ readMany n h =
       (h, cs) ← readMany (n - 1) h
   in pure (h, stringCons c cs)
 
-readFile : String -> String <Open,Read,Close,IOExcept>
+readFile : String -> String <{Open,Read,Close,IOExcept}>
 readFile filename =
   let h       <- openHandle ReadMode filename;
       (h, cs) <- readUntilEnd h;
       _       <- closeHandle h
   in pure cs
 
-readUntilEnd : Handle R -> (Handle R, String) <Read,IOExcept>
+readUntilEnd : Handle R -> (Handle R, String) <{Read,IOExcept}>
 readUntilEnd h =
   let (h, eof) <- isEOF h in
     case eof of

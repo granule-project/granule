@@ -52,10 +52,6 @@ instance Substitutable Substitutors where
         k <- substitute subst k
         return $ SubstK k
 
-      SubstE e -> do
-        e <- substitute subst e
-        return $ SubstE e
-
 -- Speciale case of substituting a substition
 instance Substitutable Substitution where
   substitute subst [] = return []
@@ -182,10 +178,6 @@ instance Substitutable Coeffect where
     substitute _ c@CFloat{}    = return c
     substitute _ c@Level{}     = return c
 
-instance Substitutable Effect where
-  -- {TODO: Make effects richer}
-  substitute subst = pure
-
 instance Substitutable Kind where
 
   substitute subst (KPromote t) = do
@@ -193,6 +185,7 @@ instance Substitutable Kind where
       return $ KPromote t
 
   substitute subst KType = return KType
+  substitute subst KEffect = return KEffect
   substitute subst KCoeffect = return KCoeffect
   substitute subst KPredicate = return KPredicate
   substitute subst (KFun c1 c2) = do
@@ -204,6 +197,10 @@ instance Substitutable Kind where
       Just (SubstK k) -> return k
       Just (SubstT t) -> return $ KPromote t
       _               -> return $ KVar v
+  substitute subst (KUnion k1 k2) = do
+    k1' <- substitute subst k1
+    k2' <- substitute subst k2
+    return $ KUnion k1' k2'
 
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
@@ -495,6 +492,7 @@ substituteExpr ctxt (CaseF sp ty expr arms) =
     do  ty' <- substitute ctxt ty
         arms' <- mapM (mapFstM (substitute ctxt)) arms
         return $ Case sp ty' expr arms'
+substituteExpr ctxt (HoleF s a) = return $ Hole s a
 
 mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
 mapFstM fn (f, r) = do
@@ -546,7 +544,6 @@ instance Unifiable Substitutors where
     unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
     unify (SubstC c) (SubstC c') = unify c c'
     unify (SubstK k) (SubstK k') = unify k k'
-    unify (SubstE e) (SubstE e') = unify e e'
     unify _ _ = return Nothing
 
 instance Unifiable Type where
@@ -654,11 +651,6 @@ instance Unifiable Coeffect where
 
     unify c c' =
         if c == c' then return $ Just [] else return Nothing
-
-instance Unifiable Effect where
-    unify e e' =
-        if e == e' then return $ Just []
-                    else return $ Nothing
 
 instance Unifiable Kind where
     unify (KVar v) k =

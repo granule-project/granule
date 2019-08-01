@@ -89,6 +89,7 @@ import Language.Granule.Utils hiding (mkSpan)
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
     '∘'   { TokenRing _ }
+    '?'   { TokenHole _ }
 
 %right '∘'
 %right in
@@ -355,16 +356,17 @@ Set :: { [(String, Type)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
   | VAR ':' Type              { [(symString $1, $3)] }
 
-Effect :: { Effect }
-  : Effs                 { $1 }
-  | {-empty-}            { [] }
+Effect :: { Type }
+  : '{' EffSet '}'            { TySet $2 }
+  | {- EMPTY -}               { TyCon $ mkId "Pure" }
+  | TyJuxt                    { $1 }
 
-Effs :: { [String] }
-  : Eff ',' Effs              { $1 : $3 }
-  | Eff                       { [$1] }
+EffSet :: { [Type] }
+  : Eff ',' EffSet         { $1 : $3 }
+  | Eff                    { [$1] }
 
-Eff :: { String }
-  : CONSTR                    { constrString $1 }
+Eff :: { Type }
+  : CONSTR                  { TyCon $ mkId $ constrString $1 }
 
 Expr :: { Expr () () }
   : let LetBind MultiLet
@@ -494,6 +496,8 @@ Atom :: { Expr () () }
   | STRING                    {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () $
                                       case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
+  | '?'
+    {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp () }
 
 {
 
