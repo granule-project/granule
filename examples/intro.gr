@@ -1,10 +1,10 @@
 -- This is a stripped down version of `intro.md.gr` without all the explanation.
--- But this is useful for experimenting with in `grin`, e.g.
+-- But this is useful for experimenting with in `grepl`, e.g.
 
--- $ grin
+-- $ grepl
 -- > :l exmaples/intro.gr
 
--- Grin is a REPL a bit like ghci, so you can run code and inspect types, e.g.
+-- grepl is a REPL a bit like ghci, so you can run code and inspect types, e.g.
 -- > :t id
 -- id : forall a : Type. a -> a
 -- > not True

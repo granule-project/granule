@@ -1,0 +1,4 @@
+Type checking failed: 
+Found a goal: 2:8:
+
+   Expected type is: `Int`

@@ -1,0 +1,10 @@
+import Nat
+
+data Upper (n : Nat) : Type where
+  Mk : forall {m : Nat} . {m < n} => N m -> Upper n
+
+three : N 3
+three = S (S (S Z))
+
+atLeastThree : Upper 2
+atLeastThree = Mk three

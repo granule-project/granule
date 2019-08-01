@@ -49,20 +49,23 @@ Example: `List n Int` in Granule
 data Type = FunTy Type Type           -- ^ Function type
           | TyCon Id                  -- ^ Type constructor
           | Box Coeffect Type         -- ^ Coeffect type
-          | Diamond Effect Type       -- ^ Effect type
+          | Diamond Type Type         -- ^ Effect type
           | TyVar Id                  -- ^ Type variable
           | TyApp Type Type           -- ^ Type application
           | TyInt Int                 -- ^ Type-level Int
           | TyInfix TypeOperator Type Type  -- ^ Infix type operator
+          | TySet [Type]              -- ^ Type-level set
     deriving (Eq, Ord, Show)
 
 -- | Kinds
 data Kind = KType
           | KCoeffect
+          | KEffect
           | KPredicate
           | KFun Kind Kind
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
+          | KUnion Kind Kind
     deriving (Show, Ord, Eq)
 
 promoteTypeToKind :: Type -> Kind
@@ -89,6 +92,7 @@ protocol = kConstr $ mkId "Protocol"
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
+  freshen KEffect = return KEffect
   freshen KPredicate = return KPredicate
   freshen (KFun k1 k2) = do
     k1 <- freshen k1
@@ -106,6 +110,11 @@ instance Monad m => Freshenable m Kind where
   freshen (KPromote ty) = do
      ty <- freshen ty
      return $ KPromote ty
+
+  freshen (KUnion k1 k2) = do
+    k1' <- freshen k1
+    k2' <- freshen k2
+    return $ KUnion k1' k2'
 
 -- | Represents coeffect grades
 data Coeffect = CNat      Int
@@ -126,6 +135,106 @@ data Coeffect = CNat      Int
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
+
+-- Algebra for coeffects
+data CoeffectFold a = CoeffectFold
+  { cNat   :: Int -> a
+  , cFloat :: Rational -> a
+  , cInf   :: Maybe Type -> a
+  , cInterval :: a -> a -> a
+  , cVar   :: Id -> a
+  , cPlus  :: a -> a -> a
+  , cTimes :: a -> a -> a
+  , cMinus :: a -> a -> a
+  , cMeet  :: a -> a -> a
+  , cJoin  :: a -> a -> a
+  , cZero  :: Type -> a
+  , cOne   :: Type -> a
+  , cLevel :: Integer -> a
+  , cSet   :: [(String, Type)] -> a
+  , cSig   :: a -> Type -> a
+  , cExpon :: a -> a -> a
+  , cProd  :: a -> a -> a }
+
+-- Base monadic algebra
+baseCoeffectFold :: CoeffectFold Coeffect
+baseCoeffectFold =
+  CoeffectFold
+    { cNat = CNat
+    , cFloat = CFloat
+    , cInf = CInfinity
+    , cInterval = CInterval
+    , cVar = CVar
+    , cPlus = CPlus
+    , cTimes = CTimes
+    , cMinus = CMinus
+    , cMeet = CMeet
+    , cJoin = CJoin
+    , cZero = CZero
+    , cOne = COne
+    , cLevel = Level
+    , cSet = CSet
+    , cSig = CSig
+    , cExpon = CExpon
+    , cProd = CProduct
+    }
+
+-- | Fold on a `coeffect` type
+coeffectFold :: CoeffectFold a -> Coeffect -> a
+coeffectFold algebra = go
+  where
+    go (CNat n) =
+      (cNat algebra) n
+    go (CFloat r) =
+      (cFloat algebra) r
+    go (CInfinity i) =
+      (cInf algebra) i
+    go (CInterval l u) = let
+      l' = go l
+      u' = go u
+      in (cInterval algebra) l' u'
+    go (CVar v) =
+      (cVar algebra) v
+    go (CPlus c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cPlus algebra) c1' c2'
+    go (CTimes c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cTimes algebra) c1' c2'
+    go (CMinus c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cMinus algebra) c1' c2'
+    go (CMeet c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cMeet algebra) c1' c2'
+    go (CJoin c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cJoin algebra) c1' c2'
+    go (CZero t) =
+      (cZero algebra) t
+    go (COne t) =
+      (cOne algebra) t
+    go (Level l) =
+      (cLevel algebra) l
+    go (CSet set) =
+      (cSet algebra) set
+    go (CSig c t) = let
+      c' = go c
+      in (cSig algebra) c' t
+    go (CExpon c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cExpon algebra) c1' c2'
+    go (CProduct c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cProd algebra) c1' c2'
+
 
 coeffectIsAtom :: Coeffect -> Bool
 coeffectIsAtom (CNat _) = True
@@ -160,10 +269,6 @@ isProduct :: Type -> Maybe (Type, Type)
 isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
-
--- | Represents effect grades
--- TODO: Make richer
-type Effect = [String]
 
 ----------------------------------------------------------------------
 -- Helpers
@@ -214,7 +319,7 @@ mTyCon :: Monad m => Id -> m Type
 mTyCon       = return . TyCon
 mBox :: Monad m => Coeffect -> Type -> m Type
 mBox c y     = return (Box c y)
-mDiamond :: Monad m => Effect -> Type -> m Type
+mDiamond :: Monad m => Type -> Type -> m Type
 mDiamond e y = return (Diamond e y)
 mTyVar :: Monad m => Id -> m Type
 mTyVar       = return . TyVar
@@ -224,22 +329,25 @@ mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
 mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
+mTySet   :: Monad m => [Type] -> m Type
+mTySet xs = return (TySet xs)
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
   { tfFunTy   :: a -> a        -> m a
   , tfTyCon   :: Id            -> m a
   , tfBox     :: Coeffect -> a -> m a
-  , tfDiamond :: Effect -> a   -> m a
+  , tfDiamond :: a -> a        -> m a
   , tfTyVar   :: Id            -> m a
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: TypeOperator  -> a -> a -> m a }
+  , tfTyInfix :: TypeOperator  -> a -> a -> m a
+  , tfSet     :: [a]           -> m a }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix
+  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: Monad m => TypeFold m a -> Type -> m a
@@ -253,9 +361,10 @@ typeFoldM algebra = go
    go (Box c t) = do
      t' <- go t
      (tfBox algebra) c t'
-   go (Diamond c t) = do
+   go (Diamond e t) = do
      t' <- go t
-     (tfDiamond algebra) c t'
+     e' <- go e
+     (tfDiamond algebra) e' t'
    go (TyVar v) = (tfTyVar algebra) v
    go (TyApp t1 t2) = do
      t1' <- go t1
@@ -266,6 +375,9 @@ typeFoldM algebra = go
      t1' <- go t1
      t2' <- go t2
      (tfTyInfix algebra) op t1' t2'
+   go (TySet ts) = do
+    ts' <- mapM go ts
+    (tfSet algebra) ts'
 
 instance FirstParameter TypeScheme Span
 
@@ -283,11 +395,12 @@ instance Term Type where
       { tfFunTy   = \x y -> return $ x <> y
       , tfTyCon   = \_ -> return [] -- or: const (return [])
       , tfBox     = \c t -> return $ freeVars c <> t
-      , tfDiamond = \_ x -> return x
+      , tfDiamond = \e t -> return $ e <> t
       , tfTyVar   = \v -> return [v] -- or: return . return
       , tfTyApp   = \x y -> return $ x <> y
       , tfTyInt   = \_ -> return []
       , tfTyInfix = \_ y z -> return $ y <> z
+      , tfSet     = return . concat
       }
 
 instance Term Coeffect where

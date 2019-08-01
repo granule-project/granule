@@ -1,0 +1,11 @@
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+
+--- Map function
+map
+  : forall {a b : Type, n : Nat}
+  . (a -> b) [n] -> Vec n a -> Vec n b
+map [_] Nil = Nil;
+map [f] (Cons x xs) = Cons (f x) (map [?] xs)

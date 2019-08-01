@@ -19,6 +19,7 @@ import qualified Data.Text as T
 
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
+import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.KindsImplicit
@@ -36,7 +37,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Helpers (freeVars)
+import Language.Granule.Syntax.Helpers (freeVars, hasHole)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pretty
@@ -126,7 +127,7 @@ checkDataCon
           KPromote (TyCon k) | internalName k == "Protocol" ->
             registerDataConstructor tySch coercions
 
-          _ -> throw KindMismatch{ errLoc = sp, kExpected = KType, kActual = kind }
+          _ -> throw KindMismatch{ errLoc = sp, tyActualK = Just ty, kExpected = KType, kActual = kind }
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
@@ -326,6 +327,12 @@ checkExpr :: (?globals :: Globals)
           -> Expr () ()       -- expression
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
+-- Hit an unfilled hole
+checkExpr _ ctxt _ _ t (Hole s _) = do
+  st <- get
+  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
+  throw $ HoleMessage s (Just t) ctxt varContext
+
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
     let elaborated = Val s ty (NumInt n)
@@ -389,7 +396,7 @@ checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
 
     funTy <- substitute subst2 (FunTy argTy tau)
-    (gam1, subst1, elaboratedL) <- checkExpr defs gam (flipPol pol) topLevel funTy e1
+    (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
 
     gam <- ctxtPlus s gam1 gam2
 
@@ -408,7 +415,13 @@ checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
 -- Promotion
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
-    let vars = freeVars e -- map fst gam
+    let vars =
+          if hasHole e
+            -- If we are promoting soemthing with a hole, then put all free variables in scope
+            then map fst gam
+            -- Otherwise we need to discharge only things that get used
+            else freeVars e
+
     gamF    <- discToFreshVarsIn s vars gam demand
     (gam', subst, elaboratedE) <- checkExpr defs gamF pol False tau e
 
@@ -418,7 +431,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
     -- (the guard contexts come from a special context in the solver)
     guardGam <- allGuardContexts
     guardGam' <- filterM isLevelKinded guardGam
-    let gam'' = multAll (vars <> map fst guardGam') demand (gam' <> guardGam')
+    gam'' <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
 
     let elaborated = Val s ty (Promote tau elaboratedE)
     return (gam'', subst, elaborated)
@@ -577,6 +590,12 @@ synthExpr :: (?globals :: Globals)
           -> Expr () ()        -- ^ Expression
           -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
+-- Hit an unfilled hole
+synthExpr _ ctxt _ (Hole s _) = do
+  st <- get
+  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
+  throw $ HoleMessage s Nothing ctxt varContext
+
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do
   let t = TyCon $ mkId "Int"
@@ -611,8 +630,11 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      -- TODO: allow data type constructors to have constraints
-      (ty, _, _, _, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+
+      mapM_ (\ty -> do
+        pred <- compileTypeConstraintToConstraint s ty
+        addPredicate pred) constraints
 
       -- Apply coercions
       ty <- substitute coercions' ty
@@ -681,14 +703,10 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
 -- Diamond cut
 -- let [[p]] <- [[e1 : sig]] in [[e2 : tau]]
 synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
-  -- TODO: refactor this once we get a proper mechanism for
-  -- specifying effect over-approximations and type aliases
-
   (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
+  -- Check that a graded possibility type was inferred
   (ef1, ty1) <- case sig of
-      Diamond ["IO"] ty1 -> return ([], ty1)
-      Diamond ["Session"] ty1 -> return ([], ty1)
       Diamond ef1 ty1 -> return (ef1, ty1)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
@@ -698,9 +716,9 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   pIrrefutable <- isIrrefutable s ty1 p
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
   (tau, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+
+  -- Check that a graded possibility type was inferred
   (ef2, ty2) <- case tau of
-      Diamond ["IO"] ty2 -> return ([], ty2)
-      Diamond ["Session"] ty2 -> return ([], ty2)
       Diamond ef2 ty2 -> return (ef2, ty2)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
 
@@ -712,9 +730,12 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
-  let t = Diamond (ef1 <> ef2) ty2
+  (efTy, u) <- twoEqualEffectTypes s ef1 ef2
+  -- Multiply the effects
+  ef <- effectMult s efTy ef1 ef2
+  let t = Diamond ef ty2
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2]
+  subst <- combineManySubstitutions s [substP, subst1, subst2, u]
   -- Synth subst
   t' <- substitute substP t
 
@@ -792,7 +813,7 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    debugM "Synthing a promotion of " $ pretty e
 
    -- Create a fresh kind variable for this coeffect
-   vark <- freshIdentifierBase $ "kprom_" <> [head (pretty e)]
+   vark <- freshIdentifierBase $ "kprom_[" <> pretty (startPos s) <> "]"
    -- remember this new kind variable in the kind environment
    modify (\st -> st { tyVarContext = (mkId vark, (KCoeffect, InstanceQ)) : tyVarContext st })
 
@@ -805,7 +826,9 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
 
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy (Promote t elaboratedE)
-   return (finalTy, multAll (freeVars e) (CVar var) gam', subst, elaborated)
+
+   gam'' <- multAll s (freeVars e) (CVar var) gam'
+   return (finalTy, gam'', subst, elaborated)
 
 
 -- BinOp
@@ -978,14 +1001,14 @@ justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (KPromote t, q)) = do
       k <- inferKindOfType s t
-      case k of
-        KCoeffect -> return $ Just (var, (t, q))
-        _         -> return Nothing
+      if isCoeffectKind k
+        then return $ Just (var, (t, q))
+        else return Nothing
     convert (var, (KVar v, q)) = do
       k <- inferKindOfType s (TyVar v)
-      case k of
-        KCoeffect -> return $ Just (var, (TyVar v, q))
-        _         -> return Nothing
+      if isCoeffectKind k
+        then return $ Just (var, (TyVar v, q))
+        else return Nothing
     convert _ = return Nothing
 justCoeffectTypesConvertedVars :: (?globals::Globals)
   => Span -> [(Id, Kind)] -> Checker (Ctxt Type)
@@ -1146,8 +1169,8 @@ relateByAssumption _ _ (_, Linear _) (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
 relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
-  kind <- mguCoeffectTypes s c1 c2
-  addConstraint (rel s c1 c2 kind)
+  (kind, (inj1, inj2)) <- mguCoeffectTypes s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
 
 relateByAssumption s _ x y =
   throw UnifyGradedLinear{ errLoc = s, errGraded = fst x, errLinear = fst y }
@@ -1161,7 +1184,7 @@ discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption ->
 discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      coeffTy <- mguCoeffectTypes s c coeffect
+      (coeffTy, _) <- mguCoeffectTypes s c coeffect
       return (var, Discharged t (CSig c coeffTy))
 
     toFreshVar (var, Linear t) = do

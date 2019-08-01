@@ -1,4 +1,4 @@
-main : String <Open,Read,IOExcept,Close>
+main : String <{Open,Read,IOExcept,Close}>
 main =
     let h       ← openHandle ReadMode "LICENSE";
         (h, c1) ← readChar h;

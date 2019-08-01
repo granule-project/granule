@@ -45,6 +45,10 @@ import qualified Control.Monad.Except as Ex
 import Language.Granule.ReplError
 import Language.Granule.ReplParser
 
+import Data.Version (showVersion)
+import Paths_granule_repl (version)
+
+
 nullSpanInteractive = Span (0,0) (0,0) "interactive"
 
 type ReplPATH = [FilePath]
@@ -255,7 +259,7 @@ buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
 getConfigFile :: IO String
 getConfigFile = do
   hd <- getHomeDirectory
-  let confile = hd <> (pathSeparator:".grin")
+  let confile = hd <> (pathSeparator:".grepl")
   dfe <- doesFileExist confile
   if dfe
     then return confile
@@ -448,6 +452,7 @@ main :: IO ()
 main = do
   someP <- configFileGetPath
   let drp = (lines someP)
+  putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
   runInputT defaultSettings (loop (0,drp,[],[],M.empty))
    where
        loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def () (), [String])) -> InputT IO ()
@@ -466,6 +471,8 @@ main = do
                                Right (_,st') -> loop st'
                                Left err -> do
                                  liftIO $ print err
+                                 -- And leave a space
+                                 liftIO $ putStrLn ""
                                  case remembersFiles err of
                                    Just fs ->
                                      let (fv, rpath, adts, _, map) = st
