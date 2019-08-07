@@ -1,13 +1,5 @@
 -- gr --no-eval
-
-data Cake  where Cake  : Cake
-data Happy where Happy : Happy
-
-eat : Cake → Happy
-eat Cake = Happy
-
-have : Cake → Cake
-have Cake = Cake
+import Cake
 
 -- You cannot have your cake and eat it...
 

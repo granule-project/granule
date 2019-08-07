@@ -1,0 +1,18 @@
+------
+--- Module: Vec
+--- Description: Base library for the purposes of examples
+--- Authors: Dominic Orchard, Vilem-Benjamin Liepelt
+--- License: BSD3
+--- Copyright: (c) Authors 2018
+--- Issue-tracking: https://github.com/dorchard/granule/issues
+--- Repository: https://github.com/dorchard/granule
+------
+
+data Cake  where Cake  : Cake
+data Happy where Happy : Happy
+
+eat : Cake → Happy
+eat Cake = Happy
+
+have : Cake → Cake
+have Cake = Cake
