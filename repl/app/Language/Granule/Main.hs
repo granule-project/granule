@@ -13,9 +13,9 @@ import System.Exit (die)
 import System.FilePath
 import System.FilePath.Find
 import System.Directory
+
 import qualified Data.Map as M
 import qualified Language.Granule.Checker.Monad as Checker
-import qualified Data.ConfigFile as C
 import Data.List.NonEmpty (NonEmpty)
 import Control.Exception (try)
 import Control.Monad.State
@@ -52,13 +52,12 @@ import Paths_granule_repl (version)
 
 nullSpanInteractive = Span (0,0) (0,0) "interactive"
 
-type ReplPATH = [FilePath]
 type ADT = [DataDecl]
 type FreeVarGen = Int
 type REPLStateIO a  =
-  StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) (Ex.ExceptT ReplError IO) a
+  StateT (FreeVarGen,ADT,[FilePath], M.Map String (Def () (), [String])) (Ex.ExceptT ReplError IO) a
 
-instance MonadException m => MonadException (StateT (FreeVarGen,ReplPATH,ADT,[FilePath], M.Map String (Def () (), [String])) m) where
+instance MonadException m => MonadException (StateT (FreeVarGen,ADT,[FilePath], M.Map String (Def () (), [String])) m) where
     controlIO f = StateT $ \s -> controlIO $ \(RunIO run) -> let
                     run' = RunIO (fmap (StateT . const) . run . flip runStateT s)
                     in fmap (flip runStateT s) $ f run'
@@ -103,8 +102,8 @@ rFindMain :: [String] -> [FilePath] -> IO [[FilePath]]
 rFindMain fn rfp = forM fn $ (\x -> rFindHelper x rfp )
 
 readToQueue :: (?globals::Globals) => FilePath -> REPLStateIO ()
-readToQueue pth = let ?globals = ?globals{ globalsSourceFilePath = Just pth } in do
-    pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile pth
+readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } in do
+    pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile path
 
     case pf of
       Right ast -> do
@@ -115,24 +114,24 @@ readToQueue pth = let ?globals = ?globals{ globalsSourceFilePath = Just pth } in
                 Right _ -> do
                     let (AST dd def _) = ast
                     forM def $ \idef -> loadInQueue idef
-                    (fvg,rp,adt,f,m) <- get
-                    put (fvg,rp,(dd<>adt),f,m)
-                    liftIO $ printInfo $ green $ pth<>", interpreted"
+                    (fvg,adt,f,m) <- get
+                    put (fvg,(dd<>adt),f,m)
+                    liftIO $ printInfo $ green $ path <> ", interpreted."
                 Left errs -> do
-                  (_,_,_,f,_) <- get
+                  (_,_,f,_) <- get
                   Ex.throwError (TypeCheckerError errs)
       Left e -> do
-       (_,_,_,f,_) <- get
+       (_,_,f,_) <- get
        Ex.throwError (ParseError e f)
 
 
 
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
 loadInQueue def@(Def _ id _ _) = do
-  (fvg,rp,adt,f,m) <- get
+  (fvg,adt,f,m) <- get
   if M.member (pretty id) m
   then Ex.throwError (TermInContext (pretty id))
-  else put $ (fvg,rp,adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
+  else put $ (fvg,adt,f,M.insert (pretty id) (def,(makeUnique $ extractFreeVars id (freeVars def))) m)
 
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def () (), [String]) -> [String]
@@ -266,11 +265,11 @@ handleCMD s =
   where
     handleLine :: (?globals::Globals) => REPLExpr -> REPLStateIO ()
     handleLine DumpState = do
-      (_,_,adt,f,dict) <- get
+      (_,adt,f,dict) <- get
       liftIO $ print $ dumpStateAux dict
 
     handleLine (RunParser str) = do
-      (_,_,_,f,_) <- get
+      (_,_,f,_) <- get
       pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens str) "interactive"
       case pexp of
         Right ast -> liftIO $ putStrLn (show ast)
@@ -288,68 +287,49 @@ handleCMD s =
       liftIO $ putStrLn $ show (scanTokens str)
 
     handleLine (ShowDef term) = do
-      (_,_,_,_,m) <- get
+      (_,_,_,m) <- get
       let def' = (M.lookup term m)
       case def' of
         Nothing -> Ex.throwError(TermNotInContext term)
         Just (def,_) -> liftIO $ putStrLn (show def)
 
     handleLine (LoadFile ptr) = do
-      (fvg,rp,_,_,_) <- get
-      tester <- liftIO' $ rFindMain ptr rp
-      let lfp = makeUnique $ (concat tester)
-      case lfp of
-        [] -> do
-          put (fvg,rp,[],ptr,M.empty)
-          ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
-          return ()
-        _ -> do
-          put (fvg,rp,[],lfp,M.empty)
-          ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
-          return ()
-
+      (fvg,_,_,_) <- get
+      put (fvg,[],ptr,M.empty)
+      ecs <- processFilesREPL ptr readToQueue
+      return ()
 
     handleLine (Debuger ptr) = do
-      (fvg,rp,_,_,_) <- get
-      tester <- liftIO' $ rFindMain ptr rp
-      let lfp = makeUnique $ (concat tester)
-      case lfp of
-        [] -> do
-          put (fvg,rp,[],ptr,M.empty)
-          ecs <- processFilesREPL ptr (let ?globals = ?globals {globalsDebugging = Just True } in readToQueue)
-          return ()
-        _ -> do
-          put (fvg,rp,[],lfp,M.empty)
-          ecs <- processFilesREPL lfp (let ?globals = ?globals {globalsDebugging = Just True } in readToQueue)
-          return ()
+      let ?globals = ?globals {globalsDebugging = Just True } in handleLine (LoadFile ptr)
 
+    handleLine (AddModule paths) = do
+      (fvg,adt,f,m) <- get
 
-    handleLine (AddModule ptr) = do
-      (fvg,rp,adt,f,m) <- get
-      tester <- liftIO' $ rFindMain ptr rp
-      let lfp = makeUnique $ (concat tester)
-      case lfp of
-        [] -> do
-          put (fvg,rp,adt,(f<>ptr),m)
-          ecs <- processFilesREPL ptr (let ?globals = ?globals in readToQueue)
-          return ()
-        _ -> do
-          put (fvg,rp,adt,(f<>lfp),m)
-          ecs <- processFilesREPL lfp (let ?globals = ?globals in readToQueue)
-          return ()
+      -- Update paths to try the include path in case they do not exist locally
+      paths <- liftIO' $ forM paths $ (\path -> do
+                localFile <- doesFileExist path
+                return $ if localFile
+                  then path
+                  else case globalsIncludePath ?globals of
+                          Just includePath -> includePath <> (pathSeparator : path)
+                          Nothing          -> path)
+
+      put (fvg,adt,(f<>paths),m)
+
+      ecs <- processFilesREPL paths readToQueue
+      return ()
 
     handleLine Reload = do
-      (fvg,rp,adt,f,_) <- get
-      put (fvg,rp,[],f, M.empty)
+      (fvg,adt,f,_) <- get
+      put (fvg,[],f, M.empty)
       case f of
         [] -> liftIO $ putStrLn "No files to reload" >> return ()
         _ -> do
-          ecs <- processFilesREPL f (let ?globals = ?globals in readToQueue)
+          ecs <- processFilesREPL f readToQueue
           return ()
 
-
     handleLine (CheckType trm) = do
-      (_,_,adt,f,m) <- get
+      (_,adt,f,m) <- get
       let cked = buildAST trm m
       case cked of
         []  -> do
@@ -365,7 +345,7 @@ handleCMD s =
             Left err -> Ex.throwError (TypeCheckerError err)
 
     handleLine (Eval ev) = do
-        (fvg,rp,adt,fp,m) <- get
+        (fvg,adt,fp,m) <- get
         pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens ev) "interactive"
         case pexp of
             Right exp -> do
@@ -384,7 +364,7 @@ handleCMD s =
                         let ast = buildForEval fv m
                         typer <- synTypeBuilder exp ast adt
                         let ndef = buildDef fvg (buildTypeScheme typer) exp
-                        put ((fvg+1),rp,adt,fp,m)
+                        put ((fvg+1),adt,fp,m)
                         checked <- liftIO' $ check (AST adt (ast<>(ndef:[])) mempty)
                         case checked of
                             Right _ -> do
@@ -416,38 +396,16 @@ helpMenu = unlines
       ,"-----------------------------------------------------------------------------------"
       ]
 
-configFileGetPath :: IO String
-configFileGetPath = do
-  rt <- Ex.runExceptT $
-    do
-    cf <- liftIO $ getConfigFile
-    case cf of
-      "" ->  do
-        lift $ putStrLn "ALERT: No config file found or loaded.\nPlease refer to README for config file creation and format\nEnter ':h' or ':help' for menu"
-        return ""
-      _ -> do
-         cp <- liftIO $ C.readfile C.emptyCP cf
-         case cp of
-           Right l -> do
-             pths <- C.get l "DEFAULT" "path"
-             return pths
-           Left r -> return ""
-  case rt of
-    Right conpth -> return $ conpth
-    Left conptherr -> do
-      liftIO $ putStrLn $ "ALERT: Path variable missing from config file.  Please refer to README for config file creation and formant"
-      return ""
-
 main :: IO ()
 main = do
   -- Welcome message
   putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
-  
+
   -- Get the .granue config
   globals <- getGrConfigGlobals
 
   -- Run the REPL loop
-  runInputT defaultSettings (let ?globals = globals in loop (0,[includePath],[],[],M.empty))
+  runInputT defaultSettings (let ?globals = globals in loop (0,[],[],M.empty))
    where
     loop :: (?globals :: Globals) => (FreeVarGen, ADT, [FilePath], M.Map String (Def () (), [String])) -> InputT IO ()
     loop st = do
@@ -463,7 +421,7 @@ main = do
             (liftIO $ putStrLn helpMenu) >> loop st
 
           | otherwise -> do
-            
+
             r <- liftIO $ Ex.runExceptT (runStateT (handleCMD input) st)
             case r of
               Right (_,st') -> loop st'
@@ -473,8 +431,8 @@ main = do
                 liftIO $ putStrLn ""
                 case remembersFiles err of
                   Just fs ->
-                    let (fv, rpath, adts, _, map) = st
-                    in loop (fv, rpath, adts, fs, map)
+                    let (fv, adts, _, map) = st
+                    in loop (fv, adts, fs, map)
                   Nothing -> loop st
 
 getGrConfigGlobals :: IO Globals
