@@ -38,6 +38,7 @@ import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Substitution
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Interpreter.Eval
+import qualified Language.Granule.Interpreter as Interpreter
 import Language.Granule.Context
 --import qualified Language.Granule.Checker.Primitives as Primitives
 import qualified Control.Monad.Except as Ex
@@ -255,17 +256,6 @@ buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
    [Equation nullSpanInteractive () [] ex] ts
 
-
-getConfigFile :: IO String
-getConfigFile = do
-  hd <- getHomeDirectory
-  let confile = hd <> (pathSeparator:".grepl")
-  dfe <- doesFileExist confile
-  if dfe
-    then return confile
-    else return ""
-
-
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
 handleCMD "" = Ex.return ()
 handleCMD s =
@@ -450,13 +440,16 @@ configFileGetPath = do
 
 main :: IO ()
 main = do
-  includePath <- configFileGetPath
+  -- Welcome message
   putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
-  runInputT defaultSettings (loop (0,[includePath],[],[],M.empty))
+  
+  -- Get the .granue config
+  globals <- getGrConfigGlobals
+
+  -- Run the REPL loop
+  runInputT defaultSettings (let ?globals = globals in loop (0,[includePath],[],[],M.empty))
    where
-    replPath (_, (path:_), _, _, _) = Just path
-    replPath (_, _, _, _, _)        = Nothing
-    loop :: (FreeVarGen, ReplPATH, ADT, [FilePath], M.Map String (Def () (), [String])) -> InputT IO ()
+    loop :: (?globals :: Globals) => (FreeVarGen, ADT, [FilePath], M.Map String (Def () (), [String])) -> InputT IO ()
     loop st = do
       minput <- getInputLine "Granule> "
       case minput of
@@ -470,9 +463,8 @@ main = do
             (liftIO $ putStrLn helpMenu) >> loop st
 
           | otherwise -> do
-            r <- liftIO $ Ex.runExceptT
-                  (runStateT (let ?globals = mempty { globalsIncludePath = replPath st }
-                              in handleCMD input) st)
+            
+            r <- liftIO $ Ex.runExceptT (runStateT (handleCMD input) st)
             case r of
               Right (_,st') -> loop st'
               Left err -> do
@@ -484,3 +476,6 @@ main = do
                     let (fv, rpath, adts, _, map) = st
                     in loop (fv, rpath, adts, fs, map)
                   Nothing -> loop st
+
+getGrConfigGlobals :: IO Globals
+getGrConfigGlobals = Interpreter.getGrConfig >>= (return . Interpreter.grGlobals . snd)
