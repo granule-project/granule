@@ -1,4 +1,8 @@
-  # 0.7.6.0
+  # 0.7.6.1
+	- Added Cake.gr back in to StdLib
+	- Fixed some bugs in `grepl` (now reads the .granule config file instead of its own)
+
+	# 0.7.6.0
 	- LLVM compiler for a simple subset now included.
 	- Various internal changes which allow effect modalities (graded possibility) to be richer.
 	- Type-level sets support improved with some syntax changes, e.g., <{Read, Write}>.
