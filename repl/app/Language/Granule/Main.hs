@@ -7,6 +7,7 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE PackageImports #-}
+
 module Main where
 
 import System.Exit (die)
@@ -107,7 +108,6 @@ main = do
                 case remembersFiles err of
                   Just fs -> loop (st { files = fs })
                   Nothing -> loop st
-
 
 helpMenu :: String
 helpMenu = unlines
