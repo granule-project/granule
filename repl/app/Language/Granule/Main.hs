@@ -450,11 +450,12 @@ configFileGetPath = do
 
 main :: IO ()
 main = do
-  someP <- configFileGetPath
-  let drp = (lines someP)
+  includePath <- configFileGetPath
   putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
-  runInputT defaultSettings (loop (0,drp,[],[],M.empty))
+  runInputT defaultSettings (loop (0,[includePath],[],[],M.empty))
    where
+    replPath (_, (path:_), _, _, _) = Just path
+    replPath (_, _, _, _, _)        = Nothing
     loop :: (FreeVarGen, ReplPATH, ADT, [FilePath], M.Map String (Def () (), [String])) -> InputT IO ()
     loop st = do
       minput <- getInputLine "Granule> "
@@ -470,7 +471,7 @@ main = do
 
           | otherwise -> do
             r <- liftIO $ Ex.runExceptT
-                  (runStateT (let ?globals = mempty
+                  (runStateT (let ?globals = mempty { globalsIncludePath = replPath st }
                               in handleCMD input) st)
             case r of
               Right (_,st') -> loop st'
