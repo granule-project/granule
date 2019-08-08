@@ -455,26 +455,31 @@ main = do
   putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
   runInputT defaultSettings (loop (0,drp,[],[],M.empty))
    where
-       loop :: (FreeVarGen,ReplPATH,ADT,[FilePath] ,M.Map String (Def () (), [String])) -> InputT IO ()
-       loop st = do
-           minput <- getInputLine "Granule> "
-           case minput of
-               Nothing -> return ()
-               Just [] -> loop st
-               Just input | input == ":q" || input == ":quit"
-                              -> liftIO $ putStrLn "Leaving Granule." >> return ()
-                          | input == ":h" || input == ":help"
-                              -> (liftIO $ putStrLn helpMenu) >> loop st
-                          | otherwise -> do
-                             r <- liftIO $ Ex.runExceptT (runStateT (let ?globals = mempty in handleCMD input) st)
-                             case r of
-                               Right (_,st') -> loop st'
-                               Left err -> do
-                                 liftIO $ print err
-                                 -- And leave a space
-                                 liftIO $ putStrLn ""
-                                 case remembersFiles err of
-                                   Just fs ->
-                                     let (fv, rpath, adts, _, map) = st
-                                     in loop (fv, rpath, adts, fs, map)
-                                   Nothing -> loop st
+    loop :: (FreeVarGen, ReplPATH, ADT, [FilePath], M.Map String (Def () (), [String])) -> InputT IO ()
+    loop st = do
+      minput <- getInputLine "Granule> "
+      case minput of
+        Nothing -> return ()
+        Just [] -> loop st
+        Just input
+          | input == ":q" || input == ":quit" ->
+            liftIO $ putStrLn "Leaving Granule." >> return ()
+
+          | input == ":h" || input == ":help" ->
+            (liftIO $ putStrLn helpMenu) >> loop st
+
+          | otherwise -> do
+            r <- liftIO $ Ex.runExceptT
+                  (runStateT (let ?globals = mempty
+                              in handleCMD input) st)
+            case r of
+              Right (_,st') -> loop st'
+              Left err -> do
+                liftIO $ print err
+                -- And leave a space
+                liftIO $ putStrLn ""
+                case remembersFiles err of
+                  Just fs ->
+                    let (fv, rpath, adts, _, map) = st
+                    in loop (fv, rpath, adts, fs, map)
+                  Nothing -> loop st
