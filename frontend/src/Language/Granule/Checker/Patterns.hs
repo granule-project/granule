@@ -167,7 +167,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
-  case lookup dataC (dataConstructors st) of
+  mConstructor <- lookupDataConstructor s dataC
+  case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
 

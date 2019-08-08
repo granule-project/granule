@@ -52,14 +52,15 @@ import Language.Granule.Utils
 check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
-check ast@(AST dataDecls defs imports) = evalChecker initState $ do
-    _    <- checkNameClashes ast
-    _    <- runAll checkTyCon dataDecls
-    _    <- runAll checkDataCons dataDecls
-    defs <- runAll kindCheckDef defs
-    let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
-    defs <- runAll (checkDef defCtxt) defs
-    pure $ AST dataDecls defs imports
+check ast@(AST dataDecls defs imports hidden name) =
+  evalChecker (initState { allHiddenNames = hidden }) $ (do
+      _    <- checkNameClashes ast
+      _    <- runAll checkTyCon dataDecls
+      _    <- runAll checkDataCons dataDecls
+      defs <- runAll kindCheckDef defs
+      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+      defs <- runAll (checkDef defCtxt) defs
+      pure $ AST dataDecls defs imports hidden name)
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -625,7 +626,8 @@ synthExpr defs gam pol
 synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
   -- Should be provided in the type checkers environment
   st <- get
-  case lookup c (dataConstructors st) of
+  mConstructor <- lookupDataConstructor s c
+  case mConstructor of
     Just (tySch, coercions) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)

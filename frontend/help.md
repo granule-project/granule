@@ -23,7 +23,7 @@ $ stack install; stack repl frontend/.stack-work/dist/x86_64-osx/Cabal-2.4.0.1/b
 [...]
 *Language.Granule.Syntax.Parser> :set -XImplicitParams
 *Language.Granule.Syntax.Parser> let ?globals = defaultGlobals in parseAndDoImportsAndFreshenDefs "foo : Int\nfoo = 5"
-AST [] [Def ((1,1),(2,7)) (Id "foo" "foo") (Val ((2,7),(2,7)) (NumInt 5)) [] (Forall ((0,0),(0,0)) [] (TyCon (Id "Int" "Int")))]
+AST [] [Def ((1,1),(2,7)) (Id "foo" "foo") (Val ((2,7),(2,7)) (NumInt 5)) [] (Forall ((0,0),(0,0)) [] (TyCon (Id "Int" "Int")))] [] Nothing
 ```
 
 # Implicit parameters

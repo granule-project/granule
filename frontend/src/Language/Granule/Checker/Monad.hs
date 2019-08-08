@@ -23,6 +23,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.Identity
+import System.FilePath (takeBaseName)
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.LaTeX
@@ -129,7 +130,6 @@ meetConsumption Empty Empty = Empty
 meetConsumption Empty Full = NotFull
 meetConsumption Full Empty = NotFull
 
-
 data CheckerState = CS
             { -- Fresh variable id state
               uniqueVarIdCounterMap  :: M.Map String Nat
@@ -147,7 +147,7 @@ data CheckerState = CS
             , tyVarContext   :: Ctxt (Kind, Quantifier)
 
             -- Guard contexts (all the guards in scope)
-            -- which get promoted by branch promotions
+            -- which get promoted  by branch promotions
             , guardContexts :: [Ctxt Assumption]
 
             -- Records the amount of consumption by patterns in equation equation
@@ -162,6 +162,9 @@ data CheckerState = CS
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
+
+            -- Names from modules which are hidden
+            , allHiddenNames :: M.Map Id Id
 
             -- Warning accumulator
             -- , warnings :: [Warning]
@@ -181,10 +184,25 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , dataConstructors = Primitives.dataConstructors
                , deriv = Nothing
                , derivStack = []
+               , allHiddenNames = M.empty
                }
 
 -- *** Various helpers for manipulating the context
 
+-- Look up a data constructor, taking into account the possibility that it
+-- may be hidden to the current module
+lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution))
+lookupDataConstructor sp constrName = do
+  st <- get
+  case M.lookup constrName (allHiddenNames st) of
+    Nothing -> return $ lookup constrName (dataConstructors st)
+    Just mod ->
+      -- If the constructor is hidden but we are inside that module...
+      if sourceName mod == takeBaseName (filename sp)
+        -- .. then its fine
+        then return $ lookup constrName (dataConstructors st)
+        -- Otheriwe this is truly hidden
+        else return Nothing
 
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is

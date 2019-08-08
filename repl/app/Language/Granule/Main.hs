@@ -207,7 +207,7 @@ handleCMD s =
             err -> liftIO $ putStrLn err
         ast -> do
           -- TODO: use the type that comes out of the checker to return the type
-          checked <- liftIO' $ check (AST (currentADTs st) ast mempty)
+          checked <- liftIO' $ check (AST (currentADTs st) ast mempty mempty Nothing)
           case checked of
             Right _ -> liftIO $ putStrLn (printType trm (defns st))
             Left err -> Ex.throwError (TypeCheckerError err)
@@ -235,7 +235,7 @@ handleCMD s =
                     -- Update the free var counter
                     modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
                     -- TODO: cons ndef to the front?
-                    let astNew = AST (currentADTs st) (ast <> [ndef]) mempty
+                    let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
                     checked <- liftIO' $ check astNew
                     case checked of
                         Right _ -> do
@@ -265,7 +265,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
                   in fmap Ex.runExceptT $ f run'
 
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
-replEval val (AST dataDecls defs _) = do
+replEval val (AST dataDecls defs _ _ _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId (" repl"<>(show val))) bindings of
       Nothing -> return Nothing
@@ -294,7 +294,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
             checked <- liftIO' $ check ast
             case checked of
                 Right _ -> do
-                  let (AST dd def _) = ast
+                  let (AST dd def _ _ _) = ast
                   forM def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
                   liftIO $ printInfo $ green $ path <> ", interpreted."
