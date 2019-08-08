@@ -9,6 +9,7 @@ module Language.Granule.Syntax.Def where
 
 import Data.List ((\\), delete)
 import Data.Set (Set)
+import qualified Data.Map as M
 import GHC.Generics (Generic)
 
 import Language.Granule.Context (Ctxt)
@@ -24,7 +25,14 @@ import Language.Granule.Syntax.Pattern
 -- | Comprise a list of data type declarations and a list
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
-data AST v a = AST [DataDecl] [Def v a] (Set Import)
+data AST v a =
+  AST
+    { dataTypes :: [DataDecl]
+    , definitions :: [Def v a]
+    , imports :: Set Import
+    , hiddenNames :: M.Map Id Id -- map from names to the module hiding them
+    , moduleName  :: Maybe Id
+    }
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
@@ -96,8 +104,8 @@ type Cardinality = Maybe Nat
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
-freshenAST (AST dds defs imports) =
-  AST dds' defs' imports
+freshenAST (AST dds defs imports hiddens name) =
+  AST dds' defs' imports hiddens name
     where (dds', defs') = (map runFreshener dds, map runFreshener defs)
 
 instance Monad m => Freshenable m DataDecl where

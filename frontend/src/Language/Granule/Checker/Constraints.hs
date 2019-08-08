@@ -15,6 +15,8 @@ import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
 import Control.Exception (assert)
+import Control.Monad.IO.Class
+import System.Exit
 
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinds

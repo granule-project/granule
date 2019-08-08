@@ -190,13 +190,21 @@ appChain (TyApp t1 t2)           = True
 appChain _                       = False
 
 instance Pretty v => Pretty (AST v a) where
-    prettyL l (AST dataDecls defs imprts)
-        = (unlines . map ("import " <>) . toList) imprts
-        <> "\n\n" <> pretty' dataDecls
-        <> "\n\n" <> pretty' defs
-      where
-        pretty' :: Pretty l => [l] -> String
-        pretty' = intercalate "\n\n" . map pretty
+  prettyL l (AST dataDecls defs imprts hidden name) =
+    -- Module header (if it exists)
+    (case name of
+        Nothing -> ""
+        Just name -> "module "
+                  <> pretty name
+                  <> " hiding ("
+                  <> (intercalate "," (map (prettyL l) (toList hidden)))
+                  <> ") where\n\n")
+    <> (unlines . map ("import " <>) . toList) imprts
+    <> "\n\n" <> pretty' dataDecls
+    <> "\n\n" <> pretty' defs
+    where
+      pretty' :: Pretty l => [l] -> String
+      pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
     prettyL l (Def _ v eqs (Forall _ [] [] t))

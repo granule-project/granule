@@ -59,7 +59,9 @@ inferKindOfTypeInContext s quantifiedVariables t =
         st <- get
         case lookup conId (typeConstructors st) of
             Just (kind,_) -> return kind
-            Nothing   -> case lookup conId (dataConstructors st) of
+            Nothing   -> do
+              mConstructor <- lookupDataConstructor s conId
+              case mConstructor of
                 Just (Forall _ [] [] t, _) -> return $ KPromote t
                 Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
                 Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }

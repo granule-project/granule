@@ -106,7 +106,7 @@ instance Pretty v => Pretty (FunctionDef v a) where
 instance FirstParameter (ValueDef v a) Span
 
 normaliseDefinitions :: AST ev Type -> NormalisedAST ev Type
-normaliseDefinitions (AST dd defs imports) =
+normaliseDefinitions (AST dd defs imports _ _) =
     let normalisedDefs = map normaliseDefinition defs
     in NormalisedAST dd (lefts normalisedDefs) (rights normalisedDefs)
 
