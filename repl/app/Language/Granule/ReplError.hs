@@ -37,4 +37,4 @@ instance Show ReplError where
   show (TermNotInContext trm) = "The term `"<>trm<>"` is not in the context"
   show (EvalError e)          = show e
   show OtherError             = "Error"
-  show (TypeCheckerError err) = let ?globals = mempty in intercalate "\n\n" . map formatError . toList $ err
+  show (TypeCheckerError err) = let ?globals = mempty in intercalate "\n" . map formatError . toList $ err

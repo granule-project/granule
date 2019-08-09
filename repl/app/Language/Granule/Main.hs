@@ -1,6 +1,5 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ApplicativeDo #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE NamedFieldPuns #-}
@@ -87,10 +86,10 @@ main = do
         Just [] -> loop st
         Just input
           | input == ":q" || input == ":quit" ->
-            liftIO $ putStrLn "Leaving Granule."
+            liftIO (putStrLn "Leaving Granule.")
 
           | input == ":h" || input == ":help" ->
-            (liftIO $ putStrLn helpMenu) >> loop st
+            liftIO (putStrLn helpMenu) >> loop st
 
           | otherwise -> do
 
@@ -128,7 +127,7 @@ helpMenu = unlines
 handleCMD :: (?globals::Globals) => String -> REPLStateIO ()
 handleCMD "" = Ex.return ()
 handleCMD s =
-   case (parseLine s) of
+   case parseLine s of
     Right l -> handleLine l
     Left msg -> liftIO $ putStrLn msg
 
@@ -141,25 +140,25 @@ handleCMD s =
     handleLine (RunParser str) = do
       pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens str) "interactive"
       case pexp of
-        Right ast -> liftIO $ putStrLn (show ast)
+        Right ast -> liftIO $ print ast
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
           pts <- liftIO' $ try $ either die return $ runReaderT (tscheme $ scanTokens str) "interactive"
           case pts of
-            Right ts -> liftIO $ putStrLn (show ts)
+            Right ts -> liftIO $ print ts
             Left err -> do
               st <- get
               Ex.throwError (ParseError err (files st))
               Ex.throwError (ParseError e (files st))
 
     handleLine (RunLexer str) = do
-      liftIO $ putStrLn $ show (scanTokens str)
+      liftIO $ print (scanTokens str)
 
     handleLine (ShowDef term) = do
       st <- get
       case M.lookup term (defns st) of
         Nothing -> Ex.throwError(TermNotInContext term)
-        Just (def,_) -> liftIO $ putStrLn (show def)
+        Just (def,_) -> liftIO $ print def
 
     handleLine (LoadFile ptr) = do
       -- Set up a clean slate
@@ -172,7 +171,7 @@ handleCMD s =
 
     handleLine (AddModule paths) = do
       -- Update paths to try the include path in case they do not exist locally
-      paths <- liftIO' $ forM paths $ (\path -> do
+      paths <- liftIO' $ forM paths (\path -> do
                 localFile <- doesFileExist path
                 return $ if localFile
                   then path
@@ -253,7 +252,7 @@ instance MonadException m => MonadException (Ex.ExceptT e m) where
 replEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe RValue)
 replEval val (AST dataDecls defs _ _ _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
-    case lookup (mkId (" repl"<>(show val))) bindings of
+    case lookup (mkId (" repl" <> show val)) bindings of
       Nothing -> return Nothing
       Just (Pure _ e)    -> fmap Just (evalIn bindings e)
       Just (Promote _ e) -> fmap Just (evalIn bindings e)
@@ -263,7 +262,7 @@ liftIO' :: IO a -> REPLStateIO a
 liftIO' = lift.lift
 
 processFilesREPL :: [FilePath] -> (FilePath -> REPLStateIO a) -> REPLStateIO [[a]]
-processFilesREPL globPatterns f = forM globPatterns $ (\p -> do
+processFilesREPL globPatterns f = forM globPatterns (\p -> do
     filePaths <- liftIO $ glob p
     case filePaths of
       [] -> lift $ Ex.throwError (FilePathError p)
@@ -281,7 +280,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
             case checked of
                 Right _ -> do
                   let (AST dd def _ _ _) = ast
-                  forM def $ \idef -> loadInQueue idef
+                  forM_ def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
                   liftIO $ printInfo $ green $ path <> ", interpreted."
 
@@ -296,14 +295,14 @@ loadInQueue def@(Def _ id _ _) = do
   st <- get
   if M.member (pretty id) (defns st)
     then Ex.throwError (TermInContext (pretty id))
-    else put $ st { defns = M.insert (pretty id) (def,(nub $ extractFreeVars id (freeVars def))) (defns st) }
+    else put $ st { defns = M.insert (pretty id) (def, nub $ extractFreeVars id (freeVars def)) (defns st) }
 
 dumpStateAux :: (?globals::Globals) => M.Map String (Def () (), [String]) -> [String]
 dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ ty),dl)):xs) = ((pretty k)<>" : "<>(pretty ty)) : pDef xs
+    pDef ((k,(v@(Def _ _ _ ty),dl)):xs) =  (pretty k <> " : " <> pretty ty) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -325,11 +324,11 @@ buildAST t m =
     Just (def,lid) ->
       case lid of
         []  ->  [def]
-        ids -> (buildDef ids <> [def])
+        ids -> buildDef ids <> [def]
                   where
                     buildDef :: [String] -> [Def () ()]
                     buildDef [] =  []
-                    buildDef (x:xs) =  buildDef xs<>(buildAST x m)
+                    buildDef (x:xs) =  buildDef xs <> buildAST x m
 
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
@@ -342,5 +341,5 @@ buildCheckerState dataDecls = do
     return ()
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
-buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
+buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl" <> show rfv))
    [Equation nullSpanInteractive () [] ex] ts
