@@ -18,10 +18,10 @@ import Data.List (nub)
 
 import qualified Data.Map as M
 import qualified Language.Granule.Checker.Monad as Checker
-import Data.List.NonEmpty (NonEmpty)
 import Control.Exception (try)
 import Control.Monad.State
 import Control.Monad.Trans.Reader
+import qualified Control.Monad.Except as Ex
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 
@@ -37,13 +37,9 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
-import Language.Granule.Checker.Substitution
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Interpreter.Eval
 import qualified Language.Granule.Interpreter as Interpreter
-import Language.Granule.Context
---import qualified Language.Granule.Checker.Primitives as Primitives
-import qualified Control.Monad.Except as Ex
 
 import Language.Granule.ReplError
 import Language.Granule.ReplParser
@@ -78,7 +74,7 @@ main = do
   putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
 
   -- Get the .granue config
-  globals <- getGrConfigGlobals
+  globals <- Interpreter.getGrConfig >>= (return . Interpreter.grGlobals . snd)
 
   -- Run the REPL loop
   runInputT defaultSettings (let ?globals = globals in loop initialState)
@@ -156,7 +152,6 @@ handleCMD s =
               Ex.throwError (ParseError err (files st))
               Ex.throwError (ParseError e (files st))
 
-
     handleLine (RunLexer str) = do
       liftIO $ putStrLn $ show (scanTokens str)
 
@@ -198,60 +193,51 @@ handleCMD s =
           processFilesREPL files readToQueue
           return ()
 
-    handleLine (CheckType trm) = do
-      st <- get
-      case buildAST trm (defns st) of
-        []  ->
-          case lookupBuildADT trm (makeMapBuildADT (startBuildADT (currentADTs st))) of
-            "" -> Ex.throwError (TermNotInContext trm)
-            err -> liftIO $ putStrLn err
-        ast -> do
-          -- TODO: use the type that comes out of the checker to return the type
-          checked <- liftIO' $ check (AST (currentADTs st) ast mempty mempty Nothing)
-          case checked of
-            Right _ -> liftIO $ putStrLn (printType trm (defns st))
-            Left err -> Ex.throwError (TypeCheckerError err)
+    handleLine (CheckType exprString) = do
+      expr <- parseExpression exprString
+      ty <- synthTypeFromInputExpr expr
+      let exprString' = if elem ' ' exprString && head exprString /= '(' && last exprString /= ')' then "(" <> exprString <> ")" else exprString
+      liftIO $ putStrLn $ exprString' <> " : " <> (either pretty pretty ty)
 
-    handleLine (Eval ev) = do
-        pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens ev) "interactive"
-        case pexp of
-            Right exp -> do
-              case freeVars exp of
-                [] -> do -- simple expressions
-                    typ <- liftIO $ synType exp [] Checker.initState
-                    case typ of
-                        Right (t, a, _) -> return ()
-                        Left err -> Ex.throwError (TypeCheckerError err)
+    handleLine (Eval exprString) = do
+      expr <- parseExpression exprString
+      ty <- synthTypeFromInputExpr expr
+      case ty of
+        -- Well-typed, with `tyScheme`
+        Left tyScheme -> do
+          st <- get
+          let ndef = buildDef (freeVarCounter st) tyScheme expr
+          -- Update the free var counter
+          modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
 
-                    result <- liftIO' $ try $ evalIn builtIns (toRuntimeRep exp)
-                    case result of
-                        Right r -> liftIO $ putStrLn (pretty r)
-                        Left e -> Ex.throwError (EvalError e)
-                fv -> do
-                    st <- get
-                    let ast = buildForEval fv (defns st)
-                    typer <- synTypeBuilder exp ast (currentADTs st)
-                    let ndef = buildDef (freeVarCounter st) (buildTypeScheme typer) exp
-                    -- Update the free var counter
-                    modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
-                    -- TODO: cons ndef to the front?
-                    let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
-                    checked <- liftIO' $ check astNew
-                    case checked of
-                        Right _ -> do
-                            result <- liftIO' $ try $ replEval (freeVarCounter st) astNew
-                            case result of
-                                Left e -> Ex.throwError (EvalError e)
-                                Right Nothing -> liftIO $ print "if here fix"
-                                Right (Just result) -> liftIO $ putStrLn (pretty result)
-                        Left err -> Ex.throwError (TypeCheckerError err)
-            Left e -> do
-              st <- get
-              Ex.throwError (ParseError e (files st)) --error from parsing (pexp)
+          let fv = freeVars expr
+          let ast = buildForEval fv (defns st)
+          let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
+          result <- liftIO' $ try $ replEval (freeVarCounter st) astNew
+          case result of
+              Left e -> Ex.throwError (EvalError e)
+              Right Nothing -> liftIO $ print "if here fix"
+              Right (Just result) -> liftIO $ putStrLn (pretty result)
+        -- If this was actually just a type, return it as is
+        Right kind -> liftIO $ putStrLn exprString
 
-getGrConfigGlobals :: IO Globals
-getGrConfigGlobals = Interpreter.getGrConfig >>= (return . Interpreter.grGlobals . snd)
+parseExpression :: (?globals::Globals) => String -> REPLStateIO (Expr () ())
+parseExpression exprString = do
+  -- Check that the expression is well-typed first
+  case runReaderT (expr $ scanTokens exprString) "interactive" of
+    -- Not a syntactically well-formed term
+    Left err -> Ex.throwError (ParseError' err)
+    Right exprAst -> return exprAst
 
+synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either TypeScheme Kind)
+synthTypeFromInputExpr exprAst = do
+  st <- get
+  -- Build the AST and then try to synth the type
+  let defs = map fst (M.elems (defns st))
+  checkerResult <- liftIO' $ synthExprInIsolation (AST (currentADTs st) defs mempty mempty Nothing) exprAst
+  case checkerResult of
+    Right res -> return res
+    Left err -> Ex.throwError (TypeCheckerError err)
 
 -- Exceptions behaviour
 instance MonadException m => MonadException (StateT ReplState m) where
@@ -345,88 +331,15 @@ buildAST t m =
                     buildDef [] =  []
                     buildDef (x:xs) =  buildDef xs<>(buildAST x m)
 
-startBuildADT :: [DataDecl] -> [DataConstr]
-startBuildADT [] = []
-startBuildADT ((DataDecl _ _ _ _ dc):dataDec) = dc <> (startBuildADT dataDec)
-
-makeMapBuildADT :: [DataConstr] -> M.Map String DataConstr
-makeMapBuildADT adc =
-    M.fromList $ tempADT adc
-  where
-    tempADT :: [DataConstr] -> [(String,DataConstr)]
-    tempADT [] = []
-    tempADT (dc@(DataConstrIndexed _ id _):dct) = ((sourceName id),dc) : tempADT dct
-    tempADT (dc@(DataConstrNonIndexed _ _ _):dct) = tempADT dct
-
-lookupBuildADT :: (?globals::Globals) => String -> M.Map String DataConstr -> String
-lookupBuildADT term aMap =
-  case M.lookup term aMap of
-    Nothing ->
-      case lookup (mkId term) Primitives.typeConstructors of
-        Nothing -> ""
-        Just (k, _) -> term <> " : " <> pretty k
-    Just d -> pretty d
-
-printType :: (?globals::Globals) => String -> M.Map String (Def () (), [String]) -> String
-printType trm m =
-  case M.lookup trm m of
-    Nothing ->
-      case lookup (mkId trm) Primitives.builtins of
-        Nothing -> "Unknown"
-        Just ty -> trm <> " : " <> pretty ty
-    Just (def@(Def _ id _ ty),lid) -> (pretty id)<>" : "<>(pretty ty)
-
 buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildForEval [] _ = []
 buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
-
-synType :: (?globals::Globals)
-  => Expr () ()
-  -> Ctxt TypeScheme
-  -> Checker.CheckerState
-  -> IO (Either (NonEmpty Checker.CheckerError) (Type, Ctxt Checker.Assumption, Expr () Type))
-synType exp cts cs = liftIO $ Checker.evalChecker cs $ do
-  (ty, ctxt, subst, elab) <- synthExpr cts empty Positive exp
-  ty <- substitute subst ty
-  return (ty, ctxt, elab)
-
-synTypeBuilder :: (?globals::Globals) => Expr () () -> [Def () ()] -> [DataDecl] -> REPLStateIO Type
-synTypeBuilder exp ast adt = do
-  let ddts = buildCtxtTSDD adt
-  (_, cs) <- liftIO $ Checker.runChecker Checker.initState $ buildCheckerState adt
-  ty <- liftIO $ synType exp ((buildCtxtTS ast) <> ddts) cs
-  --liftIO $ print $ show ty
-  case ty of
-    Right (t, a, _) -> return t
-    Left err -> Ex.throwError (TypeCheckerError err)
-
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
 buildCheckerState dataDecls = do
     _ <- Checker.runAll checkTyCon dataDecls
     _ <- Checker.runAll checkDataCons dataDecls
     return ()
-
-buildCtxtTS :: (?globals::Globals) => [Def () ()] -> Ctxt TypeScheme
-buildCtxtTS [] = []
-buildCtxtTS ((x@(Def _ id _ ts)):ast) =  (id,ts) : buildCtxtTS ast
-
-buildCtxtTSDD :: (?globals::Globals) => [DataDecl] -> Ctxt TypeScheme
-buildCtxtTSDD [] = []
-buildCtxtTSDD ((DataDecl _ _ _ _ dc) : dd) =
-    makeCtxt dc <> buildCtxtTSDD dd
-  where
-    makeCtxt :: [DataConstr] -> Ctxt TypeScheme
-    makeCtxt [] = []
-    makeCtxt datcon = buildCtxtTSDDhelper datcon
-
-buildCtxtTSDDhelper :: [DataConstr] -> Ctxt TypeScheme
-buildCtxtTSDDhelper [] = []
-buildCtxtTSDDhelper (dc@(DataConstrIndexed _ id ts):dct) = (id,ts) : buildCtxtTSDDhelper dct
-buildCtxtTSDDhelper (dc@(DataConstrNonIndexed _ _ _):dct) = buildCtxtTSDDhelper dct
-
-buildTypeScheme :: (?globals::Globals) => Type -> TypeScheme
-buildTypeScheme ty = Forall nullSpanInteractive [] [] ty
 
 buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl"<>(show rfv)))
