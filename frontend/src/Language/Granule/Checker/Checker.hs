@@ -82,9 +82,10 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           mConstructor <- lookupDataConstructor s c
           case mConstructor of
             Just (tySch, _) -> return $ Left tySch
-            Nothing ->
+            Nothing -> do
+              st <- get
               -- Or see if this is a kind constructors
-              case lookup c Primitives.typeConstructors of
+              case lookup c (Primitives.typeConstructors <> (typeConstructors st)) of
                 Just (k, _) -> return $ Right k
                 Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
 
