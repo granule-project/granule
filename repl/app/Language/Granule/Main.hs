@@ -196,7 +196,7 @@ handleCMD s =
       expr <- parseExpression exprString
       ty <- synthTypeFromInputExpr expr
       let exprString' = if elem ' ' exprString && head exprString /= '(' && last exprString /= ')' then "(" <> exprString <> ")" else exprString
-      liftIO $ putStrLn $ exprString' <> " : " <> (either pretty pretty ty)
+      liftIO $ putStrLn $ exprString' <> " : " <> either pretty pretty ty
 
     handleLine (Eval exprString) = do
       expr <- parseExpression exprString
@@ -216,7 +216,7 @@ handleCMD s =
           case result of
               Left e -> Ex.throwError (EvalError e)
               Right Nothing -> liftIO $ print "if here fix"
-              Right (Just result) -> liftIO $ putStrLn (pretty result)
+              Right (Just result) -> liftIO $ putStrLn $ pretty result
         -- If this was actually just a type, return it as is
         Right kind -> liftIO $ putStrLn exprString
 
