@@ -1,3 +1,21 @@
+  # 0.7.6.2
+	- Added Cake.gr back in to StdLib
+	- Fixed some bugs in `grepl` (now reads the .granule config file instead of its own)
+	- Modules can now have headers where data constructors can be hidden on export,
+	   e.g. module Cake hiding (Cake, Happy) where...
+	- `grepl` can now infer the type of general expressions (sometimes)
+
+	# 0.7.6.0
+	- LLVM compiler for a simple subset now included.
+	- Various internal changes which allow effect modalities (graded possibility) to be richer.
+	- Type-level sets support improved with some syntax changes, e.g., <{Read, Write}>.
+	- Nat-graded monads now provided.
+	- Some renaming, R and W replaced with Stdin and Stdio so as to avoid conflicts with HandleType.
+	- More flexibility when combining different grading types.
+	- Type holes.
+	- `grin` renamed to `grepl`.
+	- Various tweaks to the standard library and various bug fixes.
+
   # 0.7.2.0
   - Ability to include additional predicates in type signatures
   - More pervasive unicode support

@@ -194,6 +194,9 @@ evalIn ctxt (Case _ _ guardExpr cases) = do
         error $ "Incomplete pattern match:\n  cases: "
              <> pretty cases <> "\n  expr: " <> pretty v
 
+evalIn ctxt (Hole _ _) = do
+  error "Trying to evaluate a hole, which should not have passed the type checker."
+
 applyBindings :: Ctxt RExpr -> RExpr -> RExpr
 applyBindings [] e = e
 applyBindings ((var, e'):bs) e = applyBindings bs (subst e' var e)
@@ -432,6 +435,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (Binop s a o e1 e2) = Binop s a o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a p t e1 e2) = LetDiamond s a p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (Case s a e ps) = Case s a (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
+  toRuntimeRep (Hole s a) = Hole s a
 
 instance RuntimeRep Value where
   toRuntimeRep (Ext a ()) = error "Bug: Parser generated an extended value case when it shouldn't have"
@@ -447,7 +451,7 @@ instance RuntimeRep Value where
   toRuntimeRep (NumFloat x) = NumFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
-eval (AST dataDecls defs _) = do
+eval (AST dataDecls defs _ _ _) = do
     bindings <- evalDefs builtIns (map toRuntimeRep defs)
     case lookup (mkId entryPoint) bindings of
       Nothing -> return Nothing

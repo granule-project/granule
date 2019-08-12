@@ -3,13 +3,13 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE StandaloneDeriving #-}
-{-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE UndecidableInstances #-}
 
 module Language.Granule.Syntax.Def where
 
 import Data.List ((\\), delete)
 import Data.Set (Set)
+import qualified Data.Map as M
 import GHC.Generics (Generic)
 
 import Language.Granule.Context (Ctxt)
@@ -25,7 +25,14 @@ import Language.Granule.Syntax.Pattern
 -- | Comprise a list of data type declarations and a list
 -- | of expression definitions
 -- | where `v` is the type of values and `a` annotations
-data AST v a = AST [DataDecl] [Def v a] (Set Import)
+data AST v a =
+  AST
+    { dataTypes :: [DataDecl]
+    , definitions :: [Def v a]
+    , imports :: Set Import
+    , hiddenNames :: M.Map Id Id -- map from names to the module hiding them
+    , moduleName  :: Maybe Id
+    }
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 
@@ -40,18 +47,25 @@ data Def v a = Def
   }
   deriving Generic
 
-deriving instance (Show v, Show a) => Show (Def v a)
 deriving instance (Eq v, Eq a) => Eq (Def v a)
+deriving instance (Show v, Show a) => Show (Def v a)
 
 -- | Single equation of a function
 data Equation v a =
-    Equation Span a [Pattern a] (Expr v a)
-  deriving Generic
-deriving instance (Show v, Show a) => Show (Equation v a)
-deriving instance (Eq v, Eq a) => Eq (Equation v a)
+    Equation {
+        equationSpan :: Span,
+        equationType :: a,
+        equationArguments :: [Pattern a],
+        equationBody :: Expr v a }
+    deriving Generic
 
-instance FirstParameter (Def v a) Span
+deriving instance (Eq v, Eq a) => Eq (Equation v a)
+deriving instance (Show v, Show a) => Show (Equation v a)
 instance FirstParameter (Equation v a) Span
+
+definitionType :: Def v a -> Type
+definitionType Def { defTypeScheme = ts } =
+    ty where (Forall _ _ _ ty) = ts
 
 -- | Data type declarations
 data DataDecl = DataDecl
@@ -90,8 +104,8 @@ type Cardinality = Maybe Nat
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
-freshenAST (AST dds defs imports) =
-  AST dds' defs' imports
+freshenAST (AST dds defs imports hiddens name) =
+  AST dds' defs' imports hiddens name
     where (dds', defs') = (map runFreshener dds, map runFreshener defs)
 
 instance Monad m => Freshenable m DataDecl where

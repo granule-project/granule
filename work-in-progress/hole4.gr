@@ -1,0 +1,7 @@
+-- Hole message should say x : Int [1] i.e., it should show the updated consumption
+-- because `x` is already used once. This will need a more sophisticated implementation
+-- of holes that might even need to invoke the solver to compute the difference between
+-- input and output contexts.
+
+foo : Int [2] -> Int
+foo [x] = x + ?

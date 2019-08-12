@@ -16,6 +16,8 @@ import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
 import Control.Exception (assert)
+import Control.Monad.IO.Class
+import System.Exit
 
 import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
@@ -122,7 +124,8 @@ compileToSBV predicate tyVarContext =
             Nothing ->
               case k of
                 KType -> buildTheorem' solverVars p
-                _ -> error $ "Trying to make a fresh existential solver variable for a grade of kind: "
+                _ ->
+                  solverError $ "Trying to make a fresh existential solver variable for a grade of kind: "
                              <> show k <> " but I don't know how."
         else
           buildTheorem' solverVars p
@@ -176,11 +179,11 @@ compileToSBV predicate tyVarContext =
         -- Otherwise...
         else do
          (pre, symbolic) <- freshCVar quant (internalName var) kind quantifierType
-         let (universalConstraints', existentialConstraints') =
+         (universalConstraints', existentialConstraints') <-
                case quantifierType of
-                 ForallQ -> (pre .&& universalConstraints, existentialConstraints)
-                 InstanceQ -> (universalConstraints, pre .&& existentialConstraints)
-                 b -> error $ "Impossible freshening a BoundQ, but this is cause above"
+                 ForallQ -> return (pre .&& universalConstraints, existentialConstraints)
+                 InstanceQ -> return (universalConstraints, pre .&& existentialConstraints)
+                 b -> solverError $ "Impossible freshening a BoundQ, but this is cause above"
              --    BoundQ -> (universalConstraints, pre .&& existentialConstraints)
          return (universalConstraints', existentialConstraints', (var, symbolic) : ctxt)
 -}
@@ -294,7 +297,7 @@ freshCVar quant name (TyCon k) q =
               .|| solverVar .== literal unusedRepresentation, SLevel solverVar)
 
         k -> do
-           error $ "I don't know how to make a fresh solver variable of type " <> show k
+          solverError $ "I don't know how to make a fresh solver variable of type " <> show k
 
 -- Extended nat
 freshCVar quant name t q | t == extendedNat = do
@@ -314,7 +317,7 @@ freshCVar quant name (TyVar v) q = do
   return (sTrue, SUnknown $ SynLeaf $ Just solverVar)
 
 freshCVar _ _ t _ =
-  error $ "Trying to make a fresh solver variable for a grade of type: "
+  solverError $ "Trying to make a fresh solver variable for a grade of type: "
    <> show t <> " but I don't know how."
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
@@ -679,3 +682,8 @@ provePredicate predicate vars
                    NotValid $ "is " <> show (ThmResult thmRes)
             Right (True, _) -> NotValid "returned probable model."
             Left str -> OtherSolverError str
+
+solverError :: MonadIO m => String -> m a
+solverError msg = liftIO $ do
+  putStrLn msg
+  exitFailure

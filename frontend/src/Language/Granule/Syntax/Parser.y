@@ -11,9 +11,11 @@ import Data.Char (isSpace)
 import Data.Foldable (toList)
 import Data.List (intercalate, nub, stripPrefix)
 import Data.Maybe (mapMaybe)
-import Data.Set (Set, (\\), fromList, insert, singleton)
+import Data.Set (Set, (\\), fromList, insert, empty, singleton)
+import qualified Data.Map as M
 import Numeric
-import System.FilePath ((</>))
+import System.FilePath ((</>), takeBaseName)
+import System.Exit
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Lexer
@@ -28,7 +30,7 @@ import Language.Granule.Utils hiding (mkSpan)
 
 }
 
-%name defs Defs
+%name topLevel TopLevel
 %name expr Expr
 %name tscheme TypeScheme
 %tokentype { Token }
@@ -39,6 +41,8 @@ import Language.Granule.Utils hiding (mkSpan)
     nl    { TokenNL _ }
     data  { TokenData _ }
     where { TokenWhere _ }
+    module { TokenModule _ }
+    hiding { TokenHiding _ }
     let   { TokenLet _ }
     in    { TokenIn  _  }
     if    { TokenIf _ }
@@ -89,6 +93,7 @@ import Language.Granule.Utils hiding (mkSpan)
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
     '∘'   { TokenRing _ }
+    '?'   { TokenHole _ }
 
 %right '∘'
 %right in
@@ -103,13 +108,27 @@ import Language.Granule.Utils hiding (mkSpan)
 %left '.'
 %%
 
+TopLevel :: { AST () () }
+  : module CONSTR where NL Defs
+            { $5 { moduleName = Just $ mkId $ constrString $2 } }
+
+  | module CONSTR hiding '(' Ids ')' where  NL Defs
+            { let modName = mkId $ constrString $2
+              in $9 { moduleName = Just modName, hiddenNames = $5 modName } }
+
+  | Defs                                        { $1 }
+
+Ids :: { Id -> M.Map Id Id }
+ : CONSTR          { \modName -> M.insert (mkId $ constrString $1) modName M.empty }
+ | CONSTR ',' Ids  { \modName -> M.insert (mkId $ constrString $1) modName ($3 modName) }
+
 Defs :: { AST () () }
-  : Def                       { AST [] [$1] mempty }
-  | DataDecl                  { AST [$1] [] mempty }
-  | Import                    { AST [] [] (singleton $1) }
-  | DataDecl NL Defs          { let (AST dds defs imprts) = $3 in AST ($1 : dds) defs imprts }
-  | Def NL Defs               { let (AST dds defs imprts) = $3 in AST dds ($1 : defs) imprts }
-  | Import NL Defs            { let (AST dds defs imprts) = $3 in AST dds defs (insert $1 imprts) }
+  : Def                       { AST [] [$1] mempty mempty Nothing }
+  | DataDecl                  { AST [$1] [] mempty mempty Nothing }
+  | Import                    { AST [] [] (singleton $1) mempty Nothing }
+  | DataDecl NL Defs          { $3 { dataTypes = $1 : dataTypes $3 } }
+  | Def NL Defs               { $3 { definitions = $1 : definitions $3 } }
+  | Import NL Defs            { $3 { imports = insert $1 (imports $3) } }
 
 NL :: { () }
   : nl NL                     { }
@@ -126,6 +145,7 @@ Def :: { Def () () }
        in case $3 of
           (Just nameB, _) | not (nameB == name) ->
             error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
+
           (_, bindings) -> do
             span <- mkSpan (thd3 $1, endPos $ getSpan $ last bindings)
             return $ Def span (mkId name) bindings (snd3 $1)
@@ -495,6 +515,8 @@ Atom :: { Expr () () }
   | STRING                    {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () $
                                       case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
+  | '?'
+    {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp () }
 
 {
 
@@ -511,7 +533,7 @@ parseError t  =  do
   where (l, c) = getPos (head t)
 
 parseDefs :: FilePath -> String -> Either String (AST () ())
-parseDefs file input = runReaderT (defs $ scanTokens input) file
+parseDefs file input = runReaderT (topLevel $ scanTokens input) file
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseAndDoImportsAndFreshenDefs input = do
@@ -520,36 +542,32 @@ parseAndDoImportsAndFreshenDefs input = do
 
 parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefsAndDoImports input = do
-    AST dds defs imports <- either error return $ parseDefs sourceFilePath input
-    doImportsRecursively imports (AST dds defs mempty)
+    ast <- either failWithMsg return $ parseDefs sourceFilePath input
+    case moduleName ast of
+      Nothing -> doImportsRecursively (imports ast) (ast { imports = empty })
+      Just (Id name _) ->
+        if name == takeBaseName sourceFilePath
+          then doImportsRecursively (imports ast) (ast { imports = empty })
+          else do
+            failWithMsg $ "Module name `" <> name <> "` does not match filename `" <> takeBaseName sourceFilePath <> "`"
+
   where
     -- Get all (transitive) dependencies. TODO: blows up when the file imports itself
     doImportsRecursively :: Set Import -> AST () () -> IO (AST () ())
-    doImportsRecursively todo ast@(AST dds defs done) = do
+    doImportsRecursively todo ast@(AST dds defs done hidden name) = do
       case toList (todo \\ done) of
         [] -> return ast
         (i:todo) ->
           let path = includePath </> i in
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
             src <- readFile path
-            let AST dds' defs' imports' = either error id (parseDefs path src)
+            AST dds' defs' imports' hidden' _ <- either failWithMsg return $ parseDefs path src
             doImportsRecursively
               (fromList todo <> imports')
-              (AST (dds' <> dds) (defs' <> defs) (insert i done))
+              (AST (dds' <> dds) (defs' <> defs) (insert i done) (hidden `M.union` hidden') name)
 
-    -- the following check doesn't seem to be needed because this comes up during type checking @buggymcbugfix
-    -- checkMatchingNumberOfArgs ds@(AST dataDecls defs) =
-    --   mapM checkMatchingNumberOfArgs' defs
-
-    -- checkMatchingNumberOfArgs' (Def _ name eqs _) =
-    --     when (length eqs >= 1 && any (/= head lengths) lengths)
-    --       ( error $ "Syntax error: Number of arguments differs in the equations of `"
-    --         <> sourceName name <> "`"
-    --       )
-        -- where
-        --   lengths = map (\(Equation _ _ pats _) -> length pats) eqs
-
-
+failWithMsg :: String -> IO a
+failWithMsg msg = putStrLn msg >> exitFailure
 
 lastSpan [] = fst $ nullSpanLocs
 lastSpan xs = getEnd . snd . last $ xs
