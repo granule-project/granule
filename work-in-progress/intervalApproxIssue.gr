@@ -1,7 +1,8 @@
 blah : Int [2..5]
 blah = [42]
 
--- Has some strange issue
+-- Requires that n <= m which is why this fails
+-- Need better error message though
 foo : forall n m : Nat, a : Type . a [n..m] -> a [n..m]
 foo [x] = [x]
 
