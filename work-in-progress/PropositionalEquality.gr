@@ -1,10 +1,9 @@
--- last checked 2019-01-07 by @buggymcbugfix
+-- last checked 2019-08-12 by @dorchard
 
--- The following should be possible even without full depndent types, but just a little type dependency.
--- Currently it does not work.
+-- The following should be possible if we had higher higher kinds
 
-data Eq (k : Kind) : k → k → Type where
-  Refl : ∀ {a : k} . Eq k a a
+data Eq (k : Kind) (x : k) : Promote x → Promote x → Type where
+  Refl : ∀ {a : x} . Eq k x a a
 
-foo : Eq Nat 1 1
+foo : Eq Coeffect Nat 1 1
 foo = Refl
