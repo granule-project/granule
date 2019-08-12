@@ -19,6 +19,7 @@ module Language.Granule.Checker.Kinds (
 
 import Control.Monad.State.Strict
 
+import Language.Granule.Checker.KindsHelpers
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (tyOps, setElements)
@@ -409,15 +410,3 @@ isEffectTypeFromKind s kind =
                 then return $ Right effTy
                 else return $ Left kind
         _ -> return $ Left kind
-
-isEffectKind :: Kind -> Bool
-isEffectKind KEffect = True
-isEffectKind (KUnion _ KEffect) = True
-isEffectKind (KUnion KEffect _) = True
-isEffectKind _ = False
-
-isCoeffectKind :: Kind -> Bool
-isCoeffectKind KCoeffect = True
-isCoeffectKind (KUnion _ KCoeffect) = True
-isCoeffectKind (KUnion KCoeffect _) = True
-isCoeffectKind _ = False

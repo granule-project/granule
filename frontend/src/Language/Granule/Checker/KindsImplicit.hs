@@ -9,6 +9,7 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Def
