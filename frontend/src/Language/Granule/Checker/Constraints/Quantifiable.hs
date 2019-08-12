@@ -23,7 +23,7 @@ instance Quantifiable SInteger where
 
 instance QuantifiableScoped Integer where
   universalScoped v = forAll [v]
-  existentialScoped v = forAll [v]
+  existentialScoped v = forSome [v]
 
 instance Quantifiable SFloat where
   universal = forall
@@ -31,7 +31,7 @@ instance Quantifiable SFloat where
 
 instance QuantifiableScoped Float where
   universalScoped v = forAll [v]
-  existentialScoped v = forAll [v]
+  existentialScoped v = forSome [v]
 
 instance Quantifiable SNatX where
   universal = forallSNatX
