@@ -44,6 +44,8 @@ tokens :-
   let                           { \p s -> TokenLet p }
   data                          { \p s -> TokenData p }
   where                         { \p s -> TokenWhere p }
+  module                        { \p s -> TokenModule p }
+  hiding                        { \p s -> TokenHiding p }
   in                            { \p s -> TokenIn p }
   if                            { \p s -> TokenIf p }
   then                          { \p s -> TokenThen p }
@@ -100,6 +102,7 @@ tokens :-
   "=>"                          { \p s -> TokenConstrain p }
   "⇒"                           { \p s -> TokenConstrain p }
   "∘"                           { \p _ -> TokenRing p }
+  "?"                           { \p _ -> TokenHole p }
 
 
 {
@@ -113,6 +116,8 @@ data Token
   | TokenData   AlexPosn
   | TokenTypeDecl AlexPosn
   | TokenWhere  AlexPosn
+  | TokenModule AlexPosn
+  | TokenHiding AlexPosn
   | TokenCase   AlexPosn
   | TokenOf     AlexPosn
   | TokenInfinity AlexPosn
@@ -161,6 +166,7 @@ data Token
   | TokenMeet AlexPosn
   | TokenRing AlexPosn
   | TokenImport AlexPosn String
+  | TokenHole AlexPosn
   deriving (Eq, Show, Generic)
 
 symString :: Token -> String

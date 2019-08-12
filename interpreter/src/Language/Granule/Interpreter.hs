@@ -41,7 +41,7 @@ import Options.Applicative.Help.Pretty (string)
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError)
 import Language.Granule.Interpreter.Eval
-import Language.Granule.Interpreter.Preprocess
+import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
@@ -141,7 +141,8 @@ getEmbeddedGrFlags :: String -> Maybe GrConfig
 getEmbeddedGrFlags
   = foldr (<|>) Nothing
   . map getEmbeddedGrFlagsLine
-  . take 3 -- only check for flags within the top 3 lines (so they are visible and at the top)
+  . take 3 -- only check for flags within the top 3 lines
+  . filter (not . all isSpace)
   . lines
   where
     getEmbeddedGrFlagsLine

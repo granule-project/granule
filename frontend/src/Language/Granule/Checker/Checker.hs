@@ -37,7 +37,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
-import Language.Granule.Syntax.Helpers (freeVars)
+import Language.Granule.Syntax.Helpers (freeVars, hasHole)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pretty
@@ -52,14 +52,53 @@ import Language.Granule.Utils
 check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
-check ast@(AST dataDecls defs imports) = evalChecker initState $ do
-    _    <- checkNameClashes ast
-    _    <- runAll checkTyCon dataDecls
-    _    <- runAll checkDataCons dataDecls
-    defs <- runAll kindCheckDef defs
-    let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
-    defs <- runAll (checkDef defCtxt) defs
-    pure $ AST dataDecls defs imports
+check ast@(AST dataDecls defs imports hidden name) =
+  evalChecker (initState { allHiddenNames = hidden }) $ (do
+      _    <- checkNameClashes ast
+      _    <- runAll checkTyCon dataDecls
+      _    <- runAll checkDataCons dataDecls
+      defs <- runAll kindCheckDef defs
+      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+      defs <- runAll (checkDef defCtxt) defs
+      pure $ AST dataDecls defs imports hidden name)
+
+-- Synthing the type of a single expression in the context of an asy
+synthExprInIsolation :: (?globals :: Globals)
+  => AST () ()
+  -> Expr () ()
+  -> IO (Either (NonEmpty CheckerError) (Either TypeScheme Kind))
+synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
+  evalChecker (initState { allHiddenNames = hidden }) $ (do
+      _    <- checkNameClashes ast
+      _    <- runAll checkTyCon dataDecls
+      _    <- runAll checkDataCons dataDecls
+      defs <- runAll kindCheckDef defs
+      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+      -- Since we need to return a type scheme, have a look first
+      -- for top-level identifiers with their schemes
+      case expr of
+        -- Lookup in data constructors
+        (Val s _ (Constr _ c [])) -> do
+          mConstructor <- lookupDataConstructor s c
+          case mConstructor of
+            Just (tySch, _) -> return $ Left tySch
+            Nothing -> do
+              st <- get
+              -- Or see if this is a kind constructors
+              case lookup c (Primitives.typeConstructors <> (typeConstructors st)) of
+                Just (k, _) -> return $ Right k
+                Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
+
+        -- Lookup in definitions
+        (Val s _ (Var _ x)) -> do
+          case lookup x (defCtxt <> Primitives.builtins) of
+            Just tyScheme -> return $ Left tyScheme
+            Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
+
+        -- Otherwise, do synth
+        _ -> do
+          (ty, _, _, _) <- synthExpr defCtxt [] Positive expr
+          return $ Left $ Forall nullSpanNoFile [] [] ty)
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -326,6 +365,12 @@ checkExpr :: (?globals :: Globals)
           -> Expr () ()       -- expression
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
+-- Hit an unfilled hole
+checkExpr _ ctxt _ _ t (Hole s _) = do
+  st <- get
+  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
+  throw $ HoleMessage s (Just t) ctxt varContext
+
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
     let elaborated = Val s ty (NumInt n)
@@ -408,7 +453,13 @@ checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
 
 -- Promotion
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
-    let vars = freeVars e -- map fst gam
+    let vars =
+          if hasHole e
+            -- If we are promoting soemthing with a hole, then put all free variables in scope
+            then map fst gam
+            -- Otherwise we need to discharge only things that get used
+            else freeVars e
+
     gamF    <- discToFreshVarsIn s vars gam demand
     (gam', subst, elaboratedE) <- checkExpr defs gamF pol False tau e
 
@@ -418,7 +469,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
     -- (the guard contexts come from a special context in the solver)
     guardGam <- allGuardContexts
     guardGam' <- filterM isLevelKinded guardGam
-    let gam'' = multAll (vars <> map fst guardGam') demand (gam' <> guardGam')
+    gam'' <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
 
     let elaborated = Val s ty (Promote tau elaboratedE)
     return (gam'', subst, elaborated)
@@ -577,6 +628,12 @@ synthExpr :: (?globals :: Globals)
           -> Expr () ()        -- ^ Expression
           -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
+-- Hit an unfilled hole
+synthExpr _ ctxt _ (Hole s _) = do
+  st <- get
+  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
+  throw $ HoleMessage s Nothing ctxt varContext
+
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do
   let t = TyCon $ mkId "Int"
@@ -606,7 +663,8 @@ synthExpr defs gam pol
 synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
   -- Should be provided in the type checkers environment
   st <- get
-  case lookup c (dataConstructors st) of
+  mConstructor <- lookupDataConstructor s c
+  case mConstructor of
     Just (tySch, coercions) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
@@ -807,7 +865,9 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
 
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy (Promote t elaboratedE)
-   return (finalTy, multAll (freeVars e) (CVar var) gam', subst, elaborated)
+
+   gam'' <- multAll s (freeVars e) (CVar var) gam'
+   return (finalTy, gam'', subst, elaborated)
 
 
 -- BinOp
@@ -1154,8 +1214,8 @@ relateByAssumption _ _ (_, Linear _) (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
 relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
-  kind <- mguCoeffectTypes s c1 c2
-  addConstraint (rel s c1 c2 kind)
+  (kind, (inj1, inj2)) <- mguCoeffectTypes s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
 
 relateByAssumption s _ x y =
   throw UnifyGradedLinear{ errLoc = s, errGraded = fst x, errLinear = fst y }
@@ -1169,7 +1229,7 @@ discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption ->
 discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      coeffTy <- mguCoeffectTypes s c coeffect
+      (coeffTy, _) <- mguCoeffectTypes s c coeffect
       return (var, Discharged t (CSig c coeffTy))
 
     toFreshVar (var, Linear t) = do

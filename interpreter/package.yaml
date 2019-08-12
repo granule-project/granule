@@ -1,5 +1,5 @@
 name: granule-interpreter
-version: '0.7.4.1'
+version: '0.7.6.2'
 synopsis: The Granule interpreter
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2019 authors
@@ -66,4 +66,3 @@ tests:
     - strict
     - tasty
     - tasty-golden
-

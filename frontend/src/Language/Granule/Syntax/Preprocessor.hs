@@ -1,7 +1,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.Granule.Interpreter.Preprocess where
+module Language.Granule.Syntax.Preprocessor where
 
 import Control.Exception (SomeException, throwIO, try)
 import Control.Monad (when)

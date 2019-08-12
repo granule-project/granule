@@ -152,11 +152,11 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp = do
   debugM "equalTypesRelatedCoeffectsInner (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
   -- Unify the coeffect kinds of the two coeffects
-  kind <- mguCoeffectTypes s c c'
+  (kind, (inj1, inj2)) <- mguCoeffectTypes s c c'
   -- subst <- unify c c'
 
   -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
-  addConstraint (rel s c' c kind)
+  addConstraint (rel s (inj2 c') (inj1 c) kind)
 
   equalTypesRelatedCoeffects s rel t t' sp
   --(eq, subst') <- equalTypesRelatedCoeffectsInner s rel uS t t' sp
@@ -423,12 +423,12 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
   return (Diamond ej tj)
 
 joinTypes s (Box c t) (Box c' t') = do
-  coeffTy <- mguCoeffectTypes s c c'
+  (coeffTy, (inj1, inj2)) <- mguCoeffectTypes s c c'
   -- Create a fresh coeffect variable
   topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
-  addConstraint (ApproximatedBy s c  (CVar topVar) coeffTy)
-  addConstraint (ApproximatedBy s c' (CVar topVar) coeffTy)
+  addConstraint (ApproximatedBy s (inj1 c)  (CVar topVar) coeffTy)
+  addConstraint (ApproximatedBy s (inj2 c') (CVar topVar) coeffTy)
   tUpper <- joinTypes s t t'
   return $ Box (CVar topVar) tUpper
 

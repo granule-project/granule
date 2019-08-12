@@ -66,6 +66,9 @@ instance Pretty () where
 instance {-# OVERLAPPABLE #-} Pretty a => Pretty [a] where
    prettyL l xs = "[" <> intercalate "," (map (prettyL l) xs) <> "]"
 
+instance (Pretty a, Pretty b) => Pretty (Either a b) where
+  prettyL l (Left a) = prettyL l a
+  prettyL l (Right b) = prettyL l b
 -- Core prettyL l printers
 
 instance Pretty Coeffect where
@@ -187,13 +190,21 @@ appChain (TyApp t1 t2)           = True
 appChain _                       = False
 
 instance Pretty v => Pretty (AST v a) where
-    prettyL l (AST dataDecls defs imprts)
-        = (unlines . map ("import " <>) . toList) imprts
-        <> "\n\n" <> pretty' dataDecls
-        <> "\n\n" <> pretty' defs
-      where
-        pretty' :: Pretty l => [l] -> String
-        pretty' = intercalate "\n\n" . map pretty
+  prettyL l (AST dataDecls defs imprts hidden name) =
+    -- Module header (if it exists)
+    (case name of
+        Nothing -> ""
+        Just name -> "module "
+                  <> pretty name
+                  <> " hiding ("
+                  <> (intercalate "," (map (prettyL l) (toList hidden)))
+                  <> ") where\n\n")
+    <> (unlines . map ("import " <>) . toList) imprts
+    <> "\n\n" <> pretty' dataDecls
+    <> "\n\n" <> pretty' defs
+    where
+      pretty' :: Pretty l => [l] -> String
+      pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
     prettyL l (Def _ v eqs (Forall _ [] [] t))
@@ -279,7 +290,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
   prettyL l (Case _ _ e ps) = "\n    (case " <> prettyL l e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> prettyL l p
                       <> " -> " <> prettyL l e') ps) <> ")"
-
+  prettyL l (Hole _ _) = "?"
 
 instance Pretty Operator where
   prettyL _ = \case
