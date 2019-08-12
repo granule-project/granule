@@ -115,5 +115,5 @@ push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] 
 push [(x, y)] = ([x], [y])
 
 --- Pull coeffects of pair elements up to the pair
-pull : forall {a : Type, b : Type, k : Coeffect, c : k} . a [c] × b [c] -> (a × b) [c]
+pull : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
 pull ([x], [y]) = [(x, y)]

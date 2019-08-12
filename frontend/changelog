@@ -1,9 +1,15 @@
-  # 0.7.6.2
-	- Added Cake.gr back in to StdLib
-	- Fixed some bugs in `grepl` (now reads the .granule config file instead of its own)
+  # 0.7.7.0
+	- Standard library changes
+      - `Cake`: back in to StdLib
+      - `Choice`: new library (provides linear tensor)
+      - `Prelude` change: generalised `pull`
+      - `Vec` addition: `pushVec`
+      - `Graph` bug fixes: `size` and `vertexcount` changed due to a bug fix in Granule;
 	- Modules can now have headers where data constructors can be hidden on export,
 	   e.g. module Cake hiding (Cake, Happy) where...
-	- `grepl` can now infer the type of general expressions (sometimes)
+	- Fixed some bugs in `grepl` (now reads the .granule config file instead of its own)
+	- `grepl` can now give the type of general expressions (if the checker can infer it)
+  - Various refactorings in the compilation of constraints to SMT; fixes a bug with `Graph` lib
 
 	# 0.7.6.0
 	- LLVM compiler for a simple subset now included.

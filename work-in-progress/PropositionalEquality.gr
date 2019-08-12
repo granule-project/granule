@@ -1,9 +1,8 @@
--- last checked 2019-08-12 by @dorchard
+data Eq : Type -> Type -> Type where
+  Refl : forall {a : Type} . Eq a a
 
--- The following should be possible if we had higher higher kinds
+sym : ∀ {a : Type, b : Type} . Eq a b -> Eq b a
+sym Refl = Refl
 
-data Eq (k : Kind) (x : k) : Promote x → Promote x → Type where
-  Refl : ∀ {a : x} . Eq k x a a
-
-foo : Eq Coeffect Nat 1 1
-foo = Refl
+trans : ∀ {a : Type, b : Type, c : Type} . Eq a b -> Eq b c -> Eq a c
+trans Refl Refl = Refl
