@@ -157,15 +157,15 @@ symGradeGreater :: SGrade -> SGrade -> Symbolic SBool
 symGradeGreater x y = symGradeLess y x
 
 symGradeLessEq :: SGrade -> SGrade -> Symbolic SBool
-symGradeLessEq x y = lazyOrSymbolicM (symGradeEq x y) (symGradeLess x y) 
+symGradeLessEq x y = lazyOrSymbolicM (symGradeEq x y) (symGradeLess x y)
 
 symGradeGreaterEq :: SGrade -> SGrade -> Symbolic SBool
 symGradeGreaterEq x y = lazyOrSymbolicM (symGradeEq x y) (symGradeGreater x y)
 
--- A short-circuiting disjunction for effectful computations that 
+-- A short-circuiting disjunction for effectful computations that
 -- produce symoblic bools (a kind of expanded `iteLazy` for Symbolic monad)
 lazyOrSymbolicM :: Symbolic SBool -> Symbolic SBool -> Symbolic SBool
-lazyOrSymbolicM m1 m2 = m1 >>= \b1 -> 
+lazyOrSymbolicM m1 m2 = m1 >>= \b1 ->
   case unliteral b1 of
     Just True -> return sTrue
     otherwise -> m2 >>= \b2 -> return $ symbolicMerge False b1 sTrue b2
