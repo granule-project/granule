@@ -230,10 +230,9 @@ checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty
 
         -- Solve the generated constraints
         checkerState <- get
-        debugM "tyVarContext" (pretty $ tyVarContext checkerState)
-        let predStack = Conj $ predicateStack checkerState
-        debugM "Solver predicate" $ pretty predStack
-        solveConstraints predStack (getSpan equation) defName
+
+        let predicate = Conj $ predicateStack checkerState
+        solveConstraints predicate (getSpan equation) defName
         pure elaboratedEq
 
     checkGuardsForImpossibility s defName
@@ -925,6 +924,10 @@ solveConstraints predicate s name = do
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
   -- remove any variables bound already in the preciate
   coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
+
+  debugM "tyVarContext" (pretty $ tyVarContext checkerState)
+  debugM "context into the solver" (pretty $ coeffectVars)
+  debugM "Solver predicate" $ pretty predicate
 
   result <- liftIO $ provePredicate predicate coeffectVars
 

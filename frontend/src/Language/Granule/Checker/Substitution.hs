@@ -675,17 +675,18 @@ instance Unifiable t => Unifiable (Maybe t) where
 
 updateTyVar :: (?globals :: Globals) => Span -> Id -> Kind -> Checker ()
 updateTyVar s tyVar k = do
-    liftIO $ putStrLn $ "updating " <> pretty tyVar <> " to " <> pretty k
+    -- CLEAN
+    --liftIO $ putStrLn $ "updating " <> pretty tyVar <> " to " <> pretty k
     -- Updated the kind of type variable `v` in the context
     st <- get
     -- Get the current quantification
     case lookup tyVar (tyVarContext st) of
       Just (_, q) -> do
           st <- get
-          liftIO $ putStrLn $ "\n\ntyVarContext before = " <> pretty (tyVarContext st)
+          -- liftIO $ putStrLn $ "\n\ntyVarContext before = " <> pretty (tyVarContext st)
           modify (\st -> st{ tyVarContext = rewriteCtxt (tyVarContext st) })
           st <- get
-          liftIO $ putStrLn $ "\ntyVarContext after = " <> pretty (tyVarContext st)
+          -- liftIO $ putStrLn $ "\ntyVarContext after = " <> pretty (tyVarContext st)
           -- Rewrite the predicate
           st <- get
           let subst = case k of
