@@ -261,7 +261,7 @@ symGradeTimes (SLevel lev1) (SLevel lev2) = return $
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
-    --SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
+    -- liftM2 SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
     liftM2 SInterval (comb symGradeMeet) (comb symGradeJoin)
      where
       comb f = do

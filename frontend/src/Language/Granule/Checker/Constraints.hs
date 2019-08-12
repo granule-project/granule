@@ -216,25 +216,25 @@ compile :: (?globals :: Globals) =>
   Ctxt SGrade -> Constraint -> Symbolic SBool
 
 compile vars (Eq _ c1 c2 t) =
-  bindM2 eqConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' eqConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
 
 compile vars (Neq _ c1 c2 t) =
-  bindM2 (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
-  bindM2 approximatedByOrEqualConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' approximatedByOrEqualConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
 
 compile vars (Lt s c1 c2) =
-  bindM2 symGradeLess (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' symGradeLess (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 compile vars (Gt s c1 c2) =
-  bindM2 symGradeGreater (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' symGradeGreater (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 compile vars (LtEq s c1 c2) =
-  bindM2 symGradeLessEq (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' symGradeLessEq (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 compile vars (GtEq s c1 c2) =
-  bindM2 symGradeGreaterEq (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
+  bindM2And' symGradeGreaterEq (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
 -- TODO: I think this is deprecated (DAO 12/08/2019)
 -- NonZeroPromotableTo s c means that:
@@ -251,10 +251,10 @@ compile vars (NonZeroPromotableTo s x c t) = do
 
     return (req .&& nonZero .&& promotableToC))
 
-
 -- | Compile a coeffect term into its symbolic representation
+-- | (along with any additional predicates)
 compileCoeffect :: (?globals :: Globals) =>
-  Coeffect -> Type -> [(Id, SGrade)] -> Symbolic SGrade
+  Coeffect -> Type -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
@@ -262,129 +262,133 @@ compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 -- constrained further: default to the cartesian coeffect
 -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
 compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v =
-  return $ SPoint
+  return (SPoint, sTrue)
 
 compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
-  return $ SLevel . fromInteger . toInteger $ n
+  return (SLevel . fromInteger . toInteger $ n, sTrue)
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
 compileCoeffect (Level n) (isProduct -> Just (TyCon k, t2)) vars | internalName k == "Level" = do
-  g <- compileCoeffect (COne t2) t2 vars
-  return $ SProduct (SLevel . fromInteger . toInteger $ n) g
+  (g, p) <- compileCoeffect (COne t2) t2 vars
+  return (SProduct (SLevel . fromInteger . toInteger $ n) g, p)
 
 compileCoeffect (Level n) (isProduct -> Just (t1, TyCon k)) vars | internalName k == "Level" = do
-  g <- compileCoeffect (COne t1) t1 vars
-  return $ SProduct g (SLevel . fromInteger . toInteger $ n)
+  (g, p) <- compileCoeffect (COne t1) t1 vars
+  return (SProduct g (SLevel . fromInteger . toInteger $ n), p)
 
 -- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
 -- TODO: see if we can erase this, does it actually happen anymore?
-compileCoeffect (CInfinity (Just (TyVar _))) _ _ = return zeroToInfinity
-compileCoeffect (CInfinity Nothing) _ _ = return zeroToInfinity
+compileCoeffect (CInfinity (Just (TyVar _))) _ _ = return (zeroToInfinity, sTrue)
+compileCoeffect (CInfinity Nothing) _ _ = return (zeroToInfinity, sTrue)
 compileCoeffect (CInfinity _) t _| t == extendedNat =
-  return $ SExtNat SNatX.inf
+  return (SExtNat SNatX.inf, sTrue)
 
 compileCoeffect (CNat n) k _ | k == nat =
-  return $ SNat  . fromInteger . toInteger $ n
+  return (SNat  . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (CNat n) k _ | k == extendedNat =
-  return $ SExtNat . fromInteger . toInteger $ n
+  return (SExtNat . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
-  return $ SFloat  . fromRational $ r
+  return (SFloat  . fromRational $ r, sTrue)
 
 compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
-  return $ SSet . S.fromList $ map (first mkId) xs
+  return (SSet . S.fromList $ map (first mkId) xs, sTrue)
 
 compileCoeffect (CVar v) _ vars =
    case lookup v vars of
-    Just cvar -> return $ cvar
+    Just cvar -> return (cvar, sTrue)
     _ -> solverError $ "Looking up a variable '" <> show v <> "' in " <> show vars
 
-compileCoeffect c@(CMeet n m) k vars =
-  bindM2 symGradeMeet (compileCoeffect n k vars) (compileCoeffect m k vars)
+compileCoeffect c@(CMeet n m) k vars = do
+  bindM2And symGradeMeet (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(CJoin n m) k vars =
-  bindM2 symGradeJoin (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And symGradeJoin (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(CPlus n m) k vars =
-  bindM2 symGradePlus (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And symGradePlus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
-compileCoeffect c@(CTimes n m) k vars =
-  bindM2 symGradeTimes (compileCoeffect n k vars) (compileCoeffect m k vars)
+compileCoeffect c@(CTimes n m) k vars = do
+  bindM2And symGradeTimes (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(CMinus n m) k vars =
-  bindM2 symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
+  bindM2And symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(CExpon n m) k vars = do
-  g1 <- compileCoeffect n k vars
-  g2 <- compileCoeffect m k vars
+  (g1, p1) <- compileCoeffect n k vars
+  (g2, p2) <- compileCoeffect m k vars
   case (g1, g2) of
-    (SNat n1, SNat n2) -> return $ SNat (n1 .^ n2)
+    (SNat n1, SNat n2) -> return (SNat (n1 .^ n2), p1 .&& p2)
     _ -> solverError $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
-compileCoeffect c@(CInterval lb ub) (isInterval -> Just t) vars =
-  liftM2 SInterval (compileCoeffect lb t vars) (compileCoeffect ub t vars)
+compileCoeffect c@(CInterval lb ub) (isInterval -> Just t) vars = do
+  (lower, p1) <- compileCoeffect lb t vars
+  (upper, p2) <- compileCoeffect ub t vars
+  intervalConstraint <- symGradeLessEq lower upper
+  return $ (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
 
 compileCoeffect (CZero k') k vars  =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> return $ SLevel $ literal unusedRepresentation
-        "Nat"       -> return $ SNat 0
-        "Q"         -> return $ SFloat (fromRational 0)
-        "Set"       -> return $ SSet (S.fromList [])
+        "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
+        "Nat"       -> return (SNat 0, sTrue)
+        "Q"         -> return (SFloat (fromRational 0), sTrue)
+        "Set"       -> return (SSet (S.fromList []), sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
-      return $ SExtNat 0
+      return (SExtNat 0, sTrue)
 
     (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
-      liftM2 SProduct
+      liftM2And SProduct
         (compileCoeffect (CZero t1) t1' vars)
         (compileCoeffect (CZero t2) t2' vars)
 
     (isInterval -> Just t, isInterval -> Just t') ->
-      liftM2 SInterval
+      liftM2And SInterval
         (compileCoeffect (CZero t) t' vars)
         (compileCoeffect (CZero t) t' vars)
 
-    (TyVar _, _) -> return $ SUnknown (SynLeaf (Just 0))
+    (TyVar _, _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
     _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
 
 compileCoeffect (COne k') k vars =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
       case internalName k' of
-        "Level"     -> return $ SLevel $ literal privateRepresentation
-        "Nat"       -> return $ SNat 1
-        "Q"         -> return $ SFloat (fromRational 1)
-        "Set"       -> return $ SSet (S.fromList [])
+        "Level"     -> return (SLevel (literal privateRepresentation), sTrue)
+        "Nat"       -> return (SNat 1, sTrue)
+        "Q"         -> return (SFloat (fromRational 1), sTrue)
+        "Set"       -> return (SSet (S.fromList []), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
 
     (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
-      return $ SExtNat 1
+      return (SExtNat 1, sTrue)
 
     (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
-      liftM2 SProduct
+      liftM2And SProduct
         (compileCoeffect (COne t1) t1' vars)
         (compileCoeffect (COne t2) t2' vars)
 
     -- Build an interval for 1
-    (isInterval -> Just t, isInterval -> Just t') ->
-        liftM2 SInterval
+    (isInterval -> Just t, isInterval -> Just t') -> do
+      liftM2And SInterval
           (compileCoeffect (COne t) t' vars)
           (compileCoeffect (COne t) t' vars)
-    (TyVar _, _) -> return $ SUnknown (SynLeaf (Just 1))
+
+    (TyVar _, _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
     _ -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
 
 compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
-  liftM2 SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
+  liftM2And SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
 
 -- For grade-polymorphic coeffects, that have come from a nat
 -- expression (sometimes this is just from a compounded expression of 1s),
 -- perform the injection from Natural numbers to arbitrary semirings
 compileCoeffect (CNat n) (TyVar _) _ | n > 0 =
-  return $ SUnknown (injection n)
+  return (SUnknown (injection n), sTrue)
     where
       injection 0 = SynLeaf (Just 0)
       injection 1 = SynLeaf (Just 1)
@@ -566,5 +570,22 @@ provePredicate predicate vars
             Right (True, _) -> NotValid "returned probable model."
             Left str -> OtherSolverError str
 
-bindM2 :: Monad m => (t1 -> t2 -> m b) -> m t1 -> m t2 -> m b
-bindM2 k ma mb = ma >>= (\a -> mb >>= (\b -> k a b))
+-- Useful combinators here
+-- Generalises `bindM2` to functions which return also a symbolic grades
+-- which should be combined via .&&
+bindM2And :: Monad m => (t1 -> t2 -> m b) -> m (t1, SBool) -> m (t2, SBool) -> m (b, SBool)
+bindM2And k ma mb = do
+  (a, p) <- ma
+  (b, q) <- mb
+  c <- k a b
+  return (c, p .&& q)
+
+bindM2And' :: Monad m => (t1 -> t2 -> m SBool) -> m (t1, SBool) -> m (t2, SBool) -> m SBool
+bindM2And' k ma mb = do
+  (a, p) <- ma
+  (b, q) <- mb
+  c <- k a b
+  return (p .&& q .&& c)
+
+liftM2And :: Monad m => (t1 -> t2 -> b) -> m (t1, SBool) -> m (t2, SBool) -> m (b, SBool)
+liftM2And k = bindM2And (\a b -> return (k a b))
