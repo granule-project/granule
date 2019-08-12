@@ -21,7 +21,7 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
-import Language.Granule.Checker.KindsHelpers
+import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.KindsImplicit
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad

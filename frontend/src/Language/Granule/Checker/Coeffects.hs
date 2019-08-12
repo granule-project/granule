@@ -13,6 +13,8 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
+import Language.Granule.Utils
+
 -- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
 --    set of used variables, (first param))
