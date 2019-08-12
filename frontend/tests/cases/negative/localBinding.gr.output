@@ -1,3 +1,3 @@
 Type checking failed: 
-Grading error: 3:8:
+Grading error: frontend/tests/cases/negative/localBinding.gr:3:8:
 1 is not approximatable by 3 for type Nat because Nat denotes precise usage.

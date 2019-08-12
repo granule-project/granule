@@ -1,4 +1,4 @@
 Type checking failed: 
-Falsifiable theorem: 9:1:
+Falsifiable theorem: frontend/tests/cases/negative/predicateFalseInUse.gr:9:1:
 The following theorem associated with `foo` is falsifiable:
 	(0..1 ≤ 0..1) ∧ (0 > 0)

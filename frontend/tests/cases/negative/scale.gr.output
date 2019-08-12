@@ -1,6 +1,6 @@
 Type checking failed: 
-Unbound variable error: 2:10:
+Unbound variable error: frontend/tests/cases/negative/scale.gr:2:10:
 `scale`
 
-Unbound variable error: 5:20:
+Unbound variable error: frontend/tests/cases/negative/scale.gr:5:20:
 `scale`

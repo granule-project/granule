@@ -1,4 +1,4 @@
 Type checking failed: 
-Falsifiable theorem: 6:1:
+Falsifiable theorem: frontend/tests/cases/negative/intervalApprox.gr:6:1:
 The following theorem associated with `intervalApprox` is falsifiable:
 	(0..∞ ≤ 1..2)
