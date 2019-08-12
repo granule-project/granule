@@ -170,12 +170,6 @@ lazyOrSymbolicM m1 m2 = m1 >>= \b1 ->
     Just True -> return sTrue
     otherwise -> m2 >>= \b2 -> return $ symbolicMerge False b1 sTrue b2
 
-
-iteLazy :: Mergeable a => SBool -> a -> a -> a
-iteLazy t a b
-  | Just r <- unliteral t = if r then a else b
-  | True                  = symbolicMerge False t a b
-
 symGradeEq :: SGrade -> SGrade -> Symbolic SBool
 symGradeEq (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 (.&&) (symGradeEq lb2 lb1) (symGradeEq ub1 ub2)
