@@ -1,3 +1,3 @@
 Type checking failed: 
-Linearity error: 8:13:
+Linearity error: frontend/tests/cases/negative/wild.gr:8:13:
 Wildcard pattern `_` allowing a value to be discarded
