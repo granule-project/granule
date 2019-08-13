@@ -313,24 +313,17 @@ extractFreeVars i (x:xs) =
     then sourceName x : extractFreeVars i xs
     else extractFreeVars i xs
 
-buildAST :: String -> M.Map String (Def () (), [String]) -> [Def () ()]
-buildAST t m =
-  case M.lookup t m  of
+buildAST :: M.Map String (Def () (), [String]) -> String -> [Def () ()]
+buildAST m var =
+  case M.lookup var m  of
     -- Nothing case indicates a primitive so we don't need to pull in the local def here
     Nothing -> []
     -- Otherwise, recursively pull in the necessary definitions
-    Just (def,lid) ->
-      case lid of
-        []  ->  [def]
-        ids -> buildDef ids <> [def]
-                  where
-                    buildDef :: [String] -> [Def () ()]
-                    buildDef [] =  []
-                    buildDef (x:xs) =  buildDef xs <> buildAST x m
+    Just (def, dependencies) ->
+      def : concatMap (buildAST m) dependencies
 
 buildRelevantASTdefinitions :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
-buildRelevantASTdefinitions [] _ = []
-buildRelevantASTdefinitions (x:xs) m = buildAST (sourceName x) m <> buildRelevantASTdefinitions xs m
+buildRelevantASTdefinitions vars m = reverse . concatMap (buildAST m . sourceName) $ vars
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
 buildCheckerState dataDecls = do
