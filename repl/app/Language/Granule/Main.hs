@@ -62,7 +62,7 @@ data ReplState =
 initialState :: ReplState
 initialState = ReplState 0 [] [] M.empty
 
-type REPLStateIO a  = StateT ReplState (Ex.ExceptT ReplError IO) a
+type REPLStateIO a = StateT ReplState (Ex.ExceptT ReplError IO) a
 
 -- A span used for top-level inputs
 nullSpanInteractive = Span (0,0) (0,0) "interactive"
@@ -236,7 +236,7 @@ synthTypeFromInputExpr exprAst = do
   checkerResult <- liftIO' $ synthExprInIsolation (AST (currentADTs st) defs mempty mempty Nothing) exprAst
   case checkerResult of
     Right res -> return res
-    Left err -> Ex.throwError (TypeCheckerError err)
+    Left err -> Ex.throwError (TypeCheckerError err (files st))
 
 -- Exceptions behaviour
 instance MonadException m => MonadException (StateT ReplState m) where
@@ -285,7 +285,8 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                   liftIO $ printInfo $ green $ path <> ", interpreted."
 
                 Left errs -> do
-                  Ex.throwError (TypeCheckerError errs)
+                  st <- get
+                  Ex.throwError (TypeCheckerError errs (files st))
       Left e -> do
        st <- get
        Ex.throwError (ParseError e (files st))
