@@ -36,7 +36,6 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
-import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Interpreter.Eval
 import qualified Language.Granule.Interpreter as Interpreter
 
@@ -210,7 +209,7 @@ handleCMD s =
           modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
 
           let fv = freeVars expr
-          let ast = buildForEval fv (defns st)
+          let ast = buildRelevantASTdefinitions fv (defns st)
           let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
           result <- liftIO' $ try $ replEval (freeVarCounter st) astNew
           case result of
@@ -232,8 +231,10 @@ synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Eith
 synthTypeFromInputExpr exprAst = do
   st <- get
   -- Build the AST and then try to synth the type
-  let defs = map fst (M.elems (defns st))
-  checkerResult <- liftIO' $ synthExprInIsolation (AST (currentADTs st) defs mempty mempty Nothing) exprAst
+  let ast = buildRelevantASTdefinitions (freeVars exprAst) (defns st)
+  let astRest = AST (currentADTs st) ast mempty mempty Nothing
+
+  checkerResult <- liftIO' $ synthExprInIsolation astRest exprAst
   case checkerResult of
     Right res -> return res
     Left err -> Ex.throwError (TypeCheckerError err (files st))
@@ -312,16 +313,12 @@ extractFreeVars i (x:xs) =
     then sourceName x : extractFreeVars i xs
     else extractFreeVars i xs
 
-buildAST ::String -> M.Map String (Def () (), [String]) -> [Def () ()]
+buildAST :: String -> M.Map String (Def () (), [String]) -> [Def () ()]
 buildAST t m =
   case M.lookup t m  of
-    Nothing ->
-      -- Check primitives
-      case lookup (mkId t) Primitives.builtins of
-        Nothing -> []
-        -- Create a trivial definition (x = x) with the right type
-        Just ty -> [Def nullSpanInteractive (mkId t) [] ty]
-        --   (Val nullSpanInteractive () (Var () (mkId t)))
+    -- Nothing case indicates a primitive so we don't need to pull in the local def here
+    Nothing -> []
+    -- Otherwise, recursively pull in the necessary definitions
     Just (def,lid) ->
       case lid of
         []  ->  [def]
@@ -331,9 +328,9 @@ buildAST t m =
                     buildDef [] =  []
                     buildDef (x:xs) =  buildDef xs <> buildAST x m
 
-buildForEval :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
-buildForEval [] _ = []
-buildForEval (x:xs) m = buildAST (sourceName x) m <> buildForEval xs m
+buildRelevantASTdefinitions :: [Id] -> M.Map String (Def () (), [String]) -> [Def () ()]
+buildRelevantASTdefinitions [] _ = []
+buildRelevantASTdefinitions (x:xs) m = buildAST (sourceName x) m <> buildRelevantASTdefinitions xs m
 
 buildCheckerState :: (?globals::Globals) => [DataDecl] -> Checker.Checker ()
 buildCheckerState dataDecls = do
