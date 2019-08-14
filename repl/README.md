@@ -25,7 +25,7 @@ A REPL for the Granule language
 
 To install `grepl`, run
 ```
-$ stack install
+$ stack install :grepl
 ```
 
 To launch, run
@@ -37,16 +37,16 @@ $ grepl
 
 The following commands are available for use in the REPL
 ```
-:help                (:h)  
-:quit                (:q)  
-:type <term>         (:t)  
+:help                (:h)
+:quit                (:q)
+:type <term>         (:t)
 :type_scheme <type>  (:ts)
-:show <term>         (:s)  
-:parse <expression>  (:p)  
-:lexer <string>      (:x)  
-:debug <filepath>    (:d)  
-:dump                ()   
-:load <filepath>     (:l)  
+:show <term>         (:s)
+:parse <expression>  (:p)
+:lexer <string>      (:x)
+:debug <filepath>    (:d)
+:dump                ()
+:load <filepath>     (:l)
 :module <filepath>   (:m)
 ```
 
@@ -64,17 +64,19 @@ Leave the REPL
 Load a file into the REPL.  This will erase content in state and replace with loaded file.
 ```
 Granule> :l Vec.gr
-S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
+Vec.gr, interpreted
 ```
 #### :type <term\> (:t)
 <a id="type"></a>
-Display the type of a term in the REPL state
+Display the type of an expression in the REPL state
 ```
 Granule> :l Vec.gr
-S:\Documents\Research\granule\StdLib\Vec.gr, interpreted
+Vec.gr, interpreted
 
 Granule> :t head
-head : forall a : Type, n : Nat. ((Vec n + 1 a) |1|) → a
+head :
+  forall {a : Type, n : ↑Nat} .
+   (Vec (n + 1) a) [0..1] -> a
 ```
 
 #### :show <term\> (:s)
@@ -142,55 +144,20 @@ Granule> :dump
 <a id="module"></a>
 Adds a file to the REPL by appending to the current REPL state
 ```
-Granule> :m Files.gr
-S:\Documents\Research\granule\examples\Files.gr, interpreted
+Granule> :m Prelude.gr
+Prelude.gr, interpreted
 ```
 #### :reload (:r)
-Reload the last file loaded into the Repl
+Reload the last file loaded into the Repl (included all the additionally loaded modules)
 ```
 Granule> :l example.gr
-S:\Documents\Research\granule\tests\regression\good\example.gr, interpreted
+example.gr, interpreted
 Granule> :r
-S:\Documents\Research\granule\tests\regression\good\example.gr, interpreted
+example.gr, interpreted
 ```
 ## Configuration File
 <a id="configuration-file"></a>
 
-The congiuration file contains various variables used for set up of the REPL
-#### Config file creation
-<a id="config-file-creation"></a>
-The configuration file needs to be created by the user.  It needs to be named
-`.grepl`.  This file needs to be placed in the home directory
-###### Windows
-```
-C:\Users\<username>
-```
-###### Linux
-```
-/home/<username> or directory of users $HOME environmental variable
-```
-###### Mac OS X
-```
-/Users/<username>
-```
-#### Config File Format
-<a id="config-file-format"></a>
-The config file is set up so the config variable is on the far left (needs to be lowercase)
-followed by an equals and then the value(s).  For multiple value a newline and white space
-is needed.  
-```
-<config var 1> = someValue
-<config var 2> = aValue1
-                 aValue2
-                 aValue3
-```
-#### Config File Use
-<a id="config-file-use"></a>
-Currently the config file uses a `path` variable to make loading files into the REPL easier.
-If the path variable is set up you can use just a file name instead of the full path to load the files.  To set up add the `path = <directory paths>` to the config file.  
-NOTE: The REPL will search subdirectories when looking for a matching file.
-```
-path = S:\Documents\Research\granule\StdLib
-       S:\Documents\Research\granule\examples
-       S:\Documents\Research\granule\tests\regression\good
-```
+The configuration file for `grepl` is the same as that as
+`gr`. See README.md in the top-level directory for how to setup
+the `.granule` file for the global configuration.

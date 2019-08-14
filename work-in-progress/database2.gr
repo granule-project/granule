@@ -1,6 +1,6 @@
 -- last checked 2019-01-07 by @buggymcbugfix
 
-import List
+import Vec
 
 data Patient where
   Patient
@@ -17,8 +17,8 @@ meanAge' : ∀ n : Nat . (Vec (n + 1) Patient) -- Patient database
        → Int   -- Mean age viewed public
 meanAge' xs total n =
   case xs of
-    Next (Patient [age]) Empty → div (age + total) n;
-    Next (Patient [age]) xs  → meanAge' xs (age + total) (n+1)
+    Cons (Patient [age]) Nil → div (age + total) n;
+    Cons (Patient [age]) xs  → meanAge' xs (age + total) (n+1)
 
 
 -- Can only be `Private`

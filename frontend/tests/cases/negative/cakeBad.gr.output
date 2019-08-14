@@ -1,0 +1,3 @@
+Type checking failed: 
+Unbound data constructor: frontend/tests/cases/negative/cakeBad.gr:6:12:
+`Cake`

@@ -12,8 +12,6 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 
-import Language.Granule.Context
-
 -- | Generate a fresh alphanumeric identifier name string
 freshIdentifierBase :: String -> Checker String
 freshIdentifierBase s = do
@@ -49,10 +47,4 @@ freshTyVarInContextWithBinding var k q = do
 -- | Helper for registering a new coeffect variable in the checker
 registerTyVarInContext :: Id -> Kind -> Quantifier -> Checker ()
 registerTyVarInContext v k q = do
-  modify (\st -> st { tyVarContext = (v, (k, q)) : tyVarContext st })
-
--- Erase a variable from the context
-eraseVar :: Ctxt Assumption -> Id -> Ctxt Assumption
-eraseVar [] _ = []
-eraseVar ((var, t):ctxt) var' | var == var' = ctxt
-                              | otherwise = (var, t) : eraseVar ctxt var'
+    modify (\st -> st { tyVarContext = (v, (k, q)) : tyVarContext st })

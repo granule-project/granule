@@ -51,7 +51,10 @@ desugar (Def s var eqs tys@(Forall _ _ _ ty)) =
         (Case nullSpanNoFile () guard cases)
 
       where
-        numArgs = case head eqs of Equation _ _ ps _ -> length ps
+        numArgs =
+          case eqs of
+            ((Equation _ _ ps _):_) -> length ps
+            _                       -> 0
 
         -- List of variables to represent each argument
         vars = [mkId (" internal" ++ show i) | i <- [1..numArgs]]

@@ -15,7 +15,7 @@ import Language.Granule.Context
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr hiding (Substitutable)
 import Language.Granule.Syntax.Pattern
-import Language.Granule.Syntax.Helpers
+import Language.Granule.Syntax.Helpers hiding (freshIdentifierBase)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
@@ -25,7 +25,7 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Variables (freshTyVarInContextWithBinding)
+import Language.Granule.Checker.Variables
 
 import Language.Granule.Utils
 
@@ -136,9 +136,10 @@ instance Substitutable Coeffect where
                     -- If the coeffect variable has a poly kind then update it with the
                     -- kind of c
                     Just ((KVar kv), q) -> do
-                        k' <- inferCoeffectType nullSpan c
+                        coeffTy <- inferCoeffectType nullSpan c
                         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (promoteTypeToKind k', q) }
+                                                                    v (promoteTypeToKind coeffTy, q) }
+
                     _ -> return ()
                 return c
             -- Convert a single type substitution (type variable, type pair) into a
@@ -593,14 +594,15 @@ instance Unifiable Coeffect where
             -- If the coeffect variable has a poly kind then update it with the
             -- kind of c
             Just ((KVar kv), q) -> do
-                    k' <- inferCoeffectType nullSpan c
+                    coeffTy <- inferCoeffectType nullSpan c
                     put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (promoteTypeToKind k', q) }
+                                                                    v (promoteTypeToKind coeffTy, q) }
+
             Just (k, q) ->
                 case c of
                     CVar v' ->
                         case lookup v' (tyVarContext checkerState) of
-                            Just (KVar _, q) ->
+                            Just (KVar _, q) -> do
                                 -- The type of v is known and c is a variable with a poly kind
                                 put $ checkerState
                                     { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
@@ -667,3 +669,43 @@ instance Unifiable t => Unifiable (Maybe t) where
     unify Nothing _ = return (Just [])
     unify _ Nothing = return (Just [])
     unify (Just x) (Just y) = unify x y
+
+updateTyVar :: (?globals :: Globals) => Span -> Id -> Kind -> Checker ()
+updateTyVar s tyVar k = do
+    -- CLEAN
+    --liftIO $ putStrLn $ "updating " <> pretty tyVar <> " to " <> pretty k
+    -- Updated the kind of type variable `v` in the context
+    st <- get
+    -- Get the current quantification
+    case lookup tyVar (tyVarContext st) of
+      Just (_, q) -> do
+          st <- get
+          -- liftIO $ putStrLn $ "\n\ntyVarContext before = " <> pretty (tyVarContext st)
+          modify (\st -> st{ tyVarContext = rewriteCtxt (tyVarContext st) })
+          st <- get
+          -- liftIO $ putStrLn $ "\ntyVarContext after = " <> pretty (tyVarContext st)
+          -- Rewrite the predicate
+          st <- get
+          let subst = case k of
+                        KPromote t -> [(tyVar, SubstT t)]
+                        _          -> [(tyVar, SubstK k)]
+          ps <- mapM (substitute subst) (predicateStack st)
+          put st{ predicateStack = ps }
+
+          {- }
+          case demoteKindToType k of
+              Nothing -> return ()
+              Just t -> do
+                  ps <- mapM (substitute [(v, SubstK t, q))])
+                  modify (\st -> st{ predicateStack = map (rewriteBindersInPredicate [(v, (t, q))])
+                                                          (predicateStack st)})
+  -}
+      Nothing -> throw UnboundVariableError{ errLoc = s, errId = tyVar }
+  where
+    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
+    rewriteCtxt [] = []
+    rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
+     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
+     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

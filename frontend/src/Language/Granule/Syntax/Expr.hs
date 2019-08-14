@@ -201,6 +201,10 @@ instance Term (Value ev a) where
     hasHole (Promote _ e) = hasHole e
     hasHole _             = False
 
+    isLexicallyAtomic Abs{} = False
+    isLexicallyAtomic (Constr _ _ xs) = null xs
+    isLexicallyAtomic _     = True
+
 instance Substitutable Value where
     subst es v (Abs a w t e)      = Val (nullSpanInFile $ getSpan es) a $ Abs a w t (subst es v e)
     subst es v (Pure a e)         = Val (nullSpanInFile $ getSpan es) a $ Pure a (subst es v e)
@@ -262,6 +266,9 @@ instance Term (Expr v a) where
     hasHole (Val _ _ e) = hasHole e
     hasHole (Case _ _ e cases) = hasHole e || (or (map (hasHole . snd) cases))
     hasHole Hole{} = True
+
+    isLexicallyAtomic (Val _ _ e) = isLexicallyAtomic e
+    isLexicallyAtomic _ = False
 
 instance Substitutable Expr where
     subst es v (App s a e1 e2) =

@@ -82,6 +82,14 @@ instance Term Kind where
   freeVars (KVar x)     = [x]
   freeVars _            = []
 
+  isLexicallyAtomic KVar{} = True
+  isLexicallyAtomic KType{} = True
+  isLexicallyAtomic KCoeffect{} = True
+  isLexicallyAtomic KEffect{} = True
+  isLexicallyAtomic KPredicate{} = True
+  isLexicallyAtomic KPromote{} = True
+  isLexicallyAtomic _ = False
+
 kConstr :: Id -> Kind
 kConstr = KPromote . TyCon
 
@@ -234,18 +242,6 @@ coeffectFold algebra = go
       c1' = go c1
       c2' = go c2
       in (cProd algebra) c1' c2'
-
-
-coeffectIsAtom :: Coeffect -> Bool
-coeffectIsAtom (CNat _) = True
-coeffectIsAtom (CFloat _) = True
-coeffectIsAtom (CInfinity _) = True
-coeffectIsAtom (CVar _) = True
-coeffectIsAtom (COne _) = True
-coeffectIsAtom (CZero _) = True
-coeffectIsAtom (Level _) = True
-coeffectIsAtom (CSet _) = True
-coeffectIsAtom _ = False
 
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
@@ -403,6 +399,13 @@ instance Term Type where
       , tfSet     = return . concat
       }
 
+    isLexicallyAtomic TyInt{} = True
+    isLexicallyAtomic TyVar{} = True
+    isLexicallyAtomic TySet{} = True
+    isLexicallyAtomic TyCon{} = True
+    isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
+    isLexicallyAtomic _ = False
+
 instance Term Coeffect where
     freeVars (CVar v) = [v]
     freeVars (CPlus c1 c2) = freeVars c1 <> freeVars c2
@@ -421,6 +424,17 @@ instance Term Coeffect where
     freeVars (CSig c k) = freeVars c <> freeVars k
     freeVars (CInterval c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CProduct c1 c2) = freeVars c1 <> freeVars c2
+
+    isLexicallyAtomic CVar{} = True
+    isLexicallyAtomic CNat{} = True
+    isLexicallyAtomic CFloat{} = True
+    isLexicallyAtomic CZero{} = True
+    isLexicallyAtomic COne{} = True
+    isLexicallyAtomic Level{} = True
+    isLexicallyAtomic CProduct{} = True
+    isLexicallyAtomic CInfinity{} = True
+    isLexicallyAtomic _ = False
+
 
 ----------------------------------------------------------------------
 -- Freshenable instances

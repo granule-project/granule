@@ -1,8 +1,8 @@
 name: granule-repl
-version: '0.7.6.0'
-synopsis: The GRanule INteractive interpreter
+version: '0.7.7.0'
+synopsis: The Granule interactive interpreter (grepl)
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
-copyright: 2018 authors
+copyright: 2019 authors
 license: BSD3
 github: dorchard/granule
 dependencies:
@@ -20,7 +20,6 @@ executables:
     dependencies:
     - granule-interpreter
     - granule-frontend
-    - ConfigFile
     - containers
     - Glob
     - directory

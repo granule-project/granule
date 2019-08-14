@@ -1,6 +1,0 @@
--- last checked 2019-01-07 by @buggymcbugfix
-
-import Vec
-
-identity : ∀ a : Type, n : Nat . Vec n a → Vec n a
-identity = foldr [Cons] Nil

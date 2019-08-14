@@ -52,14 +52,53 @@ import Language.Granule.Utils
 check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type))
-check ast@(AST dataDecls defs imports) = evalChecker initState $ do
-    _    <- checkNameClashes ast
-    _    <- runAll checkTyCon dataDecls
-    _    <- runAll checkDataCons dataDecls
-    defs <- runAll kindCheckDef defs
-    let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
-    defs <- runAll (checkDef defCtxt) defs
-    pure $ AST dataDecls defs imports
+check ast@(AST dataDecls defs imports hidden name) =
+  evalChecker (initState { allHiddenNames = hidden }) $ (do
+      _    <- checkNameClashes ast
+      _    <- runAll checkTyCon dataDecls
+      _    <- runAll checkDataCons dataDecls
+      defs <- runAll kindCheckDef defs
+      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+      defs <- runAll (checkDef defCtxt) defs
+      pure $ AST dataDecls defs imports hidden name)
+
+-- Synthing the type of a single expression in the context of an asy
+synthExprInIsolation :: (?globals :: Globals)
+  => AST () ()
+  -> Expr () ()
+  -> IO (Either (NonEmpty CheckerError) (Either TypeScheme Kind))
+synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
+  evalChecker (initState { allHiddenNames = hidden }) $ (do
+      _    <- checkNameClashes ast
+      _    <- runAll checkTyCon dataDecls
+      _    <- runAll checkDataCons dataDecls
+      defs <- runAll kindCheckDef defs
+      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+      -- Since we need to return a type scheme, have a look first
+      -- for top-level identifiers with their schemes
+      case expr of
+        -- Lookup in data constructors
+        (Val s _ (Constr _ c [])) -> do
+          mConstructor <- lookupDataConstructor s c
+          case mConstructor of
+            Just (tySch, _) -> return $ Left tySch
+            Nothing -> do
+              st <- get
+              -- Or see if this is a kind constructors
+              case lookup c (Primitives.typeConstructors <> (typeConstructors st)) of
+                Just (k, _) -> return $ Right k
+                Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
+
+        -- Lookup in definitions
+        (Val s _ (Var _ x)) -> do
+          case lookup x (defCtxt <> Primitives.builtins) of
+            Just tyScheme -> return $ Left tyScheme
+            Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
+
+        -- Otherwise, do synth
+        _ -> do
+          (ty, _, _, _) <- synthExpr defCtxt [] Positive expr
+          return $ Left $ Forall nullSpanNoFile [] [] ty)
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -230,10 +269,9 @@ checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty
 
         -- Solve the generated constraints
         checkerState <- get
-        debugM "tyVarContext" (pretty $ tyVarContext checkerState)
-        let predStack = Conj $ predicateStack checkerState
-        debugM "Solver predicate" $ pretty predStack
-        solveConstraints predStack (getSpan equation) defName
+
+        let predicate = Conj $ predicateStack checkerState
+        solveConstraints predicate (getSpan equation) defName
         pure elaboratedEq
 
     checkGuardsForImpossibility s defName
@@ -625,7 +663,8 @@ synthExpr defs gam pol
 synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
   -- Should be provided in the type checkers environment
   st <- get
-  case lookup c (dataConstructors st) of
+  mConstructor <- lookupDataConstructor s c
+  case mConstructor of
     Just (tySch, coercions) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
@@ -943,6 +982,12 @@ solveConstraints predicate s name = do
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
+  -- remove any variables bound already in the preciate
+  coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
+
+  debugM "tyVarContext" (pretty $ tyVarContext checkerState)
+  debugM "context into the solver" (pretty $ coeffectVars)
+  debugM "Solver predicate" $ pretty predicate
 
   result <- liftIO $ provePredicate predicate coeffectVars
 

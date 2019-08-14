@@ -67,7 +67,16 @@ Now run
     git clone https://github.com/granule-project/granule \
     && cd granule \
     && stack setup \
-    && stack install --test
+    && stack install :gr --test
+    && stack install :grepl
+
+This will instance the main frontend `gr` and the interactive mode
+`grepl`.
+
+If you would also like to install the LLVM compiler (experimental and a
+work in progress) you can then run:
+
+    stack install :grc
 
 More details about how to install can be found on the [wiki
 page](https://github.com/granule-project/granule/wiki/Installing-Granule).

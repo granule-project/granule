@@ -32,8 +32,7 @@ compose : forall a : Type, b : Type, c : Type
 compose g f = \x -> g (f x)
 
 --- Apply f to x until p holds
-until
-  : forall a : Type
+until : forall a : Type
   . (a -> Bool) [1..∞] -> (a -> a) [0..∞] -> a [2..∞] -> a
 until [p] [f] [x] =
   case p x of
@@ -47,7 +46,6 @@ if0 g [x] [y] =
     case g of
       [0] -> x;
       [_] -> y
-
 
 --- # Numeric functions and constants
 
@@ -65,7 +63,6 @@ pi = 3.141592653589793
 -- An approximation of Euler's number
 e : Float
 e = 2.718281828459045
-
 
 --- # Combinators involving products (pairs)
 
@@ -87,20 +84,25 @@ uncurry : forall a : Type, b : Type, c : Type .
           (a -> b -> c) -> (a × b -> c)
 uncurry f (x, y) = f x y
 
-
---- # Coeffect-specifc combinators
+--- # Coeffect-polymorphic combinators
 
 --- Coeffectful composition
-comp : forall {n : Nat, m : Nat, a : Type, b : Type, c : Type} .
+comp : forall {k : Coeffect, n : k, m : k, a : Type, b : Type, c : Type} .
        (b [n] -> c) -> (a [m] -> b) [n] -> a [m * n] -> c
 comp g [f] = \[x] -> g [f [x]]
 
-unbox : forall a : Type . a [1] -> a
+unbox : forall {a : Type, k : Coeffect} . a [1 : k] -> a
 unbox [x] = x
 
---- Coeffectful application
-app : forall a : Type, b : Type, c : Nat . (a [c] -> b) -> a [c] -> b
-app f x = f x
+--- Push coeffects on a pair into the left and right elements
+push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
+push [(x, y)] = ([x], [y])
+
+--- Pull coeffects of pair elements up to the pair
+pull : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
+pull ([x], [y]) = [(x, y)]
+
+--- # Coeffect-specifc combinators
 
 --- Flatten two boxes (with Nat grading)
 flatten : forall {a : Type, n : Nat, m : Nat} . (a [n]) [m] -> a [n * m]
@@ -109,11 +111,3 @@ flatten [[x]] = [x]
 --- Expand two boxes (with Nat grading)
 unflatten : forall {a : Type, n : Nat, m : Nat} . a [n*m] -> (a [n]) [m]
 unflatten [x] = [[x]]
-
---- Push coeffects on a pair into the left and right elements
-push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
-push [(x, y)] = ([x], [y])
-
---- Pull coeffects of pair elements up to the pair
-pull : forall {a : Type, b : Type, k : Coeffect, c : k} . a [c] × b [c] -> (a × b) [c]
-pull ([x], [y]) = [(x, y)]

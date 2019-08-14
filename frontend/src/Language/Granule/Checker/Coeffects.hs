@@ -1,4 +1,4 @@
-{- Deals with coeffect algebras -}
+{- Deals with coeffect resource algebras -}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
@@ -15,29 +15,8 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
--- | Find out whether a coeffect if flattenable, and if so get the operation
--- | used to representing flattening on the grades
-flattenable :: Type -> Type -> Maybe ((Coeffect -> Coeffect -> Coeffect), Type)
-flattenable t1 t2
- | t1 == t2 = case t1 of
-     t1 | t1 == extendedNat -> Just (CTimes, t1)
-
-     TyCon (internalName -> "Nat")   -> Just (CTimes, t1)
-     TyCon (internalName -> "Level") -> Just (CMeet, t1)
-
-     -- TODO
-     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
-
-     _ -> Nothing
- | otherwise =
-     case (t1, t2) of
-        (t1, TyCon (internalName -> "Nat")) | t1 == extendedNat -> Just (CTimes, t1)
-        (TyCon (internalName -> "Nat"), t2) | t2 == extendedNat -> Just (CTimes, t2)
-
-        _ -> Just (CProduct, TyCon (mkId "×") .@ t1 .@ t2)
-
--- | Multiply an context by a coeffect (algorithmic-style)
---   (Derelict and promote all variables which are not discharged and are in the
+-- | Multiply an context by a coeffect
+--   (Derelict and promote all variables which are not discharged and are in th
 --    set of used variables, (first param))
 multAll :: (?globals :: Globals) => Span -> [Id] -> Coeffect -> Ctxt Assumption -> Checker (Ctxt Assumption)
 
