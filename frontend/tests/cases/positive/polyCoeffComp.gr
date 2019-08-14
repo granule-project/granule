@@ -1,0 +1,13 @@
+import Prelude
+
+test : Int [2] -> Int
+test [x] = x+x
+
+test2 : Int [3] -> Int
+test2 [x] = x+x+x
+
+test3 : Int [6] -> Int
+test3 = comp test [test2]
+
+main : Int
+main = test3 [10]
