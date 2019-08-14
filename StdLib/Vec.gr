@@ -165,6 +165,12 @@ pullVec
 pullVec Nil = [Nil];
 pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]
 
+--- pushVec pushes in non linearity of vector into the elements
+pushVec : ∀ {k : Nat, n : Nat, a : Type}
+         . (Vec n a) [1..k+1] → Vec n (a [1..k+1])
+pushVec [Nil] = Nil;
+pushVec [Cons x xs] = Cons [x] (pushVec [xs])
+
 copySpine
   : forall {a : Type, n : Nat}
   . Vec n a -> Vec n () × Vec n a

@@ -1,7 +1,7 @@
-bar : String <R>
+bar : String <{Stdin}>
 bar = fromStdin --- reads but doesn't do anything with that result
 
-foo : () → String <R>
+foo : () → String <{Stdin}>
 foo = λ() → fromStdin
 
 main : () <IO>

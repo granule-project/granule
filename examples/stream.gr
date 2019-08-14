@@ -22,7 +22,8 @@ cycleInner
   → (Vec (n+1) a) [0..1]
   → Stream a
 cycleInner [again] [Cons x Nil] = Next x [λ() → (cycleInner [again] [again])];
-cycleInner [again] [Cons x xs]  = Next x [λ() → (cycleInner [again] [xs])]
+-- The following case requires propagation of information across guards to be made more general
+cycleInner [again] [Cons x (Cons y xs)]  = Next x [λ() → (cycleInner [again] [Cons y xs])]
 
 main : Vec 7 Int
 main = takeS (S (S (S (S (S (S (S Z))))))) (cycle [Cons 1 (Cons 2 (Cons 3 Nil))])

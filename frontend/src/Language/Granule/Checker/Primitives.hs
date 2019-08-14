@@ -351,7 +351,7 @@ builtins :: [(Id, TypeScheme)]
 (builtinTypeConstructors, builtinDataConstructors, builtins) =
   (map fst datas, concatMap snd datas, map unDef defs)
     where
-      AST types defs _ = case parseDefs "builtins" builtinSrc of
+      AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
         Right ast -> ast
         Left err -> error err
       datas = map unData types

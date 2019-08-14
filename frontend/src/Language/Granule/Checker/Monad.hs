@@ -23,6 +23,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except
 import Control.Monad.Fail (MonadFail)
 import Control.Monad.Identity
+import System.FilePath (takeBaseName)
 
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.LaTeX
@@ -90,11 +91,11 @@ instance Term Assumption where
   freeVars (Discharged t c) = freeVars t ++ freeVars c
 
 instance Pretty Assumption where
-    prettyL l (Linear ty) = prettyL l ty
-    prettyL l (Discharged t c) = ".[" <> prettyL l t <> "]. " <> prettyL l c
+    pretty (Linear ty) = pretty ty
+    pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
+   pretty (a, b) = pretty a <> " : " <> pretty b
 
 -- Describes where a pattern is fully consuming, i.e. amounts
 -- to linear use and therefore triggers other patterns to be counted
@@ -129,7 +130,6 @@ meetConsumption Empty Empty = Empty
 meetConsumption Empty Full = NotFull
 meetConsumption Full Empty = NotFull
 
-
 data CheckerState = CS
             { -- Fresh variable id state
               uniqueVarIdCounterMap  :: M.Map String Nat
@@ -147,7 +147,7 @@ data CheckerState = CS
             , tyVarContext   :: Ctxt (Kind, Quantifier)
 
             -- Guard contexts (all the guards in scope)
-            -- which get promoted by branch promotions
+            -- which get promoted  by branch promotions
             , guardContexts :: [Ctxt Assumption]
 
             -- Records the amount of consumption by patterns in equation equation
@@ -162,6 +162,9 @@ data CheckerState = CS
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
             , derivStack :: [Derivation]
+
+            -- Names from modules which are hidden
+            , allHiddenNames :: M.Map Id Id
 
             -- Warning accumulator
             -- , warnings :: [Warning]
@@ -181,10 +184,25 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , dataConstructors = Primitives.dataConstructors
                , deriv = Nothing
                , derivStack = []
+               , allHiddenNames = M.empty
                }
 
 -- *** Various helpers for manipulating the context
 
+-- Look up a data constructor, taking into account the possibility that it
+-- may be hidden to the current module
+lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution))
+lookupDataConstructor sp constrName = do
+  st <- get
+  case M.lookup constrName (allHiddenNames st) of
+    Nothing -> return $ lookup constrName (dataConstructors st)
+    Just mod ->
+      -- If the constructor is hidden but we are inside that module...
+      if sourceName mod == takeBaseName (filename sp)
+        -- .. then its fine
+        then return $ lookup constrName (dataConstructors st)
+        -- Otheriwe this is truly hidden
+        else return Nothing
 
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
@@ -284,12 +302,12 @@ concludeImplication s localCtxt = do
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
-{-
+
 -- Create a local existential scope
 -- NOTE: leaving this here, but this approach is not used and is incompataible
 -- with the way that existential variables are generated in the solver
 --
-existential :: (?globals :: Globals) => Id -> Kind -> Checker ()
+existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of
     -- No need to add variables of kind Type to the predicate
@@ -299,7 +317,8 @@ existential var k = do
       case predicateStack checkerState of
         (p : stack) -> do
           put (checkerState { predicateStack = Exists var k p : stack })
--}
+        [] ->
+          put (checkerState { predicateStack = [Exists var k (Conj [])] })
 
 pushPred :: Pred -> [Pred] -> [Pred]
 pushPred p (p' : stack) = appendPred p p' : stack

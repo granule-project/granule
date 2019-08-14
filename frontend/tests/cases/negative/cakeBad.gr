@@ -1,0 +1,6 @@
+import Cake
+
+-- Due to the Cake and Happy data constructors being abstract in
+-- the `Cake` module, this is not possible as `Cake` and `Happy` are unknown
+impossible : Cake → (Happy, Cake)
+impossible Cake = (eat Cake, have Cake)
