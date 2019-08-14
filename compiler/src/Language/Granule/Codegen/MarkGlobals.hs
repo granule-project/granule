@@ -12,7 +12,7 @@ data GlobalMarker =
     deriving (Show, Eq)
 
 instance Pretty GlobalMarker where
-    prettyL l (GlobalVar _ x) = prettyL 0 x
+    pretty (GlobalVar _ x) = pretty x
 
 markGlobals :: NormalisedAST () Type -> NormalisedAST GlobalMarker Type
 markGlobals (NormalisedAST dataDecls functionDefs valueDefs) =

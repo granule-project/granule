@@ -65,11 +65,11 @@ data NormalisedAST v a =
     NormalisedAST [DataDecl] [FunctionDef v a] [ValueDef v a]
 
 instance (Pretty a) => Pretty (NormalisedAST a v) where
-    prettyL l (NormalisedAST dataDecls functionDefs valueDefs) =
+    pretty (NormalisedAST dataDecls functionDefs valueDefs) =
         pretty' dataDecls <> "\n\n" <> pretty' functionDefs <> pretty' valueDefs
         where
             pretty' :: Pretty l => [l] -> String
-            pretty' = intercalate "\n\n" . map (prettyL l)
+            pretty' = intercalate "\n\n" . map pretty
 
 deriving instance (Show a, Show v) => Show (NormalisedAST v a)
 deriving instance (Eq a, Eq v) => Eq (NormalisedAST v a)
@@ -96,12 +96,12 @@ deriving instance (Show a, Show v) => Show (FunctionDef v a)
 deriving instance (Eq a, Eq v) => Eq (FunctionDef v a)
 
 instance (Pretty v) => Pretty (ValueDef v a) where
-    prettyL l (ValueDef _ v e t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
-                                   prettyL l v <> " = " <> prettyL l e
+    pretty (ValueDef _ v e t) = pretty v <> " : " <> pretty t <> "\n" <>
+                                   pretty v <> " = " <> pretty e
 
 instance Pretty v => Pretty (FunctionDef v a) where
-    prettyL l (FunctionDef _ v e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
-                                         prettyL l v <> " " <> prettyL l ps <> "= " <> prettyL l e
+    pretty (FunctionDef _ v e ps t) = pretty v <> " : " <> pretty t <> "\n" <>
+                                         pretty v <> " " <> pretty ps <> "= " <> pretty e
 
 instance FirstParameter (ValueDef v a) Span
 

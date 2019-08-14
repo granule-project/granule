@@ -33,8 +33,14 @@ instance Freshenable m a => Freshenable m (Maybe a) where
 class Term t where
   -- Compute the free variables in an open term
   freeVars :: t -> [Id]
+
+  -- Contains a hole (goal) somewhere
   hasHole :: t -> Bool
   hasHole _ = False
+
+  -- Is an atomic term (used in pretty printing)
+  isLexicallyAtomic :: t -> Bool
+  isLexicallyAtomic _ = False
 
 -- Used to distinguish the value-level and type-level variables
 data IdSyntacticCategory = Value | Type
