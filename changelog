@@ -2,7 +2,7 @@
   - Standard library changes
     - `Cake`: back in to StdLib
     - `Choice`: new library (provides linear tensor)
-    - `Prelude` change: generalised `pull`
+    - `Prelude` change: generalised `pull`, `comp`, `unbox`
     - `Vec` addition: `pushVec`
     - `Graph` bug fixes: `size` and `vertexcount` changed due to a bug fix in Granule;
   - Modules can now have headers where data constructors can be hidden on export,
