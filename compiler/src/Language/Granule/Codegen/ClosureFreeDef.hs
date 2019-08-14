@@ -57,25 +57,25 @@ data ClosureFreeAST =
     deriving (Show, Eq)
 
 instance Pretty ClosureFreeAST where
-    prettyL l (ClosureFreeAST dataDecls functionDefs valueDefs) =
+    pretty (ClosureFreeAST dataDecls functionDefs valueDefs) =
         pretty' dataDecls <> "\n\n" <> pretty' functionDefs <> "\n\n" <> pretty' valueDefs
         where
             pretty' :: Pretty l => [l] -> String
-            pretty' = intercalate "\n\n" . map (prettyL l)
+            pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty ClosureFreeFunctionDef where
-    prettyL l (ClosureFreeFunctionDef _ v env e ps t) = prettyL l v <> " : " <> prettyL l t <> "\n" <>
-                              prettyL l v <> " " <> prettyL l ps <> " = " <> prettyL l e
+    pretty (ClosureFreeFunctionDef _ v env e ps t) = pretty v <> " : " <> pretty t <> "\n" <>
+                              pretty v <> " " <> pretty ps <> " = " <> pretty e
 
 instance Pretty ClosureMarker where
-    prettyL l (CapturedVar _ty ident _n) =
-        "env(" ++ prettyL l ident ++ ")"
-    prettyL l (MakeClosure ident env) =
+    pretty (CapturedVar _ty ident _n) =
+        "env(" ++ pretty ident ++ ")"
+    pretty (MakeClosure ident env) =
         let prettyEnvVar (FromParentEnv ident ty _) =
-                "parent-env(" ++ prettyL l ident ++ ") : " ++ prettyL l ty
+                "parent-env(" ++ pretty ident ++ ") : " ++ pretty ty
             prettyEnvVar (FromLocalScope ident ty) =
-                prettyL l ident ++ " : " ++ prettyL l ty
+                pretty ident ++ " : " ++ pretty ty
             prettyEnv (ClosureEnvironmentInit envName varInits) =
                 "env(ident = \"" ++ envName ++ "\", " ++ intercalate ", " (map prettyEnvVar varInits) ++ ")"
-        in "make-closure(" ++ prettyL l ident ++ ", " ++ prettyEnv env ++ ")"
-    prettyL l (MakeTrivialClosure ident) = prettyL l ident
+        in "make-closure(" ++ pretty ident ++ ", " ++ prettyEnv env ++ ")"
+    pretty (MakeTrivialClosure ident) = pretty ident

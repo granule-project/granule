@@ -331,6 +331,6 @@ buildCheckerState dataDecls = do
     _ <- Checker.runAll checkDataCons dataDecls
     return ()
 
-buildDef ::Int -> TypeScheme -> Expr () () -> Def () ()
+buildDef :: Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl" <> show rfv))
    [Equation nullSpanInteractive () [] ex] ts

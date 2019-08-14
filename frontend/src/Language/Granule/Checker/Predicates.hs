@@ -39,9 +39,9 @@ data Quantifier =
   deriving (Show, Eq)
 
 instance Pretty Quantifier where
-  prettyL l ForallQ   = "∀"
-  prettyL l InstanceQ = "∃"
-  prettyL l BoundQ    = "pi"
+  pretty ForallQ   = "∀"
+  pretty InstanceQ = "∃"
+  pretty BoundQ    = "pi"
 
 stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a
 stripQuantifiers = map (\(var, (k, _)) -> (var, k))
@@ -119,64 +119,64 @@ newtype Neg a = Neg a
   deriving (Eq, Show)
 
 instance Pretty (Neg Constraint) where
-    prettyL l (Neg (Neq _ c1 c2 _)) =
-      "Trying to prove that " <> prettyL l c1 <> " == " <> prettyL l c2
+    pretty (Neg (Neq _ c1 c2 _)) =
+      "Trying to prove that " <> pretty c1 <> " == " <> pretty c2
 
-    prettyL l (Neg (Eq _ c1 c2 _)) =
-      "Actual grade `" <> prettyL l c1 <>
-      "` is not equal to specified grade `" <> prettyL l c2 <> "`"
+    pretty (Neg (Eq _ c1 c2 _)) =
+      "Actual grade `" <> pretty c1 <>
+      "` is not equal to specified grade `" <> pretty c2 <> "`"
 
-    prettyL l (Neg (ApproximatedBy _ c1 c2 (TyCon k))) | internalName k == "Level" =
-      prettyL l c2 <> " value cannot be moved to level " <> prettyL l c1
+    pretty (Neg (ApproximatedBy _ c1 c2 (TyCon k))) | internalName k == "Level" =
+      pretty c2 <> " value cannot be moved to level " <> pretty c1
 
-    prettyL l (Neg (ApproximatedBy _ c1 c2 k)) =
-      prettyL l c1 <> " is not approximatable by " <> prettyL l c2 <> " for type " <> pretty k
+    pretty (Neg (ApproximatedBy _ c1 c2 k)) =
+      pretty c1 <> " is not approximatable by " <> pretty c2 <> " for type " <> pretty k
       <> if k == (TyCon $ mkId "Nat") then " because Nat denotes precise usage." else ""
 
-    prettyL l (Neg (NonZeroPromotableTo _ _ c _)) = "TODO"
+    pretty (Neg (NonZeroPromotableTo _ _ c _)) = "TODO"
 
-    prettyL l (Neg (Lt _ c1 c2)) =
-      "Trying to prove false statement: (" <> prettyL l c1 <> " < " <> prettyL l c2 <> ")"
+    pretty (Neg (Lt _ c1 c2)) =
+      "Trying to prove false statement: (" <> pretty c1 <> " < " <> pretty c2 <> ")"
 
-    prettyL l (Neg (Gt _ c1 c2)) =
-      "Trying to prove false statement: (" <> prettyL l c1 <> " > " <> prettyL l c2 <> ")"
+    pretty (Neg (Gt _ c1 c2)) =
+      "Trying to prove false statement: (" <> pretty c1 <> " > " <> pretty c2 <> ")"
 
-    prettyL l (Neg (LtEq _ c1 c2)) =
-      "Trying to prove false statement: (" <> prettyL l c1 <> " ≤ " <> prettyL l c2 <> ")"
+    pretty (Neg (LtEq _ c1 c2)) =
+      "Trying to prove false statement: (" <> pretty c1 <> " ≤ " <> pretty c2 <> ")"
 
-    prettyL l (Neg (GtEq _ c1 c2)) =
-      "Trying to prove false statement: (" <> prettyL l c1 <> " ≥ " <> prettyL l c2 <> ")"
+    pretty (Neg (GtEq _ c1 c2)) =
+      "Trying to prove false statement: (" <> pretty c1 <> " ≥ " <> pretty c2 <> ")"
 
 instance Pretty [Constraint] where
-    prettyL l constr =
-      "---\n" <> (intercalate "\n" . map (prettyL l) $ constr)
+    pretty constr =
+      "---\n" <> (intercalate "\n" . map pretty $ constr)
 
 instance Pretty Constraint where
-    prettyL l (Eq _ c1 c2 _) =
-      "(" <> prettyL l c1 <> " = " <> prettyL l c2 <> ")" -- @" <> show s
+    pretty (Eq _ c1 c2 _) =
+      "(" <> pretty c1 <> " = " <> pretty c2 <> ")" -- @" <> show s
 
-    prettyL l (Neq _ c1 c2 _) =
-        "(" <> prettyL l c1 <> " ≠ " <> prettyL l c2 <> ")" -- @" <> show s
+    pretty (Neq _ c1 c2 _) =
+        "(" <> pretty c1 <> " ≠ " <> pretty c2 <> ")" -- @" <> show s
 
-    prettyL l (ApproximatedBy _ c1 c2 k) =
+    pretty (ApproximatedBy _ c1 c2 k) =
       case k of
         -- Nat is discrete
-        TyCon (internalName -> "Nat") -> "(" <> prettyL l c1 <> " = " <> prettyL l c2 <> ")"
-        _ -> "(" <> prettyL l c1 <> " ≤ " <> prettyL l c2 <> ")" -- @" <> show s
+        TyCon (internalName -> "Nat") -> "(" <> pretty c1 <> " = " <> pretty c2 <> ")"
+        _ -> "(" <> pretty c1 <> " ≤ " <> pretty c2 <> ")" -- @" <> show s
 
-    prettyL l (Lt _ c1 c2) =
-      "(" <> prettyL l c1 <> " < " <> prettyL l c2 <> ")"
+    pretty (Lt _ c1 c2) =
+      "(" <> pretty c1 <> " < " <> pretty c2 <> ")"
 
-    prettyL l (Gt _ c1 c2) =
-      "(" <> prettyL l c1 <> " > " <> prettyL l c2 <> ")"
+    pretty (Gt _ c1 c2) =
+      "(" <> pretty c1 <> " > " <> pretty c2 <> ")"
 
-    prettyL l (LtEq _ c1 c2) =
-      "(" <> prettyL l c1 <> " ≤ " <> prettyL l c2 <> ")"
+    pretty (LtEq _ c1 c2) =
+      "(" <> pretty c1 <> " ≤ " <> pretty c2 <> ")"
 
-    prettyL l (GtEq _ c1 c2) =
-      "(" <> prettyL l c1 <> " ≥ " <> prettyL l c2 <> ")"
+    pretty (GtEq _ c1 c2) =
+      "(" <> pretty c1 <> " ≥ " <> pretty c2 <> ")"
 
-    prettyL l (NonZeroPromotableTo _ _ c _) = "TODO"
+    pretty (NonZeroPromotableTo _ _ c _) = "TODO"
 
 
 varsConstraint :: Constraint -> [Id]
@@ -322,19 +322,19 @@ predFoldM c d i a n e (Exists x t p) =
   predFoldM c d i a n e p >>= e x t
 
 instance Pretty [Pred] where
-  prettyL l ps =
+  pretty ps =
     "Size = " <> show (length ps) <> "\n" <>
-    (intercalate "\n" (map (\p -> " - " <> prettyL l p) ps))
+    (intercalate "\n" (map (\p -> " - " <> pretty p) ps))
 
 instance Pretty Pred where
-  prettyL l =
+  pretty =
     predFold
      (intercalate " ∧ ")
      (intercalate " ∨ ")
      (\ctxt p q ->
          (if null ctxt then "" else "∀ " <> pretty' ctxt <> " . ")
       <> "(" <> p <> " -> " <> q <> ")")
-      (prettyL l)
+      pretty
       (\p -> "¬(" <> p <> ")")
       (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
     where pretty' =

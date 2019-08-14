@@ -67,7 +67,7 @@ instance Show (Runtime a) where
   show (PureWrapper _) = "<suspended IO>"
 
 instance Pretty (Runtime a) where
-  prettyL _ = show
+  pretty = show
 
 evalBinOp :: Operator -> RValue -> RValue -> RValue
 evalBinOp op v1 v2 = case op of

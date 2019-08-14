@@ -91,11 +91,11 @@ instance Term Assumption where
   freeVars (Discharged t c) = freeVars t ++ freeVars c
 
 instance Pretty Assumption where
-    prettyL l (Linear ty) = prettyL l ty
-    prettyL l (Discharged t c) = ".[" <> prettyL l t <> "]. " <> prettyL l c
+    pretty (Linear ty) = pretty ty
+    pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
-   prettyL l (a, b) = prettyL l a <> " : " <> prettyL l b
+   pretty (a, b) = pretty a <> " : " <> pretty b
 
 -- Describes where a pattern is fully consuming, i.e. amounts
 -- to linear use and therefore triggers other patterns to be counted

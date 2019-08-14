@@ -27,6 +27,13 @@ data Pattern a
   | PConstr Span a Id [Pattern a] -- ^ Constructor pattern
   deriving (Eq, Show, Generic, Functor)
 
+instance Term (Pattern a) where
+  freeVars _ = []
+  hasHole _ = False
+
+  isLexicallyAtomic PConstr{} = False
+  isLexicallyAtomic _  = True
+
 -- | First parameter of patterns is their span
 instance FirstParameter (Pattern a) Span
 instance SecondParameter (Pattern a) a
