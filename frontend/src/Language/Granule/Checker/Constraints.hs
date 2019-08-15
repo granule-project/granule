@@ -31,6 +31,8 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
+import Debug.Trace
+
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
@@ -449,9 +451,8 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 (.&&) (approximatedByOrEqualConstraint lb2 lb1)
                 (approximatedByOrEqualConstraint ub1 ub2)
 
-
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
-  lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
+  ("- " ++ show (u, u')) `trace` lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
 
 approximatedByOrEqualConstraint x y =
   solverError $ "Kind error trying to generate " <> show x <> " <= " <> show y
