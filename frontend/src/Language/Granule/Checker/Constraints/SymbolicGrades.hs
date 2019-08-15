@@ -21,6 +21,8 @@ import GHC.Generics (Generic)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 
+import Debug.Trace
+
 solverError :: MonadIO m => String -> m a
 solverError msg = liftIO $ throwIO . ErrorCall $ msg
 
@@ -48,6 +50,7 @@ data SynTree =
   | SynMeet SynTree SynTree
   | SynJoin SynTree SynTree
   | SynLeaf (Maybe SInteger)  -- Just 0 and Just 1 can be identified
+  | SynMerge SBool SynTree SynTree
 
 instance Show SynTree where
   show (SynPlus s t) = "(" ++ show s ++ " + " ++ show t ++ ")"
@@ -57,15 +60,49 @@ instance Show SynTree where
   show (SynLeaf Nothing) = "?"
   show (SynLeaf (Just n)) = T.unpack $
     T.replace (T.pack $ " :: SInteger") (T.pack "") (T.pack $ show n)
+  show (SynMerge sb s t) = "(if " ++ show sb ++ " (" ++ show s ++ ") (" ++ show t ++ "))"
 
 sEqTree :: SynTree -> SynTree -> Symbolic SBool
-sEqTree (SynPlus s s') (SynPlus t t')   = liftM2 (.&&) (sEqTree s t) (sEqTree s' t')
+sEqTree (SynPlus s s') (SynPlus t t') =
+  show (SynPlus s s', SynPlus t t')
+  `trace`
+  liftM2 (.||) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
+                -- + is commutative
+               (liftM2 (.&&) (sEqTree s' t) (sEqTree s t'))
+
 sEqTree (SynTimes s s') (SynTimes t t') = liftM2 (.&&) (sEqTree s t) (sEqTree s' t')
-sEqTree (SynMeet s s') (SynMeet t t')   = liftM2 (.&&) (sEqTree s t) (sEqTree s' t')
-sEqTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sEqTree s t) (sEqTree s' t')
+sEqTree (SynMeet s s') (SynMeet t t')   =
+  liftM2 (.||) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
+               -- /\ is commutative
+               (liftM2 (.&&) (sEqTree s t') (sEqTree s' t))
+sEqTree (SynJoin s s') (SynJoin t t')   =
+  liftM2 (.||) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
+              -- \/ is commutative
+              (liftM2 (.&&) (sEqTree s t') (sEqTree s' t))
+
+sEqTree (SynMerge sb s s') (SynMerge sb' t t')  =
+  liftM2 (.||)
+    (liftM2 (.&&) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
+                  (return $ sb .== sb'))
+    -- Flipped branching
+    (liftM2 (.&&) (liftM2 (.&&) (sEqTree s t') (sEqTree s t))
+                  (return $ sb .== sNot sb'))
+
+
 sEqTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sEqTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .=== n'
 sEqTree _ _ = return $ sFalse
+
+sLtTree :: SynTree -> SynTree -> Symbolic SBool
+sLtTree (SynPlus s s') (SynPlus t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
+sLtTree (SynTimes s s') (SynTimes t t') = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
+sLtTree (SynMeet s s') (SynMeet t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
+sLtTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
+sLtTree (SynMerge sb s s') (SynMerge sb' t t') = 
+  liftM2 (.&&) (return $ sb .== sb') (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
+sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
+sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
+sLtTree _ _ = return $ sFalse
 
 -- Work out if two symbolic grades are of the same type
 match :: SGrade -> SGrade -> Bool
@@ -133,6 +170,8 @@ instance Mergeable SGrade where
 
   symbolicMerge s sb (SUnknown (SynLeaf (Just u))) (SUnknown (SynLeaf (Just u'))) =
     SUnknown (SynLeaf (Just (symbolicMerge s sb u u')))
+
+  symbolicMerge s sb (SUnknown a) (SUnknown b) = SUnknown (SynMerge sb a b)
   symbolicMerge _ _ s t = error $ cannotDo "symbolicMerge" s t
 
 symGradeLess :: SGrade -> SGrade -> Symbolic SBool
@@ -145,8 +184,7 @@ symGradeLess (SLevel n) (SLevel n') = return $ n .< n'
 symGradeLess (SSet n) (SSet n')     = solverError "Can't compare symbolic sets yet"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
-symGradeLess (SUnknown (SynLeaf (Just n))) (SUnknown (SynLeaf (Just n'))) =
-  return $ n .< n'
+symGradeLess (SUnknown s) (SUnknown t) = sLtTree s t
 
 symGradeLess s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeLess (.&&) (const sTrue) s t)
@@ -235,7 +273,7 @@ symGradePlus SPoint SPoint = return $ SPoint
 symGradePlus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradePlus SProduct id s t)
 
--- Direct encoding of addition unit
+-- Direct encoding of additive unit
 symGradePlus (SUnknown t@(SynLeaf (Just u))) (SUnknown t'@(SynLeaf (Just u'))) =
   return $ ite (u .== 0) (SUnknown (SynLeaf (Just u')))
     (ite (u' .== 0) (SUnknown (SynLeaf (Just u))) (SUnknown (SynPlus t t')))
@@ -243,8 +281,11 @@ symGradePlus (SUnknown t@(SynLeaf (Just u))) (SUnknown t'@(SynLeaf (Just u'))) =
 symGradePlus (SUnknown t@(SynLeaf (Just u))) (SUnknown t') =
   return $ ite (u .== 0) (SUnknown t') (SUnknown (SynPlus t t'))
 
-symGradePlus (SUnknown um) (SUnknown (SynLeaf u)) =
-  symGradePlus (SUnknown (SynLeaf u)) (SUnknown um)
+symGradePlus (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
+  return $ ite (u .== 0) (SUnknown t) (SUnknown (SynPlus t t'))
+
+symGradePlus (SUnknown um) (SUnknown un) =
+  return $ SUnknown (SynPlus um un)
 
 symGradePlus s t = solverError $ cannotDo "plus" s t
 
@@ -284,15 +325,20 @@ symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t'@(SynLeaf (Just u'))) 
       (ite (u' .== 1) (SUnknown (SynLeaf (Just u)))
         (ite (u .== 0) (SUnknown (SynLeaf (Just 0)))
           (ite (u' .== 0) (SUnknown (SynLeaf (Just 0)))
-             (SUnknown (SynPlus t t')))))
+             (SUnknown (SynTimes t t')))))
 
 symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t') =
   return $
     ite (u .== 1) (SUnknown t')
       (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
 
-symGradeTimes (SUnknown um) (SUnknown (SynLeaf u)) =
-  symGradeTimes (SUnknown (SynLeaf u)) (SUnknown um)
+symGradeTimes (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
+  return $
+    ite (u .== 1) (SUnknown t)
+      (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
+
+symGradeTimes (SUnknown um) (SUnknown un) =
+  return $ SUnknown (SynTimes um un)
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
 
