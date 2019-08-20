@@ -283,7 +283,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                   let (AST dd def _ _ _) = ast
                   forM_ def $ \idef -> loadInQueue idef
                   modify (\st -> st { currentADTs = dd <> currentADTs st })
-                  liftIO $ printInfo $ green $ path <> ", interpreted."
+                  liftIO $ printInfo $ green $ path <> ", checked."
 
                 Left errs -> do
                   st <- get

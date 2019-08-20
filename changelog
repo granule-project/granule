@@ -1,3 +1,7 @@
+  # 0.7.7.1
+  - Some small fixes
+  - Tweaks to improve error messages
+
   # 0.7.7.0
   - Standard library changes
     - `Cake`: back in to StdLib
