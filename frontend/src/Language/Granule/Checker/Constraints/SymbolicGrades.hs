@@ -21,8 +21,6 @@ import GHC.Generics (Generic)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 
-import Debug.Trace
-
 solverError :: MonadIO m => String -> m a
 solverError msg = liftIO $ throwIO . ErrorCall $ msg
 
@@ -64,8 +62,6 @@ instance Show SynTree where
 
 sEqTree :: SynTree -> SynTree -> Symbolic SBool
 sEqTree (SynPlus s s') (SynPlus t t') =
-  show (SynPlus s s', SynPlus t t')
-  `trace`
   liftM2 (.||) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
                 -- + is commutative
                (liftM2 (.&&) (sEqTree s' t) (sEqTree s t'))
@@ -292,6 +288,8 @@ symGradePlus s t = solverError $ cannotDo "plus" s t
 -- | Times operation on symbolic grades
 symGradeTimes :: SGrade -> SGrade -> Symbolic SGrade
 symGradeTimes (SNat n1) (SNat n2) = return $ SNat (n1 * n2)
+symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2)
+symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.union s t
 symGradeTimes (SLevel lev1) (SLevel lev2) = return $
     ite (lev1 .== literal unusedRepresentation)
