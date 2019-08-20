@@ -449,7 +449,6 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 (.&&) (approximatedByOrEqualConstraint lb2 lb1)
                 (approximatedByOrEqualConstraint ub1 ub2)
 
-
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
   lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
 

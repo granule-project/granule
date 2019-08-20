@@ -64,14 +64,14 @@ Leave the REPL
 Load a file into the REPL.  This will erase content in state and replace with loaded file.
 ```
 Granule> :l Vec.gr
-Vec.gr, interpreted
+Vec.gr, checked.
 ```
 #### :type <term\> (:t)
 <a id="type"></a>
 Display the type of an expression in the REPL state
 ```
 Granule> :l Vec.gr
-Vec.gr, interpreted
+Vec.gr, checked.
 
 Granule> :t head
 head :
@@ -83,8 +83,8 @@ head :
 <a id="show"></a>
 Show the Def for a given term in the REPL state
 ```
-Granule> :l Nat.gr
-S:\Documents\Research\granule\StdLib\Nat.gr, interpreted
+Granule> :m Nat.gr
+StdLib\Nat.gr, checked.
 
 Granule> :s add
 Def ((32,1),(36,27)) (Id "add" "add") (Case ((34,3),(36,27)) (Val ((34,8),(34,8)) (Var (Id "n" "n_0"))) [(PConstr ((35,7),(35,7)) (Id "Z" "Z") [],Val ((35,17),(35,17)) (Var (Id "m" "m_1"))),(PConstr ((36,8),(36,8)) (Id "S" "S") [PVar ((36,10),(36,10)) (Id "n'" "n'_4")],App ((36,17),(36,27)) (Val ((36,17),(36,17)) (Constr (Id "S" "S") [])) (App ((36,20),(36,27)) (App ((36,20),(36,24)) (Val ((36,20),(36,20)) (Var (Id "add" "add"))) (Val ((36,24),(36,24)) (Var (Id "n'" "n'_4")))) (Val ((36,27),(36,27)) (Var (Id "m" "m_1")))))]) [PVar ((33,5),(33,5)) (Id "n" "n_0"),PVar ((33,7),(33,7)) (Id "m" "m_1")] (Forall ((32,7),(32,35)) [((Id "n" "n_2"),kConstr (Id "Nat=" "Nat=")),((Id "m" "m_3"),kConstr (Id "Nat=" "Nat="))] (FunTy (TyApp (TyCon (Id "N" "N")) (TyVar (Id "n" "n_2"))) (FunTy (TyApp (TyCon (Id "N" "N")) (TyVar (Id "m" "m_3"))) (TyApp (TyCon (Id "N" "N")) (TyInfix "+" (TyVar (Id "n" "n_2")) (TyVar (Id "m" "m_3")))))))
@@ -134,7 +134,7 @@ type: TyVar (Id "c" "c_5")
 Display the contents of the REPL state in the form of `term : term type`
 ```
 Granule> :l example.gr
-S:\Documents\Research\granule\tests\regression\good\example.gr, interpreted
+example.gr, checked.
 
 Granule> :dump
 ["dub : ((Int) |2|) → Int","main : Int","trip : ((Int) |3|) → Int","twice : forall c : Nat. ((((Int) |c|) → Int) |2|) → ((Int) |2 * c|) → Int"]
@@ -145,15 +145,15 @@ Granule> :dump
 Adds a file to the REPL by appending to the current REPL state
 ```
 Granule> :m Prelude.gr
-Prelude.gr, interpreted
+Prelude.gr, checked.
 ```
 #### :reload (:r)
 Reload the last file loaded into the Repl (included all the additionally loaded modules)
 ```
 Granule> :l example.gr
-example.gr, interpreted
+example.gr, checked.
 Granule> :r
-example.gr, interpreted
+example.gr, checked.
 ```
 ## Configuration File
 <a id="configuration-file"></a>

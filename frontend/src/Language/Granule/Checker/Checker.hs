@@ -318,6 +318,8 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   tau' <- substitute subst tau
   debugM "eqn" $ "### -- tau' = " <> show tau'
 
+  patternGam <- substitute subst patternGam
+
   -- Check the body
   (localGam, subst', elaboratedExpr) <-
        checkExpr defCtxt patternGam Positive True tau' expr
