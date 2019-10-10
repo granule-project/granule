@@ -1,0 +1,19 @@
+import Vec
+
+two : () <2>
+two =
+  let
+     () <- tick;
+     () <- tick
+  in pure ()
+
+-- Prove (map f) in O(|f|n)
+
+mapLinear : forall {a b : Type, n : Nat, f : Nat}
+          . (a -> b <f>) [n] -> Vec n a -> (Vec n b) <n*f>
+
+mapLinear [_] Nil = pure Nil;
+mapLinear [f] (Cons x xs) =
+ let y <- f x;
+     ys <- mapLinear [f] xs
+ in pure (Cons y ys)
