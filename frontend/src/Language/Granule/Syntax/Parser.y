@@ -93,7 +93,9 @@ import Language.Granule.Utils hiding (mkSpan)
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
     '∘'   { TokenRing _ }
-    '?'   { TokenHole _ }
+    '?'   { TokenEmptyHole _ }
+    '{!'  { TokenHoleStart _ }
+    '!}'  { TokenHoleEnd _ }
 
 %right '∘'
 %right in
@@ -487,6 +489,11 @@ Juxt :: { Expr () () }
   | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () $1 $2 }
   | Atom                      { $1 }
 
+Hole :: { Expr () () }
+  : '{!' Vars1 '!}'           {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp (map mkId $2) ()} 
+  | '{!' '!}'                 {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp [] () }
+  | '?'                       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp [] () }
+
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
   | INT                       {% let (TokenInt _ x) = $1
@@ -515,8 +522,7 @@ Atom :: { Expr () () }
   | STRING                    {% (mkSpan $ getPosToSpan $1) >>= \sp ->
                                   return $ Val sp () $
                                       case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
-  | '?'
-    {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp () }
+  | Hole                      { $1 }
 
 {
 
