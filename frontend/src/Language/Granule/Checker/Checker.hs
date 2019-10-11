@@ -371,12 +371,15 @@ checkExpr :: (?globals :: Globals)
 checkExpr _ ctxt _ _ t (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
-  throw $ HoleMessage s (Just t) ctxt varContext vars
+  let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
+  case unboundVariables of
+    [] -> throw $ HoleMessage s (Just t) ctxt varContext vars
+    vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
     let elaborated = Val s ty (NumInt n)
-    return ([], [], elaborated)
+    return ([], [], elaborated) 
 
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalName c == "Float" = do
     let elaborated = Val s ty (NumFloat n)
@@ -634,7 +637,10 @@ synthExpr :: (?globals :: Globals)
 synthExpr _ ctxt _ (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
-  throw $ HoleMessage s Nothing ctxt varContext vars
+  let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
+  case unboundVariables of
+    [] -> throw $ HoleMessage s Nothing ctxt varContext vars
+    vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do
