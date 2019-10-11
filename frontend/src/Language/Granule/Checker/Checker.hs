@@ -368,10 +368,10 @@ checkExpr :: (?globals :: Globals)
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-checkExpr _ ctxt _ _ t (Hole s _) = do
+checkExpr _ ctxt _ _ t (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
-  throw $ HoleMessage s (Just t) ctxt varContext
+  throw $ HoleMessage s (Just t) ctxt varContext vars
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
@@ -631,10 +631,10 @@ synthExpr :: (?globals :: Globals)
           -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-synthExpr _ ctxt _ (Hole s _) = do
+synthExpr _ ctxt _ (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
-  throw $ HoleMessage s Nothing ctxt varContext
+  throw $ HoleMessage s Nothing ctxt varContext vars
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do

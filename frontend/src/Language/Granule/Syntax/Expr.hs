@@ -94,7 +94,7 @@ data ExprF ev a expr value =
      -- let p <- e1 in e2
   | ValF Span a value
   | CaseF Span a expr [(Pattern a, expr)]
-  | HoleF Span a
+  | HoleF Span [Id] a
   deriving (Generic, Eq)
 
 data Operator
@@ -124,7 +124,7 @@ pattern Binop sp a op lhs rhs = (ExprFix2 (BinopF sp a op lhs rhs))
 pattern LetDiamond sp a pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a pat mty nowexp nextexp))
 pattern Val sp a val = (ExprFix2 (ValF sp a val))
 pattern Case sp a swexp arms = (ExprFix2 (CaseF sp a swexp arms))
-pattern Hole sp a = ExprFix2 (HoleF sp a)
+pattern Hole sp vars a = ExprFix2 (HoleF sp vars a)
 {-# COMPLETE App, Binop, LetDiamond, Val, Case, Hole #-}
 
 instance Bifunctor (f ev a)

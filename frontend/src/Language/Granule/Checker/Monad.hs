@@ -371,7 +371,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier) }
+    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), vars :: [Id] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -553,7 +553,11 @@ instance UserMsg CheckerError where
       then ""
       else "\n\n   Type context:" <> (concatMap (\(v, (t , _)) ->  "\n     "
                                                 <> pretty v
-                                                <> " : " <> pretty t) tyContext) <> "\n")
+                                                <> " : " <> pretty t) tyContext))
+    <>
+    (if null vars
+      then ""
+      else "\n\n   Contains:" <> (concatMap (\ x -> "\n     " ++ pretty x) vars) <> "\n")
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
