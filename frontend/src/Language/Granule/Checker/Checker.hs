@@ -373,7 +373,7 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
   case unboundVariables of
-    [] -> throw $ HoleMessage s (Just t) ctxt varContext vars
+    [] -> throw $ HoleMessage s (Just t) ctxt varContext
     vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
 
 -- Checking of constants
@@ -639,7 +639,7 @@ synthExpr _ ctxt _ (Hole s vars _) = do
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
   case unboundVariables of
-    [] -> throw $ HoleMessage s Nothing ctxt varContext vars
+    [] -> throw $ HoleMessage s Nothing ctxt varContext
     vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
 
 -- Literals can have their type easily synthesised
