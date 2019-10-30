@@ -57,7 +57,7 @@ typeConstructors =
     , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing))
     , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    ] ++ builtinTypeConstructors
+    ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
