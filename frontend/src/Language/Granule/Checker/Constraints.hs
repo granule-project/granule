@@ -353,10 +353,6 @@ compileCoeffect (CZero k') k vars  =
     (TyVar _, _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
     _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
 
-
-compileCoeffect (CNat 0) (TyVar _) _ =
-    SUnknown (SynLeaf (Just 1))
-
 compileCoeffect (COne k') k vars =
   case (k', k) of
     (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
