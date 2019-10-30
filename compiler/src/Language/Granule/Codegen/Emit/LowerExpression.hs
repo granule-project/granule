@@ -99,6 +99,9 @@ emitExpr environment (CaseF _ ty (swon, emitSwExpr) cases) =
 
            tryFirstPattern <- foldrM (makeJump switchOnExpr successLabel) cases -}
 
+-- The following case should now really be possible because holes stop the type checker.
+emitExpr environment (HoleF _ _) = error "Trying to compile a hole"
+
 emitValue :: MonadFix m
           => MonadState EmitterState m
           => MonadModuleBuilder m
