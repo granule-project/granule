@@ -67,7 +67,7 @@ Now run
     git clone https://github.com/granule-project/granule \
     && cd granule \
     && stack setup \
-    && stack install :gr --test
+    && stack install :gr --test \
     && stack install :grepl
 
 This will instance the main frontend `gr` and the interactive mode
