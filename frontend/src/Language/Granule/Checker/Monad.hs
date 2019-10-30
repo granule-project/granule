@@ -181,7 +181,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , guardContexts = []
                , patternConsumption = []
                , typeConstructors = Primitives.typeConstructors
-               , dataConstructors = Primitives.dataConstructors
+               , dataConstructors = []
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty

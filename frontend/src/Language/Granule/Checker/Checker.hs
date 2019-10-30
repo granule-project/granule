@@ -55,8 +55,8 @@ check :: (?globals :: Globals)
 check ast@(AST dataDecls defs imports hidden name) =
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
-      _    <- runAll checkTyCon dataDecls
-      _    <- runAll checkDataCons dataDecls
+      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
@@ -992,7 +992,6 @@ solveConstraints predicate s name = do
   debugM "Solver predicate" $ pretty predicate
 
   result <- liftIO $ provePredicate predicate coeffectVars
-
   case result of
     QED -> return ()
     NotValid msg -> do
