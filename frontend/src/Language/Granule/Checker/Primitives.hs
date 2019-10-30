@@ -341,30 +341,30 @@ tick : () <1>
 tick = BUILTIN
 
 --------------------------------------------------------------------------------
--- L3-style pointers
+-- L3-style pointers (work in progress)
 --------------------------------------------------------------------------------
 
-data Ptr : Type -> Type where
+-- data Ptr : Type -> Type where
 
-data Cap : Type -> Type -> Type where
+-- data Cap : Type -> Type -> Type where
 
-data PtrCap a where
-  MkPtrCap : forall { id : Type } . (Ptr id) [] -> Cap a id -> PtrCap a
+-- data PtrCap a where
+--   MkPtrCap : forall { id : Type } . (Ptr id) [] -> Cap a id -> PtrCap a
 
-newPtr
-  : forall { a : Type }
-  . a -> PtrCap a
-newPtr = BUILTIN
+-- newPtr
+--   : forall { a : Type }
+--   . a -> PtrCap a
+-- newPtr = BUILTIN
 
-swapPtr
-  : forall { a b : Type, id : Type }
-  . b -> Ptr id -> Cap a id -> (a × Cap b id)
-swapPtr = BUILTIN
+-- swapPtr
+--   : forall { a b : Type, id : Type }
+--   . b -> Ptr id -> Cap a id -> (a × Cap b id)
+-- swapPtr = BUILTIN
 
-freePtr
-  : forall { a b : Type, id : Type }
-  . Ptr id -> Cap a id -> a
-freePtr = BUILTIN
+-- freePtr
+--   : forall { a b : Type, id : Type }
+--   . Ptr id -> Cap a id -> a
+-- freePtr = BUILTIN
 
 
 |]
