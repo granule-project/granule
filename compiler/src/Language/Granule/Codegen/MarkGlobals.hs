@@ -44,6 +44,7 @@ fixMapExtExpr (BinopF sp ty op lhs rhs) = Binop sp ty op lhs rhs
 fixMapExtExpr (LetDiamondF sp ty pat mty now next) = LetDiamond sp ty pat mty now next
 fixMapExtExpr (ValF sp ty val) = Val sp ty val
 fixMapExtExpr (CaseF sp ty swexp arms) = Case sp ty swexp arms
+fixMapExtExpr (HoleF sp ty) = Hole sp ty
 
 fixMapExtValue :: (a -> eva -> Value evb a)
                -> ValueF eva a (Value evb a) (Expr evb a)
