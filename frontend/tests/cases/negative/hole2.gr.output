@@ -1,7 +1,7 @@
 Type checking failed: 
 Found a goal: frontend/tests/cases/negative/hole2.gr:11:40:
 
-   Expected type is: `a2 -> b1`
+   Expected type is: `a1 -> b1`
 
    Context:
      f : .[a -> b]. ((n0.0 + 1) : Nat)
@@ -10,7 +10,7 @@ Found a goal: frontend/tests/cases/negative/hole2.gr:11:40:
 
    Type context:
      b1 : Type
-     a2 : Type
+     a1 : Type
      n0.0 : ↑Nat
      a : Type
      b : Type
