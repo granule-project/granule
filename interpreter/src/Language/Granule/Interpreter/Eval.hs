@@ -53,6 +53,7 @@ data Runtime a =
   -- | Delayed side effects wrapper
   | PureWrapper (IO (Expr (Runtime a) ()))
 
+
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
 diamondConstr = Ext () . PureWrapper
 
