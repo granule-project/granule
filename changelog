@@ -1,3 +1,8 @@
+  # 0.7.7.2
+  - LLVM compiler separated into its own project to make building easier at the moment (see https://github.com/granule-project/granule-compiler-llvm).
+  - Some small internal improvements (e.g., builtins get internally kind checked earlier).
+  - A couple of missing examples and tests added.
+
   # 0.7.7.1
   - Some small fixes
   - Tweaks to improve error messages
