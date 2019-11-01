@@ -344,6 +344,8 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
 
+-- Polarities are used to understand when a type is
+-- `expected` vs. `actual` (i.e., for error messages)
 data Polarity = Positive | Negative deriving Show
 
 flipPol :: Polarity -> Polarity
@@ -595,22 +597,16 @@ checkExpr defs gam pol topLevel tau e = do
 
   (tau', gam', subst', elaboratedE) <- synthExpr defs gam pol e
 
+  -- Now to do a type equality on check type `tau` and synth type `tau'`
   (tyEq, _, subst) <-
-    case pol of
-      Positive -> do
-        debugM "+ Compare for equality " $ pretty tau' <> " = " <> pretty tau
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
-          else lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
-
-      -- i.e., this check is from a synth
-      Negative -> do
-        debugM "- Compare for equality " $ pretty tau <> " = " <> pretty tau'
-        if topLevel
-          -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypesWithPolarity (getSpan e) FstIsSpec tau' tau
-          else lEqualTypesWithPolarity (getSpan e) FstIsSpec tau' tau
+          then do
+            debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
+            equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+          else do
+            debugM "** Compare for equality " $ pretty tau' <> " :> " <> pretty tau
+            lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
 
   if tyEq
     then do
@@ -825,9 +821,11 @@ synthExpr defs gam pol
 -- Application
 synthExpr defs gam pol (App s _ e e') = do
     (fTy, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e
+
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
+         liftIO $ debugM "FunTy sig" $ pretty sig
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
