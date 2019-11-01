@@ -1,0 +1,9 @@
+
+choice : forall {a : Type, b : Type} . a [0..1] -> a [0..1] -> a
+choice [x] [y] = x
+
+choose1 : forall {a : Type} . a -> a
+choose1 x = x
+
+b : Int [1..1] -> Int [0..1] -> Int
+b [y] [z] = choose1 (choice [y] [z]) + y

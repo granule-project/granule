@@ -27,7 +27,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator ->Type -> Type -> Checker (Bool, Type, Substitution)
+  => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
 
 equalTypesWithPolarity :: (?globals :: Globals)
