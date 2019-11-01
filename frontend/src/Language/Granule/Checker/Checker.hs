@@ -489,8 +489,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
             -> True
           _ -> False
 
-
--- Dependent pattern-matching case (only at the top level)
+-- Check a case expression
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
@@ -501,24 +500,20 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   -- Check each of the branches
   branchCtxtsAndSubst <-
     forM cases $ \(pat_i, e_i) -> do
+
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
-
+      newConjunct
+      
+      -- Check that some specialisation didn't occure in this case
+      -- (dependent / GADT pattern matches not allowed in a case)
+      -- otherwise throw an error
+      when (not (null subst)) (throw $ CaseOnIndexedType s guardTy)
 
       -- Checking the case body
-      newConjunct
-      -- Specialise the return type and the incoming environment using the
-      -- pattern-match-generated type substitution
-      tau' <- substitute subst tau
-      (specialisedGam, unspecialisedGam) <- substCtxt subst gam
 
-      let checkGam = patternGam <> specialisedGam <> unspecialisedGam
-      (localGam, subst', elaborated_i) <- checkExpr defs checkGam pol False tau' e_i
-
-      -- We could do this, but it seems redundant.
-      -- localGam' <- ctxtPlus s guardGam localGam
-      -- ctxtApprox s localGam' checkGam
+      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
 
       -- Check linear use in anything Linear
       gamSoFar <- ctxtPlus s guardGam localGam
@@ -526,10 +521,6 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-
-
-           debugM "Specialised gam" (pretty specialisedGam)
-           debugM "Unspecialised gam" (pretty unspecialisedGam)
 
            debugM "pattern gam" (pretty patternGam)
            debugM "local gam" (pretty localGam)
@@ -541,7 +532,9 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
            -- 28/02/2018 - We used to have this
            --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
            -- But we want promotion to invovlve the guard to avoid leaks
-           let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
+           -- let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
+
+           let branchCtxt = localGam `subtractCtxt` patternGam
 
            branchCtxt' <- ctxtPlus s branchCtxt  (justLinear $ (gam `intersectCtxts` specialisedGam) `intersectCtxts` localGam)
 
@@ -572,7 +565,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
 
   -- Pop from stacks related to case
   _ <- popGuardContext
-  _ <- popCaseFrame
+  popCaseFrame
 
   -- Find the upper-bound contexts
   let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
@@ -684,7 +677,7 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
 -- Case synthesis
 synthExpr defs gam pol (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
-  (ty, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
+  (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   -- then synthesise the types of the branches
 
   newCaseFrame
@@ -693,9 +686,15 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, _, elaborated_pat_i, _) <- ctxtFromTypedPattern s ty pati NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
       newConjunct
-      ---
+
+      -- Check that some specialisation didn't occure in this case
+      -- (dependent / GADT pattern matches not allowed in a case)
+      -- otherwise throw an error
+      when (not (null subst)) (throw $ CaseOnIndexedType s guardTy)
+      
+      -- Synth the case body
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
       concludeImplication (getSpan pati) eVars
 
@@ -718,6 +717,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
   let (branchCtxts, branchSubsts) = unzip branchCtxtsAndSubsts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
+
   -- Finds the upper-bound return type between all branches
   branchType <- foldM (\ty2 (ty1, sp) -> joinTypes sp ty1 ty2)
                    (head branchTys)

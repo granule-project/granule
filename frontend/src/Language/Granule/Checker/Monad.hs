@@ -478,6 +478,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | UnknownResourceAlgebra
     { errLoc :: Span, errTy :: Type, errK :: Kind }
+  | CaseOnIndexedType
+    { errLoc :: Span, errTy :: Type }
   deriving (Show, Eq)
 
 
@@ -538,6 +540,7 @@ instance UserMsg CheckerError where
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
   title UnknownResourceAlgebra{} = "Type error"
+  title CaseOnIndexedType{} = "Type error"
 
   msg HoleMessage{..} =
     (case holeTy of
@@ -787,6 +790,9 @@ instance UserMsg CheckerError where
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+
+  msg CaseOnIndexedType{ errTy }
+    = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
 
   color HoleMessage{} = Blue
   color _ = Red
