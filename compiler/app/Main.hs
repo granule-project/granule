@@ -86,7 +86,7 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
 runGrOnStdIn :: GrConfig -> IO ()
 runGrOnStdIn GrConfig{..}
   = let ?globals = grGlobals{ globalsSourceFilePath = Just "stdin" } in do
-      printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
+      printInfo "Reading from stdin: confirm input with `enter+ctrl-d` (`enter+ctrl-z` on windows) or exit with `ctrl-c`"
       debugM "Globals" (show ?globals)
       result <- getContents >>= run
       printResult result
