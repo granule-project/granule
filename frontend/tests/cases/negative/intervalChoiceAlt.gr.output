@@ -1,4 +1,4 @@
 Type checking failed: 
-Falsifiable theorem: frontend/tests/cases/negative/internalChoiceAlt.gr:9:1:
+Falsifiable theorem: frontend/tests/cases/negative/intervalChoiceAlt.gr:9:1:
 The following theorem associated with `b` is falsifiable:
 	(prom_[9:33]0 ≤ 0..1) ∧ (prom_[9:29]0 + (1..1) ≤ 1..1) ∧ (0..1 ≤ prom_[9:33]0) ∧ (0..1 ≤ prom_[9:29]0)
