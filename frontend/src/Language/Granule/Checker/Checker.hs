@@ -505,15 +505,21 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
       newConjunct
-      
+
       -- Check that some specialisation didn't occure in this case
       -- (dependent / GADT pattern matches not allowed in a case)
       -- otherwise throw an error
+      liftIO $ putStrLn $ pretty subst
       when (not (null subst)) (throw $ CaseOnIndexedType s guardTy)
 
       -- Checking the case body
-
       (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
+
+      -- Check that the use of locally bound variables matches their bound type
+      ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
+
+      -- Conclude the implication
+      concludeImplication (getSpan pat_i) eVars
 
       -- Check linear use in anything Linear
       gamSoFar <- ctxtPlus s guardGam localGam
@@ -521,44 +527,12 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-
-           debugM "pattern gam" (pretty patternGam)
-           debugM "local gam" (pretty localGam)
-
-           st <- get
-           debugM "pred so far" (pretty (predicateStack st))
-
-           -- The resulting context has the shared part removed
-           -- 28/02/2018 - We used to have this
-           --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
-           -- But we want promotion to invovlve the guard to avoid leaks
-           -- let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
-
-           let branchCtxt = localGam `subtractCtxt` patternGam
-
-           branchCtxt' <- ctxtPlus s branchCtxt  (justLinear $ (gam `intersectCtxts` specialisedGam) `intersectCtxts` localGam)
-
-           -- Check local binding use
-           ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
-
-
-           -- Check "global" (to the definition) binding use
-           consumedGam <- ctxtPlus s guardGam localGam
-           debugM "** gam = " (pretty gam)
-           debugM "** c sub p = " (pretty (consumedGam `subtractCtxt` patternGam))
-
-           ctxtApprox s (consumedGam `subtractCtxt` patternGam) gam
-
-           -- Conclude the implication
-           concludeImplication (getSpan pat_i) eVars
-
-           return (branchCtxt', subst', (elaborated_pat_i, elaborated_i))
+           return (localGam `subtractCtxt` patternGam
+                 , subst'
+                 , (elaborated_pat_i, elaborated_i))
 
         -- Anything that was bound in the pattern but not used correctly
         p:ps -> illLinearityMismatch s (p:|ps)
-
-  st <- get
-  debugM "pred so after branches" (pretty (predicateStack st))
 
   -- All branches must be possible
   checkGuardsForImpossibility s $ mkId "case"
@@ -571,18 +545,12 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
   branchesGam <- fold1M (joinCtxts s) branchCtxts
 
-  debugM "*** Branches from the case " (pretty branchCtxts)
-
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxtPlus s branchesGam guardGam
-  debugM "--- Output context for case " (pretty g)
 
-  st <- get
-  debugM "pred at end of case" (pretty (predicateStack st))
+  subst <- combineManySubstitutions s (substG : substs)
 
   let elaborated = Case s tau elaboratedGuard elaboratedCases
-
-  subst <- combineManySubstitutions s substs -- previously concat substs
   return (g, subst, elaborated)
 
 -- All other expressions must be checked using synthesis
@@ -693,20 +661,24 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       -- (dependent / GADT pattern matches not allowed in a case)
       -- otherwise throw an error
       when (not (null subst)) (throw $ CaseOnIndexedType s guardTy)
-      
+
       -- Synth the case body
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
-      concludeImplication (getSpan pati) eVars
 
+      -- Check that the use of locally bound variables matches their bound type
       ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
+
+      -- Conclude
+      concludeImplication (getSpan pati) eVars
 
       -- Check linear use in this branch
       gamSoFar <- ctxtPlus s guardGam localGam
       case checkLinearity patternGam gamSoFar of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
-         [] -> return (tyCase, (localGam `subtractCtxt` patternGam, subst'),
-                        (elaborated_pat_i, elaborated_i))
+         [] -> return (tyCase
+                    , (localGam `subtractCtxt` patternGam, subst')
+                    , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
@@ -729,10 +701,7 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxtPlus s branchesGam guardGam
 
-  debugM "*** synth branchesGam" (pretty branchesGam)
-
-  subst <- combineManySubstitutions s branchSubsts
-  subst <- combineSubstitutions s substG subst
+  subst <- combineManySubstitutions s (substG : branchSubsts)
 
   let elaborated = Case s branchType elaboratedGuard elaboratedCases
   return (branchType, gamNew, subst, elaborated)
