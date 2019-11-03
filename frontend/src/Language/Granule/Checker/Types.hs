@@ -517,3 +517,17 @@ twoEqualEffectTypes s ef1 ef2 = do
             else throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = KPromote efTy1, kActual = KPromote efTy2 }
           Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
       Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
+
+isIndexedType :: Type -> Checker Bool
+isIndexedType = typeFoldM $
+  TypeFold
+    { tfFunTy = \x y -> return (x || y)
+    , tfTyCon = -- Main case
+        undefined
+    , tfBox = \_ x -> return x
+    , tfDiamond = \_ x -> return x
+    , tfTyVar = \_ -> return False
+    , tfTyApp = \x y -> return (x || y)
+    , tfTyInt = \_ -> return False
+    , tfTyInfix = \_ x y -> return (x || y)
+    , tfSet = \_ -> return False }
