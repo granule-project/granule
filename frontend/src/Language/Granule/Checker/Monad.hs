@@ -307,9 +307,7 @@ concludeImplication s localCtxt = do
 
 
 -- Create a local existential scope
--- NOTE: leaving this here, but this approach is not used and is incompataible
--- with the way that existential variables are generated in the solver
---
+-- NOTE: leaving this here, but this approach is not used
 existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of

@@ -502,6 +502,9 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
 
   newCaseFrame
 
+  st <- get
+  debugM "predBefore" (pretty $ predicateStack st)
+
   -- Check each of the branches
   branchCtxtsAndSubst <-
     forM cases $ \(pat_i, e_i) -> do
@@ -540,14 +543,21 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
   _ <- popGuardContext
   popCaseFrame
 
-  -- Find the upper-bound contexts
+  st <- get
+  debugM "predAfter" (pretty $ predicateStack st)
+
+  -- Find the upper-bound of the contexts
   let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
-  branchesGam <- fold1M (joinCtxts s) branchCtxts
+  (branchesGam, tyVars) <- foldM (\(ctxt, vars) ctxt' -> do
+    (ctxt'', vars') <- joinCtxts s ctxt ctxt'
+    return (ctxt'', vars ++ vars')) (head branchCtxts, []) (tail branchCtxts)
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxtPlus s branchesGam guardGam
 
   subst <- combineManySubstitutions s (substG : substs)
+
+  --mapM_ (uncurry existential) tyVars
 
   let elaborated = Case s tau elaboratedGuard elaboratedCases
   return (g, subst, elaborated)
@@ -694,12 +704,16 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
                    (tail branchTysAndSpans)
 
   -- Find the upper-bound type on the return contexts
-  branchesGam <- fold1M (joinCtxts s) branchCtxts
+  (branchesGam, tyVars) <- foldM (\(ctxt, vars) ctxt' -> do
+    (ctxt'', vars') <- joinCtxts s ctxt ctxt'
+    return (ctxt'', vars ++ vars')) (head branchCtxts, []) (tail branchCtxts)
 
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxtPlus s branchesGam guardGam
 
   subst <- combineManySubstitutions s (substG : branchSubsts)
+
+  --mapM_ (uncurry existential) tyVars
 
   let elaborated = Case s branchType elaboratedGuard elaboratedCases
   return (branchType, gamNew, subst, elaborated)
@@ -1099,9 +1113,10 @@ ctxtEquals s ctxt1 ctxt2 = do
 
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
-    the other, then the resulting context will not have this linear variable -}
+    the other, then the resulting context will not have this linear variable.
+    Also return s a list of new type variable created to do the join. -}
 joinCtxts :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
-  -> Checker (Ctxt Assumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind)
 joinCtxts s ctxt1 ctxt2 = do
     -- All the type assumptions from ctxt1 whose variables appear in ctxt2
     -- and weaken all others
@@ -1112,14 +1127,14 @@ joinCtxts s ctxt1 ctxt2 = do
 
     -- Make an context with fresh coeffect variables for all
     -- the variables which are in both ctxt1 and ctxt2...
-    varCtxt <- freshVarsIn s (map fst ctxt) ctxt
+    (varCtxt, tyVars) <- freshVarsIn s (map fst ctxt) ctxt
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
     zipWithM_ (relateByAssumption s ApproximatedBy) ctxt varCtxt
     zipWithM_ (relateByAssumption s ApproximatedBy) ctxt' varCtxt
     -- Return the common upper-bound context of ctxt1 and ctxt2
-    return varCtxt
+    return (varCtxt, tyVars)
 
 {- |  intersect contexts and weaken anything not appear in both
         relative to the left context (this is not commutative) -}
@@ -1213,17 +1228,22 @@ discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars c
 -- turned into discharged coeffect assumptions annotated
 -- with a fresh coeffect variable (and all variables not in
 -- `vars` get deleted).
+-- Returns also the list of newly generated type variables
 -- e.g.
 --  `freshVarsIn ["x", "y"] [("x", Discharged (2, Int),
 --                           ("y", Linear Int),
 --                           ("z", Discharged (3, Int)]
---  -> [("x", Discharged (c5 :: Nat, Int),
+--  -> ([("x", Discharged (c5 :: Nat, Int),
 --      ("y", Linear Int)]
---
-freshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption
-  -> Checker (Ctxt Assumption)
-freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
+--     , [c5 :: Nat])
+freshVarsIn :: (?globals :: Globals) => Span -> [Id] -> (Ctxt Assumption)
+            -> Checker (Ctxt Assumption, Ctxt Kind)
+freshVarsIn s vars ctxt = do
+    newCtxtAndTyVars <- mapM toFreshVar (relevantSubCtxt vars ctxt)
+    let (newCtxt, tyVars) = unzip newCtxtAndTyVars
+    return (newCtxt, catMaybes tyVars)
   where
+    toFreshVar :: (Id, Assumption) -> Checker ((Id, Assumption), Maybe (Id, Kind))
     toFreshVar (var, Discharged t c) = do
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
@@ -1231,11 +1251,13 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
+      existential cvar (promoteTypeToKind ctype)
 
       -- Return the freshened var-type mapping
-      return (var, Discharged t (CVar cvar))
+      -- and the new type variable
+      return ((var, Discharged t (CVar cvar)), Just (cvar, promoteTypeToKind ctype))
 
-    toFreshVar (var, Linear t) = return (var, Linear t)
+    toFreshVar (var, Linear t) = return ((var, Linear t), Nothing)
 
 
 -- Combine two contexts
