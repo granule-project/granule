@@ -2,7 +2,5 @@ import Prelude
 import Vec
 
 isEmpty : ∀ {n : Nat} . Vec n Int → Bool
-isEmpty xs =
-    case xs of
-      Nil        → True;
-      (Cons _ _) → False
+isEmpty Nil        = True;
+isEmpty (Cons _ _) = False
