@@ -1,0 +1,11 @@
+data Bool = True | False
+
+data Vec (n : Nat) (a : Type) where
+    Nil : Vec 0 a;
+    Cons : forall {n : Nat} . a -> Vec n a -> Vec (n+1) a
+
+either : (Vec 1 (Int [2..Inf])) [0..1] -> Int
+either [Cons [x] _] =
+  case x > 0 of
+    True -> x;
+    False -> x + x
