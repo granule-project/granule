@@ -45,7 +45,7 @@ polyShaped t = case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
       case mCardinality of
-        Just (_, c) -> case c of
+        Just (_, c, _) -> case c of
           Just 1 -> do
             debugM "uniShaped constructor" (show t <> "\n" <> show c)
             pure False
@@ -260,6 +260,7 @@ ctxtFromTypedPattern' _ s t p _ = do
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   throw PatternTypingError{ errLoc = s, errPat = p, tyExpected = t }
+
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
   -> Type

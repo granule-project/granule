@@ -156,7 +156,10 @@ data CheckerState = CS
             , patternConsumption :: [Consumption]
 
             -- Data type information
-            , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
+            --  map of type constructor names to their the kind, num of
+            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
+            , typeConstructors :: Ctxt (Kind, Cardinality, Bool)
+            -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
             -- LaTeX derivation

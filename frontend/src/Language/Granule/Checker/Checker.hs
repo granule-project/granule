@@ -86,7 +86,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
               st <- get
               -- Or see if this is a kind constructors
               case lookup c (Primitives.typeConstructors <> (typeConstructors st)) of
-                Just (k, _) -> return $ Right k
+                Just (k, _, _) -> return $ Right k
                 Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
 
         -- Lookup in definitions
@@ -103,11 +103,11 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
 checkTyCon :: DataDecl -> Checker ()
-checkTyCon (DataDecl sp name tyVars kindAnn ds)
+checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
+      st{ typeConstructors = (name, (tyConKind, cardin, isIndexedDataType d)) : typeConstructors st }
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
@@ -118,7 +118,7 @@ checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (kind,_) -> kind
+                Just (kind,_,_) -> kind
                 Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
@@ -491,9 +491,14 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
+
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   pushGuardContext guardGam
+
+  -- Dependent / GADT pattern matches not allowed in a case
+  ixed <- isIndexedType guardTy
+  when ixed (throw $ CaseOnIndexedType s guardTy)
 
   newCaseFrame
 
@@ -506,17 +511,11 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
       newConjunct
 
-      -- Check that some specialisation didn't occure in this case
-      -- (dependent / GADT pattern matches not allowed in a case)
-      -- otherwise throw an error
-      liftIO $ putStrLn $ pretty subst
-      when (not (null subst)) (throw $ CaseOnIndexedType s guardTy)
-
       -- Checking the case body
       (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
+      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
       -- Conclude the implication
       concludeImplication (getSpan pat_i) eVars
@@ -648,6 +647,10 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   -- then synthesise the types of the branches
 
+  -- Dependent / GADT pattern matches not allowed in a case
+  ixed <- isIndexedType guardTy
+  when ixed (throw $ CaseOnIndexedType s guardTy)
+
   newCaseFrame
 
   branchTysAndCtxtsAndSubsts <-
@@ -657,16 +660,11 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
       newConjunct
 
-      -- Check that some specialisation didn't occure in this case
-      -- (dependent / GADT pattern matches not allowed in a case)
-      -- otherwise throw an error
-      when (not (null subst)) (throw $ CaseOnIndexedType s guardTy)
-
       -- Synth the case body
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
+      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
       -- Conclude
       concludeImplication (getSpan pati) eVars

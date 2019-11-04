@@ -59,7 +59,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of
-            Just (kind,_) -> return kind
+            Just (kind,_,_) -> return kind
             Nothing   -> do
               mConstructor <- lookupDataConstructor s conId
               case mConstructor of

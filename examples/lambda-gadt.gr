@@ -8,9 +8,8 @@ data Lam : Type → Type where
   Fix  : ∀ a : Type           . (Lam (a → a)) [∞] → Lam a    --- fixed point
 
 eval : ∀ a : Type . Lam a → a
-eval e = case e of
-    (Lift v)   → v;
-    (Pair l r) → (eval l, eval r);
-    (Lam f)    → λx → eval (f (Lift x));
-    (App f x)  → (eval f) (eval x);
-    (Fix [f])  → (eval f) (eval (Fix [f]))
+eval (Lift v)   = v;
+eval (Pair l r) = (eval l, eval r);
+eval (Lam f)    = λx → eval (f (Lift x));
+eval (App f x)  = (eval f) (eval x);
+eval (Fix [f])  = (eval f) (eval (Fix [f]))

@@ -518,12 +518,14 @@ twoEqualEffectTypes s ef1 ef2 = do
           Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
       Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
 
+-- | Find out if a type is indexed
 isIndexedType :: Type -> Checker Bool
 isIndexedType = typeFoldM $
   TypeFold
     { tfFunTy = \x y -> return (x || y)
-    , tfTyCon = -- Main case
-        undefined
+    , tfTyCon = \c -> do {
+        st <- get;
+        return $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
     , tfBox = \_ x -> return x
     , tfDiamond = \_ x -> return x
     , tfTyVar = \_ -> return False
