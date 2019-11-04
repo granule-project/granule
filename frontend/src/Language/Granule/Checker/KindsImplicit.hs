@@ -90,7 +90,7 @@ inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Pure")) = do
 inferKindOfTypeImplicits s ctxt (TyCon conId) = do
   st <- get
   case lookup conId (typeConstructors st) of
-    Just (kind,_) -> return (kind, [])
+    Just (kind,_,_) -> return (kind, [])
     Nothing   -> do
       mConstructor <- lookupDataConstructor s conId
       case mConstructor of

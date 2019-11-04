@@ -22,41 +22,41 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 setElements :: [(Kind, Type)]
 setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
-typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (Kind, Cardinality, Bool))] -- TODO Cardinality is not a good term
 typeConstructors =
-    [ (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
-    , (mkId "Int",  (KType, Nothing))
-    , (mkId "Float", (KType, Nothing))
-    , (mkId "Char", (KType, Nothing))
-    , (mkId "String", (KType, Nothing))
-    , (mkId "Protocol", (KType, Nothing))
-    , (mkId "Nat",  (KUnion KCoeffect KEffect, Nothing))
-    , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
-    , (mkId "Level", (KCoeffect, Nothing)) -- Security level
-    , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
-    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
+    [ (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1, False))
+    , (mkId "Int",  (KType, Nothing, False))
+    , (mkId "Float", (KType, Nothing, False))
+    , (mkId "Char", (KType, Nothing, False))
+    , (mkId "String", (KType, Nothing, False))
+    , (mkId "Protocol", (KType, Nothing, False))
+    , (mkId "Nat",  (KUnion KCoeffect KEffect, Nothing, False))
+    , (mkId "Q",    (KCoeffect, Nothing, False)) -- Rationals
+    , (mkId "Level", (KCoeffect, Nothing, False)) -- Security level
+    , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing, False))
+    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing, False))
     -- Channels and protocol types
-    , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing))
-    , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing))
-    , (mkId "End" , (protocol, Nothing))
-    , (mkId "Chan", (KFun protocol KType, Nothing))
-    , (mkId "Dual", (KFun protocol protocol, Nothing))
-    , (mkId "->", (KFun KType (KFun KType KType), Nothing))
+    , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing, False))
+    , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing, False))
+    , (mkId "End" , (protocol, Nothing, False))
+    , (mkId "Chan", (KFun protocol KType, Nothing, True))
+    , (mkId "Dual", (KFun protocol protocol, Nothing, True))
+    , (mkId "->", (KFun KType (KFun KType KType), Nothing, False))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
+    , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing, True))
     -- Effect grade types - Sessions
-    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), Nothing))
-    , (mkId "Com", (KEffect, Nothing))
+    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), Nothing, True))
+    , (mkId "Com", (KEffect, Nothing, False))
     -- Effect grade types - IO
-    , (mkId "IO", (KEffect, Nothing))
-    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "IO", (KEffect, Nothing, False))
+    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)

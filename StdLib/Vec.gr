@@ -162,7 +162,7 @@ pullVec
   : forall {a : Type, c : Coeffect, k : c, n : Nat}
   . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
-pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]
+pullVec (Cons [x] xs) = let [ys] = pullVec xs in [Cons x ys]
 
 --- pushVec pushes in non linearity of vector into the elements
 pushVec : ∀ {k : Nat, n : Nat, a : Type}
