@@ -26,16 +26,18 @@ spec = let ?globals = mempty in do
     -- Unit tests
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
-       (c, pred) <- runCtxts joinCtxts
+       ((c, tyVars), pred) <- runCtxts joinCtxts
               [(varA, Discharged tyVarK (CSig (CNat 5) natInterval))]
               [(varA, Discharged tyVarK (cNatOrdered 10))]
+
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
+       tyVars `shouldBe` [(mkId "c.0", natInterval)]
        pred `shouldBe`
          [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
               , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
      it "join ctxts with discharged assumption in one" $ do
-       (c, pred) <- runCtxts joinCtxts
+       ((c, _), pred) <- runCtxts joinCtxts
               [(varA, Discharged (tyVarK) (cNatOrdered 5))]
               []
        c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
