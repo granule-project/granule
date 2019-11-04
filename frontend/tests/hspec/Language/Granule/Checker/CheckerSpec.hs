@@ -31,15 +31,15 @@ spec = let ?globals = mempty in do
               [(varA, Discharged tyVarK (cNatOrdered 10))]
 
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
-       tyVars `shouldBe` [(mkId "c.0", natInterval)]
+       tyVars `shouldBe` [(mkId "a.0", promoteTypeToKind $ natInterval)]
        pred `shouldBe`
          [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
               , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
      it "join ctxts with discharged assumption in one" $ do
        ((c, _), pred) <- runCtxts joinCtxts
-              [(varA, Discharged (tyVarK) (cNatOrdered 5))]
-              []
+                          [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+                          []
        c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
        pred `shouldBe`
          [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
@@ -91,10 +91,10 @@ extractMainExpr _ = undefined
 
 runCtxts
   :: (?globals::Globals)
-  => (Span -> a -> a -> Checker a)
+  => (Span -> a -> a -> Checker b)
   -> a
   -> a
-  -> IO (a, [Pred])
+  -> IO (b, [Pred])
 runCtxts f a b = do
   (Right res, state) <- runChecker initState (f nullSpan a b)
   pure (res, predicateStack state)
