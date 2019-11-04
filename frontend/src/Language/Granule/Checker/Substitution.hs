@@ -147,7 +147,8 @@ instance Substitutable Coeffect where
             Just (SubstT t) -> do
                 k <- inferKindOfType nullSpan t
                 k' <- inferCoeffectType nullSpan (CVar v)
-                case joinKind k (promoteTypeToKind k') of
+                jK <- joinKind k (promoteTypeToKind k')
+                case jK of
                     Just (KPromote (TyCon (internalName -> "Nat")), _) ->
                         compileNatKindedTypeToCoeffect nullSpan t
                     _ -> return (CVar v)
@@ -536,7 +537,8 @@ instance Unifiable Substitutors where
         -- We can unify a type with a coeffect, if the type is actually a Nat
         k <- inferKindOfType nullSpan t
         k' <- inferCoeffectType nullSpan c'
-        case joinKind k (KPromote k') of
+        jK <- joinKind k (KPromote k')
+        case jK of
             Just (KPromote (TyCon k), _) | internalName k == "Nat" -> do
                 c <- compileNatKindedTypeToCoeffect nullSpan t
                 unify c c'
@@ -571,7 +573,8 @@ instance Unifiable Type where
     unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
         k <- inferKindOfType nullSpan t
         k' <- inferKindOfType nullSpan t
-        case joinKind k k' of
+        jK <- joinKind k k'
+        case jK of
             Just (KPromote (TyCon (internalName -> "Nat")), _) -> do
                 c  <- compileNatKindedTypeToCoeffect nullSpan t
                 c' <- compileNatKindedTypeToCoeffect nullSpan t'

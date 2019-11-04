@@ -362,6 +362,22 @@ addConstraintToPreviousFrame c = do
           stack ->
             put (checkerState { predicateStack = Conj [Con c] : stack })
 
+-- Given a coeffect type variable and a coeffect kind,
+-- replace any occurence of that variable in a context
+updateCoeffectType :: Id -> Kind -> Checker ()
+updateCoeffectType tyVar k = do
+   modify (\checkerState ->
+    checkerState
+     { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
+ where
+   rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
+   rewriteCtxt [] = []
+   rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+   rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+   rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
+
 -- | Convenience function for throwing a single error
 throw :: CheckerError -> Checker a
 throw = throwError . pure

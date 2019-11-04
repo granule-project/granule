@@ -71,9 +71,11 @@ inferKindOfTypeImplicits :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -
 inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
    (k1, u1) <- inferKindOfTypeImplicits s ctxt t1
    (k2, u2) <- inferKindOfTypeImplicits s ctxt t2
-   case joinKind k1 KType of
-    Just (k1, u1') ->
-      case joinKind k2 KType of
+   jK1 <- joinKind k1 KType
+   case jK1 of
+    Just (k1, u1') -> do
+      jK2 <- joinKind k2 KType
+      case jK2 of
         Just (k2, u2') -> do
           u <- combineManySubstitutions s [u1, u2, u1', u2']
           return (KType, u)
@@ -101,7 +103,8 @@ inferKindOfTypeImplicits s ctxt (TyCon conId) = do
 inferKindOfTypeImplicits s ctxt (Box c t) = do
     _ <- inferCoeffectTypeInContext s ctxt c
     (k, u) <- inferKindOfTypeImplicits s ctxt t
-    case joinKind k KType of
+    jK <- joinKind k KType
+    case jK of
       Just (k, u') -> do
         u'' <- combineSubstitutions s u u'
         return (KType, u'')
@@ -110,12 +113,14 @@ inferKindOfTypeImplicits s ctxt (Box c t) = do
 inferKindOfTypeImplicits s ctxt (Diamond e t) = do
   (ke, u') <- inferKindOfTypeImplicits s ctxt e
   (k, u) <- inferKindOfTypeImplicits s ctxt t
-  case joinKind k KType of
+  jK <- joinKind k KType
+  case jK of
     Just (k, u2) -> do
       case ke of
         KPromote effTy -> do
             (effTyK, u3) <- inferKindOfTypeImplicits s ctxt effTy
-            case joinKind effTyK KEffect of
+            jK' <- joinKind effTyK KEffect
+            case jK' of
               Just (_, u4) -> do
                 u5 <- combineManySubstitutions s [u, u', u2, u3, u4]
                 return (KType, u5)
@@ -139,7 +144,8 @@ inferKindOfTypeImplicits s ctxt (TyApp t1 t2) = do
   case k1 of
     KFun k1 k2 -> do
       (kArg, u2) <- inferKindOfTypeImplicits s ctxt t2
-      case (joinKind k1 kArg) of
+      jK <- joinKind k1 kArg
+      case jK of
         Just (k, uk) -> do
           u <- combineManySubstitutions s [u1, u2, uk]
           k2' <- substitute u k2
@@ -159,9 +165,11 @@ inferKindOfTypeImplicits s ctxt (TyInt _) = return $ (kConstr $ mkId "Nat", [])
 inferKindOfTypeImplicits s ctxt (TyInfix (tyOps -> (k1exp, k2exp, kret)) t1 t2) = do
   (k1act, u1) <- inferKindOfTypeImplicits s ctxt t1
   (k2act, u2) <- inferKindOfTypeImplicits s ctxt t2
-  case joinKind k1act k1exp of
-    Just (k1, u3) ->
-      case joinKind k2act k2exp of
+  jK1 <- joinKind k1act k1exp
+  case jK1 of
+    Just (k1, u3) -> do
+      jK2 <- joinKind k2act k2exp
+      case jK2 of
         Just (k2, u4) -> do
           u <- combineManySubstitutions s [u1, u2, u3, u4]
           kret' <- substitute u kret

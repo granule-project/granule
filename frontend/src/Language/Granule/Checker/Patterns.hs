@@ -150,9 +150,10 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
         -- Case: no enclosing [ ] pattern
         Nothing -> return (coeff, innerBoxTy)
         -- Case: there is an enclosing [ ] pattern of type outerBoxTy
-        Just (outerCoeff, outerBoxTy) ->
+        Just (outerCoeff, outerBoxTy) -> do
           -- Therefore try and flatten at this point
-          case flattenable outerBoxTy innerBoxTy of
+          flatM <- flattenable outerBoxTy innerBoxTy
+          case flatM of
             Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }

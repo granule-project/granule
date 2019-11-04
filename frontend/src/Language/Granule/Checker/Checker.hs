@@ -1196,7 +1196,7 @@ relateByAssumption _ _ (_, Linear _) (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
 relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
-  (kind, (inj1, inj2)) <- mguCoeffectTypes s c1 c2
+  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
   addConstraint (rel s (inj1 c1) (inj2 c2) kind)
 
 -- Linear binding and a graded binding (likely from a promotion)
@@ -1214,7 +1214,7 @@ discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption ->
 discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      (coeffTy, _) <- mguCoeffectTypes s c coeffect
+      (coeffTy, _) <- mguCoeffectTypesFromCoeffects s c coeffect
       return (var, Discharged t (CSig c coeffTy))
 
     toFreshVar (var, Linear t) = do
