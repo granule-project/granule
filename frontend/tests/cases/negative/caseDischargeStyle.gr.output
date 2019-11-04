@@ -1,9 +1,6 @@
 Type checking failed: 
-Linearity error: frontend/tests/cases/negative/caseDischargeStyle.gr:7:3:
-Variable `y` is promoted but its binding is linear; its binding should be under a box.
-
-Linearity error: frontend/tests/cases/negative/caseDischargeStyle.gr:7:3:
-Linear variable `b` is never used.
+Type error: frontend/tests/cases/negative/caseDischargeStyle.gr:7:3:
+Variable `y` is used as graded variable, but it is bound as a linear variable.
 
 Grading error: frontend/tests/cases/negative/caseDischargeStyle.gr:14:3:
 0 is not approximatable by 1 for type Nat because Nat denotes precise usage.

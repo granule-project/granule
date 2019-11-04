@@ -464,7 +464,7 @@ data CheckerError
   | SolverTimeout
     { errLoc :: Span, errSolverTimeoutMillis :: Integer, errDefId :: Id, errContext :: String, errPred :: Pred }
   | UnifyGradedLinear
-    { errLoc :: Span, errGraded :: Id, errLinear :: Id }
+    { errLoc :: Span, errLinearOrGraded :: Id }
   | ImpossiblePatternMatch
     { errLoc :: Span, errId :: Id, errPred :: Pred }
   | ImpossiblePatternMatchTrivial
@@ -758,9 +758,8 @@ instance UserMsg CheckerError where
     <> "\nYou may want to increase the timeout (see --help)."
 
   msg UnifyGradedLinear{..}
-    = "Can't unify free-variable types:\n\t"
-    <> "(graded) " <> pretty errGraded
-    <> "\n  with\n\t(linear) " <> pretty errLinear
+    = "Variable `" <> pretty errLinearOrGraded
+    <> "` is used as graded variable, but it is bound as a linear variable."
 
   msg ImpossiblePatternMatch{ errId, errPred }
     = "Pattern match in an equation of `" <> pretty errId

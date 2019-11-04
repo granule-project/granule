@@ -1168,6 +1168,7 @@ checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
   -- happens with them
   checkLinearity inCtxt outCtxt
 
+-- Assumption that the two assumps are for the same variable
 relateByAssumption :: (?globals :: Globals)
   => Span
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
@@ -1183,8 +1184,11 @@ relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
   (kind, (inj1, inj2)) <- mguCoeffectTypes s c1 c2
   addConstraint (rel s (inj1 c1) (inj2 c2) kind)
 
-relateByAssumption s _ x y =
-  throw UnifyGradedLinear{ errLoc = s, errGraded = fst x, errLinear = fst y }
+-- Linear binding and a graded binding (likely from a promotion)
+relateByAssumption s _ (idX, _) (idY, _) =
+  if idX == idY
+    then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
+    else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
 
 
 -- Replace all top-level discharged coeffects with a variable
