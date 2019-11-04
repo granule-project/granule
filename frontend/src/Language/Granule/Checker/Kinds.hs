@@ -3,13 +3,12 @@
 module Language.Granule.Checker.Kinds (
                       inferKindOfType
                     , inferKindOfTypeInContext
-                    , joinCoeffectTypes
                     , hasLub
                     , joinKind
+                    , mguCoeffectTypesFromCoeffects
                     , inferCoeffectType
                     , inferCoeffectTypeInContext
                     , inferCoeffectTypeAssumption
-                    , mguCoeffectTypes
                     , promoteTypeToKind
                     , demoteKindToType
                     , isEffectType
@@ -19,6 +18,7 @@ module Language.Granule.Checker.Kinds (
 
 import Control.Monad.State.Strict
 
+import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.KindsHelpers
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -90,7 +90,16 @@ inferKindOfTypeInContext s quantifiedVariables t =
             Just (kind, _) -> return kind
             Nothing -> throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
 
-    kApp (KFun k1 k2) kArg | k1 `hasLub` kArg = return k2
+    kApp (KFun k1 k2) kArg = do
+      kLub <- k1 `hasLub` kArg
+      if kLub
+        then return k2
+        else throw KindMismatch
+              { errLoc = s
+              , tyActualK = Nothing
+              , kActual = kArg
+              , kExpected = k1 }
+
     kApp k kArg = throw KindMismatch
         { errLoc = s
         , tyActualK = Nothing
@@ -100,12 +109,17 @@ inferKindOfTypeInContext s quantifiedVariables t =
 
     kInt _ = return $ kConstr $ mkId "Nat"
 
-    kInfix (tyOps -> (k1exp, k2exp, kret)) k1act k2act
-      | not (k1act `hasLub` k1exp) = throw
-        KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = k1exp, kActual = k1act}
-      | not (k2act `hasLub` k2exp) = throw
-        KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = k2exp, kActual = k2act}
-      | otherwise                  = pure kret
+    kInfix (tyOps -> (k1exp, k2exp, kret)) k1act k2act = do
+      kLub <- k1act `hasLub` k1exp
+      if not kLub
+        then throw
+          KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = k1exp, kActual = k1act}
+        else do
+          kLub' <- k2act `hasLub` k2exp
+          if not kLub'
+            then throw
+              KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = k2exp, kActual = k2act}
+            else pure kret
 
     kSet ks =
       -- If the set is empty, then it could have any kind, so we need to make
@@ -141,57 +155,35 @@ inferKindOfTypeInContext s quantifiedVariables t =
                     where (left, right) = partition (\x -> (head ks) == x) ks
 
 -- | Compute the join of two kinds, if it exists
-joinKind :: Kind -> Kind -> Maybe (Kind, Substitution)
-joinKind k1 k2 | k1 == k2 = Just (k1, [])
-joinKind (KVar v) k = Just (k, [(v, SubstK k)])
-joinKind k (KVar v) = Just (k, [(v, SubstK k)])
-joinKind (KPromote t1) (KPromote t2) =
-   fmap (\k -> (KPromote $ fst k, [])) (joinCoeffectTypes t1 t2)
+joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Substitution))
+joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
+joinKind (KVar v) k = return $ Just (k, [(v, SubstK k)])
+joinKind k (KVar v) = return $ Just (k, [(v, SubstK k)])
+joinKind (KPromote t1) (KPromote t2) = do
+  (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
+  return $ Just (KPromote coeffTy, [])
 
-joinKind (KUnion k1 k2) k =
-  case joinKind k k1 of
-    Nothing ->
-        case joinKind k k2 of
-            Nothing -> Nothing
-            Just (k2', u) -> Just (KUnion k1 k2', u)
-    Just (k1', u) -> Just (KUnion k1' k2, u)
+joinKind (KUnion k1 k2) k = do
+  jK1 <- joinKind k k1
+  case jK1 of
+    Nothing -> do
+        jK2 <- joinKind k k2
+        case jK2 of
+            Nothing -> return $ Nothing
+            Just (k2', u) -> return $ Just (KUnion k1 k2', u)
+    Just (k1', u) -> return $ Just (KUnion k1' k2, u)
 
 joinKind k (KUnion k1 k2) = joinKind (KUnion k1 k2) k
 
-joinKind _ _ = Nothing
+joinKind _ _ = return $ Nothing
 
 -- | Predicate on whether two kinds have a leasy upper bound
-hasLub :: Kind -> Kind -> Bool
-hasLub k1 k2 =
-  case joinKind k1 k2 of
-    Nothing -> False
-    Just _  -> True
-
--- | Some coeffect types can be joined (have a least-upper bound). This
--- | function computes the join if it exists.
-joinCoeffectTypes :: Type -> Type -> Maybe (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect))
-joinCoeffectTypes t1 t2 = case (t1, t2) of
-  -- Equal things unify to the same thing
-  (t, t') | t == t' -> Just (t, (id, id))
-
-  -- `Nat` can unify with `Q` to `Q`
-  (TyCon (internalName -> "Q"), TyCon (internalName -> "Nat")) ->
-    Just $ (TyCon $ mkId "Q", (id, inj))
-      where inj = coeffectFold $ baseCoeffectFold
-                     { cNat = \x -> CFloat (fromInteger . toInteger $ x) }
-
-  (TyCon (internalName -> "Nat"), TyCon (internalName -> "Q")) ->
-    Just $ (TyCon $ mkId "Q", (inj, id))
-      where inj = coeffectFold $ baseCoeffectFold
-                    { cNat = \x -> CFloat (fromInteger . toInteger $ x) }
-
-  -- `Nat` can unify with `Ext Nat` to `Ext Nat`
-  (t, TyCon (internalName -> "Nat")) | t == extendedNat ->
-        Just (extendedNat, (id, id))
-  (TyCon (internalName -> "Nat"), t) | t == extendedNat ->
-        Just (extendedNat, (id, id))
-
-  _ -> Nothing
+hasLub :: (?globals :: Globals) => Kind -> Kind -> Checker Bool
+hasLub k1 k2 = do
+  jK <- joinKind k1 k2
+  case jK of
+    Nothing -> return False
+    Just _  -> return True
 
 -- | Infer the type of ta coeffect term (giving its span as well)
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker Type
@@ -211,21 +203,16 @@ inferCoeffectTypeInContext s ctxt (CProduct c1 c2)    = do
   return $ TyApp (TyApp (TyCon $ mkId "×") k1) k2
 
 inferCoeffectTypeInContext s ctxt (CInterval c1 c2)    = do
-  k1 <- inferCoeffectTypeInContext s ctxt c1
-  k2 <- inferCoeffectTypeInContext s ctxt c2
-
-  case joinCoeffectTypes k1 k2 of
-    Just (k, _) -> return $ TyApp (TyCon $ mkId "Interval") k
-
-    Nothing -> throw IntervalGradeKindError{ errLoc = s, errTy1 = k1, errTy2 = k2 }
+  (k, _) <- mguCoeffectTypesFromCoeffects s c1 c2
+  return $ TyApp (TyCon $ mkId "Interval") k
 
 -- Take the join for compound coeffect epxressions
-inferCoeffectTypeInContext s _ (CPlus c c')  = fmap fst $ mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CMinus c c') = fmap fst $ mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CTimes c c') = fmap fst $ mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CMeet c c')  = fmap fst $ mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CJoin c c')  = fmap fst $ mguCoeffectTypes s c c'
-inferCoeffectTypeInContext s _ (CExpon c c') = fmap fst $ mguCoeffectTypes s c c'
+inferCoeffectTypeInContext s _ (CPlus c c')  = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CMinus c c') = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CTimes c c') = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CMeet c c')  = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CJoin c c')  = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CExpon c c') = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
 
 -- Coeffect variables should have a type in the cvar->kind context
 inferCoeffectTypeInContext s ctxt (CVar cvar) = do
@@ -279,119 +266,12 @@ checkKindIsCoeffect span ctxt ty = do
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
-mguCoeffectTypes :: (?globals :: Globals)
+mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
                  => Span -> Coeffect -> Coeffect -> Checker (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect))
-mguCoeffectTypes s c1 c2 = do
+mguCoeffectTypesFromCoeffects s c1 c2 = do
   coeffTy1 <- inferCoeffectType s c1
   coeffTy2 <- inferCoeffectType s c2
-  upper <- mguCoeffectTypes' s coeffTy1 coeffTy2
-  case upper of
-    Just x -> return x
-    -- Cannot unify so form a product
-    Nothing -> return
-      (TyApp (TyApp (TyCon (mkId "×")) coeffTy1) coeffTy2,
-                  (\x -> CProduct x (COne coeffTy2), \x -> CProduct (COne coeffTy1) x))
-
--- Inner definition which does not throw its error, and which operates on just the types
-mguCoeffectTypes' :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Maybe (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
-
--- Trivial case
-mguCoeffectTypes' s t t' | t == t' = return $ Just (t, (id, id))
-
--- Both are variables
-mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
-  updateCoeffectType kv1 (KVar kv2)
-  return $ Just (TyVar kv2, (id, id))
-
--- Left-hand side is a poly variable, but Just is concrete
-mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
-  updateCoeffectType kv1 (promoteTypeToKind coeffTy2)
-  return $ Just (coeffTy2, (id, id))
-
--- Right-hand side is a poly variable, but Linear is concrete
-mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
-  updateCoeffectType kv2 (promoteTypeToKind coeffTy1)
-  return $ Just (coeffTy1, (id, id))
-
--- Try to unify coeffect types
-mguCoeffectTypes' s t t' | Just (tj, injs) <- joinCoeffectTypes t t' =
-  return $ Just (tj, injs)
-
--- Unifying a product of (t, t') with t yields (t, t') [and the symmetric versions]
-mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t1 == coeffTy2 =
-  return $ Just (coeffTy1, (id, \x -> CProduct x (COne t2)))
-
-mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t2 == coeffTy2 =
-  return $ Just (coeffTy1, (id, \x -> CProduct (COne t1) x))
-
-mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t1 == coeffTy1 =
-  return $ Just (coeffTy2, (\x -> CProduct x (COne t2), id))
-
-mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t2 == coeffTy1 =
-  return $ Just (coeffTy2, (\x -> CProduct (COne t1) x, id))
-
--- Unifying with an interval
-mguCoeffectTypes' s coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =
-  return $ Just (coeffTy2, (\x -> CInterval x x, id))
-mguCoeffectTypes' s coeffTy1@(isInterval -> Just t') coeffTy2 | coeffTy2 == t' =
-  return $ Just (coeffTy1, (id, \x -> CInterval x x))
-
--- Unifying inside an interval (recursive case)
-
--- Both intervals
-mguCoeffectTypes' s (isInterval -> Just t) (isInterval -> Just t') = do
--- See if we can recursively unify inside an interval
-  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
-  coeffecTyUpper <- mguCoeffectTypes' s t t'
-  case coeffecTyUpper of
-    Just (upperTy, (inj1, inj2)) ->
-      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, (inj1', inj2'))
-            where
-              inj1' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj1 c1) (inj1 c2) }
-              inj2' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj2 c1) (inj2 c2) }
-    Nothing -> return Nothing
-
-mguCoeffectTypes' s t (isInterval -> Just t') = do
-  -- See if we can recursively unify inside an interval
-  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
-  coeffecTyUpper <- mguCoeffectTypes' s t t'
-  case coeffecTyUpper of
-    Just (upperTy, (inj1, inj2)) ->
-      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, (\x -> CInterval (inj1 x) (inj1 x), inj2'))
-            where inj2' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj2 c1) (inj2 c2) }
-
-    Nothing -> return Nothing
-
-mguCoeffectTypes' s (isInterval -> Just t') t = do
-  -- See if we can recursively unify inside an interval
-  -- This is done in a local type checking context as `mguCoeffectType` can cause unification
-  coeffecTyUpper <- mguCoeffectTypes' s t' t
-  case coeffecTyUpper of
-    Just (upperTy, (inj1, inj2)) ->
-      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, (inj1', \x -> CInterval (inj2 x) (inj2 x)))
-            where inj1' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj1 c1) (inj1 c2) }
-
-    Nothing -> return Nothing
-
--- No way to unify (outer function will take the product)
-mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
-
--- Given a coeffect type variable and a coeffect kind,
--- replace any occurence of that variable in a context
-updateCoeffectType :: Id -> Kind -> Checker ()
-updateCoeffectType tyVar k = do
-   modify (\checkerState ->
-    checkerState
-     { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
- where
-   rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
-   rewriteCtxt [] = []
-   rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
-    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
-   rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
-    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
-   rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
+  mguCoeffectTypes s coeffTy1 coeffTy2
 
 -- Given a type term, works out if its kind is actually an effect type (promoted)
 -- if so, returns `Right effTy` where `effTy` is the effect type

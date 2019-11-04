@@ -152,7 +152,7 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp = do
   debugM "equalTypesRelatedCoeffectsInner (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
   -- Unify the coeffect kinds of the two coeffects
-  (kind, (inj1, inj2)) <- mguCoeffectTypes s c c'
+  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- subst <- unify c c'
 
   -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
@@ -221,7 +221,8 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ = do
               <> "\n" <> pretty m <> " : " <> show t2
   where
     tyVarConstraint (k1, n) (k2, m) = do
-      case k1 `joinKind` k2 of
+      jK <- k1 `joinKind` k2
+      case jK of
         Just (KPromote (TyCon kc), unif) -> do
 
           k <- inferKindOfType s (TyCon kc)
@@ -264,7 +265,8 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ) -> do --  && sp /= PatternCtxt
 
-      case k1 `joinKind` kind of
+      jK <-  k1 `joinKind` kind
+      case jK of
         Nothing -> throw UnificationKindError
           { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = kind }
 
@@ -280,7 +282,8 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
 
        -- If the kind if nat then set up and equation as there might be a
        -- pausible equation involving the quantified variable
-       case k1 `joinKind` kind of
+       jK <- k1 `joinKind` kind
+       case jK of
          Just (KPromote (TyCon (Id "Nat" "Nat")), unif) -> do
            c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
            c2 <- compileNatKindedTypeToCoeffect s t
@@ -423,7 +426,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
   return (Diamond ej tj)
 
 joinTypes s (Box c t) (Box c' t') = do
-  (coeffTy, (inj1, inj2)) <- mguCoeffectTypes s c c'
+  (coeffTy, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- Create a fresh coeffect variable
   topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
@@ -498,7 +501,8 @@ equalKinds sp (KVar v) k = do
 equalKinds sp k (KVar v) = do
     return (True, k, [(v, SubstK k)])
 equalKinds sp k1 k2 = do
-    case joinKind k1 k2 of
+    jK <- joinKind k1 k2
+    case jK of
       Just (k, u) -> return (True, k, u)
       Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
 
