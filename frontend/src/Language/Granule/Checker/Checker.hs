@@ -8,6 +8,7 @@
 
 module Language.Granule.Checker.Checker where
 
+import Control.Arrow (second)
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
@@ -43,6 +44,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Pattern hiding (boundVars)
 
 import Language.Granule.Utils
 
@@ -158,7 +160,8 @@ checkDataCon
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
-
+        registerPatterns tName dName
+        
         case tySchKind of
           KType ->
             registerDataConstructor tySch coercions
@@ -178,6 +181,13 @@ checkDataCon
       case extend (dataConstructors st) dName (dataConstrTy, subst) of
         Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
         Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
+    
+    registerPatterns tName dName = do
+      st <- get
+      let original = patterns st
+      case extend (patterns st) tName [dName] of
+        Just pm -> put st { patterns = pm }
+        Nothing -> put st { patterns = replace original tName (dName : fromJust (lookup tName original)) }
 
     mkTyVarNameClashErr v = DataConstructorTypeVariableNameClash
         { errLoc = sp
@@ -285,7 +295,7 @@ checkEquation :: (?globals :: Globals) =>
   -> TypeScheme      -- Type scheme
   -> Checker (Equation () Type)
 
-checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
+checkEquation defCtxt id (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
@@ -350,6 +360,46 @@ flipPol :: Polarity -> Polarity
 flipPol Positive = Negative
 flipPol Negative = Positive
 
+generateCases :: Span
+              -> Ctxt (Ctxt (TypeScheme, Substitution))
+              -> Ctxt Assumption
+              -> Checker (Ctxt [Pattern ()])
+generateCases span constructors ctxt = do
+  let types = map (second getAssumConstr) ctxt
+  let constr = zip (map fst types) $ map (uncurry zip . (\ (a, b) -> (map fst $ fromJust $ lookup b constructors, map ((,) b . tsArity . fst . snd) $ fromJust $ lookup b constructors))) types
+  mapM (uncurry (buildPatterns span)) constr
+
+getAssumConstr :: Assumption -> Id
+getAssumConstr (Linear t) = getTypeConstr t
+getAssumConstr (Discharged t _) = getTypeConstr t
+
+getTypeConstr :: Type -> Id
+getTypeConstr (FunTy t1 _) = undefined
+getTypeConstr (TyCon id) = id
+getTypeConstr (Box _ t) = getTypeConstr t
+getTypeConstr (Diamond t1 _) = getTypeConstr t1
+getTypeConstr (TyApp t1 t2) = getTypeConstr t1
+getTypeConstr (TyVar id) = undefined
+getTypeConstr (TyInt _) = undefined
+getTypeConstr (TyInfix _ _ _) = undefined
+getTypeConstr (TySet _) = undefined
+
+buildPatterns :: Span -> Id -> Ctxt (Id, Integer) -> Checker (Id, [Pattern ()])
+buildPatterns span id constructors = return (id, map mkConstr constructors)
+  where mkConstr (name, (_, nVars)) = PConstr span () name (map mkVar $ nFresh nVars)
+        mkVar = PVar span ()
+        nFresh n = map (mkId . show) (take (fromInteger n) [1..])
+
+tsArity :: TypeScheme -> Integer
+tsArity (Forall _ _ _ t) = tArity t
+
+tArity :: Type -> Integer
+tArity (FunTy t1 t2) = 1 + tArity t2
+tArity _ = 0
+
+combineCases :: Ctxt [Pattern ()] -> ([Id], [[Pattern ()]])
+combineCases pats = (map fst pats, mapM snd pats)
+
 -- Type check an expression
 
 --  `checkExpr defs gam t expr` computes `Just delta`
@@ -372,8 +422,17 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
+  let pats = patterns st
+  constructors <- mapM (\ (a, b) -> do
+    dc <- mapM (lookupDataConstructor s) b
+    let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+    return (a, sd)) pats
+  cases <- generateCases s constructors ctxt
+  let combined = combineCases cases
+  -- f <- freshIdentifierBase "xs"
+--  debugM' "FRESH" (show f)
   case unboundVariables of
-    [] -> throw $ HoleMessage s (Just t) ctxt varContext
+    [] -> throw $ HoleMessage s (Just t) ctxt varContext combined
     vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
 
 -- Checking of constants
@@ -638,8 +697,12 @@ synthExpr _ ctxt _ (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
+  mConstructor <- lookupDataConstructor s (fst (head varContext))
   case unboundVariables of
-    [] -> throw $ HoleMessage s Nothing ctxt varContext
+    [] -> 
+      case mConstructor of
+        Just con -> throw $ HoleMessage s Nothing ctxt varContext ([], [])
+        Nothing -> throw UnboundVariableError{ errLoc = s, errId = fst (head varContext) }
     vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
 
 -- Literals can have their type easily synthesised

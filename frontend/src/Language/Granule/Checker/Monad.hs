@@ -166,6 +166,7 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
+            , patterns :: Ctxt [Id]
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -185,6 +186,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
+               , patterns = []
                }
 
 -- *** Various helpers for manipulating the context
@@ -203,6 +205,13 @@ lookupDataConstructor sp constrName = do
         then return $ lookup constrName (dataConstructors st)
         -- Otheriwe this is truly hidden
         else return Nothing
+
+lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
+lookupPatternMatches sp constrName = do
+  st <- get
+  case M.lookup constrName (allHiddenNames st) of
+    Nothing -> return $ lookup constrName (patterns st)
+    Just mod ->return $ lookup constrName (patterns st)
 
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
@@ -371,7 +380,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier)}
+    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -554,6 +563,11 @@ instance UserMsg CheckerError where
       else "\n\n   Type context:" <> (concatMap (\(v, (t , _)) ->  "\n     "
                                                 <> pretty v
                                                 <> " : " <> pretty t) tyContext))
+    <>
+    (if null (fst cases)
+      then ""
+      else "\n\n   Case-splits for " <> (intercalate ", " (map pretty $ fst cases)) <> ":\n     " <> 
+        (concatMap (\ps -> concatMap (\ p -> pretty p <> "   ") ps <> "\n     ") (snd cases)))
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
