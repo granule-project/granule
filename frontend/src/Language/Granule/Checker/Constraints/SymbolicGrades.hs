@@ -21,6 +21,8 @@ import GHC.Generics (Generic)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 
+import Debug.Trace
+
 solverError :: MonadIO m => String -> m a
 solverError msg = liftIO $ throwIO . ErrorCall $ msg
 
@@ -30,7 +32,7 @@ data SGrade =
      | SFloat    SFloat
      | SLevel    SInteger
      | SSet      (S.Set (Id, Type))
-     | SExtNat   SNatX
+     | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
      | SPoint
@@ -299,8 +301,13 @@ symGradeTimes (SLevel lev1) (SLevel lev2) = return $
             (SLevel $ lev1 `smax` lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
+
+symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) | natLike lb1 =
+  "simplified times "
+   `trace`
+    liftM2 SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
+
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
-    -- liftM2 SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
     liftM2 SInterval (comb symGradeMeet) (comb symGradeJoin)
      where
       comb f = do

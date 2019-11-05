@@ -557,7 +557,7 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
 
   subst <- combineManySubstitutions s (substG : substs)
 
-  --mapM_ (uncurry existential) tyVars
+  mapM_ (uncurry existential) tyVars
 
   let elaborated = Case s tau elaboratedGuard elaboratedCases
   return (g, subst, elaborated)
@@ -1131,10 +1131,19 @@ joinCtxts s ctxt1 ctxt2 = do
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
-    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt varCtxt
-    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt' varCtxt
+    _ <- zipWith3M_ (relateByLUB s) ctxt ctxt' varCtxt
     -- Return the common upper-bound context of ctxt1 and ctxt2
     return (varCtxt, tyVars)
+
+zipWith3M_ :: Monad m => (a -> b -> c -> m d) -> [a] -> [b] -> [c] -> m [d]
+zipWith3M_ f _ _ [] = return []
+zipWith3M_ f _ [] _ = return []
+zipWith3M_ f [] _ _ = return []
+zipWith3M_ f (x:xs) (y:ys) (z:zs) = do
+  w <- f x y z
+  ws <- zipWith3M_ f xs ys zs
+  return $ w : ws
+
 
 {- |  intersect contexts and weaken anything not appear in both
         relative to the left context (this is not commutative) -}
@@ -1206,6 +1215,28 @@ relateByAssumption s _ (idX, _) (idY, _) =
     else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
 
 
+-- Assumption that the three assumptions are for the same variable
+relateByLUB :: (?globals :: Globals)
+  => Span
+  -> (Id, Assumption)
+  -> (Id, Assumption)
+  -> (Id, Assumption)
+  -> Checker ()
+
+-- Linear assumptions ignored
+relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return ()
+
+-- Discharged coeffect assumptions
+relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = do
+  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+
+-- Linear binding and a graded binding (likely from a promotion)
+relateByLUB s (idX, _) (idY, _) (_, _) =
+  if idX == idY
+    then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
+    else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
+
 -- Replace all top-level discharged coeffects with a variable
 -- and derelict anything else
 -- but add a var
@@ -1251,7 +1282,7 @@ freshVarsIn s vars ctxt = do
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
-      existential cvar (promoteTypeToKind ctype)
+      -- existential cvar (promoteTypeToKind ctype)
 
       -- Return the freshened var-type mapping
       -- and the new type variable
