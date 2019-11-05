@@ -389,8 +389,6 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
     return (a, sd)) pats
   cases <- generateCases s constructors ctxt
   let combined = combineCases cases
-  -- f <- freshIdentifierBase "xs"
---  debugM' "FRESH" (show f)
   case unboundVariables of
     [] -> throw $ HoleMessage s (Just t) ctxt varContext combined
     vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
@@ -657,12 +655,15 @@ synthExpr _ ctxt _ (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
-  mConstructor <- lookupDataConstructor s (fst (head varContext))
+  let pats = patterns st
+  constructors <- mapM (\ (a, b) -> do
+    dc <- mapM (lookupDataConstructor s) b
+    let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+    return (a, sd)) pats
+  cases <- generateCases s constructors ctxt
+  let combined = combineCases cases
   case unboundVariables of
-    [] -> 
-      case mConstructor of
-        Just con -> throw $ HoleMessage s Nothing ctxt varContext ([], [])
-        Nothing -> throw UnboundVariableError{ errLoc = s, errId = fst (head varContext) }
+    [] -> throw $ HoleMessage s Nothing ctxt varContext combined
     vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
 
 -- Literals can have their type easily synthesised
