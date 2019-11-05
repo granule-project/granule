@@ -418,6 +418,13 @@ instance Substitutable Constraint where
     k <- substitute ctxt k
     return $ Neq s c1 c2 k
 
+  substitute ctxt (Lub s c1 c2 c3 k) = do
+    c1 <- substitute ctxt c1
+    c2 <- substitute ctxt c2
+    c3 <- substitute ctxt c3
+    k <- substitute ctxt k
+    return $ Lub s c1 c2 c3 k
+
   substitute ctxt (ApproximatedBy s c1 c2 k) = do
     c1 <- substitute ctxt c1
     c2 <- substitute ctxt c2

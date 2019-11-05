@@ -54,6 +54,9 @@ data Constraint =
   | Neq Span Coeffect Coeffect Type
   | ApproximatedBy Span Coeffect Coeffect Type
 
+  -- 
+  | Lub Span Coeffect Coeffect Coeffect Type
+
   -- NonZeroPromotableTo s x c means that:
   --   exists x . (x != 0) and x * 1 = c
   -- This is used to check constraints related to definite unification
@@ -73,6 +76,7 @@ instance FirstParameter Constraint Span
 normaliseConstraint :: Constraint -> Constraint
 normaliseConstraint (Eq s c1 c2 t)   = Eq s (normalise c1) (normalise c2) t
 normaliseConstraint (Neq s c1 c2 t)  = Neq s (normalise c1) (normalise c2) t
+normaliseConstraint (Lub s c1 c2 c3 t) = Lub s (normalise c1) (normalise c2) (normalise c3) t
 normaliseConstraint (ApproximatedBy s c1 c2 t) = ApproximatedBy s (normalise c1) (normalise c2) t
 normaliseConstraint (NonZeroPromotableTo s x c t) = NonZeroPromotableTo s x (normalise c) t
 normaliseConstraint (Lt s c1 c2) = Lt s (normalise c1) (normalise c2)
@@ -95,6 +99,12 @@ instance Monad m => Freshenable m Constraint where
     c1 <- freshen c1
     c2 <- freshen c2
     return $ ApproximatedBy s' c1 c2 t
+
+  freshen (Lub s' c1 c2 c3 t) = do
+    c1 <- freshen c1
+    c2 <- freshen c2
+    c3 <- freshen c3
+    return $ Lub s' c1 c2 c3 t
 
   freshen (NonZeroPromotableTo s i c t) = do
     c <- freshen c
@@ -133,6 +143,9 @@ instance Pretty (Neg Constraint) where
       pretty c1 <> " is not approximatable by " <> pretty c2 <> " for type " <> pretty k
       <> if k == (TyCon $ mkId "Nat") then " because Nat denotes precise usage." else ""
 
+    pretty (Neg p@Lub{}) = 
+      "Trying to prove negation of statement: " ++ pretty p
+
     pretty (Neg (NonZeroPromotableTo _ _ c _)) = "TODO"
 
     pretty (Neg (Lt _ c1 c2)) =
@@ -164,6 +177,9 @@ instance Pretty Constraint where
         TyCon (internalName -> "Nat") -> "(" <> pretty c1 <> " = " <> pretty c2 <> ")"
         _ -> "(" <> pretty c1 <> " ≤ " <> pretty c2 <> ")" -- @" <> show s
 
+    pretty (Lub _ c1 c2 c3 _) =
+      "(" <> pretty c1 <> " ⊔ " <> pretty c2 <> " = " <> pretty c3 <> ")"
+
     pretty (Lt _ c1 c2) =
       "(" <> pretty c1 <> " < " <> pretty c2 <> ")"
 
@@ -182,6 +198,7 @@ instance Pretty Constraint where
 varsConstraint :: Constraint -> [Id]
 varsConstraint (Eq _ c1 c2 _) = freeVars c1 <> freeVars c2
 varsConstraint (Neq _ c1 c2 _) = freeVars c1 <> freeVars c2
+varsConstraint (Lub _ c1 c2 c3 _) = freeVars c1 <> freeVars c2 <> freeVars c3
 varsConstraint (ApproximatedBy _ c1 c2 _) = freeVars c1 <> freeVars c2
 varsConstraint (NonZeroPromotableTo _ _ c _) = freeVars c
 varsConstraint (Lt _ c1 c2) = freeVars c1 <> freeVars c2
@@ -384,6 +401,12 @@ rewriteBindersInPredicate ctxt =
 
     updateConstraint ckindVar (ckind, _) (ApproximatedBy s c1 c2 k) =
       ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+        (case k of
+          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
+          _  -> k)
+
+    updateConstraint ckindVar (ckind, _) (Lub s c1 c2 c3 k) =
+      Lub s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2) (updateCoeffect ckindVar ckind c3)
         (case k of
           TyVar ckindVar' | ckindVar == ckindVar' -> ckind
           _  -> k)

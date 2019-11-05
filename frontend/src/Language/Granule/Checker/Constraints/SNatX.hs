@@ -12,6 +12,8 @@ module Language.Granule.Checker.Constraints.SNatX where
 import Data.SBV
 import GHC.Generics (Generic)
 
+import Debug.Trace
+
 newtype SNatX = SNatX { xVal  :: SInteger }
   deriving (Generic, Mergeable)
 
@@ -45,8 +47,9 @@ instance EqSymbolic SNatX where
   (SNatX a) .== (SNatX b) = a .== b
 
 instance OrdSymbolic SNatX where
-  a .< b = ite (isInf a) sFalse
-         $ ite (isInf b) sTrue
+  a .< b = (show a <> " <. " <> show b) `trace` 
+          ite (isInf b) sTrue
+         $ ite (isInf a) sFalse
          $ xVal a .< xVal b
 
 meetSNatX :: SNatX -> SNatX -> SNatX
