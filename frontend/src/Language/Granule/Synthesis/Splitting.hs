@@ -1,10 +1,12 @@
 module Language.Granule.Synthesis.Splitting where
 
 import Control.Arrow (second)
+import Control.Monad (replicateM)
 import Data.Maybe (fromJust)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Variables
 
 import Language.Granule.Context
 
@@ -38,10 +40,18 @@ getTypeConstr (TyInfix _ _ _) = undefined
 getTypeConstr (TySet _) = undefined
 
 buildPatterns :: Span -> Id -> Ctxt (Id, Integer) -> Checker (Id, [Pattern ()])
-buildPatterns span id constructors = return (id, map mkConstr constructors)
-  where mkConstr (name, (_, nVars)) = PConstr span () name (map mkVar $ nFresh nVars)
-        mkVar = PVar span ()
-        nFresh n = map (mkId . show) (take (fromInteger n) [1..])
+buildPatterns span id constructors = do
+  patterns <- mapM mkPat constructors
+  return (id, patterns)
+  where
+    mkPat :: (Id, (Id, Integer)) -> Checker (Pattern ())
+    mkPat (name, (_, nVars)) = do
+      vars <- nFresh nVars
+      return $ PConstr span () name (map (PVar span ()) vars)
+    nFresh :: Integer -> Checker [Id]
+    nFresh n = do
+      freshStrings <- replicateM (fromInteger n) (freshIdentifierBase ((\ (Id x _) -> x) id))
+      return $ map mkId freshStrings
 
 tsArity :: TypeScheme -> Integer
 tsArity (Forall _ _ _ t) = tArity t
