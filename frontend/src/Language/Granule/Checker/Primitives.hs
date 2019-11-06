@@ -22,6 +22,10 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 setElements :: [(Kind, Type)]
 setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
+-- Associates type constuctors names to their:
+--    * kind
+--    * cardinality (number of matchable constructors)
+--    * boolean flag on whether they are indexed types or not
 typeConstructors :: [(Id, (Kind, Cardinality, Bool))] -- TODO Cardinality is not a good term
 typeConstructors =
     [ (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1, False))

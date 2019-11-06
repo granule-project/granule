@@ -70,8 +70,8 @@ synthExprInIsolation :: (?globals :: Globals)
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
-      _    <- runAll checkTyCon dataDecls
-      _    <- runAll checkDataCons dataDecls
+      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
       -- Since we need to return a type scheme, have a look first
