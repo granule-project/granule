@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/intervals.gr:6:1:
 The following theorem associated with `foo` is falsifiable:
-	∃ y0 : ↑(Interval Nat) . (y0 ≤ 2..2) ∧ ((1..1) + (1..1) ≤ y0) ∧ (1..1 ≤ y0)
+	∃ y0 : ↑(Interval Nat) . (y0 ≤ 2..2) ∧ (1..1 ⊔ (1..1) + (1..1) = y0)

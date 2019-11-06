@@ -22,7 +22,6 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
-import Language.Granule.Checker.Constraints.SNatX
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
 import Language.Granule.Syntax.Helpers
@@ -129,7 +128,7 @@ compileToSBV predicate tyVarContext =
 
 -- | Symbolic coeffect representing 0..Inf
 zeroToInfinity :: SGrade
-zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
+zeroToInfinity = SInterval (SExtNat $ SNatX.SNatX 0) (SExtNat SNatX.inf)
 
 freshCVarScoped ::
     (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
@@ -176,12 +175,12 @@ freshCVarScoped quant name (TyCon conName) q k =
 freshCVarScoped quant name t q k | t == extendedNat = do
    quant q name (\solverVar ->
     k (SNatX.representationConstraint solverVar
-     , SExtNat (SNatX solverVar)))
+     , SExtNat (SNatX.SNatX solverVar)))
 
 -- A poly typed coeffect variable compiled into the
 --  infinity value (since this satisfies all the semiring properties on the nose)
 freshCVarScoped quant name (TyVar v) q k | "kprom" `isPrefixOf` internalName v =
--- future TODO: resolve polymorphism to free coeffect (uninterpreted)
+  -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
   k (sTrue, SPoint)
 
 freshCVarScoped quant name (TyVar v) q k =
@@ -223,24 +222,22 @@ compile vars (Neq _ c1 c2 t) =
   bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
 
 -- Assumes that c3 is already existentially bound
-compile vars (Lub _ c1 c2 c3@(CVar v) t) = do
+compile vars (Lub _ c1 c2 c3@(CVar v) t) =
+
   case t of
+    {-
+    -- An alternate procedure for computing least-upper bounds
+    -- I was experimenting with this to see if it could speed up solving.
+    -- For largely symbolic constraints, it doesn't seem to make much difference.
+
     -- Use the join when `extendedNat` is involved
     (isInterval -> Just t') | t' == extendedNat -> do
       (s1, p1) <- compileCoeffect c1 t vars
       (s2, p2) <- compileCoeffect c2 t vars
       (s3, p3) <- compileCoeffect c3 t vars
-
-      l <- (sLowerBound s1) `symGradeMeet` (sLowerBound s2)
-      u <- (sUpperBound s1) `symGradeJoin` (sUpperBound s2)
-      pa1 <- (sLowerBound s3) `symGradeEq` l
-      pa2 <- (sUpperBound s3) `symGradeEq` u
-
-      pa3 <- symGradeLessEq l u
-
-      --("lub = " <> show s1 <> " U " <> show s2)
-      --  `trace`
-      return (p1 .&& p2 .&& p3 .&& pa1 .&& pa2 .&& pa3)
+      lub   <- s1 `symGradeJoin` s2
+      eq    <- s3 `symGradeEq` lub
+      return (p1 .&& p2 .&& p3 .&& eq) -}
 
     _ -> do
       (s1, p1) <- compileCoeffect c1 t vars
