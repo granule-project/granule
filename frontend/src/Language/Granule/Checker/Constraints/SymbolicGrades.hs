@@ -229,7 +229,7 @@ symGradeMeet (SFloat n1) (SFloat n2) = return $ SFloat $ n1 `smin` n2
 symGradeMeet (SExtNat x) (SExtNat y) = return $ SExtNat $
   ite (isInf x) y (ite (isInf y) x (SNatX (xVal x `smin` xVal y)))
 symGradeMeet (SInterval lb1 ub1) (SInterval lb2 ub2) =
-  liftM2 SInterval (lb1 `symGradeMeet` lb2) (ub1 `symGradeMeet` ub2)
+  liftM2 SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeMeet` ub2)
 symGradeMeet SPoint SPoint = return SPoint
 symGradeMeet s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMeet SProduct id s t)
@@ -248,7 +248,7 @@ symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $
   ite (isInf x .|| isInf y) inf (SNatX (xVal x `smax` xVal y))
 symGradeJoin (SInterval lb1 ub1) (SInterval lb2 ub2) =
-   liftM2 SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeJoin` ub2)
+   liftM2 SInterval (lb1 `symGradeMeet` lb2) (ub1 `symGradeJoin` ub2)
 symGradeJoin SPoint SPoint = return SPoint
 symGradeJoin s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeJoin SProduct id s t)
