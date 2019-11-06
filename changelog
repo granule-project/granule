@@ -1,4 +1,5 @@
   # 0.7.7.3 (wip)
+  - Improved error messages
 
   # 0.7.7.2
   - LLVM compiler separated into its own project to make building easier at the moment (see https://github.com/granule-project/granule-compiler-llvm).
