@@ -140,8 +140,10 @@ instance Pretty (Neg Constraint) where
       pretty c2 <> " value cannot be moved to level " <> pretty c1
 
     pretty (Neg (ApproximatedBy _ c1 c2 k)) =
-      pretty c1 <> " is not approximatable by " <> pretty c2 <> " for type " <> pretty k
-      <> if k == (TyCon $ mkId "Nat") then " because Nat denotes precise usage." else ""
+      case k of
+        TyCon (internalName -> "Nat") ->
+          "Expected " <> pretty c2 <> " uses, but instead there are " <> pretty c1 <> " actual uses."
+        _ -> pretty c1 <> " is not approximatable by " <> pretty c2 <> " for type " <> pretty k
 
     pretty (Neg p@Lub{}) = 
       "Trying to prove negation of statement: " ++ pretty p
