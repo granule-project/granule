@@ -53,7 +53,7 @@ testing           = fromMaybe False $ globalsTesting ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
-solverTimeoutMillis = fromMaybe 5000 $ globalsSolverTimeoutMillis ?globals
+solverTimeoutMillis = fromMaybe 10000 $ globalsSolverTimeoutMillis ?globals
 
 -- | Accessors for global file paths with default values
 includePath, sourceFilePath :: (?globals :: Globals) => FilePath
