@@ -45,7 +45,7 @@ polyShaped t = case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
       case mCardinality of
-        Just (_, c) -> case c of
+        Just (_, c, _) -> case c of
           Just 1 -> do
             debugM "uniShaped constructor" (show t <> "\n" <> show c)
             pure False
@@ -150,9 +150,10 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
         -- Case: no enclosing [ ] pattern
         Nothing -> return (coeff, innerBoxTy)
         -- Case: there is an enclosing [ ] pattern of type outerBoxTy
-        Just (outerCoeff, outerBoxTy) ->
+        Just (outerCoeff, outerBoxTy) -> do
           -- Therefore try and flatten at this point
-          case flattenable outerBoxTy innerBoxTy of
+          flatM <- flattenable outerBoxTy innerBoxTy
+          case flatM of
             Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
@@ -260,6 +261,7 @@ ctxtFromTypedPattern' _ s t p _ = do
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
   throw PatternTypingError{ errLoc = s, errPat = p, tyExpected = t }
+
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
   -> Type

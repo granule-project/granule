@@ -156,7 +156,10 @@ data CheckerState = CS
             , patternConsumption :: [Consumption]
 
             -- Data type information
-            , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
+            --  map of type constructor names to their the kind, num of
+            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
+            , typeConstructors :: Ctxt (Kind, Cardinality, Bool)
+            -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
             -- LaTeX derivation
@@ -304,9 +307,7 @@ concludeImplication s localCtxt = do
 
 
 -- Create a local existential scope
--- NOTE: leaving this here, but this approach is not used and is incompataible
--- with the way that existential variables are generated in the solver
---
+-- NOTE: leaving this here, but this approach is not used
 existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of
@@ -360,6 +361,22 @@ addConstraintToPreviousFrame c = do
             put (checkerState { predicateStack = ps : Conj [Con c] : stack })
           stack ->
             put (checkerState { predicateStack = Conj [Con c] : stack })
+
+-- Given a coeffect type variable and a coeffect kind,
+-- replace any occurence of that variable in a context
+updateCoeffectType :: Id -> Kind -> Checker ()
+updateCoeffectType tyVar k = do
+   modify (\checkerState ->
+    checkerState
+     { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
+ where
+   rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
+   rewriteCtxt [] = []
+   rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+   rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
+    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+   rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 
 -- | Convenience function for throwing a single error
 throw :: CheckerError -> Checker a
@@ -461,7 +478,7 @@ data CheckerError
   | SolverTimeout
     { errLoc :: Span, errSolverTimeoutMillis :: Integer, errDefId :: Id, errContext :: String, errPred :: Pred }
   | UnifyGradedLinear
-    { errLoc :: Span, errGraded :: Id, errLinear :: Id }
+    { errLoc :: Span, errLinearOrGraded :: Id }
   | ImpossiblePatternMatch
     { errLoc :: Span, errId :: Id, errPred :: Pred }
   | ImpossiblePatternMatchTrivial
@@ -478,6 +495,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | UnknownResourceAlgebra
     { errLoc :: Span, errTy :: Type, errK :: Kind }
+  | CaseOnIndexedType
+    { errLoc :: Span, errTy :: Type }
   deriving (Show, Eq)
 
 
@@ -538,6 +557,7 @@ instance UserMsg CheckerError where
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
   title UnknownResourceAlgebra{} = "Type error"
+  title CaseOnIndexedType{} = "Type error"
 
   msg HoleMessage{..} =
     (case holeTy of
@@ -752,9 +772,8 @@ instance UserMsg CheckerError where
     <> "\nYou may want to increase the timeout (see --help)."
 
   msg UnifyGradedLinear{..}
-    = "Can't unify free-variable types:\n\t"
-    <> "(graded) " <> pretty errGraded
-    <> "\n  with\n\t(linear) " <> pretty errLinear
+    = "Variable `" <> pretty errLinearOrGraded
+    <> "` is used as graded variable, but it is bound as a linear variable."
 
   msg ImpossiblePatternMatch{ errId, errPred }
     = "Pattern match in an equation of `" <> pretty errId
@@ -787,6 +806,9 @@ instance UserMsg CheckerError where
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+
+  msg CaseOnIndexedType{ errTy }
+    = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
 
   color HoleMessage{} = Blue
   color _ = Red

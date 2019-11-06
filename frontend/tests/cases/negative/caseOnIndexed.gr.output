@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/caseOnIndexed.gr:6:5:
+Cannot use a `case` pattern match on indexed type Vec n Int. Define a specialised function instead.

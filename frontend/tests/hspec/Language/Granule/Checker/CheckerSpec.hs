@@ -26,22 +26,26 @@ spec = let ?globals = mempty in do
     -- Unit tests
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
-       (c, pred) <- runCtxts joinCtxts
+       ((c, tyVars), pred) <- runCtxts joinCtxts
               [(varA, Discharged tyVarK (CSig (CNat 5) natInterval))]
               [(varA, Discharged tyVarK (cNatOrdered 10))]
+
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
+       tyVars `shouldBe` [(mkId "a.0", promoteTypeToKind $ natInterval)]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
-              , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
+        [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)]]
+         --[Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
+         --     , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
      it "join ctxts with discharged assumption in one" $ do
-       (c, pred) <- runCtxts joinCtxts
-              [(varA, Discharged (tyVarK) (cNatOrdered 5))]
-              []
+       ((c, _), pred) <- runCtxts joinCtxts
+                          [(varA, Discharged (tyVarK) (cNatOrdered 5))]
+                          []
        c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
-               ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
+         [Conj [Con (Lub nullSpan (cNatOrdered 5) (CZero natInterval) (CVar (mkId "a.0")) natInterval)]]
+         -- [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
+         --      ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
@@ -89,10 +93,10 @@ extractMainExpr _ = undefined
 
 runCtxts
   :: (?globals::Globals)
-  => (Span -> a -> a -> Checker a)
+  => (Span -> a -> a -> Checker b)
   -> a
   -> a
-  -> IO (a, [Pred])
+  -> IO (b, [Pred])
 runCtxts f a b = do
   (Right res, state) <- runChecker initState (f nullSpan a b)
   pure (res, predicateStack state)

@@ -70,8 +70,8 @@ synthExprInIsolation :: (?globals :: Globals)
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
-      _    <- runAll checkTyCon dataDecls
-      _    <- runAll checkDataCons dataDecls
+      _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
+      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
       -- Since we need to return a type scheme, have a look first
@@ -86,7 +86,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
               st <- get
               -- Or see if this is a kind constructors
               case lookup c (Primitives.typeConstructors <> (typeConstructors st)) of
-                Just (k, _) -> return $ Right k
+                Just (k, _, _) -> return $ Right k
                 Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
 
         -- Lookup in definitions
@@ -103,11 +103,11 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
 checkTyCon :: DataDecl -> Checker ()
-checkTyCon (DataDecl sp name tyVars kindAnn ds)
+checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
+      st{ typeConstructors = (name, (tyConKind, cardin, isIndexedDataType d)) : typeConstructors st }
   where
     cardin = (Just . genericLength) ds -- the number of data constructors
     tyConKind = mkKind (map snd tyVars)
@@ -118,7 +118,7 @@ checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (kind,_) -> kind
+                Just (kind,_,_) -> kind
                 Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
@@ -344,6 +344,8 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
 
+-- Polarities are used to understand when a type is
+-- `expected` vs. `actual` (i.e., for error messages)
 data Polarity = Positive | Negative deriving Show
 
 flipPol :: Polarity -> Polarity
@@ -487,36 +489,36 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
             -> True
           _ -> False
 
-
--- Dependent pattern-matching case (only at the top level)
+-- Check a case expression
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
+
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   pushGuardContext guardGam
+
+  -- Dependent / GADT pattern matches not allowed in a case
+  ixed <- isIndexedType guardTy
+  when ixed (throw $ CaseOnIndexedType s guardTy)
 
   newCaseFrame
 
   -- Check each of the branches
   branchCtxtsAndSubst <-
     forM cases $ \(pat_i, e_i) -> do
+
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
-
+      newConjunct
 
       -- Checking the case body
-      newConjunct
-      -- Specialise the return type and the incoming environment using the
-      -- pattern-match-generated type substitution
-      tau' <- substitute subst tau
-      (specialisedGam, unspecialisedGam) <- substCtxt subst gam
+      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
 
-      let checkGam = patternGam <> specialisedGam <> unspecialisedGam
-      (localGam, subst', elaborated_i) <- checkExpr defs checkGam pol False tau' e_i
+      -- Check that the use of locally bound variables matches their bound type
+      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
-      -- We could do this, but it seems redundant.
-      -- localGam' <- ctxtPlus s guardGam localGam
-      -- ctxtApprox s localGam' checkGam
+      -- Conclude the implication
+      concludeImplication (getSpan pat_i) eVars
 
       -- Check linear use in anything Linear
       gamSoFar <- ctxtPlus s guardGam localGam
@@ -524,70 +526,35 @@ checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-
-
-           debugM "Specialised gam" (pretty specialisedGam)
-           debugM "Unspecialised gam" (pretty unspecialisedGam)
-
-           debugM "pattern gam" (pretty patternGam)
-           debugM "local gam" (pretty localGam)
-
-           st <- get
-           debugM "pred so far" (pretty (predicateStack st))
-
-           -- The resulting context has the shared part removed
-           -- 28/02/2018 - We used to have this
-           --let branchCtxt = (localGam `subtractCtxt` guardGam) `subtractCtxt` specialisedGam
-           -- But we want promotion to invovlve the guard to avoid leaks
-           let branchCtxt = (localGam `subtractCtxt` specialisedGam) `subtractCtxt` patternGam
-
-           branchCtxt' <- ctxtPlus s branchCtxt  (justLinear $ (gam `intersectCtxts` specialisedGam) `intersectCtxts` localGam)
-
-           -- Check local binding use
-           ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
-
-
-           -- Check "global" (to the definition) binding use
-           consumedGam <- ctxtPlus s guardGam localGam
-           debugM "** gam = " (pretty gam)
-           debugM "** c sub p = " (pretty (consumedGam `subtractCtxt` patternGam))
-
-           ctxtApprox s (consumedGam `subtractCtxt` patternGam) gam
-
-           -- Conclude the implication
-           concludeImplication (getSpan pat_i) eVars
-
-           return (branchCtxt', subst', (elaborated_pat_i, elaborated_i))
+           return (localGam `subtractCtxt` patternGam
+                 , subst'
+                 , (elaborated_pat_i, elaborated_i))
 
         -- Anything that was bound in the pattern but not used correctly
         p:ps -> illLinearityMismatch s (p:|ps)
-
-  st <- get
-  debugM "pred so after branches" (pretty (predicateStack st))
 
   -- All branches must be possible
   checkGuardsForImpossibility s $ mkId "case"
 
   -- Pop from stacks related to case
   _ <- popGuardContext
-  _ <- popCaseFrame
+  popCaseFrame
 
-  -- Find the upper-bound contexts
+  -- Find the upper-bound of the contexts
   let (branchCtxts, substs, elaboratedCases) = unzip3 branchCtxtsAndSubst
-  branchesGam <- fold1M (joinCtxts s) branchCtxts
-
-  debugM "*** Branches from the case " (pretty branchCtxts)
+  (branchesGam, tyVars) <- foldM (\(ctxt, vars) ctxt' -> do
+    (ctxt'', vars') <- joinCtxts s ctxt ctxt'
+    return (ctxt'', vars ++ vars')) (head branchCtxts, []) (tail branchCtxts)
 
   -- Contract the outgoing context of the guard and the branches (joined)
   g <- ctxtPlus s branchesGam guardGam
-  debugM "--- Output context for case " (pretty g)
 
-  st <- get
-  debugM "pred at end of case" (pretty (predicateStack st))
+  subst <- combineManySubstitutions s (substG : substs)
+
+  -- Exisentially quantify any ty variables generated by joining contexts
+  mapM_ (uncurry existential) tyVars
 
   let elaborated = Case s tau elaboratedGuard elaboratedCases
-
-  subst <- combineManySubstitutions s substs -- previously concat substs
   return (g, subst, elaborated)
 
 -- All other expressions must be checked using synthesis
@@ -595,22 +562,16 @@ checkExpr defs gam pol topLevel tau e = do
 
   (tau', gam', subst', elaboratedE) <- synthExpr defs gam pol e
 
+  -- Now to do a type equality on check type `tau` and synth type `tau'`
   (tyEq, _, subst) <-
-    case pol of
-      Positive -> do
-        debugM "+ Compare for equality " $ pretty tau' <> " = " <> pretty tau
         if topLevel
           -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
-          else lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
-
-      -- i.e., this check is from a synth
-      Negative -> do
-        debugM "- Compare for equality " $ pretty tau <> " = " <> pretty tau'
-        if topLevel
-          -- If we are checking a top-level, then don't allow overapproximation
-          then equalTypesWithPolarity (getSpan e) FstIsSpec tau' tau
-          else lEqualTypesWithPolarity (getSpan e) FstIsSpec tau' tau
+          then do
+            debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
+            equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+          else do
+            debugM "** Compare for equality " $ pretty tau' <> " :> " <> pretty tau
+            lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
 
   if tyEq
     then do
@@ -688,8 +649,12 @@ synthExpr _ gam _ (Val s _ (Constr _ c [])) = do
 -- Case synthesis
 synthExpr defs gam pol (Case s _ guardExpr cases) = do
   -- Synthesise the type of the guardExpr
-  (ty, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
+  (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   -- then synthesise the types of the branches
+
+  -- Dependent / GADT pattern matches not allowed in a case
+  ixed <- isIndexedType guardTy
+  when ixed (throw $ CaseOnIndexedType s guardTy)
 
   newCaseFrame
 
@@ -697,21 +662,26 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, _, elaborated_pat_i, _) <- ctxtFromTypedPattern s ty pati NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
       newConjunct
-      ---
-      (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
-      concludeImplication (getSpan pati) eVars
 
-      ctxtEquals s (localGam `intersectCtxts` patternGam) patternGam
+      -- Synth the case body
+      (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
+
+      -- Check that the use of locally bound variables matches their bound type
+      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
+
+      -- Conclude
+      concludeImplication (getSpan pati) eVars
 
       -- Check linear use in this branch
       gamSoFar <- ctxtPlus s guardGam localGam
       case checkLinearity patternGam gamSoFar of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
-         [] -> return (tyCase, (localGam `subtractCtxt` patternGam, subst'),
-                        (elaborated_pat_i, elaborated_i))
+         [] -> return (tyCase
+                    , (localGam `subtractCtxt` patternGam, subst')
+                    , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
@@ -722,21 +692,24 @@ synthExpr defs gam pol (Case s _ guardExpr cases) = do
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
   let (branchCtxts, branchSubsts) = unzip branchCtxtsAndSubsts
   let branchTysAndSpans = zip branchTys (map (getSpan . snd) cases)
+
   -- Finds the upper-bound return type between all branches
   branchType <- foldM (\ty2 (ty1, sp) -> joinTypes sp ty1 ty2)
                    (head branchTys)
                    (tail branchTysAndSpans)
 
   -- Find the upper-bound type on the return contexts
-  branchesGam <- fold1M (joinCtxts s) branchCtxts
+  (branchesGam, tyVars) <- foldM (\(ctxt, vars) ctxt' -> do
+    (ctxt'', vars') <- joinCtxts s ctxt ctxt'
+    return (ctxt'', vars ++ vars')) (head branchCtxts, []) (tail branchCtxts)
 
   -- Contract the outgoing context of the guard and the branches (joined)
   gamNew <- ctxtPlus s branchesGam guardGam
 
-  debugM "*** synth branchesGam" (pretty branchesGam)
+  subst <- combineManySubstitutions s (substG : branchSubsts)
 
-  subst <- combineManySubstitutions s branchSubsts
-  subst <- combineSubstitutions s substG subst
+  -- Exisentially quantify any ty variables generated by joining contexts
+  mapM_ (uncurry existential) tyVars
 
   let elaborated = Case s branchType elaboratedGuard elaboratedCases
   return (branchType, gamNew, subst, elaborated)
@@ -825,9 +798,11 @@ synthExpr defs gam pol
 -- Application
 synthExpr defs gam pol (App s _ e e') = do
     (fTy, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e
+
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy sig tau) -> do
+         liftIO $ debugM "FunTy sig" $ pretty sig
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
@@ -1134,9 +1109,10 @@ ctxtEquals s ctxt1 ctxt2 = do
 
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
-    the other, then the resulting context will not have this linear variable -}
+    the other, then the resulting context will not have this linear variable.
+    Also return s a list of new type variable created to do the join. -}
 joinCtxts :: (?globals :: Globals) => Span -> Ctxt Assumption -> Ctxt Assumption
-  -> Checker (Ctxt Assumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind)
 joinCtxts s ctxt1 ctxt2 = do
     -- All the type assumptions from ctxt1 whose variables appear in ctxt2
     -- and weaken all others
@@ -1147,14 +1123,22 @@ joinCtxts s ctxt1 ctxt2 = do
 
     -- Make an context with fresh coeffect variables for all
     -- the variables which are in both ctxt1 and ctxt2...
-    varCtxt <- freshVarsIn s (map fst ctxt) ctxt
+    (varCtxt, tyVars) <- freshVarsIn s (map fst ctxt) ctxt
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
-    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt varCtxt
-    zipWithM_ (relateByAssumption s ApproximatedBy) ctxt' varCtxt
+    _ <- zipWith3M_ (relateByLUB s) ctxt ctxt' varCtxt
     -- Return the common upper-bound context of ctxt1 and ctxt2
-    return varCtxt
+    return (varCtxt, tyVars)
+  where
+    zipWith3M_ :: Monad m => (a -> b -> c -> m d) -> [a] -> [b] -> [c] -> m [d]
+    zipWith3M_ f _ _ [] = return []
+    zipWith3M_ f _ [] _ = return []
+    zipWith3M_ f [] _ _ = return []
+    zipWith3M_ f (x:xs) (y:ys) (z:zs) = do
+      w <- f x y z
+      ws <- zipWith3M_ f xs ys zs
+      return $ w : ws
 
 {- |  intersect contexts and weaken anything not appear in both
         relative to the left context (this is not commutative) -}
@@ -1203,6 +1187,7 @@ checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
   -- happens with them
   checkLinearity inCtxt outCtxt
 
+-- Assumption that the two assumps are for the same variable
 relateByAssumption :: (?globals :: Globals)
   => Span
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
@@ -1215,12 +1200,38 @@ relateByAssumption _ _ (_, Linear _) (_, Linear _) = return ()
 
 -- Discharged coeffect assumptions
 relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
-  (kind, (inj1, inj2)) <- mguCoeffectTypes s c1 c2
+  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
   addConstraint (rel s (inj1 c1) (inj2 c2) kind)
 
-relateByAssumption s _ x y =
-  throw UnifyGradedLinear{ errLoc = s, errGraded = fst x, errLinear = fst y }
+-- Linear binding and a graded binding (likely from a promotion)
+relateByAssumption s _ (idX, _) (idY, _) =
+  if idX == idY
+    then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
+    else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
 
+-- Relate 3 assumptions by the least-upper bound relation, i.e.,
+--   `relateByLUB s c1 c2 c3` means `c3` is the lub of `c1` and `c2`
+-- Assumption that the three assumptions are for the same variable
+relateByLUB :: (?globals :: Globals)
+  => Span
+  -> (Id, Assumption)
+  -> (Id, Assumption)
+  -> (Id, Assumption)
+  -> Checker ()
+
+-- Linear assumptions ignored
+relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return ()
+
+-- Discharged coeffect assumptions
+relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = do
+  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+
+-- Linear binding and a graded binding (likely from a promotion)
+relateByLUB s (idX, _) (idY, _) (_, _) =
+  if idX == idY
+    then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
+    else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
 
 -- Replace all top-level discharged coeffects with a variable
 -- and derelict anything else
@@ -1230,7 +1241,7 @@ discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption ->
 discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
   where
     toFreshVar (var, Discharged t c) = do
-      (coeffTy, _) <- mguCoeffectTypes s c coeffect
+      (coeffTy, _) <- mguCoeffectTypesFromCoeffects s c coeffect
       return (var, Discharged t (CSig c coeffTy))
 
     toFreshVar (var, Linear t) = do
@@ -1244,17 +1255,22 @@ discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars c
 -- turned into discharged coeffect assumptions annotated
 -- with a fresh coeffect variable (and all variables not in
 -- `vars` get deleted).
+-- Returns also the list of newly generated type variables
 -- e.g.
 --  `freshVarsIn ["x", "y"] [("x", Discharged (2, Int),
 --                           ("y", Linear Int),
 --                           ("z", Discharged (3, Int)]
---  -> [("x", Discharged (c5 :: Nat, Int),
+--  -> ([("x", Discharged (c5 :: Nat, Int),
 --      ("y", Linear Int)]
---
-freshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption
-  -> Checker (Ctxt Assumption)
-freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
+--     , [c5 :: Nat])
+freshVarsIn :: (?globals :: Globals) => Span -> [Id] -> (Ctxt Assumption)
+            -> Checker (Ctxt Assumption, Ctxt Kind)
+freshVarsIn s vars ctxt = do
+    newCtxtAndTyVars <- mapM toFreshVar (relevantSubCtxt vars ctxt)
+    let (newCtxt, tyVars) = unzip newCtxtAndTyVars
+    return (newCtxt, catMaybes tyVars)
   where
+    toFreshVar :: (Id, Assumption) -> Checker ((Id, Assumption), Maybe (Id, Kind))
     toFreshVar (var, Discharged t c) = do
       ctype <- inferCoeffectType s c
       -- Create a fresh variable
@@ -1264,9 +1280,10 @@ freshVarsIn s vars ctxt = mapM toFreshVar (relevantSubCtxt vars ctxt)
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
 
       -- Return the freshened var-type mapping
-      return (var, Discharged t (CVar cvar))
+      -- and the new type variable
+      return ((var, Discharged t (CVar cvar)), Just (cvar, promoteTypeToKind ctype))
 
-    toFreshVar (var, Linear t) = return (var, Linear t)
+    toFreshVar (var, Linear t) = return ((var, Linear t), Nothing)
 
 
 -- Combine two contexts
