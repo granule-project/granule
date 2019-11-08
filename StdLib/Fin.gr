@@ -1,9 +1,9 @@
 ------
 --- Module: Fin
 --- Description: Finitely bounded sets
---- Authors: Vilem-Benjamin Liepelt
+--- Authors: Vilem-Benjamin Liepelt, Dominic Orchard
 --- License: BSD3
---- Copyright: (c) Authors 2018
+--- Copyright: (c) Authors 2018-19
 --- Issue-tracking: https://github.com/dorchard/granule/issues
 --- Repository: https://github.com/dorchard/granule
 ------
