@@ -41,6 +41,17 @@
 		"body": ["forall {a : Type, b : Type, n : Nat} . $0"]
 	},
 
+	"Quantifier for 'nm'": {
+		"prefix": "forallnm",
+		"body": ["forall {n : Nat, m : Nat} . $0"]
+	},
+
+	"Quantifier for 'nk'": {
+		"prefix": "forallnk",
+		"body": ["forall {n : Nat, k : Nat} . $0"]
+	},
+
+
 	"Natural number data type": {
 		"prefix": "dataN",
 		"body": ["data N (n : Nat) where\n    Z : N 0;\n    S : forall {n : Nat} . N n -> N (n+1)\n$0"]
