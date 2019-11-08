@@ -37,6 +37,9 @@ typeConstructors =
     , (mkId "Nat",  (KUnion KCoeffect KEffect, Nothing, False))
     , (mkId "Q",    (KCoeffect, Nothing, False)) -- Rationals
     , (mkId "Level", (KCoeffect, Nothing, False)) -- Security level
+    , (mkId "Private", (KPromote (TyCon $ mkId "Level"), Nothing, False))
+    , (mkId "Public", (KPromote (TyCon $ mkId "Level"), Nothing, False))
+    , (mkId "Unused", (KPromote (TyCon $ mkId "Level"), Nothing, False))
     , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing, False))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing, False))
     -- Channels and protocol types
