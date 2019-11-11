@@ -55,6 +55,7 @@ data Type = FunTy Type Type           -- ^ Function type
           | TyInt Int                 -- ^ Type-level Int
           | TyInfix TypeOperator Type Type  -- ^ Infix type operator
           | TySet [Type]              -- ^ Type-level set
+          | TyCase Type [(Type, Type)] -- ^ Type-level case
     deriving (Eq, Ord, Show)
 
 -- | Kinds
@@ -327,6 +328,8 @@ mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 mTySet   :: Monad m => [Type] -> m Type
 mTySet xs = return (TySet xs)
+mTyCase :: Monad m => Type -> [(Type, Type)] -> m Type
+mTyCase x cs = return (TyCase x cs)
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
@@ -338,12 +341,13 @@ data TypeFold m a = TypeFold
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
   , tfTyInfix :: TypeOperator  -> a -> a -> m a
-  , tfSet     :: [a]           -> m a }
+  , tfSet     :: [a]           -> m a
+  , tfTyCase  :: a -> [(a, a)] -> m a}
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet
+  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: Monad m => TypeFold m a -> Type -> m a
@@ -374,6 +378,15 @@ typeFoldM algebra = go
    go (TySet ts) = do
     ts' <- mapM go ts
     (tfSet algebra) ts'
+   go (TyCase t ts) = do
+    t' <- go t
+    ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
+    (tfTyCase algebra) t' ts'
+    where
+     extractMonad (a,b) = do
+      a' <- a
+      b' <- b
+      return (a', b')
 
 instance FirstParameter TypeScheme Span
 
@@ -397,6 +410,7 @@ instance Term Type where
       , tfTyInt   = \_ -> return []
       , tfTyInfix = \_ y z -> return $ y <> z
       , tfSet     = return . concat
+      , tfTyCase  = \t cs -> return $ t <> (concat . concat) [[a,b] | (a,b) <- cs]
       }
 
     isLexicallyAtomic TyInt{} = True
