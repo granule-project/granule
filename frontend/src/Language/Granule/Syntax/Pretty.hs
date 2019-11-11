@@ -152,6 +152,11 @@ instance Pretty Type where
     pretty (TySet ts) =
       "{" <> intercalate ", " (map pretty ts) <> "}"
 
+    pretty (TyCase t ps) =
+     "\n    (case " <> pretty t <> " of\n      "
+                    <> intercalate ";\n      " (map (\(p, t') -> pretty p
+                    <> " : " <> pretty t') ps) <> ")"
+
 instance Pretty TypeOperator where
   pretty = \case
    TyOpLesser          -> "<"
