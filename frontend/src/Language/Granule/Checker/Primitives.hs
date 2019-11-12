@@ -64,6 +64,11 @@ typeConstructors =
     , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    --Effect grade types - Exceptions
+    , (mkId "Exc", (KEffect, Nothing, False))
+    , (mkId "ExampleExc1", (KPromote (TyCon $ mkId "Exc"), Nothing, False))
+    , (mkId "ExampleExc2", (KPromote (TyCon $ mkId "Exc"), Nothing, False))
+    
     ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)

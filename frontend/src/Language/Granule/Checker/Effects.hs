@@ -23,6 +23,7 @@ import Data.Maybe (mapMaybe)
 -- Describe all effect types that are based on a union-emptyset monoid
 unionSetLike :: Id -> Bool
 unionSetLike (internalName -> "IO") = True
+unionSetLike (internalName -> "Exc") = True
 unionSetLike _ = False
 
 -- `isEffUnit sp effTy eff` checks whether `eff` of effect type `effTy`
@@ -38,8 +39,7 @@ isEffUnit s effTy eff =
         -- Session singleton case
         TyCon (internalName -> "Com") -> do
             return True
-        -- IO set case
-        -- Any union-set effects, like IO
+        -- Any union-set effects, like IO and exceptions
         TyCon c | unionSetLike c ->
             case eff of
                 (TySet []) -> return True
@@ -64,8 +64,7 @@ effApproximates s effTy eff1 eff2 =
             -- Session singleton case
             TyCon (internalName -> "Com") -> do
                 return True
-            -- IO set case
-            -- Any union-set effects, like IO
+        -- Any union-set effects, like IO and exceptions
             TyCon c | unionSetLike c ->
                 case eff1 of
                     (TyCon (internalName -> "Pure")) -> return True
@@ -93,7 +92,7 @@ effectMult sp effTy t1 t2 = do
         TyCon (internalName -> "Com") ->
           return $ TyCon $ mkId "Session"
 
-        -- Any union-set effects, like IO
+        -- Any union-set effects, like IO and exceptions
         TyCon c | unionSetLike c ->
           case (t1, t2) of
             -- Actual sets, take the union

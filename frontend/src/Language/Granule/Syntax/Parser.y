@@ -50,6 +50,9 @@ import Language.Granule.Utils hiding (mkSpan)
     else  { TokenElse _ }
     case  { TokenCase _ }
     of    { TokenOf _ }
+    try    { TokenTry _ }
+    as    { TokenAs _ }
+    catch    { TokenCatch _ }
     import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
@@ -407,6 +410,11 @@ Expr :: { Expr () () }
       {% let (_, pat, mt, expr) = $2
         in (mkSpan (getPos $1, getEnd $3)) >>=
               \sp -> return $ LetDiamond sp () pat mt expr $3 }
+
+  | try Expr as PAtom in Expr catch Expr 
+    {% let t1 = $2; x = $4; t2 = $6; t3 = $8
+      in (mkSpan (getPos $1, getEnd $8)) >>=
+              \sp -> return $ TryCatch sp () t1 x t2 t3 }
 
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
