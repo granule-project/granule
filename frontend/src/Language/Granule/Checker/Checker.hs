@@ -11,7 +11,6 @@ module Language.Granule.Checker.Checker where
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
-import Data.List (genericLength)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
@@ -109,9 +108,9 @@ checkTyCon (DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, cardin)) : typeConstructors st }
+      st{ typeConstructors = (name, (tyConKind, ids)) : typeConstructors st }
   where
-    cardin = (Just . genericLength) ds -- the number of data constructors
+    ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
@@ -161,7 +160,7 @@ checkDataCon
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
         registerPatterns tName dName
-        
+
         case tySchKind of
           KType ->
             registerDataConstructor tySch coercions
@@ -181,7 +180,7 @@ checkDataCon
       case extend (dataConstructors st) dName (dataConstrTy, subst) of
         Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
         Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
-    
+
     registerPatterns tName dName = do
       st <- get
       let original = patterns st

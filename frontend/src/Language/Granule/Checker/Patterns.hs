@@ -45,8 +45,8 @@ polyShaped t = case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
       case mCardinality of
-        Just (_, c) -> case c of
-          Just 1 -> do
+        Just (_, c) -> case length c of
+          1 -> do
             debugM "uniShaped constructor" (show t <> "\n" <> show c)
             pure False
           _ -> do

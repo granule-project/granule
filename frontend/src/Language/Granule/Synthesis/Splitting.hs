@@ -1,6 +1,6 @@
 module Language.Granule.Synthesis.Splitting where
 
-import Control.Arrow (second)
+import Control.Arrow (second, (&&&))
 import Control.Monad (replicateM)
 import Data.Maybe (fromJust)
 
@@ -13,7 +13,7 @@ import Language.Granule.Context
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
-import Language.Granule.Syntax.Pattern hiding (boundVars)
+import Language.Granule.Syntax.Pattern
 
 generateCases :: Span
     -> Ctxt (Ctxt (TypeScheme, Substitution))
@@ -21,7 +21,7 @@ generateCases :: Span
     -> Checker (Ctxt [Pattern ()])
 generateCases span constructors ctxt = do
   let types = map (second getAssumConstr) ctxt
-  let constr = zip (map fst types) $ map (uncurry zip . (\ (a, b) -> (map fst $ fromJust $ lookup b constructors, map ((,) b . tsArity . fst . snd) $ fromJust $ lookup b constructors))) types
+  let constr = map (fst &&& (uncurry zip . (\ (a, b) -> (map fst $ fromJust $ lookup b constructors, map ((,) b . tsArity . fst . snd) $ fromJust $ lookup b constructors)))) types
   mapM (uncurry (buildPatterns span)) constr
 
 getAssumConstr :: Assumption -> Id

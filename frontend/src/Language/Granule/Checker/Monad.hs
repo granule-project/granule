@@ -156,7 +156,7 @@ data CheckerState = CS
             , patternConsumption :: [Consumption]
 
             -- Data type information
-            , typeConstructors :: Ctxt (Kind, Cardinality) -- the kind of the and number of data constructors
+            , typeConstructors :: Ctxt (Kind, [Id]) -- the kind of the and number of data constructors
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
             -- LaTeX derivation
@@ -567,7 +567,7 @@ instance UserMsg CheckerError where
     (if null (fst cases)
       then ""
       else "\n\n   Case-splits for " <> (intercalate ", " (map pretty $ fst cases)) <> ":\n     " <> 
-        (concatMap (\ps -> concatMap (\ p -> pretty p <> "   ") ps <> "\n     ") (snd cases)))
+        (concatMap (\ps -> concatMap (\ p -> pretty p <> "\t") ps <> "\n     ") (snd cases)))
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"

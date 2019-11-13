@@ -4,8 +4,8 @@
 
 module Language.Granule.Checker.Primitives where
 
-import Data.List (genericLength)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe (fromMaybe)
 import Text.RawString.QQ (r)
 
 import Language.Granule.Checker.SubstitutionContexts
@@ -25,44 +25,44 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 setElements :: [(Kind, Type)]
 setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
-typeConstructors :: [(Id, (Kind, Cardinality))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (Kind, [Id]))] -- TODO Cardinality is not a good term
 typeConstructors =
-    [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), Nothing))
-    , (mkId ",", (KFun KType (KFun KType KType), Just 1))
-    , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1))
-    , (mkId "Int",  (KType, Nothing))
-    , (mkId "Float", (KType, Nothing))
-    , (mkId "Char", (KType, Nothing))
-    , (mkId "String", (KType, Nothing))
-    , (mkId "Protocol", (KType, Nothing))
-    , (mkId "Nat",  (KUnion KCoeffect KEffect, Nothing))
-    , (mkId "Q",    (KCoeffect, Nothing)) -- Rationals
-    , (mkId "Level", (KCoeffect, Nothing)) -- Security level
-    , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing))
-    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing))
+    [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), []))
+    , (mkId ",", (KFun KType (KFun KType KType), [mkId ","]))
+    , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), [mkId "×"]))
+    , (mkId "Int",  (KType, []))
+    , (mkId "Float", (KType, []))
+    , (mkId "Char", (KType, []))
+    , (mkId "String", (KType, []))
+    , (mkId "Protocol", (KType, []))
+    , (mkId "Nat",  (KUnion KCoeffect KEffect, []))
+    , (mkId "Q",    (KCoeffect, [])) -- Rationals
+    , (mkId "Level", (KCoeffect, [])) -- Security level
+    , (mkId "Interval", (KFun KCoeffect KCoeffect, []))
+    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), []))
     -- File stuff
     -- Channels and protocol types
-    , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing))
-    , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing))
-    , (mkId "End" , (protocol, Nothing))
-    , (mkId "Chan", (KFun protocol KType, Nothing))
-    , (mkId "Dual", (KFun protocol protocol, Nothing))
-    , (mkId "->", (KFun KType (KFun KType KType), Nothing))
+    , (mkId "Send", (KFun KType (KFun protocol protocol), []))
+    , (mkId "Recv", (KFun KType (KFun protocol protocol), []))
+    , (mkId "End" , (protocol, []))
+    , (mkId "Chan", (KFun protocol KType, []))
+    , (mkId "Dual", (KFun protocol protocol, []))
+    , (mkId "->", (KFun KType (KFun KType KType), []))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing))
+    , (mkId "Ext", (KFun KCoeffect KCoeffect, []))
     -- Effect grade types - Sessions
-    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), Nothing))
-    , (mkId "Com", (KEffect, Nothing))
+    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), []))
+    , (mkId "Com", (KEffect, []))
     -- Effect grade types - IO
-    , (mkId "IO", (KEffect, Nothing))
-    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing))
-    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing))
+    , (mkId "IO", (KEffect, []))
+    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), []))
+    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), []))
+    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), []))
+    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), []))
+    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), []))
+    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), []))
+    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), []))
+    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), []))
     ] ++ builtinTypeConstructors
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
@@ -345,7 +345,7 @@ tick = BUILTIN
 |]
 
 
-builtinTypeConstructors :: [(Id, (Kind, Cardinality))]
+builtinTypeConstructors :: [(Id, (Kind, [Id]))]
 builtinDataConstructors :: [(Id, (TypeScheme, Substitution))]
 builtins :: [(Id, TypeScheme)]
 (builtinTypeConstructors, builtinDataConstructors, builtins) =
@@ -359,9 +359,9 @@ builtins :: [(Id, TypeScheme)]
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
 
-      unData :: DataDecl -> ((Id, (Kind, Cardinality)), [(Id, (TypeScheme, Substitution))])
+      unData :: DataDecl -> ((Id, (Kind, [Id])), [(Id, (TypeScheme, Substitution))])
       unData (DataDecl _ tyConName tyVars kind dataConstrs)
-        = (( tyConName, (maybe KType id kind, (Just $ genericLength dataConstrs)))
+        = (( tyConName, (fromMaybe KType kind, map dataConstrId dataConstrs))
           , map unDataConstr dataConstrs
           )
         where
