@@ -23,7 +23,7 @@ import Data.Maybe (mapMaybe)
 -- Describe all effect types that are based on a union-emptyset monoid
 unionSetLike :: Id -> Bool
 unionSetLike (internalName -> "IO") = True
-unionSetLike (internalName -> "Exc") = True
+unionSetLike (internalName -> "Exceptions") = True
 unionSetLike _ = False
 
 -- `isEffUnit sp effTy eff` checks whether `eff` of effect type `effTy`

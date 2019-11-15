@@ -756,6 +756,10 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   let elaborated = LetDiamond s t elaboratedP optionalTySig elaborated1 elaborated2
   return (t, gamNew, subst, elaborated)
 
+
+-- checking for exception handling
+
+  
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
    -- Try the local context

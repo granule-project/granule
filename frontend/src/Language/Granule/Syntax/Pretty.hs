@@ -264,10 +264,9 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
     "let " <> pretty v <> " :" <> pretty t <> " <- "
           <> pretty e1 <> " in " <> pretty e2
 
-  pretty (Try Catch _ _ v t e1 e2 e3) =
-    "try " <> pretty v <> " :" <> pretty t <> " <- "
-          <> pretty e1 <> " in " <> pretty e2 
-          <> " catch " <> pretty e3
+  pretty (TryCatch _ _ e1 x e2 e3) =
+    "try " <> pretty e1 <> " as " <> pretty x <> " in " 
+          <> pretty e2 <> " catch " <> pretty e3
 
   pretty (Val _ _ v) = pretty v
   pretty (Case _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
