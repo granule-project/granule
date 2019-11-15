@@ -166,7 +166,6 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
-            , patterns :: Ctxt [Id]
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -186,7 +185,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
-               , patterns = []
                }
 
 -- *** Various helpers for manipulating the context
@@ -210,8 +208,8 @@ lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
 lookupPatternMatches sp constrName = do
   st <- get
   case M.lookup constrName (allHiddenNames st) of
-    Nothing -> return $ lookup constrName (patterns st)
-    Just mod ->return $ lookup constrName (patterns st)
+    Nothing -> return $ snd <$> lookup constrName (typeConstructors st)
+    Just mod ->return $ snd <$> lookup constrName (typeConstructors st)
 
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is

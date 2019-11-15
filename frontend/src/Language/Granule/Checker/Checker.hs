@@ -8,6 +8,7 @@
 
 module Language.Granule.Checker.Checker where
 
+import Control.Arrow (second)
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
@@ -159,7 +160,6 @@ checkDataCon
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
-        registerPatterns tName dName
 
         case tySchKind of
           KType ->
@@ -180,13 +180,6 @@ checkDataCon
       case extend (dataConstructors st) dName (dataConstrTy, subst) of
         Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
         Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
-
-    registerPatterns tName dName = do
-      st <- get
-      let original = patterns st
-      case extend (patterns st) tName [dName] of
-        Just pm -> put st { patterns = pm }
-        Nothing -> put st { patterns = replace original tName (dName : fromJust (lookup tName original)) }
 
     mkTyVarNameClashErr v = DataConstructorTypeVariableNameClash
         { errLoc = sp
@@ -381,7 +374,7 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
-  let pats = patterns st
+  let pats = map (second snd) (typeConstructors st)
   constructors <- mapM (\ (a, b) -> do
     dc <- mapM (lookupDataConstructor s) b
     let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
@@ -654,7 +647,7 @@ synthExpr _ ctxt _ (Hole s vars _) = do
   st <- get
   let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
-  let pats = patterns st
+  let pats = map (second snd) (typeConstructors st)
   constructors <- mapM (\ (a, b) -> do
     dc <- mapM (lookupDataConstructor s) b
     let sd = zip (fromJust $ lookup a pats) (catMaybes dc)

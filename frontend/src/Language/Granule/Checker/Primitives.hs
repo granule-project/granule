@@ -25,7 +25,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 setElements :: [(Kind, Type)]
 setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
-typeConstructors :: [(Id, (Kind, [Id]))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (Kind, [Id]))]
 typeConstructors =
     [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), []))
     , (mkId ",", (KFun KType (KFun KType KType), [mkId ","]))
@@ -82,12 +82,11 @@ tyOps = \case
 
 dataConstructors :: [(Id, (TypeScheme, Substitution))]
 dataConstructors =
-    [ ( mkId ",", (Forall nullSpanBuiltin [((mkId "a"),KType),((mkId "b"),KType)] []
+    ( mkId ",", (Forall nullSpanBuiltin [(mkId "a", KType), (mkId "b", KType)] []
         (FunTy (TyVar (mkId "a"))
           (FunTy (TyVar (mkId "b"))
                  (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))), [])
-      )
-    ] ++ builtinDataConstructors
+    ) : builtinDataConstructors
 
 binaryOperators :: Operator -> NonEmpty Type
 binaryOperators = \case
