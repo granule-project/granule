@@ -1,8 +1,8 @@
 module Language.Granule.Synthesis.Splitting where
 
-import Control.Arrow (second, (&&&))
+import Control.Arrow (second)
 import Control.Monad (replicateM)
-import Data.Maybe (fromJust)
+import Data.Maybe (mapMaybe)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.SubstitutionContexts
@@ -15,15 +15,25 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
 
-generateCases :: Span
+generateCases ::
+    Span
     -> Ctxt (Ctxt (TypeScheme, Substitution))
     -> Ctxt Assumption
     -> Checker (Ctxt [Pattern ()])
 generateCases span constructors ctxt = do
   let types = map (second getAssumConstr) ctxt
-  let constr = map (fst &&& (uncurry zip . (\ (a, b) -> (map fst $ fromJust $ lookup b constructors, map ((,) b . tsArity . fst . snd) $ fromJust $ lookup b constructors)))) types
-  mapM (uncurry (buildPatterns span)) constr
+  let relConstructors = relevantDataConstrs constructors types
+  mapM (uncurry (buildPatterns span)) relConstructors
 
+-- Returns a context linking variables to a context linking their types to their data constructors.
+relevantDataConstrs :: Ctxt (Ctxt (TypeScheme, Substitution)) -> Ctxt Id -> Ctxt (Ctxt (Id, Integer))
+relevantDataConstrs constructors types =
+  let typeSchemes = map fst
+      constructorArities dataId = map ((,) dataId . tsArity . fst . snd)
+      constructorInfo dataId = do
+        dataIdsConstrs <- lookup dataId constructors
+        return (typeSchemes dataIdsConstrs, constructorArities dataId dataIdsConstrs)
+  in  zip (map fst types) (map (uncurry zip) (mapMaybe (constructorInfo . snd) types))
 getAssumConstr :: Assumption -> Id
 getAssumConstr (Linear t) = getTypeConstr t
 getAssumConstr (Discharged t _) = getTypeConstr t
@@ -34,7 +44,7 @@ getTypeConstr (TyCon id) = id
 getTypeConstr (Box _ t) = getTypeConstr t
 getTypeConstr (Diamond t1 _) = getTypeConstr t1
 getTypeConstr (TyApp t1 t2) = getTypeConstr t1
-getTypeConstr (TyVar id) = undefined
+getTypeConstr (TyVar id) = id
 getTypeConstr (TyInt _) = undefined
 getTypeConstr (TyInfix _ _ _) = undefined
 getTypeConstr (TySet _) = undefined

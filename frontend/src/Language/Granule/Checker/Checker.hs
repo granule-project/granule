@@ -372,18 +372,24 @@ checkExpr :: (?globals :: Globals)
 -- Hit an unfilled hole
 checkExpr _ ctxt _ _ t (Hole s vars _) = do
   st <- get
-  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt ++ (freeVars t)) (tyVarContext st)
-  let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
-  let pats = map (second snd) (typeConstructors st)
-  constructors <- mapM (\ (a, b) -> do
-    dc <- mapM (lookupDataConstructor s) b
-    let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-    return (a, sd)) pats
-  cases <- generateCases s constructors ctxt
-  let combined = combineCases cases
+
+  let getIdName (Id n _) = n
+  let boundVariableIds = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
+  let holeCtxt = relevantSubCtxt boundVariableIds ctxt
+  let holeTyCtxt = relevantSubCtxt boundVariableIds (tyVarContext st)
+  let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
+
   case unboundVariables of
-    [] -> throw $ HoleMessage s (Just t) ctxt varContext combined
-    vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
+    (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
+    [] -> do
+      let pats = map (second snd) (typeConstructors st)
+      constructors <- mapM (\ (a, b) -> do
+        dc <- mapM (lookupDataConstructor s) b
+        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+        return (a, sd)) pats
+      cases <- generateCases s constructors holeCtxt
+      let combined = combineCases cases
+      throw $ HoleMessage s (Just t) holeCtxt holeTyCtxt combined
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
