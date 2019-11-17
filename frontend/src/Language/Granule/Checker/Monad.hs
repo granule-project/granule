@@ -4,8 +4,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -554,18 +552,18 @@ instance UserMsg CheckerError where
     -- Print the context if there is anything to use
     (if null context
       then ""
-      else "\n\n   Context:" <> (concatMap (\x -> "\n     " ++ pretty x) context))
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) context)
     <>
     (if null tyContext
       then ""
-      else "\n\n   Type context:" <> (concatMap (\(v, (t , _)) ->  "\n     "
+      else "\n\n   Type context:" <> concatMap (\(v, (t , _)) ->  "\n     "
                                                 <> pretty v
-                                                <> " : " <> pretty t) tyContext))
+                                                <> " : " <> pretty t) tyContext)
     <>
     (if null (fst cases)
       then ""
-      else "\n\n   Case-splits for " <> (intercalate ", " (map pretty $ fst cases)) <> ":\n     " <> 
-        (concatMap (\ps -> concatMap (\ p -> pretty p <> "\t") ps <> "\n     ") (snd cases)))
+      else "\n\n   Case-splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
+        concatMap (\ps -> concatMap (\ p -> pretty p <> "\t") ps <> "\n     ") (snd cases))
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"

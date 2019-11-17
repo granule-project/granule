@@ -3,6 +3,7 @@ module Language.Granule.Synthesis.Splitting where
 import Control.Arrow (second)
 import Control.Monad (replicateM)
 import Data.Maybe (mapMaybe)
+import Data.List (partition)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.SubstitutionContexts
@@ -21,9 +22,16 @@ generateCases ::
     -> Ctxt Assumption
     -> Checker (Ctxt [Pattern ()])
 generateCases span constructors ctxt = do
-  let types = map (second getAssumConstr) ctxt
-  let relConstructors = relevantDataConstrs constructors types
-  mapM (uncurry (buildPatterns span)) relConstructors
+  let isLinear (_, a) = case a of Linear _ -> True ; Discharged _ _ -> False
+  let (linear, discharged) = partition isLinear ctxt
+
+  let linearTypes = map (second getAssumConstr) linear
+  let relConstructors = relevantDataConstrs constructors linearTypes
+  linearPatterns <- mapM (uncurry (buildPatterns span)) relConstructors
+
+  let boxPatterns = map (buildBoxPattern span . fst) discharged
+
+  return $ linearPatterns ++ boxPatterns
 
 -- Returns a context linking variables to a context linking their types to their data constructors.
 relevantDataConstrs :: Ctxt (Ctxt (TypeScheme, Substitution)) -> Ctxt Id -> Ctxt (Ctxt (Id, Integer))
@@ -34,9 +42,10 @@ relevantDataConstrs constructors types =
         dataIdsConstrs <- lookup dataId constructors
         return (typeSchemes dataIdsConstrs, constructorArities dataId dataIdsConstrs)
   in  zip (map fst types) (map (uncurry zip) (mapMaybe (constructorInfo . snd) types))
+
 getAssumConstr :: Assumption -> Id
 getAssumConstr (Linear t) = getTypeConstr t
-getAssumConstr (Discharged t _) = getTypeConstr t
+getAssumConstr (Discharged t _) = undefined -- Unreachable
 
 getTypeConstr :: Type -> Id
 getTypeConstr (FunTy t1 _) = undefined
@@ -62,6 +71,9 @@ buildPatterns span id constructors = do
     nFresh n = do
       freshStrings <- replicateM (fromInteger n) (freshIdentifierBase ((\ (Id x _) -> x) id))
       return $ map mkId freshStrings
+
+buildBoxPattern :: Span -> Id -> (Id, [Pattern ()])
+buildBoxPattern span id = (id, pure $ PBox span () (PVar span () id))
 
 tsArity :: TypeScheme -> Integer
 tsArity (Forall _ _ _ t) = tArity t

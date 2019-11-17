@@ -1,5 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
