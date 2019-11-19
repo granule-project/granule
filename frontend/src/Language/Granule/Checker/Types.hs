@@ -536,4 +536,5 @@ isIndexedType = typeFoldM $
     , tfTyApp = \x y -> return (x || y)
     , tfTyInt = \_ -> return False
     , tfTyInfix = \_ x y -> return (x || y)
-    , tfSet = \_ -> return False }
+    , tfSet = \_ -> return False
+    , tfTyCase = \_ _ -> return False }
