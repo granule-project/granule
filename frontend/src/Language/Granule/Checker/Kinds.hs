@@ -42,7 +42,7 @@ inferKindOfType s t = do
 
 inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Kind
 inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet) t
+    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase) t
   where
     kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
      | internalName c == internalName c' = return $ kConstr c
@@ -153,6 +153,24 @@ inferKindOfTypeInContext s quantifiedVariables t =
             -- Find the first occurence of a change in kind:
             else throw $ KindMismatch { errLoc = s , tyActualK = Nothing, kExpected = head left, kActual = head right }
                     where (left, right) = partition (\x -> (head ks) == x) ks
+
+    kCase k ks =
+     -- Given that k, each pattern p and its corresponding branch b are well-kinded:
+     -- The kind of k must be the same as the kind of each pattern p.
+     if all (\x -> fst x == k) ks
+      then -- All the branches must have the same kind.
+        let bk = snd (head ks) in
+          if all (\x -> snd x == bk) ks
+             then return bk
+             -- Find the first branch that doesn't share a kind:
+             else
+               let (_, right) = partition (\x -> bk == snd x) ks in
+                throw $ KindMismatch { errLoc = s, tyActualK = Nothing, kExpected = bk, kActual = snd (head right) }
+
+      -- Find the first pattern that doesn't match the kind of k:
+      else
+        let (_, right) = partition (\x -> k == fst x) ks in
+         throw $ KindMismatch { errLoc = s, tyActualK = Nothing, kExpected = k, kActual = fst (head right) }
 
 -- | Compute the join of two kinds, if it exists
 joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Substitution))
