@@ -313,6 +313,7 @@ Type :: { Type }
   | TyAtom '[' ']'            { Box (CInterval (CZero extendedNat) infinity) $1 }
 
   | TyAtom '<' Effect '>'     { Diamond $3 $1 }
+  | case Type of TyCases { TyCase $2 $4 }
 
 TyApp :: { Type }
  : TyJuxt TyAtom              { TyApp $1 $2 }
@@ -328,6 +329,16 @@ TyJuxt :: { Type }
   | TyAtom '^' TyAtom         { TyInfix TyOpExpon $1 $3 }
   | TyAtom "/\\" TyAtom       { TyInfix TyOpMeet $1 $3 }
   | TyAtom "\\/" TyAtom       { TyInfix TyOpJoin $1 $3 }
+
+TyCases :: { [(Type, Type)] }
+ : TyCase TyCasesNext             { $1 : $2 }
+
+TyCasesNext :: { [(Type, Type)] }
+  : ';' TyCases                 { $2 }
+  | {- empty -}               { [] }
+
+TyCase :: { (Type, Type) }
+  : Type '->' Type           { ($1, $3) }
 
 Constraint :: { Type }
   : TyAtom '>' TyAtom         { TyInfix TyOpGreater $1 $3 }
