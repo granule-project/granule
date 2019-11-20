@@ -1,4 +1,4 @@
-module Language.Granule.Synthesis.Splitting where
+module Language.Granule.Synthesis.Splitting(generateCases, combineCases) where
 
 import Control.Arrow (second)
 import Control.Monad (replicateM)
@@ -22,7 +22,7 @@ generateCases ::
     -> Ctxt Assumption
     -> Checker (Ctxt [Pattern ()])
 generateCases span constructors ctxt = do
-  let isLinear (_, a) = case a of Linear _ -> True ; Discharged _ _ -> False
+  let isLinear (_, a) = case a of Linear (Box _ _) -> False; Linear _ -> True ; Discharged _ _ -> False
   let (linear, discharged) = partition isLinear ctxt
 
   let linearTypes = map (second getAssumConstr) linear

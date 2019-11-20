@@ -70,6 +70,7 @@ library:
   - Language.Granule.Syntax.Preprocessor.Markdown
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
+  - Language.Granule.Synthesis.Splitting
   - Language.Granule.Context
   - Language.Granule.Utils
   dependencies:
