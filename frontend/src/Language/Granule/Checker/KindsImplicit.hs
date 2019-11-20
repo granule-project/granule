@@ -183,3 +183,9 @@ inferKindOfTypeImplicits s ctxt (TySet ts) = do
     -- ks <- mapM (inferKindOfTypeImplicits s ctxt) ts
     k <- inferKindOfTypeInContext s ctxt (TySet ts)
     return (k, [])
+
+inferKindOfTypeImplicits s ctxt (TyCase t ts) = do
+  --TODO: substitutions from t and from each branch.
+  -- Fall back to kind inference
+  k <- inferKindOfTypeInContext s ctxt (TyCase t ts)
+  return (k, [])
