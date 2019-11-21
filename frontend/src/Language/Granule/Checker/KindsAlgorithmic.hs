@@ -14,16 +14,19 @@ import Language.Granule.Utils
 checkKind :: (?globals :: Globals) =>
     Span -> Ctxt Kind -> Type -> Kind -> Checker Substitution
 
+-- KChk_Funk
 checkKind s ctxt (FunTy t1 t2) KType = do
     subst1 <- checkKind s ctxt t1 KType
     subst2 <- checkKind s ctxt t2 KType
     combineSubstitutions s subst1 subst2
 
+-- KChk_App
 checkKind s ctxt (TyApp t1 t2) k2 = do
     (k1, subst1) <- synthKind s ctxt t2
     subst2 <- checkKind s ctxt t1 (KFun k1 k2)
     combineSubstitutions s subst1 subst2
 
+-- KChk_opRing and KChk_effOp combined
 checkKind s ctxt (TyInfix op t1 t2) k = do
     isClosedAndSubst <- closedOperatorAtKind s ctxt op k
     case isClosedAndSubst of
@@ -35,14 +38,19 @@ checkKind s ctxt (TyInfix op t1 t2) k = do
         (False, _) ->
             throw $ OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
 
+-- TODO
 checkKind s ctxt _ k = undefined
 
+-- | `closedOperatorAtKind` takes an operator `op` and a kind `k` and returns true
+-- if this is a valid operator at kind `k -> k -> k`
 closedOperatorAtKind :: (?globals :: Globals) =>
     Span -> Ctxt Kind -> TypeOperator -> Kind -> Checker (Bool, Substitution)
 
+-- Nat case
 closedOperatorAtKind _ _ op (KPromote (TyCon (internalName -> "Nat"))) =
     return (closedOperation op, [])
 
+-- * case
 closedOperatorAtKind s ctxt TyOpTimes (KPromote t) = do
     -- See if the type is a coeffect
     (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
@@ -62,6 +70,7 @@ closedOperatorAtKind s ctxt TyOpTimes (KPromote t) = do
             putChecker
             return (True, subst)
 
+-- Any other "coeffect operators" case
 closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
     -- See if the type is a coeffect
     (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
@@ -73,7 +82,7 @@ closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
 
 closedOperatorAtKind _ _ _ _ = return (False, [])
 
-
+-- TODO
 synthKind :: -- (?globals :: Globals) =>
     Span -> Ctxt Kind -> Type -> Checker (Kind, Substitution)
 synthKind = undefined
