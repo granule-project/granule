@@ -497,6 +497,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | CaseOnIndexedType
     { errLoc :: Span, errTy :: Type }
+  | OperatorUndefinedForKind
+    { errLoc :: Span, errK :: Kind, errTyOp :: TypeOperator }
   deriving (Show, Eq)
 
 
@@ -558,6 +560,7 @@ instance UserMsg CheckerError where
   title InvalidTypeDefinition{} = "Invalid type definition"
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
+  title OperatorUndefinedForKind{} = "Kind error"
 
   msg HoleMessage{..} =
     (case holeTy of
@@ -809,6 +812,9 @@ instance UserMsg CheckerError where
 
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
+
+  msg OperatorUndefinedForKind{ errK, errTyOp }
+    = "Operator " <> pretty errTyOp <> " is not defined for type-level terms of kind " <> pretty errK
 
   color HoleMessage{} = Blue
   color _ = Red
