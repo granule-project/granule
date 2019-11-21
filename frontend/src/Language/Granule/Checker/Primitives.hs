@@ -5,10 +5,7 @@
 module Language.Granule.Checker.Primitives where
 
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.Maybe (fromMaybe)
 import Text.RawString.QQ (r)
-
-import Language.Granule.Checker.SubstitutionContexts
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
@@ -25,45 +22,49 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 setElements :: [(Kind, Type)]
 setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
-typeConstructors :: [(Id, (Kind, [Id]))]
+-- Associates type constuctors names to their:
+--    * kind
+--    * cardinality (number of matchable constructors)
+--    * boolean flag on whether they are indexed types or not
+typeConstructors :: [(Id, (Kind, [Id], Bool))] -- TODO Cardinality is not a good term
 typeConstructors =
-    [ (mkId "ArrayStack", (KFun kNat (KFun kNat (KFun KType KType)), []))
-    , (mkId ",", (KFun KType (KFun KType KType), [mkId ","]))
-    , (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), [mkId "×"]))
-    , (mkId "Int",  (KType, []))
-    , (mkId "Float", (KType, []))
-    , (mkId "Char", (KType, []))
-    , (mkId "String", (KType, []))
-    , (mkId "Protocol", (KType, []))
-    , (mkId "Nat",  (KUnion KCoeffect KEffect, []))
-    , (mkId "Q",    (KCoeffect, [])) -- Rationals
-    , (mkId "Level", (KCoeffect, [])) -- Security level
-    , (mkId "Interval", (KFun KCoeffect KCoeffect, []))
-    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), []))
-    -- File stuff
+    [ let prodId = mkId "×" in (prodId, (KFun KCoeffect (KFun KCoeffect KCoeffect), [prodId], False))
+    , (mkId "Int",  (KType, [], False))
+    , (mkId "Float", (KType, [], False))
+    , (mkId "Char", (KType, [], False))
+    , (mkId "String", (KType, [], False))
+    , (mkId "Protocol", (KType, [], False))
+    , (mkId "Nat",  (KUnion KCoeffect KEffect, [], False))
+    , (mkId "Q",    (KCoeffect, [], False)) -- Rationals
+    , (mkId "Level", (KCoeffect, [], False)) -- Security level
+    , (mkId "Private", (KPromote (TyCon $ mkId "Level"), [], False))
+    , (mkId "Public", (KPromote (TyCon $ mkId "Level"), [], False))
+    , (mkId "Unused", (KPromote (TyCon $ mkId "Level"), [], False))
+    , (mkId "Interval", (KFun KCoeffect KCoeffect, [], False))
+    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), [], False))
     -- Channels and protocol types
-    , (mkId "Send", (KFun KType (KFun protocol protocol), []))
-    , (mkId "Recv", (KFun KType (KFun protocol protocol), []))
-    , (mkId "End" , (protocol, []))
-    , (mkId "Chan", (KFun protocol KType, []))
-    , (mkId "Dual", (KFun protocol protocol, []))
-    , (mkId "->", (KFun KType (KFun KType KType), []))
+    , (mkId "Send", (KFun KType (KFun protocol protocol), [], False))
+    , (mkId "Recv", (KFun KType (KFun protocol protocol), [], False))
+    , (mkId "End" , (protocol, [], False))
+    , (mkId "Chan", (KFun protocol KType, [], True))
+    , (mkId "Dual", (KFun protocol protocol, [], True))
+    , (mkId "->", (KFun KType (KFun KType KType), [], False))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (KFun KCoeffect KCoeffect, []))
+    , (mkId "Ext", (KFun KCoeffect KCoeffect, [], True))
     -- Effect grade types - Sessions
-    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), []))
-    , (mkId "Com", (KEffect, []))
+    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), [], True))
+    , (mkId "Com", (KEffect, [], False))
     -- Effect grade types - IO
-    , (mkId "IO", (KEffect, []))
-    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), []))
-    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), []))
-    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), []))
-    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), []))
-    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), []))
-    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), []))
-    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), []))
-    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), []))
-    ] ++ builtinTypeConstructors
+    , (mkId "IO", (KEffect, [], False))
+    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
@@ -80,13 +81,21 @@ tyOps = \case
     TyOpMeet -> (kNat, kNat, kNat)
     TyOpJoin -> (kNat, kNat, kNat)
 
-dataConstructors :: [(Id, (TypeScheme, Substitution))]
-dataConstructors =
-    ( mkId ",", (Forall nullSpanBuiltin [(mkId "a", KType), (mkId "b", KType)] []
-        (FunTy (TyVar (mkId "a"))
-          (FunTy (TyVar (mkId "b"))
-                 (TyApp (TyApp (TyCon (mkId ",")) (TyVar (mkId "a"))) (TyVar (mkId "b"))))), [])
-    ) : builtinDataConstructors
+dataTypes :: [DataDecl]
+dataTypes =
+    -- Special built-in for products (which cannot be parsed)
+    [ DataDecl
+      { dataDeclSpan = nullSpanBuiltin
+      , dataDeclId   = mkId ","
+      , dataDeclTyVarCtxt = [((mkId "a"),KType),((mkId "b"),KType)]
+      , dataDeclKindAnn = Just KType
+      , dataDeclDataConstrs = [
+        DataConstrNonIndexed
+          { dataConstrSpan = nullSpanBuiltin
+          , dataConstrId = mkId ","
+          , dataConstrParams = [TyVar (mkId "a"), TyVar (mkId "b")]
+         }]}
+    ] ++ builtinDataTypesParsed
 
 binaryOperators :: Operator -> NonEmpty Type
 binaryOperators = \case
@@ -207,8 +216,9 @@ unpackChan = BUILTIN
 -- File Handles
 --------------------------------------------------------------------------------
 
-data Handle : HandleType -> Type
-  = BUILTIN
+data Handle : HandleType -> Type where
+
+data HandleType = R | W | A | RW
 
 -- TODO: with type level sets we could index a handle by a set of capabilities
 -- then we wouldn't need readChar and readChar' etc.
@@ -217,8 +227,6 @@ data IOMode : HandleType -> Type where
   WriteMode : IOMode W;
   AppendMode : IOMode A;
   ReadWriteMode : IOMode RW
-
-data HandleType = R | W | A | RW
 
 openHandle
   : forall {m : HandleType}
@@ -251,9 +259,7 @@ isEOF = BUILTIN
 isEOF' : Handle RW -> (Handle RW, Bool) <{Read,IOExcept}>
 isEOF' = BUILTIN
 
--- ???
--- evalIO : forall {a : Type, e : Effect} . (a [0..1]) <IOExcept, e> -> (Maybe a) <e>
--- catch = BUILTIN
+
 --------------------------------------------------------------------------------
 -- Char
 --------------------------------------------------------------------------------
@@ -341,29 +347,44 @@ copy = BUILTIN
 tick : () <1>
 tick = BUILTIN
 
+--------------------------------------------------------------------------------
+-- L3-style pointers (work in progress)
+--------------------------------------------------------------------------------
+
+-- data Ptr : Type -> Type where
+
+-- data Cap : Type -> Type -> Type where
+
+-- data PtrCap a where
+--   MkPtrCap : forall { id : Type } . (Ptr id) [] -> Cap a id -> PtrCap a
+
+-- newPtr
+--   : forall { a : Type }
+--   . a -> PtrCap a
+-- newPtr = BUILTIN
+
+-- swapPtr
+--   : forall { a b : Type, id : Type }
+--   . b -> Ptr id -> Cap a id -> (a × Cap b id)
+-- swapPtr = BUILTIN
+
+-- freePtr
+--   : forall { a b : Type, id : Type }
+--   . Ptr id -> Cap a id -> a
+-- freePtr = BUILTIN
+
+
 |]
 
 
-builtinTypeConstructors :: [(Id, (Kind, [Id]))]
-builtinDataConstructors :: [(Id, (TypeScheme, Substitution))]
+builtinDataTypesParsed :: [DataDecl]
 builtins :: [(Id, TypeScheme)]
-(builtinTypeConstructors, builtinDataConstructors, builtins) =
-  (map fst datas, concatMap snd datas, map unDef defs)
+(builtinDataTypesParsed, builtins) =
+  (types, map unDef defs)
     where
       AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
         Right ast -> ast
         Left err -> error err
-      datas = map unData types
 
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
-
-      unData :: DataDecl -> ((Id, (Kind, [Id])), [(Id, (TypeScheme, Substitution))])
-      unData (DataDecl _ tyConName tyVars kind dataConstrs)
-        = (( tyConName, (fromMaybe KType kind, map dataConstrId dataConstrs))
-          , map unDataConstr dataConstrs
-          )
-        where
-          unDataConstr :: DataConstr -> (Id, (TypeScheme, Substitution))
-          unDataConstr (DataConstrIndexed _ name tysch) = (name, (tysch, []))
-          unDataConstr d = unDataConstr (nonIndexedToIndexedDataConstr tyConName tyVars d)

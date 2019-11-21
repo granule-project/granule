@@ -1,8 +1,8 @@
 name: granule-frontend
-version: '0.7.7.1'
+version: '0.7.7.3'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
-copyright: 2018 authors
+copyright: 2018-19 authors
 license: BSD3
 github: granule-project/granule
 dependencies:
@@ -77,7 +77,7 @@ library:
   - array
   - containers
   - mtl >=2.2.1
-  - sbv >=8.0
+  - sbv >=8.5
   - transformers >=0.5
   - text
   - time

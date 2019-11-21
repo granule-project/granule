@@ -25,8 +25,7 @@ length
 length Nil = Z;
 length (Cons [_] xs) = S (length xs)
 
--- Length of an indexed vector into an indexed nat
--- copying the spine of the lists and preserinv the elements
+-- Length of a `Vec` into an indexed `N`, preserving the elements
 length'
   : forall {a : Type, n : Nat}
   . Vec n a -> (N n, Vec n a)
@@ -163,7 +162,7 @@ pullVec
   : forall {a : Type, c : Coeffect, k : c, n : Nat}
   . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
-pullVec (Cons [x] xs) = case pullVec xs of [ys] -> [Cons x ys]
+pullVec (Cons [x] xs) = let [ys] = pullVec xs in [Cons x ys]
 
 --- pushVec pushes in non linearity of vector into the elements
 pushVec : ∀ {k : Nat, n : Nat, a : Type}

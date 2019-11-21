@@ -12,13 +12,6 @@ packages:
   original:
     hackage: ConfigFile-1.1.4
 - completed:
-    hackage: llvm-hs-pretty-0.6.1.0@sha256:54785b205bc9a267513b539eb8073f9f576e01da196720871bc894520e712e16,1670
-    pantry-tree:
-      size: 4741
-      sha256: 09128cc6ff572c3c544de01ee2b683cdc356d606a5829f1c60966593ff2f59db
-  original:
-    hackage: llvm-hs-pretty-0.6.1.0
-- completed:
     hackage: text-replace-0.0.0.4@sha256:88800aba160dfb512cf43b24063170d34900e1646ad21f28715a22679f42ae15,1738
     pantry-tree:
       size: 293
@@ -26,12 +19,12 @@ packages:
   original:
     hackage: text-replace-0.0.0.4
 - completed:
-    hackage: sbv-8.2@sha256:bb17f85a58fbf67cc3fd9e897f7c4a625be80da342f8903ef17e97de7c9ac2ae,18313
+    hackage: sbv-8.5@sha256:62217ddd7a29e14e75286cba4b406187f37df63fd48f356a6639e3f9c82a18c0,19781
     pantry-tree:
-      size: 52972
-      sha256: b5e2f174fa20c1ef8c14cfb4e72fd35c92c35f181d042aaacce1cdf526addabd
+      size: 54393
+      sha256: c80e3c0b08211b163b5b540e9356ffc77f3e69a4e7b08e3c6b21cb3bfe22ebbe
   original:
-    hackage: sbv-8.2
+    hackage: sbv-8.5
 snapshots:
 - completed:
     size: 498180

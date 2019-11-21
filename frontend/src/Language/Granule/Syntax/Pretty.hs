@@ -114,7 +114,7 @@ instance Pretty TypeScheme where
     pretty (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty t
       where
         kVars [] = ""
-        kVars vs = "\n  forall {" <> intercalate ", " (map prettyKindSignatures vs) <> "} . \n   "
+        kVars vs = "forall {" <> intercalate ", " (map prettyKindSignatures vs) <> "} . "
         prettyKindSignatures (var, kind) = pretty var <> " : " <> pretty kind
         constraints [] = ""
         constraints cs = "{" <> intercalate ", " (map pretty cs) <> "} =>\n    "

@@ -1,6 +1,6 @@
 -- gr --no-eval
 
-import Result
+data Result a where Ok a | Failed (String [0..1])
 
 data List a where Empty; Next a (List a)
 

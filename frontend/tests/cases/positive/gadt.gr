@@ -10,7 +10,5 @@ data Foo a where
   MkBoo : Boo → Foo Boo
 
 unwrap : ∀ {a : Type} . Foo a → a
-unwrap x =
-  case x of
-    (MkBar x) → x;
-    (MkBoo x) → x
+unwrap (MkBar x) = x;
+unwrap (MkBoo x) = x

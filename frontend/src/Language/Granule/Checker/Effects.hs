@@ -153,7 +153,7 @@ effectTop t = do
     swap (a, b) = (b, a)
     -- find all elements of the matching element type
     allConstructorsMatchingElemKind elemKind = mapMaybe (go elemKind) P.typeConstructors
-    go elemKind (con, (k, _)) =
+    go elemKind (con, (k, _, _)) =
         if k == elemKind then Just con else Nothing
 
 isPure :: Type -> Bool

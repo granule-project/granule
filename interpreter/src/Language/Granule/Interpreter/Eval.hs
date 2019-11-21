@@ -27,7 +27,9 @@ import Control.Monad (when, foldM)
 
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
-
+-- import Foreign.Marshal.Alloc (free, malloc)
+-- import Foreign.Ptr (castPtr)
+-- import Foreign.Storable (peek, poke)
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
@@ -50,6 +52,7 @@ data Runtime a =
 
   -- | Delayed side effects wrapper
   | PureWrapper (IO (Expr (Runtime a) ()))
+
 
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
 diamondConstr = Ext () . PureWrapper
@@ -328,6 +331,9 @@ builtIns =
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)
+  -- , (mkId "newPtr", malloc)
+  -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
+  -- , (mkId "freePtr", free)
   ]
   where
     fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue

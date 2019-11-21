@@ -8,7 +8,7 @@ module Language.Granule.Checker.Constraints.SymbolicGrades where
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
-import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
+import Language.Granule.Checker.Constraints.SNatX
 
 import Data.Functor.Identity
 import Control.Monad.IO.Class
@@ -30,7 +30,7 @@ data SGrade =
      | SFloat    SFloat
      | SLevel    SInteger
      | SSet      (S.Set (Id, Type))
-     | SExtNat   SNatX
+     | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
      | SPoint
@@ -226,9 +226,10 @@ symGradeMeet (SNat n1) (SNat n2)     = return $ SNat $ n1 `smin` n2
 symGradeMeet (SSet s) (SSet t)       = return $ SSet $ S.intersection s t
 symGradeMeet (SLevel s) (SLevel t)   = return $ SLevel $ s `smin` t
 symGradeMeet (SFloat n1) (SFloat n2) = return $ SFloat $ n1 `smin` n2
-symGradeMeet (SExtNat x) (SExtNat y) = return $ SExtNat (x `smin` y)
+symGradeMeet (SExtNat x) (SExtNat y) = return $ SExtNat $
+  ite (isInf x) y (ite (isInf y) x (SNatX (xVal x `smin` xVal y)))
 symGradeMeet (SInterval lb1 ub1) (SInterval lb2 ub2) =
-  liftM2 SInterval (lb1 `symGradeMeet` lb2) (ub1 `symGradeMeet` ub2)
+  liftM2 SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeMeet` ub2)
 symGradeMeet SPoint SPoint = return SPoint
 symGradeMeet s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMeet SProduct id s t)
@@ -244,9 +245,10 @@ symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
 symGradeJoin (SSet s) (SSet t)   = return $ SSet $ S.intersection s t
 symGradeJoin (SLevel s) (SLevel t) = return $ SLevel $ s `smax` t
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
-symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat (x `smax` y)
+symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $
+  ite (isInf x .|| isInf y) inf (SNatX (xVal x `smax` xVal y))
 symGradeJoin (SInterval lb1 ub1) (SInterval lb2 ub2) =
-   liftM2 SInterval (lb1 `symGradeJoin` lb2) (ub1 `symGradeJoin` ub2)
+   liftM2 SInterval (lb1 `symGradeMeet` lb2) (ub1 `symGradeJoin` ub2)
 symGradeJoin SPoint SPoint = return SPoint
 symGradeJoin s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeJoin SProduct id s t)
@@ -299,8 +301,8 @@ symGradeTimes (SLevel lev1) (SLevel lev2) = return $
             (SLevel $ lev1 `smax` lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
+
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
-    -- liftM2 SInterval (lb1 `symGradeTimes` lb2) (ub1 `symGradeTimes` ub2)
     liftM2 SInterval (comb symGradeMeet) (comb symGradeJoin)
      where
       comb f = do

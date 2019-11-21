@@ -108,7 +108,7 @@ instance Monad m => Freshenable m Kind where
     return $ KFun k1 k2
 
   freshen (KVar v) = do
-    v' <- lookupVar Type v
+    v' <- lookupVar  Type v
     case v' of
        Just v' -> return (KVar $ Id (sourceName v) v')
        -- This case happens if we are referring to a defined

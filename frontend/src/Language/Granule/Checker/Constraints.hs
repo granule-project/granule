@@ -22,7 +22,6 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
-import Language.Granule.Checker.Constraints.SNatX (SNatX(..))
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
 import Language.Granule.Syntax.Helpers
@@ -30,6 +29,8 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
+
+-- import Debug.Trace
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
@@ -100,7 +101,6 @@ compileToSBV predicate tyVarContext =
         else
           buildTheorem' solverVars p
 
-    -- TODO: generalise this to not just Nat indices
     buildTheorem' solverVars (Impl ((v, k):vs) p p') =
       if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
@@ -128,7 +128,7 @@ compileToSBV predicate tyVarContext =
 
 -- | Symbolic coeffect representing 0..Inf
 zeroToInfinity :: SGrade
-zeroToInfinity = SInterval (SExtNat $ SNatX 0) (SExtNat SNatX.inf)
+zeroToInfinity = SInterval (SExtNat $ SNatX.SNatX 0) (SExtNat SNatX.inf)
 
 freshCVarScoped ::
     (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
@@ -144,8 +144,8 @@ freshCVarScoped quant name (isInterval -> Just t) q k =
       freshCVarScoped quant (name <> ".upper") t q
        (\(predUb, solverVarUb) -> do
           -- Respect the meaning of intervals
-          greaterEq <- symGradeGreaterEq solverVarUb solverVarLb
-          k ( predLb .&& predUb .&& greaterEq
+          lessEq <- symGradeLessEq solverVarLb solverVarUb
+          k ( predLb .&& predUb .&& lessEq
             , SInterval solverVarLb solverVarUb )
           ))
 
@@ -173,14 +173,14 @@ freshCVarScoped quant name (TyCon conName) q k =
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshCVarScoped quant name t q k | t == extendedNat = do
-  quant q name (\solverVar ->
+   quant q name (\solverVar ->
     k (SNatX.representationConstraint solverVar
-     , SExtNat (SNatX solverVar)))
+     , SExtNat (SNatX.SNatX solverVar)))
 
 -- A poly typed coeffect variable compiled into the
 --  infinity value (since this satisfies all the semiring properties on the nose)
 freshCVarScoped quant name (TyVar v) q k | "kprom" `isPrefixOf` internalName v =
--- future TODO: resolve polymorphism to free coeffect (uninterpreted)
+  -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
   k (sTrue, SPoint)
 
 freshCVarScoped quant name (TyVar v) q k =
@@ -221,6 +221,40 @@ compile vars (Eq _ c1 c2 t) =
 compile vars (Neq _ c1 c2 t) =
   bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
 
+-- Assumes that c3 is already existentially bound
+compile vars (Lub _ c1 c2 c3@(CVar v) t) =
+
+  case t of
+    {-
+    -- An alternate procedure for computing least-upper bounds
+    -- I was experimenting with this to see if it could speed up solving.
+    -- For largely symbolic constraints, it doesn't seem to make much difference.
+
+    -- Use the join when `extendedNat` is involved
+    (isInterval -> Just t') | t' == extendedNat -> do
+      (s1, p1) <- compileCoeffect c1 t vars
+      (s2, p2) <- compileCoeffect c2 t vars
+      (s3, p3) <- compileCoeffect c3 t vars
+      lub   <- s1 `symGradeJoin` s2
+      eq    <- s3 `symGradeEq` lub
+      return (p1 .&& p2 .&& p3 .&& eq) -}
+
+    _ -> do
+      (s1, p1) <- compileCoeffect c1 t vars
+      (s2, p2) <- compileCoeffect c2 t vars
+      (s3, p3) <- compileCoeffect c3 t vars
+      -- s3 is an upper bound
+      pa1 <- approximatedByOrEqualConstraint s1 s3
+      pb1 <- approximatedByOrEqualConstraint s2 s3
+      --- and it is the least such upper bound
+      pc <- freshCVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
+              (\(py, y) -> do
+                pc1 <- approximatedByOrEqualConstraint s1 y
+                pc2 <- approximatedByOrEqualConstraint s2 y
+                pc3 <- approximatedByOrEqualConstraint s3 y
+                return ((py .&& pc1 .&& pc2) .=> pc3))
+      return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
+
 compile vars (ApproximatedBy _ c1 c2 t) =
   bindM2And' approximatedByOrEqualConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
 
@@ -250,6 +284,8 @@ compile vars (NonZeroPromotableTo s x c t) = do
     promotableToC <- compile ((x, xVar) : vars) (Eq s (CTimes (COne t) (CVar x)) c t)
 
     return (req .&& nonZero .&& promotableToC))
+
+compile vars c = error $ "Internal bug: cannot compile " <> show c
 
 -- | Compile a coeffect term into its symbolic representation
 -- | (along with any additional predicates)
@@ -300,7 +336,7 @@ compileCoeffect (CVar v) _ vars =
     Just cvar -> return (cvar, sTrue)
     _ -> solverError $ "Looking up a variable '" <> show v <> "' in " <> show vars
 
-compileCoeffect c@(CMeet n m) k vars = do
+compileCoeffect c@(CMeet n m) k vars =
   bindM2And symGradeMeet (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(CJoin n m) k vars =
@@ -309,7 +345,7 @@ compileCoeffect c@(CJoin n m) k vars =
 compileCoeffect c@(CPlus n m) k vars =
   bindM2And symGradePlus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
-compileCoeffect c@(CTimes n m) k vars = do
+compileCoeffect c@(CTimes n m) k vars =
   bindM2And symGradeTimes (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(CMinus n m) k vars =
@@ -337,7 +373,7 @@ compileCoeffect (CZero k') k vars  =
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
-    (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
+    (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
       return (SExtNat 0, sTrue)
 
     (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
@@ -363,7 +399,7 @@ compileCoeffect (COne k') k vars =
         "Set"       -> return (SSet (S.fromList []), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
 
-    (otherK', otherK) | (otherK' == extendedNat || otherK' == nat) && otherK == extendedNat ->
+    (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
       return (SExtNat 1, sTrue)
 
     (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
@@ -439,8 +475,9 @@ approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts approximatedByOrEqualConstraint (.&&) (const sTrue) s t)
 
 -- Perform approximation when nat-like grades are involved
+-- e.g. [2..3] <= [0..10]  iff (0 <= 2 and 3 <= 10)
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)
-    | natLike lb1 && natLike lb2 && natLike ub1 && natLike ub2 =
+    | natLike lb1 || natLike lb2 || natLike ub1 || natLike ub2 =
   liftM2 (.&&) (symGradeLessEq lb2 lb1) (symGradeLessEq ub1 ub2)
 
 -- if intervals are not nat-like then use the notion of approximation
@@ -472,7 +509,7 @@ trivialUnsatisfiableConstraints
     positiveConstraints =
         predFold concat (\_ -> []) (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
 
-    -- All the unsatisfiable constraints
+    -- All the (trivially) unsatisfiable constraints
     unsat :: Constraint -> [Constraint]
     unsat c@(Eq _ c1 c2 _)  = if (c1 `neqC` c2) then [c] else []
     unsat c@(Neq _ c1 c2 _) = if (c1 `neqC` c2) then [] else [c]
@@ -480,6 +517,7 @@ trivialUnsatisfiableConstraints
     unsat c@(NonZeroPromotableTo _ _ (CZero _) _) = [c]
     unsat (NonZeroPromotableTo _ _ _ _) = []
     -- TODO: look at this information
+    unsat Lub{} = []
     unsat (Lt _ c1 c2) = []
     unsat (Gt _ c1 c2) = []
     unsat (LtEq _ c1 c2) = []
@@ -536,7 +574,7 @@ provePredicate predicate vars
       return QED
   | otherwise = do
       let (sbvTheorem, _, unsats) = compileToSBV predicate vars
-      ThmResult thmRes <- prove $ do -- proveWith defaultSMTCfg {verbose=True}
+      ThmResult thmRes <- proveWith defaultSMTCfg $ do --  -- proveWith cvc4 {verbose=True}
         case solverTimeoutMillis of
           n | n <= 0 -> return ()
           n -> setTimeOut n

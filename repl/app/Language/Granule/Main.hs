@@ -195,7 +195,7 @@ handleCMD s =
       expr <- parseExpression exprString
       ty <- synthTypeFromInputExpr expr
       let exprString' = if elem ' ' exprString && head exprString /= '(' && last exprString /= ')' then "(" <> exprString <> ")" else exprString
-      liftIO $ putStrLn $ exprString' <> " : " <> either pretty pretty ty
+      liftIO $ putStrLn $ "  \ESC[1m" <> exprString' <> "\ESC[0m : " <> (either pretty pretty ty)
 
     handleLine (Eval exprString) = do
       expr <- parseExpression exprString
