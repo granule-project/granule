@@ -1,5 +1,6 @@
 module Language.Granule.Checker.KindsAlgorithmic where
 
+import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
@@ -12,7 +13,7 @@ import Language.Granule.Context
 import Language.Granule.Utils
 
 checkKind :: (?globals :: Globals) =>
-    Span -> Ctxt Kind -> Type -> Kind -> Checker Substitution
+    Span -> Ctxt (Kind, Quantifier) -> Type -> Kind -> Checker Substitution
 
 -- KChk_Funk
 checkKind s ctxt (FunTy t1 t2) KType = do
@@ -34,7 +35,7 @@ checkKind s ctxt (TyInfix op t1 t2) k = do
             subst1 <- checkKind s ctxt t1 k
             subst2 <- checkKind s ctxt t2 k
             combineManySubstitutions s [subst, subst1, subst2]
-            
+
         (False, _) ->
             throw $ OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
 
@@ -44,7 +45,7 @@ checkKind s ctxt _ k = undefined
 -- | `closedOperatorAtKind` takes an operator `op` and a kind `k` and returns true
 -- if this is a valid operator at kind `k -> k -> k`
 closedOperatorAtKind :: (?globals :: Globals) =>
-    Span -> Ctxt Kind -> TypeOperator -> Kind -> Checker (Bool, Substitution)
+    Span -> Ctxt (Kind, Quantifier) -> TypeOperator -> Kind -> Checker (Bool, Substitution)
 
 -- Nat case
 closedOperatorAtKind _ _ op (KPromote (TyCon (internalName -> "Nat"))) =
@@ -84,5 +85,12 @@ closedOperatorAtKind _ _ _ _ = return (False, [])
 
 -- TODO
 synthKind :: -- (?globals :: Globals) =>
-    Span -> Ctxt Kind -> Type -> Checker (Kind, Substitution)
-synthKind = undefined
+    Span -> Ctxt (Kind, Quantifier) -> Type -> Checker (Kind, Substitution)
+
+-- KChkS_var and KChkS instVar
+synthKind s ctxt (TyVar x) = do
+  case lookup x ctxt of
+    Just (k, _) -> return (k, [])
+    Nothing     -> throw $ UnboundVariableError s x
+
+synthKind s ctxt t = error "TODO"
