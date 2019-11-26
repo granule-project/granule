@@ -84,7 +84,7 @@ work in progress) you can get this from its [separate repo](https://github.com/g
     stack install :grc
 
 
-## Running the Interpreter
+## Running the Checker + Interpreter
 
 Granule program files have file extension `.gr`. Use the `gr` command to run the interpreter:
 
@@ -95,6 +95,10 @@ Granule program files have file extension `.gr`. Use the `gr` command to run the
 
 A good starting point for learning about Granule is the tutorial given in
 [examples/intro.gr.md](https://github.com/granule-project/granule/blob/master/examples/intro.gr.md).
+
+On Windows, you may have issues with unicode, for which there is a work around by
+setting the code page to UTF-8 (via `chcp.com 65001` https://stackoverflow.com/questions/25373116/how-can-i-set-my-ghci-prompt-to-a-lambda-character-on-windows). You may also want to run without colours
+`gr --no-color`.
 
 ### Setting the Path
 
