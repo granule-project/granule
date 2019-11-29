@@ -3,4 +3,4 @@ Type error: frontend/tests/cases/negative/caseDischargeStyle.gr:7:3:
 Variable `y` is used as graded variable, but it is bound as a linear variable.
 
 Grading error: frontend/tests/cases/negative/caseDischargeStyle.gr:14:3:
-0 is not approximatable by 1 for type Nat because Nat denotes precise usage.
+Expected 1 uses, but instead there are 0 actual uses.
