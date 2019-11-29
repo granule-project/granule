@@ -76,9 +76,9 @@ vecConstructors =
 
 
 runSplitter :: (?globals :: Globals)
-  => Ctxt (Ctxt (TypeScheme, Substitution))
-  -> Ctxt Assumption
-  -> IO (Ctxt [Pattern ()])
+            => Ctxt (Ctxt (TypeScheme, Substitution))
+            -> Ctxt Assumption
+            -> IO (Ctxt [Pattern ()])
 runSplitter constructors ctxt = do
   (Right res, _) <- runChecker initState (generateCases nullSpan constructors ctxt)
   return res

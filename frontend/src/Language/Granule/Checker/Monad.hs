@@ -499,6 +499,8 @@ data CheckerError
     { errLoc :: Span, tyConExpected :: Id, tyConActual :: Id }
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
+  | InvalidHolePosition
+    { errLoc :: Span }
   | UnknownResourceAlgebra
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | CaseOnIndexedType
@@ -562,6 +564,7 @@ instance UserMsg CheckerError where
   title NameClashDefs{} = "Definition name clash"
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
+  title InvalidHolePosition{} = "Invalid hole position"
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
 
@@ -814,6 +817,8 @@ instance UserMsg CheckerError where
 
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
+
+  msg InvalidHolePosition{} = ""
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy

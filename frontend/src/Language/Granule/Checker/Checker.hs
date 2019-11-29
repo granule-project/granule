@@ -70,7 +70,7 @@ synthExprInIsolation :: (?globals :: Globals)
   -> Expr () ()
   -> IO (Either (NonEmpty CheckerError) (Either TypeScheme Kind))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
-  evalChecker (initState { allHiddenNames = hidden }) $ (do
+  evalChecker (initState { allHiddenNames = hidden }) $ do
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
@@ -100,7 +100,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         -- Otherwise, do synth
         _ -> do
           (ty, _, _, _) <- synthExpr defCtxt [] Positive expr
-          return $ Left $ Forall nullSpanNoFile [] [] ty)
+          return $ Left $ Forall nullSpanNoFile [] [] ty
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -397,7 +397,7 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
     let elaborated = Val s ty (NumInt n)
-    return ([], [], elaborated) 
+    return ([], [], elaborated)
 
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalName c == "Float" = do
     let elaborated = Val s ty (NumFloat n)
@@ -611,21 +611,7 @@ synthExpr :: (?globals :: Globals)
           -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-synthExpr _ ctxt _ (Hole s vars _) = do
-  st <- get
-  let varContext = relevantSubCtxt (concatMap (freeVars . snd) ctxt) (tyVarContext st)
-  let unboundVariables = filter (\ x -> isNothing (lookup ((\ (Id a _) -> a) x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
-  let snd3 (a, b, c) = b
-  let pats = map (second snd3) (typeConstructors st)
-  constructors <- mapM (\ (a, b) -> do
-    dc <- mapM (lookupDataConstructor s) b
-    let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-    return (a, sd)) pats
-  cases <- generateCases s constructors ctxt
-  let combined = combineCases cases
-  case unboundVariables of
-    [] -> throw $ HoleMessage s Nothing ctxt varContext combined
-    vs -> throw UnboundVariableError{ errLoc = s, errId = head vs }
+synthExpr _ ctxt _ (Hole s vars _) = throw $ InvalidHolePosition s
 
 -- Literals can have their type easily synthesised
 synthExpr _ _ _ (Val s _ (NumInt n))  = do
