@@ -877,7 +877,7 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
       -- If successful then return this local computation
       case result of
         Right True -> local >> return resultTy
-        _         -> selectFirstByType t1 t2 ops
+        _          -> selectFirstByType t1 t2 ops
 
     selectFirstByType t1 t2 (_:ops) = selectFirstByType t1 t2 ops
 

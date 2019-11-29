@@ -53,10 +53,10 @@ deriving instance (Show v, Show a) => Show (Def v a)
 -- | Single equation of a function
 data Equation v a =
     Equation {
-        equationSpan :: Span,
-        equationType :: a,
-        equationArguments :: [Pattern a],
-        equationBody :: Expr v a }
+        equationSpan       :: Span,
+        equationAnnotation :: a,
+        equationPatterns   :: [Pattern a],
+        equationBody       :: Expr v a }
     deriving Generic
 
 deriving instance (Eq v, Eq a) => Eq (Equation v a)
