@@ -16,9 +16,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
 
-import Language.Granule.Utils
-
-generateCases :: (?globals :: Globals) =>
+generateCases ::
     Span
     -> Ctxt (Ctxt (TypeScheme, Substitution))
     -> Ctxt Assumption
@@ -27,13 +25,9 @@ generateCases span constructors ctxt = do
   let isLinear (_, a) = case a of Linear (Box _ _) -> False; Linear _ -> True ; Discharged _ _ -> False
   let (linear, discharged) = partition isLinear ctxt
 
-  debugM' "linear" (show linear)
-
   let linearTypes = map (second getAssumConstr) linear
   let relConstructors = relevantDataConstrs constructors linearTypes
-  debugM' "relConstructors" (show relConstructors)
   linearPatterns <- mapM (uncurry (buildPatterns span)) relConstructors
-
   let boxPatterns = map (buildBoxPattern span . fst) discharged
 
   return $ linearPatterns ++ boxPatterns
