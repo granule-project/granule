@@ -1,8 +1,8 @@
 module Language.Granule.Synthesis.Splitting(generateCases, combineCases) where
 
-import Control.Arrow (second)
+import Control.Arrow (second, (&&&))
 import Control.Monad (replicateM)
-import Data.Maybe (mapMaybe)
+import Data.Maybe (fromMaybe)
 import Data.List (partition)
 
 import Language.Granule.Checker.Monad
@@ -16,7 +16,9 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
 
-generateCases ::
+import Language.Granule.Utils
+
+generateCases :: (?globals :: Globals) =>
     Span
     -> Ctxt (Ctxt (TypeScheme, Substitution))
     -> Ctxt Assumption
@@ -25,8 +27,11 @@ generateCases span constructors ctxt = do
   let isLinear (_, a) = case a of Linear (Box _ _) -> False; Linear _ -> True ; Discharged _ _ -> False
   let (linear, discharged) = partition isLinear ctxt
 
+  debugM' "linear" (show linear)
+
   let linearTypes = map (second getAssumConstr) linear
   let relConstructors = relevantDataConstrs constructors linearTypes
+  debugM' "relConstructors" (show relConstructors)
   linearPatterns <- mapM (uncurry (buildPatterns span)) relConstructors
 
   let boxPatterns = map (buildBoxPattern span . fst) discharged
@@ -41,7 +46,7 @@ relevantDataConstrs constructors types =
       constructorInfo dataId = do
         dataIdsConstrs <- lookup dataId constructors
         return (typeSchemes dataIdsConstrs, constructorArities dataId dataIdsConstrs)
-  in  zip (map fst types) (map (uncurry zip) (mapMaybe (constructorInfo . snd) types))
+  in  map (fst &&& (uncurry zip . fromMaybe ([], []) . constructorInfo . snd)) types
 
 getAssumConstr :: Assumption -> Id
 getAssumConstr (Linear t) = getTypeConstr t
@@ -59,6 +64,7 @@ getTypeConstr (TyInfix _ _ _) = undefined
 getTypeConstr (TySet _) = undefined
 
 buildPatterns :: Span -> Id -> Ctxt (Id, Integer) -> Checker (Id, [Pattern ()])
+buildPatterns span id [] = return (id, [PVar span () id])
 buildPatterns span id constructors = do
   patterns <- mapM mkPat constructors
   return (id, patterns)

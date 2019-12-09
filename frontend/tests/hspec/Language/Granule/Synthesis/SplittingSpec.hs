@@ -38,16 +38,13 @@ spec = let ?globals = mempty in do
     -- i x = {! x !}
     it "Polymorphic identity" $ do
       res <- runSplitter [] [(xId, Linear (TyVar aId))]
-      res `shouldBe` []
+      res `shouldBe` [(xId, [PVar nullSpan () xId])]
 
     -- k : ∀ { a b : Type } . a → b [0] → a
     -- k x y = {! x y !}
     it "K combinator with 0-graded second parameter" $ do
       res <- runSplitter [] [(xId, Linear (TyVar aId)), (yId, Linear (Box (CNat 0) (TyVar bId)))]
-      res `shouldBe` [(yId, [PBox nullSpan () (PVar nullSpan () yId)])]
-
-    -- Move to checker
-    -- it "only generates cases for variables in hole context" $ do
+      res `shouldBe` [(xId, [PVar nullSpan () xId]), (yId, [PBox nullSpan () (PVar nullSpan () yId)])]
 
 boolId, vecId, xId, yId, aId, bId, nId, mId, nilId, consId :: Id
 boolId = mkId "Bool"

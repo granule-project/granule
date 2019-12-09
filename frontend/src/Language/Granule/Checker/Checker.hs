@@ -392,7 +392,7 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
         return (a, sd)) pats
       cases <- generateCases s constructors holeCtxt
       let combined = combineCases cases
-      throw $ HoleMessage s (Just t) holeCtxt holeTyCtxt combined
+      throw $ HoleMessage s t holeCtxt holeTyCtxt combined
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do

@@ -394,7 +394,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
+    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -569,9 +569,7 @@ instance UserMsg CheckerError where
   title CaseOnIndexedType{} = "Type error"
 
   msg HoleMessage{..} =
-    (case holeTy of
-      Nothing -> "\n   Hole occurs in synthesis position so the type is not yet known"
-      Just ty -> "\n   Expected type is: `" <> pretty ty <> "`")
+    "\n   Expected type is: `" <> pretty holeTy <> "`"
     <>
     -- Print the context if there is anything to use
     (if null context
@@ -818,7 +816,7 @@ instance UserMsg CheckerError where
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
 
-  msg InvalidHolePosition{} = ""
+  msg InvalidHolePosition{} = "Hole occurs in synthesis position so the type is not yet known"
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
