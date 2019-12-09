@@ -164,11 +164,18 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
-evalIn ctxt (TryCatch s _ t1 x t2 t3) = do
-  --try to evaluate t1 as x in t2
-  --case result has no exception effect, eval result
-  --case result has exception effect, perform floor function, eval t3
-
+evalIn ctxt (TryCatch s _ e1 x e2 e3) = do
+  v1 <- evalIn ctxt e1 -- eval e1
+  case v1 of
+    (isDiaConstr -> Just e) -> do
+        eInner <- e
+        v1' <- evalIn ctxt eInner
+        pResult  <- pmatch ctxt [(x, e2)] v1'-- substitute v1 for x in v2
+        case pResult of
+          Just e2' -> evalIn ctxt e2'
+          Nothing -> evalIn ctxt e3
+    other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
+                      <> prettyDebug other
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
