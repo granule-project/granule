@@ -92,8 +92,8 @@ data ExprF ev a expr value =
      -- let p : t <- e1 in e2
      -- or
      -- let p <- e1 in e2
-  | TryCatchF Span a expr Var expr expr
-     -- try t1 as x in t2 catch e3
+  | TryCatchF Span a expr (Pattern a) expr expr
+     -- try e1 as p in e2 catch e3
   | ValF Span a value
   | CaseF Span a expr [(Pattern a, expr)]
   | HoleF Span a
@@ -312,7 +312,7 @@ instance Monad m => Freshenable m (Expr v a) where
                 Just ty -> freshen ty >>= (return . Just)
       return $ LetDiamond s a p t e1 e2
 
-    freshen (TryCatch s a e1 x e2 e2) = do
+    freshen (TryCatch s a e1 x e2 e3) = do
       e1 <- freshen e1
       x <- freshen x
       e2 <- freshen e2
