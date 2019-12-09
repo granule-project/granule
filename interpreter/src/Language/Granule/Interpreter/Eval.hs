@@ -452,6 +452,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (App s a e1 e2) = App s a (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (Binop s a o e1 e2) = Binop s a o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a p t e1 e2) = LetDiamond s a p t (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (TryCatch s a e1 x e2 e3) = TryCatch s a (toRuntimeRep e1) x (toRuntimeRep e2) (toRuntimeRep e3)
   toRuntimeRep (Case s a e ps) = Case s a (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
   toRuntimeRep (Hole s a) = Hole s a
 
