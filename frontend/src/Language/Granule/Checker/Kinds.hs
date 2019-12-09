@@ -49,6 +49,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
 
     kFun KType KType = return KType
     kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
+    kFun KType (KPromote (TyCon (internalName -> "ExcFree"))) = return $ KPromote (TyCon (mkId "ExcFree"))
     kFun KType y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = y }
     kFun x _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
@@ -57,10 +58,6 @@ inferKindOfTypeInContext s quantifiedVariables t =
       var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
       return $ KPromote $ TyVar var
 
-    kCon (internalName -> "ExcFree") = do
-      var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
-      return $ KPromote $ TyVar var
-      
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of
