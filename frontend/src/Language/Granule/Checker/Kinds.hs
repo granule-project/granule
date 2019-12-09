@@ -56,6 +56,11 @@ inferKindOfTypeInContext s quantifiedVariables t =
       -- Create a fresh type variable
       var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
       return $ KPromote $ TyVar var
+
+    kCon (internalName -> "ExcFree") = do
+      var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
+      return kFun ($ KPromote $ TyVar var) ($ KPromote $ TyVar var) 
+
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of

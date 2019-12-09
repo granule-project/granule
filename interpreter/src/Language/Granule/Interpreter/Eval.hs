@@ -164,6 +164,11 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
+evalIn ctxt (TryCatch s _ t1 x t2 t3) = do
+  --try to evaluate t1 as x in t2
+  --case result has no exception effect, eval result
+  --case result has exception effect, perform floor function, eval t3
+
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
