@@ -378,7 +378,6 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
   let getIdName (Id n _) = n
   let boundVariableIds = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let holeCtxt = relevantSubCtxt boundVariableIds ctxt
-  let holeTyCtxt = relevantSubCtxt boundVariableIds (tyVarContext st)
   let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
 
   case unboundVariables of
@@ -392,7 +391,7 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
         return (a, sd)) pats
       cases <- generateCases s constructors holeCtxt
       let combined = combineCases cases
-      throw $ HoleMessage s t holeCtxt holeTyCtxt combined
+      throw $ HoleMessage s t ctxt (tyVarContext st) combined
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
