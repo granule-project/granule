@@ -1,0 +1,11 @@
+-- gr --no-eval
+
+data Tag = AA | BB
+
+data TagProxy (t : Tag) : Type where
+  TagA : TagProxy AA;
+  TagB : TagProxy BB
+
+useTag : forall {t : Tag} . TagProxy t -> (case t of AA -> Int; BB -> ())
+useTag TagA = 0;
+useTag TagB = ()

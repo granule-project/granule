@@ -1,0 +1,14 @@
+-- gr --no-eval
+
+-- Test of type-level case operator precedence.
+-- The TagA branch should be parsed as returning an Int -> Int
+
+data Tag = AA | BB
+
+data TagProxy (t : Tag) : Type where
+  TagA : TagProxy AA;
+  TagB : TagProxy BB
+
+useTag : forall {t : Tag} . TagProxy t -> (case t of AA -> Int -> Int; BB -> ())
+useTag TagA = \x -> x + 1;
+useTag TagB = ()
