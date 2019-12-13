@@ -411,10 +411,10 @@ Expr :: { Expr () () }
         in (mkSpan (getPos $1, getEnd $3)) >>=
               \sp -> return $ LetDiamond sp () pat mt expr $3 }
 
-  | try Expr as PAtom in Expr catch Expr 
-    {% let t1 = $2; x = $4; t2 = $6; t3 = $8
-      in (mkSpan (getPos $1, getEnd $8)) >>=
-              \sp -> return $ TryCatch sp () t1 x t2 t3 }
+   | try Expr as PAtom in Expr catch Expr 
+    {% let e1 = $2; x = $4; e2 = $6; e3 = $8
+        in (mkSpan (getPos $1, getEnd $8)) >>=
+              \sp -> return $ TryCatch sp () e1 x e2 e3 }
 
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
