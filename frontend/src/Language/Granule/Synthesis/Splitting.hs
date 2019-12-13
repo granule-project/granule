@@ -1,11 +1,17 @@
-module Language.Granule.Synthesis.Splitting(generateCases, combineCases) where
+module Language.Granule.Synthesis.Splitting(generateCases) where
 
 import Control.Arrow (second)
-import Control.Monad (replicateM)
+import Control.Monad (filterM, replicateM)
+import Control.Monad.State.Strict
 import Data.Maybe (fromJust, isJust, mapMaybe)
 import Data.List (partition)
 
+import Language.Granule.Checker.Constraints
+import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Patterns
+import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 
@@ -16,12 +22,15 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
 
-generateCases ::
-    Span
-    -> Ctxt (Ctxt (TypeScheme, Substitution))
-    -> Ctxt Assumption
-    -> Checker (Ctxt [Pattern ()])
-generateCases span constructors ctxt = do
+import Language.Granule.Utils
+
+generateCases :: (?globals :: Globals) =>
+  Span
+  -> Type
+  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt Assumption
+  -> Checker ([Id], [[Pattern ()]])
+generateCases span ty constructors ctxt = do
   let isLinear (_, a) = case a of Linear (Box _ _) -> False; Linear _ -> True ; Discharged _ _ -> False
   let (linear, discharged) = partition isLinear ctxt
 
@@ -36,7 +45,49 @@ generateCases span constructors ctxt = do
 
   let boxPatterns = map (buildBoxPattern span . fst) discharged
 
-  return $ linearPatterns ++ variablePatterns ++ boxPatterns
+  let allPatterns = linearPatterns ++ boxPatterns ++ variablePatterns
+  let cases = combineCases allPatterns
+  let casePatterns = snd cases
+
+  let tys = map ((\ a -> case a of Linear x -> x; Discharged x _ -> x) . snd) ctxt ++ [ty]
+  let funTy = foldr1 FunTy tys
+
+  validPatterns <- filterM (validateCase span funTy) casePatterns
+
+  return (fst cases, validPatterns)
+
+validateCase :: (?globals :: Globals) => Span -> Type -> [Pattern ()] -> Checker Bool
+validateCase span ty pats = do
+  st <- get
+  newConjunct
+  (patternGam, tau, localVars, subst, elaboratedPats, consumptions) <-
+     ctxtFromTypedPatterns span ty pats (patternConsumption st)
+
+  modify (\st -> st { patternConsumption =
+                         zipWith joinConsumption consumptions (patternConsumption st) } )
+
+  tau' <- substitute subst tau
+
+  patternGam <- substitute subst patternGam
+  pred <- popFromPredicateStack
+
+  tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted span
+  let thm = foldr (uncurry Exists) pred localVars
+  result <- liftIO $ provePredicate thm tyVars
+  case result of
+    QED -> return True
+    _ -> return False
+  where
+    popFromPredicateStack = do
+      st <- get
+      return . head . predicateStack $ st
+
+    tyVarContextExistential = do
+      st <- get
+      return $ mapMaybe (\(v, (k, q)) ->
+                      case q of
+                        BoundQ -> Nothing
+                        _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
 
 -- Returns a context linking variables to a context linking their types to their data constructors.
 relevantDataConstrs :: Ctxt (Ctxt (TypeScheme, Substitution)) -> Ctxt Id -> Ctxt (Ctxt (Id, Integer))

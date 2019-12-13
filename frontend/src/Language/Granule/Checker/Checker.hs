@@ -17,6 +17,7 @@ import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
 
+import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
@@ -389,9 +390,8 @@ checkExpr _ ctxt _ _ t (Hole s vars _) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      cases <- generateCases s constructors holeCtxt
-      let combined = combineCases cases
-      throw $ HoleMessage s t ctxt (tyVarContext st) combined
+      cases <- generateCases s t constructors holeCtxt
+      throw $ HoleMessage s t ctxt (tyVarContext st) cases
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumInt n))   | internalName c == "Int" = do
@@ -1030,28 +1030,6 @@ rewriteMessage msg = do
                  _ -> line'
              else line'
        in line''
-
-justCoeffectTypesConverted :: (?globals::Globals)
-  => Span -> [(a, (Kind, b))] -> Checker [(a, (Type, b))]
-justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
-  where
-    convert (var, (KPromote t, q)) = do
-      k <- inferKindOfType s t
-      if isCoeffectKind k
-        then return $ Just (var, (t, q))
-        else return Nothing
-    convert (var, (KVar v, q)) = do
-      k <- inferKindOfType s (TyVar v)
-      if isCoeffectKind k
-        then return $ Just (var, (TyVar v, q))
-        else return Nothing
-    convert _ = return Nothing
-justCoeffectTypesConvertedVars :: (?globals::Globals)
-  => Span -> [(Id, Kind)] -> Checker (Ctxt Type)
-justCoeffectTypesConvertedVars s env = do
-  let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
-  env' <- justCoeffectTypesConverted s implicitUniversalMadeExplicit
-  return $ stripQuantifiers env'
 
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
