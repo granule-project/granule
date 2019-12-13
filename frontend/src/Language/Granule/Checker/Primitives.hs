@@ -176,8 +176,8 @@ readInt = BUILTIN
 --Exceptions
 --------------------------------------------------------------------------------
 
-throw : Exception <{MayFail}>
-throw = BUILTIN
+--throw : Exception <{MayFail}>
+--throw = BUILTIN
  
 --------------------------------------------------------------------------------
 -- Conversions
