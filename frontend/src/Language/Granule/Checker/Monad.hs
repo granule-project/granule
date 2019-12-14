@@ -13,7 +13,7 @@ module Language.Granule.Checker.Monad where
 
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
-import Data.List (intercalate)
+import Data.List (intercalate, transpose)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
 import Data.Semigroup (sconcat)
@@ -585,7 +585,15 @@ instance UserMsg CheckerError where
     (if null (fst cases)
       then ""
       else "\n\n   Case-splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
-        concatMap (\ps -> concatMap (\ p -> pretty p <> "\t") ps <> "\n     ") (snd cases))
+        intercalate "\n     " (formatCases (snd cases)))
+
+    where
+      formatCases = map unwords . transpose . map padToLongest . transpose . map (map pretty)
+      
+      padToLongest xs =
+        let size = maximum (map length xs)
+        in  map (\s -> s ++ replicate (size - length s) ' ') xs
+
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
