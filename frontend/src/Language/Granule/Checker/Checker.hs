@@ -1343,12 +1343,7 @@ checkGuardsForImpossibility s name = do
   let ps = head $ guardPredicates st
 
   -- Convert all universal variables to existential
-  let tyVarContextExistential =
-         mapMaybe (\(v, (k, q)) ->
-                       case q of
-                         BoundQ -> Nothing
-                         _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
-  tyVars <- justCoeffectTypesConverted s tyVarContextExistential
+  tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted s
 
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do

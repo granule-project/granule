@@ -11,7 +11,6 @@ import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 
@@ -63,31 +62,19 @@ validateCase span ty pats = do
   (patternGam, tau, localVars, subst, elaboratedPats, consumptions) <-
      ctxtFromTypedPatterns span ty pats (patternConsumption st)
 
-  modify (\st -> st { patternConsumption =
-                         zipWith joinConsumption consumptions (patternConsumption st) } )
-
-  tau' <- substitute subst tau
-
-  patternGam <- substitute subst patternGam
   pred <- popFromPredicateStack
-
   tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted span
   let thm = foldr (uncurry Exists) pred localVars
   result <- liftIO $ provePredicate thm tyVars
+
   case result of
     QED -> return True
-    _ -> return False
+    _   -> return False
+
   where
     popFromPredicateStack = do
       st <- get
       return . head . predicateStack $ st
-
-    tyVarContextExistential = do
-      st <- get
-      return $ mapMaybe (\(v, (k, q)) ->
-                      case q of
-                        BoundQ -> Nothing
-                        _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
 
 -- Returns a context linking variables to a context linking their types to their data constructors.
 relevantDataConstrs :: Ctxt (Ctxt (TypeScheme, Substitution)) -> Ctxt Id -> Ctxt (Ctxt (Id, Integer))
