@@ -311,18 +311,20 @@ checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constrai
   -- Create conjunct to capture the body expression constraints
   newConjunct
 
+{-
   -- Specialise the return type by the pattern generated substitution
   debugM "eqn" $ "### -- patternGam = " <> show patternGam
   debugM "eqn" $ "### -- localVars  = " <> show localVars
   debugM "eqn" $ "### -- tau = " <> show tau
   tau' <- substitute subst tau
   debugM "eqn" $ "### -- tau' = " <> show tau'
+-}
 
   patternGam <- substitute subst patternGam
 
   -- Check the body
   (localGam, subst', elaboratedExpr) <-
-       checkExpr defCtxt patternGam Positive True tau' expr
+       checkExpr defCtxt patternGam Positive True tau expr
 
   case checkLinearity patternGam localGam of
     [] -> do
