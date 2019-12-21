@@ -219,7 +219,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
-          (as, bs, us, elabPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
+          (as, _, bs, us, elabPs, consumptionsOut) <- ctxtFromTypedPatterns s dataConstructorIndexRewrittenAndSpecialised ps []
+          let consumptionOut = foldr meetConsumption Full consumptionsOut
 
           -- Combine the substitutions
           subst <- combineSubstitutions s (flipSubstitution unifiers) us
@@ -241,21 +242,6 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
               , tyExpected = dataConstructorTypeFresh
               , tyActual = ty
               }
-  where
-    unpeel :: [Pattern ()] -- A list of patterns for each part of a data constructor pattern
-            -> Type -- The remaining type of the constructor
-            -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
-    unpeel = unpeel' ([],[],[],[],Full)
-
-    -- Tail recursive version of unpeel
-    unpeel' acc [] t = return acc
-
-    unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
-        (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
-        us <- combineSubstitutions s us us'
-        unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
-
-    unpeel' _ (p:_) t = throw PatternArityError{ errLoc = s, errId = dataC }
 
 ctxtFromTypedPattern' _ s t p _ = do
   st <- get
