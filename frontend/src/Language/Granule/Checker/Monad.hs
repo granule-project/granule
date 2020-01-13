@@ -210,9 +210,7 @@ lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
 lookupPatternMatches sp constrName = do
   let snd3 (a, b, c) = b
   st <- get
-  case M.lookup constrName (allHiddenNames st) of
-    Nothing -> return $ snd3 <$> lookup constrName (typeConstructors st)
-    Just mod ->return $ snd3 <$> lookup constrName (typeConstructors st)
+  return $ snd3 <$> lookup constrName (typeConstructors st)
 
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
@@ -585,13 +583,15 @@ instance UserMsg CheckerError where
     <>
     (if null (fst cases)
       then ""
-      else "\n\n   Case-splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
-        intercalate "\n     " (formatCases (snd cases)))
+      else if null (snd cases)
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty $ fst cases)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
+             intercalate "\n     " (formatCases (snd cases)))
 
     where
       formatCases = map unwords . transpose . map (padToLongest . map parenthesise) . transpose . map (map pretty)
 
-      parenthesise pat = if any isSpace pat then concat ["(", pat, ")"] else pat
+      parenthesise pat = if any isSpace pat then "(" <> pat <> ")" else pat
 
       padToLongest xs =
         let size = maximum (map length xs)
