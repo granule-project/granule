@@ -62,12 +62,10 @@ typeConstructors =
     , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     --Effect grade types - Exceptions
     , (mkId "Exception", (KEffect, Nothing, False))
-    , (mkId "MayFail", (KPromote (TyCon $ mkId "Exceptions"), Nothing, False))
-    , (mkId "OK", (KPromote (TyCon $ mkId "Exceptions"), Nothing, False))
+    , (mkId "IOExcept", (KPromote (TyCon $ mkId "Exception"), Nothing, False))
     
     ]
 
@@ -176,8 +174,8 @@ readInt = BUILTIN
 --Exceptions
 --------------------------------------------------------------------------------
 
---throw : Exception <{MayFail}>
---throw = BUILTIN
+throw : Exception <{Exception}>
+throw = BUILTIN
  
 --------------------------------------------------------------------------------
 -- Conversions

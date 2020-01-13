@@ -92,8 +92,8 @@ data ExprF ev a expr value =
      -- let p : t <- e1 in e2
      -- or
      -- let p <- e1 in e2
-  | TryCatchF Span a expr (Pattern a) expr expr
-     -- try e1 as p in e2 catch e3
+  | TryCatchF Span a expr (Pattern a) (Maybe Type) expr expr
+     -- try e1 as p : t in e2 catch e3
   | ValF Span a value
   | CaseF Span a expr [(Pattern a, expr)]
   | HoleF Span a
@@ -124,7 +124,7 @@ type UnfixedExpr ev a = UnExprFix2 ExprF ValueF ev a
 pattern App sp a fexp argexp = (ExprFix2 (AppF sp a fexp argexp))
 pattern Binop sp a op lhs rhs = (ExprFix2 (BinopF sp a op lhs rhs))
 pattern LetDiamond sp a pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a pat mty nowexp nextexp))
-pattern TryCatch sp a t1 x t2 t3 = (ExprFix2 (TryCatchF sp a t1 x t2 t3))
+pattern TryCatch sp a t1 pat mty t2 t3 = (ExprFix2 (TryCatchF sp a t1 pat mty t2 t3))
 pattern Val sp a val = (ExprFix2 (ValF sp a val))
 pattern Case sp a swexp arms = (ExprFix2 (CaseF sp a swexp arms))
 pattern Hole sp a = ExprFix2 (HoleF sp a)
@@ -258,7 +258,7 @@ instance Term (Expr v a) where
     freeVars (App _ _ e1 e2)            = freeVars e1 <> freeVars e2
     freeVars (Binop _ _ _ e1 e2)        = freeVars e1 <> freeVars e2
     freeVars (LetDiamond _ _ p _ e1 e2) = freeVars e1 <> (freeVars e2 \\ boundVars p)
-    freeVars (TryCatch _ _ e1 x e2 e3) = freeVars e1 <> freeVars e2 <> freeVars e3
+    freeVars (TryCatch _ _ e1 p _ e2 e3) = freeVars e1 <> (freeVars e2 \\ boundVars p) <> freeVars e3
     freeVars (Val _ _ e)                = freeVars e
     freeVars (Case _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
@@ -267,7 +267,7 @@ instance Term (Expr v a) where
     hasHole (App _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (Binop _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (LetDiamond _ _ p _ e1 e2) = hasHole e1 || hasHole e2
-    hasHole (TryCatch _ _ e1 x e2 e3) = hasHole e1 || hasHole e2 || hasHole e3
+    hasHole (TryCatch _ _ e1 p _ e2 e3) = hasHole e1 || hasHole e2 || hasHole e3
     hasHole (Val _ _ e) = hasHole e
     hasHole (Case _ _ e cases) = hasHole e || (or (map (hasHole . snd) cases))
     hasHole Hole{} = True
@@ -285,8 +285,8 @@ instance Substitutable Expr where
     subst es v (LetDiamond s a w t e1 e2) =
       LetDiamond s a w t (subst es v e1) (subst es v e2)
 
-    subst es v (TryCatch s a e1 x e2 e3) =
-      TryCatch s a (subst es v e1) x (subst es v e2) (subst es v e3)
+    subst es v (TryCatch s a e1 p t e2 e3) =
+      TryCatch s a (subst es v e1) p t (subst es v e2) (subst es v e3)
 
     subst es v (Val _ _ val) =
       subst es v val
@@ -312,12 +312,15 @@ instance Monad m => Freshenable m (Expr v a) where
                 Just ty -> freshen ty >>= (return . Just)
       return $ LetDiamond s a p t e1 e2
 
-    freshen (TryCatch s a e1 x e2 e3) = do
+    freshen (TryCatch s a e1 p t e2 e3) = do
       e1 <- freshen e1
-      x <- freshen x
+      p <- freshen p
+      t   <- case t of
+                Nothing -> return Nothing
+                Just ty -> freshen ty >>= (return . Just)
       e2 <- freshen e2
       e3 <- freshen e3
-      return $ TryCatch s a e1 x e2 e3
+      return $ TryCatch s a e1 p t e2 e3
 
 
     freshen (Binop s a op e1 e2) = do

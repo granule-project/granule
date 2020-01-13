@@ -25,6 +25,8 @@ import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
+import Control.Exception (catch)
+
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
 -- import Foreign.Marshal.Alloc (free, malloc)
@@ -32,6 +34,7 @@ import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Ch
 -- import Foreign.Storable (peek, poke)
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
+
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -164,18 +167,27 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
-evalIn ctxt (TryCatch s _ e1 x e2 e3) = do
-  v1 <- evalIn ctxt e1 -- eval e1
-  case v1 of
+evalIn ctxt (TryCatch s _ e1 p _ e2 e3) = do
+  -- (cf. TRY_1)
+  e1' <- evalIn ctxt e1
+  case e1' of
     (isDiaConstr -> Just e) -> do
-        eInner <- e
-        v1' <- evalIn ctxt eInner
-        pResult  <- pmatch ctxt [(x, e2)] v1'-- substitute v1 for x in v2
+        -- (cf. TRY_2)
+        v1 <- evalIn ctxt e 
+        -- (cf. TRY_BETA_1)
+        pResult  <- pmatch ctxt [(p, e2)] v1
         case pResult of
-          Just e2' -> evalIn ctxt e2'
-          Nothing -> evalIn ctxt e3
+          Just e2' -> 
+              catch(evalIn ctxt e2')
+              -- (cf. TRY_BETA_2)
+              (\ee -> evalIn ctxt e3)
+          Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s       
+
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
+      
+
+
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
@@ -452,7 +464,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (App s a e1 e2) = App s a (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (Binop s a o e1 e2) = Binop s a o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a p t e1 e2) = LetDiamond s a p t (toRuntimeRep e1) (toRuntimeRep e2)
-  toRuntimeRep (TryCatch s a e1 x e2 e3) = TryCatch s a (toRuntimeRep e1) x (toRuntimeRep e2) (toRuntimeRep e3)
+  toRuntimeRep (TryCatch s a e1 p t e2 e3) = TryCatch s a (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
   toRuntimeRep (Case s a e ps) = Case s a (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
   toRuntimeRep (Hole s a) = Hole s a
 
