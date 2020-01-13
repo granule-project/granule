@@ -169,21 +169,20 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
 
 evalIn ctxt (TryCatch s _ e1 p _ e2 e3) = do
   -- (cf. TRY_1)
-  e1' <- evalIn ctxt e1
-  case e1' of
+  v1 <- evalIn ctxt e1
+  case v1 of
     (isDiaConstr -> Just e) -> do
         -- (cf. TRY_2)
-        v1 <- evalIn ctxt e 
+        v1' <- evalIn ctxt e 
         -- (cf. TRY_BETA_1)
-        pResult  <- pmatch ctxt [(p, e2)] v1
+        pResult  <- pmatch ctxt [(p, e2)] v1'
         case pResult of
           Just e2' -> 
               catch(evalIn ctxt e2')
               -- (cf. TRY_BETA_2)
-              (\ee -> evalIn ctxt e3)
+              (\ee -> return evalIn ctxt e3)
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s       
-
-    other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
+  other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
       
 
