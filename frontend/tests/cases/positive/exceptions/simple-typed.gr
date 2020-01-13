@@ -1,0 +1,1 @@
+try 3 as x : Nat in (\x -> x + 3) 

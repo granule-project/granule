@@ -1,0 +1,6 @@
+try "LICENSE" as x in 
+    let h       <- openHandle ReadMode x;
+        (h, c1)     <- readChar h;
+        ()          <- closeHandle h
+    in pure c1 
+catch pure "A"

@@ -1,0 +1,1 @@
+try ( (\x -> x + 3) 3) as y in y + 3 catch 10
