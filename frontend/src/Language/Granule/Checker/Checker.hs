@@ -267,6 +267,7 @@ checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty
             { predicateStack = []
             , tyVarContext = []
             , guardContexts = []
+            , uniqueVarIdCounterMap = mempty
             }
         elaboratedEq <- checkEquation defCtxt defName equation tys
 
