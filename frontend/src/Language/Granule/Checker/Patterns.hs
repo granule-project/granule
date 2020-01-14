@@ -219,7 +219,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
-          (as, _, bs, us, elabPs, consumptionsOut) <- ctxtFromTypedPatterns s dataConstructorIndexRewrittenAndSpecialised ps []
+          (as, _, bs, us, elabPs, consumptionsOut) <- ctxtFromTypedPatterns' outerBoxTy s dataConstructorIndexRewrittenAndSpecialised ps []
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
           -- Combine the substitutions
@@ -255,13 +255,22 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
   -> [Pattern ()]
   -> [Consumption]
   -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
-ctxtFromTypedPatterns sp ty [] _ = do
+ctxtFromTypedPatterns = ctxtFromTypedPatterns' Nothing
+
+ctxtFromTypedPatterns' :: (?globals :: Globals)
+  => Maybe (Coeffect, Type)
+  -> Span
+  -> Type
+  -> [Pattern ()]
+  -> [Consumption]
+  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
+ctxtFromTypedPatterns' _ sp ty [] _ = do
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns' outerCoeff s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
-  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern s t1 pat cons
+  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s t1 pat cons
 
   -- Apply substitutions
   t2' <- substitute subst t2
@@ -271,13 +280,13 @@ ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
-      ctxtFromTypedPatterns s t2'' pats consumptionsIn
+      ctxtFromTypedPatterns' outerCoeff s t2'' pats consumptionsIn
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
   return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
-ctxtFromTypedPatterns s ty (p:ps) _ = do
+ctxtFromTypedPatterns' _ s ty (p:ps) _ = do
   -- This means we have patterns left over, but the type is not a
   -- function type, so we need to throw a type error
 
