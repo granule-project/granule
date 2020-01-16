@@ -1,4 +1,4 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/impossiblePat.gr:8:1:
 The following theorem associated with `last` is falsifiable:
-	∀ n0.1 : ↑Nat,t9.1 : Type,t10.1 : Type,t11.1 : ↑Nat . ((0..0 ≤ 0..1) ∧ (n0.1 + 1 = n + 1) -> (0..1 ≤ 0..1))
+	∀ n0.0 : ↑Nat,t9.0 : Type,t10.0 : Type,t11.0 : ↑Nat . ((0..0 ≤ 0..1) ∧ (n0.0 + 1 = n + 1) -> (0..1 ≤ 0..1))
