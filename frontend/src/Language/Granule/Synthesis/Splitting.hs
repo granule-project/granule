@@ -1,10 +1,10 @@
 module Language.Granule.Synthesis.Splitting ( generateCases ) where
 
 import Control.Arrow (second)
-import Control.Monad (filterM, replicateM)
+import Control.Monad (filterM, mapM)
 import Control.Monad.State.Strict
 import Data.List (partition)
-import Data.Maybe (fromJust, isJust, mapMaybe)
+import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
 
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints
@@ -87,17 +87,18 @@ validateCase span ty pats = do
 relevantDataConstrs ::
      Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Id
-  -> Ctxt (Ctxt (Id, Nat))
+  -> Ctxt (Ctxt [Maybe Id])
 relevantDataConstrs constructors types =
-  let typeSchemes = map fst
-      constructorArities dataId = map ((,) dataId . tsArity . fst . snd)
-      constructorInfo dataId = do
+  let
+    constructorInfo :: Id -> Maybe (Ctxt [Maybe Id])
+    constructorInfo dataId = do
         dataIdsConstrs <- lookup dataId constructors
-        return
-          (typeSchemes dataIdsConstrs, constructorArities dataId dataIdsConstrs)
+        let consNames = map fst dataIdsConstrs
+        let consTyNames = map (tsTypeNames . fst . snd) dataIdsConstrs
+        return (zip consNames consTyNames)
   in zip
        (map fst types)
-       (map (uncurry zip) (mapMaybe (constructorInfo . snd) types))
+       (mapMaybe (constructorInfo . snd) types)
 
 getAssumConstr :: Assumption -> Maybe Id
 getAssumConstr (Linear t) = getTypeConstr t
@@ -114,18 +115,19 @@ getTypeConstr (TyInt _) = Nothing
 getTypeConstr (TyInfix _ _ _) = Nothing
 getTypeConstr (TySet _) = Nothing
 
-buildConstructorPatterns :: Span -> Id -> Ctxt (Id, Nat) -> Checker (Id, [Pattern ()])
+buildConstructorPatterns :: Span -> Id -> Ctxt [Maybe Id] -> Checker (Id, [Pattern ()])
 buildConstructorPatterns span id constructors = do
   patterns <- mapM mkPat constructors
   return (id, patterns)
   where
-    mkPat :: (Id, (Id, Nat)) -> Checker (Pattern ())
-    mkPat (name, (_, nVars)) = do
-      vars <- nFresh nVars
+    mkPat :: (Id, [Maybe Id]) -> Checker (Pattern ())
+    mkPat (name, ids) = do
+      vars <- genFresh ids
       return $ PConstr span () name (map (PVar span ()) vars)
-    nFresh :: Nat -> Checker [Id]
-    nFresh n = do
-      freshStrings <- replicateM (fromEnum n) (freshIdentifierBase ((\(Id x _) -> x) id))
+    genFresh :: [Maybe Id] -> Checker [Id]
+    genFresh ids = do
+      let baseIds = map (fromMaybe id) ids
+      freshStrings <- mapM (freshIdentifierBase . (\(Id x _) -> x)) baseIds
       return $ map mkId freshStrings
 
 buildVariablePatterns :: Span -> Id -> (Id, [Pattern ()])
@@ -134,8 +136,12 @@ buildVariablePatterns span id = (id, pure $ PVar span () id)
 buildBoxPattern :: Span -> Id -> (Id, [Pattern ()])
 buildBoxPattern span id = (id, pure $ PBox span () (PVar span () id))
 
-tsArity :: TypeScheme -> Nat
-tsArity (Forall _ _ _ t) = arity t
+tsTypeNames :: TypeScheme -> [Maybe Id]
+tsTypeNames (Forall _ _ _ t) = typeNames t
+
+typeNames :: Type -> [Maybe Id]
+typeNames (FunTy id _ t2) = id : typeNames t2
+typeNames _ = []
 
 combineCases :: Ctxt [Pattern ()] -> ([Id], [[Pattern ()]])
 combineCases pats = (map fst pats, mapM snd pats)
