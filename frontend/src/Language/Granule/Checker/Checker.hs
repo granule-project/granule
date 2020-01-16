@@ -233,9 +233,9 @@ checkAndGenerateSubstitution sp tName ty ixkinds =
         | otherwise = throw UnexpectedTypeConstructor
           { errLoc = sp, tyConActual = tC, tyConExpected = tName }
 
-    checkAndGenerateSubstitution' sp tName (FunTy arg res) kinds = do
+    checkAndGenerateSubstitution' sp tName (FunTy id arg res) kinds = do
       (res', subst, tyVarsNew) <- checkAndGenerateSubstitution' sp tName res kinds
-      return (FunTy arg res', subst, tyVarsNew)
+      return (FunTy id arg res', subst, tyVarsNew)
 
     checkAndGenerateSubstitution' sp tName (TyApp fun arg) (kind:kinds) = do
       varSymb <- freshIdentifierBase "t"
@@ -403,7 +403,7 @@ checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalName c == "Floa
     let elaborated = Val s ty (NumFloat n)
     return ([], [], elaborated)
 
-checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
+checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ (Abs _ p t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
 
@@ -456,7 +456,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
     (argTy, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
 
-    funTy <- substitute subst2 (FunTy argTy tau)
+    funTy <- substitute subst2 (FunTy Nothing argTy tau)
     (gam1, subst1, elaboratedL) <- checkExpr defs gam pol topLevel funTy e1
 
     gam <- ctxtPlus s gam1 gam2
@@ -817,7 +817,7 @@ synthExpr defs gam pol (App s _ e e') = do
 
     case fTy of
       -- Got a function type for the left-hand side of application
-      (FunTy sig tau) -> do
+      (FunTy _ sig tau) -> do
          liftIO $ debugM "FunTy sig" $ pretty sig
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
@@ -884,7 +884,7 @@ synthExpr defs gam pol (Binop s _ op e1 e2) = do
     selectFirstByType t1 t2 [] = throw FailedOperatorResolution
         { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> var "..." }
 
-    selectFirstByType t1 t2 ((FunTy opt1 (FunTy opt2 resultTy)):ops) = do
+    selectFirstByType t1 t2 ((FunTy _ opt1 (FunTy _ opt2 resultTy)):ops) = do
       -- Attempt to use this typing
       (result, local) <- peekChecker $ do
          (eq1, _, _) <- equalTypes s t1 opt1
@@ -915,7 +915,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p (Just sig) e)) = do
      -- Locally we should have this property (as we are under a binder)
      ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy sig tau
+     let finalTy = FunTy Nothing sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
      substFinal <- combineSubstitutions s substP subst
@@ -947,7 +947,7 @@ synthExpr defs gam pol (Val s _ (Abs _ p Nothing e)) = do
      -- Locally we should have this property (as we are under a binder)
      ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
-     let finalTy = FunTy sig tau
+     let finalTy = FunTy Nothing sig tau
      let elaborated = Val s finalTy (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
 

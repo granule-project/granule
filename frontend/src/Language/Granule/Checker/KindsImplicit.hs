@@ -68,7 +68,7 @@ replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
 -- which get automatically resolved
 inferKindOfTypeImplicits :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker (Kind, Substitution)
 
-inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
+inferKindOfTypeImplicits s ctxt (FunTy _ t1 t2) = do
    (k1, u1) <- inferKindOfTypeImplicits s ctxt t1
    (k2, u2) <- inferKindOfTypeImplicits s ctxt t2
    jK1 <- joinKind k1 KType

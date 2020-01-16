@@ -52,7 +52,7 @@ generateCases span ty constructors ctxt = do
         map
           ((\a -> case a of Linear x -> x; Discharged x _ -> x) . snd)
           ctxt ++ [ty]
-  let funTy = foldr1 FunTy tys
+  let funTy = foldr1 (FunTy Nothing) tys
   let cases = combineCases orderedPatterns
   validPatterns <- filterM (caseFilter span funTy) (snd cases)
   return (fst cases, validPatterns)
@@ -87,7 +87,7 @@ validateCase span ty pats = do
 relevantDataConstrs ::
      Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Id
-  -> Ctxt (Ctxt (Id, Integer))
+  -> Ctxt (Ctxt (Id, Nat))
 relevantDataConstrs constructors types =
   let typeSchemes = map fst
       constructorArities dataId = map ((,) dataId . tsArity . fst . snd)
@@ -104,7 +104,7 @@ getAssumConstr (Linear t) = getTypeConstr t
 getAssumConstr (Discharged _ _) = Nothing
 
 getTypeConstr :: Type -> Maybe Id
-getTypeConstr (FunTy t1 _) = Nothing
+getTypeConstr (FunTy _ t1 _) = Nothing
 getTypeConstr (TyCon id) = Just id
 getTypeConstr (Box _ t) = getTypeConstr t
 getTypeConstr (Diamond t1 _) = getTypeConstr t1
@@ -114,18 +114,18 @@ getTypeConstr (TyInt _) = Nothing
 getTypeConstr (TyInfix _ _ _) = Nothing
 getTypeConstr (TySet _) = Nothing
 
-buildConstructorPatterns :: Span -> Id -> Ctxt (Id, Integer) -> Checker (Id, [Pattern ()])
+buildConstructorPatterns :: Span -> Id -> Ctxt (Id, Nat) -> Checker (Id, [Pattern ()])
 buildConstructorPatterns span id constructors = do
   patterns <- mapM mkPat constructors
   return (id, patterns)
   where
-    mkPat :: (Id, (Id, Integer)) -> Checker (Pattern ())
+    mkPat :: (Id, (Id, Nat)) -> Checker (Pattern ())
     mkPat (name, (_, nVars)) = do
       vars <- nFresh nVars
       return $ PConstr span () name (map (PVar span ()) vars)
-    nFresh :: Integer -> Checker [Id]
+    nFresh :: Nat -> Checker [Id]
     nFresh n = do
-      freshStrings <- replicateM (fromInteger n) (freshIdentifierBase ((\(Id x _) -> x) id))
+      freshStrings <- replicateM (fromEnum n) (freshIdentifierBase ((\(Id x _) -> x) id))
       return $ map mkId freshStrings
 
 buildVariablePatterns :: Span -> Id -> (Id, [Pattern ()])
@@ -134,12 +134,8 @@ buildVariablePatterns span id = (id, pure $ PVar span () id)
 buildBoxPattern :: Span -> Id -> (Id, [Pattern ()])
 buildBoxPattern span id = (id, pure $ PBox span () (PVar span () id))
 
-tsArity :: TypeScheme -> Integer
-tsArity (Forall _ _ _ t) = tArity t
-
-tArity :: Type -> Integer
-tArity (FunTy t1 t2) = 1 + tArity t2
-tArity _ = 0
+tsArity :: TypeScheme -> Nat
+tsArity (Forall _ _ _ t) = arity t
 
 combineCases :: Ctxt [Pattern ()] -> ([Id], [[Pattern ()]])
 combineCases pats = (map fst pats, mapM snd pats)

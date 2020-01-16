@@ -36,7 +36,7 @@ desugar (Def s var eqs tys@(Forall _ _ _ ty)) =
         (evalState (typeDirectedDesugar (Equation s a ps body) ty) (0 :: Int))
 
     typeDirectedDesugar (Equation _ _ [] e) _ = return e
-    typeDirectedDesugar (Equation s a (p : ps) e) (FunTy t1 t2) = do
+    typeDirectedDesugar (Equation s a (p : ps) e) (FunTy _ t1 t2) = do
       e' <- typeDirectedDesugar (Equation s a ps e) t2
       return $ Val nullSpanNoFile () $ Abs () p (Just t1) e'
     -- Error cases

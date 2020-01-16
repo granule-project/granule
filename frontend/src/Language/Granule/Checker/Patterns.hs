@@ -248,7 +248,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
     -- Tail recursive version of unpeel
     unpeel' acc [] t = return acc
 
-    unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
+    unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy _ t t') = do
         (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
         us <- combineSubstitutions s us us'
         unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
@@ -270,7 +270,7 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
 ctxtFromTypedPatterns sp ty [] _ = do
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
   (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern s t1 pat cons
@@ -291,7 +291,7 @@ ctxtFromTypedPatterns s ty (p:ps) _ = do
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
   psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
-  let spuriousType = foldr FunTy (TyVar $ mkId "?") psTyVars
+  let spuriousType = foldr (FunTy Nothing) (TyVar $ mkId "?") psTyVars
   throw TooManyPatternsError
     { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }
 

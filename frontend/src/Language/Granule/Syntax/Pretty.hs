@@ -126,10 +126,14 @@ instance Pretty Type where
     pretty (TyInt n)      = show n
 
     -- Non atoms
-    pretty (FunTy t1 t2)  =
+    pretty (FunTy Nothing t1 t2)  =
       case t1 of
         FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
         _ -> pretty t1 <> " -> " <> pretty t2
+
+    pretty (FunTy (Just id) t1 t2)  =
+      let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
+      in  "(" <> pretty id <> " : " <> pt1 <> ") -> " <> pretty t2
 
     pretty (Box c t)      =
       prettyNested t <> " [" <> pretty c <> "]"

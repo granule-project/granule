@@ -124,7 +124,7 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   -> SpecIndicator
   -> Checker (Bool, Substitution)
 
-equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy t1 t2) fTy2@(FunTy t1' t2') _ sp = do
+equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp = do
   -- contravariant position (always approximate)
   (eq1, u1) <-
     case sp of
@@ -413,10 +413,10 @@ isDualSession sp _ t1 t2 _ = throw
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
 joinTypes s t t' | t == t' = return t
 
-joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
+joinTypes s (FunTy id t1 t2) (FunTy _ t1' t2') = do
   t1j <- joinTypes s t1' t1 -- contravariance
   t2j <- joinTypes s t2 t2'
-  return (FunTy t1j t2j)
+  return (FunTy id t1j t2j)
 
 joinTypes _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
@@ -526,7 +526,7 @@ twoEqualEffectTypes s ef1 ef2 = do
 isIndexedType :: Type -> Checker Bool
 isIndexedType = typeFoldM $
   TypeFold
-    { tfFunTy = \x y -> return (x || y)
+    { tfFunTy = \_ x y -> return (x || y)
     , tfTyCon = \c -> do {
         st <- get;
         return $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }

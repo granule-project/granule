@@ -559,7 +559,7 @@ instance Unifiable Substitutors where
 instance Unifiable Type where
     unify (TyVar v) t = return $ Just [(v, SubstT t)]
     unify t (TyVar v) = return $ Just [(v, SubstT t)]
-    unify (FunTy t1 t2) (FunTy t1' t2') = do
+    unify (FunTy _ t1 t2) (FunTy _ t1' t2') = do
         u1 <- unify t1 t1'
         u2 <- unify t2 t2'
         u1 <<>> u2

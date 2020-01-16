@@ -100,32 +100,32 @@ dataTypes =
 binaryOperators :: Operator -> NonEmpty Type
 binaryOperators = \case
     OpPlus ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
     OpMinus ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
     OpTimes ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
     OpEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
     OpNotEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
     OpLesserEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
     OpLesser ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
     OpGreater ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
     OpGreaterEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
 
 -- TODO make a proper quasi quoter that parses this at compile time
 builtinSrc :: String

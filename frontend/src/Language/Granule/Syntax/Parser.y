@@ -308,13 +308,13 @@ Kind :: { Kind }
 
 
 Type :: { Type }
-  : TyJuxt                    { $1 }
-  | Type '->' Type            { FunTy $1 $3 }
-  | Type '×' Type             { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
-  | TyAtom '[' Coeffect ']'   { Box $3 $1 }
-  | TyAtom '[' ']'            { Box (CInterval (CZero extendedNat) infinity) $1 }
-
-  | TyAtom '<' Effect '>'     { Diamond $3 $1 }
+  : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) $4 $7 }
+  | TyJuxt                         { $1 }
+  | Type '->' Type                 { FunTy Nothing $1 $3 }
+  | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
+  | TyAtom '[' Coeffect ']'        { Box $3 $1 }
+  | TyAtom '[' ']'                 { Box (CInterval (CZero extendedNat) infinity) $1 }
+  | TyAtom '<' Effect '>'          { Diamond $3 $1 }
 
 TyApp :: { Type }
  : TyJuxt TyAtom              { TyApp $1 $2 }
