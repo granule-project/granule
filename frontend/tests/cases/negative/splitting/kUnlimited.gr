@@ -1,0 +1,4 @@
+-- gr --no-eval
+
+k' : ∀ {a : Type, b : Type} . a → b [] → a
+k' x [y] = {! x y !}

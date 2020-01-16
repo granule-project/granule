@@ -1,6 +1,5 @@
-Checking hole2.gr...
-Type checking failed: hole2.gr:
-Found a goal: hole2.gr:11:40:
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/hole2.gr:11:40:
 
    Expected type is: `a0 -> b0`
 
