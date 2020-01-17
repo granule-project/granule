@@ -52,7 +52,9 @@ holeRefactorDef cases def =
   where
     updateEquations [eqn] =
       let updated = holeRefactorEqn eqn
-      in  map (\ cas -> (\pats eqn -> eqn {equationPatterns = pats}) cas updated) cases
+      in map
+           (\cas -> (\pats eqn -> eqn {equationPatterns = pats}) cas updated)
+           cases
     updateEquations _ = error "Only one LHS for now"
 
 holeRefactorEqn :: Equation () () -> Equation () ()

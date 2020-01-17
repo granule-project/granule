@@ -11,7 +11,6 @@
 
 module Language.Granule.Checker.Monad where
 
-import Data.Char (isSpace)
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
 import Data.List (intercalate, transpose)
@@ -589,10 +588,7 @@ instance UserMsg CheckerError where
              intercalate "\n     " (formatCases (snd cases)))
 
     where
-      formatCases = map unwords . transpose . map (padToLongest . map parenthesise) . transpose . map (map pretty)
-
-      parenthesise pat = if any isSpace pat then "(" <> pat <> ")" else pat
-
+      formatCases = map unwords . transpose . map padToLongest . transpose . map (map pretty)
       padToLongest xs =
         let size = maximum (map length xs)
         in  map (\s -> s ++ replicate (size - length s) ' ') xs

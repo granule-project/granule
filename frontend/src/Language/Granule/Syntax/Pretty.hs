@@ -217,7 +217,10 @@ instance Pretty (Pattern a) where
     pretty (PBox _ _ _ p)     = "[" <> pretty p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
-    pretty (PConstr _ _ _ name args) = intercalate " " (pretty name : map prettyNested args)
+    pretty (PConstr _ _ _ name args) = 
+      if null args
+        then pretty name
+        else "(" <> unwords (pretty name : map prettyNested args) <> ")"
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     pretty [] = ""
