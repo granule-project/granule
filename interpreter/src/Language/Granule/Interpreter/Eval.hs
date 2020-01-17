@@ -217,10 +217,10 @@ pmatch ::
 pmatch _ [] _ =
   return Nothing
 
-pmatch _ ((PWild _ _, e):_)  _ =
+pmatch _ ((PWild _ _ _, e):_)  _ =
   return $ Just e
 
-pmatch ctxt ((PConstr _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
+pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
  | id == id' && length innerPs == length vs = do
 
   -- Fold over the inner patterns
@@ -233,18 +233,18 @@ pmatch ctxt ((PConstr _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
     -- There was a failure somewhere
     Nothing  -> pmatch ctxt ps v
 
-pmatch _ ((PVar _ _ var, e):_) v =
+pmatch _ ((PVar _ _ _ var, e):_) v =
   return $ Just $ subst (Val nullSpan () False v) var e
 
-pmatch ctxt ((PBox _ _ p, e):ps) v@(Promote _ (Val _ _ _ v')) = do
+pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Promote _ (Val _ _ _ v')) = do
   match <- pmatch ctxt [(p, e)] v'
   case match of
     Just e -> return $ Just e
     Nothing -> pmatch ctxt ps v
 
-pmatch ctxt ((PInt _ _ n, e):ps) (NumInt m) | n == m = return $ Just e
+pmatch ctxt ((PInt _ _ _ n, e):ps) (NumInt m) | n == m = return $ Just e
 
-pmatch ctxt ((PFloat _ _ n, e):ps) (NumFloat m )| n == m = return $ Just e
+pmatch ctxt ((PFloat _ _ _ n, e):ps) (NumFloat m )| n == m = return $ Just e
 
 pmatch ctxt (_:ps) v = pmatch ctxt ps v
 
@@ -416,7 +416,7 @@ builtIns =
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var [Equation _ _ [] e] _ : defs) = do
+evalDefs ctxt (Def _ var [Equation _ _ rf [] e] _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
@@ -433,7 +433,7 @@ instance RuntimeRep Def where
   toRuntimeRep (Def s i eqs tys) = Def s i (map toRuntimeRep eqs) tys
 
 instance RuntimeRep Equation where
-  toRuntimeRep (Equation s a ps e) = Equation s a ps (toRuntimeRep e)
+  toRuntimeRep (Equation s a rf ps e) = Equation s a rf ps (toRuntimeRep e)
 
 instance RuntimeRep Expr where
   toRuntimeRep (Val s a rf v) = Val s a rf (toRuntimeRep v)

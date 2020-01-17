@@ -123,7 +123,7 @@ buildConstructorPatterns span id constructors = do
     mkPat :: (Id, [Maybe Id]) -> Checker (Pattern ())
     mkPat (name, ids) = do
       vars <- genFresh ids
-      return $ PConstr span () name (map (PVar span ()) vars)
+      return $ PConstr span () False name (map (PVar span () False) vars)
     genFresh :: [Maybe Id] -> Checker [Id]
     genFresh ids = do
       let baseIds = map (fromMaybe id) ids
@@ -131,10 +131,10 @@ buildConstructorPatterns span id constructors = do
       return $ map mkId freshStrings
 
 buildVariablePatterns :: Span -> Id -> (Id, [Pattern ()])
-buildVariablePatterns span id = (id, pure $ PVar span () id)
+buildVariablePatterns span id = (id, pure $ PVar span () False id)
 
 buildBoxPattern :: Span -> Id -> (Id, [Pattern ()])
-buildBoxPattern span id = (id, pure $ PBox span () (PVar span () id))
+buildBoxPattern span id = (id, pure $ PBox span () False (PVar span () False id))
 
 tsTypeNames :: TypeScheme -> [Maybe Id]
 tsTypeNames (Forall _ _ _ t) = typeNames t

@@ -289,7 +289,7 @@ checkEquation :: (?globals :: Globals) =>
   -> TypeScheme      -- Type scheme
   -> Checker (Equation () Type)
 
-checkEquation defCtxt id (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
+checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
@@ -340,7 +340,7 @@ checkEquation defCtxt id (Equation s () pats expr) tys@(Forall _ foralls constra
 
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
-      let elab = Equation s ty elaborated_pats elaboratedExpr
+      let elab = Equation s ty rf elaborated_pats elaboratedExpr
 
       elab' <- substitute subst'' elab
       return elab'

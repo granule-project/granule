@@ -12,7 +12,7 @@ import Data.List ((\\), delete)
 import Data.Set (Set)
 import qualified Data.Map as M
 import GHC.Generics (Generic)
-import qualified Text.Reprinter as Rp (Data)
+import qualified Text.Reprinter as Rp
 
 import Language.Granule.Context (Ctxt)
 import Language.Granule.Syntax.FirstParameter
@@ -60,6 +60,7 @@ data Equation v a =
     Equation {
         equationSpan       :: Span,
         equationAnnotation :: a,
+        equationRefactored :: Bool,
         equationPatterns   :: [Pattern a],
         equationBody       :: Expr v a }
     deriving (Generic)
@@ -68,6 +69,11 @@ deriving instance (Eq v, Eq a) => Eq (Equation v a)
 deriving instance (Show v, Show a) => Show (Equation v a)
 deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (Equation v a)
 instance FirstParameter (Equation v a) Span
+
+instance Rp.Refactorable (Equation v a) where
+  isRefactored eqn = if equationRefactored eqn then Just Rp.Replace else Nothing
+
+  getSpan = convSpan . equationSpan
 
 definitionType :: Def v a -> Type
 definitionType Def { defTypeScheme = ts } =
@@ -149,10 +155,10 @@ instance Monad m => Freshenable m DataConstr where
     return $ DataConstrNonIndexed sp v ts
 
 instance Monad m => Freshenable m (Equation v a) where
-  freshen (Equation s a ps e) = do
+  freshen (Equation s a rf ps e) = do
     ps <- mapM freshen ps
     e <- freshen e
-    return (Equation s a ps e)
+    return (Equation s a rf ps e)
 
 -- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
@@ -162,7 +168,7 @@ instance Monad m => Freshenable m (Def v a) where
     return (Def s var eqs t)
 
 instance Term (Equation v a) where
-  freeVars (Equation s a binders body) =
+  freeVars (Equation s a _ binders body) =
       freeVars body \\ concatMap boundVars binders
 
 instance Term (Def v a) where

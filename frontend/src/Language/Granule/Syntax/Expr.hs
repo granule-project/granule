@@ -178,7 +178,7 @@ deriving instance ((Rp.Data (ExprFix2 ValueF ExprF ev a)), Rp.Data ev, Rp.Data a
 -- Syntactic sugar constructor
 letBox :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
 letBox s pat e1 e2 =
-  App s () False (Val s () False (Abs () (PBox s () pat) Nothing e2)) e1
+  App s () False (Val s () False (Abs () (PBox s () False pat) Nothing e2)) e1
 
 pair :: Expr v () -> Expr v () -> Expr v ()
 pair e1 e2 = App s () False (App s () False (Val s () False (Constr () (mkId "(,)") [])) e1) e2

@@ -86,7 +86,7 @@ ctxtFromTypedPattern' :: (?globals :: Globals) =>
   -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
+ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
     -- DESIGN DECISION: We've turned off the checks that our linearity for ints
     -- when preceded by other concrete matches. (15/02/19) - DAO
     -- But we want to think about this more in the future
@@ -104,18 +104,18 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
             isPoly <- polyShaped t
             if isPoly
               then illLinearityMismatch s (pure NonLinearPattern)
-              else return ([], [], [], PWild s t, Full)
+              else return ([], [], [], PWild s t rf, Full)
 
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
               addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
 
-              return ([], [], [], PWild s t, NotFull)
+              return ([], [], [], PWild s t rf, NotFull)
 
   --  _ -> illLinearityMismatch s [NonLinearPattern]
 
-ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
-    let elabP = PVar s t v
+ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
+    let elabP = PVar s t rf v
 
     case outerCoeff of
       Nothing ->
@@ -124,24 +124,24 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
          return ([(v, Discharged t coeff)], [], [], elabP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
   | internalName c == "Int" = do
 
     definiteUnification s outerCoeff ty
 
-    let elabP = PInt s' ty n
+    let elabP = PInt s' ty rf n
     return ([], [], [], elabP, Full)
 
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
   | internalName c == "Float" = do
 
     definiteUnification s outerCoeff ty
 
-    let elabP = PFloat s' ty n
+    let elabP = PFloat s' ty rf n
     return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
+ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
     innerBoxTy <- inferCoeffectType s coeff
 
@@ -160,10 +160,10 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 
-    let elabP = PBox sp t elabPinner
+    let elabP = PBox sp t rf elabPinner
     return (ctxt, eVars, subst, elabP, NotFull)
 
-ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
+ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -226,7 +226,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
 
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
-          let elabP = PConstr s ty dataC elabPs
+          let elabP = PConstr s ty rf dataC elabPs
           return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
@@ -303,9 +303,9 @@ duplicateBinderCheck s ps = case duplicateBinders of
   where
     duplicateBinders = duplicates . concatMap getBinders $ ps
     getBinders = patternFold
-      (\_ _ id -> [sourceName id])
-      (\_ _ -> [])
-      (\_ _ bs -> bs)
+      (\_ _ _ id -> [sourceName id])
       (\_ _ _ -> [])
-      (\_ _ _ -> [])
-      (\_ _ _ bss -> concat bss)
+      (\_ _ _ bs -> bs)
+      (\_ _ _ _ -> [])
+      (\_ _ _ _ -> [])
+      (\_ _ _ _ bss -> concat bss)

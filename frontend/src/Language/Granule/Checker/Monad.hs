@@ -111,7 +111,7 @@ data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 -- is checked elsewhere
 initialisePatternConsumptions :: [Equation v a] -> [Consumption]
 initialisePatternConsumptions [] = []
-initialisePatternConsumptions ((Equation _ _ pats _):_) =
+initialisePatternConsumptions ((Equation _ _ _ pats _):_) =
   map (\_ -> NotFull) pats
 
 -- Join information about consumption between branches

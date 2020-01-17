@@ -182,18 +182,18 @@ Binding :: { (Maybe String, Equation () ()) }
   : VAR '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $3)
-          return (Just $ symString $1, Equation span () [] $3) }
+          return (Just $ symString $1, Equation span () False [] $3) }
 
   | VAR Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
-          return (Just $ symString $1, Equation span () $2 $4) }
+          return (Just $ symString $1, Equation span () False $2 $4) }
 
 -- this was probably a silly idea @buggymcbugfix
   -- | '|' Pats '=' Expr
   --     {% do
   --         span <- mkSpan (getPos $1, getEnd $4)
-  --         return (Nothing, Equation span () $2 $4) }
+  --         return (Nothing, Equation span () False $2 $4) }
 
 DataConstrs :: { [DataConstr] }
   : DataConstr DataConstrNext { $1 : $2 }
@@ -228,30 +228,30 @@ Pats :: { [Pattern ()] }
 
 PAtom :: { Pattern () }
   : VAR
-       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ PVar sp () (mkId $ symString $1) }
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ PVar sp () False (mkId $ symString $1) }
 
   | '_'
-       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ PWild sp () }
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ PWild sp () False }
 
   | INT
-       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenInt _ x = $1 in PInt sp () x }
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenInt _ x = $1 in PInt sp () False x }
 
   | FLOAT
-       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenFloat _ x = $1 in PFloat sp () $ read x }
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenFloat _ x = $1 in PFloat sp () False $ read x }
 
   | CONSTR
-       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenConstr _ x = $1 in PConstr sp () (mkId x) [] }
+       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ let TokenConstr _ x = $1 in PConstr sp () False (mkId x) [] }
 
   | '(' NAryConstr ')'        { $2 }
 
   | '[' PAtom ']'
-       {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () $2 }
+       {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
   | '[' NAryConstr ']'
-       {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () $2 }
+       {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
   | '(' PMolecule ',' PMolecule ')'
-       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () (mkId ",") [$2, $4] }
+       {% (mkSpan (getPos $1, getPos $5)) >>= \sp -> return $ PConstr sp () False (mkId ",") [$2, $4] }
 
 PMolecule :: { Pattern () }
   : NAryConstr                { $1 }
@@ -260,7 +260,7 @@ PMolecule :: { Pattern () }
 NAryConstr :: { Pattern () }
   : CONSTR Pats               {% let TokenConstr _ x = $1
                                 in (mkSpan (getPos $1, getEnd $ last $2)) >>=
-                                       \sp -> return $ PConstr sp  () (mkId x) $2 }
+                                       \sp -> return $ PConstr sp () False (mkId x) $2 }
 
 ForallSig :: { [(Id, Kind)] }
  : '{' VarSigs '}' { $2 }
@@ -421,8 +421,8 @@ Expr :: { Expr () () }
         span2 <- mkSpan $ getPosToSpan $3
         span3 <- mkSpan $ getPosToSpan $3
         return $ Case span1 () False $2
-                  [(PConstr span2 () (mkId "True") [], $4),
-                     (PConstr span3 () (mkId "False") [], $6)] }
+                  [(PConstr span2 () False (mkId "True") [], $4),
+                     (PConstr span3 () False (mkId "False") [], $6)] }
 
   | Form
     { $1 }

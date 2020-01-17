@@ -450,11 +450,11 @@ instance Substitutable Constraint where
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
 instance Substitutable (Equation () Type) where
-  substitute ctxt (Equation sp ty patterns expr) =
+  substitute ctxt (Equation sp ty rf patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
          expr' <- substitute ctxt expr
-         return $ Equation sp ty' pat' expr'
+         return $ Equation sp ty' rf pat' expr'
 
 substituteValue :: (?globals::Globals)
                 => Substitution
@@ -516,24 +516,24 @@ instance Substitutable (Value () Type) where
 
 instance Substitutable (Pattern Type) where
   substitute ctxt = patternFoldM
-      (\sp ann nm -> do
+      (\sp ann rf nm -> do
           ann' <- substitute ctxt ann
-          return $ PVar sp ann' nm)
-      (\sp ann -> do
+          return $ PVar sp ann' rf nm)
+      (\sp ann rf -> do
           ann' <- substitute ctxt ann
-          return $ PWild sp ann')
-      (\sp ann pat -> do
+          return $ PWild sp ann' rf)
+      (\sp ann rf pat -> do
           ann' <- substitute ctxt ann
-          return $ PBox sp ann' pat)
-      (\sp ann int -> do
+          return $ PBox sp ann' rf pat)
+      (\sp ann rf int -> do
           ann' <- substitute ctxt ann
-          return $ PInt sp ann' int)
-      (\sp ann doub -> do
+          return $ PInt sp ann' rf int)
+      (\sp ann rf doub -> do
           ann' <- substitute ctxt ann
-          return $ PFloat sp ann' doub)
-      (\sp ann nm pats -> do
+          return $ PFloat sp ann' rf doub)
+      (\sp ann rf nm pats -> do
           ann' <- substitute ctxt ann
-          return $ PConstr sp ann' nm pats)
+          return $ PConstr sp ann' rf nm pats)
 
 class Unifiable t where
     unify :: (?globals :: Globals) => t -> t -> Checker (Maybe Substitution)
