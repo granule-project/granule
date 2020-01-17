@@ -10,6 +10,7 @@ import Language.Granule.Checker.Monad
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 
 import Language.Granule.Utils
@@ -18,47 +19,53 @@ import Language.Granule.Utils
   = HoleMessage
     { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
 -}
-rewriteHole :: (?globals :: Globals) => String -> AST () () -> CheckerError -> IO ()
+rewriteHole ::
+     (?globals :: Globals) => String -> AST () () -> CheckerError -> IO ()
 rewriteHole input ast HoleMessage {..} = do
   let source = Text.pack input
-  debugM' "AST" (show ast)
-  let refactored = refactorEmptyHoles source ast
+  let refactored = rewriteHoles source (snd cases) ast
   putStrLn (Text.unpack refactored)
   return ()
 rewriteHole _ _ _ = error "Impossible"
-
-refactorEmptyHoles :: (?globals :: Globals) => Source -> AST () () -> Source
-refactorEmptyHoles source =
-  runIdentity . (\ast -> reprint astReprinter ast source) . emptyHoles
 
 astReprinter :: (?globals :: Globals) => Reprinting Identity
 astReprinter = catchAll `extQ` reprintExpr
   where
     reprintExpr x = genReprinting (return . Text.pack . pretty) (x :: Def () ())
 
--- Converts e.g. {! x !} to ?
+-- Converts e.g. {! x !} to ? and replicates equation for each pattern
 -- TODO: Support nested holes
 -- TODO: Holes inside Val e.g. lambda
-emptyHoles :: AST () () -> AST () ()
-emptyHoles ast =
-  (ast {definitions = map emptyHolesDef (definitions ast) })
+-- TODO: Support multiple equations before refactor
+rewriteHoles ::
+     (?globals :: Globals) => Source -> [[Pattern ()]] -> AST () () -> Source
+rewriteHoles source cases =
+  runIdentity . (\ast -> reprint astReprinter ast source) . holeRefactor cases
 
-emptyHolesDef :: Def () () -> Def () ()
-emptyHolesDef def =
-  def
-  { defEquations = map emptyHolesEqn (defEquations def)
-  , defRefactored = True }
+holeRefactor :: [[Pattern ()]] -> AST () () -> AST () ()
+holeRefactor cases ast =
+  ast {definitions = map (holeRefactorDef cases) (definitions ast)}
 
-emptyHolesEqn :: Equation () () -> Equation () ()
-emptyHolesEqn eqn =
-  eqn
-  { equationBody = emptyHolesExpr (equationBody eqn)
-  , equationRefactored = True }
+holeRefactorDef :: [[Pattern ()]] -> Def () () -> Def () ()
+holeRefactorDef cases def =
+  def {defEquations = updateEquations (defEquations def), defRefactored = True}
+  where
+    updateEquations [eqn] =
+      let updated = holeRefactorEqn eqn
+      in  map (\ cas -> (\pats eqn -> eqn {equationPatterns = pats}) cas updated) cases
+    updateEquations _ = error "Only one LHS for now"
 
-emptyHolesExpr :: Expr () () -> Expr () ()
-emptyHolesExpr (Hole sp a _ _) = Hole sp a True []
-emptyHolesExpr (App sp a rf e1 e2) = App sp a rf (emptyHolesExpr e1) (emptyHolesExpr e2)
-emptyHolesExpr (Binop sp a rf op e1 e2) = Binop sp a rf op (emptyHolesExpr e1) (emptyHolesExpr e2)
-emptyHolesExpr (LetDiamond sp a rf pat ty e1 e2) = LetDiamond sp a rf pat ty (emptyHolesExpr e1) (emptyHolesExpr e2)
-emptyHolesExpr (Case sp a rf e cases) = Case sp a rf (emptyHolesExpr e) (map (second emptyHolesExpr) cases)
-emptyHolesExpr v@Val{} = v
+holeRefactorEqn :: Equation () () -> Equation () ()
+holeRefactorEqn eqn = eqn {equationBody = holeRefactorExpr (equationBody eqn)}
+
+holeRefactorExpr :: Expr () () -> Expr () ()
+holeRefactorExpr (Hole sp a _ _) = Hole sp a True []
+holeRefactorExpr (App sp a rf e1 e2) =
+  App sp a rf (holeRefactorExpr e1) (holeRefactorExpr e2)
+holeRefactorExpr (Binop sp a rf op e1 e2) =
+  Binop sp a rf op (holeRefactorExpr e1) (holeRefactorExpr e2)
+holeRefactorExpr (LetDiamond sp a rf pat ty e1 e2) =
+  LetDiamond sp a rf pat ty (holeRefactorExpr e1) (holeRefactorExpr e2)
+holeRefactorExpr (Case sp a rf e cases) =
+  Case sp a rf (holeRefactorExpr e) (map (second holeRefactorExpr) cases)
+holeRefactorExpr v@Val {} = v
