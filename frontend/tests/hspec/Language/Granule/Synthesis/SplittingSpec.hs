@@ -24,7 +24,7 @@ spec = let ?globals = mempty in do
     -- not x = {! x !}
     it "Boolean not function" $ do
       res <- runSplitter (TyCon boolId) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))]
-      res `shouldBe` ([xId], [[PConstr nullSpan () falseId []], [PConstr nullSpan () trueId []]])
+      res `shouldBe` ([xId], [[PConstr nullSpan () False falseId []], [PConstr nullSpan () False trueId []]])
 
     -- append : ∀ { a : Type, n m : Nat } . Vec n a → Vec m a → Vec (m + n) a
     -- append x y = {! x y !}
@@ -33,13 +33,13 @@ spec = let ?globals = mempty in do
         (xId, Linear (TyApp (TyApp (TyCon vecId) (TyVar nId)) (TyVar aId))),
         (yId, Linear (TyApp (TyApp (TyCon vecId) (TyVar mId)) (TyVar aId)))
         ]
-      res `shouldBe` ([xId, yId], [[PConstr nullSpan () nilId [], PConstr nullSpan () nilId []], [PConstr nullSpan () nilId [], PConstr nullSpan () consId [PVar nullSpan () (Id "y.0" "y.0"), PVar nullSpan () (Id "y.1" "y.1")]], [PConstr nullSpan () consId [PVar nullSpan () (Id "x.0" "x.0"), PVar nullSpan () (Id "x.1" "x.1")], PConstr nullSpan () nilId []], [PConstr nullSpan () consId [PVar nullSpan () (Id "x.0" "x.0"), PVar nullSpan () (Id "x.1" "x.1")],PConstr nullSpan () consId [PVar nullSpan () (Id "y.0" "y.0"), PVar nullSpan () (Id "y.1" "y.1")]]])
+      res `shouldBe` ([xId, yId], [[PConstr nullSpan () False nilId [], PConstr nullSpan () False nilId []], [PConstr nullSpan () False nilId [], PConstr nullSpan () False consId [PVar nullSpan () False (Id "y.0" "y.0"), PVar nullSpan () False (Id "y.1" "y.1")]], [PConstr nullSpan () False consId [PVar nullSpan () False (Id "x.0" "x.0"), PVar nullSpan () False (Id "x.1" "x.1")], PConstr nullSpan () False nilId []], [PConstr nullSpan () False consId [PVar nullSpan () False (Id "x.0" "x.0"), PVar nullSpan () False (Id "x.1" "x.1")],PConstr nullSpan () False consId [PVar nullSpan () False (Id "y.0" "y.0"), PVar nullSpan () False (Id "y.1" "y.1")]]])
 
     -- i : ∀ { a : Type } . a → a
     -- i x = {! x !}
     it "Polymorphic identity" $ do
       res <- runSplitter (FunTy Nothing (TyVar aId) (TyVar aId)) [] [] [] [(xId, Linear (TyVar aId))]
-      res `shouldBe` ([xId], [[PVar nullSpan () xId]])
+      res `shouldBe` ([xId], [[PVar nullSpan () False xId]])
 
     -- i : ∀ { a : Type } . a → a
     -- i x = {! !}
@@ -54,7 +54,7 @@ spec = let ?globals = mempty in do
         (FunTy Nothing (TyVar aId) (FunTy Nothing (Box (CNat 0) (TyVar bId)) (TyVar aId)))
         [] [] []
         [(xId, Linear (TyVar aId)), (yId, Linear (Box (CNat 0) (TyVar bId)))]
-      res `shouldBe` ([xId, yId], [[PVar nullSpan () xId, PBox nullSpan () (PVar nullSpan () yId)]])
+      res `shouldBe` ([xId, yId], [[PVar nullSpan () False xId, PBox nullSpan () False (PVar nullSpan () False yId)]])
 
     -- o : ∀ { a b c : Type } . (a → b) → (b → c) → (a → c)
     -- o a b c = {! a b c !}
@@ -68,9 +68,9 @@ spec = let ?globals = mempty in do
           (cId, Linear (TyVar aId))
         ]
       res `shouldBe` ([aId, bId, cId], [
-          [PVar nullSpan () aId,
-          PVar nullSpan () bId,
-          PVar nullSpan () cId]])
+          [PVar nullSpan () False aId,
+          PVar nullSpan () False bId,
+          PVar nullSpan () False cId]])
 
     -- f : ∀ { a : Type, n : Nat } . Vec 0 a → Vec 1 a → Vec 2 a
     -- f xs ys = {! xs ys !}
@@ -80,7 +80,7 @@ spec = let ?globals = mempty in do
         vecDataCons vecTyCons vecTyVarCtxt
         [(xId, Linear (TyApp (TyApp (TyCon vecId) (TyInt 0)) (TyVar aId))),
          (yId, Linear (TyApp (TyApp (TyCon vecId) (TyInt 1)) (TyVar aId)))]
-      res `shouldBe` ([xId, yId], [[PConstr nullSpan () nilId [], PConstr nullSpan () consId [PVar nullSpan () (Id "y.0" "y.0"), PVar nullSpan () (Id "y.1" "y.1")]]])
+      res `shouldBe` ([xId, yId], [[PConstr nullSpan () False nilId [], PConstr nullSpan () False consId [PVar nullSpan () False (Id "y.0" "y.0"), PVar nullSpan () False (Id "y.1" "y.1")]]])
 
     -- flip : ∀ { a : Type, b : Type } . (a, b) → (b, a)
     -- flip pair = {! pair !}
@@ -89,7 +89,7 @@ spec = let ?globals = mempty in do
         (TyApp (TyApp (TyCon (Id "," ",")) (TyVar bId)) (TyVar aId))
         tupleDataCons tupleTypeCons [(aId, (KType, ForallQ)),(bId, (KType, ForallQ))]
         [(xId, Linear (TyApp (TyApp (TyCon (Id "," ",")) (TyVar aId)) (TyVar bId)))]
-      res `shouldBe` ([xId], [[PConstr nullSpan () tupleId [PVar nullSpan () (Id "x.0" "x.0"), PVar nullSpan () (Id "x.1" "x.1")]]])
+      res `shouldBe` ([xId], [[PConstr nullSpan () False tupleId [PVar nullSpan () False (Id "x.0" "x.0"), PVar nullSpan () False (Id "x.1" "x.1")]]])
 
 
 boolId, vecId, natId, xId, yId, aId, bId, cId, nId, mId, nilId, consId, trueId, falseId, tupleId :: Id

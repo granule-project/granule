@@ -88,7 +88,7 @@ spec = let ?globals = mempty in do
         annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
 
 extractMainExpr :: Def v a -> Expr v a
-extractMainExpr (Def _ _ [(Equation _ _ _ e)] _) = e
+extractMainExpr (Def _ _ [(Equation _ _ _ _ e)] _) = e
 extractMainExpr _ = undefined
 
 runCtxts
