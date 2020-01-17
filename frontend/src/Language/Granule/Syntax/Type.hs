@@ -25,7 +25,7 @@ data TypeScheme =
     [(Id, Kind)]  -- binders
     [Type]        -- constraints
     Type          -- type
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, Rp.Data)
 
 -- Constructors and operators are just strings
 data TypeOperator
@@ -68,7 +68,7 @@ data Kind = KType
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
           | KUnion Kind Kind
-    deriving (Show, Ord, Eq)
+    deriving (Show, Ord, Eq, Rp.Data)
 
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyVar v) = KVar v

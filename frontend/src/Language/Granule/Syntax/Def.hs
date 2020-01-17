@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -11,6 +12,7 @@ import Data.List ((\\), delete)
 import Data.Set (Set)
 import qualified Data.Map as M
 import GHC.Generics (Generic)
+import qualified Text.Reprinter as Rp (Data)
 
 import Language.Granule.Context (Ctxt)
 import Language.Granule.Syntax.FirstParameter
@@ -33,8 +35,10 @@ data AST v a =
     , hiddenNames :: M.Map Id Id -- map from names to the module hiding them
     , moduleName  :: Maybe Id
     }
+
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
+deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (AST v a)
 
 type Import = FilePath
 
@@ -45,10 +49,11 @@ data Def v a = Def
   , defEquations :: [Equation v a]
   , defTypeScheme :: TypeScheme
   }
-  deriving Generic
+  deriving (Generic)
 
 deriving instance (Eq v, Eq a) => Eq (Def v a)
 deriving instance (Show v, Show a) => Show (Def v a)
+deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (Def v a)
 
 -- | Single equation of a function
 data Equation v a =
@@ -57,10 +62,11 @@ data Equation v a =
         equationAnnotation :: a,
         equationPatterns   :: [Pattern a],
         equationBody       :: Expr v a }
-    deriving Generic
+    deriving (Generic)
 
 deriving instance (Eq v, Eq a) => Eq (Equation v a)
 deriving instance (Show v, Show a) => Show (Equation v a)
+deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (Equation v a)
 instance FirstParameter (Equation v a) Span
 
 definitionType :: Def v a -> Type
@@ -75,7 +81,7 @@ data DataDecl = DataDecl
   , dataDeclKindAnn :: Maybe Kind
   , dataDeclDataConstrs :: [DataConstr]
   }
-  deriving (Generic, Show, Eq)
+  deriving (Generic, Show, Eq, Rp.Data)
 
 instance FirstParameter DataDecl Span
 
@@ -85,7 +91,7 @@ data DataConstr
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrTypeScheme :: TypeScheme } -- ^ GADTs
   | DataConstrNonIndexed
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, Rp.Data)
 
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
