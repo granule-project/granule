@@ -25,7 +25,7 @@ import Data.Functor.Identity (runIdentity)
 -- | Check the kind of a definition
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
-kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
+kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
@@ -44,7 +44,7 @@ kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
                    quantifiedVariables
         modify (\st -> st { tyVarContext = [] })
         -- Update the def with the resolved quantifications
-        return (Def s id eqs (Forall s' qVars constraints ty))
+        return (Def s id rf eqs (Forall s' qVars constraints ty))
 
     --KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> throw KindMismatch{ errLoc = s, tyActualK = Just ty, kExpected = KType, kActual = kind }

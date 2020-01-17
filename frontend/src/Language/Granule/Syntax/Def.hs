@@ -46,6 +46,7 @@ type Import = FilePath
 data Def v a = Def
   { defSpan :: Span
   , defId :: Id
+  , defRefactored :: Bool
   , defEquations :: [Equation v a]
   , defTypeScheme :: TypeScheme
   }
@@ -54,6 +55,11 @@ data Def v a = Def
 deriving instance (Eq v, Eq a) => Eq (Def v a)
 deriving instance (Show v, Show a) => Show (Def v a)
 deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (Def v a)
+
+instance Rp.Refactorable (Def v a) where
+  isRefactored def = if defRefactored def then Just Rp.Replace else Nothing
+
+  getSpan = convSpan . defSpan
 
 -- | Single equation of a function
 data Equation v a =
@@ -162,15 +168,15 @@ instance Monad m => Freshenable m (Equation v a) where
 
 -- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
-  freshen (Def s var eqs t) = do
+  freshen (Def s var rf eqs t) = do
     t  <- freshen t
     eqs <- mapM freshen eqs
-    return (Def s var eqs t)
+    return (Def s var rf eqs t)
 
 instance Term (Equation v a) where
   freeVars (Equation s a _ binders body) =
       freeVars body \\ concatMap boundVars binders
 
 instance Term (Def v a) where
-  freeVars (Def _ name equations _) =
+  freeVars (Def _ name _ equations _) =
     delete name (concatMap freeVars equations)

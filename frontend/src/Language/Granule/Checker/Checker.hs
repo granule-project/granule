@@ -61,7 +61,7 @@ check ast@(AST dataDecls defs imports hidden name) =
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
-      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
       pure $ AST dataDecls defs imports hidden name)
 
@@ -76,7 +76,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
-      let defCtxt = map (\(Def _ name _ tys) -> (name, tys)) defs
+      let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       -- Since we need to return a type scheme, have a look first
       -- for top-level identifiers with their schemes
       case expr of
@@ -250,7 +250,7 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty)) = do
+checkDef defCtxt (Def s defName rf equations tys@(Forall s_t foralls constraints ty)) = do
 
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
@@ -280,7 +280,7 @@ checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty
 
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
-    pure $ Def s defName elaboratedEquations tys
+    pure $ Def s defName rf elaboratedEquations tys
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions

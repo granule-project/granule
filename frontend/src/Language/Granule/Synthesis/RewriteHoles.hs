@@ -21,6 +21,7 @@ import Language.Granule.Utils
 rewriteHole :: (?globals :: Globals) => String -> AST () () -> CheckerError -> IO ()
 rewriteHole input ast HoleMessage {..} = do
   let source = Text.pack input
+  debugM' "AST" (show ast)
   let refactored = refactorEmptyHoles source ast
   putStrLn (Text.unpack refactored)
   return ()
@@ -33,7 +34,7 @@ refactorEmptyHoles source =
 astReprinter :: (?globals :: Globals) => Reprinting Identity
 astReprinter = catchAll `extQ` reprintExpr
   where
-    reprintExpr x = genReprinting (return . Text.pack . pretty) (x :: Expr () ())
+    reprintExpr x = genReprinting (return . Text.pack . pretty) (x :: Def () ())
 
 -- Converts e.g. {! x !} to ?
 -- TODO: Support nested holes
@@ -45,12 +46,14 @@ emptyHoles ast =
 emptyHolesDef :: Def () () -> Def () ()
 emptyHolesDef def =
   def
-  {defEquations = map emptyHolesEqn (defEquations def) }
+  { defEquations = map emptyHolesEqn (defEquations def)
+  , defRefactored = True }
 
 emptyHolesEqn :: Equation () () -> Equation () ()
 emptyHolesEqn eqn =
   eqn
-  { equationBody = emptyHolesExpr (equationBody eqn) }
+  { equationBody = emptyHolesExpr (equationBody eqn)
+  , equationRefactored = True }
 
 emptyHolesExpr :: Expr () () -> Expr () ()
 emptyHolesExpr (Hole sp a _ _) = Hole sp a True []

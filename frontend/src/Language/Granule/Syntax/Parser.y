@@ -151,7 +151,7 @@ Def :: { Def () () }
 
           (_, bindings) -> do
             span <- mkSpan (thd3 $1, endPos $ getSpan $ last bindings)
-            return $ Def span (mkId name) bindings (snd3 $1)
+            return $ Def span (mkId name) False bindings (snd3 $1)
     }
 
 DataDecl :: { DataDecl }
