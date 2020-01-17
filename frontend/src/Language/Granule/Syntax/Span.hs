@@ -35,4 +35,4 @@ getStart = startPos . getSpan
 
 convSpan :: Span -> Rp.Span
 convSpan Span{startPos = sp, endPos = ep} =
-  ((Rp.Line *** Rp.Col) ep, (Rp.Line *** Rp.Col) ep)
+  ((Rp.Line *** Rp.Col) sp, (Rp.Line *** Rp.Col) ep)

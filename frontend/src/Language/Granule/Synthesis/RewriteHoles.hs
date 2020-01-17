@@ -2,7 +2,7 @@
 
 module Language.Granule.Synthesis.RewriteHoles where
 
---import Debug.Trace
+import Control.Arrow (second)
 import qualified Data.Text.Lazy as Text
 import Text.Reprinter
 
@@ -20,11 +20,9 @@ import Language.Granule.Utils
 -}
 rewriteHole :: (?globals :: Globals) => String -> AST () () -> CheckerError -> IO ()
 rewriteHole input ast HoleMessage {..} = do
-  debugM' "ast" (show ast)
   let source = Text.pack input
-  debugM' "src" (Text.unpack source)
   let refactored = refactorEmptyHoles source ast
-  debugM' "rft" (Text.unpack refactored)
+  putStrLn (Text.unpack refactored)
   return ()
 rewriteHole _ _ _ = error "Impossible"
 
@@ -38,22 +36,26 @@ astReprinter = catchAll `extQ` reprintExpr
     reprintExpr x = genReprinting (return . Text.pack . pretty) (x :: Expr () ())
 
 -- Converts e.g. {! x !} to ?
--- TODO: Also pass back count of rewritten holes
 -- TODO: Support nested holes
-emptyHoles :: AST v e -> AST v e
+-- TODO: Holes inside Val e.g. lambda
+emptyHoles :: AST () () -> AST () ()
 emptyHoles ast =
-  ast {definitions = map emptyHolesDef (definitions ast) }
+  (ast {definitions = map emptyHolesDef (definitions ast) })
 
-emptyHolesDef :: Def v e -> Def v e
+emptyHolesDef :: Def () () -> Def () ()
 emptyHolesDef def =
   def
   {defEquations = map emptyHolesEqn (defEquations def) }
 
-emptyHolesEqn :: Equation v e -> Equation v e
+emptyHolesEqn :: Equation () () -> Equation () ()
 emptyHolesEqn eqn =
   eqn
   { equationBody = emptyHolesExpr (equationBody eqn) }
 
-emptyHolesExpr :: Expr v e -> Expr v e
+emptyHolesExpr :: Expr () () -> Expr () ()
 emptyHolesExpr (Hole sp a _ _) = Hole sp a True []
-emptyHolesExpr e = e
+emptyHolesExpr (App sp a rf e1 e2) = App sp a rf (emptyHolesExpr e1) (emptyHolesExpr e2)
+emptyHolesExpr (Binop sp a rf op e1 e2) = Binop sp a rf op (emptyHolesExpr e1) (emptyHolesExpr e2)
+emptyHolesExpr (LetDiamond sp a rf pat ty e1 e2) = LetDiamond sp a rf pat ty (emptyHolesExpr e1) (emptyHolesExpr e2)
+emptyHolesExpr (Case sp a rf e cases) = Case sp a rf (emptyHolesExpr e) (map (second emptyHolesExpr) cases)
+emptyHolesExpr v@Val{} = v

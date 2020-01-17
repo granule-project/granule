@@ -162,18 +162,15 @@ instance Annotated (Value ev Type) Type where
     annotation other = getFirstParameter other
 
 instance Rp.Refactorable (Expr ev a) where
-  isRefactored (App _ _ rf _ _) = Just Rp.Replace
-  isRefactored (Binop _ _ rf _ _ _) = Just Rp.Replace
-  isRefactored (LetDiamond _ _ rf _ _ _ _) = Just Rp.Replace
-  isRefactored (Val _ _ rf _) = Just Rp.Replace
-  isRefactored (Case _ _ rf _ _) = Just Rp.Replace
-  isRefactored (Hole _ _ rf _) = Just Rp.Replace
+  isRefactored (App _ _ True _ _) = Just Rp.Replace
+  isRefactored (Binop _ _ True _ _ _) = Just Rp.Replace
+  isRefactored (LetDiamond _ _ True _ _ _ _) = Just Rp.Replace
+  isRefactored (Val _ _ True _) = Just Rp.Replace
+  isRefactored (Case _ _ True _ _) = Just Rp.Replace
+  isRefactored (Hole _ _ True _) = Just Rp.Replace
+  isRefactored _ = Nothing
 
   getSpan = convSpan . getFirstParameter
-    where
-      convSpan :: Span -> Rp.Span
-      convSpan Span{startPos = sp, endPos = ep} =
-        ((Rp.Line *** Rp.Col) ep, (Rp.Line *** Rp.Col) ep)
 
 deriving instance (Rp.Data (ExprFix2 ValueF ExprF () ()))
 deriving instance ((Rp.Data (ExprFix2 ValueF ExprF ev a)), Rp.Data ev, Rp.Data a) => Rp.Data (Expr ev a)
