@@ -168,25 +168,16 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
                       <> prettyDebug other
 
 evalIn ctxt (TryCatch s _ e1 p _ e2 e3) = do
-  -- (cf. TRY_1)
-  v1 <- evalIn ctxt e1
-  case v1 of
-    (isDiaConstr -> Just e) -> do
-        -- (cf. TRY_2)
-        v1' <- evalIn ctxt e 
-        -- (cf. TRY_BETA_1)
-        pResult  <- pmatch ctxt [(p, e2)] v1'
-        case pResult of
-          Just e2' -> 
-              catch(evalIn ctxt e2')
-              -- (cf. TRY_BETA_2)
-              (\ee -> return evalIn ctxt e3)
-          Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s       
-  other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
-                      <> prettyDebug other
-      
-
-
+  -- (cf. TRY_BETA_1)
+  catch ( e1' <- evalIn ctxt e1 >> 
+    pResult  <- pmatch ctxt [(p, e2)] e1'
+    case pResult of
+      Just e2' -> evalIn ctxt e2'
+      Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s       
+  )
+  -- (cf. TRY_BETA_2)
+  (\e -> evalIn ctxt e3)
+          
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
