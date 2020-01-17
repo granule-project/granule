@@ -4,6 +4,7 @@
 
 module Language.Granule.Syntax.Parser where
 
+import Control.Arrow (second)
 import Control.Monad (forM, when, unless)
 import Control.Monad.Trans.Reader
 import Control.Monad.Trans.Class (lift)
@@ -393,33 +394,33 @@ Expr :: { Expr () () }
   : let LetBind MultiLet
       {% let (_, pat, mt, expr) = $2
       	in (mkSpan (getPos $1, getEnd $3)) >>=
-           \sp -> return $ App sp ()
-                   (Val (getSpan $3) () (Abs () pat mt $3)) expr
+           \sp -> return $ App sp () False
+                   (Val (getSpan $3) () False (Abs () pat mt $3)) expr
       }
 
   | '\\' '(' PAtom ':' Type ')' '->' Expr
       {% (mkSpan (getPos $1, getEnd $8)) >>=
-             \sp -> return $ Val sp () (Abs () $3 (Just $5) $8) }
+             \sp -> return $ Val sp () False (Abs () $3 (Just $5) $8) }
 
   | '\\' PAtom '->' Expr
       {% (mkSpan (getPos $1, getEnd $4)) >>=
-             \sp -> return $ Val sp () (Abs () $2 Nothing $4) }
+             \sp -> return $ Val sp () False (Abs () $2 Nothing $4) }
 
   | let LetBindEff MultiLetEff
       {% let (_, pat, mt, expr) = $2
         in (mkSpan (getPos $1, getEnd $3)) >>=
-              \sp -> return $ LetDiamond sp () pat mt expr $3 }
+              \sp -> return $ LetDiamond sp () False pat mt expr $3 }
 
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
-             \sp -> return $ Case sp () $2 $4 }
+             \sp -> return $ Case sp () False $2 $4 }
 
   | if Expr then Expr else Expr
     {% do
         span1 <- mkSpan (getPos $1, getEnd $6)
         span2 <- mkSpan $ getPosToSpan $3
         span3 <- mkSpan $ getPosToSpan $3
-        return $ Case span1 () $2
+        return $ Case span1 () False $2
                   [(PConstr span2 () (mkId "True") [], $4),
                      (PConstr span3 () (mkId "False") [], $6)] }
 
@@ -442,8 +443,8 @@ MultiLet
     {% let (_, pat, mt, expr) = $2
 
      	in (mkSpan (getPos $1, getEnd $3)) >>=
-           \sp -> return $ App sp ()
-     	               (Val (getSpan $3) () (Abs () pat mt $3)) expr }
+           \sp -> return $ App sp () False
+     	               (Val (getSpan $3) () False (Abs () pat mt $3)) expr }
   | in Expr
     { $2 }
 
@@ -456,7 +457,7 @@ MultiLetEff
   : ';' LetBindEff MultiLetEff
       {% let (_, pat, mt, expr) = $2
 	      in (mkSpan (getPos $1, getEnd $3)) >>=
-             \sp -> return $ LetDiamond sp () pat mt expr $3
+             \sp -> return $ LetDiamond sp () False pat mt expr $3
       }
   | in Expr                   { $2 }
 
@@ -472,55 +473,55 @@ Case :: { (Pattern (), Expr () ()) }
   | NAryConstr '->' Expr      { ($1, $3) }
 
 Form :: { Expr () () }
-  : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpPlus $1 $3 }
-  | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpMinus $1 $3 }
-  | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpTimes $1 $3 }
-  | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesser $1 $3 }
-  | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpGreater $1 $3 }
-  | Form '<=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesserEq $1 $3 }
-  | Form '>=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpGreaterEq $1 $3 }
-  | Form '==' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpEq $1 $3 }
-  | Form '/=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpNotEq $1 $3 }
-  | Form '∘'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () (App sp () (Val sp () (Var () (mkId "compose"))) $1) $3 }
+  : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpPlus $1 $3 }
+  | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpMinus $1 $3 }
+  | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpTimes $1 $3 }
+  | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpLesser $1 $3 }
+  | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpGreater $1 $3 }
+  | Form '<=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpLesserEq $1 $3 }
+  | Form '>=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpGreaterEq $1 $3 }
+  | Form '==' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpEq $1 $3 }
+  | Form '/=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpNotEq $1 $3 }
+  | Form '∘'  Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ App sp () False (App sp () False (Val sp () False (Var () (mkId "compose"))) $1) $3 }
   | Juxt           { $1 }
 
 Juxt :: { Expr () () }
-  : Juxt '`' Atom '`'         {% (mkSpan (getStart $1, getEnd $3)) >>= \sp -> return $ App sp () $3 $1 }
-  | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () $1 $2 }
+  : Juxt '`' Atom '`'         {% (mkSpan (getStart $1, getEnd $3)) >>= \sp -> return $ App sp () False $3 $1 }
+  | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () False $1 $2 }
   | Atom                      { $1 }
 
 Hole :: { Expr () () }
-  : '{!' Vars1 '!}'           {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp (map mkId $2) ()} 
-  | '{!' '!}'                 {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp [] () }
-  | '?'                       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp [] () }
+  : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }
+  | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] }
+  | '?'                       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp () False [] }
 
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }
   | INT                       {% let (TokenInt _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
-                                    >>= \sp -> return $ Val sp () $ NumInt x }
-  -- | '<' Expr '>'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ App sp () (Val sp () (Var () (mkId "pure"))) $2 }
+                                    >>= \sp -> return $ Val sp () False $ NumInt x }
+  -- | '<' Expr '>'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ App sp () False (Val sp () (Var () (mkId "pure"))) $2 }
   | FLOAT                     {% let (TokenFloat _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
-                                     >>= \sp -> return $ Val sp () $ NumFloat $ read x }
+                                     >>= \sp -> return $ Val sp () False $ NumFloat $ read x }
 
-  | VAR                       {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () $ Var () (mkId $ symString $1) }
+  | VAR                       {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Var () (mkId $ symString $1) }
 
-  | '[' Expr ']'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Val sp () $ Promote () $2 }
-  | CONSTR                    {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () $ Constr () (mkId $ constrString $1) [] }
+  | '[' Expr ']'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Val sp () False $ Promote () $2 }
+  | CONSTR                    {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Constr () (mkId $ constrString $1) [] }
   | '(' Expr ',' Expr ')'     {% do
                                     span1 <- (mkSpan (getPos $1, getPos $5))
                                     span2 <- (mkSpan (getPos $1, getPos $3))
                                     span3 <- (mkSpan $ getPosToSpan $3)
-                                    return $ App span1 () (App span2 ()
-                                              (Val span3 () (Constr () (mkId ",") []))
+                                    return $ App span1 () False (App span2 () False
+                                              (Val span3 () False (Constr () (mkId ",") []))
                                                 $2)
                                               $4 }
   | CHAR                      {% (mkSpan $ getPosToSpan $1) >>= \sp ->
-                                  return $ Val sp () $
+                                  return $ Val sp () False $
                                      case $1 of (TokenCharLiteral _ c) -> CharLiteral c }
   | STRING                    {% (mkSpan $ getPosToSpan $1) >>= \sp ->
-                                  return $ Val sp () $
+                                  return $ Val sp () False $
                                       case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
   | Hole                      { $1 }
 

@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE LambdaCase #-}
@@ -9,6 +10,7 @@
 module Language.Granule.Syntax.Pattern where
 
 import GHC.Generics (Generic)
+import qualified Text.Reprinter as Rp (Data)
 
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.FirstParameter
@@ -25,7 +27,7 @@ data Pattern a
   | PInt Span a Int               -- ^ Numeric patterns
   | PFloat Span a Double          -- ^ Float pattern
   | PConstr Span a Id [Pattern a] -- ^ Constructor pattern
-  deriving (Eq, Show, Generic, Functor)
+  deriving (Eq, Show, Generic, Functor, Rp.Data)
 
 instance Term (Pattern a) where
   freeVars _ = []

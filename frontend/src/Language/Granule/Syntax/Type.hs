@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
 
@@ -13,8 +14,9 @@ import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
-import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
+import GHC.Generics (Generic)
+import qualified Text.Reprinter as Rp (Data)
 
 -- | Represent types with a universal quantification at the start
 data TypeScheme =
@@ -39,7 +41,7 @@ data TypeOperator
   | TyOpExpon
   | TyOpMeet
   | TyOpJoin
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Rp.Data)
 
 
 {-| Types.
@@ -55,7 +57,7 @@ data Type = FunTy (Maybe Id) Type Type      -- ^ Function type
           | TyInt Int                       -- ^ Type-level Int
           | TyInfix TypeOperator Type Type  -- ^ Infix type operator
           | TySet [Type]                    -- ^ Type-level set
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Rp.Data)
 
 -- | Kinds
 data Kind = KType
@@ -142,7 +144,7 @@ data Coeffect = CNat      Int
               | CSig      Coeffect Type
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Rp.Data)
 
 -- Algebra for coeffects
 data CoeffectFold a = CoeffectFold

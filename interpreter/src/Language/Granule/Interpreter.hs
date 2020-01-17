@@ -24,7 +24,7 @@ import Control.Monad ((<=<), forM)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import Data.List (intercalate, isPrefixOf, stripPrefix)
+import Data.List (find, intercalate, isPrefixOf, stripPrefix)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import Data.Maybe (fromMaybe)
@@ -39,12 +39,13 @@ import Options.Applicative
 import Options.Applicative.Help.Pretty (string)
 
 import Language.Granule.Checker.Checker
-import Language.Granule.Checker.Monad (CheckerError)
+import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Utils
 import Paths_granule_interpreter (version)
 
@@ -79,6 +80,10 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
             printResult result
             return result
     if all isRight (concat results) then exitSuccess else exitFailure
+
+findHoleMessage :: NonEmpty CheckerError -> Maybe CheckerError
+findHoleMessage xs =
+  find (\ e -> case e of HoleMessage{} -> True; _ -> False) xs
 
 runGrOnStdIn :: GrConfig -> IO ()
 runGrOnStdIn GrConfig{..}
@@ -117,7 +122,10 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
         checked <- try $ check ast
         case checked of
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
-          Right (Left errs) -> return . Left $ CheckerError errs
+          Right (Left errs) ->
+            case (globalsRewriteHoles ?globals, findHoleMessage errs) of
+              (Just True, Just holeMsg) -> rewriteHole input ast holeMsg >> (return . Left $ CheckerError errs)
+              _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
             if noEval then do
               printSuccess "OK"
@@ -300,6 +308,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help ("Program entry point. Defaults to " <> show entryPoint)
             <> metavar "ID"
 
+        globalsRewriteHoles <-
+          flag Nothing (Just True)
+            $ long "rewrite-holes"
+            <> help "WARNING: Destructively overwrite equations containing holes to pattern match on generated case-splits."
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -338,6 +351,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsIncludePath
               , globalsSourceFilePath = Nothing
               , globalsEntryPoint
+              , globalsRewriteHoles
               }
             }
           )

@@ -255,25 +255,25 @@ instance Pretty Id where
 
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
-  pretty (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
+  pretty (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
     "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
-  pretty (App _ _ e1 e2) =
+  pretty (App _ _ _ e1 e2) =
     pretty e1 <> " " <> prettyNested e2
 
-  pretty (Binop _ _ op e1 e2) =
+  pretty (Binop _ _ _ op e1 e2) =
     pretty e1 <> " " <> pretty op <> " " <> pretty e2
 
-  pretty (LetDiamond _ _ v t e1 e2) =
+  pretty (LetDiamond _ _ _ v t e1 e2) =
     "let " <> pretty v <> " :" <> pretty t <> " <- "
           <> pretty e1 <> " in " <> pretty e2
 
-  pretty (Val _ _ v) = pretty v
-  pretty (Case _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
+  pretty (Val _ _ _ v) = pretty v
+  pretty (Case _ _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> pretty p
                       <> " -> " <> pretty e') ps) <> ")"
-  pretty (Hole _ [] _) = "?"
-  pretty (Hole _ vs _) = "{!" <> unwords (map pretty vs) <> "!}"
+  pretty (Hole _ _ _ []) = "?"
+  pretty (Hole _ _ _ vs) = "{!" <> unwords (map pretty vs) <> "!}"
 
 instance Pretty Operator where
   pretty = \case

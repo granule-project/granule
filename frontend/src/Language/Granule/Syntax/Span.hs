@@ -1,6 +1,10 @@
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 
 module Language.Granule.Syntax.Span where
+
+import Control.Arrow ((***))
+import qualified Text.Reprinter as Rp (Data, Span, Col(..), Line(..))
 
 import Language.Granule.Syntax.FirstParameter
 
@@ -9,7 +13,7 @@ type Pos = (Int, Int) -- (line, column)
 data Span = Span { startPos :: Pos
                  , endPos :: Pos
                  , filename :: String }
-  deriving (Eq, Show)
+  deriving (Eq, Show, Rp.Data)
 
 nullSpanLocs :: (Pos, Pos)
 nullSpanLocs = ((0, 0), (0, 0))
@@ -28,3 +32,7 @@ getEnd = endPos . getSpan
 
 getStart ::  FirstParameter t Span => t -> Pos
 getStart = startPos . getSpan
+
+convSpan :: Span -> Rp.Span
+convSpan Span{startPos = sp, endPos = ep} =
+  ((Rp.Line *** Rp.Col) ep, (Rp.Line *** Rp.Col) ep)

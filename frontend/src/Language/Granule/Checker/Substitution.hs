@@ -483,25 +483,25 @@ substituteExpr :: (?globals::Globals)
                => Substitution
                -> ExprF ev Type (Expr ev Type) (Value ev Type)
                -> Checker (Expr ev Type)
-substituteExpr ctxt (AppF sp ty fn arg) =
+substituteExpr ctxt (AppF sp ty rf fn arg) =
     do  ty' <- substitute ctxt ty
-        return $ App sp ty' fn arg
-substituteExpr ctxt (BinopF sp ty op lhs rhs) =
+        return $ App sp ty' rf fn arg
+substituteExpr ctxt (BinopF sp ty rf op lhs rhs) =
     do  ty' <- substitute ctxt ty
-        return $ Binop sp ty' op lhs rhs
-substituteExpr ctxt (LetDiamondF sp ty pattern mty value expr) =
+        return $ Binop sp ty' rf op lhs rhs
+substituteExpr ctxt (LetDiamondF sp ty rf pattern mty value expr) =
     do  ty' <- substitute ctxt ty
         pattern' <- substitute ctxt pattern
         mty' <- mapM (substitute ctxt) mty
-        return $ LetDiamond sp ty' pattern' mty' value expr
-substituteExpr ctxt (ValF sp ty value) =
+        return $ LetDiamond sp ty' rf pattern' mty' value expr
+substituteExpr ctxt (ValF sp ty rf value) =
     do  ty' <- substitute ctxt ty
-        return $ Val sp ty' value
-substituteExpr ctxt (CaseF sp ty expr arms) =
+        return $ Val sp ty' rf value
+substituteExpr ctxt (CaseF sp ty rf expr arms) =
     do  ty' <- substitute ctxt ty
         arms' <- mapM (mapFstM (substitute ctxt)) arms
-        return $ Case sp ty' expr arms'
-substituteExpr ctxt (HoleF s vs a) = return $ Hole s vs a
+        return $ Case sp ty' rf expr arms'
+substituteExpr ctxt (HoleF s a rf vs) = return $ Hole s a rf vs
 
 mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
 mapFstM fn (f, r) = do

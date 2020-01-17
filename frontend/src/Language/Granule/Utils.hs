@@ -37,6 +37,7 @@ data Globals = Globals
   , globalsIncludePath         :: Maybe FilePath
   , globalsSourceFilePath      :: Maybe FilePath
   , globalsEntryPoint          :: Maybe String
+  , globalsRewriteHoles        :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
@@ -79,6 +80,7 @@ instance Semigroup Globals where
       , globalsSourceFilePath      = globalsSourceFilePath      g1 <|> globalsSourceFilePath      g2
       , globalsTesting             = globalsTesting             g1 <|> globalsTesting             g2
       , globalsEntryPoint          = globalsEntryPoint          g1 <|> globalsEntryPoint          g2
+      , globalsRewriteHoles        = globalsRewriteHoles        g1 <|> globalsRewriteHoles        g2
       }
 
 instance Monoid Globals where
@@ -95,6 +97,7 @@ instance Monoid Globals where
     , globalsSourceFilePath      = Nothing
     , globalsTesting             = Nothing
     , globalsEntryPoint          = Nothing
+    , globalsRewriteHoles        = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general

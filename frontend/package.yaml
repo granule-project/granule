@@ -71,6 +71,7 @@ library:
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
   - Language.Granule.Synthesis.Splitting
+  - Language.Granule.Synthesis.RewriteHoles
   - Language.Granule.Context
   - Language.Granule.Utils
   dependencies:
@@ -87,6 +88,9 @@ library:
   - raw-strings-qq
   - text-replace
   - directory
+  - syb >=0.6
+  - syz >=0.2.0.0
+  - text >=1.1.2
 
 tests:
   frontend-spec:
