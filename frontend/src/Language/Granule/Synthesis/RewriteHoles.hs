@@ -1,32 +1,55 @@
-{-# LANGUAGE RecordWildCards #-}
+{-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 module Language.Granule.Synthesis.RewriteHoles where
 
 import Control.Arrow (second)
+import Control.Exception (SomeException, throwIO, try)
+import Control.Monad (when, void)
+import Data.Maybe (fromJust)
 import qualified Data.Text.Lazy as Text
+import System.Directory (removeFile, renameFile)
+import System.FilePath (splitFileName)
+import System.IO (hClose, hPutStr, openTempFile)
 import Text.Reprinter
-
-import Language.Granule.Checker.Monad
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Identifiers
 
 import Language.Granule.Utils
 
 {-
   = HoleMessage
-    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
+    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: }
 -}
 rewriteHole ::
-     (?globals :: Globals) => String -> AST () () -> CheckerError -> IO ()
-rewriteHole input ast HoleMessage {..} = do
+     (?globals :: Globals) => String -> AST () () -> Bool -> ([Id], [[Pattern ()]]) -> IO ()
+rewriteHole input ast keepBackup cases = do
   let source = Text.pack input
   let refactored = rewriteHoles source (snd cases) ast
-  putStrLn (Text.unpack refactored)
-  return ()
-rewriteHole _ _ _ = error "Impossible"
+  if False
+    then void . putStrLn . Text.unpack $ refactored
+    else do
+      -- Note: this is all copied from Preprocessor.hs, abstract into Utils
+      let file = fromJust $ globalsSourceFilePath ?globals
+      -- open a temporary file
+      (tempFile, tempHd) <- uncurry openTempFile (splitFileName file)
+            -- write the processed source to the temporary file
+      try (hPutStr tempHd (Text.unpack refactored)) >>= \case
+        Right () -> do
+          hClose tempHd
+          -- if we are keeping the original source file, then rename it
+          when keepBackup (renameFile file (file <> ".bak"))
+          -- move the temp file to the original source file path
+          renameFile tempFile file
+          return ()
+        Left (e :: SomeException) -> do
+          hClose tempHd
+          removeFile tempFile
+          throwIO e
 
 astReprinter :: (?globals :: Globals) => Reprinting Identity
 astReprinter = catchAll `extQ` reprintExpr

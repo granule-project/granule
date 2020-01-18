@@ -76,7 +76,7 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
               (keepBackup config)
               path
               (literateEnvName config)
-            result <- run src
+            result <- run config src
             printResult result
             return result
     if all isRight (concat results) then exitSuccess else exitFailure
@@ -86,11 +86,11 @@ findHoleMessage xs =
   find (\ e -> case e of HoleMessage{} -> True; _ -> False) xs
 
 runGrOnStdIn :: GrConfig -> IO ()
-runGrOnStdIn GrConfig{..}
+runGrOnStdIn config@GrConfig{..}
   = let ?globals = grGlobals{ globalsSourceFilePath = Just "stdin" } in do
       printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
       debugM "Globals" (show ?globals)
-      result <- getContents >>= run
+      result <- getContents >>= run config
       printResult result
       if isRight result then exitSuccess else exitFailure
 
@@ -108,9 +108,10 @@ printResult = \case
 -}
 run
   :: (?globals :: Globals)
-  => String
+  => GrConfig
+  -> String
   -> IO (Either InterpreterError InterpreterResult)
-run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
+run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
     result <- try $ parseAndDoImportsAndFreshenDefs input
     case result of
       Left (e :: SomeException) -> return . Left . ParseError $ show e
@@ -124,7 +125,8 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
           Right (Left errs) ->
             case (globalsRewriteHoles ?globals, findHoleMessage errs) of
-              (Just True, Just holeMsg) -> rewriteHole input ast holeMsg >> (return . Left $ CheckerError errs)
+              (Just True, Just HoleMessage{..}) ->
+                rewriteHole input ast (keepBackup config) cases >> (return . Left $ CheckerError errs)
               _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
             if noEval then do
@@ -166,7 +168,7 @@ parseGrFlags
 
 
 data GrConfig = GrConfig
-  { grRewriter    :: Maybe (String -> String)
+  { grRewriter        :: Maybe (String -> String)
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
   , grGlobals         :: Globals
