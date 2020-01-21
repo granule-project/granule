@@ -168,6 +168,9 @@ data CheckerState = CS
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
 
+            -- The type of the current equation.
+            , equationTy :: Maybe Type
+
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -187,6 +190,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
+               , equationTy = Nothing
                }
 
 -- *** Various helpers for manipulating the context

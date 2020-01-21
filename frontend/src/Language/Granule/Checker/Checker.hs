@@ -322,6 +322,9 @@ checkEquation defCtxt id (Equation s () pats expr) tys@(Forall _ foralls constra
   tau' <- substitute subst tau
   debugM "eqn" $ "### -- tau' = " <> show tau'
 
+  equationTy' <- substitute subst ty
+  modify (\st -> st { equationTy = Just equationTy' })
+
   patternGam <- substitute subst patternGam
 
   -- Check the body
