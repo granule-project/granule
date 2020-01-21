@@ -17,6 +17,7 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
+import Language.Granule.Checker.Normalise
 
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
@@ -75,8 +76,10 @@ equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 = do
    if eq
      then do
         t2 <- substitute unif t2
+        let t2 = normaliseType t2
         return (eq, t2, unif)
-     else return (eq, t1, [])
+     else let t1' = normaliseType t1 in
+       return (eq, t1', [])
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
