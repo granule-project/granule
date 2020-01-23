@@ -307,6 +307,14 @@ equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp
 equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp
   | internalName d == "Dual" = isDualSession s rel t t' sp
 
+-- Equality on ExcFree application on one side
+
+equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon e) t) t' _ sp
+  | internalName e == "ExcFree" = return (False,[])
+
+equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon e) t') _ sp
+  | internalName e == "ExcFree" = return (False,[])
+
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp = do
   (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp
@@ -351,7 +359,8 @@ equalOtherKindedTypesGeneric s t1 t2 k = do
 
     KPromote (TyCon (internalName -> "Protocol")) ->
       sessionInequality s t1 t2
-
+    KPromote (TyCon (internalName -> "Exception")) ->
+      return (t1 == t2, [])
     KType -> throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
 
     _ ->
