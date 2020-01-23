@@ -1,1 +1,3 @@
-try 3 as x : Nat in (\x -> x + 3) 
+main : String <IO>
+main = 
+    try 3 as x : Nat in (\x -> x + 3) 

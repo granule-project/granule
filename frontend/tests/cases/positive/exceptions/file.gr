@@ -1,6 +1,7 @@
-try "LICENSE" as x in 
-    let h       <- openHandle ReadMode x;
-        (h, c1)     <- readChar h;
-        ()          <- closeHandle h
-    in pure c1 
-catch pure "A"
+main : String <IO>
+main = 
+    try (openHandle ReadMode "LICENSE") as [h] in 
+      let (h, c1)     <- readChar h;
+          ()          <- closeHandle h
+      in pure c1 
+    catch pure "A"
