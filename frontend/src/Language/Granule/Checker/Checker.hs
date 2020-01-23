@@ -13,6 +13,7 @@ import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -41,6 +42,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Helpers (freeVars, hasHole)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Pattern (Pattern(..))
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
@@ -322,8 +324,13 @@ checkEquation defCtxt id (Equation s () pats expr) tys@(Forall _ foralls constra
   tau' <- substitute subst tau
   debugM "eqn" $ "### -- tau' = " <> show tau'
 
+  -- The type of the equation, after substitution.
   equationTy' <- substitute subst ty
-  modify (\st -> st { equationTy = Just equationTy' })
+  let equationTy'' = refineEquationTy patternGam equationTy'
+
+  -- Store the equation type in the state in case it is needed when splitting
+  -- on a hole.
+  modify (\st -> st { equationTy = Just equationTy'' })
 
   patternGam <- substitute subst patternGam
 
@@ -350,6 +357,41 @@ checkEquation defCtxt id (Equation s () pats expr) tys@(Forall _ foralls constra
 
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
+
+  where
+    -- Given a context and a function type, refines the type by deconstructing
+    -- patterns into their constituent patterns and replacing parts of the type
+    -- by the corresponding pattern.
+    -- e.g. Given a pattern: Cons x xs
+    --      and a type:      Vec (n+1) t -> Vec n t
+    --      returns:         t -> Vec n t -> Vec n t
+    refineEquationTy :: [(Id, Assumption)] -> Type -> Type
+    refineEquationTy patternGam ty =
+      case patternGam of
+        [] -> ty
+        (_:_) ->
+          let patternArities = map patternArity pats
+              patternFunTys = map (map assumptionToType) (splitPlaces patternArities patternGam)
+          in replaceParameters patternFunTys ty
+
+    -- Computes how many arguments a pattern has.
+    -- e.g. Cons x xs --> 2
+    patternArity :: Pattern a -> Integer
+    patternArity (PBox _ _ p) = patternArity p
+    patternArity (PConstr _ _ _ ps) = sum (map patternArity ps)
+    patternArity _ = 1
+
+    replaceParameters :: [[Type]] -> Type -> Type
+    replaceParameters [] ty = ty
+    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
+    replaceParameters ((t:ts):tss) ty =
+      FunTy Nothing t (replaceParameters (ts:tss) ty)
+    replaceParameters _ t = error $ "Expecting function type: " <> pretty t
+
+    -- Convert an id+assumption to a type.
+    assumptionToType :: (Id, Assumption) -> Type
+    assumptionToType (_, Linear t) = t
+    assumptionToType (_, Discharged t _) = t
 
 -- Polarities are used to understand when a type is
 -- `expected` vs. `actual` (i.e., for error messages)

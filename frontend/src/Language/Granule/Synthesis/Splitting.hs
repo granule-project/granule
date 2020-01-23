@@ -1,8 +1,8 @@
-module Language.Granule.Synthesis.Splitting ( generateCases ) where
+module Language.Granule.Synthesis.Splitting (generateCases) where
 
 import Control.Arrow (second)
 import Control.Monad (filterM, mapM)
-import Control.Monad.State.Strict
+import Control.Monad.State.Strict (get, liftIO)
 import Data.List (partition)
 import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
 
@@ -36,9 +36,9 @@ generateCases span ty constructors ctxt = do
   -- Determines whether an assumption should be treated as linear.
   let isLinear (_, a) =
         case a of
+          Discharged _ _   -> False
           Linear (Box _ _) -> False
-          Linear _ -> True
-          Discharged _ _ -> False
+          Linear _         -> True
   let (linear, nonlinear) = partition isLinear ctxt
 
   -- Spits linear assumptions into splittable/not-splittable. Where splittable
@@ -60,13 +60,13 @@ generateCases span ty constructors ctxt = do
   -- Convert the discharged types into boxed patterns.
   let boxPatterns = map (buildBoxPattern span . fst) nonlinear
 
-  let allPatterns = linearPatterns ++ boxPatterns ++ variablePatterns
+  let allPatterns = linearPatterns <> boxPatterns <> variablePatterns
 
   -- Order patterns into the same ordering as the context.
   let orderedPatterns =
         map (\(id, _) -> (id, fromJust $ lookup id allPatterns)) ctxt
 
-  -- Convert the patterns
+  -- Convert the patterns into cases (i.e. Cartesian product of patterns).
   let cases = combineCases orderedPatterns
 
   -- The Nothing case should be unreachable, as this function is only ever
@@ -88,8 +88,8 @@ caseFilter :: (?globals :: Globals)
 caseFilter span ty pats = do
   (result, local) <- peekChecker $ validateCase span ty pats
   case result of
-    Right True -> local >> pure True
-    _ -> pure False
+    Right True -> local >> return True
+    _ -> return False
 
 -- Checks a case (i.e. list of patterns) against a type for validity.
 validateCase :: (?globals :: Globals)
@@ -104,7 +104,7 @@ validateCase span ty pats = do
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
   (_, _, localVars, _, _, _) <-
-    ctxtFromTypedPatterns span ty pats (patternConsumption st)
+    ctxtFromTypedPatterns span ty pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 
   -- Build the type variable environment for proving the predicate

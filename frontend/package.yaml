@@ -87,6 +87,7 @@ library:
   - raw-strings-qq
   - text-replace
   - directory
+  - split
 
 tests:
   frontend-spec:
