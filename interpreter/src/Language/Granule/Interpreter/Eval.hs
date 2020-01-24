@@ -25,7 +25,7 @@ import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
-import Control.Exception (catch)
+import Control.Exception (catch, IOException)
 
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
@@ -178,7 +178,7 @@ evalIn ctxt (TryCatch s _ e1 p _ e2 e3) =
               Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
   )
   -- (cf. TRY_BETA_2)
-  (\_ -> evalIn ctxt e3)
+  (\(_ :: IOException) -> evalIn ctxt e3)
           
 {-
 -- Hard-coded 'scale', removed for now
@@ -291,7 +291,9 @@ builtIns =
         hFlush stdout
         val <- Text.getLine
         return $ Val nullSpan () (NumInt $ read $ unpack val))
-
+  , (mkId "throw", 
+        IO (raiseIO# (toException e))
+  )
   , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")

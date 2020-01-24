@@ -66,7 +66,8 @@ typeConstructors =
     , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     --Effect grade types - Exceptions
     , (mkId "Exception", (KEffect, Nothing, False))
-    , (mkId "ExcFree", (KFun KEffect KEffect, Nothing, False))
+    , (mkId "OK", (KPromote (TyCon $ mkId "ExcElems"), Nothing, False))
+    , (mkId "MayFail", (KPromote (TyCon $ mkId "ExcElems"), Nothing, False))
     ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
@@ -174,10 +175,8 @@ readInt = BUILTIN
 --Exceptions
 --------------------------------------------------------------------------------
 
-
 throw : IO <{Exception}>
 throw: BUILTIN
-
 
 --------------------------------------------------------------------------------
 -- Conversions
