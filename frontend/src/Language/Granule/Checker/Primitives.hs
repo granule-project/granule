@@ -66,7 +66,7 @@ typeConstructors =
     , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     --Effect grade types - Exceptions
     , (mkId "Exception", (KEffect, Nothing, False))
-    , (mkId "OK", (KPromote (TyCon $ mkId "ExcElems"), Nothing, False))
+    , (mkId "Success", (KPromote (TyCon $ mkId "ExcElems"), Nothing, False))
     , (mkId "MayFail", (KPromote (TyCon $ mkId "ExcElems"), Nothing, False))
     ]
 
