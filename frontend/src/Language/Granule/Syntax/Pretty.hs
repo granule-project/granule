@@ -265,9 +265,9 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
           <> pretty e1 <> " in " <> pretty e2
 
   pretty (TryCatch _ _ e1 v t e2 e3) =
-    "try " <> pretty e1 <> " as " <> pretty v <> " :" <> pretty t    <> " in " 
+    "try " <> pretty e1 <> " as [" <> pretty v <> "] " <> (if t /= Nothing then ":" <> pretty t else "")   <> " in " 
           <> pretty e2 <> " catch " <> pretty e3
-
+    
   pretty (Val _ _ v) = pretty v
   pretty (Case _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> pretty p
