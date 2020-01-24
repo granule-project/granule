@@ -36,5 +36,7 @@ tyVarContextExistential = do
   st <- get
   return $ mapMaybe (\(v, (k, q)) ->
     case q of
-      BoundQ -> Nothing
+      -- This makes splitting work when the LHS is a pattern, but not sure if it
+      -- has adverse effects...
+      -- BoundQ -> Nothing
       _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
