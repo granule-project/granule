@@ -20,13 +20,14 @@
 module Language.Granule.Interpreter where
 
 import Control.Exception (SomeException, displayException, try)
-import Control.Monad ((<=<), forM)
+import Control.Monad ((<=<), forM, forM_)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
-import Data.List (find, intercalate, isPrefixOf, stripPrefix)
+import Data.List (intercalate, isPrefixOf, stripPrefix)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
+import qualified Data.List.NonEmpty as NonEmpty (filter)
 import Data.Maybe (fromMaybe)
 import Data.Semigroup ((<>))
 import Data.Version (showVersion)
@@ -81,10 +82,6 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
             return result
     if all isRight (concat results) then exitSuccess else exitFailure
 
-findHoleMessage :: NonEmpty CheckerError -> Maybe CheckerError
-findHoleMessage xs =
-  find (\ e -> case e of HoleMessage{} -> True; _ -> False) xs
-
 runGrOnStdIn :: GrConfig -> IO ()
 runGrOnStdIn config@GrConfig{..}
   = let ?globals = grGlobals{ globalsSourceFilePath = Just "stdin" } in do
@@ -124,9 +121,10 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         case checked of
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
           Right (Left errs) ->
-            case (globalsRewriteHoles ?globals, findHoleMessage errs) of
-              (Just True, Just HoleMessage{..}) ->
-                rewriteHole input ast (keepBackup config) cases >> (return . Left $ CheckerError errs)
+            case (globalsRewriteHoles ?globals, getHoleMessages errs) of
+              (Just True, holes@(_:_)) -> do
+                forM_ holes (\ hole -> rewriteHole input ast (keepBackup config) (cases hole))
+                return . Left $ CheckerError errs
               _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
             if noEval then do
@@ -143,6 +141,11 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   else return $ Left NoEntryPoint
                 Right (Just result) -> do
                   return . Right $ InterpreterResult result
+
+  where
+    getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
+    getHoleMessages es =
+      NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False) es
 
 
 -- | Get the flags embedded in the first line of a file, e.g.
