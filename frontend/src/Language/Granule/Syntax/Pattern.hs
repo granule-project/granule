@@ -31,7 +31,7 @@ instance Term (Pattern a) where
   freeVars _ = []
   hasHole _ = False
 
-  isLexicallyAtomic PConstr{} = False
+  isLexicallyAtomic (PConstr _ _ _ pats) = null pats
   isLexicallyAtomic _  = True
 
 -- | First parameter of patterns is their span
