@@ -1,10 +1,12 @@
+import Control.Exception (catch, throwIO)
 import Control.Monad (unless)
 import Data.Algorithm.Diff (getGroupedDiff)
 import Data.Algorithm.DiffOutput (ppDiff)
 import Test.Tasty (defaultMain, TestTree, testGroup)
-import Test.Tasty.Golden (findByExtension)
+import Test.Tasty.Golden (findByExtension, goldenVsFile)
 import Test.Tasty.Golden.Advanced (goldenTest)
-import System.Directory (setCurrentDirectory)
+import System.Directory (renameFile, setCurrentDirectory)
+import System.Exit (ExitCode)
 import System.FilePath (dropExtension)
 import qualified System.IO.Strict as Strict (readFile)
 
@@ -19,7 +21,17 @@ main = do
   setCurrentDirectory "../"
   negative <- goldenTestsNegative
   positive <- goldenTestsPositive
-  defaultMain $ testGroup "Golden tests" [negative, positive]
+  rewrite <- goldenTestsRewrite
+
+  catch
+    (defaultMain $ testGroup "Golden tests" [rewrite])
+    (\(e :: ExitCode) -> do
+      -- Move all of the backup files back to their original place.
+      backupFiles <- findByExtension [".bak"]  "frontend/tests/cases/rewrite"
+      print backupFiles
+      _ <- mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
+      throwIO e
+    )
 
 goldenTestsNegative :: IO TestTree
 goldenTestsNegative = do
@@ -65,6 +77,33 @@ goldenTestsPositive = do
         Right (InterpreterResult val) -> pretty val
         Left err -> error $ formatError err
         Right NoEval -> mempty
+
+goldenTestsRewrite :: IO TestTree
+goldenTestsRewrite = do
+  let dir = "frontend/tests/cases/rewrite"
+
+  -- get example files, but discard the excluded ones
+  files <- findByExtension granuleFileExtensions dir
+
+  -- ensure we don't have spurious output files without associated tests
+  outfiles <- findByExtension [".output"] dir
+  failOnOrphanOutfiles files outfiles
+
+  return $ testGroup
+    "Golden rewrite examples"
+    (map grGolden' files)
+
+  where
+    grGolden' :: FilePath -> TestTree
+    grGolden' file =
+      goldenVsFile file file (file <> ".output") (runGr file)
+
+    runGr :: FilePath -> IO ()
+    runGr fp = do
+      src <- readFile fp
+      let ?globals = goldenGlobals { globalsSourceFilePath = Just fp, globalsRewriteHoles = Just True }
+      _ <- Interpreter.run (mempty { Interpreter.grKeepBackup = Just True }) src
+      return ()
 
 grGolden
   :: (Either InterpreterError InterpreterResult -> String)

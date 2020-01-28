@@ -1,0 +1,11 @@
+data Maybe a = None | Some a
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+head' : forall { a : Type, n : Nat } . Vec n a -> Maybe a
+head' xs = {! xs !}
+
+head'' : forall { a : Type, n : Nat } . Vec (n + 1) a -> a
+head'' xs = {! xs !}
