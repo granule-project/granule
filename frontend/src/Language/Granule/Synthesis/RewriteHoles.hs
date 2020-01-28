@@ -11,7 +11,6 @@ import Text.Reprinter
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.FirstParameter
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import qualified Language.Granule.Syntax.Span as GrSpan
@@ -24,11 +23,11 @@ rewriteHole ::
   => String
   -> AST () ()
   -> Bool
-  -> ([Id], [[Pattern ()]])
+  -> [[Pattern ()]]
   -> IO ()
 rewriteHole input ast keepBackup cases = do
   let source = Text.pack input
-  let refactored = rewriteHoles source (snd cases) ast
+  let refactored = rewriteHoles source cases ast
   let file = fromJust $ globalsSourceFilePath ?globals
   void $ writeSrcFile file keepBackup (Text.unpack refactored)
 

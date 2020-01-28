@@ -123,7 +123,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           Right (Left errs) ->
             case (globalsRewriteHoles ?globals, getHoleMessages errs) of
               (Just True, holes@(_:_)) -> do
-                forM_ holes (\ hole -> rewriteHole input ast (keepBackup config) (cases hole))
+                let holeCases = concatMap (snd . cases) holes
+                forM_ holes (\ hole -> rewriteHole input ast (keepBackup config) holeCases)
                 return . Left $ CheckerError errs
               _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
