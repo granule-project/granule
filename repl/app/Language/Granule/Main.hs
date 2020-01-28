@@ -293,7 +293,7 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
        Ex.throwError (ParseError e (files st))
 
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
-loadInQueue def@(Def _ id _ _) = do
+loadInQueue def@(Def _ id _ _ _) = do
   st <- get
   if M.member (pretty id) (defns st)
     then Ex.throwError (TermInContext (pretty id))
@@ -304,7 +304,7 @@ dumpStateAux m = pDef (M.toList m)
   where
     pDef :: [(String, (Def () (), [String]))] -> [String]
     pDef [] = []
-    pDef ((k,(v@(Def _ _ _ ty),dl)):xs) =  (pretty k <> " : " <> pretty ty) : pDef xs
+    pDef ((k,(v@(Def _ _ _ _ ty),dl)):xs) =  (pretty k <> " : " <> pretty ty) : pDef xs
 
 extractFreeVars :: Id -> [Id] -> [String]
 extractFreeVars _ []     = []
@@ -332,5 +332,5 @@ buildCheckerState dataDecls = do
     return ()
 
 buildDef :: Int -> TypeScheme -> Expr () () -> Def () ()
-buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl" <> show rfv))
-   [Equation nullSpanInteractive () [] ex] ts
+buildDef rfv ts ex = Def nullSpanInteractive (mkId (" repl" <> show rfv)) False
+   [Equation nullSpanInteractive () False [] ex] ts

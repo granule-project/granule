@@ -90,7 +90,7 @@ grGolden formatResult file = goldenTest
     runGr fp = do
       src <- readFile fp
       let ?globals = goldenGlobals { globalsSourceFilePath = Just fp }
-      Interpreter.run src
+      Interpreter.run mempty src
 
 failOnOrphanOutfiles :: [FilePath] -> [FilePath] -> IO ()
 failOnOrphanOutfiles files outfiles

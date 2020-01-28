@@ -10,9 +10,11 @@ import Text.Reprinter
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
+import qualified Language.Granule.Syntax.Span as GrSpan
 
 import Language.Granule.Utils
 
@@ -30,9 +32,8 @@ rewriteHole input ast keepBackup cases = do
   let file = fromJust $ globalsSourceFilePath ?globals
   void $ writeSrcFile file keepBackup (Text.unpack refactored)
 
--- TODO: Support nested holes
--- TODO: Holes inside Val e.g. lambda
--- TODO: Support multiple equations before refactor
+-- The top level rewriting function, transforms a given source file and
+-- corresponding AST.
 rewriteHoles ::
      (?globals :: Globals) => Source -> [[Pattern ()]] -> AST () () -> Source
 rewriteHoles source cases =
@@ -53,14 +54,15 @@ holeRefactor cases ast =
 -- Refactors a definition by updating its list of equations.
 holeRefactorDef :: [[Pattern ()]] -> Def () () -> Def () ()
 holeRefactorDef cases def =
-  def {defEquations = updateEquations (defEquations def), defRefactored = True}
+  def
+  {defEquations = concatMap updateEqn (defEquations def), defRefactored = True}
   where
-    updateEquations [eqn] =
+    updateEqn eqn =
       let updated = holeRefactorEqn eqn
-      in map
-           (\cas -> (\pats eqn -> eqn {equationPatterns = pats}) cas updated)
-           cases
-    updateEquations _ = error "Only one LHS for now"
+          relCases = findRelevantCase eqn cases
+      in case relCases of
+           [] -> [updated]
+           _ -> map (\case' -> updated {equationPatterns = case'}) relCases
 
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn :: Equation () () -> Equation () ()
@@ -79,3 +81,17 @@ holeRefactorExpr (LetDiamond sp a rf pat ty e1 e2) =
 holeRefactorExpr (Case sp a rf e cases) =
   Case sp a rf (holeRefactorExpr e) (map (second holeRefactorExpr) cases)
 holeRefactorExpr v@Val {} = v
+
+-- Finds potentially relevant cases for a given equation, based on spans.
+findRelevantCase :: Equation () () -> [[Pattern ()]] -> [[Pattern ()]]
+findRelevantCase eqn =
+  filter
+    (\case' -> equationSpan eqn `encompasses` (getFirstParameter . head) case')
+
+-- A span encompasses another if it starts before it (or with it) and ends after
+-- it (or with it).
+encompasses :: GrSpan.Span -> GrSpan.Span -> Bool
+encompasses (GrSpan.Span (sl1, sc1) (el1, ec1) _) (GrSpan.Span (sl2, sc2) (el2, ec2) _) =
+  (sl1 < sl2 && el1 > el2) ||
+  (not (sl1 > sl2 || el1 < el2) &&
+   ((sl1 == sl2) || (sc1 < sc2)) && ((el1 == el2) || (ec1 > ec2)))
