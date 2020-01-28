@@ -189,10 +189,13 @@ instance Pretty v => Pretty (AST v a) where
       pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
-    {-pretty (Def _ v _ eqs (Forall _ [] [] t))
-      = pretty v <> " : " <> pretty t <> "\n" <> intercalate "\n" (map (prettyEqn v) eqs)-}
+    pretty (Def _ v _ eqs (Forall _ [] [] t))
+      = pretty v <> " : " <> pretty t <> "\n" <> prettyEqnList v eqs
     pretty (Def _ v _ eqs tySch)
-      = pretty v <> " : " <> pretty tySch <> "\n" <> intercalate "\n" (map (prettyEqn v) eqs)
+      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> prettyEqnList v eqs
+
+prettyEqnList :: (?globals :: Globals, Pretty v) => Id -> EquationList v a -> String
+prettyEqnList v (EquationList _ eqns _) = intercalate "\n" $ map (prettyEqn v) eqns
 
 prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
 prettyEqn v (Equation _ _ _ ps e) =

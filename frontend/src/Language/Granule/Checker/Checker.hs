@@ -252,8 +252,7 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName rf equations tys@(Forall s_t foralls constraints ty)) = do
-
+checkDef defCtxt (Def s defName rf el@(EquationList _ equations _) tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()
@@ -262,7 +261,7 @@ checkDef defCtxt (Def s defName rf equations tys@(Forall s_t foralls constraints
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
-
+                      
     elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
         -- Erase the solver predicate between equations
         modify' $ \st -> st
@@ -282,7 +281,8 @@ checkDef defCtxt (Def s defName rf equations tys@(Forall s_t foralls constraints
 
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
-    pure $ Def s defName rf elaboratedEquations tys
+    let el' = el { equations = elaboratedEquations }
+    pure $ Def s defName rf el' tys
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions

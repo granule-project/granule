@@ -5,6 +5,7 @@
 {-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
+{-# LANGUAGE RecordWildCards #-}
 
 module Language.Granule.Syntax.Def where
 
@@ -47,7 +48,7 @@ data Def v a = Def
   { defSpan :: Span
   , defId :: Id
   , defRefactored :: Bool
-  , defEquations :: [Equation v a]
+  , defEquations :: EquationList v a
   , defTypeScheme :: TypeScheme
   }
   deriving (Generic)
@@ -60,6 +61,29 @@ instance Rp.Refactorable (Def v a) where
   isRefactored def = if defRefactored def then Just Rp.Replace else Nothing
 
   getSpan = convSpan . defSpan
+
+-- | A list of equations
+data EquationList v a = EquationList
+  { equationsSpan :: Span
+  , equations :: [Equation v a]
+  , equationsRefactored :: Bool
+  } deriving (Generic)
+
+deriving instance (Eq v, Eq a) => Eq (EquationList v a)
+deriving instance (Show v, Show a) => Show (EquationList v a)
+deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (EquationList v a)
+instance FirstParameter (EquationList v a) Span
+
+instance Rp.Refactorable (EquationList v a) where
+  isRefactored eqnList = if equationsRefactored eqnList then Just Rp.Replace else Nothing
+
+  getSpan = convSpan . equationsSpan
+
+consEquation :: Equation v a -> EquationList v a -> EquationList v a
+consEquation eqn EquationList{..} =
+  let newStartPos = startPos (equationSpan eqn)
+      newSpan = equationsSpan { startPos = newStartPos }
+  in EquationList newSpan (eqn : equations) equationsRefactored
 
 -- | Single equation of a function
 data Equation v a =
@@ -166,12 +190,22 @@ instance Monad m => Freshenable m (Equation v a) where
     e <- freshen e
     return (Equation s a rf ps e)
 
+instance Monad m => Freshenable m (EquationList v a) where
+  freshen (EquationList s eqs rf) = do
+    eqs' <- mapM freshen eqs
+    return (EquationList s eqs' rf)
+
 -- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
   freshen (Def s var rf eqs t) = do
     t  <- freshen t
-    eqs <- mapM freshen eqs
-    return (Def s var rf eqs t)
+    equations' <- mapM freshen (equations eqs)
+    let eqs' = eqs { equations = equations' }
+    return (Def s var rf eqs' t)
+
+instance Term (EquationList v a) where
+  freeVars (EquationList _ eqs _) =
+    concatMap freeVars eqs
 
 instance Term (Equation v a) where
   freeVars (Equation s a _ binders body) =
@@ -179,4 +213,4 @@ instance Term (Equation v a) where
 
 instance Term (Def v a) where
   freeVars (Def _ name _ equations _) =
-    delete name (concatMap freeVars equations)
+    delete name (freeVars equations)

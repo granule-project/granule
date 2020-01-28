@@ -11,6 +11,7 @@ import Text.Reprinter
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import qualified Language.Granule.Syntax.Span as GrSpan
@@ -41,20 +42,29 @@ rewriteHoles source cases =
 -- The reprinter which runs on a refactored AST. Reprinting is done at the Def
 -- level down, as the equations across a definition are subject to change.
 astReprinter :: (?globals :: Globals) => Reprinting Identity
-astReprinter = catchAll `extQ` reprintDef
+astReprinter = catchAll `extQ` reprintEqnList
   where
-    reprintDef x = genReprinting (return . Text.pack . pretty) (x :: Def () ())
+    reprintEqnList x =
+      genReprinting
+        (return . Text.pack . prettyEqnList (mkId "TODO"))
+        (x :: EquationList () ())
 
 -- Refactor an AST by refactoring its definitions.
 holeRefactor :: [[Pattern ()]] -> AST () () -> AST () ()
 holeRefactor cases ast =
   ast {definitions = map (holeRefactorDef cases) (definitions ast)}
 
--- Refactors a definition by updating its list of equations.
+-- Refactor a definition by refactoring its list of equations.
 holeRefactorDef :: [[Pattern ()]] -> Def () () -> Def () ()
 holeRefactorDef cases def =
-  def
-  {defEquations = concatMap updateEqn (defEquations def), defRefactored = True}
+  def {defEquations = holeRefactorEqnList cases (defEquations def)}
+
+-- Refactors a list of equations by updating each with the relevant patterns.
+holeRefactorEqnList ::
+     [[Pattern ()]] -> EquationList () () -> EquationList () ()
+holeRefactorEqnList cases eqns =
+  eqns
+  {equations = concatMap updateEqn (equations eqns), equationsRefactored = True}
   where
     updateEqn eqn =
       let updated = holeRefactorEqn eqn

@@ -150,7 +150,7 @@ Def :: { Def () () }
             error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
 
           (_, bindings) -> do
-            span <- mkSpan (thd3 $1, endPos $ getSpan $ last bindings)
+            span <- mkSpan (thd3 $1, endPos $ getSpan $ last (equations bindings))
             return $ Def span (mkId name) False bindings (snd3 $1)
     }
 
@@ -167,16 +167,16 @@ DataDecl :: { DataDecl }
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
 
-Bindings :: { (Maybe String, [Equation () ()]) }
+Bindings :: { (Maybe String, EquationList () ()) }
   : Binding ';' NL Bindings   { let (v, bind) = $1
                                 in case $4 of
                                     (v', binds)
                                       | v' == v || v' == Nothing ->
-                                          (v, (bind : binds))
+                                          (v, consEquation bind binds)
                                       | otherwise ->
                                           error $ "Identifier " <> show v' <> " in group of equations does not match " <> show v
                               }
-  | Binding                   { case $1 of (v, bind) -> (v, [bind]) }
+  | Binding                   { case $1 of (v, bind) -> (v, EquationList (equationSpan bind) [bind] False) }
 
 Binding :: { (Maybe String, Equation () ()) }
   : VAR '=' Expr
