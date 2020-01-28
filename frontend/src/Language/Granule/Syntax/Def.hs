@@ -65,8 +65,9 @@ instance Rp.Refactorable (Def v a) where
 -- | A list of equations
 data EquationList v a = EquationList
   { equationsSpan :: Span
-  , equations :: [Equation v a]
+  , equationsId :: Id
   , equationsRefactored :: Bool
+  , equations :: [Equation v a]
   } deriving (Generic)
 
 deriving instance (Eq v, Eq a) => Eq (EquationList v a)
@@ -83,7 +84,7 @@ consEquation :: Equation v a -> EquationList v a -> EquationList v a
 consEquation eqn EquationList{..} =
   let newStartPos = startPos (equationSpan eqn)
       newSpan = equationsSpan { startPos = newStartPos }
-  in EquationList newSpan (eqn : equations) equationsRefactored
+  in EquationList newSpan equationsId equationsRefactored (eqn : equations)
 
 -- | Single equation of a function
 data Equation v a =
@@ -191,9 +192,9 @@ instance Monad m => Freshenable m (Equation v a) where
     return (Equation s a rf ps e)
 
 instance Monad m => Freshenable m (EquationList v a) where
-  freshen (EquationList s eqs rf) = do
+  freshen (EquationList s name rf eqs) = do
     eqs' <- mapM freshen eqs
-    return (EquationList s eqs' rf)
+    return (EquationList s name rf eqs')
 
 -- | Alpha-convert all bound variables of a definition to unique names.
 instance Monad m => Freshenable m (Def v a) where
@@ -204,8 +205,8 @@ instance Monad m => Freshenable m (Def v a) where
     return (Def s var rf eqs' t)
 
 instance Term (EquationList v a) where
-  freeVars (EquationList _ eqs _) =
-    concatMap freeVars eqs
+  freeVars (EquationList _ name _ eqs) =
+    delete name (concatMap freeVars eqs)
 
 instance Term (Equation v a) where
   freeVars (Equation s a _ binders body) =

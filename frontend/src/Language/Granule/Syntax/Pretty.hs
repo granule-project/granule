@@ -190,12 +190,12 @@ instance Pretty v => Pretty (AST v a) where
 
 instance Pretty v => Pretty (Def v a) where
     pretty (Def _ v _ eqs (Forall _ [] [] t))
-      = pretty v <> " : " <> pretty t <> "\n" <> prettyEqnList v eqs
+      = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
     pretty (Def _ v _ eqs tySch)
-      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> prettyEqnList v eqs
+      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> pretty eqs
 
-prettyEqnList :: (?globals :: Globals, Pretty v) => Id -> EquationList v a -> String
-prettyEqnList v (EquationList _ eqns _) = intercalate "\n" $ map (prettyEqn v) eqns
+instance Pretty v => Pretty (EquationList v a) where
+  pretty (EquationList _ v _ eqs) = intercalate "\n;" $ map (prettyEqn v) eqs
 
 prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
 prettyEqn v (Equation _ _ _ ps e) =

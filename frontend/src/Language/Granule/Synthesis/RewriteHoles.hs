@@ -11,7 +11,6 @@ import Text.Reprinter
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.FirstParameter
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import qualified Language.Granule.Syntax.Span as GrSpan
@@ -44,10 +43,8 @@ rewriteHoles source cases =
 astReprinter :: (?globals :: Globals) => Reprinting Identity
 astReprinter = catchAll `extQ` reprintEqnList
   where
-    reprintEqnList x =
-      genReprinting
-        (return . Text.pack . prettyEqnList (mkId "TODO"))
-        (x :: EquationList () ())
+    reprintEqnList eqns =
+      genReprinting (return . Text.pack . pretty) (eqns :: EquationList () ())
 
 -- Refactor an AST by refactoring its definitions.
 holeRefactor :: [[Pattern ()]] -> AST () () -> AST () ()

@@ -252,7 +252,7 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName rf el@(EquationList _ equations _) tys@(Forall s_t foralls constraints ty)) = do
+checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations) tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()

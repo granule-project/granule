@@ -146,7 +146,7 @@ Def :: { Def () () }
   : Sig NL Bindings
     {% let name = fst3 $1
        in case $3 of
-          (Just nameB, _) | not (nameB == name) ->
+          (nameB, _) | not (nameB == name) ->
             error $ "Name for equation `" <> nameB <> "` does not match the signature head `" <> name <> "`"
 
           (_, bindings) -> do
@@ -167,27 +167,27 @@ DataDecl :: { DataDecl }
 Sig :: { (String, TypeScheme, Pos) }
   : VAR ':' TypeScheme        { (symString $1, $3, getPos $1) }
 
-Bindings :: { (Maybe String, EquationList () ()) }
+Bindings :: { (String, EquationList () ()) }
   : Binding ';' NL Bindings   { let (v, bind) = $1
                                 in case $4 of
                                     (v', binds)
-                                      | v' == v || v' == Nothing ->
+                                      | v' == v ->
                                           (v, consEquation bind binds)
                                       | otherwise ->
                                           error $ "Identifier " <> show v' <> " in group of equations does not match " <> show v
                               }
-  | Binding                   { case $1 of (v, bind) -> (v, EquationList (equationSpan bind) [bind] False) }
+  | Binding                   { case $1 of (v, bind) -> (v, EquationList (equationSpan bind) (mkId v) False [bind]) }
 
-Binding :: { (Maybe String, Equation () ()) }
+Binding :: { (String, Equation () ()) }
   : VAR '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $3)
-          return (Just $ symString $1, Equation span () False [] $3) }
+          return (symString $1, Equation span () False [] $3) }
 
   | VAR Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
-          return (Just $ symString $1, Equation span () False $2 $4) }
+          return (symString $1, Equation span () False $2 $4) }
 
 -- this was probably a silly idea @buggymcbugfix
   -- | '|' Pats '=' Expr

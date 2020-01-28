@@ -416,7 +416,7 @@ builtIns =
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var _ (EquationList _ [Equation _ _ rf [] e] _) _ : defs) = do
+evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ rf [] e]) _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
@@ -433,7 +433,7 @@ instance RuntimeRep Def where
   toRuntimeRep (Def s i rf eqs tys) = Def s i rf (toRuntimeRep eqs) tys
 
 instance RuntimeRep EquationList where
-  toRuntimeRep (EquationList s eqns rf) = EquationList s (map toRuntimeRep eqns) rf
+  toRuntimeRep (EquationList s i rf eqns) = EquationList s i rf (map toRuntimeRep eqns)
 
 instance RuntimeRep Equation where
   toRuntimeRep (Equation s a rf ps e) = Equation s a rf ps (toRuntimeRep e)
