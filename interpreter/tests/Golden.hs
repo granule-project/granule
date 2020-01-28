@@ -24,7 +24,7 @@ main = do
   rewrite <- goldenTestsRewrite
 
   catch
-    (defaultMain $ testGroup "Golden tests" [rewrite])
+    (defaultMain $ testGroup "Golden tests" [negative, positive, rewrite])
     (\(e :: ExitCode) -> do
       -- Move all of the backup files back to their original place.
       backupFiles <- findByExtension [".bak"]  "frontend/tests/cases/rewrite"

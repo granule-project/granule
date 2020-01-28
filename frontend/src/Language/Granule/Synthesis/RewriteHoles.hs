@@ -1,6 +1,8 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 
-module Language.Granule.Synthesis.RewriteHoles where
+module Language.Granule.Synthesis.RewriteHoles
+  ( rewriteHoles
+  ) where
 
 import Control.Arrow (second)
 import Control.Monad (void)
@@ -18,24 +20,24 @@ import qualified Language.Granule.Syntax.Span as GrSpan
 import Language.Granule.Utils
 
 -- Rewrites holes in the file by splitting on their potential cases.
-rewriteHole ::
+rewriteHoles ::
      (?globals :: Globals)
   => String
   -> AST () ()
   -> Bool
   -> [[Pattern ()]]
   -> IO ()
-rewriteHole input ast keepBackup cases = do
+rewriteHoles input ast keepBackup cases = do
   let source = Text.pack input
-  let refactored = rewriteHoles source cases ast
+  let refactored = holeRewriter source cases ast
   let file = fromJust $ globalsSourceFilePath ?globals
   void $ writeSrcFile file keepBackup (Text.unpack refactored)
 
 -- The top level rewriting function, transforms a given source file and
 -- corresponding AST.
-rewriteHoles ::
+holeRewriter ::
      (?globals :: Globals) => Source -> [[Pattern ()]] -> AST () () -> Source
-rewriteHoles source cases =
+holeRewriter source cases =
   runIdentity . (\ast -> reprint astReprinter ast source) . holeRefactor cases
 
 -- The reprinter which runs on a refactored AST. Reprinting is done at the Def

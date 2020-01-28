@@ -20,7 +20,7 @@
 module Language.Granule.Interpreter where
 
 import Control.Exception (SomeException, displayException, try)
-import Control.Monad ((<=<), forM, forM_)
+import Control.Monad ((<=<), forM)
 import Development.GitRev
 import Data.Char (isSpace)
 import Data.Either (isRight)
@@ -124,7 +124,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
             case (globalsRewriteHoles ?globals, getHoleMessages errs) of
               (Just True, holes@(_:_)) -> do
                 let holeCases = concatMap (snd . cases) holes
-                forM_ holes (\ hole -> rewriteHole input ast (keepBackup config) holeCases)
+                rewriteHoles input ast (keepBackup config) holeCases
                 return . Left $ CheckerError errs
               _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
