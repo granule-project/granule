@@ -195,11 +195,11 @@ instance Pretty v => Pretty (Def v a) where
       = pretty v <> "\n  : " <> pretty tySch <> "\n" <> pretty eqs
 
 instance Pretty v => Pretty (EquationList v a) where
-  pretty (EquationList _ v _ eqs) = intercalate "\n;" $ map (prettyEqn v) eqs
+  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map (prettyEqn v) eqs
 
 prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
 prettyEqn v (Equation _ _ _ ps e) =
-  pretty v <> " " <> pretty ps <> "= " <> pretty e
+  pretty v <> " " <> unwords (map prettyNested ps) <> " = " <> pretty e
 
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
@@ -220,10 +220,8 @@ instance Pretty (Pattern a) where
     pretty (PBox _ _ _ p)     = "[" <> pretty p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
-    pretty (PConstr _ _ _ name args) = 
-      if null args
-        then pretty name
-        else "(" <> unwords (pretty name : map prettyNested args) <> ")"
+    pretty (PConstr _ _ _ name args) | internalName name == "," = intercalate ", " (map prettyNested args)
+    pretty (PConstr _ _ _ name args) = unwords (pretty name : map prettyNested args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     pretty [] = ""

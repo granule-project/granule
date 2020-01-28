@@ -28,11 +28,10 @@ import Language.Granule.Utils
 -- which correspond to those identifiers.
 generateCases :: (?globals :: Globals)
   => Span
-  -> Type
   -> Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Assumption
   -> Checker ([Id], [[Pattern ()]])
-generateCases span ty constructors ctxt = do
+generateCases span constructors ctxt = do
   -- Determines whether an assumption should be treated as linear.
   let isLinear (_, a) =
         case a of

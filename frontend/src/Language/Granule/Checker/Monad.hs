@@ -592,7 +592,8 @@ instance UserMsg CheckerError where
              intercalate "\n     " (formatCases (snd cases)))
 
     where
-      formatCases = map unwords . transpose . map padToLongest . transpose . map (map pretty)
+      formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
+
       padToLongest xs =
         let size = maximum (map length xs)
         in  map (\s -> s ++ replicate (size - length s) ' ') xs

@@ -436,7 +436,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      cases <- generateCases s t constructors holeCtxt
+      cases <- generateCases s constructors holeCtxt
       throw $ HoleMessage s t ctxt (tyVarContext st) cases
 
 -- Checking of constants
