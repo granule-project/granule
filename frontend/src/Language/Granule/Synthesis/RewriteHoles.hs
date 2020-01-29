@@ -79,6 +79,7 @@ holeRefactorEqn eqn = eqn {equationBody = holeRefactorExpr (equationBody eqn)}
 -- Refactors an expression by 'emptying' all holes, i.e. removing the variables
 -- contained in it. This is done recursively.
 holeRefactorExpr :: Expr () () -> Expr () ()
+holeRefactorExpr (Hole sp a _ []) = Hole sp a False []
 holeRefactorExpr (Hole sp a _ _) = Hole sp a True []
 holeRefactorExpr (App sp a rf e1 e2) =
   App sp a rf (holeRefactorExpr e1) (holeRefactorExpr e2)

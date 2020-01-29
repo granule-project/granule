@@ -493,7 +493,7 @@ Juxt :: { Expr () () }
 Hole :: { Expr () () }
   : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }
   | '{!' '!}'                 {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $2)) >>= \sp -> return $ Hole sp () False [] }
-  | '?'                       {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ Hole sp () False [] }
+  | '?'                       {% (mkSpan (fst . getPosToSpan $ $1, second (+1) . snd . getPosToSpan $ $1)) >>= \sp -> return $ Hole sp () False [] }
 
 Atom :: { Expr () () }
   : '(' Expr ')'              { $2 }

@@ -28,7 +28,6 @@ main = do
     (\(e :: ExitCode) -> do
       -- Move all of the backup files back to their original place.
       backupFiles <- findByExtension [".bak"]  "frontend/tests/cases/rewrite"
-      print backupFiles
       _ <- mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
       throwIO e
     )
