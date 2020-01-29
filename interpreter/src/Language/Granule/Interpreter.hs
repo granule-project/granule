@@ -46,6 +46,7 @@ import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Utils
 import Paths_granule_interpreter (version)
@@ -146,19 +147,26 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
     getHoleMessages es =
       NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False) es
 
-    runHoleSplitter :: String
-                    -> GrConfig
-                    -> NonEmpty CheckerError
-                    -> [CheckerError]
-                    -> IO (Either InterpreterError InterpreterResult)
+    runHoleSplitter :: (?globals :: Globals)
+      => String
+      -> GrConfig
+      -> NonEmpty CheckerError
+      -> [CheckerError]
+      -> IO (Either InterpreterError InterpreterResult)
     runHoleSplitter input config errs holes = do
       noImportResult <- try $ parseAndFreshenDefs input
       case noImportResult of
         Left (e :: SomeException) -> return . Left . ParseError . show $ e
         Right noImportAst -> do
-          let holeCases = concatMap (snd . cases) holes
+          let position = globalsHolePosition ?globals
+          let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
+          let holeCases = concatMap (snd . cases) relevantHoles
           rewriteHoles input noImportAst (keepBackup config) holeCases
           return . Left . CheckerError $ errs
+
+    holeInPosition :: Pos -> CheckerError -> Bool
+    holeInPosition pos (HoleMessage sp _ _ _ _) = spanContains pos sp
+    holeInPosition _ _ = False
 
 -- | Get the flags embedded in the first line of a file, e.g.
 -- "-- gr --no-eval"
@@ -330,6 +338,18 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "rewrite-holes"
             <> help "WARNING: Destructively overwrite equations containing holes to pattern match on generated case-splits."
 
+        globalsHoleLine <-
+          optional . option (auto @Int)
+            $ long "hole-line"
+            <> help "The line where the hole you wish to rewrite is located."
+            <> metavar "LINE"
+
+        globalsHoleCol <-
+          optional . option (auto @Int)
+            $ long "hole-column"
+            <> help "The column where the hole you wish to rewrite is located."
+            <> metavar "COL"
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -369,6 +389,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsSourceFilePath = Nothing
               , globalsEntryPoint
               , globalsRewriteHoles
+              , globalsHolePosition = (,) <$> globalsHoleLine <*> globalsHoleCol
               }
             }
           )

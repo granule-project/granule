@@ -36,3 +36,13 @@ getStart = startPos . getSpan
 convSpan :: Span -> Rp.Span
 convSpan Span{startPos = sp, endPos = ep} =
   ((Rp.Line *** Rp.Col) sp, (Rp.Line *** Rp.Col) ep)
+
+-- Determines whether a given position is within the bounds of a span.
+spanContains :: Pos -> Span -> Bool
+spanContains (posL, posC) (Span (startL, startC) (endL, endC) _) =
+  startL <= posL && endL >= posL && startC <= posC && endC >= posC
+
+-- A span encompasses another if it contains both positions of the other span.
+encompasses :: Span -> Span -> Bool
+encompasses outer (Span pos1 pos2 _) =
+  spanContains pos1 outer && spanContains pos2 outer

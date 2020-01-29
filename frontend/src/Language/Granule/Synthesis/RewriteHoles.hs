@@ -15,7 +15,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
-import qualified Language.Granule.Syntax.Span as GrSpan
+import Language.Granule.Syntax.Span (encompasses)
 
 import Language.Granule.Utils
 
@@ -27,6 +27,7 @@ rewriteHoles ::
   -> Bool
   -> [[Pattern ()]]
   -> IO ()
+rewriteHoles _ _ _ [] = return ()
 rewriteHoles input ast keepBackup cases = do
   let source = Text.pack input
   let refactored = holeRewriter source cases ast
@@ -62,15 +63,20 @@ holeRefactorDef cases def =
 holeRefactorEqnList ::
      [[Pattern ()]] -> EquationList () () -> EquationList () ()
 holeRefactorEqnList cases eqns =
-  eqns
-  {equations = concatMap updateEqn (equations eqns), equationsRefactored = True}
+  eqns {equations = newEquations, equationsRefactored = refactored}
   where
+    allUpdated = map updateEqn (equations eqns)
+    newEquations = concatMap fst allUpdated
+    refactored = any snd allUpdated
+    -- Updates an individual equation with the relevant cases, returning a tuple
+    -- containing the new equation and whether a refactoring was performed.
     updateEqn eqn =
-      let updated = holeRefactorEqn eqn
-          relCases = findRelevantCase eqn cases
+      let relCases = findRelevantCase eqn cases
       in case relCases of
-           [] -> [updated]
-           _ -> map (\case' -> updated {equationPatterns = case'}) relCases
+           [] -> ([eqn], False)
+           _ ->
+             let updated = holeRefactorEqn eqn
+             in (map (\pats -> updated {equationPatterns = pats}) relCases, True)
 
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn :: Equation () () -> Equation () ()
@@ -96,11 +102,3 @@ findRelevantCase :: Equation () () -> [[Pattern ()]] -> [[Pattern ()]]
 findRelevantCase eqn =
   filter
     (\case' -> equationSpan eqn `encompasses` (getFirstParameter . head) case')
-
--- A span encompasses another if it starts before it (or with it) and ends after
--- it (or with it).
-encompasses :: GrSpan.Span -> GrSpan.Span -> Bool
-encompasses (GrSpan.Span (sl1, sc1) (el1, ec1) _) (GrSpan.Span (sl2, sc2) (el2, ec2) _) =
-  (sl1 < sl2 && el1 > el2) ||
-  (not (sl1 > sl2 || el1 < el2) &&
-   ((sl1 == sl2) || (sc1 < sc2)) && ((el1 == el2) || (ec1 > ec2)))
