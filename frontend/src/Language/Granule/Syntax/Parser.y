@@ -547,6 +547,11 @@ parseAndDoImportsAndFreshenDefs input = do
     ast <- parseDefsAndDoImports input
     return $ freshenAST ast
 
+parseAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
+parseAndFreshenDefs input = do
+  ast <- either failWithMsg return $ parseDefs sourceFilePath input
+  return $ freshenAST ast
+
 parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
 parseDefsAndDoImports input = do
     ast <- either failWithMsg return $ parseDefs sourceFilePath input

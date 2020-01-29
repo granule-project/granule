@@ -100,7 +100,10 @@ goldenTestsRewrite = do
     runGr :: FilePath -> IO ()
     runGr fp = do
       src <- readFile fp
-      let ?globals = goldenGlobals { globalsSourceFilePath = Just fp, globalsRewriteHoles = Just True }
+      let ?globals = goldenGlobals {
+        globalsSourceFilePath = Just fp,
+        globalsRewriteHoles = Just True,
+        globalsIncludePath = Just "StdLib" }
       _ <- Interpreter.run (mempty { Interpreter.grKeepBackup = Just True }) src
       return ()
 

@@ -1,0 +1,4 @@
+import Bool
+
+not' : Bool -> Bool
+not' b = {! b !}

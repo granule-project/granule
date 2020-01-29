@@ -123,9 +123,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           Right (Left errs) ->
             case (globalsRewriteHoles ?globals, getHoleMessages errs) of
               (Just True, holes@(_:_)) -> do
-                let holeCases = concatMap (snd . cases) holes
-                rewriteHoles input ast (keepBackup config) holeCases
-                return . Left $ CheckerError errs
+                runHoleSplitter input config errs holes
               _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
             if noEval then do
@@ -148,6 +146,19 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
     getHoleMessages es =
       NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False) es
 
+    runHoleSplitter :: String
+                    -> GrConfig
+                    -> NonEmpty CheckerError
+                    -> [CheckerError]
+                    -> IO (Either InterpreterError InterpreterResult)
+    runHoleSplitter input config errs holes = do
+      noImportResult <- try $ parseAndFreshenDefs input
+      case noImportResult of
+        Left (e :: SomeException) -> return . Left . ParseError . show $ e
+        Right noImportAst -> do
+          let holeCases = concatMap (snd . cases) holes
+          rewriteHoles input noImportAst (keepBackup config) holeCases
+          return . Left . CheckerError $ errs
 
 -- | Get the flags embedded in the first line of a file, e.g.
 -- "-- gr --no-eval"
