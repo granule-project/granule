@@ -237,7 +237,7 @@ instance Monad m => Freshenable m (Value v a) where
       return $ Promote a e'
 
     freshen (Var a v) = do
-      v' <- lookupVar Value v
+      v' <- lookupVar ValueL v
       case v' of
          Just v' -> return (Var a $ Id (sourceName v) v')
          -- This case happens if we are referring to a defined

@@ -43,7 +43,7 @@ class Term t where
   isLexicallyAtomic _ = False
 
 -- Used to distinguish the value-level and type-level variables
-data IdSyntacticCategory = Value | Type
+data IdSyntacticCategory = ValueL | TypeL
 
 -- | The freshening monad for alpha-conversion to avoid name capturing
 type Freshener m t = StateT FreshenerState m t
@@ -83,8 +83,8 @@ freshIdentifierBase cat var = do
     st <- get
     let var' = sourceName var <> "`" <> show (counter st)
     case cat of
-      Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
-      Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
+      ValueL -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
+      TypeL  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
     return var { internalName = var' }
 
 -- | Look up a variable in the freshener state.
@@ -93,8 +93,8 @@ lookupVar :: Monad m => IdSyntacticCategory -> Id -> Freshener m (Maybe String)
 lookupVar cat v = do
   st <- get
   case cat of
-    Value -> return . lookup (sourceName v) . varMap $ st
-    Type  -> return . lookup (sourceName v) .  tyMap $ st
+    ValueL -> return . lookup (sourceName v) . varMap $ st
+    TypeL  -> return . lookup (sourceName v) .  tyMap $ st
 
 instance MonadFail Identity where
   fail = error

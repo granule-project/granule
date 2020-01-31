@@ -109,7 +109,7 @@ instance Monad m => Freshenable m Kind where
     return $ KFun k1 k2
 
   freshen (KVar v) = do
-    v' <- lookupVar  Type v
+    v' <- lookupVar  TypeL v
     case v' of
        Just v' -> return (KVar $ Id (sourceName v) v')
        -- This case happens if we are referring to a defined
@@ -456,7 +456,7 @@ instance Term Coeffect where
 instance Freshenable m TypeScheme where
   freshen :: Monad m => TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds constraints ty) = do
-        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v;
+        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase TypeL v;
                                         k' <- freshen k;
                                         return (v', k') }) binds
         constraints' <- mapM freshen constraints
@@ -474,7 +474,7 @@ instance Freshenable m Type where
         t' <- freshen t
         return $ Box c' t'
       freshenTyVar v = do
-        v' <- lookupVar Type v
+        v' <- lookupVar TypeL v
         case v' of
            Just v' -> return (TyVar $ Id (sourceName v) v')
            -- This case happens if we are referring to a defined
@@ -483,13 +483,13 @@ instance Freshenable m Type where
 
 instance Freshenable m Coeffect where
     freshen (CVar v) = do
-      v' <- lookupVar Type v
+      v' <- lookupVar TypeL v
       case v' of
         Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar v
 
     freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do
-      t <- freshIdentifierBase Type i
+      t <- freshIdentifierBase TypeL i
       return $ CInfinity $ Just $ TyVar t
 
     freshen (CPlus c1 c2) = do

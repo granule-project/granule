@@ -121,7 +121,7 @@ instance Freshenable m (Pattern a) where
 
   freshen :: Monad m => Pattern a -> Freshener m (Pattern a)
   freshen (PVar s a var) = do
-      var' <- freshIdentifierBase Value var
+      var' <- freshIdentifierBase ValueL var
       return $ PVar s a var'
 
   freshen (PBox s a p) = do
