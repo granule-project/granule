@@ -20,7 +20,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
 setElements :: [(Kind, Type)]
-setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO"), (KPromote $ TyCon $ mkId "ExcElem", TyCon $ mkId "Exception")]
 
 -- Associates type constuctors names to their:
 --    * kind
@@ -66,8 +66,8 @@ typeConstructors =
     , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
     --Effect grade types - Exceptions
     , (mkId "Exception", (KEffect, Nothing, False))
-    , (mkId "Success", (KPromote (TyCon $ mkId "ExcElems"), Nothing, False))
-    , (mkId "MayFail", (KPromote (TyCon $ mkId "ExcElems"), Nothing, False))
+    , (mkId "Success", (KPromote (TyCon $ mkId "ExcElem"), Nothing, False))
+    , (mkId "MayFail", (KPromote (TyCon $ mkId "ExcElem"), Nothing, False))
     ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
