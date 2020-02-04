@@ -27,8 +27,8 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
-    [Type Z]      -- constraints
-    (Type Z)      -- type
+    [Type Zero]      -- constraints
+    (Type Zero)      -- type
   deriving (Eq, Show, Generic)
 
 -- Constructors and operators are just strings
@@ -53,33 +53,35 @@ Example: `List n Int` in Granule
          is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
 
-type Kind = Type (S Z)
+type One = Succ Zero
 
-data Nat = S Nat | Z
+type Kind = Type One
+
+data Nat = Succ Nat | Zero
 
 data Level (l :: Nat) where
-  Succ :: Level l -> Level (S l)
-  Zero :: Level Z
+  LSucc :: Level l -> Level (Succ l)
+  LZero :: Level Zero
 
 deriving instance Eq (Level l)
 deriving instance Show (Level l)
 
 data Type (l :: Nat) where
     -- May not need promote
-    Promote :: Type l  -> Type (S l)
-    Type    :: Level l -> Type (S l)        -- ^ Universe construction
+    Promote :: Type l  -> Type (Succ l)
+    Type    :: Level l -> Type (Succ l)        -- ^ Universe construction
     FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
 
     TyCon   :: Id -> Type l                 -- ^ Type constructor
-    Box     :: Coeffect -> Type Z -> Type Z -- ^ Coeffect type
-    Diamond :: Type Z -> Type Z -> Type Z   -- ^ Effect type
+    Box     :: Coeffect -> Type Zero -> Type Zero -- ^ Coeffect type
+    Diamond :: Type Zero -> Type Zero -> Type Zero   -- ^ Effect type
     TyVar   :: Id -> Type l                 -- ^ Type variable
     TyApp   :: Type l -> Type l -> Type l   -- ^ Type application
     TyInt   :: Int -> Type l                -- ^ Type-level Int
     TyInfix :: TypeOperator -> Type l -> Type l -> Type l -- ^ Infix type operator
     TySet   :: [Type l] -> Type l           -- ^ Type-level set
     TyCase  :: Type l -> [(Type l, Type l)] -> Type l -- ^ Type-level case
-    KUnion  :: Type (S Z) -> Type (S Z) -> Type (S Z)
+    KUnion  :: Type One -> Type One -> Type One
 
 deriving instance Show (Type l)
 deriving instance Eq (Type l)
@@ -148,7 +150,7 @@ instance Monad m => Freshenable m Kind where
 -- | Represents coeffect grades
 data Coeffect = CNat      Int
               | CFloat    Rational
-              | CInfinity (Maybe (Type Z))
+              | CInfinity (Maybe (Type Zero))
               | CInterval { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
@@ -156,11 +158,11 @@ data Coeffect = CNat      Int
               | CMinus    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
-              | CZero     (Type Z)
-              | COne      (Type Z)
+              | CZero     (Type Zero)
+              | COne      (Type Zero)
               | Level     Integer
-              | CSet      [(String, Type Z)]
-              | CSig      Coeffect (Type Z)
+              | CSet      [(String, Type Zero)]
+              | CSig      Coeffect (Type Zero)
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
@@ -169,7 +171,7 @@ data Coeffect = CNat      Int
 data CoeffectFold a = CoeffectFold
   { cNat   :: Int -> a
   , cFloat :: Rational -> a
-  , cInf   :: Maybe (Type Z) -> a
+  , cInf   :: Maybe (Type Zero) -> a
   , cInterval :: a -> a -> a
   , cVar   :: Id -> a
   , cPlus  :: a -> a -> a
@@ -177,11 +179,11 @@ data CoeffectFold a = CoeffectFold
   , cMinus :: a -> a -> a
   , cMeet  :: a -> a -> a
   , cJoin  :: a -> a -> a
-  , cZero  :: Type Z -> a
-  , cOne   :: Type Z -> a
+  , cZero  :: Type Zero -> a
+  , cOne   :: Type Zero -> a
   , cLevel :: Integer -> a
-  , cSet   :: [(String, Type Z)] -> a
-  , cSig   :: a -> Type Z -> a
+  , cSet   :: [(String, Type Zero)] -> a
+  , cSig   :: a -> Type Zero -> a
   , cExpon :: a -> a -> a
   , cProd  :: a -> a -> a }
 
