@@ -270,18 +270,18 @@ publicRepresentation  = 2
 unusedRepresentation :: Integer
 unusedRepresentation = 0
 
-nat, extendedNat :: Type
+nat, extendedNat :: Type l
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
 
 infinity :: Coeffect
 infinity = CInfinity (Just extendedNat)
 
-isInterval :: Type -> Maybe Type
+isInterval :: Type l -> Maybe (Type l)
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
-isProduct :: Type -> Maybe (Type, Type)
+isProduct :: (Type l) -> Maybe (Type l, Type l)
 isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
@@ -290,61 +290,61 @@ isProduct _ = Nothing
 -- Helpers
 
 -- | Compute the arity of a function type
-arity :: Type -> Word
+arity :: Type l -> Word
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 
 -- | Get the result type after the last Arrow, e.g. for @a -> b -> Pair a b@
 -- the result type is @Pair a b@
-resultType :: Type -> Type
+resultType :: Type l -> Type l
 resultType (FunTy _ t) = resultType t
 resultType t = t
 
 -- | Get the leftmost type of an application
 -- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
 -- TyCon (Id "," ",")
-leftmostOfApplication :: Type -> Type
+leftmostOfApplication :: Type l -> Type l
 leftmostOfApplication (TyApp t _) = leftmostOfApplication t
 leftmostOfApplication t = t
 
 -- | Smart constructor for type constructors
-con :: String -> Type
+con :: String -> Type l
 con = TyCon . mkId
 
 -- | Smart constructor for type variables
-var :: String -> Type
+var :: String -> Type l
 var = TyVar . mkId
 
 -- | Smart constructor for function types
-(.->) :: Type -> Type -> Type
+(.->) :: Type l -> Type l -> Type l
 s .-> t = FunTy s t
 infixr 1 .->
 
 -- | Smart constructor for type application
-(.@) :: Type -> Type -> Type
+(.@) :: Type l -> Type l -> Type l
 s .@ t = TyApp s t
 infixl 9 .@
 
 -- Trivially effectful monadic constructors
-mFunTy :: Monad m => Type -> Type -> m Type
+mFunTy :: Monad m => Type l -> Type l -> m (Type l)
 mFunTy x y   = return (FunTy x y)
-mTyCon :: Monad m => Id -> m Type
+mTyCon :: Monad m => Id -> m (Type l)
 mTyCon       = return . TyCon
-mBox :: Monad m => Coeffect -> Type -> m Type
+mBox :: Monad m => Coeffect -> Type l -> m (Type l)
 mBox c y     = return (Box c y)
-mDiamond :: Monad m => Type -> Type -> m Type
+mDiamond :: Monad m => Type l -> Type l -> m (Type l)
 mDiamond e y = return (Diamond e y)
-mTyVar :: Monad m => Id -> m Type
+mTyVar :: Monad m => Id -> m (Type l)
 mTyVar       = return . TyVar
-mTyApp :: Monad m => Type -> Type -> m Type
+mTyApp :: Monad m => Type l -> Type l -> m (Type l)
 mTyApp x y   = return (TyApp x y)
-mTyInt :: Monad m => Int -> m Type
+mTyInt :: Monad m => Int -> m (Type l)
 mTyInt       = return . TyInt
-mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
+mTyInfix :: Monad m => TypeOperator -> Type l -> Type l -> m (Type l)
 mTyInfix op x y  = return (TyInfix op x y)
-mTySet   :: Monad m => [Type] -> m Type
+mTySet   :: Monad m => [Type l] -> m (Type l)
 mTySet xs = return (TySet xs)
-mTyCase :: Monad m => Type -> [(Type, Type)] -> m Type
+mTyCase :: Monad m => Type l -> [(Type l, Type l)] -> m (Type l)
 mTyCase x cs = return (TyCase x cs)
 
 -- Monadic algebra for types
@@ -361,12 +361,12 @@ data TypeFold m a = TypeFold
   , tfTyCase  :: a -> [(a, a)] -> m a}
 
 -- Base monadic algebra
-baseTypeFold :: Monad m => TypeFold m Type
+baseTypeFold :: Monad m => TypeFold m (Type l)
 baseTypeFold =
   TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
 
 -- | Monadic fold on a `Type` value
-typeFoldM :: Monad m => TypeFold m a -> Type -> m a
+typeFoldM :: Monad m => TypeFold m a -> Type l -> m a
 typeFoldM algebra = go
   where
    go (FunTy t1 t2) = do
@@ -406,7 +406,7 @@ typeFoldM algebra = go
 
 instance FirstParameter TypeScheme Span
 
-freeAtomsVars :: Type -> [Id]
+freeAtomsVars :: Type l -> [Id]
 freeAtomsVars (TyVar v) = [v]
 freeAtomsVars (TyApp t1 (TyVar v)) = v : freeAtomsVars t1
 freeAtomsVars (TyApp t1 _) = freeAtomsVars t1
