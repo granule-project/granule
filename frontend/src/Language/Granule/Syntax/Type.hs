@@ -85,7 +85,7 @@ data Type (l :: Nat) where
 
 deriving instance Show (Type l)
 deriving instance Eq (Type l)
-deriving instance Ord (Type l)
+--deriving instance Ord (Type l)
 
 {-
 promoteTypeToKind :: Type -> Kind
@@ -165,7 +165,7 @@ data Coeffect = CNat      Int
               | CSig      Coeffect (Type Zero)
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Show) --Ord, Show)
 
 -- Algebra for coeffects
 data CoeffectFold a = CoeffectFold
@@ -333,9 +333,9 @@ mFunTy :: Monad m => Type l -> Type l -> m (Type l)
 mFunTy x y   = return (FunTy x y)
 mTyCon :: Monad m => Id -> m (Type l)
 mTyCon       = return . TyCon
-mBox :: Monad m => Coeffect -> Type l -> m (Type l)
+mBox :: Monad m => Coeffect -> Type Zero -> m (Type Zero)
 mBox c y     = return (Box c y)
-mDiamond :: Monad m => Type l -> Type l -> m (Type l)
+mDiamond :: Monad m => Type Zero -> Type Zero -> m (Type Zero)
 mDiamond e y = return (Diamond e y)
 mTyVar :: Monad m => Id -> m (Type l)
 mTyVar       = return . TyVar
