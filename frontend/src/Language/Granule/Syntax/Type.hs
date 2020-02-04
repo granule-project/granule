@@ -3,6 +3,10 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE GADTs #-}
 
 -- Syntax of types, coeffects, and effects
 
@@ -12,6 +16,7 @@ import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
+import GHC.TypeLits
 
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
@@ -21,8 +26,8 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
-    [Type]        -- constraints
-    Type          -- type
+    [Type 0]      -- constraints
+    (Type 0)      -- type
   deriving (Eq, Show, Generic)
 
 -- Constructors and operators are just strings
@@ -46,29 +51,33 @@ data TypeOperator
 Example: `List n Int` in Granule
          is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
-data Type = FunTy Type Type           -- ^ Function type
-          | TyCon Id                  -- ^ Type constructor
-          | Box Coeffect Type         -- ^ Coeffect type
-          | Diamond Type Type         -- ^ Effect type
-          | TyVar Id                  -- ^ Type variable
-          | TyApp Type Type           -- ^ Type application
-          | TyInt Int                 -- ^ Type-level Int
-          | TyInfix TypeOperator Type Type  -- ^ Infix type operator
-          | TySet [Type]              -- ^ Type-level set
-          | TyCase Type [(Type, Type)] -- ^ Type-level case
+
+type Kind = Type 1
+
+data Level l where
+  Succ :: Level l -> Level (1 + l)
+  Zero :: Level 0
+  deriving (Eq, Show)
+
+data Type (l :: Nat) where
+    -- May not need promote
+    Promote :: Type l  -> Type (l + 1)
+    Type    :: Level l -> Type (l + 1)      -- ^ Universe construction
+    FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
+
+    TyCon   :: Id -> Type l                 -- ^ Type constructor
+    Box     :: Coeffect -> Type 0 -> Type 0 -- ^ Coeffect type
+    Diamond :: Type 0 -> Type 0 -> Type 0   -- ^ Effect type
+    TyVar   :: Id -> Type l                 -- ^ Type variable
+    TyApp   :: Type l -> Type l -> Type l   -- ^ Type application
+    TyInt   :: Int -> Type l                -- ^ Type-level Int
+    TyInfix :: TypeOperator -> Type l -> Type l -> Type l -- ^ Infix type operator
+    TySet   :: [Type l] -> Type l           -- ^ Type-level set
+    TyCase  :: Type l -> [(Type l, Type l)] -> Type l -- ^ Type-level case
+    KUnion  :: Type 1 -> Type 1 -> Type 1
     deriving (Eq, Ord, Show)
 
--- | Kinds
-data Kind = KType
-          | KCoeffect
-          | KEffect
-          | KPredicate
-          | KFun Kind Kind
-          | KVar Id              -- Kind poly variable
-          | KPromote Type        -- Promoted types
-          | KUnion Kind Kind
-    deriving (Show, Ord, Eq)
-
+{-
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyVar v) = KVar v
 promoteTypeToKind t = KPromote t
@@ -90,14 +99,16 @@ instance Term Kind where
   isLexicallyAtomic KPredicate{} = True
   isLexicallyAtomic KPromote{} = True
   isLexicallyAtomic _ = False
+-}
 
-kConstr :: Id -> Kind
-kConstr = KPromote . TyCon
+tyCon :: String -> Type l
+tyCon = TyCon . mkId
 
 kNat, protocol :: Kind
 kNat = kConstr $ mkId "Nat"
 protocol = kConstr $ mkId "Protocol"
 
+{-
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
@@ -124,11 +135,12 @@ instance Monad m => Freshenable m Kind where
     k1' <- freshen k1
     k2' <- freshen k2
     return $ KUnion k1' k2'
+    -}
 
 -- | Represents coeffect grades
 data Coeffect = CNat      Int
               | CFloat    Rational
-              | CInfinity (Maybe Type)
+              | CInfinity (Maybe (Type 0))
               | CInterval { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
@@ -136,11 +148,11 @@ data Coeffect = CNat      Int
               | CMinus    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
-              | CZero     Type
-              | COne      Type
+              | CZero     (Type 0)
+              | COne      (Type 0)
               | Level     Integer
-              | CSet      [(String, Type)]
-              | CSig      Coeffect Type
+              | CSet      [(String, Type 0)]
+              | CSig      Coeffect (Type 0)
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
@@ -149,7 +161,7 @@ data Coeffect = CNat      Int
 data CoeffectFold a = CoeffectFold
   { cNat   :: Int -> a
   , cFloat :: Rational -> a
-  , cInf   :: Maybe Type -> a
+  , cInf   :: Maybe (Type 0) -> a
   , cInterval :: a -> a -> a
   , cVar   :: Id -> a
   , cPlus  :: a -> a -> a
@@ -157,11 +169,11 @@ data CoeffectFold a = CoeffectFold
   , cMinus :: a -> a -> a
   , cMeet  :: a -> a -> a
   , cJoin  :: a -> a -> a
-  , cZero  :: Type -> a
-  , cOne   :: Type -> a
+  , cZero  :: Type 0 -> a
+  , cOne   :: Type 0 -> a
   , cLevel :: Integer -> a
-  , cSet   :: [(String, Type)] -> a
-  , cSig   :: a -> Type -> a
+  , cSet   :: [(String, Type 0)] -> a
+  , cSig   :: a -> Type 0 -> a
   , cExpon :: a -> a -> a
   , cProd  :: a -> a -> a }
 
@@ -270,11 +282,8 @@ isProduct _ = Nothing
 ----------------------------------------------------------------------
 -- Helpers
 
--- | Natural numbers
-type Nat = Word
-
 -- | Compute the arity of a function type
-arity :: Type -> Nat
+arity :: Type -> Word
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 
@@ -399,7 +408,7 @@ freeAtomsVars t = []
 ----------------------------------------------------------------------
 -- Types and coeffects are terms
 
-instance Term Type where
+instance Term (Type l) where
     freeVars = runIdentity . typeFoldM TypeFold
       { tfFunTy   = \x y -> return $ x <> y
       , tfTyCon   = \_ -> return [] -- or: const (return [])
@@ -463,7 +472,7 @@ instance Freshenable m TypeScheme where
         ty' <- freshen ty
         return $ Forall s binds' constraints' ty'
 
-instance Freshenable m Type where
+instance Freshenable m (Type l) where
   freshen =
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox })
