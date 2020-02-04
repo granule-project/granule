@@ -351,12 +351,12 @@ mTyCase :: Monad m => Type l -> [(Type l, Type l)] -> m (Type l)
 mTyCase x cs = return (TyCase x cs)
 
 -- Monadic algebra for types
-data TypeFold m a = TypeFold
-  { tfFunTy   :: a -> a        -> m a
-  , tfTyCon   :: Id            -> m a
-  , tfBox     :: Coeffect -> a -> m a
-  , tfDiamond :: a -> a        -> m a
-  , tfTyVar   :: Id            -> m a
+data TypeFold m (a :: Nat -> *) = TypeFold
+  { tfFunTy   :: a l -> a l    -> m (a l)
+  , tfTyCon   :: Id            -> m (a l)
+  , tfBox     :: Coeffect -> a Zero -> m (a Zero)
+  , tfDiamond :: a Zero -> a Zero       -> m (a Zero)
+  , tfTyVar   :: Id            -> m (a l)
   , tfTyApp   :: a -> a        -> m a
   , tfTyInt   :: Int           -> m a
   , tfTyInfix :: TypeOperator  -> a -> a -> m a
