@@ -7,6 +7,8 @@
 {-# LANGUAGE TypeOperators #-}
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
+
 
 -- Syntax of types, coeffects, and effects
 
@@ -57,7 +59,9 @@ type Kind = Type 1
 data Level l where
   Succ :: Level l -> Level (1 + l)
   Zero :: Level 0
-  deriving (Eq, Show)
+
+deriving instance Eq (Level l)
+deriving instance Show (Level l)
 
 data Type (l :: Nat) where
     -- May not need promote
@@ -75,7 +79,10 @@ data Type (l :: Nat) where
     TySet   :: [Type l] -> Type l           -- ^ Type-level set
     TyCase  :: Type l -> [(Type l, Type l)] -> Type l -- ^ Type-level case
     KUnion  :: Type 1 -> Type 1 -> Type 1
-    deriving (Eq, Ord, Show)
+
+deriving instance Show (Type l)
+deriving instance Eq (Type l)
+deriving instance Ord (Type l)
 
 {-
 promoteTypeToKind :: Type -> Kind
