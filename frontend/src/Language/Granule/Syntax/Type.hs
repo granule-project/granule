@@ -18,7 +18,6 @@ import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
-import GHC.TypeLits
 
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
@@ -28,8 +27,8 @@ data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
-    [Type 0]      -- constraints
-    (Type 0)      -- type
+    [Type Z]      -- constraints
+    (Type Z)      -- type
   deriving (Eq, Show, Generic)
 
 -- Constructors and operators are just strings
@@ -54,31 +53,33 @@ Example: `List n Int` in Granule
          is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
 
-type Kind = Type 1
+type Kind = Type (S Z)
 
-data Level l where
-  Succ :: Level l -> Level (1 + l)
-  Zero :: Level 0
+data Nat = S Nat | Z
+
+data Level (l :: Nat) where
+  Succ :: Level l -> Level (S l)
+  Zero :: Level Z
 
 deriving instance Eq (Level l)
 deriving instance Show (Level l)
 
 data Type (l :: Nat) where
     -- May not need promote
-    Promote :: Type l  -> Type (l + 1)
-    Type    :: Level l -> Type (l + 1)      -- ^ Universe construction
+    Promote :: Type l  -> Type (S l)
+    Type    :: Level l -> Type (S l)        -- ^ Universe construction
     FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
 
     TyCon   :: Id -> Type l                 -- ^ Type constructor
-    Box     :: Coeffect -> Type 0 -> Type 0 -- ^ Coeffect type
-    Diamond :: Type 0 -> Type 0 -> Type 0   -- ^ Effect type
+    Box     :: Coeffect -> Type Z -> Type Z -- ^ Coeffect type
+    Diamond :: Type Z -> Type Z -> Type Z   -- ^ Effect type
     TyVar   :: Id -> Type l                 -- ^ Type variable
     TyApp   :: Type l -> Type l -> Type l   -- ^ Type application
     TyInt   :: Int -> Type l                -- ^ Type-level Int
     TyInfix :: TypeOperator -> Type l -> Type l -> Type l -- ^ Infix type operator
     TySet   :: [Type l] -> Type l           -- ^ Type-level set
     TyCase  :: Type l -> [(Type l, Type l)] -> Type l -- ^ Type-level case
-    KUnion  :: Type 1 -> Type 1 -> Type 1
+    KUnion  :: Type (S Z) -> Type (S Z) -> Type (S Z)
 
 deriving instance Show (Type l)
 deriving instance Eq (Type l)
@@ -147,7 +148,7 @@ instance Monad m => Freshenable m Kind where
 -- | Represents coeffect grades
 data Coeffect = CNat      Int
               | CFloat    Rational
-              | CInfinity (Maybe (Type 0))
+              | CInfinity (Maybe (Type Z))
               | CInterval { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
@@ -155,11 +156,11 @@ data Coeffect = CNat      Int
               | CMinus    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
-              | CZero     (Type 0)
-              | COne      (Type 0)
+              | CZero     (Type Z)
+              | COne      (Type Z)
               | Level     Integer
-              | CSet      [(String, Type 0)]
-              | CSig      Coeffect (Type 0)
+              | CSet      [(String, Type Z)]
+              | CSig      Coeffect (Type Z)
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
     deriving (Eq, Ord, Show)
@@ -168,7 +169,7 @@ data Coeffect = CNat      Int
 data CoeffectFold a = CoeffectFold
   { cNat   :: Int -> a
   , cFloat :: Rational -> a
-  , cInf   :: Maybe (Type 0) -> a
+  , cInf   :: Maybe (Type Z) -> a
   , cInterval :: a -> a -> a
   , cVar   :: Id -> a
   , cPlus  :: a -> a -> a
@@ -176,11 +177,11 @@ data CoeffectFold a = CoeffectFold
   , cMinus :: a -> a -> a
   , cMeet  :: a -> a -> a
   , cJoin  :: a -> a -> a
-  , cZero  :: Type 0 -> a
-  , cOne   :: Type 0 -> a
+  , cZero  :: Type Z -> a
+  , cOne   :: Type Z -> a
   , cLevel :: Integer -> a
-  , cSet   :: [(String, Type 0)] -> a
-  , cSig   :: a -> Type 0 -> a
+  , cSet   :: [(String, Type Z)] -> a
+  , cSig   :: a -> Type Z -> a
   , cExpon :: a -> a -> a
   , cProd  :: a -> a -> a }
 
