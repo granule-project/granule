@@ -115,8 +115,8 @@ tyCon :: String -> Type l
 tyCon = TyCon . mkId
 
 kNat, protocol :: Kind
-kNat = kConstr $ mkId "Nat"
-protocol = kConstr $ mkId "Protocol"
+kNat = TyCon $ mkId "Nat"
+protocol = TyCon $ mkId "Protocol"
 
 {-
 instance Monad m => Freshenable m Kind where
