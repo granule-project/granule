@@ -82,16 +82,14 @@ inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
         _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = KType, kActual = k2 }
     _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k2 }
 
--- kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
-
 inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Pure")) = do
     -- Create a fresh type variable
     var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
     return $ (KPromote $ TyVar var, [])
 
---inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "ExcFree")) = do
---    var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
---    return $ (KPromote $ TyVar var, [])
+inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "ExcFree")) = do
+    var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
+    return $ ((KFun (KPromote $ TyVar var) (KPromote $ TyVar var)), [])
 
 inferKindOfTypeImplicits s ctxt (TyCon conId) = do
   st <- get
