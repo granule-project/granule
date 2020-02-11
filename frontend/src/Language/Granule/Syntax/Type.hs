@@ -425,15 +425,15 @@ freeAtomsVars t = []
 instance Term (Type l) where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
       { tfFunTy   = \(Const x) (Const y) -> return $ Const $ x <> y
-      , tfTyCon   = \_ -> return [] -- or: const (return [])
+      , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
       , tfBox     = \c (Const t) -> return $ Const (freeVars c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
-      , tfTyVar   = \v -> return [v] -- or: return . return
-      , tfTyApp   = \x y -> return $ x <> y
-      , tfTyInt   = \_ -> return []
-      , tfTyInfix = \_ y z -> return $ y <> z
-      , tfSet     = return . concat
-      , tfTyCase  = \t cs -> return $ t <> (concat . concat) [[a,b] | (a,b) <- cs]
+      , tfTyVar   = \v -> return $ Const [v] -- or: return . return
+      , tfTyApp   = \(Const x) (Const y)-> return $ Const(x <> y)
+      , tfTyInt   = \_ -> return (Const [])
+      , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
+      , tfSet     = return . Const . concat . map getConst
+      , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
       }
 
     isLexicallyAtomic TyInt{} = True
