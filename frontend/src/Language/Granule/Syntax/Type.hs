@@ -9,7 +9,7 @@
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE RankNTypes #-}
-
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- Syntax of types, coeffects, and effects
 
@@ -377,11 +377,14 @@ baseTypeFold =
   TypeFold mPromote mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
 
 -- | Monadic fold on a `Type` value
-typeFoldM :: Monad m => TypeFold m a -> Type l -> m (a l)
+typeFoldM :: forall m l a . Monad m => TypeFold m a -> Type l -> m (a l)
 typeFoldM algebra = go
   where
-   go (Promote t) = (tfPromote algebra) t
-   go (Type t) = (tfTy algebra) t
+   go :: Type l' -> m (a l')
+   go (Promote t) = do
+     t' <- go t
+     (tfPromote algebra) t'
+   go (Type l) = (tfTy algebra) l
    go (FunTy t1 t2) = do
      t1' <- go t1
      t2' <- go t2
