@@ -8,6 +8,7 @@
 {-# LANGUAGE KindSignatures #-}
 {-# LANGUAGE GADTs #-}
 {-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE RankNTypes #-}
 
 
 -- Syntax of types, coeffects, and effects
@@ -352,24 +353,24 @@ mTyCase x cs = return (TyCase x cs)
 
 -- Monadic algebra for types
 data TypeFold m (a :: Nat -> *) = TypeFold
-  { tfFunTy   :: a l -> a l    -> m (a l)
-  , tfTyCon   :: Id            -> m (a l)
-  , tfBox     :: Coeffect -> a Zero -> m (a Zero)
-  , tfDiamond :: a Zero -> a Zero       -> m (a Zero)
-  , tfTyVar   :: Id            -> m (a l)
-  , tfTyApp   :: a -> a        -> m a
-  , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: TypeOperator  -> a -> a -> m a
-  , tfSet     :: [a]           -> m a
-  , tfTyCase  :: a -> [(a, a)] -> m a}
+  { tfFunTy   :: forall (l :: Nat) . a l -> a l    -> m (a l)
+  , tfTyCon   :: forall (l :: Nat) . Id            -> m (a l)
+  , tfBox     :: Coeffect -> a Zero                -> m (a Zero)
+  , tfDiamond :: a Zero -> a Zero                  -> m (a Zero)
+  , tfTyVar   :: forall (l :: Nat) . Id            -> m (a l)
+  , tfTyApp   :: forall (l :: Nat) . a l -> a l    -> m (a l)
+  , tfTyInt   :: forall (l :: Nat) . Int           -> m (a l)
+  , tfTyInfix :: forall (l :: Nat) . TypeOperator  -> a l -> a l -> m (a l)
+  , tfSet     :: forall (l :: Nat) . [a l]         -> m (a l)
+  , tfTyCase  :: forall (l :: Nat) . a l -> [(a l, a l)] -> m (a l)}
 
 -- Base monadic algebra
-baseTypeFold :: Monad m => TypeFold m (Type l)
+baseTypeFold :: Monad m => TypeFold m Type --(Type l)
 baseTypeFold =
   TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
 
 -- | Monadic fold on a `Type` value
-typeFoldM :: Monad m => TypeFold m a -> Type l -> m a
+typeFoldM :: Monad m => TypeFold m a -> Type l -> m (a l)
 typeFoldM algebra = go
   where
    go (FunTy t1 t2) = do
