@@ -426,8 +426,8 @@ instance Term (Type l) where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
       { tfFunTy   = \(Const x) (Const y) -> return $ Const $ x <> y
       , tfTyCon   = \_ -> return [] -- or: const (return [])
-      , tfBox     = \c (Const t) -> return $ freeVars c <> (Const t)
-      , tfDiamond = \e (Const t) -> return $ e <> t
+      , tfBox     = \c (Const t) -> return $ Const (freeVars c <> t)
+      , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
       , tfTyVar   = \v -> return [v] -- or: return . return
       , tfTyApp   = \x y -> return $ x <> y
       , tfTyInt   = \_ -> return []
