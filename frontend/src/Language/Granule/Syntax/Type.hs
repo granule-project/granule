@@ -22,6 +22,7 @@ import Language.Granule.Syntax.Span
 
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
+import Data.Functor.Const
 
 -- | Represent types with a universal quantification at the start
 data TypeScheme =
@@ -416,15 +417,17 @@ freeAtomsVars (TyApp t1 (TyVar v)) = v : freeAtomsVars t1
 freeAtomsVars (TyApp t1 _) = freeAtomsVars t1
 freeAtomsVars t = []
 
+
+
 ----------------------------------------------------------------------
 -- Types and coeffects are terms
 
 instance Term (Type l) where
-    freeVars = runIdentity . typeFoldM TypeFold
-      { tfFunTy   = \x y -> return $ x <> y
+    freeVars = getConst . runIdentity . typeFoldM TypeFold
+      { tfFunTy   = \(Const x) (Const y) -> return $ Const $ x <> y
       , tfTyCon   = \_ -> return [] -- or: const (return [])
-      , tfBox     = \c t -> return $ freeVars c <> t
-      , tfDiamond = \e t -> return $ e <> t
+      , tfBox     = \c (Const t) -> return $ freeVars c <> (Const t)
+      , tfDiamond = \e (Const t) -> return $ e <> t
       , tfTyVar   = \v -> return [v] -- or: return . return
       , tfTyApp   = \x y -> return $ x <> y
       , tfTyInt   = \_ -> return []
