@@ -6,7 +6,7 @@ module Language.Granule.Synthesis.RewriteHoles
 
 import Control.Arrow (second)
 import Control.Monad (void)
-import Data.Maybe (fromJust)
+import Data.Maybe (fromJust, listToMaybe)
 import qualified Data.Text.Lazy as Text
 import Text.Reprinter
 
@@ -101,4 +101,7 @@ holeRefactorExpr v@Val {} = v
 findRelevantCase :: Equation () () -> [[Pattern ()]] -> [[Pattern ()]]
 findRelevantCase eqn =
   filter
-    (\case' -> equationSpan eqn `encompasses` (getFirstParameter . head) case')
+    (\case' ->
+       case listToMaybe case' of
+         Nothing -> False
+         Just h -> equationSpan eqn `encompasses` getFirstParameter h)
