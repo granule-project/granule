@@ -261,9 +261,17 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations) tys@(Forall
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
-                      
-    elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
-        -- Erase the solver predicate between equations
+
+    elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
+
+    checkGuardsForImpossibility s defName
+    checkGuardsForExhaustivity s defName ty equations
+    let el' = el { equations = elaboratedEquations }
+    pure $ Def s defName rf el' tys
+  where
+    elaborateEquation :: Equation () () -> Checker (Equation () Type)
+    elaborateEquation equation = do
+      -- Erase the solver predicate between equations
         modify' $ \st -> st
             { predicateStack = []
             , tyVarContext = []
@@ -278,11 +286,6 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations) tys@(Forall
         let predicate = Conj $ predicateStack checkerState
         solveConstraints predicate (getSpan equation) defName
         pure elaboratedEq
-
-    checkGuardsForImpossibility s defName
-    checkGuardsForExhaustivity s defName ty equations
-    let el' = el { equations = elaboratedEquations }
-    pure $ Def s defName rf el' tys
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions

@@ -75,8 +75,8 @@ holeRefactorEqnList cases eqns =
       in case relCases of
            [] -> ([eqn], False)
            _ ->
-             let updated = holeRefactorEqn eqn
-             in (map (\pats -> updated {equationPatterns = pats}) relCases, True)
+             let eqn' = holeRefactorEqn eqn
+             in (map (\cs -> eqn' {equationPatterns = cs}) relCases, True)
 
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn :: Equation () () -> Equation () ()
