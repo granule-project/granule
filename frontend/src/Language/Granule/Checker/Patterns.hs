@@ -131,18 +131,24 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
 ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
   | internalName c == "Int" = do
 
+    newConjunct
     definiteUnification s outerCoeff ty
+    pred <- squashPred
 
     let elabP = PInt s' ty rf n
-    return ([], [], [], elabP, undefined, Full)
+    let predP = PInt s' pred rf n
+    return ([], [], [], elabP, predP, Full)
 
 ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
   | internalName c == "Float" = do
 
+    newConjunct
     definiteUnification s outerCoeff ty
+    pred <- squashPred
 
     let elabP = PFloat s' ty rf n
-    return ([], [], [], elabP, undefined, Full)
+    let predP = PFloat s' pred rf n
+    return ([], [], [], elabP, predP, Full)
 
 -- Pattern match on a modal box
 ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
@@ -316,3 +322,15 @@ duplicateBinderCheck s ps = case duplicateBinders of
       (\_ _ _ _ -> [])
       (\_ _ _ _ -> [])
       (\_ _ _ _ bss -> concat bss)
+
+-- | Folds the top conjunct into the next one (creating one big conjunct), while
+--   returning the top conjunct.
+squashPred :: Checker Pred
+squashPred = do
+  st <- get
+  case predicateStack st of
+    (Conj xs : Conj ys : ps) -> do
+      modify (\st -> st { predicateStack = Conj (xs ++ ys) : ps })
+      return $ Conj xs
+    (Conj xs : ps) -> return $ Conj xs
+    _ -> error "squashPred case undefined"
