@@ -100,6 +100,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons = do
         -- box patterns.
         let elabP = PWild s t rf
         let predP = PWild s (Conj []) rf
+        debugM' (pretty predP) ""
 
         case outerCoeff of
           -- Can only have a wildcard under a box if the type of the pattern is unishaped
@@ -120,6 +121,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons = do
 ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
     let elabP = PVar s t rf v
     let predP = PVar s (Conj []) rf v
+    debugM' (pretty predP) ""
 
     case outerCoeff of
       Nothing ->
@@ -137,6 +139,7 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
 
     let elabP = PInt s' ty rf n
     let predP = PInt s' pred rf n
+    debugM' (pretty predP) (pretty pred)
     return ([], [], [], elabP, predP, Full)
 
 ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
@@ -148,6 +151,7 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
 
     let elabP = PFloat s' ty rf n
     let predP = PFloat s' pred rf n
+    debugM' (pretty predP) (pretty pred)
     return ([], [], [], elabP, predP, Full)
 
 -- Pattern match on a modal box
@@ -167,11 +171,13 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
 
-
+    newConjunct
     (ctxt, eVars, subst, elabPInner, predPInner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
+    pred <- squashPred
 
     let elabP = PBox sp t rf elabPInner
-    let predP = PBox sp (Conj []) rf predPInner
+    let predP = PBox sp pred rf predPInner
+    debugM' (pretty predP) (pretty pred)
     return (ctxt, eVars, subst, elabP, predP, NotFull)
 
 ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
@@ -182,7 +188,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
-
+      newConjunct
       definiteUnification s outerBoxTy ty
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
@@ -228,6 +234,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
+          pred <- squashPred
+
           (as, bs, us, elabPs, predPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
 
           -- Combine the substitutions
@@ -238,7 +246,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs
-          let predP = PConstr s undefined rf dataC predPs
+          let predP = PConstr s pred rf dataC predPs
+          debugM' (pretty predP) (pretty pred)
           return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
