@@ -332,9 +332,9 @@ infixl 9 .@
 
 -- Trivially effectful monadic constructors
 mPromote :: Monad m => Type l -> m (Type (Succ l))
-mPromote = return . Promote
+mPromote     = return . Promote
 mTy :: Monad m => Level l -> m (Type (Succ l))
-mTy = return . Type
+mTy          = return . Type
 mFunTy :: Monad m => Type l -> Type l -> m (Type l)
 mFunTy x y   = return (FunTy x y)
 mTyCon :: Monad m => Id -> m (Type l)
@@ -352,14 +352,16 @@ mTyInt       = return . TyInt
 mTyInfix :: Monad m => TypeOperator -> Type l -> Type l -> m (Type l)
 mTyInfix op x y  = return (TyInfix op x y)
 mTySet   :: Monad m => [Type l] -> m (Type l)
-mTySet xs = return (TySet xs)
+mTySet xs    = return (TySet xs)
 mTyCase :: Monad m => Type l -> [(Type l, Type l)] -> m (Type l)
 mTyCase x cs = return (TyCase x cs)
+mKUnion :: Monad m => Type One -> Type One -> m (Type One)
+mKUnion x y  = return (KUnion x y)
 
 -- Monadic algebra for types
 data TypeFold m (a :: Nat -> *) = TypeFold
   { tfPromote :: forall (l :: Nat) . a l           -> m (a (Succ l))
-  , tfTy      :: forall (l ::Nat)  . Level l       -> m (a (Succ l))
+  , tfTy      :: forall (l :: Nat) . Level l       -> m (a (Succ l))
   , tfFunTy   :: forall (l :: Nat) . a l -> a l    -> m (a l)
   , tfTyCon   :: forall (l :: Nat) . Id            -> m (a l)
   , tfBox     :: Coeffect -> a Zero                -> m (a Zero)
@@ -369,12 +371,13 @@ data TypeFold m (a :: Nat -> *) = TypeFold
   , tfTyInt   :: forall (l :: Nat) . Int           -> m (a l)
   , tfTyInfix :: forall (l :: Nat) . TypeOperator  -> a l -> a l -> m (a l)
   , tfSet     :: forall (l :: Nat) . [a l]         -> m (a l)
-  , tfTyCase  :: forall (l :: Nat) . a l -> [(a l, a l)] -> m (a l)}
+  , tfTyCase  :: forall (l :: Nat) . a l -> [(a l, a l)] -> m (a l)
+  , tfKUnion  :: a One -> a One                    -> m (a One)}
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --(Type l)
 baseTypeFold =
-  TypeFold mPromote mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
+  TypeFold mPromote mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m l a . Monad m => TypeFold m a -> Type l -> m (a l)
@@ -419,6 +422,10 @@ typeFoldM algebra = go
       a' <- a
       b' <- b
       return (a', b')
+   go (KUnion t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfKUnion algebra) t1' t2'
 
 instance FirstParameter TypeScheme Span
 
@@ -435,16 +442,19 @@ freeAtomsVars t = []
 
 instance Term (Type l) where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
-      { tfFunTy   = \(Const x) (Const y) -> return $ Const $ x <> y
+      { tfPromote = \(Const x) -> return (Const x)
+      , tfTy      = \_ -> return (Const [])
+      , tfFunTy   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
       , tfBox     = \c (Const t) -> return $ Const (freeVars c <> t)
       , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
       , tfTyVar   = \v -> return $ Const [v] -- or: return . return
-      , tfTyApp   = \(Const x) (Const y)-> return $ Const(x <> y)
+      , tfTyApp   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyInt   = \_ -> return (Const [])
       , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
       , tfSet     = return . Const . concat . map getConst
       , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
+      , tfKUnion  = \(Const x) (Const y) -> return $ Const (x <> y)
       }
 
     isLexicallyAtomic TyInt{} = True
