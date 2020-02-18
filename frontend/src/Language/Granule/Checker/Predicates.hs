@@ -15,7 +15,7 @@ inside the type checker.
 
 import Control.Monad.Fail
 import Control.Monad.Trans.State.Strict
-import Data.List (intercalate, (\\))
+import Data.List (intercalate, (\\), nub)
 import GHC.Generics (Generic)
 
 import Language.Granule.Context
@@ -219,12 +219,14 @@ data Pred where
     Exists :: Id -> Kind -> Pred -> Pred
 
 instance Term Pred where
-  freeVars (Conj ps) = concatMap freeVars ps
-  freeVars (Disj ps) = concatMap freeVars ps
-  freeVars (Impl bounds p1 p2) = (freeVars p1 <> freeVars p2) \\ map fst bounds
-  freeVars (Con c) = varsConstraint c
-  freeVars (NegPred p) = freeVars p
-  freeVars (Exists x _ p) = freeVars p \\ [x]
+  freeVars = nub . freeVars'
+    where
+      freeVars' (Conj ps) = concatMap freeVars' ps
+      freeVars' (Disj ps) = concatMap freeVars' ps
+      freeVars' (Impl bounds p1 p2) = (freeVars' p1 <> freeVars' p2) \\ map fst bounds
+      freeVars' (Con c) = varsConstraint c
+      freeVars' (NegPred p) = freeVars' p
+      freeVars' (Exists x _ p) = freeVars' p \\ [x]
 
 boundVars :: Pred -> [Id]
 boundVars (Conj ps) = concatMap boundVars ps

@@ -23,6 +23,7 @@ import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Utils
 
 -- | Creates a constraint when a definition unification has occured under
@@ -58,6 +59,7 @@ polyShaped t = case leftmostOfApplication t of
     _ -> do
       debugM "polyShaped because not a constructor" (show t)
       pure True
+
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -235,6 +237,10 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
           pred <- squashPred
+
+          liftIO $ putStrLn $ " for constructor " <> pretty dataC <> " relevant pred context = "
+                      <> pretty (relevantSubCtxt (freeVars pred) freshTyVarsCtxt)
+
 
           (as, bs, us, elabPs, predPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
 
