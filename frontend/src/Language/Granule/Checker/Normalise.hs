@@ -3,7 +3,7 @@ module Language.Granule.Checker.Normalise where
 import Language.Granule.Syntax.Type
 import Data.Functor.Identity (runIdentity)
 
-normaliseType :: Type -> Type
+normaliseType :: Type l -> Type l
 normaliseType = runIdentity . typeFoldM (baseTypeFold { tfTyCase = reduceCase })
   where
     reduceCase t ps =
