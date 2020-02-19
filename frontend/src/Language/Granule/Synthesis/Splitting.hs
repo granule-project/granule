@@ -155,7 +155,9 @@ getAssumConstr (Linear t) = getTypeConstr t
   where
     getTypeConstr :: Type -> Maybe Id
     getTypeConstr (FunTy _ t1 _) = Nothing
-    getTypeConstr (TyCon id) = Just id
+    getTypeConstr (TyCon id)
+      | isBuiltInBaseType (internalName id) = Nothing
+      | otherwise =  Just id
     getTypeConstr (Box _ t) = getTypeConstr t
     getTypeConstr (Diamond t1 _) = getTypeConstr t1
     getTypeConstr (TyApp t1 t2) = getTypeConstr t1
@@ -163,6 +165,8 @@ getAssumConstr (Linear t) = getTypeConstr t
     getTypeConstr (TyInt _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _) = Nothing
+
+    isBuiltInBaseType = (`elem` ["Int", "Float", "Char", "String", "Protocol"])
 
 -- Given a list of data constructors, generates patterns corresponding to them.
 buildConstructorPatterns ::

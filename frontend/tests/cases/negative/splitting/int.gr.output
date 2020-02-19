@@ -1,0 +1,10 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/int.gr:2:10:
+
+   Expected type is: `Int`
+
+   Context:
+     x : Int
+
+   Case splits for x:
+     x

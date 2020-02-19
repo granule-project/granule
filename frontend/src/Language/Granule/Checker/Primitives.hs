@@ -26,7 +26,7 @@ setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 --    * kind
 --    * cardinality (number of matchable constructors)
 --    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Kind, [Id], Bool))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (Kind, [Id], Bool))]
 typeConstructors =
     [ let prodId = mkId "×" in (prodId, (KFun KCoeffect (KFun KCoeffect KCoeffect), [prodId], False))
     , (mkId "Int",  (KType, [], False))
