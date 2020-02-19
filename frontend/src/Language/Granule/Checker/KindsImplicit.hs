@@ -87,7 +87,7 @@ inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Pure")) = do
     var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
     return $ (KPromote $ TyVar var, [])
 
-inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "ExcFree")) = do
+inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Handled")) = do
     var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
     return $ ((KFun (KPromote $ TyVar var) (KPromote $ TyVar var)), [])
 
