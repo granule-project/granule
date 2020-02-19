@@ -17,7 +17,7 @@ import Language.Granule.Syntax.Span
 
 import Language.Granule.Utils
 
-import Data.List (nub)
+import Data.List (nub, (\\))
 import Data.Maybe (mapMaybe)
 
 -- Describe all effect types that are based on a union-emptyset monoid
@@ -44,8 +44,25 @@ isEffUnit s effTy eff =
             case eff of
                 (TySet []) -> return True
                 _          -> return False
-        -- Unknown
+        TyApp op ef ->
+            case op of
+        --masking operation
+                TyCon (internalName -> "Handled") ->
+                    isEffUnit s op (handledNormalise s ef)
+        --Unknown
+                _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
         _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
+
+handledNormalise :: (?globals :: Globals) => Span -> Type -> Type
+handledNormalise s eff =
+    case eff of
+        (TyApp (TyCon (internalName -> "Handled")) inner) -> 
+            case inner of 
+                (TyApp (TyCon (internalName -> "Handled")) innest) -> handledNormalise s innest
+                TyCon (internalName -> "Pure") -> inner
+                TyCon (internalName -> "Exception") -> inner
+                TySet efs -> TySet ( efs \\ [TyCon (mkId "IOExcept")] )
+                _ -> inner                 --all under \\ should be [Type] but is Type 
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
 -- resource algebra
@@ -66,16 +83,33 @@ effApproximates s effTy eff1 eff2 =
                 return True
         -- Any union-set effects, like IO and exceptions
             TyCon c | unionSetLike c ->
-                case eff1 of
-                    (TyCon (internalName -> "Pure")) -> return True
-                    (TySet efs1) ->
-                        case eff2 of
-                            (TySet efs2) ->
-                                -- eff1 is a subset of eff2
-                                return $ all (\ef1 -> ef1 `elem` efs2) efs1
-                            _ -> return False
-                    _ -> return False
-            -- Unknown effect resource algebra
+                case (eff1, eff2) of
+                    (TyCon (internalName -> "Pure"), _) -> return True
+                    (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
+                        efs1' <- handledNormalise s efs1
+                        if efs1 == efs1' then return False
+                        else do
+                            efs2' <- handledNormalise s efs2
+                            if efs2 == efs2' then return False
+                            else effApproximates s effTy efs1' efs2'
+                    --Handled, set
+                    (TyApp (TyCon (internalName -> "Handled")) efs1, TySet efs2) -> do
+                        efs1' <- handledNormalise s efs1
+                        if efs1 == efs1' then return False
+                        else effApproximates s effTy efs1' eff2
+                    --set, Handled
+                    (TySet efs1, TyApp (TyCon (internalName -> "Handled")) efs2) -> do
+                        efs2' <- handledNormalise s efs2
+                        if efs2 == efs2' then return False
+                        else effApproximates s effTy eff1 efs2'
+                    -- Actual sets, take the union
+                    (TySet efs1, TySet efs2) ->
+                        -- eff1 is a subset of eff2
+                        return $ all (\ef1 -> ef1 `elem` efs2) efs1
+                    (TySet efs1, _) -> return False
+                    _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = KPromote effTy }
+                        
+                    -- Unknown effect resource algebra
             _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = KPromote effTy }
 
 effectMult :: Span -> Type -> Type -> Type -> Checker Type
@@ -95,6 +129,38 @@ effectMult sp effTy t1 t2 = do
         -- Any union-set effects, like IO and exceptions
         TyCon c | unionSetLike c ->
           case (t1, t2) of
+            --Handled, Handled
+            (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
+                ts1' <- handledNormalise sp ts1
+                if ts1 == ts1' then throw $
+                --change error to TyEffMult later
+                  TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
+                else do
+                    ts2' <- handledNormalise sp ts2
+                    if ts2 == ts2' then throw $
+                --change error to TyEffMult later
+                        TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
+                    else do
+                        t <- (effectMult sp effTy ts1' ts2') ;
+                        return $ TyApp (TyCon $ (mkId "Handled")) t
+            --Handled, set
+            (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
+                ts1' <- handledNormalise sp ts1
+                if ts1 == ts1' then throw $
+                --change error to TyEffMult later
+                  TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
+                else do
+                    t <- (effectMult sp effTy ts1' t2) ; 
+                    return $ TyApp (TyCon $ (mkId "Handled")) t
+             --set, Handled
+            (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
+                ts2' <- handledNormalise sp ts2 
+                if ts2 == ts2' then throw $
+                --change error to TyEffMult later
+                  TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
+                else do
+                    t <- (effectMult sp effTy t1 ts2') ;
+                    return $ TyApp (TyCon $ (mkId "Handled")) t
             -- Actual sets, take the union
             (TySet ts1, TySet ts2) ->
               return $ TySet $ nub (ts1 <> ts2)
