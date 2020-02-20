@@ -60,7 +60,6 @@ polyShaped t = case leftmostOfApplication t of
       debugM "polyShaped because not a constructor" (show t)
       pure True
 
-
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also:
@@ -237,7 +236,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
           pred <- squashPred
-
+          let relevantVars = relevantSubCtxt (freeVars pred) freshTyVarsCtxt
+          let quantifiedPred = foldr (\ (v, k) pred' -> Exists v k pred') pred relevantVars
           liftIO $ putStrLn $ " for constructor " <> pretty dataC <> " relevant pred context = "
                       <> pretty (relevantSubCtxt (freeVars pred) freshTyVarsCtxt)
 
@@ -252,8 +252,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs
-          let predP = PConstr s pred rf dataC predPs
-          debugM' (pretty predP) (pretty pred)
+          let predP = PConstr s quantifiedPred rf dataC predPs
+          debugM' (pretty predP) (pretty quantifiedPred)
           return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
