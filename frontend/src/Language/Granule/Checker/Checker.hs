@@ -310,8 +310,9 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
 
   -- Build the binding context for the branch pattern
   st <- get
-  (patternGam, tau, localVars, subst, elaborated_pats, _, consumptions) <-
+  (patternGam, tau, localVars, subst, elaborated_pats, predicated_pats, consumptions) <-
      ctxtFromTypedPatterns s ty pats (patternConsumption st)
+  modify (\st -> st { prevPatternPreds = predicated_pats })
 
   -- Update the consumption information
   modify (\st -> st { patternConsumption =
@@ -431,10 +432,9 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
 
   case unboundVariables of
-    (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
+    (v:vs) -> throwError $ fmap (\v' -> UnboundVariableError{ errLoc = s, errId = v' }) (v:|vs)
     [] -> do
-      let snd3 (a, b, c) = b
-      let pats = map (second snd3) (typeConstructors st)
+      let pats = map (second (\ (_, b, _) -> b)) (typeConstructors st)
       constructors <- mapM (\ (a, b) -> do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)

@@ -170,6 +170,9 @@ data CheckerState = CS
             -- The type of the current equation.
             , equationTy :: Maybe Type
 
+            -- The previous pattern, annotated with its predicate.
+            , prevPatternPreds :: [Pattern Pred]
+
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -190,6 +193,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
+               , prevPatternPreds = []
                }
 
 -- *** Various helpers for manipulating the context
