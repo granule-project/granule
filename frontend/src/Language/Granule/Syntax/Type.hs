@@ -67,10 +67,11 @@ data Level (l :: Nat) where
 
 deriving instance Eq (Level l)
 deriving instance Show (Level l)
+deriving instance Ord (Level l)
 
 data Type (l :: Nat) where
     -- May not need promote
-    Promote :: Type l  -> Type (Succ l)
+    TyPromote :: Type l  -> Type (Succ l)
     Type    :: Level l -> Type (Succ l)        -- ^ Universe construction
     FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
 
@@ -87,20 +88,20 @@ data Type (l :: Nat) where
 
 deriving instance Show (Type l)
 deriving instance Eq (Type l)
---deriving instance Ord (Type l)
+deriving instance Ord (Type l)
 
 {-
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyVar v) = KVar v
-promoteTypeToKind t = KPromote t
+promoteTypeToKind t = TyPromote t
 
 demoteKindToType :: Kind -> Maybe Type
-demoteKindToType (KPromote t) = Just t
+demoteKindToType (TyPromote t) = Just t
 demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
 instance Term Kind where
-  freeVars (KPromote t) = freeVars t
+  freeVars (TyPromote t) = freeVars t
   freeVars (KVar x)     = [x]
   freeVars _            = []
 
@@ -109,7 +110,7 @@ instance Term Kind where
   isLexicallyAtomic KCoeffect{} = True
   isLexicallyAtomic KEffect{} = True
   isLexicallyAtomic KPredicate{} = True
-  isLexicallyAtomic KPromote{} = True
+  isLexicallyAtomic TyPromote{} = True
   isLexicallyAtomic _ = False
 -}
 
@@ -139,9 +140,9 @@ instance Monad m => Freshenable m Kind where
        -- function which does not get its name freshened
        Nothing -> return (KVar $ mkId (sourceName v))
 
-  freshen (KPromote ty) = do
+  freshen (TyPromote ty) = do
      ty <- freshen ty
-     return $ KPromote ty
+     return $ TyPromote ty
 
   freshen (KUnion k1 k2) = do
     k1' <- freshen k1
@@ -167,7 +168,7 @@ data Coeffect = CNat      Int
               | CSig      Coeffect (Type Zero)
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
-    deriving (Eq, Show) --Ord, Show)
+    deriving (Eq, Show, Ord)
 
 -- Algebra for coeffects
 data CoeffectFold a = CoeffectFold
@@ -331,8 +332,8 @@ s .@ t = TyApp s t
 infixl 9 .@
 
 -- Trivially effectful monadic constructors
-mPromote :: Monad m => Type l -> m (Type (Succ l))
-mPromote     = return . Promote
+mTyPromote :: Monad m => Type l -> m (Type (Succ l))
+mTyPromote     = return . TyPromote
 mTy :: Monad m => Level l -> m (Type (Succ l))
 mTy          = return . Type
 mFunTy :: Monad m => Type l -> Type l -> m (Type l)
@@ -360,7 +361,7 @@ mKUnion x y  = return (KUnion x y)
 
 -- Monadic algebra for types
 data TypeFold m (a :: Nat -> *) = TypeFold
-  { tfPromote :: forall (l :: Nat) . a l           -> m (a (Succ l))
+  { tfTyPromote :: forall (l :: Nat) . a l           -> m (a (Succ l))
   , tfTy      :: forall (l :: Nat) . Level l       -> m (a (Succ l))
   , tfFunTy   :: forall (l :: Nat) . a l -> a l    -> m (a l)
   , tfTyCon   :: forall (l :: Nat) . Id            -> m (a l)
@@ -377,16 +378,16 @@ data TypeFold m (a :: Nat -> *) = TypeFold
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --(Type l)
 baseTypeFold =
-  TypeFold mPromote mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
+  TypeFold mTyPromote mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m l a . Monad m => TypeFold m a -> Type l -> m (a l)
 typeFoldM algebra = go
   where
    go :: Type l' -> m (a l')
-   go (Promote t) = do
+   go (TyPromote t) = do
      t' <- go t
-     (tfPromote algebra) t'
+     (tfTyPromote algebra) t'
    go (Type l) = (tfTy algebra) l
    go (FunTy t1 t2) = do
      t1' <- go t1
@@ -442,7 +443,7 @@ freeAtomsVars t = []
 
 instance Term (Type l) where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
-      { tfPromote = \(Const x) -> return (Const x)
+      { tfTyPromote = \(Const x) -> return (Const x)
       , tfTy      = \_ -> return (Const [])
       , tfFunTy   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
