@@ -45,7 +45,7 @@ isEffUnit s effTy eff =
                 (TySet []) -> return True
                 _          -> return False
         -- Unknown
-        _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
+        _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = TyPromote effTy }
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
 -- resource algebra
@@ -77,7 +77,7 @@ effApproximates s effTy eff1 eff2 =
                             _ -> return False
                     _ -> return False
             -- Unknown effect resource algebra
-            _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = KPromote effTy }
+            _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = TyPromote effTy }
 
 effectMult :: Span -> Type -> Type -> Type -> Checker Type
 effectMult sp effTy t1 t2 = do
@@ -102,11 +102,11 @@ effectMult sp effTy t1 t2 = do
             _ -> throw $
                   TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
         _ -> throw $
-               UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = KPromote effTy }
+               UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = TyPromote effTy }
 
 effectUpperBound :: (?globals :: Globals) => Span -> Type -> Type -> Type -> Checker Type
 effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
-    nvar <- freshTyVarInContextWithBinding (mkId "n") (KPromote t) BoundQ
+    nvar <- freshTyVarInContextWithBinding (mkId "n") (TyPromote t) BoundQ
     -- Unify the two variables into one
     nat1 <- compileNatKindedTypeToCoeffect s t1
     nat2 <- compileNatKindedTypeToCoeffect s t2
@@ -134,7 +134,7 @@ effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
         _ ->  throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 effectUpperBound s effTy t1 t2 =
-    throw UnknownResourceAlgebra{ errLoc = s, errTy = t1, errK = KPromote effTy }
+    throw UnknownResourceAlgebra{ errLoc = s, errTy = t1, errK = TyPromote effTy }
 
 -- "Top" element of the effect
 effectTop :: Type -> Maybe Type

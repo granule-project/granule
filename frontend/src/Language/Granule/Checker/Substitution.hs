@@ -149,7 +149,7 @@ instance Substitutable Coeffect where
                 k' <- inferCoeffectType nullSpan (CVar v)
                 jK <- joinKind k (promoteTypeToKind k')
                 case jK of
-                    Just (KPromote (TyCon (internalName -> "Nat")), _) ->
+                    Just (TyPromote (TyCon (internalName -> "Nat")), _) ->
                         compileNatKindedTypeToCoeffect nullSpan t
                     _ -> return (CVar v)
 
@@ -182,14 +182,14 @@ instance Substitutable Coeffect where
 
 instance Substitutable Kind where
 
-  substitute subst (KPromote t) = do
+  substitute subst (TyPromote t) = do
       t <- substitute subst t
-      return $ KPromote t
+      return $ TyPromote t
 
   substitute subst KType = return KType
-  substitute subst KEffect = return KEffect
-  substitute subst KCoeffect = return KCoeffect
-  substitute subst KPredicate = return KPredicate
+  substitute subst (TyCon (internalName -> "Effect")) = return KEffect
+  substitute subst (TyCon (internalName -> "Coeffect")) = return KCoeffect
+  substitute subst (TyCon (internalName -> "Predicate")) = return KPredicate
   substitute subst (KFun c1 c2) = do
     c1 <- substitute subst c1
     c2 <- substitute subst c2
@@ -197,7 +197,7 @@ instance Substitutable Kind where
   substitute subst (KVar v) =
     case lookup v subst of
       Just (SubstK k) -> return k
-      Just (SubstT t) -> return $ KPromote t
+      Just (SubstT t) -> return $ TyPromote t
       _               -> return $ KVar v
   substitute subst (KUnion k1 k2) = do
     k1' <- substitute subst k1
@@ -544,9 +544,9 @@ instance Unifiable Substitutors where
         -- We can unify a type with a coeffect, if the type is actually a Nat
         k <- inferKindOfType nullSpan t
         k' <- inferCoeffectType nullSpan c'
-        jK <- joinKind k (KPromote k')
+        jK <- joinKind k (TyPromote k')
         case jK of
-            Just (KPromote (TyCon k), _) | internalName k == "Nat" -> do
+            Just (TyPromote (TyCon k), _) | internalName k == "Nat" -> do
                 c <- compileNatKindedTypeToCoeffect nullSpan t
                 unify c c'
             _ -> return Nothing
@@ -582,7 +582,7 @@ instance Unifiable Type where
         k' <- inferKindOfType nullSpan t
         jK <- joinKind k k'
         case jK of
-            Just (KPromote (TyCon (internalName -> "Nat")), _) -> do
+            Just (TyPromote (TyCon (internalName -> "Nat")), _) -> do
                 c  <- compileNatKindedTypeToCoeffect nullSpan t
                 c' <- compileNatKindedTypeToCoeffect nullSpan t'
                 addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
@@ -697,7 +697,7 @@ updateTyVar s tyVar k = do
           -- Rewrite the predicate
           st <- get
           let subst = case k of
-                        KPromote t -> [(tyVar, SubstT t)]
+                        TyPromote t -> [(tyVar, SubstT t)]
                         _          -> [(tyVar, SubstK k)]
           ps <- mapM (substitute subst) (predicateStack st)
           put st{ predicateStack = ps }
@@ -714,7 +714,7 @@ updateTyVar s tyVar k = do
   where
     rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
     rewriteCtxt [] = []
-    rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
+    rewriteCtxt ((name, (TyPromote (TyVar kindVar), q)) : ctxt)
      | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
     rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
      | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt

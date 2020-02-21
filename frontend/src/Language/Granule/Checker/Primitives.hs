@@ -20,7 +20,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
 setElements :: [(Kind, Type)]
-setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+setElements = [(TyPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
 kindConstructor :: [(Id, (Type 2, Cardinality, Bool))]
 kindConstructor =
@@ -56,28 +56,28 @@ typeConstructors =
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, True))
     -- Effect grade types - Sessions
-    , (mkId "Session", (Promote (TyCon $ mkId "Com"), Nothing, True))
+    , (mkId "Session", (TyPromote (TyCon $ mkId "Com"), Nothing, True))
     , (mkId "Com", ((tyCon "Effect"), Nothing, False))
     -- Effect grade types - IO
     , (mkId "IO", ((tyCon "Effect"), Nothing, False))
-    , (mkId "Stdout", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Stdin", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Stderr", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Open", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Read", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Write", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "IOExcept", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Close", (Promote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Stdout", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Stdin", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Stderr", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Open", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Read", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Write", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "IOExcept", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Close", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
     ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
-    TyOpLesser -> (kNat, kNat, KPredicate)
-    TyOpLesserEq -> (kNat, kNat, KPredicate)
-    TyOpGreater -> (kNat, kNat, KPredicate)
-    TyOpGreaterEq -> (kNat, kNat, KPredicate)
-    TyOpEq -> (kNat, kNat, KPredicate)
-    TyOpNotEq -> (kNat, kNat, KPredicate)
+    TyOpLesser -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpLesserEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpGreater -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpGreaterEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpNotEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
     TyOpPlus -> (kNat, kNat, kNat)
     TyOpTimes -> (kNat, kNat, kNat)
     TyOpMinus -> (kNat, kNat, kNat)

@@ -164,7 +164,7 @@ checkDataCon
           KType ->
             registerDataConstructor tySch coercions
 
-          KPromote (TyCon k) | internalName k == "Protocol" ->
+          TyPromote (TyCon k) | internalName k == "Protocol" ->
             registerDataConstructor tySch coercions
 
           _ -> throw KindMismatch{ errLoc = sp, tyActualK = Just ty, kExpected = KType, kActual = kind }
@@ -835,10 +835,10 @@ synthExpr defs gam pol (Val s _ (Promote _ e)) = do
    -- Create a fresh kind variable for this coeffect
    vark <- freshIdentifierBase $ "kprom_[" <> pretty (startPos s) <> "]"
    -- remember this new kind variable in the kind environment
-   modify (\st -> st { tyVarContext = (mkId vark, (KCoeffect, InstanceQ)) : tyVarContext st })
+   modify (\st -> st { tyVarContext = (mkId vark, ((TyCon (mkId "Coeffect")), InstanceQ)) : tyVarContext st })
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
-   var <- freshTyVarInContext (mkId $ "prom_[" <> pretty (startPos s) <> "]") (KPromote $ TyVar $ mkId vark)
+   var <- freshTyVarInContext (mkId $ "prom_[" <> pretty (startPos s) <> "]") (TyPromote $ TyVar $ mkId vark)
 
    gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
 
@@ -1012,7 +1012,7 @@ rewriteMessage msg = do
            line'' =
              if line /= line' then
                case k of
-                 KPromote (TyCon (internalName -> "Level")) ->
+                 TyPromote (TyCon (internalName -> "Level")) ->
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
                           (T.replace (T.pack "Integer") (T.pack "Level") line'))
@@ -1024,7 +1024,7 @@ justCoeffectTypesConverted :: (?globals::Globals)
   => Span -> [(a, (Kind, b))] -> Checker [(a, (Type, b))]
 justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
-    convert (var, (KPromote t, q)) = do
+    convert (var, (TyPromote t, q)) = do
       k <- inferKindOfType s t
       if isCoeffectKind k
         then return $ Just (var, (t, q))

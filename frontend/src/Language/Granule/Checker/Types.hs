@@ -226,7 +226,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ = do
     tyVarConstraint (k1, n) (k2, m) = do
       jK <- k1 `joinKind` k2
       case jK of
-        Just (KPromote (TyCon kc), unif) -> do
+        Just (TyPromote (TyCon kc), unif) -> do
 
           k <- inferKindOfType s (TyCon kc)
           -- Create solver vars for coeffects
@@ -274,7 +274,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
           { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = kind }
 
         -- If the kind is Nat, then create a solver constraint
-        Just (KPromote (TyCon (internalName -> "Nat")), unif) -> do
+        Just (TyPromote (TyCon (internalName -> "Nat")), unif) -> do
           nat <- compileNatKindedTypeToCoeffect s t
           addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
           return (True, unif ++ [(n, SubstT t)])
@@ -287,7 +287,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
        -- pausible equation involving the quantified variable
        jK <- k1 `joinKind` kind
        case jK of
-         Just (KPromote (TyCon (Id "Nat" "Nat")), unif) -> do
+         Just (TyPromote (TyCon (Id "Nat" "Nat")), unif) -> do
            c1 <- compileNatKindedTypeToCoeffect s (TyVar n)
            c2 <- compileNatKindedTypeToCoeffect s t
            addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
@@ -346,13 +346,13 @@ equalOtherKindedTypesGeneric :: (?globals :: Globals)
     -> Checker (Bool, Substitution)
 equalOtherKindedTypesGeneric s t1 t2 k = do
   case k of
-    KPromote (TyCon (internalName -> "Nat")) -> do
+    TyPromote (TyCon (internalName -> "Nat")) -> do
       c1 <- compileNatKindedTypeToCoeffect s t1
       c2 <- compileNatKindedTypeToCoeffect s t2
       addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
       return (True, [])
 
-    KPromote (TyCon (internalName -> "Protocol")) ->
+    TyPromote (TyCon (internalName -> "Protocol")) ->
       sessionInequality s t1 t2
 
     KType -> throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
@@ -441,7 +441,7 @@ joinTypes s (Box c t) (Box c' t') = do
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
   let ty = TyCon $ mkId "Nat"
-  var <- freshTyVarInContext m (KPromote ty)
+  var <- freshTyVarInContext m (TyPromote ty)
   -- Unify the two coeffects into one
   addConstraint (Eq s (CNat n) (CVar var) ty)
   return $ TyInt n
@@ -452,7 +452,7 @@ joinTypes s (TyVar n) (TyVar m) = do
 
   kind <- inferKindOfType s (TyVar n)
   case kind of
-    KPromote t -> do
+    TyPromote t -> do
 
       nvar <- freshTyVarInContextWithBinding n kind BoundQ
       -- Unify the two variables into one
@@ -484,16 +484,16 @@ joinTypes s t1 t2 = do
                 -- If equal, do the upper bound
                 if eq
                     then do effectUpperBound s efTy1 t1 t2
-                    else throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = KPromote efTy1, kActual = KPromote efTy2 }
+                    else throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = TyPromote efTy1, kActual = TyPromote efTy2 }
             Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
         Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 -- TODO: eventually merge this with joinKind
 equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker (Bool, Kind, Substitution)
 equalKinds sp k1 k2 | k1 == k2 = return (True, k1, [])
-equalKinds sp (KPromote t1) (KPromote t2) = do
+equalKinds sp (TyPromote t1) (TyPromote t2) = do
     (eq, t, u) <- equalTypes sp t1 t2
-    return (eq, KPromote t, u)
+    return (eq, TyPromote t, u)
 equalKinds sp (KFun k1 k1') (KFun k2 k2') = do
     (eq, k, u) <- equalKinds sp k1 k2
     (eq', k', u') <- equalKinds sp k1' k2'
@@ -521,7 +521,7 @@ twoEqualEffectTypes s ef1 ef2 = do
             (eq, _, u) <- equalTypes s efTy1 efTy2
             if eq then do
               return (efTy1, u)
-            else throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = KPromote efTy1, kActual = KPromote efTy2 }
+            else throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = TyPromote efTy1, kActual = TyPromote efTy2 }
           Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
       Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
 

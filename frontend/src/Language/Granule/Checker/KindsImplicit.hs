@@ -32,8 +32,8 @@ kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
   forM_ constraints $ \constraint -> do
     (kind, _) <- inferKindOfTypeImplicits s quantifiedVariables constraint
     case kind of
-      KPredicate -> return ()
-      _ -> throw KindMismatch{ errLoc = s, tyActualK = Just constraint, kExpected = KPredicate, kActual = kind }
+      (TyCon (internalName -> "Predicate")) -> return ()
+      _ -> throw KindMismatch{ errLoc = s, tyActualK = Just constraint, kExpected = (TyCon (mkId "Predicate")), kActual = kind }
 
   ty <- return $ replaceSynonyms ty
   (kind, unifiers) <- inferKindOfTypeImplicits s quantifiedVariables ty
@@ -46,11 +46,11 @@ kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
         -- Update the def with the resolved quantifications
         return (Def s id eqs (Forall s' qVars constraints ty))
 
-    --KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
+    --TyPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> throw KindMismatch{ errLoc = s, tyActualK = Just ty, kExpected = KType, kActual = kind }
 
 kindIsKind :: Kind -> Bool
-kindIsKind (KPromote (TyCon (internalName -> "Kind"))) = True
+kindIsKind (TyPromote (TyCon (internalName -> "Kind"))) = True
 kindIsKind _ = False
 
 -- Replace any constructor Ids with their top-element
@@ -82,12 +82,12 @@ inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
         _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = KType, kActual = k2 }
     _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k2 }
 
--- kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
+-- kFun KType (TyPromote (TyCon (internalName -> "Protocol"))) = return $ TyPromote (TyCon (mkId "Protocol"))
 
 inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Pure")) = do
     -- Create a fresh type variable
-    var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
-    return $ (KPromote $ TyVar var, [])
+    var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") (TyCon (mkId "Effect"))
+    return $ (TyPromote $ TyVar var, [])
 
 inferKindOfTypeImplicits s ctxt (TyCon conId) = do
   st <- get
@@ -96,7 +96,7 @@ inferKindOfTypeImplicits s ctxt (TyCon conId) = do
     Nothing   -> do
       mConstructor <- lookupDataConstructor s conId
       case mConstructor of
-        Just (Forall _ [] [] t, _) -> return (KPromote t, [])
+        Just (Forall _ [] [] t, _) -> return (TyPromote t, [])
         Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
         Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
@@ -117,16 +117,16 @@ inferKindOfTypeImplicits s ctxt (Diamond e t) = do
   case jK of
     Just (k, u2) -> do
       case ke of
-        KPromote effTy -> do
+        TyPromote effTy -> do
             (effTyK, u3) <- inferKindOfTypeImplicits s ctxt effTy
-            jK' <- joinKind effTyK KEffect
+            jK' <- joinKind effTyK (TyCon (mkId "Effect"))
             case jK' of
               Just (_, u4) -> do
                 u5 <- combineManySubstitutions s [u, u', u2, u3, u4]
                 return (KType, u5)
-              _ -> throw KindMismatch { errLoc = s, tyActualK = Just effTy, kExpected = KEffect, kActual = effTyK }
+              _ -> throw KindMismatch { errLoc = s, tyActualK = Just effTy, kExpected = (TyCon (mkId "Effect")), kActual = effTyK }
         -- TODO: create a custom error message for this
-        otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just e, kExpected = KPromote (TyVar $ mkId "effectType"), kActual = otherk }
+        otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just e, kExpected = TyPromote (TyVar $ mkId "effectType"), kActual = otherk }
     _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = KType, kActual = k }
 
 inferKindOfTypeImplicits s ctxt (TyVar tyVar) =

@@ -44,18 +44,18 @@ inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -
 inferKindOfTypeInContext s quantifiedVariables t =
     typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase) t
   where
-    kFun (KPromote (TyCon c)) (KPromote (TyCon c'))
+    kFun (TyPromote (TyCon c)) (TyPromote (TyCon c'))
      | internalName c == internalName c' = return $ kConstr c
 
     kFun KType KType = return KType
-    kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
+    kFun KType (TyPromote (TyCon (internalName -> "Protocol"))) = return $ TyPromote (TyCon (mkId "Protocol"))
     kFun KType y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = y }
     kFun x _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
     kCon (internalName -> "Pure") = do
       -- Create a fresh type variable
-      var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
-      return $ KPromote $ TyVar var
+      var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") (TyCon (mkId "Effect"))
+      return $ TyPromote $ TyVar var
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of
@@ -63,7 +63,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
             Nothing   -> do
               mConstructor <- lookupDataConstructor s conId
               case mConstructor of
-                Just (Forall _ [] [] t, _) -> return $ KPromote t
+                Just (Forall _ [] [] t, _) -> return $ TyPromote t
                 Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
                 Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
@@ -77,7 +77,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
       effTyM <- isEffectTypeFromKind s effK
       case effTyM of
         Right effTy -> return KType
-        Left otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = KEffect, kActual = otherk }
+        Left otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = (TyCon (mkId "Effect")), kActual = otherk }
 
     kDiamond _ x     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
@@ -123,7 +123,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
 
     kSet ks =
       -- If the set is empty, then it could have any kind, so we need to make
-      -- a kind which is `KPromote (Set a)` for some type variable `a` of unknown kind
+      -- a kind which is `TyPromote (Set a)` for some type variable `a` of unknown kind
       if null ks
         then do
             -- create fresh polymorphic kind variable for this type
@@ -132,8 +132,8 @@ inferKindOfTypeInContext s quantifiedVariables t =
             modify (\st -> st { tyVarContext = (mkId vark, (KType, InstanceQ))
                                    : tyVarContext st })
             -- Create a fresh type variable
-            var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (KPromote $ TyVar $ mkId vark)
-            return $ KPromote $ TyApp (TyCon $ mkId "Set") (TyVar var)
+            var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (TyPromote $ TyVar $ mkId vark)
+            return $ TyPromote $ TyApp (TyCon $ mkId "Set") (TyVar var)
 
         -- Otherwise, everything in the set has to have the same kind
         else
@@ -142,11 +142,11 @@ inferKindOfTypeInContext s quantifiedVariables t =
             then  -- check if there is an alias (name) for sets of this kind
                 case lookup (head ks) setElements of
                     -- Lift this alias to the kind level
-                    Just t -> return $ KPromote t
+                    Just t -> return $ TyPromote t
                     Nothing ->
                         -- Return a set type lifted to a kind
                         case demoteKindToType (head ks) of
-                           Just t -> return $ KPromote $ TyApp (TyCon $ mkId "Set") t
+                           Just t -> return $ TyPromote $ TyApp (TyCon $ mkId "Set") t
                            -- If the kind cannot be demoted then we shouldn't be making a set
                            Nothing -> throw $ KindCannotFormSet s (head ks)
 
@@ -177,9 +177,9 @@ joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Subst
 joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (KVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (KVar v) = return $ Just (k, [(v, SubstK k)])
-joinKind (KPromote t1) (KPromote t2) = do
+joinKind (TyPromote t1) (TyPromote t2) = do
   (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
-  return $ Just (KPromote coeffTy, [])
+  return $ Just (TyPromote coeffTy, [])
 
 joinKind (KUnion k1 k2) k = do
   jK1 <- joinKind k k1
@@ -245,9 +245,9 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
 --      return newType
 
     Just (KVar   name) -> return $ TyVar name
-    Just (KPromote t)  -> checkKindIsCoeffect s ctxt t
+    Just (TyPromote t)  -> checkKindIsCoeffect s ctxt t
     Just k             -> throw
-      KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = KPromote (TyVar $ mkId "coeffectType"), kActual = k }
+      KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = TyPromote (TyVar $ mkId "coeffectType"), kActual = k }
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
@@ -269,17 +269,17 @@ checkKindIsCoeffect span ctxt ty = do
   case kind of
     k | isCoeffectKind k -> return ty
     -- Came out as a promoted type, check that this is a coeffect
-    KPromote k -> do
+    TyPromote k -> do
       kind' <- inferKindOfTypeInContext span ctxt k
       if isCoeffectKind kind'
         then return ty
-        else throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
+        else throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
     KVar v ->
       case lookup v ctxt of
         Just k | isCoeffectKind k -> return ty
-        _              -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
+        _              -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
 
-    _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = KCoeffect, kActual = kind }
+    _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
@@ -302,7 +302,7 @@ isEffectType s ty = do
 isEffectTypeFromKind :: (?globals :: Globals) => Span -> Kind -> Checker (Either Kind Type)
 isEffectTypeFromKind s kind =
     case kind of
-        KPromote effTy -> do
+        TyPromote effTy -> do
             kind' <- inferKindOfType s effTy
             if isEffectKind kind'
                 then return $ Right effTy
