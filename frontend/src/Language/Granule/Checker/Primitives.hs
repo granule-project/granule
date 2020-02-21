@@ -1,6 +1,7 @@
 -- Provides all the type information for built-ins
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE QuasiQuotes #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.Primitives where
 
@@ -19,40 +20,40 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
-setElements :: [(Kind, Type)]
+setElements :: [(Kind, Type Zero)]
 setElements = [(TyPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
-kindConstructor :: [(Id, (Type 2, Cardinality, Bool))]
+kindConstructor :: [(Id, (Type (Succ One), Cardinality, Bool))]
 kindConstructor =
-  [ (mkId "Coeffect", Type (Succ Zero))
-  , (mkId "Effect", Type (Succ Zero))
-  , (mkId "Predicate", Type (Succ Zero)) ]
+  [ (mkId "Coeffect", (Type (LSucc LZero), Nothing, False))
+  , (mkId "Effect", (Type (LSucc LZero), Nothing, False))
+  , (mkId "Predicate", (Type (LSucc LZero), Nothing, False)) ]
 
 -- Associates type constuctors names to their:
 --    * kind
 --    * cardinality (number of matchable constructors)
 --    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Type 1, Cardinality, Bool))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (Type One, Cardinality, Bool))] -- TODO Cardinality is not a good term
 typeConstructors =
-      (mkId "->", FunTy (Type Zero) (FunTy (Type Zero) (Type Zero))
-    , (mkId "×", (FunTy (tyCon $ "Coeffect") (FunTy (tyCon $ "Coeffect") (tyCon $ "Coeffect"))), Just 1, False))
-    , (mkId "Int",  (Type Zero, Nothing, False))
-    , (mkId "Float", (Type Zero, Nothing, False))
-    , (mkId "Char", (Type Zero, Nothing, False))
-    , (mkId "String", (Type Zero, Nothing, False))
-    , (mkId "Protocol", (Type Zero, Nothing, False))
+    [ (mkId "->", (FunTy (Type LZero) (FunTy (Type LZero) (Type LZero)), Nothing, False))
+    , (mkId "×", (FunTy (tyCon $ "Coeffect") (FunTy (tyCon $ "Coeffect") (tyCon $ "Coeffect")), Just 1, False))
+    , (mkId "Int",  (Type LZero, Nothing, False))
+    , (mkId "Float", (Type LZero, Nothing, False))
+    , (mkId "Char", (Type LZero, Nothing, False))
+    , (mkId "String", (Type LZero, Nothing, False))
+    , (mkId "Protocol", (Type LZero, Nothing, False))
     , (mkId "Nat",  (KUnion (tyCon "Coeffect") (tyCon "Effect"), Nothing, False))
     , (mkId "Q",    (tyCon "Coeffect", Nothing, False)) -- Rationals
     , (mkId "Level", (tyCon "Coeffect", Nothing, False)) -- Security level
     , (mkId "Interval", (FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, False))
-    , (mkId "Set", (FunTy (TyVar $ mkId "k") (FunTy (tyCon $ mkId "k") (tyCon "Coeffect")), Nothing, False))
+    , (mkId "Set", (FunTy (TyVar $ mkId "k") (FunTy (tyCon "k") (tyCon "Coeffect")), Nothing, False))
     -- Channels and protocol types
-    , (mkId "Send", (FunTy (Type Zero) (FunTy protocol protocol), Nothing, False))
-    , (mkId "Recv", (FunTy (Type Zero) (FunTy protocol protocol), Nothing, False))
+    , (mkId "Send", (FunTy (Type LZero) (FunTy protocol protocol), Nothing, False))
+    , (mkId "Recv", (FunTy (Type LZero) (FunTy protocol protocol), Nothing, False))
     , (mkId "End" , (protocol, Nothing, False))
-    , (mkId "Chan", (FunTy protocol (Type Zero), Nothing, True))
+    , (mkId "Chan", (FunTy protocol (Type LZero), Nothing, True))
     , (mkId "Dual", (FunTy protocol protocol, Nothing, True))
-    , (mkId "->", (FunTy (Type Zero) (FunTy (Type Zero) (Type Zero)), Nothing, False))
+    , (mkId "->", (FunTy (Type LZero) (FunTy (Type LZero) (Type LZero)), Nothing, False))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, True))
     -- Effect grade types - Sessions
@@ -91,8 +92,8 @@ dataTypes =
     [ DataDecl
       { dataDeclSpan = nullSpanBuiltin
       , dataDeclId   = mkId ","
-      , dataDeclTyVarCtxt = [((mkId "a"),KType),((mkId "b"),KType)]
-      , dataDeclKindAnn = Just KType
+      , dataDeclTyVarCtxt = [((mkId "a"), Type LZero),((mkId "b"), Type LZero)]
+      , dataDeclKindAnn = Just (Type LZero)
       , dataDeclDataConstrs = [
         DataConstrNonIndexed
           { dataConstrSpan = nullSpanBuiltin
@@ -101,7 +102,7 @@ dataTypes =
          }]}
     ] ++ builtinDataTypesParsed
 
-binaryOperators :: Operator -> NonEmpty Type
+binaryOperators :: Operator -> NonEmpty (Type Zero)
 binaryOperators = \case
     OpPlus ->
       FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))

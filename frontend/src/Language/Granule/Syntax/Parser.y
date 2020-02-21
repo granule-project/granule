@@ -213,7 +213,7 @@ DataConstrNext :: { [DataConstr] }
 
 TyVars :: { [(Id, Kind)] }
   : '(' VAR ':' Kind ')' TyVars { (mkId $ symString $2, $4) : $6 }
-  | VAR TyVars                  { (mkId $ symString $1, KType) : $2 }
+  | VAR TyVars                  { (mkId $ symString $1, Type LZero) : $2 }
   | {- empty -}                 { [] }
 
 KindAnn :: { Maybe Kind }
@@ -298,7 +298,7 @@ Kind :: { Kind }
   : Kind '->' Kind            { FunTy $1 $3 }
   | VAR                       { TyVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
-                                  "Type"      -> KType
+                                  "Type"      -> Type LZero
                                   "Coeffect"  -> (TyCon (mkId "Coeffect"))
                                   "Predicate" -> (TyCon (mkId "Predicate"))
                                   s          -> tyCon s }
