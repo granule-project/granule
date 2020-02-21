@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.SubstitutionContexts where
 
@@ -15,7 +16,7 @@ type Substitution = Ctxt Substitutors
 {-| Substitutors are things we want to substitute in... they may be one
      of several things... -}
 data Substitutors =
-    SubstT  Type
+    SubstT  (Type Zero)
   | SubstC  Coeffect
   | SubstK  Kind
   deriving (Eq, Show)
