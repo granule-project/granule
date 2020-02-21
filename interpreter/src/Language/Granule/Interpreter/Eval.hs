@@ -25,8 +25,8 @@ import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
-import Control.Exception (catch, IOException)
-
+import Control.Exception (catch, throwIO, IOException)
+import GHC.IO.Exception (IOErrorType)
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
 -- import Foreign.Marshal.Alloc (free, malloc)
@@ -35,6 +35,7 @@ import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Ch
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
+import System.IO.Error (mkIOError)
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -178,7 +179,7 @@ evalIn ctxt (TryCatch s _ e1 p _ e2 e3) =
               Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
   )
   -- (cf. TRY_BETA_2)
-  (\(_ :: IOException) -> evalIn ctxt e3)
+  (\(e :: IOException) -> evalIn ctxt e3)
           
 {-
 -- Hard-coded 'scale', removed for now
@@ -291,9 +292,7 @@ builtIns =
         hFlush stdout
         val <- Text.getLine
         return $ Val nullSpan () (NumInt $ read $ unpack val))
-  , (mkId "throw", 
-        IO (raiseIO# (toException e))
-  )
+  , (mkId "throw", diamondConstr (throwIO $ mkIOError OtherError "gran" Nothing Nothing)
   , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")

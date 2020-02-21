@@ -154,11 +154,11 @@ effectMult sp effTy t1 t2 = do
                     return $ TyApp (TyCon $ (mkId "Handled")) t
              --set, Handled
             (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
-                ts2' <- handledNormalise sp ts2 
+                ts2' <- handledNormalise sp ts2 --is type, should be checker type
                 if ts2 == ts2' then throw $
                 --change error to TyEffMult later
                   TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
-                else do
+                else do 
                     t <- (effectMult sp effTy t1 ts2') ;
                     return $ TyApp (TyCon $ (mkId "Handled")) t
             -- Actual sets, take the union
