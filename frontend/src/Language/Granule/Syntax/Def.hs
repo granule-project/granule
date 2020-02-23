@@ -120,7 +120,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
 instance FirstParameter DataConstr Span
 
 -- | How many data constructors a type has (Nothing -> don't know)
-type Cardinality = Maybe Nat
+type Cardinality = Maybe Int
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a
