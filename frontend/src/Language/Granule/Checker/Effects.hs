@@ -53,7 +53,7 @@ isEffUnit s effTy eff =
                 _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
         _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
 
-handledNormalise :: (?globals :: Globals) => Span -> Type -> Type
+handledNormalise :: Span -> Type -> Type
 handledNormalise s eff =
     case eff of
         (TyApp (TyCon (internalName -> "Handled")) inner) -> 
@@ -63,6 +63,7 @@ handledNormalise s eff =
                 TyCon (internalName -> "Exception") -> inner
                 TySet efs -> TySet ( efs \\ [TyCon (mkId "IOExcept")] )
                 _ -> inner                 --all under \\ should be [Type] but is Type 
+        _ -> eff
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
 -- resource algebra
@@ -86,20 +87,20 @@ effApproximates s effTy eff1 eff2 =
                 case (eff1, eff2) of
                     (TyCon (internalName -> "Pure"), _) -> return True
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
-                        efs1' <- handledNormalise s efs1
+                        let efs1' = handledNormalise s efs1
                         if efs1 == efs1' then return False
                         else do
-                            efs2' <- handledNormalise s efs2
+                            let efs2' = handledNormalise s efs2
                             if efs2 == efs2' then return False
                             else effApproximates s effTy efs1' efs2'
                     --Handled, set
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TySet efs2) -> do
-                        efs1' <- handledNormalise s efs1
+                        let efs1' = handledNormalise s efs1
                         if efs1 == efs1' then return False
                         else effApproximates s effTy efs1' eff2
                     --set, Handled
                     (TySet efs1, TyApp (TyCon (internalName -> "Handled")) efs2) -> do
-                        efs2' <- handledNormalise s efs2
+                        let efs2' = handledNormalise s efs2
                         if efs2 == efs2' then return False
                         else effApproximates s effTy eff1 efs2'
                     -- Actual sets, take the union
@@ -131,12 +132,12 @@ effectMult sp effTy t1 t2 = do
           case (t1, t2) of
             --Handled, Handled
             (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
-                ts1' <- handledNormalise sp ts1
+                let ts1' = handledNormalise sp ts1
                 if ts1 == ts1' then throw $
                 --change error to TyEffMult later
                   TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
                 else do
-                    ts2' <- handledNormalise sp ts2
+                    let ts2' = handledNormalise sp ts2
                     if ts2 == ts2' then throw $
                 --change error to TyEffMult later
                         TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
@@ -145,7 +146,7 @@ effectMult sp effTy t1 t2 = do
                         return $ TyApp (TyCon $ (mkId "Handled")) t
             --Handled, set
             (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
-                ts1' <- handledNormalise sp ts1
+                let ts1' = handledNormalise sp ts1
                 if ts1 == ts1' then throw $
                 --change error to TyEffMult later
                   TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
@@ -154,7 +155,7 @@ effectMult sp effTy t1 t2 = do
                     return $ TyApp (TyCon $ (mkId "Handled")) t
              --set, Handled
             (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
-                ts2' <- handledNormalise sp ts2 --is type, should be checker type
+                let ts2' = handledNormalise sp ts2
                 if ts2 == ts2' then throw $
                 --change error to TyEffMult later
                   TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
