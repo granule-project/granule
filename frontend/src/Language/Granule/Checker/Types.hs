@@ -319,6 +319,10 @@ equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp = do
   unifiers <- combineSubstitutions s u1 u2
   return (one && two, unifiers)
 
+equalTypesRelatedCoeffectsInner s rel (TyCase t1 _) (TyCase t1' _) k sp = do
+  equalTypesRelatedCoeffectsInner s rel t1 t1' k sp
+  error "TODO"
+
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp = do
   effTyM <- isEffectTypeFromKind s k
   case effTyM of
