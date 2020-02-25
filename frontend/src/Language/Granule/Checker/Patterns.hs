@@ -60,6 +60,63 @@ polyShaped t = case leftmostOfApplication t of
       debugM "polyShaped because not a constructor" (show t)
       pure True
 
+data PatternComponents a where
+  BoxComponents :: Pattern a -> PatternComponents a
+  ConstrComponents :: [Pattern a] -> PatternComponents a
+  BaseCase      :: PatternComponents a
+
+-- generateNegativePatternInformation
+-- first is current pat
+-- second is previous pat (with pred annotations)
+isMoreGeneral :: Pattern a -> Maybe (Pattern Predicate) -> Checker (Maybe (PatternComponents Predicate))
+isMoreGeneral _ Nothing                              = return Nothing
+isMoreGeneral (PWild{)) (Just (PWild{}))             = return $ Just BaseCase
+isMoreGeneral (PBox _  _ _ p) (Just (PBox _ _ _ p')) = return $ Just (BoxComponents p')
+isMoreGeneral _         (Just p) = 
+  addPredicate $ negPred (getAnnotation p)
+  return Nothing
+
+patternFoldM
+  :: (Monad m)
+  => (Span -> Type -> ann -> Bool -> Id -> m b)
+  -> (Span -> Type -> ann -> Bool -> m b)
+  -> (Span -> Type -> ann -> Bool -> b -> Predicate -> m b)
+  -> (Span -> Type -> ann -> Bool -> Int -> m b)
+  -> (Span -> Type -> ann -> Bool -> Double -> m b)
+  -> (Span -> Type -> ann -> Bool -> Id -> [b] -> m b)
+  -> Pattern ann -> Type -> Maybe (Pattern Predicate) ->
+  -> m b
+patternFoldM v w b i f c pat ty = go ty pat
+  where
+
+    go :: Type -> Pattern ann  -> Maybe (Pattern Predicate) -> m b
+    go ty = \case
+      (PVar sp ann rf nm) _ -> v sp ty ann rf nm
+      (PWild sp ann rf) _ -> w sp ty ann rf
+      (PBox sp ann rf pat) (Just (PBox sp' ann' rf' pat')) ->
+        do
+            pat'' <- go pat (Just pat')
+            b sp ann rf pat'' Nothing
+      (PBox sp ann rf pat) Just pat' ->
+        do
+            propgPred <- calc pat (getAnnotation pat')
+            pushPred proggPred
+            pat'' <- go pat Nothing
+            b sp ann rf pat'' (Just (propgPred))
+      (PBox sp ann rf pat) Nothing ->
+        do
+            pat'' <- go pat Nothing
+            b sp ann rf pat'' Nothing
+      PInt sp ann rf int -> i sp ann rf int
+      PFloat sp ann rf doub -> f sp ann rf doub
+      PConstr sp ann rf nm pats ->
+        do
+            pats' <- mapM go pats
+            c sp ann rf nm pats'
+
+
+
+
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also:
@@ -83,11 +140,12 @@ ctxtFromTypedPattern' :: (?globals :: Globals) =>
   -> Span
   -> Type
   -> Pattern ()
+  -> Maybe (Pattern Predicate)
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Pattern Pred, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons = do
+ctxtFromTypedPattern' outerCoeff _ t p@(PWild s _ rf) prevPat cons = do
     -- DESIGN DECISION: We've turned off the checks that our linearity for ints
     -- when preceded by other concrete matches. (15/02/19) - DAO
     -- But we want to think about this more in the future
@@ -100,6 +158,8 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons = do
         -- add a constraint that 0 approaximates the effect of the enclosing
         -- box patterns.
         let elabP = PWild s t rf
+
+        -- 
         let predP = PWild s (Conj []) rf
         debugM' (pretty predP) ""
 
@@ -171,6 +231,7 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
             Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
+
 
     newConjunct
     (ctxt, eVars, subst, elabPInner, predPInner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
