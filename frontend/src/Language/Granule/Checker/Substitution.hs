@@ -26,6 +26,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Variables
+import Language.Granule.Checker.Normalise
 
 import Language.Granule.Utils
 
@@ -68,10 +69,10 @@ instance Substitutable Substitution where
         <> "` to a non variable type: `" <> show t <> "`"
 
 instance Substitutable Type where
-  substitute subst = typeFoldM (baseTypeFold
+  substitute subst s = typeFoldM (baseTypeFold
                               { tfTyVar = varSubst
                               , tfBox = box
-                              , tfDiamond = dia })
+                              , tfDiamond = dia }) s >>= (return . normaliseType)
     where
       box c t = do
         c <- substitute subst c
