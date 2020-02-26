@@ -164,16 +164,14 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
-{-
 -- Hard-coded 'scale', removed for now
-evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
-  (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
-    (Abs (PVar nullSpan $ mkId " y") Nothing (
-      letBox nullSpan (PVar nullSpan $ mkId " ye")
-         (Val nullSpan (Var (mkId " y")))
-         (Binop nullSpan
-           "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
--}
+evalIn _ (Val _ _ (Var _ v)) | internalName v == "scale" = return
+  (Abs () (PVar nullSpan () $ mkId " x") Nothing (Val nullSpan ()
+    (Abs () (PVar nullSpan () $ mkId " y") Nothing (
+      letBox nullSpan (PVar nullSpan () $ mkId " ye")
+         (Val nullSpan () (Var () (mkId " y")))
+         (Binop nullSpan ()
+           OpTimes (Val nullSpan () (Var () (mkId " x"))) (Val nullSpan () (Var () (mkId " ye"))))))))
 
 evalIn ctxt (Val _ _ (Var _ x)) =
     case lookup x ctxt of
