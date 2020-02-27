@@ -1,0 +1,32 @@
+import Nat
+
+-- Indexed by:
+--   * the 'id'
+--   * the current position of the pointer within the array
+--   * the size of the array
+data ArrayPtr : Type -> Nat -> Nat -> Type where
+
+-- Indexed  by:
+--   * the 'id'
+--   * the type of things in the array
+data ArrayCap : Type -> Type -> Type where
+
+newArrayPtr : forall {id : Type, n : Nat, a : Type} .
+    N n -> (Int -> a) [n] -> ((ArrayPtr id 0 n) [] , ArrayCap id a)
+newArrayPtr = newArrayPtr
+
+incArrayPtr : forall {id : Type, n : Nat, i : Nat, k : Nat} . {(i + k) < n} =>
+   ArrayPtr id i n -> N k -> ArrayPtr id (i+k) n
+incArrayPtr = incArrayPtr
+
+decArrayPtr : forall {id : Type, n : Nat, i : Nat, k : Nat} . {(i - k) >= 0} =>
+   ArrayPtr id i n -> N k -> ArrayPtr id (i - k) n
+decArrayPtr = decArrayPtr
+
+swapArrayPtr : forall {id : Type, n : Nat, i : Nat, a : Type} .
+  a -> ArrayPtr id i n -> ArrayCap id a -> (a , ArrayCap id a)
+swapArrayPtr = swapArrayPtr
+
+freeArrayPtr : forall {id : Type, n : Nat, i : Nat , a : Type} .
+  ArrayCap id a -> ()
+freeArrayPtr = freeArrayPtr
