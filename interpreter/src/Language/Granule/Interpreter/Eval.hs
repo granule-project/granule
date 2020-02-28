@@ -26,7 +26,7 @@ import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
 import Control.Exception (catch, throwIO, IOException)
-import GHC.IO.Exception (IOErrorType)
+import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
 -- import Foreign.Marshal.Alloc (free, malloc)
@@ -292,7 +292,7 @@ builtIns =
         hFlush stdout
         val <- Text.getLine
         return $ Val nullSpan () (NumInt $ read $ unpack val))
-  , (mkId "throw", diamondConstr (throwIO $ mkIOError OtherError "gran" Nothing Nothing)
+  , (mkId "throw", diamondConstr (throwIO $ mkIOError OtherError "exc" Nothing Nothing))
   , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
