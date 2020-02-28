@@ -355,13 +355,17 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     -- since we are instantiating a polymorphic type
 
     renameMap <- mapM instantiateVariable kinds
-    ty <- renameType (ctxtMap snd $ elideEither renameMap) ty
 
-    let subst = map (\(v, (_, var)) -> (v, SubstT $ TyVar var)) $ elideEither renameMap
+    ty <- renameType (ctxtMap (snd . fromEither) renameMap) ty
+
+    -- Applying the rename map to itself (one part at time), to accommodate dependency here
+    renameMap <- selfRename renameMap
+
+    let subst = map (\(v, kv) -> (v, SubstT . TyVar . snd . fromEither $ kv)) renameMap
     constr' <- mapM (substitute subst) constr
 
     -- Return the type and all instance variables
-    let newTyVars = map (\(_, (k, v')) -> (v', k))  $ elideEither renameMap
+    let newTyVars = map (\(_, kv) -> swap . fromEither $ kv) renameMap
     let substitution = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
 
     ixSubstitution' <- substitute substitution ixSubstitution
@@ -369,6 +373,18 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     return (ty, newTyVars, substitution, constr', ixSubstitution')
 
   where
+    -- Takes a renamep map and iteratively applies each renaming forwards to
+    -- the rest of the rename map, substituting into kinds, and therefore
+    -- implementing dependency between the type parameters
+    selfRename [] = return []
+    selfRename ((v, kv):xs) = do
+      xs' <- mapM (substituteAlong [(v, SubstT . TyVar . snd . fromEither $ kv)]) xs
+      xs'' <- selfRename xs'
+      return $ (v, kv) : xs''
+
+    substituteAlong subst (v, Left (k, v'))  = substitute subst k >>= (\k' -> return (v, Left (k', v')))
+    substituteAlong subst (v, Right (k, v')) = substitute subst k >>= (\k' -> return (v, Right (k', v')))
+
     -- Freshen variables, create instance variables
     -- Left of id means a succesful instance variable created
     -- Right of id means that this is an existential and so an (externally visisble)
@@ -386,10 +402,13 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
          else do
            var' <- freshTyVarInContextWithBinding var k quantifier
            return (var, Left (k, var'))
-    -- Forget the Either
-    elideEither = map proj
-      where proj (v, Left a) = (v, a)
-            proj (v, Right a) = (v, a)
+
+    fromEither :: Either a a -> a
+    fromEither (Left a) = a
+    fromEither (Right a) = a
+
+    swap (a, b) = (b, a)
+
     -- Get just the lefts (used to extract just the skolems)
     justLefts = mapMaybe conv
       where conv (v, Left a)  = Just (v,  a)

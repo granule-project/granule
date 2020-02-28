@@ -132,7 +132,7 @@ instance Monad m => Freshenable m DataDecl where
     tyVars <- mapM (\(v, k) -> freshen k >>= \k' -> return (v, k')) tyVars
     kind <- freshen kind
     ds <- freshen ds
-    return $ DataDecl s v tyVars kind ds
+    return (DataDecl s v tyVars kind ds)
 
 instance Monad m => Freshenable m DataConstr where
   freshen (DataConstrIndexed sp v tys) = do

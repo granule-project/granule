@@ -253,6 +253,9 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
           <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
 
+  debugM "context" $ pretty $ tyVarContext checkerState
+  
+
   -- Do an occurs check for types
   case kind of
     KType ->
