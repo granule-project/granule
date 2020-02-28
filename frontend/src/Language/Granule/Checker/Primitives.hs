@@ -175,7 +175,7 @@ readInt = BUILTIN
 --Exceptions
 --------------------------------------------------------------------------------
 
-throw : IO <{Exception}>
+throw : IO <{IOException}>
 throw = BUILTIN
 
 --------------------------------------------------------------------------------
@@ -246,13 +246,13 @@ openHandle
   -> (Handle m) <{Open,IOExcept}>
 openHandle = BUILTIN
 
-readChar : Handle R -> (Handle R, Char) [0..1] <{Read,IOExcept}>
+readChar : Handle R -> ((Handle R, Char) [0..1]) <{Read,IOExcept}>
 readChar = BUILTIN
 
-readChar' : Handle RW -> (Handle RW, Char) [0..1] <{Read,IOExcept}>
+readChar' : Handle RW -> ((Handle RW, Char) [0..1]) <{Read,IOExcept}>
 readChar' = BUILTIN
 
-appendChar : Handle A -> Char -> (Handle A) [0..1] <{Write,IOExcept}>
+appendChar : Handle A -> Char -> ((Handle A) [0..1]) <{Write,IOExcept}>
 appendChar = BUILTIN
 
 writeChar : Handle W -> Char -> (Handle W) [0..1] <{Write,IOExcept}>
