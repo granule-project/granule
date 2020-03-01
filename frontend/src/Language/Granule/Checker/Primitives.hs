@@ -255,19 +255,19 @@ readChar' = BUILTIN
 appendChar : Handle A -> Char -> ((Handle A) [0..1]) <{Write,IOExcept}>
 appendChar = BUILTIN
 
-writeChar : Handle W -> Char -> (Handle W) [0..1] <{Write,IOExcept}>
+writeChar : Handle W -> Char -> ((Handle W) [0..1]) <{Write,IOExcept}>
 writeChar = BUILTIN
 
-writeChar' : Handle RW -> Char -> (Handle RW) [0..1] <{Write,IOExcept}>
+writeChar' : Handle RW -> Char -> ((Handle RW) [0..1]) <{Write,IOExcept}>
 writeChar' = BUILTIN
 
-closeHandle : forall {m : HandleType} . Handle m -> () [0..1] <{Close,IOExcept}>
+closeHandle : forall {m : HandleType} . Handle m -> (() [0..1]) <{Close,IOExcept}>
 closeHandle = BUILTIN
 
-isEOF : Handle R -> (Handle R, Bool) [0..1] <{Read,IOExcept}>
+isEOF : Handle R -> ((Handle R, Bool) [0..1]) <{Read,IOExcept}>
 isEOF = BUILTIN
 
-isEOF' : Handle RW -> (Handle RW, Bool) [0..1] <{Read,IOExcept}>
+isEOF' : Handle RW -> ((Handle RW, Bool) [0..1]) <{Read,IOExcept}>
 isEOF' = BUILTIN
 
 
