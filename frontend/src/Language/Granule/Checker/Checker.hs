@@ -489,6 +489,57 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
             -> True
           _ -> False
 
+checkExpr defs gam pol True tau (TryCatch s a e1 pat mty e2 e3) = do
+
+synth1 <- synthExpr defs gam pol (LetDiamond s a p mty e1 e2)
+  case synth1 of 
+    Nothing -> return Nothing
+    Just (t1, gam1, subst1, elaborated1) -> 
+
+      
+
+  --get f from t1
+    f' <- Nothing
+
+        (t2, gam2, subst2, elaborated2) <- synthExpr defs gam pol e2
+        (t3, gam3, subst3, elaborated3) <- synthExpr defs gam pol e3
+        
+        gam' <- ctxtPlus gam1 (joinCtxts gam2 gam3)
+          if gam != gam' then return Nothing
+          else 
+            if (t2 != t3) then return Nothing 
+            else
+              if (tau == (effectMult f' g)) then
+                return True
+              else 
+                return Nothing
+
+          
+
+
+
+
+  --(effects of tau) -uncombinate/difference- (handled effects of t1) should be (effects of t2)
+
+  --gam2 <- ctxtPlus gam2 gam3  
+  -- add pat of type t1 to the context 
+
+  check2 <- checkExpr defs gam2 pol False t2 e2
+  case check2 of 
+    Nothing -> return Nothing
+    _ -> do 
+      check3 <- checkExpr defs gam2 pol False t2 e3
+      case check3 of
+        Nothing -> return Nothing 
+        _ -> return check3
+
+  --check that e2 == e3 == tau <(handled f)*g>
+
+
+  --(Ctxt Assumption, Substitution, Expr () Type)
+  --computes Just delta or Nothing if typing doesn't match
+
+
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
 
