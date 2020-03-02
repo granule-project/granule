@@ -53,6 +53,7 @@ import Language.Granule.Utils hiding (mkSpan)
     import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
+    DFLOAT  { TokenDFloat _ _}
     VAR    { TokenSym _ _ }
     CONSTR { TokenConstr _ _ }
     CHAR   { TokenCharLiteral _ _ }
@@ -473,6 +474,7 @@ Form :: { Expr () () }
   : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpPlus $1 $3 }
   | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpMinus $1 $3 }
   | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpTimes $1 $3 }
+  | Form '/' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpDiv $1 $3 }
   | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesser $1 $3 }
   | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpGreater $1 $3 }
   | Form '<=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesserEq $1 $3 }
@@ -496,6 +498,9 @@ Atom :: { Expr () () }
   | FLOAT                     {% let (TokenFloat _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
                                      >>= \sp -> return $ Val sp () $ NumFloat $ read x }
+  | DFLOAT                    {% let (TokenDFloat _ x) = $1
+                                 in (mkSpan $ getPosToSpan $1)
+                                     >>= \sp -> return $ Val sp () $ NumDFloat $ read $ tail x }
 
   | VAR                       {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () $ Var () (mkId $ symString $1) }
 

@@ -385,8 +385,8 @@ checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalName c == "Floa
     return ([], [], elaborated)
 
 -- Differentially private floats
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumFloat n)) | internalName c == "DFloat" = do
-    let elaborated = Val s ty (NumFloat n)
+checkExpr _ [] _ _ ty@(TyCon c) (Val s _ (NumDFloat n)) | internalName c == "DFloat" = do
+    let elaborated = Val s ty (NumDFloat n)
     return ([], [], elaborated)
 
 checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
@@ -433,9 +433,9 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 -- Application special case for built-in 'scale'
 -- TODO: needs more thought
 checkExpr defs gam pol topLevel tau
-          (App s _ (App s' _ (Val s'' _ (Var _ v)) (Val s3 _ (NumFloat x))) e) | internalName v == "scale" = do
+          (App s _ (App s' _ (Val s'' _ (Var _ v)) (Val s3 _ (NumDFloat x))) e) | internalName v == "scale" = do
 
-    let floatTy = TyCon $ mkId "Float"
+    let floatTy = TyCon $ mkId "DFloat"
 
     (eq, _, subst) <- equalTypes s floatTy tau
     if eq then do
@@ -447,7 +447,7 @@ checkExpr defs gam pol topLevel tau
       -- Create elborated AST
       let scaleTy = FunTy floatTy (FunTy (Box (CFloat (toRational x)) floatTy) floatTy)
       let elab' = App s floatTy
-                    (App s' scaleTy (Val s'' floatTy (Var floatTy v)) (Val s3 floatTy (NumFloat x))) elab
+                    (App s' scaleTy (Val s'' floatTy (Var floatTy v)) (Val s3 floatTy (NumDFloat x))) elab
 
       return (gam, subst'', elab')
       else
@@ -625,6 +625,10 @@ synthExpr _ _ _ (Val s _ (NumInt n))  = do
 synthExpr _ _ _ (Val s _ (NumFloat n)) = do
   let t = TyCon $ mkId "Float"
   return (t, [], [], Val s t (NumFloat n))
+
+synthExpr _ _ _ (Val s _ (NumDFloat n)) = do
+  let t = TyCon $ mkId "DFloat"
+  return (t, [], [], Val s t (NumDFloat n))
 
 synthExpr _ _ _ (Val s _ (CharLiteral c)) = do
   let t = TyCon $ mkId "Char"
@@ -809,14 +813,14 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
 -- Specialised application for scale
 {- TODO: needs thought -}
 synthExpr defs gam pol
-      (App s _ (Val s' _ (Var _ v)) (Val s'' _ (NumFloat r))) | internalName v == "scale" = do
+      (App s _ (Val s' _ (Var _ v)) (Val s'' _ (NumDFloat r))) | internalName v == "scale" = do
 
-  let floatTy = TyCon $ mkId "Float"
+  let floatTy = TyCon $ mkId "DFloat"
 
   let scaleTyApplied = FunTy (Box (CFloat (toRational r)) floatTy) floatTy
   let scaleTy = FunTy floatTy scaleTyApplied
 
-  let elab = App s scaleTy (Val s' scaleTy (Var scaleTy v)) (Val s'' floatTy (NumFloat r))
+  let elab = App s scaleTy (Val s' scaleTy (Var scaleTy v)) (Val s'' floatTy (NumDFloat r))
 
   return (scaleTyApplied, [], [], elab)
 

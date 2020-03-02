@@ -25,6 +25,7 @@ $fruit = [\127815-\127827] -- 🍇🍈🍉🍊🍋🍌🍍🍎🍏🍐🍑🍒�
 @sym    = $lower ($alphanum | \')* | $fruit
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
+@dfloat   = d \-? $digit+ \. $digit+
 @int    = \-? $digit+
 @charLiteral = \' ([\\.]|[^\']| . ) \'
 @stringLiteral = \"(\\.|[^\"]|\n)*\"
@@ -54,6 +55,7 @@ tokens :-
   of                            { \p s -> TokenOf p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
+  @dfloat                       { \p s -> TokenDFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
   @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
   @stringLiteral                { \p s -> TokenStringLiteral p $ read s }
@@ -127,6 +129,7 @@ data Token
   | TokenBox    AlexPosn
   | TokenInt    AlexPosn Int
   | TokenFloat  AlexPosn String
+  | TokenDFloat  AlexPosn String
   | TokenSym    AlexPosn String
   | TokenArrow  AlexPosn
   | TokenConstrain AlexPosn
