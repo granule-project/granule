@@ -8,6 +8,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
@@ -133,8 +134,8 @@ meetConsumption Full Empty = NotFull
 
 data CheckerState = CS
             { -- Fresh variable id state
-              uniqueVarIdCounterMap  :: M.Map String Nat
-            , uniqueVarIdCounter     :: Nat
+              uniqueVarIdCounterMap  :: M.Map String Int
+            , uniqueVarIdCounter     :: Int
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
 

@@ -52,7 +52,7 @@ type Freshener m t = StateT FreshenerState m t
 --  fail = Control.Monad.Fail.fail
 
 data FreshenerState = FreshenerState
-  { counter :: Word -- ^ fresh Id counter
+  { counter :: Int -- ^ fresh Id counter
   , varMap :: [(String, String)] -- ^ mapping of variables to their fresh names
   , tyMap  :: [(String, String)] -- ^ mapping of type variables to fresh names
   } deriving Show

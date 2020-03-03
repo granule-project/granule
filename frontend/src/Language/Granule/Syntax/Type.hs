@@ -296,7 +296,7 @@ isProduct _ = Nothing
 -- Helpers
 
 -- | Compute the arity of a function type
-arity :: Type l -> Word
+arity :: Type l -> Int
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 
