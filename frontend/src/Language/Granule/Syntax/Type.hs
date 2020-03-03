@@ -73,6 +73,14 @@ deriving instance Eq (Level l)
 deriving instance Show (Level l)
 deriving instance Ord (Level l)
 
+tyPromote :: Type l -> Maybe (Type (Succ l))
+tyPromote = error "TODO"
+
+data TypeWithLevel where
+  TypeWithLevel :: Type l -> TypeWithLevel
+
+deriving instance Show TypeWithLevel
+
 data Type (l :: Nat) where
     -- May not need promoted
     TyPromote :: LesserLevel l l' => Type l  -> Type l'

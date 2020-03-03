@@ -27,6 +27,12 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
+tryTyPromote :: Span -> Type l -> Checker (Type (Succ l))
+tryTyPromote s ty =
+  case tyPromote ty of
+    Just tyPromote -> return tyPromoted
+    Nothing -> throw $ PromotionError s ty
+
 lEqualTypesWithPolarity :: (?globals :: Globals)
   => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol

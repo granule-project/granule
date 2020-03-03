@@ -499,7 +499,9 @@ data CheckerError
     { errLoc :: Span, errTy :: Type Zero, errK :: Kind }
   | CaseOnIndexedType
     { errLoc :: Span, errTy :: Type Zero }
-  deriving (Show, Eq)
+  | PromotionError
+    { errLoc :: Span, errTyP :: TypeWithLevel }
+  deriving Show
 
 
 instance UserMsg CheckerError where
@@ -560,6 +562,7 @@ instance UserMsg CheckerError where
   title InvalidTypeDefinition{} = "Invalid type definition"
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
+  title PromotionError{} = "Type error"
 
   msg HoleMessage{..} =
     (case holeTy of
@@ -811,6 +814,9 @@ instance UserMsg CheckerError where
 
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
+
+  msg (PromotionError _ (TypeWithLevel errTyP))
+    = "The type " <> pretty errTyP <> " cannot be promoted to a higher universe level."
 
   color HoleMessage{} = Blue
   color _ = Red
