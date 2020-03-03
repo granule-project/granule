@@ -1,5 +1,6 @@
 {- Deals with interactions between coeffect resource algebras -}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.Flatten
           (mguCoeffectTypes, flattenable) where
@@ -11,7 +12,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Utils
 
 mguCoeffectTypes :: (?globals :: Globals)
-                 => Span -> Type -> Type -> Checker (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+                 => Span -> Type Zero -> Type Zero -> Checker (Type Zero, (Coeffect -> Coeffect, Coeffect -> Coeffect))
 mguCoeffectTypes s t1 t2 = do
   upper <- mguCoeffectTypes' s t1 t2
   case upper of
@@ -23,24 +24,24 @@ mguCoeffectTypes s t1 t2 = do
 
 -- Inner definition which does not throw its error, and which operates on just the types
 mguCoeffectTypes' :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Maybe (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
+  => Span -> Type Zero -> Type Zero -> Checker (Maybe (Type Zero, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
 
 -- Trivial case
 mguCoeffectTypes' s t t' | t == t' = return $ Just (t, (id, id))
 
 -- Both are variables
 mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
-  updateCoeffectType kv1 (KVar kv2)
+  updateCoeffectType kv1 (TyPromote (TyVar kv2))
   return $ Just (TyVar kv2, (id, id))
 
 -- Left-hand side is a poly variable, but Just is concrete
 mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
-  updateCoeffectType kv1 (promoteTypeToKind coeffTy2)
+  updateCoeffectType kv1 (TyPromote coeffTy2)
   return $ Just (coeffTy2, (id, id))
 
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
-  updateCoeffectType kv2 (promoteTypeToKind coeffTy1)
+  updateCoeffectType kv2 (TyPromote coeffTy1)
   return $ Just (coeffTy1, (id, id))
 
 -- `Nat` can unify with `Q` to `Q`
@@ -124,7 +125,7 @@ mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
 flattenable :: (?globals :: Globals)
-            => Type -> Type -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Type))
+            => Type Zero -> Type Zero -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Type Zero))
 flattenable t1 t2
  | t1 == t2 = case t1 of
     t1 | t1 == extendedNat -> return $ Just (CTimes, t1)
