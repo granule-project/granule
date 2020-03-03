@@ -42,16 +42,23 @@ inferKindOfType s t = do
     checkerState <- get
     inferKindOfTypeInContext s (stripQuantifiers $ tyVarContext checkerState) t
 
-inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type Zero -> Checker Kind
+inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type l -> Checker (Type (Succ l))
 inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase) t
+    typeFoldM (TypeFold kPromote kTy kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase kUnion) t
   where
-    kFun (TyPromote (TyCon c)) (TyPromote (TyCon c'))
+    --May not need promote
+    kPromote = mTyPromote
+    kTy :: Level l -> Checker (Type (Succ l))
+    kTy l = return $ Type $ LSucc l
+
+    kFun :: Type l -> Type l -> Checker (Type l)
+    kFun (TyCon c) (TyCon c')
      | internalName c == internalName c' = return $ TyCon c
 
-    kFun (Type LZero) (Type LZero) = return $ Type LZero
+    kFun (Type l) (Type l') | l == l' = return $ Type l
     kFun (Type LZero) (TyPromote (TyCon (internalName -> "Protocol"))) = return $ TyPromote (TyCon (mkId "Protocol"))
-    kFun (Type LZero) y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = y }
+    kFun (Type l) y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type l, kActual = y }
+    -- kFun x expects Type LZero, but should be of any level
     kFun x _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
 
     kCon (internalName -> "Pure") = do
