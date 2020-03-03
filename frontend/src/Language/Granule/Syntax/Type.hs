@@ -65,13 +65,17 @@ data Level (l :: Nat) where
   LSucc :: Level l -> Level (Succ l)
   LZero :: Level Zero
 
+class LesserLevel (l :: Nat) (l' :: Nat) where
+instance LesserLevel Zero (Succ l) where
+instance LesserLevel l l' => LesserLevel (Succ l) (Succ l')
+
 deriving instance Eq (Level l)
 deriving instance Show (Level l)
 deriving instance Ord (Level l)
 
 data Type (l :: Nat) where
-    -- May not need promote
-    TyPromote :: Type l  -> Type (Succ l)
+    -- May not need promoted
+    TyPromote :: LesserLevel l l' => Type l  -> Type l'
     Type    :: Level l -> Type (Succ l)        -- ^ Universe construction
     FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
 
