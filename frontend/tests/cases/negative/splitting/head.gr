@@ -1,0 +1,8 @@
+import Vec
+import Maybe
+
+head' : forall { a : Type, n : Nat } . Vec n a -> Maybe a
+head' xs = {! xs !}
+
+head'' : forall { a : Type, n : Nat } . Vec (n + 1) a -> a
+head'' xs = {! xs !}

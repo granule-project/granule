@@ -1,0 +1,5 @@
+import Bool
+
+not' : Bool -> Bool
+not' False = ?;
+not' True = ?

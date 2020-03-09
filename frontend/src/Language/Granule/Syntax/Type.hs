@@ -1,6 +1,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
 
@@ -13,8 +14,9 @@ import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
-import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
+import GHC.Generics (Generic)
+import qualified Text.Reprinter as Rp (Data)
 
 -- | Represent types with a universal quantification at the start
 data TypeScheme =
@@ -23,7 +25,7 @@ data TypeScheme =
     [(Id, Kind)]  -- binders
     [Type]        -- constraints
     Type          -- type
-  deriving (Eq, Show, Generic)
+  deriving (Eq, Show, Generic, Rp.Data)
 
 -- Constructors and operators are just strings
 data TypeOperator
@@ -39,23 +41,23 @@ data TypeOperator
   | TyOpExpon
   | TyOpMeet
   | TyOpJoin
-  deriving (Eq, Ord, Show)
+  deriving (Eq, Ord, Show, Rp.Data)
 
 
 {-| Types.
 Example: `List n Int` in Granule
          is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
-data Type = FunTy Type Type           -- ^ Function type
-          | TyCon Id                  -- ^ Type constructor
-          | Box Coeffect Type         -- ^ Coeffect type
-          | Diamond Type Type         -- ^ Effect type
-          | TyVar Id                  -- ^ Type variable
-          | TyApp Type Type           -- ^ Type application
-          | TyInt Int                 -- ^ Type-level Int
+data Type = FunTy (Maybe Id) Type Type      -- ^ Function type
+          | TyCon Id                        -- ^ Type constructor
+          | Box Coeffect Type               -- ^ Coeffect type
+          | Diamond Type Type               -- ^ Effect type
+          | TyVar Id                        -- ^ Type variable
+          | TyApp Type Type                 -- ^ Type application
+          | TyInt Int                       -- ^ Type-level Int
           | TyInfix TypeOperator Type Type  -- ^ Infix type operator
-          | TySet [Type]              -- ^ Type-level set
-    deriving (Eq, Ord, Show)
+          | TySet [Type]                    -- ^ Type-level set
+    deriving (Eq, Ord, Show, Rp.Data)
 
 -- | Kinds
 data Kind = KType
@@ -66,7 +68,7 @@ data Kind = KType
           | KVar Id              -- Kind poly variable
           | KPromote Type        -- Promoted types
           | KUnion Kind Kind
-    deriving (Show, Ord, Eq)
+    deriving (Show, Ord, Eq, Rp.Data)
 
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyVar v) = KVar v
@@ -142,7 +144,7 @@ data Coeffect = CNat      Int
               | CSig      Coeffect Type
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Ord, Show, Rp.Data)
 
 -- Algebra for coeffects
 data CoeffectFold a = CoeffectFold
@@ -274,13 +276,13 @@ type Nat = Word
 
 -- | Compute the arity of a function type
 arity :: Type -> Nat
-arity (FunTy _ t) = 1 + arity t
-arity _           = 0
+arity (FunTy _ _ t) = 1 + arity t
+arity _             = 0
 
 -- | Get the result type after the last Arrow, e.g. for @a -> b -> Pair a b@
 -- the result type is @Pair a b@
 resultType :: Type -> Type
-resultType (FunTy _ t) = resultType t
+resultType (FunTy _ _ t) = resultType t
 resultType t = t
 
 -- | Get the leftmost type of an application
@@ -300,7 +302,7 @@ var = TyVar . mkId
 
 -- | Smart constructor for function types
 (.->) :: Type -> Type -> Type
-s .-> t = FunTy s t
+s .-> t = FunTy Nothing s t
 infixr 1 .->
 
 -- | Smart constructor for type application
@@ -309,36 +311,36 @@ s .@ t = TyApp s t
 infixl 9 .@
 
 -- Trivially effectful monadic constructors
-mFunTy :: Monad m => Type -> Type -> m Type
-mFunTy x y   = return (FunTy x y)
+mFunTy :: Monad m => Maybe Id -> Type -> Type -> m Type
+mFunTy id x y   = return (FunTy id x y)
 mTyCon :: Monad m => Id -> m Type
-mTyCon       = return . TyCon
+mTyCon          = return . TyCon
 mBox :: Monad m => Coeffect -> Type -> m Type
-mBox c y     = return (Box c y)
+mBox c y        = return (Box c y)
 mDiamond :: Monad m => Type -> Type -> m Type
-mDiamond e y = return (Diamond e y)
+mDiamond e y    = return (Diamond e y)
 mTyVar :: Monad m => Id -> m Type
-mTyVar       = return . TyVar
+mTyVar          = return . TyVar
 mTyApp :: Monad m => Type -> Type -> m Type
-mTyApp x y   = return (TyApp x y)
+mTyApp x y      = return (TyApp x y)
 mTyInt :: Monad m => Int -> m Type
-mTyInt       = return . TyInt
+mTyInt          = return . TyInt
 mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
-mTyInfix op x y  = return (TyInfix op x y)
+mTyInfix op x y = return (TyInfix op x y)
 mTySet   :: Monad m => [Type] -> m Type
-mTySet xs = return (TySet xs)
+mTySet xs       = return (TySet xs)
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
-  { tfFunTy   :: a -> a        -> m a
-  , tfTyCon   :: Id            -> m a
-  , tfBox     :: Coeffect -> a -> m a
-  , tfDiamond :: a -> a        -> m a
-  , tfTyVar   :: Id            -> m a
-  , tfTyApp   :: a -> a        -> m a
-  , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: TypeOperator  -> a -> a -> m a
-  , tfSet     :: [a]           -> m a }
+  { tfFunTy   :: Maybe Id -> a -> a     -> m a
+  , tfTyCon   :: Id                     -> m a
+  , tfBox     :: Coeffect -> a          -> m a
+  , tfDiamond :: a -> a                 -> m a
+  , tfTyVar   :: Id                     -> m a
+  , tfTyApp   :: a -> a                 -> m a
+  , tfTyInt   :: Int                    -> m a
+  , tfTyInfix :: TypeOperator -> a -> a -> m a
+  , tfSet     :: [a]                    -> m a }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
@@ -349,10 +351,10 @@ baseTypeFold =
 typeFoldM :: Monad m => TypeFold m a -> Type -> m a
 typeFoldM algebra = go
   where
-   go (FunTy t1 t2) = do
+   go (FunTy id t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfFunTy algebra) t1' t2'
+     (tfFunTy algebra) id t1' t2'
    go (TyCon s) = (tfTyCon algebra) s
    go (Box c t) = do
      t' <- go t
@@ -388,7 +390,7 @@ freeAtomsVars t = []
 
 instance Term Type where
     freeVars = runIdentity . typeFoldM TypeFold
-      { tfFunTy   = \x y -> return $ x <> y
+      { tfFunTy   = \_ x y -> return $ x <> y
       , tfTyCon   = \_ -> return [] -- or: const (return [])
       , tfBox     = \c t -> return $ freeVars c <> t
       , tfDiamond = \e t -> return $ e <> t

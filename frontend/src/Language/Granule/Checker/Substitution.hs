@@ -469,11 +469,11 @@ instance Substitutable Constraint where
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
 instance Substitutable (Equation () Type) where
-  substitute ctxt (Equation sp ty patterns expr) =
+  substitute ctxt (Equation sp ty rf patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
          expr' <- substitute ctxt expr
-         return $ Equation sp ty' pat' expr'
+         return $ Equation sp ty' rf pat' expr'
 
 substituteValue :: (?globals::Globals)
                 => Substitution
@@ -502,25 +502,25 @@ substituteExpr :: (?globals::Globals)
                => Substitution
                -> ExprF ev Type (Expr ev Type) (Value ev Type)
                -> Checker (Expr ev Type)
-substituteExpr ctxt (AppF sp ty fn arg) =
+substituteExpr ctxt (AppF sp ty rf fn arg) =
     do  ty' <- substitute ctxt ty
-        return $ App sp ty' fn arg
-substituteExpr ctxt (BinopF sp ty op lhs rhs) =
+        return $ App sp ty' rf fn arg
+substituteExpr ctxt (BinopF sp ty rf op lhs rhs) =
     do  ty' <- substitute ctxt ty
-        return $ Binop sp ty' op lhs rhs
-substituteExpr ctxt (LetDiamondF sp ty pattern mty value expr) =
+        return $ Binop sp ty' rf op lhs rhs
+substituteExpr ctxt (LetDiamondF sp ty rf pattern mty value expr) =
     do  ty' <- substitute ctxt ty
         pattern' <- substitute ctxt pattern
         mty' <- mapM (substitute ctxt) mty
-        return $ LetDiamond sp ty' pattern' mty' value expr
-substituteExpr ctxt (ValF sp ty value) =
+        return $ LetDiamond sp ty' rf pattern' mty' value expr
+substituteExpr ctxt (ValF sp ty rf value) =
     do  ty' <- substitute ctxt ty
-        return $ Val sp ty' value
-substituteExpr ctxt (CaseF sp ty expr arms) =
+        return $ Val sp ty' rf value
+substituteExpr ctxt (CaseF sp ty rf expr arms) =
     do  ty' <- substitute ctxt ty
         arms' <- mapM (mapFstM (substitute ctxt)) arms
-        return $ Case sp ty' expr arms'
-substituteExpr ctxt (HoleF s a) = return $ Hole s a
+        return $ Case sp ty' rf expr arms'
+substituteExpr ctxt (HoleF s a rf vs) = return $ Hole s a rf vs
 
 mapFstM :: (Monad m) => (a -> m b) -> (a, c) -> m (b, c)
 mapFstM fn (f, r) = do
@@ -535,24 +535,24 @@ instance Substitutable (Value () Type) where
 
 instance Substitutable (Pattern Type) where
   substitute ctxt = patternFoldM
-      (\sp ann nm -> do
+      (\sp ann rf nm -> do
           ann' <- substitute ctxt ann
-          return $ PVar sp ann' nm)
-      (\sp ann -> do
+          return $ PVar sp ann' rf nm)
+      (\sp ann rf -> do
           ann' <- substitute ctxt ann
-          return $ PWild sp ann')
-      (\sp ann pat -> do
+          return $ PWild sp ann' rf)
+      (\sp ann rf pat -> do
           ann' <- substitute ctxt ann
-          return $ PBox sp ann' pat)
-      (\sp ann int -> do
+          return $ PBox sp ann' rf pat)
+      (\sp ann rf int -> do
           ann' <- substitute ctxt ann
-          return $ PInt sp ann' int)
-      (\sp ann doub -> do
+          return $ PInt sp ann' rf int)
+      (\sp ann rf doub -> do
           ann' <- substitute ctxt ann
-          return $ PFloat sp ann' doub)
-      (\sp ann nm pats -> do
+          return $ PFloat sp ann' rf doub)
+      (\sp ann rf nm pats -> do
           ann' <- substitute ctxt ann
-          return $ PConstr sp ann' nm pats)
+          return $ PConstr sp ann' rf nm pats)
 
 class Unifiable t where
     unify :: (?globals :: Globals) => t -> t -> Checker (Maybe Substitution)
@@ -578,7 +578,7 @@ instance Unifiable Substitutors where
 instance Unifiable Type where
     unify (TyVar v) t = return $ Just [(v, SubstT t)]
     unify t (TyVar v) = return $ Just [(v, SubstT t)]
-    unify (FunTy t1 t2) (FunTy t1' t2') = do
+    unify (FunTy _ t1 t2) (FunTy _ t1' t2') = do
         u1 <- unify t1 t1'
         u2 <- unify t2 t2'
         u1 <<>> u2
