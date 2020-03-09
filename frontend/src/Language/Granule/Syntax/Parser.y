@@ -473,6 +473,7 @@ Form :: { Expr () () }
   : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpPlus $1 $3 }
   | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpMinus $1 $3 }
   | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpTimes $1 $3 }
+  | Form '/' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpDiv $1 $3 }
   | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesser $1 $3 }
   | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpGreater $1 $3 }
   | Form '<=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () OpLesserEq $1 $3 }
@@ -496,7 +497,6 @@ Atom :: { Expr () () }
   | FLOAT                     {% let (TokenFloat _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
                                      >>= \sp -> return $ Val sp () $ NumFloat $ read x }
-
   | VAR                       {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () $ Var () (mkId $ symString $1) }
 
   | '[' Expr ']'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Val sp () $ Promote () $2 }

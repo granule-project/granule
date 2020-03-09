@@ -280,6 +280,7 @@ instance Pretty Operator where
     OpNotEq           -> "≠"
     OpPlus            -> "+"
     OpTimes           -> "*"
+    OpDiv             -> "/"
     OpMinus           -> "-"
 
 ticks :: String -> String

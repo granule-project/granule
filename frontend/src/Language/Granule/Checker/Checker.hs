@@ -435,7 +435,7 @@ checkExpr defs gam pol _ ty@(FunTy sig tau) (Val s _ (Abs _ p t e)) = do
 checkExpr defs gam pol topLevel tau
           (App s _ (App s' _ (Val s'' _ (Var _ v)) (Val s3 _ (NumFloat x))) e) | internalName v == "scale" = do
 
-    let floatTy = TyCon $ mkId "Float"
+    let floatTy = TyCon $ mkId "DFloat"
 
     (eq, _, subst) <- equalTypes s floatTy tau
     if eq then do
@@ -451,7 +451,7 @@ checkExpr defs gam pol topLevel tau
 
       return (gam, subst'', elab')
       else
-        throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "Float", tyActual = tau }
+        throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ e1 e2) = do
@@ -811,7 +811,7 @@ synthExpr defs gam _ (Val s _ (Var _ x)) =
 synthExpr defs gam pol
       (App s _ (Val s' _ (Var _ v)) (Val s'' _ (NumFloat r))) | internalName v == "scale" = do
 
-  let floatTy = TyCon $ mkId "Float"
+  let floatTy = TyCon $ mkId "DFloat"
 
   let scaleTyApplied = FunTy (Box (CFloat (toRational r)) floatTy) floatTy
   let scaleTy = FunTy floatTy scaleTyApplied

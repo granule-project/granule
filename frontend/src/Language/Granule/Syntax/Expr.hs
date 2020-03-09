@@ -106,6 +106,7 @@ data Operator
   | OpNotEq
   | OpPlus
   | OpTimes
+  | OpDiv
   | OpMinus
   deriving (Generic, Eq, Ord, Show)
 

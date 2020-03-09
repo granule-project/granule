@@ -82,6 +82,9 @@ evalBinOp op v1 v2 = case op of
       (NumInt n1, NumInt n2) -> NumInt (n1 * n2)
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 * n2)
       _ -> evalFail
+    OpDiv -> case (v1, v2) of
+      (NumFloat n1, NumFloat n2) -> NumFloat (n1 / n2)
+      _ -> evalFail
     OpMinus -> case (v1, v2) of
       (NumInt n1, NumInt n2) -> NumInt (n1 - n2)
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 - n2)
