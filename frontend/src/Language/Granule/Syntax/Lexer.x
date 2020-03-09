@@ -25,7 +25,6 @@ $fruit = [\127815-\127827] -- 🍇🍈🍉🍊🍋🍌🍍🍎🍏🍐🍑🍒�
 @sym    = $lower ($alphanum | \')* | $fruit
 @constr = ($upper ($alphanum | \')* | \(\))
 @float   = \-? $digit+ \. $digit+
-@dfloat   = d \-? $digit+ \. $digit+
 @int    = \-? $digit+
 @charLiteral = \' ([\\.]|[^\']| . ) \'
 @stringLiteral = \"(\\.|[^\"]|\n)*\"
