@@ -53,7 +53,6 @@ import Language.Granule.Utils hiding (mkSpan)
     import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
-    DFLOAT  { TokenDFloat _ _}
     VAR    { TokenSym _ _ }
     CONSTR { TokenConstr _ _ }
     CHAR   { TokenCharLiteral _ _ }
@@ -498,10 +497,6 @@ Atom :: { Expr () () }
   | FLOAT                     {% let (TokenFloat _ x) = $1
                                  in (mkSpan $ getPosToSpan $1)
                                      >>= \sp -> return $ Val sp () $ NumFloat $ read x }
-  | DFLOAT                    {% let (TokenDFloat _ x) = $1
-                                 in (mkSpan $ getPosToSpan $1)
-                                     >>= \sp -> return $ Val sp () $ NumDFloat $ read $ tail x }
-
   | VAR                       {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () $ Var () (mkId $ symString $1) }
 
   | '[' Expr ']'              {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ Val sp () $ Promote () $2 }

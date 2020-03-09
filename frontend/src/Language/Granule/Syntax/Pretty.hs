@@ -231,7 +231,6 @@ instance Pretty v => Pretty (Value v a) where
     pretty (Var _ x)     = pretty x
     pretty (NumInt n)    = show n
     pretty (NumFloat n)  = show n
-    pretty (NumDFloat n)  = show n
     pretty (CharLiteral c) = show c
     pretty (StringLiteral s) = show s
     pretty (Constr _ s vs) | internalName s == "," =

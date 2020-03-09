@@ -456,7 +456,6 @@ instance RuntimeRep Value where
   toRuntimeRep (Var a x) = Var a x
   toRuntimeRep (NumInt x) = NumInt x
   toRuntimeRep (NumFloat x) = NumFloat x
-  toRuntimeRep (NumDFloat x) = NumDFloat x
 
 eval :: (?globals :: Globals) => AST () () -> IO (Maybe RValue)
 eval (AST dataDecls defs _ _ _) = do

@@ -53,7 +53,6 @@ data ValueF ev a value expr =
     | VarF a Id
     | NumIntF Int
     | NumFloatF Double
-    | NumDFloatF Double
     | CharLiteralF Char
     | StringLiteralF Text
     -- Extensible part
@@ -77,12 +76,11 @@ pattern Constr a ident vals = (ExprFix2 (ConstrF a ident vals))
 pattern Var a ident = (ExprFix2 (VarF a ident))
 pattern NumInt n = (ExprFix2 (NumIntF n))
 pattern NumFloat n = (ExprFix2 (NumFloatF n))
-pattern NumDFloat n = (ExprFix2 (NumDFloatF n))
 pattern CharLiteral ch = (ExprFix2 (CharLiteralF ch))
 pattern StringLiteral str = (ExprFix2 (StringLiteralF str))
 pattern Ext a extv = (ExprFix2 (ExtF a extv))
 {-# COMPLETE Abs, Promote, Pure, Constr, Var, NumInt,
-             NumFloat, NumDFloat, CharLiteral, StringLiteral, Ext #-}
+             NumFloat, CharLiteral, StringLiteral, Ext #-}
 
 -- | Expressions (computations) in Granule (with `v` extended values
 -- | and annotations `a`).
@@ -158,7 +156,6 @@ instance Annotated (Expr ev a) a where
 instance Annotated (Value ev Type) Type where
     annotation (NumInt _) = TyCon (mkId "Int")
     annotation (NumFloat _) = TyCon (mkId "Float")
-    annotation (NumDFloat _) = TyCon (mkId "DFloat")
     annotation (StringLiteral _) = TyCon (mkId "String")
     annotation (CharLiteral _) = TyCon (mkId "Char")
     annotation other = getFirstParameter other
@@ -195,7 +192,6 @@ instance Term (Value ev a) where
     freeVars (Promote _ e) = freeVars e
     freeVars NumInt{}        = []
     freeVars NumFloat{}      = []
-    freeVars NumDFloat{}      = []
     freeVars Constr{}        = []
     freeVars CharLiteral{}   = []
     freeVars StringLiteral{} = []
@@ -217,7 +213,6 @@ instance Substitutable Value where
     subst es v (Var a w) | v == w = es
     subst es _ v@NumInt{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
     subst es _ v@NumFloat{}      = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
-    subst es _ v@NumDFloat{}      = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
     subst es _ v@Var{}           = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
     subst es _ v@Constr{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
     subst es _ v@CharLiteral{}   = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
@@ -252,7 +247,6 @@ instance Monad m => Freshenable m (Value v a) where
 
     freshen v@NumInt{}   = return v
     freshen v@NumFloat{} = return v
-    freshen v@NumDFloat{} = return v
     freshen v@Constr{}   = return v
     freshen v@CharLiteral{} = return v
     freshen v@StringLiteral{} = return v
