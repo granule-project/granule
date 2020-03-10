@@ -111,8 +111,6 @@ data TypeWithLevel where
 deriving instance Show TypeWithLevel
 
 data Type (l :: Nat) where
-    -- May not need promoted
-    TyPromote :: LesserLevel l l' => Type l  -> Type l'
     Type    :: Level l -> Type (Succ l)        -- ^ Universe construction
     FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
 
@@ -373,8 +371,6 @@ s .@ t = TyApp s t
 infixl 9 .@
 
 -- Trivially effectful monadic constructors
-mTyPromote :: Monad m => Type l -> m (Type (Succ l))
-mTyPromote     = return . TyPromote
 mTy :: Monad m => Level l -> m (Type (Succ l))
 mTy          = return . Type
 mFunTy :: Monad m => Type l -> Type l -> m (Type l)
@@ -402,8 +398,7 @@ mKUnion x y  = return (KUnion x y)
 
 -- Monadic algebra for types
 data TypeFold m (a :: Nat -> *) = TypeFold
-  { tfTyPromote :: forall (l :: Nat) . a l           -> m (a (Succ l))
-  , tfTy      :: forall (l :: Nat) . Level l       -> m (a (Succ l))
+  { tfTy      :: forall (l :: Nat) . Level l       -> m (a (Succ l))
   , tfFunTy   :: forall (l :: Nat) . a l -> a l    -> m (a l)
   , tfTyCon   :: forall (l :: Nat) . Id            -> m (a l)
   , tfBox     :: Coeffect -> a Zero                -> m (a Zero)
@@ -419,16 +414,13 @@ data TypeFold m (a :: Nat -> *) = TypeFold
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --(Type l)
 baseTypeFold =
-  TypeFold mTyPromote mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m l a . Monad m => TypeFold m a -> Type l -> m (a l)
 typeFoldM algebra = go
   where
    go :: Type l' -> m (a l')
-   go (TyPromote t) = do
-     t' <- go t
-     (tfTyPromote algebra) t'
    go (Type l) = (tfTy algebra) l
    go (FunTy t1 t2) = do
      t1' <- go t1
@@ -484,8 +476,7 @@ freeAtomsVars t = []
 
 instance Term (Type l) where
     freeVars = getConst . runIdentity . typeFoldM TypeFold
-      { tfTyPromote = \(Const x) -> return (Const x)
-      , tfTy      = \_ -> return (Const [])
+      { tfTy      = \_ -> return (Const [])
       , tfFunTy   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
       , tfBox     = \c (Const t) -> return $ Const (freeVars c <> t)

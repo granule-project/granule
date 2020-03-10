@@ -302,8 +302,8 @@ Kind :: { Kind }
                                   "Coeffect"  -> (TyCon (mkId "Coeffect"))
                                   "Predicate" -> (TyCon (mkId "Predicate"))
                                   s          -> tyCon s }
-  | '(' TyJuxt TyAtom ')'     { TyPromote (TyApp $2 $3) }
-  | TyJuxt TyAtom             { TyPromote (TyApp $1 $2) }
+  | '(' TyJuxt TyAtom ')'     { TyApp $2 $3 }
+  | TyJuxt TyAtom             { TyApp $1 $2 }
 
 
 Type :: { Type Zero }

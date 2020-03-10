@@ -124,8 +124,10 @@ instance Pretty (Type l) where
     pretty (TyInt n)      = show n
 
     -- Non atoms
+    {-
     pretty (TyPromote t) =
       "↑" <> prettyNested t
+    -}
 
     pretty (Type l) =
       "Type " <> pretty l

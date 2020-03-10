@@ -44,10 +44,8 @@ inferKindOfType s t = do
 
 inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type l -> Checker (Type (Succ l))
 inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM (TypeFold kPromote kTy kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase kUnion) t
+    typeFoldM (TypeFold kTy kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase kUnion) t
   where
-    --May not need promote
-    kPromote = mTyPromote
     kTy :: Level l -> Checker (Type (Succ l))
     kTy l = return $ Type $ LSucc l
 
