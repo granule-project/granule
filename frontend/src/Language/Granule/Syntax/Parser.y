@@ -302,8 +302,13 @@ Kind :: { Kind }
                                   "Coeffect"  -> (TyCon (mkId "Coeffect"))
                                   "Predicate" -> (TyCon (mkId "Predicate"))
                                   s          -> tyCon s }
-  | '(' TyJuxt TyAtom ')'     { TyApp $2 $3 }
-  | TyJuxt TyAtom             { TyApp $1 $2 }
+  | '(' TyJuxt TyAtom ')'     { case tyPromote (TyApp $2 $3) of
+                                  Just ty -> ty
+                                  Nothing -> error $ "Type at " ++ (show (getPos $1)) ++ " cannot be used as a kind" }
+
+  | TyJuxt TyAtom             { case tyPromote (TyApp $1 $2) of
+                                  Just ty -> ty
+                                  Nothing -> error $ "Type " ++ (show (TyApp $1 $2)) ++ " cannot be used as a kind" }
 
 
 Type :: { Type Zero }

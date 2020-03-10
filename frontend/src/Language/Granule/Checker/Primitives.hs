@@ -21,7 +21,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
 setElements :: [(Kind, Type Zero)]
-setElements = [(TyPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+setElements = [(TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
 kindConstructor :: [(Id, (Type (Succ One), Cardinality, Bool))]
 kindConstructor =
@@ -57,18 +57,18 @@ typeConstructors =
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, True))
     -- Effect grade types - Sessions
-    , (mkId "Session", (TyPromote (TyCon $ mkId "Com"), Nothing, True))
+    , (mkId "Session", (TyCon $ mkId "Com", Nothing, True))
     , (mkId "Com", ((tyCon "Effect"), Nothing, False))
     -- Effect grade types - IO
     , (mkId "IO", ((tyCon "Effect"), Nothing, False))
-    , (mkId "Stdout", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Stdin", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Stderr", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Open", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Read", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Write", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "IOExcept", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Close", (TyPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "Stdout", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Stdin", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Stderr", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Open", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Read", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Write", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "IOExcept", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Close", (TyCon $ mkId "IOElem", Nothing, False))
     ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
