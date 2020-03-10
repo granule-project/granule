@@ -95,6 +95,7 @@ holeRefactorExpr (LetDiamond sp a rf pat ty e1 e2) =
   LetDiamond sp a rf pat ty (holeRefactorExpr e1) (holeRefactorExpr e2)
 holeRefactorExpr (Case sp a rf e cases) =
   Case sp a rf (holeRefactorExpr e) (map (second holeRefactorExpr) cases)
+-- TODO: for maximum expressivity with holes we should recursively refacor inside values as well (as they contain exprs)
 holeRefactorExpr v@Val {} = v
 
 -- Finds potentially relevant cases for a given equation, based on spans.
