@@ -385,7 +385,7 @@ rewriteBindersInPredicate ctxt =
                   Just (ty, _) -> 
                     case tyPromote ty of
                       Just ty -> ty
-                      Nothing -> error $ "Granule bug in `rewriteBindersInPredicate`: cannot promote type " ++ pretty ty
+                      Nothing -> error $ "Granule bug in `rewriteBindersInPredicate`: cannot promote type " ++ show ty
                   Nothing -> TyVar kvar
     existsCase var k p = Exists var k p
 
