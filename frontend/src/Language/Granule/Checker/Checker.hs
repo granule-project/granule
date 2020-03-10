@@ -428,7 +428,6 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
 
   let getIdName (Id n _) = n
   let boundVariableIds = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
-  let holeCtxt = relevantSubCtxt boundVariableIds ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
 
   case unboundVariables of
@@ -440,7 +439,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      cases <- generateCases s constructors holeCtxt
+      cases <- generateCases s constructors ctxt boundVariableIds
       throw $ HoleMessage s t ctxt (tyVarContext st) cases
 
 -- Checking of constants

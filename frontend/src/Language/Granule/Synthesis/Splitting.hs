@@ -30,22 +30,27 @@ generateCases :: (?globals :: Globals)
   => Span
   -> Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Assumption
+  -> [Id]
   -> Checker ([Id], [[Pattern ()]])
-generateCases span constructors ctxt = do
+generateCases span constructors ctxt toSplit = do
+  -- Creates two subcontexts based on whether a variable should be split or not.
+  let splitCtxt = relevantSubCtxt toSplit ctxt
+  let noSplitCtxt = deleteVars ctxt toSplit
+
   -- Determines whether an assumption should be treated as linear.
   let isLinear (_, a) =
         case a of
           Discharged _ _   -> False
           Linear (Box _ _) -> False
           Linear _         -> True
-  let (linear, nonlinear) = partition isLinear ctxt
+  let (linear, nonlinear) = partition isLinear splitCtxt
 
   -- Spits linear assumptions into splittable/not-splittable. Where splittable
   -- means that it is a data constructor at the highest level.
   let (splittable', unsplittable') =
         partition (isJust . snd) $ map (second getAssumConstr) linear
   let splittable = map (second fromJust) splittable'
-  let unsplittable = map fst unsplittable'
+  let unsplittable = getCtxtIds unsplittable'
 
   -- Get the relevant constructors for the splittable variables, and then
   -- actually generate the patterns.
@@ -54,7 +59,8 @@ generateCases span constructors ctxt = do
     mapM (uncurry (buildConstructorPatterns span)) relConstructors
 
   -- Convert the unsplittables into plain variable patterns.
-  let variablePatterns = map (buildVariablePatterns span) unsplittable
+  let variablePatterns =
+        map (buildVariablePatterns span) (unsplittable ++ getCtxtIds noSplitCtxt)
 
   -- Convert the discharged types into boxed patterns.
   let boxPatterns = map (buildBoxPattern span . fst) nonlinear
