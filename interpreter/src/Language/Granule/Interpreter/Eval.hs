@@ -82,6 +82,9 @@ evalBinOp op v1 v2 = case op of
       (NumInt n1, NumInt n2) -> NumInt (n1 * n2)
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 * n2)
       _ -> evalFail
+    OpDiv -> case (v1, v2) of
+      (NumFloat n1, NumFloat n2) -> NumFloat (n1 / n2)
+      _ -> evalFail
     OpMinus -> case (v1, v2) of
       (NumInt n1, NumInt n2) -> NumInt (n1 - n2)
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 - n2)
@@ -164,16 +167,14 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
-{-
 -- Hard-coded 'scale', removed for now
-evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
-  (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
-    (Abs (PVar nullSpan $ mkId " y") Nothing (
-      letBox nullSpan (PVar nullSpan $ mkId " ye")
-         (Val nullSpan (Var (mkId " y")))
-         (Binop nullSpan
-           "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
--}
+evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
+  (Abs () (PVar nullSpan () False $ mkId " x") Nothing (Val nullSpan () False
+    (Abs () (PVar nullSpan () False $ mkId " y") Nothing (
+      letBox nullSpan (PVar nullSpan () False $ mkId " ye")
+         (Val nullSpan () False (Var () (mkId " y")))
+         (Binop nullSpan () False
+           OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
 
 evalIn ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of

@@ -452,6 +452,11 @@ checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "F
     let elaborated = Val s ty rf (NumFloat n)
     return ([], [], elaborated)
 
+-- Differentially private floats
+checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DFloat" = do
+    let elaborated = Val s ty rf (NumFloat n)
+    return ([], [], elaborated)
+
 checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
   -- If an explicit signature on the lambda was given, then check
   -- it confirms with the type being checked here
@@ -495,11 +500,26 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
 
 -- Application special case for built-in 'scale'
 -- TODO: needs more thought
-{- checkExpr defs gam pol topLevel tau
-          (App s _ (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ x))) e) | internalName v == "scale" = do
-    equalTypes s (TyCon $ mkId "Float") tau
-    checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) (TyCon $ mkId "Float")) e
--}
+checkExpr defs gam pol topLevel tau
+          (App s _ rf (App s' _ rf' (Val s'' _ rf'' (Var _ v)) (Val s3 _ rf3 (NumFloat x))) e) | internalName v == "scale" = do
+
+    let floatTy = TyCon $ mkId "DFloat"
+
+    (eq, _, subst) <- equalTypes s floatTy tau
+    if eq then do
+      -- Type check the argument
+      (gam, subst', elab) <- checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) floatTy) e
+
+      subst'' <- combineSubstitutions s subst subst'
+
+      -- Create elborated AST
+      let scaleTy = FunTy Nothing floatTy (FunTy Nothing (Box (CFloat (toRational x)) floatTy) floatTy)
+      let elab' = App s floatTy rf
+                    (App s' scaleTy rf' (Val s'' floatTy rf'' (Var floatTy v)) (Val s3 floatTy rf3 (NumFloat x))) elab
+
+      return (gam, subst'', elab')
+      else
+        throw $ TypeError { errLoc = s, tyExpected = TyCon $ mkId "DFloat", tyActual = tau }
 
 -- Application checking
 checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
@@ -852,13 +872,18 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) =
        return (ty, [(x, Discharged ty (COne k))], [], elaborated)
 
 -- Specialised application for scale
-{-
-TODO: needs thought
+{- TODO: needs thought -}
 synthExpr defs gam pol
-      (App _ _ (Val _ _ (Var _ v)) (Val _ _ (NumFloat _ r))) | internalName v == "scale" = do
-  let float = TyCon $ mkId "Float"
-  return (FunTy (Box (CFloat (toRational r)) float) float, [])
--}
+      (App s _ rf (Val s' _ rf' (Var _ v)) (Val s'' _ rf'' (NumFloat r))) | internalName v == "scale" = do
+
+  let floatTy = TyCon $ mkId "DFloat"
+
+  let scaleTyApplied = FunTy Nothing (Box (CFloat (toRational r)) floatTy) floatTy
+  let scaleTy = FunTy Nothing floatTy scaleTyApplied
+
+  let elab = App s scaleTy rf (Val s' scaleTy rf' (Var scaleTy v)) (Val s'' floatTy rf'' (NumFloat r))
+
+  return (scaleTyApplied, [], [], elab)
 
 -- Application
 synthExpr defs gam pol (App s _ rf e e') = do
