@@ -263,7 +263,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
     "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
   pretty (App _ _ _ e1 e2) =
-    pretty e1 <> " " <> prettyNested e2
+    prettyNested e1 <> " " <> prettyNested e2
 
   pretty (Binop _ _ _ op e1 e2) =
     pretty e1 <> " " <> pretty op <> " " <> pretty e2
