@@ -73,8 +73,37 @@ deriving instance Eq (Level l)
 deriving instance Show (Level l)
 deriving instance Ord (Level l)
 
+--tyPromote :: LesserLevel l l' => Type l -> Maybe (Type l')
 tyPromote :: Type l -> Maybe (Type (Succ l))
-tyPromote = error "TODO"
+tyPromote (Type l) = return $ Type (LSucc l)
+tyPromote (FunTy t1 t2) = do
+  t1 <- tyPromote t1
+  t2 <- tyPromote t2
+  return $ FunTy t1 t2
+tyPromote (TyCon i) = return $ TyCon i
+tyPromote (TyVar i) = return $ TyVar i
+tyPromote (TyApp t1 t2) = do
+  t1 <- tyPromote t1
+  t2 <- tyPromote t2
+  return $ TyApp t1 t2
+tyPromote (TyInt n) = return $ TyInt n
+tyPromote (TyInfix op t1 t2) = do
+  t1 <- tyPromote t1
+  t2 <- tyPromote t2
+  return $ TyInfix op t1 t2
+tyPromote (TySet ts) = do
+  ts <- mapM tyPromote ts
+  return $ TySet ts
+tyPromote (TyCase t ts) = do
+  t <- tyPromote t
+  ts <- mapM (\(a,b) -> extractMonad (tyPromote a, tyPromote b)) ts
+  return $ TyCase t ts
+    where
+      extractMonad (a,b) = do
+        a' <- a
+        b' <- b
+        return (a', b')
+tyPromote t = Nothing
 
 data TypeWithLevel where
   TypeWithLevel :: Type l -> TypeWithLevel
