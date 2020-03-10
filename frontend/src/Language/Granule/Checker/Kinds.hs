@@ -54,7 +54,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
      | internalName c == internalName c' = return $ TyCon c
 
     kFun (Type l) (Type l') | l == l' = return $ Type l
-    kFun (Type LZero) (TyCon (internalName -> "Protocol") = return $ TyCon (mkId "Protocol")
+    kFun (Type LZero) (TyCon (internalName -> "Protocol")) = return $ TyCon (mkId "Protocol")
     kFun (Type l) y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type l, kActual = y }
     -- kFun x expects Type LZero, but should be of any level
     kFun x _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
@@ -184,9 +184,10 @@ joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Subst
 joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (TyVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (TyVar v) = return $ Just (k, [(v, SubstK k)])
-joinKind (TyPromote t1) (TyPromote t2) = do
+joinKind t1 t2 = do
   (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
-  return $ Just (TyPromote coeffTy, [])
+  coeffTy <- tryTyPromote nullSpan coeffTy
+  return $ Just (coeffTy, [])
 
 joinKind (KUnion k1 k2) k = do
   jK1 <- joinKind k k1

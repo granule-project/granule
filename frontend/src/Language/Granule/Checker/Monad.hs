@@ -58,6 +58,12 @@ newtype Checker a = Checker
 
 type CheckerResult r = Either (NonEmpty CheckerError) r
 
+tryTyPromote :: Span -> Type l -> Checker (Type (Succ l))
+tryTyPromote s ty =
+  case tyPromote ty of
+    Just ty' -> return ty'
+    Nothing -> throw $ PromotionError s (TypeWithLevel ty)
+
 evalChecker :: CheckerState -> Checker a -> IO (CheckerResult a)
 evalChecker initialState (Checker k) = evalStateT (runExceptT k) initialState
 
