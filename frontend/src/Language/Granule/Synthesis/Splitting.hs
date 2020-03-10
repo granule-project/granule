@@ -46,7 +46,8 @@ generateCases span constructors ctxt toSplit = do
   let (linear, nonlinear) = partition isLinear splitCtxt
 
   -- Spits linear assumptions into splittable/not-splittable. Where splittable
-  -- means that it is a data constructor at the highest level.
+  -- means that it is a data constructor at the highest level (note we filtered
+  -- out box patterns in the previous step).
   let (splittable', unsplittable') =
         partition (isJust . snd) $ map (second getAssumConstr) linear
   let splittable = map (second fromJust) splittable'

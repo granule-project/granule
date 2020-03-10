@@ -427,20 +427,23 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   st <- get
 
   let getIdName (Id n _) = n
-  let boundVariableIds = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
+  let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
-    [] -> do
-      let snd3 (a, b, c) = b
-      let pats = map (second snd3) (typeConstructors st)
-      constructors <- mapM (\ (a, b) -> do
-        dc <- mapM (lookupDataConstructor s) b
-        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-        return (a, sd)) pats
-      cases <- generateCases s constructors ctxt boundVariableIds
-      throw $ HoleMessage s t ctxt (tyVarContext st) cases
+    [] ->
+      case boundVariables of
+        (_:_) -> do
+          let snd3 (a, b, c) = b
+          let pats = map (second snd3) (typeConstructors st)
+          constructors <- mapM (\ (a, b) -> do
+            dc <- mapM (lookupDataConstructor s) b
+            let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+            return (a, sd)) pats
+          cases <- generateCases s constructors ctxt boundVariables
+          throw $ HoleMessage s t ctxt (tyVarContext st) cases
+        [] -> throw $ HoleMessage s t ctxt (tyVarContext st) ([], [])
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
