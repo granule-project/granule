@@ -9,6 +9,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Types
 import Language.Granule.Utils
 
 mguCoeffectTypes :: (?globals :: Globals)
@@ -31,17 +32,19 @@ mguCoeffectTypes' s t t' | t == t' = return $ Just (t, (id, id))
 
 -- Both are variables
 mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
-  updateCoeffectType kv1 (TyPromote (TyVar kv2))
+  updateCoeffectType kv1 (TyVar kv2)
   return $ Just (TyVar kv2, (id, id))
 
 -- Left-hand side is a poly variable, but Just is concrete
 mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
-  updateCoeffectType kv1 (TyPromote coeffTy2)
+  coeffTy2 <- tryTyPromote s coeffTy2
+  updateCoeffectType kv1 coeffTy2
   return $ Just (coeffTy2, (id, id))
 
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
-  updateCoeffectType kv2 (TyPromote coeffTy1)
+  coeffTy1 <- tryTyPromote s coeffTy1
+  updateCoeffectType kv2 coeffTy1
   return $ Just (coeffTy1, (id, id))
 
 -- `Nat` can unify with `Q` to `Q`

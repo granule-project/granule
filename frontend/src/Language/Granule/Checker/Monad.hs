@@ -374,7 +374,7 @@ updateCoeffectType tyVar k = do
  where
    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
    rewriteCtxt [] = []
-   rewriteCtxt ((name, (TyVar kindVar), q) : ctxt)
+   rewriteCtxt ((name, ((TyVar kindVar), q)) : ctxt)
     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 
