@@ -45,7 +45,9 @@ isEffUnit s effTy eff =
                 (TySet []) -> return True
                 _          -> return False
         -- Unknown
-        _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = TyPromote effTy }
+        _ -> do
+            effTy' <- tryTyPromote s effTy
+            throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = effTy' }
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
 -- resource algebra

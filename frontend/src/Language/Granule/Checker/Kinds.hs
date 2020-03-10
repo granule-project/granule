@@ -54,7 +54,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
      | internalName c == internalName c' = return $ TyCon c
 
     kFun (Type l) (Type l') | l == l' = return $ Type l
-    kFun (Type LZero) (TyPromote (TyCon (internalName -> "Protocol"))) = return $ TyPromote (TyCon (mkId "Protocol"))
+    kFun (Type LZero) (TyCon (internalName -> "Protocol") = return $ TyCon (mkId "Protocol")
     kFun (Type l) y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type l, kActual = y }
     -- kFun x expects Type LZero, but should be of any level
     kFun x _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
@@ -62,7 +62,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
     kCon (internalName -> "Pure") = do
       -- Create a fresh type variable
       var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") (TyCon (mkId "Effect"))
-      return $ TyPromote $ TyVar var
+      return $ TyVar var
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of
@@ -139,8 +139,8 @@ inferKindOfTypeInContext s quantifiedVariables t =
             modify (\st -> st { tyVarContext = (mkId vark, (Type LZero, InstanceQ))
                                    : tyVarContext st })
             -- Create a fresh type variable
-            var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (TyPromote $ TyVar $ mkId vark)
-            return $ TyPromote $ TyApp (TyCon $ mkId "Set") (TyVar var)
+            var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (TyVar $ mkId vark)
+            tyPromote nullSpan $ TyApp (TyCon $ mkId "Set") (TyVar var)
 
         -- Otherwise, everything in the set has to have the same kind
         else

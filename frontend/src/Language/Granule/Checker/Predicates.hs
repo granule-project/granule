@@ -364,7 +364,7 @@ isTrivial = predFold and or (\_ lhs rhs -> rhs) (const False) id (\_ _ p -> p)
 
 -- TODO: replace with use of `substitute`
 
--- given an context mapping coeffect type variables to coeffect typ,
+-- given a context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
 rewriteBindersInPredicate :: Ctxt (Type Zero, Quantifier) -> Pred -> Pred
@@ -382,7 +382,10 @@ rewriteBindersInPredicate ctxt =
       Exists var k' p
         where
           k' = case lookup kvar ctxt of
-                  Just (ty, _) -> TyPromote ty
+                  Just (ty, _) -> 
+                    case tyPromote ty of
+                      Just ty -> ty
+                      Nothing -> error $ "Granule bug in `rewriteBindersInPredicate`: cannot promote type " ++ pretty ty
                   Nothing -> TyVar kvar
     existsCase var k p = Exists var k p
 

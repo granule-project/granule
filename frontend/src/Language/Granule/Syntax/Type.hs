@@ -67,7 +67,7 @@ data Level (l :: Nat) where
 
 class LesserLevel (l :: Nat) (l' :: Nat) where
 instance LesserLevel Zero (Succ l) where
-instance LesserLevel l l' => LesserLevel (Succ l) (Succ l')
+-- instance LesserLevel l l' => LesserLevel (Succ l) (Succ l')
 
 deriving instance Eq (Level l)
 deriving instance Show (Level l)
