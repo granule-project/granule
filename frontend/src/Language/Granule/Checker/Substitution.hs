@@ -67,7 +67,7 @@ instance Substitutable Substitution where
         <> show subst <> " maps variable `" <> show var
         <> "` to a non variable type: `" <> show t <> "`"
 
-instance Substitutable Type where
+instance VarSubstitutable l => Substitutable (Type l) where
   substitute subst = typeFoldM (baseTypeFold
                               { tfTyVar = varSubst
                               , tfBox = box
@@ -81,10 +81,23 @@ instance Substitutable Type where
         e <- substitute subst e
         mDiamond e t
 
-      varSubst v =
-         case lookup v subst of
-           Just (SubstT t) -> return t
-           _               -> mTyVar v
+      varSubst = varSubstForLevel
+
+class VarSubstitutable (l :: Level) where
+  varSubstForLevel :: Id -> Substitution -> Type l
+
+instance VarSubstitutable Zero where
+  varSubstForLevel v =
+    case lookup v subst of
+      Just (SubstT t) -> return t
+      _               -> mTyVar v
+
+instance VarSubstitutable (Succ Zero) where
+  varSubstForLevel v =
+    case lookup v subst of
+      Just (SubstK t) -> return t
+      Just (SubstT t) -> tryTyPromote nullSpan t
+      _               -> mTyVar v
 
 instance Substitutable Coeffect where
 
@@ -179,30 +192,6 @@ instance Substitutable Coeffect where
     substitute _ c@CNat{}      = return c
     substitute _ c@CFloat{}    = return c
     substitute _ c@Level{}     = return c
-
-instance Substitutable Kind where
-
-  substitute subst (TyPromote t) = do
-      t <- substitute subst t
-      return $ TyPromote t
-
-  substitute subst KType = return KType
-  substitute subst (TyCon (internalName -> "Effect")) = return KEffect
-  substitute subst (TyCon (internalName -> "Coeffect")) = return KCoeffect
-  substitute subst (TyCon (internalName -> "Predicate")) = return KPredicate
-  substitute subst (KFun c1 c2) = do
-    c1 <- substitute subst c1
-    c2 <- substitute subst c2
-    return $ KFun c1 c2
-  substitute subst (KVar v) =
-    case lookup v subst of
-      Just (SubstK k) -> return k
-      Just (SubstT t) -> return $ TyPromote t
-      _               -> return $ KVar v
-  substitute subst (KUnion k1 k2) = do
-    k1' <- substitute subst k1
-    k2' <- substitute subst k2
-    return $ KUnion k1' k2'
 
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
