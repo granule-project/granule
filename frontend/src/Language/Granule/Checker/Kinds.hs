@@ -253,9 +253,7 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
 --      return newType
 
     Just (TyVar   name) -> return $ TyVar name
-    Just (TyPromote t)  -> checkKindIsCoeffect s ctxt t
-    Just k             -> throw
-      KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = TyPromote (TyVar $ mkId "coeffectType"), kActual = k }
+    Just t  -> checkKindIsCoeffect s ctxt t
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
@@ -276,18 +274,15 @@ checkKindIsCoeffect span ctxt ty = do
   kind <- inferKindOfTypeInContext span ctxt ty
   case kind of
     k | isCoeffectKind k -> return ty
-    -- Came out as a promoted type, check that this is a coeffect
-    TyPromote k -> do
-      kind' <- inferKindOfTypeInContext span ctxt k
-      if isCoeffectKind kind'
-        then return ty
-        else throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
     TyVar v ->
       case lookup v ctxt of
         Just k | isCoeffectKind k -> return ty
         _              -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
-
-    _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
+    k -> do
+      kind' <- inferKindOfTypeInContext span ctxt k
+      if isCoeffectKind kind'
+        then return ty
+        else throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
