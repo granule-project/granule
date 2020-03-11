@@ -11,5 +11,5 @@ Found a goal: frontend/tests/cases/negative/splitting/second-arg.gr:6:11:
      a : Type
      n : ↑Nat
 
-   Case splits for n, f:
+   Case splits for f:
      n [f]

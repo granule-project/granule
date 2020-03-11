@@ -433,7 +433,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] ->
-      case boundVariables of
+      case vars of
         (_:_) -> do
           let snd3 (a, b, c) = b
           let pats = map (second snd3) (typeConstructors st)
@@ -442,8 +442,8 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
             let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
             return (a, sd)) pats
           cases <- generateCases s constructors ctxt boundVariables
-          throw $ HoleMessage s t ctxt (tyVarContext st) cases
-        [] -> throw $ HoleMessage s t ctxt (tyVarContext st) ([], [])
+          throw $ HoleMessage s t ctxt (tyVarContext st) cases boundVariables
+        [] -> throw $ HoleMessage s t ctxt (tyVarContext st) ([], []) []
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do

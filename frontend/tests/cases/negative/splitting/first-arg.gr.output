@@ -11,6 +11,6 @@ Found a goal: frontend/tests/cases/negative/splitting/first-arg.gr:6:11:
      a : Type
      n : ↑Nat
 
-   Case splits for n, f:
+   Case splits for n:
      Z      f
      (S m0) f
