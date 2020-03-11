@@ -217,7 +217,7 @@ instance Pretty DataConstr where
 instance Pretty (Pattern a) where
     pretty (PVar _ _ _ v)     = pretty v
     pretty (PWild _ _ _)      = "_"
-    pretty (PBox _ _ _ p)     = "[" <> pretty p <> "]"
+    pretty (PBox _ _ _ p)     = "[" <> prettyNested p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
     pretty (PConstr _ _ _ name args) | internalName name == "," = intercalate ", " (map prettyNested args)

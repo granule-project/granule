@@ -8,7 +8,7 @@
 
 module Language.Granule.Checker.Checker where
 
-import Control.Arrow (second)
+import Control.Arrow (first, second)
 import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
@@ -428,7 +428,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
 
   let getIdName (Id n _) = n
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
-  let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
+  let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (first getIdName) ctxt))) vars
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }

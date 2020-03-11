@@ -8,8 +8,9 @@ module Language.Granule.Checker.Substitution where
 
 import Control.Monad
 import Control.Monad.State.Strict
-import Data.Maybe (mapMaybe)
 import Data.Bifunctor.Foldable (bicataM)
+import Data.List (elemIndex, sortBy)
+import Data.Maybe (mapMaybe)
 
 import Language.Granule.Context
 import Language.Granule.Syntax.Def
@@ -294,7 +295,10 @@ instance Substitutable (Ctxt Assumption) where
 
   substitute subst ctxt = do
     (ctxt0, ctxt1) <- substCtxt subst ctxt
-    return (ctxt0 <> ctxt1)
+    let ctxtIds = getCtxtIds ctxt
+    let combined = ctxt0 <> ctxt1
+    -- Ensure that the resulting ctxt preserves the ordering of the input ctxt.
+    return $ sortBy (\ (x, _) (y, _) -> elemIndex x ctxtIds `compare` elemIndex y ctxtIds) combined
 
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
   -> Checker (Ctxt Assumption, Ctxt Assumption)
