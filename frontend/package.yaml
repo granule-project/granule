@@ -61,8 +61,17 @@ library:
   - Language.Granule.Syntax.Annotated
   - Language.Granule.Syntax.Identifiers
   - Language.Granule.Syntax.Lexer
+  - Language.Granule.Syntax.Literal
   - Language.Granule.Syntax.Parser
+  - Language.Granule.Syntax.Parser.Alex
+  - Language.Granule.Syntax.Parser.Comments
+  - Language.Granule.Syntax.Parser.Layout
+  - Language.Granule.Syntax.Parser.LexActions
+  - Language.Granule.Syntax.Parser.LookAhead
+  - Language.Granule.Syntax.Parser.Monad
+  - Language.Granule.Syntax.Parser.Tokens
   - Language.Granule.Syntax.Pattern
+  - Language.Granule.Syntax.Position
   - Language.Granule.Syntax.Pretty
   - Language.Granule.Syntax.Preprocessor
   - Language.Granule.Syntax.Preprocessor.Ascii
@@ -73,10 +82,13 @@ library:
   - Language.Granule.Synthesis.Splitting
   - Language.Granule.Synthesis.RewriteHoles
   - Language.Granule.Context
+  - Language.Granule.Util.Lens
   - Language.Granule.Utils
   dependencies:
   - array
   - containers
+  - deepseq
+  - ieee754
   - mtl >=2.2.1
   - sbv >=8.5
   - transformers >=0.5

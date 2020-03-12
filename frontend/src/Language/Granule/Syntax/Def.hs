@@ -37,6 +37,14 @@ data AST v a =
     , moduleName  :: Maybe Id
     }
 
+
+instance Semigroup (AST v a) where
+  AST dt defs imps hids m <> AST dt' defs' imps' hids' m' =
+    AST (dt <> dt') (defs <> defs') (imps <> imps') (hids <> hids') (maybe m' Just m)
+
+instance Monoid (AST v a) where
+  mempty = AST [] [] mempty mempty Nothing
+
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (AST v a)

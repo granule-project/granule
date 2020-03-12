@@ -11,6 +11,10 @@
 
 module Language.Granule.Syntax.Pretty where
 
+
+-- import Prelude hiding ((<>))
+import Data.Int (Int32)
+
 import Data.Foldable (toList)
 import Data.List
 import Language.Granule.Syntax.Expr
@@ -30,11 +34,6 @@ prettyDebug x =
 prettyNested :: (?globals :: Globals, Term a, Pretty a) => a -> String
 prettyNested e =
   if isLexicallyAtomic e then pretty e else "(" <> pretty e <> ")"
-
--- infixr 6 <+>
--- (<+>) :: String -> String -> String
--- s1 <+> s2 = s1 <> " " <> s2
-
 
 -- The pretty printer class
 class Pretty t where
@@ -308,3 +307,76 @@ instance Pretty Span where
 
 instance Pretty Pos where
     pretty (l, c) = show l <> ":" <> show c
+
+
+--------------------------------
+----- Text.Pretty drop-ins -----
+--------------------------------
+
+
+type Doc = String
+
+
+-- some helpers until Pretty uses Text.Pretty (2020-03-12, GD)
+
+vcat :: [Doc] -> Doc
+vcat = unlines
+
+
+-- fsep :: [Doc] -> Doc
+-- fsep = unwords
+
+
+-- infixl 6 <>
+-- (<>) :: Doc -> Doc -> Doc
+-- s1 <> s2 = s1 ++ s2
+
+
+infixl 6 <+>
+(<+>) :: Doc -> Doc -> Doc
+s1 <+> s2 = if s1 == empty then s2 else if s2 == empty then s1 else s1 <> " " <> s2
+
+
+colon :: Doc
+colon = ":"
+
+
+comma :: Doc
+comma = ","
+
+
+text :: String -> Doc
+text = id
+
+
+punctuate :: Doc -> [Doc] -> Doc
+punctuate = intercalate
+
+
+empty :: Doc
+empty = ""
+
+
+-- | Comma separated list, without the brackets.
+prettyList_ :: (?globals :: Globals) => Pretty a => [a] -> Doc
+prettyList_ = punctuate comma . map pretty
+
+
+enclosed :: Doc -> Doc -> Doc -> Doc
+enclosed l r w = l <> w <> r
+
+
+char :: Char -> Doc
+char = pure
+
+
+parens :: Doc -> Doc
+parens = enclosed (char '(') (char ')')
+
+
+prettyShow :: (Pretty a) => a -> String
+prettyShow = let ?globals = mempty in pretty
+
+
+instance Pretty Int32 where
+  pretty = show
