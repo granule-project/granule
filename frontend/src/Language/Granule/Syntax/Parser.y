@@ -261,6 +261,9 @@ DataConstr :: { DataConstr }
   : Constr ':' TypeScheme
        { DataConstrIndexed (getSpan' ($1,$2,$3)) (mkId $1) $3 }
 
+  | Constr
+       { DataConstrNonIndexed (getSpan' $1) (mkId $1) [] }
+
   | Constr TyParams
        { DataConstrNonIndexed (getSpan' ($1,$2)) (mkId $1) (fmap getType $2) }
 
@@ -402,8 +405,8 @@ TyAtom :: { Type' }
   | '(' Type ',' Type ')'     { mkType (getSpan' ($1,$2,$3,$4,$5)) $ TyApp (TyApp (TyCon $ mkId ",") (getType $2)) (getType $4) }
 
 TyParams :: { [Type'] }
-  : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
-  |                           { [] }
+  : TyAtom { [$1] }
+  | TyAtom TyParams { $1 : $2 } -- use right recursion for simplicity -- VBL
 
 Coeffect :: { Coeffect' }
   : INT                         { mkCoeff (getSpan' $1) $ let (LitNat _ x) = $1 in CNat (fromIntegral x) }
