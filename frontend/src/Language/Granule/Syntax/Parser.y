@@ -11,7 +11,7 @@ module Language.Granule.Syntax.Parser
   , parseTypeScheme
   ) where
 
-import Control.Arrow (first, second, (***))
+import Control.Arrow (first, second, (***), (&&&))
 import Control.Monad (forM, when, unless)
 import Control.Monad.State (get)
 import Control.Monad.Trans.Reader
@@ -35,7 +35,8 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Literal
 import Language.Granule.Syntax.Pattern
-import Language.Granule.Syntax.Position
+import Language.Granule.Syntax.Position hiding (startPos)
+import qualified Language.Granule.Syntax.Position as P
 import Language.Granule.Syntax.Parser.Monad
 import Language.Granule.Syntax.Preprocessor.Markdown
 import Language.Granule.Syntax.Preprocessor.Latex
@@ -673,23 +674,33 @@ readModuleName :: ModuleName -> String
 readModuleName [] = []
 readModuleName mn = intercalate "/" (fmap snd mn) <> ".gr"
 
-getPos :: (HasRange a) => a -> Pos
-getPos = error "getPos: TODO"
-
-getPosToSpan :: (HasRange a) => a -> (Pos, Pos)
-getPosToSpan = error "getPosToSpan: TODO"
-
 textToString :: Text -> String
 textToString = show
 
 rangeToSpan :: Range -> Span
-rangeToSpan = error "rangeToSpan: TODO"
+rangeToSpan NoRange = nullSpanNoFile
+rangeToSpan r =
+  let name = maybe "" id (rangeFile r)
+      toPos = (fromIntegral . posLine) &&& (fromIntegral . posCol)
+      sp = maybe (0, 0) toPos (rStart' r)
+      ep = maybe sp toPos (rEnd' r)
+  in Span { filename = name, startPos = sp, endPos = ep }
 
 getSpan' :: (HasRange a) => a -> Span
 getSpan' = rangeToSpan . getRange
 
+instance HasRange Span where
+  getRange s =
+    let fname = Just $ filename s
+        both f (x, y) = (f x, f y)
+        (startLine, startCol) = both fromIntegral (startPos s)
+        (endLine, endCol) = both fromIntegral (endPos s)
+        posStart = (P.startPos' ()) { posLine = startLine, posCol = startCol }
+        posEnd = (P.startPos' ()) { posLine = endLine, posCol = endCol }
+    in posToRange' fname posStart posEnd
+
 spanToRange :: Span -> Range
-spanToRange = error "spanToRange: TODO"
+spanToRange = getRange
 
 instance HasRange (EquationList v a) where
   getRange = spanToRange . equationsSpan
