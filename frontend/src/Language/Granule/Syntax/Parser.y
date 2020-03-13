@@ -192,7 +192,8 @@ Ids :: { Id -> M.Map Id Id }
 --   | Import NL Defs            { $3 { imports = insert $1 (imports $3) } }
 
 ModuleName :: { ModuleName }
-  : q_id { $1 }
+  -- at the moment, we only seem to use constructor-like names for modules (2020-03-13, GD)
+  : CONSTR { [$1] }
 
 Import :: { Import }
   : import ModuleName { readModuleName $2 }

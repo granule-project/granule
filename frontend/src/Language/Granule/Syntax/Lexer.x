@@ -319,6 +319,7 @@ tokens :-
 <0,code> data           { keyword KwData }
 <0,code> where          { keyword KwWhere }
 <0,code> module         { keyword KwModule }
+<0,code> import         { keyword KwImport }
 <0,code> hiding         { keyword KwHiding }
 <0,code> in             { keyword KwIn }
 <0,code> if             { keyword KwIf }
