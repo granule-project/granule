@@ -153,7 +153,7 @@ maybe_vclose : {- empty -} { () }
 
 TopDeclarations :: { AST () () }
 TopDeclarations
-  : {- empty -}   { AST mempty mempty mempty  mempty Nothing }
+  : {- empty -}   { mempty }
   | Declarations0 { $1 }
 
 
