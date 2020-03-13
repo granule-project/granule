@@ -134,10 +134,10 @@ File :: { AST () () }
   : TopLevel { $1 }
 
 TopLevel :: { AST () () }
-  : module Constr where TopDeclarations
+  : module Constr where Declarations0
             { $4 { moduleName = Just $ mkId $2 } }
 
-  | module Constr hiding '(' Ids ')' where TopDeclarations
+  | module Constr hiding '(' Ids ')' where Declarations0
             { let modName = mkId $2
               in $8 { moduleName = Just modName, hiddenNames = $5 modName } }
 
@@ -152,7 +152,7 @@ maybe_vclose : {- empty -} { () }
 TopDeclarations :: { AST () () }
 TopDeclarations
   : {- empty -}   { mempty }
-  | Declarations0 { $1 }
+  | topen Declarations1 close { $2 }
 
 
 -- Arbitrary declarations
@@ -565,7 +565,7 @@ Atom :: { Expr () () }
 
 -- The first token in a file decides the indentation of the top-level layout
 -- block. Or not. It will if we allow the top-level module to be omitted.
--- topen :      {- empty -}     {% pushCurrentContext }
+topen :      {- empty -}     {% pushCurrentContext }
 
 
 {-  A layout block might have to be closed by a parse error. Example:
@@ -598,15 +598,15 @@ beginImpDir : {- empty -}   {% pushLexState imp_dir }
 -- TODO: once we support parsing modules, remove the 'layout' fragment here, as
 -- this should be handled by the fact that 'where' is a layout keyword (2020-03-10)
 parseProgram :: FilePath -> String -> ParseResult (AST () ())
-parseProgram file = parseFromSrc defaultParseFlags [layout, normal] program (Just file)
+parseProgram file = parseFromSrc defaultParseFlags [normal] program (Just file)
 
 parseDefs = parseProgram
 
 parseExpr :: FilePath -> String -> ParseResult (Expr () ())
-parseExpr file = parseFromSrc defaultParseFlags [layout, normal] expr (Just file)
+parseExpr file = parseFromSrc defaultParseFlags [normal] expr (Just file)
 
 parseTypeScheme :: FilePath -> String -> ParseResult TypeScheme
-parseTypeScheme file = parseFromSrc defaultParseFlags [layout, normal] tscheme (Just file)
+parseTypeScheme file = parseFromSrc defaultParseFlags [normal] tscheme (Just file)
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseAndDoImportsAndFreshenDefs input = do
