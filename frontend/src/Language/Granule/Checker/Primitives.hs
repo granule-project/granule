@@ -10,6 +10,7 @@ import Text.RawString.QQ (r)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Parser (parseDefs)
+import Language.Granule.Syntax.Parser.Monad
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Expr (Operator(..))
@@ -394,8 +395,8 @@ builtins :: [(Id, TypeScheme)]
   (types, map unDef defs)
     where
       AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
-        Right ast -> ast
-        Left err -> error err
+        ParseOk _ ast -> ast
+        ParseFailed err -> error (show err)
 
       unDef :: Def () () -> (Id, TypeScheme)
       unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
