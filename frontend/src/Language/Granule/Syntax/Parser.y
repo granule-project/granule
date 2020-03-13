@@ -78,7 +78,6 @@ import Language.Granule.Utils
     forall { TokKeyword KwForall $$ }
     '∞'   { TokSymbol SymInfinity $$ }
     '\\'  { TokSymbol SymLambda $$ }
-    '/'  { TokSymbol SymForwardSlash $$ }
     '->'  { TokSymbol SymArrow $$ }
     '<-'  { TokSymbol SymBind $$ }
     '=>'  { TokSymbol SymConstrain $$ }
@@ -114,7 +113,6 @@ import Language.Granule.Utils
     '?'   { TokSymbol SymEmptyHole $$ }
     '{!'  { TokSymbol SymHoleStart $$ }
     '!}'  { TokSymbol SymHoleEnd $$ }
-    q_id  { TokQId $$ }
     vopen   { TokSymbol SymOpenVirtualBrace $$ }
     vclose  { TokSymbol SymCloseVirtualBrace $$ }
     vsemi   { TokSymbol SymVirtualSemi $$ }
