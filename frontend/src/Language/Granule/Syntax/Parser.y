@@ -5,6 +5,10 @@
 
 module Language.Granule.Syntax.Parser
   ( parseDefs
+  , parseAndFreshenDefs
+  , parseAndDoImportsAndFreshenDefs
+  , parseExpr
+  , parseTypeScheme
   ) where
 
 import Control.Arrow (first, second, (***))
@@ -599,6 +603,12 @@ parseProgram :: FilePath -> String -> ParseResult (AST () ())
 parseProgram file = parseFromSrc defaultParseFlags [layout, normal] program (Just file)
 
 parseDefs = parseProgram
+
+parseExpr :: FilePath -> String -> ParseResult (Expr () ())
+parseExpr file = parseFromSrc defaultParseFlags [layout, normal] expr (Just file)
+
+parseTypeScheme :: FilePath -> String -> ParseResult TypeScheme
+parseTypeScheme file = parseFromSrc defaultParseFlags [layout, normal] tscheme (Just file)
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseAndDoImportsAndFreshenDefs input = do

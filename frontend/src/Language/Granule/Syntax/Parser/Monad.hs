@@ -34,7 +34,7 @@ module Language.Granule.Syntax.Parser.Monad
 
 -- import Prelude hiding ((<>))
 
-import Control.Exception (displayException)
+import Control.Exception (Exception, displayException)
 import Control.Monad.Except (MonadError(throwError))
 import Control.Monad.State
 import Data.Int
@@ -121,6 +121,8 @@ data ParseError
     { errPath      :: !AbsolutePath
     , errIOError   :: IOError
     }
+
+instance Exception ParseError
 
 -- | Warnings for parsing.
 data ParseWarning

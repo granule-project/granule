@@ -9,7 +9,6 @@
 
 module Main where
 
-import System.Exit (die)
 import System.FilePath
 import System.Directory
 
@@ -19,13 +18,13 @@ import qualified Data.Map as M
 import qualified Language.Granule.Checker.Monad as Checker
 import Control.Exception (try)
 import Control.Monad.State
-import Control.Monad.Trans.Reader
 import qualified Control.Monad.Except as Ex
 import System.Console.Haskeline
 import System.Console.Haskeline.MonadException()
 
 import "Glob" System.FilePath.Glob (glob)
 import Language.Granule.Utils
+import Language.Granule.Syntax.Parser.Monad (ParseResult(..))
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
@@ -33,7 +32,6 @@ import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Parser
-import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
 import Language.Granule.Interpreter.Eval
@@ -137,21 +135,24 @@ handleCMD s =
       liftIO $ print $ dumpStateAux (defns st)
 
     handleLine (RunParser str) = do
-      pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens str) "interactive"
+      let pexp = parseExpr "interactive" str
       case pexp of
-        Right ast -> liftIO $ print ast
-        Left e -> do
+        ParseOk _ ast -> liftIO $ print ast
+        ParseFailed e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
-          pts <- liftIO' $ try $ either die return $ runReaderT (tscheme $ scanTokens str) "interactive"
+          let pts = parseTypeScheme "interactive" str
           case pts of
-            Right ts -> liftIO $ print ts
-            Left err -> do
+            ParseOk _ ts -> liftIO $ print ts
+            ParseFailed err -> do
               st <- get
               Ex.throwError (ParseError err (files st))
               Ex.throwError (ParseError e (files st))
 
     handleLine (RunLexer str) = do
-      liftIO $ print (scanTokens str)
+      liftIO $ print "Lexing action currently disabled."
+      -- I've disabled this for now as we don't have a super easy way of generating
+      -- the list of tokens to print. (2020-03-13, GD).
+      -- liftIO $ print (scanTokens str)
 
     handleLine (ShowDef term) = do
       st <- get
@@ -222,10 +223,10 @@ handleCMD s =
 parseExpression :: (?globals::Globals) => String -> REPLStateIO (Expr () ())
 parseExpression exprString = do
   -- Check that the expression is well-typed first
-  case runReaderT (expr $ scanTokens exprString) "interactive" of
+  case parseExpr "interactive" exprString of
     -- Not a syntactically well-formed term
-    Left err -> Ex.throwError (ParseError' err)
-    Right exprAst -> return exprAst
+    ParseFailed err -> Ex.throwError (ParseError' err)
+    ParseOk _ exprAst -> pure exprAst
 
 synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either TypeScheme Kind)
 synthTypeFromInputExpr exprAst = do
