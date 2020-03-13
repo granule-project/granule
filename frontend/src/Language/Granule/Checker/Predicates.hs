@@ -177,7 +177,7 @@ instance Pretty Constraint where
       case k of
         -- Nat is discrete
         TyCon (internalName -> "Nat") -> "(" <> pretty c1 <> " = " <> pretty c2 <> ")"
-        _ -> "(" <> pretty c1 <> " ≤ " <> pretty c2 <> ")" -- @" <> show s
+        _ -> "(" <> pretty c1 <> " ≤ " <> pretty c2 <> ")" -- <> " @ " <> pretty k
 
     pretty (Lub _ c1 c2 c3 _) =
       "(" <> pretty c1 <> " ⊔ " <> pretty c2 <> " = " <> pretty c3 <> ")"

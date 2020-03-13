@@ -448,7 +448,7 @@ data CheckerError
   | UnificationDisallowed
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind, tyIsConcrete :: Bool }
   | UnificationFailGeneric
     { errLoc :: Span, errSubst1 :: Substitutors, errSubst2 :: Substitutors }
   | OccursCheckFail
@@ -725,8 +725,8 @@ instance UserMsg CheckerError where
     = "Trying to unify `" <> pretty errSubst1 <> "` and `" <> pretty errSubst2 <> "`"
 
   msg UnificationFail{..}
-    = "Cannot unify universally quantified type variable `" <> pretty errVar <> "`"
-    <> "` of kind `" <> pretty errKind <> "` with a concrete type `" <> pretty errTy <> "`"
+    = "Cannot unify universally quantified type variable `" <> pretty errVar
+    <> "` of kind `" <> pretty errKind <> "` with " <> (if tyIsConcrete then "a concrete type " else "") <> "`" <> pretty errTy <> "`"
 
   msg SessionDualityError{..}
     = "Session type `" <> pretty errTy1 <> "` is not dual to `" <> pretty errTy2 <> "`"

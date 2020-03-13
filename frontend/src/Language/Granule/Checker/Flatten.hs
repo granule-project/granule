@@ -4,10 +4,12 @@
 module Language.Granule.Checker.Flatten
           (mguCoeffectTypes, flattenable) where
 
+import Control.Monad.State.Strict
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Predicates
 import Language.Granule.Utils
 
 mguCoeffectTypes :: (?globals :: Globals)
@@ -30,18 +32,47 @@ mguCoeffectTypes' s t t' | t == t' = return $ Just (t, (id, id))
 
 -- Both are variables
 mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
-  updateCoeffectType kv1 (KVar kv2)
-  return $ Just (TyVar kv2, (id, id))
+  st <- get
+  case (lookup kv1 (tyVarContext st), lookup kv2 (tyVarContext st))  of
+    (Nothing, _) -> throw $ UnboundVariableError s kv1
+    (_, Nothing) -> throw $ UnboundVariableError s kv2
+    (Just (KCoeffect, _), Just (KCoeffect, InstanceQ)) -> do
+      updateCoeffectType kv2 (KVar kv1)
+      return $ Just (TyVar kv1, (id, id))
+
+    (Just (KCoeffect, InstanceQ), Just (KCoeffect, _)) -> do
+      updateCoeffectType kv1 (KVar kv2)
+      return $ Just (TyVar kv2, (id, id))
+
+    (Just (KCoeffect, ForallQ), Just (KCoeffect, ForallQ)) -> do
+      throw $ UnificationFail s kv2 (TyVar kv1) KCoeffect False
+
+    (Just (KCoeffect, _), Just (k, _)) -> throw $ KindMismatch s Nothing KCoeffect k
+    (Just (k, _), Just (_, _))         -> throw $ KindMismatch s Nothing KCoeffect k
+
 
 -- Left-hand side is a poly variable, but Just is concrete
 mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
-  updateCoeffectType kv1 (promoteTypeToKind coeffTy2)
-  return $ Just (coeffTy2, (id, id))
+  st <- get
+  case lookup kv1 (tyVarContext st) of
+    Nothing -> throw $ UnboundVariableError s kv1
+    Just (k, ForallQ) ->
+      throw $ UnificationFail s kv1 coeffTy2 k True
+    Just (k, _) -> do -- InstanceQ or BoundQ
+      updateCoeffectType kv1 (promoteTypeToKind coeffTy2)
+      return $ Just (coeffTy2, (id, id))
 
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
-  updateCoeffectType kv2 (promoteTypeToKind coeffTy1)
-  return $ Just (coeffTy1, (id, id))
+
+  st <- get
+  case lookup kv2 (tyVarContext st) of
+    Nothing -> throw $ UnboundVariableError s kv2
+    Just (k, ForallQ) ->
+      throw $ UnificationFail s kv2 coeffTy1 k True
+    Just (k, _) -> do -- InstanceQ or BoundQ
+      updateCoeffectType kv2 (promoteTypeToKind coeffTy1)
+      return $ Just (coeffTy1, (id, id))
 
 -- `Nat` can unify with `Q` to `Q`
 mguCoeffectTypes' s (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =
