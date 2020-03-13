@@ -345,7 +345,6 @@ tokens :-
 <0,code> ")"            { symbol SymCloseParen }
 <0,code> "["            { symbol SymOpenBracket }
 <0,code> "]"            { symbol SymCloseBracket }
-<0,code> "()"           { symbol SymAbsurd }
 <0,code> "->"           { symbol SymArrow }
 <0,code> "*"            { symbol SymStar }
 <0,code> "+"            { symbol SymPlus }

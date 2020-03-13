@@ -26,7 +26,7 @@ data Symbol
         | SymOpenParen        | SymCloseParen
         | SymOpenBrace        | SymCloseBrace
         | SymOpenVirtualBrace | SymCloseVirtualBrace
-        | SymPlus | SymStar | SymAbsurd | SymComma | SymDoubleColon
+        | SymPlus | SymStar | SymComma | SymDoubleColon
         | SymOpenBracket | SymCloseBracket
         | SymBoxLeft | SymBoxRight
         | SymConstrain | SymSub | SymLangle | SymRangle
