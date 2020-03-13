@@ -234,6 +234,8 @@ $digit       = 0-9
 $hexdigit    = [ $digit a-f A-F ]
 -- $alpha       = [ A-Z a-z _ ]
 $alpha  = [a-zA-Z\_\-\=]
+$lower  = [a-z]
+$upper  = [A-Z]
 -- $op          = [ \- \! \# \$ \% \& \* \+ \/ \< \= \> \^ \| \~ \? \` \[ \] \, \: ]
 -- $idstart     = [ $digit $alpha $op ]
 -- $idchar      = [ $idstart ' \\ ]
@@ -250,8 +252,10 @@ $white_nonl  = $white_notab # \n
 $letter = [a-zA-Z]
 -- $eol    = [\n]
 $alphanum  = [$alpha $digit \_]
-@ident      = $letter ($alphanum | \')*
+$fruit = [\127815-\127827] -- 🍇🍈🍉🍊🍋🍌🍍🍎🍏🍐🍑🍒🍓
+@ident    = $lower ($alphanum | \')* | $fruit
 @q_ident    = (@ident \.)* @ident
+@constr = ($upper ($alphanum | \')* | \(\))
 
 -- A name can't start with \x (to allow \x -> x).
 -- Bug in alex: [ _ op ]+ doesn't seem to work!
@@ -351,6 +355,9 @@ tokens :-
 
 -- Literals
 <0,code> @integer       { literal' integer LitNat }
+
+-- Data and type constructor identifiers
+<0,code,imp_dir_> @constr      { conIdentifier }
 
 -- Identifiers
 <0,code,imp_dir_> @q_ident      { identifier }

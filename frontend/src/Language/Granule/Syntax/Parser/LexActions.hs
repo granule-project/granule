@@ -14,7 +14,7 @@ module Language.Granule.Syntax.Parser.LexActions
     , begin_, end_
     , lexError
       -- ** Specialized actions
-    , keyword, symbol, identifier, literal, literal', integer
+    , keyword, symbol, identifier, conIdentifier, literal, literal', integer
       -- * Lex predicates
     , followedBy, eof, inState
     ) where
@@ -221,6 +221,31 @@ qualified tok =
             []  -> lexError "lex error on .."
             [x] -> return $ tok $ Left  x
             xs  -> return $ tok $ Right xs
+    where
+        -- Compute the ranges for the substrings (separated by '.') of
+        -- a name. Dots are included: the intervals generated for
+        -- "A.B.x" correspond to "A.", "B." and "x".
+        mkName :: Interval -> [String] -> [(Interval, String)]
+        mkName _ []     = []
+        mkName i [x]    = [(i, x)]
+        mkName i (x:xs) = (i0, x) : mkName i1 xs
+            where
+                p0 = iStart i
+                p1 = iEnd i
+                p' = movePos (movePosByString p0 x) '.'
+                i0 = Interval p0 p'
+                i1 = Interval p' p1
+
+
+-- | Parse a type/data constructor.
+conIdentifier :: LexAction Token
+conIdentifier =
+    token $ \s ->
+    do  i <- getParseInterval
+        case mkName i $ wordsBy (=='.') s of
+            []  -> lexError "lex error on .."
+            [x] -> pure $ TokConstr x
+            xs  -> lexError "qualified constructor names not yet supported in lexing..."
     where
         -- Compute the ranges for the substrings (separated by '.') of
         -- a name. Dots are included: the intervals generated for

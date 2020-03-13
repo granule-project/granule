@@ -23,6 +23,7 @@ end_      :: LexAction Token
 keyword    :: Keyword -> LexAction Token
 symbol     :: Symbol -> LexAction Token
 identifier :: LexAction Token
+conIdentifier :: LexAction Token
 literal    :: Read a => (Range -> a -> Literal) -> LexAction Token
 literal'   :: (String -> a) -> (Range -> a -> Literal) -> LexAction Token
 integer    :: String -> Integer
