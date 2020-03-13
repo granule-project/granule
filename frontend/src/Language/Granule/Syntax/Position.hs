@@ -321,6 +321,11 @@ instance (HasRange a, HasRange b, HasRange c, HasRange d, HasRange e, HasRange f
 instance (HasRange a, HasRange b, HasRange c, HasRange d, HasRange e, HasRange f, HasRange g) => HasRange (a,b,c,d,e,f,g) where
     getRange (x,y,z,w,v,u,t) = getRange (x,(y,(z,(w,(v,(u,t))))))
 
+-- | Precondition: The ranges of the tuple elements must point to the
+-- same file (or be empty).
+instance (HasRange a, HasRange b, HasRange c, HasRange d, HasRange e, HasRange f, HasRange g, HasRange h) => HasRange (a,b,c,d,e,f,g,h) where
+    getRange (x,y,z,w,v,u,t,s) = getRange (x,(y,(z,(w,(v,(u,(t,s)))))))
+
 instance HasRange a => HasRange (Maybe a) where
     getRange = maybe noRange getRange
 
