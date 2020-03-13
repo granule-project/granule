@@ -43,7 +43,7 @@ import Language.Granule.Syntax.Preprocessor.Latex
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Parser.Tokens
-import Language.Granule.Utils hiding (mkSpan)
+import Language.Granule.Utils
 
 }
 
@@ -593,11 +593,6 @@ beginImpDir : {- empty -}   {% pushLexState imp_dir }
 
 {
 
-mkSpan :: (Pos, Pos) -> Parser Span
-mkSpan (start, end) = do
-  filename <- maybe "" id . parseSrcFile <$> get
-  return $ Span start end filename
-
 -- TODO: once we support parsing modules, remove the 'layout' fragment here, as
 -- this should be handled by the fact that 'where' is a layout keyword (2020-03-10)
 parseProgram :: FilePath -> String -> ParseResult (AST () ())
@@ -656,26 +651,10 @@ parseDefsAndDoImports input = do
               (fromList todo <> imports')
               (AST (dds' <> dds) (defs' <> defs) (insert i done) (hidden `M.union` hidden') name)
 
-failWithMsg :: String -> IO a
-failWithMsg msg = putStrLn msg >> exitFailure
-
-lastSpan [] = fst $ nullSpanLocs
-lastSpan xs = getEnd . snd . last $ xs
-
-lastSpan' [] = fst $ nullSpanLocs
-lastSpan' xs = endPos $ getSpan (last xs)
-
-fst3 (a, b, c) = a
-snd3 (a, b, c) = b
-thd3 (a, b, c) = c
-
 type ModuleName = [(Interval, String)]
 readModuleName :: ModuleName -> String
 readModuleName [] = []
 readModuleName mn = intercalate "/" (fmap snd mn) <> ".gr"
-
-textToString :: Text -> String
-textToString = show
 
 rangeToSpan :: Range -> Span
 rangeToSpan NoRange = nullSpanNoFile
@@ -719,6 +698,10 @@ mkDataDecl s n ctx k = DataDecl s (mkId n) (fmap (getId *** getKind) ctx) (fmap 
 
 mkForall :: Span -> [(Id', Kind')] -> [Type'] -> Type' -> TypeScheme
 mkForall s iks ts t = Forall s (fmap (mkId *** getKind) iks) (fmap getType ts) (getType t)
+
+
+failWithMsg :: String -> IO a
+failWithMsg msg = putStrLn msg >> exitFailure
 
 
 failWithErr :: ParseError -> _
