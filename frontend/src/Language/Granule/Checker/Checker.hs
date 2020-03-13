@@ -552,8 +552,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
             -- Otherwise we need to discharge only things that get used
             else freeVars e
 
-    gamF    <- discToFreshVarsIn s vars gam demand
-    (gam', subst, elaboratedE) <- checkExpr defs gamF pol False tau e
+    (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
     -- Causes a promotion of any typing assumptions that came from variable
     -- inside a guard from an enclosing case that have kind Level
@@ -926,9 +925,7 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
    var <- freshTyVarInContext (mkId $ "prom_[" <> pretty (startPos s) <> "]") (KPromote $ TyVar $ mkId vark)
 
-   gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
-
-   (t, gam', subst, elaboratedE) <- synthExpr defs gamF pol e
+   (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
@@ -1300,22 +1297,6 @@ relateByLUB s (idX, _) (idY, _) (_, _) =
   if idX == idY
     then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
     else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
-
--- Replace all top-level discharged coeffects with a variable
--- and derelict anything else
--- but add a var
-discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption -> Coeffect
-  -> Checker (Ctxt Assumption)
-discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
-  where
-    toFreshVar (var, Discharged t c) = do
-      (coeffTy, _) <- mguCoeffectTypesFromCoeffects s c coeffect
-      return (var, Discharged t (CSig c coeffTy))
-
-    toFreshVar (var, Linear t) = do
-      coeffTy <- inferCoeffectType s coeffect
-      return (var, Discharged t (COne coeffTy))
-
 
 -- `freshVarsIn names ctxt` creates a new context with
 -- all the variables names in `ctxt` that appear in the list
