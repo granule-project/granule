@@ -28,7 +28,8 @@ multAll s vars c ((name, Linear t) : ctxt) | name `elem` vars = do
 
 multAll s vars c ((name, Discharged t c') : ctxt) | name `elem` vars = do
     ctxt' <- multAll s vars c ctxt
-    (_, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+    -- TODO: do we want to throw away the subst?
+    (_, _, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
     return $ (name, Discharged t ((inj1 c) `CTimes` (inj2 c'))) : ctxt'
 
 -- Ignore linear and non-relevant variables

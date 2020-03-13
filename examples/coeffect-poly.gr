@@ -4,9 +4,12 @@
 cp : forall {a : Type, c : Coeffect} . a [(1 + 1):c] -> (a × a)
 cp [x] = (x, x)
 
+cpUse : forall {a : Type} . a [2] -> (a, a)
+cpUse = cp
+
 poly : forall {a : Type, k : Coeffect, c : k} . a [ c * ((1 + 1):k) ] -> (a × a) [c]
 poly [x] = [(x, x)]
 
--- equivalent
+-- -- equivalent
 cp2 : forall {a : Type, c : Coeffect} . a [2:c] -> (a × a)
 cp2 [x] = (x,x)

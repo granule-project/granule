@@ -160,8 +160,8 @@ joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (KVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (KVar v) = return $ Just (k, [(v, SubstK k)])
 joinKind (KPromote t1) (KPromote t2) = do
-  (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
-  return $ Just (KPromote coeffTy, [])
+  (coeffTy, subst, _) <- mguCoeffectTypes nullSpan t1 t2
+  return $ Just (KPromote coeffTy, subst)
 
 joinKind (KUnion k1 k2) k = do
   jK1 <- joinKind k k1
@@ -186,33 +186,34 @@ hasLub k1 k2 = do
     Just _  -> return True
 
 -- | Infer the type of ta coeffect term (giving its span as well)
-inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker Type
+inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker (Type, Substitution)
 inferCoeffectType s c = do
   st <- get
   inferCoeffectTypeInContext s (map (\(id, (k, _)) -> (id, k)) (tyVarContext st)) c
 
-inferCoeffectTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Coeffect -> Checker Type
+inferCoeffectTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Coeffect -> Checker (Type, Substitution)
 -- Coeffect constants have an obvious kind
-inferCoeffectTypeInContext _ _ (Level _)         = return $ TyCon $ mkId "Level"
-inferCoeffectTypeInContext _ _ (CNat _)          = return $ TyCon $ mkId "Nat"
-inferCoeffectTypeInContext _ _ (CFloat _)        = return $ TyCon $ mkId "Q"
-inferCoeffectTypeInContext _ _ (CSet _)          = return $ TyCon $ mkId "Set"
+inferCoeffectTypeInContext _ _ (Level _)         = return $ (TyCon $ mkId "Level", [])
+inferCoeffectTypeInContext _ _ (CNat _)          = return $ (TyCon $ mkId "Nat", [])
+inferCoeffectTypeInContext _ _ (CFloat _)        = return $ (TyCon $ mkId "Q", [])
+inferCoeffectTypeInContext _ _ (CSet _)          = return $ (TyCon $ mkId "Set", [])
 inferCoeffectTypeInContext s ctxt (CProduct c1 c2)    = do
-  k1 <- inferCoeffectTypeInContext s ctxt c1
-  k2 <- inferCoeffectTypeInContext s ctxt c2
-  return $ TyApp (TyApp (TyCon $ mkId "×") k1) k2
+  (k1, subst1) <- inferCoeffectTypeInContext s ctxt c1
+  (k2, subst2) <- inferCoeffectTypeInContext s ctxt c2
+  -- TODO: need to combine subst1 and subst2, but cannot do combine substitution here
+  return $ (TyApp (TyApp (TyCon $ mkId "×") k1) k2, subst2)
 
 inferCoeffectTypeInContext s ctxt (CInterval c1 c2)    = do
-  (k, _) <- mguCoeffectTypesFromCoeffects s c1 c2
-  return $ TyApp (TyCon $ mkId "Interval") k
+  (k, substitution, _) <- mguCoeffectTypesFromCoeffects s c1 c2
+  return $ (TyApp (TyCon $ mkId "Interval") k, substitution)
 
 -- Take the join for compound coeffect epxressions
-inferCoeffectTypeInContext s _ (CPlus c c')  = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
-inferCoeffectTypeInContext s _ (CMinus c c') = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
-inferCoeffectTypeInContext s _ (CTimes c c') = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
-inferCoeffectTypeInContext s _ (CMeet c c')  = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
-inferCoeffectTypeInContext s _ (CJoin c c')  = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
-inferCoeffectTypeInContext s _ (CExpon c c') = fmap fst $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CPlus c c')  = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CMinus c c') = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CTimes c c') = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CMeet c c')  = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CJoin c c')  = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CExpon c c') = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
 
 -- Coeffect variables should have a type in the cvar->kind context
 inferCoeffectTypeInContext s ctxt (CVar cvar) = do
@@ -226,24 +227,27 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
 --      put (state { uniqueVarId = uniqueVarId state + 1 })
 --      return newType
 
-    Just (KVar   name) -> return $ TyVar name
-    Just (KPromote t)  -> checkKindIsCoeffect s ctxt t
+    Just (KVar   name) -> return $ (TyVar name, [])
+    Just (KPromote t)  -> checkKindIsCoeffect s ctxt t  >>= (\t -> return (t, []))
     Just k             -> throw
       KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = KPromote (TyVar $ mkId "coeffectType"), kActual = k }
 
-inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
-inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
-inferCoeffectTypeInContext s ctxt (CInfinity (Just t)) = checkKindIsCoeffect s ctxt t
+inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
+inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
+inferCoeffectTypeInContext s ctxt (CInfinity (Just t)) = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
 -- Unknown infinity defaults to the interval of extended nats version
-inferCoeffectTypeInContext s ctxt (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat)
-inferCoeffectTypeInContext s ctxt (CSig _ t) = checkKindIsCoeffect s ctxt t
+inferCoeffectTypeInContext s ctxt (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat, [])
+inferCoeffectTypeInContext s ctxt (CSig _ t) = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
+
+fst2 :: (a, b, c) -> (a, b)
+fst2 (x, y, _) = (x, y)
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)
-                            => Span -> Assumption -> Checker (Maybe Type)
-inferCoeffectTypeAssumption _ (Linear _) = return Nothing
+                            => Span -> Assumption -> Checker (Maybe Type, Substitution)
+inferCoeffectTypeAssumption _ (Linear _) = return (Nothing, [])
 inferCoeffectTypeAssumption s (Discharged _ c) = do
-    t <- inferCoeffectType s c
-    return $ Just t
+    (t, subst) <- inferCoeffectType s c
+    return $ (Just t, subst)
 
 checkKindIsCoeffect :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Type
 checkKindIsCoeffect span ctxt ty = do
@@ -267,10 +271,11 @@ checkKindIsCoeffect span ctxt ty = do
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
 mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
-                 => Span -> Coeffect -> Coeffect -> Checker (Type, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+                 => Span -> Coeffect -> Coeffect -> Checker (Type, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
-  coeffTy1 <- inferCoeffectType s c1
-  coeffTy2 <- inferCoeffectType s c2
+  -- TODO: Need to not throw away the substitution here
+  (coeffTy1, _) <- inferCoeffectType s c1
+  (coeffTy2, _) <- inferCoeffectType s c2
   mguCoeffectTypes s coeffTy1 coeffTy2
 
 -- Given a type term, works out if its kind is actually an effect type (promoted)

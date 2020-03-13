@@ -371,7 +371,7 @@ Coeffect :: { Coeffect }
   | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { CSig $1 $3 }
   | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
 
 Set :: { [(String, Type)] }

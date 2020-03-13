@@ -152,19 +152,19 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp = do
   debugM "equalTypesRelatedCoeffectsInner (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
   -- Unify the coeffect kinds of the two coeffects
-  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- subst <- unify c c'
 
   -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
+  c' <- substitute subst c'
+  c  <- substitute subst c
+  kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
 
-  equalTypesRelatedCoeffects s rel t t' sp
-  --(eq, subst') <- equalTypesRelatedCoeffectsInner s rel uS t t' sp
-  --case subst of
-  --  Just subst -> do
---      substFinal <- combineSubstitutions s subst subst'
---      return (eq, substFinal)
-  --  Nothing -> return (False, [])
+  (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp
+
+  substU <- combineSubstitutions s subst subst'
+  return (eq, substU)
 
 equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ | n == m = do
   checkerState <- get
@@ -429,7 +429,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
   return (Diamond ej tj)
 
 joinTypes s (Box c t) (Box c' t') = do
-  (coeffTy, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  (coeffTy, _, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- Create a fresh coeffect variable
   topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
