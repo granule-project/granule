@@ -143,7 +143,7 @@ TopLevel :: { AST () () }
             { let modName = mkId $2
               in $8 { moduleName = Just modName, hiddenNames = $5 modName } }
 
-  | Declarations { $1 }
+  | TopDeclarations { $1 }
 
 
 maybe_vclose :: { () }
