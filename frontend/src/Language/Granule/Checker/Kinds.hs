@@ -14,7 +14,6 @@ module Language.Granule.Checker.Kinds (
                     , promoteTypeToKind
                     , demoteKindToType
                     , isEffectType
-                    , isEffectTypeFromKind
                     , isEffectKind
                     , isCoeffectKind) where
 
@@ -81,10 +80,9 @@ inferKindOfTypeInContext s quantifiedVariables t =
     kBox _ x = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
 
     kDiamond effK (Type LZero) = do
-      effTyM <- isEffectTypeFromKind s effK
-      case effTyM of
-        Right effTy -> return $ Type LZero
-        Left otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = (TyCon (mkId "Effect")), kActual = otherk }
+      if isEffectKind effK
+        then return $ Type LZero
+        else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = (TyCon (mkId "Effect")), kActual = effK }
 
     kDiamond _ x     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
 
@@ -297,17 +295,7 @@ mguCoeffectTypesFromCoeffects s c1 c2 = do
 -- Given a type term, works out if its kind is actually an effect type (promoted)
 -- if so, returns `Right effTy` where `effTy` is the effect type
 -- otherwise, returns `Left k` where `k` is the kind of the original type term
-isEffectType :: (?globals :: Globals) => Span -> Type Zero -> Checker (Either Kind (Type Zero))
+isEffectType :: (?globals :: Globals) => Span -> Type Zero -> Checker Bool
 isEffectType s ty = do
     kind <- inferKindOfType s ty
-    isEffectTypeFromKind s kind
-
-isEffectTypeFromKind :: (?globals :: Globals) => Span -> Kind -> Checker (Either Kind (Type Zero))
-isEffectTypeFromKind s kind =
-    case kind of
-        TyPromote effTy -> do
-            kind' <- inferKindOfType s effTy
-            if isEffectKind kind'
-                then return $ Right effTy
-                else return $ Left kind
-        _ -> return $ Left kind
+    return $ isEffectKind kind

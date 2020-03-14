@@ -320,14 +320,13 @@ equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp = do
   return (one && two, unifiers)
 
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp = do
-  effTyM <- isEffectTypeFromKind s k
-  case effTyM of
-    Right effTy -> do
+  if isEffectKind k
+    then do
       -- If the kind of this equality is Effect
       -- then use effect equality (and possible approximation)
       eq <- effApproximates s effTy t1 t2
       return (eq, [])
-    Left k ->
+    else
       -- Look to see if we are doing equality on sets that are not effects
       case (t1, t2) of
         -- If so do set equality (no approximation)
@@ -473,20 +472,20 @@ joinTypes s t (TyVar _) = return t
 
 joinTypes s t1 t2 = do
     -- See if the two types are actually effects and if so do the join
-    mefTy1 <- isEffectType s t1
-    mefTy2 <- isEffectType s t2
-    case mefTy1 of
-        Right efTy1 ->
-          case mefTy2 of
-            Right efTy2 -> do
-                -- Check that the types of the effect terms match
-                (eq, _, u) <- equalTypes s efTy1 efTy2
-                -- If equal, do the upper bound
-                if eq
-                    then do effectUpperBound s efTy1 t1 t2
-                    else throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = TyPromote efTy1, kActual = TyPromote efTy2 }
-            Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
-        Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+    ef1 <- isEffectType s t1
+    ef2 <- isEffectType s t2
+    if ef1 && ef2
+      then do
+        -- Check that the types of the effect terms match
+        (eq, _, u) <- equalTypes s t1 t2
+        -- If equal, do the upper bound
+        if eq
+          then do effectUpperBound s t1 t1 t2
+          else do
+            efTy1 <- tryTyPromote t1
+            efTy2 <- tryTyPromote t2
+            throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = efTy1, kActual = efTy2 }
+      else throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 -- TODO: eventually merge this with joinKind
 equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker (Bool, Kind, Substitution)
@@ -509,21 +508,28 @@ equalKinds sp k1 k2 = do
       Just (k, u) -> return (True, k, u)
       Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
 
-twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
+twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type Zero -> Type Zero -> Checker (Type Zero, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
-    mefTy1 <- isEffectType s ef1
-    mefTy2 <- isEffectType s ef2
-    case mefTy1 of
-      Right efTy1 ->
-        case mefTy2 of
-          Right efTy2 -> do
+    mef1 <- isEffectType s ef1
+    mef2 <- isEffectType s ef2
+    if mef1
+      then do
+        if mef2
+          then do
             -- Check that the types of the effect terms match
-            (eq, _, u) <- equalTypes s efTy1 efTy2
+            (eq, _, u) <- equalTypes s ef1 ef2
             if eq then do
-              return (efTy1, u)
-            else throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = TyPromote efTy1, kActual = TyPromote efTy2 }
-          Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
-      Left k -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
+              return (ef1, u)
+            else do
+              efTy1' <- tryTyPromote s ef1
+              efTy2' <- tryTyPromote s ef2
+              throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = efTy1', kActual = efTy2' }
+          else do
+            k <- inferKindOfType s ef2
+            throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
+      else do
+        k <- inferKindOfType s ef1
+        throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
 
 -- | Find out if a type is indexed
 isIndexedType :: Type -> Checker Bool
