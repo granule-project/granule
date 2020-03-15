@@ -738,7 +738,11 @@ instance UserMsg CheckerError where
 
   msg ExpectedEffectType{..}
     = "Expected a type of the form `a <eff>` but got `"
-    <> pretty errTy <> "` in subject of let"
+    <> pretty errTy
+
+    msg ExpectedOptionalEffectType{..}
+    = "Expected a type of the form `a <eff>[0..1]` but got `"
+    <> pretty errTy
 
   msg LhsOfApplicationNotAFunction{..}
     = "Expected a function type on the left-hand side of an application, but got `"

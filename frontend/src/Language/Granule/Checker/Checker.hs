@@ -489,56 +489,55 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
             -> True
           _ -> False
 
-checkExpr defs gam pol True tau (TryCatch s a e1 pat mty e2 e3) = do
+checkExpr defs gam pol True tau (TryCatch s a e1 p mty e2 e3) = do
+  (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
-synth1 <- synthExpr defs gam pol (LetDiamond s a p mty e1 e2)
-  case synth1 of 
-    Nothing -> return Nothing
-    Just (t1, gam1, subst1, elaborated1) -> 
+  -- Check that a graded possibility type was inferred
+  (ef1, ty1) <- case sig of
+      ty1 @ (Box (Diamond ef1) opt) -> 
+        if equalTypes opt (@ CInterval (@ CNat 0) (@ CNat 1))
+        then return (ef1, ty1)
+        else throw LinearityError{ errLoc = s, linearityMismatch = LinearUsedNonLinearly}
+      t -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = t }
 
-      
+  -- Type clauses in the context of the binders from the pattern
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  pIrrefutable <- isIrrefutable s ty1 p
+  unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
+  (tau2, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+  (tau3, gam3, subst3, elaborated3) <- synthExpr defs (binders <> gam) pol e3
 
-  --get f from t1
-    f' <- Nothing
+  -- check e2 and e2 are diamonds
+  (ef2, ty2) <- case tau2 of
+      Diamond ef2 ty2 -> return (ef2, ty2, ef3, ty3)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
+  (ef3, ty3) <- case tau3 of
+      Diamond ef3 ty3 -> return (ef3, ty3)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
+  
+  optionalSigEquality s optionalTySig ty1
 
-        (t2, gam2, subst2, elaborated2) <- synthExpr defs gam pol e2
-        (t3, gam3, subst3, elaborated3) <- synthExpr defs gam pol e3
-        
-        gam' <- ctxtPlus gam1 (joinCtxts gam2 gam3)
-          if gam != gam' then return Nothing
-          else 
-            if (t2 != t3) then return Nothing 
-            else
-              if (tau == (effectMult f' g)) then
-                return True
-              else 
-                return Nothing
+  -- linearity check for e2 and e3
+  ctxtEquals s (gam2 `intersectCtxts` binders) binders
+  ctxtEquals s (gam3 `intersectCtxts` binders) binders
 
-          
+--contexts/binding?????? TODO
+  gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
+  gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
+  gam' <- gamNew2
 
+ --resulting effect type
+  (g, subst') <-  twoEqualEffectTypes s ef2 ef3
+  (efTy, subst'') <- twoEqualEffectTypes s (Handled ef1) g
+  ef <- effectMult s efTy (Handled ef1) g
+  let t = Diamond ef ty2
 
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst', subst'']
+  -- Synth subst
+  t' <- substitute substP t
 
-
-  --(effects of tau) -uncombinate/difference- (handled effects of t1) should be (effects of t2)
-
-  --gam2 <- ctxtPlus gam2 gam3  
-  -- add pat of type t1 to the context 
-
-  check2 <- checkExpr defs gam2 pol False t2 e2
-  case check2 of 
-    Nothing -> return Nothing
-    _ -> do 
-      check3 <- checkExpr defs gam2 pol False t2 e3
-      case check3 of
-        Nothing -> return Nothing 
-        _ -> return check3
-
-  --check that e2 == e3 == tau <(handled f)*g>
-
-
-  --(Ctxt Assumption, Substitution, Expr () Type)
-  --computes Just delta or Nothing if typing doesn't match
-
+  let elaborated = TryCatch s a elaborated1 elaboratedP optionalTySig elaborated2 elaborated3
+      return (gam', subst, elaborated)    
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
