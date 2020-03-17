@@ -487,57 +487,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ (Promote _ e)) = do
           Just (TyApp (TyCon (internalName -> "Interval"))
                       (TyCon (internalName -> "Level")))
             -> True
-          _ -> False
-
-checkExpr defs gam pol True tau (TryCatch s a e1 p mty e2 e3) = do
-  (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
-
-  -- Check that a graded possibility type was inferred
-  (ef1, ty1) <- case sig of
-      ty1 @ (Box (Diamond ef1) opt) -> 
-        if equalTypes opt (@ CInterval (@ CNat 0) (@ CNat 1))
-        then return (ef1, ty1)
-        else throw LinearityError{ errLoc = s, linearityMismatch = LinearUsedNonLinearly}
-      t -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = t }
-
-  -- Type clauses in the context of the binders from the pattern
-  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
-  pIrrefutable <- isIrrefutable s ty1 p
-  unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
-  (tau2, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
-  (tau3, gam3, subst3, elaborated3) <- synthExpr defs (binders <> gam) pol e3
-
-  -- check e2 and e2 are diamonds
-  (ef2, ty2) <- case tau2 of
-      Diamond ef2 ty2 -> return (ef2, ty2, ef3, ty3)
-      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
-  (ef3, ty3) <- case tau3 of
-      Diamond ef3 ty3 -> return (ef3, ty3)
-      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
-  
-  optionalSigEquality s optionalTySig ty1
-
-  -- linearity check for e2 and e3
-  ctxtEquals s (gam2 `intersectCtxts` binders) binders
-  ctxtEquals s (gam3 `intersectCtxts` binders) binders
-
---contexts/binding?????? TODO
-  gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
-  gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
-  gam' <- gamNew2
-
- --resulting effect type
-  (g, subst') <-  twoEqualEffectTypes s ef2 ef3
-  (efTy, subst'') <- twoEqualEffectTypes s (Handled ef1) g
-  ef <- effectMult s efTy (Handled ef1) g
-  let t = Diamond ef ty2
-
-  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst', subst'']
-  -- Synth subst
-  t' <- substitute substP t
-
-  let elaborated = TryCatch s a elaborated1 elaboratedP optionalTySig elaborated2 elaborated3
-      return (gam', subst, elaborated)    
+          _ -> False 
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ guardExpr cases) = do
@@ -807,9 +757,57 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
   return (t, gamNew, subst, elaborated)
 
 
--- checking for exception handling
+synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
+  (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
+  -- Check that a graded possibility type was inferred
+  (ef1, ty1) <- case sig of
+      Box opt (Diamond ef1 ty1) -> 
+        if opt == (CInterval (CNat 0) (CNat 1)) 
+        then return (ef1, ty1)
+        else throw LinearityError{ errLoc = s}
+      t -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = t }
+
+  -- Type clauses in the context of the binders from the pattern
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  pIrrefutable <- isIrrefutable s ty1 p
+  unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
+  (tau2, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+  (tau3, gam3, subst3, elaborated3) <- synthExpr defs (binders <> gam) pol e3
+
+  -- check e2 and e2 are diamonds
+  (ef2, ty2) <- case tau2 of
+      Diamond ef2 ty2 -> return (ef2, ty2)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
+  (ef3, ty3) <- case tau3 of
+      Diamond ef3 ty3 -> return (ef3, ty3)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
   
+  optionalSigEquality s mty ty1
+
+  -- linearity check for e2 and e3
+  ctxtEquals s (gam2 `intersectCtxts` binders) binders
+  ctxtEquals s (gam3 `intersectCtxts` binders) binders
+
+  --contexts/binding
+  gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
+  gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
+  gam' <- ctxtPlus s gamNew2 gamNew3
+
+  --resulting effect type 
+  f <- App s a Handled ef1
+  (g, subst') <-  twoEqualEffectTypes s ef2 ef3
+  (efTy, subst'') <- twoEqualEffectTypes s f g
+  ef <- effectMult s efTy f g
+  let t = Diamond ef ty2
+
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst', subst'']
+  -- Synth subst
+  t' <- substitute substP t
+  
+  let elaborated = TryCatch s t elaborated1 elaboratedP mty elaborated2 elaborated3
+  return (t, gam', subst, elaborated) 
+
 -- Variables
 synthExpr defs gam _ (Val s _ (Var _ x)) =
    -- Try the local context
