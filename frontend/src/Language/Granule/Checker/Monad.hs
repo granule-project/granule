@@ -463,6 +463,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | ExpectedEffectType
     { errLoc :: Span, errTy :: Type }
+  | ExpectedOptionalEffectType
+      { errLoc :: Span, errTy :: Type }
   | LhsOfApplicationNotAFunction
     { errLoc :: Span, errTy :: Type }
   | FailedOperatorResolution
@@ -541,6 +543,7 @@ instance UserMsg CheckerError where
   title DataConstructorReturnTypeError{} = "Wrong return type in data constructor"
   title MalformedDataConstructorType{} = "Malformed data constructor type"
   title ExpectedEffectType{} = "Type error"
+  title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
@@ -740,7 +743,7 @@ instance UserMsg CheckerError where
     = "Expected a type of the form `a <eff>` but got `"
     <> pretty errTy
 
-    msg ExpectedOptionalEffectType{..}
+  msg ExpectedOptionalEffectType{..}
     = "Expected a type of the form `a <eff>[0..1]` but got `"
     <> pretty errTy
 
