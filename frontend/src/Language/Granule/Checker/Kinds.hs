@@ -42,76 +42,83 @@ inferKindOfType s t = do
     inferKindOfTypeInContext s (stripQuantifiers $ tyVarContext checkerState) t
 
 inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type Zero -> Checker Kind
-inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM0 (TypeFoldZero kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase) t
+inferKindOfTypeInContext s quantifiedVariables t = do
+    w <- typeFoldM0 (TypeFoldZero kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase) t
+    return $ unwrap w
   where
-    kFun :: Type l -> Type l -> Checker (Type l)
-    kFun (TyCon c) (TyCon c')
-     | internalName c == internalName c' = return $ TyCon c
+    kFun :: Kind' -> Kind' -> Checker Kind'
+    kFun (W (TyCon c)) (W (TyCon c'))
+     | internalName c == internalName c' = return $ W $ TyCon c
 
-    kFun (Type l) (Type l') | l == l' = return $ Type l
-    kFun (Type LZero) (TyCon (internalName -> "Protocol")) = return $ TyCon (mkId "Protocol")
-    kFun (Type l) y = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type l, kActual = y }
-    -- kFun x expects Type LZero, but should be of any level
-    kFun x _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
+    kFun (W (Type l)) (W (Type l')) | l == l' = return $ W $ Type l
+    kFun (W (Type LZero)) (W (TyCon (internalName -> "Protocol"))) = return $ W $ TyCon (mkId "Protocol")
+    kFun (W (Type l)) (W y) = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type l, kActual = y }
+    kFun (W x) _     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
 
+    kCon :: Id -> Checker Kind'
     kCon (internalName -> "Pure") = do
       -- Create a fresh type variable
       var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") (TyCon (mkId "Effect"))
-      return $ TyVar var
+      return $ W $ TyVar var
     kCon conId = do
         st <- get
         case lookup conId (typeConstructors st) of
-            Just (kind,_,_) -> return kind
+            Just (kind,_,_) -> return $ W kind
             Nothing   -> do
               mConstructor <- lookupDataConstructor s conId
               case mConstructor of
-                Just (Forall _ [] [] t, _) -> return $ tyPromote t
+                Just (Forall _ [] [] t, _) -> return $ W $ tyPromote t
                 Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
                 Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
-    kBox c (Type LZero) = do
+    kBox :: Coeffect -> Kind' -> Checker Kind'
+    kBox c (W (Type LZero)) = do
        -- Infer the coeffect (fails if that is ill typed)
        _ <- inferCoeffectType s c
-       return $ Type LZero
-    kBox _ x = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
+       return $ W $ Type LZero
+    kBox _ (W x) = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
 
-    kDiamond effK (Type LZero) = do
+    kDiamond :: Kind' -> Kind' -> Checker Kind'
+    kDiamond (W effK) (W (Type LZero)) = do
       if isEffectKind effK
-        then return $ Type LZero
+        then return $ W $ Type LZero
         else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = (TyCon (mkId "Effect")), kActual = effK }
 
-    kDiamond _ x     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
+    kDiamond _ (W x)     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
 
+    kVar :: Id -> Checker Kind'
     kVar tyVar =
       case lookup tyVar quantifiedVariables of
-        Just kind -> return kind
+        Just kind -> return $ W kind
         Nothing   -> do
           st <- get
           case lookup tyVar (tyVarContext st) of
-            Just (kind, _) -> return kind
+            Just (kind, _) -> return $ W kind
             Nothing -> throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
 
-    kApp (FunTy k1 k2) kArg = do
+    kApp :: Kind' -> Kind' -> Checker Kind'
+    kApp (W (FunTy k1 k2)) (W kArg) = do
       kLub <- k1 `hasLub` kArg
       if kLub
-        then return k2
+        then return $ W k2
         else throw KindMismatch
               { errLoc = s
               , tyActualK = Nothing
               , kActual = kArg
               , kExpected = k1 }
 
-    kApp k kArg = throw KindMismatch
+    kApp (W k) (W kArg) = throw KindMismatch
         { errLoc = s
         , tyActualK = Nothing
         , kExpected = (FunTy kArg (TyVar $ mkId "..."))
         , kActual = k
         }
 
-    kInt _ = return $ TyCon $ mkId "Nat"
+    kInt :: Int -> Checker Kind'
+    kInt _ = return $ W $ TyCon $ mkId "Nat"
 
-    kInfix (tyOps -> (k1exp, k2exp, kret)) k1act k2act = do
+    kInfix :: TypeOperator -> Kind' -> Kind' -> Checker Kind'
+    kInfix (tyOps -> (k1exp, k2exp, kret)) (W k1act) (W k2act) = do
       kLub <- k1act `hasLub` k1exp
       if not kLub
         then throw
@@ -121,9 +128,13 @@ inferKindOfTypeInContext s quantifiedVariables t =
           if not kLub'
             then throw
               KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = k2exp, kActual = k2act}
-            else pure kret
+            else pure $ W kret
 
-    kSet ks =
+    kSet :: [Kind'] -> Checker Kind'
+    kSet wks = kSetW (map unwrap wks)
+
+    kSetW :: [Kind] -> Checker Kind'
+    kSetW ks =
       -- If the set is empty, then it could have any kind, so we need to make
       -- a kind which is `TyPromote (Set a)` for some type variable `a` of unknown kind
       if null ks
@@ -145,25 +156,34 @@ inferKindOfTypeInContext s quantifiedVariables t =
                 case lookup (head ks) setElements of
                     -- Lift this alias to the kind level
                     Just t -> tryTyPromote s t
-                    Nothing ->
+                    Nothing -> return $ W $ TyApp (TyCon $ mkId "Set") (head ks)
+                    {-
                         -- Return a set type lifted to a kind
                         case demoteKindToType (head ks) of
                            Just t -> tryTyPromote s $ TyApp (TyCon $ mkId "Set") t
                            -- If the kind cannot be demoted then we shouldn't be making a set
                            Nothing -> throw $ KindCannotFormSet s (head ks)
+                    -}
 
             -- Find the first occurence of a change in kind:
             else throw $ KindMismatch { errLoc = s , tyActualK = Nothing, kExpected = head left, kActual = head right }
                     where (left, right) = partition (\x -> (head ks) == x) ks
 
-    kCase k ks =
+    kCase :: Kind' -> [(Kind', Kind')] -> Checker Kind'
+    kCase wk wks =
+      let k = unwrap wk
+          ks = map (\(a, b) -> (unwrap a, unwrap b)) wks
+      in kCaseW k ks
+
+    kCaseW :: Kind -> [(Kind, Kind)] -> Checker Kind'
+    kCaseW k ks =
      -- Given that k, each pattern p and its corresponding branch b are well-kinded:
      -- The kind of k must be the same as the kind of each pattern p.
      if all (\x -> fst x == k) ks
       then -- All the branches must have the same kind.
         let bk = snd (head ks) in
           if all (\x -> snd x == bk) ks
-             then return bk
+             then return $ W bk
              -- Find the first branch that doesn't share a kind:
              else
                let (_, right) = partition (\x -> bk == snd x) ks in
@@ -180,7 +200,7 @@ joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (TyVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (TyVar v) = return $ Just (k, [(v, SubstK k)])
 joinKind k1 k2 = do
-  (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
+  (coeffTy, _) <- mguCoeffectTypes nullSpan k1 k2
   coeffTy <- tryTyPromote nullSpan coeffTy
   return $ Just (coeffTy, [])
 
@@ -296,3 +316,7 @@ isEffectType :: (?globals :: Globals) => Span -> Type Zero -> Checker Bool
 isEffectType s ty = do
     kind <- inferKindOfType s ty
     return $ isEffectKind kind
+
+-- Wrapper for TypeFold, since GHC has trouble deducing a ~ Type . Succ
+data TypeSucc a = W { unwrap :: Type (Succ a) }
+type Kind' = TypeSucc Zero
