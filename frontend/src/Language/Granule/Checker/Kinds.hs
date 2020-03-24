@@ -41,13 +41,10 @@ inferKindOfType s t = do
     checkerState <- get
     inferKindOfTypeInContext s (stripQuantifiers $ tyVarContext checkerState) t
 
-inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type l -> Checker (Type (Succ l))
+inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type Zero -> Checker Kind
 inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM (TypeFold kTy kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase kUnion) t
+    typeFoldM0 (TypeFoldZero kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kCase) t
   where
-    kTy :: Level l -> Checker (Type (Succ l))
-    kTy l = return $ Type $ LSucc l
-
     kFun :: Type l -> Type l -> Checker (Type l)
     kFun (TyCon c) (TyCon c')
      | internalName c == internalName c' = return $ TyCon c
@@ -147,11 +144,11 @@ inferKindOfTypeInContext s quantifiedVariables t =
             then  -- check if there is an alias (name) for sets of this kind
                 case lookup (head ks) setElements of
                     -- Lift this alias to the kind level
-                    Just t -> return $ TyPromote t
+                    Just t -> tryTyPromote s t
                     Nothing ->
                         -- Return a set type lifted to a kind
                         case demoteKindToType (head ks) of
-                           Just t -> return $ TyPromote $ TyApp (TyCon $ mkId "Set") t
+                           Just t -> tryTyPromote s $ TyApp (TyCon $ mkId "Set") t
                            -- If the kind cannot be demoted then we shouldn't be making a set
                            Nothing -> throw $ KindCannotFormSet s (head ks)
 
@@ -182,7 +179,7 @@ joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Subst
 joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (TyVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (TyVar v) = return $ Just (k, [(v, SubstK k)])
-joinKind t1 t2 = do
+joinKind k1 k2 = do
   (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
   coeffTy <- tryTyPromote nullSpan coeffTy
   return $ Just (coeffTy, [])

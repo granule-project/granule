@@ -439,16 +439,16 @@ data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
     } -> TypeFoldAtLevel m One a
 
   TypeFoldL ::
-    { tfTyL      :: Level l                     -> m (a (Succ l))
-    , tfFunTyL   :: a (Succ l) -> a (Succ l)    -> m (a (Succ l))
-    , tfTyConL   :: Id                          -> m (a (Succ l))
-    , tfTyVarL   :: Id                          -> m (a (Succ l))
-    , tfTyAppL   :: a (Succ l) -> a (Succ l)    -> m (a (Succ l))
-    , tfTyIntL   :: Int                         -> m (a (Succ l))
-    , tfTyInfixL :: TypeOperator  -> a (Succ l) -> a (Succ l) -> m (a (Succ l))
-    , tfSetL     :: [a (Succ l)]                -> m (a (Succ l))
-    , tfTyCaseL  :: a (Succ l) -> [(a (Succ l), a (Succ l))] -> m (a (Succ l))
-    } -> TypeFoldAtLevel m (Succ l) a
+    { tfTyL      :: Level (Succ l)                     -> m (a (Succ (Succ l)))
+    , tfFunTyL   :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
+    , tfTyConL   :: Id                          -> m (a (Succ (Succ l)))
+    , tfTyVarL   :: Id                          -> m (a (Succ (Succ l)))
+    , tfTyAppL   :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
+    , tfTyIntL   :: Int                         -> m (a (Succ (Succ l)))
+    , tfTyInfixL :: TypeOperator  -> a (Succ (Succ l)) -> a (Succ (Succ l)) -> m (a (Succ (Succ l)))
+    , tfSetL     :: [a (Succ (Succ l))]                -> m (a (Succ (Succ l)))
+    , tfTyCaseL  :: a (Succ (Succ l)) -> [(a (Succ (Succ l)), a (Succ (Succ l)))] -> m (a (Succ (Succ l)))
+    } -> TypeFoldAtLevel m (Succ (Succ l)) a
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --(Type l)
@@ -586,10 +586,10 @@ typeFoldM1 algebra = go
      t2' <- go t2
      (tfKUnion1 algebra) t1' t2'
 
-typeFoldML :: forall m l a . Monad m => TypeFoldAtLevel m (Succ l) a -> Type (Succ l) -> m (a (Succ l))
+typeFoldML :: forall m l a . Monad m => TypeFoldAtLevel m (Succ (Succ l)) a -> Type (Succ (Succ l)) -> m (a (Succ (Succ l)))
 typeFoldML algebra = go
   where
-   go :: Type (Succ l') -> m (a (Succ l'))
+   go :: Type (Succ (Succ l)) -> m (a (Succ (Succ l)))
    go (Type l) = (tfTyL algebra) l
    go (FunTy t1 t2) = do
      t1' <- go t1
