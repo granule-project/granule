@@ -411,10 +411,57 @@ data TypeFold m (a :: Nat -> *) = TypeFold
   , tfTyCase  :: forall (l :: Nat) . a l -> [(a l, a l)] -> m (a l)
   , tfKUnion  :: a One -> a One                    -> m (a One)}
 
+data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
+  TypeFoldZero ::
+    { tfFunTy0   :: a Zero -> a Zero   -> m (a Zero)
+    , tfTyCon0   :: Id                 -> m (a Zero)
+    , tfBox0     :: Coeffect -> a Zero -> m (a Zero)
+    , tfDiamond0 :: a Zero -> a Zero   -> m (a Zero)
+    , tfTyVar0   :: Id                 -> m (a Zero)
+    , tfTyApp0   :: a Zero -> a Zero   -> m (a Zero)
+    , tfTyInt0   :: Int                -> m (a Zero)
+    , tfTyInfix0 :: TypeOperator  -> a Zero -> a Zero -> m (a Zero)
+    , tfSet0     :: [a Zero]           -> m (a Zero)
+    , tfTyCase0  :: a Zero -> [(a Zero, a Zero)] -> m (a Zero)
+    } -> TypeFoldAtLevel m Zero a
+
+  TypeFoldOne ::
+    { tfTy1      :: Level Zero        -> m (a One)
+    , tfFunTy1   :: a One -> a One    -> m (a One)
+    , tfTyCon1   :: Id                -> m (a One)
+    , tfTyVar1   :: Id                -> m (a One)
+    , tfTyApp1   :: a One -> a One    -> m (a One)
+    , tfTyInt1   :: Int               -> m (a One)
+    , tfTyInfix1 :: TypeOperator  -> a One -> a One -> m (a One)
+    , tfSet1     :: [a One]           -> m (a One)
+    , tfTyCase1  :: a One -> [(a One, a One)] -> m (a One)
+    , tfKUnion1  :: a One -> a One    -> m (a One)
+    } -> TypeFoldAtLevel m One a
+
+  TypeFoldL ::
+    { tfTyL      :: Level l                     -> m (a (Succ l))
+    , tfFunTyL   :: a (Succ l) -> a (Succ l)    -> m (a (Succ l))
+    , tfTyConL   :: Id                          -> m (a (Succ l))
+    , tfTyVarL   :: Id                          -> m (a (Succ l))
+    , tfTyAppL   :: a (Succ l) -> a (Succ l)    -> m (a (Succ l))
+    , tfTyIntL   :: Int                         -> m (a (Succ l))
+    , tfTyInfixL :: TypeOperator  -> a (Succ l) -> a (Succ l) -> m (a (Succ l))
+    , tfSetL     :: [a (Succ l)]                -> m (a (Succ l))
+    , tfTyCaseL  :: a (Succ l) -> [(a (Succ l), a (Succ l))] -> m (a (Succ l))
+    } -> TypeFoldAtLevel m (Succ l) a
+
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --(Type l)
 baseTypeFold =
   TypeFold mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
+
+baseTypeFoldZero :: Monad m => TypeFoldAtLevel m Zero Type
+baseTypeFoldZero =
+  TypeFoldZero mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
+
+baseTypeFoldOne :: Monad m => TypeFoldAtLevel m One Type
+baseTypeFoldOne =
+  TypeFoldOne mTy mFunTy mTyCon mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m l a . Monad m => TypeFold m a -> Type l -> m (a l)
@@ -460,6 +507,117 @@ typeFoldM algebra = go
      t1' <- go t1
      t2' <- go t2
      (tfKUnion algebra) t1' t2'
+
+-- | Monadic fold on a `Type` value
+typeFoldM0 :: forall m a . Monad m => TypeFoldAtLevel m Zero a -> Type Zero -> m (a Zero)
+typeFoldM0 algebra = go
+  where
+   go :: Type Zero -> m (a Zero)
+   go (FunTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfFunTy0 algebra) t1' t2'
+   go (TyCon s) = (tfTyCon0 algebra) s
+   go (Box c t) = do
+     t' <- go t
+     (tfBox0 algebra) c t'
+   go (Diamond e t) = do
+     t' <- go t
+     e' <- go e
+     (tfDiamond0 algebra) e' t'
+   go (TyVar v) = (tfTyVar0 algebra) v
+   go (TyApp t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyApp0 algebra) t1' t2'
+   go (TyInt i) = (tfTyInt0 algebra) i
+   go (TyInfix op t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyInfix0 algebra) op t1' t2'
+   go (TySet ts) = do
+    ts' <- mapM go ts
+    (tfSet0 algebra) ts'
+   go (TyCase t ts) = do
+    t' <- go t
+    ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
+    (tfTyCase0 algebra) t' ts'
+    where
+     extractMonad (a,b) = do
+      a' <- a
+      b' <- b
+      return (a', b')
+
+-- | Monadic fold on a `Type` value
+typeFoldM1 :: forall m a . Monad m => TypeFoldAtLevel m One a -> Type One -> m (a One)
+typeFoldM1 algebra = go
+  where
+   go :: Type One -> m (a One)
+   go (Type l) = (tfTy1 algebra) l
+   go (FunTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfFunTy1 algebra) t1' t2'
+   go (TyCon s) = (tfTyCon1 algebra) s
+   go (TyVar v) = (tfTyVar1 algebra) v
+   go (TyApp t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyApp1 algebra) t1' t2'
+   go (TyInt i) = (tfTyInt1 algebra) i
+   go (TyInfix op t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyInfix1 algebra) op t1' t2'
+   go (TySet ts) = do
+    ts' <- mapM go ts
+    (tfSet1 algebra) ts'
+   go (TyCase t ts) = do
+    t' <- go t
+    ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
+    (tfTyCase1 algebra) t' ts'
+    where
+     extractMonad (a,b) = do
+      a' <- a
+      b' <- b
+      return (a', b')
+   go (KUnion t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfKUnion1 algebra) t1' t2'
+
+typeFoldML :: forall m l a . Monad m => TypeFoldAtLevel m (Succ l) a -> Type (Succ l) -> m (a (Succ l))
+typeFoldML algebra = go
+  where
+   go :: Type (Succ l') -> m (a (Succ l'))
+   go (Type l) = (tfTyL algebra) l
+   go (FunTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfFunTyL algebra) t1' t2'
+   go (TyCon s) = (tfTyConL algebra) s
+   go (TyVar v) = (tfTyVarL algebra) v
+   go (TyApp t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyAppL algebra) t1' t2'
+   go (TyInt i) = (tfTyIntL algebra) i
+   go (TyInfix op t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyInfixL algebra) op t1' t2'
+   go (TySet ts) = do
+    ts' <- mapM go ts
+    (tfSetL algebra) ts'
+   go (TyCase t ts) = do
+    t' <- go t
+    ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
+    (tfTyCaseL algebra) t' ts'
+    where
+     extractMonad (a,b) = do
+      a' <- a
+      b' <- b
+      return (a', b')
 
 instance FirstParameter TypeScheme Span
 
