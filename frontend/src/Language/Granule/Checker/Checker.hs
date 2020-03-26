@@ -762,11 +762,11 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
 
   -- Check that a graded possibility type was inferred
   (ef1, ty1) <- case sig of
-      Box opt (Diamond ef1 ty1) -> 
+      Diamond ef1 (Box opt ty1) ->
         if opt == (CInterval (CNat 0) (CNat 1)) 
         then return (ef1, ty1)
-        else throw LinearityError{ errLoc = s}
-      t -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = t }
+        else throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
+      _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
 
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
@@ -794,9 +794,9 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
   gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
   gam' <- ctxtPlus s gamNew2 gamNew3
 
-  --resulting effect type 
-  f <- App s a Handled ef1
-  (g, subst') <-  twoEqualEffectTypes s ef2 ef3
+  --resulting effect type
+  let f = TyApp (TyCon $ mkId "Handled") ef1
+  (g, subst') <- twoEqualEffectTypes s ef2 ef3
   (efTy, subst'') <- twoEqualEffectTypes s f g
   ef <- effectMult s efTy f g
   let t = Diamond ef ty2
