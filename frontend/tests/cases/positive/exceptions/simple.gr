@@ -1,3 +1,0 @@
-main : String <IO>
-main = 
-    try 3 as [x] in x + 3 catch 4

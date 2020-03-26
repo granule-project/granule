@@ -243,7 +243,7 @@ openHandle
   : forall {m : HandleType}
   . IOMode m
   -> String
-  -> (Handle m) <{Open,IOExcept}>
+  -> ((Handle m) [0..1]) <{Open,IOExcept}>
 openHandle = BUILTIN
 
 readChar : Handle R -> ((Handle R, Char) [0..1]) <{Read,IOExcept}>
