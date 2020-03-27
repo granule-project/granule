@@ -787,7 +787,7 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
 
   -- linearity check for e2 and e3
   ctxtEquals s (gam2 `intersectCtxts` binders) binders
-  ctxtEquals s (gam3 `intersectCtxts` binders) binders
+  
 
   --contexts/binding
   gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
