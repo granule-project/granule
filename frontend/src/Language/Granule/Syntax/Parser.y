@@ -17,6 +17,7 @@ import qualified Data.Map as M
 import Numeric
 import System.FilePath ((</>), takeBaseName)
 import System.Exit
+import System.Directory (doesFileExist)
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Lexer
@@ -569,9 +570,11 @@ parseDefsAndDoImports input = do
     doImportsRecursively todo ast@(AST dds defs done hidden name) = do
       case toList (todo \\ done) of
         [] -> return ast
-        (i:todo) ->
-          let path = includePath </> i in
+        (i:todo) -> do
+          fileLocal <- doesFileExist i
+          let path = if fileLocal then i else includePath </> i
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
+
             src <- readFile path
             AST dds' defs' imports' hidden' _ <- either failWithMsg return $ parseDefs path src
             doImportsRecursively
