@@ -11,8 +11,6 @@ module Language.Granule.Checker.Kinds (
                     , inferCoeffectType
                     , inferCoeffectTypeInContext
                     , inferCoeffectTypeAssumption
-                    , promoteTypeToKind
-                    , demoteKindToType
                     , isEffectType
                     , isEffectKind
                     , isCoeffectKind) where
@@ -67,7 +65,9 @@ inferKindOfTypeInContext s quantifiedVariables t = do
             Nothing   -> do
               mConstructor <- lookupDataConstructor s conId
               case mConstructor of
-                Just (Forall _ [] [] t, _) -> return $ W $ tyPromote t
+                Just (Forall _ [] [] t, _) -> do
+                  k <- tryTyPromote s t
+                  return $ W k
                 Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
                 Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
@@ -146,7 +146,8 @@ inferKindOfTypeInContext s quantifiedVariables t = do
                                    : tyVarContext st })
             -- Create a fresh type variable
             var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (TyVar $ mkId vark)
-            tyPromote nullSpan $ TyApp (TyCon $ mkId "Set") (TyVar var)
+            k <- tryTyPromote s $ TyApp (TyCon $ mkId "Set") (TyVar var)
+            return $ W k
 
         -- Otherwise, everything in the set has to have the same kind
         else
@@ -155,7 +156,9 @@ inferKindOfTypeInContext s quantifiedVariables t = do
             then  -- check if there is an alias (name) for sets of this kind
                 case lookup (head ks) setElements of
                     -- Lift this alias to the kind level
-                    Just t -> tryTyPromote s t
+                    Just t -> do
+                      k <- tryTyPromote s t
+                      return $ W k
                     Nothing -> return $ W $ TyApp (TyCon $ mkId "Set") (head ks)
                     {-
                         -- Return a set type lifted to a kind
@@ -199,11 +202,14 @@ joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Subst
 joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (TyVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (TyVar v) = return $ Just (k, [(v, SubstK k)])
-joinKind k1 k2 = do
-  (coeffTy, _) <- mguCoeffectTypes nullSpan k1 k2
+{-
+-- TODO: Fix with demote? Was on two promoted types t1 and t2. Fails with kinds.
+-- Can try general case k1 k2, try demote k1 and try demote k2 first
+joinKind (TyPromote t1) (TyPromote t2) = do
+  (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
   coeffTy <- tryTyPromote nullSpan coeffTy
   return $ Just (coeffTy, [])
-
+-}
 joinKind (KUnion k1 k2) k = do
   jK1 <- joinKind k k1
   case jK1 of
@@ -268,7 +274,10 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
 --      return newType
 
     Just (TyVar   name) -> return $ TyVar name
-    Just t  -> checkKindIsCoeffect s ctxt t
+    --TODO: Case for demoting k to Type for checkKindIsCoeffect
+    --Just (TyPromote t) -> checkKindIsCoeffect s ctxt t
+    Just k -> throw
+      KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = TyVar $ mkId "coeffectType", kActual = k }
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
@@ -293,9 +302,8 @@ checkKindIsCoeffect span ctxt ty = do
       case lookup v ctxt of
         Just k | isCoeffectKind k -> return ty
         _              -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
-    k -> do
-      kind' <- inferKindOfTypeInContext span ctxt k
-      if isCoeffectKind kind'
+    _ -> do
+      if isCoeffectKind kind
         then return ty
         else throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
 
