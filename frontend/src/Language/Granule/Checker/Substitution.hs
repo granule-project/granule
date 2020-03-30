@@ -1,6 +1,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -83,7 +84,7 @@ instance VarSubstitutable l => Substitutable (Type l) where
 
       varSubst = varSubstForLevel
 
-class VarSubstitutable (l :: Level) where
+class VarSubstitutable (l :: ULevel) where
   varSubstForLevel :: Id -> Substitution -> Type l
 
 instance VarSubstitutable Zero where
@@ -148,7 +149,7 @@ instance Substitutable Coeffect where
                 case lookup v (tyVarContext checkerState) of
                     -- If the coeffect variable has a poly kind then update it with the
                     -- kind of c
-                    Just ((KVar kv), q) -> do
+                    Just ((TyVar kv), q) -> do
                         coeffTy <- inferCoeffectType nullSpan c
                         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
                                                                     v (promoteTypeToKind coeffTy, q) }
@@ -162,7 +163,7 @@ instance Substitutable Coeffect where
                 k' <- inferCoeffectType nullSpan (CVar v)
                 jK <- joinKind k (promoteTypeToKind k')
                 case jK of
-                    Just (TyPromote (TyCon (internalName -> "Nat")), _) ->
+                    Just (TyCon (internalName -> "Nat"), _) ->
                         compileNatKindedTypeToCoeffect nullSpan t
                     _ -> return (CVar v)
 
@@ -217,7 +218,7 @@ removeReflexivePairs :: Substitution -> Substitution
 removeReflexivePairs [] = []
 removeReflexivePairs ((v, SubstT (TyVar v')):subst) | v == v' = removeReflexivePairs subst
 removeReflexivePairs ((v, SubstC (CVar v')):subst) | v == v' = removeReflexivePairs subst
-removeReflexivePairs ((v, SubstK (KVar v')):subst) | v == v' = removeReflexivePairs subst
+removeReflexivePairs ((v, SubstK (TyVar v')):subst) | v == v' = removeReflexivePairs subst
 removeReflexivePairs ((v, e):subst) = (v, e) : removeReflexivePairs subst
 
 -- | Combines substitutions which may fail if there are conflicting
@@ -535,7 +536,7 @@ instance Unifiable Substitutors where
         k' <- inferCoeffectType nullSpan c'
         jK <- joinKind k (TyPromote k')
         case jK of
-            Just (TyPromote (TyCon k), _) | internalName k == "Nat" -> do
+            Just (TyCon k, _) | internalName k == "Nat" -> do
                 c <- compileNatKindedTypeToCoeffect nullSpan t
                 unify c c'
             _ -> return Nothing
@@ -571,7 +572,7 @@ instance Unifiable Type where
         k' <- inferKindOfType nullSpan t
         jK <- joinKind k k'
         case jK of
-            Just (TyPromote (TyCon (internalName -> "Nat")), _) -> do
+            Just (TyCon (internalName -> "Nat"), _) -> do
                 c  <- compileNatKindedTypeToCoeffect nullSpan t
                 c' <- compileNatKindedTypeToCoeffect nullSpan t'
                 addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
@@ -592,7 +593,7 @@ instance Unifiable Coeffect where
         case lookup v (tyVarContext checkerState) of
             -- If the coeffect variable has a poly kind then update it with the
             -- kind of c
-            Just ((KVar kv), q) -> do
+            Just ((TyVar kv), q) -> do
                     coeffTy <- inferCoeffectType nullSpan c
                     put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
                                                                     v (promoteTypeToKind coeffTy, q) }
@@ -601,7 +602,7 @@ instance Unifiable Coeffect where
                 case c of
                     CVar v' ->
                         case lookup v' (tyVarContext checkerState) of
-                            Just (KVar _, q) -> do
+                            Just (TyVar _, q) -> do
                                 -- The type of v is known and c is a variable with a poly kind
                                 put $ checkerState
                                     { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
@@ -654,11 +655,11 @@ instance Unifiable Coeffect where
         if c == c' then return $ Just [] else return Nothing
 
 instance Unifiable Kind where
-    unify (KVar v) k =
+    unify (TyVar v) k =
         return $ Just [(v, SubstK k)]
-    unify k (KVar v) =
+    unify k (TyVar v) =
         return $ Just [(v, SubstK k)]
-    unify (KFun k1 k2) (KFun k1' k2') = do
+    unify (FunTy k1 k2) (FunTy k1' k2') = do
         u1 <- unify k1 k1'
         u2 <- unify k2 k2'
         u1 <<>> u2
@@ -685,9 +686,12 @@ updateTyVar s tyVar k = do
           -- liftIO $ putStrLn $ "\ntyVarContext after = " <> pretty (tyVarContext st)
           -- Rewrite the predicate
           st <- get
+          let subst = [(tyVar, SubstK k)]
+          {-
           let subst = case k of
                         TyPromote t -> [(tyVar, SubstT t)]
                         _          -> [(tyVar, SubstK k)]
+          -}
           ps <- mapM (substitute subst) (predicateStack st)
           put st{ predicateStack = ps }
 
@@ -703,8 +707,8 @@ updateTyVar s tyVar k = do
   where
     rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
     rewriteCtxt [] = []
-    rewriteCtxt ((name, (TyPromote (TyVar kindVar), q)) : ctxt)
+    rewriteCtxt ((name, (TyVar kindVar, q)) : ctxt)
      | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
-    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
+    rewriteCtxt ((name, (TyVar kindVar, q)) : ctxt)
      | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
     rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

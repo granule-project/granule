@@ -61,17 +61,17 @@ type Kind = Type One
 
 data Nat = Succ Nat | Zero
 
-data Level (l :: Nat) where
-  LSucc :: Level l -> Level (Succ l)
-  LZero :: Level Zero
+data ULevel (l :: Nat) where
+  LSucc :: ULevel l -> ULevel (Succ l)
+  LZero :: ULevel Zero
 
 class LesserLevel (l :: Nat) (l' :: Nat) where
 instance LesserLevel Zero (Succ l) where
 -- instance LesserLevel l l' => LesserLevel (Succ l) (Succ l')
 
-deriving instance Eq (Level l)
-deriving instance Show (Level l)
-deriving instance Ord (Level l)
+deriving instance Eq (ULevel l)
+deriving instance Show (ULevel l)
+deriving instance Ord (ULevel l)
 
 --tyPromote :: LesserLevel l l' => Type l -> Maybe (Type l')
 tyPromote :: Type l -> Maybe (Type (Succ l))
@@ -111,7 +111,7 @@ data TypeWithLevel where
 deriving instance Show TypeWithLevel
 
 data Type (l :: Nat) where
-    Type    :: Level l -> Type (Succ l)        -- ^ Universe construction
+    Type    :: ULevel l -> Type (Succ l)        -- ^ Universe construction
     FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
 
     TyCon   :: Id -> Type l                 -- ^ Type constructor
@@ -371,7 +371,7 @@ s .@ t = TyApp s t
 infixl 9 .@
 
 -- Trivially effectful monadic constructors
-mTy :: Monad m => Level l -> m (Type (Succ l))
+mTy :: Monad m => ULevel l -> m (Type (Succ l))
 mTy          = return . Type
 mFunTy :: Monad m => Type l -> Type l -> m (Type l)
 mFunTy x y   = return (FunTy x y)
@@ -398,7 +398,7 @@ mKUnion x y  = return (KUnion x y)
 
 -- Monadic algebra for types
 data TypeFold m (a :: Nat -> *) = TypeFold
-  { tfTy      :: forall (l :: Nat) . Level l       -> m (a (Succ l))
+  { tfTy      :: forall (l :: Nat) . ULevel l       -> m (a (Succ l))
   , tfFunTy   :: forall (l :: Nat) . a l -> a l    -> m (a l)
   , tfTyCon   :: forall (l :: Nat) . Id            -> m (a l)
   , tfBox     :: Coeffect -> a Zero                -> m (a Zero)
@@ -426,7 +426,7 @@ data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
     } -> TypeFoldAtLevel m Zero a
 
   TypeFoldOne ::
-    { tfTy1      :: Level Zero        -> m (a One)
+    { tfTy1      :: ULevel Zero        -> m (a One)
     , tfFunTy1   :: a One -> a One    -> m (a One)
     , tfTyCon1   :: Id                -> m (a One)
     , tfTyVar1   :: Id                -> m (a One)
@@ -439,7 +439,7 @@ data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
     } -> TypeFoldAtLevel m One a
 
   TypeFoldL ::
-    { tfTyL      :: Level (Succ l)                     -> m (a (Succ (Succ l)))
+    { tfTyL      :: ULevel (Succ l)                     -> m (a (Succ (Succ l)))
     , tfFunTyL   :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
     , tfTyConL   :: Id                          -> m (a (Succ (Succ l)))
     , tfTyVarL   :: Id                          -> m (a (Succ (Succ l)))

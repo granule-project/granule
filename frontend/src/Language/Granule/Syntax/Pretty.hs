@@ -101,12 +101,12 @@ instance Pretty Coeffect where
     pretty (CInterval c1 c2) = prettyNested c1 <> ".." <> prettyNested c2
     pretty (CProduct c1 c2) = "(" <> pretty c1 <> ", " <> pretty c2 <> ")"
 
-instance Pretty (Level l) where
-  pretty = show . toInt
+instance Pretty (ULevel l) where
+  pretty = show . (toInt 0)
     where
-      toInt :: Level l' -> Int
-      toInt LZero = 0
-      toInt (LSucc l') = 1 + toInt l'
+      toInt :: Int -> ULevel l' -> Int
+      toInt n LZero = n
+      toInt n (LSucc l') = toInt (n + 1) l'
 
 instance Pretty TypeScheme where
     pretty (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty t
