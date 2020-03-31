@@ -192,7 +192,7 @@ instance Monad m => Freshenable m Kind where
 -- | Represents coeffect grades
 data Coeffect = CNat      Int
               | CFloat    Rational
-              | CInfinity (Maybe (Type Zero))
+              | CInfinity (Maybe (Type One))
               | CInterval { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
@@ -200,11 +200,11 @@ data Coeffect = CNat      Int
               | CMinus    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
-              | CZero     (Type Zero)
-              | COne      (Type Zero)
+              | CZero     (Type One)
+              | COne      (Type One)
               | Level     Integer
               | CSet      [(String, Type Zero)]
-              | CSig      Coeffect (Type Zero)
+              | CSig      Coeffect (Type One)
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
     deriving (Eq, Show, Ord)
@@ -213,7 +213,7 @@ data Coeffect = CNat      Int
 data CoeffectFold a = CoeffectFold
   { cNat   :: Int -> a
   , cFloat :: Rational -> a
-  , cInf   :: Maybe (Type Zero) -> a
+  , cInf   :: Maybe (Type One) -> a
   , cInterval :: a -> a -> a
   , cVar   :: Id -> a
   , cPlus  :: a -> a -> a
@@ -221,11 +221,11 @@ data CoeffectFold a = CoeffectFold
   , cMinus :: a -> a -> a
   , cMeet  :: a -> a -> a
   , cJoin  :: a -> a -> a
-  , cZero  :: Type Zero -> a
-  , cOne   :: Type Zero -> a
+  , cZero  :: Type One -> a
+  , cOne   :: Type One -> a
   , cLevel :: Integer -> a
   , cSet   :: [(String, Type Zero)] -> a
-  , cSig   :: a -> Type Zero -> a
+  , cSig   :: a -> Type One -> a
   , cExpon :: a -> a -> a
   , cProd  :: a -> a -> a }
 

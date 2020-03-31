@@ -385,7 +385,9 @@ Coeffect :: { Coeffect }
   | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { case tyPromote $3 of
+                                    Just ty -> normalise (CSig $1 ty)
+                                    Nothing -> error $ "Type at " ++ (show (getPos $3)) ++ " cannot be used as a kind" }
   | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
 
 Set :: { [(String, Type Zero)] }
