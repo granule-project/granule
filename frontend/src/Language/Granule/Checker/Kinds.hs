@@ -215,8 +215,8 @@ joinKind (KUnion k1 k2) k = do
 joinKind k (KUnion k1 k2) = joinKind (KUnion k1 k2) k
 
 joinKind k1 k2 = do
-  (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
-  coeffTy <- tryTyPromote nullSpan coeffTy
+  (coeffTy, _) <- mguCoeffectTypes nullSpan k1 k2
+  --coeffTy <- tryTyPromote nullSpan coeffTy
   return $ Just (coeffTy, [])
 --joinKind _ _ = return $ Nothing
 

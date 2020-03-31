@@ -367,7 +367,7 @@ isTrivial = predFold and or (\_ lhs rhs -> rhs) (const False) id (\_ _ p -> p)
 -- given a context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
-rewriteBindersInPredicate :: Ctxt (Type Zero, Quantifier) -> Pred -> Pred
+rewriteBindersInPredicate :: Ctxt (Type One, Quantifier) -> Pred -> Pred
 rewriteBindersInPredicate ctxt =
     predFold
       Conj
@@ -382,10 +382,7 @@ rewriteBindersInPredicate ctxt =
       Exists var k' p
         where
           k' = case lookup kvar ctxt of
-                  Just (ty, _) -> 
-                    case tyPromote ty of
-                      Just ty -> ty
-                      Nothing -> error $ "Granule bug in `rewriteBindersInPredicate`: cannot promote type " ++ show ty
+                  Just (ty, _) -> ty
                   Nothing -> TyVar kvar
     existsCase var k p = Exists var k p
 

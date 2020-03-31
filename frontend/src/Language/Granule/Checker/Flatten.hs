@@ -127,7 +127,7 @@ mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
 flattenable :: (?globals :: Globals)
-            => Type Zero -> Type Zero -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Type Zero))
+            => Type One -> Type One -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Type One))
 flattenable t1 t2
  | t1 == t2 = case t1 of
     t1 | t1 == extendedNat -> return $ Just (CTimes, t1)
