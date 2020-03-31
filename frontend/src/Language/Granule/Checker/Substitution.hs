@@ -84,7 +84,7 @@ instance VarSubstitutable l => Substitutable (Type l) where
 
       varSubst = varSubstForLevel
 
-class VarSubstitutable (l :: ULevel) where
+class VarSubstitutable (l :: Nat) where
   varSubstForLevel :: Id -> Substitution -> Type l
 
 instance VarSubstitutable Zero where
@@ -309,8 +309,8 @@ substAssumption subst (v, Discharged t c) = do
 
 
 -- | Apply a name map to a type to rename the type variables
-renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> Checker Type
-renameType subst = typeFoldM $ baseTypeFold
+renameType :: (?globals :: Globals) => [(Id, Id)] -> Type Zero -> Checker (Type Zero)
+renameType subst = typeFoldM0 $ baseTypeFoldZero
   { tfBox   = renameBox subst
   , tfTyVar = renameTyVar subst
   }
@@ -334,7 +334,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
 
-  -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
+  -> Checker (Type Zero, Ctxt Kind, Substitution, [Type Zero], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
@@ -439,7 +439,7 @@ instance Substitutable Constraint where
   substitute ctxt (LtEq s c1 c2) = LtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
-instance Substitutable (Equation () Type) where
+instance Substitutable (Equation () (Type Zero)) where
   substitute ctxt (Equation sp ty patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
@@ -448,8 +448,8 @@ instance Substitutable (Equation () Type) where
 
 substituteValue :: (?globals::Globals)
                 => Substitution
-                -> ValueF ev Type (Value ev Type) (Expr ev Type)
-                -> Checker (Value ev Type)
+                -> ValueF ev (Type Zero) (Value ev (Type Zero)) (Expr ev (Type Zero))
+                -> Checker (Value ev (Type Zero))
 substituteValue ctxt (AbsF ty arg mty expr) =
     do  ty' <- substitute ctxt ty
         arg' <- substitute ctxt arg
@@ -471,8 +471,8 @@ substituteValue _ other = return (ExprFix2 other)
 
 substituteExpr :: (?globals::Globals)
                => Substitution
-               -> ExprF ev Type (Expr ev Type) (Value ev Type)
-               -> Checker (Expr ev Type)
+               -> ExprF ev (Type Zero) (Expr ev (Type Zero)) (Value ev (Type Zero))
+               -> Checker (Expr ev (Type Zero))
 substituteExpr ctxt (AppF sp ty fn arg) =
     do  ty' <- substitute ctxt ty
         return $ App sp ty' fn arg
@@ -498,13 +498,13 @@ mapFstM fn (f, r) = do
     f' <- fn f
     return (f', r)
 
-instance Substitutable (Expr () Type) where
+instance Substitutable (Expr () (Type Zero)) where
   substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
 
-instance Substitutable (Value () Type) where
+instance Substitutable (Value () (Type Zero)) where
   substitute ctxt = bicataM (substituteValue ctxt) (substituteExpr ctxt)
 
-instance Substitutable (Pattern Type) where
+instance Substitutable (Pattern (Type Zero)) where
   substitute ctxt = patternFoldM
       (\sp ann nm -> do
           ann' <- substitute ctxt ann
@@ -546,7 +546,7 @@ instance Unifiable Substitutors where
     unify (SubstK k) (SubstK k') = unify k k'
     unify _ _ = return Nothing
 
-instance Unifiable Type where
+instance Unifiable (Type l) where
     unify (TyVar v) t = return $ Just [(v, SubstT t)]
     unify t (TyVar v) = return $ Just [(v, SubstT t)]
     unify (FunTy t1 t2) (FunTy t1' t2') = do
