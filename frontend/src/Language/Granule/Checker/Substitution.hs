@@ -71,18 +71,13 @@ instance Substitutable Substitution where
 instance VarSubstitutable l => Substitutable (Type l) where
   substitute subst = typeFoldM (baseTypeFold
                               { tfTyVar = varSubst
-                              , tfBox = box
-                              , tfDiamond = dia })
+                              , tfBox = box })
     where
       box c t = do
         c <- substitute subst c
         mBox c t
 
-      dia e t = do
-        e <- substitute subst e
-        mDiamond e t
-
-      varSubst = varSubstForLevel
+      varSubst = return . (flip varSubstForLevel subst)
 
 class VarSubstitutable (l :: Nat) where
   varSubstForLevel :: Id -> Substitution -> Type l

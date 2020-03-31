@@ -12,7 +12,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Utils
 
 mguCoeffectTypes :: (?globals :: Globals)
-                 => Span -> Type Zero -> Type Zero -> Checker (Type Zero, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+                 => Span -> Type One -> Type One -> Checker (Type One, (Coeffect -> Coeffect, Coeffect -> Coeffect))
 mguCoeffectTypes s t1 t2 = do
   upper <- mguCoeffectTypes' s t1 t2
   case upper of
@@ -24,7 +24,7 @@ mguCoeffectTypes s t1 t2 = do
 
 -- Inner definition which does not throw its error, and which operates on just the types
 mguCoeffectTypes' :: (?globals :: Globals)
-  => Span -> Type Zero -> Type Zero -> Checker (Maybe (Type Zero, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
+  => Span -> Type One -> Type One -> Checker (Maybe (Type One, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
 
 -- Trivial case
 mguCoeffectTypes' s t t' | t == t' = return $ Just (t, (id, id))
@@ -36,14 +36,14 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
 
 -- Left-hand side is a poly variable, but Just is concrete
 mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
-  coeffTy2' <- tryTyPromote s coeffTy2
-  updateCoeffectType kv1 coeffTy2'
+  --coeffTy2' <- tryTyPromote s coeffTy2
+  updateCoeffectType kv1 coeffTy2
   return $ Just (coeffTy2, (id, id))
 
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
-  coeffTy1' <- tryTyPromote s coeffTy1
-  updateCoeffectType kv2 coeffTy1'
+  --coeffTy1' <- tryTyPromote s coeffTy1
+  updateCoeffectType kv2 coeffTy1
   return $ Just (coeffTy1, (id, id))
 
 -- `Nat` can unify with `Q` to `Q`

@@ -202,14 +202,6 @@ joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Subst
 joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (TyVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (TyVar v) = return $ Just (k, [(v, SubstK k)])
-{-
--- TODO: Fix with demote? Was on two promoted types t1 and t2. Fails with kinds.
--- Can try general case k1 k2, try demote k1 and try demote k2 first
-joinKind (TyPromote t1) (TyPromote t2) = do
-  (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
-  coeffTy <- tryTyPromote nullSpan coeffTy
-  return $ Just (coeffTy, [])
--}
 joinKind (KUnion k1 k2) k = do
   jK1 <- joinKind k k1
   case jK1 of
@@ -222,7 +214,11 @@ joinKind (KUnion k1 k2) k = do
 
 joinKind k (KUnion k1 k2) = joinKind (KUnion k1 k2) k
 
-joinKind _ _ = return $ Nothing
+joinKind k1 k2 = do
+  (coeffTy, _) <- mguCoeffectTypes nullSpan t1 t2
+  coeffTy <- tryTyPromote nullSpan coeffTy
+  return $ Just (coeffTy, [])
+--joinKind _ _ = return $ Nothing
 
 -- | Predicate on whether two kinds have a leasy upper bound
 hasLub :: (?globals :: Globals) => Kind -> Kind -> Checker Bool
