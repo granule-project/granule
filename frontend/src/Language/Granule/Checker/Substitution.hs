@@ -68,32 +68,29 @@ instance Substitutable Substitution where
         <> show subst <> " maps variable `" <> show var
         <> "` to a non variable type: `" <> show t <> "`"
 
-instance VarSubstitutable l => Substitutable (Type l) where
-  substitute subst = typeFoldM (baseTypeFold
-                              { tfTyVar = varSubst
-                              , tfBox = box })
-    where
-      box c t = do
-        c <- substitute subst c
-        mBox c t
+instance Substitutable (Type Zero) where
+  substitute subst = typeFoldM0 (baseTypeFoldZero
+                                { tfTyVar0 = varSubst
+                                , tfBox0 = box })
+      where
+        box c t = do
+          c <- substitute subst c
+          mBox c t
 
-      varSubst = return . (flip varSubstForLevel subst)
+        varSubst v =
+          case lookup v subst of
+            Just (SubstT t) -> return t
+            _               -> mTyVar v
 
-class VarSubstitutable (l :: Nat) where
-  varSubstForLevel :: Id -> Substitution -> Type l
-
-instance VarSubstitutable Zero where
-  varSubstForLevel v =
-    case lookup v subst of
-      Just (SubstT t) -> return t
-      _               -> mTyVar v
-
-instance VarSubstitutable (Succ Zero) where
-  varSubstForLevel v =
-    case lookup v subst of
-      Just (SubstK t) -> return t
-      Just (SubstT t) -> tryTyPromote nullSpan t
-      _               -> mTyVar v
+instance Substitutable (Type One) where
+  substitute subst = typeFoldM1 (baseTypeFoldOne
+                                { tfTyVar1 = varSubst })
+      where
+        varSubst v =
+          case lookup v subst of
+            Just (SubstK t) -> return t
+            Just (SubstT t) -> tryTyPromote nullSpan t
+            _               -> mTyVar v
 
 instance Substitutable Coeffect where
 
