@@ -56,7 +56,7 @@ kindIsKind _ = False
 -- Replace any constructor Ids with their top-element
 -- (i.e., IO gets replaces with the set of all effects as an alias)
 replaceSynonyms :: Type -> Type
-replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
+replaceSynonyms = runIdentity . typeFoldM0 (baseTypeFoldZero { tfTyCon = conCase })
   where
     conCase conId =
       case effectTop (TyCon conId) of
