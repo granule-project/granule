@@ -401,6 +401,8 @@ data CheckerError
     { errLoc :: Span, errConstraint :: Neg Constraint }
   | KindMismatch
     { errLoc :: Span, tyActualK :: Maybe (Type Zero), kExpected :: Kind, kActual :: Kind }
+  | SortMismatch
+    { errLoc :: Span, tyActualS :: Maybe (Type One), sExpected :: Type (Succ One), sActual :: Type (Succ One) }
   | KindError
     { errLoc :: Span, errTy :: Type Zero, errK :: Kind }
   | KindCannotFormSet
@@ -515,6 +517,7 @@ instance UserMsg CheckerError where
   title TypeError{} = "Type error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
+  title SortMismatch{} = "Sort mismatch"
   title KindError{} = "Kind error"
   title KindCannotFormSet{} = "Kind error"
   title KindsNotEqual{} = "Kind error"
@@ -594,6 +597,11 @@ instance UserMsg CheckerError where
     = case tyActualK of
         Nothing -> "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
         Just ty -> "Expected kind `" <> pretty kExpected <> "` for type `" <> pretty ty <> "` but actual kind is `" <> pretty kActual <> "`"
+
+  msg SortMismatch{..}
+    = case tyActualS of
+        Nothing -> "Expected sort `" <> pretty sExpected <> "` but got `" <> pretty sActual <> "`"
+        Just k -> "Expected sort `" <> pretty sExpected <> "` for kind `" <> pretty k <> "` but actual sort is `" <> pretty sActual <> "`"
 
   msg KindError{..}
     = "Type `" <> pretty errTy
