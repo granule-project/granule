@@ -229,12 +229,12 @@ hasLub k1 k2 = do
     Just _  -> return True
 
 -- | Infer the type of ta coeffect term (giving its span as well)
-inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker (Type Zero)
+inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker (Type One)
 inferCoeffectType s c = do
   st <- get
   inferCoeffectTypeInContext s (map (\(id, (k, _)) -> (id, k)) (tyVarContext st)) c
 
-inferCoeffectTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Coeffect -> Checker (Type Zero)
+inferCoeffectTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Coeffect -> Checker (Type One)
 -- Coeffect constants have an obvious kind
 inferCoeffectTypeInContext _ _ (Level _)         = return $ TyCon $ mkId "Level"
 inferCoeffectTypeInContext _ _ (CNat _)          = return $ TyCon $ mkId "Nat"
@@ -270,10 +270,7 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
 --      return newType
 
     Just (TyVar   name) -> return $ TyVar name
-    --TODO: Case for demoting k to Type for checkKindIsCoeffect
-    --Just (TyPromote t) -> checkKindIsCoeffect s ctxt t
-    Just k -> throw
-      KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = TyVar $ mkId "coeffectType", kActual = k }
+    Just k -> checkKindIsCoeffect s ctxt k
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
@@ -283,7 +280,7 @@ inferCoeffectTypeInContext s ctxt (CInfinity Nothing) = return (TyApp (TyCon $ m
 inferCoeffectTypeInContext s ctxt (CSig _ t) = checkKindIsCoeffect s ctxt t
 
 inferCoeffectTypeAssumption :: (?globals :: Globals)
-                            => Span -> Assumption -> Checker (Maybe (Type Zero))
+                            => Span -> Assumption -> Checker (Maybe (Type One))
 inferCoeffectTypeAssumption _ (Linear _) = return Nothing
 inferCoeffectTypeAssumption s (Discharged _ c) = do
     t <- inferCoeffectType s c
@@ -298,16 +295,13 @@ checkKindIsCoeffect span ctxt ty = do
       case lookup v ctxt of
         Just k | isCoeffectKind k -> return ty
         _              -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
-    _ -> do
-      if isCoeffectKind kind
-        then return ty
-        else throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
+    _ -> throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
 mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
-                 => Span -> Coeffect -> Coeffect -> Checker (Type Zero, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+                 => Span -> Coeffect -> Coeffect -> Checker (Type One, (Coeffect -> Coeffect, Coeffect -> Coeffect))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
   coeffTy1 <- inferCoeffectType s c1
   coeffTy2 <- inferCoeffectType s c2
