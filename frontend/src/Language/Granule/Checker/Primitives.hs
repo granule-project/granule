@@ -33,42 +33,42 @@ kindConstructor =
 --    * kind
 --    * cardinality (number of matchable constructors)
 --    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Type One, Cardinality, Bool))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (TypeWithLevel, Cardinality, Bool))] -- TODO Cardinality is not a good term
 typeConstructors =
-    [ (mkId "->", (FunTy (Type LZero) (FunTy (Type LZero) (Type LZero)), Nothing, False))
-    , (mkId "×", (FunTy (tyCon $ "Coeffect") (FunTy (tyCon $ "Coeffect") (tyCon $ "Coeffect")), Just 1, False))
-    , (mkId "Int",  (Type LZero, Nothing, False))
-    , (mkId "Float", (Type LZero, Nothing, False))
-    , (mkId "Char", (Type LZero, Nothing, False))
-    , (mkId "String", (Type LZero, Nothing, False))
-    , (mkId "Protocol", (Type LZero, Nothing, False))
-    , (mkId "Nat",  (KUnion (tyCon "Coeffect") (tyCon "Effect"), Nothing, False))
-    , (mkId "Q",    (tyCon "Coeffect", Nothing, False)) -- Rationals
-    , (mkId "Level", (tyCon "Coeffect", Nothing, False)) -- Security level
-    , (mkId "Interval", (FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, False))
-    , (mkId "Set", (FunTy (TyVar $ mkId "k") (FunTy (tyCon "k") (tyCon "Coeffect")), Nothing, False))
+    [ (mkId "->", (TypeWithLevel (LSucc LZero) $ FunTy (Type LZero) (FunTy (Type LZero) (Type LZero)), Nothing, False))
+    , (mkId "×", (TypeWithLevel (LSucc (LSucc LZero)) $ FunTy (tyCon $ "Coeffect") (FunTy (tyCon $ "Coeffect") (tyCon $ "Coeffect")), Just 1, False))
+    , (mkId "Int",  (TypeWithLevel (LSucc LZero) $ Type LZero, Nothing, False))
+    , (mkId "Float", (TypeWithLevel (LSucc LZero) $ Type LZero, Nothing, False))
+    , (mkId "Char", (TypeWithLevel (LSucc LZero) $ Type LZero, Nothing, False))
+    , (mkId "String", (TypeWithLevel (LSucc LZero) $ Type LZero, Nothing, False))
+    , (mkId "Protocol", (TypeWithLevel (LSucc LZero) $ Type LZero, Nothing, False))
+    , (mkId "Nat",  (TypeWithLevel (LSucc (LSucc LZero)) $ KUnion (tyCon "Coeffect") (tyCon "Effect"), Nothing, False))
+    , (mkId "Q",    (TypeWithLevel (LSucc (LSucc LZero)) $ tyCon "Coeffect", Nothing, False)) -- Rationals
+    , (mkId "Level", (TypeWithLevel (LSucc (LSucc LZero)) $ tyCon "Coeffect", Nothing, False)) -- Security level
+    , (mkId "Interval", (TypeWithLevel (LSucc (LSucc LZero)) $ FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, False))
+    , (mkId "Set", (TypeWithLevel (LSucc (LSucc LZero)) $ FunTy (TyVar $ mkId "k") (FunTy (tyCon "k") (tyCon "Coeffect")), Nothing, False))
     -- Channels and protocol types
-    , (mkId "Send", (FunTy (Type LZero) (FunTy protocol protocol), Nothing, False))
-    , (mkId "Recv", (FunTy (Type LZero) (FunTy protocol protocol), Nothing, False))
-    , (mkId "End" , (protocol, Nothing, False))
-    , (mkId "Chan", (FunTy protocol (Type LZero), Nothing, True))
-    , (mkId "Dual", (FunTy protocol protocol, Nothing, True))
-    , (mkId "->", (FunTy (Type LZero) (FunTy (Type LZero) (Type LZero)), Nothing, False))
+    , (mkId "Send", (TypeWithLevel (LSucc LZero) $ FunTy (Type LZero) (FunTy protocol protocol), Nothing, False))
+    , (mkId "Recv", (TypeWithLevel (LSucc LZero) $ FunTy (Type LZero) (FunTy protocol protocol), Nothing, False))
+    , (mkId "End" , (TypeWithLevel (LSucc LZero) $ protocol, Nothing, False))
+    , (mkId "Chan", (TypeWithLevel (LSucc LZero) $ FunTy protocol (Type LZero), Nothing, True))
+    , (mkId "Dual", (TypeWithLevel (LSucc LZero) $ FunTy protocol protocol, Nothing, True))
+    , (mkId "->", (TypeWithLevel (LSucc LZero) $ FunTy (Type LZero) (FunTy (Type LZero) (Type LZero)), Nothing, False))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, True))
+    , (mkId "Ext", (TypeWithLevel (LSucc (LSucc LZero)) $ FunTy (tyCon "Coeffect") (tyCon "Coeffect"), Nothing, True))
     -- Effect grade types - Sessions
-    , (mkId "Session", (TyCon $ mkId "Com", Nothing, True))
-    , (mkId "Com", ((tyCon "Effect"), Nothing, False))
+    , (mkId "Session", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "Com", Nothing, True))
+    , (mkId "Com", (TypeWithLevel (LSucc (LSucc LZero)) $ (tyCon "Effect"), Nothing, False))
     -- Effect grade types - IO
-    , (mkId "IO", ((tyCon "Effect"), Nothing, False))
-    , (mkId "Stdout", (TyCon $ mkId "IOElem", Nothing, False))
-    , (mkId "Stdin", (TyCon $ mkId "IOElem", Nothing, False))
-    , (mkId "Stderr", (TyCon $ mkId "IOElem", Nothing, False))
-    , (mkId "Open", (TyCon $ mkId "IOElem", Nothing, False))
-    , (mkId "Read", (TyCon $ mkId "IOElem", Nothing, False))
-    , (mkId "Write", (TyCon $ mkId "IOElem", Nothing, False))
-    , (mkId "IOExcept", (TyCon $ mkId "IOElem", Nothing, False))
-    , (mkId "Close", (TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "IO", (TypeWithLevel (LSucc (LSucc LZero)) $ (tyCon "Effect"), Nothing, False))
+    , (mkId "Stdout", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Stdin", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Stderr", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Open", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Read", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Write", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "IOExcept", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
+    , (mkId "Close", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", Nothing, False))
     ]
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)

@@ -47,4 +47,4 @@ freshTyVarInContextWithBinding var k q = do
 -- | Helper for registering a new coeffect variable in the checker
 registerTyVarInContext :: Id -> Kind -> Quantifier -> Checker ()
 registerTyVarInContext v k q = do
-    modify (\st -> st { tyVarContext = (v, (k, q)) : tyVarContext st })
+    modify (\st -> st { tyVarContext = (v, (TypeWithLevel (LSucc LZero) k, q)) : tyVarContext st })

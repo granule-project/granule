@@ -58,11 +58,11 @@ newtype Checker a = Checker
 
 type CheckerResult r = Either (NonEmpty CheckerError) r
 
-tryTyPromote :: Span -> Type l -> Checker (Type (Succ l))
+tryTyPromote :: HasLevel l => Span -> Type l -> Checker (Type (Succ l))
 tryTyPromote s ty =
   case tyPromote ty of
     Just ty' -> return ty'
-    Nothing -> throw $ PromotionError s (TypeWithLevel ty)
+    Nothing -> throw $ PromotionError s (TypeWithLevel (getLevel ty) ty)
 
 evalChecker :: CheckerState -> Checker a -> IO (CheckerResult a)
 evalChecker initialState (Checker k) = evalStateT (runExceptT k) initialState
@@ -152,7 +152,7 @@ data CheckerState = CS
 
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
-            , tyVarContext   :: Ctxt (Kind, Quantifier)
+            , tyVarContext   :: Ctxt (TypeWithLevel, Quantifier)
 
             -- Guard contexts (all the guards in scope)
             -- which get promoted  by branch promotions
@@ -166,7 +166,7 @@ data CheckerState = CS
             -- Data type information
             --  map of type constructor names to their the kind, num of
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Kind, Cardinality, Bool)
+            , typeConstructors :: Ctxt (TypeWithLevel, Cardinality, Bool)
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
@@ -180,7 +180,7 @@ data CheckerState = CS
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
-  deriving (Show, Eq) -- for debugging
+  deriving Show -- for debugging
 
 -- | Initial checker context state
 initState :: CheckerState
@@ -372,16 +372,16 @@ addConstraintToPreviousFrame c = do
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
-updateCoeffectType :: Id -> Kind -> Checker ()
+updateCoeffectType :: Id -> Type One -> Checker ()
 updateCoeffectType tyVar k = do
    modify (\checkerState ->
     checkerState
      { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
  where
-   rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
+   rewriteCtxt :: Ctxt (TypeWithLevel, Quantifier) -> Ctxt (TypeWithLevel, Quantifier)
    rewriteCtxt [] = []
-   rewriteCtxt ((name, ((TyVar kindVar), q)) : ctxt)
-    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+   rewriteCtxt ((name, ((TypeWithLevel (LSucc LZero) (TyVar kindVar)), q)) : ctxt)
+    | tyVar == kindVar = (name, (TypeWithLevel (LSucc LZero) k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 
 -- | Convenience function for throwing a single error
@@ -827,8 +827,8 @@ instance UserMsg CheckerError where
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
 
-  msg (PromotionError _ (TypeWithLevel errTyP))
-    = "The type " <> pretty errTyP <> " cannot be promoted to a higher universe level."
+  msg (PromotionError _ (TypeWithLevel lev errTyP))
+    = "The type " <> pretty errTyP <> " at level " <> pretty lev <> " cannot be promoted to a higher universe level."
 
   color HoleMessage{} = Blue
   color _ = Red

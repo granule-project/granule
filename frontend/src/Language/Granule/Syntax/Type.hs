@@ -106,7 +106,7 @@ tyPromote (TyCase t ts) = do
 tyPromote t = Nothing
 
 data TypeWithLevel where
-  TypeWithLevel :: Type l -> TypeWithLevel
+  TypeWithLevel :: ULevel l -> Type l -> TypeWithLevel
 
 deriving instance Show TypeWithLevel
 
@@ -123,11 +123,25 @@ data Type (l :: Nat) where
     TyInfix :: TypeOperator -> Type l -> Type l -> Type l -- ^ Infix type operator
     TySet   :: [Type l] -> Type l           -- ^ Type-level set
     TyCase  :: Type l -> [(Type l, Type l)] -> Type l -- ^ Type-level case
-    KUnion  :: Type One -> Type One -> Type One
+    KUnion  :: Type (Succ (Succ Zero)) -> Type (Succ (Succ Zero)) -> Type (Succ (Succ Zero))
 
 deriving instance Show (Type l)
 deriving instance Eq (Type l)
 deriving instance Ord (Type l)
+
+data LevelProxy (l :: Nat) = LevelProxy
+
+getLevel :: forall l . HasLevel l => Type l -> ULevel l
+getLevel _ = getLevel' (LevelProxy :: LevelProxy l)
+
+class HasLevel (l :: Nat) where
+  getLevel' :: LevelProxy l -> ULevel l
+
+instance HasLevel Zero where
+  getLevel' LevelProxy = LZero
+
+instance HasLevel l => HasLevel (Succ l) where
+  getLevel' LevelProxy = LSucc (getLevel' (LevelProxy :: LevelProxy l))
 
 {-
 promoteTypeToKind :: Type -> Kind
@@ -393,7 +407,7 @@ mTySet   :: Monad m => [Type l] -> m (Type l)
 mTySet xs    = return (TySet xs)
 mTyCase :: Monad m => Type l -> [(Type l, Type l)] -> m (Type l)
 mTyCase x cs = return (TyCase x cs)
-mKUnion :: Monad m => Type One -> Type One -> m (Type One)
+mKUnion :: Monad m => Type (Succ One) -> Type (Succ One) -> m (Type (Succ One))
 mKUnion x y  = return (KUnion x y)
 
 -- Monadic algebra for types
@@ -409,7 +423,7 @@ data TypeFold m (a :: Nat -> *) = TypeFold
   , tfTyInfix :: forall (l :: Nat) . TypeOperator  -> a l -> a l -> m (a l)
   , tfSet     :: forall (l :: Nat) . [a l]         -> m (a l)
   , tfTyCase  :: forall (l :: Nat) . a l -> [(a l, a l)] -> m (a l)
-  , tfKUnion  :: a One -> a One                    -> m (a One)}
+  , tfKUnion  :: a (Succ One) -> a (Succ One)                    -> m (a (Succ One))}
 
 data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
   TypeFoldZero ::
@@ -435,7 +449,6 @@ data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
     , tfTyInfix1 :: TypeOperator  -> a One -> a One -> m (a One)
     , tfSet1     :: [a One]           -> m (a One)
     , tfTyCase1  :: a One -> [(a One, a One)] -> m (a One)
-    , tfKUnion1  :: a One -> a One    -> m (a One)
     } -> TypeFoldAtLevel m One a
 
   TypeFoldL ::
@@ -448,6 +461,7 @@ data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
     , tfTyInfixL :: TypeOperator  -> a (Succ (Succ l)) -> a (Succ (Succ l)) -> m (a (Succ (Succ l)))
     , tfSetL     :: [a (Succ (Succ l))]                -> m (a (Succ (Succ l)))
     , tfTyCaseL  :: a (Succ (Succ l)) -> [(a (Succ (Succ l)), a (Succ (Succ l)))] -> m (a (Succ (Succ l)))
+    , tfKUnion1  :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
     } -> TypeFoldAtLevel m (Succ (Succ l)) a
 
 -- Base monadic algebra
@@ -461,7 +475,7 @@ baseTypeFoldZero =
 
 baseTypeFoldOne :: Monad m => TypeFoldAtLevel m One Type
 baseTypeFoldOne =
-  TypeFoldOne mTy mFunTy mTyCon mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
+  TypeFoldOne mTy mFunTy mTyCon mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m l a . Monad m => TypeFold m a -> Type l -> m (a l)
@@ -581,10 +595,6 @@ typeFoldM1 algebra = go
       a' <- a
       b' <- b
       return (a', b')
-   go (KUnion t1 t2) = do
-     t1' <- go t1
-     t2' <- go t2
-     (tfKUnion1 algebra) t1' t2'
 
 typeFoldML :: forall m l a . Monad m => TypeFoldAtLevel m (Succ (Succ l)) a -> Type (Succ (Succ l)) -> m (a (Succ (Succ l)))
 typeFoldML algebra = go
@@ -618,6 +628,10 @@ typeFoldML algebra = go
       a' <- a
       b' <- b
       return (a', b')
+   go (KUnion t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfKUnion1 algebra) t1' t2'
 
 instance FirstParameter TypeScheme Span
 

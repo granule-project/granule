@@ -646,6 +646,7 @@ instance Unifiable Coeffect where
     unify c c' =
         if c == c' then return $ Just [] else return Nothing
 
+{-
 instance Unifiable Kind where
     unify (TyVar v) k =
         return $ Just [(v, SubstK k)]
@@ -656,6 +657,7 @@ instance Unifiable Kind where
         u2 <- unify k2 k2'
         u1 <<>> u2
     unify k k' = return $ if k == k' then Just [] else Nothing
+-}
 
 instance Unifiable t => Unifiable (Maybe t) where
     unify Nothing _ = return (Just [])
@@ -697,10 +699,10 @@ updateTyVar s tyVar k = do
   -}
       Nothing -> throw UnboundVariableError{ errLoc = s, errId = tyVar }
   where
-    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
+    rewriteCtxt :: Ctxt (TypeWithLevel, Quantifier) -> Ctxt (TypeWithLevel, Quantifier)
     rewriteCtxt [] = []
-    rewriteCtxt ((name, (TyVar kindVar, q)) : ctxt)
-     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
-    rewriteCtxt ((name, (TyVar kindVar, q)) : ctxt)
-     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+    rewriteCtxt ((name, (TypeWithLevel (LSucc LZero) (TyVar kindVar), q)) : ctxt)
+     | tyVar == kindVar = (name, (TypeWithLevel (LSucc LZero) k, q)) : rewriteCtxt ctxt
+    rewriteCtxt ((name, (TypeWithLevel (LSucc LZero) (TyVar kindVar), q)) : ctxt)
+     | tyVar == kindVar = (name, (TypeWithLevel (LSucc LZero) k, q)) : rewriteCtxt ctxt
     rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
