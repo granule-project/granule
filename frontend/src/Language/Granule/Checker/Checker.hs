@@ -52,7 +52,7 @@ import Language.Granule.Utils
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
-  -> IO (Either (NonEmpty CheckerError) (AST () Type))
+  -> IO (Either (NonEmpty CheckerError) (AST () (Type Zero)))
 check ast@(AST dataDecls defs imports hidden name) =
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
@@ -220,9 +220,9 @@ checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
 checkAndGenerateSubstitution ::
        Span                     -- ^ Location of this application
     -> Id                       -- ^ Name of the type constructor
-    -> Type                     -- ^ Type of the data constructor
+    -> Type Zero                -- ^ Type of the data constructor
     -> [Kind]                   -- ^ Types of the remaining data type indices
-    -> Checker (Type, Substitution, Ctxt Kind)
+    -> Checker (Type Zero, Substitution, Ctxt Kind)
 checkAndGenerateSubstitution sp tName ty ixkinds =
     checkAndGenerateSubstitution' sp tName ty (reverse ixkinds)
   where
@@ -247,7 +247,7 @@ checkAndGenerateSubstitution sp tName ty ixkinds =
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
-         -> Checker (Def () Type)
+         -> Checker (Def () (Type Zero))
 checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty)) = do
 
     -- duplicate forall bindings
@@ -259,7 +259,7 @@ checkDef defCtxt (Def s defName equations tys@(Forall s_t foralls constraints ty
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
 
-    elaboratedEquations :: [Equation () Type] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
+    elaboratedEquations :: [Equation () (Type Zero)] <- forM equations $ \equation -> do -- Checker [Maybe (Equation () Type)]
         -- Erase the solver predicate between equations
         modify' $ \st -> st
             { predicateStack = []
@@ -284,7 +284,7 @@ checkEquation :: (?globals :: Globals) =>
   -> Id              -- Name of the definition
   -> Equation () ()  -- Equation
   -> TypeScheme      -- Type scheme
-  -> Checker (Equation () Type)
+  -> Checker (Equation () (Type Zero))
 
 checkEquation defCtxt _ (Equation s () pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
@@ -368,9 +368,9 @@ checkExpr :: (?globals :: Globals)
           -> Ctxt Assumption   -- local typing context
           -> Polarity         -- polarity of <= constraints
           -> Bool             -- whether we are top-level or not
-          -> Type             -- type
+          -> Type Zero        -- type
           -> Expr () ()       -- expression
-          -> Checker (Ctxt Assumption, Substitution, Expr () Type)
+          -> Checker (Ctxt Assumption, Substitution, Expr () (Type Zero))
 
 -- Hit an unfilled hole
 checkExpr _ ctxt _ _ t (Hole s _) = do
@@ -592,7 +592,7 @@ synthExpr :: (?globals :: Globals)
           -> Ctxt Assumption   -- ^ Local typing context
           -> Polarity          -- ^ Polarity of subgrading
           -> Expr () ()        -- ^ Expression
-          -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
+          -> Checker (Type Zero, Ctxt Assumption, Substitution, Expr () (Type Zero))
 
 -- Hit an unfilled hole
 synthExpr _ ctxt _ (Hole s _) = do
@@ -950,7 +950,7 @@ synthExpr _ _ _ e =
   throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
 -- Check an optional type signature for equality against a type
-optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> Checker ()
+optionalSigEquality :: (?globals :: Globals) => Span -> Maybe (Type Zero) -> Type Zero -> Checker ()
 optionalSigEquality _ Nothing _ = pure ()
 optionalSigEquality s (Just t) t' = do
   _ <- equalTypes s t' t
@@ -1021,7 +1021,7 @@ rewriteMessage msg = do
        in line''
 
 justCoeffectTypesConverted :: (?globals::Globals)
-  => Span -> [(a, (Kind, b))] -> Checker [(a, (Type, b))]
+  => Span -> [(a, (Kind, b))] -> Checker [(a, (Type Zero, b))]
 justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (t, q)) = do
@@ -1036,7 +1036,7 @@ justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
         else return Nothing
     convert _ = return Nothing
 justCoeffectTypesConvertedVars :: (?globals::Globals)
-  => Span -> [(Id, Kind)] -> Checker (Ctxt Type)
+  => Span -> [(Id, Kind)] -> Checker (Ctxt (Type Zero))
 justCoeffectTypesConvertedVars s env = do
   let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
   env' <- justCoeffectTypesConverted s implicitUniversalMadeExplicit
@@ -1194,7 +1194,7 @@ checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
 -- Assumption that the two assumps are for the same variable
 relateByAssumption :: (?globals :: Globals)
   => Span
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
   -> (Id, Assumption)
   -> (Id, Assumption)
   -> Checker ()
@@ -1342,7 +1342,7 @@ justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
 justLinear ((x, _) : xs) = justLinear xs
 
 checkGuardsForExhaustivity :: (?globals :: Globals)
-  => Span -> Id -> Type -> [Equation () ()] -> Checker ()
+  => Span -> Id -> Type Zero -> [Equation () ()] -> Checker ()
 checkGuardsForExhaustivity s name ty eqs = do
   debugM "Guard exhaustivity" "todo"
   return ()

@@ -31,8 +31,8 @@ import Language.Granule.Utils
 --   a box pattern (or many nested box patterns)
 definiteUnification :: (?globals :: Globals)
   => Span
-  -> Maybe (Coeffect, Type) -- Outer coeffect
-  -> Type                   -- Type of the pattern
+  -> Maybe (Coeffect, Type Zero) -- Outer coeffect
+  -> Type Zero                   -- Type of the pattern
   -> Checker ()
 definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
@@ -41,7 +41,7 @@ definiteUnification s (Just (coeff, coeffTy)) ty = do
     addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
-polyShaped :: (?globals :: Globals) => Type -> Checker Bool
+polyShaped :: (?globals :: Globals) => Type Zero -> Checker Bool
 polyShaped t = case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
@@ -71,21 +71,21 @@ polyShaped t = case leftmostOfApplication t of
 --      - a consumption context explaining usage triggered by pattern matching
 ctxtFromTypedPattern :: (?globals :: Globals) =>
   Span
-  -> Type
+  -> Type Zero
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern (Type Zero), Consumption)
 
 ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
 -- | Inner helper, which takes information about the enclosing coeffect
 ctxtFromTypedPattern' :: (?globals :: Globals) =>
-     Maybe (Coeffect, Type)    -- enclosing coeffect
+     Maybe (Coeffect, Type Zero)    -- enclosing coeffect
   -> Span
-  -> Type
+  -> Type Zero
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern (Type Zero), Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
@@ -252,19 +252,19 @@ ctxtFromTypedPattern' _ s t p _ = do
 
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
-  -> Type
+  -> Type Zero
   -> [Pattern ()]
   -> [Consumption]
-  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
+  -> Checker (Ctxt Assumption, Type Zero, Ctxt Kind, Substitution, [Pattern (Type Zero)], [Consumption])
 ctxtFromTypedPatterns = ctxtFromTypedPatterns' Nothing
 
 ctxtFromTypedPatterns' :: (?globals :: Globals)
-  => Maybe (Coeffect, Type)
+  => Maybe (Coeffect, Type Zero)
   -> Span
-  -> Type
+  -> Type Zero
   -> [Pattern ()]
   -> [Consumption]
-  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
+  -> Checker (Ctxt Assumption, Type Zero, Ctxt Kind, Substitution, [Pattern (Type Zero)], [Consumption])
 ctxtFromTypedPatterns' _ sp ty [] _ = do
   return ([], ty, [], [], [], [])
 

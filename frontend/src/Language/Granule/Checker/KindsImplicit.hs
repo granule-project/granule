@@ -55,7 +55,7 @@ kindIsKind _ = False
 
 -- Replace any constructor Ids with their top-element
 -- (i.e., IO gets replaces with the set of all effects as an alias)
-replaceSynonyms :: Type -> Type
+replaceSynonyms :: Type Zero -> Type Zero
 replaceSynonyms = runIdentity . typeFoldM0 (baseTypeFoldZero { tfTyCon = conCase })
   where
     conCase conId =
@@ -66,7 +66,7 @@ replaceSynonyms = runIdentity . typeFoldM0 (baseTypeFoldZero { tfTyCon = conCase
 
 -- Infers the kind of a type, but also allows some of the type variables to have poly kinds
 -- which get automatically resolved
-inferKindOfTypeImplicits :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker (Kind, Substitution)
+inferKindOfTypeImplicits :: (?globals :: Globals) => Span -> Ctxt Kind -> Type Zero -> Checker (Kind, Substitution)
 
 inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
    (k1, u1) <- inferKindOfTypeImplicits s ctxt t1

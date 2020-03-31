@@ -28,23 +28,23 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 lEqualTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
+  => Span -> SpecIndicator -> Type Zero -> Type Zero -> Checker (Bool, Type Zero, Substitution)
 lEqualTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy pol
 
 equalTypesWithPolarity :: (?globals :: Globals)
-  => Span -> SpecIndicator -> Type -> Type -> Checker (Bool, Type, Substitution)
+  => Span -> SpecIndicator -> Type Zero -> Type Zero -> Checker (Bool, Type Zero, Substitution)
 equalTypesWithPolarity s pol = equalTypesRelatedCoeffectsAndUnify s Eq pol
 
 lEqualTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
+  => Span -> Type Zero -> Type Zero -> Checker (Bool, Type Zero, Substitution)
 lEqualTypes s = equalTypesRelatedCoeffectsAndUnify s ApproximatedBy SndIsSpec
 
 equalTypes :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
+  => Span -> Type Zero -> Type Zero -> Checker (Bool, Type Zero, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
 equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
+  => Span -> Type Zero -> Type Zero -> Checker (Bool, Type Zero, Substitution)
 equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
 {- | Check whether two types are equal, and at the same time
@@ -58,18 +58,18 @@ equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s E
 equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
   -- Starting spec indication
   -> SpecIndicator
   -- Left type (usually the inferred)
-  -> Type
+  -> Type Zero
   -- Right type (usually the specified)
-  -> Type
+  -> Type Zero
   -- Result is a effectful, producing:
   --    * a boolean of the equality
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier
-  -> Checker (Bool, Type, Substitution)
+  -> Checker (Bool, Type Zero, Substitution)
 equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 = do
 
    (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 spec
@@ -95,9 +95,9 @@ flipIndicator PatternCtxt = PatternCtxt
 equalTypesRelatedCoeffects :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -> Type
-  -> Type
+  -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
+  -> Type Zero
+  -> Type Zero
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
   -> Checker (Bool, Substitution)
@@ -119,9 +119,9 @@ equalTypesRelatedCoeffects s rel t1 t2 sp = do
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-  -> Type
-  -> Type
+  -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
+  -> Type Zero
+  -> Type Zero
   -> Kind
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
@@ -339,8 +339,8 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp = do
 {- | Equality on other types (e.g. Nat and Session members) -}
 equalOtherKindedTypesGeneric :: (?globals :: Globals)
     => Span
-    -> Type
-    -> Type
+    -> Type Zero
+    -> Type Zero
     -> Kind
     -> Checker (Bool, Substitution)
 equalOtherKindedTypesGeneric s t1 t2 k = do
@@ -363,7 +363,7 @@ equalOtherKindedTypesGeneric s t1 t2 k = do
 -- Essentially use to report better error messages when two session type
 -- are not equality
 sessionInequality :: (?globals :: Globals)
-    => Span -> Type -> Type -> Checker (Bool, Substitution)
+    => Span -> Type Zero -> Type Zero -> Checker (Bool, Substitution)
 sessionInequality s (TyApp (TyCon c) t) (TyApp (TyCon c') t')
   | internalName c == "Send" && internalName c' == "Send" = do
   (g, _, u) <- equalTypes s t t'
@@ -383,9 +383,9 @@ sessionInequality s t1 t2 = throw TypeError{ errLoc = s, tyExpected = t1, tyActu
 isDualSession :: (?globals :: Globals)
     => Span
        -- Explain how coeffects should be related by a solver constraint
-    -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
-    -> Type
-    -> Type
+    -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
+    -> Type Zero
+    -> Type Zero
     -- Indicates whether the first type or second type is a specification
     -> SpecIndicator
     -> Checker (Bool, Substitution)
@@ -412,7 +412,7 @@ isDualSession sp _ t1 t2 _ = throw
 
 
 -- Essentially equality on types but join on any coeffects
-joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
+joinTypes :: (?globals :: Globals) => Span -> Type Zero -> Type Zero -> Checker (Type Zero)
 joinTypes s t t' | t == t' = return t
 
 joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
@@ -532,7 +532,7 @@ twoEqualEffectTypes s ef1 ef2 = do
         throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
 
 -- | Find out if a type is indexed
-isIndexedType :: Type -> Checker Bool
+isIndexedType :: Type Zero -> Checker Bool
 isIndexedType = typeFoldM $
   TypeFold
     { tfFunTy = \x y -> return (x || y)
