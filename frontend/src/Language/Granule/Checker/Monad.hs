@@ -812,7 +812,7 @@ instance UserMsg CheckerError where
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
 
   msg UnknownResourceAlgebra{ errK, errTy }
-    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from effect term `" <> pretty errTy <> "`"
 
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."

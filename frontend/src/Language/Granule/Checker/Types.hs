@@ -506,6 +506,7 @@ equalKinds sp k1 k2 = do
       Just (k, u) -> return (True, k, u)
       Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
 
+-- Checkers that two effects have the same type, and if so then returns that effect type
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
     mefTy1 <- isEffectType s ef1
