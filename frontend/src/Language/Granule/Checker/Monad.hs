@@ -402,7 +402,7 @@ data CheckerError
   | KindMismatch
     { errLoc :: Span, tyActualK :: Maybe (Type Zero), kExpected :: Kind, kActual :: Kind }
   | SortMismatch
-    { errLoc :: Span, tyActualS :: Maybe (Type One), sExpected :: Type (Succ One), sActual :: Type (Succ One) }
+    { errLoc :: Span, kActualS :: Maybe (Type One), sExpected :: Type Two, sActual :: Type Two }
   | KindError
     { errLoc :: Span, errTy :: Type Zero, errK :: Kind }
   | KindCannotFormSet
@@ -599,7 +599,7 @@ instance UserMsg CheckerError where
         Just ty -> "Expected kind `" <> pretty kExpected <> "` for type `" <> pretty ty <> "` but actual kind is `" <> pretty kActual <> "`"
 
   msg SortMismatch{..}
-    = case tyActualS of
+    = case kActualS of
         Nothing -> "Expected sort `" <> pretty sExpected <> "` but got `" <> pretty sActual <> "`"
         Just k -> "Expected sort `" <> pretty sExpected <> "` for kind `" <> pretty k <> "` but actual sort is `" <> pretty sActual <> "`"
 

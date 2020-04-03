@@ -44,7 +44,144 @@ class InferKind l where
   inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt TypeWithLevel -> Type l -> Checker (Type (Succ l))
 
 instance InferKind (Succ Zero) where
-  inferKindOfTypeInContext s quantifiedVariables t = error "TODO"
+  inferKindOfTypeInContext s quantifiedVariables t = do
+        w <- typeFoldM1 (TypeFoldOne kTy kFun kCon kVar kApp kInt kInfix kSet kCase) t
+        return $ unwrap w
+      where
+        kTy :: ULevel Zero -> Checker Sort'
+        kTy l = return $ W $ Type (LSucc l)
+
+        kFun :: Sort' -> Sort' -> Checker Sort'
+        kFun (W (TyCon c)) (W (TyCon c'))
+          | internalName c == internalName c' = return $ W $ TyCon c
+
+        kFun (W (Type l)) (W (Type l')) | l == l' = return $ W $ Type l
+        kFun (W (Type l)) (W y) = throw SortMismatch{ errLoc = s, kActualS = Nothing, sExpected = Type l, sActual = y }
+        kFun (W x) _     = throw SortMismatch{ errLoc = s, kActualS = Nothing, sExpected = Type (LSucc LZero), sActual = x }
+
+        kCon :: Id -> Checker Sort'
+        kCon (internalName -> "Pure") = do
+          -- Create a fresh type variable
+          var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") (TyCon (mkId "Effect"))
+          return $ W $ TyVar var
+        kCon conId = do
+            st <- get
+            case lookup conId (typeConstructors st) of
+                Just (TypeWithLevel (LSucc (LSucc LZero)) sort,_,_) -> return $ W sort
+                _   -> do
+                  mConstructor <- lookupDataConstructor s conId
+                  case mConstructor of
+                    Just (Forall _ [] [] t, _) -> do
+                      k <- tryTyPromote s t
+                      sort <- tryTyPromote s k
+                      return $ W sort
+                    Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
+                    Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
+
+        kVar :: Id -> Checker Sort'
+        kVar tyVar =
+          case lookup tyVar quantifiedVariables of
+            Just (TypeWithLevel (LSucc (LSucc LZero)) sort) -> return $ W sort
+            _   -> do
+              st <- get
+              case lookup tyVar (tyVarContext st) of
+                Just (TypeWithLevel (LSucc (LSucc LZero)) sort, _) -> return $ W sort
+                _ -> throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
+
+        kApp :: Sort' -> Sort' -> Checker Sort'
+        kApp (W (FunTy k1 k2)) (W kArg) = do
+          kLub <- k1 `sHasLub` kArg
+          if kLub
+            then return $ W k2
+            else throw SortMismatch
+                  { errLoc = s
+                  , kActualS = Nothing
+                  , sActual = kArg
+                  , sExpected = k1 }
+
+        kApp (W k) (W kArg) = throw SortMismatch
+            { errLoc = s
+            , kActualS = Nothing
+            , sExpected = (FunTy kArg (TyVar $ mkId "..."))
+            , sActual = k
+            }
+
+        kInt :: Int -> Checker Sort'
+        kInt _ = return $ W $ TyCon $ mkId "Nat"
+
+        kInfix :: TypeOperator -> Sort' -> Sort' -> Checker Sort'
+        kInfix (tyOps -> (k1exp, k2exp, kret)) (W k1act) (W k2act) = do
+          kLub <- k1act `sHasLub` k1exp
+          if not kLub
+            then throw
+              SortMismatch{ errLoc = s, kActualS = Nothing, sExpected = k1exp, sActual = k1act}
+            else do
+              kLub' <- k2act `hasLub` k2exp
+              if not kLub'
+                then throw
+                  SortMismatch{ errLoc = s, kActualS = Nothing, sExpected = k2exp, sActual = k2act}
+                else pure $ W kret
+
+        kSet :: [Sort'] -> Checker Sort'
+        kSet wks = kSetW (map unwrap wks)
+
+        kSetW :: [Type Two] -> Checker Sort'
+        kSetW ks =
+          -- If the set is empty, then it could have any kind, so we need to make
+          -- a kind which is `TyPromote (Set a)` for some type variable `a` of unknown kind
+          if null ks
+            then do
+                -- create fresh polymorphic kind variable for this type
+                vark <- freshIdentifierBase $ "set_elemk"
+                -- remember this new kind variable in the kind environment
+                modify (\st -> st { tyVarContext = (mkId vark, (TypeWithLevel (LSucc LZero) $ Type LZero, InstanceQ))
+                                      : tyVarContext st })
+                -- Create a fresh type variable
+                var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (TyVar $ mkId vark)
+                k <- tryTyPromote s $ TyApp (TyCon $ mkId "Set") (TyVar var)
+                return $ W k
+
+            -- Otherwise, everything in the set has to have the same kind
+            else
+              if foldr (\x r -> (x == head ks) && r) True ks
+
+                then  -- check if there is an alias (name) for sets of this kind
+                    case lookup (head ks) setElements of
+                        -- Lift this alias to the sort level
+                        Just t -> do
+                          k <- tryTyPromote s t
+                          sort <- tryTyPromote s k
+                          return $ W sort
+                        Nothing -> return $ W $ TyApp (TyCon $ mkId "Set") (head ks)
+
+                -- Find the first occurence of a change in kind:
+                else throw $ SortMismatch { errLoc = s , kActualS = Nothing, sExpected = head left, sActual = head right }
+                        where (left, right) = partition (\x -> (head ks) == x) ks
+
+        kCase :: Sort' -> [(Sort', Sort')] -> Checker Sort'
+        kCase wk wks =
+          let k = unwrap wk
+              ks = map (\(a, b) -> (unwrap a, unwrap b)) wks
+          in kCaseW k ks
+
+        kCaseW :: Type Two -> [(Type Two, Type Two)] -> Checker Sort'
+        kCaseW k ks =
+          -- Given that k, each pattern p and its corresponding branch b are well-kinded:
+          -- The kind of k must be the same as the kind of each pattern p.
+          if all (\x -> fst x == k) ks
+            then -- All the branches must have the same kind.
+              let bk = snd (head ks) in
+                if all (\x -> snd x == bk) ks
+                  then return $ W bk
+                  -- Find the first branch that doesn't share a kind:
+                  else
+                    let (_, right) = partition (\x -> bk == snd x) ks in
+                      throw $ SortMismatch { errLoc = s, kActualS = Nothing, sExpected = bk, sActual = snd (head right) }
+
+            -- Find the first pattern that doesn't match the kind of k:
+            else
+              let (_, right) = partition (\x -> k == fst x) ks in
+              throw $ SortMismatch { errLoc = s, kActualS = Nothing, sExpected = k, sActual = fst (head right) }
 
 instance InferKind Zero where
   inferKindOfTypeInContext s quantifiedVariables t = do
@@ -87,9 +224,10 @@ instance InferKind Zero where
 
       kDiamond :: Kind' -> Kind' -> Checker Kind'
       kDiamond (W effK) (W (Type LZero)) = do
-        -- TODO: check that effK is something that is actually an effect.
-          return $ W $ Type LZero
-        -- else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = (TyCon (mkId "Effect")), kActual = effK }
+        ef <- isEffectType s effK
+        if ef
+          then return $ W $ Type LZero
+          else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = (TyCon (mkId "Effect")), kActual = effK }
 
       kDiamond _ (W x)     = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = Type LZero, kActual = x }
 
@@ -209,35 +347,45 @@ joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Subst
 joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
 joinKind (TyVar v) k = return $ Just (k, [(v, SubstK k)])
 joinKind k (TyVar v) = return $ Just (k, [(v, SubstK k)])
-{- 
-TODO: need a joinSort :: Type Two -> Type Two -> Checker (Maybe (Type Two, Substitution))
-that does this
-joinKind (KUnion k1 k2) k = do
-  jK1 <- joinKind k k1
-  case jK1 of
-    Nothing -> do
-        jK2 <- joinKind k k2
-        case jK2 of
-            Nothing -> return $ Nothing
-            Just (k2', u) -> return $ Just (KUnion k1 k2', u)
-    Just (k1', u) -> return $ Just (KUnion k1' k2, u)
-
-joinKind k (KUnion k1 k2) = joinKind (KUnion k1 k2) k
--}
-
 joinKind k1 k2 = do
   (coeffTy, _) <- mguCoeffectTypes nullSpan k1 k2
   --coeffTy <- tryTyPromote nullSpan coeffTy
   return $ Just (coeffTy, [])
 --joinKind _ _ = return $ Nothing
 
--- | Predicate on whether two kinds have a leasy upper bound
+joinSort :: Type Two -> Type Two -> Checker (Maybe (Type Two, Substitution))
+joinSort s1 s2 | s1 == s2 = return $ Just (s1, [])
+joinSort (TyVar v) s = return $ Just (s, [(v, SubstS s)])
+joinSort s (TyVar v) = return $ Just (s, [(v, SubstS s)])
+joinSort (KUnion s1 s2) s = do
+  jS1 <- joinSort s s1
+  case jS1 of
+    Nothing -> do
+        jS2 <- joinSort s s2
+        case jS2 of
+            Nothing -> return $ Nothing
+            Just (s2', u) -> return $ Just (KUnion s1 s2', u)
+    Just (s1', u) -> return $ Just (KUnion s1' s2, u)
+
+joinSort s (KUnion s1 s2) = joinSort (KUnion s1 s2) s
+joinSort _ _ = return $ Nothing
+
+-- | Predicate on whether two kinds have a least upper bound
 hasLub :: (?globals :: Globals) => Kind -> Kind -> Checker Bool
 hasLub k1 k2 = do
   jK <- joinKind k1 k2
   case jK of
     Nothing -> return False
     Just _  -> return True
+
+-- | Predicate on whether two sorts have a least upper bound
+sHasLub :: (?globals :: Globals) => Type Two -> Type Two -> Checker Bool
+sHasLub s1 s2 = do
+  jS <- joinSort s1 s2
+  case jS of
+    Nothing -> return False
+    Just _  -> return True
+
 
 -- | Infer the type of ta coeffect term (giving its span as well)
 inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker (Type One)
@@ -281,7 +429,10 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
 --      return newType
 
     Just (TypeWithLevel (LSucc LZero) (TyVar   name)) -> return $ TyVar name
-    Just k -> checkKindIsCoeffect s ctxt k
+    --Just k -> checkKindIsCoeffect s ctxt k
+    Just (TypeWithLevel (LSucc LZero) k) -> checkKindIsCoeffect s ctxt k
+    --TODO: fix for cases where the universe level is wrong?
+    Just _ -> throw UnboundTypeVariable{ errLoc = s, errId = cvar }
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t
@@ -305,10 +456,8 @@ checkKindIsCoeffect span ctxt ty = do
     TyVar v ->
       case lookup v ctxt of
         Just (TypeWithLevel (LSucc (LSucc LZero)) k) | isCoeffectKind k -> return ty
-    -- TODO: make a KindMismatch that works at the level above
-        _              -> undefined -- throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = kind }
-    _ -> undefined -- throw KindMismatch{ errLoc = span, tyActualK = Just ty, kExpected = (TyCon (mkId "Coeffect")), kActual = undefined }
-    -- TODO: hm kind should be given here in this error message
+        _ -> throw SortMismatch{ errLoc = span, kActualS = Just ty, sExpected = (TyCon (mkId "Coeffect")), sActual = kind }
+    _ -> throw SortMismatch{ errLoc = span, kActualS = Just ty, sExpected = (TyCon (mkId "Coeffect")), sActual = kind }
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
@@ -331,3 +480,4 @@ isEffectType s ty = do
 -- Wrapper for TypeFold, since GHC has trouble deducing a ~ Type . Succ
 data TypeSucc a = W { unwrap :: Type (Succ a) }
 type Kind' = TypeSucc Zero
+type Sort' = TypeSucc One

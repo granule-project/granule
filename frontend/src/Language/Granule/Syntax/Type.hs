@@ -56,6 +56,7 @@ Example: `List n Int` in Granule
 -}
 
 type One = Succ Zero
+type Two = Succ One
 
 type Kind = Type One
 
@@ -407,7 +408,7 @@ mTySet   :: Monad m => [Type l] -> m (Type l)
 mTySet xs    = return (TySet xs)
 mTyCase :: Monad m => Type l -> [(Type l, Type l)] -> m (Type l)
 mTyCase x cs = return (TyCase x cs)
-mKUnion :: Monad m => Type (Succ One) -> Type (Succ One) -> m (Type (Succ One))
+mKUnion :: Monad m => Type Two -> Type Two -> m (Type Two)
 mKUnion x y  = return (KUnion x y)
 
 -- Monadic algebra for types
@@ -423,7 +424,7 @@ data TypeFold m (a :: Nat -> *) = TypeFold
   , tfTyInfix :: forall (l :: Nat) . TypeOperator  -> a l -> a l -> m (a l)
   , tfSet     :: forall (l :: Nat) . [a l]         -> m (a l)
   , tfTyCase  :: forall (l :: Nat) . a l -> [(a l, a l)] -> m (a l)
-  , tfKUnion  :: a (Succ One) -> a (Succ One)                    -> m (a (Succ One))}
+  , tfKUnion  :: a Two -> a Two                    -> m (a Two)}
 
 data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
   TypeFoldZero ::
@@ -461,7 +462,7 @@ data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
     , tfTyInfixL :: TypeOperator  -> a (Succ (Succ l)) -> a (Succ (Succ l)) -> m (a (Succ (Succ l)))
     , tfSetL     :: [a (Succ (Succ l))]                -> m (a (Succ (Succ l)))
     , tfTyCaseL  :: a (Succ (Succ l)) -> [(a (Succ (Succ l)), a (Succ (Succ l)))] -> m (a (Succ (Succ l)))
-    , tfKUnion1  :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
+    , tfKUnionL  :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
     } -> TypeFoldAtLevel m (Succ (Succ l)) a
 
 -- Base monadic algebra
@@ -631,7 +632,7 @@ typeFoldML algebra = go
    go (KUnion t1 t2) = do
      t1' <- go t1
      t2' <- go t2
-     (tfKUnion1 algebra) t1' t2'
+     (tfKUnionL algebra) t1' t2'
 
 instance FirstParameter TypeScheme Span
 
