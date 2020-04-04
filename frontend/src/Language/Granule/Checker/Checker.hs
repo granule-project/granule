@@ -775,7 +775,7 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
   (tau2, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
   (tau3, gam3, subst3, elaborated3) <- synthExpr defs (binders <> gam) pol e3
 
-  -- check e2 and e2 are diamonds
+  -- check e2 and e3 are diamonds
   (ef2, ty2) <- case tau2 of
       Diamond ef2 ty2 -> return (ef2, ty2)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
@@ -796,12 +796,12 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
 
   --resulting effect type
   let f = TyApp (TyCon $ mkId "Handled") ef1
-  (g, subst') <- twoEqualEffectTypes s ef2 ef3
-  (efTy, subst'') <- twoEqualEffectTypes s f g
+  (efTy, subst') <- twoEqualEffectTypes s ef1 ef2
+  g <- effectUpperBound s efTy ef2 ef3
   ef <- effectMult s efTy f g
   let t = Diamond ef ty2
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst', subst'']
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
   -- Synth subst
   t' <- substitute substP t
   
