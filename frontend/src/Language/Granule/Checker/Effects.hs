@@ -163,6 +163,7 @@ effectTop t = do
     -- find all elements of the matching element type
     allConstructorsMatchingElemKind :: Kind -> [Id]
     allConstructorsMatchingElemKind elemKind = mapMaybe (go elemKind) P.typeConstructors
+    go :: Kind -> (Id, (TypeWithLevel, a, Bool)) -> Maybe Id
     go elemKind (con, (TypeWithLevel (LSucc LZero) k, _, _)) =
         if k == elemKind then Just con else Nothing
     -- Level doesn't match
