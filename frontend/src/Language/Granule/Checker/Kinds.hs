@@ -110,53 +110,19 @@ instance InferKind (Succ Zero) where
         kInt _ = return $ W $ TyCon $ mkId "Nat"
 
         kInfix :: TypeOperator -> Sort' -> Sort' -> Checker Sort'
-        kInfix (tyOps -> (k1exp, k2exp, kret)) (W k1act) (W k2act) = do
-          kLub <- k1act `sHasLub` k1exp
-          if not kLub
-            then throw
-              SortMismatch{ errLoc = s, kActualS = Nothing, sExpected = k1exp, sActual = k1act}
-            else do
-              kLub' <- k2act `hasLub` k2exp
-              if not kLub'
-                then throw
-                  SortMismatch{ errLoc = s, kActualS = Nothing, sExpected = k2exp, sActual = k2act}
-                else pure $ W kret
+        kInfix op (W sort) (W sort') = error $
+          "Cannot currently do a kind-level infix operation " ++ pretty op
+           ++ " on kinds of sort " ++ pretty sort ++ " and " ++ pretty sort'
 
         kSet :: [Sort'] -> Checker Sort'
         kSet wks = kSetW (map unwrap wks)
 
         kSetW :: [Type Two] -> Checker Sort'
         kSetW ks =
-          -- If the set is empty, then it could have any kind, so we need to make
-          -- a kind which is `TyPromote (Set a)` for some type variable `a` of unknown kind
           if null ks
-            then do
-                -- create fresh polymorphic kind variable for this type
-                vark <- freshIdentifierBase $ "set_elemk"
-                -- remember this new kind variable in the kind environment
-                modify (\st -> st { tyVarContext = (mkId vark, (TypeWithLevel (LSucc LZero) $ Type LZero, InstanceQ))
-                                      : tyVarContext st })
-                -- Create a fresh type variable
-                var <- freshTyVarInContext (mkId $ "set_elem[" <> pretty (startPos s) <> "]") (TyVar $ mkId vark)
-                k <- tryTyPromote s $ TyApp (TyCon $ mkId "Set") (TyVar var)
-                return $ W k
-
-            -- Otherwise, everything in the set has to have the same kind
+            then error $ "Cannot currently do a kind-level set"
             else
-              if foldr (\x r -> (x == head ks) && r) True ks
-
-                then  -- check if there is an alias (name) for sets of this kind
-                    case lookup (head ks) setElements of
-                        -- Lift this alias to the sort level
-                        Just t -> do
-                          k <- tryTyPromote s t
-                          sort <- tryTyPromote s k
-                          return $ W sort
-                        Nothing -> return $ W $ TyApp (TyCon $ mkId "Set") (head ks)
-
-                -- Find the first occurence of a change in kind:
-                else throw $ SortMismatch { errLoc = s , kActualS = Nothing, sExpected = head left, sActual = head right }
-                        where (left, right) = partition (\x -> (head ks) == x) ks
+              error $ "Cannot currently do a kind-level set on kinds of sort " ++ pretty (head ks)
 
         kCase :: Sort' -> [(Sort', Sort')] -> Checker Sort'
         kCase wk wks =
@@ -379,7 +345,7 @@ hasLub k1 k2 = do
     Just _  -> return True
 
 -- | Predicate on whether two sorts have a least upper bound
-sHasLub :: (?globals :: Globals) => Type Two -> Type Two -> Checker Bool
+sHasLub :: Type Two -> Type Two -> Checker Bool
 sHasLub s1 s2 = do
   jS <- joinSort s1 s2
   case jS of
