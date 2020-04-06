@@ -141,10 +141,11 @@ instance Substitutable Coeffect where
                 case lookup v (tyVarContext checkerState) of
                     -- If the coeffect variable has a poly kind then update it with the
                     -- kind of c
-                    Just ((TyVar kv), q) -> do
-                        coeffTy <- inferCoeffectType nullSpan c
+                    --Result of lookup: (TypeWithLevel, quantifier)
+                    Just (TypeWithLevel _ (TyVar kv), q) -> do
+                        coeffK <- inferCoeffectType nullSpan c
                         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (promoteTypeToKind coeffTy, q) }
+                                                                    v (TypeWithLevel (LSucc LZero) coeffK, q) }
 
                     _ -> return ()
                 return c
@@ -153,7 +154,7 @@ instance Substitutable Coeffect where
             Just (SubstT t) -> do
                 k <- inferKindOfType nullSpan t
                 k' <- inferCoeffectType nullSpan (CVar v)
-                jK <- joinKind k (promoteTypeToKind k')
+                jK <- joinKind k k'
                 case jK of
                     Just (TyCon (internalName -> "Nat"), _) ->
                         compileNatKindedTypeToCoeffect nullSpan t
@@ -303,8 +304,8 @@ substAssumption subst (v, Discharged t c) = do
 -- | Apply a name map to a type to rename the type variables
 renameType :: (?globals :: Globals) => [(Id, Id)] -> Type Zero -> Checker (Type Zero)
 renameType subst = typeFoldM0 $ baseTypeFoldZero
-  { tfBox   = renameBox subst
-  , tfTyVar = renameTyVar subst
+  { tfBox0   = renameBox subst
+  , tfTyVar0 = renameTyVar subst
   }
   where
     renameBox renameMap c t = do
@@ -526,7 +527,7 @@ instance Unifiable Substitutors where
         -- We can unify a type with a coeffect, if the type is actually a Nat
         k <- inferKindOfType nullSpan t
         k' <- inferCoeffectType nullSpan c'
-        jK <- joinKind k (TyPromote k')
+        jK <- joinKind k k'
         case jK of
             Just (TyCon k, _) | internalName k == "Nat" -> do
                 c <- compileNatKindedTypeToCoeffect nullSpan t
@@ -585,16 +586,16 @@ instance Unifiable Coeffect where
         case lookup v (tyVarContext checkerState) of
             -- If the coeffect variable has a poly kind then update it with the
             -- kind of c
-            Just ((TyVar kv), q) -> do
-                    coeffTy <- inferCoeffectType nullSpan c
+            Just (TypeWithLevel _ (TyVar kv), q) -> do
+                    coeffK <- inferCoeffectType nullSpan c
                     put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (promoteTypeToKind coeffTy, q) }
+                                                                    v (TypeWithLevel (LSucc LZero) coeffK, q) }
 
             Just (k, q) ->
                 case c of
                     CVar v' ->
                         case lookup v' (tyVarContext checkerState) of
-                            Just (TyVar _, q) -> do
+                            Just (TypeWithLevel _ (TyVar _), q) -> do
                                 -- The type of v is known and c is a variable with a poly kind
                                 put $ checkerState
                                     { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
