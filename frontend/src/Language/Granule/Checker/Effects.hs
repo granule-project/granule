@@ -3,6 +3,7 @@
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Granule.Checker.Effects where
 
@@ -160,9 +161,12 @@ effectTop t = do
   where
     swap (a, b) = (b, a)
     -- find all elements of the matching element type
+    allConstructorsMatchingElemKind :: Kind -> [Id]
     allConstructorsMatchingElemKind elemKind = mapMaybe (go elemKind) P.typeConstructors
-    go elemKind (con, (k, _, _)) =
+    go elemKind (con, (TypeWithLevel (LSucc LZero) k, _, _)) =
         if k == elemKind then Just con else Nothing
+    -- Level doesn't match
+    go elemKind _ = Nothing
 
 isPure :: Type Zero -> Bool
 isPure (TyCon c) = internalName c == "Pure"

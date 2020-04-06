@@ -53,6 +53,10 @@ instance Substitutable Substitutors where
         k <- substitute subst k
         return $ SubstK k
 
+      SubstS sort -> do
+        sort <- substitute subst sort
+        return $ SubstS sort
+
 -- Speciale case of substituting a substition
 instance Substitutable Substitution where
   substitute subst [] = return []
@@ -91,6 +95,9 @@ instance Substitutable (Type One) where
             Just (SubstK t) -> return t
             Just (SubstT t) -> tryTyPromote nullSpan t
             _               -> mTyVar v
+
+instance Substitutable (Type Two) where
+  substitute _ = error "TODO: Cannot currently substitute into Sorts"
 
 instance Substitutable Coeffect where
 
@@ -539,7 +546,7 @@ instance Unifiable Substitutors where
     unify (SubstK k) (SubstK k') = unify k k'
     unify _ _ = return Nothing
 
-instance Unifiable (Type l) where
+instance Unifiable (Type Zero) where
     unify (TyVar v) t = return $ Just [(v, SubstT t)]
     unify t (TyVar v) = return $ Just [(v, SubstT t)]
     unify (FunTy t1 t2) (FunTy t1' t2') = do
@@ -647,7 +654,6 @@ instance Unifiable Coeffect where
     unify c c' =
         if c == c' then return $ Just [] else return Nothing
 
-{-
 instance Unifiable Kind where
     unify (TyVar v) k =
         return $ Just [(v, SubstK k)]
@@ -658,7 +664,6 @@ instance Unifiable Kind where
         u2 <- unify k2 k2'
         u1 <<>> u2
     unify k k' = return $ if k == k' then Just [] else Nothing
--}
 
 instance Unifiable t => Unifiable (Maybe t) where
     unify Nothing _ = return (Just [])
