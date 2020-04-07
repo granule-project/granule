@@ -80,7 +80,7 @@ inferKindOfTypeImplicits s ctxt (FunTy _ t1 t2) = do
           u <- combineManySubstitutions s [u1, u2, u1', u2']
           return (KType, u)
         _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = KType, kActual = k2 }
-    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k2 }
+    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k1 }
 
 -- kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
 
