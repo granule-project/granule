@@ -71,83 +71,82 @@ replaceSynonyms = runIdentity . typeFoldM0 (baseTypeFoldZero { tfTyCon0 = conCas
 
 -- Infers the kind of a type, but also allows some of the type variables to have poly kinds
 -- which get automatically resolved
-inferKindOfTypeImplicits :: (?globals :: Globals) => Span -> Ctxt Kind -> Type Zero -> Checker (Kind, Substitution)
+inferKindOfTypeImplicits :: (?globals :: Globals) => Span -> Ctxt TypeWithLevel -> Type Zero -> Checker (Kind, Substitution)
 
 inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
    (k1, u1) <- inferKindOfTypeImplicits s ctxt t1
    (k2, u2) <- inferKindOfTypeImplicits s ctxt t2
-   jK1 <- joinKind k1 KType
+   jK1 <- joinKind k1 (Type LZero)
    case jK1 of
     Just (k1, u1') -> do
-      jK2 <- joinKind k2 KType
+      jK2 <- joinKind k2 (Type LZero)
       case jK2 of
         Just (k2, u2') -> do
           u <- combineManySubstitutions s [u1, u2, u1', u2']
-          return (KType, u)
-        _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = KType, kActual = k2 }
-    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k2 }
+          return (Type LZero, u)
+        _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = (Type LZero), kActual = k2 }
+    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = (Type LZero), kActual = k2 }
 
--- kFun KType (TyPromote (TyCon (internalName -> "Protocol"))) = return $ TyPromote (TyCon (mkId "Protocol"))
+-- kFun (Type LZero) (TyPromote (TyCon (internalName -> "Protocol"))) = return $ TyPromote (TyCon (mkId "Protocol"))
 
 inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Pure")) = do
     -- Create a fresh type variable
     var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") (TyCon (mkId "Effect"))
-    return $ (TyPromote $ TyVar var, [])
+    return $ (TyVar var, [])
 
 inferKindOfTypeImplicits s ctxt (TyCon conId) = do
   st <- get
   case lookup conId (typeConstructors st) of
-    Just (kind,_,_) -> return (kind, [])
-    Nothing   -> do
+    Just (TypeWithLevel (LSucc LZero) kind,_,_) -> return (kind, [])
+    _   -> do
       mConstructor <- lookupDataConstructor s conId
       case mConstructor of
-        Just (Forall _ [] [] t, _) -> return (TyPromote t, [])
+        Just (Forall _ [] [] t, _) -> do
+           promotedTy <- tryTyPromote s t
+           return (promotedTy, [])
         Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
         Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
 inferKindOfTypeImplicits s ctxt (Box c t) = do
     _ <- inferCoeffectTypeInContext s ctxt c
     (k, u) <- inferKindOfTypeImplicits s ctxt t
-    jK <- joinKind k KType
+    jK <- joinKind k (Type LZero)
     case jK of
       Just (k, u') -> do
         u'' <- combineSubstitutions s u u'
-        return (KType, u'')
-      _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = KType, kActual = k }
+        return ((Type LZero), u'')
+      _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = (Type LZero), kActual = k }
 
 inferKindOfTypeImplicits s ctxt (Diamond e t) = do
-  (ke, u') <- inferKindOfTypeImplicits s ctxt e
+  (effTy, u') <- inferKindOfTypeImplicits s ctxt e
   (k, u) <- inferKindOfTypeImplicits s ctxt t
-  jK <- joinKind k KType
+  jK <- joinKind k (Type LZero)
   case jK of
     Just (k, u2) -> do
-      case ke of
-        TyPromote effTy -> do
-            (effTyK, u3) <- inferKindOfTypeImplicits s ctxt effTy
-            jK' <- joinKind effTyK (TyCon (mkId "Effect"))
+            effTyK <- inferKindOfTypeInContext s ctxt effTy
+            jK' <- joinSort effTyK (TyCon (mkId "Effect"))
             case jK' of
               Just (_, u4) -> do
-                u5 <- combineManySubstitutions s [u, u', u2, u3, u4]
-                return (KType, u5)
-              _ -> throw KindMismatch { errLoc = s, tyActualK = Just effTy, kExpected = (TyCon (mkId "Effect")), kActual = effTyK }
-        -- TODO: create a custom error message for this
-        otherk  -> throw KindMismatch { errLoc = s, tyActualK = Just e, kExpected = TyPromote (TyVar $ mkId "effectType"), kActual = otherk }
-    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = KType, kActual = k }
+                u5 <- combineManySubstitutions s [u, u', u2, u4]
+                return ((Type LZero), u5)
+              _ -> throw SortMismatch { errLoc = s, kActualS = Just effTy, sExpected = (TyCon (mkId "Effect")), sActual = effTyK }
+    -- TODO: create a custom error message for this
+    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = (Type LZero), kActual = k }
 
 inferKindOfTypeImplicits s ctxt (TyVar tyVar) =
   case lookup tyVar ctxt of
-    Just kind -> return (kind, [])
-    Nothing   -> do
+    Just (TypeWithLevel (LSucc LZero) kind)-> return (kind, [])
+    _   -> do
       st <- get
       case lookup tyVar (tyVarContext st) of
-        Just (kind, _) -> return (kind, [])
-        Nothing ->
+        Just (TypeWithLevel (LSucc LZero) kind, _) -> return (kind, [])
+        _ ->
           throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
 
 inferKindOfTypeImplicits s ctxt (TyApp t1 t2) = do
   (k1, u1) <- inferKindOfTypeImplicits s ctxt t1
   case k1 of
-    KFun k1 k2 -> do
+    FunTy k1 k2 -> do
       (kArg, u2) <- inferKindOfTypeImplicits s ctxt t2
       jK <- joinKind k1 kArg
       case jK of
@@ -156,16 +155,16 @@ inferKindOfTypeImplicits s ctxt (TyApp t1 t2) = do
           k2' <- substitute u k2
           return (k2', u)
         Nothing -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = k1, kActual = kArg }
-    KVar v -> do
+    TyVar v -> do
         (kArg, u2) <- inferKindOfTypeImplicits s ctxt t2
         kResVar <- freshIdentifierBase $ "_kres"
-        let u = [(v, SubstK $ KFun (KVar $ mkId kResVar) kArg)]
+        let u = [(v, SubstK $ FunTy (TyVar $ mkId kResVar) kArg)]
         uOut <- combineSubstitutions s u2 u
-        return (KVar $ mkId kResVar, uOut)
+        return (TyVar $ mkId kResVar, uOut)
 
-    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KFun (KVar $ mkId "..") (KVar $ mkId ".."), kActual = k1 }
+    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = FunTy (TyVar $ mkId "..") (TyVar $ mkId ".."), kActual = k1 }
 
-inferKindOfTypeImplicits s ctxt (TyInt _) = return $ (kConstr $ mkId "Nat", [])
+inferKindOfTypeImplicits s ctxt (TyInt _) = return $ (TyCon $ mkId "Nat", [])
 
 inferKindOfTypeImplicits s ctxt (TyInfix (tyOps -> (k1exp, k2exp, kret)) t1 t2) = do
   (k1act, u1) <- inferKindOfTypeImplicits s ctxt t1
