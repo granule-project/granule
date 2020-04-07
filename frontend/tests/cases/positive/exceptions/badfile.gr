@@ -1,7 +1,7 @@
 main : Char <{Open, Read, Close}>
 main = 
-  try (openHandle ReadMode "nonexistentFile") as [h] in 
-      let [(h, c1)]     <- readChar h;
-          [()]          <- closeHandle h
+    try (openHandle ReadMode "nonexistentFile") as [h] in 
+      let [(h', c1)]     <- readChar h;
+          [()]           <- closeHandle h'
       in pure c1 
-  catch pure "A"
+    catch pure "A"
