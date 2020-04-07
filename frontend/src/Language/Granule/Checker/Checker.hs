@@ -147,9 +147,15 @@ checkDataCon
         let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
 
         -- Add the type variables from the data constructor into the environment
+        -- The main universal context
+        let tyVarsD' = relevantSubCtxt (freeVars $ resultType ty) tyVars_justD
+        -- This subset of the context is for existentials
+        let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
         modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
-        tySchKind <- inferKindOfTypeInContext sp tyVars ty
+               [(v, (k, ForallQ)) | (v, k) <- tyVarsD']
+            ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
+            ++ tyVarContext st }
+        (tySchKind, _) <- inferKindOfTypeImplicits sp tyVars ty
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
@@ -253,7 +259,8 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations) tys@(Forall s_t foralls constraints ty)) = do
+checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
+             tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()
@@ -892,7 +899,6 @@ synthExpr defs gam pol (App s _ rf e e') = do
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy _ sig tau) -> do
-         liftIO $ debugM "FunTy sig" $ pretty sig
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
