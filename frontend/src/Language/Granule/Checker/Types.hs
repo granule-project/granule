@@ -62,7 +62,7 @@ equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s E
 equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type One -> Constraint)
   -- Starting spec indication
   -> SpecIndicator
   -- Left type (usually the inferred)
@@ -99,7 +99,7 @@ flipIndicator PatternCtxt = PatternCtxt
 equalTypesRelatedCoeffects :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type One -> Constraint)
   -> Type Zero
   -> Type Zero
   -- Indicates whether the first type or second type is a specification
@@ -123,7 +123,7 @@ equalTypesRelatedCoeffects s rel t1 t2 sp = do
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type One -> Constraint)
   -> Type Zero
   -> Type Zero
   -> Kind
@@ -420,7 +420,7 @@ sessionInequality s t1 t2 = throw TypeError{ errLoc = s, tyExpected = t1, tyActu
 isDualSession :: (?globals :: Globals)
     => Span
        -- Explain how coeffects should be related by a solver constraint
-    -> (Span -> Coeffect -> Coeffect -> Type Zero -> Constraint)
+    -> (Span -> Coeffect -> Coeffect -> Type One -> Constraint)
     -> Type Zero
     -> Type Zero
     -- Indicates whether the first type or second type is a specification
