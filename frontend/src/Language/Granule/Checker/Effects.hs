@@ -129,19 +129,18 @@ effectMult sp effTy t1 t2 = do
             (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
                 let ts1' = handledNormalise sp ts1
                 let ts2' = handledNormalise sp ts2 
-                do
-                  t <- (effectMult sp effTy ts1' ts2')
-                  return $ TyApp (TyCon $ (mkId "Handled")) t
+                t <- (effectMult sp effTy ts1' ts2')
+                return (handledNormalise sp (TyApp (TyCon $ mkId "Handled") t))
             --Handled, set
             (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
                 let ts1' = handledNormalise sp ts1
                 t <- (effectMult sp effTy ts1' t2) ; 
-                return $ TyApp (TyCon $ (mkId "Handled")) t
+                return (handledNormalise sp (TyApp (TyCon $ mkId "Handled") t))
              --set, Handled
             (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
                 let ts2' = handledNormalise sp ts2 
                 t <- (effectMult sp effTy t1 ts2') ;
-                return $ TyApp (TyCon $ (mkId "Handled")) t
+                return (handledNormalise sp (TyApp (TyCon $ mkId "Handled") t))
             -- Actual sets, take the union
             (TySet ts1, TySet ts2) ->
               return $ TySet $ nub (ts1 <> ts2)
