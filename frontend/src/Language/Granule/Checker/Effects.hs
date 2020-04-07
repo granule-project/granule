@@ -147,21 +147,13 @@ effectMult sp effTy t1 t2 = do
             --Handled, set
             (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
                 let ts1' = handledNormalise sp ts1
-                if ts1 == ts1' then throw $
-                --change error to TyEffMult later
-                  TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
-                else do
-                    t <- (effectMult sp effTy ts1' t2) ; 
-                    return $ TyApp (TyCon $ (mkId "Handled")) t
+                t <- (effectMult sp effTy ts1' t2) ; 
+                return $ TyApp (TyCon $ (mkId "Handled")) t
              --set, Handled
             (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
-                let ts2' = handledNormalise sp ts2
-                if ts2 == ts2' then throw $
-                --change error to TyEffMult later
-                  TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
-                else do 
-                    t <- (effectMult sp effTy t1 ts2') ;
-                    return $ TyApp (TyCon $ (mkId "Handled")) t
+                let ts2' = handledNormalise sp ts2 
+                t <- (effectMult sp effTy t1 ts2') ;
+                return $ TyApp (TyCon $ (mkId "Handled")) t
             -- Actual sets, take the union
             (TySet ts1, TySet ts2) ->
               return $ TySet $ nub (ts1 <> ts2)
