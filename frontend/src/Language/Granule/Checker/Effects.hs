@@ -62,7 +62,7 @@ handledNormalise s eff =
                 TyCon (internalName -> "Pure") -> inner
                 TyCon (internalName -> "Exception") -> inner
                 TySet efs -> TySet ( efs \\ [TyCon (mkId "IOExcept")] )
-                _ -> inner                 --all under \\ should be [Type] but is Type 
+                _ -> inner 
         _ -> eff
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
