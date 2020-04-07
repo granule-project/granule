@@ -740,7 +740,7 @@ synthExpr defs gam pol (LetDiamond s _ p optionalTySig e1 e2) = do
 
   -- Check that usage matches the binding grades/linearity
   -- (performs the linearity check)
-  ctxtEquals s (gam2 `intersectCtxts` binders) binders
+  ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
@@ -761,11 +761,13 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
   (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
   -- Check that a graded possibility type was inferred
-  (ef1, ty1) <- case sig of
-    Diamond ef1 (Box opt ty1) | opt == (CInterval (CNat 0) (CNat 1)) ->
-        return (ef1, ty1)
+  (ef1, opt, ty1) <- case sig of
+    Diamond ef1 (Box opt ty1) ->
+        return (ef1, opt, ty1)
     _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig } 
 
+  addConstraint (ApproximatedBy s (CInterval (CNat 0) (CNat 1)) opt (TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat") ) )
+  
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
@@ -784,9 +786,8 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
   optionalSigEquality s mty ty1
 
   -- linearity check for e2 and e3
-  ctxtEquals s (gam2 `intersectCtxts` binders) binders
+  ctxtApprox s (gam2 `intersectCtxts` binders) binders
   
-
   --contexts/binding
   gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
   gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
