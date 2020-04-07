@@ -1,6 +1,6 @@
 main : Char <{Open, Read, Close}>
 main = 
-    try (openHandle ReadMode "LICENSE") as [h] : Handle in 
+    try (openHandle ReadMode "LICENSE") as [h] : Handle R in 
       let [(h', c1)]     <- readChar h;
           [()]           <- closeHandle h'
       in pure c1 
