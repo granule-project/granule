@@ -117,6 +117,9 @@ instance Pretty TypeScheme where
         constraints [] = ""
         constraints cs = "{" <> intercalate ", " (map pretty cs) <> "} =>\n    "
 
+instance Pretty TypeWithLevel where
+    pretty (TypeWithLevel l t) = pretty t
+
 instance Pretty (Type l) where
     -- Atoms
     pretty (TyCon s)      = pretty s
