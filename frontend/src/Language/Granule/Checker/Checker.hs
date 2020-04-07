@@ -762,11 +762,9 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
 
   -- Check that a graded possibility type was inferred
   (ef1, ty1) <- case sig of
-      Diamond ef1 (Box opt ty1) ->
-        if opt == (CInterval (CNat 0) (CNat 1)) 
-        then return (ef1, ty1)
-        else throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
-      _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
+    Diamond ef1 (Box opt ty1) | opt == (CInterval (CNat 0) (CNat 1)) ->
+        return (ef1, ty1)
+    _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig } 
 
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull

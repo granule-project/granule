@@ -88,21 +88,16 @@ effApproximates s effTy eff1 eff2 =
                     (TyCon (internalName -> "Pure"), _) -> return True
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
                         let efs1' = handledNormalise s efs1
-                        if efs1 == efs1' then return False
-                        else do
-                            let efs2' = handledNormalise s efs2
-                            if efs2 == efs2' then return False
-                            else effApproximates s effTy efs1' efs2'
+                        let efs2' = handledNormalise s efs2
+                        effApproximates s effTy efs1' efs2'
                     --Handled, set
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TySet efs2) -> do
                         let efs1' = handledNormalise s efs1
-                        if efs1 == efs1' then return False
-                        else effApproximates s effTy efs1' eff2
+                        effApproximates s effTy efs1' eff2
                     --set, Handled
                     (TySet efs1, TyApp (TyCon (internalName -> "Handled")) efs2) -> do
                         let efs2' = handledNormalise s efs2
-                        if efs2 == efs2' then return False
-                        else effApproximates s effTy eff1 efs2'
+                        effApproximates s effTy eff1 efs2'
                     -- Actual sets, take the union
                     (TySet efs1, TySet efs2) ->
                         -- eff1 is a subset of eff2
