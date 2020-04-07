@@ -169,8 +169,24 @@ inferKindOfTypeInContext s quantifiedVariables t =
 -- | Compute the join of two kinds, if it exists
 joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Substitution))
 joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
-joinKind (KVar v) k = return $ Just (k, [(v, SubstK k)])
-joinKind k (KVar v) = return $ Just (k, [(v, SubstK k)])
+joinKind (KVar v) k = do
+  st <- get
+  case (lookup v (tyVarContext st)) of
+    Just (_, q) | q == InstanceQ || q == BoundQ -> return $ Just (k, [(v, SubstK k)])
+    -- Occurs if an implicitly quantified variable has arisen
+    Nothing -> return $ Just (k, [(v, SubstK k)])
+    -- Don't unify with universal variables
+    _  -> return Nothing
+
+joinKind k (KVar v) = do
+  st <- get
+  case (lookup v (tyVarContext st)) of
+    Just (_, q) | q == InstanceQ || q == BoundQ -> return $ Just (k, [(v, SubstK k)])
+    -- Occurs if an implicitly quantified variable has arisen
+    Nothing -> return $ Just (k, [(v, SubstK k)])
+    -- Don't unify with universal variables
+    _  -> return Nothing
+
 joinKind (KPromote t1) (KPromote t2) = do
   (coeffTy, subst, _) <- mguCoeffectTypes nullSpan t1 t2
   return $ Just (KPromote coeffTy, subst)
