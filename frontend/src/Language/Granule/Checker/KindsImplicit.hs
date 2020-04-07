@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Granule.Checker.KindsImplicit where
 
@@ -23,40 +25,43 @@ import Language.Granule.Utils
 import Data.Functor.Identity (runIdentity)
 
 -- | Check the kind of a definition
--- Currently we expect that a type scheme has kind KType
+-- Currently we expect that a type scheme has kind (Type LZero)
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
 kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
+
+  let quantifiedVariables' = (ctxtMap (\k -> TypeWithLevel (LSucc LZero) k) quantifiedVariables)
+
   -- Set up the quantified variables in the type variable context
-  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
+  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables'})
 
   forM_ constraints $ \constraint -> do
-    (kind, _) <- inferKindOfTypeImplicits s quantifiedVariables constraint
+    (kind, _) <- inferKindOfTypeImplicits s quantifiedVariables' constraint
     case kind of
       (TyCon (internalName -> "Predicate")) -> return ()
       _ -> throw KindMismatch{ errLoc = s, tyActualK = Just constraint, kExpected = (TyCon (mkId "Predicate")), kActual = kind }
 
   ty <- return $ replaceSynonyms ty
-  (kind, unifiers) <- inferKindOfTypeImplicits s quantifiedVariables ty
+  (kind, unifiers) <- inferKindOfTypeImplicits s quantifiedVariables' ty
   case kind of
-    KType -> do
+    (Type LZero) -> do
         -- Rewrite the quantified variables with their possibly updated kinds (inferred)
         qVars <- mapM (\(v, a) -> substitute unifiers a >>= (\b -> return (v, b)))
                    quantifiedVariables
         modify (\st -> st { tyVarContext = [] })
-        -- Update the def with the resolved quantifications
+        -- Update the def with the resolved quantificaftions
         return (Def s id eqs (Forall s' qVars constraints ty))
 
     --TyPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
-    _     -> throw KindMismatch{ errLoc = s, tyActualK = Just ty, kExpected = KType, kActual = kind }
+    _     -> throw KindMismatch{ errLoc = s, tyActualK = Just ty, kExpected = (Type LZero), kActual = kind }
 
 kindIsKind :: Kind -> Bool
-kindIsKind (TyPromote (TyCon (internalName -> "Kind"))) = True
+kindIsKind (TyCon (internalName -> "Kind")) = True
 kindIsKind _ = False
 
 -- Replace any constructor Ids with their top-element
 -- (i.e., IO gets replaces with the set of all effects as an alias)
 replaceSynonyms :: Type Zero -> Type Zero
-replaceSynonyms = runIdentity . typeFoldM0 (baseTypeFoldZero { tfTyCon = conCase })
+replaceSynonyms = runIdentity . typeFoldM0 (baseTypeFoldZero { tfTyCon0 = conCase })
   where
     conCase conId =
       case effectTop (TyCon conId) of

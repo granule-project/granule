@@ -299,8 +299,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
 
          _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t }
 
-    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+    (Just _) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
 
 

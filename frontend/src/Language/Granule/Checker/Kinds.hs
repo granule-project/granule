@@ -8,6 +8,7 @@ module Language.Granule.Checker.Kinds (
                     , inferKindOfTypeInContext
                     , hasLub
                     , joinKind
+                    , joinSort
                     , mguCoeffectTypesFromCoeffects
                     , inferCoeffectType
                     , inferCoeffectTypeInContext

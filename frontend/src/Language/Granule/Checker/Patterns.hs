@@ -1,5 +1,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
@@ -31,7 +34,7 @@ import Language.Granule.Utils
 --   a box pattern (or many nested box patterns)
 definiteUnification :: (?globals :: Globals)
   => Span
-  -> Maybe (Coeffect, Type Zero) -- Outer coeffect
+  -> Maybe (Coeffect, Type One) -- Outer coeffect
   -> Type Zero                   -- Type of the pattern
   -> Checker ()
 definiteUnification _ Nothing _ = return ()
@@ -80,7 +83,7 @@ ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
 -- | Inner helper, which takes information about the enclosing coeffect
 ctxtFromTypedPattern' :: (?globals :: Globals) =>
-     Maybe (Coeffect, Type Zero)    -- enclosing coeffect
+     Maybe (Coeffect, Type One)    -- enclosing coeffect
   -> Span
   -> Type Zero
   -> Pattern ()
@@ -259,7 +262,7 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
 ctxtFromTypedPatterns = ctxtFromTypedPatterns' Nothing
 
 ctxtFromTypedPatterns' :: (?globals :: Globals)
-  => Maybe (Coeffect, Type Zero)
+  => Maybe (Coeffect, Type One)
   -> Span
   -> Type Zero
   -> [Pattern ()]

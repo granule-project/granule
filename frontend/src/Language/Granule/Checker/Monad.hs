@@ -394,7 +394,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe (Type Zero), context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier) }
+    { errLoc :: Span , holeTy :: Maybe (Type Zero), context :: Ctxt Assumption, tyContext :: Ctxt (TypeWithLevel, Quantifier) }
   | TypeError
     { errLoc :: Span, tyExpected :: Type Zero, tyActual :: Type Zero }
   | GradingError
@@ -458,7 +458,7 @@ data CheckerError
   | NoUpperBoundError
     { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
   | DisallowedCoeffectNesting
-    { errLoc :: Span, errTyOuter :: Type Zero, errTyInner :: Type Zero }
+    { errLoc :: Span, errTyOuter :: Type One, errTyInner :: Type One }
   | UnboundDataConstructor
     { errLoc :: Span, errId :: Id }
   | UnboundTypeConstructor
