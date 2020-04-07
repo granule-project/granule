@@ -323,7 +323,7 @@ TyApp :: { Type }
  | TyAtom                     { $1 }
 
 TyJuxt :: { Type }
-  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
+  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 } 
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
   | TyAtom '+' TyAtom         { TyInfix TyOpPlus $1 $3 }
@@ -372,7 +372,7 @@ Coeffect :: { Coeffect }
   | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { CSig $1 $3 }
+  | Coeffect ':' Type           { normalise (CSig $1 $3) }
   | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
 
 Set :: { [(String, Type)] }

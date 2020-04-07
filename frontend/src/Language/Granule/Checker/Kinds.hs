@@ -42,8 +42,20 @@ inferKindOfType s t = do
 
 inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Kind
 inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet) t
+    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kSig) t
   where
+    kSig k' t k = do
+      if k' == k
+        then return k
+        else
+          -- Allow ty ints to be overloaded at different signatures other than nat
+          case t of
+            TyInt _ ->
+              case k of
+                KVar _ -> return k
+                _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+            _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+
     kFun _ (KPromote (TyCon c)) (KPromote (TyCon c'))
      | internalName c == internalName c' = return $ kConstr c
 

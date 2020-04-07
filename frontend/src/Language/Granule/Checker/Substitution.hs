@@ -3,6 +3,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Language.Granule.Checker.Substitution where
 
@@ -142,8 +143,14 @@ instance Substitutable Coeffect where
 
                     _ -> return ()
                 return c
-            -- Convert a single type substitution (type variable, type pair) into a
-            -- coeffect substituion
+
+            -- Substitution of a ty var becomes a coeffect var
+            Just (SubstT (TyVar v')) ->
+              return $ CVar v'
+
+            -- Substitution of a type (that is not just a variable) can
+            -- be done if we convert the type term into a coeffect term
+            -- NOTE: This will go away when we merge the Coeffect syntax just into Type
             Just (SubstT t) -> do
                 k <- inferKindOfType nullSpan t
                 (k', _) <- inferCoeffectType nullSpan (CVar v)
@@ -153,7 +160,7 @@ instance Substitutable Coeffect where
                         compileNatKindedTypeToCoeffect nullSpan t
                     _ -> return (CVar v)
 
-            _               -> return $ CVar v
+            _  -> return $ CVar v
 
     substitute subst (CInfinity k) = do
         k <- substitute subst k
