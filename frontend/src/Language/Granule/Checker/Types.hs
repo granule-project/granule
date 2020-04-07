@@ -151,6 +151,7 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
+
   -- Unify the coeffect kinds of the two coeffects
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- subst <- unify c c'
@@ -254,7 +255,6 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
 
   debugM "context" $ pretty $ tyVarContext checkerState
-  
 
   -- Do an occurs check for types
   case kind of
@@ -539,4 +539,5 @@ isIndexedType = typeFoldM $
     , tfTyApp = \x y -> return (x || y)
     , tfTyInt = \_ -> return False
     , tfTyInfix = \_ x y -> return (x || y)
-    , tfSet = \_ -> return False }
+    , tfSet = \_ -> return False
+    , tfTySig = \x _ _ -> return x }

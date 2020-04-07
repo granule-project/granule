@@ -347,6 +347,7 @@ TyAtom :: { Type }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
+  | TyAtom ':' Kind           { TySig $1 $3 }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL

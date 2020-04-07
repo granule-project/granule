@@ -163,6 +163,7 @@ getAssumConstr (Linear t) = getTypeConstr t
     getTypeConstr (TyInt _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _) = Nothing
+    getTypeConstr (TySig t _) = getTypeConstr t
 
 -- Given a list of data constructors, generates patterns corresponding to them.
 buildConstructorPatterns ::
