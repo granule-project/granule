@@ -324,24 +324,6 @@ substAssumption subst (v, Discharged t c) = do
     c <- substitute subst c
     return (v, Discharged t c)
 
-
--- | Apply a name map to a type to rename the type variables
-renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> Checker Type
-renameType subst = typeFoldM $ baseTypeFold
-  { tfBox   = renameBox subst
-  , tfTyVar = renameTyVar subst
-  }
-  where
-    renameBox renameMap c t = do
-      c' <- substitute (map (\(v, var) -> (v, SubstC $ CVar var)) renameMap) c
-      t' <- renameType renameMap t
-      return $ Box c' t'
-    renameTyVar renameMap v =
-      case lookup v renameMap of
-        Just v' -> return $ TyVar v'
-        -- Shouldn't happen
-        Nothing -> return $ TyVar v
-
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
 freshPolymorphicInstance :: (?globals :: Globals)
@@ -360,13 +342,13 @@ freshPolymorphicInstance :: (?globals :: Globals)
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    renameMap <- mapM instantiateVariable kinds
+    renameMap <- cumulativeMapM instantiateVariable kinds
 
     -- Applying the rename map to itself (one part at time), to accommodate dependency here
     renameMap <- selfRename renameMap
 
     -- Turn the rename map into a substitution
-    let subst = map (\(v, kv) -> (v, SubstT . TyVar . snd . fromEither $ kv)) renameMap
+    let subst = ctxtMap (SubstT . TyVar . snd . fromEither) renameMap
 
     -- Freshen the types and constraints
     tyFreshened <- substitute subst ty
@@ -408,8 +390,19 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
            return (var, Right (k, var'))
 
          else do
+
            var' <- freshTyVarInContextWithBinding var k quantifier
            return (var, Left (k, var'))
+
+    -- Apply `f` but as we go apply the resulting substitution forwards on the rest of the list
+    cumulativeMapM f [] = return []
+    cumulativeMapM f (x:xs) = do
+      eitherSubst1 <- f x
+      -- Apply the substitution forwards on the list of kinds
+      xs' <- mapM (\(v, k) -> substitute (ctxtMap (SubstT . TyVar . snd . fromEither) [eitherSubst1]) k
+                               >>= (\k' -> return (v, k'))) xs
+      substN <- cumulativeMapM f xs'
+      return $ eitherSubst1 : substN
 
     fromEither :: Either a a -> a
     fromEither (Left a) = a
