@@ -86,7 +86,10 @@ holeRefactorEqnList cases eqns =
                  updateOldPatterns cs =
                    eqn'
                    { equationPatterns =
-                       zipWith (uncurry . refactorPattern) oldPatterns cs
+                       map
+                         (\oldPat ->
+                            foldr (flip (uncurry . refactorPattern)) oldPat cs)
+                         oldPatterns
                    }
              in (map updateOldPatterns relCases, True)
 
