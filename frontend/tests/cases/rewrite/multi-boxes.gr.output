@@ -1,4 +1,5 @@
 data Bool = True | False
 
-threeBoxes : ((Bool [2]) [3]) [4] -> Bool
-threeBoxes [[[b]]] = ?
+threeBoxes : ((Bool [1]) [1]) [1] -> Bool
+threeBoxes [[[True]]] = ?;
+threeBoxes [[[False]]] = ?
