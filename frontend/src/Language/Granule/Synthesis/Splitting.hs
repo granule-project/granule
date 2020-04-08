@@ -166,6 +166,7 @@ getTypeConstr (TyCon id) = Just id
 getTypeConstr (Box _ t) = getTypeConstr t
 getTypeConstr (Diamond t1 _) = getTypeConstr t1
 getTypeConstr (TyApp t1 t2) = getTypeConstr t1
+getTypeConstr (TySig t _) = getTypeConstr t
 getTypeConstr (TyVar _) = Nothing
 getTypeConstr (TyInt _) = Nothing
 getTypeConstr (TyInfix _ _ _) = Nothing

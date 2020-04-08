@@ -147,9 +147,15 @@ checkDataCon
         let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
 
         -- Add the type variables from the data constructor into the environment
+        -- The main universal context
+        let tyVarsD' = relevantSubCtxt (freeVars $ resultType ty) tyVars_justD
+        -- This subset of the context is for existentials
+        let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
         modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVars_justD] ++ tyVarContext st }
-        tySchKind <- inferKindOfTypeInContext sp tyVars ty
+               [(v, (k, ForallQ)) | (v, k) <- tyVarsD']
+            ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
+            ++ tyVarContext st }
+        (tySchKind, _) <- inferKindOfTypeImplicits sp tyVars ty
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
@@ -253,7 +259,8 @@ checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
          -> Checker (Def () Type)
-checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations) tys@(Forall s_t foralls constraints ty)) = do
+checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
+             tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()
@@ -554,8 +561,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
             -- Otherwise we need to discharge only things that get used
             else freeVars e
 
-    gamF    <- discToFreshVarsIn s vars gam demand
-    (gam', subst, elaboratedE) <- checkExpr defs gamF pol False tau e
+    (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
     -- Causes a promotion of any typing assumptions that came from variable
     -- inside a guard from an enclosing case that have kind Level
@@ -570,7 +576,8 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
   where
     -- Calculate whether a type assumption is level kinded
     isLevelKinded (_, as) = do
-        ty <- inferCoeffectTypeAssumption s as
+        -- TODO: should deal with the subst
+        (ty, _) <- inferCoeffectTypeAssumption s as
         return $ case ty of
           Just (TyCon (internalName -> "Level"))
             -> True
@@ -869,9 +876,9 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) =
        return (ty, [(x, Linear ty)], [], elaborated)
 
      Just (Discharged ty c) -> do
-       k <- inferCoeffectType s c
+       (k, subst) <- inferCoeffectType s c
        let elaborated = Val s ty rf (Var ty x)
-       return (ty, [(x, Discharged ty (COne k))], [], elaborated)
+       return (ty, [(x, Discharged ty (COne k))], subst, elaborated)
 
 -- Specialised application for scale
 {- TODO: needs thought -}
@@ -894,7 +901,6 @@ synthExpr defs gam pol (App s _ rf e e') = do
     case fTy of
       -- Got a function type for the left-hand side of application
       (FunTy _ sig tau) -> do
-         liftIO $ debugM "FunTy sig" $ pretty sig
          (gam2, subst2, elaboratedR) <- checkExpr defs gam (flipPol pol) False sig e'
          gamNew <- ctxtPlus s gam1 gam2
 
@@ -928,9 +934,7 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
    var <- freshTyVarInContext (mkId $ "prom_[" <> pretty (startPos s) <> "]") (KPromote $ TyVar $ mkId vark)
 
-   gamF <- discToFreshVarsIn s (freeVars e) gam (CVar var)
-
-   (t, gam', subst, elaboratedE) <- synthExpr defs gamF pol e
+   (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
@@ -1123,7 +1127,8 @@ ctxtApprox s ctxt1 ctxt2 = do
       case lookup id ctxt1 of
         -- ... if so equate
         Just ass1 -> do
-          relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
+          -- TODO: deal with the subst here
+          _ <- relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
           return id
         -- ... if not check to see if the missing variable is linear
         Nothing   ->
@@ -1132,8 +1137,10 @@ ctxtApprox s ctxt1 ctxt2 = do
              Linear t -> illLinearityMismatch s . pure $ LinearNotUsed id
              -- Else, this could be due to weakening so see if this is allowed
              Discharged t c -> do
-               kind <- inferCoeffectType s c
-               relateByAssumption s ApproximatedBy (id, Discharged t (CZero kind)) (id, ass2)
+               -- TODO: deal with the subst here
+               (kind, _) <- inferCoeffectType s c
+               -- TODO: deal with the subst here
+               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (CZero kind)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1158,7 +1165,8 @@ ctxtEquals s ctxt1 ctxt2 = do
       case lookup id ctxt1 of
         -- ... if so equate
         Just ass1 -> do
-          relateByAssumption s Eq (id, ass1) (id, ass2)
+          -- -- TODO: deal with the subst here
+          _ <- relateByAssumption s Eq (id, ass1) (id, ass2)
           return id
         -- ... if not check to see if the missing variable is linear
         Nothing   ->
@@ -1167,8 +1175,10 @@ ctxtEquals s ctxt1 ctxt2 = do
              Linear t -> illLinearityMismatch s . pure $ LinearNotUsed id
              -- Else, this could be due to weakening so see if this is allowed
              Discharged t c -> do
-               kind <- inferCoeffectType s c
-               relateByAssumption s Eq (id, Discharged t (CZero kind)) (id, ass2)
+               -- TODO: deal with the subst here
+               (kind, _) <- inferCoeffectType s c
+               -- TODO: deal with the subst here
+               _ <- relateByAssumption s Eq (id, Discharged t (CZero kind)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1235,7 +1245,8 @@ intersectCtxtsWithWeaken s a b = do
    weaken (var, Linear t) =
        return (var, Linear t)
    weaken (var, Discharged t c) = do
-       kind <- inferCoeffectType s c
+        -- TODO: deal with the subst here
+       (kind, _) <- inferCoeffectType s c
        return (var, Discharged t (CZero kind))
 
 {- | Given an input context and output context, check the usage of
@@ -1263,15 +1274,16 @@ relateByAssumption :: (?globals :: Globals)
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -> (Id, Assumption)
   -> (Id, Assumption)
-  -> Checker ()
+  -> Checker Substitution
 
 -- Linear assumptions ignored
-relateByAssumption _ _ (_, Linear _) (_, Linear _) = return ()
+relateByAssumption _ _ (_, Linear _) (_, Linear _) = return []
 
 -- Discharged coeffect assumptions
 relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
-  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
   addConstraint (rel s (inj1 c1) (inj2 c2) kind)
+  return subst
 
 -- Linear binding and a graded binding (likely from a promotion)
 relateByAssumption s _ (idX, _) (idY, _) =
@@ -1287,37 +1299,22 @@ relateByLUB :: (?globals :: Globals)
   -> (Id, Assumption)
   -> (Id, Assumption)
   -> (Id, Assumption)
-  -> Checker ()
+  -> Checker Substitution
 
 -- Linear assumptions ignored
-relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return ()
+relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return []
 
 -- Discharged coeffect assumptions
 relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = do
-  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
   addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  return subst
 
 -- Linear binding and a graded binding (likely from a promotion)
 relateByLUB s (idX, _) (idY, _) (_, _) =
   if idX == idY
     then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
     else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
-
--- Replace all top-level discharged coeffects with a variable
--- and derelict anything else
--- but add a var
-discToFreshVarsIn :: (?globals :: Globals) => Span -> [Id] -> Ctxt Assumption -> Coeffect
-  -> Checker (Ctxt Assumption)
-discToFreshVarsIn s vars ctxt coeffect = mapM toFreshVar (relevantSubCtxt vars ctxt)
-  where
-    toFreshVar (var, Discharged t c) = do
-      (coeffTy, _) <- mguCoeffectTypesFromCoeffects s c coeffect
-      return (var, Discharged t (CSig c coeffTy))
-
-    toFreshVar (var, Linear t) = do
-      coeffTy <- inferCoeffectType s coeffect
-      return (var, Discharged t (COne coeffTy))
-
 
 -- `freshVarsIn names ctxt` creates a new context with
 -- all the variables names in `ctxt` that appear in the list
@@ -1342,7 +1339,8 @@ freshVarsIn s vars ctxt = do
   where
     toFreshVar :: (Id, Assumption) -> Checker ((Id, Assumption), Maybe (Id, Kind))
     toFreshVar (var, Discharged t c) = do
-      ctype <- inferCoeffectType s c
+      -- TODO: deal with the subst here
+      (ctype, _) <- inferCoeffectType s c
       -- Create a fresh variable
       freshName <- freshIdentifierBase (internalName var)
       let cvar = mkId freshName
@@ -1377,7 +1375,8 @@ extCtxt s ctxt var (Linear t) = do
     Just (Discharged t' c) ->
        if t == t'
          then do
-           k <- inferCoeffectType s c
+           -- TODO: deal with the subst here
+           (k, _) <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Linear t) : ctxt
@@ -1392,7 +1391,8 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Linear t') ->
         if t == t'
         then do
-           k <- inferCoeffectType s c
+           -- TODO: deal with the subst here
+           (k, _) <- inferCoeffectType s c
            return $ replace ctxt var (Discharged t (c `CPlus` COne k))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Discharged t c) : ctxt

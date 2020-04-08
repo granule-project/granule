@@ -143,17 +143,17 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
 -- Pattern match on a modal box
 ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
-    innerBoxTy <- inferCoeffectType s coeff
+    (innerBoxTy, subst0) <- inferCoeffectType s coeff
 
-    (coeff, coeffTy) <- case outerBoxTy of
+    (coeff, subst1, coeffTy) <- case outerBoxTy of
         -- Case: no enclosing [ ] pattern
-        Nothing -> return (coeff, innerBoxTy)
+        Nothing -> return (coeff, [], innerBoxTy)
         -- Case: there is an enclosing [ ] pattern of type outerBoxTy
         Just (outerCoeff, outerBoxTy) -> do
           -- Therefore try and flatten at this point
           flatM <- flattenable outerBoxTy innerBoxTy
           case flatM of
-            Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
+            Just (flattenOp, subst, ty) -> return (flattenOp outerCoeff coeff, subst, ty)
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
 
@@ -161,7 +161,8 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 
     let elabP = PBox sp t rf elabPinner
-    return (ctxt, eVars, subst, elabP, NotFull)
+    substU <- combineManySubstitutions s [subst0, subst1, subst]
+    return (ctxt, eVars, substU, elabP, NotFull)
 
 ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC

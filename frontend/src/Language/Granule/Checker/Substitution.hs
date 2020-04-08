@@ -3,6 +3,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE FlexibleContexts #-}
 
 module Language.Granule.Checker.Substitution where
 
@@ -137,24 +138,30 @@ instance Substitutable Coeffect where
                     -- If the coeffect variable has a poly kind then update it with the
                     -- kind of c
                     Just ((KVar kv), q) -> do
-                        coeffTy <- inferCoeffectType nullSpan c
+                        (coeffTy, _) <- inferCoeffectType nullSpan c
                         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
                                                                     v (promoteTypeToKind coeffTy, q) }
 
                     _ -> return ()
                 return c
-            -- Convert a single type substitution (type variable, type pair) into a
-            -- coeffect substituion
+
+            -- Substitution of a ty var becomes a coeffect var
+            Just (SubstT (TyVar v')) ->
+              return $ CVar v'
+
+            -- Substitution of a type (that is not just a variable) can
+            -- be done if we convert the type term into a coeffect term
+            -- NOTE: This will go away when we merge the Coeffect syntax just into Type
             Just (SubstT t) -> do
                 k <- inferKindOfType nullSpan t
-                k' <- inferCoeffectType nullSpan (CVar v)
+                (k', _) <- inferCoeffectType nullSpan (CVar v)
                 jK <- joinKind k (promoteTypeToKind k')
                 case jK of
                     Just (KPromote (TyCon (internalName -> "Nat")), _) ->
                         compileNatKindedTypeToCoeffect nullSpan t
                     _ -> return (CVar v)
 
-            _               -> return $ CVar v
+            _  -> return $ CVar v
 
     substitute subst (CInfinity k) = do
         k <- substitute subst k
@@ -321,24 +328,6 @@ substAssumption subst (v, Discharged t c) = do
     c <- substitute subst c
     return (v, Discharged t c)
 
-
--- | Apply a name map to a type to rename the type variables
-renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> Checker Type
-renameType subst = typeFoldM $ baseTypeFold
-  { tfBox   = renameBox subst
-  , tfTyVar = renameTyVar subst
-  }
-  where
-    renameBox renameMap c t = do
-      c' <- substitute (map (\(v, var) -> (v, SubstC $ CVar var)) renameMap) c
-      t' <- renameType renameMap t
-      return $ Box c' t'
-    renameTyVar renameMap v =
-      case lookup v renameMap of
-        Just v' -> return $ TyVar v'
-        -- Shouldn't happen
-        Nothing -> return $ TyVar v
-
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
 freshPolymorphicInstance :: (?globals :: Globals)
@@ -357,24 +346,25 @@ freshPolymorphicInstance :: (?globals :: Globals)
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-
-    renameMap <- mapM instantiateVariable kinds
-
-    ty <- renameType (ctxtMap (snd . fromEither) renameMap) ty
+    renameMap <- cumulativeMapM instantiateVariable kinds
 
     -- Applying the rename map to itself (one part at time), to accommodate dependency here
     renameMap <- selfRename renameMap
 
-    let subst = map (\(v, kv) -> (v, SubstT . TyVar . snd . fromEither $ kv)) renameMap
-    constr' <- mapM (substitute subst) constr
+    -- Turn the rename map into a substitution
+    let subst = ctxtMap (SubstT . TyVar . snd . fromEither) renameMap
+
+    -- Freshen the types and constraints
+    tyFreshened <- substitute subst ty
+    constrFreshened <- mapM (substitute subst) constr
 
     -- Return the type and all instance variables
     let newTyVars = map (\(_, kv) -> swap . fromEither $ kv) renameMap
-    let substitution = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
+    let substLefts = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
 
-    ixSubstitution' <- substitute substitution ixSubstitution
+    ixSubstitution' <- substitute substLefts ixSubstitution
 
-    return (ty, newTyVars, substitution, constr', ixSubstitution')
+    return (tyFreshened, newTyVars, substLefts, constrFreshened, ixSubstitution')
 
   where
     -- Takes a renamep map and iteratively applies each renaming forwards to
@@ -404,8 +394,19 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
            return (var, Right (k, var'))
 
          else do
+
            var' <- freshTyVarInContextWithBinding var k quantifier
            return (var, Left (k, var'))
+
+    -- Apply `f` but as we go apply the resulting substitution forwards on the rest of the list
+    cumulativeMapM f [] = return []
+    cumulativeMapM f (x:xs) = do
+      eitherSubst1 <- f x
+      -- Apply the substitution forwards on the list of kinds
+      xs' <- mapM (\(v, k) -> substitute (ctxtMap (SubstT . TyVar . snd . fromEither) [eitherSubst1]) k
+                               >>= (\k' -> return (v, k'))) xs
+      substN <- cumulativeMapM f xs'
+      return $ eitherSubst1 : substN
 
     fromEither :: Either a a -> a
     fromEither (Left a) = a
@@ -566,12 +567,15 @@ instance Unifiable Substitutors where
     unify (SubstT t) (SubstC c') = do
         -- We can unify a type with a coeffect, if the type is actually a Nat
         k <- inferKindOfType nullSpan t
-        k' <- inferCoeffectType nullSpan c'
+        (k', subst) <- inferCoeffectType nullSpan c'
         jK <- joinKind k (KPromote k')
         case jK of
             Just (KPromote (TyCon k), _) | internalName k == "Nat" -> do
                 c <- compileNatKindedTypeToCoeffect nullSpan t
-                unify c c'
+                substM <- unify c c'
+                case substM of
+                  Nothing -> return $ Just subst
+                  Just subst' -> combineManySubstitutions nullSpan [subst, subst'] >>= (return . Just)
             _ -> return Nothing
 
     unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
@@ -623,13 +627,14 @@ instance Unifiable Type where
 instance Unifiable Coeffect where
     unify (CVar v) c = do
         checkerState <- get
-        case lookup v (tyVarContext checkerState) of
+        subst <- case lookup v (tyVarContext checkerState) of
             -- If the coeffect variable has a poly kind then update it with the
             -- kind of c
             Just ((KVar kv), q) -> do
-                    coeffTy <- inferCoeffectType nullSpan c
+                    (coeffTy, subst) <- inferCoeffectType nullSpan c
                     put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
                                                                     v (promoteTypeToKind coeffTy, q) }
+                    return subst
 
             Just (k, q) ->
                 case c of
@@ -639,11 +644,12 @@ instance Unifiable Coeffect where
                                 -- The type of v is known and c is a variable with a poly kind
                                 put $ checkerState
                                     { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
-                            _ -> return ()
-                    _ -> return ()
-            Nothing -> return ()
+                                return []
+                            _ -> return []
+                    _ -> return []
+            Nothing -> return []
         -- Standard result of unifying with a variable
-        return $ Just [(v, SubstC c)]
+        return $ Just $ subst ++ [(v, SubstC c)]
 
     unify c (CVar v) = unify (CVar v) c
     unify (CPlus c1 c2) (CPlus c1' c2') = do
