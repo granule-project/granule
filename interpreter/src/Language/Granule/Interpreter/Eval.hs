@@ -176,7 +176,7 @@ evalIn ctxt (TryCatch s _ e1 p _ e2 e3) = do
       e1' <- evalIn ctxt eInner
         -- (cf. TRY_BETA_1)
       catch ( 
-          pmatch ctxt [(p, e2)] e1' >>=
+          pmatch ctxt [(PBox s () p, e2)] e1' >>=
             \v -> 
               case v of
                 Just e2' -> evalIn ctxt e2'
