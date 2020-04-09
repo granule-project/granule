@@ -428,7 +428,7 @@ builtIns =
     readChar (Ext _ (Handle h)) = diamondConstr $ do
           c <- SIO.hGetChar h
           return $ valExpr $ Promote () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
-    readChar _ = error $ "Runtime exception: trying to get from a non handle value"
+    readChar h = error $ "Runtime exception: trying to get from a non handle value" <> prettyDebug h
 
     closeHandle :: RValue -> RValue
     closeHandle (Ext _ (Handle h)) = diamondConstr $ do
