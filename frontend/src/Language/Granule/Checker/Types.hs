@@ -9,6 +9,7 @@
 module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
+import Data.List (sortBy)
 
 import Language.Granule.Checker.Constraints.Compile
 
@@ -80,10 +81,9 @@ equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 = do
    if eq
      then do
         t2 <- substitute unif t2
-        let t2 = normaliseType t2
         return (eq, t2, unif)
-     else let t1' = normaliseType t1 in
-       return (eq, t1', [])
+     else let t1 = normaliseType t1 in
+       return (eq, t1, [])
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
@@ -322,6 +322,37 @@ equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp = do
   unifiers <- combineSubstitutions s u1 u2
   return (one && two, unifiers)
 
+equalTypesRelatedCoeffectsInner s rel (TyCase t1 b1) (TyCase t1' b1') k sp = do
+  -- Check guards are equal
+  (r1, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp
+  b1  <- mapM (pairMapM (substitute u1)) b1
+  b1' <- mapM (pairMapM (substitute u1)) b1'
+  -- Check whether there are the same number of branches
+  let r2 = (length b1) == (length b1')
+  -- Sort both branches by their patterns
+  let bs = zip (sortBranch b1) (sortBranch b1')
+  -- For each pair of branches, check whether the patterns are equal and the results are equal
+  checkBs bs (r1 && r2) u1
+    where
+      sortBranch :: Ord a => [(a, b)] -> [(a, b)]
+      sortBranch = sortBy (\(x, _) (y, _) -> compare x y)
+
+      pairMapM :: Monad m => (a -> m b) -> (a, a) -> m (b, b)
+      pairMapM f (x, y) = do
+        x' <- f x
+        y' <- f y
+        return (x', y')
+
+      checkBs [] r u = return (r, u)
+      checkBs (((p1, t1), (p2, t2)) : bs) r u= do
+        (r1, u1) <- equalTypesRelatedCoeffects s rel p1 p2 sp
+        t1 <- substitute u1 t1
+        t2 <- substitute u1 t2
+        unifiers <- combineSubstitutions s u u1
+        (r2, u2) <- equalTypesRelatedCoeffects s rel t1 t2 sp
+        unifiers <- combineSubstitutions s unifiers u2
+        checkBs bs (r && r1 && r2) unifiers
+
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp =
 --TODO: fix isEffect case
   -- Look to see if we are doing equality on sets that are not effects
@@ -429,6 +460,8 @@ isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') 
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
   (eq1, u1) <- equalTypesRelatedCoeffects sp rel t t' ind
+  s <- substitute u1 s
+  s' <- substitute u1 s'
   (eq2, u2) <- isDualSession sp rel s s' ind
   u <- combineSubstitutions sp u1 u2
   return (eq1 && eq2, u)

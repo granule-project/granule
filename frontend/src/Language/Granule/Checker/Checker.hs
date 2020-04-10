@@ -36,7 +36,6 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
-import Language.Granule.Checker.Normalise
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers
@@ -815,10 +814,9 @@ synthExpr defs gam pol (App s _ e e') = do
 
          -- Synth subst
          tau    <- substitute subst2 tau
-         let tau' = normaliseType tau
 
-         let elaborated = App s tau' elaboratedL elaboratedR
-         return (tau', gamNew, subst, elaborated)
+         let elaborated = App s tau elaboratedL elaboratedR
+         return (tau, gamNew, subst, elaborated)
 
       -- Not a function type
       t -> throw LhsOfApplicationNotAFunction{ errLoc = s, errTy = t }

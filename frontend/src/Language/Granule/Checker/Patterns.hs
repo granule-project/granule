@@ -20,7 +20,6 @@ import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
-import Language.Granule.Checker.Normalise
 
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
@@ -279,12 +278,9 @@ ctxtFromTypedPatterns' outerCoeff s (FunTy t1 t2) (pat:pats) (cons:consumptionsI
   -- Apply substitutions
   t2' <- substitute subst t2
 
-  -- Normalise the result
-  let t2'' = normaliseType t2'
-
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
-      ctxtFromTypedPatterns' outerCoeff s t2'' pats consumptionsIn
+      ctxtFromTypedPatterns' outerCoeff s t2' pats consumptionsIn
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
