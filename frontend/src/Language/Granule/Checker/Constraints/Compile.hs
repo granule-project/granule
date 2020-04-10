@@ -1,6 +1,7 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.Constraints.Compile where
 
@@ -16,7 +17,7 @@ import Language.Granule.Syntax.Span
 
 import Language.Granule.Utils
 
-compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type -> Checker Coeffect
+compileNatKindedTypeToCoeffect :: (?globals :: Globals) => Span -> Type Zero -> Checker Coeffect
 compileNatKindedTypeToCoeffect s (TyInfix op t1 t2) = do
   t1' <- compileNatKindedTypeToCoeffect s t1
   t2' <- compileNatKindedTypeToCoeffect s t2
@@ -39,7 +40,7 @@ compileNatKindedTypeToCoeffect s t =
   throw $ KindError{errLoc = s, errTy = t, errK = kNat }
 
 compileTypeConstraintToConstraint ::
-    (?globals :: Globals) => Span -> Type -> Checker Pred
+    (?globals :: Globals) => Span -> Type Zero -> Checker Pred
 compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   c1 <- compileNatKindedTypeToCoeffect s t1
   c2 <- compileNatKindedTypeToCoeffect s t2

@@ -4,6 +4,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE ScopedTypeVariables #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 
 {- Deals with compilation of coeffects into symbolic representations of SBV -}
@@ -35,7 +37,7 @@ import Language.Granule.Utils
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type, Quantifier)
+  => Pred -> Ctxt (Type One, Quantifier)
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
 compileToSBV predicate tyVarContext =
   (buildTheoremNew (reverse tyVarContext) []
@@ -49,7 +51,7 @@ compileToSBV predicate tyVarContext =
 
     predicate' = rewriteBindersInPredicate tyVarContext predicate
 
-    buildTheoremNew :: Ctxt (Type, Quantifier) -> Ctxt SGrade -> Symbolic SBool
+    buildTheoremNew :: Ctxt (Type One, Quantifier) -> Ctxt SGrade -> Symbolic SBool
     buildTheoremNew [] solverVars =
       buildTheorem' solverVars predicate
 
@@ -85,19 +87,11 @@ compileToSBV predicate tyVarContext =
       if v `elem` (freeVars p)
         -- optimisation
         then
-          case demoteKindToType k of
-            Just t ->
-              freshCVarScoped compileQuantScoped (internalName v) t InstanceQ
-                (\(varPred, solverVar) -> do
-                  pred' <- buildTheorem' ((v, solverVar) : solverVars) p
-                  return (varPred .&& pred'))
+          freshCVarScoped compileQuantScoped (internalName v) k InstanceQ
+            (\(varPred, solverVar) -> do
+              pred' <- buildTheorem' ((v, solverVar) : solverVars) p
+              return (varPred .&& pred'))
 
-            Nothing ->
-              case k of
-                KType -> buildTheorem' solverVars p
-                _ ->
-                  solverError $ "Trying to make a fresh existential solver variable for a grade of kind: "
-                             <> show k <> " but I don't know how."
         else
           buildTheorem' solverVars p
 
@@ -105,18 +99,10 @@ compileToSBV predicate tyVarContext =
       if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
-          case demoteKindToType k of
-            Just t ->
-              freshCVarScoped compileQuantScoped (internalName v) t ForallQ
+          freshCVarScoped compileQuantScoped (internalName v) k ForallQ
                 (\(varPred, solverVar) -> do
                   pred' <- buildTheorem' ((v, solverVar) : solverVars) (Impl vs p p')
                   return (varPred .=> pred'))
-            Nothing ->
-                    case k of
-                      KType -> buildTheorem' solverVars p
-                      _ -> solverError $ "Trying to make a fresh universal solver variable for a grade of kind: "
-                                   <> show k <> " but I don't know how."
-
         else
           -- An optimisation, don't bother quantifying things
           -- which don't appear in the theorem anyway
@@ -133,7 +119,7 @@ zeroToInfinity = SInterval (SExtNat $ SNatX.SNatX 0) (SExtNat SNatX.inf)
 freshCVarScoped ::
     (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
   -> String
-  -> Type
+  -> Type One
   -> Quantifier
   -> ((SBool, SGrade) -> Symbolic SBool)
   -> Symbolic SBool
@@ -290,7 +276,7 @@ compile vars c = error $ "Internal bug: cannot compile " <> show c
 -- | Compile a coeffect term into its symbolic representation
 -- | (along with any additional predicates)
 compileCoeffect :: (?globals :: Globals) =>
-  Coeffect -> Type -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
+  Coeffect -> Type One -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
 
@@ -566,7 +552,7 @@ data SolverResult
 provePredicate
   :: (?globals :: Globals)
   => Pred                    -- Predicate
-  -> Ctxt (Type, Quantifier) -- Free variable quantifiers
+  -> Ctxt (Type One, Quantifier) -- Free variable quantifiers
   -> IO SolverResult
 provePredicate predicate vars
   | isTrivial predicate = do

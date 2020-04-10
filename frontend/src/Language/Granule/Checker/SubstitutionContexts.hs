@@ -1,5 +1,6 @@
 {-# LANGUAGE TypeSynonymInstances #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.SubstitutionContexts where
 
@@ -15,15 +16,17 @@ type Substitution = Ctxt Substitutors
 {-| Substitutors are things we want to substitute in... they may be one
      of several things... -}
 data Substitutors =
-    SubstT  Type
+    SubstT  (Type Zero)
   | SubstC  Coeffect
   | SubstK  Kind
+  | SubstS (Type Two)
   deriving (Eq, Show)
 
 instance Pretty Substitutors where
   pretty (SubstT t) = pretty t
   pretty (SubstC c) = pretty c
   pretty (SubstK k) = pretty k
+  pretty (SubstS s) = pretty s
 
 instance Term Substitution where
   freeVars [] = []
@@ -33,6 +36,8 @@ instance Term Substitution where
     freeVars c ++ freeVars subst
   freeVars ((v, SubstK k):subst) =
     freeVars k ++ freeVars subst
+  freeVars ((v, SubstS s):subst) =
+    freeVars s ++ freeVars subst
 
 -- | For substitutions which are just renaminings
 --   allow the substitution to be inverted

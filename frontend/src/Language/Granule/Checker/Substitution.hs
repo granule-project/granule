@@ -1,6 +1,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -53,6 +54,10 @@ instance Substitutable Substitutors where
         k <- substitute subst k
         return $ SubstK k
 
+      SubstS sort -> do
+        sort <- substitute subst sort
+        return $ SubstS sort
+
 -- Speciale case of substituting a substition
 instance Substitutable Substitution where
   substitute subst [] = return []
@@ -68,24 +73,32 @@ instance Substitutable Substitution where
         <> show subst <> " maps variable `" <> show var
         <> "` to a non variable type: `" <> show t <> "`"
 
-instance Substitutable Type where
-  substitute subst s = typeFoldM (baseTypeFold
-                              { tfTyVar = varSubst
-                              , tfBox = box
-                              , tfDiamond = dia }) s >>= (return . normaliseType)
-    where
-      box c t = do
-        c <- substitute subst c
-        mBox c t
+instance Substitutable (Type Zero) where
+  substitute subst s = typeFoldM0 (baseTypeFoldZero
+                                { tfTyVar0 = varSubst
+                                , tfBox0 = box }) s >>= (return . normaliseType)
+      where
+        box c t = do
+          c <- substitute subst c
+          mBox c t
 
-      dia e t = do
-        e <- substitute subst e
-        mDiamond e t
+        varSubst v =
+          case lookup v subst of
+            Just (SubstT t) -> return t
+            _               -> mTyVar v
 
-      varSubst v =
-         case lookup v subst of
-           Just (SubstT t) -> return t
-           _               -> mTyVar v
+instance Substitutable (Type One) where
+  substitute subst = typeFoldM1 (baseTypeFoldOne
+                                { tfTyVar1 = varSubst })
+      where
+        varSubst v =
+          case lookup v subst of
+            Just (SubstK t) -> return t
+            Just (SubstT t) -> tryTyPromote nullSpan t
+            _               -> mTyVar v
+
+instance Substitutable (Type Two) where
+  substitute _ = error "TODO: Cannot currently substitute into Sorts"
 
 instance Substitutable Coeffect where
 
@@ -136,10 +149,11 @@ instance Substitutable Coeffect where
                 case lookup v (tyVarContext checkerState) of
                     -- If the coeffect variable has a poly kind then update it with the
                     -- kind of c
-                    Just ((KVar kv), q) -> do
-                        coeffTy <- inferCoeffectType nullSpan c
+                    --Result of lookup: (TypeWithLevel, quantifier)
+                    Just (TypeWithLevel _ (TyVar kv), q) -> do
+                        coeffK <- inferCoeffectType nullSpan c
                         put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (promoteTypeToKind coeffTy, q) }
+                                                                    v (TypeWithLevel (LSucc LZero) coeffK, q) }
 
                     _ -> return ()
                 return c
@@ -148,9 +162,9 @@ instance Substitutable Coeffect where
             Just (SubstT t) -> do
                 k <- inferKindOfType nullSpan t
                 k' <- inferCoeffectType nullSpan (CVar v)
-                jK <- joinKind k (promoteTypeToKind k')
+                jK <- joinKind k k'
                 case jK of
-                    Just (KPromote (TyCon (internalName -> "Nat")), _) ->
+                    Just (TyCon (internalName -> "Nat"), _) ->
                         compileNatKindedTypeToCoeffect nullSpan t
                     _ -> return (CVar v)
 
@@ -181,30 +195,6 @@ instance Substitutable Coeffect where
     substitute _ c@CFloat{}    = return c
     substitute _ c@Level{}     = return c
 
-instance Substitutable Kind where
-
-  substitute subst (KPromote t) = do
-      t <- substitute subst t
-      return $ KPromote t
-
-  substitute subst KType = return KType
-  substitute subst KEffect = return KEffect
-  substitute subst KCoeffect = return KCoeffect
-  substitute subst KPredicate = return KPredicate
-  substitute subst (KFun c1 c2) = do
-    c1 <- substitute subst c1
-    c2 <- substitute subst c2
-    return $ KFun c1 c2
-  substitute subst (KVar v) =
-    case lookup v subst of
-      Just (SubstK k) -> return k
-      Just (SubstT t) -> return $ KPromote t
-      _               -> return $ KVar v
-  substitute subst (KUnion k1 k2) = do
-    k1' <- substitute subst k1
-    k2' <- substitute subst k2
-    return $ KUnion k1' k2'
-
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
   substitute s (Just t) = substitute s t >>= return . Just
@@ -229,7 +219,7 @@ removeReflexivePairs :: Substitution -> Substitution
 removeReflexivePairs [] = []
 removeReflexivePairs ((v, SubstT (TyVar v')):subst) | v == v' = removeReflexivePairs subst
 removeReflexivePairs ((v, SubstC (CVar v')):subst) | v == v' = removeReflexivePairs subst
-removeReflexivePairs ((v, SubstK (KVar v')):subst) | v == v' = removeReflexivePairs subst
+removeReflexivePairs ((v, SubstK (TyVar v')):subst) | v == v' = removeReflexivePairs subst
 removeReflexivePairs ((v, e):subst) = (v, e) : removeReflexivePairs subst
 
 -- | Combines substitutions which may fail if there are conflicting
@@ -320,10 +310,10 @@ substAssumption subst (v, Discharged t c) = do
 
 
 -- | Apply a name map to a type to rename the type variables
-renameType :: (?globals :: Globals) => [(Id, Id)] -> Type -> Checker Type
-renameType subst = typeFoldM $ baseTypeFold
-  { tfBox   = renameBox subst
-  , tfTyVar = renameTyVar subst
+renameType :: (?globals :: Globals) => [(Id, Id)] -> Type Zero -> Checker (Type Zero)
+renameType subst = typeFoldM0 $ baseTypeFoldZero
+  { tfBox0   = renameBox subst
+  , tfTyVar0 = renameTyVar subst
   }
   where
     renameBox renameMap c t = do
@@ -345,7 +335,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
 
-  -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
+  -> Checker (Type Zero, Ctxt Kind, Substitution, [Type Zero], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
@@ -450,7 +440,7 @@ instance Substitutable Constraint where
   substitute ctxt (LtEq s c1 c2) = LtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
-instance Substitutable (Equation () Type) where
+instance Substitutable (Equation () (Type Zero)) where
   substitute ctxt (Equation sp ty patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
@@ -459,8 +449,8 @@ instance Substitutable (Equation () Type) where
 
 substituteValue :: (?globals::Globals)
                 => Substitution
-                -> ValueF ev Type (Value ev Type) (Expr ev Type)
-                -> Checker (Value ev Type)
+                -> ValueF ev (Type Zero) (Value ev (Type Zero)) (Expr ev (Type Zero))
+                -> Checker (Value ev (Type Zero))
 substituteValue ctxt (AbsF ty arg mty expr) =
     do  ty' <- substitute ctxt ty
         arg' <- substitute ctxt arg
@@ -482,8 +472,8 @@ substituteValue _ other = return (ExprFix2 other)
 
 substituteExpr :: (?globals::Globals)
                => Substitution
-               -> ExprF ev Type (Expr ev Type) (Value ev Type)
-               -> Checker (Expr ev Type)
+               -> ExprF ev (Type Zero) (Expr ev (Type Zero)) (Value ev (Type Zero))
+               -> Checker (Expr ev (Type Zero))
 substituteExpr ctxt (AppF sp ty fn arg) =
     do  ty' <- substitute ctxt ty
         return $ App sp ty' fn arg
@@ -509,13 +499,13 @@ mapFstM fn (f, r) = do
     f' <- fn f
     return (f', r)
 
-instance Substitutable (Expr () Type) where
+instance Substitutable (Expr () (Type Zero)) where
   substitute ctxt = bicataM (substituteExpr ctxt) (substituteValue ctxt)
 
-instance Substitutable (Value () Type) where
+instance Substitutable (Value () (Type Zero)) where
   substitute ctxt = bicataM (substituteValue ctxt) (substituteExpr ctxt)
 
-instance Substitutable (Pattern Type) where
+instance Substitutable (Pattern (Type Zero)) where
   substitute ctxt = patternFoldM
       (\sp ann nm -> do
           ann' <- substitute ctxt ann
@@ -545,9 +535,9 @@ instance Unifiable Substitutors where
         -- We can unify a type with a coeffect, if the type is actually a Nat
         k <- inferKindOfType nullSpan t
         k' <- inferCoeffectType nullSpan c'
-        jK <- joinKind k (KPromote k')
+        jK <- joinKind k k'
         case jK of
-            Just (KPromote (TyCon k), _) | internalName k == "Nat" -> do
+            Just (TyCon k, _) | internalName k == "Nat" -> do
                 c <- compileNatKindedTypeToCoeffect nullSpan t
                 unify c c'
             _ -> return Nothing
@@ -557,7 +547,7 @@ instance Unifiable Substitutors where
     unify (SubstK k) (SubstK k') = unify k k'
     unify _ _ = return Nothing
 
-instance Unifiable Type where
+instance Unifiable (Type Zero) where
     unify (TyVar v) t = return $ Just [(v, SubstT t)]
     unify t (TyVar v) = return $ Just [(v, SubstT t)]
     unify (FunTy t1 t2) (FunTy t1' t2') = do
@@ -583,7 +573,7 @@ instance Unifiable Type where
         k' <- inferKindOfType nullSpan t
         jK <- joinKind k k'
         case jK of
-            Just (KPromote (TyCon (internalName -> "Nat")), _) -> do
+            Just (TyCon (internalName -> "Nat"), _) -> do
                 c  <- compileNatKindedTypeToCoeffect nullSpan t
                 c' <- compileNatKindedTypeToCoeffect nullSpan t'
                 addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
@@ -604,16 +594,16 @@ instance Unifiable Coeffect where
         case lookup v (tyVarContext checkerState) of
             -- If the coeffect variable has a poly kind then update it with the
             -- kind of c
-            Just ((KVar kv), q) -> do
-                    coeffTy <- inferCoeffectType nullSpan c
+            Just (TypeWithLevel _ (TyVar kv), q) -> do
+                    coeffK <- inferCoeffectType nullSpan c
                     put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (promoteTypeToKind coeffTy, q) }
+                                                                    v (TypeWithLevel (LSucc LZero) coeffK, q) }
 
             Just (k, q) ->
                 case c of
                     CVar v' ->
                         case lookup v' (tyVarContext checkerState) of
-                            Just (KVar _, q) -> do
+                            Just (TypeWithLevel _ (TyVar _), q) -> do
                                 -- The type of v is known and c is a variable with a poly kind
                                 put $ checkerState
                                     { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
@@ -666,11 +656,11 @@ instance Unifiable Coeffect where
         if c == c' then return $ Just [] else return Nothing
 
 instance Unifiable Kind where
-    unify (KVar v) k =
+    unify (TyVar v) k =
         return $ Just [(v, SubstK k)]
-    unify k (KVar v) =
+    unify k (TyVar v) =
         return $ Just [(v, SubstK k)]
-    unify (KFun k1 k2) (KFun k1' k2') = do
+    unify (FunTy k1 k2) (FunTy k1' k2') = do
         u1 <- unify k1 k1'
         u2 <- unify k2 k2'
         u1 <<>> u2
@@ -697,9 +687,12 @@ updateTyVar s tyVar k = do
           -- liftIO $ putStrLn $ "\ntyVarContext after = " <> pretty (tyVarContext st)
           -- Rewrite the predicate
           st <- get
+          let subst = [(tyVar, SubstK k)]
+          {-
           let subst = case k of
-                        KPromote t -> [(tyVar, SubstT t)]
+                        TyPromote t -> [(tyVar, SubstT t)]
                         _          -> [(tyVar, SubstK k)]
+          -}
           ps <- mapM (substitute subst) (predicateStack st)
           put st{ predicateStack = ps }
 
@@ -713,10 +706,10 @@ updateTyVar s tyVar k = do
   -}
       Nothing -> throw UnboundVariableError{ errLoc = s, errId = tyVar }
   where
-    rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
+    rewriteCtxt :: Ctxt (TypeWithLevel, Quantifier) -> Ctxt (TypeWithLevel, Quantifier)
     rewriteCtxt [] = []
-    rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
-     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
-    rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
-     | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+    rewriteCtxt ((name, (TypeWithLevel (LSucc LZero) (TyVar kindVar), q)) : ctxt)
+     | tyVar == kindVar = (name, (TypeWithLevel (LSucc LZero) k, q)) : rewriteCtxt ctxt
+    rewriteCtxt ((name, (TypeWithLevel (LSucc LZero) (TyVar kindVar), q)) : ctxt)
+     | tyVar == kindVar = (name, (TypeWithLevel (LSucc LZero) k, q)) : rewriteCtxt ctxt
     rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt

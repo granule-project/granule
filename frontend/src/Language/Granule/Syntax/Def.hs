@@ -2,6 +2,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 
@@ -63,7 +64,7 @@ deriving instance (Eq v, Eq a) => Eq (Equation v a)
 deriving instance (Show v, Show a) => Show (Equation v a)
 instance FirstParameter (Equation v a) Span
 
-definitionType :: Def v a -> Type
+definitionType :: Def v a -> Type Zero
 definitionType Def { defTypeScheme = ts } =
     ty where (Forall _ _ _ ty) = ts
 
@@ -84,7 +85,7 @@ data DataConstr
   = DataConstrIndexed
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrTypeScheme :: TypeScheme } -- ^ GADTs
   | DataConstrNonIndexed
-    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
+    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type Zero] } -- ^ ADTs
   deriving (Eq, Show, Generic)
 
 -- | Is the data type an indexed data type, or just a plain ADT?
@@ -119,7 +120,7 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
 instance FirstParameter DataConstr Span
 
 -- | How many data constructors a type has (Nothing -> don't know)
-type Cardinality = Maybe Nat
+type Cardinality = Maybe Int
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a

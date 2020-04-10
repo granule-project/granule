@@ -8,6 +8,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE LambdaCase #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Granule.Syntax.Pretty where
 
@@ -100,15 +101,12 @@ instance Pretty Coeffect where
     pretty (CInterval c1 c2) = prettyNested c1 <> ".." <> prettyNested c2
     pretty (CProduct c1 c2) = "(" <> pretty c1 <> ", " <> pretty c2 <> ")"
 
-instance Pretty Kind where
-    pretty KType          = "Type"
-    pretty KEffect      = "Effect"
-    pretty KCoeffect      = "Coeffect"
-    pretty KPredicate     = "Predicate"
-    pretty (KFun k1 k2)   = prettyNested k1 <> " -> " <> pretty k2
-    pretty (KVar v)       = pretty v
-    pretty (KPromote t)   = "↑" <> prettyNested t
-    pretty (KUnion k1 k2) = "(" <> prettyNested k1 <> " ∪ " <> prettyNested k2 <> ")"
+instance Pretty (ULevel l) where
+  pretty = show . (toInt 0)
+    where
+      toInt :: Int -> ULevel l' -> Int
+      toInt n LZero = n
+      toInt n (LSucc l') = toInt (n + 1) l'
 
 instance Pretty TypeScheme where
     pretty (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty t
@@ -119,13 +117,24 @@ instance Pretty TypeScheme where
         constraints [] = ""
         constraints cs = "{" <> intercalate ", " (map pretty cs) <> "} =>\n    "
 
-instance Pretty Type where
+instance Pretty TypeWithLevel where
+    pretty (TypeWithLevel l t) = pretty t
+
+instance Pretty (Type l) where
     -- Atoms
     pretty (TyCon s)      = pretty s
     pretty (TyVar v)      = pretty v
     pretty (TyInt n)      = show n
 
     -- Non atoms
+    {-
+    pretty (TyPromote t) =
+      "↑" <> prettyNested t
+    -}
+
+    pretty (Type l) =
+      "Type " <> pretty l
+
     pretty (FunTy t1 t2)  =
       case t1 of
         FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
@@ -156,6 +165,8 @@ instance Pretty Type where
      "(case " <> pretty t <> " of "
                     <> intercalate "; " (map (\(p, t') -> pretty p
                     <> " : " <> pretty t') ps) <> ")"
+
+    pretty (KUnion k1 k2) = "(" <> prettyNested k1 <> " ∪ " <> prettyNested k2 <> ")"
 
 instance Pretty TypeOperator where
   pretty = \case

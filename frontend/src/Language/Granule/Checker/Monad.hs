@@ -7,6 +7,8 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 {-# LANGUAGE RecordWildCards #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
@@ -56,6 +58,12 @@ newtype Checker a = Checker
 
 type CheckerResult r = Either (NonEmpty CheckerError) r
 
+tryTyPromote :: HasLevel l => Span -> Type l -> Checker (Type (Succ l))
+tryTyPromote s ty =
+  case tyPromote ty of
+    Just ty' -> return ty'
+    Nothing -> throw $ PromotionError s (TypeWithLevel (getLevel ty) ty)
+
 evalChecker :: CheckerState -> Checker a -> IO (CheckerResult a)
 evalChecker initialState (Checker k) = evalStateT (runExceptT k) initialState
 
@@ -82,8 +90,8 @@ runAll f xs = do
 
 -- | Types of discharged coeffects
 data Assumption
-  = Linear Type
-  | Discharged Type Coeffect
+  = Linear (Type Zero)
+  | Discharged (Type Zero) Coeffect
     deriving (Eq, Show)
 
 instance Term Assumption where
@@ -132,8 +140,8 @@ meetConsumption Full Empty = NotFull
 
 data CheckerState = CS
             { -- Fresh variable id state
-              uniqueVarIdCounterMap  :: M.Map String Nat
-            , uniqueVarIdCounter     :: Nat
+              uniqueVarIdCounterMap  :: M.Map String Int
+            , uniqueVarIdCounter     :: Int
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: [Pred]
 
@@ -144,7 +152,7 @@ data CheckerState = CS
 
             -- Type variable context, maps type variables to their kinds
             -- and their quantification
-            , tyVarContext   :: Ctxt (Kind, Quantifier)
+            , tyVarContext   :: Ctxt (TypeWithLevel, Quantifier)
 
             -- Guard contexts (all the guards in scope)
             -- which get promoted  by branch promotions
@@ -158,7 +166,7 @@ data CheckerState = CS
             -- Data type information
             --  map of type constructor names to their the kind, num of
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Kind, Cardinality, Bool)
+            , typeConstructors :: Ctxt (TypeWithLevel, Cardinality, Bool)
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
@@ -172,7 +180,7 @@ data CheckerState = CS
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
-  deriving (Show, Eq) -- for debugging
+  deriving Show -- for debugging
 
 -- | Initial checker context state
 initState :: CheckerState
@@ -312,7 +320,7 @@ existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of
     -- No need to add variables of kind Type to the predicate
-    KType -> return ()
+    Type LZero -> return ()
     k -> do
       checkerState <- get
       case predicateStack checkerState of
@@ -364,18 +372,16 @@ addConstraintToPreviousFrame c = do
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
-updateCoeffectType :: Id -> Kind -> Checker ()
+updateCoeffectType :: Id -> Type One -> Checker ()
 updateCoeffectType tyVar k = do
    modify (\checkerState ->
     checkerState
      { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
  where
-   rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)
+   rewriteCtxt :: Ctxt (TypeWithLevel, Quantifier) -> Ctxt (TypeWithLevel, Quantifier)
    rewriteCtxt [] = []
-   rewriteCtxt ((name, (KPromote (TyVar kindVar), q)) : ctxt)
-    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
-   rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
-    | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
+   rewriteCtxt ((name, ((TypeWithLevel (LSucc LZero) (TyVar kindVar)), q)) : ctxt)
+    | tyVar == kindVar = (name, (TypeWithLevel (LSucc LZero) k, q)) : rewriteCtxt ctxt
    rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
 
 -- | Convenience function for throwing a single error
@@ -388,27 +394,29 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier) }
+    { errLoc :: Span , holeTy :: Maybe (Type Zero), context :: Ctxt Assumption, tyContext :: Ctxt (TypeWithLevel, Quantifier) }
   | TypeError
-    { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
+    { errLoc :: Span, tyExpected :: Type Zero, tyActual :: Type Zero }
   | GradingError
     { errLoc :: Span, errConstraint :: Neg Constraint }
   | KindMismatch
-    { errLoc :: Span, tyActualK :: Maybe Type, kExpected :: Kind, kActual :: Kind }
+    { errLoc :: Span, tyActualK :: Maybe (Type Zero), kExpected :: Kind, kActual :: Kind }
+  | SortMismatch
+    { errLoc :: Span, kActualS :: Maybe (Type One), sExpected :: Type Two, sActual :: Type Two }
   | KindError
-    { errLoc :: Span, errTy :: Type, errK :: Kind }
+    { errLoc :: Span, errTy :: Type Zero, errK :: Kind }
   | KindCannotFormSet
     { errLoc :: Span, errK :: Kind }
   | KindsNotEqual
     { errLoc :: Span, errK1 :: Kind, errK2 :: Kind }
   | IntervalGradeKindError
-    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
+    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
   | LinearityError
     { errLoc :: Span, linearityMismatch :: LinearityMismatch }
   | PatternTypingError
-    { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type }
+    { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type Zero }
   | PatternTypingMismatch
-    { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type, tyActual :: Type }
+    { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type Zero, tyActual :: Type Zero }
   | PatternArityError
     { errLoc :: Span, errId :: Id }
   | UnboundVariableError
@@ -422,51 +430,51 @@ data CheckerError
   | DuplicateBindingError
     { errLoc :: Span, duplicateBinding :: String }
   | UnificationError
-    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
+    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
   | UnificationKindError
-    { errLoc :: Span, errTy1 :: Type, errK1 :: Kind, errTy2 :: Type, errK2 :: Kind }
+    { errLoc :: Span, errTy1 :: Type Zero, errK1 :: Kind, errTy2 :: Type Zero, errK2 :: Kind }
   | TypeVariableMismatch
-    { errLoc :: Span, errVar :: Id, errTy1 :: Type, errTy2 :: Type }
+    { errLoc :: Span, errVar :: Id, errTy1 :: Type Zero, errTy2 :: Type Zero }
   | UndefinedEqualityKindError
-    { errLoc :: Span, errTy1 :: Type, errK1 :: Kind, errTy2 :: Type, errK2 :: Kind }
+    { errLoc :: Span, errTy1 :: Type Zero, errK1 :: Kind, errTy2 :: Type Zero, errK2 :: Kind }
   | CoeffectUnificationError
-    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type, errC1 :: Coeffect, errC2 :: Coeffect }
+    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero, errC1 :: Coeffect, errC2 :: Coeffect }
   | DataConstructorTypeVariableNameClash
     { errLoc :: Span, errDataConstructorId :: Id, errTypeConstructor :: Id, errVar :: Id }
   | DataConstructorNameClashError
     { errLoc :: Span, errId :: Id }
   | EffectMismatch
-    { errLoc :: Span, effExpected :: Type, effActual :: Type }
+    { errLoc :: Span, effExpected :: Type Zero, effActual :: Type Zero }
   | UnificationDisallowed
-    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
+    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
   | UnificationFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+    { errLoc :: Span, errVar :: Id, errTy :: Type Zero, errKind :: Kind }
   | UnificationFailGeneric
     { errLoc :: Span, errSubst1 :: Substitutors, errSubst2 :: Substitutors }
   | OccursCheckFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type }
+    { errLoc :: Span, errVar :: Id, errTy :: Type Zero }
   | SessionDualityError
-    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
+    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
   | NoUpperBoundError
-    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
+    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
   | DisallowedCoeffectNesting
-    { errLoc :: Span, errTyOuter :: Type, errTyInner :: Type }
+    { errLoc :: Span, errTyOuter :: Type One, errTyInner :: Type One }
   | UnboundDataConstructor
     { errLoc :: Span, errId :: Id }
   | UnboundTypeConstructor
     { errLoc :: Span, errId :: Id }
   | TooManyPatternsError
-    { errLoc :: Span, errPats :: NonEmpty (Pattern ()), tyExpected :: Type, tyActual :: Type }
+    { errLoc :: Span, errPats :: NonEmpty (Pattern ()), tyExpected :: Type Zero, tyActual :: Type Zero }
   | DataConstructorReturnTypeError
     { errLoc :: Span, idExpected :: Id, idActual :: Id }
   | MalformedDataConstructorType
-    { errLoc :: Span, errTy :: Type }
+    { errLoc :: Span, errTy :: Type Zero }
   | ExpectedEffectType
-    { errLoc :: Span, errTy :: Type }
+    { errLoc :: Span, errTy :: Type Zero }
   | LhsOfApplicationNotAFunction
-    { errLoc :: Span, errTy :: Type }
+    { errLoc :: Span, errTy :: Type Zero }
   | FailedOperatorResolution
-    { errLoc :: Span, errOp :: Operator, errTy :: Type }
+    { errLoc :: Span, errOp :: Operator, errTy :: Type Zero }
   | NeedTypeSignature
     { errLoc :: Span, errExpr :: Expr () () }
   | SolverErrorCounterExample
@@ -492,12 +500,14 @@ data CheckerError
   | UnexpectedTypeConstructor
     { errLoc :: Span, tyConExpected :: Id, tyConActual :: Id }
   | InvalidTypeDefinition
-    { errLoc :: Span, errTy :: Type }
+    { errLoc :: Span, errTy :: Type Zero }
   | UnknownResourceAlgebra
-    { errLoc :: Span, errTy :: Type, errK :: Kind }
+    { errLoc :: Span, errTy :: Type Zero, errK :: Kind }
   | CaseOnIndexedType
-    { errLoc :: Span, errTy :: Type }
-  deriving (Show, Eq)
+    { errLoc :: Span, errTy :: Type Zero }
+  | PromotionError
+    { errLoc :: Span, errTyP :: TypeWithLevel }
+  deriving Show
 
 
 instance UserMsg CheckerError where
@@ -507,6 +517,7 @@ instance UserMsg CheckerError where
   title TypeError{} = "Type error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
+  title SortMismatch{} = "Sort mismatch"
   title KindError{} = "Kind error"
   title KindCannotFormSet{} = "Kind error"
   title KindsNotEqual{} = "Kind error"
@@ -558,6 +569,7 @@ instance UserMsg CheckerError where
   title InvalidTypeDefinition{} = "Invalid type definition"
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
+  title PromotionError{} = "Type error"
 
   msg HoleMessage{..} =
     (case holeTy of
@@ -585,6 +597,11 @@ instance UserMsg CheckerError where
     = case tyActualK of
         Nothing -> "Expected kind `" <> pretty kExpected <> "` but got `" <> pretty kActual <> "`"
         Just ty -> "Expected kind `" <> pretty kExpected <> "` for type `" <> pretty ty <> "` but actual kind is `" <> pretty kActual <> "`"
+
+  msg SortMismatch{..}
+    = case kActualS of
+        Nothing -> "Expected sort `" <> pretty sExpected <> "` but got `" <> pretty sActual <> "`"
+        Just k -> "Expected sort `" <> pretty sExpected <> "` for kind `" <> pretty k <> "` but actual sort is `" <> pretty sActual <> "`"
 
   msg KindError{..}
     = "Type `" <> pretty errTy
@@ -809,6 +826,9 @@ instance UserMsg CheckerError where
 
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
+
+  msg (PromotionError _ (TypeWithLevel lev errTyP))
+    = "The type " <> pretty errTyP <> " at level " <> pretty lev <> " cannot be promoted to a higher universe level."
 
   color HoleMessage{} = Blue
   color _ = Red

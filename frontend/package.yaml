@@ -19,6 +19,7 @@ ghc-options:
 - -Wno-unused-matches
 - -Wno-name-shadowing
 - -Wno-type-defaults
+- -fno-warn-unticked-promoted-constructors
 
 default-extensions:
 - ImplicitParams

@@ -3,6 +3,13 @@
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE InstanceSigs #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE TypeOperators #-}
+{-# LANGUAGE KindSignatures #-}
+{-# LANGUAGE GADTs #-}
+{-# LANGUAGE StandaloneDeriving #-}
+{-# LANGUAGE RankNTypes #-}
+{-# LANGUAGE ScopedTypeVariables #-}
 
 -- Syntax of types, coeffects, and effects
 
@@ -15,14 +22,15 @@ import Language.Granule.Syntax.Span
 
 import GHC.Generics (Generic)
 import Data.Functor.Identity (runIdentity)
+import Data.Functor.Const
 
 -- | Represent types with a universal quantification at the start
 data TypeScheme =
   Forall
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
-    [Type]        -- constraints
-    Type          -- type
+    [Type Zero]      -- constraints
+    (Type Zero)      -- type
   deriving (Eq, Show, Generic)
 
 -- Constructors and operators are just strings
@@ -46,40 +54,108 @@ data TypeOperator
 Example: `List n Int` in Granule
          is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
-data Type = FunTy Type Type           -- ^ Function type
-          | TyCon Id                  -- ^ Type constructor
-          | Box Coeffect Type         -- ^ Coeffect type
-          | Diamond Type Type         -- ^ Effect type
-          | TyVar Id                  -- ^ Type variable
-          | TyApp Type Type           -- ^ Type application
-          | TyInt Int                 -- ^ Type-level Int
-          | TyInfix TypeOperator Type Type  -- ^ Infix type operator
-          | TySet [Type]              -- ^ Type-level set
-          | TyCase Type [(Type, Type)] -- ^ Type-level case
-    deriving (Eq, Ord, Show)
 
--- | Kinds
-data Kind = KType
-          | KCoeffect
-          | KEffect
-          | KPredicate
-          | KFun Kind Kind
-          | KVar Id              -- Kind poly variable
-          | KPromote Type        -- Promoted types
-          | KUnion Kind Kind
-    deriving (Show, Ord, Eq)
+type One = Succ Zero
+type Two = Succ One
 
+type Kind = Type One
+
+data Nat = Succ Nat | Zero
+
+data ULevel (l :: Nat) where
+  LSucc :: ULevel l -> ULevel (Succ l)
+  LZero :: ULevel Zero
+
+class LesserLevel (l :: Nat) (l' :: Nat) where
+instance LesserLevel Zero (Succ l) where
+-- instance LesserLevel l l' => LesserLevel (Succ l) (Succ l')
+
+deriving instance Eq (ULevel l)
+deriving instance Show (ULevel l)
+deriving instance Ord (ULevel l)
+
+--tyPromote :: LesserLevel l l' => Type l -> Maybe (Type l')
+tyPromote :: Type l -> Maybe (Type (Succ l))
+tyPromote (Type l) = return $ Type (LSucc l)
+tyPromote (FunTy t1 t2) = do
+  t1 <- tyPromote t1
+  t2 <- tyPromote t2
+  return $ FunTy t1 t2
+tyPromote (TyCon i) = return $ TyCon i
+tyPromote (TyVar i) = return $ TyVar i
+tyPromote (TyApp t1 t2) = do
+  t1 <- tyPromote t1
+  t2 <- tyPromote t2
+  return $ TyApp t1 t2
+tyPromote (TyInt n) = return $ TyInt n
+tyPromote (TyInfix op t1 t2) = do
+  t1 <- tyPromote t1
+  t2 <- tyPromote t2
+  return $ TyInfix op t1 t2
+tyPromote (TySet ts) = do
+  ts <- mapM tyPromote ts
+  return $ TySet ts
+tyPromote (TyCase t ts) = do
+  t <- tyPromote t
+  ts <- mapM (\(a,b) -> extractMonad (tyPromote a, tyPromote b)) ts
+  return $ TyCase t ts
+    where
+      extractMonad (a,b) = do
+        a' <- a
+        b' <- b
+        return (a', b')
+tyPromote t = Nothing
+
+data TypeWithLevel where
+  TypeWithLevel :: ULevel l -> Type l -> TypeWithLevel
+
+deriving instance Show TypeWithLevel
+
+data Type (l :: Nat) where
+    Type    :: ULevel l -> Type (Succ l)        -- ^ Universe construction
+    FunTy   :: Type l  -> Type l -> Type l  -- ^ Function type
+
+    TyCon   :: Id -> Type l                 -- ^ Type constructor
+    Box     :: Coeffect -> Type Zero -> Type Zero -- ^ Coeffect type
+    Diamond :: Type Zero -> Type Zero -> Type Zero   -- ^ Effect type
+    TyVar   :: Id -> Type l                 -- ^ Type variable
+    TyApp   :: Type l -> Type l -> Type l   -- ^ Type application
+    TyInt   :: Int -> Type l                -- ^ Type-level Int
+    TyInfix :: TypeOperator -> Type l -> Type l -> Type l -- ^ Infix type operator
+    TySet   :: [Type l] -> Type l           -- ^ Type-level set
+    TyCase  :: Type l -> [(Type l, Type l)] -> Type l -- ^ Type-level case
+    KUnion  :: Type (Succ (Succ Zero)) -> Type (Succ (Succ Zero)) -> Type (Succ (Succ Zero))
+
+deriving instance Show (Type l)
+deriving instance Eq (Type l)
+deriving instance Ord (Type l)
+
+data LevelProxy (l :: Nat) = LevelProxy
+
+getLevel :: forall l . HasLevel l => Type l -> ULevel l
+getLevel _ = getLevel' (LevelProxy :: LevelProxy l)
+
+class HasLevel (l :: Nat) where
+  getLevel' :: LevelProxy l -> ULevel l
+
+instance HasLevel Zero where
+  getLevel' LevelProxy = LZero
+
+instance HasLevel l => HasLevel (Succ l) where
+  getLevel' LevelProxy = LSucc (getLevel' (LevelProxy :: LevelProxy l))
+
+{-
 promoteTypeToKind :: Type -> Kind
 promoteTypeToKind (TyVar v) = KVar v
-promoteTypeToKind t = KPromote t
+promoteTypeToKind t = TyPromote t
 
 demoteKindToType :: Kind -> Maybe Type
-demoteKindToType (KPromote t) = Just t
+demoteKindToType (TyPromote t) = Just t
 demoteKindToType (KVar v)     = Just (TyVar v)
 demoteKindToType _            = Nothing
 
 instance Term Kind where
-  freeVars (KPromote t) = freeVars t
+  freeVars (TyPromote t) = freeVars t
   freeVars (KVar x)     = [x]
   freeVars _            = []
 
@@ -88,16 +164,18 @@ instance Term Kind where
   isLexicallyAtomic KCoeffect{} = True
   isLexicallyAtomic KEffect{} = True
   isLexicallyAtomic KPredicate{} = True
-  isLexicallyAtomic KPromote{} = True
+  isLexicallyAtomic TyPromote{} = True
   isLexicallyAtomic _ = False
+-}
 
-kConstr :: Id -> Kind
-kConstr = KPromote . TyCon
+tyCon :: String -> Type l
+tyCon = TyCon . mkId
 
 kNat, protocol :: Kind
-kNat = kConstr $ mkId "Nat"
-protocol = kConstr $ mkId "Protocol"
+kNat = TyCon $ mkId "Nat"
+protocol = TyCon $ mkId "Protocol"
 
+{-
 instance Monad m => Freshenable m Kind where
   freshen KType = return KType
   freshen KCoeffect = return KCoeffect
@@ -109,26 +187,27 @@ instance Monad m => Freshenable m Kind where
     return $ KFun k1 k2
 
   freshen (KVar v) = do
-    v' <- lookupVar  Type v
+    v' <- lookupVar  TypeL v
     case v' of
        Just v' -> return (KVar $ Id (sourceName v) v')
        -- This case happens if we are referring to a defined
        -- function which does not get its name freshened
        Nothing -> return (KVar $ mkId (sourceName v))
 
-  freshen (KPromote ty) = do
+  freshen (TyPromote ty) = do
      ty <- freshen ty
-     return $ KPromote ty
+     return $ TyPromote ty
 
   freshen (KUnion k1 k2) = do
     k1' <- freshen k1
     k2' <- freshen k2
     return $ KUnion k1' k2'
+    -}
 
 -- | Represents coeffect grades
 data Coeffect = CNat      Int
               | CFloat    Rational
-              | CInfinity (Maybe Type)
+              | CInfinity (Maybe (Type One))
               | CInterval { lowerBound :: Coeffect, upperBound :: Coeffect }
               | CVar      Id
               | CPlus     Coeffect Coeffect
@@ -136,20 +215,20 @@ data Coeffect = CNat      Int
               | CMinus    Coeffect Coeffect
               | CMeet     Coeffect Coeffect
               | CJoin     Coeffect Coeffect
-              | CZero     Type
-              | COne      Type
+              | CZero     (Type One)
+              | COne      (Type One)
               | Level     Integer
-              | CSet      [(String, Type)]
-              | CSig      Coeffect Type
+              | CSet      [(String, Type Zero)]
+              | CSig      Coeffect (Type One)
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
-    deriving (Eq, Ord, Show)
+    deriving (Eq, Show, Ord)
 
 -- Algebra for coeffects
 data CoeffectFold a = CoeffectFold
   { cNat   :: Int -> a
   , cFloat :: Rational -> a
-  , cInf   :: Maybe Type -> a
+  , cInf   :: Maybe (Type One) -> a
   , cInterval :: a -> a -> a
   , cVar   :: Id -> a
   , cPlus  :: a -> a -> a
@@ -157,11 +236,11 @@ data CoeffectFold a = CoeffectFold
   , cMinus :: a -> a -> a
   , cMeet  :: a -> a -> a
   , cJoin  :: a -> a -> a
-  , cZero  :: Type -> a
-  , cOne   :: Type -> a
+  , cZero  :: Type One -> a
+  , cOne   :: Type One -> a
   , cLevel :: Integer -> a
-  , cSet   :: [(String, Type)] -> a
-  , cSig   :: a -> Type -> a
+  , cSet   :: [(String, Type Zero)] -> a
+  , cSig   :: a -> Type One -> a
   , cExpon :: a -> a -> a
   , cProd  :: a -> a -> a }
 
@@ -251,18 +330,18 @@ publicRepresentation  = 2
 unusedRepresentation :: Integer
 unusedRepresentation = 0
 
-nat, extendedNat :: Type
+nat, extendedNat :: Type l
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
 
 infinity :: Coeffect
 infinity = CInfinity (Just extendedNat)
 
-isInterval :: Type -> Maybe Type
+isInterval :: Type l -> Maybe (Type l)
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
-isProduct :: Type -> Maybe (Type, Type)
+isProduct :: (Type l) -> Maybe (Type l, Type l)
 isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
@@ -270,89 +349,141 @@ isProduct _ = Nothing
 ----------------------------------------------------------------------
 -- Helpers
 
--- | Natural numbers
-type Nat = Word
-
 -- | Compute the arity of a function type
-arity :: Type -> Nat
+arity :: Type l -> Int
 arity (FunTy _ t) = 1 + arity t
 arity _           = 0
 
 -- | Get the result type after the last Arrow, e.g. for @a -> b -> Pair a b@
 -- the result type is @Pair a b@
-resultType :: Type -> Type
+resultType :: Type l -> Type l
 resultType (FunTy _ t) = resultType t
 resultType t = t
 
 -- | Get the leftmost type of an application
 -- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
 -- TyCon (Id "," ",")
-leftmostOfApplication :: Type -> Type
+leftmostOfApplication :: Type l -> Type l
 leftmostOfApplication (TyApp t _) = leftmostOfApplication t
 leftmostOfApplication t = t
 
 -- | Smart constructor for type constructors
-con :: String -> Type
+con :: String -> Type l
 con = TyCon . mkId
 
 -- | Smart constructor for type variables
-var :: String -> Type
+var :: String -> Type l
 var = TyVar . mkId
 
 -- | Smart constructor for function types
-(.->) :: Type -> Type -> Type
+(.->) :: Type l -> Type l -> Type l
 s .-> t = FunTy s t
 infixr 1 .->
 
 -- | Smart constructor for type application
-(.@) :: Type -> Type -> Type
+(.@) :: Type l -> Type l -> Type l
 s .@ t = TyApp s t
 infixl 9 .@
 
 -- Trivially effectful monadic constructors
-mFunTy :: Monad m => Type -> Type -> m Type
+mTy :: Monad m => ULevel l -> m (Type (Succ l))
+mTy          = return . Type
+mFunTy :: Monad m => Type l -> Type l -> m (Type l)
 mFunTy x y   = return (FunTy x y)
-mTyCon :: Monad m => Id -> m Type
+mTyCon :: Monad m => Id -> m (Type l)
 mTyCon       = return . TyCon
-mBox :: Monad m => Coeffect -> Type -> m Type
+mBox :: Monad m => Coeffect -> Type Zero -> m (Type Zero)
 mBox c y     = return (Box c y)
-mDiamond :: Monad m => Type -> Type -> m Type
+mDiamond :: Monad m => Type Zero -> Type Zero -> m (Type Zero)
 mDiamond e y = return (Diamond e y)
-mTyVar :: Monad m => Id -> m Type
+mTyVar :: Monad m => Id -> m (Type l)
 mTyVar       = return . TyVar
-mTyApp :: Monad m => Type -> Type -> m Type
+mTyApp :: Monad m => Type l -> Type l -> m (Type l)
 mTyApp x y   = return (TyApp x y)
-mTyInt :: Monad m => Int -> m Type
+mTyInt :: Monad m => Int -> m (Type l)
 mTyInt       = return . TyInt
-mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
+mTyInfix :: Monad m => TypeOperator -> Type l -> Type l -> m (Type l)
 mTyInfix op x y  = return (TyInfix op x y)
-mTySet   :: Monad m => [Type] -> m Type
-mTySet xs = return (TySet xs)
-mTyCase :: Monad m => Type -> [(Type, Type)] -> m Type
+mTySet   :: Monad m => [Type l] -> m (Type l)
+mTySet xs    = return (TySet xs)
+mTyCase :: Monad m => Type l -> [(Type l, Type l)] -> m (Type l)
 mTyCase x cs = return (TyCase x cs)
+mKUnion :: Monad m => Type Two -> Type Two -> m (Type Two)
+mKUnion x y  = return (KUnion x y)
 
 -- Monadic algebra for types
-data TypeFold m a = TypeFold
-  { tfFunTy   :: a -> a        -> m a
-  , tfTyCon   :: Id            -> m a
-  , tfBox     :: Coeffect -> a -> m a
-  , tfDiamond :: a -> a        -> m a
-  , tfTyVar   :: Id            -> m a
-  , tfTyApp   :: a -> a        -> m a
-  , tfTyInt   :: Int           -> m a
-  , tfTyInfix :: TypeOperator  -> a -> a -> m a
-  , tfSet     :: [a]           -> m a
-  , tfTyCase  :: a -> [(a, a)] -> m a}
+data TypeFold m (a :: Nat -> *) = TypeFold
+  { tfTy      :: forall (l :: Nat) . ULevel l       -> m (a (Succ l))
+  , tfFunTy   :: forall (l :: Nat) . a l -> a l    -> m (a l)
+  , tfTyCon   :: forall (l :: Nat) . Id            -> m (a l)
+  , tfBox     :: Coeffect -> a Zero                -> m (a Zero)
+  , tfDiamond :: a Zero -> a Zero                  -> m (a Zero)
+  , tfTyVar   :: forall (l :: Nat) . Id            -> m (a l)
+  , tfTyApp   :: forall (l :: Nat) . a l -> a l    -> m (a l)
+  , tfTyInt   :: forall (l :: Nat) . Int           -> m (a l)
+  , tfTyInfix :: forall (l :: Nat) . TypeOperator  -> a l -> a l -> m (a l)
+  , tfSet     :: forall (l :: Nat) . [a l]         -> m (a l)
+  , tfTyCase  :: forall (l :: Nat) . a l -> [(a l, a l)] -> m (a l)
+  , tfKUnion  :: a Two -> a Two                    -> m (a Two)}
+
+data TypeFoldAtLevel m (l :: Nat) (a :: Nat -> *) where
+  TypeFoldZero ::
+    { tfFunTy0   :: a Zero -> a Zero   -> m (a Zero)
+    , tfTyCon0   :: Id                 -> m (a Zero)
+    , tfBox0     :: Coeffect -> a Zero -> m (a Zero)
+    , tfDiamond0 :: a Zero -> a Zero   -> m (a Zero)
+    , tfTyVar0   :: Id                 -> m (a Zero)
+    , tfTyApp0   :: a Zero -> a Zero   -> m (a Zero)
+    , tfTyInt0   :: Int                -> m (a Zero)
+    , tfTyInfix0 :: TypeOperator  -> a Zero -> a Zero -> m (a Zero)
+    , tfSet0     :: [a Zero]           -> m (a Zero)
+    , tfTyCase0  :: a Zero -> [(a Zero, a Zero)] -> m (a Zero)
+    } -> TypeFoldAtLevel m Zero a
+
+  TypeFoldOne ::
+    { tfTy1      :: ULevel Zero        -> m (a One)
+    , tfFunTy1   :: a One -> a One    -> m (a One)
+    , tfTyCon1   :: Id                -> m (a One)
+    , tfTyVar1   :: Id                -> m (a One)
+    , tfTyApp1   :: a One -> a One    -> m (a One)
+    , tfTyInt1   :: Int               -> m (a One)
+    , tfTyInfix1 :: TypeOperator  -> a One -> a One -> m (a One)
+    , tfSet1     :: [a One]           -> m (a One)
+    , tfTyCase1  :: a One -> [(a One, a One)] -> m (a One)
+    } -> TypeFoldAtLevel m One a
+
+  TypeFoldL ::
+    { tfTyL      :: ULevel (Succ l)                     -> m (a (Succ (Succ l)))
+    , tfFunTyL   :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
+    , tfTyConL   :: Id                          -> m (a (Succ (Succ l)))
+    , tfTyVarL   :: Id                          -> m (a (Succ (Succ l)))
+    , tfTyAppL   :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
+    , tfTyIntL   :: Int                         -> m (a (Succ (Succ l)))
+    , tfTyInfixL :: TypeOperator  -> a (Succ (Succ l)) -> a (Succ (Succ l)) -> m (a (Succ (Succ l)))
+    , tfSetL     :: [a (Succ (Succ l))]                -> m (a (Succ (Succ l)))
+    , tfTyCaseL  :: a (Succ (Succ l)) -> [(a (Succ (Succ l)), a (Succ (Succ l)))] -> m (a (Succ (Succ l)))
+    , tfKUnionL  :: a (Succ (Succ l)) -> a (Succ (Succ l))    -> m (a (Succ (Succ l)))
+    } -> TypeFoldAtLevel m (Succ (Succ l)) a
 
 -- Base monadic algebra
-baseTypeFold :: Monad m => TypeFold m Type
+baseTypeFold :: Monad m => TypeFold m Type --(Type l)
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase mKUnion
+
+baseTypeFoldZero :: Monad m => TypeFoldAtLevel m Zero Type
+baseTypeFoldZero =
+  TypeFoldZero mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
+
+baseTypeFoldOne :: Monad m => TypeFoldAtLevel m One Type
+baseTypeFoldOne =
+  TypeFoldOne mTy mFunTy mTyCon mTyVar mTyApp mTyInt mTyInfix mTySet mTyCase
 
 -- | Monadic fold on a `Type` value
-typeFoldM :: Monad m => TypeFold m a -> Type -> m a
+typeFoldM :: forall m l a . Monad m => TypeFold m a -> Type l -> m (a l)
 typeFoldM algebra = go
   where
+   go :: Type l' -> m (a l')
+   go (Type l) = (tfTy algebra) l
    go (FunTy t1 t2) = do
      t1' <- go t1
      t2' <- go t2
@@ -387,30 +518,149 @@ typeFoldM algebra = go
       a' <- a
       b' <- b
       return (a', b')
+   go (KUnion t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfKUnion algebra) t1' t2'
+
+-- | Monadic fold on a `Type` value
+typeFoldM0 :: forall m a . Monad m => TypeFoldAtLevel m Zero a -> Type Zero -> m (a Zero)
+typeFoldM0 algebra = go
+  where
+   go :: Type Zero -> m (a Zero)
+   go (FunTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfFunTy0 algebra) t1' t2'
+   go (TyCon s) = (tfTyCon0 algebra) s
+   go (Box c t) = do
+     t' <- go t
+     (tfBox0 algebra) c t'
+   go (Diamond e t) = do
+     t' <- go t
+     e' <- go e
+     (tfDiamond0 algebra) e' t'
+   go (TyVar v) = (tfTyVar0 algebra) v
+   go (TyApp t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyApp0 algebra) t1' t2'
+   go (TyInt i) = (tfTyInt0 algebra) i
+   go (TyInfix op t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyInfix0 algebra) op t1' t2'
+   go (TySet ts) = do
+    ts' <- mapM go ts
+    (tfSet0 algebra) ts'
+   go (TyCase t ts) = do
+    t' <- go t
+    ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
+    (tfTyCase0 algebra) t' ts'
+    where
+     extractMonad (a,b) = do
+      a' <- a
+      b' <- b
+      return (a', b')
+
+-- | Monadic fold on a `Type` value
+typeFoldM1 :: forall m a . Monad m => TypeFoldAtLevel m One a -> Type One -> m (a One)
+typeFoldM1 algebra = go
+  where
+   go :: Type One -> m (a One)
+   go (Type l) = (tfTy1 algebra) l
+   go (FunTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfFunTy1 algebra) t1' t2'
+   go (TyCon s) = (tfTyCon1 algebra) s
+   go (TyVar v) = (tfTyVar1 algebra) v
+   go (TyApp t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyApp1 algebra) t1' t2'
+   go (TyInt i) = (tfTyInt1 algebra) i
+   go (TyInfix op t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyInfix1 algebra) op t1' t2'
+   go (TySet ts) = do
+    ts' <- mapM go ts
+    (tfSet1 algebra) ts'
+   go (TyCase t ts) = do
+    t' <- go t
+    ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
+    (tfTyCase1 algebra) t' ts'
+    where
+     extractMonad (a,b) = do
+      a' <- a
+      b' <- b
+      return (a', b')
+
+typeFoldML :: forall m l a . Monad m => TypeFoldAtLevel m (Succ (Succ l)) a -> Type (Succ (Succ l)) -> m (a (Succ (Succ l)))
+typeFoldML algebra = go
+  where
+   go :: Type (Succ (Succ l)) -> m (a (Succ (Succ l)))
+   go (Type l) = (tfTyL algebra) l
+   go (FunTy t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfFunTyL algebra) t1' t2'
+   go (TyCon s) = (tfTyConL algebra) s
+   go (TyVar v) = (tfTyVarL algebra) v
+   go (TyApp t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyAppL algebra) t1' t2'
+   go (TyInt i) = (tfTyIntL algebra) i
+   go (TyInfix op t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfTyInfixL algebra) op t1' t2'
+   go (TySet ts) = do
+    ts' <- mapM go ts
+    (tfSetL algebra) ts'
+   go (TyCase t ts) = do
+    t' <- go t
+    ts' <- mapM (\(a,b) -> extractMonad (go a, go b)) ts
+    (tfTyCaseL algebra) t' ts'
+    where
+     extractMonad (a,b) = do
+      a' <- a
+      b' <- b
+      return (a', b')
+   go (KUnion t1 t2) = do
+     t1' <- go t1
+     t2' <- go t2
+     (tfKUnionL algebra) t1' t2'
 
 instance FirstParameter TypeScheme Span
 
-freeAtomsVars :: Type -> [Id]
+freeAtomsVars :: Type l -> [Id]
 freeAtomsVars (TyVar v) = [v]
 freeAtomsVars (TyApp t1 (TyVar v)) = v : freeAtomsVars t1
 freeAtomsVars (TyApp t1 _) = freeAtomsVars t1
 freeAtomsVars t = []
 
+
+
 ----------------------------------------------------------------------
 -- Types and coeffects are terms
 
-instance Term Type where
-    freeVars = runIdentity . typeFoldM TypeFold
-      { tfFunTy   = \x y -> return $ x <> y
-      , tfTyCon   = \_ -> return [] -- or: const (return [])
-      , tfBox     = \c t -> return $ freeVars c <> t
-      , tfDiamond = \e t -> return $ e <> t
-      , tfTyVar   = \v -> return [v] -- or: return . return
-      , tfTyApp   = \x y -> return $ x <> y
-      , tfTyInt   = \_ -> return []
-      , tfTyInfix = \_ y z -> return $ y <> z
-      , tfSet     = return . concat
-      , tfTyCase  = \t cs -> return $ t <> (concat . concat) [[a,b] | (a,b) <- cs]
+instance Term (Type l) where
+    freeVars = getConst . runIdentity . typeFoldM TypeFold
+      { tfTy      = \_ -> return (Const [])
+      , tfFunTy   = \(Const x) (Const y) -> return $ Const (x <> y)
+      , tfTyCon   = \_ -> return (Const []) -- or: const (return [])
+      , tfBox     = \c (Const t) -> return $ Const (freeVars c <> t)
+      , tfDiamond = \(Const e) (Const t) -> return $ Const (e <> t)
+      , tfTyVar   = \v -> return $ Const [v] -- or: return . return
+      , tfTyApp   = \(Const x) (Const y) -> return $ Const (x <> y)
+      , tfTyInt   = \_ -> return (Const [])
+      , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
+      , tfSet     = return . Const . concat . map getConst
+      , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
+      , tfKUnion  = \(Const x) (Const y) -> return $ Const (x <> y)
       }
 
     isLexicallyAtomic TyInt{} = True
@@ -456,14 +706,14 @@ instance Term Coeffect where
 instance Freshenable m TypeScheme where
   freshen :: Monad m => TypeScheme -> Freshener m TypeScheme
   freshen (Forall s binds constraints ty) = do
-        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v;
+        binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase TypeL v;
                                         k' <- freshen k;
                                         return (v', k') }) binds
         constraints' <- mapM freshen constraints
         ty' <- freshen ty
         return $ Forall s binds' constraints' ty'
 
-instance Freshenable m Type where
+instance Freshenable m (Type l) where
   freshen =
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
                               tfBox = freshenTyBox })
@@ -474,7 +724,7 @@ instance Freshenable m Type where
         t' <- freshen t
         return $ Box c' t'
       freshenTyVar v = do
-        v' <- lookupVar Type v
+        v' <- lookupVar TypeL v
         case v' of
            Just v' -> return (TyVar $ Id (sourceName v) v')
            -- This case happens if we are referring to a defined
@@ -483,13 +733,13 @@ instance Freshenable m Type where
 
 instance Freshenable m Coeffect where
     freshen (CVar v) = do
-      v' <- lookupVar Type v
+      v' <- lookupVar TypeL v
       case v' of
         Just v' -> return $ CVar $ Id (sourceName v) v'
         Nothing -> return $ CVar v
 
     freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do
-      t <- freshIdentifierBase Type i
+      t <- freshIdentifierBase TypeL i
       return $ CInfinity $ Just $ TyVar t
 
     freshen (CPlus c1 c2) = do
