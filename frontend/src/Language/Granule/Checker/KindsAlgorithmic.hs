@@ -16,7 +16,7 @@ checkKind :: (?globals :: Globals) =>
     Span -> Ctxt (Kind, Quantifier) -> Type -> Kind -> Checker Substitution
 
 -- KChk_Funk
-checkKind s ctxt (FunTy t1 t2) KType = do
+checkKind s ctxt (FunTy _ t1 t2) KType = do
     subst1 <- checkKind s ctxt t1 KType
     subst2 <- checkKind s ctxt t2 KType
     combineSubstitutions s subst1 subst2
