@@ -1,0 +1,16 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/append.gr:8:18:
+
+   Expected type is: `Vec ((m + n) + 2) a`
+
+   Context:
+     xs : Vec (n + 1) a
+     ys : Vec (m + 1) a
+
+   Type context:
+     a : Type
+     n : ↑Nat
+     m : ↑Nat
+
+   Case splits for xs, ys:
+     (Cons xs0 xs1) (Cons ys0 ys1)

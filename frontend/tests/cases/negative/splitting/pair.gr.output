@@ -1,0 +1,14 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/pair.gr:2:13:
+
+   Expected type is: `(b, a)`
+
+   Context:
+     pair : (a, b)
+
+   Type context:
+     a : Type
+     b : Type
+
+   Case splits for pair:
+     (pair0, pair1)

@@ -1,0 +1,14 @@
+data N where
+  Z : N;
+  S : N -> N
+
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+f : forall {n : Nat} . Vec n N -> Vec n N
+f Z Nil = ?;
+f Z (Cons xs0 xs1) = ?;
+f (S x0) Nil = ?;
+f (S x0) (Cons xs0 xs1) = ?;
+f Nil = ?

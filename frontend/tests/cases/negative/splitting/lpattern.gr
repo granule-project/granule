@@ -1,0 +1,4 @@
+import Bool
+
+and0 : Bool -> Bool -> Bool -> Bool -> Bool -> Bool
+and0 a b c d e = {! a b c d e !}

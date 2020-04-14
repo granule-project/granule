@@ -126,10 +126,14 @@ instance Pretty Type where
     pretty (TyInt n)      = show n
 
     -- Non atoms
-    pretty (FunTy t1 t2)  =
+    pretty (FunTy Nothing t1 t2)  =
       case t1 of
         FunTy{} -> "(" <> pretty t1 <> ") -> " <> pretty t2
         _ -> pretty t1 <> " -> " <> pretty t2
+
+    pretty (FunTy (Just id) t1 t2)  =
+      let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
+      in  "(" <> pretty id <> " : " <> pt1 <> ") -> " <> pretty t2
 
     pretty (Box c t)      =
       prettyNested t <> " [" <> pretty c <> "]"
@@ -151,6 +155,9 @@ instance Pretty Type where
 
     pretty (TySet ts) =
       "{" <> intercalate ", " (map pretty ts) <> "}"
+
+    pretty (TySig t k) =
+      "(" ++ pretty t ++ " : " ++ pretty k ++ ")"
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -185,14 +192,17 @@ instance Pretty v => Pretty (AST v a) where
       pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
-    pretty (Def _ v eqs (Forall _ [] [] t))
-      = pretty v <> " : " <> pretty t <> "\n" <> intercalate "\n" (map (prettyEqn v) eqs)
-    pretty (Def _ v eqs tySch)
-      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> intercalate "\n" (map (prettyEqn v) eqs)
+    pretty (Def _ v _ eqs (Forall _ [] [] t))
+      = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
+    pretty (Def _ v _ eqs tySch)
+      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> pretty eqs
+
+instance Pretty v => Pretty (EquationList v a) where
+  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map (prettyEqn v) eqs
 
 prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
-prettyEqn v (Equation _ _ ps e) =
-  pretty v <> " " <> pretty ps <> "= " <> pretty e
+prettyEqn v (Equation _ _ _ ps e) =
+  pretty v <> " " <> unwords (map prettyNested ps) <> " = " <> pretty e
 
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
@@ -208,12 +218,13 @@ instance Pretty DataConstr where
     pretty (DataConstrNonIndexed _ name params) = pretty name <> (unwords . map pretty) params
 
 instance Pretty (Pattern a) where
-    pretty (PVar _ _ v)     = pretty v
-    pretty (PWild _ _)      = "_"
-    pretty (PBox _ _ p)     = "[" <> pretty p <> "]"
-    pretty (PInt _ _ n)     = show n
-    pretty (PFloat _ _ n)   = show n
-    pretty (PConstr _ _ name args)  = intercalate " " (pretty name : map prettyNested args)
+    pretty (PVar _ _ _ v)     = pretty v
+    pretty (PWild _ _ _)      = "_"
+    pretty (PBox _ _ _ p)     = "[" <> pretty p <> "]"
+    pretty (PInt _ _ _ n)     = show n
+    pretty (PFloat _ _ _ n)   = show n
+    pretty (PConstr _ _ _ name args) | internalName name == "," = intercalate ", " (map prettyNested args)
+    pretty (PConstr _ _ _ name args) = unwords (pretty name : map prettyNested args)
 
 instance {-# OVERLAPS #-} Pretty [Pattern a] where
     pretty [] = ""
@@ -251,24 +262,25 @@ instance Pretty Id where
 
 
 instance Pretty (Value v a) => Pretty (Expr v a) where
-  pretty (App _ _ (App _ _ (Val _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
+  pretty (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ x _)) t1) t2) | sourceName x == "," =
     "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
-  pretty (App _ _ e1 e2) =
-    pretty e1 <> " " <> prettyNested e2
+  pretty (App _ _ _ e1 e2) =
+    prettyNested e1 <> " " <> prettyNested e2
 
-  pretty (Binop _ _ op e1 e2) =
+  pretty (Binop _ _ _ op e1 e2) =
     pretty e1 <> " " <> pretty op <> " " <> pretty e2
 
-  pretty (LetDiamond _ _ v t e1 e2) =
+  pretty (LetDiamond _ _ _ v t e1 e2) =
     "let " <> pretty v <> " :" <> pretty t <> " <- "
           <> pretty e1 <> " in " <> pretty e2
 
-  pretty (Val _ _ v) = pretty v
-  pretty (Case _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
+  pretty (Val _ _ _ v) = pretty v
+  pretty (Case _ _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "
                       <> intercalate ";\n      " (map (\(p, e') -> pretty p
                       <> " -> " <> pretty e') ps) <> ")"
-  pretty (Hole _ _) = "?"
+  pretty (Hole _ _ _ []) = "?"
+  pretty (Hole _ _ _ vs) = "{!" <> unwords (map pretty vs) <> "!}"
 
 instance Pretty Operator where
   pretty = \case
@@ -280,6 +292,7 @@ instance Pretty Operator where
     OpNotEq           -> "≠"
     OpPlus            -> "+"
     OpTimes           -> "*"
+    OpDiv             -> "/"
     OpMinus           -> "-"
 
 ticks :: String -> String
