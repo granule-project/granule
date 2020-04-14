@@ -1,0 +1,7 @@
+data Either a b where Left a | Right b
+
+-- Should fail as it doesn't say 1 <= n
+pushEither : forall {a : Type, b : Type, n : Nat} .
+            (Either a b) [n] -> Either (a [n]) (b [n])
+pushEither [Left x]  = Left [x];
+pushEither [Right y] = Right [y]
