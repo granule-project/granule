@@ -195,7 +195,7 @@ instance Pretty v => Pretty (Def v a) where
     pretty (Def _ v _ eqs (Forall _ [] [] t))
       = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
     pretty (Def _ v _ eqs tySch)
-      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> pretty eqs
+      = pretty v <> " : " <> pretty tySch <> "\n" <> pretty eqs
 
 instance Pretty v => Pretty (EquationList v a) where
   pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map (prettyEqn v) eqs
