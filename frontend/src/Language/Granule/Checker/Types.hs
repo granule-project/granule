@@ -143,7 +143,7 @@ equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _
 
 equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp
-  (eq', unif') <- equalTypesRelatedCoeffects s rel ef1 ef2 sp
+  (eq', unif') <- equalTypesRelatedCoeffects s rel (handledNormalise s ef1) (handledNormalise s ef2) sp
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
