@@ -172,10 +172,10 @@ evalIn ctxt (TryCatch s _ e1 p _ e2 e3) = do
   v1 <- evalIn ctxt e1
   case v1 of
     (isDiaConstr -> Just e) -> do
-      eInner <- e
-      e1' <- evalIn ctxt eInner
         -- (cf. TRY_BETA_1)
-      catch ( 
+      catch ( do
+          eInner <- e
+          e1' <- evalIn ctxt eInner
           pmatch ctxt [(PBox s () p, e2)] e1' >>=
             \v -> 
               case v of
