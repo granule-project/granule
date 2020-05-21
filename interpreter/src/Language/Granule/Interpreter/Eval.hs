@@ -150,7 +150,7 @@ evalIn ctxt (Binop _ _ op e1 e2) = do
      v2 <- evalIn ctxt e2
      return $ evalBinOp op v1 v2
 
-evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
+evalIn ctxt (LetDiamond s _ p _ e1 e2) = return $ diamondConstr $ do
   -- (cf. LET_1)
   v1 <- evalIn ctxt e1
   case v1 of
@@ -162,11 +162,16 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = do
         -- (cf. LET_BETA)
         pResult  <- pmatch ctxt [(p, e2)] v1'
         case pResult of
-          Just e2' -> evalIn ctxt e2'
+          Just e2' -> do
+             v <- evalIn ctxt e2'
+             case v of
+               (isDiaConstr -> Just e) -> e
+               _ -> error $ "Runtime exception: let should produce a diamonad constructor"
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
+
 
 evalIn ctxt (TryCatch s _ e1 p _ e2 e3) = do
   v1 <- evalIn ctxt e1
