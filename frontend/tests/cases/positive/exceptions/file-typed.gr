@@ -1,4 +1,4 @@
-main : Char <{Open, Read, Close}>
+main : Char <{Open, Read, Close, IOExcept}>
 main = 
     try (openHandle ReadMode "LICENSE") as [h] : Handle R in 
       let [(h', c1)]     <- readChar h;
