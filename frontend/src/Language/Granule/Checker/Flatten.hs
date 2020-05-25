@@ -1,5 +1,7 @@
 {- Deals with interactions between coeffect resource algebras -}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Granule.Checker.Flatten
           (mguCoeffectTypes, flattenable) where
@@ -14,19 +16,19 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Utils
 
 mguCoeffectTypes :: (?globals :: Globals)
-                 => Span -> Type -> Type -> Checker (Type, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+                 => Span -> Type One -> Type One -> Checker (Type One, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect))
 mguCoeffectTypes s t1 t2 = do
   upper <- mguCoeffectTypes' s t1 t2
   case upper of
     Just x -> return x
     -- Cannot unify so form a product
     Nothing -> return
-      (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [], 
+      (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [],
                   (\x -> CProduct x (COne t2), \x -> CProduct (COne t1) x))
 
 -- Inner definition which does not throw its error, and which operates on just the types
 mguCoeffectTypes' :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Maybe (Type, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
+  => Span -> Type One -> Type One -> Checker (Maybe (Type One, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect)))
 
 -- Trivial case
 mguCoeffectTypes' s t t' | t == t' = return $ Just (t, [], (id, id))
@@ -37,19 +39,24 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
   case (lookup kv1 (tyVarContext st), lookup kv2 (tyVarContext st))  of
     (Nothing, _) -> throw $ UnboundVariableError s kv1
     (_, Nothing) -> throw $ UnboundVariableError s kv2
-    (Just (KCoeffect, _), Just (KCoeffect, InstanceQ)) -> do
-      updateCoeffectType kv2 (KVar kv1)
-      return $ Just (TyVar kv1, [(kv2, SubstK $ KVar kv1)], (id, id))
+    (Just (TypeWithLevel _ (TyCon (internalName -> "Coeffect")), _), Just (TypeWithLevel _ (TyCon (internalName -> "Coeffect")), InstanceQ)) -> do
+      updateCoeffectType kv2 (TyVar kv1)
+      return $ Just (TyVar kv1, [(kv2, SubstK $ TyVar kv1)], (id, id))
 
-    (Just (KCoeffect, InstanceQ), Just (KCoeffect, _)) -> do
-      updateCoeffectType kv1 (KVar kv2)
-      return $ Just (TyVar kv2, [(kv1, SubstK $ KVar kv2)], (id, id))
+    (Just (TypeWithLevel _ (TyCon (internalName -> "Coeffect")), InstanceQ), Just (TypeWithLevel _ (TyCon (internalName -> "Coeffect")), _)) -> do
+      updateCoeffectType kv1 (TyVar kv2)
+      return $ Just (TyVar kv2, [(kv1, SubstK $ TyVar kv2)], (id, id))
 
-    (Just (KCoeffect, ForallQ), Just (KCoeffect, ForallQ)) -> do
-      throw $ UnificationFail s kv2 (TyVar kv1) KCoeffect False
+    (Just (TypeWithLevel _ (TyCon (internalName -> "Coeffect")), ForallQ), Just (TypeWithLevel _ (TyCon (internalName -> "Coeffect")), ForallQ)) -> do
+      throw $ UnificationFail s kv2 (TypeWithLevel (LSucc LZero) (TyVar kv1)) (TyCon $ mkId "Coeffect") False
 
-    (Just (KCoeffect, _), Just (k, _)) -> throw $ KindMismatch s Nothing KCoeffect k
-    (Just (k, _), Just (_, _))         -> throw $ KindMismatch s Nothing KCoeffect k
+    (Just (TypeWithLevel _ (TyCon (internalName -> "Coeffect")), _), Just (TypeWithLevel (LSucc LZero) k, _)) ->
+      throw $ KindMismatch s Nothing (TyCon (mkId "Coeffect")) k
+
+    (Just (TypeWithLevel (LSucc LZero) k, _), Just (_, _)) ->
+      throw $ KindMismatch s Nothing (TyCon (mkId "Coeffect")) k
+
+    (Just (t, _), Just (t', _)) -> throw $ LevelMismatchUnification s t t'
 
 
 -- Left-hand side is a poly variable, but Just is concrete
@@ -57,11 +64,11 @@ mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
   st <- get
   case lookup kv1 (tyVarContext st) of
     Nothing -> throw $ UnboundVariableError s kv1
-    Just (k, ForallQ) ->
-      throw $ UnificationFail s kv1 coeffTy2 k True
+    Just (TypeWithLevel (LSucc LZero) k, ForallQ) ->
+      throw $ UnificationFail s kv1 (TypeWithLevel (LSucc LZero) coeffTy2) k True
     Just (k, _) -> do -- InstanceQ or BoundQ
-      updateCoeffectType kv1 (promoteTypeToKind coeffTy2)
-      return $ Just (coeffTy2, [(kv1, SubstT coeffTy2)], (id, id))
+      updateCoeffectType kv1 coeffTy2
+      return $ Just (coeffTy2, [(kv1, SubstK coeffTy2)], (id, id))
 
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
@@ -69,11 +76,11 @@ mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
   st <- get
   case lookup kv2 (tyVarContext st) of
     Nothing -> throw $ UnboundVariableError s kv2
-    Just (k, ForallQ) ->
-      throw $ UnificationFail s kv2 coeffTy1 k True
-    Just (k, _) -> do -- InstanceQ or BoundQ
-      updateCoeffectType kv2 (promoteTypeToKind coeffTy1)
-      return $ Just (coeffTy1, [(kv2, SubstT coeffTy1)], (id, id))
+    Just (TypeWithLevel (LSucc LZero) k, ForallQ) ->
+      throw $ UnificationFail s kv2 (TypeWithLevel (LSucc LZero) coeffTy1) k True
+    Just (TypeWithLevel _ k, _) -> do -- InstanceQ or BoundQ
+      updateCoeffectType kv2 coeffTy1
+      return $ Just (coeffTy1, [(kv2, SubstK coeffTy1)], (id, id))
 
 -- `Nat` can unify with `Q` to `Q`
 mguCoeffectTypes' s (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =
@@ -156,7 +163,7 @@ mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 -- | Find out whether a coeffect if flattenable, and if so get the operation
 -- | used to representing flattening on the grades
 flattenable :: (?globals :: Globals)
-            => Type -> Type -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Substitution, Type))
+            => Type One -> Type One -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Substitution, Type One))
 flattenable t1 t2
  | t1 == t2 = case t1 of
     t1 | t1 == extendedNat -> return $ Just (CTimes, [], t1)

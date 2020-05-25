@@ -2,6 +2,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.Coeffects where
 
@@ -16,7 +17,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 -- Calculate whether a coeffect expression could be used for any semiring
-isGenericCoeffectExpression :: Type -> Bool
+isGenericCoeffectExpression :: Type Zero -> Bool
 isGenericCoeffectExpression (TyInt 1) = True
 isGenericCoeffectExpression (TyInt 0) = True
 isGenericCoeffectExpression (TyInfix TyOpPlus c1 c2) =

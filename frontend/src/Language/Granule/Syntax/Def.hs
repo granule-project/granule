@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DeriveGeneric #-}
 {-# LANGUAGE DeriveDataTypeable #-}
+{-# LANGUAGE DataKinds #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE RecordWildCards #-}
@@ -13,6 +14,7 @@ import Data.List ((\\), delete)
 import Data.Set (Set)
 import qualified Data.Map as M
 import GHC.Generics (Generic)
+import Data.Data
 import qualified Text.Reprinter as Rp
 
 import Language.Granule.Context (Ctxt)
@@ -39,7 +41,7 @@ data AST v a =
 
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
-deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (AST v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (AST v a)
 
 type Import = FilePath
 
@@ -55,7 +57,7 @@ data Def v a = Def
 
 deriving instance (Eq v, Eq a) => Eq (Def v a)
 deriving instance (Show v, Show a) => Show (Def v a)
-deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (Def v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (Def v a)
 
 instance Rp.Refactorable (Def v a) where
   isRefactored def = if defRefactored def then Just Rp.Replace else Nothing
@@ -72,7 +74,7 @@ data EquationList v a = EquationList
 
 deriving instance (Eq v, Eq a) => Eq (EquationList v a)
 deriving instance (Show v, Show a) => Show (EquationList v a)
-deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (EquationList v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (EquationList v a)
 instance FirstParameter (EquationList v a) Span
 
 instance Rp.Refactorable (EquationList v a) where
@@ -98,7 +100,7 @@ data Equation v a =
 
 deriving instance (Eq v, Eq a) => Eq (Equation v a)
 deriving instance (Show v, Show a) => Show (Equation v a)
-deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (Equation v a)
+deriving instance (Data (ExprFix2 ValueF ExprF v a), Data v, Data a) => Data (Equation v a)
 instance FirstParameter (Equation v a) Span
 
 instance Rp.Refactorable (Equation v a) where
@@ -106,7 +108,7 @@ instance Rp.Refactorable (Equation v a) where
 
   getSpan = convSpan . equationSpan
 
-definitionType :: Def v a -> Type
+definitionType :: Def v a -> Type Zero
 definitionType Def { defTypeScheme = ts } =
     ty where (Forall _ _ _ ty) = ts
 
@@ -118,7 +120,7 @@ data DataDecl = DataDecl
   , dataDeclKindAnn :: Maybe Kind
   , dataDeclDataConstrs :: [DataConstr]
   }
-  deriving (Generic, Show, Eq, Rp.Data)
+  deriving (Generic, Show, Eq, Data)
 
 instance FirstParameter DataDecl Span
 
@@ -127,8 +129,8 @@ data DataConstr
   = DataConstrIndexed
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrTypeScheme :: TypeScheme } -- ^ GADTs
   | DataConstrNonIndexed
-    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
-  deriving (Eq, Show, Generic, Rp.Data)
+    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type Zero] } -- ^ ADTs
+  deriving (Eq, Show, Generic, Typeable, Data)
 
 -- | Is the data type an indexed data type, or just a plain ADT?
 isIndexedDataType :: DataDecl -> Bool
@@ -160,9 +162,6 @@ nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params
     returnTy t (v:vs) = returnTy (TyApp t ((TyVar . fst) v)) vs
 
 instance FirstParameter DataConstr Span
-
--- | How many data constructors a type has (Nothing -> don't know)
-type Cardinality = Maybe Nat
 
 -- | Fresh a whole AST
 freshenAST :: AST v a -> AST v a

@@ -1,6 +1,7 @@
 {
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Syntax.Parser where
 
@@ -216,7 +217,7 @@ DataConstrNext :: { [DataConstr] }
 
 TyVars :: { [(Id, Kind)] }
   : '(' VAR ':' Kind ')' TyVars { (mkId $ symString $2, $4) : $6 }
-  | VAR TyVars                  { (mkId $ symString $1, KType) : $2 }
+  | VAR TyVars                  { (mkId $ symString $1, Type LZero) : $2 }
   | {- empty -}                 { [] }
 
 KindAnn :: { Maybe Kind }
@@ -267,11 +268,11 @@ ForallSig :: { [(Id, Kind)] }
  : '{' VarSigs '}' { $2 }
  | VarSigs         { $1 }
 
-Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
+Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type Zero]) }
  : forall ForallSig '.'                          { (((getPos $1, getPos $3), $2), []) }
  | forall ForallSig '.' '{' Constraints '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
-Constraints :: { [Type] }
+Constraints :: { [Type Zero] }
 Constraints
  : Constraint ',' Constraints { $1 : $3 }
  | Constraint                 { [$1] }
@@ -290,7 +291,7 @@ VarSigs :: { [(Id, Kind)] }
 VarSig :: { [(Id, Kind)] }
   : Vars1 ':' Kind            { map (\id -> (mkId id, $3)) $1 }
   | Vars1                     { flip concatMap $1 (\id -> let k = mkId ("_k" <> id)
-                                                          in [(mkId id, KVar k)]) }
+                                                          in [(mkId id, TyVar k)]) }
 
 -- A non-empty list of variables
 Vars1 :: { [String] }
@@ -298,18 +299,23 @@ Vars1 :: { [String] }
   | VAR Vars1                 { symString $1 : $2 }
 
 Kind :: { Kind }
-  : Kind '->' Kind            { KFun $1 $3 }
-  | VAR                       { KVar (mkId $ symString $1) }
+  : Kind '->' Kind            { FunTy Nothing $1 $3 }
+  | VAR                       { TyVar (mkId $ symString $1) }
   | CONSTR                    { case constrString $1 of
-                                  "Type"      -> KType
-                                  "Coeffect"  -> KCoeffect
-                                  "Predicate" -> KPredicate
-                                  s          -> kConstr $ mkId s }
-  | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
-  | TyJuxt TyAtom             { KPromote (TyApp $1 $2) }
+                                  "Type"      -> Type LZero
+                                  "Coeffect"  -> (TyCon (mkId "Coeffect"))
+                                  "Predicate" -> (TyCon (mkId "Predicate"))
+                                  s          -> tyCon s }
+  | '(' TyJuxt TyAtom ')'     { case tyPromote (TyApp $2 $3) of
+                                  Just ty -> ty
+                                  Nothing -> error $ "Type at " ++ (show (getPos $1)) ++ " cannot be used as a kind" }
+
+  | TyJuxt TyAtom             { case tyPromote (TyApp $1 $2) of
+                                  Just ty -> ty
+                                  Nothing -> error $ "Type " ++ (show (TyApp $1 $2)) ++ " cannot be used as a kind" }
 
 
-Type :: { Type }
+Type :: { Type Zero }
   : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) $4 $7 }
   | TyJuxt                         { $1 }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
@@ -317,13 +323,14 @@ Type :: { Type }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
   | TyAtom '[' ']'                 { Box (CInterval (CZero extendedNat) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
+  | case Type of TyCases { TyCase $2 $4 }
 
-TyApp :: { Type }
+TyApp :: { Type Zero }
  : TyJuxt TyAtom              { TyApp $1 $2 }
  | TyAtom                     { $1 }
 
-TyJuxt :: { Type }
-  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 } 
+TyJuxt :: { Type Zero }
+  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
   | TyAtom '+' TyAtom         { TyInfix TyOpPlus $1 $3 }
@@ -333,7 +340,17 @@ TyJuxt :: { Type }
   | TyAtom "/\\" TyAtom       { TyInfix TyOpMeet $1 $3 }
   | TyAtom "\\/" TyAtom       { TyInfix TyOpJoin $1 $3 }
 
-Constraint :: { Type }
+TyCases :: { [(Type Zero, Type Zero)] }
+ : TyCase TyCasesNext             { $1 : $2 }
+
+TyCasesNext :: { [(Type Zero, Type Zero)] }
+  : ';' TyCases                 { $2 }
+  | {- empty -}               { [] }
+
+TyCase :: { (Type Zero, Type Zero) }
+  : Type '->' Type           { ($1, $3) }
+
+Constraint :: { Type Zero }
   : TyAtom '>' TyAtom         { TyInfix TyOpGreater $1 $3 }
   | TyAtom '<' TyAtom         { TyInfix TyOpLesser $1 $3 }
   | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
@@ -341,7 +358,7 @@ Constraint :: { Type }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
 
-TyAtom :: { Type }
+TyAtom :: { Type Zero }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
@@ -349,7 +366,7 @@ TyAtom :: { Type }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
   | TyAtom ':' Kind           { TySig $1 $3 }
 
-TyParams :: { [Type] }
+TyParams :: { [Type Zero] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
   |                           { [] }
 
@@ -373,23 +390,25 @@ Coeffect :: { Coeffect }
   | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { case tyPromote $3 of
+                                    Just ty -> normalise (CSig $1 ty)
+                                    Nothing -> error $ "Type " ++ (show $3) ++ " cannot be used as a kind" }
   | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
 
-Set :: { [(String, Type)] }
+Set :: { [(String, Type Zero)] }
   : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
   | VAR ':' Type              { [(symString $1, $3)] }
 
-Effect :: { Type }
+Effect :: { Type Zero }
   : '{' EffSet '}'            { TySet $2 }
   | {- EMPTY -}               { TyCon $ mkId "Pure" }
   | TyJuxt                    { $1 }
 
-EffSet :: { [Type] }
+EffSet :: { [Type Zero] }
   : Eff ',' EffSet         { $1 : $3 }
   | Eff                    { [$1] }
 
-Eff :: { Type }
+Eff :: { Type Zero }
   : CONSTR                  { TyCon $ mkId $ constrString $1 }
 
 Expr :: { Expr () () }
@@ -429,7 +448,7 @@ Expr :: { Expr () () }
   | Form
     { $1 }
 
-LetBind :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
+LetBind :: { (Pos, Pattern (), Maybe (Type Zero), Expr () ()) }
   : PAtom ':' Type '=' Expr
       { (getStart $1, $1, Just $3, $5) }
   | PAtom '=' Expr
@@ -450,7 +469,7 @@ MultiLet
   | in Expr
     { $2 }
 
-LetBindEff :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
+LetBindEff :: { (Pos, Pattern (), Maybe (Type Zero), Expr () ()) }
   : PAtom '<-' Expr            { (getStart $1, $1, Nothing, $3) }
   | PAtom ':' Type '<-' Expr   { (getStart $1, $1, Just $3, $5) }
 

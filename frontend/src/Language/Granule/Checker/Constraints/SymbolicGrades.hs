@@ -1,4 +1,5 @@
 {-# LANGUAGE DeriveGeneric  #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.Constraints.SymbolicGrades where
 
@@ -29,7 +30,7 @@ data SGrade =
        SNat      SInteger
      | SFloat    SFloat
      | SLevel    SInteger
-     | SSet      (S.Set (Id, Type))
+     | SSet      (S.Set (Id, Type Zero))
      | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)

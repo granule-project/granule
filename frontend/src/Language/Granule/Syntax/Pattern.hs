@@ -9,15 +9,15 @@
 
 module Language.Granule.Syntax.Pattern where
 
-import GHC.Generics (Generic)
-import qualified Text.Reprinter as Rp
-
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Annotated
 import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
+
+import GHC.Generics (Generic)
+import Data.Data
 
 -- | Language.Granule.Syntax of patterns
 data Pattern a
@@ -27,7 +27,7 @@ data Pattern a
   | PInt Span a Bool Int               -- ^ Numeric patterns
   | PFloat Span a Bool Double          -- ^ Float pattern
   | PConstr Span a Bool Id [Pattern a] -- ^ Constructor pattern
-  deriving (Eq, Show, Generic, Functor, Rp.Data)
+  deriving (Eq, Show, Generic, Functor, Typeable, Data)
 
 instance Term (Pattern a) where
   freeVars _ = []
@@ -123,7 +123,7 @@ instance Freshenable m (Pattern a) where
 
   freshen :: Monad m => Pattern a -> Freshener m (Pattern a)
   freshen (PVar s a rf var) = do
-      var' <- freshIdentifierBase Value var
+      var' <- freshIdentifierBase ValueL var
       return $ PVar s a rf var'
 
   freshen (PBox s a rf p) = do

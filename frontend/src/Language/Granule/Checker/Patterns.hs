@@ -1,4 +1,8 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
@@ -29,8 +33,8 @@ import Language.Granule.Utils
 --   a box pattern (or many nested box patterns)
 definiteUnification :: (?globals :: Globals)
   => Span
-  -> Maybe (Coeffect, Type) -- Outer coeffect
-  -> Type                   -- Type of the pattern
+  -> Maybe (Coeffect, Type One) -- Outer coeffect
+  -> Type Zero                   -- Type of the pattern
   -> Checker ()
 definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
@@ -39,7 +43,7 @@ definiteUnification s (Just (coeff, coeffTy)) ty = do
     addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
-polyShaped :: (?globals :: Globals) => Type -> Checker Bool
+polyShaped :: (?globals :: Globals) => Type Zero -> Checker Bool
 polyShaped t = case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
@@ -69,21 +73,21 @@ polyShaped t = case leftmostOfApplication t of
 --      - a consumption context explaining usage triggered by pattern matching
 ctxtFromTypedPattern :: (?globals :: Globals) =>
   Span
-  -> Type
+  -> Type Zero
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern (Type Zero), Consumption)
 
 ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
 -- | Inner helper, which takes information about the enclosing coeffect
 ctxtFromTypedPattern' :: (?globals :: Globals) =>
-     Maybe (Coeffect, Type)    -- enclosing coeffect
+     Maybe (Coeffect, Type One)    -- enclosing coeffect
   -> Span
-  -> Type
+  -> Type Zero
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern (Type Zero), Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
 ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
@@ -218,7 +222,9 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
-          (as, bs, us, elabPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
+          (as, _, bs, us, elabPs, consumptionsOut) <-
+            ctxtFromTypedPatterns' outerBoxTy s dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
+          let consumptionOut = foldr meetConsumption Full consumptionsOut
 
           -- Combine the substitutions
           subst <- combineSubstitutions s (flipSubstitution unifiers) us
@@ -240,21 +246,6 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
               , tyExpected = dataConstructorTypeFresh
               , tyActual = ty
               }
-  where
-    unpeel :: [Pattern ()] -- A list of patterns for each part of a data constructor pattern
-            -> Type -- The remaining type of the constructor
-            -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
-    unpeel = unpeel' ([],[],[],[],Full)
-
-    -- Tail recursive version of unpeel
-    unpeel' acc [] t = return acc
-
-    unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy _ t t') = do
-        (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
-        us <- combineSubstitutions s us us'
-        unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
-
-    unpeel' _ (p:_) t = throw PatternArityError{ errLoc = s, errId = dataC }
 
 ctxtFromTypedPattern' _ s t p _ = do
   st <- get
@@ -264,27 +255,39 @@ ctxtFromTypedPattern' _ s t p _ = do
 
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
-  -> Type
+  -> Type Zero
   -> [Pattern ()]
   -> [Consumption]
-  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
-ctxtFromTypedPatterns sp ty [] _ = do
+  -> Checker (Ctxt Assumption, Type Zero, Ctxt Kind, Substitution, [Pattern (Type Zero)], [Consumption])
+ctxtFromTypedPatterns = ctxtFromTypedPatterns' Nothing
+
+ctxtFromTypedPatterns' :: (?globals :: Globals)
+  => Maybe (Coeffect, Type One)
+  -> Span
+  -> Type Zero
+  -> [Pattern ()]
+  -> [Consumption]
+  -> Checker (Ctxt Assumption, Type Zero, Ctxt Kind, Substitution, [Pattern (Type Zero)], [Consumption])
+ctxtFromTypedPatterns' _ sp ty [] _ = do
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns' outerCoeff s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
-  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern s t1 pat cons
+  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s t1 pat cons
+
+  -- Apply substitutions
+  t2' <- substitute subst t2
 
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
-      ctxtFromTypedPatterns s t2 pats consumptionsIn
+      ctxtFromTypedPatterns' outerCoeff s t2' pats consumptionsIn
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
   return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
-ctxtFromTypedPatterns s ty (p:ps) _ = do
+ctxtFromTypedPatterns' _ s ty (p:ps) _ = do
   -- This means we have patterns left over, but the type is not a
   -- function type, so we need to throw a type error
 

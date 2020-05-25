@@ -8,7 +8,6 @@ module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete)
 import Control.Monad.Trans.State.Strict
-import Control.Monad.Fail
 import Control.Monad.Identity
 
 import Language.Granule.Syntax.Identifiers
@@ -43,7 +42,7 @@ class Term t where
   isLexicallyAtomic _ = False
 
 -- Used to distinguish the value-level and type-level variables
-data IdSyntacticCategory = Value | Type
+data IdSyntacticCategory = ValueL | TypeL
 
 -- | The freshening monad for alpha-conversion to avoid name capturing
 type Freshener m t = StateT FreshenerState m t
@@ -52,7 +51,7 @@ type Freshener m t = StateT FreshenerState m t
 --  fail = Control.Monad.Fail.fail
 
 data FreshenerState = FreshenerState
-  { counter :: Word -- ^ fresh Id counter
+  { counter :: Int -- ^ fresh Id counter
   , varMap :: [(String, String)] -- ^ mapping of variables to their fresh names
   , tyMap  :: [(String, String)] -- ^ mapping of type variables to fresh names
   } deriving Show
@@ -83,8 +82,8 @@ freshIdentifierBase cat var = do
     st <- get
     let var' = sourceName var <> "`" <> show (counter st)
     case cat of
-      Value -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
-      Type  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
+      ValueL -> put st { counter = (counter st) + 1, varMap = (sourceName var, var') : (varMap st) }
+      TypeL  -> put st { counter = (counter st) + 1,  tyMap = (sourceName var, var') :  (tyMap st) }
     return var { internalName = var' }
 
 -- | Look up a variable in the freshener state.
@@ -93,8 +92,8 @@ lookupVar :: Monad m => IdSyntacticCategory -> Id -> Freshener m (Maybe String)
 lookupVar cat v = do
   st <- get
   case cat of
-    Value -> return . lookup (sourceName v) . varMap $ st
-    Type  -> return . lookup (sourceName v) .  tyMap $ st
+    ValueL -> return . lookup (sourceName v) . varMap $ st
+    TypeL  -> return . lookup (sourceName v) .  tyMap $ st
 
 instance MonadFail Identity where
   fail = error
