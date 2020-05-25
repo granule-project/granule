@@ -407,6 +407,7 @@ reprintAsDef id goalTy expr =
           equations =
           [ Equation
             { equationSpan = nullSpanNoFile,
+              equationRefactored = True,
               equationAnnotation = TyVar $ mkId "a",
               equationPatterns = exprPatterns expr
               ,
@@ -463,9 +464,10 @@ makeVar name (Forall _ _ _ t) =
   where s = nullSpanNoFile
 
 makeAbs :: Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeAbs name e (Forall _ _ _ t@(FunTy Nothing t1 t2)) =
+makeAbs name e (Forall _ _ _ t@(FunTy _ t1 t2)) =
   Val s t False (Abs t (PVar s t False name) (Just t1) e)
   where s = nullSpanNoFile
+makeAbs name e _ = error "Cannot synth here" -- TODO: better error handling
 
 makeApp :: Id -> Expr () Type -> TypeScheme -> Type -> Expr () Type
 makeApp name e (Forall _ _ _ t1) t2 =
