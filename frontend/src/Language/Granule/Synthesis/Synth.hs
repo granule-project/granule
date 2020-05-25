@@ -20,7 +20,7 @@ import Language.Granule.Syntax.Pretty
 
 import Language.Granule.Context
 
-import Language.Granule.Checker.Checker
+-- import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -32,7 +32,7 @@ import Language.Granule.Syntax.Span
 
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
-import qualified Control.Monad.State.Strict as State (get, liftIO, modify)
+import qualified Control.Monad.State.Strict as State (get, modify)
 import Control.Monad.Trans.List
 import Control.Monad.Trans.State.Strict
 
@@ -58,6 +58,7 @@ zeroUse _ = False
 zero :: Coeffect -> Type
 zero (CNat _) = TyCon $ mkId "Nat"
 zero (CInterval c1 c2) = TyApp (TyCon $ mkId "Interval") (zero c1)
+zero _ = error "Unknown coeffect"
 
 testVal :: (?globals :: Globals) => Bool
 testVal  = do
@@ -65,7 +66,7 @@ testVal  = do
   case unsafePerformIO $ (evalChecker initState solve) of
     Left _ -> False
     Right x -> x
-  where c = (CNat 1)
+  -- where c = (CNat 1)
 
 
 solve :: (?globals :: Globals)
@@ -288,7 +289,10 @@ computeAddOutputCtx del1 del2 del3 = do
         return $ (x, Linear t1) : ctxt
       _ -> Nothing
 
+pattern ProdTy :: Type -> Type -> Type
 pattern ProdTy t1 t2 = TyApp (TyApp (TyCon (Id "," ",")) t1) t2
+
+pattern SumTy :: Type -> Type -> Type
 pattern SumTy t1 t2  = TyApp (TyApp (TyCon (Id "Either" "Either")) t1) t2
 
 isRAsync :: Type -> Bool
