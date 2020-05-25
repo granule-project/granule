@@ -349,6 +349,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help "The column where the hole you wish to rewrite is located."
             <> metavar "COL"
 
+        globalsSynthesise <-
+          optional. option (auto @Bool)
+            $ long "synthesise"
+            <> help "Turn on program synthesis. Must be used in conjunction with hole-line and hole-column"
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -389,6 +394,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsEntryPoint
               , globalsRewriteHoles
               , globalsHolePosition = (,) <$> globalsHoleLine <*> globalsHoleCol
+              , globalsSynthesise
               }
             }
           )

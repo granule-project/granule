@@ -42,6 +42,7 @@ data Globals = Globals
   , globalsEntryPoint          :: Maybe String
   , globalsRewriteHoles        :: Maybe Bool
   , globalsHolePosition        :: Maybe Pos
+  , globalsSynthesise          :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
@@ -86,6 +87,7 @@ instance Semigroup Globals where
       , globalsEntryPoint          = globalsEntryPoint          g1 <|> globalsEntryPoint          g2
       , globalsRewriteHoles        = globalsRewriteHoles        g1 <|> globalsRewriteHoles        g2
       , globalsHolePosition        = globalsHolePosition        g1 <|> globalsHolePosition        g2
+      , globalsSynthesise          = globalsSynthesise          g1 <|> globalsSynthesise          g2
       }
 
 instance Monoid Globals where
@@ -104,6 +106,7 @@ instance Monoid Globals where
     , globalsEntryPoint          = Nothing
     , globalsRewriteHoles        = Nothing
     , globalsHolePosition        = Nothing
+    , globalsSynthesise          = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general
