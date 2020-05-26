@@ -16,6 +16,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span (Span, encompasses)
+import Language.Granule.Synthesis.Synth (refactorEqn)
 
 import Language.Granule.Utils
 
@@ -80,10 +81,9 @@ holeRefactorEqnList cases eqns =
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn ::  Equation () () -> Expr () Type -> Equation () ()
 holeRefactorEqn eqn goal =
-   eqn {equationBody = holeRefactorExpr goal (equationBody eqn)}
+   refactorEqn $ eqn {equationBody = holeRefactorExpr goal (equationBody eqn)}
 
--- Refactors an expression by 'emptying' all holes, i.e. removing the variables
--- contained in it. This is done recursively.
+-- Refactors an expression by filling the hole with the new goal (could be another hole)
 holeRefactorExpr :: Expr () Type -> Expr () () -> Expr () ()
 holeRefactorExpr goal (Hole sp a _ _) = fmap (const ()) goal
 holeRefactorExpr goal (App sp a rf e1 e2) =

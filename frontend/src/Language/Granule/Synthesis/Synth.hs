@@ -13,7 +13,7 @@ import System.IO.Unsafe
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
---import Language.Granule.Syntax.FirstParameter
+import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
@@ -426,59 +426,66 @@ topLevel ts@(Forall _ binders constraints ty) = do
 -- Reprint Expr as a top-level declaration
 reprintAsDef :: Id -> TypeScheme -> Expr () Type -> Def () Type
 reprintAsDef id goalTy expr =
-  Def
-  { defSpan = nullSpanNoFile,
-    defId = id,
-    defRefactored = False,
-    defEquations =
-       EquationList
-        { equationsSpan = nullSpanNoFile,
-          equationsId = id,
-          equationsRefactored = False,
-          equations =
-          [ Equation
-            { equationSpan = nullSpanNoFile,
-              equationRefactored = True,
-              equationAnnotation = TyVar $ mkId "a",
-              equationPatterns = getPatterns expr
-              ,
-            equationBody = exprBody expr
+  refactorDef $
+    Def
+      { defSpan = nullSpanNoFile,
+        defId = id,
+        defRefactored = False,
+        defEquations =
+          EquationList
+            { equationsSpan = nullSpanNoFile,
+              equationsId = id,
+              equationsRefactored = False,
+              equations =
+              [ Equation
+                { equationSpan = nullSpanNoFile,
+                  equationRefactored = True,
+                  equationAnnotation = getSecondParameter expr,
+                  equationPatterns = [],
+                  equationBody = expr
+                }
+              ]
             }
-          ]
-        }
-      ,
-   defTypeScheme = goalTy
-  }
-  where
+          ,
+      defTypeScheme = goalTy
+      }
 
-    getPatterns e =
-      let pats = exprPatterns e in
-        boxPatterns e pats
+-- Refactors a definition which contains abstractions in its equations
+-- by pushing these abstractions into equation patterns
+refactorDef :: Def () Type -> Def () Type
+refactorDef (Def sp id ref (EquationList sp' id' ref' eqns) tyS) =
+  Def sp id ref (EquationList sp' id' ref' (map refactorEqn eqns)) tyS
 
-    replace (pat@(PVar _ _ _ name):xs) var pat' =
-      if name == var then
-        (pat' : (replace xs var pat'))
-      else
-        (pat : (replace xs var pat'))
-    replace (pat@(PBox {}):xs) var pat' =
-      pat : (replace xs var pat')
-    replace pats _ _ = pats
+refactorEqn :: Equation v a -> Equation v a
+refactorEqn (Equation sp ref annotation pats body) =
+  Equation sp ref annotation (pats ++ getPatterns body) (exprBody body)
+    where
+      getPatterns e = boxPatterns e (exprPatterns e)
 
-    exprPatterns (App _ _ _ (Val _ (Box{}) _ (Abs _ p _ e )) _) = exprPatterns e
-    exprPatterns (Val _ _ _ (Abs _ p _ e)) = p  : exprPatterns e
-    exprPatterns e = []
+      replace (pat@(PVar _ _ _ name):xs) var pat' =
+        if name == var then
+          (pat' : (replace xs var pat'))
+        else
+          (pat : (replace xs var pat'))
+      replace (pat@(PBox {}):xs) var pat' =
+        pat : (replace xs var pat')
+      replace pats _ _ = pats
 
-    --boxPatterns (Val _ (FunTy _ Box{} _) _ (Abs _ p _ e)) pats = boxPatterns e pats
-    boxPatterns (Val _ _ _ (Abs _ p _ e)) pats = boxPatterns e pats
-    boxPatterns (App _ _ _ (Val _ (Box{}) _ (Abs _ p _ e )) (Val _ _ _ (Var _ name))) pats =
-     let pats' = replace pats name p in
-       boxPatterns e pats'
-    boxPatterns e pats = pats
+      exprPatterns (App _ _ _ (Val _ _ _ (Abs _ p (Just (Box{})) e )) _) = exprPatterns e
+      exprPatterns (Val _ _ _ (Abs _ p _ e)) = p  : exprPatterns e
+      exprPatterns e = []
 
-    exprBody (App _ _ _ (Val _ _ _ (Abs _ _ _ e )) _) = exprBody e
-    exprBody (Val _ _ _ (Abs _ _ _ e)) = exprBody e
-    exprBody e = e
+      --boxPatterns (Val _ (FunTy _ Box{} _) _ (Abs _ p _ e)) pats = boxPatterns e pats
+      boxPatterns (Val _ _ _ (Abs _ p _ e)) pats = boxPatterns e pats
+      boxPatterns (App _ _ _ (Val _ _ _ (Abs _ p (Just (Box {})) e )) (Val _ _ _ (Var _ name))) pats =
+        boxPatterns e pats'
+         where
+          pats' = replace pats name p
+      boxPatterns e pats = pats
 
+      exprBody (App _ _ _ (Val _ _ _ (Abs _ _ _ e )) _) = exprBody e
+      exprBody (Val _ _ _ (Abs _ _ _ e)) = exprBody e
+      exprBody e = e
 
 bindToContext :: (Id, Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Bool -> (Ctxt (Assumption), Ctxt (Assumption))
 bindToContext var gamma omega True = (gamma, var:omega)
