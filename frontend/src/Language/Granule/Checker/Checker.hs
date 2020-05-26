@@ -6,11 +6,14 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
+{-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
 module Language.Granule.Checker.Checker where
 
 import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
+import qualified Control.Monad.Trans.List as ListT
+import qualified Control.Monad.Except as ExcT
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
@@ -47,6 +50,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Synthesis.Splitting
+import qualified Language.Granule.Synthesis.Synth as Syn
 
 import Language.Granule.Utils
 
@@ -446,8 +450,18 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      cases <- generateCases s constructors holeCtxt
-      throw $ HoleMessage s t ctxt (tyVarContext st) cases
+      (varsSplitOn, cases) <- generateCases s constructors holeCtxt
+
+      -- If we are in synthesise mode, also try to synthesise a
+      -- term for each case split goal
+      cases' <-
+        case globalsSynthesise ?globals of
+           Just True -> programSynthesise ctxt t cases
+           -- Otherwise synthesise empty holes for each case
+           -- (and throw away the binding information)
+           _ -> return $ zip (map fst cases) (repeat (Hole s t True []))
+
+      throw $ HoleMessage s t ctxt (tyVarContext st) varsSplitOn cases'
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
@@ -1461,3 +1475,23 @@ checkGuardsForImpossibility s name = do
         }
 
       SolverProofError msg -> error msg
+
+-- Hook into the synthesis engine.
+programSynthesise :: (?globals :: Globals) =>
+  Ctxt Assumption -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
+programSynthesise ctxt ty patternss = do
+  st <- get
+  forM patternss $ \(pattern, patternCtxt) -> do
+    -- Run the synthesiser in this context
+    let synRes = Syn.synthesise Syn.initDecls True False (ctxt ++ patternCtxt) [] (Forall nullSpan [] [] ty)
+    synthResults <- liftIO $ ListT.runListT $ evalStateT (ExcT.runExceptT (Syn.unSynthesiser synRes)) initState
+
+    let positiveResults = Syn.getList synthResults
+    case positiveResults of
+      -- Nothing synthed, so create a blank hole instead
+      []    -> do
+        debugM "Synthesiser" "No programs synthesised"
+        return (pattern, Hole nullSpan ty True [])
+      ((t, _, _):_) -> do
+        debugM "Synthesiser" $ "Synthesised: " <> pretty t
+        return (pattern, t)

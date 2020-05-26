@@ -395,7 +395,13 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
+    { errLoc      :: Span,
+      holeTy      :: Type,
+      context     :: Ctxt Assumption,
+      tyContext   :: Ctxt (Kind, Quantifier),
+      varsSplitOn :: [Id],
+      -- Used for synthesising programs
+      cases       :: [([Pattern ()], Expr () Type)] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -583,12 +589,12 @@ instance UserMsg CheckerError where
                                                 <> pretty v
                                                 <> " : " <> pretty t) tyContext)
     <>
-    (if null (fst cases)
+    (if null varsSplitOn
       then ""
-      else if null (snd cases)
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty $ fst cases)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
-             intercalate "\n     " (formatCases (snd cases)))
+      else if null cases
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty varsSplitOn)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty varsSplitOn) <> ":\n     " <>
+             intercalate "\n     " (formatCases (map fst cases)))
 
     where
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)

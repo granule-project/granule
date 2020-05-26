@@ -159,12 +159,12 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         Right noImportAst -> do
           let position = globalsHolePosition ?globals
           let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
-          let holeCases = concatMap (snd . cases) relevantHoles
+          let holeCases = concatMap cases relevantHoles
           rewriteHoles input noImportAst (keepBackup config) holeCases
           return . Left . CheckerError $ errs
 
     holeInPosition :: Pos -> CheckerError -> Bool
-    holeInPosition pos (HoleMessage sp _ _ _ _) = spanContains pos sp
+    holeInPosition pos (HoleMessage sp _ _ _ _ _) = spanContains pos sp
     holeInPosition _ _ = False
 
 -- | Get the flags embedded in the first line of a file, e.g.
@@ -350,7 +350,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> metavar "COL"
 
         globalsSynthesise <-
-          optional. option (auto @Bool)
+          flag Nothing (Just True)
             $ long "synthesise"
             <> help "Turn on program synthesis. Must be used in conjunction with hole-line and hole-column"
 

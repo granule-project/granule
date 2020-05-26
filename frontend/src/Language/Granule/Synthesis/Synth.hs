@@ -577,7 +577,7 @@ useVar (name, Discharged t grade) _ True =
     else
         return (False, [], t)
 
- 
+
 varHelper :: (?globals :: Globals)
   => Ctxt (DataDecl)
   -> Ctxt (Assumption)
