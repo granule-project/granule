@@ -327,13 +327,6 @@ isAtomic (SumTy {}) = False
 isAtomic (Box{}) = False
 isAtomic _ = True
 
-kindsOfTyVars :: Type -> [(Id, Kind)]
-kindsOfTyVars (FunTy _ t1 t2) = kindsOfTyVars t1 ++ kindsOfTyVars t2
-kindsOfTyVars (ProdTy t1 t2) = kindsOfTyVars t1 ++ kindsOfTyVars t2
-kindsOfTyVars (SumTy t1 t2) = kindsOfTyVars t1 ++ kindsOfTyVars t2
-kindsOfTyVars (Box _ t) = kindsOfTyVars t
-kindsOfTyVars (TyVar (Id src int)) = [((Id src int), KType)]
-kindsOfTyVars _ = []
 
 
 newtype Synthesiser a = Synthesiser
