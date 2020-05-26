@@ -76,7 +76,7 @@ solve = do
   cs <- State.get
  -- newConjunct
   pred <- popFromPredicateStack
-  let ctxtCk  = tyVarContext cs
+  -- let ctxtCk  = tyVarContext cs
 --  coeffectVars <- justCoeffectTypesConverted nullSpanNoFile ctxtCk
   tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
   result <- liftIO $ provePredicate pred tyVars
