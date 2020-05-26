@@ -598,7 +598,9 @@ varHelper decls left (var@(x, a) : right) isAdd goalTy =
       case goalTy of
         Forall _ binders constraints goalTy' ->
           do
+            liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy' 
             (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile t goalTy'
+            liftIO $ putStrLn $ show (success, specTy, subst)
             case success of
               True -> do
                 return (makeVar x goalTy, gamma, subst)
