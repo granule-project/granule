@@ -1490,7 +1490,7 @@ programSynthesise ctxt ty patternss = do
     case positiveResults of
       -- Nothing synthed, so create a blank hole instead
       []    -> do
-        debugM "Synthesiser" $ "No programs synthesised for " <>  (show ty)
+        debugM "Synthesiser" $ "No programs synthesised for " <> pretty ty
         return (pattern, Hole nullSpan ty True [])
       ((t, _, _):_) -> do
         debugM "Synthesiser" $ "Synthesised: " <> pretty t

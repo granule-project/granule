@@ -27,6 +27,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
+import Language.Granule.Checker.Kinds (inferCoeffectType)
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 import Language.Granule.Syntax.Span
@@ -55,11 +56,6 @@ zeroUse (CNat n) = (n == 0)
 zeroUse (CInterval (CNat n1) (CNat _)) = (n1 == 0)
 zeroUse (CInfinity _) = True
 zeroUse _ = False
-
-zero :: Coeffect -> Type
-zero (CNat _) = TyCon $ mkId "Nat"
-zero (CInterval c1 c2) = TyApp (TyCon $ mkId "Interval") (zero c1)
-zero _ = error "Unknown coeffect"
 
 testVal :: (?globals :: Globals) => Bool
 testVal  = do
@@ -746,7 +742,8 @@ unboxHelper decls left (var@(x, a) : right) gamma False goalTy =
           (e, delta, subst) <- synthesise decls True False gamma' omega'' goalTy
           case lookupAndCutout id' delta of
             Just (delta', (Discharged _ usage)) -> do
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile usage (CZero $ zero usage ) (zero usage))
+              (kind, _) <- conv $ inferCoeffectType nullSpan usage
+              conv $ addConstraint (ApproximatedBy nullSpanNoFile usage (CZero kind) kind)
               res <- conv $ solve
               case res of
                 True ->
@@ -777,7 +774,8 @@ unboxHelper decls left (var@(x, a) : right) gamma True goalTy =
                    return (makeUnbox id' x goalTy t t' e,  delta'', subst)
                  False -> none
              _ -> do
-               conv $ addConstraint (ApproximatedBy nullSpanNoFile grade (CZero $ zero grade) (zero grade)) -- zeroUse grade
+               (kind, _) <- conv $ inferCoeffectType nullSpan grade
+               conv $ addConstraint (ApproximatedBy nullSpanNoFile grade (CZero kind) kind) -- zeroUse grade
                res <- conv $ solve
                case res of
                  True ->
