@@ -471,13 +471,13 @@ refactorEqn (Equation sp ref annotation pats body) =
         pat : (replace xs var pat')
       replace pats _ _ = pats
 
-      exprPatterns (App _ _ _ (Val _ _ _ (Abs _ p (Just (Box{})) e )) _) = exprPatterns e
+      exprPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) _) = exprPatterns e
       exprPatterns (Val _ _ _ (Abs _ p _ e)) = p  : exprPatterns e
       exprPatterns e = []
 
       --boxPatterns (Val _ (FunTy _ Box{} _) _ (Abs _ p _ e)) pats = boxPatterns e pats
       boxPatterns (Val _ _ _ (Abs _ p _ e)) pats = boxPatterns e pats
-      boxPatterns (App _ _ _ (Val _ _ _ (Abs _ p (Just (Box {})) e )) (Val _ _ _ (Var _ name))) pats =
+      boxPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) (Val _ _ _ (Var _ name))) pats =
         boxPatterns e pats'
          where
           pats' = replace pats name p
