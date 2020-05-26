@@ -589,11 +589,18 @@ instance UserMsg CheckerError where
       else if null (snd cases)
         then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
         else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
-             intercalate "\n     " (formatCases (snd cases)))
+             intercalate "\n     " (formatCases relevantCases))
 
     where
+      -- Extract those cases which correspond to a variable in holeVars.
+      relevantCases :: [[Pattern ()]]
+      relevantCases = map (map snd . filter ((`elem` holeVars) . fst) . zip (fst cases)) (snd cases)
+
+      formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
 
+      -- Pad all strings in a list so they match the length of the longest.
+      padToLongest :: [String] -> [String]
       padToLongest xs =
         let size = maximum (map length xs)
         in  map (\s -> s ++ replicate (size - length s) ' ') xs

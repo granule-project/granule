@@ -1,0 +1,11 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/nested-graded.gr:6:13:
+
+   Expected type is: `Vec (2 * n) a`
+
+   Context:
+     xs : (Vec n a) [2]
+
+   Type context:
+     n : ↑Nat
+     a : Type
