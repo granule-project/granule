@@ -76,6 +76,7 @@ solve = do
   cs <- State.get
  -- newConjunct
   pred <- popFromPredicateStack
+  traceM  ("pred: " <> pretty pred)
   -- let ctxtCk  = tyVarContext cs
 --  coeffectVars <- justCoeffectTypesConverted nullSpanNoFile ctxtCk
   tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
@@ -85,13 +86,13 @@ solve = do
       traceM $ "yay"
       return True
     NotValid s -> do
-      traceM s
+      traceM ("message: " <> s)
       return False
     SolverProofError msgs -> do
-      traceM $ show msgs
+      traceM $ ("message: " <> show msgs)
       return False
     OtherSolverError reason -> do
-      traceM $ show reason
+      traceM $ ("message: " <> show reason)
       return False
     Timeout -> do
       traceM "timed out"
@@ -389,15 +390,17 @@ initDecls =
 testSyn :: Bool -> IO ()
 testSyn useReprint =
   let ty =
-        FunTy Nothing (Box (CInterval (CNat 2) (CNat 3)) (TyVar $ mkId "b") ) (FunTy Nothing (SumTy (TyVar $ mkId "a") (TyVar $ mkId "c")) (SumTy (ProdTy (TyVar $ mkId "a") (Box (CInterval (CNat 2) (CNat 2)) (TyVar $ mkId "b") )) (ProdTy (TyVar $ mkId "c") (Box (CInterval (CNat 3) (CNat 3)) (TyVar $ mkId "b") ))))
+--        FunTy Nothing (Box (CInterval (CNat 2) (CNat 3)) (TyVar $ mkId "b") ) (FunTy Nothing (SumTy (TyVar $ mkId "a") (TyVar $ mkId "c")) (SumTy (ProdTy (TyVar $ mkId "a") (Box (CInterval (CNat 2) (CNat 2)) (TyVar $ mkId "b") )) (ProdTy (TyVar $ mkId "c") (Box (CInterval (CNat 3) (CNat 3)) (TyVar $ mkId "b") ))))
 --        FunTy Nothing (TyVar $ mkId "a") (SumTy (TyVar $ mkId "b") (TyVar $ mkId "a"))
 --        FunTy Nothing (Box (CNat 3) (TyVar $ mkId "a")) (FunTy Nothing (Box (CNat 6) (TyVar $ mkId "b") ) (Box (CNat 3) (ProdTy (ProdTy (TyVar $ mkId "b") (TyVar $ mkId "b")) (TyVar $ mkId "a")) ))
 --        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
 --        FunTy Nothing (FunTy Nothing (TyVar $ mkId "a") (FunTy Nothing (TyVar $ mkId "b") (TyVar $ mkId "c"))) (FunTy Nothing (TyVar $ mkId "b") (FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "c")))
 --        FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "a")
+        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
         in
-    let ts = (Forall nullSpanNoFile [(mkId "a", KType), (mkId "b", KType), (mkId "c", KType)] [] ty) in
+    let ts = (Forall nullSpanNoFile [(mkId "a", KType)] [] ty) in
     let ?globals = testGlobals in do
+     -- State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) [(mkId "a", KType)]})
     let res = testOutput $ topLevel ts in -- [(mkId "y", Linear (TyVar $ mkId "b")), (mkId "x", Linear (TyVar $ mkId "a"))] [] ty
         if length res == 0
         then  (putStrLn "No inhabitants found.")
@@ -417,6 +420,7 @@ getList (x:xs) = case x of
 
 topLevel :: (?globals :: Globals) => TypeScheme -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 topLevel ts@(Forall _ binders constraints ty) = do
+  conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders})
   synthesise initDecls True False [] [] ts
 
 -- Reprint Expr as a top-level declaration
@@ -549,19 +553,17 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> Bool -> Checker (Bool, Ctxt (Assumption), Type)
 useVar (name, Linear t) gamma False = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma False = do
-  if False then do
-    vark <- freshIdentifierBase $ "kprom_c"
-    State.modify (\st -> st { tyVarContext = (mkId vark, (KCoeffect, InstanceQ)) : tyVarContext st })
-    var <- freshTyVarInContext (mkId $ "c") (KPromote $ TyVar $ mkId vark)
-    existential var (KPromote $ TyVar $ mkId vark)
-    addConstraint (Eq nullSpanNoFile (CPlus (CVar var) (COne t)) grade (TyVar $ mkId "c"))
+  if True then do -- NOTE temporary - set to false to not use constraint solver
+   -- vark <- freshIdentifierBase $ "c"
+   -- State.modify (\st -> st { tyVarContext = (mkId vark, (KPromote $ nat, InstanceQ)) : tyVarContext st })
+    var <- freshTyVarInContext (mkId $ "c") (KPromote $ nat)
+    existential var (KPromote $ nat)
+    addConstraint (Eq nullSpanNoFile (CPlus (CVar var) (COne nat)) grade (nat))
     res <- solve
     case res of
       True -> do
-        traceM "hello"
         return (True, (name, Discharged t (CVar var)):gamma, t)
       False -> do
-        traceM "huh"
         return (False, [], t)
   else if canUse grade then
         case useCoeffect grade of
@@ -600,9 +602,9 @@ varHelper decls left (var@(x, a) : right) isAdd goalTy =
       case goalTy of
         Forall _ binders constraints goalTy' ->
           do
-            liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy' 
+--            liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy'
             (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile t goalTy'
-            liftIO $ putStrLn $ show (success, specTy, subst)
+--            liftIO $ putStrLn $ show (success, specTy, subst)
             case success of
               True -> do
                 return (makeVar x goalTy, gamma, subst)
