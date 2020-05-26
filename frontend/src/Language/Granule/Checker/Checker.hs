@@ -1483,7 +1483,6 @@ programSynthesise ctxt ty patternss = do
   currentState <- get
   forM patternss $ \(pattern, patternCtxt) -> do
     -- Run the synthesiser in this context
-    modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) (Syn.kindsOfTyVars ty)})
     let synRes = Syn.synthesise Syn.initDecls True False (ctxt ++ patternCtxt) [] (Forall nullSpan [] [] ty)
     synthResults <- liftIO $ ListT.runListT $ evalStateT (ExcT.runExceptT (Syn.unSynthesiser synRes)) currentState
 
