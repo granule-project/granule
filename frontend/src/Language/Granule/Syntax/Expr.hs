@@ -130,6 +130,27 @@ pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
 pattern Hole sp a rf vars = ExprFix2 (HoleF sp a rf vars)
 {-# COMPLETE App, Binop, LetDiamond, Val, Case, Hole #-}
 
+-- Cannot be automatically derived unfortunately
+instance Functor (Value ev) where
+  fmap f (Abs a pats mt e) = Abs (f a) (fmap f pats) mt (fmap f e)
+  fmap f (Promote a e)     = Promote (f a) (fmap f e)
+  fmap f (Pure a e)        = Pure (f a) (fmap f e)
+  fmap f (Constr a idv vals) = Constr (f a) idv (map (fmap f) vals)
+  fmap f (Var a idv)       = Var (f a) idv
+  fmap f (Ext a ev)        = Ext (f a) ev
+  fmap f (NumInt n)        = NumInt n
+  fmap f (NumFloat n)      = NumFloat n
+  fmap f (CharLiteral c)   = CharLiteral c
+  fmap f (StringLiteral s) = StringLiteral s
+
+instance Functor (Expr ev) where
+  fmap f (App s a rf e1 e2) = App s (f a) rf (fmap f e1) (fmap f e2)
+  fmap f (Binop s a b op t1 t2) = Binop s (f a) b op (fmap f t1) (fmap f t2)
+  fmap f (LetDiamond s a b ps mt e1 e2) = LetDiamond s (f a) b (fmap f ps) mt (fmap f e1) (fmap f e2)
+  fmap f (Val s a b val) = Val s (f a) b (fmap f val)
+  fmap f (Case s a b expr pats) = Case s (f a) b (fmap f expr) (map (\(p, e) -> (fmap f p, fmap f e)) pats)
+  fmap f (Hole s a b ids)  = Hole s (f a) b ids
+
 instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
     project = unExprFix
