@@ -330,6 +330,10 @@ isAtomic _ = True
 newtype Synthesiser a = Synthesiser
   { unSynthesiser :: ExceptT (NonEmpty CheckerError) (StateT CheckerState (ListT IO)) a }
   deriving (Functor, Applicative, Monad)
+
+instance MonadIO Synthesiser where
+  liftIO = conv . liftIO
+
 conv :: Checker a -> Synthesiser a
 conv (Checker k) =  Synthesiser (ExceptT (StateT (\s -> ListT (fmap (\x -> [x]) $ runStateT (runExceptT k) s))))
 
