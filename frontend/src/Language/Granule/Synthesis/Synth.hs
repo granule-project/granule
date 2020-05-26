@@ -572,7 +572,7 @@ useVar (name, Discharged t grade) gamma False = do
     res <- solve
     case res of
       True -> do
-        return (True, (name, Discharged t (CVar var)):gamma, t)
+        return (True, replace gamma name (Discharged t (CVar var)), t)
       False -> do
         return (False, [], t)
   else if canUse grade then
