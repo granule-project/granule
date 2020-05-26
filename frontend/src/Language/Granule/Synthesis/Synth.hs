@@ -511,8 +511,8 @@ makeUnbox name1 name2 (Forall _ _ _ goalTy) boxTy varTy e  =
   App s goalTy False
   (Val s boxTy False
     (Abs (FunTy Nothing boxTy goalTy)
-      (PBox s varTy False
-        (PVar s varTy False name1)) (Just varTy) e))
+      (PBox s boxTy False
+        (PVar s varTy False name1)) (Just boxTy) e))
   (Val s varTy False
     (Var varTy name2))
   where s = nullSpanNoFile
