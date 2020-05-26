@@ -76,12 +76,12 @@ holeRefactorEqnList cases eqns =
       in case relCases of
            [] -> ([eqn], False)
            _ ->
-             (map (\(_, cs, t) -> (holeRefactorEqn eqn t) {equationPatterns = cs}) relCases, True)
+             (map (\(_, cs, t) -> refactorEqn $ ((holeRefactorEqn eqn t) {equationPatterns = cs})) relCases, True)
 
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn ::  Equation () () -> Expr () Type -> Equation () ()
 holeRefactorEqn eqn goal =
-   refactorEqn $ eqn {equationBody = holeRefactorExpr goal (equationBody eqn)}
+   eqn {equationBody = holeRefactorExpr goal (equationBody eqn)}
 
 -- Refactors an expression by filling the hole with the new goal (could be another hole)
 holeRefactorExpr :: Expr () Type -> Expr () () -> Expr () ()
