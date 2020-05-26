@@ -1483,14 +1483,14 @@ programSynthesise ctxt ty patternss = do
   currentState <- get
   forM patternss $ \(pattern, patternCtxt) -> do
     -- Run the synthesiser in this context
-    let synRes = Syn.synthesise Syn.initDecls True False (ctxt ++ patternCtxt) [] (Forall nullSpan [] [] ty)
+    let synRes = Syn.synthesise Syn.initDecls True False (ctxt ++ patternCtxt) [] (Forall nullSpan (Syn.kindsOfTyVars ty) [] ty)
     synthResults <- liftIO $ ListT.runListT $ evalStateT (ExcT.runExceptT (Syn.unSynthesiser synRes)) currentState
 
     let positiveResults = Syn.getList synthResults
     case positiveResults of
       -- Nothing synthed, so create a blank hole instead
       []    -> do
-        debugM "Synthesiser" $ "No programs synthesised for " <> pretty ty
+        debugM "Synthesiser" $ "No programs synthesised for " <>  (show ty)
         return (pattern, Hole nullSpan ty True [])
       ((t, _, _):_) -> do
         debugM "Synthesiser" $ "Synthesised: " <> pretty t
