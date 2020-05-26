@@ -1480,11 +1480,11 @@ checkGuardsForImpossibility s name = do
 programSynthesise :: (?globals :: Globals) =>
   Ctxt Assumption -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
 programSynthesise ctxt ty patternss = do
-  st <- get
+  currentState <- get
   forM patternss $ \(pattern, patternCtxt) -> do
     -- Run the synthesiser in this context
     let synRes = Syn.synthesise Syn.initDecls True False (ctxt ++ patternCtxt) [] (Forall nullSpan [] [] ty)
-    synthResults <- liftIO $ ListT.runListT $ evalStateT (ExcT.runExceptT (Syn.unSynthesiser synRes)) initState
+    synthResults <- liftIO $ ListT.runListT $ evalStateT (ExcT.runExceptT (Syn.unSynthesiser synRes)) currentState
 
     let positiveResults = Syn.getList synthResults
     case positiveResults of
