@@ -554,7 +554,7 @@ makeEitherRight lTy rTy e  =
 
 makeCase :: Type -> Type -> Id -> Id -> Id -> Expr () Type -> Expr () Type -> Expr () Type
 makeCase t1 t2 sId lId rId lExpr rExpr =
-  Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PVar s t1 False lId, lExpr), (PVar s t2 False rId, rExpr)]
+  Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PConstr s (SumTy t1 t2) False (mkId "Left") [(PVar s t1 False lId)], lExpr), (PConstr s (SumTy t1 t2) False (mkId "Right") [(PVar s t2 False rId)], rExpr)]
   where s = nullSpanNoFile
 
 --makeEitherCase :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type
