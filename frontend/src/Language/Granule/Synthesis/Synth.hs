@@ -162,7 +162,7 @@ gradeMult (CInterval (CNat n1) (CNat n2)) (CInterval (CNat n1') (CNat n2')) =
         (n1 * n1', n2 * n2') in
     Just $ (CInterval (CNat n3) (CNat n4))
 gradeMult (CInfinity t1) (CInfinity t2) = Just $ CInfinity t1
-gradeMult _ _ = Nothing
+gradeMult c c' = Just (CTimes c c')
 
 ctxSubtract :: Ctxt (Assumption)  -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
 ctxSubtract [] [] = Just []
