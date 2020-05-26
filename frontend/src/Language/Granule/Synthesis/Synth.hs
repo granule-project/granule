@@ -29,9 +29,11 @@ import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Kinds (inferCoeffectType)
 import Language.Granule.Checker.Types
-import Language.Granule.Checker.Variables
+import Language.Granule.Checker.Variables hiding (freshIdentifierBase)
+import qualified Language.Granule.Checker.Variables as Var
 import Language.Granule.Syntax.Span
 
+import Data.List (delete)
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import qualified Control.Monad.State.Strict as State (get, modify)
@@ -44,6 +46,11 @@ data Configuration = Config
    { churchSyntax            :: Bool,
      howManyNatPossibilities :: Int
     }
+
+freshIdentifierBase :: String -> Checker String
+freshIdentifierBase s = do
+  id <- Var.freshIdentifierBase s
+  return $ delete '.' id
 
 canUse :: Coeffect -> Bool
 canUse (CNat n) = (n > 0)
