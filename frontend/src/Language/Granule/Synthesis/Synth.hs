@@ -939,7 +939,6 @@ synthesise :: (?globals :: Globals)
            -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 
 synthesise decls allowLam isAdd gamma omega goalTy@(Forall _ binders _ goalTy') = do
-  conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders}) -- TODO find a better way to do the freshening
   case (isRAsync goalTy', omega) of
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
