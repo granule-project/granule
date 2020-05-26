@@ -563,7 +563,7 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> Bool -> Checker (Bool, Ctxt (Assumption), Type)
 useVar (name, Linear t) gamma False = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma False = do
-  if True then do -- NOTE temporary - set to false to not use constraint solver
+  if False then do -- NOTE temporary - set to false to not use constraint solver
    -- vark <- freshIdentifierBase $ "c"
    -- State.modify (\st -> st { tyVarContext = (mkId vark, (KPromote $ nat, InstanceQ)) : tyVarContext st })
     var <- freshTyVarInContext (mkId $ "c") (KPromote $ nat)

@@ -122,7 +122,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
           Right (Left errs) ->
             case (globalsRewriteHoles ?globals, getHoleMessages errs) of
-              (Just True, holes@(_:_)) -> do
+              (Just True, holes@(_:_)) ->
                 runHoleSplitter input config errs holes
               _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
@@ -162,7 +162,11 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           -- Associate the span with each generate cases
           let holeCases = concatMap (\h -> map (\(x, y) -> (errLoc h, x, y)) (cases h)) relevantHoles
           rewriteHoles input noImportAst (keepBackup config) holeCases
-          return . Left . CheckerError $ errs
+          case globalsSynthesise ?globals of
+            Just True -> do
+              printSuccess "Synthesised"
+              return $ Right NoEval
+            _         -> return . Left . CheckerError $ errs
 
     holeInPosition :: Pos -> CheckerError -> Bool
     holeInPosition pos (HoleMessage sp _ _ _ _ _) = spanContains pos sp
