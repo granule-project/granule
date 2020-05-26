@@ -159,7 +159,8 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         Right noImportAst -> do
           let position = globalsHolePosition ?globals
           let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
-          let holeCases = concatMap cases relevantHoles
+          -- Associate the span with each generate cases
+          let holeCases = concatMap (\h -> map (\(x, y) -> (errLoc h, x, y)) (cases h)) relevantHoles
           rewriteHoles input noImportAst (keepBackup config) holeCases
           return . Left . CheckerError $ errs
 

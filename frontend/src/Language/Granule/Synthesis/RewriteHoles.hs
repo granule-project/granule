@@ -6,17 +6,16 @@ module Language.Granule.Synthesis.RewriteHoles
 
 import Control.Arrow (second)
 import Control.Monad (void)
-import Data.Maybe (fromJust, listToMaybe)
+import Data.Maybe (fromJust)
 import qualified Data.Text.Lazy as Text
-import Text.Reprinter
+import Text.Reprinter hiding (Span)
 
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
-import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
-import Language.Granule.Syntax.Span (encompasses)
+import Language.Granule.Syntax.Span (Span, encompasses)
 
 import Language.Granule.Utils
 
@@ -26,7 +25,7 @@ rewriteHoles ::
   => String
   -> AST () ()
   -> Bool
-  -> [([Pattern ()], Expr () Type)]
+  -> [(Span, [Pattern ()], Expr () Type)]
   -> IO ()
 rewriteHoles _ _ _ [] = return ()
 rewriteHoles input ast keepBackup cases = do
@@ -38,7 +37,7 @@ rewriteHoles input ast keepBackup cases = do
 -- The top level rewriting function, transforms a given source file and
 -- corresponding AST.
 holeRewriter ::
-     (?globals :: Globals) => Source -> [([Pattern ()], Expr () Type)] -> AST () () -> Source
+     (?globals :: Globals) => Source -> [(Span, [Pattern ()], Expr () Type)] -> AST () () -> Source
 holeRewriter source cases =
   runIdentity . (\ast -> reprint astReprinter ast source) . holeRefactor cases
 
@@ -51,18 +50,18 @@ astReprinter = catchAll `extQ` reprintEqnList
       genReprinting (return . Text.pack . pretty) (eqns :: EquationList () ())
 
 -- Refactor an AST by refactoring its definitions.
-holeRefactor :: [([Pattern ()], Expr () Type)] -> AST () () -> AST () ()
+holeRefactor :: [(Span, [Pattern ()], Expr () Type)] -> AST () () -> AST () ()
 holeRefactor cases ast =
   ast {definitions = map (holeRefactorDef cases) (definitions ast)}
 
 -- Refactor a definition by refactoring its list of equations.
-holeRefactorDef :: [([Pattern ()], Expr () Type)] -> Def () () -> Def () ()
+holeRefactorDef :: [(Span, [Pattern ()], Expr () Type)] -> Def () () -> Def () ()
 holeRefactorDef cases def =
   def {defEquations = holeRefactorEqnList cases (defEquations def)}
 
 -- Refactors a list of equations by updating each with the relevant patterns.
 holeRefactorEqnList ::
-     [([Pattern ()], Expr () Type)] -> EquationList () () -> EquationList () ()
+     [(Span, [Pattern ()], Expr () Type)] -> EquationList () () -> EquationList () ()
 holeRefactorEqnList cases eqns =
   eqns {equations = newEquations, equationsRefactored = refactored}
   where
@@ -76,11 +75,12 @@ holeRefactorEqnList cases eqns =
       in case relCases of
            [] -> ([eqn], False)
            _ ->
-             (map (\(cs, t) -> (holeRefactorEqn eqn t) {equationPatterns = cs}) relCases, True)
+             (map (\(_, cs, t) -> (holeRefactorEqn eqn t) {equationPatterns = cs}) relCases, True)
 
 -- Refactors an equation by refactoring the expression in its body.
-holeRefactorEqn :: Equation () () -> Expr () Type -> Equation () ()
-holeRefactorEqn eqn goal = eqn {equationBody = holeRefactorExpr goal (equationBody eqn)}
+holeRefactorEqn ::  Equation () () -> Expr () Type -> Equation () ()
+holeRefactorEqn eqn goal =
+   eqn {equationBody = holeRefactorExpr goal (equationBody eqn)}
 
 -- Refactors an expression by 'emptying' all holes, i.e. removing the variables
 -- contained in it. This is done recursively.
@@ -104,11 +104,7 @@ holeRefactorVal goal (Pure a expr)     = Pure a (holeRefactorExpr goal expr)
 holeRefactorVal goal (Constr a v vals) = Constr a v (map (holeRefactorVal goal) vals)
 holeRefactorVal goal v = v
 
--- Finds potentially relevant cases for a given equation, based on spans.
-findRelevantCase :: Equation () () -> [([Pattern ()], Expr () Type)] -> [([Pattern ()], Expr () Type)]
+-- Finds associated cases for a given equation, based on spans.
+findRelevantCase :: Equation () () -> [(Span, [Pattern ()], Expr () Type)] -> [(Span, [Pattern ()], Expr () Type)]
 findRelevantCase eqn =
-  filter
-    (\(case', expr) ->
-       case listToMaybe case' of
-         Nothing -> False
-         Just h -> equationSpan eqn `encompasses` getFirstParameter h)
+  filter (\(span, case', expr) -> (equationSpan eqn) `encompasses` span)
