@@ -9,7 +9,6 @@
 module Language.Granule.Checker.Checker where
 
 import Control.Arrow (first, second)
-import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))

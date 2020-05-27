@@ -21,11 +21,12 @@ module Data.Bifunctor.Foldable where
 import Data.Bifunctor hiding (second)
 import Data.Bitraversable
 import Control.Monad ((<=<))
+import Data.Kind
 
 newtype Fix2 f g = Fix2 { unFix :: (f (Fix2 f g) (Fix2 g f)) }
 
 -- The base functor of two mutually recurive fixed points
-type family Base t q :: (* -> * -> *)
+type family Base t q :: (Type -> Type -> Type)
 type instance Base (Fix2 f g) (Fix2 g f) = f
 
 instance Show (f (Fix2 f g) (Fix2 g f)) => Show (Fix2 f g) where

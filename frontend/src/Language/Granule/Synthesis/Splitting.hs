@@ -1,7 +1,7 @@
 module Language.Granule.Synthesis.Splitting (generateCases) where
 
 import Control.Arrow (second)
-import Control.Monad (filterM, mapM)
+import Control.Monad (filterM)
 import Control.Monad.State.Strict (get, liftIO)
 import Data.List (partition)
 import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)

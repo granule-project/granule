@@ -8,7 +8,6 @@ module Language.Granule.Syntax.Helpers where
 
 import Data.List (delete)
 import Control.Monad.Trans.State.Strict
-import Control.Monad.Fail
 import Control.Monad.Identity
 
 import Language.Granule.Syntax.Identifiers
