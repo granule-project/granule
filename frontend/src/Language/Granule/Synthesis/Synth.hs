@@ -52,18 +52,6 @@ freshIdentifierBase s = do
   id <- Var.freshIdentifierBase s
   return $ delete '.' id
 
-canUse :: Coeffect -> Bool
-canUse (CNat n) = (n > 0)
-canUse (CInterval (CNat _) (CNat n2)) = (n2 > 0)
-canUse (CInfinity _) = True
-canUse _ = False
-
-zeroUse :: Coeffect -> Bool
-zeroUse (CNat n) = (n == 0)
-zeroUse (CInterval (CNat n1) (CNat _)) = (n1 == 0)
-zeroUse (CInfinity _) = True
-zeroUse _ = False
-
 testVal :: (?globals :: Globals) => Bool
 testVal  = do
   --addConstraint (ApproximatedBy nullSpanNoFile (CNat 0) (CZero $ zero (CNat 0) ) (zero (CNat 0)))
@@ -107,172 +95,80 @@ solve = do
       st <- State.get
       return . head . predicateStack $ st
 
-
-useCoeffect :: Coeffect -> Maybe Coeffect
-useCoeffect (CNat n) = Just $ CNat (n - 1)
-useCoeffect (CInterval (CNat n1) (CNat n2)) = Just $ CInterval (CNat (n1 `monus` 1)) (CNat (n2-1))
-  where
-    monus 0 x = 0
-    monus x y = x - y
-useCoeffect (CInfinity t) = Just $ CInfinity t
-useCoeffect _ = Nothing
-
-
---- Replace with SMT solver constraints
-checkSubUsage :: Coeffect -> Bool
-checkSubUsage (CNat n1) = not (canUse $ CNat n1)
-checkSubUsage (CInterval (CNat n1) _) = n1 == 0
-checkSubUsage (CInfinity _) = True
-checkSubUsage _ = False
-
-checkAddUsage :: Coeffect -> Coeffect -> Bool
-checkAddUsage (CNat n1) (CNat n2) = n1 == n2
-checkAddUsage (CInterval (CNat n1) (CNat n2)) (CInterval (CNat n1') (CNat n2')) =
-  n1 >= n1' && n2 <= n2' && n1 <= n2 && n1' <= n2'
-checkAddUsage (CInfinity t1) (CInfinity t2) = t1 == t2
-checkAddUsage _ _ = False
-
-
 gradeAdd :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeAdd (CNat n) (CNat n') = Just $ CNat (n + n')
-gradeAdd (CInterval (CNat n1) (CNat n2)) (CInterval (CNat n1') (CNat n2')) =
-  let (n3, n4) = (n1 + n1', n2 + n2') in
-  Just $ CInterval (CNat n3) (CNat n4)
-gradeAdd (CInfinity t1) (CInfinity t2) = Just $ CInfinity t1
-gradeAdd _ _ = Nothing
+gradeAdd c c' = Just $ CPlus c c'
 
 gradeSub :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeSub (CNat n) (CNat n') = if n - n' < 0 then Nothing else Just $ CNat (n - n')
-gradeSub (CInterval (CNat n1) (CNat n2)) (CInterval (CNat n1') (CNat n2')) =
-  let (n3, n4) = if n1' == 0 then
-        (n2 - n2', n2 - n2')
-        else
-        (n1 - n1', n2 - n2') in
-    case (n3<0, n4<0) of
-      (True, False)-> Just $ (CInterval (CNat 0) (CNat n4))
-      (False, False)-> Just $ (CInterval (CNat n3) (CNat n4))
-      _ -> Nothing
-gradeSub (CInfinity t1) (CInfinity t2) = Just (CInfinity t1)
-gradeSub _ _ = Nothing
+gradeSub c c' =  Just $ CMinus c c'
 
 gradeMult :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeMult (CNat n) (CNat n') = Just $ CNat (n * n')
-gradeMult (CInterval (CNat n1) (CNat n2)) (CInterval (CNat n1') (CNat n2')) =
-  let (n3, n4) =
-        (n1 * n1', n2 * n2') in
-    Just $ (CInterval (CNat n3) (CNat n4))
-gradeMult (CInfinity t1) (CInfinity t2) = Just $ CInfinity t1
-gradeMult c c' = Just (CTimes c c')
+gradeMult c c' = Just $ CTimes c c'
 
-ctxSubtract :: Ctxt (Assumption)  -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
-ctxSubtract [] [] = Just []
-ctxSubtract ((x1, Linear t1):xs) ys =
+gradeLub :: Coeffect -> Coeffect -> Maybe Coeffect
+gradeLub c c' = Just $ CMeet c c'
+
+gradeGlb :: Coeffect -> Coeffect -> Maybe Coeffect
+gradeGlb c c' = Just $ CJoin c c'
+
+ctxtSubtract :: Ctxt (Assumption)  -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
+ctxtSubtract [] [] = Just []
+ctxtSubtract ((x1, Linear t1):xs) ys =
   case lookup x1 ys of
-    Just _ -> ctxSubtract xs ys
+    Just _ -> ctxtSubtract xs ys
     _ -> do
-      ctx <- ctxSubtract xs ys
+      ctx <- ctxtSubtract xs ys
       return $ (x1, Linear t1) : ctx
-ctxSubtract ((x1, Discharged t1 g1):xs) ys  =
+ctxtSubtract ((x1, Discharged t1 g1):xs) ys  =
   case lookup x1 ys of
     Just (Discharged t2 g2) ->
       case gradeSub g1 g2 of
         Just g3 -> do
-          ctx <- ctxSubtract xs ys
+          ctx <- ctxtSubtract xs ys
           return $ (x1, Discharged t1 g3):ctx
         Nothing -> Nothing
     _ -> do
-      ctx <- ctxSubtract xs ys
+      ctx <- ctxtSubtract xs ys
       return $ (x1, Discharged t1 g1):ctx
-ctxSubtract _ _ = Just []
+ctxtSubtract _ _ = Just []
 
-ctxMultByCoeffect :: Ctxt (Assumption) -> Coeffect -> Maybe (Ctxt (Assumption))
-ctxMultByCoeffect [] _ = Just []
-ctxMultByCoeffect ((x, Discharged t1 g1):xs) g2 =
+ctxtMultByCoeffect :: Coeffect -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
+ctxtMultByCoeffect _ [] = Just []
+ctxtMultByCoeffect g1 ((x, Discharged t g2):xs) =
   case gradeMult g1 g2 of
-    Just g3 -> do
-      ctxt <- ctxMultByCoeffect xs g2
-      return $ ((x, Discharged t1 g3): ctxt)
+    Just g' -> do
+      ctxt <- ctxtMultByCoeffect g1 xs
+      return $ ((x, Discharged t g'): ctxt)
     Nothing -> Nothing
-ctxMultByCoeffect _ _ = Nothing
+ctxtMultByCoeffect _ _ = Nothing
 
-gradeLub :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeLub (CInterval (CNat g1) (CNat g2)) (CInterval (CNat g1') (CNat g2')) =
-  Just (CInterval (CNat (min g1 g1')) (CNat (max g2 g2')))
-gradeLub (CNat n) (CNat n') = if n == n' then Just (CNat n) else Nothing
-gradeLub (CInfinity t1) (CInfinity t2) = Just (CInfinity t1)
-gradeLub _ _ = Nothing
-
-gradeGlb :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeGlb (CInterval (CNat g1) (CNat g2)) (CInterval (CNat g1') (CNat g2')) = Just (CInterval (CNat (max g1 g1')) (CNat (min g2 g2')))
-gradeGlb (CNat n) (CNat n') = if n == n' then Just (CNat n) else Nothing
-gradeGlb (CInfinity t1) (CInfinity t2) = Just $ CInfinity t1
-gradeGlb _ _ = Nothing
-
-ctxGlb :: Ctxt (Assumption) -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
-ctxGlb [] [] = Just []
-ctxGlb x [] = Just x
-ctxGlb [] y = Just y
-ctxGlb ((x, Discharged t1 g1):xs) ys =
+ctxtMerge :: (Coeffect -> Coeffect -> Maybe Coeffect) -> Ctxt Assumption -> Ctxt Assumption -> Maybe (Ctxt Assumption)
+ctxtMerge _ [] [] = Just []
+ctxtMerge _ x [] = Just x
+ctxtMerge _ [] y = Just y
+ctxtMerge coefOp ((x, Discharged t1 g1):xs) ys =
   case lookupAndCutout x ys of
     Just (ys', Discharged t2 g2) ->
       if t1 == t2 then
-        case gradeGlb g1 g2 of
+        case coefOp g1 g2 of
           Just g3 -> do
-            ctx <- ctxGlb xs ys'
-            return $ (x, Discharged t1 g3) : ctx
+            ctxt <- ctxtMerge coefOp xs ys'
+            return $ (x, Discharged t1 g3) : ctxt
           Nothing -> Nothing
       else
         Nothing
     Nothing -> do
-      ctx <- ctxGlb xs ys
-      return $ (x, Discharged t1 g1) : ctx
+      ctxt <- ctxtMerge coefOp xs ys
+      return $ (x, Discharged t1 g1) : ctxt
     _ -> Nothing
-ctxGlb ((x, Linear t1):xs) ys =
+ctxtMerge coefOp ((x, Linear t1):xs) ys =
   case lookup x ys of
-    Just (Linear t2) -> ctxGlb xs ys
+    Just (Linear t2) -> ctxtMerge coefOp xs ys
     Nothing -> Nothing
     _ -> Nothing
-
-ctxLub :: Ctxt (Assumption) -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
-ctxLub [] [] = Just []
-ctxLub x [] = Just x
-ctxLub [] y = Just y
-ctxLub ((x, Discharged t1 g1):xs) ys =
-  case lookupAndCutout x ys of
-    Just (ys', Discharged t2 g2) ->
-      if t1 == t2 then
-        case gradeLub g1 g2 of
-          Just g3 -> do
-            ctx <- ctxLub xs ys'
-            return $ (x, Discharged t1 g3) : ctx
-          Nothing -> Nothing
-      else
-        Nothing
-    Nothing -> do
-      ctx <- ctxLub xs ys
-      return $ (x, Discharged t1 g1) : ctx
-    _ -> Nothing
-ctxLub ((x, Linear t1):xs) ys =
-  case lookup x ys of
-    Just (Linear t2) -> ctxLub xs ys
-    Nothing -> Nothing
-    _ -> Nothing
-
-checkCtxApproximation :: Ctxt (Assumption) -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
-checkCtxApproximation [] _ = return []
-checkCtxApproximation ((x, Discharged t1 g1):xs) ys =
-  case lookup x ys of
-    Just (Discharged t2 g2) ->
-        if g1 <= g2 then do
-            ctxt <- checkCtxApproximation xs ys
-            return $ (x, Discharged t1 g1) : ctxt
-        else Nothing
-    _ -> Nothing
-checkCtxApproximation _ ys = Nothing
 
 computeAddInputCtx :: Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption)
 computeAddInputCtx gamma delta =
-  case ctxSubtract gamma delta of
+  case ctxtSubtract gamma delta of
     Just ctx' -> ctx'
     Nothing -> []
 
@@ -710,18 +606,18 @@ boxHelper decls gamma isAdd goalTy =
     (Forall _ binders constraints (Box g t)) -> do
       (e, delta, subst) <- synthesise decls True isAdd gamma [] (Forall nullSpanNoFile binders constraints t)
       if isAdd then
-        case ctxMultByCoeffect delta g of
+        case ctxtMultByCoeffect g delta of
           Just delta' -> do
             return (makeBox goalTy e, delta', subst)
           _ -> none
       else
-        let used = ctxSubtract gamma delta in
+        let used = ctxtSubtract gamma delta in
         -- Compute what was used to synth e
           case used of
             Just used' -> do
-              case ctxMultByCoeffect used' g of
+              case ctxtMultByCoeffect g used' of
                 Just delta' -> do
-                  case ctxSubtract gamma delta' of
+                  case ctxtSubtract gamma delta' of
                     Just delta'' -> do
                       return (makeBox goalTy e, delta'', subst)
                     Nothing -> none
@@ -902,7 +798,7 @@ sumElimHelper decls left (var@(x, a):right) gamma False goalTy =
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookup l delta1, lookup r delta2) of
           (Nothing, Nothing) ->
-            case ctxGlb delta1 delta2 of
+            case ctxtMerge gradeGlb delta1 delta2 of
               Just delta3 ->
                 return (makeCase t1 t2 x l r e1 e2, delta3, subst)
               Nothing -> none
@@ -927,7 +823,7 @@ sumElimHelper decls left (var@(x, a):right) gamma True goalTy =
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) ->
-            case ctxLub delta1' delta2' of
+            case ctxtMerge gradeLub delta1' delta2' of
               Just delta3 ->
                 let delta3' = computeAddOutputCtx omega' delta3 [] in do
                    return (makeCase t1 t2 x l r e1 e2, delta3', subst)
