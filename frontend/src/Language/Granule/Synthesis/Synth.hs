@@ -105,10 +105,10 @@ gradeMult :: Coeffect -> Coeffect -> Maybe Coeffect
 gradeMult c c' = Just $ CTimes c c'
 
 gradeLub :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeLub c c' = Just $ CMeet c c'
+gradeLub c c' = Just $ CJoin c c'
 
 gradeGlb :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeGlb c c' = Just $ CJoin c c'
+gradeGlb c c' = Just $ CMeet c c'
 
 ctxtSubtract :: Ctxt (Assumption)  -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
 ctxtSubtract [] [] = Just []
