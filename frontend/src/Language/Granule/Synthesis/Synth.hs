@@ -174,35 +174,36 @@ computeAddInputCtx gamma delta =
 
 computeAddOutputCtx :: Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption)
 computeAddOutputCtx del1 del2 del3 = do
-  case addDeltas del1 del2 of
+  case ctxtAdd del1 del2 of
     Just del' ->
-      case addDeltas del' del3 of
+      case ctxtAdd del' del3 of
           Just del'' -> del''
           _ -> []
     _ -> []
-  where
-  addDeltas [] [] = Just []
-  addDeltas x [] = Just x
-  addDeltas [] y = Just y
-  addDeltas ((x, Discharged t1 g1):xs) ys =
-    case lookupAndCutout x ys of
-      Just (ys', Discharged t2 g2) ->
-        case gradeAdd g1 g2 of
-          Just g3 -> do
-            ctxt <- addDeltas xs ys'
-            return $ (x, Discharged t1 g3) : ctxt
-          Nothing -> Nothing
-      Nothing -> do
-        ctxt <- addDeltas xs ys
-        return $ (x, Discharged t1 g1) : ctxt
-      _ -> Nothing
-  addDeltas ((x, Linear t1):xs) ys =
-    case lookup x ys of
-      Just (Linear t2) -> addDeltas xs ys
-      Nothing -> do
-        ctxt <- addDeltas xs ys
-        return $ (x, Linear t1) : ctxt
-      _ -> Nothing
+
+ctxtAdd :: Ctxt Assumption -> Ctxt Assumption -> Maybe (Ctxt Assumption)
+ctxtAdd [] [] = Just []
+ctxtAdd x [] = Just x
+ctxtAdd [] y = Just y
+ctxtAdd ((x, Discharged t1 g1):xs) ys =
+  case lookupAndCutout x ys of
+    Just (ys', Discharged t2 g2) ->
+      case gradeAdd g1 g2 of
+        Just g3 -> do
+          ctxt <- ctxtAdd xs ys'
+          return $ (x, Discharged t1 g3) : ctxt
+        Nothing -> Nothing
+    Nothing -> do
+      ctxt <- ctxtAdd xs ys
+      return $ (x, Discharged t1 g1) : ctxt
+    _ -> Nothing
+ctxtAdd ((x, Linear t1):xs) ys =
+  case lookup x ys of
+    Just (Linear t2) -> ctxtAdd xs ys
+    Nothing -> do
+      ctxt <- ctxtAdd xs ys
+      return $ (x, Linear t1) : ctxt
+    _ -> Nothing
 
 pattern ProdTy :: Type -> Type -> Type
 pattern ProdTy t1 t2 = TyApp (TyApp (TyCon (Id "," ",")) t1) t2
