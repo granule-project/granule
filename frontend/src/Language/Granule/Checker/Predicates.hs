@@ -13,7 +13,6 @@ inside the type checker.
 
 -}
 
-import Control.Monad.Fail
 import Control.Monad.Trans.State.Strict
 import Data.List (intercalate, (\\))
 import GHC.Generics (Generic)

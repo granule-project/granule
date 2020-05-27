@@ -19,7 +19,6 @@ import qualified Data.Map as M
 import Data.Semigroup (sconcat)
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import Control.Monad.Fail (MonadFail)
 import Control.Monad.Identity
 import System.FilePath (takeBaseName)
 

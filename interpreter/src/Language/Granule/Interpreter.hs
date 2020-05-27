@@ -29,7 +29,6 @@ import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
 import Data.Maybe (fromMaybe)
-import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 
