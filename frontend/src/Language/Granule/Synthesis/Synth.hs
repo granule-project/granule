@@ -459,38 +459,28 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> Bool -> Checker (Bool, Ctxt (Assumption), Type)
 useVar (name, Linear t) gamma False = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma False = do
-  if True then do -- NOTE temporary - set to false to not use constraint solver
-   -- vark <- freshIdentifierBase $ "c"
-   -- State.modify (\st -> st { tyVarContext = (mkId vark, (KPromote $ nat, InstanceQ)) : tyVarContext st })
-    (kind, _) <- inferCoeffectType nullSpan grade
-    var <- freshTyVarInContext (mkId $ "c") (KPromote kind)
-    existential var (KPromote kind)
-    addConstraint (Eq nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
-    res <- solve
-    case res of
-      True -> do
-        return (True, replace gamma name (Discharged t (CVar var)), t)
-      False -> do
-        return (False, [], t)
-  else if canUse grade then
-        case useCoeffect grade of
-          Nothing -> return (False, [], t )
-          Just grade' ->
-            return (True, (name, Discharged t grade'):gamma, t)
-        else
-        return (False, [], t)
+  (kind, _) <- inferCoeffectType nullSpan grade
+  var <- freshTyVarInContext (mkId $ "c") (KPromote kind)
+  existential var (KPromote kind)
+  addConstraint (Eq nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
+  res <- solve
+  case res of
+    True -> do
+      return (True, replace gamma name (Discharged t (CVar var)), t)
+    False -> do
+      return (False, [], t)
 useVar (name, Linear t) _ True = return (True, [(name, Linear t)], t)
-useVar (name, Discharged t grade) _ True =
-    if canUse grade then
-      case useCoeffect grade of
-        Nothing -> return (False, [], t)
-        Just grade' ->
-          let singleUse = gradeSub grade grade' in
-            case singleUse of
-              Just grade'' -> return (True, [(name, Discharged t grade'')], t)
-              Nothing -> return (False, [], t)
-    else
-        return (False, [], t)
+useVar (name, Discharged t grade) _ True = do
+  (kind, _) <- inferCoeffectType nullSpan grade
+  var <- freshTyVarInContext (mkId $ "c") (KPromote kind)
+  existential var (KPromote kind)
+  addConstraint (Eq nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
+  res <- solve
+  case res of
+    True ->
+      return (True, [(name, (Discharged t (CVar var)))], t)
+    False ->
+      return (False, [], t)
 
 
 varHelper :: (?globals :: Globals)
@@ -671,7 +661,7 @@ unboxHelper decls left (var@(x, a) : right) gamma True goalTy =
            let delta' = computeAddOutputCtx omega' delta []
            case lookupAndCutout id' delta' of
              Just (delta'', (Discharged _ usage)) -> do
-               conv $ addConstraint (Eq nullSpanNoFile grade usage (TyVar $ mkId "a")) -- checkAddUsage usage grade
+               conv $ addConstraint (Eq nullSpanNoFile grade usage (TyVar $ mkId "a"))
                res <- conv $ solve
                case res of
                  True ->
@@ -679,7 +669,7 @@ unboxHelper decls left (var@(x, a) : right) gamma True goalTy =
                  False -> none
              _ -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
-               conv $ addConstraint (ApproximatedBy nullSpanNoFile grade (CZero kind) kind) -- zeroUse grade
+               conv $ addConstraint (ApproximatedBy nullSpanNoFile grade (CZero kind) kind)
                res <- conv $ solve
                case res of
                  True ->
