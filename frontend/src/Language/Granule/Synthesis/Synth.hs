@@ -478,7 +478,7 @@ useVar (name, Discharged t grade) _ True = do
   res <- solve
   case res of
     True ->
-      return (True, [(name, (Discharged t (CVar var)))], t)
+      return (True, [(name, (Discharged t (COne kind)))], t)
     False ->
       return (False, [], t)
 
