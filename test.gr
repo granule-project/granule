@@ -1,12 +1,5 @@
-id : forall {a : Type} . a -> a
-id = ?
+push : forall {a : Type, b : Type, n : Nat } . (a, b) [n + 1] -> (a [n], b)
+push  = ?
 
-k : forall {a : Type, b : Type} . a -> b [0] -> a
-k = ?
-
--- data N (n : Nat) where
---     Z : N 0;
---     S : forall {n : Nat} . (N n) -> N (n+1)
-
--- rep : forall {a : Type, n : Nat} . N n -> (a -> a) [n] -> a -> a
--- rep n f = 
+foo : forall {a : Type, n : Nat} . a [n + 1] -> (a, a [n])
+foo [x1] = (x1, [x1])
