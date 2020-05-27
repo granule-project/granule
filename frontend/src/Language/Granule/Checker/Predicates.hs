@@ -132,8 +132,8 @@ instance Pretty (Neg Constraint) where
       "Trying to prove that " <> pretty c1 <> " == " <> pretty c2
 
     pretty (Neg (Eq _ c1 c2 _)) =
-      "Actual grade `" <> pretty c1 <>
-      "` is not equal to specified grade `" <> pretty c2 <> "`"
+      "Actual grade or index `" <> pretty c1 <>
+      "` is not equal to specified grade or index `" <> pretty c2 <> "`"
 
     pretty (Neg (ApproximatedBy _ c1 c2 (TyCon k))) | internalName k == "Level" =
       pretty c2 <> " value cannot be moved to level " <> pretty c1

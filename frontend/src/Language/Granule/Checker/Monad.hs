@@ -514,7 +514,7 @@ instance UserMsg CheckerError where
 
   title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
-  title GradingError{} = "Grading error"
+  title GradingError{} = "Type error"
   title KindMismatch{} = "Kind mismatch"
   title KindError{} = "Kind error"
   title KindCannotFormSet{} = "Kind error"
