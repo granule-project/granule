@@ -99,7 +99,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
         -- add a constraint that 0 approaximates the effect of the enclosing
         -- box patterns.
         case outerCoeff of
-          -- Can only have a wildcard under a box if the type of the pattern is unishaped
+          -- Can only have a wildcard not under a box if the type of the pattern is unishaped
           Nothing -> do
             isPoly <- polyShaped t
             if isPoly
