@@ -372,13 +372,14 @@ refactorEqn (Equation sp name ref annotation pats body) =
           (pat : (replace xs var pat'))
       replace (pat@(PBox {}):xs) var pat' =
         pat : (replace xs var pat')
+      replace ((PConstr s ty a id constrs):xs) var pat' =
+        (PConstr s ty a id (replace constrs var pat')) : replace xs var pat'
       replace pats _ _ = pats
 
       exprPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) _) = exprPatterns e
       exprPatterns (Val _ _ _ (Abs _ p _ e)) = p  : exprPatterns e
       exprPatterns e = []
 
-      --boxPatterns (Val _ (FunTy _ Box{} _) _ (Abs _ p _ e)) pats = boxPatterns e pats
       boxPatterns (Val _ _ _ (Abs _ p _ e)) pats = boxPatterns e pats
       boxPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) (Val _ _ _ (Var _ name))) pats =
         boxPatterns e pats'
@@ -437,7 +438,7 @@ makePairElim name lId rId (Forall _ _ _ goalTy) lTy rTy e =
   App s goalTy False
   (Val s (ProdTy lTy rTy) False
     (Abs (FunTy Nothing (ProdTy lTy rTy) goalTy)
-      (PConstr s (ProdTy lTy rTy) False name [(PVar s lTy False lId), (PVar s rTy False rId)] )
+      (PConstr s (ProdTy lTy rTy) False (mkId ",") [(PVar s lTy False lId), (PVar s rTy False rId)] )
         Nothing e))
   (Val s (ProdTy lTy rTy) False (Var (ProdTy lTy rTy) name))
   where s = nullSpanNoFile
