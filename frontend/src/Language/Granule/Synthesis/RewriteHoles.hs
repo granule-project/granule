@@ -45,10 +45,13 @@ holeRewriter source cases =
 -- The reprinter which runs on a refactored AST. Reprinting is done at the Def
 -- level down, as the equations across a definition are subject to change.
 astReprinter :: (?globals :: Globals) => Reprinting Identity
-astReprinter = catchAll `extQ` reprintEqnList
+astReprinter = catchAll `extQ` reprintEqnList `extQ` reprintEqn
   where
-    reprintEqnList eqns =
-      genReprinting (return . Text.pack . pretty) (eqns :: EquationList () ())
+    reprintEqn eqn =
+      genReprinting (return . Text.pack . pretty) (eqn :: Equation () ())
+
+    reprintEqnList eqn =
+      genReprinting (return . Text.pack . pretty) (eqn :: EquationList () ())
 
 -- Refactor an AST by refactoring its definitions.
 holeRefactor :: [(Span, [Pattern ()], Expr () Type)] -> AST () () -> AST () ()
@@ -68,7 +71,7 @@ holeRefactorEqnList cases eqns =
   where
     allUpdated = map updateEqn (equations eqns)
     newEquations = concatMap fst allUpdated
-    refactored = any snd allUpdated
+    refactored = all snd allUpdated
     -- Updates an individual equation with the relevant cases, returning a tuple
     -- containing the new equation and whether a refactoring was performed.
     updateEqn eqn =
@@ -81,7 +84,8 @@ holeRefactorEqnList cases eqns =
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn ::  Equation () () -> Expr () Type -> Equation () ()
 holeRefactorEqn eqn goal =
-   eqn {equationBody = holeRefactorExpr goal (equationBody eqn)}
+  eqn { equationRefactored = True
+        , equationBody = holeRefactorExpr goal (equationBody eqn) }
 
 -- Refactors an expression by filling the hole with the new goal (could be another hole)
 holeRefactorExpr :: Expr () Type -> Expr () () -> Expr () ()

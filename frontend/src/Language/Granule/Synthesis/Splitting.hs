@@ -62,7 +62,8 @@ generateCases span constructors ctxt = do
 
   -- Order patterns into the same ordering as the context.
   let orderedPatterns =
-        map (\(id, _) -> (id, fromJust $ lookup id allPatterns)) ctxt
+        map (\(id, _) ->
+                (id, fromJust $ lookup id allPatterns)) ctxt
 
   -- Convert the patterns into cases (i.e. Cartesian product of patterns).
   let cases = combineCases orderedPatterns
