@@ -1,0 +1,4 @@
+data Bool = True | False
+
+threeBoxes : ((Bool [1]) [1]) [1] -> Bool
+threeBoxes b = {! b !}

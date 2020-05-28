@@ -1,0 +1,6 @@
+data Vec (n : Nat) t where
+  Nil : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n + 1) t
+
+vecDup : forall { n : Nat, a : Type } . (Vec n a) [2] -> Vec (2 * n) a
+vecDup xs = {! xs !}

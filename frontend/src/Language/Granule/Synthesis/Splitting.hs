@@ -24,52 +24,37 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 -- Generates a set of valid cases given a type and context of assumptions, in
--- the form of a pair of identifiers and lists of lists of patterns
--- which correspond to those identifiers.
+-- the form of a pair of identifiers and lists of lists of patterns which
+-- correspond to those identifiers. This generates cases for *all* variables in
+-- the context, but only splits those in the toSplit list.
 generateCases :: (?globals :: Globals)
   => Span
   -> Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Assumption
+  -> [Id]
   -> Checker ([Id], [[Pattern ()]])
-generateCases span constructors ctxt = do
-  -- Determines whether an assumption should be treated as linear.
-  let isLinear (_, a) =
-        case a of
-          Discharged _ _   -> False
-          Linear (Box _ _) -> False
-          Linear _         -> True
-  let (linear, nonlinear) = partition isLinear ctxt
+generateCases span constructors ctxt toSplit = do
+  -- Creates two subcontexts based on whether a variable should be split or not.
+  let splitCtxt = relevantSubCtxt toSplit ctxt
+  let noSplitCtxt = deleteVars ctxt toSplit
 
-  -- Spits linear assumptions into splittable/not-splittable. Where splittable
-  -- means that it is a data constructor at the highest level.
-  let (splittable', unsplittable') =
-        partition (isJust . snd) $ map (second getAssumConstr) linear
-  let splittable = map (second fromJust) splittable'
-  let unsplittable = map fst unsplittable'
+  -- Split the variables we want to.
+  splitPatterns <- splitAll span constructors splitCtxt
+  -- Convert the variables we don't wish to split to trivial patterns.
+  let noSplitPatterns =
+        map (buildVariablePatterns span) (getCtxtIds noSplitCtxt)
 
-  -- Get the relevant constructors for the splittable variables, and then
-  -- actually generate the patterns.
-  let relConstructors = relevantDataConstrs constructors splittable
-  linearPatterns <-
-    mapM (uncurry (buildConstructorPatterns span)) relConstructors
+  let allPatterns = splitPatterns <> noSplitPatterns
 
-  -- Convert the unsplittables into plain variable patterns.
-  let variablePatterns = map (buildVariablePatterns span) unsplittable
-
-  -- Convert the discharged types into boxed patterns.
-  let boxPatterns = map (buildBoxPattern span . fst) nonlinear
-
-  let allPatterns = linearPatterns <> boxPatterns <> variablePatterns
-
-  -- Order patterns into the same ordering as the context.
+  -- Arrange patterns into the same ordering as the context.
   let orderedPatterns =
         map (\(id, _) -> (id, fromJust $ lookup id allPatterns)) ctxt
 
-  -- Convert the patterns into cases (i.e. Cartesian product of patterns).
+  -- Convert the patterns into cases (i.e. Cartesian product across patterns).
   let cases = combineCases orderedPatterns
 
   -- The Nothing case should be unreachable, as this function is only ever
-  -- called after checkEquation where equationTy is set.
+  -- called after checkEquation, where equationTy is set.
   st <- get
   case equationTy st of
     Nothing -> return ([], [])
@@ -77,6 +62,81 @@ generateCases span constructors ctxt = do
       -- Filter the patterns if they are impossible.
       validPatterns <- filterM (caseFilter span eqTy) (snd cases)
       return (fst cases, validPatterns)
+
+-- Splits all variables in a given context into a list of patterns.
+splitAll ::
+     Span
+  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt Assumption
+  -> Checker (Ctxt [Pattern ()])
+splitAll span constructors ctxt = do
+  -- Partition the variables we will split by whether they are boxed or not.
+  let (boxed, notBoxed) = partition (isBoxed . snd) ctxt
+
+  -- Splits those variables not in boxes, where possible.
+  (linearPatterns, unsplittable) <- splitNotBoxed span constructors notBoxed
+
+  -- Convert the unsplittables into plain variable patterns.
+  let variablePatterns =
+        map (buildVariablePatterns span) unsplittable
+
+  -- Convert the boxed types into boxed patterns, which may be split recursively
+  -- until we reach a non-box.
+  boxPatterns <- splitBoxed span constructors boxed
+
+  let allPatterns = linearPatterns <> boxPatterns <> variablePatterns
+  return allPatterns
+
+-- Performs case splits on a series of variables which are *not* boxes. Returns
+-- a tuple of patterns and unsplittable variable IDs.
+splitNotBoxed ::
+     Span
+  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt Assumption
+  -> Checker (Ctxt [Pattern ()], [Id])
+splitNotBoxed _ _ [] = pure ([], [])
+splitNotBoxed span constructors ctxt = do
+  -- Spits linear assumptions into splittable/not-splittable. Where splittable
+  -- means that it is a data constructor at the highest level (note we filtered
+  -- out box patterns in the previous step).
+  let (splittable', unsplittable') =
+        partition (isJust . snd) $ map (second getAssumConstr) ctxt
+  let splittable = map (second fromJust) splittable'
+  let unsplittable = getCtxtIds unsplittable'
+
+  -- Get the relevant constructors for the splittable variables, and then
+  -- actually generate the patterns.
+  let relConstructors = relevantDataConstrs constructors splittable
+  linearPatterns <-
+    mapM (uncurry (buildConstructorPatterns span)) relConstructors
+
+  return (linearPatterns, unsplittable)
+
+-- Performs case splits on a series of variables which *are* boxes. Returns a
+-- context linking each variable to its corresponding to patterns. Note that
+-- we recursively split boxes until we reach something that isn't a box, then
+-- split that once.
+splitBoxed ::
+     Span
+  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt Assumption
+  -> Checker (Ctxt [Pattern ()])
+splitBoxed _ _ [] = pure []
+splitBoxed span constructors ctxt = do
+  -- Gets the type inside the box.
+  let extractSubtype t =
+        case t of
+          Linear (Box _ t') -> Linear t'
+          Discharged (Box _ t') cf -> Discharged t' cf
+          t -> t -- Note: this case should never be reached.
+  let subtypeCtxt = map (second extractSubtype) ctxt
+
+  -- Recursively split all variables, using their subtype.
+  allPatterns <- splitAll span constructors subtypeCtxt
+
+  -- We box all of the patterns generated to get the result.
+  let result = map (second (map (buildBoxPattern span))) allPatterns
+  return result
 
 -- Wrapper around validateCase which updates the state when the case is valid.
 caseFilter :: (?globals :: Globals)
@@ -103,7 +163,7 @@ validateCase span ty pats = do
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
   (_, _, localVars, _, _, _) <-
-    ctxtFromTypedPatterns span ty pats (map (const NotFull) pats)
+    ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 
   -- Build the type variable environment for proving the predicate
@@ -150,20 +210,34 @@ relevantDataConstrs constructors types =
 
 -- Gets a potential constructor identifier on a type constructor, recursively.
 getAssumConstr :: Assumption -> Maybe Id
-getAssumConstr (Discharged _ _) = Nothing
-getAssumConstr (Linear t) = getTypeConstr t
+getAssumConstr a =
+  case a of
+    (Discharged t _) -> getTypeConstr t
+    (Linear t) -> getTypeConstr t
   where
-    getTypeConstr :: Type -> Maybe Id
     getTypeConstr (FunTy _ t1 _) = Nothing
     getTypeConstr (TyCon id) = Just id
     getTypeConstr (Box _ t) = getTypeConstr t
     getTypeConstr (Diamond t1 _) = getTypeConstr t1
     getTypeConstr (TyApp t1 t2) = getTypeConstr t1
+    getTypeConstr (TySig t _) = getTypeConstr t
     getTypeConstr (TyVar _) = Nothing
     getTypeConstr (TyInt _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _) = Nothing
-    getTypeConstr (TySig t _) = getTypeConstr t
+
+-- Given a function type, expand grades on parameters to be more permissive,
+-- for the purpose of generating theorems. Exact natural number grades greater
+-- than 1 are converted to intervals from 1 to that natural number. Interval
+-- grades on the natural numbers with a lower bound greater than 1 are given 1
+-- as a new lower bound. This is because when case splitting, we generate a
+-- single usage from the pattern match.
+expandGrades :: Type -> Type
+expandGrades (FunTy id t1 t2) = FunTy id (expandGrades t1) (expandGrades t2)
+expandGrades (Box (CInterval (CNat lower) (CNat upper)) t) | lower > 1 =
+  Box (CInterval (CNat 1) (CNat upper)) t
+expandGrades (Box (CNat n) t) | n > 1 = Box (CInterval (CNat 1) (CNat n)) t
+expandGrades ty = ty
 
 -- Given a list of data constructors, generates patterns corresponding to them.
 buildConstructorPatterns ::
@@ -196,10 +270,9 @@ buildConstructorPatterns span id constructors = do
 buildVariablePatterns :: Span -> Id -> (Id, [Pattern ()])
 buildVariablePatterns span id = (id, pure $ PVar span () False id)
 
--- Given an identifier, generates a box pattern containing that identifier,
--- paired with the identifier itself.
-buildBoxPattern :: Span -> Id -> (Id, [Pattern ()])
-buildBoxPattern span id = (id, pure $ PBox span () False (PVar span () False id))
+-- Wraps a pattern in a box
+buildBoxPattern :: Span -> Pattern () -> Pattern ()
+buildBoxPattern span = PBox span () False
 
 -- Accumulates identifiers which label function types.
 tsTypeNames :: TypeScheme -> [Maybe Id]
@@ -213,3 +286,9 @@ tsTypeNames (Forall _ _ _ t) = typeNames t
 -- the patterns.
 combineCases :: Ctxt [Pattern ()] -> ([Id], [[Pattern ()]])
 combineCases pats = (map fst pats, mapM snd pats)
+
+-- Determines whether an assumption contains a box type.
+isBoxed :: Assumption -> Bool
+isBoxed (Linear (Box _ _)) = True
+isBoxed (Discharged (Box _ _) _) = True
+isBoxed _ = False
