@@ -885,6 +885,19 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
         then return result
         else none
 
-    Additive ->
-      -- TODO: check that all linear stuff is in, and all usages are at least what was passed in
-      return result
+    Additive -> do
+      consumed <- mapM (\(id, a) -> conv $
+                    case lookup id gamma of
+                      Just (Linear{}) -> return True;
+                      Just (Discharged _ grade) ->
+                        case a of
+                          Discharged _ grade' -> do
+                            (kind, _) <- inferCoeffectType nullSpan grade
+                            addConstraint (ApproximatedBy nullSpanNoFile grade' grade kind)
+                            solve
+                          _ -> return False
+                      Nothing -> return False) ctxt
+      if and consumed
+        then return result
+        else none
+
