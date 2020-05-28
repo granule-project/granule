@@ -451,13 +451,25 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
       (varsSplitOn, cases) <- generateCases s constructors holeCtxt
 
       -- If we are in synthesise mode, also try to synthesise a
-      -- term for each case split goal
+      -- term for each case split goal *if* this is also a hole
+      -- of interest
+      let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
       cases' <-
         case globalsSynthesise ?globals of
-           Just True -> programSynthesise ctxt t cases
+           Just True ->
+              -- Check to see if this hole is something we are interested in
+              case globalsHolePosition ?globals of
+                -- Synth everything mode
+                Nothing -> programSynthesise ctxt vars t cases
+                Just pos ->
+                  if spanContains pos s
+                    -- This is a hole we want to synth on
+                    then  programSynthesise ctxt vars t cases
+                    -- This is not a hole we want to synth on
+                    else  return casesWithHoles
            -- Otherwise synthesise empty holes for each case
            -- (and throw away the binding information)
-           _ -> return $ zip (map fst cases) (repeat (Hole s t True []))
+           _ -> return casesWithHoles
 
       throw $ HoleMessage s t ctxt (tyVarContext st) varsSplitOn cases'
 
