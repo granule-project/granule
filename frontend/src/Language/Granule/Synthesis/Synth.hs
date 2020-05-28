@@ -222,12 +222,8 @@ isLAsync (Box{}) = True
 isLAsync _ = False
 
 isAtomic :: Type -> Bool
-isAtomic (FunTy {}) = False
-isAtomic (ProdTy{}) = False
-isAtomic (SumTy {}) = False
-isAtomic (Box{}) = False
-isAtomic (TyCon (Id "()" "()")) = False
-isAtomic _ = True
+isAtomic (TyVar {}) = True
+isAtomic _ = False
 
 
 
