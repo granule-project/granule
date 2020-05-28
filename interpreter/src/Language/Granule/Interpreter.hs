@@ -120,11 +120,17 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         checked <- try $ check ast
         case checked of
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
-          Right (Left errs) ->
-            case (globalsRewriteHoles ?globals, getHoleMessages errs) of
-              (Just True, holes@(_:_)) ->
-                runHoleSplitter input config errs holes
-              _ -> return . Left $ CheckerError errs
+          Right (Left errs) -> do
+            let holeErrors = getHoleMessages errs
+            if ignoreHoles && length holeErrors == length errs
+              then do
+                printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
+                return $ Right NoEval
+              else
+                case (globalsRewriteHoles ?globals, holeErrors) of
+                  (Just True, holes@(_:_)) ->
+                    runHoleSplitter input config errs holes
+                  _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
             if noEval then do
               printSuccess "OK"
@@ -359,6 +365,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "synthesise"
             <> help "Turn on program synthesis. Must be used in conjunction with hole-line and hole-column"
 
+        globalsIgnoreHoles <-
+          flag Nothing (Just True)
+            $ long "ignore-holes"
+            <> help "Suppress information from holes (treat holes as well-typed)"
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -391,6 +402,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsNoEval
               , globalsSuppressInfos
               , globalsSuppressErrors
+              , globalsIgnoreHoles
               , globalsTimestamp
               , globalsTesting = Nothing
               , globalsSolverTimeoutMillis
