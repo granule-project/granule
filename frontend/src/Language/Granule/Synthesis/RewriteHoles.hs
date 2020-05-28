@@ -79,7 +79,15 @@ holeRefactorEqnList cases eqns =
       in case relCases of
            [] -> ([eqn], False)
            _ ->
-             (map (\(_, cs, t) -> refactorEqn $ ((holeRefactorEqn eqn t) {equationPatterns = cs})) relCases, True)
+             (map (\(_, cs, t) ->
+                       -- Fill in the hole
+                       let eqn' = (holeRefactorEqn eqn t)
+                       in
+                         if null cs && not (null (equationPatterns eqn))
+                            -- There were no new patterns but there were some before so don't run the refactorer
+                            then eqn'
+                            -- ... or update the patterns
+                            else refactorEqn (eqn' {equationPatterns = cs})) relCases, True)
 
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn ::  Equation () () -> Expr () Type -> Equation () ()
