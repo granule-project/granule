@@ -226,6 +226,7 @@ isAtomic (FunTy {}) = False
 isAtomic (ProdTy{}) = False
 isAtomic (SumTy {}) = False
 isAtomic (Box{}) = False
+isAtomic (TyCon (Id "()" "()")) = False
 isAtomic _ = True
 
 
@@ -868,8 +869,6 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
         varHelper decls [] gamma resourceScheme goalTy
         `try`
         appHelper decls [] gamma resourceScheme goalTy
-        `try`
-        unitIntroHelper decls gamma resourceScheme goalTy
       else
         -- Right Sync : Focus on goalTy
         (sumIntroHelper decls gamma resourceScheme goalTy
@@ -877,6 +876,8 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
         pairIntroHelper decls gamma resourceScheme goalTy)
         `try`
         boxHelper decls gamma resourceScheme goalTy
+        `try`
+        unitIntroHelper decls gamma resourceScheme goalTy
 
 synthesise :: (?globals :: Globals)
            => Ctxt (DataDecl)      -- ADT Definitions
