@@ -436,10 +436,8 @@ checkExpr :: (?globals :: Globals)
 checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   st <- get
 
-  let getIdName (Id n _) = n
-  let boundVariableIds = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
-  let holeCtxt = relevantSubCtxt boundVariableIds ctxt
-  let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (\ (Id a _, s) -> (a, s)) ctxt))) vars
+  let holeCtxt = filter (\(id, a) -> id `elem` vars) ctxt
+  let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }

@@ -275,12 +275,8 @@ instance Monad m => Freshenable m (Value v a) where
       return $ Promote a e'
 
     freshen (Var a v) = do
-      v' <- lookupVar Value v
-      case v' of
-         Just v' -> return (Var a $ Id (sourceName v) v')
-         -- This case happens if we are referring to a defined
-         -- function which does not get its name freshened
-         Nothing -> return (Var a $ Id (sourceName v) (sourceName v))
+      v' <- freshenId v
+      return $ Var a v'
 
     freshen v@NumInt{}   = return v
     freshen v@NumFloat{} = return v
@@ -289,6 +285,15 @@ instance Monad m => Freshenable m (Value v a) where
     freshen v@StringLiteral{} = return v
     freshen v@Ext{} = return v
 
+freshenId :: Monad m => Id -> Freshener m Id
+freshenId v = do
+      v' <- lookupVar Value v
+      case v' of
+         Just v' -> return (Id (sourceName v) v')
+         -- This case happens if we are referring to a defined
+         -- function which does not get its name freshened
+         Nothing -> return (Id (sourceName v) (sourceName v))
+
 instance Term (Expr v a) where
     freeVars (App _ _ _ e1 e2)            = freeVars e1 <> freeVars e2
     freeVars (Binop _ _ _ _ e1 e2)        = freeVars e1 <> freeVars e2
@@ -296,7 +301,7 @@ instance Term (Expr v a) where
     freeVars (Val _ _ _ e)                = freeVars e
     freeVars (Case _ _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
-    freeVars Hole{} = []
+    freeVars (Hole _ _ _ vars) = vars
 
     hasHole (App _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (Binop _ _ _ _ e1 e2) = hasHole e1 || hasHole e2
@@ -360,4 +365,8 @@ instance Monad m => Freshenable m (Expr v a) where
      v <- freshen v
      return (Val s a rf v)
 
-    freshen v@Hole{} = return v
+    freshen (Hole s a rf vars) = do
+      -- Freshen hole variables like they are normal variables
+      vars' <- mapM freshenId vars
+      return $ Hole s a rf vars'
+
