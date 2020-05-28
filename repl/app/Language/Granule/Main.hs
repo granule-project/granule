@@ -16,7 +16,7 @@ import System.Directory
 import Data.List (nub)
 
 import qualified Data.Map as M
-import qualified Data.List.NonEmpty as NonEmpty (NonEmpty, filter)
+import qualified Data.List.NonEmpty as NonEmpty (NonEmpty, filter, fromList)
 import qualified Language.Granule.Checker.Monad as Checker
 import Control.Exception (try)
 import Control.Monad.State
@@ -310,7 +310,8 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
                       liftIO $ printInfo $ (green $ path <> ", checked ")
                                         <> (blue $ "(but with " ++ show (length holeErrors) ++ " holes).")
                     else
-                      Ex.throwError (TypeCheckerError errs (files st))
+                      let errs' = NonEmpty.fromList $ relevantMessages (ignoreHolesMode st) errs
+                      in Ex.throwError (TypeCheckerError errs' (files st))
       Left e -> do
        st <- get
        Ex.throwError (ParseError e (files st))
@@ -318,6 +319,10 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
 getHoleMessages :: NonEmpty.NonEmpty Checker.CheckerError -> [Checker.CheckerError]
 getHoleMessages es =
   NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> True; _ -> False) es
+
+relevantMessages :: Bool -> NonEmpty.NonEmpty Checker.CheckerError -> [Checker.CheckerError]
+relevantMessages ignoreHoles es =
+  NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> not ignoreHoles; _ -> True) es
 
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
 loadInQueue def@(Def _ id _ _ _) = do
