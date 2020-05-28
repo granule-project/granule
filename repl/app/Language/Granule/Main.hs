@@ -334,5 +334,5 @@ buildCheckerState dataDecls = do
 buildDef :: Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex =
   Def nullSpanInteractive id False
-   (EquationList nullSpanInteractive id False [Equation nullSpanInteractive () False [] ex]) ts
+   (EquationList nullSpanInteractive id False [Equation nullSpanInteractive id () False [] ex]) ts
   where id = mkId (" repl" <> show rfv)

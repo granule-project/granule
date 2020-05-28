@@ -198,11 +198,11 @@ instance Pretty v => Pretty (Def v a) where
       = pretty v <> " : " <> pretty tySch <> "\n" <> pretty eqs
 
 instance Pretty v => Pretty (EquationList v a) where
-  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map (prettyEqn v) eqs
+  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map pretty eqs
 
-prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
-prettyEqn v (Equation _ _ _ ps e) =
-  pretty v <> " " <> unwords (map prettyNested ps) <> " = " <> pretty e
+instance Pretty v => Pretty (Equation v a) where
+  pretty (Equation _ v _ _ ps e) =
+     pretty v <> " " <> unwords (map prettyNested ps) <> " = " <> pretty e
 
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =

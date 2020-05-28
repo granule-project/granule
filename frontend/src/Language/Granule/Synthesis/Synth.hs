@@ -341,6 +341,7 @@ reprintAsDef id goalTy expr =
               equations =
               [ Equation
                 { equationSpan = nullSpanNoFile,
+                  equationId = id,
                   equationRefactored = True,
                   equationAnnotation = getSecondParameter expr,
                   equationPatterns = [],
@@ -359,8 +360,8 @@ refactorDef (Def sp id ref (EquationList sp' id' ref' eqns) tyS) =
   Def sp id ref (EquationList sp' id' ref' (map refactorEqn eqns)) tyS
 
 refactorEqn :: Equation v a -> Equation v a
-refactorEqn (Equation sp ref annotation pats body) =
-  Equation sp ref annotation (pats ++ getPatterns body) (exprBody body)
+refactorEqn (Equation sp name ref annotation pats body) =
+  Equation sp name ref annotation (pats ++ getPatterns body) (exprBody body)
     where
       getPatterns e = boxPatterns e (exprPatterns e)
 

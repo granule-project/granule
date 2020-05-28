@@ -470,11 +470,11 @@ instance Substitutable Constraint where
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
 instance Substitutable (Equation () Type) where
-  substitute ctxt (Equation sp ty rf patterns expr) =
+  substitute ctxt (Equation sp name ty rf patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
          expr' <- substitute ctxt expr
-         return $ Equation sp ty' rf pat' expr'
+         return $ Equation sp name ty' rf pat' expr'
 
 substituteValue :: (?globals::Globals)
                 => Substitution

@@ -90,6 +90,7 @@ consEquation eqn EquationList{..} =
 data Equation v a =
     Equation {
         equationSpan       :: Span,
+        equationId         :: Id,
         equationAnnotation :: a,
         equationRefactored :: Bool,
         equationPatterns   :: [Pattern a],
@@ -186,10 +187,10 @@ instance Monad m => Freshenable m DataConstr where
     return $ DataConstrNonIndexed sp v ts
 
 instance Monad m => Freshenable m (Equation v a) where
-  freshen (Equation s a rf ps e) = do
+  freshen (Equation s name a rf ps e) = do
     ps <- mapM freshen ps
     e <- freshen e
-    return (Equation s a rf ps e)
+    return (Equation s name a rf ps e)
 
 instance Monad m => Freshenable m (EquationList v a) where
   freshen (EquationList s name rf eqs) = do
@@ -209,7 +210,7 @@ instance Term (EquationList v a) where
     delete name (concatMap freeVars eqs)
 
 instance Term (Equation v a) where
-  freeVars (Equation s a _ binders body) =
+  freeVars (Equation s _ a _ binders body) =
       freeVars body \\ concatMap boundVars binders
 
 instance Term (Def v a) where
