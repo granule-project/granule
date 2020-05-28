@@ -213,6 +213,7 @@ pattern SumTy t1 t2  = TyApp (TyApp (TyCon (Id "Either" "Either")) t1) t2
 
 isRAsync :: Type -> Bool
 isRAsync (FunTy {}) = True
+isRAsync (TyCon (internalName -> "()")) = True
 isRAsync _ = False
 
 isLAsync :: Type -> Bool
@@ -724,6 +725,22 @@ pairElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
             _ -> none
       _ -> none
 
+unitIntroHelper :: (?globals :: Globals)
+  => Ctxt (DataDecl)
+  -> Ctxt (Assumption)
+  -> ResourceScheme
+  -> TypeScheme
+  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+unitIntroHelper decls gamma resourceScheme goalTy =
+  case goalTy of
+    (Forall _ binders constraints (TyCon (internalName -> "()"))) -> do
+      let unitVal = Val nullSpan (TyCon (mkId "()")) True
+                      (Constr (TyCon (mkId "()")) (mkId "()") [])
+      case resourceScheme of
+        Additive -> return (unitVal, [], [])
+        Subtractive -> return (unitVal, gamma, [])
+    _ -> none
+
 pairIntroHelper :: (?globals :: Globals)
   => Ctxt (DataDecl)
   -> Ctxt (Assumption)
@@ -838,6 +855,8 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
       absHelper decls gamma omega allowLam resourceScheme goalTy `try` none
+      `try`
+       unitIntroHelper decls gamma resourceScheme goalTy
     (False, omega@(x:xs)) ->
       -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
       unboxHelper decls [] omega gamma resourceScheme goalTy
