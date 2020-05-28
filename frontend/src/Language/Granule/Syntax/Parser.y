@@ -183,12 +183,12 @@ Binding :: { (String, Equation () ()) }
   : VAR '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $3)
-          return (symString $1, Equation span () False [] $3) }
+          return (symString $1, Equation span (mkId $ symString $1) () False [] $3) }
 
   | VAR Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
-          return (symString $1, Equation span () False $2 $4) }
+          return (symString $1, Equation span (mkId $ symString $1) () False $2 $4) }
 
 -- this was probably a silly idea @buggymcbugfix
   -- | '|' Pats '=' Expr
