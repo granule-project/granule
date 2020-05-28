@@ -1,0 +1,9 @@
+data Vec (n : Nat) t where
+  Nil  : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n+1) t
+
+append : forall { a : Type, n m : Nat } . Vec (n + 1) a -> Vec (m + 1) a -> Vec ((m + n) + 2) a
+append (Cons xs0 Nil) (Cons ys0 Nil) = ?;
+append (Cons xs0 Nil) (Cons ys0 (Cons ys10 ys11)) = ?;
+append (Cons xs0 (Cons xs10 xs11)) (Cons ys0 Nil) = ?;
+append (Cons xs0 (Cons xs10 xs11)) (Cons ys0 (Cons ys10 ys11)) = ?

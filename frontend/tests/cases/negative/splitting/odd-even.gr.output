@@ -1,0 +1,16 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/odd-even.gr:6:17:
+
+   Expected type is: `a`
+
+   Context:
+     xs : Vec (2 * n) a
+     ys : Vec ((2 * n) + 1) a
+
+   Type context:
+     n : ↑Nat
+     a : Type
+
+   Case splits for xs, ys:
+     Nil            (Cons ys0 ys1)
+     (Cons xs0 xs1) (Cons ys0 ys1)

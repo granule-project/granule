@@ -395,7 +395,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
+    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]]), holeVars :: [Id] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -586,13 +586,20 @@ instance UserMsg CheckerError where
     (if null (fst cases)
       then ""
       else if null (snd cases)
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty $ fst cases)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
-             intercalate "\n     " (formatCases (snd cases)))
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
+             intercalate "\n     " (formatCases relevantCases))
 
     where
+      -- Extract those cases which correspond to a variable in holeVars.
+      relevantCases :: [[Pattern ()]]
+      relevantCases = map (map snd . filter ((`elem` holeVars) . fst) . zip (fst cases)) (snd cases)
+
+      formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
 
+      -- Pad all strings in a list so they match the length of the longest.
+      padToLongest :: [String] -> [String]
       padToLongest xs =
         let size = maximum (map length xs)
         in  map (\s -> s ++ replicate (size - length s) ' ') xs

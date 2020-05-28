@@ -1,0 +1,6 @@
+data Vec (n : Nat) t where
+  Nil : Vec 0 t;
+  Cons : t -> Vec n t -> Vec (n + 1) t
+
+oddEven : forall { n : Nat, a : Type } . Vec (2 * n) a -> Vec ((2 * n) + 1) a -> a
+oddEven xs ys = {! xs ys !}
