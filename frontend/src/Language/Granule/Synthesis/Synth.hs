@@ -213,7 +213,6 @@ pattern SumTy t1 t2  = TyApp (TyApp (TyCon (Id "Either" "Either")) t1) t2
 
 isRAsync :: Type -> Bool
 isRAsync (FunTy {}) = True
-isRAsync (TyCon (internalName -> "()")) = True
 isRAsync _ = False
 
 isLAsync :: Type -> Bool
@@ -855,8 +854,6 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
       absHelper decls gamma omega allowLam resourceScheme goalTy `try` none
-      `try`
-       unitIntroHelper decls gamma resourceScheme goalTy
     (False, omega@(x:xs)) ->
       -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
       unboxHelper decls [] omega gamma resourceScheme goalTy
@@ -871,6 +868,8 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
         varHelper decls [] gamma resourceScheme goalTy
         `try`
         appHelper decls [] gamma resourceScheme goalTy
+        `try`
+        unitIntroHelper decls gamma resourceScheme goalTy
       else
         -- Right Sync : Focus on goalTy
         (sumIntroHelper decls gamma resourceScheme goalTy
