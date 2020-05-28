@@ -1488,12 +1488,17 @@ checkGuardsForImpossibility s name = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
-programSynthesise ctxt ty patternss = do
+  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
+programSynthesise ctxt vars ty patternss = do
   currentState <- get
   forM patternss $ \(pattern, patternCtxt) -> do
+    -- Build a context which has the pattern context
+    let ctxt' = patternCtxt
+          -- ... plus anything from the original context not being cased upon
+            ++ filter (\(id, a) -> not (id `elem` vars)) ctxt
+
     -- Run the synthesiser in this context
-    let synRes = Syn.synthesise Syn.initDecls True (Syn.Subtractive) (ctxt ++ patternCtxt) [] (Forall nullSpan [] [] ty)
+    let synRes = Syn.synthesise Syn.initDecls True (Syn.Subtractive) ctxt' [] (Forall nullSpan [] [] ty)
     synthResults <- liftIO $ ListT.runListT $ evalStateT (ExcT.runExceptT (Syn.unSynthesiser synRes)) currentState
 
     let positiveResults = Syn.getList synthResults
