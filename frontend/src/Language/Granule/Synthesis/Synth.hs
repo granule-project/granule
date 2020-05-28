@@ -636,7 +636,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Subtractive goalTy =
           case lookupAndCutout id' delta of
             Just (delta', (Discharged _ usage)) -> do
               (kind, _) <- conv $ inferCoeffectType nullSpan usage
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile usage (CZero kind) kind)
+              conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) usage kind)
               res <- conv $ solve
               case res of
                 True ->
