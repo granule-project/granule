@@ -202,7 +202,7 @@ instance Pretty v => Pretty (EquationList v a) where
 
 instance Pretty v => Pretty (Equation v a) where
   pretty (Equation _ v _ _ ps e) =
-     pretty v <> " " <> unwords (map prettyNested ps) <> " = " <> pretty e
+     pretty v <> (if length ps == 0 then "" else " ") <> unwords (map prettyNested ps) <> " = " <> pretty e
 
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
