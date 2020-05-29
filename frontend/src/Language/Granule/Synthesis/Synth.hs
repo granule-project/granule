@@ -9,6 +9,7 @@ module Language.Granule.Synthesis.Synth where
 --import Control.Monad (forM_)
 import Debug.Trace
 import System.IO.Unsafe
+import qualified Data.Map as M
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
@@ -30,15 +31,13 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Kinds (inferCoeffectType)
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables hiding (freshIdentifierBase)
-import qualified Language.Granule.Checker.Variables as Var
 import Language.Granule.Syntax.Span
 
-import Data.List (delete)
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import qualified Control.Monad.State.Strict as State (get, modify)
 import Control.Monad.Trans.List
-import Control.Monad.Trans.State.Strict
+import Control.Monad.State.Strict
 
 import Language.Granule.Utils
 
@@ -46,11 +45,6 @@ data Configuration = Config
    { churchSyntax            :: Bool,
      howManyNatPossibilities :: Int
     }
-
-freshIdentifierBase :: String -> Checker String
-freshIdentifierBase s = do
-  id <- Var.freshIdentifierBase s
-  return $ delete '.' id
 
 testVal :: (?globals :: Globals) => Bool
 testVal  = do
@@ -229,7 +223,7 @@ isAtomic _ = False
 
 newtype Synthesiser a = Synthesiser
   { unSynthesiser :: ExceptT (NonEmpty CheckerError) (StateT CheckerState (ListT IO)) a }
-  deriving (Functor, Applicative, Monad)
+  deriving (Functor, Applicative, Monad, MonadState CheckerState)
 
 instance MonadIO Synthesiser where
   liftIO = conv . liftIO
@@ -512,9 +506,8 @@ absHelper :: (?globals :: Globals)
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 absHelper decls gamma omega allowLam resourceScheme goalTy =
   case goalTy of
-      (Forall _ binders constraints (FunTy _ t1 t2)) -> do
-        x <- conv $ freshIdentifierBase "x"
-        let id = mkId x
+      (Forall _ binders constraints (FunTy name t1 t2)) -> do
+        id <- useBinderNameOrFreshen name
         let (gamma', omega') =
               if isLAsync t1 then
                 (gamma, ((id, Linear t1):omega))
@@ -544,15 +537,14 @@ appHelper decls left (var@(x, a) : right) Subtractive goalTy@(Forall _ binders c
   (canUse, omega', t) <- conv $ useVar var omega Subtractive
   case (canUse, t) of
     (True, FunTy _ t1 t2) -> do
-        id <- conv $ freshIdentifierBase "x"
-        let id' = mkId id
-        let (gamma', omega'') = bindToContext (id', Linear t2) omega' [] (isLAsync t2)
+        id <- freshIdentifier
+        let (gamma', omega'') = bindToContext (id, Linear t2) omega' [] (isLAsync t2)
         (e1, delta1, sub1) <- synthesiseInner decls True Subtractive gamma' omega'' goalTy
         (e2, delta2, sub2) <- synthesiseInner decls True Subtractive delta1 [] (Forall nullSpanNoFile binders constraints t1)
         subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
-        case lookup id' delta2 of
+        case lookup id delta2 of
           Nothing ->
-            return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id' e1, delta2, subst)
+            return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst)
           _ -> none
     _ -> none
 appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders constraints _ ) =
@@ -561,10 +553,9 @@ appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders cons
     (canUse, omega', t) <- conv $ useVar var omega Additive
     case (canUse, t) of
       (True, FunTy _ t1 t2) -> do
-        id <- conv $ freshIdentifierBase "x"
-        let id' = mkId id
+        id <- freshIdentifier
         let gamma1 = computeAddInputCtx omega omega'
-        let (gamma1', omega'') = bindToContext (id', Linear t2) gamma1 [] (isLAsync t2)
+        let (gamma1', omega'') = bindToContext (id, Linear t2) gamma1 [] (isLAsync t2)
         (e1, delta1, sub1) <- synthesiseInner decls True Additive gamma1' omega'' goalTy
 
         let gamma2 = computeAddInputCtx gamma1' delta1
@@ -572,9 +563,9 @@ appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders cons
 
         let delta3 = computeAddOutputCtx omega' delta1 delta2
         subst <- conv $ combineSubstitutions nullSpan sub1 sub2
-        case lookupAndCutout id' delta3 of
+        case lookupAndCutout id delta3 of
           Just (delta3', Linear _) ->
-                return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id' e1, delta3', subst)
+                return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta3', subst)
           _ -> none
       _ -> none
 
@@ -625,18 +616,17 @@ unboxHelper decls left (var@(x, a) : right) gamma Subtractive goalTy =
       (canUse, omega', t) <- conv $ useVar var omega Subtractive
       case (canUse, t) of
         (True, Box grade t') -> do
-          id <- conv $ freshIdentifierBase "x"
-          let id' = mkId id
-          let (gamma', omega'') = bindToContext (id', Discharged t' grade) gamma omega' (isLAsync t')
+          id <- freshIdentifier
+          let (gamma', omega'') = bindToContext (id, Discharged t' grade) gamma omega' (isLAsync t')
           (e, delta, subst) <- synthesiseInner decls True Subtractive gamma' omega'' goalTy
-          case lookupAndCutout id' delta of
+          case lookupAndCutout id delta of
             Just (delta', (Discharged _ usage)) -> do
               (kind, _) <- conv $ inferCoeffectType nullSpan usage
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) usage kind)
               res <- conv $ solve
               case res of
                 True ->
-                  return (makeUnbox id' x goalTy t t' e, delta', subst)
+                  return (makeUnbox id x goalTy t t' e, delta', subst)
                 False -> do
                   none
             _ -> none
@@ -648,20 +638,19 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
       (canUse, omega', t) <- conv $ useVar var omega Additive
       case (canUse, t) of
         (True, Box grade t') -> do
-           id <- conv $ freshIdentifierBase "x"
-           let id' = mkId id
+           id <- freshIdentifier
            let omega1 = computeAddInputCtx omega omega'
-           let (gamma', omega1') = bindToContext (id', Discharged t' grade) gamma omega1 (isLAsync t')
+           let (gamma', omega1') = bindToContext (id, Discharged t' grade) gamma omega1 (isLAsync t')
            (e, delta, subst) <- synthesiseInner decls True Additive gamma' omega1' goalTy
            let delta' = computeAddOutputCtx omega' delta []
-           case lookupAndCutout id' delta' of
+           case lookupAndCutout id delta' of
              Just (delta'', (Discharged _ usage)) -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
                conv $ addConstraint (Eq nullSpanNoFile grade usage kind)
                res <- conv $ solve
                case res of
                  True ->
-                   return (makeUnbox id' x goalTy t t' e,  delta'', subst)
+                   return (makeUnbox id x goalTy t t' e,  delta'', subst)
                  False -> none
              _ -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
@@ -669,7 +658,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
                res <- conv $ solve
                case res of
                  True ->
-                   return (makeUnbox id' x goalTy t t' e,  delta', subst)
+                   return (makeUnbox id x goalTy t t' e,  delta', subst)
                  False -> none
         _ -> none
 
@@ -689,9 +678,8 @@ pairElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
     (canUse, omega', t) <- conv $ useVar var omega Subtractive
     case (canUse, t) of
       (True, ProdTy t1 t2) -> do
-          l <- conv $ freshIdentifierBase "x"
-          r <- conv $ freshIdentifierBase "x"
-          let (lId, rId) = (mkId l, mkId r)
+          lId <- freshIdentifier
+          rId <- freshIdentifier
           let (gamma', omega'') = bindToContext (lId, Linear t1) gamma omega' (isLAsync t1)
           let (gamma'', omega''') = bindToContext (rId, Linear t2) gamma' omega'' (isLAsync t2)
           (e, delta, subst) <- synthesiseInner decls True Subtractive gamma'' omega''' goalTy
@@ -705,9 +693,8 @@ pairElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
     (canUse, omega', t) <- conv $ useVar var omega Additive
     case (canUse, t) of
       (True, ProdTy t1 t2) -> do
-          l <- conv $ freshIdentifierBase "x"
-          r <- conv $ freshIdentifierBase "x"
-          let (lId, rId) = (mkId l, mkId r)
+          lId <- freshIdentifier
+          rId <- freshIdentifier
           let omega1 = computeAddInputCtx omega omega'
           let (gamma', omega1') = bindToContext (lId, Linear t1) gamma omega1 (isLAsync t1)
           let (gamma'', omega1'') = bindToContext (rId, Linear t2) gamma' omega1' (isLAsync t2)
@@ -791,10 +778,8 @@ sumElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
   (canUse, omega', t) <- conv $ useVar var omega Subtractive
   case (canUse, t) of
     (True, SumTy t1 t2) -> do
-      freshL <- conv $ freshIdentifierBase "x"
-      freshR <- conv $ freshIdentifierBase "x"
-      let l = mkId freshL
-      let r = mkId freshR
+      l <- freshIdentifier
+      r <- freshIdentifier
       let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega' (isLAsync t1)
       let (gamma'', omega''') = bindToContext (r, Linear t2) gamma' omega'' (isLAsync t2)
       (e1, delta1, subst1) <- synthesiseInner decls True Subtractive gamma' omega'' goalTy
@@ -815,10 +800,8 @@ sumElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
   (canUse, omega', t) <- conv $ useVar var omega Additive
   case (canUse, t) of
     (True, SumTy t1 t2) -> do
-      freshL <- conv $ freshIdentifierBase "x"
-      freshR <- conv $ freshIdentifierBase "x"
-      let l = mkId freshL
-      let r = mkId freshR
+      l <- freshIdentifier
+      r <- freshIdentifier
       let omega1 = computeAddInputCtx omega omega'
       let (gamma', omega1') = bindToContext (l, Linear t1) gamma omega1 (isLAsync t1)
       let (gamma'', omega1'') = bindToContext (r, Linear t2) gamma' omega1' (isLAsync t2)
@@ -916,3 +899,26 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
         then return result
         else none
 
+useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
+useBinderNameOrFreshen Nothing = freshIdentifier
+useBinderNameOrFreshen (Just n) = return n
+
+freshIdentifier :: Synthesiser Id
+freshIdentifier = do
+  let mappo = ["x","y","z","u","v","p","q"]
+  let base = "x"
+  checkerState <- get
+  let vmap = uniqueVarIdCounterMap checkerState
+  case M.lookup base vmap of
+    Nothing -> do
+      let vmap' = M.insert base 1 vmap
+      put checkerState { uniqueVarIdCounterMap = vmap' }
+      return $ mkId base
+
+    Just n -> do
+      let vmap' = M.insert base (n+1) vmap
+      put checkerState { uniqueVarIdCounterMap = vmap' }
+      let n' = fromInteger . toInteger $ n
+      if n' < length mappo
+        then return $ mkId $ mappo !! n'
+        else return $ mkId $ base <> show n'
