@@ -781,7 +781,7 @@ sumElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
       l <- freshIdentifier
       r <- freshIdentifier
       let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega' (isLAsync t1)
-      let (gamma'', omega''') = bindToContext (r, Linear t2) gamma' omega'' (isLAsync t2)
+      let (gamma'', omega''') = bindToContext (r, Linear t2) gamma omega' (isLAsync t2)
       (e1, delta1, subst1) <- synthesiseInner decls True Subtractive gamma' omega'' goalTy
       (e2, delta2, subst2) <- synthesiseInner decls True Subtractive gamma'' omega''' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
