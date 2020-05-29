@@ -905,7 +905,7 @@ useBinderNameOrFreshen (Just n) = return n
 
 freshIdentifier :: Synthesiser Id
 freshIdentifier = do
-  let mappo = ["x","y","z","u","v","p","q"]
+  let mappo = ["x","y","z","u","v","w","p","q"]
   let base = "x"
   checkerState <- get
   let vmap = uniqueVarIdCounterMap checkerState
