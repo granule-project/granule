@@ -80,7 +80,7 @@ inferKindOfTypeImplicits s ctxt (FunTy _ t1 t2) = do
           u <- combineManySubstitutions s [u1, u2, u1', u2']
           return (KType, u)
         _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = KType, kActual = k2 }
-    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k2 }
+    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k1 }
 
 -- kFun KType (KPromote (TyCon (internalName -> "Protocol"))) = return $ KPromote (TyCon (mkId "Protocol"))
 
@@ -183,3 +183,16 @@ inferKindOfTypeImplicits s ctxt (TySet ts) = do
     -- ks <- mapM (inferKindOfTypeImplicits s ctxt) ts
     k <- inferKindOfTypeInContext s ctxt (TySet ts)
     return (k, [])
+
+inferKindOfTypeImplicits s ctxt (TySig t k) = do
+  k' <- inferKindOfTypeInContext s ctxt t
+  if k' == k
+        then return (k, [])
+        else
+          -- Allow ty ints to be overloaded at different signatures other than nat
+          case t of
+            TyInt _ ->
+              case k of
+                KVar _ -> return (k, [])
+                _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+            _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }

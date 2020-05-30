@@ -156,6 +156,9 @@ instance Pretty Type where
     pretty (TySet ts) =
       "{" <> intercalate ", " (map pretty ts) <> "}"
 
+    pretty (TySig t k) =
+      "(" ++ pretty t ++ " : " ++ pretty k ++ ")"
+
 instance Pretty TypeOperator where
   pretty = \case
    TyOpLesser          -> "<"
@@ -217,7 +220,7 @@ instance Pretty DataConstr where
 instance Pretty (Pattern a) where
     pretty (PVar _ _ _ v)     = pretty v
     pretty (PWild _ _ _)      = "_"
-    pretty (PBox _ _ _ p)     = "[" <> pretty p <> "]"
+    pretty (PBox _ _ _ p)     = "[" <> prettyNested p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
     pretty (PConstr _ _ _ name args) | internalName name == "," = intercalate ", " (map prettyNested args)
@@ -263,7 +266,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
     "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
   pretty (App _ _ _ e1 e2) =
-    pretty e1 <> " " <> prettyNested e2
+    prettyNested e1 <> " " <> prettyNested e2
 
   pretty (Binop _ _ _ op e1 e2) =
     pretty e1 <> " " <> pretty op <> " " <> pretty e2
@@ -289,6 +292,7 @@ instance Pretty Operator where
     OpNotEq           -> "≠"
     OpPlus            -> "+"
     OpTimes           -> "*"
+    OpDiv             -> "/"
     OpMinus           -> "-"
 
 ticks :: String -> String

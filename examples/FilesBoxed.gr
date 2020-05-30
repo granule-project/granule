@@ -2,7 +2,7 @@ import File
 
 main : String <IO>
 main =
-    let [mh]    = [openHandle ReadMode "LICENSE"] in
+    let [mh] : ((Handle R) <{Open, IOExcept}>) [2] = [openHandle ReadMode "LICENSE"] in
     let h       <- mh;
         h'      <- mh;
         ()      <- closeHandle h';

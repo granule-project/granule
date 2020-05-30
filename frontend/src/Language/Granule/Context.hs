@@ -86,3 +86,6 @@ lookupAndCutout v ((v', t):ctxt) | v == v' =
 lookupAndCutout v ((v', t'):ctxt) = do
   (ctxt', t) <- lookupAndCutout v ctxt
   Just ((v', t') : ctxt', t)
+
+getCtxtIds :: Ctxt t -> [Id]
+getCtxtIds = map fst

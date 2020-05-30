@@ -1,0 +1,14 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/graded.gr:2:11:
+
+   Expected type is: `(b, a)`
+
+   Context:
+     x : .[(a, b)]. (0..∞)
+
+   Type context:
+     a : Type
+     b : Type
+
+   Case splits for x:
+     (x0, x1)

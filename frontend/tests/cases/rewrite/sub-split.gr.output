@@ -1,0 +1,8 @@
+data N (n : Nat) where
+  Z : N 0;
+  S : forall {n : Nat} . (m : N n) -> N (n + 1)
+
+rep : forall {a : Type, n : Nat} . N (n + 1) -> (a  -> a) [n + 1] -> a -> a
+rep Z [f] = ?;
+rep (S Z) [f] = ?;
+rep (S (S m0)) [f] = ?

@@ -17,6 +17,7 @@ import qualified Data.Map as M
 import Numeric
 import System.FilePath ((</>), takeBaseName)
 import System.Exit
+import System.Directory (doesFileExist)
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Lexer
@@ -322,7 +323,7 @@ TyApp :: { Type }
  | TyAtom                     { $1 }
 
 TyJuxt :: { Type }
-  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
+  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 } 
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
   | TyAtom '+' TyAtom         { TyInfix TyOpPlus $1 $3 }
@@ -346,6 +347,7 @@ TyAtom :: { Type }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
+  | TyAtom ':' Kind           { TySig $1 $3 }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
@@ -569,9 +571,11 @@ parseDefsAndDoImports input = do
     doImportsRecursively todo ast@(AST dds defs done hidden name) = do
       case toList (todo \\ done) of
         [] -> return ast
-        (i:todo) ->
-          let path = includePath </> i in
+        (i:todo) -> do
+          fileLocal <- doesFileExist i
+          let path = if fileLocal then i else includePath </> i
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
+
             src <- readFile path
             AST dds' defs' imports' hidden' _ <- either failWithMsg return $ parseDefs path src
             doImportsRecursively

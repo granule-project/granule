@@ -1,0 +1,2 @@
+foo : forall {k : Coeffect, k' : Coeffect, c : k, c' : k', a : Type} . a [c] -> a [c * c']
+foo [x] = [x]

@@ -1,4 +1,4 @@
-resolver: lts-13.21
+resolver: lts-15.13
 packages:
 - frontend/
 - interpreter/

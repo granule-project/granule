@@ -29,7 +29,6 @@ import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
 import qualified Data.List.NonEmpty as NonEmpty (filter)
 import Data.Maybe (fromMaybe)
-import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 
@@ -160,12 +159,13 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         Right noImportAst -> do
           let position = globalsHolePosition ?globals
           let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
-          let holeCases = concatMap (snd . cases) relevantHoles
+          let relevantCases = map cases relevantHoles
+          let holeCases = concatMap (\ cs -> map (zip (fst cs)) (snd cs)) relevantCases
           rewriteHoles input noImportAst (keepBackup config) holeCases
           return . Left . CheckerError $ errs
 
     holeInPosition :: Pos -> CheckerError -> Bool
-    holeInPosition pos (HoleMessage sp _ _ _ _) = spanContains pos sp
+    holeInPosition pos (HoleMessage sp _ _ _ _ _) = spanContains pos sp
     holeInPosition _ _ = False
 
 -- | Get the flags embedded in the first line of a file, e.g.

@@ -19,7 +19,6 @@ import qualified Data.Map as M
 import Data.Semigroup (sconcat)
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import Control.Monad.Fail (MonadFail)
 import Control.Monad.Identity
 import System.FilePath (takeBaseName)
 
@@ -400,7 +399,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
+    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]]), holeVars :: [Id] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -452,7 +451,7 @@ data CheckerError
   | UnificationDisallowed
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind, tyIsConcrete :: Bool }
   | UnificationFailGeneric
     { errLoc :: Span, errSubst1 :: Substitutors, errSubst2 :: Substitutors }
   | OccursCheckFail
@@ -519,7 +518,7 @@ instance UserMsg CheckerError where
 
   title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
-  title GradingError{} = "Grading error"
+  title GradingError{} = "Type error"
   title KindMismatch{} = "Kind mismatch"
   title KindError{} = "Kind error"
   title KindCannotFormSet{} = "Kind error"
@@ -591,13 +590,20 @@ instance UserMsg CheckerError where
     (if null (fst cases)
       then ""
       else if null (snd cases)
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty $ fst cases)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
-             intercalate "\n     " (formatCases (snd cases)))
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
+             intercalate "\n     " (formatCases relevantCases))
 
     where
+      -- Extract those cases which correspond to a variable in holeVars.
+      relevantCases :: [[Pattern ()]]
+      relevantCases = map (map snd . filter ((`elem` holeVars) . fst) . zip (fst cases)) (snd cases)
+
+      formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
 
+      -- Pad all strings in a list so they match the length of the longest.
+      padToLongest :: [String] -> [String]
       padToLongest xs =
         let size = maximum (map length xs)
         in  map (\s -> s ++ replicate (size - length s) ' ') xs
@@ -729,8 +735,8 @@ instance UserMsg CheckerError where
     = "Trying to unify `" <> pretty errSubst1 <> "` and `" <> pretty errSubst2 <> "`"
 
   msg UnificationFail{..}
-    = "Cannot unify universally quantified type variable `" <> pretty errVar <> "`"
-    <> "` of kind `" <> pretty errKind <> "` with a concrete type `" <> pretty errTy <> "`"
+    = "Cannot unify universally quantified type variable `" <> pretty errVar
+    <> "` of kind `" <> pretty errKind <> "` with " <> (if tyIsConcrete then "a concrete type " else "") <> "`" <> pretty errTy <> "`"
 
   msg SessionDualityError{..}
     = "Session type `" <> pretty errTy1 <> "` is not dual to `" <> pretty errTy2 <> "`"
