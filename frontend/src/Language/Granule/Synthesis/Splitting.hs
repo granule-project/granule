@@ -162,7 +162,7 @@ validateCase span ty pats = do
 
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
-  (_, _, localVars, _, _, _) <-
+  (_, _, localVars, _, _, _, _) <-
     ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 

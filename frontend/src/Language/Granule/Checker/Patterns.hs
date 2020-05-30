@@ -1,4 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE GADTs #-}
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
@@ -21,6 +22,7 @@ import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Helpers (freeVars)
@@ -68,54 +70,13 @@ data PatternComponents a where
 -- generateNegativePatternInformation
 -- first is current pat
 -- second is previous pat (with pred annotations)
-isMoreGeneral :: Pattern a -> Maybe (Pattern Predicate) -> Checker (Maybe (PatternComponents Predicate))
+isMoreGeneral :: Pattern a -> Maybe (Pattern Pred) -> Checker (Maybe (PatternComponents Pred))
 isMoreGeneral _ Nothing                              = return Nothing
 isMoreGeneral (PWild{}) (Just (PWild{}))             = return $ Just BaseCase
 isMoreGeneral (PBox _  _ _ p) (Just (PBox _ _ _ p')) = return $ Just (BoxComponents p')
-isMoreGeneral _         (Just p) =
-  addPredicate $ negPred (getAnnotation p)
+isMoreGeneral _         (Just p) = do
+  addPredicate $ NegPred (getSecondParameter p)
   return Nothing
-
-patternFoldM
-  :: (Monad m)
-  => (Span -> Type -> ann -> Bool -> Id -> m b)
-  -> (Span -> Type -> ann -> Bool -> m b)
-  -> (Span -> Type -> ann -> Bool -> b -> Predicate -> m b)
-  -> (Span -> Type -> ann -> Bool -> Int -> m b)
-  -> (Span -> Type -> ann -> Bool -> Double -> m b)
-  -> (Span -> Type -> ann -> Bool -> Id -> [b] -> m b)
-  -> Pattern ann -> Type -> Maybe (Pattern Predicate)
-  -> m b
-patternFoldM v w b i f c pat ty = go ty pat
-  where
-
-    go :: Type -> Pattern ann  -> Maybe (Pattern Predicate) -> m b
-    go ty = \case
-      (PVar sp ann rf nm) _ -> v sp ty ann rf nm
-      (PWild sp ann rf) _ -> w sp ty ann rf
-      (PBox sp ann rf pat) (Just (PBox sp' ann' rf' pat')) ->
-        do
-            pat'' <- go pat (Just pat')
-            b sp ann rf pat'' Nothing
-      (PBox sp ann rf pat) Just pat' ->
-        do
-            propgPred <- calc pat (getAnnotation pat')
-            pushPred proggPred
-            pat'' <- go pat Nothing
-            b sp ann rf pat'' (Just (propgPred))
-      (PBox sp ann rf pat) Nothing ->
-        do
-            pat'' <- go pat Nothing
-            b sp ann rf pat'' Nothing
-      PInt sp ann rf int -> i sp ann rf int
-      PFloat sp ann rf doub -> f sp ann rf doub
-      PConstr sp ann rf nm pats ->
-        do
-            pats' <- mapM go pats
-            c sp ann rf nm pats'
-
-
-
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -132,7 +93,7 @@ ctxtFromTypedPattern :: (?globals :: Globals) =>
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Pattern Pred, Consumption)
 
-ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
+ctxtFromTypedPattern s t p cons = ctxtFromTypedPattern' Nothing s t p Nothing cons
 
 -- | Inner helper, which takes information about the enclosing coeffect
 ctxtFromTypedPattern' :: (?globals :: Globals) =>
@@ -140,7 +101,7 @@ ctxtFromTypedPattern' :: (?globals :: Globals) =>
   -> Span
   -> Type
   -> Pattern ()
-  -> Maybe (Pattern Predicate)
+  -> Maybe (Pattern Pred)
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Pattern Pred, Consumption)
 
@@ -178,7 +139,7 @@ ctxtFromTypedPattern' outerCoeff _ t p@(PWild s _ rf) prevPat cons = do
 
   --  _ -> illLinearityMismatch s [NonLinearPattern]
 
-ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
+ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ _ = do
     let elabP = PVar s t rf v
     let predP = PVar s (Conj []) rf v
     debugM' (pretty predP) ""
@@ -190,7 +151,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
          return ([(v, Discharged t coeff)], [], [], elabP, predP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _ _
   | internalName c == "Int" = do
 
     newConjunct
@@ -202,7 +163,7 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
     debugM' (pretty predP) (pretty pred)
     return ([], [], [], elabP, predP, Full)
 
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _ _
   | internalName c == "Float" = do
 
     newConjunct
@@ -215,7 +176,7 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
     return ([], [], [], elabP, predP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
+ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ _ = do
 
     (innerBoxTy, subst0) <- inferCoeffectType s coeff
 
@@ -233,15 +194,15 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
 
     newConjunct
-    (ctxt, eVars, subst, elabPInner, predPInner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
+    (ctxt, eVars, subst, elabPInner, predPInner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Nothing Full
     pred <- squashPred
 
-    let elabP = PBox sp t rf elabPinner
+    let elabP = PBox sp t rf elabPInner
     let predP = PBox sp pred rf predPInner
     substU <- combineManySubstitutions s [subst0, subst1, subst]
-    return (ctxt, eVars, substU, elabP, NotFull)
+    return (ctxt, eVars, substU, elabP, predP, NotFull)
 
-ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
+ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) _ cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -337,13 +298,13 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
     unpeel' acc [] t = return acc
 
     unpeel' (as, bs, us, elabPs, predPs, consOut) (p:ps) (FunTy _ t t') = do
-        (as', bs', us', elabP, predP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
+        (as', bs', us', elabP, predP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p Nothing cons
         us <- combineSubstitutions s us us'
         unpeel' (as<>as', bs<>bs', us, elabP:elabPs, predP:predPs, consOut `meetConsumption` consOut') ps t'
 
     unpeel' _ (p:_) t = throw PatternArityError{ errLoc = s, errId = dataC }
 
-ctxtFromTypedPattern' _ s t p _ = do
+ctxtFromTypedPattern' _ s t p _ _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st

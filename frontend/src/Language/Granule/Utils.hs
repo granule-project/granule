@@ -139,7 +139,7 @@ debugM explanation message =
 
 debugM' :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM' explanation message =
-    when True $ traceM $
+    traceM $
       ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
 -- | Print to terminal when debugging e.g.:
