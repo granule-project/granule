@@ -1,5 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE GADTs #-}
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
@@ -21,10 +20,9 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
-import Language.Granule.Syntax.Type
-import Language.Granule.Syntax.SecondParameter
-import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Helpers (freeVars)
 import Language.Granule.Utils
 
@@ -62,21 +60,24 @@ polyShaped t = case leftmostOfApplication t of
       debugM "polyShaped because not a constructor" (show t)
       pure True
 
-data PatternComponents a where
-  BoxComponents :: Pattern a -> PatternComponents a
-  ConstrComponents :: [Pattern a] -> PatternComponents a
-  BaseCase      :: PatternComponents a
-
--- generateNegativePatternInformation
--- first is current pat
--- second is previous pat (with pred annotations)
-isMoreGeneral :: Pattern a -> Maybe (Pattern Pred) -> Checker (Maybe (PatternComponents Pred))
-isMoreGeneral _ Nothing                              = return Nothing
-isMoreGeneral (PWild{}) (Just (PWild{}))             = return $ Just BaseCase
-isMoreGeneral (PBox _  _ _ p) (Just (PBox _ _ _ p')) = return $ Just (BoxComponents p')
-isMoreGeneral _         (Just p) = do
-  addPredicate $ NegPred (getSecondParameter p)
-  return Nothing
+-- Given two patterns, finds which predicates annotated on the latter should be
+-- propagated forward.
+extractFromPattern :: Pattern a -> Pattern b -> [b]
+-- We always propagate forward theorems from constants.
+extractFromPattern _ (PInt _ p _ _) = return p
+extractFromPattern _ (PFloat _ p _ _) = return p
+-- With a constructor, we propagate, unless they are the same constructor, in
+-- which case we recurse on the subpatterns.
+extractFromPattern (PConstr _ _ _ id1 sub1) (PConstr _ p _ id2 sub2)
+  | id1 == id2 = concat $ zipWith extractFromPattern sub1 sub2
+  | otherwise = return p
+extractFromPattern _ (PConstr _ p _ _ _) = return p
+-- Similarly, for unboxings we also propagate forward unless both patterns are
+-- unboxings, in which case we recurse.
+extractFromPattern (PBox _ _ _ sub1) (PBox _ _ _ sub2) = extractFromPattern sub1 sub2
+extractFromPattern _ (PBox _ p _ _) = return p
+-- In any other case, there is nothing to propagate.
+extractFromPattern _ _ = []
 
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
@@ -91,9 +92,9 @@ ctxtFromTypedPattern :: (?globals :: Globals) =>
   -> Type
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Pattern Pred, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Pattern (Ctxt Kind, Pred), Consumption)
 
-ctxtFromTypedPattern s t p cons = ctxtFromTypedPattern' Nothing s t p Nothing cons
+ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
 -- | Inner helper, which takes information about the enclosing coeffect
 ctxtFromTypedPattern' :: (?globals :: Globals) =>
@@ -101,12 +102,11 @@ ctxtFromTypedPattern' :: (?globals :: Globals) =>
   -> Span
   -> Type
   -> Pattern ()
-  -> Maybe (Pattern Pred)
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
-  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Pattern Pred, Consumption)
+  -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Pattern (Ctxt Kind, Pred), Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern' outerCoeff _ t p@(PWild s _ rf) prevPat cons = do
+ctxtFromTypedPattern' outerCoeff _ t p@(PWild s _ rf) cons = do
     -- DESIGN DECISION: We've turned off the checks that our linearity for ints
     -- when preceded by other concrete matches. (15/02/19) - DAO
     -- But we want to think about this more in the future
@@ -120,29 +120,28 @@ ctxtFromTypedPattern' outerCoeff _ t p@(PWild s _ rf) prevPat cons = do
         -- box patterns.
         let elabP = PWild s t rf
 
-        let predP = PWild s (Conj []) rf
-        debugM' (pretty predP) ""
-
         case outerCoeff of
           -- Can only have a wildcard not under a box if the type of the pattern is unishaped
           Nothing -> do
             isPoly <- polyShaped t
             if isPoly
               then illLinearityMismatch s (pure NonLinearPattern)
-              else return ([], [], [], elabP, predP, Full)
+              else do
+                let predP = PWild s ([], Conj []) rf
+                return ([], [], [], elabP, predP, Full)
 
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
-              addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
-
+              let constr = ApproximatedBy s (CZero coeffTy) coeff coeffTy
+              addConstraint constr
+              let predP = PWild s ([], Conj [Con constr]) rf
               return ([], [], [], elabP, predP, NotFull)
 
   --  _ -> illLinearityMismatch s [NonLinearPattern]
 
-ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ _ = do
+ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
     let elabP = PVar s t rf v
-    let predP = PVar s (Conj []) rf v
-    debugM' (pretty predP) ""
+    let predP = PVar s ([], Conj []) rf v
 
     case outerCoeff of
       Nothing ->
@@ -151,7 +150,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ _ = do
          return ([(v, Discharged t coeff)], [], [], elabP, predP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _ _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
   | internalName c == "Int" = do
 
     newConjunct
@@ -159,11 +158,10 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _ _
     pred <- squashPred
 
     let elabP = PInt s' ty rf n
-    let predP = PInt s' pred rf n
-    debugM' (pretty predP) (pretty pred)
+    let predP = PInt s' ([], pred) rf n
     return ([], [], [], elabP, predP, Full)
 
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _ _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
   | internalName c == "Float" = do
 
     newConjunct
@@ -171,12 +169,11 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _ _
     pred <- squashPred
 
     let elabP = PFloat s' ty rf n
-    let predP = PFloat s' pred rf n
-    debugM' (pretty predP) (pretty pred)
+    let predP = PFloat s' ([], pred) rf n
     return ([], [], [], elabP, predP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ _ = do
+ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) pat@(PBox sp _ rf p) _ = do
 
     (innerBoxTy, subst0) <- inferCoeffectType s coeff
 
@@ -192,17 +189,16 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ _ = do
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
 
-
     newConjunct
-    (ctxt, eVars, subst, elabPInner, predPInner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Nothing Full
+    (ctxt, eVars, subst, elabPInner, predPInner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
     pred <- squashPred
 
     let elabP = PBox sp t rf elabPInner
-    let predP = PBox sp pred rf predPInner
+    let predP = PBox sp ([], pred) rf predPInner
     substU <- combineManySubstitutions s [subst0, subst1, subst]
     return (ctxt, eVars, substU, elabP, predP, NotFull)
 
-ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) _ cons = do
+ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -258,10 +254,6 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) _ cons = do
 
           pred <- squashPred
           let relevantVars = relevantSubCtxt (freeVars pred) freshTyVarsCtxt
-          let quantifiedPred = foldr (\ (v, k) pred' -> Exists v k pred') pred relevantVars
-          liftIO $ putStrLn $ " for constructor " <> pretty dataC <> " relevant pred context = "
-                      <> pretty (relevantSubCtxt (freeVars pred) freshTyVarsCtxt)
-
 
           (as, bs, us, elabPs, predPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
 
@@ -273,8 +265,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) _ cons = do
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs
-          let predP = PConstr s quantifiedPred rf dataC predPs
-          debugM' (pretty predP) (pretty quantifiedPred)
+          let predP = PConstr s (relevantVars, pred) rf dataC predPs
+
           return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
@@ -291,20 +283,20 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) _ cons = do
   where
     unpeel :: [Pattern ()] -- A list of patterns for each part of a data constructor pattern
             -> Type -- The remaining type of the constructor
-            -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], [Pattern Pred], Consumption)
+            -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], [Pattern (Ctxt Kind, Pred)], Consumption)
     unpeel = unpeel' ([], [], [], [], [], Full)
 
     -- Tail recursive version of unpeel
     unpeel' acc [] t = return acc
 
     unpeel' (as, bs, us, elabPs, predPs, consOut) (p:ps) (FunTy _ t t') = do
-        (as', bs', us', elabP, predP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p Nothing cons
+        (as', bs', us', elabP, predP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
         us <- combineSubstitutions s us us'
-        unpeel' (as<>as', bs<>bs', us, elabP:elabPs, predP:predPs, consOut `meetConsumption` consOut') ps t'
+        unpeel' (as <> as', bs <> bs', us, elabPs ++ [elabP], predPs ++ [predP], consOut `meetConsumption` consOut') ps t'
 
     unpeel' _ (p:_) t = throw PatternArityError{ errLoc = s, errId = dataC }
 
-ctxtFromTypedPattern' _ s t p _ _ = do
+ctxtFromTypedPattern' _ s t p _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
@@ -315,14 +307,20 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
   -> Type
   -> [Pattern ()]
   -> [Consumption]
-  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Pattern Pred], [Consumption])
+  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Pattern (Ctxt Kind, Pred)], [Consumption])
 ctxtFromTypedPatterns sp ty [] _ = do
   return ([], ty, [], [], [], [], [])
 
 ctxtFromTypedPatterns s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
-
   -- Match a pattern
   (localGam, eVars, subst, elabP, predP, consumption) <- ctxtFromTypedPattern s t1 pat cons
+
+  -- Propagate relevant theorems
+  st <- get
+  let relevant = concatMap (extractFromPattern pat) (prevPatternPreds st)
+  modify (\st -> st
+      { prevPatternPreds = predP : prevPatternPreds st
+      , guardPredicates = map (\r -> (r, s)) relevant : guardPredicates st })
 
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, predPs, consumptions) <-

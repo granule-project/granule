@@ -317,9 +317,8 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
 
   -- Build the binding context for the branch pattern
   st <- get
-  (patternGam, tau, localVars, subst, elaborated_pats, predicated_pats, consumptions) <-
+  (patternGam, tau, localVars, subst, elaborated_pats, _, consumptions) <-
      ctxtFromTypedPatterns s ty pats (patternConsumption st)
-  modify (\st -> st { prevPatternPreds = predicated_pats })
 
   -- Update the consumption information
   modify (\st -> st { patternConsumption =

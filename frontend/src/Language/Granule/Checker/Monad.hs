@@ -170,7 +170,7 @@ data CheckerState = CS
             , equationTy :: Maybe Type
 
             -- The previous pattern, annotated with its predicate.
-            , prevPatternPreds :: [Pattern Pred]
+            , prevPatternPreds :: [Pattern (Ctxt Kind, Pred)]
 
             -- Warning accumulator
             -- , warnings :: [Warning]
@@ -284,9 +284,7 @@ concludeImplication s localCtxt = do
           let impl = Impl localCtxt p p'
 
           -- Add the implication to the predicate stack
-          modify (\st -> st { predicateStack = pushPred impl stack
-          -- And add this case to the knowledge stack
-                            , guardPredicates = [((localCtxt, p), s)] : knowledgeStack })
+          modify (\st -> st { predicateStack = pushPred impl stack })
 
         -- Some information currently in the stack frame
         previousGuards : knowledgeStack -> do
@@ -296,22 +294,17 @@ concludeImplication s localCtxt = do
 
            freshenedPrevGuardPred <- freshenPred $ Impl previousGuardCtxt (Conj []) (NegPred prevGuardPred)
            let (Impl freshPrevGuardCxt _ freshPrevGuardPred) = freshenedPrevGuardPred
+           let existentialPred = foldr (uncurry Exists) freshPrevGuardPred freshPrevGuardCxt
 
            -- Implication of p .&& negated previous guards => p'
-           let impl@(Impl implCtxt implAntecedent _) =
-                -- TODO: turned off this feature for now by putting True in the guard here
-                if True -- isTrivial freshPrevGuardPred
-                  then (Impl localCtxt p p')
-                  else (Impl (localCtxt <> freshPrevGuardCxt)
-                                 (Conj [p, freshPrevGuardPred]) p')
-
-           let knowledge = ((implCtxt, implAntecedent), s) : previousGuards
+           let impl =
+                if isTrivial freshPrevGuardPred
+                  then Impl localCtxt p p'
+                  else Impl localCtxt (Conj [p, existentialPred]) p'
 
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
-           modify (\st -> st { predicateStack = pushPred impl stack
-           -- And add this case to the knowledge stack
-                             , guardPredicates = knowledge : knowledgeStack })
+           modify (\st -> st { predicateStack = pushPred impl stack })
 
 
     _ -> error "Predicate: not enough conjunctions on the stack"
