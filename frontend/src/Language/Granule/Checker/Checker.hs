@@ -267,6 +267,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
+                      , prevPatternPreds = []
                       , patternConsumption = initialisePatternConsumptions equations } )
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations

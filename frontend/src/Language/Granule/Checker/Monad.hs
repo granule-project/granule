@@ -302,8 +302,7 @@ concludeImplication s localCtxt = do
                   then Impl localCtxt p p'
                   else Impl localCtxt (Conj [p, existentialPred]) p'
 
-           -- Store `p` (impliciation antecedent) to use in later cases
-           -- on the top of the guardPredicates stack
+
            modify (\st -> st { predicateStack = pushPred impl stack })
 
 
