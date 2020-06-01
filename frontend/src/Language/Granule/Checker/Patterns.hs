@@ -367,4 +367,4 @@ squashPred = do
       modify (\st -> st { predicateStack = Conj (xs ++ ys) : ps })
       return $ Conj xs
     (Conj xs : ps) -> return $ Conj xs
-    _ -> error "squashPred case undefined"
+    _ -> return $ Conj []

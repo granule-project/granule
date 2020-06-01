@@ -284,7 +284,9 @@ concludeImplication s localCtxt = do
           let impl = Impl localCtxt p p'
 
           -- Add the implication to the predicate stack
-          modify (\st -> st { predicateStack = pushPred impl stack })
+          modify (\st -> st { predicateStack = pushPred impl stack
+          -- And add this case to the knowledge stack
+                            , guardPredicates = [((localCtxt, p), s)] : knowledgeStack })
 
         -- Some information currently in the stack frame
         previousGuards : knowledgeStack -> do
@@ -302,8 +304,12 @@ concludeImplication s localCtxt = do
                   then Impl localCtxt p p'
                   else Impl localCtxt (Conj [p, existentialPred]) p'
 
-
-           modify (\st -> st { predicateStack = pushPred impl stack })
+           let knowledge = ((localCtxt, p), s) : previousGuards
+           -- Store `p` (impliciation antecedent) to use in later cases
+           -- on the top of the guardPredicates stack
+           modify (\st -> st { predicateStack = pushPred impl stack
+           -- And add this case to the knowledge stack
+                             , guardPredicates = knowledge : knowledgeStack })
 
 
     _ -> error "Predicate: not enough conjunctions on the stack"
