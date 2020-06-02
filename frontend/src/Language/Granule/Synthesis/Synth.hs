@@ -7,7 +7,7 @@ module Language.Granule.Synthesis.Synth where
 
 --import Data.List
 --import Control.Monad (forM_)
-import Debug.Trace
+--import Debug.Trace
 import System.IO.Unsafe
 import qualified Data.Map as M
 
@@ -39,30 +39,22 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import qualified Control.Monad.State.Strict as State (get, modify)
 import Control.Monad.Trans.List
-import Control.Monad.Trans.Writer
+import Control.Monad.Writer.Lazy
 import Control.Monad.State.Strict
 
 import Language.Granule.Utils
 
-testVal :: (?globals :: Globals) => Bool
-testVal  = do
-  --addConstraint (ApproximatedBy nullSpanNoFile (CNat 0) (CZero $ zero (CNat 0) ) (zero (CNat 0)))
-  case unsafePerformIO $ (evalChecker initState solve) of
-    Left _ -> False
-    Right x -> x
-  -- where c = (CNat 1)
-
 solve :: (?globals :: Globals)
-  => Checker Bool
+  => Synthesiser Bool
 solve = do
-  cs <- State.get
- -- newConjunct
-  pred <- popFromPredicateStack
-  traceM  ("pred: " <> pretty pred)
+  cs <- conv $ State.get
+  let pred = Conj $ predicateStack cs
+  -- traceM  ("pred: " <> pretty pred)
   -- let ctxtCk  = tyVarContext cs
 --  coeffectVars <- justCoeffectTypesConverted nullSpanNoFile ctxtCk
-  tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
+  tyVars <- conv $ tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
   result <- liftIO $ provePredicate pred tyVars
+  tell (SynthesisData 1 0 (sizeOfPred pred))
   case result of
     QED -> do
       --traceM $ "yay"
@@ -81,10 +73,6 @@ solve = do
       return False
     _ -> do
       return False
-  where
-    popFromPredicateStack = do
-      st <- State.get
-      return . head . predicateStack $ st
 
 gradeAdd :: Coeffect -> Coeffect -> Maybe Coeffect
 gradeAdd c c' = Just $ CPlus c c'
@@ -234,7 +222,7 @@ instance Monoid SynthesisData where
 
 newtype Synthesiser a = Synthesiser
   { unSynthesiser :: ExceptT (NonEmpty CheckerError) (WriterT SynthesisData (StateT CheckerState (ListT IO))) a }
-  deriving (Functor, Applicative, Monad, MonadState CheckerState)
+  deriving (Functor, Applicative, Monad, MonadState CheckerState, MonadWriter SynthesisData)
 
 instance MonadIO Synthesiser where
   liftIO = conv . liftIO
@@ -423,13 +411,13 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 --makeEitherCase :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type
 --makeEitherCase name lId rId (Forall _ _ _ goalTy) lTy rTy =
 
-useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> ResourceScheme -> Checker (Bool, Ctxt (Assumption), Type)
+useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> ResourceScheme -> Synthesiser (Bool, Ctxt (Assumption), Type)
 useVar (name, Linear t) gamma Subtractive = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma Subtractive = do
-  (kind, _) <- inferCoeffectType nullSpan grade
-  var <- freshTyVarInContext (mkId $ "c") (KPromote kind)
-  existential var (KPromote kind)
-  addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
+  (kind, _) <- conv $ inferCoeffectType nullSpan grade
+  var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
+  conv $ existential var (KPromote kind)
+  conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
   res <- solve
   case res of
     True -> do
@@ -438,7 +426,7 @@ useVar (name, Discharged t grade) gamma Subtractive = do
       return (False, [], t)
 useVar (name, Linear t) _ Additive = return (True, [(name, Linear t)], t)
 useVar (name, Discharged t grade) _ Additive = do
-  (kind, _) <- inferCoeffectType nullSpan grade
+  (kind, _) <- conv $ inferCoeffectType nullSpan grade
   return (True, [(name, (Discharged t (COne kind)))], t)
 
 
@@ -453,7 +441,7 @@ varHelper decls left [] _ _ = none
 varHelper decls left (var@(x, a) : right) resourceScheme goalTy =
   (varHelper decls (var:left) right resourceScheme goalTy) `try`
   do
-    (canUse, gamma, t) <- conv $ useVar var (left ++ right) resourceScheme
+    (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
     if canUse then
       case goalTy of
         Forall _ binders constraints goalTy' ->
@@ -505,7 +493,7 @@ appHelper decls left [] _ _ = none
 appHelper decls left (var@(x, a) : right) Subtractive goalTy@(Forall _ binders constraints _ ) =
   (appHelper decls (var : left) right Subtractive goalTy) `try`
   let omega = left ++ right in do
-  (canUse, omega', t) <- conv $ useVar var omega Subtractive
+  (canUse, omega', t) <- useVar var omega Subtractive
   case (canUse, t) of
     (True, FunTy _ t1 t2) -> do
         id <- freshIdentifier
@@ -521,7 +509,7 @@ appHelper decls left (var@(x, a) : right) Subtractive goalTy@(Forall _ binders c
 appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders constraints _ ) =
   (appHelper decls (var : left) right Additive goalTy) `try`
   let omega = left ++ right in do
-    (canUse, omega', t) <- conv $ useVar var omega Additive
+    (canUse, omega', t) <- useVar var omega Additive
     case (canUse, t) of
       (True, FunTy _ t1 t2) -> do
         id <- freshIdentifier
@@ -584,7 +572,7 @@ unboxHelper :: (?globals :: Globals)
 unboxHelper decls left [] _ _ _ = none
 unboxHelper decls left (var@(x, a) : right) gamma Subtractive goalTy =
     let omega = left ++ right in do
-      (canUse, omega', t) <- conv $ useVar var omega Subtractive
+      (canUse, omega', t) <- useVar var omega Subtractive
       case (canUse, t) of
         (True, Box grade t') -> do
           id <- freshIdentifier
@@ -594,7 +582,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Subtractive goalTy =
             Just (delta', (Discharged _ usage)) -> do
               (kind, _) <- conv $ inferCoeffectType nullSpan usage
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) usage kind)
-              res <- conv $ solve
+              res <- solve
               case res of
                 True ->
                   return (makeUnbox id x goalTy t t' e, delta', subst)
@@ -606,7 +594,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Subtractive goalTy =
 unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
     (unboxHelper decls (var : left) right gamma Additive goalTy) `try`
     let omega = left ++ right in do
-      (canUse, omega', t) <- conv $ useVar var omega Additive
+      (canUse, omega', t) <- useVar var omega Additive
       case (canUse, t) of
         (True, Box grade t') -> do
            id <- freshIdentifier
@@ -618,7 +606,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
              Just (delta'', (Discharged _ usage)) -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
                conv $ addConstraint (Eq nullSpanNoFile grade usage kind)
-               res <- conv $ solve
+               res <- solve
                case res of
                  True ->
                    return (makeUnbox id x goalTy t t' e,  delta'', subst)
@@ -626,7 +614,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
              _ -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
                conv $ addConstraint (ApproximatedBy nullSpanNoFile grade (CZero kind) kind)
-               res <- conv $ solve
+               res <- solve
                case res of
                  True ->
                    return (makeUnbox id x goalTy t t' e,  delta', subst)
@@ -646,7 +634,7 @@ pairElimHelper decls left [] _ _ _ = none
 pairElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
   (pairElimHelper decls (var:left) right gamma Subtractive goalTy) `try`
   let omega = left ++ right in do
-    (canUse, omega', t) <- conv $ useVar var omega Subtractive
+    (canUse, omega', t) <- useVar var omega Subtractive
     case (canUse, t) of
       (True, ProdTy t1 t2) -> do
           lId <- freshIdentifier
@@ -661,7 +649,7 @@ pairElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
 pairElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
   (pairElimHelper decls (var:left) right gamma Additive goalTy) `try`
   let omega = left ++ right in do
-    (canUse, omega', t) <- conv $ useVar var omega Additive
+    (canUse, omega', t) <- useVar var omega Additive
     case (canUse, t) of
       (True, ProdTy t1 t2) -> do
           lId <- freshIdentifier
@@ -746,7 +734,7 @@ sumElimHelper decls left [] _ _ _ = none
 sumElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
   (sumElimHelper decls (var:left) right gamma Subtractive goalTy) `try`
   let omega = left ++ right in do
-  (canUse, omega', t) <- conv $ useVar var omega Subtractive
+  (canUse, omega', t) <- useVar var omega Subtractive
   case (canUse, t) of
     (True, SumTy t1 t2) -> do
       l <- freshIdentifier
@@ -768,7 +756,7 @@ sumElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
 sumElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
   (sumElimHelper decls (var:left) right gamma Additive goalTy) `try`
   let omega = left ++ right in do
-  (canUse, omega', t) <- conv $ useVar var omega Additive
+  (canUse, omega', t) <- useVar var omega Additive
   case (canUse, t) of
     (True, SumTy t1 t2) -> do
       l <- freshIdentifier
@@ -843,26 +831,26 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
     Subtractive -> do
       -- All linear variables should be gone
       -- and all graded should approximate 0
-      consumed <- mapM (\(id, a) -> conv $
+      consumed <- mapM (\(id, a) ->
                     case a of
                       Linear{} -> return False;
                       Discharged _ grade -> do
-                        (kind, _) <- inferCoeffectType nullSpan grade
-                        addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) grade kind)
+                        (kind, _) <-  conv $ inferCoeffectType nullSpan grade
+                        conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) grade kind)
                         solve) ctxt
       if and consumed
         then return result
         else none
 
     Additive -> do
-      consumed <- mapM (\(id, a) -> conv $
+      consumed <- mapM (\(id, a) ->
                     case lookup id gamma of
                       Just (Linear{}) -> return True;
                       Just (Discharged _ grade) ->
                         case a of
                           Discharged _ grade' -> do
-                            (kind, _) <- inferCoeffectType nullSpan grade
-                            addConstraint (ApproximatedBy nullSpanNoFile grade' grade kind)
+                            (kind, _) <- conv $ inferCoeffectType nullSpan grade
+                            conv $ addConstraint (ApproximatedBy nullSpanNoFile grade' grade kind)
                             solve
                           _ -> return False
                       Nothing -> return False) ctxt
@@ -919,3 +907,7 @@ freshIdentifier = do
       if n' < length mappo
         then return $ mkId $ mappo !! n'
         else return $ mkId $ base <> show n'
+
+-- TODO
+sizeOfPred :: Pred -> Integer
+sizeOfPred _ = 2
