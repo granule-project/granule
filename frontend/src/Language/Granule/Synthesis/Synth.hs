@@ -39,6 +39,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import qualified Control.Monad.State.Strict as State (get, modify)
 import Control.Monad.Trans.List
+import Control.Monad.Trans.Writer
 import Control.Monad.State.Strict
 
 import Language.Granule.Utils
@@ -50,7 +51,6 @@ testVal  = do
     Left _ -> False
     Right x -> x
   -- where c = (CNat 1)
-
 
 solve :: (?globals :: Globals)
   => Checker Bool
@@ -65,19 +65,19 @@ solve = do
   result <- liftIO $ provePredicate pred tyVars
   case result of
     QED -> do
-      traceM $ "yay"
+      --traceM $ "yay"
       return True
     NotValid s -> do
-      traceM ("message: " <> s)
+      --traceM ("message: " <> s)
       return False
     SolverProofError msgs -> do
-      traceM $ ("message: " <> show msgs)
+      --traceM $ ("message: " <> show msgs)
       return False
     OtherSolverError reason -> do
-      traceM $ ("message: " <> show reason)
+      --traceM $ ("message: " <> show reason)
       return False
     Timeout -> do
-      traceM "timed out"
+      --traceM "timed out"
       return False
     _ -> do
       return False
@@ -216,27 +216,51 @@ isAtomic :: Type -> Bool
 isAtomic (TyVar {}) = True
 isAtomic _ = False
 
+-- Data structure for collecting information about synthesis
+data SynthesisData =
+  SynthesisData {
+    smtCallsCount :: Integer
+  , smtTime       :: Double
+  , theoremSizeTotal :: Integer
+  }
 
+instance Semigroup SynthesisData where
+ (SynthesisData calls time size) <> (SynthesisData calls' time' size') =
+    SynthesisData (calls + calls') (time + time') (size + size')
+
+instance Monoid SynthesisData where
+  mempty  = SynthesisData 0 0 0
+  mappend = (<>)
 
 newtype Synthesiser a = Synthesiser
-  { unSynthesiser :: ExceptT (NonEmpty CheckerError) (StateT CheckerState (ListT IO)) a }
+  { unSynthesiser :: ExceptT (NonEmpty CheckerError) (WriterT SynthesisData (StateT CheckerState (ListT IO))) a }
   deriving (Functor, Applicative, Monad, MonadState CheckerState)
 
 instance MonadIO Synthesiser where
   liftIO = conv . liftIO
 
 conv :: Checker a -> Synthesiser a
-conv (Checker k) =  Synthesiser (ExceptT (StateT (\s -> ListT (fmap (\x -> [x]) $ runStateT (runExceptT k) s))))
+conv (Checker k) =
+  Synthesiser
+    (ExceptT
+      (WriterT
+        (StateT (\s ->
+           ListT (fmap (\(res, state) -> [((res, mempty), state)])
+                   $ runStateT (runExceptT k) s)))))
 
 tryAll :: Synthesiser a -> Synthesiser a -> Synthesiser a
 tryAll m n =
-  Synthesiser (ExceptT (StateT (\s -> mplus (runStateT (runExceptT (unSynthesiser n)) s) (runStateT (runExceptT (unSynthesiser m)) s))))
+  Synthesiser
+    (ExceptT
+      (WriterT
+        (StateT (\s -> mplus (runStateT (runWriterT (runExceptT (unSynthesiser n))) s)
+                             (runStateT (runWriterT (runExceptT (unSynthesiser m))) s)))))
 
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = tryAll m n
 
 none :: Synthesiser a
-none = Synthesiser (ExceptT (StateT (\s -> (ListT $ return []))))
+none = Synthesiser (ExceptT (WriterT (StateT (\s -> (ListT $ return [])))))
 
 data ResourceScheme = Additive | Subtractive
   deriving (Show, Eq)
@@ -845,6 +869,32 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
       if and consumed
         then return result
         else none
+
+-- Run from the checker
+runSynthesiser :: (?globals :: Globals)
+           => Ctxt (DataDecl)      -- ADT Definitions
+           -> ResourceScheme       -- whether the synthesis is in additive mode or not
+           -> Ctxt (Assumption)    -- (unfocused) free variables
+           -> Ctxt (Assumption)    -- focused variables
+           -> TypeScheme           -- type from which to synthesise
+           -> CheckerState
+           -> IO [(Expr () Type, Ctxt (Assumption), Substitution)]
+runSynthesiser decls resourceScheme gamma omega goalTy checkerState = do
+  let synRes = synthesise (decls ++ initDecls) True Subtractive gamma omega goalTy
+  synthResults <- runListT $ evalStateT (runWriterT (runExceptT (unSynthesiser synRes))) checkerState
+  synthResults <- case globalsBenchmark ?globals of
+                    -- Output benchmarking info
+                    Just True -> do
+                      let (synthResultsActual, benchmarkingData) = unzip synthResults
+                      let aggregate = mconcat benchmarkingData
+                      putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
+                      putStrLn $ "smtCalls = " ++ (show $ smtCallsCount aggregate)
+                      putStrLn $ "smtTime = "  ++ (show $ smtCallsCount aggregate)
+                      putStrLn $ "theoremSizeMean = "
+                            ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+                      return synthResultsActual
+                    _ -> return $ map fst synthResults
+  return $ rights synthResults
 
 useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
 useBinderNameOrFreshen Nothing = freshIdentifier
