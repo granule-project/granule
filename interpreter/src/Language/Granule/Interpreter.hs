@@ -389,6 +389,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help ("Name of the code environment to check in literate files. Defaults to "
                     <> show (literateEnvName mempty))
 
+        globalsBenchmark <-
+          flag Nothing (Just True)
+           $ long "benchmark"
+           <> help "Compute benchmarking results for the synthesis procedure."
+
         pure
           ( globPatterns
           , GrConfig
@@ -412,6 +417,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsRewriteHoles
               , globalsHolePosition = (,) <$> globalsHoleLine <*> globalsHoleCol
               , globalsSynthesise
+              , globalsBenchmark
               }
             }
           )
