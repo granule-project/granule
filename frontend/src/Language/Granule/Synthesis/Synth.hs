@@ -55,9 +55,13 @@ solve = do
   -- let ctxtCk  = tyVarContext cs
 --  coeffectVars <- justCoeffectTypesConverted nullSpanNoFile ctxtCk
   tyVars <- conv $ tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
-  startTime <- Clock.getTime Clock.Monotonic
-  result    <- liftIO $ provePredicate pred tyVars
-  endTime   <- Clock.getTime Clock.Monotonic
+
+  -- Prove the predicate
+  start  <- liftIO $ Clock.getTime Clock.Monotonic
+  result <- liftIO $ provePredicate pred tyVars
+  end    <- liftIO $ Clock.getTime Clock.Monotonic
+
+  -- Update benchmarking data
   tell (SynthesisData 1 (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(9 :: Integer)::Double)) (sizeOfPred pred))
   case result of
     QED -> do
