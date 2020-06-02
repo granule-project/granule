@@ -12,8 +12,6 @@ module Language.Granule.Checker.Checker where
 import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
-import qualified Control.Monad.Trans.List as ListT
-import qualified Control.Monad.Except as ExcT
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
@@ -1498,11 +1496,10 @@ programSynthesise ctxt vars ty patternss = do
             ++ filter (\(id, a) -> not (id `elem` vars)) ctxt
 
     -- Run the synthesiser in this context
-    let synRes = Syn.synthesise Syn.initDecls True (Syn.Subtractive) ctxt' [] (Forall nullSpan [] [] ty)
-    synthResults <- liftIO $ ListT.runListT $ evalStateT (ExcT.runExceptT (Syn.unSynthesiser synRes)) currentState
+    synRes <-
+       liftIO $ Syn.runSynthesiser [] (Syn.Subtractive) ctxt' [] (Forall nullSpan [] [] ty) currentState
 
-    let positiveResults = Syn.getList synthResults
-    case positiveResults of
+    case synRes of
       -- Nothing synthed, so create a blank hole instead
       []    -> do
         debugM "Synthesiser" $ "No programs synthesised for " <> pretty ty

@@ -32,7 +32,9 @@ import Language.Granule.Checker.Kinds (inferCoeffectType)
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables hiding (freshIdentifierBase)
 import Language.Granule.Syntax.Span
+import Language.Granule.Synthesis.Refactor
 
+import Data.Either (rights)
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import qualified Control.Monad.State.Strict as State (get, modify)
@@ -40,11 +42,6 @@ import Control.Monad.Trans.List
 import Control.Monad.State.Strict
 
 import Language.Granule.Utils
-
-data Configuration = Config
-   { churchSyntax            :: Bool,
-     howManyNatPossibilities :: Int
-    }
 
 testVal :: (?globals :: Globals) => Bool
 testVal  = do
@@ -302,14 +299,7 @@ testSyn useReprint =
 
 testOutput :: Synthesiser (Expr () Type, Ctxt (Assumption), Substitution) -> [(Expr () Type, Ctxt (Assumption), Substitution)]
 testOutput res =
-  getList $ unsafePerformIO $ runListT $ evalStateT (runExceptT (unSynthesiser res)) initState
-
-getList :: [Either (NonEmpty CheckerError) (Expr () Type, Ctxt Assumption, Substitution)] -> [(Expr () Type, Ctxt Assumption, Substitution)]
-getList [] = []
-getList (x:xs) = case x of
-  Right x' -> x' : (getList xs)
-  Left _ -> getList xs
-
+  rights $ map fst $ unsafePerformIO $ runListT $ evalStateT (runWriterT $ (runExceptT (unSynthesiser res))) initState
 
 topLevel :: (?globals :: Globals) => TypeScheme -> ResourceScheme -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 topLevel ts@(Forall _ binders constraints ty) resourceScheme = do
@@ -343,49 +333,6 @@ reprintAsDef id goalTy expr =
           ,
       defTypeScheme = goalTy
       }
-
--- Refactors a definition which contains abstractions in its equations
--- by pushing these abstractions into equation patterns
-refactorDef :: Def () Type -> Def () Type
-refactorDef (Def sp id ref (EquationList sp' id' ref' eqns) tyS) =
-  Def sp id ref (EquationList sp' id' ref' (map refactorEqn eqns)) tyS
-
-refactorEqn :: Equation v a -> Equation v a
-refactorEqn (Equation sp name ref annotation pats body) =
-  Equation sp name ref annotation (pats ++ getPatterns body) (exprBody body)
-    where
-      getPatterns e = boxPatterns e (exprPatterns e)
-
-      replace (pat@(PVar _ _ _ name):xs) var pat' =
-        if name == var then
-          (pat' : (replace xs var pat'))
-        else
-          (pat : (replace xs var pat'))
-      replace (pat@(PBox {}):xs) var pat' =
-        pat : (replace xs var pat')
-      replace ((PConstr s ty a id constrs):xs) var pat' =
-        (PConstr s ty a id (replace constrs var pat')) : replace xs var pat'
-      replace pats _ _ = pats
-
-      exprPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) _) = exprPatterns e
-      exprPatterns (Val _ _ _ (Abs _ p _ e)) = p  : exprPatterns e
-      exprPatterns e = []
-
-      boxPatterns (Val _ _ _ (Abs _ p _ e)) pats = boxPatterns e pats
-      boxPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) (Val _ _ _ (Var _ name))) pats =
-        boxPatterns e pats'
-         where
-          pats' = replace pats name p
-      boxPatterns e pats = pats
-
-      exprBody (App _ _ _ (Val _ _ _ (Abs _ _ _ e )) _) = exprBody e
-      exprBody (Val _ _ _ (Abs _ _ _ e)) = exprBody e
-      exprBody e = e
-
-bindToContext :: (Id, Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Bool -> (Ctxt (Assumption), Ctxt (Assumption))
-bindToContext var gamma omega True = (gamma, var:omega)
-bindToContext var gamma omega False = (var:gamma, omega)
-
 
 makeVar :: Id -> TypeScheme -> Expr () Type
 makeVar name (Forall _ _ _ t) =

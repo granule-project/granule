@@ -16,7 +16,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span (Span, encompasses)
-import Language.Granule.Synthesis.Synth (refactorEqn)
+import Language.Granule.Synthesis.Refactor (refactorEqn)
 
 import Language.Granule.Utils
 
