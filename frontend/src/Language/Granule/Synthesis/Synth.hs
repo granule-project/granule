@@ -916,6 +916,10 @@ freshIdentifier = do
         then return $ mkId $ mappo !! n'
         else return $ mkId $ base <> show n'
 
--- TODO
 sizeOfPred :: Pred -> Integer
-sizeOfPred _ = 2
+sizeOfPred (Conj ps) = 1 + (sum $ map sizeOfPred ps)
+sizeOfPred (Disj ps) = 1 + (sum $ map sizeOfPred ps)
+sizeOfPred (Impl _ p1 p2) = 1 + (sizeOfPred p1) + (sizeOfPred p2)
+sizeOfPred (Con c) = 1
+sizeOfPred (NegPred p) = 1 + (sizeOfPred p)
+sizeOfPred (Exists _ _ p) = 1 + (sizeOfPred p)
