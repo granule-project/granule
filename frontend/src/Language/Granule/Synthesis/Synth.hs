@@ -42,6 +42,8 @@ import Control.Monad.Trans.List
 import Control.Monad.Writer.Lazy
 import Control.Monad.State.Strict
 
+import qualified System.Clock as Clock
+
 import Language.Granule.Utils
 
 solve :: (?globals :: Globals)
@@ -53,8 +55,10 @@ solve = do
   -- let ctxtCk  = tyVarContext cs
 --  coeffectVars <- justCoeffectTypesConverted nullSpanNoFile ctxtCk
   tyVars <- conv $ tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
-  result <- liftIO $ provePredicate pred tyVars
-  tell (SynthesisData 1 0 (sizeOfPred pred))
+  startTime <- Clock.getTime Clock.Monotonic
+  result    <- liftIO $ provePredicate pred tyVars
+  endTime   <- Clock.getTime Clock.Monotonic
+  tell (SynthesisData 1 (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(9 :: Integer)::Double)) (sizeOfPred pred))
   case result of
     QED -> do
       --traceM $ "yay"
@@ -876,9 +880,9 @@ runSynthesiser decls resourceScheme gamma omega goalTy checkerState = do
                       let (synthResultsActual, benchmarkingData) = unzip synthResults
                       let aggregate = mconcat benchmarkingData
                       putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
-                      putStrLn $ "smtCalls = " ++ (show $ smtCallsCount aggregate)
-                      putStrLn $ "smtTime = "  ++ (show $ smtCallsCount aggregate)
-                      putStrLn $ "theoremSizeMean = "
+                      putStrLn $ "Total smtCalls = " ++ (show $ smtCallsCount aggregate)
+                      putStrLn $ "Total smtTime = "  ++ (show $ smtTime aggregate)
+                      putStrLn $ "Mean theoremSize = "
                             ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
                       return synthResultsActual
                     _ -> return $ map fst synthResults
