@@ -246,7 +246,7 @@ instance MonadIO Synthesiser where
   liftIO = conv . liftIO
 
 tellMe :: SynthesisData -> Synthesiser ()
-tellMe d = Synthesiser (ExceptT (StateT (\s -> ListT (WriterT $ return ([], d)))))
+tellMe d = Synthesiser (ExceptT (StateT (\s -> ListT (WriterT $ return ([(Right (), s)], d)))))
 
 -- Wrapper/unwrapper
 mkSynthesiser ::
