@@ -920,6 +920,28 @@ sizeOfPred :: Pred -> Integer
 sizeOfPred (Conj ps) = 1 + (sum $ map sizeOfPred ps)
 sizeOfPred (Disj ps) = 1 + (sum $ map sizeOfPred ps)
 sizeOfPred (Impl _ p1 p2) = 1 + (sizeOfPred p1) + (sizeOfPred p2)
-sizeOfPred (Con c) = 1
+sizeOfPred (Con c) = sizeOfConstraint c
 sizeOfPred (NegPred p) = 1 + (sizeOfPred p)
 sizeOfPred (Exists _ _ p) = 1 + (sizeOfPred p)
+
+sizeOfConstraint :: Constraint -> Integer
+sizeOfConstraint (Eq _ c1 c2 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfConstraint (Neq _ c1 c2 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfConstraint (ApproximatedBy _ c1 c2 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfConstraint (Lub _ c1 c2 c3 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2) + (sizeOfCoeffect c3)
+sizeOfConstraint (NonZeroPromotableTo _ _ c _) = 1 + (sizeOfCoeffect c)
+sizeOfConstraint (Lt _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfConstraint (Gt _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfConstraint (LtEq _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfConstraint (GtEq _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+
+sizeOfCoeffect :: Coeffect -> Integer
+sizeOfCoeffect (CPlus c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfCoeffect (CTimes c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfCoeffect (CMinus c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfCoeffect (CMeet c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfCoeffect (CJoin c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
+sizeOfCoeffect (CZero _) = 0
+sizeOfCoeffect (COne _) = 0
+sizeOfCoeffect (CVar _) = 0
+sizeOfCoeffect _ = 0
