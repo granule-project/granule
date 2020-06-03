@@ -576,6 +576,8 @@ provePredicate predicate vars
         sbvTheorem
       ------------------
       -- Benchmarking end
+      -- Force the result
+      _ <- return $ thmRes `seq` thmRes
       end    <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
       let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
 

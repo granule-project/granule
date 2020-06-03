@@ -59,11 +59,13 @@ solve = do
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   (smtTime, result) <- liftIO $ provePredicate pred tyVars
+  -- Force the result
+  _ <- return $ result `seq` result
   end    <- liftIO $ Clock.getTime Clock.Monotonic
   let proverTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
 
   -- Update benchmarking data
-  tell (SynthesisData 1 proverTime smtTime (sizeOfPred pred))
+  tell (SynthesisData 1 smtTime proverTime (sizeOfPred pred))
   case result of
     QED -> do
       --traceM $ "yay"
