@@ -62,7 +62,7 @@ solve = do
   end    <- liftIO $ Clock.getTime Clock.Monotonic
 
   -- Update benchmarking data
-  tell (SynthesisData 1 (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(9 :: Integer)::Double)) (sizeOfPred pred))
+  tell (SynthesisData 1 (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)) (sizeOfPred pred))
   case result of
     QED -> do
       --traceM $ "yay"
@@ -884,9 +884,9 @@ runSynthesiser decls resourceScheme gamma omega goalTy checkerState = do
                       let (synthResultsActual, benchmarkingData) = unzip synthResults
                       let aggregate = mconcat benchmarkingData
                       putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
-                      putStrLn $ "Total smtCalls = " ++ (show $ smtCallsCount aggregate)
-                      putStrLn $ "Total smtTime = "  ++ (show $ smtTime aggregate)
-                      putStrLn $ "Mean theoremSize = "
+                      putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
+                      putStrLn $ "Total smtTime (ms) = "  ++ (show $ smtTime aggregate)
+                      putStrLn $ "Mean theoremSize   = "
                             ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
                       return synthResultsActual
                     _ -> return $ map fst synthResults
