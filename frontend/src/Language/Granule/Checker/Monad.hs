@@ -169,6 +169,8 @@ data CheckerState = CS
             -- The type of the current equation.
             , equationTy :: Maybe Type
 
+            , smtTime :: Double
+
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -189,6 +191,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
+               , smtTime = 0.0
                }
 
 -- *** Various helpers for manipulating the context

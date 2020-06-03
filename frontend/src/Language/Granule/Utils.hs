@@ -49,7 +49,7 @@ data Globals = Globals
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -59,6 +59,7 @@ suppressErrors    = fromMaybe False $ globalsSuppressErrors ?globals
 ignoreHoles       = fromMaybe False $ globalsIgnoreHoles ?globals
 timestamp         = fromMaybe False $ globalsTimestamp ?globals
 testing           = fromMaybe False $ globalsTesting ?globals
+benchmarking      = fromMaybe False $ globalsBenchmark ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer

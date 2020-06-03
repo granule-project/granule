@@ -113,7 +113,7 @@ validateCase span ty pats = do
 
   -- Quantify the predicate by the existence of all local variables.
   let thm = foldr (uncurry Exists) pred localVars
-  result <- liftIO $ provePredicate thm tyVars
+  (_, result) <- liftIO $ provePredicate thm tyVars
 
   case result of
     QED -> return (Just binders)

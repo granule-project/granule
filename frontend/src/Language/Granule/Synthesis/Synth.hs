@@ -58,11 +58,12 @@ solve = do
 
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
-  result <- liftIO $ provePredicate pred tyVars
+  (smtTime, result) <- liftIO $ provePredicate pred tyVars
   end    <- liftIO $ Clock.getTime Clock.Monotonic
+  let proverTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
 
   -- Update benchmarking data
-  tell (SynthesisData 1 (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)) (sizeOfPred pred))
+  tell (SynthesisData 1 proverTime smtTime (sizeOfPred pred))
   case result of
     QED -> do
       --traceM $ "yay"
@@ -215,17 +216,18 @@ isAtomic _ = False
 -- Data structure for collecting information about synthesis
 data SynthesisData =
   SynthesisData {
-    smtCallsCount :: Integer
-  , smtTime       :: Double
+    smtCallsCount    :: Integer
+  , smtTime          :: Double
+  , proverTime       :: Double -- longer than smtTime as it includes compilation of predicates to SMT
   , theoremSizeTotal :: Integer
   }
 
 instance Semigroup SynthesisData where
- (SynthesisData calls time size) <> (SynthesisData calls' time' size') =
-    SynthesisData (calls + calls') (time + time') (size + size')
+ (SynthesisData calls stime time size) <> (SynthesisData calls' stime' time' size') =
+    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size')
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0
+  mempty  = SynthesisData 0 0 0 0
   mappend = (<>)
 
 newtype Synthesiser a = Synthesiser
@@ -878,18 +880,19 @@ runSynthesiser :: (?globals :: Globals)
 runSynthesiser decls resourceScheme gamma omega goalTy checkerState = do
   let synRes = synthesise (decls ++ initDecls) True Subtractive gamma omega goalTy
   synthResults <- runListT $ evalStateT (runWriterT (runExceptT (unSynthesiser synRes))) checkerState
-  synthResults <- case globalsBenchmark ?globals of
+  synthResults <- if benchmarking
+                    then do
                     -- Output benchmarking info
-                    Just True -> do
                       let (synthResultsActual, benchmarkingData) = unzip synthResults
                       let aggregate = mconcat benchmarkingData
                       putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
                       putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
-                      putStrLn $ "Total smtTime (ms) = "  ++ (show $ smtTime aggregate)
+                      putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
+                      putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
                       putStrLn $ "Mean theoremSize   = "
                             ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
                       return synthResultsActual
-                    _ -> return $ map fst synthResults
+                    else return $ map fst synthResults
   return $ rights synthResults
 
 useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
