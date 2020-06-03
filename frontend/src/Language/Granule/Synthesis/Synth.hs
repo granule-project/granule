@@ -908,7 +908,7 @@ synthesiseProgram :: (?globals :: Globals)
            -> CheckerState
            -> IO [(Expr () Type, Ctxt (Assumption), Substitution)]
 synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
-  let synRes = synthesise (decls ++ initDecls) True Subtractive gamma omega goalTy
+  let synRes = synthesise (decls ++ initDecls) True resourceScheme gamma omega goalTy
   (synthResults, aggregate) <- runSynthesiser synRes checkerState
   if benchmarking
     then do
