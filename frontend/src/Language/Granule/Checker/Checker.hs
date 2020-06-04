@@ -1497,7 +1497,9 @@ programSynthesise ctxt vars ty patternss = do
 
     -- Run the synthesiser in this context
     synRes <-
-       liftIO $ Syn.synthesiseProgram [] (Syn.Subtractive) ctxt' [] (Forall nullSpan [] [] ty) currentState
+       liftIO $ Syn.synthesiseProgram
+                    [] (if additiveSynthesisMode then Syn.Additive else Syn.Subtractive)
+                    ctxt' [] (Forall nullSpan [] [] ty) currentState
 
     case synRes of
       -- Nothing synthed, so create a blank hole instead

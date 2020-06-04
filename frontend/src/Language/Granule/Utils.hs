@@ -45,11 +45,12 @@ data Globals = Globals
   , globalsHolePosition        :: Maybe Pos
   , globalsSynthesise          :: Maybe Bool
   , globalsBenchmark           :: Maybe Bool
+  , globalsAdditiveSynthesis   :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, additiveSynthesisMode :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -60,6 +61,7 @@ ignoreHoles       = fromMaybe False $ globalsIgnoreHoles ?globals
 timestamp         = fromMaybe False $ globalsTimestamp ?globals
 testing           = fromMaybe False $ globalsTesting ?globals
 benchmarking      = fromMaybe False $ globalsBenchmark ?globals
+additiveSynthesisMode = fromMaybe False $ globalsAdditiveSynthesis ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -93,7 +95,8 @@ instance Semigroup Globals where
       , globalsRewriteHoles        = globalsRewriteHoles        g1 <|> globalsRewriteHoles        g2
       , globalsHolePosition        = globalsHolePosition        g1 <|> globalsHolePosition        g2
       , globalsSynthesise          = globalsSynthesise          g1 <|> globalsSynthesise          g2
-      , globalsBenchmark           = globalsBenchmark           g1 <|> globalsBenchmark          g2
+      , globalsBenchmark           = globalsBenchmark           g1 <|> globalsBenchmark           g2
+      , globalsAdditiveSynthesis   = globalsAdditiveSynthesis   g1 <|> globalsAdditiveSynthesis   g2
       }
 
 instance Monoid Globals where
@@ -115,6 +118,7 @@ instance Monoid Globals where
     , globalsHolePosition        = Nothing
     , globalsSynthesise          = Nothing
     , globalsBenchmark           = Nothing
+    , globalsAdditiveSynthesis   = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general

@@ -370,6 +370,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "ignore-holes"
             <> help "Suppress information from holes (treat holes as well-typed)"
 
+        globalsAdditiveSynthesis <-
+          flag Nothing (Just True)
+           $ long "additive"
+            <> help "Use additive mode for synthesis, rather than subtractive (default)."
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -418,6 +423,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsHolePosition = (,) <$> globalsHoleLine <*> globalsHoleCol
               , globalsSynthesise
               , globalsBenchmark
+              , globalsAdditiveSynthesis
               }
             }
           )
