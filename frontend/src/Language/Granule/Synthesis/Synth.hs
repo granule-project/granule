@@ -275,8 +275,12 @@ try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n =
   mkSynthesiser (\s -> do
      (results1, data1) <- (runSynthesiser m) s
-     (results2, data2) <- (runSynthesiser n) s
-     return (results1 ++ results2, data1 `mappend` data2))
+     if length results1 >= 1 then
+         return (results1, data1)
+     else
+         do
+           (results2, data2) <- (runSynthesiser n) s
+           return (results1 ++ results2, data1 `mappend` data2))
   {- Synthesiser
     (ExceptT
         (StateT (\s -> mplus (runStateT (runWriterT (runExceptT (unSynthesiser n))) s)
