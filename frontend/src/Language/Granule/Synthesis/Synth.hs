@@ -917,6 +917,8 @@ synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
   if benchmarking
     then do
       -- Output benchmarking info
+      putStrLn $ "-------------------------------------------------"
+      putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
       putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
       putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
       putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
