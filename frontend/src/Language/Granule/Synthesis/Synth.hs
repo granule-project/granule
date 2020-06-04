@@ -280,7 +280,7 @@ try m n =
      else
          do
            (results2, data2) <- (runSynthesiser n) s
-           return (results1 ++ results2, data1 `mappend` data2))
+           return (results2, data1 `mappend` data2))
   {- Synthesiser
     (ExceptT
         (StateT (\s -> mplus (runStateT (runWriterT (runExceptT (unSynthesiser n))) s)
