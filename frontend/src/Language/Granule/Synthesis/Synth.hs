@@ -274,12 +274,12 @@ conv (Checker k) =
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n =
   mkSynthesiser (\s -> do
-     (results1, data1) <- (runSynthesiser m) s
+     (results1, data1) <- (runSynthesiser n) s
      if length results1 >= 1 then
          return (results1, data1)
      else
          do
-           (results2, data2) <- (runSynthesiser n) s
+           (results2, data2) <- (runSynthesiser m) s
            return (results1 ++ results2, data1 `mappend` data2))
 
 try1 :: Synthesiser a -> Synthesiser a -> Synthesiser a
@@ -490,6 +490,7 @@ varHelper :: (?globals :: Globals)
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 varHelper decls left [] _ _ = none
 varHelper decls left (var@(x, a) : right) resourceScheme goalTy =
+ (varHelper decls (var:left) right resourceScheme goalTy) `try1`
   do
     (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
     if canUse then
@@ -504,7 +505,6 @@ varHelper decls left (var@(x, a) : right) resourceScheme goalTy =
               _ -> none
     else
         none
-  `try` (varHelper decls (var:left) right resourceScheme goalTy)
 
 
 
@@ -545,6 +545,7 @@ appHelper :: (?globals :: Globals)
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 appHelper decls left [] _ _ = none
 appHelper decls left (var@(x, a) : right) Subtractive goalTy@(Forall _ binders constraints _ ) =
+  (appHelper decls (var : left) right Subtractive goalTy) `try`
   let omega = left ++ right in do
   (canUse, omega', t) <- useVar var omega Subtractive
   case (canUse, t) of
@@ -559,8 +560,8 @@ appHelper decls left (var@(x, a) : right) Subtractive goalTy@(Forall _ binders c
             return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst)
           _ -> none
     _ -> none
-  `try` (appHelper decls (var : left) right Subtractive goalTy)
 appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders constraints _ ) =
+  (appHelper decls (var : left) right Additive goalTy) `try`
   let omega = left ++ right in do
     (canUse, omega', t) <- useVar var omega Additive
     case (canUse, t) of
@@ -569,10 +570,8 @@ appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders cons
         let gamma1 = computeAddInputCtx omega omega'
         let (gamma1', omega'') = bindToContext (id, Linear t2) gamma1 [] (isLAsync t2)
         (e1, delta1, sub1) <- synthesiseInner decls True Additive gamma1' omega'' goalTy
-
         let gamma2 = computeAddInputCtx gamma1' delta1
         (e2, delta2, sub2) <- synthesiseInner decls True Additive gamma2 [] (Forall nullSpanNoFile binders constraints t1)
-
         let delta3 = computeAddOutputCtx omega' delta1 delta2
         subst <- conv $ combineSubstitutions nullSpan sub1 sub2
         case lookupAndCutout id delta3 of
@@ -580,7 +579,6 @@ appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders cons
                 return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta3', subst)
           _ -> none
       _ -> none
-  `try` (appHelper decls (var : left) right Additive goalTy)
 
 
 boxHelper :: (?globals :: Globals)
@@ -625,6 +623,7 @@ unboxHelper :: (?globals :: Globals)
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 unboxHelper decls left [] _ _ _ = none
 unboxHelper decls left (var@(x, a) : right) gamma Subtractive goalTy =
+  (unboxHelper decls (var : left) right gamma Subtractive goalTy) `try`
     let omega = left ++ right in do
       (canUse, omega', t) <- useVar var omega Subtractive
       case (canUse, t) of
@@ -637,15 +636,15 @@ unboxHelper decls left (var@(x, a) : right) gamma Subtractive goalTy =
               (kind, _) <- conv $ inferCoeffectType nullSpan usage
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) usage kind)
               res <- solve
-              case True of
+              case res of
                 True ->
                   return (makeUnbox id x goalTy t t' e, delta', subst)
                 False -> do
                   none
             _ -> none
         _ -> none
-  `try` (unboxHelper decls (var : left) right gamma Subtractive goalTy)
 unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
+    (unboxHelper decls (var : left) right gamma Additive goalTy) `try`
     let omega = left ++ right in do
       (canUse, omega', t) <- useVar var omega Additive
       case (canUse, t) of
@@ -673,7 +672,6 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
                    return (makeUnbox id x goalTy t t' e,  delta', subst)
                  False -> none
         _ -> none
-    `try` (unboxHelper decls (var : left) right gamma Additive goalTy)
 
 
 pairElimHelper :: (?globals :: Globals)
@@ -686,6 +684,7 @@ pairElimHelper :: (?globals :: Globals)
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 pairElimHelper decls left [] _ _ _ = none
 pairElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
+  (pairElimHelper decls (var:left) right gamma Subtractive goalTy) `try`
   let omega = left ++ right in do
     (canUse, omega', t) <- useVar var omega Subtractive
     case (canUse, t) of
@@ -699,8 +698,8 @@ pairElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
             (Nothing, Nothing) -> return (makePairElim x lId rId goalTy t1 t2 e, delta, subst)
             _ -> none
       _ -> none
-  `try` (pairElimHelper decls (var:left) right gamma Subtractive goalTy)
 pairElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
+  (pairElimHelper decls (var:left) right gamma Additive goalTy) `try`
   let omega = left ++ right in do
     (canUse, omega', t) <- useVar var omega Additive
     case (canUse, t) of
@@ -719,7 +718,6 @@ pairElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
                 _ -> none
             _ -> none
       _ -> none
-  `try` (pairElimHelper decls (var:left) right gamma Additive goalTy)
 
 unitIntroHelper :: (?globals :: Globals)
   => Ctxt (DataDecl)
@@ -786,6 +784,7 @@ sumElimHelper :: (?globals :: Globals)
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 sumElimHelper decls left [] _ _ _ = none
 sumElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
+  (sumElimHelper decls (var:left) right gamma Subtractive goalTy) `try`
   let omega = left ++ right in do
   (canUse, omega', t) <- useVar var omega Subtractive
   case (canUse, t) of
@@ -805,9 +804,9 @@ sumElimHelper decls left (var@(x, a):right) gamma Subtractive goalTy =
               Nothing -> none
           _ -> none
     _ -> none
-  `try` (sumElimHelper decls (var:left) right gamma Subtractive goalTy)
 
 sumElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
+  (sumElimHelper decls (var:left) right gamma Additive goalTy) `try`
   let omega = left ++ right in do
   (canUse, omega', t) <- useVar var omega Additive
   case (canUse, t) of
@@ -829,7 +828,6 @@ sumElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
               Nothing -> none
           _ -> none
     _ -> none
-  `try` (sumElimHelper decls (var:left) right gamma Additive goalTy)
 
 
 
@@ -846,7 +844,7 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
   case (isRAsync goalTy', omega) of
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
-      none `try1` absHelper decls gamma omega allowLam resourceScheme goalTy
+      absHelper decls gamma omega allowLam resourceScheme goalTy `try1` none
     (False, omega@(x:xs)) ->
       -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
       unboxHelper decls [] omega gamma resourceScheme goalTy
