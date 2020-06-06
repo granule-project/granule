@@ -7,7 +7,7 @@ module Language.Granule.Synthesis.Synth where
 
 --import Data.List
 --import Control.Monad (forM_)
---import Debug.Trace
+import Debug.Trace
 import System.IO.Unsafe
 import qualified Data.Map as M
 
@@ -38,9 +38,10 @@ import Data.Either (rights)
 import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import qualified Control.Monad.State.Strict as State (get, modify)
-import Control.Monad.Trans.List
-import Control.Monad.Writer.Lazy
+--import Control.Monad.Trans.List
+--import Control.Monad.Writer.Lazy
 import Control.Monad.State.Strict
+import Control.Monad.Logic
 
 import qualified System.Clock as Clock
 
@@ -62,10 +63,10 @@ solve = do
   -- Force the result
   _ <- return $ result `seq` result
   end    <- liftIO $ Clock.getTime Clock.Monotonic
-  let proverTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+  --let proverTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
 
   -- Update benchmarking data
-  tellMe (SynthesisData 1 smtTime proverTime (sizeOfPred pred))
+  -- tellMe (SynthesisData 1 smtTime proverTime (sizeOfPred pred))
   case result of
     QED -> do
       --traceM $ "yay"
@@ -237,7 +238,7 @@ instance Monoid SynthesisData where
 
 newtype Synthesiser a = Synthesiser
   { unSynthesiser ::
-      ExceptT (NonEmpty CheckerError) (StateT CheckerState (ListT (WriterT SynthesisData IO))) a }
+      ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT IO)) a }
   deriving (Functor, Applicative, Monad, MonadState CheckerState)
 
 -- Monad transformer definitions
@@ -245,57 +246,44 @@ newtype Synthesiser a = Synthesiser
 instance MonadIO Synthesiser where
   liftIO = conv . liftIO
 
-tellMe :: SynthesisData -> Synthesiser ()
-tellMe d = Synthesiser (ExceptT (StateT (\s -> ListT (WriterT $ return ([(Right (), s)], d)))))
+--tellMe :: SynthesisData -> Synthesiser ()
+--tellMe d = Synthesiser (ExceptT (StateT (\s -> ListT (WriterT $ return ([(Right (), s)], d)))))
 
 -- Wrapper/unwrapper
 mkSynthesiser ::
-     (CheckerState -> IO ([((Either (NonEmpty CheckerError) a), CheckerState)], SynthesisData))
+     (CheckerState -> LogicT IO ((Either (NonEmpty CheckerError) a), CheckerState))
   -> Synthesiser a
-mkSynthesiser x = Synthesiser (ExceptT (StateT (\s -> ListT (WriterT $ x s))))
+mkSynthesiser x = Synthesiser (ExceptT (StateT (\s -> x s)))
 
 runSynthesiser :: Synthesiser a
-  -> (CheckerState -> IO ([((Either (NonEmpty CheckerError) a), CheckerState)], SynthesisData))
-runSynthesiser m s = runWriterT (runListT (runStateT (runExceptT (unSynthesiser m)) s))
+  -> (CheckerState -> LogicT IO ((Either (NonEmpty CheckerError) a), CheckerState))
+runSynthesiser m s = (runStateT (runExceptT (unSynthesiser m)) s)
 
-foo :: Synthesiser Int
-foo = do
-  tellMe (SynthesisData 10 10 10 10)
-  none
+--foo :: Synthesiser Int
+--foo = do
+--  tellMe (SynthesisData 10 10 10 10)
+--  none
 
 conv :: Checker a -> Synthesiser a
 conv (Checker k) =
   Synthesiser
     (ExceptT
-        (StateT (\s ->
-           ListT (WriterT (fmap (\(res, state) -> ([(res, state)], mempty))
-                   $ runStateT (runExceptT k) s)))))
+         (StateT (\s -> lift (runStateT (runExceptT k) s))))
+
 
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n =
   mkSynthesiser (\s -> do
-     (results1, data1) <- (runSynthesiser n) s
-     if length results1 >= 1 then
-         return (results1, data1)
-     else
-         do
-           (results2, data2) <- (runSynthesiser m) s
-           return (results1 ++ results2, data1 `mappend` data2))
-
-try1 :: Synthesiser a -> Synthesiser a -> Synthesiser a
-try1 m n =
-  mkSynthesiser (\s -> do
-     (results1, data1) <- (runSynthesiser m) s
-     (results2, data2) <- (runSynthesiser n) s
-     return (results1 ++ results2, data1 `mappend` data2))
-  {- Synthesiser
-    (ExceptT
-        (StateT (\s -> mplus (runStateT (runWriterT (runExceptT (unSynthesiser n))) s)
-                             (runStateT (runWriterT (runExceptT (unSynthesiser m))) s)))))
--}
+                     res1 <- (runSynthesiser m) s
+                     traceM $ "here"
+                     res2 <- (runSynthesiser n) s
+                     (return res1) `mplus` (return res2)
+                )
+  --- mkSynthesiser (\s -> m)
 
 none :: Synthesiser a
-none = mkSynthesiser (\s -> return ([], mempty))
+none = Synthesiser (ExceptT (StateT (\s -> (return mzero) s)))
+ -- mkSynthesiser (\s -> return mzero)
 
 data ResourceScheme = Additive | Subtractive
   deriving (Show, Eq)
@@ -307,47 +295,19 @@ testGlobals = mempty
   , globalsTesting = Just True
   }
 
--- ADTs available in synthesis (Either)
-initDecls :: Ctxt (DataDecl)
-initDecls =
-  [
-    (Id "Either" "Either", DataDecl
-    {
-      dataDeclSpan = nullSpanNoFile,
-      dataDeclId = Id "Either" "Either",
-      dataDeclTyVarCtxt = [((Id "a" "a"), KType),((Id "b" "b"), KType)],
-      dataDeclKindAnn = Nothing,
-      dataDeclDataConstrs =
-        [
-          DataConstrNonIndexed
-          {
-            dataConstrSpan = nullSpanNoFile,
-            dataConstrId = (Id "Left" "Left"),
-            dataConstrParams = [TyVar (Id "a" "a")]
-          },
-          DataConstrNonIndexed
-          {
-            dataConstrSpan = nullSpanNoFile,
-            dataConstrId = (Id "Right" "Right"),
-            dataConstrParams = [TyVar (Id "b" "b")]
-          }
-        ]
-    })
-  ]
-
 
 testSyn :: Bool -> IO ()
 testSyn useReprint =
   let ty =
 --        FunTy Nothing (Box (CInterval (CNat 2) (CNat 3)) (TyVar $ mkId "b") ) (FunTy Nothing (SumTy (TyVar $ mkId "a") (TyVar $ mkId "c")) (SumTy (ProdTy (TyVar $ mkId "a") (Box (CInterval (CNat 2) (CNat 2)) (TyVar $ mkId "b") )) (ProdTy (TyVar $ mkId "c") (Box (CInterval (CNat 3) (CNat 3)) (TyVar $ mkId "b") ))))
 --        FunTy Nothing (TyVar $ mkId "a") (SumTy (TyVar $ mkId "b") (TyVar $ mkId "a"))
---        FunTy Nothing (Box (CNat 3) (TyVar $ mkId "a")) (FunTy Nothing (Box (CNat 6) (TyVar $ mkId "b") ) (Box (CNat 3) (ProdTy (ProdTy (TyVar $ mkId "b") (TyVar $ mkId "b")) (TyVar $ mkId "a")) ))
+        FunTy Nothing (Box (CNat 3) (TyVar $ mkId "a")) (FunTy Nothing (Box (CNat 6) (TyVar $ mkId "b") ) (Box (CNat 3) (ProdTy (ProdTy (TyVar $ mkId "b") (TyVar $ mkId "b")) (TyVar $ mkId "a")) ))
 --        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
 --        FunTy Nothing (FunTy Nothing (TyVar $ mkId "a") (FunTy Nothing (TyVar $ mkId "b") (TyVar $ mkId "c"))) (FunTy Nothing (TyVar $ mkId "b") (FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "c")))
 --        FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "a")
-        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
+--        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
         in
-    let ts = (Forall nullSpanNoFile [(mkId "a", KType)] [] ty) in
+    let ts = (Forall nullSpanNoFile [(mkId "a", KType), (mkId "b", KType), (mkId "c", KType)] [] ty) in
     let ?globals = testGlobals in do
      -- State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) [(mkId "a", KType)]})
     let res = testOutput $ topLevel ts Subtractive in -- [(mkId "y", Linear (TyVar $ mkId "b")), (mkId "x", Linear (TyVar $ mkId "a"))] [] ty
@@ -358,16 +318,16 @@ testSyn useReprint =
 
 testOutput :: Synthesiser a -> [a]
 testOutput res =
-  rights $ map fst $ fst $ unsafePerformIO $ runSynthesiser res initState
+  rights $ map fst $ unsafePerformIO $ observeAllT $ runSynthesiser res initState
 
-testData :: Synthesiser a -> SynthesisData
-testData res =
-  snd $ unsafePerformIO $ runSynthesiser res initState
+--testData :: Synthesiser a -> SynthesisData
+--testData res =
+--  snd $ unsafePerformIO $ runSynthesiser res initState
 
 topLevel :: (?globals :: Globals) => TypeScheme -> ResourceScheme -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 topLevel ts@(Forall _ binders constraints ty) resourceScheme = do
   conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders})
-  synthesise initDecls True resourceScheme [] [] ts
+  synthesise [] True resourceScheme [] [] ts
 
 -- Reprint Expr as a top-level declaration
 reprintAsDef :: Id -> TypeScheme -> Expr () Type -> Def () Type
@@ -490,7 +450,7 @@ varHelper :: (?globals :: Globals)
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 varHelper decls left [] _ _ = none
 varHelper decls left (var@(x, a) : right) resourceScheme goalTy =
- (varHelper decls (var:left) right resourceScheme goalTy) `try1`
+ (varHelper decls (var:left) right resourceScheme goalTy) `try`
   do
     (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
     if canUse then
@@ -501,6 +461,7 @@ varHelper decls left (var@(x, a) : right) resourceScheme goalTy =
             (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile t goalTy'
             case success of
               True -> do
+                traceM $ show x
                 return (makeVar x goalTy, gamma, subst)
               _ -> none
     else
@@ -526,6 +487,7 @@ absHelper decls gamma omega allowLam resourceScheme goalTy =
                 (gamma, ((id, Linear t1):omega))
               else
                 (((id, Linear t1):gamma, omega))
+        traceM $ show t1
         (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
         case (resourceScheme, lookupAndCutout id delta) of
           (Additive, Just (delta', Linear _)) ->
@@ -844,29 +806,29 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
   case (isRAsync goalTy', omega) of
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
-      absHelper decls gamma omega allowLam resourceScheme goalTy `try1` none
+      absHelper decls gamma omega allowLam resourceScheme goalTy `try` none
     (False, omega@(x:xs)) ->
       -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
       unboxHelper decls [] omega gamma resourceScheme goalTy
-      `try1`
+      `try`
       pairElimHelper decls [] omega gamma resourceScheme goalTy
-      `try1`
+      `try`
       sumElimHelper decls [] omega gamma resourceScheme goalTy
     (False, []) ->
       -- Transition to synchronous (focused) search
       if isAtomic goalTy' then
         -- Left Sync: App rule + Init rules
         varHelper decls [] gamma resourceScheme goalTy
-        `try1`
+        `try`
         appHelper decls [] gamma resourceScheme goalTy
       else
         -- Right Sync : Focus on goalTy
         sumIntroHelper decls gamma resourceScheme goalTy
-        `try1`
+        `try`
         pairIntroHelper decls gamma resourceScheme goalTy
-        `try1`
+        `try`
         boxHelper decls gamma resourceScheme goalTy
-        `try1`
+        `try`
         unitIntroHelper decls gamma resourceScheme goalTy
 
 synthesise :: (?globals :: Globals)
@@ -920,19 +882,19 @@ synthesiseProgram :: (?globals :: Globals)
            -> CheckerState
            -> IO [(Expr () Type, Ctxt (Assumption), Substitution)]
 synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
-  let synRes = synthesise (decls ++ initDecls) True resourceScheme gamma omega goalTy
-  (synthResults, aggregate) <- runSynthesiser synRes checkerState
-  if benchmarking
-    then do
-      -- Output benchmarking info
-      putStrLn $ "-------------------------------------------------"
-      putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
-      putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
-      putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
-      putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
-      putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
-      putStrLn $ "Mean theoremSize   = " ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
-    else return ()
+  let synRes = synthesise decls True resourceScheme gamma omega goalTy
+  synthResults <- observeManyT 1 (runSynthesiser synRes checkerState)
+--  if benchmarking
+--    then do
+--      -- Output benchmarking info
+--      putStrLn $ "-------------------------------------------------"
+--      putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
+--      putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
+--      putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
+--      putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
+--      putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
+--      putStrLn $ "Mean theoremSize   = " ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+--    else return ()
   return $ rights (map fst synthResults)
 
 useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
