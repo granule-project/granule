@@ -269,8 +269,8 @@ conv (Checker k) =
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = do
   traceM $ "here"
-  Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n))) {-  do
-  traceM $ "here"
+  Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
+  {- traceM $ "here"
   Synthesiser (ExceptT (StateT (\s ->
       ((runStateT (runExceptT (unSynthesiser m)) s))
       `interleave`
@@ -284,7 +284,8 @@ try m n = do
   --- mkSynthesiser (\s -> m)
 
 none :: Synthesiser a
-none = Synthesiser (ExceptT (StateT (\s -> (return mzero) s)))
+none = Synthesiser (ExceptT mzero)
+ -- Synthesiser (ExceptT (StateT (\s -> (return mzero) s)))
  -- mkSynthesiser (\s -> return mzero)
 
 data ResourceScheme = Additive | Subtractive
