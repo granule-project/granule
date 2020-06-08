@@ -7,7 +7,7 @@ module Language.Granule.Synthesis.Synth where
 
 --import Data.List
 --import Control.Monad (forM_)
-import Debug.Trace
+--import Debug.Trace
 import System.IO.Unsafe
 import qualified Data.Map as M
 
@@ -47,25 +47,37 @@ import qualified System.Clock as Clock
 
 import Language.Granule.Utils
 
+
 solve :: (?globals :: Globals)
   => Synthesiser Bool
 solve = do
   cs <- conv $ State.get
   let pred = Conj $ predicateStack cs
-  -- let ctxtCk  = tyVarContext cs
---  coeffectVars <- justCoeffectTypesConverted nullSpanNoFile ctxtCk
   tyVars <- conv $ tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
 
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
-  (smtTime, result) <- liftIO $ provePredicate pred tyVars
+  (smtTime', result) <- liftIO $ provePredicate pred tyVars
   -- Force the result
   _ <- return $ result `seq` result
   end    <- liftIO $ Clock.getTime Clock.Monotonic
-  --let proverTime = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+  let proverTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
+
 
   -- Update benchmarking data
-  -- tellMe (SynthesisData 1 smtTime proverTime (sizeOfPred pred))
+
+  state <- Synthesiser $ lift $ lift $ lift get
+--  traceM  $ show state
+  Synthesiser $ lift $ lift $ lift $ modify (\state ->
+            state {
+             smtCallsCount = 1 + (smtCallsCount state),
+             smtTime = smtTime' + (smtTime state),
+             proverTime = proverTime' + (proverTime state),
+             theoremSizeTotal = (sizeOfPred pred) + (theoremSizeTotal state)
+                  })
+
+          --  (SynthesisData 1 smtTime proverTime (sizeOfPred pred))
+
   case result of
     QED -> do
       return True
@@ -232,7 +244,7 @@ instance Monoid SynthesisData where
 
 newtype Synthesiser a = Synthesiser
   { unSynthesiser ::
-      ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT IO)) a }
+      ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT (StateT SynthesisData IO))) a }
   deriving (Functor, Applicative, MonadState CheckerState)
 
 -- Synthesiser always uses fair bind from LogicT
@@ -254,16 +266,16 @@ instance MonadIO Synthesiser where
   liftIO = conv . liftIO
 
 --tellMe :: SynthesisData -> Synthesiser ()
---tellMe d = Synthesiser (ExceptT (StateT (\s -> ListT (WriterT $ return ([(Right (), s)], d)))))
+--tellMe d = Synthesiser (ExceptT (StateT (\s -> LogicT (StateT (\s' -> return ([(Right (), s)], d) s')))))
 
 -- Wrapper/unwrapper
-mkSynthesiser ::
-     (CheckerState -> LogicT IO ((Either (NonEmpty CheckerError) a), CheckerState))
-  -> Synthesiser a
-mkSynthesiser x = Synthesiser (ExceptT (StateT (\s -> x s)))
+--mkSynthesiser ::
+--     (CheckerState -> LogicT IO ((Either (NonEmpty CheckerError) a), CheckerState))
+--  -> Synthesiser a
+--mkSynthesiser x = Synthesiser (ExceptT (StateT (\s -> x s)))
 
 runSynthesiser :: Synthesiser a
-  -> (CheckerState -> IO [((Either (NonEmpty CheckerError) a), CheckerState)])
+  -> (CheckerState -> StateT SynthesisData IO [((Either (NonEmpty CheckerError) a), CheckerState)])
 runSynthesiser m s = do
   observeManyT 1 (runStateT (runExceptT (unSynthesiser m)) s)
 
@@ -276,25 +288,12 @@ conv :: Checker a -> Synthesiser a
 conv (Checker k) =
   Synthesiser
     (ExceptT
-         (StateT (\s -> lift (runStateT (runExceptT k) s))))
+         (StateT (\s -> lift $ lift (runStateT (runExceptT k) s))))
 
 
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = do
-  traceM $ "here"
   Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
-  {- traceM $ "here"
-  Synthesiser (ExceptT (StateT (\s ->
-      ((runStateT (runExceptT (unSynthesiser m)) s))
-      `interleave`
-      ((runStateT (runExceptT (unSynthesiser n)) s))))) -}
---  mkSynthesiser (\s -> do
---                     res1 <- (nunSynthesiser m) s
---                     traceM $ "here"
---                     res2 <- (runSynthesiser n) s
---                     (return res1) `mplus` (return res2)
---                )
-  --- mkSynthesiser (\s -> m)
 
 none :: Synthesiser a
 none = Synthesiser (ExceptT mzero)
@@ -332,7 +331,7 @@ testSyn useReprint =
 
 testOutput :: Synthesiser a -> [a]
 testOutput res =
-  rights $ map fst $ unsafePerformIO $ runSynthesiser res initState
+  rights $ map fst $ fst $ unsafePerformIO $ runStateT (runSynthesiser res initState) mempty
 
 --testData :: Synthesiser a -> SynthesisData
 --testData res =
@@ -887,18 +886,18 @@ synthesiseProgram :: (?globals :: Globals)
            -> IO [(Expr () Type, Ctxt (Assumption), Substitution)]
 synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
   let synRes = synthesise decls True resourceScheme gamma omega goalTy
-  synthResults <- (runSynthesiser synRes checkerState)
---  if benchmarking
---    then do
---      -- Output benchmarking info
---      putStrLn $ "-------------------------------------------------"
---      putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
---      putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
---      putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
---      putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
---      putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
---      putStrLn $ "Mean theoremSize   = " ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
---    else return ()
+  (synthResults, aggregate) <- (runStateT (runSynthesiser synRes checkerState) mempty)
+  if benchmarking
+    then do
+      -- Output benchmarking info
+      putStrLn $ "-------------------------------------------------"
+      putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
+      putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
+      putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
+      putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
+      putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
+      putStrLn $ "Mean theoremSize   = " ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+    else return ()
   return $ rights (map fst synthResults)
 
 useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
