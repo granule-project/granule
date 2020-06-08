@@ -233,7 +233,20 @@ instance Monoid SynthesisData where
 newtype Synthesiser a = Synthesiser
   { unSynthesiser ::
       ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT IO)) a }
-  deriving (Functor, Applicative, Monad, MonadState CheckerState)
+  deriving (Functor, Applicative, MonadState CheckerState)
+
+-- Synthesiser always uses fair bind from LogicT
+instance Monad Synthesiser where
+  return = Synthesiser . return
+  k >>= f =
+    Synthesiser $ ExceptT (StateT
+       (\s -> unSynth k s >>- (\(eb, s) ->
+          case eb of
+            Left r -> mzero
+            Right b -> (unSynth . f) b s)))
+
+     where
+       unSynth m = runStateT (runExceptT (unSynthesiser m))
 
 -- Monad transformer definitions
 
@@ -252,7 +265,7 @@ mkSynthesiser x = Synthesiser (ExceptT (StateT (\s -> x s)))
 runSynthesiser :: Synthesiser a
   -> (CheckerState -> IO [((Either (NonEmpty CheckerError) a), CheckerState)])
 runSynthesiser m s = do
-  observeManyT 5 (runStateT (runExceptT (unSynthesiser m)) s)
+  observeManyT 1 (runStateT (runExceptT (unSynthesiser m)) s)
 
 --foo :: Synthesiser Int
 --foo = do
@@ -285,8 +298,6 @@ try m n = do
 
 none :: Synthesiser a
 none = Synthesiser (ExceptT mzero)
- -- Synthesiser (ExceptT (StateT (\s -> (return mzero) s)))
- -- mkSynthesiser (\s -> return mzero)
 
 data ResourceScheme = Additive | Subtractive
   deriving (Show, Eq)
