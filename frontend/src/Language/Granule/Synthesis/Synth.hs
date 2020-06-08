@@ -269,10 +269,12 @@ conv (Checker k) =
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = do
   traceM $ "here"
+  Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n))) {-  do
+  traceM $ "here"
   Synthesiser (ExceptT (StateT (\s ->
       ((runStateT (runExceptT (unSynthesiser m)) s))
       `interleave`
-      ((runStateT (runExceptT (unSynthesiser n)) s)))))
+      ((runStateT (runExceptT (unSynthesiser n)) s))))) -}
 --  mkSynthesiser (\s -> do
 --                     res1 <- (nunSynthesiser m) s
 --                     traceM $ "here"
