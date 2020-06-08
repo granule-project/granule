@@ -250,8 +250,9 @@ mkSynthesiser ::
 mkSynthesiser x = Synthesiser (ExceptT (StateT (\s -> x s)))
 
 runSynthesiser :: Synthesiser a
-  -> (CheckerState -> LogicT IO ((Either (NonEmpty CheckerError) a), CheckerState))
-runSynthesiser m s = (runStateT (runExceptT (unSynthesiser m)) s)
+  -> (CheckerState -> IO [((Either (NonEmpty CheckerError) a), CheckerState)])
+runSynthesiser m s = do
+  observeManyT 5 (runStateT (runExceptT (unSynthesiser m)) s)
 
 --foo :: Synthesiser Int
 --foo = do
@@ -266,13 +267,18 @@ conv (Checker k) =
 
 
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
-try m n =
-  mkSynthesiser (\s -> do
-                     res1 <- (runSynthesiser m) s
-                     traceM $ "here"
-                     res2 <- (runSynthesiser n) s
-                     (return res1) `mplus` (return res2)
-                )
+try m n = do
+  traceM $ "here"
+  Synthesiser (ExceptT (StateT (\s ->
+      ((runStateT (runExceptT (unSynthesiser m)) s))
+      `mplus`
+      ((runStateT (runExceptT (unSynthesiser n)) s)))))
+--  mkSynthesiser (\s -> do
+--                     res1 <- (nunSynthesiser m) s
+--                     traceM $ "here"
+--                     res2 <- (runSynthesiser n) s
+--                     (return res1) `mplus` (return res2)
+--                )
   --- mkSynthesiser (\s -> m)
 
 none :: Synthesiser a
@@ -312,7 +318,7 @@ testSyn useReprint =
 
 testOutput :: Synthesiser a -> [a]
 testOutput res =
-  rights $ map fst $ unsafePerformIO $ observeAllT $ runSynthesiser res initState
+  rights $ map fst $ unsafePerformIO $ runSynthesiser res initState
 
 --testData :: Synthesiser a -> SynthesisData
 --testData res =
@@ -875,7 +881,7 @@ synthesiseProgram :: (?globals :: Globals)
            -> IO [(Expr () Type, Ctxt (Assumption), Substitution)]
 synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
   let synRes = synthesise decls True resourceScheme gamma omega goalTy
-  synthResults <- observeManyT 1 (runSynthesiser synRes checkerState)
+  synthResults <- (runSynthesiser synRes checkerState)
 --  if benchmarking
 --    then do
 --      -- Output benchmarking info
