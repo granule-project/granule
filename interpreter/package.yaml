@@ -16,6 +16,8 @@ dependencies:
 - mtl >=2.2.1
 - optparse-applicative
 - text
+- logict == 0.7.0.2
+
 default-extensions:
 - LambdaCase
 - RecordWildCards
