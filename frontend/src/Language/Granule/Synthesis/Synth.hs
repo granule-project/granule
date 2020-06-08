@@ -52,7 +52,6 @@ solve :: (?globals :: Globals)
 solve = do
   cs <- conv $ State.get
   let pred = Conj $ predicateStack cs
-  -- traceM  ("pred: " <> pretty pred)
   -- let ctxtCk  = tyVarContext cs
 --  coeffectVars <- justCoeffectTypesConverted nullSpanNoFile ctxtCk
   tyVars <- conv $ tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
@@ -69,19 +68,14 @@ solve = do
   -- tellMe (SynthesisData 1 smtTime proverTime (sizeOfPred pred))
   case result of
     QED -> do
-      --traceM $ "yay"
       return True
     NotValid s -> do
-      --traceM ("message: " <> s)
       return False
     SolverProofError msgs -> do
-      --traceM $ ("message: " <> show msgs)
       return False
     OtherSolverError reason -> do
-      --traceM $ ("message: " <> show reason)
       return False
     Timeout -> do
-      --traceM "timed out"
       return False
     _ -> do
       return False
@@ -461,7 +455,6 @@ varHelper decls left (var@(x, a) : right) resourceScheme goalTy =
             (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile t goalTy'
             case success of
               True -> do
-                traceM $ show x
                 return (makeVar x goalTy, gamma, subst)
               _ -> none
     else
@@ -487,7 +480,6 @@ absHelper decls gamma omega allowLam resourceScheme goalTy =
                 (gamma, ((id, Linear t1):omega))
               else
                 (((id, Linear t1):gamma, omega))
-        traceM $ show t1
         (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
         case (resourceScheme, lookupAndCutout id delta) of
           (Additive, Just (delta', Linear _)) ->
