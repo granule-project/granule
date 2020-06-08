@@ -443,7 +443,6 @@ useVar (name, Discharged t grade) _ Additive = do
   (kind, _) <- conv $ inferCoeffectType nullSpan grade
   return (True, [(name, (Discharged t (COne kind)))], t)
 
-
 varHelper :: (?globals :: Globals)
   => Ctxt (DataDecl)
   -> Ctxt (Assumption)
@@ -452,25 +451,18 @@ varHelper :: (?globals :: Globals)
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 varHelper decls left [] _ _ = none
-varHelper decls left (var@(x, a) : right) resourceScheme goalTy =
+varHelper decls left (var@(x, a) : right) resourceScheme goalTy@(Forall _ binders constraints goalTy') =
  (varHelper decls (var:left) right resourceScheme goalTy) `try`
-  do
-    (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
-    if canUse then
-      case goalTy of
-        Forall _ binders constraints goalTy' ->
-          do
---            liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy'
-            (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile t goalTy'
-            case success of
-              True -> do
-                return (makeVar x goalTy, gamma, subst)
-              _ -> none
-    else
-        none
-
-
-
+   (do
+--    liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy'
+      (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
+      case success of
+        True -> do
+          (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
+          if canUse
+            then return (makeVar x goalTy, gamma, subst)
+            else none
+        _ -> none)
 
 absHelper :: (?globals :: Globals)
   => Ctxt (DataDecl)

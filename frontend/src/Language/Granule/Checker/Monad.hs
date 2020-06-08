@@ -83,6 +83,10 @@ data Assumption
   | Discharged Type Coeffect
     deriving (Eq, Show)
 
+getAssumptionType :: Assumption -> Type
+getAssumptionType (Linear t) = t
+getAssumptionType (Discharged t _) = t
+
 instance Term Assumption where
   freeVars (Linear t) = freeVars t
   freeVars (Discharged t c) = freeVars t ++ freeVars c
