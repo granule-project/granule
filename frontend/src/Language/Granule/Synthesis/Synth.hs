@@ -271,7 +271,7 @@ try m n = do
   traceM $ "here"
   Synthesiser (ExceptT (StateT (\s ->
       ((runStateT (runExceptT (unSynthesiser m)) s))
-      `mplus`
+      `interleave`
       ((runStateT (runExceptT (unSynthesiser n)) s)))))
 --  mkSynthesiser (\s -> do
 --                     res1 <- (nunSynthesiser m) s
