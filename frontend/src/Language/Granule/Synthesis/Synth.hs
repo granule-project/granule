@@ -906,6 +906,7 @@ synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
               <> ", proverTime = " <> (show $ proverTime aggregate)
               <> ", solverTime = " <> (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
               <> ", meanTheoremSize = " <> (show $ if (smtCallsCount aggregate) == 0 then 0 else (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+              <> ", success = " <> (if length results == 0 then "False" else "True")
               <> " } "
       else do
         -- Output benchmarking info
