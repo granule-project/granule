@@ -1,0 +1,2 @@
+disject : forall {a : Type, n : Nat, m : Nat} . a [m * n] -> (a [n]) [m]
+disject = ?
