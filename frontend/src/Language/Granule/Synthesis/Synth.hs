@@ -905,7 +905,7 @@ synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
               <> ", synthTime = " <> (show $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
               <> ", proverTime = " <> (show $ proverTime aggregate)
               <> ", solverTime = " <> (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
-              <> ", meanTheoremSize = " <> (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+              <> ", meanTheoremSize = " <> (show $ if (smtCallsCount aggregate) == 0 then 0 else (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
               <> " } "
       else do
         -- Output benchmarking info
@@ -916,7 +916,7 @@ synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
         putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
         putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
         putStrLn $ "Total synth time (ms) = "  ++ (show $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-        putStrLn $ "Mean theoremSize   = " ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+        putStrLn $ "Mean theoremSize   = " ++ (show $ (if (smtCallsCount aggregate) == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
     else return ()
   -- </benchmarking-output>
   return results
