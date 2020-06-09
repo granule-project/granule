@@ -441,7 +441,7 @@ useVar (name, Discharged t grade) gamma Subtractive = do
   (kind, _) <- conv $ inferCoeffectType nullSpan grade
   var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
   conv $ existential var (KPromote kind)
-  conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
+  conv $ addConstraint (Eq nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
   res <- solve
   case res of
     True -> do
