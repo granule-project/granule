@@ -885,20 +885,41 @@ synthesiseProgram :: (?globals :: Globals)
            -> CheckerState
            -> IO [(Expr () Type, Ctxt (Assumption), Substitution)]
 synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
+  start <- liftIO $ Clock.getTime Clock.Monotonic
+  -- %%
   let synRes = synthesise decls True resourceScheme gamma omega goalTy
   (synthResults, aggregate) <- (runStateT (runSynthesiser synRes checkerState) mempty)
+  let results = rights (map fst synthResults)
+  -- Force eval of first result (if it exists) to avoid any laziness when benchmarking
+  () <- when benchmarking $ unless (null results) (return $ seq (show $ head results) ())
+  -- %%
+  end    <- liftIO $ Clock.getTime Clock.Monotonic
+
+  -- <benchmarking-output>
   if benchmarking
     then do
-      -- Output benchmarking info
-      putStrLn $ "-------------------------------------------------"
-      putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
-      putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
-      putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
-      putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
-      putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
-      putStrLn $ "Mean theoremSize   = " ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+      -- Output raw data (used for performance evaluation)
+      if benchmarkingRawData then do
+        putStrLn $ "Measurement "
+              <> "{ smtCalls = " <> (show $ smtCallsCount aggregate)
+              <> ", synthTime = " <> (show $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+              <> ", proverTime = " <> (show $ proverTime aggregate)
+              <> ", solverTime = " <> (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
+              <> ", meanTheoremSize = " <> (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
+              <> " } "
+      else do
+        -- Output benchmarking info
+        putStrLn $ "-------------------------------------------------"
+        putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
+        putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
+        putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
+        putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
+        putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
+        putStrLn $ "Total synth time (ms) = "  ++ (show $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+        putStrLn $ "Mean theoremSize   = " ++ (show $ (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
     else return ()
-  return $ rights (map fst synthResults)
+  -- </benchmarking-output>
+  return results
 
 useBinderNameOrFreshen :: Maybe Id -> Synthesiser Id
 useBinderNameOrFreshen Nothing = freshIdentifier

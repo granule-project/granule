@@ -45,12 +45,13 @@ data Globals = Globals
   , globalsHolePosition        :: Maybe Pos
   , globalsSynthesise          :: Maybe Bool
   , globalsBenchmark           :: Maybe Bool
+  , globalsBenchmarkRaw        :: Maybe Bool
   , globalsAdditiveSynthesis   :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, additiveSynthesisMode :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, additiveSynthesisMode :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -61,6 +62,7 @@ ignoreHoles       = fromMaybe False $ globalsIgnoreHoles ?globals
 timestamp         = fromMaybe False $ globalsTimestamp ?globals
 testing           = fromMaybe False $ globalsTesting ?globals
 benchmarking      = fromMaybe False $ globalsBenchmark ?globals
+benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
 additiveSynthesisMode = fromMaybe False $ globalsAdditiveSynthesis ?globals
 
 -- | Accessor for the solver timeout with a default value
@@ -96,6 +98,7 @@ instance Semigroup Globals where
       , globalsHolePosition        = globalsHolePosition        g1 <|> globalsHolePosition        g2
       , globalsSynthesise          = globalsSynthesise          g1 <|> globalsSynthesise          g2
       , globalsBenchmark           = globalsBenchmark           g1 <|> globalsBenchmark           g2
+      , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
       , globalsAdditiveSynthesis   = globalsAdditiveSynthesis   g1 <|> globalsAdditiveSynthesis   g2
       }
 
@@ -118,6 +121,7 @@ instance Monoid Globals where
     , globalsHolePosition        = Nothing
     , globalsSynthesise          = Nothing
     , globalsBenchmark           = Nothing
+    , globalsBenchmarkRaw        = Nothing
     , globalsAdditiveSynthesis   = Nothing
     }
 

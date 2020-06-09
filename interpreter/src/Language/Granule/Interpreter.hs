@@ -399,6 +399,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "benchmark"
            <> help "Compute benchmarking results for the synthesis procedure."
 
+        globalsBenchmarkRaw <-
+          flag Nothing (Just True)
+           $ long "raw-data"
+           <> help "Show raw data of benchmarking data for synthesis."
+
         pure
           ( globPatterns
           , GrConfig
@@ -423,6 +428,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsHolePosition = (,) <$> globalsHoleLine <*> globalsHoleCol
               , globalsSynthesise
               , globalsBenchmark
+              , globalsBenchmarkRaw
               , globalsAdditiveSynthesis
               }
             }
