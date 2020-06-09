@@ -1,0 +1,4 @@
+data Either a b = Left a | Right b
+until : forall a : Type
+  . (a -> Either () ()) [1..∞] -> (a -> a) [0..∞] -> a [2..∞] -> a
+until = ?
