@@ -1,0 +1,2 @@
+s : forall {a b c : Type} . (a -> (b -> c)) -> (a -> b) -> a [] -> c
+s = ?
