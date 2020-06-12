@@ -375,6 +375,12 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "additive"
             <> help "Use additive mode for synthesis, rather than subtractive (default)."
 
+        globalsAlternateSynthesisMode <-
+          flag Nothing (Just True)
+           $ long "alternate"
+            <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
+
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -430,6 +436,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmark
               , globalsBenchmarkRaw
               , globalsAdditiveSynthesis
+              , globalsAlternateSynthesisMode
               }
             }
           )

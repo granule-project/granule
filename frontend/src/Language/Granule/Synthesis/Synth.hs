@@ -663,12 +663,16 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
            case lookupAndCutout id delta' of
              Just (delta'', (Discharged _ usage)) -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
+               liftIO $ putStrLn $ (pretty usage ++ " <=? " ++ pretty grade)
                conv $ addConstraint (ApproximatedBy nullSpanNoFile usage grade kind)
                res <- solve
                case res of
-                 True ->
+                 True -> do
+                   liftIO $ putStrLn "all good"
                    return (makeUnbox id x goalTy t t' e,  delta'', subst)
-                 False -> none
+                 False -> do
+                   liftIO $ putStrLn "FAIL"
+                   none
              _ -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
                conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) grade kind)
@@ -906,6 +910,8 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
         then return result
         else none
 
+    -- All linear variables should have been used
+    -- and all graded assumptions should have usages which approximate their original assumption
     Additive -> do
       consumed <- mapM (\(id, a) ->
                     case lookup id gamma of
