@@ -1,0 +1,9 @@
+- Inline CtxtAdd and CtxtSubtract
+- Check how omega and omega' are used in context of focusing
+- Prove soundes alternatve box rule
+- Prove soundness of naive additive
+- Implement alternate additive
+- Trace ctxtSubtract fall through case 
+- Investigate bug with flob synthesising an incorrect program
+- Investigating genearlised coeffects in subtractive case
+- Looking into pull
