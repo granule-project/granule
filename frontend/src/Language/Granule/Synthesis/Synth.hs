@@ -104,29 +104,24 @@ gradeLub c c' = Just $ CJoin c c'
 gradeGlb :: Coeffect -> Coeffect -> Maybe Coeffect
 gradeGlb c c' = Just $ CMeet c c'
 
-ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption)  -> Ctxt (Assumption) -> Synthesiser(Maybe (Ctxt (Assumption)))
-ctxtSubtract [] [] = return $ Just []
+ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption)  -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+ctxtSubtract gam [] = return gam
 ctxtSubtract ((x1, Linear t1):xs) ys =
   case lookup x1 ys of
     Just _ -> ctxtSubtract xs ys
     _ -> do
       ctx <- ctxtSubtract xs ys
-      case ctx of
-        Just ctx' -> return $ Just ((x1, Linear t1) : ctx')
-        _ -> return Nothing
+      return $ ((x1, Linear t1) : ctx)
+
 ctxtSubtract ((x1, Discharged t1 g1):xs) ys  =
   case lookup x1 ys of
     Just (Discharged t2 g2) -> do
       g3 <- gradeSub g2 g1
       ctx <- ctxtSubtract xs ys
-      case ctx of
-        Just ctx' -> return $ Just ((x1, Discharged t1 g3):ctx')
-        _ -> return Nothing
+      return ((x1, Discharged t1 g3):ctx)
     _ -> do
       ctx <- ctxtSubtract xs ys
-      case ctx of
-        Just ctx' -> return $ Just ((x1, Discharged t1 g1):ctx')
-        _ -> return Nothing
+      return ((x1, Discharged t1 g1):ctx)
     where
       gradeSub g g' = do
         (kind, _) <- conv $ inferCoeffectType nullSpan g
@@ -134,7 +129,9 @@ ctxtSubtract ((x1, Discharged t1 g1):xs) ys  =
         conv $ existential var (KPromote kind)
         conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) g) g' kind)
         return $ CVar var
-ctxtSubtract _ _ = return $ Just []
+-- UNSURE ABOUT THIS
+-- corresponds to `[] - gam` where `gam` is not empty
+ctxtSubtract _ _ = return []
 
 ctxtMultByCoeffect :: Coeffect -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
 ctxtMultByCoeffect _ [] = Just []
@@ -191,21 +188,18 @@ ctxtMerge coefOp ((x, Linear t1):xs) ys =
     Nothing -> Nothing
     _ -> Nothing
 
+maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
+maybeToSynthesiser (Just x) = return x
+maybeToSynthesiser Nothing = none
+
 computeAddInputCtx :: (?globals :: Globals) => Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 computeAddInputCtx gamma delta = do
-  ctx <- ctxtSubtract gamma delta
-  case ctx of
-    Just ctx' -> return ctx'
-    Nothing -> return []
+  ctxtSubtract gamma delta
 
-computeAddOutputCtx :: Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption)
+computeAddOutputCtx :: Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 computeAddOutputCtx del1 del2 del3 = do
-  case ctxtAdd del1 del2 of
-    Just del' ->
-      case ctxtAdd del' del3 of
-          Just del'' -> del''
-          _ -> []
-    _ -> []
+  del' <- maybeToSynthesiser $ ctxtAdd del1 del2
+  maybeToSynthesiser $ ctxtAdd del' del3
 
 ctxtAdd :: Ctxt Assumption -> Ctxt Assumption -> Maybe (Ctxt Assumption)
 ctxtAdd [] [] = Just []
@@ -225,7 +219,7 @@ ctxtAdd ((x, Discharged t1 g1):xs) ys =
     _ -> Nothing
 ctxtAdd ((x, Linear t1):xs) ys =
   case lookup x ys of
-    Just (Linear t2) -> ctxtAdd xs ys
+    Just (Linear t2) -> Nothing
     Nothing -> do
       ctxt <- ctxtAdd xs ys
       return $ (x, Linear t1) : ctxt
@@ -473,8 +467,8 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
   (kind, _) <- conv $ inferCoeffectType nullSpan grade
   var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
   conv $ existential var (KPromote kind)
-  --conv $ addPredicate (Impl [] (Con (Neq nullSpanNoFile (CZero kind) grade kind))
-  --                             (Con (ApproximatedBy nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)))
+  -- conv $ addPredicate (Impl [] (Con (Neq nullSpanNoFile (CZero kind) grade kind))
+  --                              (Con (ApproximatedBy nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)))
   conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
   res <- solve
   case res of
@@ -571,7 +565,7 @@ appHelper decls left (var@(x, a) : right) Additive goalTy@(Forall _ binders cons
         (e1, delta1, sub1) <- synthesiseInner decls True Additive gamma1' omega'' goalTy
         gamma2 <- computeAddInputCtx gamma1' delta1
         (e2, delta2, sub2) <- synthesiseInner decls True Additive gamma2 [] (Forall nullSpanNoFile binders constraints t1)
-        let delta3 = computeAddOutputCtx omega' delta1 delta2
+        delta3 <- computeAddOutputCtx omega' delta1 delta2
         subst <- conv $ combineSubstitutions nullSpan sub1 sub2
         case lookupAndCutout id delta3 of
           Just (delta3', Linear _) ->
@@ -602,17 +596,12 @@ boxHelper decls gamma resourceScheme goalTy =
             (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
             used <- ctxtSubtract gamma delta
             -- Compute what was used to synth e
-            case used of
-              Just used' -> do
-                case ctxtMultByCoeffect g used' of
-                  Just delta' -> do
-                    delta'' <- ctxtSubtract gamma delta'
-                    case delta'' of
-                      Just delta''' -> do
-                        return (makeBox goalTy e, delta''', subst)
-                      Nothing -> none
-                  _ -> none
+            case ctxtMultByCoeffect g used of
+              Just delta' -> do
+                delta'' <- ctxtSubtract gamma delta'
+                return (makeBox goalTy e, delta'', subst)
               _ -> none
+
         Subtractive Alternative -> do
           gamma' <- ctxtDivByCoeffect g gamma
           case gamma' of
@@ -670,7 +659,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
            omega1 <- computeAddInputCtx omega omega'
            let (gamma', omega1') = bindToContext (id, Discharged t' grade) gamma omega1 (isLAsync t')
            (e, delta, subst) <- synthesiseInner decls True Additive gamma' omega1' goalTy
-           let delta' = computeAddOutputCtx omega' delta []
+           delta' <- computeAddOutputCtx omega' delta []
            case lookupAndCutout id delta' of
              Just (delta'', (Discharged _ usage)) -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
@@ -727,7 +716,7 @@ pairElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
           let (gamma', omega1') = bindToContext (lId, Linear t1) gamma omega1 (isLAsync t1)
           let (gamma'', omega1'') = bindToContext (rId, Linear t2) gamma' omega1' (isLAsync t2)
           (e, delta, subst) <- synthesiseInner decls True Additive gamma'' omega1'' goalTy
-          let delta' = computeAddOutputCtx omega' delta []
+          delta' <- computeAddOutputCtx omega' delta []
           case lookupAndCutout lId delta' of
             Just (delta', Linear _) ->
               case lookupAndCutout rId delta' of
@@ -766,7 +755,7 @@ pairIntroHelper decls gamma resourceScheme goalTy =
       (e1, delta1, subst1) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t1)
       gammaAdd <- computeAddInputCtx gamma delta1
       (e2, delta2, subst2) <- synthesiseInner decls True resourceScheme (if resourceScheme == Additive then gammaAdd else delta1) [] (Forall nullSpanNoFile binders constraints t2)
-      let delta3 = if resourceScheme == Additive then computeAddOutputCtx delta1 delta2 [] else delta2
+      delta3 <- if resourceScheme == Additive then computeAddOutputCtx delta1 delta2 [] else return delta2
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       return (makePair t1 t2 e1 e2, delta3, subst)
     _ -> none
@@ -839,8 +828,8 @@ sumElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) ->
             case ctxtMerge gradeLub delta1' delta2' of
-              Just delta3 ->
-                let delta3' = computeAddOutputCtx omega' delta3 [] in do
+              Just delta3 -> do
+                   delta3' <- computeAddOutputCtx omega' delta3 []
                    return (makeCase t1 t2 x l r e1 e2, delta3', subst)
               Nothing -> none
           _ -> none
