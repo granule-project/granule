@@ -93,6 +93,7 @@ library:
   - text >=1.1.2
   - split
   - logict == 0.7.0.2
+  - clock
 
 tests:
   frontend-spec:
