@@ -7,7 +7,7 @@ module Language.Granule.Synthesis.Synth where
 
 --import Data.List
 --import Control.Monad (forM_)
-import Debug.Trace
+--import Debug.Trace
 import System.IO.Unsafe
 import qualified Data.Map as M
 
@@ -53,8 +53,8 @@ solve :: (?globals :: Globals)
 solve = do
   cs <- conv $ State.get
   let pred = Conj $ predicateStack cs
-  tyVars <- conv $ tyVarContextExistential >>= justCoeffectTypesConverted nullSpanNoFile
-  traceM $ pretty pred
+  tyVars <- conv $ justCoeffectTypesConverted nullSpanNoFile (tyVarContext cs)
+  --traceM $ pretty pred
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   (smtTime', result) <- liftIO $ provePredicate pred tyVars
