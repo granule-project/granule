@@ -441,7 +441,7 @@ useVar (name, Discharged t grade) gamma Subtractive = do
   (kind, _) <- conv $ inferCoeffectType nullSpan grade
   var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
   conv $ existential var (KPromote kind)
-  conv $ addConstraint (Eq nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
+  conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) (COne kind)) grade kind)
   res <- solve
   case res of
     True -> do
@@ -622,7 +622,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
            case lookupAndCutout id delta' of
              Just (delta'', (Discharged _ usage)) -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
-               conv $ addConstraint (Eq nullSpanNoFile grade usage kind)
+               conv $ addConstraint (ApproximatedBy nullSpanNoFile usage grade kind)
                res <- solve
                case res of
                  True ->
@@ -630,7 +630,7 @@ unboxHelper decls left (var@(x, a) : right) gamma Additive goalTy =
                  False -> none
              _ -> do
                (kind, _) <- conv $ inferCoeffectType nullSpan grade
-               conv $ addConstraint (ApproximatedBy nullSpanNoFile grade (CZero kind) kind)
+               conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) grade kind)
                res <- solve
                case res of
                  True ->
