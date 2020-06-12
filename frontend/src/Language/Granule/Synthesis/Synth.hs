@@ -747,15 +747,21 @@ pairIntroHelper :: (?globals :: Globals)
   -> ResourceScheme BoxRuleMode
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
-pairIntroHelper decls gamma resourceScheme goalTy =
+pairIntroHelper decls gamma (sub@Subtractive{}) goalTy =
   case goalTy of
     (Forall _ binders constraints (ProdTy t1 t2)) -> do
-      --liftIO $ putStrLn "Doing pair intro helper"
-      --liftIO $ putStrLn $ show gamma
-      (e1, delta1, subst1) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t1)
+      (e1, delta1, subst1) <- synthesiseInner decls True sub gamma [] (Forall nullSpanNoFile binders constraints t1)
+      (e2, delta2, subst2) <- synthesiseInner decls True sub delta1 [] (Forall nullSpanNoFile binders constraints t2)
+      subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
+      return (makePair t1 t2 e1 e2, delta2, subst)
+    _ -> none
+pairIntroHelper decls gamma Additive goalTy =
+  case goalTy of
+    (Forall _ binders constraints (ProdTy t1 t2)) -> do
+      (e1, delta1, subst1) <- synthesiseInner decls True Additive gamma [] (Forall nullSpanNoFile binders constraints t1)
       gammaAdd <- computeAddInputCtx gamma delta1
-      (e2, delta2, subst2) <- synthesiseInner decls True resourceScheme (if resourceScheme == Additive then gammaAdd else delta1) [] (Forall nullSpanNoFile binders constraints t2)
-      delta3 <- if resourceScheme == Additive then computeAddOutputCtx delta1 delta2 [] else return delta2
+      (e2, delta2, subst2) <- synthesiseInner decls True Additive gammaAdd [] (Forall nullSpanNoFile binders constraints t2)
+      delta3 <- computeAddOutputCtx delta1 delta2 []
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       return (makePair t1 t2 e1 e2, delta3, subst)
     _ -> none
