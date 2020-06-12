@@ -1,7 +1,4 @@
 data Either a b = Left a | Right b
 ifThenElse : forall {a : Type, b : Type, c : Type}
   . (Either a b) -> (a -> c) [0..1] -> (b -> c) [0..1] -> c
-ifThenElse x [u] [v] = 
-    (case x of
-      Left w -> u w;
-      Right p -> v p)
+ifThenElse = ?
