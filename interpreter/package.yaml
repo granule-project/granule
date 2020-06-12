@@ -17,6 +17,7 @@ dependencies:
 - optparse-applicative
 - text
 - logict == 0.7.0.2
+- clock
 
 default-extensions:
 - LambdaCase

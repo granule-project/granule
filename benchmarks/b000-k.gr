@@ -1,2 +1,5 @@
-k : forall {a b : Type} . a -> b [0] -> a
-k = ?
+--k : forall {a b : Type} . a [1] -> a [1] -> a [1] -> b [3] -> b [3] -> b [3] -> (a [3], b [9])
+--k = ?
+
+f : forall { a b c : Type } . a [10] -> b [20] -> c [30] -> (((a , a)[5] , (b, b) [10]), (c, (c, c))[10])
+f = ?
