@@ -80,7 +80,6 @@ solve = do
 
   case result of
     QED -> do
-      traceM $ pretty pred
       return True
     NotValid s -> do
       return False
@@ -95,9 +94,6 @@ solve = do
 
 gradeAdd :: Coeffect -> Coeffect -> Maybe Coeffect
 gradeAdd c c' = Just $ CPlus c c'
-
-gradeSub :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeSub c c' =  Just $ CMinus c c'
 
 gradeMult :: Coeffect -> Coeffect -> Maybe Coeffect
 gradeMult c c' = Just $ CTimes c c'
