@@ -92,18 +92,6 @@ solve = do
     _ -> do
       return False
 
-gradeAdd :: Coeffect -> Coeffect -> Coeffect
-gradeAdd c c' = CPlus c c'
-
-gradeMult :: Coeffect -> Coeffect -> Coeffect
-gradeMult c c' = CTimes c c'
-
-gradeLub :: Coeffect -> Coeffect -> Coeffect
-gradeLub c c' = CJoin c c'
-
-gradeGlb :: Coeffect -> Coeffect -> Coeffect
-gradeGlb c c' = CMeet c c'
-
 ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption)  -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 ctxtSubtract gam [] = return gam
 ctxtSubtract gam ((x, Linear t):del) =
@@ -131,10 +119,9 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
 
 ctxtMultByCoeffect :: Coeffect -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 ctxtMultByCoeffect _ [] = return []
-ctxtMultByCoeffect g1 ((x, Discharged t g2):xs) =
-    let g' = gradeMult g1 g2 in do
+ctxtMultByCoeffect g1 ((x, Discharged t g2):xs) = do
       ctxt <- ctxtMultByCoeffect g1 xs
-      return $ ((x, Discharged t g'): ctxt)
+      return $ ((x, Discharged t (CTimes g1 g2)): ctxt)
 ctxtMultByCoeffect _ _ = none
 
 ctxtDivByCoeffect :: (?globals :: Globals) => Coeffect -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
@@ -194,10 +181,9 @@ ctxtAdd x [] = Just x
 ctxtAdd [] y = Just y
 ctxtAdd ((x, Discharged t1 g1):xs) ys =
   case lookupAndCutout x ys of
-    Just (ys', Discharged t2 g2) ->
-      let g3 = gradeAdd g1 g2 in do
-          ctxt <- ctxtAdd xs ys'
-          return $ (x, Discharged t1 g3) : ctxt
+    Just (ys', Discharged t2 g2) -> do
+      ctxt <- ctxtAdd xs ys'
+      return $ (x, Discharged t1 (CPlus g1 g2)) : ctxt
     Nothing -> do
       ctxt <- ctxtAdd xs ys
       return $ (x, Discharged t1 g1) : ctxt
@@ -792,7 +778,7 @@ sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookup l delta1, lookup r delta2) of
           (Nothing, Nothing) -> do
-            delta3 <- ctxtMerge gradeGlb delta1 delta2
+            delta3 <- ctxtMerge (CMeet) delta1 delta2
             return (makeCase t1 t2 x l r e1 e2, delta3, subst)
           _ -> none
     _ -> none
@@ -813,7 +799,7 @@ sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) -> do
-            delta3 <- ctxtMerge gradeLub delta1' delta2'
+            delta3 <- ctxtMerge (CJoin) delta1' delta2'
             delta3' <- maybeToSynthesiser $ ctxtAdd omega' delta3
             return (makeCase t1 t2 x l r e1 e2, delta3', subst)
           _ -> none
