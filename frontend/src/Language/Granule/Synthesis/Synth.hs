@@ -368,6 +368,10 @@ reprintAsDef id goalTy expr =
       defTypeScheme = goalTy
       }
 
+bindToContext :: (Id, Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Bool -> (Ctxt (Assumption), Ctxt (Assumption))
+bindToContext var gamma omega True = (gamma, var:omega)
+bindToContext var gamma omega False = (var:gamma, omega)
+
 makeVar :: Id -> TypeScheme -> Expr () Type
 makeVar name (Forall _ _ _ t) =
   Val s t False (Var t name)
