@@ -1496,9 +1496,10 @@ programSynthesise ctxt vars ty patternss = do
             ++ filter (\(id, a) -> not (id `elem` vars)) ctxt
 
     -- Run the synthesiser in this context
+    let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
     synRes <-
        liftIO $ Syn.synthesiseProgram
-                    [] (if additiveSynthesisMode then Syn.Additive else (Syn.Subtractive Syn.Default))
+                    [] (if additiveSynthesisMode then (Syn.Additive mode) else (Syn.Subtractive mode))
                     ctxt' [] (Forall nullSpan [] [] ty) currentState
 
     case synRes of
