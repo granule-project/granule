@@ -188,14 +188,14 @@ maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
 maybeToSynthesiser Nothing = none
 
-computeAddInputCtx :: (?globals :: Globals) => Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
-computeAddInputCtx gamma delta = do
-  ctxtSubtract gamma delta
-
-computeAddOutputCtx :: Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
-computeAddOutputCtx del1 del2 del3 = do
-  del' <- maybeToSynthesiser $ ctxtAdd del1 del2
-  maybeToSynthesiser $ ctxtAdd del' del3
+--computeAddInputCtx :: (?globals :: Globals) => Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+--computeAddInputCtx gamma delta = do
+--  ctxtSubtract gamma delta
+--
+--computeAddOutputCtx :: Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+--computeAddOutputCtx del1 del2 del3 = do
+--  del' <- maybeToSynthesiser $ ctxtAdd del1 del2
+--  maybeToSynthesiser $ ctxtAdd del' del3
 
 ctxtAdd :: Ctxt Assumption -> Ctxt Assumption -> Maybe (Ctxt Assumption)
 ctxtAdd [] [] = Just []
@@ -819,25 +819,25 @@ sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
           _ -> none
     _ -> none
 
-sumElimHelper decls left (var@(x, a):right) gamma Additive goalTy =
-  (sumElimHelper decls (var:left) right gamma Additive goalTy) `try`
+sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
+  (sumElimHelper decls (var:left) right gamma add goalTy) `try`
   let omega = left ++ right in do
-  (canUse, omega', t) <- useVar var omega Additive
+  (canUse, omega', t) <- useVar var omega add
   case (canUse, t) of
     (True, SumTy t1 t2) -> do
       l <- freshIdentifier
       r <- freshIdentifier
-      omega1 <- computeAddInputCtx omega omega'
+      omega1 <- ctxtSubtract omega omega'
       let (gamma', omega1') = bindToContext (l, Linear t1) gamma omega1 (isLAsync t1)
       let (gamma'', omega1'') = bindToContext (r, Linear t2) gamma omega1 (isLAsync t2)
-      (e1, delta1, subst1) <- synthesiseInner decls True Additive gamma' omega1' goalTy
-      (e2, delta2, subst2) <- synthesiseInner decls True Additive gamma'' omega1'' goalTy
+      (e1, delta1, subst1) <- synthesiseInner decls True add gamma' omega1' goalTy
+      (e2, delta2, subst2) <- synthesiseInner decls True add gamma'' omega1'' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) ->
             case ctxtMerge gradeLub delta1' delta2' of
               Just delta3 -> do
-                   delta3' <- computeAddOutputCtx omega' delta3 []
+                   delta3' <- maybeToSynthesiser $ ctxtAdd omega' delta3
                    return (makeCase t1 t2 x l r e1 e2, delta3', subst)
               Nothing -> none
           _ -> none
