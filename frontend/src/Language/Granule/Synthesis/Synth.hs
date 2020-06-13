@@ -443,6 +443,8 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 --makeEitherCase :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type
 --makeEitherCase name lId rId (Forall _ _ _ goalTy) lTy rTy =
 
+-- Note that the way this is used, the (var, assumption) pair in the first
+-- argument is not contained in the provided context (second argument)
 useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> ResourceScheme AltOrDefault -> Synthesiser (Bool, Ctxt (Assumption), Type)
 useVar (name, Linear t) gamma Subtractive{} = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma Subtractive{} = do
