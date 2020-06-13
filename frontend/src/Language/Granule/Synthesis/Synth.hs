@@ -92,17 +92,17 @@ solve = do
     _ -> do
       return False
 
-gradeAdd :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeAdd c c' = Just $ CPlus c c'
+gradeAdd :: Coeffect -> Coeffect -> Coeffect
+gradeAdd c c' = CPlus c c'
 
-gradeMult :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeMult c c' = Just $ CTimes c c'
+gradeMult :: Coeffect -> Coeffect -> Coeffect
+gradeMult c c' = CTimes c c'
 
-gradeLub :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeLub c c' = Just $ CJoin c c'
+gradeLub :: Coeffect -> Coeffect -> Coeffect
+gradeLub c c' = CJoin c c'
 
-gradeGlb :: Coeffect -> Coeffect -> Maybe Coeffect
-gradeGlb c c' = Just $ CMeet c c'
+gradeGlb :: Coeffect -> Coeffect -> Coeffect
+gradeGlb c c' = CMeet c c'
 
 ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption)  -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 ctxtSubtract gam [] = return gam
@@ -129,26 +129,21 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
         conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) g') g kind)
         return $ CVar var
 
-ctxtMultByCoeffect :: Coeffect -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
-ctxtMultByCoeffect _ [] = Just []
+ctxtMultByCoeffect :: Coeffect -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+ctxtMultByCoeffect _ [] = return []
 ctxtMultByCoeffect g1 ((x, Discharged t g2):xs) =
-  case gradeMult g1 g2 of
-    Just g' -> do
+    let g' = gradeMult g1 g2 in do
       ctxt <- ctxtMultByCoeffect g1 xs
       return $ ((x, Discharged t g'): ctxt)
-    Nothing -> Nothing
-ctxtMultByCoeffect _ _ = Nothing
+ctxtMultByCoeffect _ _ = none
 
-ctxtDivByCoeffect :: (?globals :: Globals) => Coeffect -> Ctxt (Assumption) -> Synthesiser (Maybe (Ctxt (Assumption)))
-ctxtDivByCoeffect _ [] = return $ Just []
+ctxtDivByCoeffect :: (?globals :: Globals) => Coeffect -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+ctxtDivByCoeffect _ [] = return []
 ctxtDivByCoeffect g1 ((x, Discharged t g2):xs) =
     do
       ctxt <- ctxtDivByCoeffect g1 xs
-      case ctxt of
-        Just ctxt' -> do
-          var <- gradeDiv g1 g2
-          return $ Just ((x, Discharged t var): ctxt')
-        _ -> return Nothing
+      var <- gradeDiv g1 g2
+      return ((x, Discharged t var): ctxt)
   where
     gradeDiv g g' = do
       (kind, _) <- conv $ inferCoeffectType nullSpan g
@@ -156,33 +151,29 @@ ctxtDivByCoeffect g1 ((x, Discharged t g2):xs) =
       conv $ existential var (KPromote kind)
       conv $ addConstraint (ApproximatedBy nullSpanNoFile (CTimes (CVar var) g) g' kind)
       return $ CVar var
+ctxtDivByCoeffect _ _ = none
 
-ctxtDivByCoeffect _ _ = return Nothing
-
-ctxtMerge :: (Coeffect -> Coeffect -> Maybe Coeffect) -> Ctxt Assumption -> Ctxt Assumption -> Maybe (Ctxt Assumption)
-ctxtMerge _ [] [] = Just []
-ctxtMerge _ x [] = Just x
-ctxtMerge _ [] y = Just y
+ctxtMerge :: (Coeffect -> Coeffect -> Coeffect) -> Ctxt Assumption -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
+ctxtMerge _ [] [] = return []
+ctxtMerge _ x [] = return x
+ctxtMerge _ [] y = return y
 ctxtMerge coefOp ((x, Discharged t1 g1):xs) ys =
   case lookupAndCutout x ys of
     Just (ys', Discharged t2 g2) ->
       if t1 == t2 then
-        case coefOp g1 g2 of
-          Just g3 -> do
+        let g3 =  coefOp g1 g2 in do
             ctxt <- ctxtMerge coefOp xs ys'
             return $ (x, Discharged t1 g3) : ctxt
-          Nothing -> Nothing
       else
-        Nothing
+        none
     Nothing -> do
       ctxt <- ctxtMerge coefOp xs ys
       return $ (x, Discharged t1 g1) : ctxt
-    _ -> Nothing
+    _ -> none
 ctxtMerge coefOp ((x, Linear t1):xs) ys =
   case lookup x ys of
     Just (Linear t2) -> ctxtMerge coefOp xs ys
-    Nothing -> Nothing
-    _ -> Nothing
+    _ -> none
 
 maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
@@ -204,11 +195,9 @@ ctxtAdd [] y = Just y
 ctxtAdd ((x, Discharged t1 g1):xs) ys =
   case lookupAndCutout x ys of
     Just (ys', Discharged t2 g2) ->
-      case gradeAdd g1 g2 of
-        Just g3 -> do
+      let g3 = gradeAdd g1 g2 in do
           ctxt <- ctxtAdd xs ys'
           return $ (x, Discharged t1 g3) : ctxt
-        Nothing -> Nothing
     Nothing -> do
       ctxt <- ctxtAdd xs ys
       return $ (x, Discharged t1 g1) : ctxt
@@ -585,35 +574,26 @@ boxHelper decls gamma resourceScheme goalTy =
         Additive{} ->
           do
             (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
-            case ctxtMultByCoeffect g delta of
-              Just delta' -> do
-                return (makeBox goalTy e, delta', subst)
-              _ -> none
+            delta' <- ctxtMultByCoeffect g delta
+            return (makeBox goalTy e, delta', subst)
         Subtractive Default ->
           do
             (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
             used <- ctxtSubtract gamma delta
             -- Compute what was used to synth e
-            case ctxtMultByCoeffect g used of
-              Just delta' -> do
-                delta'' <- ctxtSubtract gamma delta'
-                return (makeBox goalTy e, delta'', subst)
-              _ -> none
+            delta' <- ctxtMultByCoeffect g used
+            delta'' <- ctxtSubtract gamma delta'
+            return (makeBox goalTy e, delta'', subst)
 
         Subtractive Alternative -> do
           gamma' <- ctxtDivByCoeffect g gamma
-          case gamma' of
-            Just gamma'' -> do
-              (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma'' [] (Forall nullSpanNoFile binders constraints t)
-              case ctxtMultByCoeffect g delta of
-                Just delta' -> do
-                  res <- solve
-                  case res of
-                    True -> do
-                      return (makeBox goalTy e, delta', subst)
-                    False -> none
-                _ -> none
-            _ -> none
+          (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' [] (Forall nullSpanNoFile binders constraints t)
+          delta' <- ctxtMultByCoeffect g delta
+          res <- solve
+          case res of
+            True -> do
+              return (makeBox goalTy e, delta', subst)
+            False -> none
     _ -> none
 
 
@@ -811,11 +791,9 @@ sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
       (e2, delta2, subst2) <- synthesiseInner decls True sub gamma'' omega''' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookup l delta1, lookup r delta2) of
-          (Nothing, Nothing) ->
-            case ctxtMerge gradeGlb delta1 delta2 of
-              Just delta3 ->
-                return (makeCase t1 t2 x l r e1 e2, delta3, subst)
-              Nothing -> none
+          (Nothing, Nothing) -> do
+            delta3 <- ctxtMerge gradeGlb delta1 delta2
+            return (makeCase t1 t2 x l r e1 e2, delta3, subst)
           _ -> none
     _ -> none
 
@@ -834,12 +812,10 @@ sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
       (e2, delta2, subst2) <- synthesiseInner decls True add gamma'' omega1'' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
-          (Just (delta1', Linear _), Just (delta2', Linear _)) ->
-            case ctxtMerge gradeLub delta1' delta2' of
-              Just delta3 -> do
-                   delta3' <- maybeToSynthesiser $ ctxtAdd omega' delta3
-                   return (makeCase t1 t2 x l r e1 e2, delta3', subst)
-              Nothing -> none
+          (Just (delta1', Linear _), Just (delta2', Linear _)) -> do
+            delta3 <- ctxtMerge gradeLub delta1' delta2'
+            delta3' <- maybeToSynthesiser $ ctxtAdd omega' delta3
+            return (makeCase t1 t2 x l r e1 e2, delta3', subst)
           _ -> none
     _ -> none
 
