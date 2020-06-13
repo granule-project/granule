@@ -106,32 +106,28 @@ gradeGlb c c' = Just $ CMeet c c'
 
 ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption)  -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 ctxtSubtract gam [] = return gam
-ctxtSubtract ((x1, Linear t1):xs) ys =
-  case lookup x1 ys of
-    Just _ -> ctxtSubtract xs ys
-    _ -> do
-      ctx <- ctxtSubtract xs ys
-      return $ ((x1, Linear t1) : ctx)
+ctxtSubtract gam ((x, Linear t):del) =
+  case lookup x gam of
+    Just _ -> ctxtSubtract gam del
+    Nothing -> none
 
-ctxtSubtract ((x1, Discharged t1 g1):xs) ys  =
-  case lookup x1 ys of
-    Just (Discharged t2 g2) -> do
-      g3 <- gradeSub g2 g1
-      ctx <- ctxtSubtract xs ys
-      return ((x1, Discharged t1 g3):ctx)
-    _ -> do
-      ctx <- ctxtSubtract xs ys
-      return ((x1, Discharged t1 g1):ctx)
+ctxtSubtract gam ((x, Discharged t g2):del) =
+  case lookup x gam of
+    Just (Discharged t2 g1) -> do
+      g3 <- g1 `gradeSub` g2
+      ctx <- ctxtSubtract gam del
+      return ((x, Discharged t g3):ctx)
+    _ -> none
     where
       gradeSub g g' = do
+        -- g - g' = c
+        -- therefore
+        -- g = c + g'
         (kind, _) <- conv $ inferCoeffectType nullSpan g
         var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
         conv $ existential var (KPromote kind)
-        conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) g) g' kind)
+        conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) g') g kind)
         return $ CVar var
--- UNSURE ABOUT THIS
--- corresponds to `[] - gam` where `gam` is not empty
-ctxtSubtract _ _ = return []
 
 ctxtMultByCoeffect :: Coeffect -> Ctxt (Assumption) -> Maybe (Ctxt (Assumption))
 ctxtMultByCoeffect _ [] = Just []
