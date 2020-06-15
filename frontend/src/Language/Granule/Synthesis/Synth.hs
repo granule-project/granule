@@ -65,7 +65,6 @@ solve = do
 
 
   -- Update benchmarking data
-
   state <- Synthesiser $ lift $ lift $ lift get
 --  traceM  $ show state
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
@@ -75,8 +74,6 @@ solve = do
              proverTime = proverTime' + (proverTime state),
              theoremSizeTotal = (sizeOfPred pred) + (theoremSizeTotal state)
                   })
-
-          --  (SynthesisData 1 smtTime proverTime (sizeOfPred pred))
 
   case result of
     QED -> do
@@ -91,6 +88,8 @@ solve = do
       return False
     _ -> do
       return False
+
+-- * Context manipulations
 
 ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption)  -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 ctxtSubtract gam [] = return gam
@@ -524,23 +523,32 @@ absHelper :: (?globals :: Globals)
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
-absHelper decls gamma omega allowLam resourceScheme goalTy =
-  case goalTy of
-      (Forall _ binders constraints (FunTy name t1 t2)) -> do
-        id <- useBinderNameOrFreshen name
-        let (gamma', omega') =
-              if isLAsync t1 then
-                (gamma, ((id, Linear t1):omega))
-              else
-                (((id, Linear t1):gamma, omega))
-        (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
-        case (resourceScheme, lookupAndCutout id delta) of
-          (Additive{}, Just (delta', Linear _)) ->
-            return (makeAbs id e goalTy, delta', subst)
-          (Subtractive{}, Nothing) ->
-            return (makeAbs id e goalTy, delta, subst)
-          _ -> none
-      _ -> none
+absHelper decls gamma omega allowLam resourceScheme goalTy@(Forall _ binders constraints (FunTy name t1 t2)) = do
+    -- Fresh var
+    id <- useBinderNameOrFreshen name
+
+    -- Build recursive context depending on focus mode
+    let (gamma', omega') =
+          if isLAsync t1 then
+            (gamma, ((id, Linear t1):omega))
+          else
+            (((id, Linear t1):gamma, omega))
+
+    -- Synthesis body
+    (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
+
+    -- Check resource use at the end
+    case (resourceScheme, lookupAndCutout id delta) of
+      (Additive{}, Just (delta', Linear _)) ->
+        -- `id` was used
+        return (makeAbs id e goalTy, delta', subst)
+      (Subtractive{}, Nothing) ->
+        -- `id` was used
+        return (makeAbs id e goalTy, delta, subst)
+      _ ->
+        -- `id` was not used!
+        none
+absHelper _ _ _ _ _ _ = none
 
 
 appHelper :: (?globals :: Globals)
@@ -562,6 +570,7 @@ appHelper decls left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ b
         (e1, delta1, sub1) <- synthesiseInner decls True sub gamma' omega'' goalTy
         case lookup id delta1 of
           Nothing -> do
+            -- Check that `id` was used by `e1` (and thus is not in `delta1`)
             (e2, delta2, sub2) <- synthesiseInner decls True sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
             subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
             return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst)
@@ -723,6 +732,7 @@ pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
           let (gamma'', omega''') = bindToContext (rId, Linear t2) gamma' omega'' (isLAsync t2)
           (e, delta, subst) <- synthesiseInner decls True sub gamma'' omega''' goalTy
           case (lookup lId delta, lookup rId delta) of
+            -- both `lId` and `rId` were used in `e`
             (Nothing, Nothing) -> return (makePairElim x lId rId goalTy t1 t2 e, delta, subst)
             _ -> none
       _ -> none
