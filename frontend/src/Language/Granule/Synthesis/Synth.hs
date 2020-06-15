@@ -89,7 +89,7 @@ solve = do
 
 -- * Context manipulations
 
-ctxtSubtract :: (?globals :: Globals) => Ctxt (Assumption)  -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+ctxtSubtract :: (?globals :: Globals) => Ctxt Assumption  -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
 ctxtSubtract gam [] = return gam
 ctxtSubtract gam ((x, Linear t):del) =
   case lookupAndCutout x gam of
@@ -114,14 +114,14 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
         conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) g') g kind)
         return $ CVar var
 
-ctxtMultByCoeffect :: Coeffect -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+ctxtMultByCoeffect :: Coeffect -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
 ctxtMultByCoeffect _ [] = return []
 ctxtMultByCoeffect g1 ((x, Discharged t g2):xs) = do
       ctxt <- ctxtMultByCoeffect g1 xs
       return $ ((x, Discharged t (CTimes g1 g2)): ctxt)
 ctxtMultByCoeffect _ _ = none
 
-ctxtDivByCoeffect :: (?globals :: Globals) => Coeffect -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
+ctxtDivByCoeffect :: (?globals :: Globals) => Coeffect -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
 ctxtDivByCoeffect _ [] = return []
 ctxtDivByCoeffect g1 ((x, Discharged t g2):xs) =
     do
@@ -228,25 +228,11 @@ isAtomic :: Type -> Bool
 isAtomic (TyVar {}) = True
 isAtomic _ = False
 
-
 data AltOrDefault = Default | Alternative
   deriving (Show, Eq)
 
-
 data ResourceScheme a = Additive a | Subtractive a
   deriving (Show, Eq)
-
-testGlobals :: Globals
-testGlobals = mempty
-  { globalsNoColors = Just True
-  , globalsSuppressInfos = Just True
-  , globalsTesting = Just True
-  }
-
-topLevel :: (?globals :: Globals) => TypeScheme -> ResourceScheme AltOrDefault -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
-topLevel ts@(Forall _ binders constraints ty) resourceScheme = do
-  conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders})
-  synthesise [] True resourceScheme [] [] ts
 
 -- Reprint Expr as a top-level declaration
 reprintAsDef :: Id -> TypeScheme -> Expr () Type -> Def () Type
@@ -276,7 +262,7 @@ reprintAsDef id goalTy expr =
       defTypeScheme = goalTy
       }
 
-bindToContext :: (Id, Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Bool -> (Ctxt (Assumption), Ctxt (Assumption))
+bindToContext :: (Id, Assumption) -> Ctxt Assumption -> Ctxt Assumption -> Bool -> (Ctxt Assumption, Ctxt Assumption)
 bindToContext var gamma omega True = (gamma, var:omega)
 bindToContext var gamma omega False = (var:gamma, omega)
 
@@ -349,7 +335,9 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 
 -- Note that the way this is used, the (var, assumption) pair in the first
 -- argument is not contained in the provided context (second argument)
-useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> ResourceScheme AltOrDefault -> Synthesiser (Bool, Ctxt (Assumption), Type)
+useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt Assumption -> ResourceScheme AltOrDefault -> Synthesiser (Bool, Ctxt Assumption, Type)
+
+-- Subtractive
 useVar (name, Linear t) gamma Subtractive{} = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma Subtractive{} = do
   (kind, _) <- conv $ inferCoeffectType nullSpan grade
@@ -364,40 +352,39 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
       return (True, replace gamma name (Discharged t (CVar var)), t)
     False -> do
       return (False, [], t)
+
+-- Additive
 useVar (name, Linear t) _ Additive{} = return (True, [(name, Linear t)], t)
 useVar (name, Discharged t grade) _ Additive{} = do
   (kind, _) <- conv $ inferCoeffectType nullSpan grade
   return (True, [(name, (Discharged t (COne kind)))], t)
 
 varHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 varHelper decls left [] _ _ = none
 varHelper decls left (var@(x, a) : right) resourceScheme goalTy@(Forall _ binders constraints goalTy') =
  (varHelper decls (var:left) right resourceScheme goalTy) `try`
    (do
 --    liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy'
       (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
-      case success of
-        True -> do
+      if success then do
           (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
-          if canUse
-            then return (makeVar x goalTy, gamma, subst)
-            else none
-        _ -> none)
+          boolToSynthesiser canUse (makeVar x goalTy, gamma, subst)
+      else none)
 
 absHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
   -> Bool
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 absHelper decls gamma omega allowLam resourceScheme goalTy@(Forall _ binders constraints (FunTy name t1 t2)) = do
     -- Fresh var
     id <- useBinderNameOrFreshen name
@@ -427,13 +414,14 @@ absHelper _ _ _ _ _ _ = none
 
 
 appHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 appHelper decls left [] _ _ = none
+
 appHelper decls left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ binders constraints _ ) =
   (appHelper decls (var : left) right sub goalTy) `try`
   let omega = left ++ right in do
@@ -474,11 +462,11 @@ appHelper decls left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _
 
 
 boxHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 boxHelper decls gamma resourceScheme goalTy =
   case goalTy of
     (Forall _ binders constraints (Box g t)) -> do
@@ -510,13 +498,13 @@ boxHelper decls gamma resourceScheme goalTy =
 
 
 unboxHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 unboxHelper decls left [] _ _ _ = none
 
 {-
@@ -587,13 +575,13 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
 
 
 pairElimHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 pairElimHelper decls left [] _ _ _ = none
 pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
   (pairElimHelper decls (var:left) right gamma sub goalTy) `try`
@@ -633,11 +621,11 @@ pairElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy 
       _ -> none
 
 unitIntroHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 unitIntroHelper decls gamma resourceScheme goalTy =
   case goalTy of
     (Forall _ binders constraints (TyCon (internalName -> "()"))) -> do
@@ -649,11 +637,11 @@ unitIntroHelper decls gamma resourceScheme goalTy =
     _ -> none
 
 pairIntroHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 pairIntroHelper decls gamma (sub@Subtractive{}) goalTy =
   case goalTy of
     (Forall _ binders constraints (ProdTy t1 t2)) -> do
@@ -675,7 +663,7 @@ pairIntroHelper decls gamma (add@(Additive mode)) goalTy =
 
 
 sumIntroHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl) -> Ctxt (Assumption) -> ResourceScheme AltOrDefault -> TypeScheme -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  => Ctxt DataDecl -> Ctxt Assumption -> ResourceScheme AltOrDefault -> TypeScheme -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 sumIntroHelper decls gamma resourceScheme goalTy =
   case goalTy of
     (Forall _ binders constraints (SumTy t1 t2)) -> do
@@ -694,13 +682,13 @@ sumIntroHelper decls gamma resourceScheme goalTy =
 
 
 sumElimHelper :: (?globals :: Globals)
-  => Ctxt (DataDecl)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
-  -> Ctxt (Assumption)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 sumElimHelper decls left [] _ _ _ = none
 sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
   (sumElimHelper decls (var:left) right gamma sub goalTy) `try`
@@ -748,13 +736,13 @@ sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
 
 
 synthesiseInner :: (?globals :: Globals)
-           => Ctxt (DataDecl)      -- ADT Definitions
+           => Ctxt DataDecl      -- ADT Definitions
            -> Bool                 -- whether a function is allowed at this point
            -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
-           -> Ctxt (Assumption)    -- (unfocused) free variables
-           -> Ctxt (Assumption)    -- focused variables
+           -> Ctxt Assumption    -- (unfocused) free variables
+           -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
-           -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+           -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 
 synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') =
   case (isRAsync goalTy', omega) of
@@ -786,13 +774,13 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
         unitIntroHelper decls gamma resourceScheme goalTy
 
 synthesise :: (?globals :: Globals)
-           => Ctxt (DataDecl)      -- ADT Definitions
+           => Ctxt DataDecl      -- ADT Definitions
            -> Bool                 -- whether a function is allowed at this point
            -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
-           -> Ctxt (Assumption)    -- (unfocused) free variables
-           -> Ctxt (Assumption)    -- focused variables
+           -> Ctxt Assumption    -- (unfocused) free variables
+           -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
-           -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
+           -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 synthesise decls allowLam resourceScheme gamma omega goalTy = do
   result@(expr, ctxt, subst) <- synthesiseInner decls allowLam resourceScheme gamma omega goalTy
   case resourceScheme of
@@ -830,13 +818,13 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
 
 -- Run from the checker
 synthesiseProgram :: (?globals :: Globals)
-           => Ctxt (DataDecl)      -- ADT Definitions
+           => Ctxt DataDecl      -- ADT Definitions
            -> ResourceScheme AltOrDefault       -- whether the synthesis is in additive mode or not
-           -> Ctxt (Assumption)    -- (unfocused) free variables
-           -> Ctxt (Assumption)    -- focused variables
+           -> Ctxt Assumption    -- (unfocused) free variables
+           -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
            -> CheckerState
-           -> IO [(Expr () Type, Ctxt (Assumption), Substitution)]
+           -> IO [(Expr () Type, Ctxt Assumption, Substitution)]
 synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
   start <- liftIO $ Clock.getTime Clock.Monotonic
   -- %%
@@ -933,6 +921,18 @@ sizeOfCoeffect _ = 0
 
 --------------------------------
 -- Testing code
+
+topLevel :: (?globals :: Globals) => TypeScheme -> ResourceScheme AltOrDefault -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
+topLevel ts@(Forall _ binders constraints ty) resourceScheme = do
+  conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders})
+  synthesise [] True resourceScheme [] [] ts
+
+testGlobals :: Globals
+testGlobals = mempty
+  { globalsNoColors = Just True
+  , globalsSuppressInfos = Just True
+  , globalsTesting = Just True
+  }
 
 testSyn :: Bool -> IO ()
 testSyn useReprint =
