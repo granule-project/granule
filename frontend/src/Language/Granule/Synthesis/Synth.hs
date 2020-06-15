@@ -518,10 +518,10 @@ appHelper decls left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ b
         id <- freshIdentifier
         let (gamma', omega'') = bindToContext (id, Linear t2) omega' [] (isLAsync t2)
         (e1, delta1, sub1) <- synthesiseInner decls True sub gamma' omega'' goalTy
-        (e2, delta2, sub2) <- synthesiseInner decls True sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
-        subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
-        case lookup id delta2 of
-          Nothing ->
+        case lookup id delta1 of
+          Nothing -> do
+            (e2, delta2, sub2) <- synthesiseInner decls True sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
+            subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
             return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst)
           _ -> none
     _ -> none
