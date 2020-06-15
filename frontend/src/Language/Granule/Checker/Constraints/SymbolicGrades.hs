@@ -61,6 +61,43 @@ instance Show SynTree where
   show (SynMerge sb s t) = "(if " ++ show sb ++ " (" ++ show s ++ ") (" ++ show t ++ "))"
 
 sEqTree :: SynTree -> SynTree -> Symbolic SBool
+
+-- Additive units
+sEqTree (SynPlus (SynLeaf (Just n)) t) t' = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+sEqTree (SynPlus t (SynLeaf (Just n))) t' = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+sEqTree t (SynPlus (SynLeaf (Just n)) t') = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+sEqTree t (SynPlus t' (SynLeaf (Just n))) = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+-- Multiplicative units
+sEqTree (SynTimes (SynLeaf (Just n)) t) t' = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 1) eq sFalse
+
+sEqTree (SynTimes t (SynLeaf (Just n))) t' = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 1) eq sFalse
+
+sEqTree t (SynTimes (SynLeaf (Just n)) t') = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 1) eq sFalse
+
+sEqTree t (SynTimes t' (SynLeaf (Just n))) = do
+  eq <- sEqTree t t'
+  return $ ite (n .== 1) eq sFalse
+
+-- Congruences
+
 sEqTree (SynPlus s s') (SynPlus t t') =
   liftM2 (.||) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
                 -- + is commutative
@@ -90,6 +127,41 @@ sEqTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .=== n'
 sEqTree _ _ = return $ sFalse
 
 sLtTree :: SynTree -> SynTree -> Symbolic SBool
+
+-- Additive units
+sLtTree (SynPlus (SynLeaf (Just n)) t) t' = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+sLtTree (SynPlus t (SynLeaf (Just n))) t' = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+sLtTree t (SynPlus (SynLeaf (Just n)) t') = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+sLtTree t (SynPlus t' (SynLeaf (Just n))) = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 0) eq sFalse
+
+-- Multiplicative units
+sLtTree (SynTimes (SynLeaf (Just n)) t) t' = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 1) eq sFalse
+
+sLtTree (SynTimes t (SynLeaf (Just n))) t' = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 1) eq sFalse
+
+sLtTree t (SynTimes (SynLeaf (Just n)) t') = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 1) eq sFalse
+
+sLtTree t (SynTimes t' (SynLeaf (Just n))) = do
+  eq <- sLtTree t t'
+  return $ ite (n .== 1) eq sFalse
+
 sLtTree (SynPlus s s') (SynPlus t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynTimes s s') (SynTimes t t') = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynMeet s s') (SynMeet t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
