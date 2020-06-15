@@ -97,10 +97,10 @@ ctxtSubtract gam ((x, Linear t):del) =
     Nothing -> none
 
 ctxtSubtract gam ((x, Discharged t g2):del) =
-  case lookup x gam of
-    Just (Discharged t2 g1) -> do
+  case lookupAndCutout x gam of
+    Just (gam', Discharged t2 g1) -> do
       g3 <- g1 `gradeSub` g2
-      ctx <- ctxtSubtract gam del
+      ctx <- ctxtSubtract gam' del
       return ((x, Discharged t g3):ctx)
     _ -> none
     where
