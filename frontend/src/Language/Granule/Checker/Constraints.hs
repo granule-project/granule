@@ -31,8 +31,6 @@ import Language.Granule.Utils
 
 import qualified System.Clock as Clock
 
--- import Debug.Trace
-
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)

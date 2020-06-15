@@ -62,42 +62,6 @@ instance Show SynTree where
 
 sEqTree :: SynTree -> SynTree -> Symbolic SBool
 
--- Additive units
-sEqTree (SynPlus (SynLeaf (Just n)) t) t' = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 0) eq sFalse
-
-sEqTree (SynPlus t (SynLeaf (Just n))) t' = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 0) eq sFalse
-
-sEqTree t (SynPlus (SynLeaf (Just n)) t') = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 0) eq sFalse
-
-sEqTree t (SynPlus t' (SynLeaf (Just n))) = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 0) eq sFalse
-
--- Multiplicative units
-sEqTree (SynTimes (SynLeaf (Just n)) t) t' = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 1) eq sFalse
-
-sEqTree (SynTimes t (SynLeaf (Just n))) t' = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 1) eq sFalse
-
-sEqTree t (SynTimes (SynLeaf (Just n)) t') = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 1) eq sFalse
-
-sEqTree t (SynTimes t' (SynLeaf (Just n))) = do
-  eq <- sEqTree t t'
-  return $ ite (n .== 1) eq sFalse
-
--- Congruences
-
 sEqTree (SynPlus s s') (SynPlus t t') =
   liftM2 (.||) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
                 -- + is commutative
@@ -124,49 +88,14 @@ sEqTree (SynMerge sb s s') (SynMerge sb' t t')  =
 
 sEqTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sEqTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .=== n'
-sEqTree _ _ = return $ sFalse
+sEqTree s t = return sFalse
 
 sLtTree :: SynTree -> SynTree -> Symbolic SBool
-
--- Additive units
-sLtTree (SynPlus (SynLeaf (Just n)) t) t' = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 0) eq sFalse
-
-sLtTree (SynPlus t (SynLeaf (Just n))) t' = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 0) eq sFalse
-
-sLtTree t (SynPlus (SynLeaf (Just n)) t') = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 0) eq sFalse
-
-sLtTree t (SynPlus t' (SynLeaf (Just n))) = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 0) eq sFalse
-
--- Multiplicative units
-sLtTree (SynTimes (SynLeaf (Just n)) t) t' = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 1) eq sFalse
-
-sLtTree (SynTimes t (SynLeaf (Just n))) t' = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 1) eq sFalse
-
-sLtTree t (SynTimes (SynLeaf (Just n)) t') = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 1) eq sFalse
-
-sLtTree t (SynTimes t' (SynLeaf (Just n))) = do
-  eq <- sLtTree t t'
-  return $ ite (n .== 1) eq sFalse
-
 sLtTree (SynPlus s s') (SynPlus t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynTimes s s') (SynTimes t t') = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynMeet s s') (SynMeet t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
-sLtTree (SynMerge sb s s') (SynMerge sb' t t') = 
+sLtTree (SynMerge sb s s') (SynMerge sb' t t') =
   liftM2 (.&&) (return $ sb .== sb') (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
 sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
@@ -393,11 +322,11 @@ symGradeTimes s t | isSProduct s || isSProduct t =
 -- units and absorption directly encoded
 symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t'@(SynLeaf (Just u'))) =
   return $
-    ite (u .== 1) (SUnknown (SynLeaf (Just u')))
-      (ite (u' .== 1) (SUnknown (SynLeaf (Just u)))
-        (ite (u .== 0) (SUnknown (SynLeaf (Just 0)))
-          (ite (u' .== 0) (SUnknown (SynLeaf (Just 0)))
-             (SUnknown (SynTimes t t')))))
+     ite (u .== 1) (SUnknown (SynLeaf (Just u')))
+       (ite (u' .== 1) (SUnknown (SynLeaf (Just u)))
+         (ite (u .== 0) (SUnknown (SynLeaf (Just 0)))
+           (ite (u' .== 0) (SUnknown (SynLeaf (Just 0)))
+              (SUnknown (SynTimes t t')))))
 
 symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t') =
   return $
@@ -405,9 +334,9 @@ symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t') =
       (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
 
 symGradeTimes (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
-  return $
-    ite (u .== 1) (SUnknown t)
-      (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
+   return $
+     ite (u .== 1) (SUnknown t)
+       (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
 
 symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)

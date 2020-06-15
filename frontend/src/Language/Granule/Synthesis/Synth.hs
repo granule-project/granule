@@ -53,7 +53,6 @@ solve = do
   cs <- conv $ State.get
   let pred = Conj $ predicateStack cs
   tyVars <- conv $ justCoeffectTypesConverted nullSpanNoFile (tyVarContext cs)
-  --traceM $ pretty pred
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   (smtTime', result) <- liftIO $ provePredicate pred tyVars
@@ -744,6 +743,7 @@ unitElimHelper decls left (var@(x,a):right) gamma (sub@Subtractive{}) goalTy = d
         (e, delta, subst) <- synthesiseInner decls True sub gamma (left ++ right) goalTy
         return (makeUnitElim x e goalTy, delta, subst)
       _ -> none
+
 unitElimHelper decls left (var@(x,a):right) gamma (add@Additive{}) goalTy =
   (unitElimHelper decls (var:left) right gamma add goalTy) `try`
     case (getAssumptionType a) of
@@ -752,7 +752,6 @@ unitElimHelper decls left (var@(x,a):right) gamma (add@Additive{}) goalTy =
         return (makeUnitElim x e goalTy, (var:delta), subst)
       _ -> none
 
-  
 
 sumElimHelper :: (?globals :: Globals)
   => Ctxt DataDecl
