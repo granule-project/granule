@@ -579,15 +579,14 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
             case lookupAndCutout x2 delta' of
               Just (delta'', (Discharged _ usage)) -> do
                 (kind, _) <- conv $ inferCoeffectType nullSpan grade
-                liftIO $ putStrLn $ (pretty usage ++ " <=? " ++ pretty grade)
+
+                debugM "check" (pretty usage ++ " <=? " ++ pretty grade)
                 conv $ addConstraint (ApproximatedBy nullSpanNoFile usage grade kind)
                 res <- solve
                 case res of
                   True -> do
-                    liftIO $ putStrLn "all good"
                     return (makeUnbox x2 x goalTy t t' e,  delta'', subst)
                   False -> do
-                    liftIO $ putStrLn "FAIL"
                     none
               _ -> do
                 (kind, _) <- conv $ inferCoeffectType nullSpan grade
