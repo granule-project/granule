@@ -190,8 +190,6 @@ ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
     Nothing -> none -- Cannot weaken a linear thing
 
 ctxtAdd :: Ctxt Assumption -> Ctxt Assumption -> Maybe (Ctxt Assumption)
-ctxtAdd [] [] = Just []
-ctxtAdd x [] = Just x
 ctxtAdd [] y = Just y
 ctxtAdd ((x, Discharged t1 g1):xs) ys =
   case lookupAndCutout x ys of
