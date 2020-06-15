@@ -222,6 +222,7 @@ isLAsync :: Type -> Bool
 isLAsync (ProdTy{}) = True
 isLAsync (SumTy{}) = True
 isLAsync (Box{}) = True
+isLAsync (TyCon (internalName -> "()")) = True
 isLAsync _ = False
 
 isAtomic :: Type -> Bool
@@ -717,6 +718,32 @@ sumIntroHelper decls gamma resourceScheme goalTy =
     _ -> none
 
 
+unitElimHelper :: (?globals :: Globals)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> ResourceScheme AltOrDefault
+  -> TypeScheme
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
+unitElimHelper decls left [] _ _ _ = none
+unitElimHelper decls left (var@(x,a):right) gamma (sub@Subtractive{}) goalTy = do
+  (unitElimHelper decls (var:left) right gamma sub goalTy) `try`
+    case (getAssumptionType a) of
+      (TyCon (internalName -> "()")) -> do
+        (e, delta, subst) <- synthesiseInner decls True sub gamma (left ++ right) goalTy
+        return (e, delta, subst)
+      _ -> none
+unitElimHelper decls left (var@(x,a):right) gamma (add@Additive{}) goalTy =
+  (unitElimHelper decls (var:left) right gamma add goalTy) `try`
+    case (getAssumptionType a) of
+      (TyCon (internalName -> "()")) -> do
+        (e, delta, subst) <- synthesiseInner decls True add gamma (left ++ right) goalTy
+        return (e, (var:delta), subst)
+      _ -> none
+
+  
+
 sumElimHelper :: (?globals :: Globals)
   => Ctxt DataDecl
   -> Ctxt Assumption
@@ -792,6 +819,8 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
       pairElimHelper decls [] omega gamma resourceScheme goalTy
       `try`
       sumElimHelper decls [] omega gamma resourceScheme goalTy
+      `try`
+      unitElimHelper decls [] omega gamma resourceScheme goalTy
     (False, []) ->
       -- Transition to synchronous (focused) search
       if isAtomic goalTy' then
