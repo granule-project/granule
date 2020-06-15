@@ -606,40 +606,47 @@ pairElimHelper :: (?globals :: Globals)
 pairElimHelper decls left [] _ _ _ = none
 pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
   (pairElimHelper decls (var:left) right gamma sub goalTy) `try`
-  let omega = left ++ right in do
-    (canUse, omega', t) <- useVar var omega sub
-    case (canUse, t) of
-      (True, ProdTy t1 t2) -> do
-          lId <- freshIdentifier
-          rId <- freshIdentifier
-          let (gamma', omega'') = bindToContext (lId, Linear t1) gamma omega' (isLAsync t1)
-          let (gamma'', omega''') = bindToContext (rId, Linear t2) gamma' omega'' (isLAsync t2)
-          (e, delta, subst) <- synthesiseInner decls True sub gamma'' omega''' goalTy
-          case (lookup lId delta, lookup rId delta) of
-            -- both `lId` and `rId` were used in `e`
-            (Nothing, Nothing) -> return (makePairElim x lId rId goalTy t1 t2 e, delta, subst)
-            _ -> none
-      _ -> none
+   (case getAssumptionType a of
+      (ProdTy t1 t2) -> do
+        let omega = left ++ right
+        (canUse, omega', t) <- useVar var omega sub
+        if canUse
+          then do
+            lId <- freshIdentifier
+            rId <- freshIdentifier
+            let (gamma', omega'') = bindToContext (lId, Linear t1) gamma omega' (isLAsync t1)
+            let (gamma'', omega''') = bindToContext (rId, Linear t2) gamma' omega'' (isLAsync t2)
+            (e, delta, subst) <- synthesiseInner decls True sub gamma'' omega''' goalTy
+            case (lookup lId delta, lookup rId delta) of
+              -- both `lId` and `rId` were used in `e`
+              (Nothing, Nothing) -> return (makePairElim x lId rId goalTy t1 t2 e, delta, subst)
+              _ -> none
+          else none
+      _ -> none)
+
 pairElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
   (pairElimHelper decls (var:left) right gamma add goalTy) `try`
-  let omega = left ++ right in do
-    (canUse, omega', t) <- useVar var omega add
-    case (canUse, t) of
-      (True, ProdTy t1 t2) -> do
-          lId <- freshIdentifier
-          rId <- freshIdentifier
-          omega1 <- ctxtSubtract omega omega'
-          let (gamma', omega1') = bindToContext (lId, Linear t1) gamma omega1 (isLAsync t1)
-          let (gamma'', omega1'') = bindToContext (rId, Linear t2) gamma' omega1' (isLAsync t2)
-          (e, delta, subst) <- synthesiseInner decls True add gamma'' omega1'' goalTy
-          delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
-          case lookupAndCutout lId delta' of
-            Just (delta', Linear _) ->
-              case lookupAndCutout rId delta' of
-                Just (delta''', Linear _) -> return (makePairElim x lId rId goalTy t1 t2 e, delta''', subst)
-                _ -> none
-            _ -> none
-      _ -> none
+    (case getAssumptionType a of
+      (ProdTy t1 t2) -> do
+        let omega = (var:left) ++ right
+        (canUse, omega', t) <- useVar var omega add
+        if canUse
+          then do
+            lId <- freshIdentifier
+            rId <- freshIdentifier
+            omega1 <- ctxtSubtract omega omega'
+            let (gamma', omega1')   = bindToContext (lId, Linear t1) gamma omega1 (isLAsync t1)
+            let (gamma'', omega1'') = bindToContext (rId, Linear t2) gamma' omega1' (isLAsync t2)
+            (e, delta, subst) <- synthesiseInner decls True add gamma'' omega1'' goalTy
+            delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
+            case lookupAndCutout lId delta' of
+              Just (delta', Linear _) ->
+                case lookupAndCutout rId delta' of
+                  Just (delta''', Linear _) -> return (makePairElim x lId rId goalTy t1 t2 e, delta''', subst)
+                  _ -> none
+              _ -> none
+          else none
+      _ -> none)
 
 unitIntroHelper :: (?globals :: Globals)
   => Ctxt DataDecl
@@ -734,7 +741,7 @@ sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
 
 sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
   (sumElimHelper decls (var:left) right gamma add goalTy) `try`
-  let omega = left ++ right in do
+  let omega = (var:left) ++ right in do
   (canUse, omega', t) <- useVar var omega add
   case (canUse, t) of
     (True, SumTy t1 t2) -> do
