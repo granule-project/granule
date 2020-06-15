@@ -166,6 +166,10 @@ maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
 maybeToSynthesiser Nothing = none
 
+boolToSynthesiser :: Bool -> a -> Synthesiser a
+boolToSynthesiser True x = return x
+boolToSynthesiser False _ = none
+
 --computeAddInputCtx :: (?globals :: Globals) => Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
 --computeAddInputCtx gamma delta = do
 --  ctxtSubtract gamma delta
@@ -368,6 +372,10 @@ reprintAsDef id goalTy expr =
       defTypeScheme = goalTy
       }
 
+bindToContext :: (Id, Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Bool -> (Ctxt (Assumption), Ctxt (Assumption))
+bindToContext var gamma omega True = (gamma, var:omega)
+bindToContext var gamma omega False = (var:gamma, omega)
+
 makeVar :: Id -> TypeScheme -> Expr () Type
 makeVar name (Forall _ _ _ t) =
   Val s t False (Var t name)
@@ -389,6 +397,8 @@ makeBox (Forall _ _ _ t) e =
   Val s t False (Promote t e)
   where s = nullSpanNoFile
 
+-- The first name is the name being bound by the let
+-- The second name is the one that is the subject of the let
 makeUnbox :: Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
 makeUnbox name1 name2 (Forall _ _ _ goalTy) boxTy varTy e  =
   App s goalTy False
@@ -433,6 +443,8 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 --makeEitherCase :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type
 --makeEitherCase name lId rId (Forall _ _ _ goalTy) lTy rTy =
 
+-- Note that the way this is used, the (var, assumption) pair in the first
+-- argument is not contained in the provided context (second argument)
 useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt (Assumption) -> ResourceScheme AltOrDefault -> Synthesiser (Bool, Ctxt (Assumption), Type)
 useVar (name, Linear t) gamma Subtractive{} = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma Subtractive{} = do
@@ -592,26 +604,38 @@ unboxHelper :: (?globals :: Globals)
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt (Assumption), Substitution)
 unboxHelper decls left [] _ _ _ = none
-unboxHelper decls left (var@(x, a) : right) gamma (sub@Subtractive{}) goalTy =
-  (unboxHelper decls (var : left) right gamma sub goalTy) `try`
-    let omega = left ++ right in do
-      (canUse, omega', t) <- useVar var omega sub
-      case (canUse, t) of
-        (True, Box grade t') -> do
-          id <- freshIdentifier
-          let (gamma', omega'') = bindToContext (id, Discharged t' grade) gamma omega' (isLAsync t')
-          (e, delta, subst) <- synthesiseInner decls True sub gamma' omega'' goalTy
-          case lookupAndCutout id delta of
-            Just (delta', (Discharged _ usage)) -> do
-              (kind, _) <- conv $ inferCoeffectType nullSpan usage
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) usage kind)
-              res <- solve
-              case res of
-                True ->
-                  return (makeUnbox id x goalTy t t' e, delta', subst)
-                False -> do
-                  none
-            _ -> none
+
+{-
+
+ G, x2 : [A]r |- B =>- e : Delta, x2 : [A]s   0 <= s
+-------------------------------------------------------
+  G, x1 : []r A |- B =>- let [x2] = x1 in e; Delta
+-}
+
+unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
+  (unboxHelper decls (var : left) right gamma sub goalTy) `try` do
+      case getAssumptionType a of
+        tyBoxA@(Box grade_r tyA) -> do
+          let omega = left ++ right
+          (canUse, omega', _) <- useVar var omega sub
+          if canUse then do
+            --
+            x2 <- freshIdentifier
+            let (gamma', omega'') = bindToContext (x2, Discharged tyA grade_r) gamma omega' (isLAsync tyA)
+            -- Synthesise inner
+            (e, delta, subst) <- synthesiseInner decls True sub gamma' omega'' goalTy
+            ---
+            case lookupAndCutout x2 delta of
+              Just (delta', (Discharged _ grade_s)) -> do
+                -- Check that: 0 <= s
+                (kind, _) <- conv $ inferCoeffectType nullSpan grade_s
+                conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) grade_s kind)
+                res <- solve
+                -- If we succeed, create the let binding
+                boolToSynthesiser res (makeUnbox x2 x1 goalTy tyBoxA tyA e, delta', subst)
+
+              _ -> none
+          else none
         _ -> none
 unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
     (unboxHelper decls (var : left) right gamma add goalTy) `try`

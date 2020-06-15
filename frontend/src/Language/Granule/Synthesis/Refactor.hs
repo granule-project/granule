@@ -2,12 +2,8 @@ module Language.Granule.Synthesis.Refactor where
 
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Type
-
-import Language.Granule.Context
-import Language.Granule.Checker.Monad
 
 -- Refactors a definition which contains abstractions in its equations
 -- by pushing these abstractions into equation patterns
@@ -46,7 +42,3 @@ refactorEqn (Equation sp name ref annotation pats body) =
       exprBody (App _ _ _ (Val _ _ _ (Abs _ _ _ e )) _) = exprBody e
       exprBody (Val _ _ _ (Abs _ _ _ e)) = exprBody e
       exprBody e = e
-
-bindToContext :: (Id, Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Bool -> (Ctxt (Assumption), Ctxt (Assumption))
-bindToContext var gamma omega True = (gamma, var:omega)
-bindToContext var gamma omega False = (var:gamma, omega)
