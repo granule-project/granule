@@ -446,23 +446,31 @@ appHelper decls left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ b
 appHelper decls left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binders constraints _ ) =
   (appHelper decls (var : left) right add goalTy) `try`
   (case getAssumptionType a of
-    (FunTy _ t1 t2) -> do
-      let omega = (var:left) ++ right
-      (canUse, omega', t) <- useVar var omega add
+    (FunTy _ tyA tyB) -> do
+      let omega = left ++ right
+      (canUse, useContextOut, _) <- useVar var omega add
       if canUse
         then do
-          id <- freshIdentifier
-          gamma1 <- ctxtSubtract omega omega'
-          let (gamma1', omega'') = bindToContext (id, Linear t2) gamma1 [] (isLAsync t2)
-          (e1, delta1, sub1) <- synthesiseInner decls True add gamma1' omega'' goalTy
-          case lookupAndCutout id delta1 of
-            Just (delta1', Linear _) -> do
-              gamma2 <- ctxtSubtract (gamma1' ++ omega'') delta1'
-              (e2, delta2, sub2) <- synthesiseInner decls True add gamma2 [] (Forall nullSpanNoFile binders constraints t1)
-              delta3 <- maybeToSynthesiser $ ctxtAdd omega' delta1'
-              delta4 <- maybeToSynthesiser $ ctxtAdd delta2 delta3
+          x2 <- freshIdentifier
+          -- Extend context (focussed) with x2 : B
+          let (gamma', omega') = bindToContext (x2, Linear tyB) omega [] (isLAsync tyB)
+          -- Synthesise new goal binding result `x2`
+          (e1, delta1, sub1) <- synthesiseInner decls True add gamma' omega' goalTy
+          -- Make sure that `x2` appears in the result
+          case lookupAndCutout x2 delta1 of
+            Just (delta1',  Linear _) -> do
+              -- Pruning subtraction
+              gamma2 <- ctxtSubtract (gamma' ++ omega') delta1'
+
+              -- Synthesise the argument
+              (e2, delta2, sub2) <- synthesiseInner decls True add gamma2 [] (Forall nullSpanNoFile binders constraints tyA)
+
+              -- Add the results
+              deltaOut <- maybeToSynthesiser $ ctxtAdd useContextOut delta1'
+              deltaOut' <- maybeToSynthesiser $ ctxtAdd deltaOut delta2
+
               subst <- conv $ combineSubstitutions nullSpan sub1 sub2
-              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta4, subst)
+              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1, deltaOut', subst)
             _ -> none
         else none
     _ -> none)
