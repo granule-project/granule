@@ -331,6 +331,16 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
   Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PConstr s (SumTy t1 t2) False (mkId "Left") [(PVar s t1 False lId)], lExpr), (PConstr s (SumTy t1 t2) False (mkId "Right") [(PVar s t2 False rId)], rExpr)]
   where s = nullSpanNoFile
 
+makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type
+makeUnitElim name e (Forall _ _ _ goalTy) =
+  App s goalTy False
+   (Val s (TyCon (Id "()" "()")) False
+    (Abs (FunTy Nothing (TyCon (Id "()" "()")) goalTy)
+     (PConstr s (TyCon (Id "()" "()")) False (mkId "()") []) (Just (TyCon (Id "()" "()"))) e))
+   (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name))
+  where s = nullSpanNoFile
+
+
 --makeEitherCase :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type
 --makeEitherCase name lId rId (Forall _ _ _ goalTy) lTy rTy =
 
@@ -732,14 +742,14 @@ unitElimHelper decls left (var@(x,a):right) gamma (sub@Subtractive{}) goalTy = d
     case (getAssumptionType a) of
       (TyCon (internalName -> "()")) -> do
         (e, delta, subst) <- synthesiseInner decls True sub gamma (left ++ right) goalTy
-        return (e, delta, subst)
+        return (makeUnitElim x e goalTy, delta, subst)
       _ -> none
 unitElimHelper decls left (var@(x,a):right) gamma (add@Additive{}) goalTy =
   (unitElimHelper decls (var:left) right gamma add goalTy) `try`
     case (getAssumptionType a) of
       (TyCon (internalName -> "()")) -> do
         (e, delta, subst) <- synthesiseInner decls True add gamma (left ++ right) goalTy
-        return (e, (var:delta), subst)
+        return (makeUnitElim x e goalTy, (var:delta), subst)
       _ -> none
 
   
