@@ -460,7 +460,11 @@ appHelper decls left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _
           case lookupAndCutout x2 delta1 of
             Just (delta1',  Linear _) -> do
               -- Pruning subtraction
-              gamma2 <- ctxtSubtract (gamma' ++ omega') delta1'
+
+              gamma2 <-
+                case mode of
+                  Default     -> return (gamma' ++ omega')
+                  Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
 
               -- Synthesise the argument
               (e2, delta2, sub2) <- synthesiseInner decls True add gamma2 [] (Forall nullSpanNoFile binders constraints tyA)
@@ -553,6 +557,7 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
             _ -> none
         else none
       _ -> none)
+
 unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
   (unboxHelper decls (var : left) right gamma add goalTy) `try`
    (case getAssumptionType a of
@@ -682,8 +687,12 @@ pairIntroHelper decls gamma (add@(Additive mode)) goalTy =
   case goalTy of
     (Forall _ binders constraints (ProdTy t1 t2)) -> do
       (e1, delta1, subst1) <- synthesiseInner decls True add gamma [] (Forall nullSpanNoFile binders constraints t1)
-      gammaAdd <- ctxtSubtract gamma delta1
-      (e2, delta2, subst2) <- synthesiseInner decls True add gammaAdd [] (Forall nullSpanNoFile binders constraints t2)
+
+      gamma' <- case mode of
+                  Default     -> return gamma              -- no-prunes
+                  Alternative -> ctxtSubtract gamma delta1 -- pruning
+
+      (e2, delta2, subst2) <- synthesiseInner decls True add gamma' [] (Forall nullSpanNoFile binders constraints t2)
       delta3 <- maybeToSynthesiser $ ctxtAdd delta1 delta2
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       return (makePair t1 t2 e1 e2, delta3, subst)
