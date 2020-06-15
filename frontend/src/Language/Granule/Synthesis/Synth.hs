@@ -140,27 +140,57 @@ ctxtDivByCoeffect g1 ((x, Discharged t g2):xs) =
       return $ CVar var
 ctxtDivByCoeffect _ _ = none
 
-ctxtMerge :: (Coeffect -> Coeffect -> Coeffect) -> Ctxt Assumption -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
+ctxtMerge :: (?globals :: Globals)
+          => (Coeffect -> Coeffect -> Coeffect) -- lattice operator
+          -> Ctxt Assumption
+          -> Ctxt Assumption
+          -> Synthesiser (Ctxt Assumption)
+
+-- Base cases
+--  * Empties
 ctxtMerge _ [] [] = return []
-ctxtMerge _ x [] = return x
-ctxtMerge _ [] y = return y
-ctxtMerge coefOp ((x, Discharged t1 g1):xs) ys =
-  case lookupAndCutout x ys of
-    Just (ys', Discharged t2 g2) ->
-      if t1 == t2 then
-        let g3 =  coefOp g1 g2 in do
-            ctxt <- ctxtMerge coefOp xs ys'
-            return $ (x, Discharged t1 g3) : ctxt
-      else
-        none
+
+--  * Can meet/join an empty context to one that has graded assumptions
+ctxtMerge operator [] ((x, Discharged t g) : ctxt) = do
+  -- Left context has no `x`, so assume it has been weakened (0 gade)
+  (kind, _) <- conv $ inferCoeffectType nullSpan g
+  ctxt' <- ctxtMerge operator [] ctxt
+  return $ (x, Discharged t (operator (CZero kind) g)) : ctxt'
+
+--  * Cannot meet/join an empty context to one with linear assumptions
+ctxtMerge _ [] ((_, Linear t) : ctxt) = none
+
+-- Inductive cases
+ctxtMerge operator ((x, Discharged t1 g1) : ctxt1') ctxt2 = do
+  case lookupAndCutout x ctxt2 of
+    Just (ctxt2', Discharged t2 g2) ->
+      if t1 == t2 -- Just in case but should always be true
+        then do
+          ctxt' <- ctxtMerge operator ctxt1' ctxt2'
+          return $ (x, Discharged t1 (operator g1 g2)) : ctxt'
+
+        else none
+
+    Just (_, Linear _) -> none -- mode mismatch
+
     Nothing -> do
-      ctxt <- ctxtMerge coefOp xs ys
-      return $ (x, Discharged t1 g1) : ctxt
-    _ -> none
-ctxtMerge coefOp ((x, Linear t1):xs) ys =
-  case lookup x ys of
-    Just (Linear t2) -> ctxtMerge coefOp xs ys
-    _ -> none
+      -- Right context has no `x`, so assume it has been weakened (0 gade)
+      ctxt' <- ctxtMerge operator ctxt1' ctxt2
+      (kind, _) <- conv $ inferCoeffectType nullSpan g1
+      return $ (x, Discharged t1 (operator g1 (CZero kind))) : ctxt'
+
+ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
+  case lookupAndCutout x ctxt2 of
+    Just (ctxt2', Linear t2) ->
+      if t1 == t2 -- Just in case but should always be true
+        then do
+          ctxt' <- ctxtMerge operator ctxt1' ctxt2'
+          return $ (x, Linear t1) : ctxt1'
+        else none
+
+    Just (_, Discharged{}) -> none -- mode mismatch
+
+    Nothing -> none -- Cannot weaken a linear thing
 
 maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
@@ -802,7 +832,8 @@ sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookup l delta1, lookup r delta2) of
           (Nothing, Nothing) -> do
-            delta3 <- ctxtMerge (CMeet) delta1 delta2
+            -- Both `l` and `r` were used in `delta1` and `delta2` respectively
+            delta3 <- ctxtMerge CMeet delta1 delta2
             return (makeCase t1 t2 x l r e1 e2, delta3, subst)
           _ -> none
     _ -> none
@@ -823,7 +854,7 @@ sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) -> do
-            delta3 <- ctxtMerge (CJoin) delta1' delta2'
+            delta3 <- ctxtMerge CJoin delta1' delta2'
             delta3' <- maybeToSynthesiser $ ctxtAdd omega' delta3
             return (makeCase t1 t2 x l r e1 e2, delta3', subst)
           _ -> none
