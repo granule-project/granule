@@ -2,7 +2,7 @@
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
 {-# LANGUAGE PatternSynonyms #-}
 
-{-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
+{-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 module Language.Granule.Synthesis.Synth where
 
 --import Data.List
@@ -33,15 +33,14 @@ import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables hiding (freshIdentifierBase)
 import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.Refactor
+import Language.Granule.Synthesis.Monad
 
 import Data.Either (rights)
-import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import qualified Control.Monad.State.Strict as State (get, modify)
 --import Control.Monad.Trans.List
 --import Control.Monad.Writer.Lazy
 import Control.Monad.State.Strict
-import Control.Monad.Logic
 
 import qualified System.Clock as Clock
 
@@ -191,23 +190,6 @@ ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
 
     Nothing -> none -- Cannot weaken a linear thing
 
-maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
-maybeToSynthesiser (Just x) = return x
-maybeToSynthesiser Nothing = none
-
-boolToSynthesiser :: Bool -> a -> Synthesiser a
-boolToSynthesiser True x = return x
-boolToSynthesiser False _ = none
-
---computeAddInputCtx :: (?globals :: Globals) => Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
---computeAddInputCtx gamma delta = do
---  ctxtSubtract gamma delta
---
---computeAddOutputCtx :: Ctxt (Assumption) -> Ctxt (Assumption) -> Ctxt (Assumption) -> Synthesiser (Ctxt (Assumption))
---computeAddOutputCtx del1 del2 del3 = do
---  del' <- maybeToSynthesiser $ ctxtAdd del1 del2
---  maybeToSynthesiser $ ctxtAdd del' del3
-
 ctxtAdd :: Ctxt Assumption -> Ctxt Assumption -> Maybe (Ctxt Assumption)
 ctxtAdd [] [] = Just []
 ctxtAdd x [] = Just x
@@ -249,81 +231,6 @@ isAtomic :: Type -> Bool
 isAtomic (TyVar {}) = True
 isAtomic _ = False
 
--- Data structure for collecting information about synthesis
-data SynthesisData =
-  SynthesisData {
-    smtCallsCount    :: Integer
-  , smtTime          :: Double
-  , proverTime       :: Double -- longer than smtTime as it includes compilation of predicates to SMT
-  , theoremSizeTotal :: Integer
-  }
-  deriving Show
-
-instance Semigroup SynthesisData where
- (SynthesisData calls stime time size) <> (SynthesisData calls' stime' time' size') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size')
-
-instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0
-  mappend = (<>)
-
--- Synthesiser monad
-
-newtype Synthesiser a = Synthesiser
-  { unSynthesiser ::
-      ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT (StateT SynthesisData IO))) a }
-  deriving (Functor, Applicative, MonadState CheckerState)
-
--- Synthesiser always uses fair bind from LogicT
-instance Monad Synthesiser where
-  return = Synthesiser . return
-  k >>= f =
-    Synthesiser $ ExceptT (StateT
-       (\s -> unSynth k s >>- (\(eb, s) ->
-          case eb of
-            Left r -> mzero
-            Right b -> (unSynth . f) b s)))
-
-     where
-       unSynth m = runStateT (runExceptT (unSynthesiser m))
-
--- Monad transformer definitions
-
-instance MonadIO Synthesiser where
-  liftIO = conv . liftIO
-
---tellMe :: SynthesisData -> Synthesiser ()
---tellMe d = Synthesiser (ExceptT (StateT (\s -> LogicT (StateT (\s' -> return ([(Right (), s)], d) s')))))
-
--- Wrapper/unwrapper
---mkSynthesiser ::
---     (CheckerState -> LogicT IO ((Either (NonEmpty CheckerError) a), CheckerState))
---  -> Synthesiser a
---mkSynthesiser x = Synthesiser (ExceptT (StateT (\s -> x s)))
-
-runSynthesiser :: Synthesiser a
-  -> (CheckerState -> StateT SynthesisData IO [((Either (NonEmpty CheckerError) a), CheckerState)])
-runSynthesiser m s = do
-  observeManyT 1 (runStateT (runExceptT (unSynthesiser m)) s)
-
---foo :: Synthesiser Int
---foo = do
---  tellMe (SynthesisData 10 10 10 10)
---  none
-
-conv :: Checker a -> Synthesiser a
-conv (Checker k) =
-  Synthesiser
-    (ExceptT
-         (StateT (\s -> lift $ lift (runStateT (runExceptT k) s))))
-
-
-try :: Synthesiser a -> Synthesiser a -> Synthesiser a
-try m n = do
-  Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
-
-none :: Synthesiser a
-none = Synthesiser (ExceptT mzero)
 
 data AltOrDefault = Default | Alternative
   deriving (Show, Eq)
@@ -982,7 +889,7 @@ synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
               <> "{ smtCalls = " <> (show $ smtCallsCount aggregate)
               <> ", synthTime = " <> (show $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
               <> ", proverTime = " <> (show $ proverTime aggregate)
-              <> ", solverTime = " <> (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
+              <> ", solverTime = " <> (show $ Language.Granule.Synthesis.Monad.smtTime aggregate)
               <> ", meanTheoremSize = " <> (show $ if (smtCallsCount aggregate) == 0 then 0 else (fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
               <> ", success = " <> (if length results == 0 then "False" else "True")
               <> " } "
@@ -992,7 +899,7 @@ synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
         putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
         putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
         putStrLn $ "Total smtCalls     = " ++ (show $ smtCallsCount aggregate)
-        putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Synth.smtTime aggregate)
+        putStrLn $ "Total smtTime    (ms) = "  ++ (show $ Language.Granule.Synthesis.Monad.smtTime aggregate)
         putStrLn $ "Total proverTime (ms) = "  ++ (show $ proverTime aggregate)
         putStrLn $ "Total synth time (ms) = "  ++ (show $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
         putStrLn $ "Mean theoremSize   = " ++ (show $ (if (smtCallsCount aggregate) == 0 then 0 else fromInteger $ theoremSizeTotal aggregate) / (fromInteger $ smtCallsCount aggregate))
