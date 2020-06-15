@@ -62,16 +62,15 @@ solve = do
   end    <- liftIO $ Clock.getTime Clock.Monotonic
   let proverTime' = fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
 
-
+  --state <- Synthesiser $ lift $ lift $ lift get
+  -- traceM  $ show state
   -- Update benchmarking data
-  state <- Synthesiser $ lift $ lift $ lift get
---  traceM  $ show state
   Synthesiser $ lift $ lift $ lift $ modify (\state ->
             state {
              smtCallsCount = 1 + (smtCallsCount state),
              smtTime = smtTime' + (smtTime state),
              proverTime = proverTime' + (proverTime state),
-             theoremSizeTotal = (sizeOfPred pred) + (theoremSizeTotal state)
+             theoremSizeTotal = (toInteger $ length tyVars) + (sizeOfPred pred) + (theoremSizeTotal state)
                   })
 
   case result of
@@ -931,10 +930,12 @@ freshIdentifier = do
         then return $ mkId $ mappo !! n'
         else return $ mkId $ base <> show n'
 
+-- Calculate theorem sizes
+
 sizeOfPred :: Pred -> Integer
 sizeOfPred (Conj ps) = 1 + (sum $ map sizeOfPred ps)
 sizeOfPred (Disj ps) = 1 + (sum $ map sizeOfPred ps)
-sizeOfPred (Impl _ p1 p2) = 1 + (sizeOfPred p1) + (sizeOfPred p2)
+sizeOfPred (Impl binders p1 p2) = 1 + (toInteger $ length binders) + (sizeOfPred p1) + (sizeOfPred p2)
 sizeOfPred (Con c) = sizeOfConstraint c
 sizeOfPred (NegPred p) = 1 + (sizeOfPred p)
 sizeOfPred (Exists _ _ p) = 1 + (sizeOfPred p)

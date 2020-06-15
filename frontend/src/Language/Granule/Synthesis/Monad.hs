@@ -74,7 +74,6 @@ try m n = do
 none :: Synthesiser a
 none = Synthesiser (ExceptT mzero)
 
-
 maybeToSynthesiser :: Maybe (Ctxt a) -> Synthesiser (Ctxt a)
 maybeToSynthesiser (Just x) = return x
 maybeToSynthesiser Nothing = none
