@@ -561,12 +561,17 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
        (canUse, omega', t) <- useVar var omega add
        if canUse
           then do
-            id <- freshIdentifier
+            x2 <- freshIdentifier
             omega1 <- ctxtSubtract omega omega'
-            let (gamma', omega1') = bindToContext (id, Discharged t' grade) gamma omega1 (isLAsync t')
+            let (gamma', omega1') = bindToContext (x2, Discharged t' grade) gamma omega1 (isLAsync t')
+
+            -- Synthesise the body of a `let` unboxing
             (e, delta, subst) <- synthesiseInner decls True add gamma' omega1' goalTy
+
+            -- Add usage at the binder to the usage in the body
             delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
-            case lookupAndCutout id delta' of
+
+            case lookupAndCutout x2 delta' of
               Just (delta'', (Discharged _ usage)) -> do
                 (kind, _) <- conv $ inferCoeffectType nullSpan grade
                 liftIO $ putStrLn $ (pretty usage ++ " <=? " ++ pretty grade)
@@ -575,7 +580,7 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                 case res of
                   True -> do
                     liftIO $ putStrLn "all good"
-                    return (makeUnbox id x goalTy t t' e,  delta'', subst)
+                    return (makeUnbox x2 x goalTy t t' e,  delta'', subst)
                   False -> do
                     liftIO $ putStrLn "FAIL"
                     none
@@ -585,7 +590,7 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                 res <- solve
                 case res of
                   True ->
-                    return (makeUnbox id x goalTy t t' e,  delta', subst)
+                    return (makeUnbox x2 x goalTy t t' e,  delta', subst)
                   False -> none
           else none
      _ -> none)
