@@ -133,7 +133,7 @@ ctxtDivByCoeffect g1 ((x, Discharged t g2):xs) =
       (kind, _) <- conv $ inferCoeffectType nullSpan g
       var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
       conv $ existential var (KPromote kind)
-      conv $ addConstraint (ApproximatedBy nullSpanNoFile (CTimes (CVar var) g) g' kind)
+      conv $ addConstraint (ApproximatedBy nullSpanNoFile (CTimes g (CVar var)) g' kind)
       return $ CVar var
 ctxtDivByCoeffect _ _ = none
 
