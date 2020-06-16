@@ -335,11 +335,9 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
 
 makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type
 makeUnitElim name e (Forall _ _ _ goalTy) =
-  App s goalTy False
-   (Val s (TyCon (Id "()" "()")) False
-    (Abs (FunTy Nothing (TyCon (Id "()" "()")) goalTy)
-     (PConstr s (TyCon (Id "()" "()")) False (mkId "()") []) (Just (TyCon (Id "()" "()"))) e))
-   (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name))
+  Case s goalTy False
+    (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name))
+    [((PConstr s (TyCon (Id "()" "()")) False (mkId "()") []), e)]
   where s = nullSpanNoFile
 
 
