@@ -836,7 +836,10 @@ synthesiseInner :: (?globals :: Globals)
            -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 
 synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') = do
-  debugM "synthDebug" $ "Synth inner with gamma = " ++ pretty gamma ++ ", and omega = " ++ pretty omega ++ ", for goal = " ++ pretty goalTy ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
+  debugM "synthDebug" $ "Synth inner with gamma = " ++ pretty gamma ++ ", and omega = "
+                      ++ pretty omega ++ ", for goal = " ++ pretty goalTy
+                      ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
+                      ++ ", isAtomic goalTy = " ++ show (isAtomic goalTy')
 
   case (isRAsync goalTy', omega) of
     (True, omega) ->
