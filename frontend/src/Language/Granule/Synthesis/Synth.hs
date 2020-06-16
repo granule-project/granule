@@ -410,6 +410,7 @@ absHelper decls gamma omega allowLam resourceScheme goalTy@(Forall _ binders con
             (((id, Linear t1):gamma, omega))
 
     -- Synthesis body
+    debugM "synthDebug" $ "Lambda-binding " ++ pretty [(id, Linear t1)]
     (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
 
     -- Check resource use at the end
@@ -636,6 +637,8 @@ pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
   (pairElimHelper decls (var:left) right gamma sub goalTy) `try`
    (case getAssumptionType a of
       (ProdTy t1 t2) -> do
+        debugM "synthDebug" $ "Trying to eliminate product type " ++ pretty a
+
         let omega = left ++ right
         (canUse, omega', t) <- useVar var omega sub
         if canUse
@@ -644,6 +647,8 @@ pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
             rId <- freshIdentifier
             let (gamma', omega'') = bindToContext (lId, Linear t1) gamma omega' (isLAsync t1)
             let (gamma'', omega''') = bindToContext (rId, Linear t2) gamma' omega'' (isLAsync t2)
+
+            debugM "synthDebug" $ "Synthesiser inside product elim for goal " ++ pretty goalTy
             (e, delta, subst) <- synthesiseInner decls True sub gamma'' omega''' goalTy
             case (lookup lId delta, lookup rId delta) of
               -- both `lId` and `rId` were used in `e`
@@ -830,7 +835,9 @@ synthesiseInner :: (?globals :: Globals)
            -> TypeScheme           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 
-synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') =
+synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') = do
+  debugM "synthDebug" $ "Synth inner with gamma = " ++ pretty gamma ++ ", and omega = " ++ pretty omega ++ ", for goal = " ++ pretty goalTy ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
+
   case (isRAsync goalTy', omega) of
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
@@ -924,6 +931,7 @@ synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
   -- %%
   end    <- liftIO $ Clock.getTime Clock.Monotonic
 
+  debugM "synthDebug" ("Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS"))
   -- <benchmarking-output>
   if benchmarking
     then do
