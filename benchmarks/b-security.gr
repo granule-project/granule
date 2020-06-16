@@ -1,2 +1,2 @@
-dontLeak : forall {a : Type} . (a [Public], a [Private]) [0..1] -> (a [Public] -> ()) -> ()
+dontLeak : forall {a b : Type} . (a [Public], a [Private]) -> ((a, ()) [Public] -> b) -> b
 dontLeak = ?

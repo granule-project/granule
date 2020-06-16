@@ -1,2 +1,2 @@
-and3 : forall {a b : Type} . a -> b -> (a, b)
-and3 = ?
+and2 : forall {a : Type, b : Type} . (a [0], b) -> b
+and2 = ?
