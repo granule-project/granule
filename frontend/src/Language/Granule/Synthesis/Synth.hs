@@ -855,21 +855,23 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
       `try`
       unitElimHelper decls [] omega gamma resourceScheme goalTy
     (False, []) ->
-      -- Transition to synchronous (focused) search
-      if isAtomic goalTy' then
-        -- Left Sync: App rule + Init rules
-        varHelper decls [] gamma resourceScheme goalTy
-        `try`
-        appHelper decls [] gamma resourceScheme goalTy
-      else
-        -- Right Sync : Focus on goalTy
-        sumIntroHelper decls gamma resourceScheme goalTy
-        `try`
-        pairIntroHelper decls gamma resourceScheme goalTy
-        `try`
-        boxHelper decls gamma resourceScheme goalTy
-        `try`
-        unitIntroHelper decls gamma resourceScheme goalTy
+      (if not (isAtomic goalTy') then
+          -- Right Sync : Focus on goalTy when goalTy is not atomic
+          sumIntroHelper decls gamma resourceScheme goalTy
+          `try`
+          pairIntroHelper decls gamma resourceScheme goalTy
+          `try`
+          boxHelper decls gamma resourceScheme goalTy
+          `try`
+          unitIntroHelper decls gamma resourceScheme goalTy
+       else none)
+       -- Or can always try to do left sync:
+       `try` (do
+            -- Transition to synchronous (focused) search
+            -- Left Sync: App rule + Init rules
+            varHelper decls [] gamma resourceScheme goalTy
+            `try`
+            appHelper decls [] gamma resourceScheme goalTy)
 
 synthesise :: (?globals :: Globals)
            => Ctxt DataDecl      -- ADT Definitions
