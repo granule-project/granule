@@ -52,6 +52,7 @@ solve :: (?globals :: Globals)
 solve = do
   cs <- conv $ State.get
   let pred = Conj $ predicateStack cs
+  debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
   tyVars <- conv $ justCoeffectTypesConverted nullSpanNoFile (tyVarContext cs)
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
@@ -74,8 +75,10 @@ solve = do
 
   case result of
     QED -> do
+      debugM "synthDebug" "SMT said: Yes."
       return True
     NotValid s -> do
+      debugM "synthDebug" "SMT said: No."
       return False
     SolverProofError msgs -> do
       return False
@@ -436,16 +439,21 @@ appHelper decls left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ b
   (appHelper decls (var : left) right sub goalTy) `try`
   (case getAssumptionType a of
     (FunTy _ t1 t2) -> do
+      debugM "synthDebug" ("Trying to use a function " ++ pretty var ++ " to get goal " ++ pretty goalTy)
+
       let omega = left ++ right
       (canUse, omega', t) <- useVar var omega sub
       if canUse
         then do
           id <- freshIdentifier
           let (gamma', omega'') = bindToContext (id, Linear t2) omega' [] (isLAsync t2)
+
+          debugM "synthDebug" ("Inside app, try to synth the goal " ++ pretty goalTy ++ " under context of " ++ pretty [(id, Linear t2)])
           (e1, delta1, sub1) <- synthesiseInner decls True sub gamma' omega'' goalTy
           case lookup id delta1 of
             Nothing -> do
               -- Check that `id` was used by `e1` (and thus is not in `delta1`)
+              debugM "synthDebug" ("Inside app, try to synth the argument at type " ++ pretty t1)
               (e2, delta2, sub2) <- synthesiseInner decls True sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
               subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
               return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst)
@@ -514,7 +522,10 @@ boxHelper decls gamma resourceScheme goalTy =
             return (makeBox goalTy e, delta'', subst)
 
         Subtractive Alternative -> do
+          debugM "synthDebug" $ "div for " <> pretty goalTy
           gamma' <- ctxtDivByCoeffect g gamma
+          debugM "synthDebug" $ "gamma = " <> pretty gamma
+          debugM "synthDebug" $ "gamma' = " <> pretty gamma'
           (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' [] (Forall nullSpanNoFile binders constraints t)
           delta' <- ctxtMultByCoeffect g delta
           res <- solve
@@ -546,6 +557,8 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
   (unboxHelper decls (var : left) right gamma sub goalTy) `try` do
     (case getAssumptionType a of
       tyBoxA@(Box grade_r tyA) -> do
+        debugM "synthDebug" $ "Trying to unbox " ++ pretty tyBoxA
+
         let omega = left ++ right
         (canUse, omega', _) <- useVar var omega sub
         if canUse then do
@@ -553,6 +566,7 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
           x2 <- freshIdentifier
           let (gamma', omega'') = bindToContext (x2, Discharged tyA grade_r) gamma omega' (isLAsync tyA)
           -- Synthesise inner
+          debugM "synthDebug" $ "Inside unboxing try to synth for " ++ pretty goalTy ++ " under " ++ pretty [(x2, Discharged tyA grade_r)]
           (e, delta, subst) <- synthesiseInner decls True sub gamma' omega'' goalTy
           ---
           case lookupAndCutout x2 delta of
