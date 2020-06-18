@@ -1,0 +1,3 @@
+data Either a b = Left a | Right b
+pull : forall {a : Type, b : Type} . Either (a []) (b []) -> (Either a b) []
+pull = ?
