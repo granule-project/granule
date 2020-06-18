@@ -1,2 +1,2 @@
 pull : forall {a : Type, b : Type, k : Coeffect, c : k} . (a [c], b [c]) -> (a, b) [c]
-pull ([v], [u]) = [(v, u)]
+pull = ?

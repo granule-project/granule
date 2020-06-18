@@ -1,2 +1,0 @@
-pullVec5 : forall {a : Type, c : Nat} . ((((a [c], a [c]), a [c]), a [c]), a [c]) -> ((((a, a), a), a), a) [c]
-pullVec5 = ?
