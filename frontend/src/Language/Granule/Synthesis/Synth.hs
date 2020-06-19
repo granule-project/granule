@@ -113,7 +113,7 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
         (kind, _) <- conv $ inferCoeffectType nullSpan g
         var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
         conv $ existential var (KPromote kind)
-        conv $ addConstraint (ApproximatedBy nullSpanNoFile (CPlus (CVar var) g') g kind)
+        conv $ addConstraint (Eq nullSpanNoFile (CPlus (CVar var) g') g kind)
         return $ CVar var
 
 ctxtMultByCoeffect :: Coeffect -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
