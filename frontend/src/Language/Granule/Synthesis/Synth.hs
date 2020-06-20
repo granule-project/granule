@@ -30,7 +30,7 @@ import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Kinds (inferCoeffectType)
 import Language.Granule.Checker.Types
-import Language.Granule.Checker.Variables hiding (freshIdentifierBase)
+import Language.Granule.Checker.Variables
 import Language.Granule.Syntax.Span
 import Language.Granule.Synthesis.Refactor
 import Language.Granule.Synthesis.Monad
@@ -114,6 +114,12 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
         var <- conv $ freshTyVarInContext (mkId $ "c") (KPromote kind)
         conv $ existential var (KPromote kind)
         conv $ addConstraint (Eq nullSpanNoFile (CPlus (CVar var) g') g kind)
+        -- maximality
+        varOther' <- conv $ freshIdentifierBase "cOther"
+        let varOther = mkId varOther'
+        conv $ addPredicate (Impl [(varOther, KPromote kind)]
+                                (Conj [Con $ Eq nullSpanNoFile (CPlus (CVar varOther) g') g kind])
+                                (Conj [Con $ ApproximatedBy nullSpanNoFile (CVar varOther) (CVar var) kind]))
         return $ CVar var
 
 ctxtMultByCoeffect :: Coeffect -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
