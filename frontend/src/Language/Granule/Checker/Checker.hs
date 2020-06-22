@@ -876,15 +876,8 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) =
      Nothing ->
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
-         Just tyScheme  -> do
-           (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
-
-           mapM_ (\ty -> do
-             pred <- compileTypeConstraintToConstraint s ty
-             addPredicate pred) constraints
-
-           let elaborated = Val s ty' rf (Var ty' x)
-           return (ty', [], [], elaborated)
+         Just tyScheme  ->
+           freshenTySchemeForVar s rf x tyScheme
 
          -- Couldn't find it
          Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
@@ -1483,6 +1476,19 @@ checkGuardsForImpossibility s name = do
         }
 
       SolverProofError msg -> error msg
+
+--
+freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
+freshenTySchemeForVar s rf id tyScheme = do
+  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
+
+  mapM_ (\ty -> do
+    pred <- compileTypeConstraintToConstraint s ty
+    addPredicate pred) constraints
+
+  let elaborated = Val s ty' rf (Var ty' id)
+  return (ty', [], [], elaborated)
+
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
