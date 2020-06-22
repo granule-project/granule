@@ -11,6 +11,7 @@
 
 module Language.Granule.Checker.Monad where
 
+import Data.Maybe (mapMaybe)
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
 import Data.List (intercalate, transpose)
@@ -157,7 +158,7 @@ data CheckerState = CS
             , patternConsumption :: [Consumption]
 
             -- Data type information
-            --  map of type constructor names to their the kind, num of
+            --  map of type constructor names to their the kind,
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
             , typeConstructors :: Ctxt (Kind, [Id], Bool)
             -- map of data constructors and their types and substitutions
@@ -172,6 +173,10 @@ data CheckerState = CS
 
             -- The type of the current equation.
             , equationTy :: Maybe Type
+
+            -- Definitions that have been triggered during type checking
+            -- by the auto deriver (so we know we need them in the interpreter)
+            , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () ()))]
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -192,6 +197,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
+               , derivedDefinitions = []
                }
 
 -- *** Various helpers for manipulating the context
@@ -865,3 +871,18 @@ freshenPred pred = do
     -- Update the unique counter in the checker
     put (st { uniqueVarIdCounter = counter freshenerState })
     return pred'
+
+-- help to get a map from type constructor names to a map from data constructor names to their types and subst
+getDataTypes :: Checker (Ctxt (Ctxt (TypeScheme, Substitution)))
+getDataTypes = do
+  st <- get
+  let tyCons   = typeConstructors st
+  let dataCons = dataConstructors st
+  return $
+      flip mapMaybe tyCons $ \(tyCon, (k, dataConsNames, _)) ->
+        case k of
+          KType ->
+            Just $ (tyCon, mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames)
+          _ ->
+            -- Ignore not Type thing
+            Nothing
