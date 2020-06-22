@@ -27,6 +27,12 @@ data TypeScheme =
     Type          -- type
   deriving (Eq, Show, Generic, Rp.Data)
 
+trivialScheme :: Type -> TypeScheme
+trivialScheme = Forall nullSpanNoFile [] []
+
+unforall :: TypeScheme -> Type
+unforall (Forall _ _ _ t) = t
+
 -- Constructors and operators are just strings
 data TypeOperator
   = TyOpLesser

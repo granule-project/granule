@@ -47,6 +47,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
+import Language.Granule.Synthesis.Deriving
 import Language.Granule.Synthesis.Splitting
 import qualified Language.Granule.Synthesis.Synth as Syn
 
@@ -1063,8 +1064,7 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
 
         Nothing -> do
           -- Get this derived
-          dataTypes  <- getDataTypes
-          let (typScheme, def) = derivePush dataTypes ty
+          (typScheme, def) <- derivePush ty
           -- Register the definition that has been derived
           modify (\st -> st { derivedDefinitions = ((mkId "push", ty), (typScheme, def)) : derivedDefinitions st })
           -- return this variable expression in place here

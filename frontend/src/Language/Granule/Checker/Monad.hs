@@ -176,7 +176,7 @@ data CheckerState = CS
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
-            , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () ()))]
+            , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () Type))]
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -873,16 +873,18 @@ freshenPred pred = do
     return pred'
 
 -- help to get a map from type constructor names to a map from data constructor names to their types and subst
-getDataTypes :: Checker (Ctxt (Ctxt (TypeScheme, Substitution)))
-getDataTypes = do
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution)))
+getDataConstructors tyCon = do
   st <- get
   let tyCons   = typeConstructors st
   let dataCons = dataConstructors st
   return $
-      flip mapMaybe tyCons $ \(tyCon, (k, dataConsNames, _)) ->
-        case k of
-          KType ->
-            Just $ (tyCon, mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames)
-          _ ->
-            -- Ignore not Type thing
-            Nothing
+    case lookup tyCon tyCons of
+      Just (k, dataConsNames, _) ->
+          case k of
+            KType ->
+              Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames
+            _ ->
+              -- Ignore not Type thing
+              Nothing
+      Nothing -> Nothing
