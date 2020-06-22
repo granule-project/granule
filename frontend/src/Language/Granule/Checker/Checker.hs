@@ -1050,6 +1050,28 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      return (finalTy', gam'' `subtractCtxt` bindings, subst, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
 
+synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
+
+  -- Check to see if this type application is an instance of a deriving construct
+  case e1 of
+    (Val _ _ _ (Var _ (internalName -> "push"))) -> do
+      st <- get
+      let name = mkId $ "push" ++ pretty ty
+      case lookup (mkId "push", ty) (derivedDefinitions st) of
+        Just (tyScheme, _) ->
+          freshenTySchemeForVar s rf name tyScheme
+
+        Nothing -> do
+          -- Get this derived
+          dataTypes  <- getDataTypes
+          let (typScheme, def) = derivePush dataTypes ty
+          -- Register the definition that has been derived
+          modify (\st -> st { derivedDefinitions = ((mkId "push", ty), (typScheme, def)) : derivedDefinitions st })
+          -- return this variable expression in place here
+          freshenTySchemeForVar s rf name typScheme
+
+    _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
+
 synthExpr _ _ _ e =
   throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 

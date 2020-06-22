@@ -506,6 +506,10 @@ substituteExpr :: (?globals::Globals)
 substituteExpr ctxt (AppF sp ty rf fn arg) =
     do  ty' <- substitute ctxt ty
         return $ App sp ty' rf fn arg
+substituteExpr ctxt (AppTyF sp ty rf fn t) =
+    do  ty' <- substitute ctxt ty
+        t' <- substitute ctxt t
+        return $ AppTy sp ty' rf fn t'
 substituteExpr ctxt (BinopF sp ty rf op lhs rhs) =
     do  ty' <- substitute ctxt ty
         return $ Binop sp ty' rf op lhs rhs

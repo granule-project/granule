@@ -88,6 +88,7 @@ pattern Ext a extv = (ExprFix2 (ExtF a extv))
 -- | and annotations `a`).
 data ExprF ev a expr value =
     AppF Span a Bool expr expr
+  | AppTyF Span a Bool expr Type
   | BinopF Span a Bool Operator expr expr
   | LetDiamondF Span a Bool (Pattern a) (Maybe Type) expr expr
      -- Graded monadic composition (like Haskell do)
@@ -123,6 +124,7 @@ type Expr = ExprFix2 ExprF ValueF
 type UnfixedExpr ev a = UnExprFix2 ExprF ValueF ev a
 
 pattern App sp a rf fexp argexp = (ExprFix2 (AppF sp a rf fexp argexp))
+pattern AppTy sp a rf fexp ty = (ExprFix2 (AppTyF sp a rf fexp ty))
 pattern Binop sp a rf op lhs rhs = (ExprFix2 (BinopF sp a rf op lhs rhs))
 pattern LetDiamond sp a rf pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a rf pat mty nowexp nextexp))
 pattern Val sp a rf val = (ExprFix2 (ValF sp a rf val))
@@ -296,6 +298,7 @@ freshenId v = do
 
 instance Term (Expr v a) where
     freeVars (App _ _ _ e1 e2)            = freeVars e1 <> freeVars e2
+    freeVars (AppTy _ _ _ e1 e2)          = freeVars e1 <> freeVars e2
     freeVars (Binop _ _ _ _ e1 e2)        = freeVars e1 <> freeVars e2
     freeVars (LetDiamond _ _ _ p _ e1 e2) = freeVars e1 <> (freeVars e2 \\ boundVars p)
     freeVars (Val _ _ _ e)                = freeVars e
@@ -317,6 +320,9 @@ instance Substitutable Expr where
     subst es v (App s a rf e1 e2) =
       App s a rf (subst es v e1) (subst es v e2)
 
+    subst es v (AppTy s a rf e1 t) =
+      AppTy s a rf (subst es v e1) t
+
     subst es v (Binop s a rf op e1 e2) =
       Binop s a rf op (subst es v e1) (subst es v e2)
 
@@ -337,6 +343,11 @@ instance Monad m => Freshenable m (Expr v a) where
       e1 <- freshen e1
       e2 <- freshen e2
       return $ App s a rf e1 e2
+
+    freshen (AppTy s a rf e1 t) = do
+      e1 <- freshen e1
+      t <- freshen t
+      return $ AppTy s a rf e1 t
 
     freshen (LetDiamond s a rf p t e1 e2) = do
       e1 <- freshen e1

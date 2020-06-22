@@ -144,6 +144,10 @@ evalIn ctxt (App s _ _ e1 e2) = do
       _ -> error $ show v1
       -- _ -> error "Cannot apply value"
 
+-- Type application have no run time component (currently)
+evalIn ctxt (AppTy s _ _ e t) = do
+  evalIn ctxt e
+
 evalIn ctxt (Binop _ _ _ op e1 e2) = do
      v1 <- evalIn ctxt e1
      v2 <- evalIn ctxt e2
@@ -442,6 +446,7 @@ instance RuntimeRep Equation where
 instance RuntimeRep Expr where
   toRuntimeRep (Val s a rf v) = Val s a rf (toRuntimeRep v)
   toRuntimeRep (App s a rf e1 e2) = App s a rf (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (AppTy s a rf e1 t) = AppTy s a rf (toRuntimeRep e1) t
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)

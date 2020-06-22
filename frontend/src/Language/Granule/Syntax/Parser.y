@@ -98,6 +98,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '?'   { TokenEmptyHole _ }
     '{!'  { TokenHoleStart _ }
     '!}'  { TokenHoleEnd _ }
+    '@'   { TokenAt _ }
 
 %right '∘'
 %right in
@@ -491,6 +492,7 @@ Juxt :: { Expr () () }
   : Juxt '`' Atom '`'         {% (mkSpan (getStart $1, getEnd $3)) >>= \sp -> return $ App sp () False $3 $1 }
   | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () False $1 $2 }
   | Atom                      { $1 }
+  | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
 
 Hole :: { Expr () () }
   : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }
