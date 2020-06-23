@@ -1,0 +1,5 @@
+foo : forall {k : Coeffect, c : k} . () [c] -> ()
+foo = push @()
+
+specialised : () [] -> ()
+specialised = push @()
