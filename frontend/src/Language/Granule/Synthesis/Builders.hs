@@ -83,10 +83,13 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
   where s = nullSpanNoFile
 
 makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeUnitElim name e (Forall _ _ _ goalTy) =
+makeUnitElim name e tyS = makeUnitElimP id name e tyS
+
+makeUnitElimP :: (Pattern Type -> Pattern Type) -> Id -> Expr () Type -> TypeScheme -> Expr () Type
+makeUnitElimP patTransf name e (Forall _ _ _ goalTy) =
   Case s goalTy False
     (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name))
-    [((PConstr s (TyCon (Id "()" "()")) False (mkId "()") []), e)]
+    [((patTransf (PConstr s (TyCon (Id "()" "()")) False (mkId "()") [])), e)]
   where s = nullSpanNoFile
 
 makeUnitIntro :: Expr () Type
