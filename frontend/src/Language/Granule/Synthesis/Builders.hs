@@ -58,13 +58,17 @@ makePair lTy rTy e1 e2 =
   where s = nullSpanNoFile
 
 makePairElim :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
-makePairElim name lId rId (Forall _ _ _ goalTy) lTy rTy e =
+makePairElim name lId rId goalTyS lTy rTy e =
+   makePairElimP id (Val s (ProdTy lTy rTy) False (Var (ProdTy lTy rTy) name)) lId rId goalTyS lTy rTy e
+     where s = nullSpanNoFile
+
+makePairElimP :: (Pattern Type -> Pattern Type) -> Expr () Type -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
+makePairElimP ptransf elimExpr lId rId (Forall _ _ _ goalTy) lTy rTy e =
   App s goalTy False
   (Val s (ProdTy lTy rTy) False
     (Abs (FunTy Nothing (ProdTy lTy rTy) goalTy)
-      (PConstr s (ProdTy lTy rTy) False (mkId ",") [(PVar s lTy False lId), (PVar s rTy False rId)] )
-        Nothing e))
-  (Val s (ProdTy lTy rTy) False (Var (ProdTy lTy rTy) name))
+      (ptransf $ PConstr s (ProdTy lTy rTy) False (mkId ",") [(PVar s lTy False lId), (PVar s rTy False rId)] )
+        Nothing e)) elimExpr
   where s = nullSpanNoFile
 
 makeEitherLeft :: Type -> Type -> Expr () Type -> Expr () Type
@@ -83,12 +87,13 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
   where s = nullSpanNoFile
 
 makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeUnitElim name e tyS = makeUnitElimP id name e tyS
+makeUnitElim name e tyS = makeUnitElimP id
+    (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name)) e tyS
+  where s = nullSpanNoFile
 
-makeUnitElimP :: (Pattern Type -> Pattern Type) -> Id -> Expr () Type -> TypeScheme -> Expr () Type
-makeUnitElimP patTransf name e (Forall _ _ _ goalTy) =
-  Case s goalTy False
-    (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name))
+makeUnitElimP :: (Pattern Type -> Pattern Type) -> Expr () Type -> Expr () Type -> TypeScheme -> Expr () Type
+makeUnitElimP patTransf argExpr e (Forall _ _ _ goalTy) =
+  Case s goalTy False argExpr
     [((patTransf (PConstr s (TyCon (Id "()" "()")) False (mkId "()") [])), e)]
   where s = nullSpanNoFile
 

@@ -1,6 +1,4 @@
 -- push example
 
-data Pair a b = Pair a b 
-
-foo : forall {a : Type, b : Type} . (Pair a b) [] -> Pair (a []) (b [])
-foo = push @ Pair
+foo : forall {a : Type, b : Type} . (a, b) [] -> (a [], b [])
+foo = push @((,))
