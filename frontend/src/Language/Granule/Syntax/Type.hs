@@ -271,7 +271,7 @@ isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
 isProduct :: Type -> Maybe (Type, Type)
-isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
+isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" || internalName c == "," =
     Just (t, t')
 isProduct _ = Nothing
 
