@@ -23,6 +23,11 @@ makeVar name (Forall _ _ _ t) =
   Val s t False (Var t name)
   where s = nullSpanNoFile
 
+makeVar' :: Id -> Type -> Expr () Type
+makeVar' name t =
+  Val s t False (Var t name)
+  where s = nullSpanNoFile
+
 makeAbs :: Id -> Expr () Type -> TypeScheme -> Expr () Type
 makeAbs name e (Forall _ _ _ t@(FunTy _ t1 t2)) =
   Val s t False (Abs t (PVar s t False name) (Just t1) e)
@@ -42,15 +47,19 @@ makeBox (Forall _ _ _ t) e =
 -- The first name is the name being bound by the let
 -- The second name is the one that is the subject of the let
 makeUnbox :: Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
-makeUnbox name1 name2 (Forall _ _ _ goalTy) boxTy varTy e  =
+makeUnbox name1 name2 tyS boxTy varTy =
+  makeUnboxP name1 (Val s varTy False (Var varTy name2)) tyS boxTy varTy
+    where s = nullSpanNoFile
+
+makeUnboxP :: Id -> Expr () Type -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
+makeUnboxP name1 expr (Forall _ _ _ goalTy) boxTy varTy e  =
   App s goalTy False
   (Val s boxTy False
     (Abs (FunTy Nothing boxTy goalTy)
       (PBox s boxTy False
         (PVar s varTy False name1)) (Just boxTy) e))
-  (Val s varTy False
-    (Var varTy name2))
-  where s = nullSpanNoFile
+  expr
+    where s = nullSpanNoFile
 
 makePair :: Type -> Type -> Expr () Type -> Expr () Type -> Expr () Type
 makePair lTy rTy e1 e2 =

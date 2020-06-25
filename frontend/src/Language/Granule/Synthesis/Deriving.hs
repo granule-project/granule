@@ -36,14 +36,16 @@ derivePush ty = do
   -- Get kind of type constructor
   kind <- inferKindOfType nullSpanNoFile ty
   -- Generate fresh type variables and apply them to the kind constructor
-  (tyVarsContext, baseTy, argTy) <- fullyApplyTypePush kind (CVar cVar) ty
+  (tyVarsContext, baseTy, _) <- fullyApplyType kind (CVar cVar) ty
+  let tyVars = map (\(id, (t, _)) -> (id, t)) tyVarsContext
+  let argTy = Box (CVar cVar) baseTy
+
   -- Give a name to the input
   z <- freshIdentifierBase "z" >>= (return . mkId)
   (returnTy, bodyExpr) <-
-    derivePush' (CVar cVar) [] baseTy (makeVar z (trivialScheme argTy))
+    derivePush' (CVar cVar) [] tyVars baseTy (makeVar z (trivialScheme argTy))
 
   -- Build derived type scheme
-  let tyVars = map (\(id, (t, _)) -> (id, t)) tyVarsContext
   let tyS = Forall nullSpanNoFile
               ([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
               []
@@ -57,27 +59,51 @@ derivePush ty = do
             (EquationList nullSpanNoFile name True
                [Equation nullSpanNoFile name (unforall tyS) True [] expr]) tyS)
 
+-- derivePush' does the main work.
+-- For example, if we are deriving for the type constructor F
+-- then we want to compute:  [] r (F a1 .. an) -> F ([] r a1) .. ([] r an)
+-- It takes as parameters:
+--   * the grade used to annotate the graded modality: `r`
+--   * the context of recursion variables: Sigma
+--   * the context of type variables used to instantiate this: a1...an
+--   * the type from which we are deriving: F a1...an
+--   * the argument expression of type [] r (F a1 .. an)
+-- It returns:
+--   * the return type: F ([] r a1) .. ([] r an)
+--   * the and the expression of this type
 derivePush' :: (?globals :: Globals)
-            => Coeffect -> Ctxt Id -> Type -> Expr () Type -> Checker (Type, Expr () Type)
+            => Coeffect -> Ctxt Id -> Ctxt Kind -> Type -> Expr () Type -> Checker (Type, Expr () Type)
+
+-- Type variable case: push_alpha arg = arg
+
+derivePush' c _sigma gamma argTy@(TyVar n) arg = do
+  case lookup n gamma of
+    Just _ -> return (Box c argTy, arg)
+    Nothing -> do
+      -- For arguments which are type variables but not parameters
+      -- to this type constructor, then we need to do an unboxing
+      x <- freshIdentifierBase "x" >>= (return . mkId)
+      let expr = makeUnboxP x arg (trivialScheme argTy) (Box c argTy) argTy (makeVar' x argTy)
+      return (argTy, expr)
 
 -- Unit case:  push_() arg = (case arg of () -> ()) : ())
-derivePush' c _sigma argTy@(TyCon (internalName -> "()")) arg = do
-  let ty  = FunTy Nothing (Box c argTy) argTy
+derivePush' c _sigma gamma argTy@(TyCon (internalName -> "()")) arg = do
+  let ty  = argTy
   return (ty, makeUnitElimP (pbox c argTy) arg makeUnitIntro (trivialScheme argTy))
 
 -- Pair case: push_(t1,t2) arg = (case arg of (x, y) -> (push_t1 [x], push_t2 [y])
-derivePush' c _sigma argTy@(ProdTy t1 t2) arg = do
+derivePush' c _sigma gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
   -- Induction
-  (leftTy, leftExpr)   <- derivePush' c _sigma t1 (makeBox (trivialScheme $ Box c t1) (makeVar x (trivialScheme t1)))
-  (rightTy, rightExpr) <- derivePush' c _sigma t2 (makeBox (trivialScheme $ Box c t2) (makeVar y (trivialScheme t2)))
+  (leftTy, leftExpr)   <- derivePush' c _sigma gamma t1 (makeBox (trivialScheme $ Box c t1) (makeVar' x t1))
+  (rightTy, rightExpr) <- derivePush' c _sigma gamma t2 (makeBox (trivialScheme $ Box c t2) (makeVar' y t2))
   -- Build eliminator
   let returnTy = ProdTy leftTy rightTy
   return (returnTy, makePairElimP (pbox c argTy) arg x y (trivialScheme returnTy) t1 t2
                (makePair leftTy rightTy leftExpr rightExpr))
 
-derivePush' _ _ ty _ = do
+derivePush' _ _ _ ty _ = do
   error $ "Cannot push derive for type " ++ show ty
 
 derivePull :: Ctxt (Ctxt (TypeScheme, Substitution)) -> Type -> (TypeScheme, Def () ())
@@ -87,17 +113,17 @@ derivePull = error "stub"
 -- generator with fresh type variables for each parameter and return a type-variable
 -- context containing these variables as well as the applied type along with
 -- a pair of the applied type (e.g., F a b) [called the base type]
--- and the type for argument of the push (e.g., F ([] r a) ([] r b))
-fullyApplyTypePush :: (?globals :: Globals)
+-- and the type for argument of a pull (e.g., F ([] r a) ([] r b))
+fullyApplyType :: (?globals :: Globals)
                    => Kind -> Coeffect -> Type -> Checker (Ctxt (Kind, Quantifier), Type, Type)
-fullyApplyTypePush k r t = fullyApplyTypePush' k r t t
+fullyApplyType k r t = fullyApplyType' k r t t
 
-fullyApplyTypePush' :: (?globals :: Globals)
+fullyApplyType' :: (?globals :: Globals)
                     => Kind -> Coeffect -> Type -> Type -> Checker (Ctxt (Kind, Quantifier), Type, Type)
-fullyApplyTypePush' KType r baseTy argTy =
+fullyApplyType' KType r baseTy argTy =
   return ([], baseTy, argTy)
 
-fullyApplyTypePush' (KFun t1 t2) r baseTy argTy = do
+fullyApplyType' (KFun t1 t2) r baseTy argTy = do
   -- Fresh ty variable
   tyVar <- freshIdentifierBase "a" >>= (return . mkId)
   -- Apply to the base type
@@ -108,8 +134,8 @@ fullyApplyTypePush' (KFun t1 t2) r baseTy argTy = do
          KType -> TyApp argTy (Box r (TyVar tyVar))
          _     -> TyApp argTy (TyVar tyVar)
   -- Induction
-  (ids, baseTy'', argTy'') <- fullyApplyTypePush' t2 r baseTy' argTy'
+  (ids, baseTy'', argTy'') <- fullyApplyType' t2 r baseTy' argTy'
   return ((tyVar, (t1, ForallQ)) : ids, baseTy'', argTy'')
 
-fullyApplyTypePush' k _ _ _ =
+fullyApplyType' k _ _ _ =
   error $ "Cannot fully apply for kind " ++ pretty k
