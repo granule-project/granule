@@ -22,6 +22,8 @@ import Language.Granule.Synthesis.Builders
 
 import Language.Granule.Utils
 import Control.Monad (zipWithM, forM)
+import Control.Monad.State.Strict (get, put)
+
 
   {-
   Module for automatically deriving graded linear logical
@@ -40,9 +42,15 @@ derivePush s ty = do
   -- Get kind of type constructor
   kind <- inferKindOfType nullSpanNoFile ty
   -- Generate fresh type variables and apply them to the kind constructor
-  (tyVarsContext, baseTy, _) <- fullyApplyType kind (CVar cVar) ty
-  let tyVars = map (\(id, (t, _)) -> (id, t)) tyVarsContext
+  (localTyVarContext, baseTy, _) <- fullyApplyType kind (CVar cVar) ty
+  let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
   let argTy = Box (CVar cVar) baseTy
+  -- We are going to add them to the context but later they will be removed
+  st <- get
+  let tyVarsContextPre = tyVarContext st
+  put $ st { tyVarContext = tyVarContext st 
+                        ++ localTyVarContext
+                        ++ [(kVar, (KCoeffect, ForallQ)), (cVar, (KPromote (TyVar kVar), ForallQ))] }
 
   -- Give a name to the input
   z <- freshIdentifierBase "z" >>= (return . mkId)
@@ -58,6 +66,8 @@ derivePush s ty = do
   let expr = Val s (FunTy Nothing argTy returnTy) True
               $ Abs returnTy (PVar s argTy True z) Nothing bodyExpr
   let name = mkId $ "push" ++ pretty ty
+
+  st <- put $ st { tyVarContext = tyVarsContextPre }
   return $
     (tyS, Def s name True
             (EquationList s name True
@@ -109,6 +119,7 @@ derivePush' s c _sigma gamma argTy@(ProdTy t1 t2) arg = do
                (makePair leftTy rightTy leftExpr rightExpr))
 
 derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
+  debugM "derive-push argTy" (pretty argTy)
   mConstructors <- getDataConstructors name
   case mConstructors of
     Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
@@ -118,41 +129,54 @@ derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
       tysAndCases <- forM constructors (\(dataConsName, (tySch, coercions)) -> do
         -- First, we do something that is a bit like pattern typing
 
+        debugM "deriv-push - tySch" (pretty tySch)
         -- Instantiate the data constructor
         (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, _constraint, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
+
+        debugM "deriv-push - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
+
         -- [Note: this does not register the constraints associated with the data constrcutor]
         dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+
+        debugM "deriv-push - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
+        debugM "deriv-push - eq with" (pretty (resultType dataConstructorTypeFresh) ++ " = " ++ pretty argTy)
         -- Perform an equality between the result type of the data constructor and the argument type here
         areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) argTy
         case areEq of
           -- This creates a unification
           (True, _, unifiers) -> do
+            debugM "deriv-push areEq" "True"
+            debugM "deriv-push unifiers" (show unifiers)
+            
             -- Unify and specialise the data constructor type
-            dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
-            dataConsType <- substitute coercions' dataConstructorIndexRewritten
-
+            dataConsType <- substitute (flipSubstitution unifiers) dataConstructorTypeFresh
+            debugM "deriv-push dataConsType" (pretty dataConsType)
             -- Types of every argument and the variable used for it
             let consParamsTypes = parameterTypes dataConsType
             consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
 
             -- Build the pattern for this case
             let consPattern =
-                  PConstr s (resultType dataConsType) True name (zipWith (\ty var -> PVar s ty True var) consParamsTypes consParamsVars)
+                  PConstr s (resultType dataConsType) True dataConsName (zipWith (\ty var -> PVar s ty True var) consParamsTypes consParamsVars)
             let consPatternBoxed =
                   PBox s (Box c (resultType dataConsType)) True consPattern
+
+            debugM "derive-push p" (pretty consPatternBoxed)
 
              -- Push on all the parameters of a the constructor
             retTysAndExprs <- zipWithM (\ty var ->
                  derivePush' s c _sigma gamma ty (makeBox (trivialScheme $ Box c ty) (makeVar' var ty)))
                     consParamsTypes consParamsVars
             let (retTys, exprs) = unzip retTysAndExprs
+            debugM "derive-push retTys" (show retTys)
 
             -- Now constructor an application of a constructor
             (tyA, _, _, constraintsA, coercionsA') <- freshPolymorphicInstance InstanceQ False tySch coercions
             -- Apply coercions
             tyA <- substitute coercionsA' tyA
 
+            debugM "derive-push ret tys and param types" (show (retTys, parameterTypes tyA))
             argsEq <- zipWithM (\appliedTy consArgTy ->
                         equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec appliedTy consArgTy) retTys (parameterTypes tyA)
             let (eqs, _types, substs) = unzip3 argsEq
@@ -161,10 +185,12 @@ derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                 finalSubst <- combineManySubstitutions s substs
                 consType <- substitute finalSubst tyA
                 let returnTy = resultType consType
-                let bodyExpr = mkConstructorApplication s name consType exprs consType
+                debugM "derive-push returnTy" (pretty returnTy)
+                let bodyExpr = mkConstructorApplication s dataConsName consType exprs consType
+                debugM "derive-push bodyExpr" (pretty bodyExpr)
                 return (returnTy, (consPatternBoxed, bodyExpr))
 
-            else error $ "Cannot derive for " <> pretty name <> " due to a typing error"
+            else error $ "Cannot derive for " <> pretty dataConsName <> " due to a typing error"
 
           (False, _, _) ->
             error $ "Cannot derive push for data constructor " <> pretty dataConsName)
