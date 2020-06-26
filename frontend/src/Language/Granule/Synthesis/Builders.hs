@@ -51,6 +51,8 @@ makeBoxUntyped e =
   Val s () False (Promote () e)
   where s = nullSpanNoFile
 
+pbox :: Pattern () -> Pattern ()
+pbox = PBox nullSpanNoFile () True
 
 -- The first name is the name being bound by the let
 -- The second name is the one that is the subject of the let

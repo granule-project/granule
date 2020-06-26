@@ -58,8 +58,8 @@ import Language.Granule.Utils
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
-  -> IO (Either (NonEmpty CheckerError) (AST () Type))
-check ast@(AST dataDecls defs imports hidden name) =
+  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
+check ast@(AST dataDecls defs imports hidden name) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
@@ -67,7 +67,10 @@ check ast@(AST dataDecls defs imports hidden name) =
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
-      pure $ AST dataDecls defs imports hidden name)
+      -- Add on any definitions computed by the type checker (derived)
+      st <- get
+      let derivedDefs = map (snd . snd) (derivedDefinitions st)
+      pure $ (AST dataDecls defs imports hidden name, derivedDefs))
 
 -- Synthing the type of a single expression in the context of an asy
 synthExprInIsolation :: (?globals :: Globals)

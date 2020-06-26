@@ -41,6 +41,7 @@ import Options.Applicative.Help.Pretty (string)
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
+import Language.Granule.Syntax.Def (extendASTWith)
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
@@ -131,13 +132,13 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
                   (Just True, holes@(_:_)) ->
                     runHoleSplitter input config errs holes
                   _ -> return . Left $ CheckerError errs
-          Right (Right ast') -> do
+          Right (Right (ast', derivedDefs)) -> do
             if noEval then do
               printSuccess "OK"
               return $ Right NoEval
             else do
               printSuccess "OK, evaluating..."
-              result <- try $ eval ast
+              result <- try $ eval (extendASTWith derivedDefs ast)
               case result of
                 Left (e :: SomeException) ->
                   return . Left . EvalError $ displayException e

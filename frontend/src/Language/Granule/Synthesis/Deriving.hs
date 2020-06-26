@@ -27,9 +27,6 @@ import Control.Monad (zipWithM, forM)
   operations based on types.
   -}
 
-pbox :: Pattern () -> Pattern ()
-pbox = PBox nullSpanNoFile () True
-
 derivePush :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
 derivePush s ty = do
   -- Create fresh variables for the grades

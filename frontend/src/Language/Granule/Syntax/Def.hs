@@ -37,6 +37,9 @@ data AST v a =
     , moduleName  :: Maybe Id
     }
 
+extendASTWith :: [Def v a] -> AST v a -> AST v a
+extendASTWith defs ast = ast { definitions = definitions ast ++ defs }
+
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)
 deriving instance (Rp.Data (ExprFix2 ValueF ExprF v a), Rp.Data v, Rp.Data a) => Rp.Data (AST v a)
