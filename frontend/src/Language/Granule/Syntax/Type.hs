@@ -292,6 +292,15 @@ resultType :: Type -> Type
 resultType (FunTy _ _ t) = resultType t
 resultType t = t
 
+parameterTypes :: Type -> [Type]
+parameterTypes (FunTy _ t1 t2) = t1 : parameterTypes t2
+parameterTypes t               = []
+
+
+resultKind :: Kind -> Kind
+resultKind (KFun _ k) = resultKind k
+resultKind k = k
+
 -- | Get the leftmost type of an application
 -- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
 -- TyCon (Id "," ",")
