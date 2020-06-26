@@ -27,8 +27,8 @@ import Language.Granule.Utils
 pbox :: Coeffect -> Type -> Pattern Type -> Pattern Type
 pbox c t = PBox nullSpanNoFile (Box c t) True
 
-derivePush :: (?globals :: Globals) => Type -> Checker (TypeScheme, Def () Type)
-derivePush ty = do
+derivePush :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () Type)
+derivePush s ty = do
   -- Create fresh variables for the grades
   kVar <- freshIdentifierBase "k" >>= (return . mkId)
   cVar <- freshIdentifierBase "r" >>= (return . mkId)
@@ -43,21 +43,21 @@ derivePush ty = do
   -- Give a name to the input
   z <- freshIdentifierBase "z" >>= (return . mkId)
   (returnTy, bodyExpr) <-
-    derivePush' (CVar cVar) [] tyVars baseTy (makeVar z (trivialScheme argTy))
+    derivePush' s (CVar cVar) [] tyVars baseTy (makeVar z (trivialScheme argTy))
 
   -- Build derived type scheme
-  let tyS = Forall nullSpanNoFile
+  let tyS = Forall s
               ([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
               []
               (FunTy Nothing argTy returnTy)
   -- Build the expression
-  let expr = Val nullSpanNoFile (FunTy Nothing argTy returnTy) True
-              $ Abs returnTy (PVar nullSpanNoFile argTy True z) Nothing bodyExpr
+  let expr = Val s (FunTy Nothing argTy returnTy) True
+              $ Abs returnTy (PVar s argTy True z) Nothing bodyExpr
   let name = mkId $ "push" ++ pretty ty
   return $
-    (tyS, Def nullSpanNoFile name True
-            (EquationList nullSpanNoFile name True
-               [Equation nullSpanNoFile name (unforall tyS) True [] expr]) tyS)
+    (tyS, Def s name True
+            (EquationList s name True
+               [Equation s name (unforall tyS) True [] expr]) tyS)
 
 -- derivePush' does the main work.
 -- For example, if we are deriving for the type constructor F
@@ -72,11 +72,12 @@ derivePush ty = do
 --   * the return type: F ([] r a1) .. ([] r an)
 --   * the and the expression of this type
 derivePush' :: (?globals :: Globals)
-            => Coeffect -> Ctxt Id -> Ctxt Kind -> Type -> Expr () Type -> Checker (Type, Expr () Type)
+            => Span
+            -> Coeffect -> Ctxt Id -> Ctxt Kind -> Type -> Expr () Type -> Checker (Type, Expr () Type)
 
 -- Type variable case: push_alpha arg = arg
 
-derivePush' c _sigma gamma argTy@(TyVar n) arg = do
+derivePush' s c _sigma gamma argTy@(TyVar n) arg = do
   case lookup n gamma of
     Just _ -> return (Box c argTy, arg)
     Nothing -> do
