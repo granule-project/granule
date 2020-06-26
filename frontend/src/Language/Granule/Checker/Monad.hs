@@ -176,7 +176,7 @@ data CheckerState = CS
 
             -- Definitions that have been triggered during type checking
             -- by the auto deriver (so we know we need them in the interpreter)
-            , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () Type))]
+            , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () ()))]
             -- Warning accumulator
             -- , warnings :: [Warning]
             }

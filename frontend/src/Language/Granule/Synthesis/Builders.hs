@@ -23,10 +23,12 @@ makeVar name (Forall _ _ _ t) =
   Val s t False (Var t name)
   where s = nullSpanNoFile
 
-makeVar' :: Id -> Type -> Expr () Type
-makeVar' name t =
-  Val s t False (Var t name)
+makeVarUntyped :: Id -> Expr () ()
+makeVarUntyped name =
+  Val s () False (Var () name)
   where s = nullSpanNoFile
+
+
 
 makeAbs :: Id -> Expr () Type -> TypeScheme -> Expr () Type
 makeAbs name e (Forall _ _ _ t@(FunTy _ t1 t2)) =
@@ -43,6 +45,12 @@ makeBox :: TypeScheme -> Expr () Type -> Expr () Type
 makeBox (Forall _ _ _ t) e =
   Val s t False (Promote t e)
   where s = nullSpanNoFile
+
+makeBoxUntyped :: Expr () () -> Expr () ()
+makeBoxUntyped e =
+  Val s () False (Promote () e)
+  where s = nullSpanNoFile
+
 
 -- The first name is the name being bound by the let
 -- The second name is the one that is the subject of the let
@@ -61,9 +69,24 @@ makeUnboxP name1 expr (Forall _ _ _ goalTy) boxTy varTy e  =
   expr
     where s = nullSpanNoFile
 
+makeUnboxUntyped :: Id -> Expr () () -> Expr () () -> Expr () ()
+makeUnboxUntyped name1 expr e =
+  App s () False
+  (Val s () False
+    (Abs ()
+      (PBox s () False
+        (PVar s () False name1)) Nothing e))
+  expr
+    where s = nullSpanNoFile
+
 makePair :: Type -> Type -> Expr () Type -> Expr () Type -> Expr () Type
 makePair lTy rTy e1 e2 =
   App s rTy False (App s lTy False (Val s (ProdTy lTy rTy) False (Constr (ProdTy lTy rTy) (mkId ",") [])) e1) e2
+  where s = nullSpanNoFile
+
+makePairUntyped :: Expr () () -> Expr () () -> Expr () ()
+makePairUntyped e1 e2 =
+  App s () False (App s () False (Val s () False (Constr () (mkId ",") [])) e1) e2
   where s = nullSpanNoFile
 
 makePairElim :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
@@ -77,6 +100,15 @@ makePairElimP ptransf elimExpr lId rId (Forall _ _ _ goalTy) lTy rTy e =
   (Val s (ProdTy lTy rTy) False
     (Abs (FunTy Nothing (ProdTy lTy rTy) goalTy)
       (ptransf $ PConstr s (ProdTy lTy rTy) False (mkId ",") [(PVar s lTy False lId), (PVar s rTy False rId)] )
+        Nothing e)) elimExpr
+  where s = nullSpanNoFile
+
+makePairElimPUntyped :: (Pattern () -> Pattern ()) -> Expr () () -> Id -> Id -> Expr () () -> Expr () ()
+makePairElimPUntyped ptransf elimExpr lId rId e =
+  App s () False
+  (Val s () False
+    (Abs ()
+      (ptransf $ PConstr s () False (mkId ",") [(PVar s () False lId), (PVar s () False rId)] )
         Nothing e)) elimExpr
   where s = nullSpanNoFile
 
@@ -106,11 +138,20 @@ makeUnitElimP patTransf argExpr e (Forall _ _ _ goalTy) =
     [((patTransf (PConstr s (TyCon (Id "()" "()")) False (mkId "()") [])), e)]
   where s = nullSpanNoFile
 
+makeUnitElimPUntyped :: (Pattern () -> Pattern ()) -> Expr () () -> Expr () () -> Expr () ()
+makeUnitElimPUntyped patTransf argExpr e =
+  Case s () False argExpr
+    [((patTransf (PConstr s () False (mkId "()") [])), e)]
+  where s = nullSpanNoFile
+
 makeUnitIntro :: Expr () Type
 makeUnitIntro =
   Val nullSpanNoFile (TyCon (mkId "()")) True
     (Constr (TyCon (mkId "()")) (mkId "()") [])
 
+makeUnitIntroUntyped :: Expr () ()
+makeUnitIntroUntyped =
+  Val nullSpanNoFile () True (Constr () (mkId "()") [])
 
 --makeEitherCase :: Id -> Id -> Id -> TypeScheme -> Type -> Type -> Expr () Type
 --makeEitherCase name lId rId (Forall _ _ _ goalTy) lTy rTy =
