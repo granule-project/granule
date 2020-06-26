@@ -881,7 +881,7 @@ getDataConstructors tyCon = do
   return $
     case lookup tyCon tyCons of
       Just (k, dataConsNames, _) ->
-          case k of
+          case resultKind k of
             KType ->
               Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames
             _ ->
