@@ -98,7 +98,6 @@ derivePush' :: (?globals :: Globals)
             -> Coeffect -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Bool)
 
 -- Type variable case: push_alpha arg = arg
-
 derivePush' s c _sigma gamma argTy@(TyVar n) arg = do
   case lookup n gamma of
     Just _ -> return (Box c argTy, arg, False)
@@ -126,6 +125,7 @@ derivePush' s c _sigma gamma argTy@(ProdTy t1 t2) arg = do
   return (returnTy, makePairElimPUntyped pbox arg x y
                      (makePairUntyped leftExpr rightExpr), lisPoly || risPoly)
 
+-- General type constructor case:
 derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
   -- First check whether this has already been derived or not
   -- (also deals with recursive types)
