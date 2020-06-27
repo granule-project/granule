@@ -10,16 +10,20 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Span
 import Language.Granule.Context
 
+import Language.Granule.Checker.Predicates (Constraint(..))
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates (Quantifier(..))
+import Language.Granule.Checker.Types (SpecIndicator(..), equalTypesRelatedCoeffectsAndUnify)
 import Language.Granule.Checker.Variables
+import Language.Granule.Checker.Substitution(substitute, freshPolymorphicInstance)
 import Language.Granule.Checker.SubstitutionContexts
 
 import Language.Granule.Synthesis.Builders
 
 import Language.Granule.Utils
-import Control.Monad.State.Strict (get)
+--import Control.Monad.IO.Class (liftIO)
+import Control.Monad.State.Strict (modify, get)
 import Control.Monad (zipWithM, forM)
 
   {-
@@ -36,9 +40,17 @@ derivePush s ty = do
   -- Get kind of type constructor
   kind <- inferKindOfType nullSpanNoFile ty
   -- Generate fresh type variables and apply them to the kind constructor
-  (localTyVarContext, baseTy, _) <- fullyApplyType kind (CVar cVar) ty
+  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (CVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
   let argTy = Box (CVar cVar) baseTy
+
+  -- For the purposes of recursive types, temporarily 'register' a dummy
+  -- definition for this push
+  st0 <- get
+  modify (\st -> st { derivedDefinitions =
+                        ((mkId "push", ty), (trivialScheme $ FunTy Nothing argTy returnTy', undefined))
+                         : derivedDefinitions st
+                    , tyVarContext = tyVarContext st ++ [(kVar, (KCoeffect, ForallQ)), (cVar, (KPromote (TyVar kVar), ForallQ))] ++ localTyVarContext })
 
   -- Give a name to the input
   z <- freshIdentifierBase "z" >>= (return . mkId)
@@ -54,6 +66,11 @@ derivePush s ty = do
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
   let name = mkId $ "push" ++ pretty ty
 
+  -- Remove the dummy definition here
+  modify (\st -> st { derivedDefinitions = deleteVar' (mkId "push", ty) (derivedDefinitions st)
+                    -- Restore type variables and predicate stack
+                    , tyVarContext = tyVarContext st0
+                    , predicateStack = predicateStack st0 } )
   return $
     (tyS, Def s name True
             (EquationList s name True
@@ -71,9 +88,10 @@ derivePush s ty = do
 -- It returns:
 --   * the return type: F ([] r a1) .. ([] r an)
 --   * the and the expression of this type
+--   * whether this is polyshaped or not
 derivePush' :: (?globals :: Globals)
             => Span
-            -> Coeffect -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () ())
+            -> Coeffect -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Bool)
 
 -- Type variable case: push_alpha arg = arg
 
@@ -105,44 +123,72 @@ derivePush' s c _sigma gamma argTy@(ProdTy t1 t2) arg = do
                      (makePairUntyped leftExpr rightExpr))
 
 derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
+  -- First check whether this has already been derived or not
+  -- (also deals with recursive types)
   st <- get
-  -- Get the kind of this type constructor
-  case lookup name (typeConstructors st) of
-    Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
-    Just (kind, _, _) -> do
+  alreadyDefined <-
+    case lookup (mkId "push", TyCon name) (derivedDefinitions st) of
+      -- We have it in context, so now we need to apply its type
+      Just (tyScheme, _) -> do
+        -- freshen the type
+        (pushTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
+        case pushTy of
+          t@(FunTy _ t1 t2) -> do
+              -- Its argument must be unified with argTy here
+              (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
+              if eq
+                -- Success!
+                then do
+                  t2' <- substitute subst t2
+                  return (Just (t2', makeVarUntyped (mkId $ "push" <> pretty name)))
+                else do
+                  -- Couldn't do the equality.
+                  debugM "derive-push" ("no eq for " ++ pretty argTy ++ " and " ++ pretty t1)
+                  return Nothing
+          _ -> return Nothing
+      Nothing -> return Nothing
 
-      -- Get all the data constructors of this type
-      mConstructors <- getDataConstructors name
-      case mConstructors of
+  case alreadyDefined of
+    Just (pushResTy, pushExpr) -> return (pushResTy, pushExpr)
+    Nothing ->
+      -- Not already defined...
+      -- Get the kind of this type constructor
+      case lookup name (typeConstructors st) of
         Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
-        Just constructors -> do
+        Just (kind, _, _) -> do
 
-          -- For each constructor, build a pattern match and an introduction:
-          cases <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions)) -> do
+          -- Get all the data constructors of this type
+          mConstructors <- getDataConstructors name
+          case mConstructors of
+            Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
+            Just constructors -> do
 
-              -- Create a variable for each parameter
-              let consParamsTypes = parameterTypes dataConsType
-              consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
+              -- For each constructor, build a pattern match and an introduction:
+              cases <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions)) -> do
 
-              -- Build the pattern for this case
-              let consPattern =
-                    PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
-              let consPatternBoxed =
-                    PBox s () True consPattern
+                  -- Create a variable for each parameter
+                  let consParamsTypes = parameterTypes dataConsType
+                  consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
 
-              -- Push on all the parameters of a the constructor
-              retTysAndExprs <- zipWithM (\ty var ->
-                      derivePush' s c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
-                        consParamsTypes consParamsVars
-              let (_retTys, exprs) = unzip retTysAndExprs
+                  -- Build the pattern for this case
+                  let consPattern =
+                        PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                  let consPatternBoxed =
+                        PBox s () True consPattern
 
-              let bodyExpr = mkConstructorApplication s dataConsName dataConsType exprs dataConsType
-              return (consPatternBoxed, bodyExpr))
+                  -- Push on all the parameters of a the constructor
+                  retTysAndExprs <- zipWithM (\ty var ->
+                          derivePush' s c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
+                            consParamsTypes consParamsVars
+                  let (_retTys, exprs) = unzip retTysAndExprs
 
-          -- Got all the branches to make the following case now
-          case objectMappingWithBox argTy kind c of
-            Just returnTy -> return (returnTy, Case s () True arg cases)
-            Nothing -> error $ "Cannot push derive for type " ++ pretty argTy ++ " due to typing"
+                  let bodyExpr = mkConstructorApplication s dataConsName dataConsType exprs dataConsType
+                  return (consPatternBoxed, bodyExpr))
+
+              -- Got all the branches to make the following case now
+              case objectMappingWithBox argTy kind c of
+                Just returnTy -> return (returnTy, Case s () True arg cases)
+                Nothing -> error $ "Cannot push derive for type " ++ pretty argTy ++ " due to typing"
 
 derivePush' s _ _ _ ty _ = do
   error $ "Cannot push derive for type " ++ pretty ty
@@ -213,3 +259,8 @@ objectMappingWithBox' (TyApp t1 t2) (k:ks) r = do
     _     -> return $ TyApp t t2
 
 objectMappingWithBox' _ _ _ = Nothing
+
+deleteVar' :: Eq a => a -> [(a, t)] -> [(a, t)]
+deleteVar' _ [] = []
+deleteVar' x ((y, b) : m) | x == y = deleteVar' x m
+                          | otherwise = (y, b) : deleteVar' x m
