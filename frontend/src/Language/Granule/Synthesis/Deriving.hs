@@ -54,13 +54,17 @@ derivePush s ty = do
 
   -- Give a name to the input
   z <- freshIdentifierBase "z" >>= (return . mkId)
-  (returnTy, bodyExpr) <-
+  (returnTy, bodyExpr, isPoly) <-
     derivePush' s (CVar cVar) [] tyVars baseTy (makeVarUntyped z)
 
   -- Build derived type scheme
+  let constraints =
+        if isPoly
+          then [TyInfix TyOpLesserEq (TyInt 1) (TyVar cVar)]
+          else []
   let tyS = Forall s
               ([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
-              []
+              constraints
               (FunTy Nothing argTy returnTy)
   -- Build the expression
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
@@ -97,30 +101,30 @@ derivePush' :: (?globals :: Globals)
 
 derivePush' s c _sigma gamma argTy@(TyVar n) arg = do
   case lookup n gamma of
-    Just _ -> return (Box c argTy, arg)
+    Just _ -> return (Box c argTy, arg, False)
     Nothing -> do
       -- For arguments which are type variables but not parameters
       -- to this type constructor, then we need to do an unboxing
       x <- freshIdentifierBase "x" >>= (return . mkId)
       let expr = makeUnboxUntyped x arg (makeVarUntyped x)
-      return (argTy, expr)
+      return (argTy, expr, False)
 
 -- Unit case:  push_() arg = (case arg of () -> ()) : ())
 derivePush' s c _sigma gamma argTy@(TyCon (internalName -> "()")) arg = do
   let ty  = argTy
-  return (ty, makeUnitElimPUntyped pbox arg makeUnitIntroUntyped)
+  return (ty, makeUnitElimPUntyped pbox arg makeUnitIntroUntyped, False)
 
 -- Pair case: push_(t1,t2) arg = (case arg of (x, y) -> (push_t1 [x], push_t2 [y])
 derivePush' s c _sigma gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
   -- Induction
-  (leftTy, leftExpr)   <- derivePush' s c _sigma gamma t1 (makeBoxUntyped (makeVarUntyped x))
-  (rightTy, rightExpr) <- derivePush' s c _sigma gamma t2 (makeBoxUntyped (makeVarUntyped y))
+  (leftTy, leftExpr, lisPoly)   <- derivePush' s c _sigma gamma t1 (makeBoxUntyped (makeVarUntyped x))
+  (rightTy, rightExpr, risPoly) <- derivePush' s c _sigma gamma t2 (makeBoxUntyped (makeVarUntyped y))
   -- Build eliminator
   let returnTy = ProdTy leftTy rightTy
   return (returnTy, makePairElimPUntyped pbox arg x y
-                     (makePairUntyped leftExpr rightExpr))
+                     (makePairUntyped leftExpr rightExpr), lisPoly || risPoly)
 
 derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
   -- First check whether this has already been derived or not
@@ -149,7 +153,14 @@ derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
       Nothing -> return Nothing
 
   case alreadyDefined of
-    Just (pushResTy, pushExpr) -> return (pushResTy, pushExpr)
+    Just (pushResTy, pushExpr) -> do
+      -- still check arity
+      mConstructors <- getDataConstructors name
+      let isPoly =
+            case mConstructors of
+               Just xs | length xs > 1 -> True
+               _                       -> False
+      return (pushResTy, pushExpr, isPoly)
     Nothing ->
       -- Not already defined...
       -- Get the kind of this type constructor
@@ -180,14 +191,15 @@ derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                   retTysAndExprs <- zipWithM (\ty var ->
                           derivePush' s c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
                             consParamsTypes consParamsVars
-                  let (_retTys, exprs) = unzip retTysAndExprs
+                  let (_retTys, exprs, isPolys) = unzip3 retTysAndExprs
 
                   let bodyExpr = mkConstructorApplication s dataConsName dataConsType exprs dataConsType
-                  return (consPatternBoxed, bodyExpr))
+                  let isPoly = (length constructors > 1) || or isPolys
+                  return ((consPatternBoxed, bodyExpr), isPoly))
 
               -- Got all the branches to make the following case now
               case objectMappingWithBox argTy kind c of
-                Just returnTy -> return (returnTy, Case s () True arg cases)
+                Just returnTy -> return (returnTy, Case s () True arg (map fst cases), or (map snd cases))
                 Nothing -> error $ "Cannot push derive for type " ++ pretty argTy ++ " due to typing"
 
 derivePush' s _ _ _ ty _ = do

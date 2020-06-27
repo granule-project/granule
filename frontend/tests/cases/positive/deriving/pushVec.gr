@@ -1,0 +1,7 @@
+data Vec (n : Nat) (a : Type) where
+    Nil : Vec 0 a;
+    Cons : forall {n : Nat} . a -> Vec n a -> Vec (n+1) a
+
+pushVec : ∀ {k : Nat, n : Nat, a : Type} . {1 <= k}
+      => (Vec n a) [k] → Vec n (a [k])
+pushVec = push @Vec
