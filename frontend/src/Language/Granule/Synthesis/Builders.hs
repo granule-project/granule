@@ -114,6 +114,15 @@ makePairElimPUntyped ptransf elimExpr lId rId e =
         Nothing e)) elimExpr
   where s = nullSpanNoFile
 
+makePairElimPUntyped' :: (Pattern () -> Pattern ()) -> Expr () () -> Id -> Id -> Expr () () -> Expr () ()
+makePairElimPUntyped' ptransf elimExpr lId rId e =
+  App s () False
+  (Val s () False
+    (Abs ()
+      (PConstr s () False (mkId ",") [ptransf (PVar s () False lId), ptransf  (PVar s () False rId)] )
+        Nothing e)) elimExpr
+  where s = nullSpanNoFile
+
 makeEitherLeft :: Type -> Type -> Expr () Type -> Expr () Type
 makeEitherLeft lTy rTy e  =
   (App s lTy False (Val s (SumTy lTy rTy) False (Constr (SumTy lTy rTy) (mkId "Left") [])) e)
