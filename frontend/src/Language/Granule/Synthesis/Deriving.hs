@@ -128,6 +128,7 @@ derivePush' s topLevel c _sigma gamma argTy@(ProdTy t1 t2) arg = do
 
 -- General type constructor case:
 derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
+  debugM "derive-push" ("TyCon case " <> pretty argTy)
   -- First check whether this has already been derived or not
   -- (also deals with recursive types)
   st <- get
@@ -181,25 +182,52 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
               -- For each constructor, build a pattern match and an introduction:
               cases <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions)) -> do
 
-                  -- Create a variable for each parameter
-                  let consParamsTypes = parameterTypes dataConsType
-                  consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
+                -- Instantiate the data constructor
+                (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, _constraint, coercions') <-
+                      freshPolymorphicInstance BoundQ True tySch coercions
 
-                  -- Build the pattern for this case
-                  let consPattern =
-                        PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
-                  let consPatternBoxed =
-                        PBox s () True consPattern
+                debugM "deriv-push - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
 
-                  -- Push on all the parameters of a the constructor
-                  retTysAndExprs <- zipWithM (\ty var ->
-                          derivePush' s False c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
-                            consParamsTypes consParamsVars
-                  let (_retTys, exprs, isPolys) = unzip3 retTysAndExprs
+                -- [Note: this does not register the constraints associated with the data constrcutor]
+                dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
 
-                  let bodyExpr = mkConstructorApplication s dataConsName dataConsType exprs dataConsType
-                  let isPoly = (length constructors > 1) || or isPolys
-                  return ((consPatternBoxed, bodyExpr), isPoly))
+                debugM "deriv-push - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
+                debugM "deriv-push - eq with" (pretty (resultType dataConstructorTypeFresh) ++ " = " ++ pretty argTy)
+                -- Perform an equality between the result type of the data constructor and the argument type here
+                areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) argTy
+                case areEq of
+                  -- This creates a unification
+                  (False, _, _) ->
+                      error $ "Cannot derive push for data constructor " <> pretty dataConsName
+                  (True, _, unifiers) -> do
+                    debugM "deriv-push areEq" "True"
+                    debugM "deriv-push unifiers" (show unifiers)
+
+                    -- Unify and specialise the data constructor type
+                    dataConsType <- substitute (flipSubstitution unifiers) dataConstructorTypeFresh
+                    debugM "deriv-push dataConsType" (pretty dataConsType)
+
+
+                    -- Create a variable for each parameter
+                    let consParamsTypes = parameterTypes dataConsType
+                    consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
+
+                    -- Build the pattern for this case
+                    let consPattern =
+                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+                    let consPatternBoxed =
+                          PBox s () True consPattern
+
+                    -- Push on all the parameters of a the constructor
+                    retTysAndExprs <- zipWithM (\ty var -> do
+                            debugM "derive-push" ("Deriving argument of case for " <> pretty dataConsName <> " at type " <> pretty ty)
+                            derivePush' s False c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
+                              consParamsTypes consParamsVars
+                    let (_retTys, exprs, isPolys) = unzip3 retTysAndExprs
+
+                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType exprs dataConsType
+                    let isPoly = (length constructors > 1) || or isPolys
+                    return ((consPatternBoxed, bodyExpr), isPoly))
 
               -- Got all the branches to make the following case now
               case objectMappingWithBox argTy kind c of
