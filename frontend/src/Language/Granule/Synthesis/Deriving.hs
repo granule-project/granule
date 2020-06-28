@@ -225,7 +225,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                               consParamsTypes consParamsVars
                     let (_retTys, exprs, isPolys) = unzip3 retTysAndExprs
 
-                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType exprs dataConsType
+                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType (reverse exprs) dataConsType
                     let isPoly = (length constructors > 1) || or isPolys
                     return ((consPatternBoxed, bodyExpr), isPoly))
 

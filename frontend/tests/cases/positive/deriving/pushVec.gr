@@ -5,3 +5,6 @@ data Vec (n : Nat) (a : Type) where
 pushVec : ∀ {k : Nat, n : Nat, a : Type} . {1 <= k}
       => (Vec n a) [k] → Vec n (a [k])
 pushVec = push @Vec
+
+main : Vec 3 (Int [1])
+main = pushVec [Cons 1 (Cons 2 (Cons 3 Nil))]
