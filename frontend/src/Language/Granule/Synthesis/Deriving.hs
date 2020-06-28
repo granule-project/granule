@@ -216,8 +216,75 @@ mkConstructorApplication s name consType (expr:exprs) (FunTy _ t1 t2) =
 mkConstructorApplication s name consType  _ _ =
   error $ "In making constructor for " ++ pretty name
 
-derivePull :: Ctxt (Ctxt (TypeScheme, Substitution)) -> Type -> (TypeScheme, Def () ())
-derivePull = error "stub"
+
+derivePull :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
+derivePull s ty = do
+  -- Create fresh variables for the grades
+  kVar <- freshIdentifierBase "k" >>= (return . mkId)
+  cVar <- freshIdentifierBase "r" >>= (return . mkId)
+
+  -- Get kind of type constructor
+  kind <- inferKindOfType nullSpanNoFile ty
+  -- Generate fresh type variables and apply them to the kind constructor
+  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (CVar cVar) ty
+  let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
+
+  z <- freshIdentifierBase "z" >>= (return . mkId)
+  (returnTy, bodyExpr, coeff) <-
+    derivePull' s [] tyVars returnTy' (makeVarUntyped z)
+
+  case coeff of
+    Just c -> do
+      let tyS = Forall s
+              ([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
+              []
+              (FunTy Nothing returnTy' (Box c returnTy))
+      let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
+      let name = mkId $ "pull" ++ pretty ty
+
+      return $
+        (tyS, Def s name True
+            (EquationList s name True
+               [Equation s name () True [] expr]) tyS)
+    Nothing -> error "shouldn't be reachable"
+
+
+derivePull'  :: (?globals :: Globals) =>  Span -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Maybe Coeffect)
+
+derivePull' s _sigma gamma argTy@(Box c t) arg = do
+  (returnTy, expr, coeff) <- derivePull' s _sigma gamma t arg
+  case coeff of
+    Just c' -> return (returnTy, expr, Just $ CMeet c c')
+    _ -> return (returnTy, expr, Just $ CMeet c c)
+
+derivePull' s _sigma gamma argTy@(TyVar n) arg = do
+  case lookup n gamma of
+    Just _ -> return (TyVar n, arg, Nothing)
+    Nothing -> error "do this in a bit"
+     -- do
+     -- -- For arguments which are type variables but not parameters
+     -- -- to this type constructor, then we need to do an unboxing
+     -- x <- freshIdentifierBase "x" >>= (return . mkId)
+     -- let expr = makeUnboxUntyped x arg (makeVarUntyped x)
+     -- return (argTy, expr)
+
+derivePull' s _sigma gamma argTy@(ProdTy t1 t2) arg = do
+  x <- freshIdentifierBase "x" >>= (return . mkId)
+  y <- freshIdentifierBase "y" >>= (return . mkId)
+  -- Induction
+  (leftTy, leftExpr, lCoeff)   <- derivePull' s _sigma gamma t1 (makeVarUntyped x)
+  (rightTy, rightExpr, rCoeff) <- derivePull' s _sigma gamma t2 (makeVarUntyped y)
+--  let coeffs = (singleton c1) `union` (singleton c2) `union` rCoeffs `union` lCoeffs
+  let returnTy = (ProdTy leftTy rightTy)
+  case (lCoeff, rCoeff) of
+    (Just c, Just c') -> return (returnTy, makePairElimPUntyped' pbox arg x y
+                     (makeBoxUntyped (makePairUntyped leftExpr rightExpr)), Just $ CMeet c c')
+    (_, _) -> return (returnTy, makePairElimPUntyped' pbox arg x y
+                     (makeBoxUntyped (makePairUntyped leftExpr rightExpr)), Nothing)
+
+  -- Build eliminator
+
+derivePull' _ _ _ ty _ = error $ "still to come!" <> show ty
 
 -- Given a kind for a type constructor, fully apply the type constructor
 -- generator with fresh type variables for each parameter and return a type-variable
