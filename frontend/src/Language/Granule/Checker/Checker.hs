@@ -1072,7 +1072,20 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           modify (\st -> st { derivedDefinitions = ((mkId "push", ty), (typScheme, def)) : derivedDefinitions st })
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
+    (Val _ _ _ (Var _ (internalName -> "pull"))) -> do
+      st <- get
+      let name = mkId $ "pull" ++ pretty ty
+      case lookup (mkId "pull", ty) (derivedDefinitions st) of
+        Just (tyScheme, _) ->
+          freshenTySchemeForVar s rf name tyScheme
 
+        Nothing -> do
+          -- Get this derived
+          (typScheme, def) <- derivePull s ty
+          -- Register the definition that has been derived
+          modify (\st -> st { derivedDefinitions = ((mkId "pull", ty), (typScheme, def)) : derivedDefinitions st })
+          -- return this variable expression in place here
+          freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
 synthExpr _ _ _ e =
