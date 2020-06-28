@@ -149,7 +149,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                     -- Success!
                     then do
                       t2' <- substitute subst t2
-                      return (Just (t2', makeVarUntyped (mkId $ "push@" <> pretty name)))
+                      return (Just (t2', App s () True (makeVarUntyped (mkId $ "push@" <> pretty name)) arg))
                     else do
                       -- Couldn't do the equality.
                       debugM "derive-push" ("no eq for " ++ pretty argTy ++ " and " ++ pretty t1)
