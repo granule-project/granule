@@ -144,7 +144,12 @@ evalIn ctxt (App s _ _ e1 e2) = do
       _ -> error $ show v1
       -- _ -> error "Cannot apply value"
 
--- Type application have no run time component (currently)
+-- Deriving applications get resolved to their names
+evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull"] = do
+  -- Replace with a deriving variable
+  evalIn ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
+
+-- Other type applications have no run time component (currently)
 evalIn ctxt (AppTy s _ _ e t) = do
   evalIn ctxt e
 
@@ -180,7 +185,7 @@ evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
          (Binop nullSpan () False
            OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
 
-evalIn ctxt (Val _ _ _ (Var _ x)) =
+evalIn ctxt (Val _ _ _ (Var _ x)) = do
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val

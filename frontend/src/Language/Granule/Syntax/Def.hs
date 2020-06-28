@@ -38,7 +38,7 @@ data AST v a =
     }
 
 extendASTWith :: [Def v a] -> AST v a -> AST v a
-extendASTWith defs ast = ast { definitions = definitions ast ++ defs }
+extendASTWith defs ast = ast { definitions = defs ++ definitions ast }
 
 deriving instance (Show (Def v a), Show a) => Show (AST v a)
 deriving instance (Eq (Def v a), Eq a) => Eq (AST v a)

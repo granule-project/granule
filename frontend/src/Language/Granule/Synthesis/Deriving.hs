@@ -68,7 +68,7 @@ derivePush s ty = do
               (FunTy Nothing argTy returnTy)
   -- Build the expression
   let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
-  let name = mkId $ "push" ++ pretty ty
+  let name = mkId $ "push@" ++ pretty ty
 
   -- Remove the dummy definition here
   modify (\st -> st { derivedDefinitions = deleteVar' (mkId "push", ty) (derivedDefinitions st)
