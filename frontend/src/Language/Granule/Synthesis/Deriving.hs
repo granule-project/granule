@@ -55,7 +55,7 @@ derivePush s ty = do
   -- Give a name to the input
   z <- freshIdentifierBase "z" >>= (return . mkId)
   (returnTy, bodyExpr, isPoly) <-
-    derivePush' s (CVar cVar) [] tyVars baseTy (makeVarUntyped z)
+    derivePush' s True (CVar cVar) [] tyVars baseTy (makeVarUntyped z)
 
   -- Build derived type scheme
   let constraints =
@@ -95,10 +95,11 @@ derivePush s ty = do
 --   * whether this is polyshaped or not
 derivePush' :: (?globals :: Globals)
             => Span
+            -> Bool
             -> Coeffect -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Bool)
 
 -- Type variable case: push_alpha arg = arg
-derivePush' s c _sigma gamma argTy@(TyVar n) arg = do
+derivePush' topLevel s c _sigma gamma argTy@(TyVar n) arg = do
   case lookup n gamma of
     Just _ -> return (Box c argTy, arg, False)
     Nothing -> do
@@ -109,48 +110,51 @@ derivePush' s c _sigma gamma argTy@(TyVar n) arg = do
       return (argTy, expr, False)
 
 -- Unit case:  push_() arg = (case arg of () -> ()) : ())
-derivePush' s c _sigma gamma argTy@(TyCon (internalName -> "()")) arg = do
+derivePush' s topLevel c _sigma gamma argTy@(TyCon (internalName -> "()")) arg = do
   let ty  = argTy
   return (ty, makeUnitElimPUntyped pbox arg makeUnitIntroUntyped, False)
 
 -- Pair case: push_(t1,t2) arg = (case arg of (x, y) -> (push_t1 [x], push_t2 [y])
-derivePush' s c _sigma gamma argTy@(ProdTy t1 t2) arg = do
+derivePush' s topLevel c _sigma gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
   -- Induction
-  (leftTy, leftExpr, lisPoly)   <- derivePush' s c _sigma gamma t1 (makeBoxUntyped (makeVarUntyped x))
-  (rightTy, rightExpr, risPoly) <- derivePush' s c _sigma gamma t2 (makeBoxUntyped (makeVarUntyped y))
+  (leftTy, leftExpr, lisPoly)   <- derivePush' s topLevel c _sigma gamma t1 (makeBoxUntyped (makeVarUntyped x))
+  (rightTy, rightExpr, risPoly) <- derivePush' s topLevel c _sigma gamma t2 (makeBoxUntyped (makeVarUntyped y))
   -- Build eliminator
   let returnTy = ProdTy leftTy rightTy
   return (returnTy, makePairElimPUntyped pbox arg x y
                      (makePairUntyped leftExpr rightExpr), lisPoly || risPoly)
 
 -- General type constructor case:
-derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
+derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
   -- First check whether this has already been derived or not
   -- (also deals with recursive types)
   st <- get
   alreadyDefined <-
-    case lookup (mkId "push", TyCon name) (derivedDefinitions st) of
-      -- We have it in context, so now we need to apply its type
-      Just (tyScheme, _) -> do
-        -- freshen the type
-        (pushTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
-        case pushTy of
-          t@(FunTy _ t1 t2) -> do
-              -- Its argument must be unified with argTy here
-              (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
-              if eq
-                -- Success!
-                then do
-                  t2' <- substitute subst t2
-                  return (Just (t2', makeVarUntyped (mkId $ "push" <> pretty name)))
-                else do
-                  -- Couldn't do the equality.
-                  debugM "derive-push" ("no eq for " ++ pretty argTy ++ " and " ++ pretty t1)
-                  return Nothing
-          _ -> return Nothing
-      Nothing -> return Nothing
+    if topLevel
+      then return Nothing
+      else
+        case lookup (mkId "push", TyCon name) (derivedDefinitions st) of
+          -- We have it in context, so now we need to apply its type
+          Just (tyScheme, _) -> do
+            -- freshen the type
+            (pushTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
+            case pushTy of
+              t@(FunTy _ t1 t2) -> do
+                  -- Its argument must be unified with argTy here
+                  (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
+                  if eq
+                    -- Success!
+                    then do
+                      t2' <- substitute subst t2
+                      return (Just (t2', makeVarUntyped (mkId $ "push@" <> pretty name)))
+                    else do
+                      -- Couldn't do the equality.
+                      debugM "derive-push" ("no eq for " ++ pretty argTy ++ " and " ++ pretty t1)
+                      return Nothing
+              _ -> return Nothing
+          Nothing -> return Nothing
 
   case alreadyDefined of
     Just (pushResTy, pushExpr) -> do
@@ -189,7 +193,7 @@ derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                   -- Push on all the parameters of a the constructor
                   retTysAndExprs <- zipWithM (\ty var ->
-                          derivePush' s c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
+                          derivePush' s False c _sigma gamma ty (makeBoxUntyped (makeVarUntyped var)))
                             consParamsTypes consParamsVars
                   let (_retTys, exprs, isPolys) = unzip3 retTysAndExprs
 
@@ -202,7 +206,7 @@ derivePush' s c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                 Just returnTy -> return (returnTy, Case s () True arg (map fst cases), or (map snd cases))
                 Nothing -> error $ "Cannot push derive for type " ++ pretty argTy ++ " due to typing"
 
-derivePush' s _ _ _ ty _ = do
+derivePush' s _ _ _ _ ty _ = do
   error $ "Cannot push derive for type " ++ pretty ty
 
 -- Based on its type, apply a list of arguments to a ty constructor
