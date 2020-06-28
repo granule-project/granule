@@ -1068,8 +1068,11 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
         Nothing -> do
           -- Get this derived
           (typScheme, def) <- derivePush s ty
+          debugM "derived push:" (pretty def)
+
           -- Register the definition that has been derived
           modify (\st -> st { derivedDefinitions = ((mkId "push", ty), (typScheme, def)) : derivedDefinitions st })
+
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
     (Val _ _ _ (Var _ (internalName -> "pull"))) -> do
