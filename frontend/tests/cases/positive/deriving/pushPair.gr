@@ -1,4 +1,4 @@
--- push example
+-- pull example
 
-foo : forall {a : Type, b : Type} . (a, b) [] -> (a [], b [])
-foo = push @((,))
+foo : forall {a : Type, b : Type} . (a [], b []) -> (a, b) []
+foo = pull @((,))

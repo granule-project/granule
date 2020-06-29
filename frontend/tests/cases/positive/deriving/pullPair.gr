@@ -1,4 +1,7 @@
 -- pull example
 
 foo : forall {a : Type, b : Type} . (a [], b []) -> (a, b) []
-foo = pull @((,))
+foo = pull @(,)
+
+main : (Int, Int) []
+main = pull @(,) ([42], [1337])
