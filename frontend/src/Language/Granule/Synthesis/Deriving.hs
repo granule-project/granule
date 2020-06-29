@@ -272,7 +272,7 @@ derivePull s ty = do
               []
               (FunTy Nothing returnTy' (Box c returnTy))
       let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
-      let name = mkId $ "pull" ++ pretty ty
+      let name = mkId $ "pull@" ++ pretty ty
 
       return $
         (tyS, Def s name True
