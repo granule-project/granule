@@ -124,7 +124,7 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   -> SpecIndicator
   -> Checker (Bool, Substitution)
 
-equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy t1 t2) fTy2@(FunTy t1' t2') _ sp = do
+equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp = do
   -- contravariant position (always approximate)
   (eq1, u1) <-
     case sp of
@@ -151,20 +151,21 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
+
   -- Unify the coeffect kinds of the two coeffects
-  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- subst <- unify c c'
 
   -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
+  c' <- substitute subst c'
+  c  <- substitute subst c
+  kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
 
-  equalTypesRelatedCoeffects s rel t t' sp
-  --(eq, subst') <- equalTypesRelatedCoeffectsInner s rel uS t t' sp
-  --case subst of
-  --  Just subst -> do
---      substFinal <- combineSubstitutions s subst subst'
---      return (eq, substFinal)
-  --  Nothing -> return (False, [])
+  (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp
+
+  substU <- combineSubstitutions s subst subst'
+  return (eq, substU)
 
 equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ | n == m = do
   checkerState <- get
@@ -253,6 +254,8 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
           <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
 
+  debugM "context" $ pretty $ tyVarContext checkerState
+
   -- Do an occurs check for types
   case kind of
     KType ->
@@ -290,7 +293,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
            addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
            return (True, unif ++ [(n, SubstT t)])
 
-         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t }
+         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
@@ -413,10 +416,10 @@ isDualSession sp _ t1 t2 _ = throw
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
 joinTypes s t t' | t == t' = return t
 
-joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
+joinTypes s (FunTy id t1 t2) (FunTy _ t1' t2') = do
   t1j <- joinTypes s t1' t1 -- contravariance
   t2j <- joinTypes s t2 t2'
-  return (FunTy t1j t2j)
+  return (FunTy id t1j t2j)
 
 joinTypes _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
@@ -426,7 +429,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
   return (Diamond ej tj)
 
 joinTypes s (Box c t) (Box c' t') = do
-  (coeffTy, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  (coeffTy, _, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- Create a fresh coeffect variable
   topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
@@ -527,7 +530,7 @@ twoEqualEffectTypes s ef1 ef2 = do
 isIndexedType :: Type -> Checker Bool
 isIndexedType = typeFoldM $
   TypeFold
-    { tfFunTy = \x y -> return (x || y)
+    { tfFunTy = \_ x y -> return (x || y)
     , tfTyCon = \c -> do {
         st <- get;
         return $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
@@ -537,4 +540,5 @@ isIndexedType = typeFoldM $
     , tfTyApp = \x y -> return (x || y)
     , tfTyInt = \_ -> return False
     , tfTyInfix = \_ x y -> return (x || y)
-    , tfSet = \_ -> return False }
+    , tfSet = \_ -> return False
+    , tfTySig = \x _ _ -> return x }

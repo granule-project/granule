@@ -25,7 +25,7 @@ import Data.Functor.Identity (runIdentity)
 -- | Check the kind of a definition
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
-kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
+kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
@@ -44,7 +44,7 @@ kindCheckDef (Def s id eqs (Forall s' quantifiedVariables constraints ty)) = do
                    quantifiedVariables
         modify (\st -> st { tyVarContext = [] })
         -- Update the def with the resolved quantifications
-        return (Def s id eqs (Forall s' qVars constraints ty))
+        return (Def s id rf eqs (Forall s' qVars constraints ty))
 
     --KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> throw KindMismatch{ errLoc = s, tyActualK = Just ty, kExpected = KType, kActual = kind }
@@ -68,7 +68,7 @@ replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
 -- which get automatically resolved
 inferKindOfTypeImplicits :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker (Kind, Substitution)
 
-inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
+inferKindOfTypeImplicits s ctxt (FunTy _ t1 t2) = do
    (k1, u1) <- inferKindOfTypeImplicits s ctxt t1
    (k2, u2) <- inferKindOfTypeImplicits s ctxt t2
    jK1 <- joinKind k1 KType
@@ -80,7 +80,7 @@ inferKindOfTypeImplicits s ctxt (FunTy t1 t2) = do
           u <- combineManySubstitutions s [u1, u2, u1', u2']
           return (KType, u)
         _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t2, kExpected = KType, kActual = k2 }
-    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k2 }
+    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = KType, kActual = k1 }
 
 inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Pure")) = do
     -- Create a fresh type variable
@@ -185,3 +185,16 @@ inferKindOfTypeImplicits s ctxt (TySet ts) = do
     -- ks <- mapM (inferKindOfTypeImplicits s ctxt) ts
     k <- inferKindOfTypeInContext s ctxt (TySet ts)
     return (k, [])
+
+inferKindOfTypeImplicits s ctxt (TySig t k) = do
+  k' <- inferKindOfTypeInContext s ctxt t
+  if k' == k
+        then return (k, [])
+        else
+          -- Allow ty ints to be overloaded at different signatures other than nat
+          case t of
+            TyInt _ ->
+              case k of
+                KVar _ -> return (k, [])
+                _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+            _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }

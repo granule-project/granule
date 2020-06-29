@@ -1,5 +1,4 @@
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ViewPatterns #-}
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
 module Language.Granule.Checker.Patterns where
@@ -45,8 +44,8 @@ polyShaped t = case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
       case mCardinality of
-        Just (_, c, _) -> case c of
-          Just 1 -> do
+        Just (_, c, _) -> case length c of
+          1 -> do
             debugM "uniShaped constructor" (show t <> "\n" <> show c)
             pure False
           _ -> do
@@ -87,7 +86,7 @@ ctxtFromTypedPattern' :: (?globals :: Globals) =>
   -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
+ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
     -- DESIGN DECISION: We've turned off the checks that our linearity for ints
     -- when preceded by other concrete matches. (15/02/19) - DAO
     -- But we want to think about this more in the future
@@ -105,18 +104,18 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _) cons =
             isPoly <- polyShaped t
             if isPoly
               then illLinearityMismatch s (pure NonLinearPattern)
-              else return ([], [], [], PWild s t, Full)
+              else return ([], [], [], PWild s t rf, Full)
 
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
               addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
 
-              return ([], [], [], PWild s t, NotFull)
+              return ([], [], [], PWild s t rf, NotFull)
 
   --  _ -> illLinearityMismatch s [NonLinearPattern]
 
-ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
-    let elabP = PVar s t v
+ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
+    let elabP = PVar s t rf v
 
     case outerCoeff of
       Nothing ->
@@ -125,46 +124,47 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ v) _ = do
          return ([(v, Discharged t coeff)], [], [], elabP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
   | internalName c == "Int" = do
 
     definiteUnification s outerCoeff ty
 
-    let elabP = PInt s' ty n
+    let elabP = PInt s' ty rf n
     return ([], [], [], elabP, Full)
 
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ n) _
+ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
   | internalName c == "Float" = do
 
     definiteUnification s outerCoeff ty
 
-    let elabP = PFloat s' ty n
+    let elabP = PFloat s' ty rf n
     return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ p) _ = do
+ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
-    innerBoxTy <- inferCoeffectType s coeff
+    (innerBoxTy, subst0) <- inferCoeffectType s coeff
 
-    (coeff, coeffTy) <- case outerBoxTy of
+    (coeff, subst1, coeffTy) <- case outerBoxTy of
         -- Case: no enclosing [ ] pattern
-        Nothing -> return (coeff, innerBoxTy)
+        Nothing -> return (coeff, [], innerBoxTy)
         -- Case: there is an enclosing [ ] pattern of type outerBoxTy
         Just (outerCoeff, outerBoxTy) -> do
           -- Therefore try and flatten at this point
           flatM <- flattenable outerBoxTy innerBoxTy
           case flatM of
-            Just (flattenOp, ty) -> return (flattenOp outerCoeff coeff, ty)
+            Just (flattenOp, subst, ty) -> return (flattenOp outerCoeff coeff, subst, ty)
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
 
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 
-    let elabP = PBox sp t elabPinner
-    return (ctxt, eVars, subst, elabP, NotFull)
+    let elabP = PBox sp t rf elabPinner
+    substU <- combineManySubstitutions s [subst0, subst1, subst]
+    return (ctxt, eVars, substU, elabP, NotFull)
 
-ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
+ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -227,7 +227,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
 
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
-          let elabP = PConstr s ty dataC elabPs
+          let elabP = PConstr s ty rf dataC elabPs
           return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
@@ -249,7 +249,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ dataC ps) cons = do
     -- Tail recursive version of unpeel
     unpeel' acc [] t = return acc
 
-    unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy t t') = do
+    unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy _ t t') = do
         (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons
         us <- combineSubstitutions s us us'
         unpeel' (as<>as', bs<>bs', us, elabP:elabPs, consOut `meetConsumption` consOut') ps t'
@@ -271,7 +271,7 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
 ctxtFromTypedPatterns sp ty [] _ = do
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns s (FunTy t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
   (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern s t1 pat cons
@@ -292,7 +292,7 @@ ctxtFromTypedPatterns s ty (p:ps) _ = do
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
   psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
-  let spuriousType = foldr FunTy (TyVar $ mkId "?") psTyVars
+  let spuriousType = foldr (FunTy Nothing) (TyVar $ mkId "?") psTyVars
   throw TooManyPatternsError
     { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }
 
@@ -304,9 +304,9 @@ duplicateBinderCheck s ps = case duplicateBinders of
   where
     duplicateBinders = duplicates . concatMap getBinders $ ps
     getBinders = patternFold
-      (\_ _ id -> [sourceName id])
-      (\_ _ -> [])
-      (\_ _ bs -> bs)
+      (\_ _ _ id -> [sourceName id])
       (\_ _ _ -> [])
-      (\_ _ _ -> [])
-      (\_ _ _ bss -> concat bss)
+      (\_ _ _ bs -> bs)
+      (\_ _ _ _ -> [])
+      (\_ _ _ _ -> [])
+      (\_ _ _ _ bss -> concat bss)

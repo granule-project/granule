@@ -1,0 +1,8 @@
+data Stream (c : Coeffect) (i : c) (j : c) (a : Type) : Type = 
+  Stream (a [i]) ((Stream c i j a) [j])
+
+head : forall {a : Type, c : Coeffect} . Stream c 1 0 a -> a
+head (Stream [x] [_]) = x
+
+next : forall {a : Type, c : Coeffect, l : c} . Stream c 0 1 a -> Stream c 0 l a
+next (Stream [_] [xs]) = xs

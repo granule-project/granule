@@ -11,7 +11,6 @@
 module Language.Granule.Checker.Constraints where
 
 --import Data.Foldable (foldrM)
-import Data.List (isPrefixOf)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Arrow (first)
@@ -177,12 +176,6 @@ freshCVarScoped quant name t q k | t == extendedNat = do
     k (SNatX.representationConstraint solverVar
      , SExtNat (SNatX.SNatX solverVar)))
 
--- A poly typed coeffect variable compiled into the
---  infinity value (since this satisfies all the semiring properties on the nose)
-freshCVarScoped quant name (TyVar v) q k | "kprom" `isPrefixOf` internalName v =
-  -- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-  k (sTrue, SPoint)
-
 freshCVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
@@ -293,12 +286,6 @@ compileCoeffect :: (?globals :: Globals) =>
   Coeffect -> Type -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
 compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
-
--- Trying to compile a coeffect from a promotion that was never
--- constrained further: default to the cartesian coeffect
--- future TODO: resolve polymorphism to free coeffect (uninterpreted)
-compileCoeffect c (TyVar v) _ | "kprom" `isPrefixOf` internalName v =
-  return (SPoint, sTrue)
 
 compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
   return (SLevel . fromInteger . toInteger $ n, sTrue)
@@ -430,8 +417,10 @@ compileCoeffect (CNat n) (TyVar _) _ | n > 0 =
       injection 1 = SynLeaf (Just 1)
       injection n = SynPlus (SynLeaf (Just 1)) (injection (n-1))
 
-compileCoeffect c (TyVar _) _ =
-   solverError $ "Trying to compile a polymorphically kinded " <> pretty c
+-- Trying to compile a coeffect from a promotion that was never
+-- constrained further
+compileCoeffect c (TyVar v) _ =
+  return (SUnknown (SynLeaf Nothing), sTrue)
 
 compileCoeffect coeff ckind _ =
    solverError $ "Can't compile a coeffect: " <> pretty coeff <> " {" <> (show coeff) <> "}"

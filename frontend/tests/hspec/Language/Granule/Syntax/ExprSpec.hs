@@ -13,8 +13,8 @@ spec :: Test.Spec
 spec = do
   describe "Expression helpers" $
     it "free variable test" $
-      freeVars (Val nullSpanNoFile ()
-            (Abs () (PVar nullSpanNoFile () $ mkId "x") Nothing
-              (Val nullSpanNoFile ()
-                (Abs () (PVar nullSpanNoFile () $ mkId "y") Nothing
-                  (Val nullSpanNoFile () (Var () $ mkId "z")))))) `shouldBe` [mkId "z"]
+      freeVars (Val nullSpanNoFile () False
+            (Abs () (PVar nullSpanNoFile () False $ mkId "x") Nothing
+              (Val nullSpanNoFile () False
+                (Abs () (PVar nullSpanNoFile () False $ mkId "y") Nothing
+                  (Val nullSpanNoFile () False (Var () $ mkId "z")))))) `shouldBe` [mkId "z"]

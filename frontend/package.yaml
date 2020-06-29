@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.7.7.3'
+version: '0.7.8.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018-19 authors
@@ -70,6 +70,8 @@ library:
   - Language.Granule.Syntax.Preprocessor.Markdown
   - Language.Granule.Syntax.Span
   - Language.Granule.Syntax.Type
+  - Language.Granule.Synthesis.Splitting
+  - Language.Granule.Synthesis.RewriteHoles
   - Language.Granule.Context
   - Language.Granule.Utils
   dependencies:
@@ -86,6 +88,10 @@ library:
   - raw-strings-qq
   - text-replace
   - directory
+  - syb >=0.6
+  - syz >=0.2.0.0
+  - text >=1.1.2
+  - split
 
 tests:
   frontend-spec:

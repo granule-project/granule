@@ -1,0 +1,35 @@
+data Bool = True | False
+
+and0 : Bool -> Bool -> Bool -> Bool -> Bool -> Bool
+and0 True True True True True = ?;
+and0 True True True True False = ?;
+and0 True True True False True = ?;
+and0 True True True False False = ?;
+and0 True True False True True = ?;
+and0 True True False True False = ?;
+and0 True True False False True = ?;
+and0 True True False False False = ?;
+and0 True False True True True = ?;
+and0 True False True True False = ?;
+and0 True False True False True = ?;
+and0 True False True False False = ?;
+and0 True False False True True = ?;
+and0 True False False True False = ?;
+and0 True False False False True = ?;
+and0 True False False False False = ?;
+and0 False True True True True = ?;
+and0 False True True True False = ?;
+and0 False True True False True = ?;
+and0 False True True False False = ?;
+and0 False True False True True = ?;
+and0 False True False True False = ?;
+and0 False True False False True = ?;
+and0 False True False False False = ?;
+and0 False False True True True = ?;
+and0 False False True True False = ?;
+and0 False False True False True = ?;
+and0 False False True False False = ?;
+and0 False False False True True = ?;
+and0 False False False True False = ?;
+and0 False False False False True = ?;
+and0 False False False False False = ?

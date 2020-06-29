@@ -5,6 +5,7 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE StandaloneDeriving #-}
 {-# LANGUAGE DeriveFunctor #-}
+{-# LANGUAGE DeriveDataTypeable #-}
 {-# LANGUAGE UndecidableInstances #-}
 {-# LANGUAGE TemplateHaskell #-}
 {-# LANGUAGE PatternSynonyms #-}
@@ -22,6 +23,7 @@ import Data.List ((\\))
 import Data.Bifunctor.TH
 import Data.Bifunctor hiding (second)
 import Data.Bifunctor.Foldable (Base, Birecursive, project)
+import qualified Text.Reprinter as Rp hiding (Generic)
 
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Annotated
@@ -57,7 +59,7 @@ data ValueF ev a value expr =
     | StringLiteralF Text
     -- Extensible part
     | ExtF a ev
-   deriving (Generic, Eq)
+   deriving (Generic, Eq, Rp.Data)
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ValueF ev a value expr)
@@ -85,18 +87,18 @@ pattern Ext a extv = (ExprFix2 (ExtF a extv))
 -- | Expressions (computations) in Granule (with `v` extended values
 -- | and annotations `a`).
 data ExprF ev a expr value =
-    AppF Span a expr expr
-  | BinopF Span a Operator expr expr
-  | LetDiamondF Span Bool a (Pattern a) (Maybe Type) expr expr
+    AppF Span a Bool expr expr
+  | BinopF Span a Bool Operator expr expr
+  | LetDiamondF Span a Bool (Pattern a) (Maybe Type) expr expr
      -- Graded monadic composition (like Haskell do)
      -- let p : t <- e1 in e2
      -- or
      -- let p <- e1 in e2
-  | TryCatchF Span Bool a expr (Pattern a) (Maybe Type) expr expr
+  | TryCatchF Span a Bool expr (Pattern a) (Maybe Type) expr expr
      -- try e1 as p : t in e2 catch e3
-  | ValF Span Bool a value
-  | CaseF Span Bool a expr [(Pattern a, expr)]
-  | HoleF Span Bool a
+  | ValF Span a Bool value
+  | CaseF Span a Bool expr [(Pattern a, expr)]
+  | HoleF Span a Bool [Id]
   deriving (Generic, Eq, Rp.Data)
 
 data Operator
@@ -108,8 +110,9 @@ data Operator
   | OpNotEq
   | OpPlus
   | OpTimes
+  | OpDiv
   | OpMinus
-  deriving (Generic, Eq, Ord, Show)
+  deriving (Generic, Eq, Ord, Show, Rp.Data)
 
 deriving instance (Show ev, Show a, Show value, Show expr)
     => Show (ExprF ev a value expr)
@@ -162,13 +165,27 @@ instance Annotated (Value ev Type) Type where
     annotation (CharLiteral _) = TyCon (mkId "Char")
     annotation other = getFirstParameter other
 
+instance Rp.Refactorable (Expr ev a) where
+  isRefactored (App _ _ True _ _) = Just Rp.Replace
+  isRefactored (Binop _ _ True _ _ _) = Just Rp.Replace
+  isRefactored (LetDiamond _ _ True _ _ _ _) = Just Rp.Replace
+  isRefactored (Val _ _ True _) = Just Rp.Replace
+  isRefactored (Case _ _ True _ _) = Just Rp.Replace
+  isRefactored (Hole _ _ True _) = Just Rp.Replace
+  isRefactored _ = Nothing
+
+  getSpan = convSpan . getFirstParameter
+
+deriving instance (Rp.Data (ExprFix2 ValueF ExprF () ()))
+deriving instance ((Rp.Data (ExprFix2 ValueF ExprF ev a)), Rp.Data ev, Rp.Data a) => Rp.Data (Expr ev a)
+
 -- Syntactic sugar constructor
 letBox :: Span -> Pattern () -> Expr ev () -> Expr ev () -> Expr ev ()
 letBox s pat e1 e2 =
-  App s () (Val s () (Abs () (PBox s () pat) Nothing e2)) e1
+  App s () False (Val s () False (Abs () (PBox s () False pat) Nothing e2)) e1
 
 pair :: Expr v () -> Expr v () -> Expr v ()
-pair e1 e2 = App s () (App s () (Val s () (Constr () (mkId "(,)") [])) e1) e2
+pair e1 e2 = App s () False (App s () False (Val s () False (Constr () (mkId "(,)") [])) e1) e2
              where s = nullSpanNoFile
 
 typedPair :: Value v Type -> Value v Type -> Value v Type
@@ -209,17 +226,17 @@ instance Term (Value ev a) where
     isLexicallyAtomic _     = True
 
 instance Substitutable Value where
-    subst es v (Abs a w t e)      = Val (nullSpanInFile $ getSpan es) a $ Abs a w t (subst es v e)
-    subst es v (Pure a e)         = Val (nullSpanInFile $ getSpan es) a $ Pure a (subst es v e)
-    subst es v (Promote a e)      = Val (nullSpanInFile $ getSpan es) a $ Promote a (subst es v e)
+    subst es v (Abs a w t e)      = Val (nullSpanInFile $ getSpan es) a False $ Abs a w t (subst es v e)
+    subst es v (Pure a e)         = Val (nullSpanInFile $ getSpan es) a False $ Pure a (subst es v e)
+    subst es v (Promote a e)      = Val (nullSpanInFile $ getSpan es) a False $ Promote a (subst es v e)
     subst es v (Var a w) | v == w = es
-    subst es _ v@NumInt{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
-    subst es _ v@NumFloat{}      = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
-    subst es _ v@Var{}           = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
-    subst es _ v@Constr{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
-    subst es _ v@CharLiteral{}   = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
-    subst es _ v@StringLiteral{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
-    subst es _ v@Ext{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) v
+    subst es _ v@NumInt{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
+    subst es _ v@NumFloat{}      = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
+    subst es _ v@Var{}           = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
+    subst es _ v@Constr{}        = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
+    subst es _ v@CharLiteral{}   = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
+    subst es _ v@StringLiteral{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
+    subst es _ v@Ext{} = Val (nullSpanInFile $ getSpan es) (getFirstParameter v) False v
 
 instance Monad m => Freshenable m (Value v a) where
     freshen (Abs a p t e) = do
@@ -276,11 +293,11 @@ instance Term (Expr v a) where
     isLexicallyAtomic _ = False
 
 instance Substitutable Expr where
-    subst es v (App s a e1 e2) =
-      App s a (subst es v e1) (subst es v e2)
+    subst es v (App s a rf e1 e2) =
+      App s a rf (subst es v e1) (subst es v e2)
 
-    subst es v (Binop s a op e1 e2) =
-      Binop s a op (subst es v e1) (subst es v e2)
+    subst es v (Binop s a rf op e1 e2) =
+      Binop s a rf op (subst es v e1) (subst es v e2)
 
     subst es v (LetDiamond s a rf w t e1 e2) =
       LetDiamond s a rf w t (subst es v e1) (subst es v e2)
@@ -291,26 +308,26 @@ instance Substitutable Expr where
     subst es v (Val _ _ _ val) =
       subst es v val
 
-    subst es v (Case s a expr cases) =
-      Case s a (subst es v expr)
+    subst es v (Case s a rf expr cases) =
+      Case s a rf (subst es v expr)
                (map (second (subst es v)) cases)
 
     subst es _ v@Hole{} = v
 
 instance Monad m => Freshenable m (Expr v a) where
-    freshen (App s a e1 e2) = do
+    freshen (App s a rf e1 e2) = do
       e1 <- freshen e1
       e2 <- freshen e2
-      return $ App s a e1 e2
+      return $ App s a rf e1 e2
 
-    freshen (LetDiamond s a p t e1 e2) = do
+    freshen (LetDiamond s a rf p t e1 e2) = do
       e1 <- freshen e1
       p  <- freshen p
       e2 <- freshen e2
       t   <- case t of
                 Nothing -> return Nothing
                 Just ty -> freshen ty >>= (return . Just)
-      return $ LetDiamond s a p t e1 e2
+      return $ LetDiamond s a rf p t e1 e2
 
     freshen (TryCatch s a rf e1 p t e2 e3) = do
       e1 <- freshen e1
@@ -322,23 +339,22 @@ instance Monad m => Freshenable m (Expr v a) where
       e3 <- freshen e3
       return $ TryCatch s a rf e1 p t e2 e3
 
-
     freshen (Binop s a rf op e1 e2) = do
       e1 <- freshen e1
       e2 <- freshen e2
       return $ Binop s a rf op e1 e2
 
-    freshen (Case s a expr cases) = do
+    freshen (Case s a rf expr cases) = do
       expr     <- freshen expr
       cases <- forM cases $ \(p, e) -> do
                   p <- freshen p
                   e <- freshen e
                   removeFreshenings (boundVars p)
                   return (p, e)
-      return (Case s a expr cases)
+      return (Case s a rf expr cases)
 
-    freshen (Val s a v) = do
+    freshen (Val s a rf v) = do
      v <- freshen v
-     return (Val s a v)
+     return (Val s a rf v)
 
     freshen v@Hole{} = return v

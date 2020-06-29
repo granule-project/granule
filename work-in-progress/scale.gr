@@ -1,8 +1,14 @@
-f : Float [5.5] → Float
+f : DFloat [5.5] → DFloat
 f [x] = (scale 2.5 [x] + 1.0) * (scale 3.0 [x])
 
-g : Float [7.5] → Float
+g : DFloat [7.5] → DFloat
 g [x] = scale 3.0 [scale 2.5 [x]]
 
 main : Float
 main = f [g [10.0]]
+
+
+data Num (e : Q) = Num
+
+kmeansIsh : forall {e : Q} . Num e -> Int
+kmeansIsh Num = 42

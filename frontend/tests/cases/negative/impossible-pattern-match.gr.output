@@ -1,3 +1,3 @@
 Type checking failed: 
 Impossible pattern match: frontend/tests/cases/negative/impossible-pattern-match.gr:7:1:
-Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n0.13 : ↑Nat . (0 ≥ n0.13 + 1)
+Pattern match in an equation of `subBad` is impossible as it implies the unsatisfiable condition ∃ n0.0 : ↑Nat . (0 ≥ n0.0 + 1)

@@ -4,8 +4,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -15,7 +13,7 @@ module Language.Granule.Checker.Monad where
 
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
-import Data.List (intercalate)
+import Data.List (intercalate, transpose)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
 import Data.Semigroup (sconcat)
@@ -112,7 +110,7 @@ data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 -- is checked elsewhere
 initialisePatternConsumptions :: [Equation v a] -> [Consumption]
 initialisePatternConsumptions [] = []
-initialisePatternConsumptions ((Equation _ _ pats _):_) =
+initialisePatternConsumptions ((Equation _ _ _ pats _):_) =
   map (\_ -> NotFull) pats
 
 -- Join information about consumption between branches
@@ -158,7 +156,7 @@ data CheckerState = CS
             -- Data type information
             --  map of type constructor names to their the kind, num of
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Kind, Cardinality, Bool)
+            , typeConstructors :: Ctxt (Kind, [Id], Bool)
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
@@ -168,6 +166,9 @@ data CheckerState = CS
 
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
+
+            -- The type of the current equation.
+            , equationTy :: Maybe Type
 
             -- Warning accumulator
             -- , warnings :: [Warning]
@@ -188,6 +189,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
+               , equationTy = Nothing
                }
 
 -- *** Various helpers for manipulating the context
@@ -206,6 +208,12 @@ lookupDataConstructor sp constrName = do
         then return $ lookup constrName (dataConstructors st)
         -- Otheriwe this is truly hidden
         else return Nothing
+
+lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
+lookupPatternMatches sp constrName = do
+  let snd3 (a, b, c) = b
+  st <- get
+  return $ snd3 <$> lookup constrName (typeConstructors st)
 
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
@@ -388,7 +396,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier) }
+    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]])}
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -440,7 +448,7 @@ data CheckerError
   | UnificationDisallowed
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind, tyIsConcrete :: Bool }
   | UnificationFailGeneric
     { errLoc :: Span, errSubst1 :: Substitutors, errSubst2 :: Substitutors }
   | OccursCheckFail
@@ -495,6 +503,8 @@ data CheckerError
     { errLoc :: Span, tyConExpected :: Id, tyConActual :: Id }
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
+  | InvalidHolePosition
+    { errLoc :: Span }
   | UnknownResourceAlgebra
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | CaseOnIndexedType
@@ -559,24 +569,38 @@ instance UserMsg CheckerError where
   title NameClashDefs{} = "Definition name clash"
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
+  title InvalidHolePosition{} = "Invalid hole position"
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
 
   msg HoleMessage{..} =
-    (case holeTy of
-      Nothing -> "\n   Hole occurs in synthesis position so the type is not yet known"
-      Just ty -> "\n   Expected type is: `" <> pretty ty <> "`")
+    "\n   Expected type is: `" <> pretty holeTy <> "`"
     <>
     -- Print the context if there is anything to use
     (if null context
       then ""
-      else "\n\n   Context:" <> (concatMap (\x -> "\n     " ++ pretty x) context))
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) context)
     <>
     (if null tyContext
       then ""
-      else "\n\n   Type context:" <> (concatMap (\(v, (t , _)) ->  "\n     "
+      else "\n\n   Type context:" <> concatMap (\(v, (t , _)) ->  "\n     "
                                                 <> pretty v
-                                                <> " : " <> pretty t) tyContext) <> "\n")
+                                                <> " : " <> pretty t) tyContext)
+    <>
+    (if null (fst cases)
+      then ""
+      else if null (snd cases)
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty $ fst cases)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
+             intercalate "\n     " (formatCases (snd cases)))
+
+    where
+      formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
+
+      padToLongest xs =
+        let size = maximum (map length xs)
+        in  map (\s -> s ++ replicate (size - length s) ' ') xs
+
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
@@ -704,8 +728,8 @@ instance UserMsg CheckerError where
     = "Trying to unify `" <> pretty errSubst1 <> "` and `" <> pretty errSubst2 <> "`"
 
   msg UnificationFail{..}
-    = "Cannot unify universally quantified type variable `" <> pretty errVar <> "`"
-    <> "` of kind `" <> pretty errKind <> "` with a concrete type `" <> pretty errTy <> "`"
+    = "Cannot unify universally quantified type variable `" <> pretty errVar
+    <> "` of kind `" <> pretty errKind <> "` with " <> (if tyIsConcrete then "a concrete type " else "") <> "`" <> pretty errTy <> "`"
 
   msg SessionDualityError{..}
     = "Session type `" <> pretty errTy1 <> "` is not dual to `" <> pretty errTy2 <> "`"
@@ -810,6 +834,8 @@ instance UserMsg CheckerError where
 
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
+
+  msg InvalidHolePosition{} = "Hole occurs in synthesis position so the type is not yet known"
 
   msg UnknownResourceAlgebra{ errK, errTy }
     = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from effect term `" <> pretty errTy <> "`"

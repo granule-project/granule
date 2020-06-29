@@ -86,6 +86,9 @@ evalBinOp op v1 v2 = case op of
       (NumInt n1, NumInt n2) -> NumInt (n1 * n2)
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 * n2)
       _ -> evalFail
+    OpDiv -> case (v1, v2) of
+      (NumFloat n1, NumFloat n2) -> NumFloat (n1 / n2)
+      _ -> evalFail
     OpMinus -> case (v1, v2) of
       (NumInt n1, NumInt n2) -> NumInt (n1 - n2)
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 - n2)
@@ -119,7 +122,7 @@ evalBinOp op v1 v2 = case op of
 
 -- Call-by-value big step semantics
 evalIn :: (?globals :: Globals) => Ctxt RValue -> RExpr -> IO RValue
-evalIn ctxt (App s _ e1 e2) = do
+evalIn ctxt (App s _ _ e1 e2) = do
     -- (cf. APP_L)
     v1 <- evalIn ctxt e1
     case v1 of
@@ -145,7 +148,7 @@ evalIn ctxt (App s _ e1 e2) = do
       _ -> error $ show v1
       -- _ -> error "Cannot apply value"
 
-evalIn ctxt (Binop _ _ op e1 e2) = do
+evalIn ctxt (Binop _ _ _ op e1 e2) = do
      v1 <- evalIn ctxt e1
      v2 <- evalIn ctxt e2
      return $ evalBinOp op v1 v2
@@ -172,7 +175,6 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = return $ diamondConstr $ do
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
-
 evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
   v1 <- evalIn ctxt e1
   case v1 of
@@ -193,29 +195,29 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
           
 {-
 -- Hard-coded 'scale', removed for now
-evalIn _ (Val _ (Var v)) | internalName v == "scale" = return
-  (Abs (PVar nullSpan $ mkId " x") Nothing (Val nullSpan
-    (Abs (PVar nullSpan $ mkId " y") Nothing (
-      letBox nullSpan (PVar nullSpan $ mkId " ye")
-         (Val nullSpan (Var (mkId " y")))
-         (Binop nullSpan
-           "*" (Val nullSpan (Var (mkId " x"))) (Val nullSpan (Var (mkId " ye"))))))))
+evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
+  (Abs () (PVar nullSpan () False $ mkId " x") Nothing (Val nullSpan () False
+    (Abs () (PVar nullSpan () False $ mkId " y") Nothing (
+      letBox nullSpan (PVar nullSpan () False $ mkId " ye")
+         (Val nullSpan () False (Var () (mkId " y")))
+         (Binop nullSpan () False
+           OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
 -}
 
-evalIn ctxt (Val _ _ (Var _ x)) =
+evalIn ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
-evalIn ctxt (Val s _ (Promote _ e)) = do
+evalIn ctxt (Val s _ _ (Promote _ e)) = do
   -- (cf. Box)
   v <- evalIn ctxt e
-  return $ Promote () (Val s () v)
+  return $ Promote () (Val s () False v)
 
-evalIn _ (Val _ _ v) = return v
+evalIn _ (Val _ _ _ v) = return v
 
-evalIn ctxt (Case _ _ guardExpr cases) = do
+evalIn ctxt (Case _ _ _ guardExpr cases) = do
     v <- evalIn ctxt guardExpr
     p <- pmatch ctxt cases v
     case p of
@@ -224,7 +226,7 @@ evalIn ctxt (Case _ _ guardExpr cases) = do
         error $ "Incomplete pattern match:\n  cases: "
              <> pretty cases <> "\n  expr: " <> pretty v
 
-evalIn ctxt (Hole _ _) = do
+evalIn ctxt (Hole _ _ _ _) = do
   error "Trying to evaluate a hole, which should not have passed the type checker."
 
 applyBindings :: Ctxt RExpr -> RExpr -> RExpr
@@ -244,10 +246,10 @@ pmatch ::
 pmatch _ [] _ =
   return Nothing
 
-pmatch _ ((PWild _ _, e):_)  _ =
+pmatch _ ((PWild _ _ _, e):_)  _ =
   return $ Just e
 
-pmatch ctxt ((PConstr _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
+pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
  | id == id' && length innerPs == length vs = do
 
   -- Fold over the inner patterns
@@ -260,31 +262,31 @@ pmatch ctxt ((PConstr _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
     -- There was a failure somewhere
     Nothing  -> pmatch ctxt ps v
 
-pmatch _ ((PVar _ _ var, e):_) v =
-  return $ Just $ subst (Val nullSpan () v) var e
+pmatch _ ((PVar _ _ _ var, e):_) v =
+  return $ Just $ subst (Val nullSpan () False v) var e
 
-pmatch ctxt ((PBox _ _ p, e):ps) v@(Promote _ (Val _ _ v')) = do
+pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Promote _ (Val _ _ _ v')) = do
   match <- pmatch ctxt [(p, e)] v'
   case match of
     Just e -> return $ Just e
     Nothing -> pmatch ctxt ps v
 
-pmatch ctxt ((PInt _ _ n, e):ps) (NumInt m) | n == m = return $ Just e
+pmatch ctxt ((PInt _ _ _ n, e):ps) (NumInt m) | n == m = return $ Just e
 
-pmatch ctxt ((PFloat _ _ n, e):ps) (NumFloat m )| n == m = return $ Just e
+pmatch ctxt ((PFloat _ _ _ n, e):ps) (NumFloat m )| n == m = return $ Just e
 
 pmatch ctxt (_:ps) v = pmatch ctxt ps v
 
 valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
-valExpr = Val nullSpanNoFile ()
+valExpr = Val nullSpanNoFile () False
 
 builtIns :: (?globals :: Globals) => Ctxt RValue
 builtIns =
   [
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
-  , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () v))
-  , (mkId "tick",       Pure () (Val nullSpan () (Constr () (mkId "()") [])))
+  , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () False v))
+  , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> NumFloat (cast n))
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
                               NumInt n -> StringLiteral . pack . show $ n
@@ -294,7 +296,7 @@ builtIns =
       putStr "> "
       hFlush stdout
       val <- Text.getLine
-      return $ Val nullSpan () (StringLiteral val))
+      return $ Val nullSpan () False (StringLiteral val))
 
   , (mkId "readInt", diamondConstr $ do
         when testing (error "trying to read stdin while testing")
@@ -307,13 +309,13 @@ builtIns =
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
                                   Text.putStr s
-                                  return $ (Val nullSpan () (Constr () (mkId "()") []))))
+                                  return $ (Val nullSpan () False (Constr () (mkId "()") []))))
   , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStderr` while testing")
                                   let red x = "\ESC[31;1m" <> x <> "\ESC[0m"
                                   Text.hPutStr stderr $ red s
-                                  return $ Val nullSpan () (Constr () (mkId "()") [])))
+                                  return $ Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "openHandle", Ext () $ Primitive openHandle)
   , (mkId "readChar", Ext () $ Primitive readChar)
   , (mkId "writeChar", Ext () $ Primitive writeChar)
@@ -351,7 +353,7 @@ builtIns =
              case b of
                True -> Constr () (mkId "True") []
                False -> Constr () (mkId "False") []
-        return . Val nullSpan () $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
+        return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure fork)
   , (mkId "forkRep", Ext () $ PrimitiveClosure forkRep)
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
@@ -367,7 +369,7 @@ builtIns =
     fork ctxt e@Abs{} = diamondConstr $ do
       c <- CC.newChan
       _ <- C.forkIO $
-         evalIn ctxt (App nullSpan () (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
+         evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
       return $ valExpr $ Ext () $ Chan c
     fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
@@ -375,7 +377,7 @@ builtIns =
     forkRep ctxt e@Abs{} = diamondConstr $ do
       c <- CC.newChan
       _ <- C.forkIO $
-         evalIn ctxt (App nullSpan ()
+         evalIn ctxt (App nullSpan () False
                         (valExpr e)
                         (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
       return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
@@ -443,7 +445,7 @@ builtIns =
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var [Equation _ _ [] e] _ : defs) = do
+evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ rf [] e]) _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
@@ -457,10 +459,13 @@ class RuntimeRep t where
   toRuntimeRep :: t () () -> t (Runtime ()) ()
 
 instance RuntimeRep Def where
-  toRuntimeRep (Def s i eqs tys) = Def s i (map toRuntimeRep eqs) tys
+  toRuntimeRep (Def s i rf eqs tys) = Def s i rf (toRuntimeRep eqs) tys
+
+instance RuntimeRep EquationList where
+  toRuntimeRep (EquationList s i rf eqns) = EquationList s i rf (map toRuntimeRep eqns)
 
 instance RuntimeRep Equation where
-  toRuntimeRep (Equation s a ps e) = Equation s a ps (toRuntimeRep e)
+  toRuntimeRep (Equation s a rf ps e) = Equation s a rf ps (toRuntimeRep e)
 
 instance RuntimeRep Expr where
   toRuntimeRep (Val s a rf v) = Val s a rf (toRuntimeRep v)

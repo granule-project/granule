@@ -1,4 +1,8 @@
+{-# LANGUAGE DeriveDataTypeable #-}
+
 module Language.Granule.Syntax.Identifiers where
+
+import qualified Text.Reprinter as Rp (Data)
 
 -- | Internal representation of entinames (variables)
 -- which pairs their source name string with an internal name
@@ -6,7 +10,7 @@ module Language.Granule.Syntax.Identifiers where
 -- always use the 'sourceName', anything involving new name
 -- generation should use 'internalName'
 data Id = Id { sourceName :: String, internalName :: String }
-  deriving (Eq, Ord)
+  deriving (Eq, Ord, Rp.Data)
 
 instance Show Id where
   show (Id s i) = "(Id " <> show s <> " " <> show i <> ")"
