@@ -150,7 +150,7 @@ evalIn ctxt (Binop _ _ op e1 e2) = do
      v2 <- evalIn ctxt e2
      return $ evalBinOp op v1 v2
 
-evalIn ctxt (LetDiamond s _ p _ e1 e2) = return $ diamondConstr $ do
+evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = return $ diamondConstr $ do
   -- (cf. LET_1)
   v1 <- evalIn ctxt e1
   case v1 of
@@ -173,7 +173,7 @@ evalIn ctxt (LetDiamond s _ p _ e1 e2) = return $ diamondConstr $ do
                       <> prettyDebug other
 
 
-evalIn ctxt (TryCatch s _ e1 p _ e2 e3) = do
+evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
   v1 <- evalIn ctxt e1
   case v1 of
     (isDiaConstr -> Just e) -> do
@@ -301,7 +301,7 @@ builtIns =
         putStr "> "
         hFlush stdout
         val <- Text.getLine
-        return $ Val nullSpan () (NumInt $ read $ unpack val))
+        return $ Val nullSpan () False (NumInt $ read $ unpack val))
   , (mkId "throw", diamondConstr (throwIO $ mkIOError OtherError "exc" Nothing Nothing))
   , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
@@ -463,13 +463,13 @@ instance RuntimeRep Equation where
   toRuntimeRep (Equation s a ps e) = Equation s a ps (toRuntimeRep e)
 
 instance RuntimeRep Expr where
-  toRuntimeRep (Val s a v) = Val s a (toRuntimeRep v)
-  toRuntimeRep (App s a e1 e2) = App s a (toRuntimeRep e1) (toRuntimeRep e2)
-  toRuntimeRep (Binop s a o e1 e2) = Binop s a o (toRuntimeRep e1) (toRuntimeRep e2)
-  toRuntimeRep (LetDiamond s a p t e1 e2) = LetDiamond s a p t (toRuntimeRep e1) (toRuntimeRep e2)
-  toRuntimeRep (TryCatch s a e1 p t e2 e3) = TryCatch s a (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
-  toRuntimeRep (Case s a e ps) = Case s a (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
-  toRuntimeRep (Hole s a) = Hole s a
+  toRuntimeRep (Val s a rf v) = Val s a rf (toRuntimeRep v)
+  toRuntimeRep (App s a rf e1 e2) = App s a rf (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
+  toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
+  toRuntimeRep (Hole s a rf) = Hole s a rf
 
 instance RuntimeRep Value where
   toRuntimeRep (Ext a ()) = error "Bug: Parser generated an extended value case when it shouldn't have"
