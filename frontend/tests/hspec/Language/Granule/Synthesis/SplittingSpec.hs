@@ -23,21 +23,20 @@ spec = let ?globals = mempty in do
     -- not : Bool → Bool
     -- not x = {! x !}
     it "Boolean not function" $ do
-      res <- runSplitter (FunTy Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))]
+      res <- runSplitter (FunTy Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))] [xId]
       res `shouldBe` ([xId], [[PConstr nullSpan () False falseId []], [PConstr nullSpan () False trueId []]])
+
+    -- not : Bool → Bool
+    -- not x = {! x !}
+    it "Empty hole" $ do
+      res <- runSplitter (FunTy Nothing (TyCon boolId) (TyCon boolId)) boolDataCons boolTyCons []  [(xId, Linear (TyCon boolId))] []
+      res `shouldBe` ([xId], [[PVar nullSpan () False xId]])
 
     -- i : ∀ { a : Type } . a → a
     -- i x = {! x !}
     it "Polymorphic identity" $ do
-      res <- runSplitter (FunTy Nothing (TyVar aId) (TyVar aId)) [] [] [] [(xId, Linear (TyVar aId))]
+      res <- runSplitter (FunTy Nothing (TyVar aId) (TyVar aId)) [] [] [] [(xId, Linear (TyVar aId))] [xId]
       res `shouldBe` ([xId], [[PVar nullSpan () False xId]])
-
-    -- i : ∀ { a : Type } . a → a
-    -- i x = {! !}
-    it "Empty hole" $ do
-      res <- runSplitter (FunTy Nothing (TyVar aId) (TyVar aId)) [] [] [] []
-      res `shouldBe` ([], [[]])
-
 
 boolId, xId, aId, trueId, falseId :: Id
 boolId = mkId "Bool"
@@ -59,13 +58,14 @@ runSplitter :: (?globals :: Globals)
   -> Ctxt (Kind, [Id], Bool)
   -> Ctxt (Kind, Quantifier)
   -> Ctxt Assumption
+  -> [Id]
   -> IO ([Id], [[Pattern ()]])
-runSplitter ty dataCons tyCons tyVarCtxt ctxt = do
+runSplitter ty dataCons tyCons tyVarCtxt ctxt boundIds = do
   let st = initState {
     patternConsumption = repeat NotFull,
     dataConstructors = concatMap snd dataCons,
     typeConstructors = tyCons,
     tyVarContext = tyVarCtxt,
     equationTy = Just ty }
-  (Right (ids, res), _) <- runChecker st (generateCases nullSpan dataCons ctxt)
+  (Right (ids, res), _) <- runChecker st (generateCases nullSpan dataCons ctxt boundIds)
   return (ids, map fst res)

@@ -439,6 +439,8 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   st <- get
 
   let holeCtxt = filter (\(id, a) -> id `elem` vars) ctxt
+  let getIdName (Id n _) = n
+  let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
   case unboundVariables of
@@ -450,7 +452,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      (varsSplitOn, cases) <- generateCases s constructors holeCtxt
+      (varsSplitOn, cases) <- generateCases s constructors holeCtxt boundVariables
 
       -- If we are in synthesise mode, also try to synthesise a
       -- term for each case split goal *if* this is also a hole
