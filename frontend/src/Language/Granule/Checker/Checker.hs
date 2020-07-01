@@ -849,7 +849,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
   return (t, gamNew, subst, elaborated)
 
 
-synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
+synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
 
   -- Check that a graded possibility type was inferred
@@ -896,7 +896,7 @@ synthExpr defs gam pol (TryCatch s a e1 p mty e2 e3) = do
   -- Synth subst
   t' <- substitute substP t
   
-  let elaborated = TryCatch s t elaborated1 elaboratedP mty elaborated2 elaborated3
+  let elaborated = TryCatch s t rf elaborated1 elaboratedP mty elaborated2 elaborated3
   return (t, gam', subst, elaborated) 
 
 -- Variables

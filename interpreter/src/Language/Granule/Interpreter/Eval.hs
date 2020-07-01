@@ -183,7 +183,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
       catch ( do
           eInner <- e
           e1' <- evalIn ctxt eInner
-          pmatch ctxt [(PBox s () p, e2)] e1' >>=
+          pmatch ctxt [(PBox s () False p, e2)] e1' >>=
             \v -> 
               case v of
                 Just e2' -> evalIn ctxt e2'
@@ -474,7 +474,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
-  toRuntimeRep (Hole s a rf) = Hole s a rf
+  toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
 
 instance RuntimeRep Value where
   toRuntimeRep (Ext a ()) = error "Bug: Parser generated an extended value case when it shouldn't have"

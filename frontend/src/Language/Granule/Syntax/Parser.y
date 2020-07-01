@@ -419,11 +419,11 @@ Expr :: { Expr () () }
   | try Expr as '[' PAtom ']' in Expr catch Expr 
       {% let e1 = $2; pat = $5; mt = Nothing; e2 = $8; e3 = $10
         in (mkSpan (getPos $1, getEnd $10)) >>=
-              \sp -> return $ TryCatch sp () e1 pat mt e2 e3 }
+              \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
   | try Expr as '[' PAtom ']' ':' Type in Expr catch Expr 
       {% let e1 = $2; pat = $5; mt = Just $8; e2 = $10; e3 = $12
         in (mkSpan (getPos $1, getEnd $12)) >>=
-              \sp -> return $ TryCatch sp () e1 pat mt e2 e3 }
+              \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
   
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=

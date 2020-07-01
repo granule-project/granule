@@ -130,7 +130,7 @@ pattern LetDiamond sp a rf pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a 
 pattern TryCatch sp a rf t1 pat mty t2 t3 = (ExprFix2 (TryCatchF sp a rf t1 pat mty t2 t3))
 pattern Val sp a rf val = (ExprFix2 (ValF sp a rf val))
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
-pattern Hole sp a rf = ExprFix2 (HoleF sp a rf)
+pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
 {-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
 
 instance Bifunctor (f ev a)
