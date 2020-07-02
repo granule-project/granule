@@ -452,7 +452,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      (varsSplitOn, cases) <- generateCases s constructors holeCtxt boundVariables
+      (_, cases) <- generateCases s constructors holeCtxt boundVariables
 
       -- If we are in synthesise mode, also try to synthesise a
       -- term for each case split goal *if* this is also a hole
@@ -475,7 +475,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
            -- (and throw away the binding information)
            _ -> return casesWithHoles
 
-      throw $ HoleMessage s t ctxt (tyVarContext st) varsSplitOn cases'
+      throw $ HoleMessage s t ctxt (tyVarContext st) boundVariables cases'
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do

@@ -167,7 +167,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           let position = globalsHolePosition ?globals
           let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
           -- Associate the span with each generate cases
-          let holeCases = concatMap (\h -> map (\(x, y) -> (errLoc h, x, y)) (cases h)) relevantHoles
+          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (holeVars h) pats, e)) (cases h)) relevantHoles
           rewriteHoles input noImportAst (keepBackup config) holeCases
           case globalsSynthesise ?globals of
             Just True -> do

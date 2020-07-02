@@ -408,7 +408,7 @@ data CheckerError
       holeTy      :: Type,
       context     :: Ctxt Assumption,
       tyContext   :: Ctxt (Kind, Quantifier),
-      varsSplitOn :: [Id],
+      holeVars :: [Id],
       -- Used for synthesising programs
       cases       :: [([Pattern ()], Expr () Type)] }
   | TypeError
@@ -598,11 +598,11 @@ instance UserMsg CheckerError where
                                                 <> pretty v
                                                 <> " : " <> pretty t) tyContext)
     <>
-    (if null varsSplitOn
+    (if null holeVars
       then ""
       else if null cases
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty varsSplitOn)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty varsSplitOn) <> ":\n     " <>
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
              intercalate "\n     " (formatCases (map fst cases)))
 
     where

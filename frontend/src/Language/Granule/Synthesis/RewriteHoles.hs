@@ -10,9 +10,12 @@ import Data.Maybe (fromJust)
 import qualified Data.Text.Lazy as Text
 import Text.Reprinter hiding (Span)
 
+import Language.Granule.Context
+
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
+import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span (Span, encompasses)
@@ -26,7 +29,7 @@ rewriteHoles ::
   => String
   -> AST () ()
   -> Bool
-  -> [(Span, [Pattern ()], Expr () Type)]
+  -> [(Span, Ctxt (Pattern ()), Expr () Type)]
   -> IO ()
 rewriteHoles _ _ _ [] = return ()
 rewriteHoles input ast keepBackup cases = do
@@ -38,7 +41,7 @@ rewriteHoles input ast keepBackup cases = do
 -- The top level rewriting function, transforms a given source file and
 -- corresponding AST.
 holeRewriter ::
-     (?globals :: Globals) => Source -> [(Span, [Pattern ()], Expr () Type)] -> AST () () -> Source
+     (?globals :: Globals) => Source -> [(Span, Ctxt (Pattern ()), Expr () Type)] -> AST () () -> Source
 holeRewriter source cases =
   runIdentity . (\ast -> reprint astReprinter ast source) . holeRefactor cases
 
@@ -54,50 +57,50 @@ astReprinter = catchAll `extQ` reprintEqnList `extQ` reprintEqn
       genReprinting (return . Text.pack . pretty) (eqn :: EquationList () ())
 
 -- Refactor an AST by refactoring its definitions.
-holeRefactor :: [(Span, [Pattern ()], Expr () Type)] -> AST () () -> AST () ()
+holeRefactor :: [(Span, Ctxt (Pattern ()), Expr () Type)] -> AST () () -> AST () ()
 holeRefactor cases ast =
   ast {definitions = map (holeRefactorDef cases) (definitions ast)}
 
 -- Refactor a definition by refactoring its list of equations.
-holeRefactorDef :: [(Span, [Pattern ()], Expr () Type)] -> Def () () -> Def () ()
+holeRefactorDef :: [(Span, Ctxt (Pattern ()), Expr () Type)] -> Def () () -> Def () ()
 holeRefactorDef cases def =
   def {defEquations = holeRefactorEqnList cases (defEquations def)}
 
 -- Refactors a list of equations by updating each with the relevant patterns.
 holeRefactorEqnList ::
-     [(Span, [Pattern ()], Expr () Type)] -> EquationList () () -> EquationList () ()
+     [(Span, Ctxt (Pattern ()), Expr () Type)] -> EquationList () () -> EquationList () ()
 holeRefactorEqnList cases eqns =
   eqns {equations = newEquations, equationsRefactored = refactored}
   where
     allUpdated = map updateEqn (equations eqns)
     newEquations = concatMap fst allUpdated
-    refactored = all snd allUpdated
+    refactored = any snd allUpdated
     -- Updates an individual equation with the relevant cases, returning a tuple
-    -- containing the new equation and whether a refactoring was performed.
+    -- containing the new equation(s) and whether a refactoring was performed.
+    updateEqn :: Equation () () -> ([Equation () ()], Bool)
     updateEqn eqn =
       let relCases = findRelevantCase eqn cases
       in case relCases of
            [] -> ([eqn], False)
            _ ->
              (map (\(_, cs, t) ->
-                       -- Fill in the hole
-                       let eqn' = (holeRefactorEqn eqn t)
-                       in
-                         if null cs && not (null (equationPatterns eqn))
-                            -- There were no new patterns but there were some before so don't run the refactorer
-                            then eqn'
-                            -- ... or update the patterns
-                            else refactorEqn (eqn' {equationPatterns = cs})) relCases, True)
+             -- Fill in the hole
+               let eqn' = holeRefactorEqn eqn t
+                   oldPatterns = equationPatterns eqn'
+               in
+                 if null cs && not (null oldPatterns)
+                   then eqn'
+                   else refactorEqn (eqn' {equationPatterns = zipWith (uncurry . refactorPattern) oldPatterns cs})) relCases, True)
 
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn ::  Equation () () -> Expr () Type -> Equation () ()
 holeRefactorEqn eqn goal =
   eqn { equationRefactored = True
-        , equationBody = holeRefactorExpr goal (equationBody eqn) }
+      , equationBody = holeRefactorExpr goal (equationBody eqn) }
 
 -- Refactors an expression by filling the hole with the new goal (could be another hole)
 holeRefactorExpr :: Expr () Type -> Expr () () -> Expr () ()
-holeRefactorExpr goal (Hole sp a _ _) = fmap (const ()) goal
+holeRefactorExpr goal (Hole sp a _ _) = void goal
 holeRefactorExpr goal (App sp a rf e1 e2) =
   App sp a rf (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (Binop sp a rf op e1 e2) =
@@ -116,7 +119,23 @@ holeRefactorVal goal (Pure a expr)     = Pure a (holeRefactorExpr goal expr)
 holeRefactorVal goal (Constr a v vals) = Constr a v (map (holeRefactorVal goal) vals)
 holeRefactorVal goal v = v
 
+-- Refactors a pattern by traversing to the rewritten variable and replacing
+-- the variable with the subpattern.
+refactorPattern :: Pattern () -> Id -> Pattern () -> Pattern ()
+refactorPattern p@(PVar _ _ _ id) id' subpat
+  | id == id' = subpat
+  | otherwise = p
+refactorPattern p@PWild {} _ _ = p
+refactorPattern (PBox sp () _ p) id' subpat =
+  let p' = refactorPattern p id' subpat
+  in PBox sp () (patRefactored p') p'
+refactorPattern p@PInt {} _ _ = p
+refactorPattern p@PFloat {} _ _ = p
+refactorPattern (PConstr sp () _ id ps) id' subpat =
+  let ps' = map (\p -> refactorPattern p id' subpat) ps
+  in PConstr sp () (any patRefactored ps') id ps'
+
 -- Finds associated cases for a given equation, based on spans.
-findRelevantCase :: Equation () () -> [(Span, [Pattern ()], Expr () Type)] -> [(Span, [Pattern ()], Expr () Type)]
+findRelevantCase :: Equation () () -> [(Span, Ctxt (Pattern ()), Expr () Type)] -> [(Span, Ctxt (Pattern ()), Expr () Type)]
 findRelevantCase eqn =
-  filter (\(span, case', expr) -> (equationSpan eqn) `encompasses` span)
+  filter (\(span, case', expr) -> equationSpan eqn `encompasses` span)

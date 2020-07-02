@@ -3,7 +3,7 @@ module Language.Granule.Synthesis.Splitting (generateCases) where
 import Control.Arrow (second)
 import Control.Monad.State.Strict (get, liftIO)
 import Data.List (partition)
-import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe, catMaybes)
+import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, mapMaybe)
 
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints
@@ -44,7 +44,7 @@ generateCases span constructors ctxt toSplit = do
           Linear _         -> True
   let (linear, nonlinear) = partition isLinear splitCtxt
 
-  -- Spits linear assumptions into splittable/not-splittable. Where splittable
+  -- Splits linear assumptions into splittable/not-splittable. Where splittable
   -- means that it is a data constructor at the highest level (note we filtered
   -- out box patterns in the previous step).
   let (splittable', unsplittable') =
@@ -83,7 +83,7 @@ generateCases span constructors ctxt toSplit = do
     Just eqTy -> do
       -- Filter the patterns if they are impossible.
       patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
-      validPatterns <- return $ catMaybes patternsAndMaybeBinders
+      let validPatterns = catMaybes patternsAndMaybeBinders
       return (fst cases, validPatterns)
 
 -- Wrapper around validateCase which updates the state when the case is valid.
