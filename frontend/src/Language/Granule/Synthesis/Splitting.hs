@@ -23,8 +23,9 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 -- Generates a set of valid cases given a type and context of assumptions, in
--- the form of a pair of identifiers and lists of lists of patterns
--- which correspond to those identifiers.
+-- the form of a pair of identifiers and lists of lists of patterns which
+-- correspond to those identifiers. This generates cases for *all* variables in
+-- the context, but only splits those in the toSplit list.
 generateCases :: (?globals :: Globals)
   => Span
   -> Ctxt (Ctxt (TypeScheme, Substitution))
@@ -37,18 +38,17 @@ generateCases span constructors ctxt toSplit = do
   let noSplitCtxt = deleteVars ctxt toSplit
 
   -- Determines whether an assumption should be treated as linear.
-  let isLinear (_, a) =
+  let isBoxed (_, a) =
         case a of
-          Discharged _ _   -> False
-          Linear (Box _ _) -> False
-          Linear _         -> True
-  let (linear, nonlinear) = partition isLinear splitCtxt
+          Linear (Box _ _) -> True
+          _                -> False
+  let (boxed, notBoxed) = partition isBoxed splitCtxt
 
-  -- Splits linear assumptions into splittable/not-splittable. Where splittable
+  -- Spits linear assumptions into splittable/not-splittable. Where splittable
   -- means that it is a data constructor at the highest level (note we filtered
   -- out box patterns in the previous step).
   let (splittable', unsplittable') =
-        partition (isJust . snd) $ map (second getAssumConstr) linear
+        partition (isJust . snd) $ map (second getAssumConstr) notBoxed
   let splittable = map (second fromJust) splittable'
   let unsplittable = getCtxtIds unsplittable'
 
@@ -63,7 +63,7 @@ generateCases span constructors ctxt toSplit = do
         map (buildVariablePatterns span) (unsplittable ++ getCtxtIds noSplitCtxt)
 
   -- Convert the discharged types into boxed patterns.
-  let boxPatterns = map (buildBoxPattern span . fst) nonlinear
+  let boxPatterns = map (buildBoxPattern span . fst) boxed
 
   let allPatterns = linearPatterns <> boxPatterns <> variablePatterns
 
@@ -159,20 +159,20 @@ relevantDataConstrs constructors types =
 
 -- Gets a potential constructor identifier on a type constructor, recursively.
 getAssumConstr :: Assumption -> Maybe Id
-getAssumConstr (Discharged _ _) = Nothing
+getAssumConstr (Discharged t _) = getTypeConstr t
 getAssumConstr (Linear t) = getTypeConstr t
-  where
-    getTypeConstr :: Type -> Maybe Id
-    getTypeConstr (FunTy _ t1 _) = Nothing
-    getTypeConstr (TyCon id) = Just id
-    getTypeConstr (Box _ t) = getTypeConstr t
-    getTypeConstr (Diamond t1 _) = getTypeConstr t1
-    getTypeConstr (TyApp t1 t2) = getTypeConstr t1
-    getTypeConstr (TyVar _) = Nothing
-    getTypeConstr (TyInt _) = Nothing
-    getTypeConstr (TyInfix _ _ _) = Nothing
-    getTypeConstr (TySet _) = Nothing
-    getTypeConstr (TySig t _) = getTypeConstr t
+
+getTypeConstr :: Type -> Maybe Id
+getTypeConstr (FunTy _ t1 _) = Nothing
+getTypeConstr (TyCon id) = Just id
+getTypeConstr (Box _ t) = getTypeConstr t
+getTypeConstr (Diamond t1 _) = getTypeConstr t1
+getTypeConstr (TyApp t1 t2) = getTypeConstr t1
+getTypeConstr (TyVar _) = Nothing
+getTypeConstr (TyInt _) = Nothing
+getTypeConstr (TyInfix _ _ _) = Nothing
+getTypeConstr (TySet _) = Nothing
+getTypeConstr (TySig t _) = getTypeConstr t
 
 -- Given a list of data constructors, generates patterns corresponding to them.
 buildConstructorPatterns ::
