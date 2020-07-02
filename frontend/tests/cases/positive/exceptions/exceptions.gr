@@ -1,0 +1,2 @@
+main : Int <Pure>
+main = try throw as [x] in pure x catch pure 42
