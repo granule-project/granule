@@ -90,7 +90,7 @@ holeRefactorEqnList cases eqns =
                in
                  if null cs && not (null oldPatterns)
                    then eqn'
-                   else refactorEqn (eqn' {equationPatterns = zipWith (uncurry . refactorPattern) oldPatterns cs})) relCases, True)
+                   else refactorEqn (eqn' {equationPatterns = map (\oldPat -> foldr (flip (uncurry . refactorPattern)) oldPat cs) oldPatterns})) relCases, True)
 
 -- Refactors an equation by refactoring the expression in its body.
 holeRefactorEqn ::  Equation () () -> Expr () Type -> Equation () ()
