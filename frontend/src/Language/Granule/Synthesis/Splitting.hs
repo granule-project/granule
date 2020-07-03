@@ -164,7 +164,7 @@ validateCase span ty pats = do
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
   (binders, _, localVars, _, _, _) <-
-    ctxtFromTypedPatterns span ty pats (map (const NotFull) pats)
+    ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 
   -- Build the type variable environment for proving the predicate
@@ -226,6 +226,19 @@ getAssumConstr a =
     getTypeConstr (TyInt _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _) = Nothing
+
+-- Given a function type, expand grades on parameters to be more permissive,
+-- for the purpose of generating theorems. Exact natural number grades greater
+-- than 1 are converted to intervals from 1 to that natural number. Interval
+-- grades on the natural numbers with a lower bound greater than 1 are given 1
+-- as a new lower bound. This is because when case splitting, we generate a
+-- single usage from the pattern match.
+expandGrades :: Type -> Type
+expandGrades (FunTy id t1 t2) = FunTy id (expandGrades t1) (expandGrades t2)
+expandGrades (Box (CInterval (CNat lower) (CNat upper)) t) | lower > 1 =
+  Box (CInterval (CNat 1) (CNat upper)) t
+expandGrades (Box (CNat n) t) | n > 1 = Box (CInterval (CNat 1) (CNat n)) t
+expandGrades ty = ty
 
 -- Given a list of data constructors, generates patterns corresponding to them.
 buildConstructorPatterns ::
