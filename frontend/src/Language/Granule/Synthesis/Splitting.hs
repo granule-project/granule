@@ -211,20 +211,21 @@ relevantDataConstrs constructors types =
 
 -- Gets a potential constructor identifier on a type constructor, recursively.
 getAssumConstr :: Assumption -> Maybe Id
-getAssumConstr (Discharged t _) = getTypeConstr t
-getAssumConstr (Linear t) = getTypeConstr t
-
-getTypeConstr :: Type -> Maybe Id
-getTypeConstr (FunTy _ t1 _) = Nothing
-getTypeConstr (TyCon id) = Just id
-getTypeConstr (Box _ t) = getTypeConstr t
-getTypeConstr (Diamond t1 _) = getTypeConstr t1
-getTypeConstr (TyApp t1 t2) = getTypeConstr t1
-getTypeConstr (TyVar _) = Nothing
-getTypeConstr (TyInt _) = Nothing
-getTypeConstr (TyInfix _ _ _) = Nothing
-getTypeConstr (TySet _) = Nothing
-getTypeConstr (TySig t _) = getTypeConstr t
+getAssumConstr a =
+  case a of
+    (Discharged t _) -> getTypeConstr t
+    (Linear t) -> getTypeConstr t
+  where
+    getTypeConstr (FunTy _ t1 _) = Nothing
+    getTypeConstr (TyCon id) = Just id
+    getTypeConstr (Box _ t) = getTypeConstr t
+    getTypeConstr (Diamond t1 _) = getTypeConstr t1
+    getTypeConstr (TyApp t1 t2) = getTypeConstr t1
+    getTypeConstr (TySig t _) = getTypeConstr t
+    getTypeConstr (TyVar _) = Nothing
+    getTypeConstr (TyInt _) = Nothing
+    getTypeConstr (TyInfix _ _ _) = Nothing
+    getTypeConstr (TySet _) = Nothing
 
 -- Given a list of data constructors, generates patterns corresponding to them.
 buildConstructorPatterns ::

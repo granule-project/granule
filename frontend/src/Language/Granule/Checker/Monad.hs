@@ -606,8 +606,11 @@ instance UserMsg CheckerError where
              intercalate "\n     " (formatCases (map fst cases)))
 
     where
+      formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
 
+      -- Pad all strings in a list so they match the length of the longest.
+      padToLongest :: [String] -> [String]
       padToLongest xs =
         let size = maximum (map length xs)
         in  map (\s -> s ++ replicate (size - length s) ' ') xs
