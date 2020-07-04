@@ -318,7 +318,7 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
 
   -- Build the binding context for the branch pattern
   st <- get
-  (patternGam, tau, localVars, subst, elaborated_pats, _, consumptions) <-
+  (patternGam, tau, localVars, subst, elaborated_pats, consumptions) <-
      ctxtFromTypedPatterns s ty pats (patternConsumption st)
 
   -- Update the consumption information
@@ -1421,7 +1421,6 @@ checkGuardsForImpossibility s name = do
 
   -- Convert all universal variables to existential
   tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted s
-
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 

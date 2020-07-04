@@ -1,0 +1,3 @@
+Type checking failed: 
+Impossible pattern match: frontend/tests/cases/negative/polyShaped.gr:7:1:
+Pattern match in an equation of `pushEither` is impossible as it implies the unsatisfiable condition (1 = n) ∧ ¬((1 = n))

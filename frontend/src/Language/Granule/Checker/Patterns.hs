@@ -307,9 +307,9 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
   -> Type
   -> [Pattern ()]
   -> [Consumption]
-  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Pattern (Ctxt Kind, Pred)], [Consumption])
+  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
 ctxtFromTypedPatterns sp ty [] _ = do
-  return ([], ty, [], [], [], [], [])
+  return ([], ty, [], [], [], [])
 
 ctxtFromTypedPatterns s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
   -- Match a pattern
@@ -318,17 +318,25 @@ ctxtFromTypedPatterns s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
   -- Propagate relevant theorems
   st <- get
   let relevant = concatMap (extractFromPattern pat) (prevPatternPreds st)
+  -- Associate each propagated predicate with a source location.
+  let withSpan = map (\r -> (r, s)) relevant
+  -- Add the predicates to the top of the guardPredicates stack.
+  let guardPredicates' =
+        case guardPredicates st of
+          [] -> [withSpan]
+          (head:tail) -> (head ++ withSpan) : tail
+
   modify (\st -> st
       { prevPatternPreds = predP : prevPatternPreds st
-      , guardPredicates = map (\r -> (r, s)) relevant : guardPredicates st })
+      , guardPredicates = guardPredicates' })
 
   -- Match the rest
-  (localGam', ty, eVars', substs, elabPs, predPs, consumptions) <-
+  (localGam', ty, eVars', substs, elabPs, consumptions) <-
       ctxtFromTypedPatterns s t2 pats consumptionsIn
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
-  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, predP : predPs, consumption : consumptions)
+  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
 ctxtFromTypedPatterns s ty (p:ps) _ = do
   -- This means we have patterns left over, but the type is not a
