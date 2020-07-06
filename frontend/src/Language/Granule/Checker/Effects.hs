@@ -38,29 +38,23 @@ isEffUnit s effTy eff =
         -- Session singleton case
         TyCon (internalName -> "Com") -> do
             return True
-        -- Any union-set effects, like IO and exceptions
         TyCon (internalName -> "Exception") ->
             case eff of
                 TyCon (internalName -> "Success") -> return True
                 _ -> return False
+        -- Any union-set effects, like IO
         TyCon c | unionSetLike c ->
             case eff of
                 (TySet []) -> return True
                 _          -> return False
-        TyApp op ef ->
-            case op of
-        --masking operation
-                TyCon (internalName -> "Handled") ->
-                    isEffUnit s op (handledNormalise s effTy ef)
         --Unknown
-                _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
         _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
 
 handledNormalise :: Span -> Type -> Type -> Type
 handledNormalise s effTy efs =
     case effTy of
         (TyApp (TyCon (internalName -> "Handled")) ef) -> handledNormalise s effTy ef
-        TyCon (internalName -> "Exception") -> TyCon (mkId "Success")
+        TyCon (internalName -> "MayFail") -> TyCon (mkId "Success")
         TySet efs' -> 
             TySet (efs' \\ [TyCon (mkId "IOExcept")])
         _ -> efs
@@ -132,18 +126,11 @@ effectMult sp effTy t1 t2 = do
 
         TyCon (internalName -> "Exception") ->
             case t1 of
+                --derived property Handled f * e = e
                 TyApp (TyCon (internalName -> "Handled")) _ -> 
-                    case t2 of
-                        TyCon (internalName -> "MayFail") ->
-                            return $ TyCon $ mkId "MayFail"
-                        _ ->
-                            return $ TyCon $ mkId "Success"
-                TyCon (internalName -> "Success") ->
-                    case t2 of
-                    TyCon (internalName -> "MayFail") ->
-                        return $ TyCon $ mkId "MayFail"
-                    _ ->
-                        return $ TyCon $ mkId "Success"
+                    return t2
+                TyCon (internalName -> "Success") -> 
+                    return t2
                 TyCon (internalName -> "MayFail") ->
                     return $ TyCon $ mkId "MayFail"
                 _ -> throw $ TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
@@ -189,20 +176,20 @@ effectUpperBound _ t@(TyCon (internalName -> "Com")) t1 t2 = do
     return $ TyCon $ mkId "Session"
 
 effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
-    case (t1, t2) of
+    let t1' = handledNormalise s t t1 
+    let t2' = handledNormalise s t t2 
+    case (t1', t2') of
         (TyCon (internalName -> "Success"),TyCon (internalName -> "Success")) ->
-            return t1
-        (TyCon (internalName -> "Success"),TyCon (internalName -> "MayFail")) ->
-            return t2
-        (TyCon (internalName -> "MayFail"),TyCon (internalName -> "Success")) ->
-            return t1
-        (TyCon (internalName -> "MayFail"),TyCon (internalName -> "MayFail")) ->
-            return t1
+            return t1'
+        (TyCon (internalName -> "MayFail"),_) ->
+            return t1'
+        (_,TyCon (internalName -> "MayFail")) ->
+            return t2'
         (TyCon (internalName -> "Pure"), _) ->
-            return t1
+            return t1'
         (_, TyCon (internalName -> "Pure")) ->
-            return t2
-        _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+            return t2'
+        _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1', errTy2 = t2' }
 
 effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
     case t1 of
