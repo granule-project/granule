@@ -408,7 +408,8 @@ data CheckerError
       holeTy      :: Type,
       context     :: Ctxt Assumption,
       tyContext   :: Ctxt (Kind, Quantifier),
-      holeVars :: [Id],
+      -- Tracks whether a variable is split
+      holeVars :: Ctxt Bool,
       -- Used for synthesising programs
       cases       :: [([Pattern ()], Expr () Type)] }
   | TypeError
@@ -598,14 +599,21 @@ instance UserMsg CheckerError where
                                                 <> pretty v
                                                 <> " : " <> pretty t) tyContext)
     <>
-    (if null holeVars
+    (if null relevantVars
       then ""
       else if null cases
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
-             intercalate "\n     " (formatCases (map fst cases)))
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty relevantVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty relevantVars) <> ":\n     " <>
+             intercalate "\n     " (formatCases relevantCases))
 
     where
+      -- Extract those cases which correspond to a split variable in holeVars.
+      relevantCases :: [[Pattern ()]]
+      relevantCases = map (map snd . filter fst . zip (map snd holeVars) . fst) cases
+
+      relevantVars :: [Id]
+      relevantVars = map fst (filter snd holeVars)
+
       formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
 

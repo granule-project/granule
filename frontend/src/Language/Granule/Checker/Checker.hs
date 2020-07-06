@@ -438,7 +438,6 @@ checkExpr :: (?globals :: Globals)
 checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   st <- get
 
-  let holeCtxt = filter (\(id, a) -> id `elem` vars) ctxt
   let getIdName (Id n _) = n
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
@@ -452,7 +451,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      (_, cases) <- generateCases s constructors holeCtxt boundVariables
+      (_, cases) <- generateCases s constructors ctxt boundVariables
 
       -- If we are in synthesise mode, also try to synthesise a
       -- term for each case split goal *if* this is also a hole
@@ -474,8 +473,8 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
            -- Otherwise synthesise empty holes for each case
            -- (and throw away the binding information)
            _ -> return casesWithHoles
-
-      throw $ HoleMessage s t ctxt (tyVarContext st) boundVariables cases'
+      let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+      throw $ HoleMessage s t ctxt (tyVarContext st) holeVars cases'
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
