@@ -169,8 +169,8 @@ data CheckerState = CS
             -- The type of the current equation.
             , equationTy :: Maybe Type
 
-            -- The previous pattern, annotated with its predicate.
-            , prevPatternPreds :: [Pattern (Ctxt Kind, Pred)]
+            -- The previous patterns, annotated with their predicates.
+            , prevPatternPreds :: [[Pattern (Ctxt Kind, Pred)]]
 
             -- Warning accumulator
             -- , warnings :: [Warning]
@@ -290,20 +290,18 @@ concludeImplication s localCtxt = do
 
         -- Some information currently in the stack frame
         previousGuards : knowledgeStack -> do
+           let prevGuardCtxt = concatMap (fst . fst) previousGuards
+           let prevGuardPred' = Conj (map (snd . fst) previousGuards)
+           let prevGuardPred = removeTrivialConstraints prevGuardPred'
 
-           let previousGuardCtxt = concatMap (fst . fst) previousGuards
-           let prevGuardPred = Conj (map (snd . fst) previousGuards)
-
-           freshenedPrevGuardPred <- freshenPred $ Impl previousGuardCtxt (Conj []) (NegPred prevGuardPred)
+           freshenedPrevGuardPred <- freshenPred $ Impl prevGuardCtxt (Conj []) (NegPred prevGuardPred)
            let (Impl freshPrevGuardCxt _ freshPrevGuardPred) = freshenedPrevGuardPred
            let existentialPred = foldr (uncurry Exists) freshPrevGuardPred freshPrevGuardCxt
-
            -- Implication of p .&& negated previous guards => p'
            let impl@(Impl _ antecedent _) =
                 if isTrivial freshPrevGuardPred
                   then Impl localCtxt p p'
                   else Impl localCtxt (Conj [p, existentialPred]) p'
-
            let knowledge = ((localCtxt, antecedent), s) : previousGuards
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
@@ -314,6 +312,41 @@ concludeImplication s localCtxt = do
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
+-- | Removes any trivial constraints (i.e. those not containing variables) from
+--   a given predicate.
+removeTrivialConstraints :: Pred -> Pred
+removeTrivialConstraints = predFold Conj Disj Impl con NegPred Exists
+  where
+    con c = if isTrivialConstraint c then Conj [] else Con c
+    isTrivialConstraint (Eq _ c1 c2 _) = isTrivialCoeffect c1 && isTrivialCoeffect c2
+    isTrivialConstraint (Neq _ c1 c2 _) = isTrivialCoeffect c1 && isTrivialCoeffect c2
+    isTrivialConstraint (ApproximatedBy _ c1 c2 _) = isTrivialCoeffect c1 && isTrivialCoeffect c2
+    isTrivialConstraint (Lub _ c1 c2 c3 _) = isTrivialCoeffect c1 && isTrivialCoeffect c2 && isTrivialCoeffect c3
+    isTrivialConstraint (NonZeroPromotableTo _ _ c _) = isTrivialCoeffect c
+    isTrivialConstraint (Lt _ c1 c2) = isTrivialCoeffect c1 && isTrivialCoeffect c2
+    isTrivialConstraint (Gt _ c1 c2) = isTrivialCoeffect c1 && isTrivialCoeffect c2
+    isTrivialConstraint (LtEq _ c1 c2) = isTrivialCoeffect c1 && isTrivialCoeffect c2
+    isTrivialConstraint (GtEq _ c1 c2) = isTrivialCoeffect c1 && isTrivialCoeffect c2
+    isTrivialCoeffect = coeffectFold algebra
+      where algebra = CoeffectFold
+              { cNat = const True
+              , cFloat = const True
+              , cInf = const True
+              , cInterval = (&&)
+              , cVar = const False
+              , cPlus = (&&)
+              , cTimes = (&&)
+              , cMinus = (&&)
+              , cMeet = (&&)
+              , cJoin = (&&)
+              , cZero = const True
+              , cOne = const True
+              , cLevel = const True
+              , cSet = const True
+              , cSig = \ _ _ -> True
+              , cExpon = (&&)
+              , cProd = (&&)
+              }
 
 -- Create a local existential scope
 -- NOTE: leaving this here, but this approach is not used

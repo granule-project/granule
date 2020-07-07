@@ -5,7 +5,9 @@ module Language.Granule.Checker.Patterns where
 
 import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
+import Data.List (transpose)
 import Data.List.NonEmpty (NonEmpty(..))
+import Data.Maybe (fromMaybe, listToMaybe)
 
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
@@ -263,7 +265,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
-
+          
           let elabP = PConstr s ty rf dataC elabPs
           let predP = PConstr s (relevantVars, pred) rf dataC predPs
 
@@ -308,37 +310,55 @@ ctxtFromTypedPatterns :: (?globals :: Globals)
   -> [Pattern ()]
   -> [Consumption]
   -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
-ctxtFromTypedPatterns sp ty [] _ = do
+ctxtFromTypedPatterns sp ty pats cons = do
+  st <- get
+  let prevPatterns = transpose (prevPatternPreds st)
+  modify (\st -> st { prevPatternPreds = [] : prevPatternPreds st})
+  ctxtFromTypedPatterns' sp ty pats cons prevPatterns
+
+ctxtFromTypedPatterns' :: (?globals :: Globals)
+  => Span
+  -> Type
+  -> [Pattern ()]
+  -> [Consumption]
+  -> [[Pattern (Ctxt Kind, Pred)]]
+  -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
+ctxtFromTypedPatterns' sp ty [] _ _ = do
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns' s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) prevPatss = do
   -- Match a pattern
   (localGam, eVars, subst, elabP, predP, consumption) <- ctxtFromTypedPattern s t1 pat cons
 
   -- Propagate relevant theorems
   st <- get
-  let relevant = concatMap (extractFromPattern pat) (prevPatternPreds st)
+  let relevant = concatMap (extractFromPattern pat) (fromMaybe [] (listToMaybe prevPatss))
   -- Associate each propagated predicate with a source location.
   let withSpan = map (\r -> (r, s)) relevant
   -- Add the predicates to the top of the guardPredicates stack.
   let guardPredicates' =
         case guardPredicates st of
-          [] -> [withSpan]
           (head:tail) -> (head ++ withSpan) : tail
+          [] -> [withSpan]
+  let prevPatternPreds' =
+        case prevPatternPreds st of
+          (current:rest) -> (current ++ [predP]) : rest
+          [] -> [[predP]]
 
   modify (\st -> st
-      { prevPatternPreds = predP : prevPatternPreds st
+      { prevPatternPreds = prevPatternPreds'
       , guardPredicates = guardPredicates' })
+  st <- get
 
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
-      ctxtFromTypedPatterns s t2 pats consumptionsIn
+      ctxtFromTypedPatterns' s t2 pats consumptionsIn (drop 1 prevPatss)
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
   return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
-ctxtFromTypedPatterns s ty (p:ps) _ = do
+ctxtFromTypedPatterns' s ty (p:ps) _ _ = do
   -- This means we have patterns left over, but the type is not a
   -- function type, so we need to throw a type error
 
