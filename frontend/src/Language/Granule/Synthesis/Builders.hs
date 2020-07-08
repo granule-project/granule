@@ -133,9 +133,14 @@ makeEitherRight lTy rTy e  =
   (App s rTy False (Val s (SumTy lTy rTy) False (Constr (SumTy lTy rTy) (mkId "Right") [])) e)
   where s = nullSpanNoFile
 
-makeCase :: Type -> Type -> Id -> Id -> Id -> Expr () Type -> Expr () Type -> Expr () Type
-makeCase t1 t2 sId lId rId lExpr rExpr =
+makeEitherCase :: Type -> Type -> Id -> Id -> Id -> Expr () Type -> Expr () Type -> Expr () Type
+makeEitherCase t1 t2 sId lId rId lExpr rExpr =
   Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PConstr s (SumTy t1 t2) False (mkId "Left") [(PVar s t1 False lId)], lExpr), (PConstr s (SumTy t1 t2) False (mkId "Right") [(PVar s t2 False rId)], rExpr)]
+  where s = nullSpanNoFile
+
+makeCase :: Type -> Id -> [(Pattern Type, Expr () Type)] -> Expr () Type
+makeCase ty var patterns =
+  Case s ty False (Val s ty False (Var ty var)) patterns
   where s = nullSpanNoFile
 
 makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type

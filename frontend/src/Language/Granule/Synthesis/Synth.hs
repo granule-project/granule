@@ -6,13 +6,16 @@ module Language.Granule.Synthesis.Synth where
 
 --import Data.List
 --import Control.Monad (forM_)
---import Debug.Trace
+import Debug.Trace
 import System.IO.Unsafe
 import qualified Data.Map as M
+import Data.Maybe
 
+import Control.Arrow (second)
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
@@ -33,6 +36,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Synthesis.Builders
 import Language.Granule.Synthesis.Refactor
 import Language.Granule.Synthesis.Monad
+import Language.Granule.Synthesis.Splitting
 
 import Data.Either (rights)
 import Control.Monad.Except
@@ -224,6 +228,8 @@ isLAsync (ProdTy{}) = True
 isLAsync (SumTy{}) = True
 isLAsync (Box{}) = True
 isLAsync (TyCon (internalName -> "()")) = True
+isLAsync (TyApp{}) = True
+isLAsync (TyCon{}) = True
 isLAsync _ = False
 
 isAtomic :: Type -> Bool
@@ -922,7 +928,7 @@ sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
           (Nothing, Nothing) -> do
             -- Both `l` and `r` were used in `delta1` and `delta2` respectively
             delta3 <- ctxtMerge CMeet delta1 delta2
-            return (makeCase t1 t2 x l r e1 e2, delta3, subst)
+            return (makeEitherCase t1 t2 x l r e1 e2, delta3, subst)
           _ -> none
     _ -> none
 {-
@@ -952,11 +958,84 @@ sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
           (Just (delta1', Linear _), Just (delta2', Linear _)) -> do
             delta3 <- ctxtMerge CJoin delta1' delta2'
             delta3' <- maybeToSynthesiser $ ctxtAdd omega' delta3
-            return (makeCase t1 t2 x l r e1 e2, delta3', subst)
+            return (makeEitherCase t1 t2 x l r e1 e2, delta3', subst)
           _ -> none
     _ -> none
 
+constrElimHelper :: (?globals :: Globals)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> ResourceScheme AltOrDefault
+  -> TypeScheme
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
+constrElimHelper decls left (var@(x, a):right) gamma (sub@(Subtractive mode)) goalTy =
+  (constrElimHelper decls (var:left) right gamma sub goalTy) `try`
+  let omega = left ++ right in do
+    (canUse, omega', t) <- useVar var omega sub
+    case (canUse, t) of
+      (True, adt@(TyApp _ _)) -> do
+        let snd3 (a, b, c) = b
+        st <- get
+        let pats = map (second snd3) (typeConstructors st)
+        constructors <- conv $  mapM (\ (a, b) -> do
+          dc <- mapM (lookupDataConstructor nullSpanNoFile) b
+          let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+          return (a, sd)) pats
+        let boundVariables = map fst (var : gamma ++ omega')
+        (_, cases) <- conv $ generateCases nullSpanNoFile constructors (var : gamma ++ omega') boundVariables
+        (patterns, delta, subst) <- synthConstrs decls sub gamma omega' cases goalTy
+        --return (makeCase adt x patterns, delta, subst)
+        none
+      (_, ty) -> do
+        traceM $ pretty ty
+        none
 
+  where
+
+    synthConstrs decls mode g o [] goalTy = none
+    synthConstrs decls mode g o ((p, assmps):[]) goalTy = do
+      let (g', o') = bindAssumptions g o assmps
+      (e, delta, subst) <- synthesiseInner decls True mode g' o' goalTy
+      if checkAssumptions delta assmps
+        then return ([(p, e)], delta, subst)
+        else none
+
+    synthConstrs decls mode g o ((p, assmps):cons) goalTy = do
+      (exprs, delta, subst) <- synthConstrs decls mode g o cons goalTy
+      let (g', o') = bindAssumptions g o assmps
+      (e, delta', subst') <- synthesiseInner decls True mode g' o' goalTy
+      if checkAssumptions delta assmps then
+        do
+          case mode of
+            Subtractive{} -> do
+              returnDelta <- ctxtMerge CMeet delta delta'
+              returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
+              return ((p, e):exprs, returnDelta, returnSubst)
+            Additive{} -> do
+              returnDelta <- ctxtMerge CJoin delta delta'
+              returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
+              return ((p, e):exprs, returnDelta, returnSubst)
+      else none
+
+
+    checkAssumptions del [] = True
+    checkAssumptions del (assmption@(id, t):assmps) =
+      case lookup id del of
+        Nothing -> checkAssumptions del assmps
+        _ -> False
+
+
+    bindAssumptions [] g o = (g, o)
+    bindAssumptions (assumption@(id, Linear t):assmps) g o =
+      let (g', o') = bindToContext assumption g o (isLAsync t) in
+          bindAssumptions assmps g' o'
+    -- Shouldn't occur
+    bindAssumptions (assumption@(id, Discharged t _):assmps) g o =
+      let (g', o') = bindToContext assumption g o (isLAsync t) in
+          bindAssumptions assmps g' o'
+constrElimHelper _ _ _ _ _ _ = none
 
 synthesiseInner :: (?globals :: Globals)
            => Ctxt DataDecl      -- ADT Definitions
@@ -986,6 +1065,8 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
       sumElimHelper decls [] omega gamma resourceScheme goalTy
       `try`
       unitElimHelper decls [] omega gamma resourceScheme goalTy
+      `try`
+      constrElimHelper decls [] omega gamma resourceScheme goalTy
     (False, []) ->
       (if not (isAtomic goalTy') then
           -- Right Sync : Focus on goalTy when goalTy is not atomic
