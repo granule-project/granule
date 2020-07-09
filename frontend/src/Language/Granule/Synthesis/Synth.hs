@@ -6,7 +6,7 @@ module Language.Granule.Synthesis.Synth where
 
 --import Data.List
 --import Control.Monad (forM_)
-import Debug.Trace
+--import Debug.Trace
 import System.IO.Unsafe
 import qualified Data.Map as M
 import Data.Maybe
@@ -938,7 +938,6 @@ G, x2 : A ⊢ C ⇒ t1 ; Δ1, x2 : A
 G, x3 : B ⊢ C ⇒ t2 ; Δ2, x3 : B
 ----------------------------------------------------------------------------------- :: sum_elim
 G, x1 : A ⊕ B ⊢ C ⇒ case x1 of inl x2 → t1 | inr x3 → t2 ; (Δ1 ⊔ Δ2), x1 : A ⊕ B
-
 -}
 sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
   (sumElimHelper decls (var:left) right gamma add goalTy) `try`
@@ -970,72 +969,99 @@ constrElimHelper :: (?globals :: Globals)
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-constrElimHelper decls left (var@(x, a):right) gamma (sub@(Subtractive mode)) goalTy =
-  (constrElimHelper decls (var:left) right gamma sub goalTy) `try`
-  let omega = left ++ right in do
-    (canUse, omega', t) <- useVar var omega sub
-    case (canUse, t) of
-      (True, adt@(TyApp _ _)) -> do
-        let snd3 (a, b, c) = b
-        st <- get
-        let pats = map (second snd3) (typeConstructors st)
-        constructors <- conv $  mapM (\ (a, b) -> do
-          dc <- mapM (lookupDataConstructor nullSpanNoFile) b
-          let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-          return (a, sd)) pats
-        let boundVariables = map fst (var : gamma ++ omega')
-        (_, cases) <- conv $ generateCases nullSpanNoFile constructors (var : gamma ++ omega') boundVariables
-        (patterns, delta, subst) <- synthConstrs decls sub gamma omega' cases goalTy
-        --return (makeCase adt x patterns, delta, subst)
-        none
-      (_, ty) -> do
-        traceM $ pretty ty
-        none
+constrElimHelper decls left [] _ _ _ = none
+constrElimHelper decls left (var@(x, a):right) gamma mode goalTy =
+  (constrElimHelper decls (var:left) right gamma mode goalTy) `try`
+  let omega = case mode of
+        Subtractive{} ->  left ++ right
+        Additive{} -> var:(left ++ right) in
+    do
+      (canUse, omega', t) <- useVar var omega mode
+
+      case (canUse, t) of
+        (True, adt@(TyApp _ _)) -> do
+          let snd3 (a, b, c) = b
+          st <- get
+          let pats = map (second snd3) (typeConstructors st)
+          constructors <- conv $  mapM (\ (a, b) -> do
+            dc <- mapM (lookupDataConstructor nullSpanNoFile) b
+            let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+            return (a, sd)) pats
+          let (ctxt, boundVariables) =
+                case a of
+                  Linear ty -> ([var] , [fst var])
+                  Discharged ty c -> ([var],  [fst var])
+          (_, cases) <- conv $ generateCases nullSpanNoFile constructors ctxt boundVariables
+          case mode of
+            Subtractive{} -> do
+              (patterns, delta, subst) <- synthConstrs adt decls mode gamma omega' cases goalTy
+              return (makeCase adt x patterns, delta, subst)
+            Additive{} -> do
+              omega'' <- ctxtSubtract omega omega'
+              (patterns, delta, subst) <- synthConstrs adt decls mode gamma omega'' cases goalTy
+              return (makeCase adt x patterns, delta, subst)
+        (_, ty) -> none
 
   where
 
-    synthConstrs decls mode g o [] goalTy = none
-    synthConstrs decls mode g o ((p, assmps):[]) goalTy = do
-      let (g', o') = bindAssumptions g o assmps
+    synthConstrs adt decls mode g o ((p:[], assmps):[]) goalTy = do
+      let (g', o') = bindAssumptions assmps g o
       (e, delta, subst) <- synthesiseInner decls True mode g' o' goalTy
-      if checkAssumptions delta assmps
-        then return ([(p, e)], delta, subst)
-        else none
+      case checkAssumptions mode delta assmps of
+        Just del' -> do
+           case transformPattern adt (g' ++ o') p of
+             Just pat -> return ([(pat, e)], del', subst)
+             Nothing -> none
+        Nothing -> none
 
-    synthConstrs decls mode g o ((p, assmps):cons) goalTy = do
-      (exprs, delta, subst) <- synthConstrs decls mode g o cons goalTy
-      let (g', o') = bindAssumptions g o assmps
+    synthConstrs adt decls mode g o ((p:[], assmps):cons) goalTy = do
+      (exprs, delta, subst) <- synthConstrs adt decls mode g o cons goalTy
+      let (g', o') = bindAssumptions assmps g o
       (e, delta', subst') <- synthesiseInner decls True mode g' o' goalTy
-      if checkAssumptions delta assmps then
-        do
-          case mode of
-            Subtractive{} -> do
-              returnDelta <- ctxtMerge CMeet delta delta'
-              returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
-              return ((p, e):exprs, returnDelta, returnSubst)
-            Additive{} -> do
-              returnDelta <- ctxtMerge CJoin delta delta'
-              returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
-              return ((p, e):exprs, returnDelta, returnSubst)
-      else none
+      case checkAssumptions mode delta assmps of
+        Just del' -> do
+          case transformPattern adt (g' ++ o') p of
+            Just pat ->
+              let op =
+                    case mode of
+                      Subtractive{} -> CMeet
+                      Additive{} -> CJoin
+              in do
+                returnDelta <- ctxtMerge op del' delta'
+                returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
+                return ((pat, e):exprs, returnDelta, returnSubst)
+            Nothing -> none
+        Nothing -> none
+    synthConstrs adt decls mode g o _ goalTy = none
 
-
-    checkAssumptions del [] = True
-    checkAssumptions del (assmption@(id, t):assmps) =
+    checkAssumptions mode del [] = Just del
+    checkAssumptions sub@(Subtractive{}) del (assmption@(id, t):assmps) =
       case lookup id del of
-        Nothing -> checkAssumptions del assmps
-        _ -> False
-
+        Nothing -> checkAssumptions sub del assmps
+        _ -> Nothing
+    checkAssumptions add@(Additive{}) del (assmption@(id, t):assmps) =
+      case lookupAndCutout id del of
+        Just (del', _) -> checkAssumptions add del' assmps
+        _ -> Nothing
 
     bindAssumptions [] g o = (g, o)
     bindAssumptions (assumption@(id, Linear t):assmps) g o =
       let (g', o') = bindToContext assumption g o (isLAsync t) in
           bindAssumptions assmps g' o'
-    -- Shouldn't occur
     bindAssumptions (assumption@(id, Discharged t _):assmps) g o =
       let (g', o') = bindToContext assumption g o (isLAsync t) in
           bindAssumptions assmps g' o'
-constrElimHelper _ _ _ _ _ _ = none
+
+    transformPattern adt ctxt (PConstr s () b id pats) =
+      Just $ PConstr s adt b id (catMaybes $ map (transformPattern adt ctxt) pats)
+    transformPattern adt ctxt (PVar s () b id) =
+      case lookup id ctxt of
+        Just (Linear t) -> Just $ PVar s t b id
+        Just (Discharged t c) -> Just $ PVar s t b id
+        Nothing -> Nothing
+    transformPattern _ _ _ = Nothing
+
+
 
 synthesiseInner :: (?globals :: Globals)
            => Ctxt DataDecl      -- ADT Definitions
