@@ -169,7 +169,7 @@ instance Rp.Refactorable (Expr ev a) where
   isRefactored (App _ _ True _ _) = Just Rp.Replace
   isRefactored (Binop _ _ True _ _ _) = Just Rp.Replace
   isRefactored (LetDiamond _ _ True _ _ _ _) = Just Rp.Replace
-  isRefactored (TryCatch _ _ True _ _ _ _) = Just Rp.Replace
+  isRefactored (TryCatch _ _ True _ _ _ _ _) = Just Rp.Replace
   isRefactored (Val _ _ True _) = Just Rp.Replace
   isRefactored (Case _ _ True _ _) = Just Rp.Replace
   isRefactored (Hole _ _ True _) = Just Rp.Replace
