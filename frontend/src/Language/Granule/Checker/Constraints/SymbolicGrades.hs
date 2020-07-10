@@ -214,6 +214,7 @@ symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
 symGradeEq (SSet n) (SSet n')     = solverError "Can't compare symbolic sets yet"
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
 symGradeEq SPoint SPoint          = return $ sTrue
+symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r
 symGradeEq s t | isSProduct s || isSProduct t =
     either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
 
@@ -270,6 +271,8 @@ symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradePlus SPoint SPoint = return $ SPoint
 symGradePlus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradePlus SProduct id s t)
+-- 1 + 1 = 0
+symGradePlus (SOOZ s) (SOOZ r) = pure . SOOZ $ ite s (sNot r) r
 
 -- Direct encoding of additive unit
 symGradePlus (SUnknown t@(SynLeaf (Just u))) (SUnknown t'@(SynLeaf (Just u'))) =
@@ -301,6 +304,7 @@ symGradeTimes (SLevel lev1) (SLevel lev2) = return $
             (SLevel $ lev1 `smax` lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
+symGradeTimes (SOOZ s) (SOOZ r) = pure . SOOZ $ s .&& r
 
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     liftM2 SInterval (comb symGradeMeet) (comb symGradeJoin)
