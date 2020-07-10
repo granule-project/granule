@@ -35,6 +35,10 @@ data SGrade =
      -- Single point coeffect (not exposed at the moment)
      | SPoint
      | SProduct { sfst :: SGrade, ssnd :: SGrade }
+     -- | Coeffect with 1 + 1 = 0. False is 0, True is 1.
+     -- |
+     -- | Grade '0' denotes even usage, and grade '1' denotes odd usage.
+     | SOOZ SBool
 
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
