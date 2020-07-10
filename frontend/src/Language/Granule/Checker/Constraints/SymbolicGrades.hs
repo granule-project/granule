@@ -360,6 +360,12 @@ symGradeMinus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMinus SProduct id s t)
 symGradeMinus s t = solverError $ cannotDo "minus" s t
 
+-- | Mod operation on symbolic grades
+symGradeMod :: SGrade -> SGrade -> Symbolic SGrade
+-- TODO: perhaps fail here if dividing by 0? (2020-07-10)
+symGradeMod s@(SNat n1) t@(SNat n2) = pure . SNat $ sMod n1 n2
+symGradeMod s t = solverError $ cannotDo "mod" s t
+
 cannotDo :: String -> SGrade -> SGrade -> String
 cannotDo op (SUnknown s) (SUnknown t) =
   "It is unknown whether "

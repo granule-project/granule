@@ -130,6 +130,11 @@ instance Substitutable Coeffect where
         c2' <- substitute subst c2
         return $ CProduct c1' c2'
 
+    substitute subst (CMod c1 c2) = do
+        c1' <- substitute subst c1
+        c2' <- substitute subst c2
+        return $ CMod c1' c2'
+
     substitute subst (CVar v) =
         case lookup v subst of
             Just (SubstC c) -> do
@@ -668,6 +673,11 @@ instance Unifiable Coeffect where
         u1 <<>> u2
 
     unify (CJoin c1 c2) (CJoin c1' c2') = do
+        u1 <- unify c1 c1'
+        u2 <- unify c2 c2'
+        u1 <<>> u2
+
+    unify (CMod c1 c2) (CMod c1' c2') = do
         u1 <- unify c1 c1'
         u2 <- unify c2 c2'
         u1 <<>> u2

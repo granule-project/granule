@@ -86,6 +86,7 @@ tokens :-
   \_                            { \p _ -> TokenUnderscore p }
   \|                            { \p s -> TokenPipe p }
   \/                            { \p s -> TokenForwardSlash p }
+  "%"                           { \p s -> TokenPercent p }
   "≤"                           { \p s -> TokenLesserEq p }
   "<="                          { \p s -> TokenLesserEq p }
   "≥"                           { \p s -> TokenGreaterEq p }
@@ -170,6 +171,7 @@ data Token
   | TokenEmptyHole AlexPosn
   | TokenHoleStart AlexPosn
   | TokenHoleEnd AlexPosn
+  | TokenPercent AlexPosn
 
   deriving (Eq, Show, Generic)
 

@@ -345,6 +345,9 @@ compileCoeffect c@(CTimes n m) k vars =
 compileCoeffect c@(CMinus n m) k vars =
   bindM2And symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
+compileCoeffect c@(CMod n m) k vars =
+  bindM2And symGradeMod (compileCoeffect n k vars) (compileCoeffect m k vars)
+
 compileCoeffect c@(CExpon n m) k vars = do
   (g1, p1) <- compileCoeffect n k vars
   (g2, p2) <- compileCoeffect m k vars
