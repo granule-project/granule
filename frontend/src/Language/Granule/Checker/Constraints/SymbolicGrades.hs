@@ -35,10 +35,8 @@ data SGrade =
      -- Single point coeffect (not exposed at the moment)
      | SPoint
      | SProduct { sfst :: SGrade, ssnd :: SGrade }
-     -- | Coeffect with 1 + 1 = 0. False is 0, True is 1.
-     -- |
-     -- | Grade '0' denotes even usage, and grade '1' denotes odd usage.
-     | SOOZ SBool
+     -- | SMod k n is a Nat @k mod n@.
+     | SMod SInteger Int
 
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
@@ -115,7 +113,7 @@ match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
 match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
 match (SUnknown _) (SUnknown _) = True
-match (SOOZ _) (SOOZ _) = True
+match (SMod _ i) (SMod _ j) = i == j
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -219,7 +217,7 @@ symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
 symGradeEq (SSet n) (SSet n')     = solverError "Can't compare symbolic sets yet"
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
 symGradeEq SPoint SPoint          = return $ sTrue
-symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r
+symGradeEq (SMod s i) (SMod r j)  | i == j = pure $ sMod s (fromIntegral i) .== sMod r (fromIntegral i)
 symGradeEq s t | isSProduct s || isSProduct t =
     either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
 
@@ -276,8 +274,7 @@ symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradePlus SPoint SPoint = return $ SPoint
 symGradePlus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradePlus SProduct id s t)
--- 1 + 1 = 0
-symGradePlus (SOOZ s) (SOOZ r) = pure . SOOZ $ ite s (sNot r) r
+symGradePlus (SMod s i) (SMod r j) | i == j = pure $ SMod (s + r) i
 
 -- Direct encoding of additive unit
 symGradePlus (SUnknown t@(SynLeaf (Just u))) (SUnknown t'@(SynLeaf (Just u'))) =
@@ -309,7 +306,7 @@ symGradeTimes (SLevel lev1) (SLevel lev2) = return $
             (SLevel $ lev1 `smax` lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
-symGradeTimes (SOOZ s) (SOOZ r) = pure . SOOZ $ s .&& r
+symGradeTimes (SMod s i) (SMod r j) | i == j = pure $ SMod (s * r) i
 
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     liftM2 SInterval (comb symGradeMeet) (comb symGradeJoin)

@@ -269,6 +269,10 @@ isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
 
+isMod :: Type -> Maybe Int
+isMod (TyApp (TyCon c) (TyInt n)) | internalName c == "Mod" = Just n
+isMod _ = Nothing
+
 ----------------------------------------------------------------------
 -- Helpers
 
