@@ -1,0 +1,4 @@
+-- examples using a semiring {0, 1} with 1 + 1 = 0
+
+oozBoth : forall a b. (f : a -> a -> b) -> a [0 : OOZ] -> b
+oozBoth f [x] = f x x
