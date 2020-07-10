@@ -169,6 +169,7 @@ freshCVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
+        "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshCVarScoped quant name t q k | t == extendedNat = do

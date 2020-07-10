@@ -115,6 +115,7 @@ match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
 match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
 match (SUnknown _) (SUnknown _) = True
+match (SOOZ _) (SOOZ _) = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
