@@ -36,6 +36,12 @@ makeAbs name e (Forall _ _ _ t@(FunTy _ t1 t2)) =
   where s = nullSpanNoFile
 makeAbs name e _ = error "Cannot synth here" -- TODO: better error handling
 
+makeAbsUnbox :: Type -> Id -> Expr () Type -> TypeScheme -> Expr () Type
+makeAbsUnbox t name e (Forall _ _ _ t'@(FunTy _ t1 t2)) =
+  Val s t False (Abs t (PBox s t False (PVar s t' False name)) (Just t1) e)
+  where s = nullSpanNoFile
+makeAbsUnbox _ name e _ = error "Cannot synth here" -- TODO: better error handling
+
 makeApp :: Id -> Expr () Type -> TypeScheme -> Type -> Expr () Type
 makeApp name e (Forall _ _ _ t1) t2 =
   App s t1 False (makeVar name (Forall nullSpanNoFile [] [] t2)) e
