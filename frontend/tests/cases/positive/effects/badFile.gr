@@ -1,6 +1,6 @@
-main : Char
+main : Char <IO>
 main = 
-    try (openHandle ReadMode "LICENSE") as [h] in 
+    try (openHandle ReadMode "nonexistent") as [h] in 
       let [(h', c1)]     <- readChar h;
           [()]           <- closeHandle h'
       in pure c1 

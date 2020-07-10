@@ -1,3 +1,3 @@
 Type checking failed:
 Type error: frontend\tests\cases\negative\effects\mismatch2.gr:3:5:
-Expected a type of the form `a <eff>` but got `Int
+Expected `Char` but got `Int`

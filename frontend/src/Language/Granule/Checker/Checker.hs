@@ -875,6 +875,12 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
       Diamond ef3 ty3 -> return (ef3, ty3)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
   
+  --to better match the typing rule both continuation types should be equal
+  (b, ty, _) <- equalTypes s ty2 ty3
+  b <- case b of
+      True -> return b
+      False -> throw TypeError{ errLoc = s, tyExpected = ty2, tyActual = ty3}
+
   optionalSigEquality s mty ty1
 
   -- linearity check for e2 and e3
@@ -890,7 +896,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   (efTy, subst') <- twoEqualEffectTypes s ef1 ef2
   g <- effectUpperBound s efTy ef2 ef3
   ef <- effectMult s efTy f g
-  let t = Diamond ef ty2
+  let t = Diamond ef ty
 
   subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
   -- Synth subst

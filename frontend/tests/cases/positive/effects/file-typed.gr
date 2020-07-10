@@ -4,4 +4,4 @@ main =
       let [(h', c1)]     <- readChar h;
           [()]           <- closeHandle h'
       in pure c1 
-    catch pure "A"
+    catch pure 'A'
