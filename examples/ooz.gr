@@ -1,4 +1,13 @@
 -- examples using a semiring {0, 1} with 1 + 1 = 0
 
-oozBoth : forall a b. (f : a -> a -> b) -> a [0 : OOZ] -> b
-oozBoth f [x] = f x x
+oozZero : forall a b. b -> a [0 : OOZ] -> b
+oozZero f [x] = f
+
+oozOne : forall a b. (a -> b) -> a [1 : OOZ] -> b
+oozOne f [x] = f x
+
+oozTwo : forall a b. (f : a -> a -> b) -> a [0 : OOZ] -> b
+oozTwo f [x] = f x x
+
+oozThree : forall a b. (f : a -> a -> a -> b) -> a [1 : OOZ] -> b
+oozThree f [x] = f x x x
