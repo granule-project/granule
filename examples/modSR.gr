@@ -1,0 +1,36 @@
+-- examples using the 'Mod k' semiring
+
+-- todo: support arbitrary nats for the Mod index
+
+isAssocPlus1 : forall {a b : Type, n m k : Mod 7} . (a [(n + m) + k] -> b) -> (a [n + (m + k)] -> b)
+isAssocPlus1 f = f
+
+isAssocPlus2 : forall {a b : Type, n m k : Mod 7} . (a [n + (m + k)] -> b) -> (a [(n + m) + k] -> b)
+isAssocPlus2 f = f
+
+isAssocMult1 : forall {a b : Type, n m k : Mod 7} . (a [(n * m) * k] -> b) -> (a [n * (m * k)] -> b)
+isAssocMult1 f = f
+
+isAssocMult2 : forall {a b : Type, n m k : Mod 7} . (a [n * (m * k)] -> b) -> (a [(n * m) * k] -> b)
+isAssocMult2 f = f
+
+isDistrib1 : forall {a b : Type, n m k : Mod 7} . (a [(n + m) * k] -> b) -> (a [(n * k) + (m * k)] -> b)
+isDistrib1 f = f
+
+isDistrib2 : forall {a b : Type, n m k : Mod 7} . (a [(n * k) + (m * k)] -> b) -> (a [(n + m) * k] -> b)
+isDistrib2 f = f
+
+isCommutePlus : forall {a b : Type, n m : Mod 7} . (a [n + m] -> b) -> (a [m + n] -> b)
+isCommutePlus f = f
+
+isCommuteMult : forall {a b : Type, n m : Mod 7} . (a [n * m] -> b) -> (a [m * n] -> b)
+isCommuteMult f = f
+
+zeroPlusIdentity : forall {a b : Type, n : Mod 7} . (a [n + (0 : Mod 7)] -> b) -> (a [n] -> b)
+zeroPlusIdentity f = f
+
+oneTimesIdentity : forall {a b : Type, n : Mod 7} . (a [n * (1 : Mod 7)] -> b) -> (a [n] -> b)
+oneTimesIdentity f = f
+
+zeroAbsorbs : forall {a b : Type, n : Mod 7} . (a [n * (0 : Mod 7)] -> b) -> (a [0 : Mod 7] -> b)
+zeroAbsorbs f = f
