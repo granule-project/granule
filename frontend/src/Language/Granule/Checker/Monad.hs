@@ -13,7 +13,7 @@ module Language.Granule.Checker.Monad where
 
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
-import Data.List (intercalate, transpose)
+import Data.List (intercalate, transpose, (\\))
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
 import Data.Semigroup (sconcat)
@@ -169,9 +169,6 @@ data CheckerState = CS
             -- The type of the current equation.
             , equationTy :: Maybe Type
 
-            -- The previous patterns, annotated with their predicates.
-            , prevPatternPreds :: [[Pattern (Ctxt Kind, Pred)]]
-
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -192,7 +189,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
-               , prevPatternPreds = []
                }
 
 -- *** Various helpers for manipulating the context
@@ -290,19 +286,21 @@ concludeImplication s localCtxt = do
 
         -- Some information currently in the stack frame
         previousGuards : knowledgeStack -> do
-           let prevGuardCtxt = concatMap (fst . fst) previousGuards
+           let prevGuardCtxt' = concatMap (fst . fst) previousGuards
            let prevGuardPred' = Conj (map (snd . fst) previousGuards)
            let prevGuardPred = removeTrivialConstraints prevGuardPred'
+           let prevGuardCtxt = filter (\c -> fst c `elem` (freeVars prevGuardPred \\ getCtxtIds localCtxt)) prevGuardCtxt'
 
            freshenedPrevGuardPred <- freshenPred $ Impl prevGuardCtxt (Conj []) (NegPred prevGuardPred)
-           let (Impl freshPrevGuardCxt _ freshPrevGuardPred) = freshenedPrevGuardPred
-           let existentialPred = foldr (uncurry Exists) freshPrevGuardPred freshPrevGuardCxt
+           let (Impl freshPrevGuardCtxt _ freshPrevGuardPred) = freshenedPrevGuardPred
+           -- let existentialPred = NegPred $ foldr (uncurry Exists) freshPrevGuardPred freshPrevGuardCtxt
            -- Implication of p .&& negated previous guards => p'
            let impl@(Impl _ antecedent _) =
                 if isTrivial freshPrevGuardPred
                   then Impl localCtxt p p'
-                  else Impl localCtxt (Conj [p, existentialPred]) p'
+                  else Impl (localCtxt <> freshPrevGuardCtxt) (Conj [p, freshPrevGuardPred]) p'
            let knowledge = ((localCtxt, antecedent), s) : previousGuards
+           debugM "theorem" (pretty impl)
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
            modify (\st -> st { predicateStack = pushPred impl stack

@@ -267,7 +267,6 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     -- Clean up knowledge shared between equations of a definition
     modify (\st -> st { guardPredicates = [[]]
-                      , prevPatternPreds = []
                       , patternConsumption = initialisePatternConsumptions equations } )
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
@@ -479,7 +478,7 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
 
   newConjunct
 
-  (bindings, localVars, subst, elaboratedP, _, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
   debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig p
@@ -605,7 +604,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i, _, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
       newConjunct
 
       -- Checking the case body
@@ -756,7 +755,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i, _, _) <- ctxtFromTypedPattern s guardTy pati NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
       newConjunct
 
       -- Synth the case body
@@ -820,7 +819,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Type body of the let...
   -- ...in the context of the binders from the pattern
-  (binders, _, substP, elaboratedP, _, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
   (tau, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
@@ -984,7 +983,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
 
   newConjunct
 
-  (bindings, localVars, substP, elaboratedP, _, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
   newConjunct
 
@@ -1016,7 +1015,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
   tyVar <- freshTyVarInContext (mkId "t") KType
   let sig = (TyVar tyVar)
 
-  (bindings, localVars, substP, elaboratedP, _, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
   newConjunct
 
@@ -1058,8 +1057,8 @@ solveConstraints predicate s name = do
   -- remove any variables bound already in the preciate
   coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
 
-  debugM "tyVarContext" (pretty $ tyVarContext checkerState)
-  debugM "context into the solver" (pretty $ coeffectVars)
+  debugM "tyVarContext" $ pretty (tyVarContext checkerState)
+  debugM "context into the solver" $ pretty coeffectVars
   debugM "Solver predicate" $ pretty predicate
 
   result <- liftIO $ provePredicate predicate coeffectVars
@@ -1427,7 +1426,7 @@ checkGuardsForImpossibility s name = do
     -- Existentially quantify those variables occuring in the pattern in scope
     let thm = foldr (uncurry Exists) p ctxt
 
-    debugM "impossibility" $ "about to try" <> pretty thm
+    debugM "impossibility" $ "about to try " <> pretty thm
     -- Try to prove the theorem
     result <- liftIO $ provePredicate thm tyVars
 
