@@ -43,7 +43,9 @@ library:
   - Language.Granule.Checker.Checker
   - Language.Granule.Checker.Coeffects
   - Language.Granule.Checker.Constraints
+  - Language.Granule.Checker.Constraints.Semiring
   - Language.Granule.Checker.Constraints.SNatX
+  - Language.Granule.Checker.Constraints.SExt
   - Language.Granule.Checker.Flatten
   - Language.Granule.Checker.KindsHelpers
   - Language.Granule.Checker.LaTeX

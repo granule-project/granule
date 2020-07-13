@@ -21,6 +21,7 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
 
 import Language.Granule.Checker.Constraints.SymbolicGrades
+import Language.Granule.Checker.Constraints.SExt
 import qualified Language.Granule.Checker.Constraints.SNatX as SNatX
 
 import Language.Granule.Syntax.Helpers
@@ -170,6 +171,8 @@ freshCVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
         "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
+        "Tropical" -> k ( solverVar .>= 0
+                        , STropical (fromSInteger solverVar))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshCVarScoped quant name t q k | t == extendedNat = do
@@ -306,12 +309,17 @@ compileCoeffect (CInfinity (Just (TyVar _))) _ _ = return (zeroToInfinity, sTrue
 compileCoeffect (CInfinity Nothing) _ _ = return (zeroToInfinity, sTrue)
 compileCoeffect (CInfinity _) t _| t == extendedNat =
   return (SExtNat SNatX.inf, sTrue)
+compileCoeffect (CInfinity _) t _| t == tropical =
+  return (STropical top, sTrue)
 
 compileCoeffect (CNat n) k _ | k == nat =
   return (SNat  . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (CNat n) k _ | k == extendedNat =
   return (SExtNat . fromInteger . toInteger $ n, sTrue)
+
+compileCoeffect (CNat n) k _ | k == tropical =
+  return (STropical . fromSInteger . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
@@ -361,6 +369,7 @@ compileCoeffect (CZero k') k vars  =
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
+        "Tropical"  -> return (STropical zero, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
       return (SExtNat 0, sTrue)
@@ -387,6 +396,7 @@ compileCoeffect (COne k') k vars =
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
+        "Tropical"  -> return (STropical one, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
 
     (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
@@ -436,6 +446,7 @@ eqConstraint (SFloat n) (SFloat m) = return $ n .== m
 eqConstraint (SLevel l) (SLevel k) = return $ l .== k
 eqConstraint u@(SUnknown{}) u'@(SUnknown{}) = symGradeEq u u'
 eqConstraint (SExtNat x) (SExtNat y) = return $ x .== y
+eqConstraint (STropical x) (STropical y) = return $ x .== y
 eqConstraint SPoint SPoint           = return sTrue
 
 eqConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
@@ -454,6 +465,7 @@ approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
+approximatedByOrEqualConstraint (STropical x) (STropical y) = return $ x .== y
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   return $ if s == t then sTrue else sFalse
 
