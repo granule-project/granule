@@ -40,6 +40,7 @@ typeConstructors =
     , (mkId "Private", (KPromote (TyCon $ mkId "Level"), [], False))
     , (mkId "Public", (KPromote (TyCon $ mkId "Level"), [], False))
     , (mkId "Unused", (KPromote (TyCon $ mkId "Level"), [], False))
+    , (mkId "OOZ", (KCoeffect, [], False)) -- 1 + 1 = 0
     , (mkId "Interval", (KFun KCoeffect KCoeffect, [], False))
     , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), [], False))
     -- Channels and protocol types
