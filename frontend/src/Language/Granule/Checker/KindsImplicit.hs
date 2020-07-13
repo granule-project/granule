@@ -146,7 +146,7 @@ inferKindOfTypeImplicits s ctxt (TyVar tyVar) =
 inferKindOfTypeImplicits s ctxt (TyApp t1 t2) = do
   (k1, u1) <- inferKindOfTypeImplicits s ctxt t1
   case k1 of
-    FunTy k1 k2 -> do
+    FunTy _ k1 k2 -> do
       (kArg, u2) <- inferKindOfTypeImplicits s ctxt t2
       jK <- joinKind k1 kArg
       case jK of
@@ -158,11 +158,11 @@ inferKindOfTypeImplicits s ctxt (TyApp t1 t2) = do
     TyVar v -> do
         (kArg, u2) <- inferKindOfTypeImplicits s ctxt t2
         kResVar <- freshIdentifierBase $ "_kres"
-        let u = [(v, SubstK $ FunTy (TyVar $ mkId kResVar) kArg)]
+        let u = [(v, SubstK $ FunTy Nothing (TyVar $ mkId kResVar) kArg)]
         uOut <- combineSubstitutions s u2 u
         return (TyVar $ mkId kResVar, uOut)
 
-    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = FunTy (TyVar $ mkId "..") (TyVar $ mkId ".."), kActual = k1 }
+    _ -> throw KindMismatch{ errLoc = s, tyActualK = Just t1, kExpected = FunTy Nothing (TyVar $ mkId "..") (TyVar $ mkId ".."), kActual = k1 }
 
 inferKindOfTypeImplicits s ctxt (TyInt _) = return $ (TyCon $ mkId "Nat", [])
 

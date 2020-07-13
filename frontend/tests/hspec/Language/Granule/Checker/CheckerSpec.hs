@@ -1,5 +1,6 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ImplicitParams #-}
+{-# LANGUAGE DataKinds #-}
 
 module Language.Granule.Checker.CheckerSpec where
 
@@ -31,7 +32,7 @@ spec = let ?globals = mempty in do
               [(varA, Discharged tyVarK (cNatOrdered 10))]
 
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
-       tyVars `shouldBe` [(mkId "a.0", promoteTypeToKind $ natInterval)]
+       tyVars `shouldBe` [(mkId "a.0", natInterval)]
        pred `shouldBe`
         [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)]]
          --[Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
@@ -85,7 +86,7 @@ spec = let ?globals = mempty in do
         -- \x -> x + 1
         (AST _ (def1:_) _ _ _) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
         (Right defElab, _) <- runChecker initState (checkDef [] def1)
-        annotation (extractMainExpr defElab) `shouldBe` (TyCon $ mkId "Int")
+        annotation (extractMainExpr defElab) `shouldBe` ((TyCon $ mkId "Int") :: Type Zero)
 
 extractMainExpr :: Def v a -> Expr v a
 extractMainExpr (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ e]) _) = e
@@ -104,6 +105,6 @@ runCtxts f a b = do
 cNatOrdered  :: Int -> Coeffect
 cNatOrdered x = CSig (CNat x) natInterval
 
-natInterval :: Type
+natInterval :: Type One
 natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")
 

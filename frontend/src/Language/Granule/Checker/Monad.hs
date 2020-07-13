@@ -180,7 +180,7 @@ data CheckerState = CS
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
-  deriving Show -- for debugging
+  deriving (Eq, Show) -- for debugging
 
 -- | Initial checker context state
 initState :: CheckerState

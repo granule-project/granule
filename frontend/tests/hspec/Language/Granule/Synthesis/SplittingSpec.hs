@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+
 module Language.Granule.Synthesis.SplittingSpec where
 
 import Test.Hspec hiding (Spec)
@@ -50,14 +52,14 @@ boolDataCons :: (?globals :: Globals) => Ctxt (Ctxt (TypeScheme, Substitution))
 boolDataCons =
   [(boolId, [(falseId, (Forall nullSpan [] [] (TyCon boolId), [])), (trueId, (Forall nullSpan [] [] (TyCon boolId), []))])]
 
-boolTyCons :: Ctxt (Kind, [Id], Bool)
-boolTyCons = [(boolId, (KType, [falseId, trueId], False))]
+boolTyCons :: Ctxt (TypeWithLevel, [Id], Bool)
+boolTyCons = [(boolId, (TypeWithLevel (LSucc LZero) (Type LZero), [falseId, trueId], False))]
 
 runSplitter :: (?globals :: Globals)
-  => Type
+  => Type Zero
   -> Ctxt (Ctxt (TypeScheme, Substitution))
-  -> Ctxt (Kind, [Id], Bool)
-  -> Ctxt (Kind, Quantifier)
+  -> Ctxt (TypeWithLevel, [Id], Bool)
+  -> Ctxt (TypeWithLevel, Quantifier)
   -> Ctxt Assumption
   -> IO ([Id], [[Pattern ()]])
 runSplitter ty dataCons tyCons tyVarCtxt ctxt = do

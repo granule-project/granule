@@ -626,5 +626,6 @@ isIndexedType t = do
       , tfTyInt0 = \_ -> return $ Const False
       , tfTyInfix0 = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfSet0 = \_ -> return $ Const False
-      , tfTyCase0 = \_ _ -> return $ Const False } t
+      , tfTyCase0 = \_ _ -> return $ Const False
+      , tfTySig0 = \(Const b) _ _ -> return $ Const b } t
   return $ getConst b

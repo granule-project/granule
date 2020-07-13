@@ -11,7 +11,6 @@
 module Language.Granule.Checker.Checker where
 
 import Control.Arrow (second)
-import Control.Monad (unless)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -114,12 +113,12 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (TypeWithLevel (LSucc LZero) tyConKind, cardin, isIndexedDataType d)) : typeConstructors st }
+      st{ typeConstructors = (name, (TypeWithLevel (LSucc LZero) tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
   where
     ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type LZero -- default to `Type`
-    mkKind (v:vs) = FunTy v (mkKind vs)
+    mkKind (v:vs) = FunTy Nothing v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
@@ -184,7 +183,7 @@ checkDataCon
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
-    indexKinds (FunTy k1 k2) = k1 : indexKinds k2
+    indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
     indexKinds k = []
 
     registerDataConstructor dataConstrTy subst = do
@@ -260,7 +259,7 @@ checkAndGenerateSubstitution sp tName ty ixkinds =
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
-         -> Checker (Def () Type)
+         -> Checker (Def () (Type Zero))
 checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
                  tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
@@ -272,15 +271,15 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
 
-    elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
+    elaboratedEquations :: [Equation () (Type Zero)] <- runAll elaborateEquation equations
 
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
   where
-    elaborateEquation :: Equation () () -> Checker (Equation () Type)
-    elaborateEquation equation = d
+    elaborateEquation :: Equation () () -> Checker (Equation () (Type Zero))
+    elaborateEquation equation = do
       -- Erase the solver predicate between equations
         modify' $ \st -> st
             { predicateStack = []
@@ -380,7 +379,7 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
     -- e.g. Given a pattern: Cons x xs
     --      and a type:      Vec (n+1) t -> Vec n t
     --      returns:         t -> Vec n t -> Vec n t
-    refineEquationTy :: [(Id, Assumption)] -> Type -> Type
+    refineEquationTy :: [(Id, Assumption)] -> Type Zero -> Type Zero
     refineEquationTy patternGam ty =
       case patternGam of
         [] -> ty
@@ -396,7 +395,7 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
     patternArity (PConstr _ _ _ _ ps) = sum (map patternArity ps)
     patternArity _ = 1
 
-    replaceParameters :: [[Type]] -> Type -> Type
+    replaceParameters :: [[Type Zero]] -> Type Zero -> Type Zero
     replaceParameters [] ty = ty
     replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
@@ -404,7 +403,7 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
-    assumptionToType :: (Id, Assumption) -> Type
+    assumptionToType :: (Id, Assumption) -> Type Zero
     assumptionToType (_, Linear t) = t
     assumptionToType (_, Discharged t _) = t
 
@@ -452,7 +451,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
       cases <- generateCases s constructors holeCtxt
-      throw $ HoleMessage s t ctxt (tyVarContext st) cases
+      throw $ HoleMessage s (Just t) ctxt (tyVarContext st) cases
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do

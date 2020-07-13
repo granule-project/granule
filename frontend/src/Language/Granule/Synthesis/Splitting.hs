@@ -1,7 +1,10 @@
+{-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
+
 module Language.Granule.Synthesis.Splitting (generateCases) where
 
 import Control.Arrow (second)
-import Control.Monad (filterM, mapM)
+import Control.Monad (filterM)
 import Control.Monad.State.Strict (get, liftIO)
 import Data.List (partition)
 import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
@@ -81,7 +84,7 @@ generateCases span constructors ctxt = do
 -- Wrapper around validateCase which updates the state when the case is valid.
 caseFilter :: (?globals :: Globals)
   => Span
-  -> Type
+  -> Type Zero
   -> [Pattern ()]
   -> Checker Bool
 caseFilter span ty pats = do
@@ -93,7 +96,7 @@ caseFilter span ty pats = do
 -- Checks a case (i.e. list of patterns) against a type for validity.
 validateCase :: (?globals :: Globals)
   => Span
-  -> Type
+  -> Type Zero
   -> [Pattern ()]
   -> Checker Bool
 validateCase span ty pats = do
@@ -153,7 +156,7 @@ getAssumConstr :: Assumption -> Maybe Id
 getAssumConstr (Discharged _ _) = Nothing
 getAssumConstr (Linear t) = getTypeConstr t
   where
-    getTypeConstr :: Type -> Maybe Id
+    getTypeConstr :: Type Zero -> Maybe Id
     getTypeConstr (FunTy _ t1 _) = Nothing
     getTypeConstr (TyCon id) = Just id
     getTypeConstr (Box _ t) = getTypeConstr t
@@ -164,6 +167,15 @@ getAssumConstr (Linear t) = getTypeConstr t
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _) = Nothing
     getTypeConstr (TySig t _) = getTypeConstr t
+    getTypeConstr (TyCase _ cases) =
+      if allSame (map snd cases)
+        then getTypeConstr . snd . head $ cases
+        else Nothing
+     where
+       allSame [] = True
+       allSame [x] = True
+       allSame (x:(y:xs)) =
+         if x == y then allSame xs else False
 
 -- Given a list of data constructors, generates patterns corresponding to them.
 buildConstructorPatterns ::
@@ -205,7 +217,7 @@ buildBoxPattern span id = (id, pure $ PBox span () False (PVar span () False id)
 tsTypeNames :: TypeScheme -> [Maybe Id]
 tsTypeNames (Forall _ _ _ t) = typeNames t
    where
-     typeNames :: Type -> [Maybe Id]
+     typeNames :: Type Zero -> [Maybe Id]
      typeNames (FunTy id _ t2) = id : typeNames t2
      typeNames _ = []
 

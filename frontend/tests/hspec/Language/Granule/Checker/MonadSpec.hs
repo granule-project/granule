@@ -1,3 +1,5 @@
+{-# LANGUAGE DataKinds #-}
+
 module Language.Granule.Checker.MonadSpec where
 
 import Test.Hspec
@@ -46,6 +48,6 @@ peekCheckerSpec = do
         return $ "x" <> show (fromJust $ M.lookup "x" (uniqueVarIdCounterMap state))
     transformState st =
       st { uniqueVarIdCounterMap  = M.insertWith (+) "x" 1 (uniqueVarIdCounterMap st)
-         , tyVarContext = [(mkId "inner", (KType, ForallQ))]
+         , tyVarContext = [(mkId "inner", (TypeWithLevel (LSucc LZero) $ Type LZero, ForallQ))]
          , deriv        = Just $ Leaf "testing"
          , derivStack   = [Leaf "unit test"] }

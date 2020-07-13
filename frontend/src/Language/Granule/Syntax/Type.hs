@@ -117,6 +117,12 @@ data TypeWithLevel where
 
 deriving instance Show TypeWithLevel
 
+-- This is only used for testing and should really be avoided
+-- elsewhere
+instance Eq TypeWithLevel where
+  (TypeWithLevel u t) == (TypeWithLevel u' t') =
+    (show u == show u') && (show t == show t')
+
 {-| Types.
 Example: `List n Int` in Granule
          is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
