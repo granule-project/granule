@@ -89,7 +89,6 @@ effApproximates s effTy eff1 eff2 =
         -- Any union-set effects, like IO
             TyCon c | unionSetLike c ->
                 case (eff1, eff2) of
-                    (TyCon (internalName -> "Pure"), _) -> return True
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
                         let efs1' = handledNormalise s effTy efs1
                         let efs2' = handledNormalise s effTy efs2

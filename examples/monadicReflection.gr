@@ -1,6 +1,4 @@
 import Maybe
-import Prelude
-
 main : (Int [0..1]) <MayFail>
 main = reflect None ()
 
@@ -11,4 +9,4 @@ reflect mb =
         Some x -> x 
 
 reify : forall {a : Type} . (() -> (a [0..1]) <MayFail>) -> Maybe a
-reify f = try f () as [x] in Some x catch None
+reify f = fromPure (try f () as [x] in pure (Some x) catch pure (None))

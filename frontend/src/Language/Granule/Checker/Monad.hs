@@ -636,6 +636,8 @@ instance UserMsg CheckerError where
       <> "` is promoted but its binding is linear; its binding should be under a box."
     NonLinearPattern ->
       "Wildcard pattern `_` allowing a value to be discarded"
+    HandlerLinearityMismatch ->
+      "Linearity of Handler clauses does not match"
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -852,6 +854,7 @@ data LinearityMismatch
   | LinearUsedNonLinearly Id
   | NonLinearPattern
   | LinearUsedMoreThanOnce Id
+  | HandlerLinearityMismatch
   deriving (Eq, Show) -- for debugging
 
 freshenPred :: Pred -> Checker Pred
