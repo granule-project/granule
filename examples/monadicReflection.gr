@@ -1,12 +1,13 @@
 import Maybe
-main : (Int [0..1]) <MayFail>
-main = reflect None ()
+
+main : Maybe Int
+main = reify (reflect (Some 4))
 
 reflect : forall {a : Type} . Maybe a -> (() -> (a [0..1]) <MayFail>)
 reflect mb = 
     case mb of
-        None -> (\_ -> throw);
-        Some x -> x 
+        None -> (\() -> throw);
+        Some x -> (\() -> x)
 
 reify : forall {a : Type} . (() -> (a [0..1]) <MayFail>) -> Maybe a
 reify f = fromPure (try f () as [x] in pure (Some x) catch pure (None))

@@ -52,9 +52,11 @@ isEffUnit s effTy eff =
 
 handledNormalise :: Span -> Type -> Type -> Type
 handledNormalise s effTy efs =
-    case effTy of
-        (TyApp (TyCon (internalName -> "Handled")) ef) -> handledNormalise s effTy ef
-        TyCon (internalName -> "MayFail") -> TyCon (mkId "Success")
+    case efs of
+        TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "MayFail")) -> TyCon (mkId "Pure")
+        TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "Success")) -> TyCon (mkId "Pure")
+        TyApp (TyCon (internalName -> "Handled")) ef -> handledNormalise s effTy ef
+        TyCon (internalName -> "Success") -> TyCon (mkId "Pure")
         TySet efs' -> 
             TySet (efs' \\ [TyCon (mkId "IOExcept")])
         _ -> efs
@@ -90,16 +92,16 @@ effApproximates s effTy eff1 eff2 =
             TyCon c | unionSetLike c ->
                 case (eff1, eff2) of
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
-                        let efs1' = handledNormalise s effTy efs1
-                        let efs2' = handledNormalise s effTy efs2
+                        let efs1' = handledNormalise s effTy eff1
+                        let efs2' = handledNormalise s effTy eff2
                         effApproximates s effTy efs1' efs2'
                     --Handled, set
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TySet efs2) -> do
-                        let efs1' = handledNormalise s effTy efs1
+                        let efs1' = handledNormalise s effTy eff1
                         effApproximates s effTy efs1' eff2
                     --set, Handled
                     (TySet efs1, TyApp (TyCon (internalName -> "Handled")) efs2) -> do
-                        let efs2' = handledNormalise s effTy efs2
+                        let efs2' = handledNormalise s effTy eff1
                         effApproximates s effTy eff1 efs2'
                     -- Actual sets, take the union
                     (TySet efs1, TySet efs2) ->
@@ -139,18 +141,18 @@ effectMult sp effTy t1 t2 = do
           case (t1, t2) of
             --Handled, Handled
             (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
-                let ts1' = handledNormalise sp effTy ts1
-                let ts2' = handledNormalise sp effTy ts2 
+                let ts1' = handledNormalise sp effTy t1
+                let ts2' = handledNormalise sp effTy t2 
                 t <- (effectMult sp effTy ts1' ts2')
                 return t
             --Handled, set
             (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
-                let ts1' = handledNormalise sp effTy ts1
+                let ts1' = handledNormalise sp effTy t1
                 t <- (effectMult sp effTy ts1' t2) ; 
                 return t
              --set, Handled
             (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
-                let ts2' = handledNormalise sp effTy ts2 
+                let ts2' = handledNormalise sp effTy t2 
                 t <- (effectMult sp effTy t1 ts2') ;
                 return t
             -- Actual sets, take the union
