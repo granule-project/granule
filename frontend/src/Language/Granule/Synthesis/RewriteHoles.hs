@@ -19,7 +19,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span (Span, encompasses)
-import Language.Granule.Synthesis.Refactor (refactorEqn)
+import Language.Granule.Synthesis.Refactor (refactorEqn, refactorCaseEqn)
 
 import Language.Granule.Utils
 
@@ -73,7 +73,7 @@ holeRefactorEqnList cases eqns =
   eqns {equations = newEquations, equationsRefactored = refactored}
   where
     allUpdated = map updateEqn (equations eqns)
-    newEquations = concatMap fst allUpdated
+    newEquations = concatMap refactorCaseEqn (concatMap fst allUpdated)
     refactored = any snd allUpdated
     -- Updates an individual equation with the relevant cases, returning a tuple
     -- containing the new equation(s) and whether a refactoring was performed.
