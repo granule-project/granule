@@ -25,6 +25,8 @@ import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
+import Control.Exception (catch, throwIO, IOException)
+import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
 -- import Foreign.Marshal.Alloc (free, malloc)
@@ -32,6 +34,8 @@ import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Ch
 -- import Foreign.Storable (peek, poke)
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
+
+import System.IO.Error (mkIOError)
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -149,7 +153,7 @@ evalIn ctxt (Binop _ _ _ op e1 e2) = do
      v2 <- evalIn ctxt e2
      return $ evalBinOp op v1 v2
 
-evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
+evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = return $ diamondConstr $ do
   -- (cf. LET_1)
   v1 <- evalIn ctxt e1
   case v1 of
@@ -161,12 +165,35 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
         -- (cf. LET_BETA)
         pResult  <- pmatch ctxt [(p, e2)] v1'
         case pResult of
-          Just e2' -> evalIn ctxt e2'
+          Just e2' -> do
+             v <- evalIn ctxt e2'
+             case v of
+               (isDiaConstr -> Just e) -> e
+               _ -> error $ "Runtime exception: let should produce a diamonad constructor"
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
+evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
+  v1 <- evalIn ctxt e1
+  case v1 of
+    (isDiaConstr -> Just e) -> do
+        -- (cf. TRY_BETA_1)
+      catch ( do
+          eInner <- e
+          e1' <- evalIn ctxt eInner
+          pmatch ctxt [(PBox s () False p, e2)] e1' >>=
+            \v -> 
+              case v of
+                Just e2' -> evalIn ctxt e2'
+                Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
+        )
+         -- (cf. TRY_BETA_2)
+        (\(e :: IOException) -> evalIn ctxt e3)
+    other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
+          
+{-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
   (Abs () (PVar nullSpan () False $ mkId " x") Nothing (Val nullSpan () False
@@ -175,6 +202,7 @@ evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
          (Val nullSpan () False (Var () (mkId " y")))
          (Binop nullSpan () False
            OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
+-}
 
 evalIn ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
@@ -258,6 +286,7 @@ builtIns =
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
   , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () False v))
+  , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) ->  v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> NumFloat (cast n))
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
@@ -276,7 +305,7 @@ builtIns =
         hFlush stdout
         val <- Text.getLine
         return $ Val nullSpan () False (NumInt $ read $ unpack val))
-
+  , (mkId "throw", diamondConstr (throwIO $ mkIOError OtherError "exc" Nothing Nothing))
   , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
@@ -381,7 +410,7 @@ builtIns =
         case x of
           (StringLiteral s) -> do
             h <- SIO.openFile (unpack s) mode
-            return $ valExpr $ Ext () $ Handle h
+            return $ valExpr $ Promote () $ valExpr $ Ext () $ Handle h
           rval -> error $ "Runtime exception: trying to open from a non string filename" <> show rval))
       where
         mode = case internalName m of
@@ -399,20 +428,20 @@ builtIns =
         case c of
           (CharLiteral c) -> do
             SIO.hPutChar h c
-            return $ valExpr $ Ext () $ Handle h
+            return $ valExpr $ Promote () $ valExpr $ Ext () $ Handle h
           _ -> error $ "Runtime exception: trying to put a non character value"))
     writeChar _ = error $ "Runtime exception: trying to put from a non handle value"
 
     readChar :: RValue -> RValue
     readChar (Ext _ (Handle h)) = diamondConstr $ do
           c <- SIO.hGetChar h
-          return $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
-    readChar _ = error $ "Runtime exception: trying to get from a non handle value"
+          return $ valExpr $ Promote () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
+    readChar h = error $ "Runtime exception: trying to get from a non handle value" <> prettyDebug h
 
     closeHandle :: RValue -> RValue
     closeHandle (Ext _ (Handle h)) = diamondConstr $ do
          SIO.hClose h
-         return $ valExpr (Constr () (mkId "()") [])
+         return $ valExpr $ Promote () $ valExpr (Constr () (mkId "()") [])
     closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
@@ -444,6 +473,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (App s a rf e1 e2) = App s a rf (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
   toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
 
