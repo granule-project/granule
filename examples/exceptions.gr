@@ -1,0 +1,9 @@
+main : Char <{Open, Read, Close}>
+main =
+  try (let
+         [h] <- openHandle ReadMode "LICENSE";
+         [(h', c1)]     <- readChar h;
+         [()]           <- closeHandle h'
+      in pure [c1])
+    as [x] : Char in pure x
+    catch pure "A"

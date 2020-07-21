@@ -94,6 +94,8 @@ data ExprF ev a expr value =
      -- let p : t <- e1 in e2
      -- or
      -- let p <- e1 in e2
+  | TryCatchF Span a Bool expr (Pattern a) (Maybe Type) expr expr
+     -- try e1 as p : t in e2 catch e3
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
   | HoleF Span a Bool [Id]
@@ -125,10 +127,11 @@ type UnfixedExpr ev a = UnExprFix2 ExprF ValueF ev a
 pattern App sp a rf fexp argexp = (ExprFix2 (AppF sp a rf fexp argexp))
 pattern Binop sp a rf op lhs rhs = (ExprFix2 (BinopF sp a rf op lhs rhs))
 pattern LetDiamond sp a rf pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a rf pat mty nowexp nextexp))
+pattern TryCatch sp a rf t1 pat mty t2 t3 = (ExprFix2 (TryCatchF sp a rf t1 pat mty t2 t3))
 pattern Val sp a rf val = (ExprFix2 (ValF sp a rf val))
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
-pattern Hole sp a rf vars = ExprFix2 (HoleF sp a rf vars)
-{-# COMPLETE App, Binop, LetDiamond, Val, Case, Hole #-}
+pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
+{-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
 
 instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
@@ -166,6 +169,7 @@ instance Rp.Refactorable (Expr ev a) where
   isRefactored (App _ _ True _ _) = Just Rp.Replace
   isRefactored (Binop _ _ True _ _ _) = Just Rp.Replace
   isRefactored (LetDiamond _ _ True _ _ _ _) = Just Rp.Replace
+  isRefactored (TryCatch _ _ True _ _ _ _ _) = Just Rp.Replace
   isRefactored (Val _ _ True _) = Just Rp.Replace
   isRefactored (Case _ _ True _ _) = Just Rp.Replace
   isRefactored (Hole _ _ True _) = Just Rp.Replace
@@ -272,6 +276,7 @@ instance Term (Expr v a) where
     freeVars (App _ _ _ e1 e2)            = freeVars e1 <> freeVars e2
     freeVars (Binop _ _ _ _ e1 e2)        = freeVars e1 <> freeVars e2
     freeVars (LetDiamond _ _ _ p _ e1 e2) = freeVars e1 <> (freeVars e2 \\ boundVars p)
+    freeVars (TryCatch _ _ _ e1 p _ e2 e3) = freeVars e1 <> (freeVars e2 \\ boundVars p) <> freeVars e3
     freeVars (Val _ _ _ e)                = freeVars e
     freeVars (Case _ _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
@@ -280,6 +285,7 @@ instance Term (Expr v a) where
     hasHole (App _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (Binop _ _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (LetDiamond _ _ _ p _ e1 e2) = hasHole e1 || hasHole e2
+    hasHole (TryCatch _ _ _ e1 p _ e2 e3) = hasHole e1 || hasHole e2 || hasHole e3
     hasHole (Val _ _ _ e) = hasHole e
     hasHole (Case _ _ _ e cases) = hasHole e || (or (map (hasHole . snd) cases))
     hasHole Hole{} = True
@@ -296,6 +302,9 @@ instance Substitutable Expr where
 
     subst es v (LetDiamond s a rf w t e1 e2) =
       LetDiamond s a rf w t (subst es v e1) (subst es v e2)
+
+    subst es v (TryCatch s a rf e1 p t e2 e3) =
+      TryCatch s a rf (subst es v e1) p t (subst es v e2) (subst es v e3)
 
     subst es v (Val _ _ _ val) =
       subst es v val
@@ -320,6 +329,16 @@ instance Monad m => Freshenable m (Expr v a) where
                 Nothing -> return Nothing
                 Just ty -> freshen ty >>= (return . Just)
       return $ LetDiamond s a rf p t e1 e2
+
+    freshen (TryCatch s a rf e1 p t e2 e3) = do
+      e1 <- freshen e1
+      p <- freshen p
+      t   <- case t of
+                Nothing -> return Nothing
+                Just ty -> freshen ty >>= (return . Just)
+      e2 <- freshen e2
+      e3 <- freshen e3
+      return $ TryCatch s a rf e1 p t e2 e3
 
     freshen (Binop s a rf op e1 e2) = do
       e1 <- freshen e1
