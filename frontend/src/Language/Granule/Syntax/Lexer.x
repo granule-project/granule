@@ -55,6 +55,7 @@ tokens :-
   try                           { \p s -> TokenTry p }
   as                            { \p s -> TokenAs p }
   catch                         { \p s -> TokenCatch p }
+  handles                       { \p s -> TokenHandles p}
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
@@ -127,6 +128,7 @@ data Token
   | TokenTry    AlexPosn
   | TokenAs     AlexPosn
   | TokenCatch  AlexPosn
+  | TokenHandles AlexPosn
   | TokenInfinity AlexPosn
   | TokenLambda AlexPosn
   | TokenLetBox AlexPosn

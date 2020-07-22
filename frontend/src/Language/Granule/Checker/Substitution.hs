@@ -523,6 +523,10 @@ substituteExpr ctxt (TryCatchF sp ty rf e1 pattern mty e2 e3) =
         pattern' <- substitute ctxt pattern
         mty' <- mapM (substitute ctxt) mty
         return $ TryCatch sp ty' rf e1 pattern' mty' e2 e3
+substituteExpr ctxt (HandledF sp ty rf expr oprs) =
+    do  ty' <- substitute ctxt ty
+        oprs' <- mapM (mapFstM (substitute ctxt)) oprs
+        return $ Handled sp ty' rf expr oprs'
 substituteExpr ctxt (ValF sp ty rf value) =
     do  ty' <- substitute ctxt ty
         return $ Val sp ty' rf value
