@@ -35,7 +35,6 @@ import Control.Monad.Trans.Class (lift)
 import Control.Monad.Trans.State.Lazy
 import Data.Generics.Zipper
 import Data.List (sortOn)
-import Data.Monoid ((<>), mempty)
 import qualified Data.Text.Lazy as Text
 
 -- | Text from source file
