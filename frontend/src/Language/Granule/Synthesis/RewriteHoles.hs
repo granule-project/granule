@@ -124,6 +124,8 @@ holeRefactorExpr (Binop sp a rf op e1 e2) =
   Binop sp a rf op (holeRefactorExpr e1) (holeRefactorExpr e2)
 holeRefactorExpr (LetDiamond sp a rf pat ty e1 e2) =
   LetDiamond sp a rf pat ty (holeRefactorExpr e1) (holeRefactorExpr e2)
+holeRefactorExpr (TryCatch sp a rf e1 pat ty e2 e3) =
+  TryCatch sp a rf (holeRefactorExpr e1) pat ty (holeRefactorExpr e2) (holeRefactorExpr e3)
 holeRefactorExpr (Case sp a rf e cases) =
   Case sp a rf (holeRefactorExpr e) (map (second holeRefactorExpr) cases)
 -- TODO: for maximum expressivity with holes we should recursively refactor inside values as well (as they contain exprs)

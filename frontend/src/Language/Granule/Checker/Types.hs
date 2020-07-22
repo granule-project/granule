@@ -147,7 +147,7 @@ equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
 
 equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Types = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
-  (eq', unif') <- equalTypesRelatedCoeffects s rel ef1 ef2 sp Effects
+  (eq', unif') <- equalTypesRelatedCoeffects s rel (handledNormalise s (Diamond ef1 t1) ef1) (handledNormalise s (Diamond ef2 t2) ef2) sp Effects
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
@@ -504,6 +504,7 @@ equalKinds sp k1 k2 = do
       Just (k, u) -> return (True, k, u)
       Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
 
+-- Checkers that two effects have the same type, and if so then returns that effect type
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
     mefTy1 <- isEffectType s ef1
