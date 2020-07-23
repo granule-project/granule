@@ -1,5 +1,7 @@
 module Language.Granule.Checker.KindsAlgorithmic(checkKind, synthKind) where
 
+import Control.Monad.State.Strict (get)
+
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.SubstitutionContexts
@@ -10,6 +12,7 @@ import Language.Granule.Context
 
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
@@ -28,16 +31,6 @@ checkKind s ctxt (TyApp t1 t2) k2 = do
   (k1, subst1) <- synthKind s ctxt t2
   subst2 <- checkKind s ctxt t1 (KFun k1 k2)
   combineSubstitutions s subst1 subst2
-
--- KChk_opPred
-checkKind s ctxt t@(TyInfix op t1 t2) KPredicate = do
-  (argK, subst1) <- synthKind s ctxt t1
-  maybeSubst <- predicateOperatorAtKind s ctxt op argK
-  case maybeSubst of
-    Just subst3 -> do
-      subst2 <- checkKind s ctxt t2 argK
-      combineManySubstitutions s [subst1, subst2, subst3]
-    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = argK }
 
 -- KChk_opRing and KChk_effOp combined (i.e. closed operators)
 checkKind s ctxt t@(TyInfix op t1 t2) k = do
@@ -117,7 +110,7 @@ predicateOperatorAtKind _ _ _ _ = return Nothing
 predicateOps :: TypeOperator -> Bool
 predicateOps op = (\(_, _, c) -> c) (tyOps op) == KPredicate
 
-synthKind :: -- (?globals :: Globals) =>
+synthKind :: (?globals :: Globals) =>
   Span -> Ctxt (Kind, Quantifier) -> Type -> Checker (Kind, Substitution)
 
 -- KChkS_var and KChkS_instVar
@@ -126,14 +119,62 @@ synthKind s ctxt (TyVar x) = do
     Just (k, _) -> return (k, [])
     Nothing     -> throw $ UnboundVariableError s x
 
--- KChkS_Int and KChkS_Char
---synthKind s ctxt (TyCon id) | isBaseType id = return (KType, [])
+-- KChkS_app
+synthKind s ctxt (TyApp t1 t2) = do
+  (funK, subst1) <- synthKind s ctxt t1
+  case funK of
+    (KFun k1 k2) -> do
+      subst2 <- checkKind s ctxt t2 k1
+      subst <- combineManySubstitutions s [subst1, subst2]
+      return (k2, subst)
+    _ -> throw KindError { errLoc = s, errTy = t1, errK = funK }
 
-synthKind s ctxt t = error "TODO"
+-- KChkS_predOp
+synthKind s ctxt (TyInfix op t1 t2) | predicateOps op = do
+  (k, subst1) <- synthKind s ctxt t1
+  maybeSubst <- predicateOperatorAtKind s ctxt op k
+  case maybeSubst of
+    Just subst3 -> do
+      subst2 <- checkKind s ctxt t2 k
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (KPredicate, subst)
+    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
 
-{-isBaseType :: Id -> Checker Bool
-isBaseType = do
+-- KChkS_opRing and KChkS_effOpp
+synthKind s ctxt (TyInfix op t1 t2) = do
+  (k, subst1) <- synthKind s ctxt t1
+  maybeSubst <- closedOperatorAtKind s ctxt op k
+  case maybeSubst of
+    Just subst3 -> do
+      subst2 <- checkKind s ctxt t2 k
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (k, subst)
+    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
+
+-- KChkS_box
+synthKind s ctxt (Box c t) = undefined
+
+-- KChkS_dia
+synthKind s ctxt (Diamond e t) = do
+  (kB, subst2) <- synthKind s ctxt e
+  case kB of
+    (KPromote b) -> do
+      subst1 <- checkKind s ctxt b KEffect
+      subst3 <- checkKind s ctxt t KType
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (KType, subst)
+    _ -> throw KindError { errLoc = s, errTy = e, errK = kB }
+
+-- KChkS_int and KChkS_char (and other predefined types)
+synthKind s ctxt (TyCon id) = do
   st <- get
   case lookup id (typeConstructors st) of
-    Just (KType, _, _) -> return True
-    _ -> return False-}
+      Just (kind, _, _) -> return (kind, [])
+      Nothing -> do
+        mConstructor <- lookupDataConstructor s id
+        case mConstructor of
+          Just (Forall _ [] [] t, _) -> return $ (KPromote t, [])
+          Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty id
+          Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
+
+synthKind _ _ _ = error "TODO"

@@ -1,6 +1,5 @@
 {- Deals with effect algebras -}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Effects where
