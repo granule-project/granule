@@ -148,6 +148,10 @@ freshCVarScoped quant name (isInterval -> Just t) q k =
             , SInterval solverVarLb solverVarUb )
           ))
 
+freshCVarScoped quant name (isMod -> Just n) q k =
+   quant q name (\solverVar ->
+    k (solverVar .>= 0 .&& (fromIntegral n) .> (0 :: SInteger), SMod solverVar n))
+
 freshCVarScoped quant name (isProduct -> Just (t1, t2)) q k =
 
   freshCVarScoped quant (name <> ".fst") t1 q
@@ -169,7 +173,6 @@ freshCVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
-        "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshCVarScoped quant name t q k | t == extendedNat = do
@@ -313,6 +316,9 @@ compileCoeffect (CNat n) k _ | k == nat =
 compileCoeffect (CNat n) k _ | k == extendedNat =
   return (SExtNat . fromInteger . toInteger $ n, sTrue)
 
+compileCoeffect (CNat n) (isMod -> Just i) _ =
+  pure (SMod (fromInteger . toInteger $ n) i, sTrue)
+
 compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
@@ -339,6 +345,9 @@ compileCoeffect c@(CTimes n m) k vars =
 compileCoeffect c@(CMinus n m) k vars =
   bindM2And symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
+compileCoeffect c@(CMod n m) k vars =
+  bindM2And symGradeMod (compileCoeffect n k vars) (compileCoeffect m k vars)
+
 compileCoeffect c@(CExpon n m) k vars = do
   (g1, p1) <- compileCoeffect n k vars
   (g2, p2) <- compileCoeffect m k vars
@@ -360,7 +369,6 @@ compileCoeffect (CZero k') k vars  =
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
-        "OOZ"       -> return (SOOZ sFalse, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
       return (SExtNat 0, sTrue)
@@ -375,6 +383,9 @@ compileCoeffect (CZero k') k vars  =
         (compileCoeffect (CZero t) t' vars)
         (compileCoeffect (CZero t) t' vars)
 
+    (isMod -> Just i, isMod -> Just j) | i == j ->
+      pure (SMod 0 i, sTrue)
+
     (TyVar _, _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
     _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
 
@@ -386,7 +397,6 @@ compileCoeffect (COne k') k vars =
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
-        "OOZ"       -> return (SOOZ sTrue, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
 
     (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
@@ -402,6 +412,9 @@ compileCoeffect (COne k') k vars =
       liftM2And SInterval
           (compileCoeffect (COne t) t' vars)
           (compileCoeffect (COne t) t' vars)
+
+    (isMod -> Just i, isMod -> Just j) | i == j ->
+      pure (SMod 1 i, sTrue)
 
     (TyVar _, _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -453,7 +466,7 @@ approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
-approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
+approximatedByOrEqualConstraint (SMod s i) (SMod r j) | i == j = pure $ sMod s (fromIntegral i) .== sMod r (fromIntegral i)
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   return $ if s == t then sTrue else sFalse
 

@@ -94,6 +94,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '.'   { TokenPeriod _ }
     '`'   { TokenBackTick _ }
     '^'   { TokenCaret _ }
+    '%'   { TokenPercent _ }
     '..'  { TokenDotDot _ }
     "\\/" { TokenJoin _ }
     "/\\" { TokenMeet _ }
@@ -326,7 +327,7 @@ TyApp :: { Type }
  | TyAtom                     { $1 }
 
 TyJuxt :: { Type }
-  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 } 
+  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
   | TyAtom '+' TyAtom         { TyInfix TyOpPlus $1 $3 }
@@ -372,6 +373,7 @@ Coeffect :: { Coeffect }
   | Coeffect '*' Coeffect       { CTimes $1 $3 }
   | Coeffect '-' Coeffect       { CMinus $1 $3 }
   | Coeffect '^' Coeffect       { CExpon $1 $3 }
+  | Coeffect '%' Coeffect       { CMod   $1 $3 }
   | Coeffect "/\\" Coeffect       { CMeet $1 $3 }
   | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }

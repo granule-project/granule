@@ -145,6 +145,7 @@ data Coeffect = CNat      Int
               | CSig      Coeffect Type
               | CExpon    Coeffect Coeffect
               | CProduct  Coeffect Coeffect
+              | CMod      Coeffect Coeffect
     deriving (Eq, Ord, Show, Rp.Data)
 
 -- Algebra for coeffects
@@ -165,7 +166,9 @@ data CoeffectFold a = CoeffectFold
   , cSet   :: [(String, Type)] -> a
   , cSig   :: a -> Type -> a
   , cExpon :: a -> a -> a
-  , cProd  :: a -> a -> a }
+  , cProd  :: a -> a -> a
+  , cMod   :: a -> a -> a
+  }
 
 -- Base monadic algebra
 baseCoeffectFold :: CoeffectFold Coeffect
@@ -188,6 +191,7 @@ baseCoeffectFold =
     , cSig = CSig
     , cExpon = CExpon
     , cProd = CProduct
+    , cMod  = CMod
     }
 
 -- | Fold on a `coeffect` type
@@ -245,6 +249,10 @@ coeffectFold algebra = go
       c1' = go c1
       c2' = go c2
       in (cProd algebra) c1' c2'
+    go (CMod c1 c2) = let
+      c1' = go c1
+      c2' = go c2
+      in (cMod algebra) c1' c2'
 
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
@@ -268,6 +276,10 @@ isProduct :: Type -> Maybe (Type, Type)
 isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
+
+isMod :: Type -> Maybe Int
+isMod (TyApp (TyCon c) (TyInt n)) | internalName c == "Mod" = Just n
+isMod _ = Nothing
 
 ----------------------------------------------------------------------
 -- Helpers
@@ -426,6 +438,7 @@ instance Term Coeffect where
     freeVars (CExpon c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CMeet c1 c2) = freeVars c1 <> freeVars c2
     freeVars (CJoin c1 c2) = freeVars c1 <> freeVars c2
+    freeVars (CMod c1 c2) = freeVars c1 <> freeVars c2
     freeVars CNat{}  = []
     freeVars CFloat{} = []
     freeVars CInfinity{} = []
@@ -519,6 +532,11 @@ instance Freshenable m Coeffect where
       c1' <- freshen c1
       c2' <- freshen c2
       return $ CJoin c1' c2'
+
+    freshen (CMod c1 c2) = do
+      c1' <- freshen c1
+      c2' <- freshen c2
+      return $ CMod c1' c2'
 
     freshen (CSet cs) = do
        cs' <- mapM (\(s, t) -> freshen t >>= (\t' -> return (s, t'))) cs

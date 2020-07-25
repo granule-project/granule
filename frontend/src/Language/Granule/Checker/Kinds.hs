@@ -247,6 +247,7 @@ inferCoeffectTypeInContext s _ (CTimes c c') = fmap fst2 $ mguCoeffectTypesFromC
 inferCoeffectTypeInContext s _ (CMeet c c')  = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
 inferCoeffectTypeInContext s _ (CJoin c c')  = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
 inferCoeffectTypeInContext s _ (CExpon c c') = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CMod c c')   = fmap fst2 $ mguCoeffectTypesFromCoeffects s c c'
 
 -- Coeffect variables should have a type in the cvar->kind context
 inferCoeffectTypeInContext s ctxt (CVar cvar) = do

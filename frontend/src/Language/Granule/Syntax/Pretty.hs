@@ -88,6 +88,8 @@ instance Pretty Coeffect where
       prettyNested c <> " * " <> prettyNested d
     pretty (CMinus c d) =
       prettyNested c <> " - " <> prettyNested d
+    pretty (CMod c1 c2) =
+      prettyNested c1 <> " % " <> prettyNested c2
     pretty (CSet xs) =
       "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyNested t) xs) <> "}"
     pretty (CSig c t) =
