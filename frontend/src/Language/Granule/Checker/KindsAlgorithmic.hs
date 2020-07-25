@@ -1,5 +1,6 @@
 module Language.Granule.Checker.KindsAlgorithmic(checkKind, synthKind) where
 
+import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict (get)
 
 import Language.Granule.Checker.Predicates
@@ -48,10 +49,14 @@ checkKind s ctxt (TyInt n) (KPromote r) | n == 0 || n == 1 = checkKind s ctxt r 
 -- KChk_effOne
 checkKind s ctxt (TyInt 1) (KPromote r) = checkKind s ctxt r KEffect
 
+-- KChk_union
+checkKind s ctxt t k@(KUnion k1 k2) =
+  checkKind s ctxt t k1 `catchError` const (checkKind s ctxt t k2) `catchError` const (throw KindError { errLoc = s, errTy = t, errK = k })
+
 -- Fall through to synthesis if checking can not be done.
 checkKind s ctxt t k = do
   (k', subst) <- synthKind s ctxt t
-  if k == k'
+  if k `approximates` k'
     then return subst
     else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
@@ -173,8 +178,16 @@ synthKind s ctxt (TyCon id) = do
       Nothing -> do
         mConstructor <- lookupDataConstructor s id
         case mConstructor of
-          Just (Forall _ [] [] t, _) -> return $ (KPromote t, [])
+          Just (Forall _ [] [] t, _) -> return (KPromote t, [])
           Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty id
           Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 
 synthKind _ _ _ = error "TODO"
+
+-- k1 U k2 'approximates' both k1 and k2.
+approximates :: Kind -> Kind -> Bool
+approximates (KFun a b) (KFun a' b') = a `approximates` a' && b `approximates` b'
+approximates (KUnion a b) (KUnion a' b') = a `approximates` a' && b `approximates` b'
+approximates (KUnion a b) c = a `approximates` c || b `approximates` c
+approximates a (KUnion b c) = a `approximates` b || a `approximates` c
+approximates k1 k2 = k1 == k2

@@ -1,9 +1,10 @@
 module Language.Granule.Checker.CoeffectsTypeConverter(justCoeffectTypesConverted, tyVarContextExistential) where
 
+import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
 import Data.Maybe(catMaybes, mapMaybe)
 
-import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.KindsAlgorithmic
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 
@@ -18,16 +19,14 @@ justCoeffectTypesConverted :: (?globals::Globals)
   => Span -> [(a, (Kind, b))] -> Checker [(a, (Type, b))]
 justCoeffectTypesConverted s xs = catMaybes <$> mapM convert xs
   where
-    convert (var, (KPromote t, q)) = do
-      k <- inferKindOfType s t
-      if isCoeffectKind k
-        then return $ Just (var, (t, q))
-        else return Nothing
-    convert (var, (KVar v, q)) = do
-      k <- inferKindOfType s (TyVar v)
-      if isCoeffectKind k
-        then return $ Just (var, (TyVar v, q))
-        else return Nothing
+    convert (var, (KPromote t, q)) = (do
+      st <- get
+      k <- checkKind s (tyVarContext st) t KCoeffect
+      return $ Just (var, (t, q))) `catchError` const (return Nothing)
+    convert (var, (KVar v, q)) = (do
+      st <- get
+      k <- checkKind s (tyVarContext st) (TyVar v) KCoeffect
+      return $ Just (var, (TyVar v, q))) `catchError` const (return Nothing)
     convert _ = return Nothing
 
 -- Convert all universal variables to existential
