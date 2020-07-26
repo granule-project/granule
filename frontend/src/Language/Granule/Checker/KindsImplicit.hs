@@ -1,5 +1,7 @@
 
-module Language.Granule.Checker.KindsImplicit where
+module Language.Granule.Checker.KindsImplicit (
+                            kindCheckDef,
+                            inferKindOfTypeImplicits) where
 
 import Control.Monad.State.Strict
 
@@ -48,10 +50,6 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
 
     --KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> throw KindMismatch{ errLoc = s, tyActualK = Just ty, kExpected = KType, kActual = kind }
-
-kindIsKind :: Kind -> Bool
-kindIsKind (KPromote (TyCon (internalName -> "Kind"))) = True
-kindIsKind _ = False
 
 -- Replace any constructor Ids with their top-element
 -- (i.e., IO gets replaces with the set of all effects as an alias)

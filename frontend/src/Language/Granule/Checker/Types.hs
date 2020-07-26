@@ -12,6 +12,8 @@ import Language.Granule.Checker.Constraints.Compile
 
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.KindsAlgorithmic
+import Language.Granule.Checker.KindsHelpers
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
@@ -101,19 +103,11 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
+  st <- get
   -- Infer kinds
-  k1 <- inferKindOfType s t1
-  k2 <- inferKindOfType s t2
-  -- Check the kinds are equal
-  (eq, kind, unif) <- equalKinds s k1 k2
-  -- If so, proceed with equality on types of this kind
-  if eq
-    then equalTypesRelatedCoeffectsInner s rel t1 t2 kind spec mode
-    else
-      -- Otherwise throw a kind error
-      case spec of
-        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k1, kActual = k2}
-        _         -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k2, kActual = k1}
+  (k, _) <- synthKind s (tyVarContext st) t1
+  _ <- checkKind s (tyVarContext st) t2 k
+  equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span

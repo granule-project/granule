@@ -2,12 +2,14 @@ module Language.Granule.Checker.KindsAlgorithmic(checkKind, synthKind) where
 
 import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict (get)
+import Data.Foldable (foldrM)
 
-import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Kinds (inferCoeffectType)
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Primitives (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
-import Language.Granule.Checker.Primitives (closedOperation, coeffectResourceAlgebraOps, tyOps)
 
 import Language.Granule.Context
 
@@ -56,7 +58,7 @@ checkKind s ctxt t k@(KUnion k1 k2) =
 -- Fall through to synthesis if checking can not be done.
 checkKind s ctxt t k = do
   (k', subst) <- synthKind s ctxt t
-  if k `approximates` k'
+  if k `subKind` k'
     then return subst
     else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
@@ -124,6 +126,13 @@ synthKind s ctxt (TyVar x) = do
     Just (k, _) -> return (k, [])
     Nothing     -> throw $ UnboundVariableError s x
 
+-- KChkS_fun
+synthKind s ctxt (FunTy _ t1 t2) = do
+  subst1 <- checkKind s ctxt t1 KType
+  subst2 <- checkKind s ctxt t2 KType
+  subst <- combineManySubstitutions s [subst1, subst2]
+  return (KType, subst)
+
 -- KChkS_app
 synthKind s ctxt (TyApp t1 t2) = do
   (funK, subst1) <- synthKind s ctxt t1
@@ -156,8 +165,14 @@ synthKind s ctxt (TyInfix op t1 t2) = do
       return (k, subst)
     Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
 
+-- KChkS_effOne, KChkS_coeffZero and KChkS_coeffOne
+synthKind s ctxt (TyInt n) = return (KPromote (TyCon (Id "Nat" "Nat")), [])
+
 -- KChkS_box
-synthKind s ctxt (Box c t) = undefined
+synthKind s ctxt (Box c t) = do
+  _ <- inferCoeffectType s c
+  subst <- checkKind s ctxt t KType
+  return (KType, subst)
 
 -- KChkS_dia
 synthKind s ctxt (Diamond e t) = do
@@ -170,7 +185,7 @@ synthKind s ctxt (Diamond e t) = do
       return (KType, subst)
     _ -> throw KindError { errLoc = s, errTy = e, errK = kB }
 
--- KChkS_int and KChkS_char (and other predefined types)
+-- KChkS_int and KChkS_char (and other base types)
 synthKind s ctxt (TyCon id) = do
   st <- get
   case lookup id (typeConstructors st) of
@@ -182,12 +197,29 @@ synthKind s ctxt (TyCon id) = do
           Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty id
           Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 
-synthKind _ _ _ = error "TODO"
+-- KChkS_set
+synthKind s ctxt (TySet (t:ts)) = do
+  (k, subst1) <- synthKind s ctxt t
+  substs <- foldrM (\t' res -> (:res) <$> checkKind s ctxt t' k) [] ts
+  subst <- combineManySubstitutions s (subst1:substs)
+  case lookup k setElements of
+    -- Lift this alias to the kind level
+    Just t -> return (KPromote t, subst)
+    Nothing ->
+      -- Return a set type lifted to a kind
+      case demoteKindToType k of
+        Just t -> return (KPromote $ TyApp (TyCon $ mkId "Set") t, subst)
+        -- If the kind cannot be demoted then we shouldn't be making a set
+        Nothing -> throw KindCannotFormSet { errLoc = s,  errK = k }
 
--- k1 U k2 'approximates' both k1 and k2.
-approximates :: Kind -> Kind -> Bool
-approximates (KFun a b) (KFun a' b') = a `approximates` a' && b `approximates` b'
-approximates (KUnion a b) (KUnion a' b') = a `approximates` a' && b `approximates` b'
-approximates (KUnion a b) c = a `approximates` c || b `approximates` c
-approximates a (KUnion b c) = a `approximates` b || a `approximates` c
-approximates k1 k2 = k1 == k2
+synthKind _ _ t = do
+  debugM "todo" (pretty t <> "\t" <> show t)
+  error "TODO"
+
+-- k1 U k2 has sub-kinds k1 and k2.
+subKind :: Kind -> Kind -> Bool
+subKind (KFun a b) (KFun a' b') = a `subKind` a' && b `subKind` b'
+subKind (KUnion a b) (KUnion a' b') = a `subKind` a' && b `subKind` b'
+subKind (KUnion a b) c = a `subKind` c || b `subKind` c
+subKind a (KUnion b c) = a `subKind` b || a `subKind` c
+subKind k1 k2 = k1 == k2

@@ -3,7 +3,6 @@
 module Language.Granule.Checker.Kinds (
                       inferKindOfType
                     , inferKindOfTypeInContext
-                    , hasLub
                     , joinKind
                     , mguCoeffectTypesFromCoeffects
                     , inferCoeffectType
@@ -12,9 +11,7 @@ module Language.Granule.Checker.Kinds (
                     , promoteTypeToKind
                     , demoteKindToType
                     , isEffectType
-                    , isEffectTypeFromKind
-                    , isEffectKind
-                    , isCoeffectKind) where
+                    , isEffectTypeFromKind) where
 
 import Control.Monad.State.Strict
 
