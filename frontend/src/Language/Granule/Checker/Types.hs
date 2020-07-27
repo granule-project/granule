@@ -13,7 +13,6 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.KindsAlgorithmic
-import Language.Granule.Checker.KindsHelpers
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
@@ -234,10 +233,12 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
       jK <- k1 `joinKind` k2
       case jK of
         Just (KPromote (TyCon kc), unif) -> do
-
-          k <- inferKindOfType s (TyCon kc)
+          st <- get
+          (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) (TyCon kc) KCoeffect)
+          case result of
+            Left err -> return ()
           -- Create solver vars for coeffects
-          when (isCoeffectKind k) $ addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
+            Right _ -> putChecker >> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif) ->
           return (True, unif ++ [(m, SubstT $ TyVar n)])
@@ -446,8 +447,8 @@ joinTypes s (TyInt n) (TyVar m) = do
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
-
-  kind <- inferKindOfType s (TyVar n)
+  st <- get
+  (kind, _) <- synthKind s (tyVarContext st) (TyVar n)
   case kind of
     KPromote t -> do
 
