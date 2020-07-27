@@ -105,9 +105,20 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   st <- get
   -- Infer kinds
-  (k, _) <- synthKind s (tyVarContext st) t1
-  _ <- checkKind s (tyVarContext st) t2 k
-  equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
+  -- TODO: Investigate if tyVarContext can just be retrieved inside the checker.
+  (k1, _) <- synthKind s (tyVarContext st) t1
+  -- TODO: Should be possible to use checkKind here with k1? Works for everything but "Pure".
+  (k2, _) <- synthKind s (tyVarContext st) t2
+  (eq, kind, unif) <- equalKinds s k1 k2
+  -- If so, proceed with equality on types of this kind
+  st <- get
+  if eq
+    then equalTypesRelatedCoeffectsInner s rel t1 t2 kind spec mode
+    else
+      -- Otherwise throw a kind error
+      case spec of
+        FstIsSpec -> throw KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k1, kActual = k2 }
+        _         -> throw KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k2, kActual = k1 }
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
@@ -226,9 +237,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
 
           k <- inferKindOfType s (TyCon kc)
           -- Create solver vars for coeffects
-          if isCoeffectKind k
-            then addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
-            else return ()
+          when (isCoeffectKind k) $ addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif) ->
           return (True, unif ++ [(m, SubstT $ TyVar n)])
@@ -257,9 +266,8 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
   -- Do an occurs check for types
   case kind of
     KType ->
-       if n `elem` freeVars t
-         then throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
-         else return ()
+       when (n `elem` freeVars t) $
+        throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
     _ -> return ()
 
   case lookup n (tyVarContext checkerState) of
@@ -293,8 +301,8 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
 
          _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
 
-    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
+    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
     Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
 
 

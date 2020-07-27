@@ -10,6 +10,7 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.Variables
 
 import Language.Granule.Context
 
@@ -51,6 +52,11 @@ checkKind s ctxt (TyInt n) (KPromote r) | n == 0 || n == 1 = checkKind s ctxt r 
 -- KChk_effOne
 checkKind s ctxt (TyInt 1) (KPromote r) = checkKind s ctxt r KEffect
 
+-- KChk_set
+{-checkKind s ctxt (TySet ts) k = do
+  substs <- foldrM (\t res -> (:res) <$> checkKind s ctxt t k) [] ts
+  combineManySubstitutions s substs-}
+
 -- KChk_union
 checkKind s ctxt t k@(KUnion k1 k2) =
   checkKind s ctxt t k1 `catchError` const (checkKind s ctxt t k2) `catchError` const (throw KindError { errLoc = s, errTy = t, errK = k })
@@ -61,61 +67,6 @@ checkKind s ctxt t k = do
   if k `subKind` k'
     then return subst
     else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
-
--- | `closedOperatorAtKind` takes an operator `op` and a kind `k` and returns a
--- substitution if this is a valid operator at kind `k -> k -> k`.
-closedOperatorAtKind :: (?globals :: Globals) =>
-  Span -> Ctxt (Kind, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
-
--- Nat case
-closedOperatorAtKind _ _ op (KPromote (TyCon (internalName -> "Nat"))) =
-  return $ if closedOperation op then Just [] else Nothing
-
--- * case
-closedOperatorAtKind s ctxt TyOpTimes (KPromote t) = do
-  -- See if the type is a coeffect
-  (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
-  case result of
-    Left _ -> do
-      -- If not, see if the type is an effect
-      (result', putChecker') <- peekChecker (checkKind s ctxt t KEffect)
-      case result' of
-        -- Not a closed operator at this kind
-        Left  _ -> return Nothing
-        -- Yes it is an effect type
-        Right subst -> do
-          putChecker'
-          return $ Just subst
-    -- Yes it is a coeffect type
-    Right subst -> do
-      putChecker
-      return $ Just subst
-
--- Any other "coeffect operators" case
-closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
-  -- See if the type is a coeffect
-  (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
-  case result of
-    Left _ -> return Nothing
-    Right subst -> do
-      putChecker
-      return $ Just subst
-
-closedOperatorAtKind _ _ _ _ = return Nothing
-
-predicateOperatorAtKind :: (?globals :: Globals) =>
-  Span -> Ctxt (Kind, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
-predicateOperatorAtKind s ctxt op (KPromote t) | predicateOps op = do
-  (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
-  case result of
-    Left _ -> return Nothing
-    Right subst -> do
-      putChecker
-      return $ Just subst
-predicateOperatorAtKind _ _ _ _ = return Nothing
-
-predicateOps :: TypeOperator -> Bool
-predicateOps op = (\(_, _, c) -> c) (tyOps op) == KPredicate
 
 synthKind :: (?globals :: Globals) =>
   Span -> Ctxt (Kind, Quantifier) -> Type -> Checker (Kind, Substitution)
@@ -179,11 +130,17 @@ synthKind s ctxt (Diamond e t) = do
   (kB, subst2) <- synthKind s ctxt e
   case kB of
     (KPromote b) -> do
-      subst1 <- checkKind s ctxt b KEffect
-      subst3 <- checkKind s ctxt t KType
+      st <- get
+      subst1 <- checkKind s (tyVarContext st) b KEffect
+      subst3 <- checkKind s (tyVarContext st) t KType
       subst <- combineManySubstitutions s [subst1, subst2, subst3]
       return (KType, subst)
     _ -> throw KindError { errLoc = s, errTy = e, errK = kB }
+
+synthKind s ctxt (TyCon (internalName -> "Pure")) = do
+  -- Create a fresh type variable
+  var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
+  return (KPromote $ TyVar var, [])
 
 -- KChkS_int and KChkS_char (and other base types)
 synthKind s ctxt (TyCon id) = do
@@ -216,7 +173,65 @@ synthKind _ _ t = do
   debugM "todo" (pretty t <> "\t" <> show t)
   error "TODO"
 
--- k1 U k2 has sub-kinds k1 and k2.
+-- | `closedOperatorAtKind` takes an operator `op` and a kind `k` and returns a
+-- substitution if this is a valid operator at kind `k -> k -> k`.
+closedOperatorAtKind :: (?globals :: Globals) =>
+  Span -> Ctxt (Kind, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
+
+-- Nat case
+closedOperatorAtKind _ _ op (KPromote (TyCon (internalName -> "Nat"))) =
+  return $ if closedOperation op then Just [] else Nothing
+
+-- * case
+closedOperatorAtKind s ctxt TyOpTimes (KPromote t) = do
+  -- See if the type is a coeffect
+  (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
+  case result of
+    Left _ -> do
+      -- If not, see if the type is an effect
+      (result', putChecker') <- peekChecker (checkKind s ctxt t KEffect)
+      case result' of
+        -- Not a closed operator at this kind
+        Left  _ -> return Nothing
+        -- Yes it is an effect type
+        Right subst -> do
+          putChecker'
+          return $ Just subst
+    -- Yes it is a coeffect type
+    Right subst -> do
+      putChecker
+      return $ Just subst
+
+-- Any other "coeffect operators" case
+closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
+  -- See if the type is a coeffect
+  (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
+  case result of
+    Left _ -> return Nothing
+    Right subst -> do
+      putChecker
+      return $ Just subst
+
+closedOperatorAtKind _ _ _ _ = return Nothing
+
+-- | `predicateOperatorAtKind` takes an operator `op` and a kind `k` and returns
+-- a substitution if this is a valid operator at kind `k -> k -> KPredicate`.
+predicateOperatorAtKind :: (?globals :: Globals) =>
+  Span -> Ctxt (Kind, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
+predicateOperatorAtKind s ctxt op (KPromote t) | predicateOps op = do
+  (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
+  case result of
+    Left _ -> return Nothing
+    Right subst -> do
+      putChecker
+      return $ Just subst
+predicateOperatorAtKind _ _ _ _ = return Nothing
+
+-- | Determines if a type operator produces results of kind KPredicate.
+predicateOps :: TypeOperator -> Bool
+predicateOps op = (\(_, _, c) -> c) (tyOps op) == KPredicate
+
+-- | k1 U k2 has sub-kinds k1 and k2.
 subKind :: Kind -> Kind -> Bool
 subKind (KFun a b) (KFun a' b') = a `subKind` a' && b `subKind` b'
 subKind (KUnion a b) (KUnion a' b') = a `subKind` a' && b `subKind` b'
