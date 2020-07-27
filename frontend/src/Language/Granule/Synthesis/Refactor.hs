@@ -1,5 +1,6 @@
 module Language.Granule.Synthesis.Refactor where
 
+--import Debug.Trace
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
