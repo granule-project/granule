@@ -75,8 +75,6 @@ holeRefactorEqnList cases eqns =
     allUpdated = map updateEqn (equations eqns)
     newEquations = concatMap refactorCaseEqn (concatMap fst allUpdated)
     refactored = any snd allUpdated
-    -- Updates an individual equation with the relevant cases, returning a tuple
-    -- containing the new equation(s) and whether a refactoring was performed.
     updateEqn :: Equation () () -> ([Equation () ()], Bool)
     updateEqn eqn =
       let relCases = findRelevantCase eqn cases
