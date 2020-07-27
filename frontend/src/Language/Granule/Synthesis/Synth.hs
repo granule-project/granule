@@ -233,6 +233,13 @@ isAtomic :: Type -> Bool
 isAtomic (TyVar {}) = True
 isAtomic _ = False
 
+isADT  :: Type -> Bool
+isADT (TyCon _) = True
+isADT (TyApp t _) = isADT t
+isADT (Box c t) = isADT t
+isADT _ = False
+
+
 data AltOrDefault = Default | Alternative
   deriving (Show, Eq)
 

@@ -92,6 +92,15 @@ makePair lTy rTy e1 e2 =
   App s rTy False (App s lTy False (Val s (ProdTy lTy rTy) False (Constr (ProdTy lTy rTy) (mkId ",") [])) e1) e2
   where s = nullSpanNoFile
 
+makeConstr :: [((Expr () Type), Type)] -> Id -> Type -> Expr () Type
+makeConstr terms name goal = buildTerm terms
+  where s = nullSpanNoFile
+        buildTerm [] = Val s goal False (Constr goal name [])
+        buildTerm ((e, ty):es) =
+          let e' = buildTerm es in
+            App s ty False e' e
+
+
 makePairUntyped :: Expr () () -> Expr () () -> Expr () ()
 makePairUntyped e1 e2 =
   App s () False (App s () False (Val s () False (Constr () (mkId ",") [])) e1) e2
