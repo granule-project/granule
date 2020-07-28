@@ -55,6 +55,7 @@ import Language.Granule.Utils hiding (mkSpan)
     try    { TokenTry _ }
     as    { TokenAs _ }
     catch    { TokenCatch _ }
+    handles  { TokenHandles _ }
     import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
@@ -425,6 +426,10 @@ Expr :: { Expr () () }
         in (mkSpan (getPos $1, getEnd $12)) >>=
               \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
   
+  | '(' Expr ')' handles Oprs
+    {% (mkSpan (getPos $1, lastSpan $5)) >>=
+             \sp -> return $ Handled sp () False $2 $5 }
+
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
              \sp -> return $ Case sp () False $2 $4 }
@@ -474,6 +479,17 @@ MultiLetEff
              \sp -> return $ LetDiamond sp () False pat mt expr $3
       }
   | in Expr                   { $2 }
+
+Oprs :: { [(Pattern (), Expr () () )] }
+ : Opr OprsNext             { $1 : $2 }
+
+OprsNext :: { [(Pattern (), Expr () ())] }
+  : ';' Oprs                 { $2 }
+  | {- empty -}               { [] }
+
+Opr :: { (Pattern (), Expr () ()) }
+  : PAtom '->' Expr           { ($1, $3) }
+  | NAryConstr '->' Expr      { ($1, $3) }
 
 Cases :: { [(Pattern (), Expr () () )] }
  : Case CasesNext             { $1 : $2 }
