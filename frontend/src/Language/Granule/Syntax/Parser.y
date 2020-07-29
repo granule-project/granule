@@ -2,6 +2,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE DataKinds #-}
+{-# LANGUAGE GADTs #-}
 
 module Language.Granule.Syntax.Parser where
 
@@ -307,12 +308,12 @@ Kind :: { Kind }
                                   "Predicate" -> (TyCon (mkId "Predicate"))
                                   s          -> tyCon s }
   | '(' TyJuxt TyAtom ')'     { case tyPromote (TyApp $2 $3) of
-                                  Just ty -> ty
-                                  Nothing -> error $ "Type at " ++ (show (getPos $1)) ++ " cannot be used as a kind" }
+                                        Just ty -> ty
+                                        Nothing -> error $ "Type at " ++ (show (getPos $1)) ++ " cannot be used as a kind" }
 
   | TyJuxt TyAtom             { case tyPromote (TyApp $1 $2) of
-                                  Just ty -> ty
-                                  Nothing -> error $ "Type " ++ (show (TyApp $1 $2)) ++ " cannot be used as a kind" }
+                                      Just ty -> ty
+                                      Nothing -> error $ "Type " ++ (show (TyApp $1 $2)) ++ " cannot be used as a kind" }
 
 
 Type :: { Type Zero }

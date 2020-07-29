@@ -29,7 +29,14 @@ import Data.Functor.Identity (runIdentity)
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
 kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
 
-  let quantifiedVariables' = (ctxtMap (\k -> TypeWithLevel (LSucc LZero) k) quantifiedVariables)
+  let quantifiedVariables' =
+        ctxtMap (\k ->
+          case k of
+            TyCon (internalName -> "Effect")   -> TypeWithLevel (LSucc (LSucc LZero)) (TyCon $ mkId "Effect")
+            TyCon (internalName -> "Coeffect") -> TypeWithLevel (LSucc (LSucc LZero)) (TyCon $ mkId "Coeffect")
+            k -> TypeWithLevel (LSucc LZero) k) quantifiedVariables
+
+  debugM "kindCheckDef" (show quantifiedVariables')
 
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables'})

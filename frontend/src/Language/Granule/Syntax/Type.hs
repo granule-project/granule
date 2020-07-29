@@ -14,6 +14,8 @@
 
 -- Syntax of types, coeffects, and effects
 
+
+
 module Language.Granule.Syntax.Type where
 
 import Language.Granule.Syntax.FirstParameter
@@ -128,19 +130,24 @@ Example: `List n Int` in Granule
          is `TyApp (TyApp (TyCon "List") (TyVar "n")) (TyCon "Int") :: Type`
 -}
 
+-- Type -> Type Zero
+-- Kind -> Type (Succ Zero)
+
 data Type (l :: Nat) where
-    Type    :: ULevel l -> Type (Succ l)        -- ^ Universe construction
+    Type    :: ULevel l -> Type (Succ l)                -- ^ Universe construction
     FunTy   :: Maybe Id -> Type l  -> Type l -> Type l  -- ^ Function type
 
-    TyCon   :: Id -> Type l                 -- ^ Type constructor
-    Box     :: Coeffect -> Type Zero -> Type Zero -- ^ Coeffect type
+    TyCon   :: Id -> Type l                          -- ^ Type constructor
+    Box     :: Coeffect -> Type Zero -> Type Zero    -- ^ Coeffect type
     Diamond :: Type Zero -> Type Zero -> Type Zero   -- ^ Effect type
-    TyVar   :: Id -> Type l                 -- ^ Type variable
-    TyApp   :: Type l -> Type l -> Type l   -- ^ Type application
-    TyInt   :: Int -> Type l                -- ^ Type-level Int
+    TyVar   :: Id -> Type l                          -- ^ Type variable
+    TyApp   :: Type l -> Type l -> Type l            -- ^ Type application
+    TyInt   :: Int -> Type l                         -- ^ Type-level Int
     TyInfix :: TypeOperator -> Type l -> Type l -> Type l -- ^ Infix type operator
-    TySet   :: [Type l] -> Type l           -- ^ Type-level set
+
+    TySet   :: [Type l] -> Type l                     -- ^ Type-level set
     TyCase  :: Type l -> [(Type l, Type l)] -> Type l -- ^ Type-level case
+
     KUnion  :: Type (Succ (Succ Zero)) -> Type (Succ (Succ Zero)) -> Type (Succ (Succ Zero))
     TySig   :: Type l -> Type (Succ l) -> Type l
 

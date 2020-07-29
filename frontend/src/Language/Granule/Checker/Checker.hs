@@ -308,7 +308,12 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
   duplicateBinderCheck s pats
 
   -- Freshen the type context
-  modify (\st -> st { tyVarContext = map (\(n, t) -> (n, (TypeWithLevel (LSucc LZero) t, ForallQ))) foralls})
+  modify (\st -> st { tyVarContext =
+                           ctxtMap (\k ->
+                             case k of
+                              TyCon (internalName -> "Effect")   -> (TypeWithLevel (LSucc (LSucc LZero)) (TyCon $ mkId "Effect"), ForallQ)
+                              TyCon (internalName -> "Coeffect") -> (TypeWithLevel (LSucc (LSucc LZero)) (TyCon $ mkId "Coeffect"), ForallQ)
+                              k -> (TypeWithLevel (LSucc LZero) k, ForallQ)) foralls})
 
   -- Create conjunct to capture the pattern constraints
   newConjunct

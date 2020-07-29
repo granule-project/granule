@@ -130,6 +130,8 @@ instance Pretty (Type l) where
     pretty (TyInt n)      = show n
 
     -- Non atoms
+    pretty (Type LZero) = "Type"
+
     pretty (Type l) =
       "Type " <> pretty l
 

@@ -82,6 +82,8 @@ instance InferKind (Succ Zero) where
             st <- get
             case lookup conId (typeConstructors st) of
                 Just (TypeWithLevel (LSucc (LSucc LZero)) sort,_,_) -> return $ W sort
+                -- Allow Type 0 constructors to also get promoted
+                Just (TypeWithLevel (LSucc LZero) (Type LZero),_,_) -> return $ W $ Type (LSucc LZero)
                 _   -> do
                   mConstructor <- lookupDataConstructor s conId
                   case mConstructor of
@@ -100,6 +102,9 @@ instance InferKind (Succ Zero) where
               st <- get
               case lookup tyVar (tyVarContext st) of
                 Just (TypeWithLevel (LSucc (LSucc LZero)) sort, _) -> return $ W sort
+                Just (TypeWithLevel (LSucc LZero) sort, _)         -> do
+                  sort' <- tryTyPromote s sort
+                  return $ W sort'
                 _ -> throw UnboundTypeVariable{ errLoc = s, errId = tyVar }
 
         kApp :: Sort' -> Sort' -> Checker Sort'
@@ -365,6 +370,8 @@ joinSort (KUnion s1 s2) s = do
     Just (s1', u) -> return $ Just (KUnion s1' s2, u)
 
 joinSort s (KUnion s1 s2) = joinSort (KUnion s1 s2) s
+joinSort s@(TyCon (internalName -> "Effect")) (TyCon (internalName -> "Effect")) = return $ Just (s, [])
+joinSort s@(TyCon (internalName -> "Coeffect")) (TyCon (internalName -> "Coeffect")) = return $ Just (s, [])
 joinSort _ _ = return $ Nothing
 
 -- | Predicate on whether two kinds have a least upper bound
@@ -428,10 +435,14 @@ inferCoeffectTypeInContext s ctxt (CVar cvar) = do
 
 inferCoeffectTypeInContext s ctxt (CZero t) = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
 inferCoeffectTypeInContext s ctxt (COne t)  = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
-inferCoeffectTypeInContext s ctxt (CInfinity (Just t)) = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
+inferCoeffectTypeInContext s ctxt (CInfinity (Just t)) =
+    checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
 -- Unknown infinity defaults to the interval of extended nats version
 inferCoeffectTypeInContext s ctxt (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat, [])
-inferCoeffectTypeInContext s ctxt (CSig _ t) = checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
+inferCoeffectTypeInContext s ctxt (CSig _ t) = do
+  st <- get
+  debugM "inferCoeffectTypeInContext" ("tyVarContext = " ++ show (tyVarContext st))
+  checkKindIsCoeffect s ctxt t >>= (\t -> return (t, []))
 
 fst2 :: (a, b, c) -> (a, b)
 fst2 (x, y, _) = (x, y)

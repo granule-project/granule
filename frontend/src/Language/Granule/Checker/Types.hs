@@ -586,30 +586,13 @@ equalKinds sp k1 k2 = do
 
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type Zero -> Type Zero -> Checker (Type Zero, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
-    --TODO: See if this function makes more sense as Span -> Type One -> Type One -> ... instead of promoting the types
-    ef1' <- tryTyPromote s ef1
-    ef2' <- tryTyPromote s ef2
-
-    mef1 <- isEffectType s ef1'
-    mef2 <- isEffectType s ef2'
-    if mef1
-      then do
-        if mef2
-          then do
-            -- Check that the types of the effect terms match
-            (eq, _, u) <- equalTypes s ef1 ef2
-            if eq then do
-              return (ef1, u)
-            else do
-              efTy1' <- tryTyPromote s ef1
-              efTy2' <- tryTyPromote s ef2
-              throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = efTy1', kActual = efTy2' }
-          else do
-            k <- inferKindOfType s ef2
-            throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef2 , errK = k }
-      else do
-        k <- inferKindOfType s ef1
-        throw $ UnknownResourceAlgebra { errLoc = s, errTy = ef1 , errK = k }
+    (eq, _, u) <- equalTypes s ef1 ef2
+    if eq then do
+      return (ef1, u)
+    else do
+      efTy1' <- tryTyPromote s ef1
+      efTy2' <- tryTyPromote s ef2
+      throw $ KindMismatch { errLoc = s, tyActualK = Just ef1, kExpected = efTy1', kActual = efTy2' }
 
 -- | Find out if a type is indexed
 isIndexedType :: Type Zero -> Checker Bool
