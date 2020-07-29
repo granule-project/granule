@@ -28,7 +28,7 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Variables
-import Language.Granule.Checker.Normalise
+--import Language.Granule.Checker.Normalise
 
 import Language.Granule.Utils
 
@@ -74,6 +74,63 @@ instance Substitutable Substitution where
         <> show subst <> " maps variable `" <> show var
         <> "` to a non variable type: `" <> show t <> "`"
 
+instance Substitutable (Type l) where
+  substitute subst (Type l) =
+    return $ Type l
+
+  substitute subst (FunTy name t1 t2) = do
+    t1' <- substitute subst t1
+    t2' <- substitute subst t2
+    return $ FunTy name t1' t2'
+
+  substitute subst (TyCon name) =
+    return $ TyCon name
+
+  substitute subst (Box c t) = do
+    t' <- substitute subst t
+    return $ Box c t'
+
+  substitute subst (Diamond e t) = do
+    t' <- substitute subst t
+    return $ Diamond e t'
+
+  substitute subst (TyVar v) =
+    return $ TyVar v
+
+  substitute subst (TyApp t1 t2) = do
+    t1' <- substitute subst t1
+    t2' <- substitute subst t2
+    return $ TyApp t1' t2'
+
+  substitute subst (TyInt n) =
+    return $ TyInt n
+
+  substitute subst (TyInfix op t1 t2) = do
+    t1' <- substitute subst t1
+    t2' <- substitute subst t2
+    return $ TyInfix op t1' t2'
+
+  substitute subst (TySet elems) = do
+    elems' <- mapM (substitute subst) elems
+    return $ TySet elems'
+
+  substitute subst (TyCase guard cases) = do
+    guard' <- substitute subst guard
+    cases' <- mapM (\(pat, branch) -> do
+                        pat' <- substitute subst pat
+                        branch' <- substitute subst branch
+                        return (pat', branch')) cases
+    return $ TyCase guard' cases'
+
+  substitute subst (KUnion k1 k2) = do
+    return $ KUnion k1 k2
+
+  substitute subst (TySig t1 t2) = do
+    t1' <- substitute subst t1
+    t2' <- substitute subst t2
+    return $ TySig t1' t2'
+
+{-
 instance Substitutable (Type Zero) where
   substitute subst s = typeFoldM0 (baseTypeFoldZero
                                 { tfTyVar0 = varSubst
@@ -100,6 +157,7 @@ instance Substitutable (Type One) where
 
 instance Substitutable (Type Two) where
   substitute _ = error "TODO: Cannot currently substitute into Sorts"
+-}
 
 instance Substitutable Coeffect where
 

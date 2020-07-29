@@ -48,6 +48,7 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
       _ -> throw KindMismatch{ errLoc = s, tyActualK = Just constraint, kExpected = (TyCon (mkId "Predicate")), kActual = kind }
 
   ty <- return $ replaceSynonyms ty
+  debugM "kindCheckDef" ("ty = " ++ pretty ty)
   (kind, unifiers) <- inferKindOfTypeImplicits s quantifiedVariables' ty
   case kind of
     (Type LZero) -> do
@@ -99,6 +100,8 @@ inferKindOfTypeImplicits s ctxt (FunTy _ t1 t2) = do
 inferKindOfTypeImplicits s ctxt (TyCon (internalName -> "Pure")) = do
     -- Create a fresh type variable
     var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") (TyCon (mkId "Effect"))
+    st <- get
+    debugM "freshvar ctxt" (pretty $ tyVarContext st)
     return $ (TyVar var, [])
 
 inferKindOfTypeImplicits s ctxt (TyCon conId) = do
@@ -115,8 +118,11 @@ inferKindOfTypeImplicits s ctxt (TyCon conId) = do
         Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 
 inferKindOfTypeImplicits s ctxt (Box c t) = do
+    debugM "inferKindOfTypeImplicits" ("c = " ++ pretty c)
     _ <- inferCoeffectTypeInContext s ctxt c
+    debugM "inferKindOfTypeImplicits" "done"
     (k, u) <- inferKindOfTypeImplicits s ctxt t
+    debugM "inferKindOfTypeImplicits" ("k = " ++ show k)
     jK <- joinKind k (Type LZero)
     case jK of
       Just (k, u') -> do
@@ -196,6 +202,8 @@ inferKindOfTypeImplicits s ctxt (TySet ts) = do
     return (k, [])
 
 inferKindOfTypeImplicits s ctxt (TySig t k) = do
+  st <- get
+  debugM "inferKindOfTypeImplicits" ("tyVarContext = " ++ pretty (tyVarContext st))
   k' <- inferKindOfTypeInContext s ctxt t
   if k' == k
         then return (k, [])

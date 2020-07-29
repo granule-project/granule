@@ -405,6 +405,8 @@ data CheckerError
     { errLoc :: Span , holeTy :: Maybe (Type Zero), context :: Ctxt Assumption, tyContext :: Ctxt (TypeWithLevel, Quantifier), cases :: ([Id], [[Pattern ()]]) }
   | TypeError
     { errLoc :: Span, tyExpected :: Type Zero, tyActual :: Type Zero }
+  | TypeErrorAtLevel
+    { errLoc :: Span, tyExpectedL :: TypeWithLevel , tyActualL :: TypeWithLevel }
   | GradingError
     { errLoc :: Span, errConstraint :: Neg Constraint }
   | KindMismatch
@@ -443,8 +445,8 @@ data CheckerError
     { errLoc :: Span, errTy1 :: Type Zero, errK1 :: Kind, errTy2 :: Type Zero, errK2 :: Kind }
   | TypeVariableMismatch
     { errLoc :: Span, errVar :: Id, errTy1 :: Type Zero, errTy2 :: Type Zero }
-  | UndefinedEqualityKindError
-    { errLoc :: Span, errTy1 :: Type Zero, errK1 :: Kind, errTy2 :: Type Zero, errK2 :: Kind }
+  | UndefinedEqualityError
+    { errLoc :: Span, errTy1L :: TypeWithLevel, errTy2L :: TypeWithLevel, errKL :: TypeWithLevel }
   | CoeffectUnificationError
     { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero, errC1 :: Coeffect, errC2 :: Coeffect }
   | DataConstructorTypeVariableNameClash
@@ -462,9 +464,9 @@ data CheckerError
   | OccursCheckFail
     { errLoc :: Span, errVar :: Id, errTy :: Type Zero }
   | SessionDualityError
-    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
+    { errLoc :: Span, errTy1L :: TypeWithLevel, errTy2L :: TypeWithLevel }
   | NoUpperBoundError
-    { errLoc :: Span, errTy1 :: Type Zero, errTy2 :: Type Zero }
+    { errLoc :: Span, errTy1L :: TypeWithLevel, errTy2L :: TypeWithLevel }
   | DisallowedCoeffectNesting
     { errLoc :: Span, errTyOuter :: Type One, errTyInner :: Type One }
   | UnboundDataConstructor
@@ -531,6 +533,7 @@ instance UserMsg CheckerError where
 
   title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
+  title TypeErrorAtLevel{} = "Type error"
   title GradingError{} = "Grading error"
   title KindMismatch{} = "Kind mismatch"
   title SortMismatch{} = "Sort mismatch"
@@ -551,7 +554,7 @@ instance UserMsg CheckerError where
   title UnificationError{} = "Unification error"
   title UnificationKindError{} = "Unification kind error"
   title TypeVariableMismatch{} = "Type variable mismatch"
-  title UndefinedEqualityKindError{} = "Undefined kind equality"
+  title UndefinedEqualityError{} = "Undefined kind equality"
   title CoeffectUnificationError{} = "Coeffect unification error"
   title DataConstructorNameClashError{} = "Data constructor name clash"
   title EffectMismatch{} = "Effect mismatch"
@@ -623,6 +626,11 @@ instance UserMsg CheckerError where
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
     else "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "`"
+
+  msg TypeErrorAtLevel{..} = if pretty tyExpectedL == pretty tyActualL
+    then "Expected `" <> pretty tyExpectedL <> "` but got `" <> pretty tyActualL <> "` coming from a different binding"
+    else "Expected `" <> pretty tyExpectedL <> "` but got `" <> pretty tyActualL <> "`"
+
 
   msg GradingError{ errConstraint } = pretty errConstraint
 
@@ -724,11 +732,11 @@ instance UserMsg CheckerError where
     = "Variable " <> pretty errVar <> " is being used at two conflicting types "
     <> "`" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
 
-  msg UndefinedEqualityKindError{..}
-    = "Equality is not defined between kinds "
-    <> pretty errK1 <> " and " <> pretty errK2
-    <> "\t\n from equality "
-    <> "'" <> pretty errTy2 <> "' and '" <> pretty errTy1 <> "' equal."
+  msg UndefinedEqualityError{..}
+    = "Equality is not defined at kind"
+    <> pretty errKL
+    <> "\t\n from equality between "
+    <> "'" <> pretty errTy2L <> "' and '" <> pretty errTy1L <> "' equal."
 
   msg CoeffectUnificationError{..}
     = "Cannot unify coeffect types '"
@@ -755,11 +763,11 @@ instance UserMsg CheckerError where
     <> "` of kind `" <> pretty errKind <> "` with " <> (if tyIsConcrete then "a concrete type " else "") <> "`" <> pretty errTyL <> "`"
 
   msg SessionDualityError{..}
-    = "Session type `" <> pretty errTy1 <> "` is not dual to `" <> pretty errTy2 <> "`"
+    = "Session type `" <> pretty errTy1L <> "` is not dual to `" <> pretty errTy2L <> "`"
 
-  msg NoUpperBoundError{..}
-    = "Types `" <> pretty errTy1 <> "` and `"
-    <> pretty errTy2 <> "` have no upper bound"
+  msg (NoUpperBoundError _ errTyL1 errTyL2)
+    = "Types `" <> pretty errTyL1 <> "` and `"
+    <> pretty errTyL2 <> "` have no upper bound"
 
   msg DisallowedCoeffectNesting{..}
     = "Graded modalities of outer index type `" <> pretty errTyOuter

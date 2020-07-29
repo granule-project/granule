@@ -15,12 +15,14 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
-justCoeffectTypesConverted :: (?globals::Globals)
+justCoeffectTypesConverted :: (?globals::Globals, Show a)
   => Span -> [(a, (TypeWithLevel, b))] -> Checker [(a, (Type One, b))]
 justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (TypeWithLevel (LSucc LZero) t, q)) = do
+      debugM "convert" ("var = " ++ show var ++ ", t = " ++ show t)
       k <- inferKindOfType s t
+      debugM "convert" ("k = " ++ show k)
       if isCoeffectKind k
         then return $ Just (var, (t, q))
         else return Nothing

@@ -15,7 +15,8 @@ module Language.Granule.Checker.Kinds (
                     , inferCoeffectTypeAssumption
                     , isEffectType
                     , isEffectKind
-                    , isCoeffectKind) where
+                    , isCoeffectKind
+                    , InferKind) where
 
 import Control.Monad.State.Strict
 
@@ -80,6 +81,8 @@ instance InferKind (Succ Zero) where
           return $ W $ TyVar var
         kCon conId = do
             st <- get
+            debugM "kCon" ("for " ++ pretty conId)
+            debugM "kCon" ("available constructors = " ++ show (map fst $ typeConstructors st))
             case lookup conId (typeConstructors st) of
                 Just (TypeWithLevel (LSucc (LSucc LZero)) sort,_,_) -> return $ W sort
                 -- Allow Type 0 constructors to also get promoted
@@ -482,6 +485,7 @@ mguCoeffectTypesFromCoeffects s c1 c2 = do
 isEffectType :: (?globals :: Globals) => Span -> Type One -> Checker Bool
 isEffectType s ty = do
     kind <- inferKindOfType s ty
+    debugM "isEffectType" (pretty kind)
     return $ isEffectKind kind
 
 -- Wrapper for TypeFold, since GHC has trouble deducing a ~ Type . Succ

@@ -63,7 +63,9 @@ check ast@(AST dataDecls defs imports hidden name) =
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      debugM "check" "kindCheckDef"
       defs <- runAll kindCheckDef defs
+      debugM "check" "kindCheckDef done"
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
       pure $ AST dataDecls defs imports hidden name)
@@ -163,7 +165,7 @@ checkDataCon
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
 
         -- Create a version of the data constructor that matches the data type head
-        -- but with a list of coercions
+        -- but with a list of coercions 
 
         ixKinds <- mapM (substitute substFromFreshening) (indexKinds kind)
         (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty ixKinds
@@ -287,13 +289,17 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
             , guardContexts = []
             , uniqueVarIdCounterMap = mempty
             }
+        debugM "elaborateEquation" "checkEquation"
         elaboratedEq <- checkEquation defCtxt defName equation tys
+        debugM "elaborateEquation" "checkEquation done"
 
         -- Solve the generated constraints
         checkerState <- get
 
         let predicate = Conj $ predicateStack checkerState
+        debugM "elaborateEquation" "solveEq"
         solveConstraints predicate (getSpan equation) defName
+        debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
 
 checkEquation :: (?globals :: Globals) =>
@@ -844,8 +850,10 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
+  debugM "ef1 =   ef2 = " (pretty ef1 ++ " - " ++ pretty ef2)
   (efTy, u) <- twoEqualEffectTypes s ef1 ef2
   -- Multiply the effects
+  debugM "* efTy = " (pretty efTy)
   ef <- effectMult s efTy ef1 ef2
   let t = Diamond ef ty2
 

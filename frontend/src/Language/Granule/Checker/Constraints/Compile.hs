@@ -21,13 +21,13 @@ import Language.Granule.Utils
 -- Take a type and convert it to a coeffect of coeffect type Nat
 -- NOTE: this will disappear at some point when we unify the syntax more
 compileNatKindedTypeToCoeffect ::
-    (?globals :: Globals) => Span -> Type Zero -> Checker Coeffect
+    (?globals :: Globals) => Span -> Type l -> Checker Coeffect
 compileNatKindedTypeToCoeffect s t = compileNatKindedTypeToCoeffectAtType s t (TyCon $ mkId "Nat")
 
 -- Take a type (second parameter) and convert it to a coeffect at a particular
 -- coeffect type (third parameter)
 compileNatKindedTypeToCoeffectAtType ::
-    (?globals :: Globals) => Span -> Type Zero -> Type One -> Checker Coeffect
+    (?globals :: Globals) => Span -> Type l -> Type One -> Checker Coeffect
 
 compileNatKindedTypeToCoeffectAtType s (TyInfix op t1 t2) coeffTy = do
   t1' <- compileNatKindedTypeToCoeffectAtType s t1 coeffTy
@@ -51,7 +51,8 @@ compileNatKindedTypeToCoeffectAtType _ (TyVar v) coeffTy =
 compileNatKindedTypeToCoeffectAtType _ (TyCon (internalName -> "Pure")) (TyCon (internalName -> "Nat")) =
   return $ CNat 0
 compileNatKindedTypeToCoeffectAtType s t coeffTy =
-  throw $ KindError{errLoc = s, errTy = t, errK = coeffTy }
+  -- TODO: This will go away soon
+  error $ "Cannot compile coeffect " <> pretty t
 
 
 compileTypeConstraintToConstraint ::

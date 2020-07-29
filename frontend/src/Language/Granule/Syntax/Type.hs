@@ -119,6 +119,8 @@ data TypeWithLevel where
 
 deriving instance Show TypeWithLevel
 
+
+
 -- This is only used for testing and should really be avoided
 -- elsewhere
 instance Eq TypeWithLevel where
@@ -162,6 +164,9 @@ instance Typeable l => Data (Type l) where
   dataTypeOf = error "Internal bug: Cannot use a Data instance on `Type l` yet"
 
 data LevelProxy (l :: Nat) = LevelProxy
+
+typeWithLevel :: forall l . HasLevel l => Type l -> TypeWithLevel
+typeWithLevel t = TypeWithLevel (getLevel t) t
 
 getLevel :: forall l . HasLevel l => Type l -> ULevel l
 getLevel _ = getLevel' (LevelProxy :: LevelProxy l)

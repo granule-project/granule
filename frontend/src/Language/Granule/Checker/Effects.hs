@@ -16,6 +16,7 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
+import Language.Granule.Syntax.Pretty
 
 import Language.Granule.Utils
 
@@ -49,6 +50,7 @@ isEffUnit s effTy eff =
         -- Unknown
         _ -> do
             effTy' <- tryTyPromote s effTy
+            debugM "U isEffUnit effTy" (pretty effTy)
             throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = effTy' }
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
@@ -83,9 +85,10 @@ effApproximates s effTy eff1 eff2 =
             -- Unknown effect resource algebra
             _ -> do
               effTy <- tryTyPromote s effTy
+              debugM "U effApproximates effTy" (pretty effTy)
               throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = effTy }
 
-effectMult :: Span -> Type Zero -> Type Zero -> Type Zero -> Checker (Type Zero)
+effectMult :: (?globals :: Globals) => Span -> Type Zero -> Type Zero -> Type Zero -> Checker (Type Zero)
 effectMult sp effTy t1 t2 = do
   if isPure t1 then return t2
   else if isPure t2 then return t1
@@ -109,11 +112,11 @@ effectMult sp effTy t1 t2 = do
                   TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
         _ -> do
           effTy <- tryTyPromote sp effTy
+          debugM "U effectMult effTy" (pretty effTy)
           throw $ UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = effTy }
 
-effectUpperBound :: (?globals :: Globals) => Span -> Type Zero -> Type Zero -> Type Zero -> Checker (Type Zero)
+effectUpperBound :: (?globals :: Globals) => Span -> Type (Succ Zero) -> Type Zero -> Type Zero -> Checker (Type Zero)
 effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
-    t <- tryTyPromote s t
     nvar <- freshTyVarInContextWithBinding (mkId "n") t BoundQ
     -- Unify the two variables into one
     nat1 <- compileNatKindedTypeToCoeffect s t1
@@ -135,14 +138,13 @@ effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
                 -- Unit right
                 TyCon (internalName -> "Pure") ->
                     return t1
-                _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+                _ -> throw NoUpperBoundError{ errLoc = s, errTy1L = TypeWithLevel LZero t1, errTy2L = TypeWithLevel LZero t2 }
         -- Unift left
         TyCon (internalName -> "Pure") ->
             return t2
-        _ ->  throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+        _ ->  throw NoUpperBoundError{ errLoc = s, errTy1L = TypeWithLevel LZero t1, errTy2L = TypeWithLevel LZero t2 }
 
-effectUpperBound s effTy t1 t2 = do
-    effTy <- tryTyPromote s effTy
+effectUpperBound s effTy t1 t2 =
     throw UnknownResourceAlgebra{ errLoc = s, errTy = t1, errK = effTy }
 
 -- "Top" element of the effect
