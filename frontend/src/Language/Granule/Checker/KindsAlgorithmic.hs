@@ -4,12 +4,12 @@ import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict (get)
 import Data.Foldable (foldrM)
 
-import Language.Granule.Checker.Kinds (inferCoeffectType)
+import Language.Granule.Checker.Kinds (inferCoeffectType, joinKind)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.Substitution (combineSubstitutions, combineManySubstitutions)
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Context
@@ -64,9 +64,10 @@ checkKind s ctxt t k@(KUnion k1 k2) =
 -- Fall through to synthesis if checking can not be done.
 checkKind s ctxt t k = do
   (k', subst) <- synthKind s ctxt t
-  if k `subKind` k'
-    then return subst
-    else throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+  join <- k `joinKind` k'
+  case join of
+    Just (_, subst) -> return subst
+    Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
 synthKind :: (?globals :: Globals) =>
   Span -> Ctxt (Kind, Quantifier) -> Type -> Checker (Kind, Substitution)
@@ -81,7 +82,7 @@ synthKind s ctxt (TyVar x) = do
 synthKind s ctxt (FunTy _ t1 t2) = do
   subst1 <- checkKind s ctxt t1 KType
   subst2 <- checkKind s ctxt t2 KType
-  subst <- combineManySubstitutions s [subst1, subst2]
+  subst <- combineSubstitutions s subst1 subst2
   return (KType, subst)
 
 -- KChkS_app
@@ -90,7 +91,7 @@ synthKind s ctxt (TyApp t1 t2) = do
   case funK of
     (KFun k1 k2) -> do
       subst2 <- checkKind s ctxt t2 k1
-      subst <- combineManySubstitutions s [subst1, subst2]
+      subst <- combineSubstitutions s subst1 subst2
       return (k2, subst)
     _ -> throw KindError { errLoc = s, errTy = t1, errK = funK }
 
@@ -230,11 +231,3 @@ predicateOperatorAtKind _ _ _ _ = return Nothing
 -- | Determines if a type operator produces results of kind KPredicate.
 predicateOps :: TypeOperator -> Bool
 predicateOps op = (\(_, _, c) -> c) (tyOps op) == KPredicate
-
--- | k1 U k2 has sub-kinds k1 and k2.
-subKind :: Kind -> Kind -> Bool
-subKind (KFun a b) (KFun a' b') = a `subKind` a' && b `subKind` b'
-subKind (KUnion a b) (KUnion a' b') = a `subKind` a' && b `subKind` b'
-subKind (KUnion a b) c = a `subKind` c || b `subKind` c
-subKind a (KUnion b c) = a `subKind` b || a `subKind` c
-subKind k1 k2 = k1 == k2

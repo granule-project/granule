@@ -23,6 +23,7 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.KindsAlgorithmic
 import Language.Granule.Checker.KindsImplicit
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
@@ -154,8 +155,8 @@ checkDataCon
                [(v, (k, ForallQ)) | (v, k) <- tyVarsD']
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
-        (tySchKind, _) <- inferKindOfTypeImplicits sp tyVars ty
-
+        st <- get
+        (tySchKind, _) <- synthKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []

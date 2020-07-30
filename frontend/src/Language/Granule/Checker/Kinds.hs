@@ -200,7 +200,17 @@ joinKind (KUnion k1 k2) k = do
 
 joinKind k (KUnion k1 k2) = joinKind (KUnion k1 k2) k
 
-joinKind _ _ = return $ Nothing
+joinKind (KFun k1 k2) (KFun k3 k4) = do
+  jK1 <- joinKind k1 k3
+  jK2 <- joinKind k2 k4
+  case (jK1, jK2) of
+    (Just (k5, subst1), Just (k6, subst2)) -> do
+      -- TODO: should use combineSubstitutions
+      -- subst <- combineSubstitutions s subst1 subst2
+      return $ Just (KFun k5 k6, subst1)
+    _ -> return Nothing
+
+joinKind _ _ = return Nothing
 
 -- | Predicate on whether two kinds have a leasy upper bound
 hasLub :: (?globals :: Globals) => Kind -> Kind -> Checker Bool
