@@ -8,7 +8,6 @@ module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
 
-import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Constraints.CompileNatKinded
 
 import Language.Granule.Checker.Effects
