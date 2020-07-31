@@ -1,12 +1,10 @@
 {- Deals with coeffect resource algebras -}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
-{-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Coeffects where
 
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
+import Language.Granule.Checker.Substitution
 import Language.Granule.Context
 
 import Language.Granule.Syntax.Identifiers

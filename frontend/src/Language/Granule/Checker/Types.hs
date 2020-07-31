@@ -11,7 +11,6 @@ import Control.Monad.State.Strict
 import Language.Granule.Checker.Constraints.CompileNatKinded
 
 import Language.Granule.Checker.Effects
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
@@ -538,3 +537,25 @@ isIndexedType = typeFoldM $
     , tfTyInfix = \_ x y -> return (x || y)
     , tfSet = \_ -> return False
     , tfTySig = \x _ _ -> return x }
+
+-- Given a type term, works out if its kind is actually an effect type (promoted)
+-- if so, returns `Right effTy` where `effTy` is the effect type
+-- otherwise, returns `Left k` where `k` is the kind of the original type term
+isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
+isEffectType s ty = do
+  st <- get
+  (kind, _) <- synthKind s (tyVarContext st) ty
+  isEffectTypeFromKind s kind
+
+isEffectTypeFromKind :: (?globals :: Globals) => Span -> Kind -> Checker (Either Kind Type)
+isEffectTypeFromKind s kind =
+  case kind of
+    KPromote effTy -> do
+      st <- get
+      (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) effTy KEffect)
+      case result of
+        Right res -> do
+          putChecker
+          return $ Right effTy
+        Left err -> return $ Left kind
+    _ -> return $ Left kind

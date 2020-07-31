@@ -7,7 +7,7 @@
 
 module Language.Granule.Checker.Substitution where
 
-
+import Control.Arrow (second)
 import Control.Monad
 import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
@@ -30,7 +30,7 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.Constraints.CompileNatKinded
 import Language.Granule.Checker.Effects (effectTop)
-import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.Flatten (mguCoeffectTypes)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
@@ -947,9 +947,9 @@ synthKind s ctxt (TySet (t:ts)) = do
         -- If the kind cannot be demoted then we shouldn't be making a set
         Nothing -> throw KindCannotFormSet { errLoc = s,  errK = k }
 
-synthKind _ _ t = do
-  debugM "todo" (pretty t <> "\t" <> show t)
-  error "TODO"
+synthKind s _ t = do
+  debugM "Can't synth" (pretty t)
+  throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
 -- | `closedOperatorAtKind` takes an operator `op` and a kind `k` and returns a
 -- substitution if this is a valid operator at kind `k -> k -> k`.
@@ -990,6 +990,7 @@ closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
       putChecker
       return $ Just subst
 
+-- TODO: Investigate the consequences of this.
 closedOperatorAtKind _ _ op (KVar _) = do
   return $ if closedOperation op then Just [] else Nothing
 
@@ -1011,3 +1012,134 @@ predicateOperatorAtKind _ _ _ _ = return Nothing
 -- | Determines if a type operator produces results of kind KPredicate.
 predicateOperation :: TypeOperator -> Bool
 predicateOperation op = (\(_, _, c) -> c) (tyOps op) == KPredicate
+
+-- | Compute the join of two kinds, if it exists
+joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Substitution))
+
+joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
+
+joinKind (KVar v) k = do
+  st <- get
+  case (lookup v (tyVarContext st)) of
+    Just (_, q) | q == InstanceQ || q == BoundQ -> return $ Just (k, [(v, SubstK k)])
+    -- Occurs if an implicitly quantified variable has arisen
+    Nothing -> return $ Just (k, [(v, SubstK k)])
+    -- Don't unify with universal variables
+    _  -> return Nothing
+
+joinKind k (KVar v) = do
+  st <- get
+  case (lookup v (tyVarContext st)) of
+    Just (_, q) | q == InstanceQ || q == BoundQ -> return $ Just (k, [(v, SubstK k)])
+    -- Occurs if an implicitly quantified variable has arisen
+    Nothing -> return $ Just (k, [(v, SubstK k)])
+    -- Don't unify with universal variables
+    _  -> return Nothing
+
+joinKind (KPromote t1) (KPromote t2) = do
+  (coeffTy, subst, _) <- mguCoeffectTypes nullSpan t1 t2
+  return $ Just (KPromote coeffTy, subst)
+
+joinKind (KUnion k1 k2) k = do
+  jK1 <- joinKind k k1
+  case jK1 of
+    Nothing -> do
+        jK2 <- joinKind k k2
+        case jK2 of
+            Nothing -> return $ Nothing
+            Just (k2', u) -> return $ Just (KUnion k1 k2', u)
+    Just (k1', u) -> return $ Just (KUnion k1' k2, u)
+
+joinKind k (KUnion k1 k2) = joinKind (KUnion k1 k2) k
+
+joinKind (KFun k1 k2) (KFun k3 k4) = do
+  jK1 <- joinKind k1 k3
+  jK2 <- joinKind k2 k4
+  case (jK1, jK2) of
+    (Just (k5, subst1), Just (k6, subst2)) -> do
+      subst <- combineSubstitutions nullSpan subst1 subst2
+      return $ Just (KFun k5 k6, subst)
+    _ -> return Nothing
+
+joinKind _ _ = return Nothing
+
+-- | Infer the type of a coeffect term (giving its span as well)
+inferCoeffectType :: (?globals :: Globals) => Span -> Coeffect -> Checker (Type, Substitution)
+inferCoeffectType s c = do
+  st <- get
+  inferCoeffectTypeInContext s (map (\(id, (k, _)) -> (id, k)) (tyVarContext st)) c
+
+inferCoeffectTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Coeffect -> Checker (Type, Substitution)
+-- Coeffect constants have an obvious kind
+inferCoeffectTypeInContext _ _ (Level _) = return (TyCon $ mkId "Level", [])
+inferCoeffectTypeInContext _ _ (CNat _) = return (TyCon $ mkId "Nat", [])
+inferCoeffectTypeInContext _ _ (CFloat _) = return (TyCon $ mkId "Q", [])
+inferCoeffectTypeInContext _ _ (CSet _) = return (TyCon $ mkId "Set", [])
+inferCoeffectTypeInContext s ctxt (CProduct c1 c2)    = do
+  (k1, subst1) <- inferCoeffectTypeInContext s ctxt c1
+  (k2, subst2) <- inferCoeffectTypeInContext s ctxt c2
+  subst <- combineSubstitutions s subst1 subst2
+  return $ (TyApp (TyApp (TyCon $ mkId "×") k1) k2, subst)
+
+inferCoeffectTypeInContext s ctxt (CInterval c1 c2)    = do
+  (k, substitution, _) <- mguCoeffectTypesFromCoeffects s c1 c2
+  return $ (TyApp (TyCon $ mkId "Interval") k, substitution)
+
+-- Take the join for compound coeffect epxressions
+inferCoeffectTypeInContext s _ (CPlus c c')  = fst2 <$> mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CMinus c c') = fst2 <$> mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CTimes c c') = fst2 <$> mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CMeet c c')  = fst2 <$> mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CJoin c c')  = fst2 <$> mguCoeffectTypesFromCoeffects s c c'
+inferCoeffectTypeInContext s _ (CExpon c c') = fst2 <$> mguCoeffectTypesFromCoeffects s c c'
+
+-- Coeffect variables should have a type in the cvar->kind context
+inferCoeffectTypeInContext s ctxt (CVar cvar) = do
+  st <- get
+  case lookup cvar ctxt of
+    Nothing -> do
+      throw UnboundTypeVariable{ errLoc = s, errId = cvar }
+      -- state <- get
+      -- let newType = TyVar $ "ck" <> show (uniqueVarId state)
+      -- We don't know what it is yet though, so don't update the coeffect kind ctxt
+      -- put (state { uniqueVarId = uniqueVarId state + 1 })
+      -- return newType
+    Just (KVar name) -> return $ (TyVar name, [])
+    Just (KPromote t) -> checkKind s (universify ctxt) t KCoeffect >> return (t, [])
+    Just k -> throw
+      KindMismatch{ errLoc = s, tyActualK = Just $ TyVar cvar, kExpected = KPromote (TyVar $ mkId "coeffectType"), kActual = k }
+
+inferCoeffectTypeInContext s ctxt (CZero t) = checkKind s (universify ctxt) t KCoeffect >> return (t, [])
+inferCoeffectTypeInContext s ctxt (COne t)  = checkKind s (universify ctxt) t KCoeffect >> return (t, [])
+inferCoeffectTypeInContext s ctxt (CInfinity (Just t)) = checkKind s (universify ctxt) t KCoeffect >> return (t, [])
+-- Unknown infinity defaults to the interval of extended nats version
+inferCoeffectTypeInContext s ctxt (CInfinity Nothing) = return (TyApp (TyCon $ mkId "Interval") extendedNat, [])
+inferCoeffectTypeInContext s ctxt (CSig _ t) = checkKind s (universify ctxt) t KCoeffect >> return (t, [])
+
+fst2 :: (a, b, c) -> (a, b)
+fst2 (x, y, _) = (x, y)
+
+inferCoeffectTypeAssumption :: (?globals :: Globals) =>
+  Span -> Assumption -> Checker (Maybe Type, Substitution)
+inferCoeffectTypeAssumption _ (Linear _) = return (Nothing, [])
+inferCoeffectTypeAssumption s (Discharged _ c) = do
+    (t, subst) <- inferCoeffectType s c
+    return $ (Just t, subst)
+
+-- Find the most general unifier of two coeffects
+-- This is an effectful operation which can update the coeffect-kind
+-- contexts if a unification resolves a variable
+mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
+  => Span
+  -> Coeffect
+  -> Coeffect
+  -> Checker (Type, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+mguCoeffectTypesFromCoeffects s c1 c2 = do
+  -- TODO: Need to not throw away the substitution here
+  (coeffTy1, _) <- inferCoeffectType s c1
+  (coeffTy2, _) <- inferCoeffectType s c2
+  mguCoeffectTypes s coeffTy1 coeffTy2
+
+-- Universally quantifies everything in a context.
+universify :: Ctxt a -> Ctxt (a, Quantifier)
+universify = map (second (\k -> (k, ForallQ)))

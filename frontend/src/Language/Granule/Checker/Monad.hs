@@ -508,6 +508,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | OperatorUndefinedForKind
     { errLoc :: Span, errK :: Kind, errTyOp :: TypeOperator }
+  | ImpossibleKindSynthesis
+    { errLoc :: Span, errTy :: Type }
   deriving (Show, Eq)
 
 
@@ -571,6 +573,7 @@ instance UserMsg CheckerError where
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
   title OperatorUndefinedForKind{} = "Kind error"
+  title ImpossibleKindSynthesis{} = "Kind error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -847,6 +850,9 @@ instance UserMsg CheckerError where
 
   msg OperatorUndefinedForKind{ errK, errTyOp }
     = "Operator " <> pretty errTyOp <> " is not defined for type-level terms of kind " <> pretty errK
+
+  msg ImpossibleKindSynthesis{ errTy }
+    = "Cannot synthesis a kind for `" <> pretty errTy <> "`"
 
   color HoleMessage{} = Blue
   color _ = Red

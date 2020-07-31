@@ -6,12 +6,11 @@ module Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToCons
 
 import Control.Monad.State.Strict
 
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints.CompileNatKinded
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Substitution (synthKind)
+import Language.Granule.Checker.Substitution (joinKind, synthKind)
 
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
