@@ -13,6 +13,7 @@ import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
 import Data.Bifunctor.Foldable (bicataM)
 import Data.Foldable (foldrM)
+import Data.Functor.Identity (runIdentity)
 import Data.List (elemIndex, sortBy)
 import Data.Maybe (mapMaybe)
 
@@ -28,6 +29,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.Constraints.CompileNatKinded
+import Language.Granule.Checker.Effects (effectTop)
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -764,7 +766,37 @@ updateTyVar s tyVar k = do
 -- get around cyclic module dependencies.                                     --
 --------------------------------------------------------------------------------
 
--- module Language.Granule.Checker.KindsAlgorithmic(checkKind, synthKind) where
+-- module Language.Granule.Checker.KindsAlgorithmic(checkKind, kindCheckDef, synthKind) where
+
+-- | Check the kind of a definition
+-- Currently we expect that a type scheme has kind KType
+kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
+kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
+  -- Set up the quantified variables in the type variable context
+  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables })
+  st <- get
+  forM_ constraints $ \constraint -> checkKind s (tyVarContext st) constraint KPredicate
+
+  st <- get
+  ty <- return $ replaceSynonyms ty
+  unifiers <- checkKind s (tyVarContext st) ty KType
+
+  -- Rewrite the quantified variables with their possibly updated kinds (inferred)
+  qVars <- mapM (\(v, a) -> substitute unifiers a >>= (\b -> return (v, b))) quantifiedVariables
+  modify (\st -> st { tyVarContext = [] })
+
+  -- Update the def with the resolved quantifications
+  return (Def s id rf eqs (Forall s' qVars constraints ty))
+
+-- Replace any constructor IDs with their top-element
+-- (i.e., IO gets replaces with the set of all effects as an alias)
+replaceSynonyms :: Type -> Type
+replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
+  where
+    conCase conId =
+      return $ case effectTop (TyCon conId) of
+        Just ty -> ty
+        Nothing -> TyCon conId
 
 checkKind :: (?globals :: Globals) =>
   Span -> Ctxt (Kind, Quantifier) -> Type -> Kind -> Checker Substitution
@@ -782,7 +814,7 @@ checkKind s ctxt (TyApp t1 t2) k2 = do
   combineSubstitutions s subst1 subst2
 
 -- KChk_opRing and KChk_effOp combined (i.e. closed operators)
-checkKind s ctxt t@(TyInfix op t1 t2) k = do
+checkKind s ctxt t@(TyInfix op t1 t2) k | closedOperation op = do
   maybeSubst <- closedOperatorAtKind s ctxt op k
   case maybeSubst of
     Just subst3 -> do
@@ -821,7 +853,7 @@ synthKind :: (?globals :: Globals) =>
 synthKind s ctxt (TyVar x) = do
   case lookup x ctxt of
     Just (k, _) -> return (k, [])
-    Nothing     -> throw $ UnboundVariableError s x
+    Nothing     -> throw $ UnboundTypeVariable { errLoc = s, errId = x }
 
 -- KChkS_fun
 synthKind s ctxt (FunTy _ t1 t2) = do
@@ -841,7 +873,7 @@ synthKind s ctxt (TyApp t1 t2) = do
     _ -> throw KindError { errLoc = s, errTy = t1, errK = funK }
 
 -- KChkS_predOp
-synthKind s ctxt (TyInfix op t1 t2) | predicateOps op = do
+synthKind s ctxt (TyInfix op t1 t2) | predicateOperation op = do
   (k, subst1) <- synthKind s ctxt t1
   maybeSubst <- predicateOperatorAtKind s ctxt op k
   case maybeSubst of
@@ -852,7 +884,7 @@ synthKind s ctxt (TyInfix op t1 t2) | predicateOps op = do
     Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
 
 -- KChkS_opRing and KChkS_effOpp
-synthKind s ctxt (TyInfix op t1 t2) = do
+synthKind s ctxt (TyInfix op t1 t2) | closedOperation op = do
   (k, subst1) <- synthKind s ctxt t1
   maybeSubst <- closedOperatorAtKind s ctxt op k
   case maybeSubst of
@@ -958,13 +990,16 @@ closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
       putChecker
       return $ Just subst
 
+closedOperatorAtKind _ _ op (KVar _) = do
+  return $ if closedOperation op then Just [] else Nothing
+
 closedOperatorAtKind _ _ _ _ = return Nothing
 
 -- | `predicateOperatorAtKind` takes an operator `op` and a kind `k` and returns
 -- a substitution if this is a valid operator at kind `k -> k -> KPredicate`.
 predicateOperatorAtKind :: (?globals :: Globals) =>
   Span -> Ctxt (Kind, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
-predicateOperatorAtKind s ctxt op (KPromote t) | predicateOps op = do
+predicateOperatorAtKind s ctxt op (KPromote t) | predicateOperation op = do
   (result, putChecker) <- peekChecker (checkKind s ctxt t KCoeffect)
   case result of
     Left _ -> return Nothing
@@ -974,5 +1009,5 @@ predicateOperatorAtKind s ctxt op (KPromote t) | predicateOps op = do
 predicateOperatorAtKind _ _ _ _ = return Nothing
 
 -- | Determines if a type operator produces results of kind KPredicate.
-predicateOps :: TypeOperator -> Bool
-predicateOps op = (\(_, _, c) -> c) (tyOps op) == KPredicate
+predicateOperation :: TypeOperator -> Bool
+predicateOperation op = (\(_, _, c) -> c) (tyOps op) == KPredicate

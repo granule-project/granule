@@ -1,12 +1,9 @@
 -- Mainly provides a kind checker on types
 
 module Language.Granule.Checker.Kinds (
-                      inferKindOfType
-                    , inferKindOfTypeInContext
-                    , joinKind
+                      joinKind
                     , mguCoeffectTypesFromCoeffects
                     , inferCoeffectType
-                    , inferCoeffectTypeInContext
                     , inferCoeffectTypeAssumption
                     , promoteTypeToKind
                     , demoteKindToType
@@ -206,7 +203,7 @@ joinKind (KFun k1 k2) (KFun k3 k4) = do
   case (jK1, jK2) of
     (Just (k5, subst1), Just (k6, subst2)) -> do
       -- TODO: should use combineSubstitutions
-      -- subst <- combineSubstitutions s subst1 subst2
+      -- subst <- combineSubstitutions nullSpan subst1 subst2
       return $ Just (KFun k5 k6, subst1)
     _ -> return Nothing
 
