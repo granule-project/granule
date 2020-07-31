@@ -1,7 +1,5 @@
 
-module Language.Granule.Checker.KindsImplicit (
-                            kindCheckDef,
-                            inferKindOfTypeImplicits) where
+module Language.Granule.Checker.KindsImplicit (kindCheckDef) where
 
 import Control.Monad.State.Strict
 

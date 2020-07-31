@@ -4,7 +4,7 @@ import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
 import Data.Maybe(catMaybes, mapMaybe)
 
-import Language.Granule.Checker.KindsAlgorithmic
+import Language.Granule.Checker.Constraints.Compile (checkKind)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 

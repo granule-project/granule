@@ -23,7 +23,7 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Constraints.CompileNatKinded
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Predicates
