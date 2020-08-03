@@ -792,7 +792,7 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
   forM_ constraints $ \constraint -> checkKind s (tyVarContext st) constraint KPredicate
 
   st <- get
-  let ty = replaceSynonyms ty
+  ty <- return $ replaceSynonyms ty
   unifiers <- checkKind s (tyVarContext st) ty KType
 
   -- Rewrite the quantified variables with their possibly updated kinds (inferred)
@@ -928,7 +928,7 @@ synthKind s ctxt (TyCon (internalName -> "Pure")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
   return (KPromote $ TyVar var, [])
 
--- KChkS_int and KChkS_char (and other base types)
+-- KChkS_con
 synthKind s ctxt (TyCon id) = do
   st <- get
   case lookup id (typeConstructors st) of
