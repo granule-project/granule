@@ -1,0 +1,41 @@
+import Vec
+
+--- Graded list monad for capturing non-determinism
+---------------------------------------------------
+
+return : forall {a : Type} . a -> Vec 1 a
+return x = Cons x Nil
+
+join : forall {a : Type, b : Type, n m : Nat}
+    . Vec n (Vec m a) -> Vec (n * m) a
+join Nil = Nil;
+join (Cons xs xss) = xs `append` (join xss)
+
+-- Functor operation
+fmap : forall {a : Type, b : Type, n : Nat}
+     . (a -> b) [n] -> Vec n a -> Vec n b
+fmap [f] Nil = Nil;
+fmap [f] (Cons x xs) = Cons (f x) (fmap [f] xs)
+
+-- Derived bind operation
+bind : forall {a : Type, b : Type, n m : Nat}
+     . Vec n a -> (a -> Vec m b) [n] -> Vec (n * m) b
+bind x f = join (fmap f x)
+
+---------------------------------------------------
+
+cartesianProduct : forall {a b : Type, n m : Nat}
+      . Vec n (a [m]) -> Vec m (b [n]) -> Vec (n * m) (a, b)
+
+cartesianProduct xs ys =
+  let [ys'] = pullVec ys
+  in xs `bind` [\([x] : a [m]) -> ys' `bind` [\y -> return (x, y)]]
+
+---------------------------------------------------
+
+-- Example:
+invAbs : Float [2] -> Vec 2 Float
+invAbs [x] = Cons x (Cons (0.0 - x) Nil)
+
+invAbsTwice : Vec 4 Float
+invAbsTwice = (pushVec [invAbs [2.0]]) `bind` [\(x : Float [2]) -> invAbs x]
