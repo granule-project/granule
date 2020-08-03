@@ -47,7 +47,7 @@ falseId = mkId "False"
 
 boolDataCons :: (?globals :: Globals) => Ctxt (Ctxt (TypeScheme, Substitution))
 boolDataCons =
-  [(boolId, [(falseId, (Forall nullSpan [] [] (TyCon boolId), [])), (trueId, (Forall nullSpan [] [] (TyCon boolId), []))])]
+  [(boolId, [(falseId, (ForallTyS nullSpan [] [] (TyCon boolId), [])), (trueId, (ForallTyS nullSpan [] [] (TyCon boolId), []))])]
 
 boolTyCons :: Ctxt (Kind, [Id], Bool)
 boolTyCons = [(boolId, (KType, [falseId, trueId], False))]

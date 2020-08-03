@@ -80,7 +80,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
             Nothing   -> do
               mConstructor <- lookupDataConstructor s conId
               case mConstructor of
-                Just (Forall _ [] [] t, _) -> return $ KPromote t
+                Just (ForallTyS _ [] [] t, _) -> return $ KPromote t
                 Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
                 Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 

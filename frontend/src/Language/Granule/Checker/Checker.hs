@@ -17,7 +17,6 @@ import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
 
-import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
@@ -102,7 +101,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         -- Otherwise, do synth
         _ -> do
           (ty, _, _, _) <- synthExpr defCtxt [] Positive expr
-          return $ Left $ Forall nullSpanNoFile [] [] ty
+          return $ Left $ ForallTyS nullSpanNoFile [] [] ty
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -137,7 +136,7 @@ checkDataCon
   tName
   kind
   tyVarsT
-  d@(DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) = do
+  d@(DataConstrIndexed sp dName tySch@(ForallTyS s tyVarsD constraints ty)) = do
     case map fst $ intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
 
@@ -158,7 +157,7 @@ checkDataCon
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
-             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
+             freshPolymorphicInstance ForallQ False (ForallTyS s tyVars constraints ty) []
 
         -- Create a version of the data constructor that matches the data type head
         -- but with a list of coercions
@@ -168,7 +167,7 @@ checkDataCon
 
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
-        let tySch = Forall sp tyVarsD' constraints ty'
+        let tySch = ForallTyS sp tyVarsD' constraints ty'
 
         case tySchKind of
           KType ->
@@ -259,7 +258,7 @@ checkDef :: (?globals :: Globals)
          -> Def () ()        -- definition
          -> Checker (Def () Type)
 checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
-             tys@(Forall s_t foralls constraints ty)) = do
+             tys@(ForallTyS s_t foralls constraints ty)) = do
     -- duplicate forall bindings
     case duplicates (map (sourceName . fst) foralls) of
       [] -> pure ()
@@ -301,12 +300,15 @@ checkEquation :: (?globals :: Globals) =>
   -> TypeScheme      -- Type scheme
   -> Checker (Equation () Type)
 
-checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls constraints ty) = do
+checkEquation defCtxt id (Equation s () rf pats expr) tys@(ForallTyS _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
   -- Freshen the type context
-  modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) foralls})
+  modify (\st -> st { tyVarContext = map (\(n, t) -> (n, (t, ForallQ))) foralls})
+
+  -- Add all the universals to the predicate
+  _ <- mapM (uncurry universal) foralls
 
   -- Create conjunct to capture the pattern constraints
   newConjunct
@@ -583,7 +585,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
           Just (TyApp (TyCon (internalName -> "Interval"))
                       (TyCon (internalName -> "Level")))
             -> True
-          _ -> False 
+          _ -> False
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
@@ -857,10 +859,10 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   (ef1, opt, ty1) <- case sig of
     Diamond ef1 (Box opt ty1) ->
         return (ef1, opt, ty1)
-    _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig } 
+    _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
 
   addConstraint (ApproximatedBy s (CInterval (CNat 0) (CNat 1)) opt (TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat") ) )
-  
+
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
@@ -875,7 +877,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   (ef3, ty3) <- case tau3 of
       Diamond ef3 ty3 -> return (ef3, ty3)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
-  
+
   --to better match the typing rule both continuation types should be equal
   (b, ty, _) <- equalTypes s ty2 ty3
   b <- case b of
@@ -886,7 +888,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
 
   -- linearity check for e2 and e3
   ctxtApprox s (gam2 `intersectCtxts` binders) binders
-  
+
   --contexts/binding
   gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
   gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
@@ -903,9 +905,9 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
   -- Synth subst
   t' <- substitute substP t
-  
+
   let elaborated = TryCatch s t rf elaborated1 elaboratedP mty elaborated2 elaborated3
-  return (t, gamNew3, subst, elaborated) 
+  return (t, gamNew3, subst, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ rf (Var _ x)) =
@@ -1110,16 +1112,11 @@ solveConstraints predicate s name = do
 
   -- Get the coeffect kind context and constraints
   checkerState <- get
-  let ctxtCk  = tyVarContext checkerState
-  coeffectVars <- justCoeffectTypesConverted s ctxtCk
-  -- remove any variables bound already in the preciate
-  coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
+  let predicate' = rewriteBindersInPredicate (tyVarContext checkerState) predicate
 
-  debugM "tyVarContext" (pretty $ tyVarContext checkerState)
-  debugM "context into the solver" (pretty $ coeffectVars)
-  debugM "Solver predicate" $ pretty predicate
+  debugM "Solver predicate" $ pretty predicate'
 
-  result <- liftIO $ provePredicate predicate coeffectVars
+  result <- liftIO $ provePredicate predicate'
   case result of
     QED -> return ()
     NotValid msg -> do
@@ -1403,6 +1400,8 @@ freshVarsIn s vars ctxt = do
       let cvar = mkId freshName
       -- Update the coeffect kind context
       modify (\s -> s { tyVarContext = (cvar, (promoteTypeToKind ctype, InstanceQ)) : tyVarContext s })
+      -- Add this to the predicate
+      existential cvar (promoteTypeToKind ctype)
 
       -- Return the freshened var-type mapping
       -- and the new type variable
@@ -1476,18 +1475,15 @@ checkGuardsForImpossibility s name = do
   st <- get
   let ps = head $ guardPredicates st
 
-  -- Convert all universal variables to existential
-  tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted s
-
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
-    let thm = foldr (uncurry Exists) p ctxt
+    let thm = universalsAsExistentials (getCtxtIds (tyVarContext st) ++ (getCtxtIds ctxt)) p
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
-    result <- liftIO $ provePredicate thm tyVars
+    result <- liftIO $ provePredicate thm
 
     p <- simplifyPred thm
 

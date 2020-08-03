@@ -270,7 +270,7 @@ ForallSig :: { [(Id, Kind)] }
  : '{' VarSigs '}' { $2 }
  | VarSigs         { $1 }
 
-Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
+ForallTyS :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
  : forall ForallSig '.'                          { (((getPos $1, getPos $3), $2), []) }
  | forall ForallSig '.' '{' Constraints '}' '=>' { (((getPos $1, getPos $7), $2), $5) }
 
@@ -281,10 +281,10 @@ Constraints
 
 TypeScheme :: { TypeScheme }
  : Type
-       {% return $ Forall nullSpanNoFile [] [] $1 }
+       {% return $ ForallTyS nullSpanNoFile [] [] $1 }
 
- | Forall Type
-       {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ Forall sp (snd $ fst $1) (snd $1) $2 }
+ | ForallTyS Type
+       {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ ForallTyS sp (snd $ fst $1) (snd $1) $2 }
 
 VarSigs :: { [(Id, Kind)] }
   : VarSig ',' VarSigs        { $1 <> $3 }

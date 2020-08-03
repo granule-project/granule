@@ -108,7 +108,7 @@ instance Rp.Refactorable (Equation v a) where
 
 definitionType :: Def v a -> Type
 definitionType Def { defTypeScheme = ts } =
-    ty where (Forall _ _ _ ty) = ts
+    ty where (ForallTyS _ _ _ ty) = ts
 
 -- | Data type declarations
 data DataDecl = DataDecl
@@ -136,7 +136,7 @@ isIndexedDataType (DataDecl _ id tyVars _ constrs) =
     all nonIndexedConstructors constrs
   where
     nonIndexedConstructors DataConstrNonIndexed{} = False
-    nonIndexedConstructors (DataConstrIndexed _ _ (Forall _ tyVars' _ ty)) =
+    nonIndexedConstructors (DataConstrIndexed _ _ (ForallTyS _ tyVars' _ ty)) =
       noMatchOnEndType (reverse tyVars) ty
 
     noMatchOnEndType ((v, _):tyVars) (TyApp t1 t2) =
@@ -153,7 +153,7 @@ nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
 nonIndexedToIndexedDataConstr _     _      d@DataConstrIndexed{} = d
 nonIndexedToIndexedDataConstr tName tyVars (DataConstrNonIndexed sp dName params)
     -- Don't push the parameters into the type scheme yet
-    = DataConstrIndexed sp dName (Forall sp [] [] ty)
+    = DataConstrIndexed sp dName (ForallTyS sp [] [] ty)
   where
     ty = foldr (FunTy Nothing) (returnTy (TyCon tName) tyVars) params
     returnTy t [] = t

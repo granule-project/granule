@@ -277,7 +277,7 @@ concludeImplication s localCtxt = do
 
         -- No previous guards in the current frame to provide additional information
         [] : knowledgeStack -> do
-          let impl = Impl localCtxt p p'
+          let impl = mkUniversals localCtxt (Impl p p')
 
           -- Add the implication to the predicate stack
           modify (\st -> st { predicateStack = pushPred impl stack
@@ -290,18 +290,18 @@ concludeImplication s localCtxt = do
            let previousGuardCtxt = concatMap (fst . fst) previousGuards
            let prevGuardPred = Conj (map (snd . fst) previousGuards)
 
-           freshenedPrevGuardPred <- freshenPred $ Impl previousGuardCtxt (Conj []) (NegPred prevGuardPred)
-           let (Impl freshPrevGuardCxt _ freshPrevGuardPred) = freshenedPrevGuardPred
+           freshenedPrevGuardPred <- freshenPred $ mkUniversals previousGuardCtxt (Impl (Conj []) (NegPred prevGuardPred))
+           let (Impl _ freshPrevGuardPred) = freshenedPrevGuardPred
 
            -- Implication of p .&& negated previous guards => p'
-           let impl@(Impl implCtxt implAntecedent _) =
+           let impl =
                 -- TODO: turned off this feature for now by putting True in the guard here
                 if True -- isTrivial freshPrevGuardPred
-                  then (Impl localCtxt p p')
-                  else (Impl (localCtxt <> freshPrevGuardCxt)
-                                 (Conj [p, freshPrevGuardPred]) p')
+                  then mkUniversals localCtxt (Impl p p')
+                  else mkUniversals localCtxt
+                             (Impl (Conj [p, freshPrevGuardPred]) p')
 
-           let knowledge = ((implCtxt, implAntecedent), s) : previousGuards
+           let knowledge = (([], implAntecedent impl), s) : previousGuards
 
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
@@ -311,10 +311,14 @@ concludeImplication s localCtxt = do
 
 
     _ -> error "Predicate: not enough conjunctions on the stack"
+  where
+    implAntecedent (Impl p _) = p
+    implAntecedent (Forall _ _ p) = implAntecedent p
+    implAntecedent (Exists _ _ p) = implAntecedent p
+    implAntecedent p = error $ "Cannot find the antecedent of implication for " <> show p
 
 
 -- Create a local existential scope
--- NOTE: leaving this here, but this approach is not used
 existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of
@@ -328,6 +332,20 @@ existential var k = do
         [] ->
           put (checkerState { predicateStack = [Exists var k (Conj [])] })
 
+-- Create a local universal scope
+universal :: Id -> Kind -> Checker ()
+universal var k = do
+  case k of
+    -- No need to add variables of kind Type to the predicate
+    KType -> return ()
+    k -> do
+      checkerState <- get
+      case predicateStack checkerState of
+        (p : stack) -> do
+          put (checkerState { predicateStack = Forall var k p : stack })
+        [] ->
+          put (checkerState { predicateStack = [Forall var k (Conj [])] })
+
 pushPred :: Pred -> [Pred] -> [Pred]
 pushPred p (p' : stack) = appendPred p p' : stack
 pushPred p [] = [Conj [p]]
@@ -335,6 +353,7 @@ pushPred p [] = [Conj [p]]
 appendPred :: Pred -> Pred -> Pred
 appendPred p (Conj ps) = Conj (p : ps)
 appendPred p (Exists var k ps) = Exists var k (appendPred p ps)
+appendPred p (Forall var k ps) = Forall var k (appendPred p ps)
 appendPred _ p = error $ "Cannot append a predicate to " <> show p
 
 addPredicate :: Pred -> Checker ()

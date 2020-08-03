@@ -419,4 +419,4 @@ builtins :: [(Id, TypeScheme)]
         Left err -> error err
 
       unDef :: Def () () -> (Id, TypeScheme)
-      unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+      unDef (Def _ name _ _ (ForallTyS _ bs cs t)) = (name, ForallTyS nullSpanBuiltin bs cs t)

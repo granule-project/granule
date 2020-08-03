@@ -29,39 +29,27 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
--- import Debug.Trace
+import Debug.Trace
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type, Quantifier)
+  => Pred
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
-compileToSBV predicate tyVarContext =
-  (buildTheoremNew (reverse tyVarContext) []
+compileToSBV predicate =
+  (symbolicTheorem predicate
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
-  , trivialUnsatisfiableConstraints predicate')
+  , trivialUnsatisfiableConstraints predicate)
 
   where
     -- flipQuant ForallQ   = InstanceQ
     -- flipQuant InstanceQ = ForallQ
     -- flipQuant BoundQ    = BoundQ
 
-    predicate' = rewriteBindersInPredicate tyVarContext predicate
+    symbolicTheorem = buildTheorem' []
 
-    buildTheoremNew :: Ctxt (Type, Quantifier) -> Ctxt SGrade -> Symbolic SBool
-    buildTheoremNew [] solverVars =
-      buildTheorem' solverVars predicate
-
-    buildTheoremNew ((v, (t, q)) : ctxt) solverVars =
-      freshCVarScoped compileQuantScoped (internalName v) t q
-         (\(varPred, solverVar) -> do
-             pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
-             case q of
-              ForallQ -> return $ varPred .=> pred
-              _       -> return $ varPred .&& pred)
-
-    -- Build the theorem, doing local creation of universal variables
-    -- when needed (see Impl case)
+    -- Build the theorem, doing local creation of variables
+    -- when needed
     buildTheorem' :: Ctxt SGrade -> Pred -> Symbolic SBool
     buildTheorem' solverVars (Conj ps) = do
       ps' <- mapM (buildTheorem' solverVars) ps
@@ -71,7 +59,7 @@ compileToSBV predicate tyVarContext =
       ps' <- mapM (buildTheorem' solverVars) ps
       return $ sOr ps'
 
-    buildTheorem' solverVars (Impl [] p1 p2) = do
+    buildTheorem' solverVars (Impl p1 p2) = do
         p1' <- buildTheorem' solverVars p1
         p2' <- buildTheorem' solverVars p2
         return $ p1' .=> p2'
@@ -100,27 +88,26 @@ compileToSBV predicate tyVarContext =
         else
           buildTheorem' solverVars p
 
-    buildTheorem' solverVars (Impl ((v, k):vs) p p') =
-      if v `elem` (freeVars p <> freeVars p')
-        -- If the quantified variable appears in the theorem
+    buildTheorem' solverVars (Forall v k p) =
+      if v `elem` (freeVars p)
+        -- optimisation
         then
           case demoteKindToType k of
             Just t ->
               freshCVarScoped compileQuantScoped (internalName v) t ForallQ
                 (\(varPred, solverVar) -> do
-                  pred' <- buildTheorem' ((v, solverVar) : solverVars) (Impl vs p p')
-                  return (varPred .=> pred'))
+                  pred' <- buildTheorem' ((v, solverVar) : solverVars) p
+                  return (varPred .&& pred'))
+
             Nothing ->
-                    case k of
-                      KType -> buildTheorem' solverVars p
-                      _ -> solverError $ "Trying to make a fresh universal solver variable for a grade of kind: "
-                                   <> show k <> " but I don't know how."
-
+              case k of
+                KType -> buildTheorem' solverVars p
+                _ ->
+                  solverError $ "Trying to make a fresh existential solver variable for a grade of kind: "
+                             <> show k <> " but I don't know how."
         else
-          -- An optimisation, don't bother quantifying things
-          -- which don't appear in the theorem anyway
+          buildTheorem' solverVars p
 
-          buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
       compile solverVars cons
@@ -250,7 +237,11 @@ compile vars (Lub _ c1 c2 c3@(CVar v) t) =
       return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
-  bindM2And' approximatedByOrEqualConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+  ("going to compile approx, with\n  c1 = " ++ show c1 ++ " c2 = "  ++ show c2 ++
+    " which normalise to\n  c1' = " ++ show (normalise c1) ++ " c2' = " ++ show (normalise c2)
+    ++ "\n  t = " ++ show t)
+   `trace`
+    bindM2And' approximatedByOrEqualConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
 
 compile vars (Lt s c1 c2) =
   bindM2And' symGradeLess (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
@@ -500,7 +491,7 @@ trivialUnsatisfiableConstraints
     -- TODO: need to check that all are unsat- but this request a different
     --       representation here.
     positiveConstraints =
-        predFold concat (\_ -> []) (\_ _ q -> q) (\x -> [x]) id (\_ _ p -> p)
+        predFold concat (\_ -> []) (\_ q -> q) (\x -> [x]) id (\_ _ p -> p) (\_ _ p -> p)
 
     -- All the (trivially) unsatisfiable constraints
     unsat :: Constraint -> [Constraint]
@@ -559,14 +550,13 @@ data SolverResult
 provePredicate
   :: (?globals :: Globals)
   => Pred                    -- Predicate
-  -> Ctxt (Type, Quantifier) -- Free variable quantifiers
   -> IO SolverResult
-provePredicate predicate vars
+provePredicate predicate
   | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return QED
   | otherwise = do
-      let (sbvTheorem, _, unsats) = compileToSBV predicate vars
+      let (sbvTheorem, _, unsats) = compileToSBV predicate
       ThmResult thmRes <- proveWith defaultSMTCfg $ do --  -- proveWith cvc4 {verbose=True}
         case solverTimeoutMillis of
           n | n <= 0 -> return ()

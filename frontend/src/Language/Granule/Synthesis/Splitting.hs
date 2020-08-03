@@ -6,7 +6,6 @@ import Control.Monad.State.Strict (get, liftIO)
 import Data.List (partition)
 import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
 
-import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
@@ -166,12 +165,9 @@ validateCase span ty pats = do
     ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 
-  -- Build the type variable environment for proving the predicate
-  tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted span
-
   -- Quantify the predicate by the existence of all local variables.
   let thm = foldr (uncurry Exists) pred localVars
-  result <- liftIO $ provePredicate thm tyVars
+  result <- liftIO $ provePredicate thm
 
   case result of
     QED -> return True
@@ -276,7 +272,7 @@ buildBoxPattern span = PBox span () False
 
 -- Accumulates identifiers which label function types.
 tsTypeNames :: TypeScheme -> [Maybe Id]
-tsTypeNames (Forall _ _ _ t) = typeNames t
+tsTypeNames (ForallTyS _ _ _ t) = typeNames t
    where
      typeNames :: Type -> [Maybe Id]
      typeNames (FunTy id _ t2) = id : typeNames t2

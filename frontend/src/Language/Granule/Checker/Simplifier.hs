@@ -29,7 +29,7 @@ simplifyPred p = go 10 p
       if (p == p') then return p' else go (n-1) p'
 
     normalisePred = predFold
-       Conj Disj Impl (Con . normaliseConstraint) NegPred Exists
+       Conj Disj Impl (Con . normaliseConstraint) NegPred Exists Forall
 
 simplifyPred' :: (?globals :: Globals)
              => Pred -> Checker Pred
@@ -50,19 +50,26 @@ simplifyPred' (Disj ps) = do
   ps <- mapM simplifyPred' ps
   return $ Disj ps
 
-simplifyPred' c@(Impl ids p1 p2) = do
+simplifyPred' c@(Impl p1 p2) = do
   let subst = collectSubst p1
   p1' <- simpl subst p1
   p2' <- simpl subst p2
   let subst' = collectSubst p2'
   p2'' <- simpl subst' p2'
-  return $ removeTrivialImpls . removeTrivialIds $ (Impl ids p1' p2'')
+  return $ removeTrivialImpls . removeTrivialIds $ (Impl p1' p2'')
 
 simplifyPred' c@(Exists id k p) = do
   p' <- simplifyPred' p
   -- Strip quantifications that are no longer used
   if id `elem` (freeVars p')
     then return $ Exists id k p'
+    else return p'
+
+simplifyPred' c@(Forall id k p) = do
+  p' <- simplifyPred' p
+  -- Strip quantifications that are no longer used
+  if id `elem` (freeVars p')
+    then return $ Forall id k p'
     else return p'
 
 simplifyPred' c@(NegPred p) =
@@ -81,9 +88,10 @@ flatten (Conj (p : ps)) =
                 p'' -> Conj [p, p'']
 flatten (Disj ps) =
   Disj (map flatten ps)
-flatten (Impl ids p1 p2) =
-  Impl ids (flatten p1) (flatten p2)
+flatten (Impl p1 p2) =
+  Impl (flatten p1) (flatten p2)
 flatten (Exists v k p) = Exists v k (flatten p)
+flatten (Forall v k p) = Forall v k (flatten p)
 flatten (NegPred p) = NegPred (flatten p)
 flatten (Con c) = Con c
 
@@ -94,14 +102,14 @@ simpl subst p = substitute subst p >>= (return . removeTrivialImpls . removeTriv
 
 removeTrivialImpls :: Pred -> Pred
 removeTrivialImpls =
-  predFold (Conj . nub) Disj remImpl Con NegPred Exists
-    where remImpl _ (Conj []) p = p
-          remImpl _ (Conj ps) p | all (\p -> case p of Conj [] -> True; _ -> False) ps = p
-          remImpl ids p1 p2 = Impl ids p1 p2
+  predFold (Conj . nub) Disj remImpl Con NegPred Exists Forall
+    where remImpl (Conj []) p = p
+          remImpl (Conj ps) p | all (\p -> case p of Conj [] -> True; _ -> False) ps = p
+          remImpl p1 p2 = Impl p1 p2
 
 removeTrivialIds :: Pred -> Pred
 removeTrivialIds =
-  predFold conj disj Impl conRemove NegPred Exists
+  predFold conj disj Impl conRemove NegPred Exists Forall
     where removeTrivialIdCon (Con (Eq _ c c' _)) | c == c' = Nothing
           -- removeTrivialIdCon (Con (ApproximatedBy _ c c' _)) | c == c' = Nothing
           removeTrivialIdCon c = Just c

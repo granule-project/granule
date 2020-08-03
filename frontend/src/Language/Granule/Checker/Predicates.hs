@@ -53,7 +53,7 @@ data Constraint =
   | Neq Span Coeffect Coeffect Type
   | ApproximatedBy Span Coeffect Coeffect Type
 
-  -- 
+  --
   | Lub Span Coeffect Coeffect Coeffect Type
 
   -- NonZeroPromotableTo s x c means that:
@@ -212,25 +212,33 @@ varsConstraint (GtEq _ c1 c2) = freeVars c1 <> freeVars c2
 data Pred where
     Conj :: [Pred] -> Pred
     Disj :: [Pred] -> Pred
-    Impl :: Ctxt Kind -> Pred -> Pred -> Pred
+    Impl :: Pred -> Pred -> Pred
     Con  :: Constraint -> Pred
     NegPred  :: Pred -> Pred
     Exists :: Id -> Kind -> Pred -> Pred
+    Forall :: Id -> Kind -> Pred -> Pred
+
+mkUniversals :: Ctxt Kind -> Pred -> Pred
+mkUniversals [] p = p
+mkUniversals ((v, k) : ctxt) p =
+  Forall v k (mkUniversals ctxt p)
 
 instance Term Pred where
   freeVars (Conj ps) = concatMap freeVars ps
   freeVars (Disj ps) = concatMap freeVars ps
-  freeVars (Impl bounds p1 p2) = (freeVars p1 <> freeVars p2) \\ map fst bounds
+  freeVars (Impl p1 p2) = freeVars p1 <> freeVars p2
   freeVars (Con c) = varsConstraint c
   freeVars (NegPred p) = freeVars p
   freeVars (Exists x _ p) = freeVars p \\ [x]
+  freeVars (Forall x _ p) = freeVars p \\ [x]
 
 boundVars :: Pred -> [Id]
-boundVars (Conj ps) = concatMap boundVars ps
-boundVars (Disj ps) = concatMap boundVars ps
-boundVars (Impl bounds p1 p2) = map fst bounds ++ (boundVars p1 ++ boundVars p2)
-boundVars (NegPred p) = boundVars p
+boundVars (Conj ps)    = concatMap boundVars ps
+boundVars (Disj ps)    = concatMap boundVars ps
+boundVars (Impl p1 p2) = boundVars p1 ++ boundVars p2
+boundVars (NegPred p)  = boundVars p
 boundVars (Exists x _ p) = x : boundVars p
+boundVars (Forall x _ p) = x : boundVars p
 boundVars (Con _) = []
 
 instance (Monad m, MonadFail m) => Freshenable m Pred where
@@ -263,25 +271,27 @@ instance (Monad m, MonadFail m) => Freshenable m Pred where
 
     return $ Exists (Id (internalName v) v') k p'
 
-  freshen (Impl [] p1 p2) = do
-    p1' <- freshen p1
-    p2' <- freshen p2
-    return $ Impl [] p1' p2'
-
-  freshen (Impl ((v, kind):vs) p p') = do
+  freshen (Forall v k p) = do
     st <- get
 
-    -- Freshen the variable bound here
-    let v' = internalName v <> "-" <> show (counter st)
-    put (st { tyMap = (internalName v, v') : tyMap st
-            , counter = counter st + 1 })
+    -- Create a new binding name for v
+    let v' = internalName v <> "-e" <> show (counter st)
 
-    -- Freshen the rest
-    (Impl vs' pf pf') <- freshen (Impl vs p p')
+    -- Updated freshener state
+    put (st { tyMap = (internalName v, v') : tyMap st
+          , counter = counter st + 1 })
+
+    -- Freshen the rest of the predicate
+    p' <- freshen p
     -- Freshening now out of scope
     removeFreshenings [Id (internalName v) v']
 
-    return $ Impl ((Id (internalName v) v', kind):vs') pf pf'
+    return $ Forall (Id (internalName v) v') k p'
+
+  freshen (Impl p1 p2) = do
+    p1' <- freshen p1
+    p2' <- freshen p2
+    return $ Impl p1' p2'
 
   freshen (Con cons) = do
     cons' <- freshen cons
@@ -294,50 +304,56 @@ deriving instance Eq Pred
 predFold ::
      ([a] -> a)
   -> ([a] -> a)
-  -> (Ctxt Kind -> a -> a -> a)
+  -> (a -> a -> a)
   -> (Constraint -> a)
   -> (a -> a)
   -> (Id -> Kind -> a -> a)
+  -> (Id -> Kind -> a -> a)
   -> Pred
   -> a
-predFold c d i a n e (Conj ps)   = c (map (predFold c d i a n e) ps)
-predFold c d i a n e (Disj ps)   = d (map (predFold c d i a n e) ps)
-predFold c d i a n e (Impl ctxt p p') = i ctxt (predFold c d i a n e p) (predFold c d i a n e p')
-predFold _ _ _ a _  _ (Con cons)  = a cons
-predFold c d i a n e (NegPred p) = n (predFold c d i a n e p)
-predFold c d i a n e (Exists x t p) = e x t (predFold c d i a n e p)
+predFold c d i a n e f (Conj ps)   = c (map (predFold c d i a n e f) ps)
+predFold c d i a n e f (Disj ps)   = d (map (predFold c d i a n e f) ps)
+predFold c d i a n e f (Impl p p') = i (predFold c d i a n e f p) (predFold c d i a n e f p')
+predFold _ _ _ a _  _ _ (Con cons)  = a cons
+predFold c d i a n e f (NegPred p) = n (predFold c d i a n e f p)
+predFold c d i a n e f (Exists x t p) = e x t (predFold c d i a n e f p)
+predFold c d i a n e f (Forall x t p) = f x t (predFold c d i a n e f p)
 
 -- Fold operation on a predicate (monadic)
 predFoldM :: Monad m =>
      ([a] -> m a)
   -> ([a] -> m a)
-  -> (Ctxt Kind -> a -> a -> m a)
+  -> (a -> a -> m a)
   -> (Constraint -> m a)
   -> (a -> m a)
   -> (Id -> Kind -> a -> m a)
+  -> (Id -> Kind -> a -> m a)
   -> Pred
   -> m a
-predFoldM c d i a n e (Conj ps)   = do
-  ps <- mapM (predFoldM c d i a n e) ps
+predFoldM c d i a n e f (Conj ps)   = do
+  ps <- mapM (predFoldM c d i a n e f) ps
   c ps
 
-predFoldM c d i a n e (Disj ps)   = do
-  ps <- mapM (predFoldM c d i a n e) ps
+predFoldM c d i a n e f (Disj ps)   = do
+  ps <- mapM (predFoldM c d i a n e f) ps
   d ps
 
-predFoldM c d i a n e (Impl localVars p p') = do
-  p <- predFoldM c d i a n e p
-  p' <- predFoldM c d i a n e p'
-  i localVars p p'
+predFoldM c d i a n e f (Impl p p') = do
+  p  <- predFoldM c d i a n e f p
+  p' <- predFoldM c d i a n e f p'
+  i p p'
 
-predFoldM _ _ _ a _ _ (Con cons)  =
+predFoldM _ _ _ a _ _ _ (Con cons)  =
   a cons
 
-predFoldM c d i a n e (NegPred p) =
-  predFoldM c d i a n e p >>= n
+predFoldM c d i a n e f (NegPred p) =
+  predFoldM c d i a n e f p >>= n
 
-predFoldM c d i a n e (Exists x t p) =
-  predFoldM c d i a n e p >>= e x t
+predFoldM c d i a n e f (Exists x t p) =
+  predFoldM c d i a n e f p >>= e x t
+
+predFoldM c d i a n e f (Forall x t p) =
+  predFoldM c d i a n e f p >>= f x t
 
 instance Pretty [Pred] where
   pretty ps =
@@ -349,42 +365,67 @@ instance Pretty Pred where
     predFold
      (intercalate " ∧ ")
      (intercalate " ∨ ")
-     (\ctxt p q ->
-         (if null ctxt then "" else "∀ " <> pretty' ctxt <> " . ")
-      <> "(" <> p <> " -> " <> q <> ")")
-      pretty
-      (\p -> "¬(" <> p <> ")")
-      (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
-    where pretty' =
-            intercalate "," . map (\(id, k) -> pretty id <> " : " <> pretty k)
+     (\p q -> "(" <> p <> " -> " <> q <> ")")
+     pretty
+     (\p -> "¬(" <> p <> ")")
+     (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
+     (\x t p -> "∀ " <> pretty x <> " : " <> pretty t <> " . " <> p)
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool
-isTrivial = predFold and or (\_ lhs rhs -> rhs) (const False) id (\_ _ p -> p)
+isTrivial = predFold and or (\lhs rhs -> rhs) (const False) id (\_ _ p -> p) (\_ _ p -> p)
+
+-- Transform universal quantifiers to existentials for the given list of
+-- identifiers. This is used for looking at whether a universal theorem
+-- can ever be satisfied (e.g., for checking whether dependent-pattern match
+-- cases are possible)
+universalsAsExistentials :: [Id] -> Pred -> Pred
+universalsAsExistentials vars =
+    predFold Conj Disj Impl Con NegPred Exists forallCase
+  where
+    forallCase var kind p =
+      if var `elem` vars then Exists var kind p else Forall var kind p
+
 
 -- TODO: replace with use of `substitute`
 
 -- given an context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
-rewriteBindersInPredicate :: Ctxt (Type, Quantifier) -> Pred -> Pred
+rewriteBindersInPredicate :: Ctxt (Kind, Quantifier) -> Pred -> Pred
 rewriteBindersInPredicate ctxt =
     predFold
       Conj
       Disj
       Impl
-      (\c -> Con $ foldr (uncurry updateConstraint) c ctxt)
+      (\c -> Con $ foldr (uncurry updateConstraint') c ctxt)
       NegPred
       existsCase
+      forallCase
   where
     existsCase :: Id -> Kind -> Pred -> Pred
     existsCase var (KVar kvar) p =
       Exists var k' p
         where
           k' = case lookup kvar ctxt of
-                  Just (ty, _) -> KPromote ty
+                  Just (k, _) -> k
                   Nothing -> KVar kvar
     existsCase var k p = Exists var k p
+
+    forallCase :: Id -> Kind -> Pred -> Pred
+    forallCase var (KVar kvar) p =
+      Forall var k' p
+        where
+          k' = case lookup kvar ctxt of
+                  Just (k, _) -> k
+                  Nothing -> KVar kvar
+    forallCase var k p = Forall var k p
+
+    updateConstraint' :: Id -> (Kind, Quantifier) -> Constraint -> Constraint
+    updateConstraint' id (k, q) c =
+      case demoteKindToType k of
+        Just t -> updateConstraint id (t, q) c
+        Nothing -> c
 
     -- `updateConstraint v k c` rewrites any occurence of the kind variable
     -- `v` in the constraint `c` with the kind `k`

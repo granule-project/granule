@@ -25,7 +25,7 @@ import Data.Functor.Identity (runIdentity)
 -- | Check the kind of a definition
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
-kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
+kindCheckDef (Def s id rf eqs (ForallTyS s' quantifiedVariables constraints ty)) = do
   -- Set up the quantified variables in the type variable context
   modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) quantifiedVariables})
 
@@ -44,7 +44,7 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
                    quantifiedVariables
         modify (\st -> st { tyVarContext = [] })
         -- Update the def with the resolved quantifications
-        return (Def s id rf eqs (Forall s' qVars constraints ty))
+        return (Def s id rf eqs (ForallTyS s' qVars constraints ty))
 
     --KPromote (TyCon k) | internalName k == "Protocol" -> modify (\st -> st { tyVarContext = [] })
     _     -> throw KindMismatch{ errLoc = s, tyActualK = Just ty, kExpected = KType, kActual = kind }
@@ -98,7 +98,7 @@ inferKindOfTypeImplicits s ctxt (TyCon conId) = do
     Nothing   -> do
       mConstructor <- lookupDataConstructor s conId
       case mConstructor of
-        Just (Forall _ [] [] t, _) -> return (KPromote t, [])
+        Just (ForallTyS _ [] [] t, _) -> return (KPromote t, [])
         Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty conId
         Nothing -> throw UnboundTypeConstructor{ errLoc = s, errId = conId }
 

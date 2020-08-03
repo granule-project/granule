@@ -111,7 +111,7 @@ instance Pretty Kind where
     pretty (KUnion k1 k2) = "(" <> prettyNested k1 <> " ∪ " <> prettyNested k2 <> ")"
 
 instance Pretty TypeScheme where
-    pretty (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty t
+    pretty (ForallTyS _ vs cs t) = kVars vs <> constraints cs <> pretty t
       where
         kVars [] = ""
         kVars vs = "forall {" <> intercalate ", " (map prettyKindSignatures vs) <> "} . "
@@ -192,7 +192,7 @@ instance Pretty v => Pretty (AST v a) where
       pretty' = intercalate "\n\n" . map pretty
 
 instance Pretty v => Pretty (Def v a) where
-    pretty (Def _ v _ eqs (Forall _ [] [] t))
+    pretty (Def _ v _ eqs (ForallTyS _ [] [] t))
       = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
     pretty (Def _ v _ eqs tySch)
       = pretty v <> "\n  : " <> pretty tySch <> "\n" <> pretty eqs

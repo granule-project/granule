@@ -48,3 +48,7 @@ freshTyVarInContextWithBinding var k q = do
 registerTyVarInContext :: Id -> Kind -> Quantifier -> Checker ()
 registerTyVarInContext v k q = do
     modify (\st -> st { tyVarContext = (v, (k, q)) : tyVarContext st })
+    -- Add to the predicate
+    case q of
+      ForallQ -> universal v k
+      _       -> existential v k

@@ -343,7 +343,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
        -- a substitution from the visible instance variable to their originals
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
+freshPolymorphicInstance quantifier isDataConstructor (ForallTyS s kinds constr ty) ixSubstitution = do
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- cumulativeMapM instantiateVariable kinds
@@ -359,7 +359,9 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     constrFreshened <- mapM (substitute subst) constr
 
     -- Return the type and all instance variables
-    let newTyVars = map (\(_, kv) -> swap . fromEither $ kv) renameMap
+    let newTyVars = mapMaybe (\(_, kv) -> case kv of
+                                            Right _ -> Nothing
+                                            Left x  -> Just $ swap x) renameMap
     let substLefts = ctxtMap (SubstT . TyVar . snd) $ justLefts renameMap
 
     ixSubstitution' <- substitute substLefts ixSubstitution
@@ -390,6 +392,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
          then do
            -- Signals an existential
            var' <- freshTyVarInContextWithBinding var k ForallQ
+           existential var' k
            -- Don't return this as a fresh skolem variable
            return (var, Right (k, var'))
 
@@ -424,10 +427,11 @@ instance Substitutable Pred where
       predFoldM
         (return . Conj)
         (return . Disj)
-        (\ids p1 p2 -> return $ Impl ids p1 p2)
+        (\p1 p2 -> return $ Impl p1 p2)
         (\c -> substitute ctxt c >>= return . Con)
         (return . NegPred)
-        (\ids k p -> substitute ctxt k >>= \k' -> return $ Exists ids k' p)
+        (\id k p -> substitute ctxt k >>= \k' -> return $ Exists id k' p)
+        (\id k p -> substitute ctxt k >>= \k' -> return $ Forall id k' p)
 
 instance Substitutable Constraint where
   substitute ctxt (Eq s c1 c2 k) = do

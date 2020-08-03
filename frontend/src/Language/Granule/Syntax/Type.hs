@@ -20,7 +20,7 @@ import qualified Text.Reprinter as Rp (Data)
 
 -- | Represent types with a universal quantification at the start
 data TypeScheme =
-  Forall
+  ForallTyS
     Span          -- span of the scheme
     [(Id, Kind)]  -- binders
     [Type]        -- constraints
@@ -453,13 +453,13 @@ instance Term Coeffect where
 
 instance Freshenable m TypeScheme where
   freshen :: Monad m => TypeScheme -> Freshener m TypeScheme
-  freshen (Forall s binds constraints ty) = do
+  freshen (ForallTyS s binds constraints ty) = do
         binds' <- mapM (\(v, k) -> do { v' <- freshIdentifierBase Type v;
                                         k' <- freshen k;
                                         return (v', k') }) binds
         constraints' <- mapM freshen constraints
         ty' <- freshen ty
-        return $ Forall s binds' constraints' ty'
+        return $ ForallTyS s binds' constraints' ty'
 
 instance Freshenable m Type where
   freshen =
@@ -555,6 +555,7 @@ normalise (CPlus (CZero _) n) = normalise n
 normalise (CPlus n (CZero _)) = normalise n
 normalise (CTimes (COne _) n) = normalise n
 normalise (CTimes n (COne _)) = normalise n
+
 normalise (COne (TyCon (Id _ "Nat"))) = CNat 1
 normalise (CZero (TyCon (Id _ "Nat"))) = CNat 0
 normalise (COne (TyCon (Id _ "Level"))) = Level 1

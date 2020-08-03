@@ -1,13 +1,9 @@
-module Language.Granule.Checker.CoeffectsTypeConverter(justCoeffectTypesConverted, tyVarContextExistential) where
+module Language.Granule.Checker.CoeffectsTypeConverter(justCoeffectTypesConverted) where
 
-import Control.Monad.State.Strict
-import Data.Maybe(catMaybes, mapMaybe)
+import Data.Maybe(catMaybes)
 
 import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
-import Language.Granule.Checker.Predicates
-
-import Language.Granule.Context
 
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
@@ -29,14 +25,3 @@ justCoeffectTypesConverted s xs = catMaybes <$> mapM convert xs
         then return $ Just (var, (TyVar v, q))
         else return Nothing
     convert _ = return Nothing
-
--- Convert all universal variables to existential
-tyVarContextExistential :: Checker (Ctxt (Kind, Quantifier))
-tyVarContextExistential = do
-  st <- get
-  return $ mapMaybe (\(v, (k, q)) ->
-    case q of
-      -- This makes splitting work when the LHS is a pattern, but not sure if it
-      -- has adverse effects...
-      -- BoundQ -> Nothing
-      _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
