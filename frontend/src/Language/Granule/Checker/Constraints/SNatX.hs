@@ -10,7 +10,6 @@ module Language.Granule.Checker.Constraints.SNatX where
 -- import Control.Monad ((<=<))
 import Data.SBV
 import GHC.Generics (Generic)
-import Data.Monoid ((<>)) -- REMOVE for later GHCs
 
 newtype SNatX = SNatX { xVal  :: SInteger }
   deriving (Generic, Mergeable)

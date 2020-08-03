@@ -583,7 +583,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
           Just (TyApp (TyCon (internalName -> "Interval"))
                       (TyCon (internalName -> "Level")))
             -> True
-          _ -> False 
+          _ -> False
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
@@ -857,16 +857,20 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   (ef1, opt, ty1) <- case sig of
     Diamond ef1 (Box opt ty1) ->
         return (ef1, opt, ty1)
-    _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig } 
+    _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
 
   addConstraint (ApproximatedBy s (CInterval (CNat 0) (CNat 1)) opt (TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat") ) )
-  
+
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
+
+  -- as branch
   (tau2, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
-  (tau3, gam3, subst3, elaborated3) <- synthExpr defs (binders <> gam) pol e3
+
+  -- catch branch
+  (tau3, gam3, subst3, elaborated3) <- synthExpr defs gam pol e3
 
   -- check e2 and e3 are diamonds
   (ef2, ty2) <- case tau2 of
@@ -875,7 +879,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   (ef3, ty3) <- case tau3 of
       Diamond ef3 ty3 -> return (ef3, ty3)
       t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
-  
+
   --to better match the typing rule both continuation types should be equal
   (b, ty, _) <- equalTypes s ty2 ty3
   b <- case b of
@@ -886,7 +890,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
 
   -- linearity check for e2 and e3
   ctxtApprox s (gam2 `intersectCtxts` binders) binders
-  
+
   --contexts/binding
   gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
   gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
@@ -903,9 +907,9 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
   -- Synth subst
   t' <- substitute substP t
-  
+
   let elaborated = TryCatch s t rf elaborated1 elaboratedP mty elaborated2 elaborated3
-  return (t, gamNew3, subst, elaborated) 
+  return (t, gamNew3, subst, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ rf (Var _ x)) =
