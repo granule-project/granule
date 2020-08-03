@@ -867,10 +867,10 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
 
   -- as branch
-  (tau2, gam2, subst2, elaborated2) <- synthExpr defs binders pol e2
+  (tau2, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
 
   -- catch branch
-  (tau3, gam3, subst3, elaborated3) <- synthExpr defs (binders <> gam) pol e3
+  (tau3, gam3, subst3, elaborated3) <- synthExpr defs gam pol e3
 
   -- check e2 and e3 are diamonds
   (ef2, ty2) <- case tau2 of
