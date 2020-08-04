@@ -210,10 +210,10 @@ compile :: (?globals :: Globals) =>
   Ctxt SGrade -> Constraint -> Symbolic SBool
 
 compile vars (Eq _ c1 c2 t) =
-  bindM2And' eqConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' eqConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Neq _ c1 c2 t) =
-  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(CVar v) t) =
@@ -234,9 +234,9 @@ compile vars (Lub _ c1 c2 c3@(CVar v) t) =
       return (p1 .&& p2 .&& p3 .&& eq) -}
 
     _ -> do
-      (s1, p1) <- compileCoeffect c1 t vars
-      (s2, p2) <- compileCoeffect c2 t vars
-      (s3, p3) <- compileCoeffect c3 t vars
+      (s1, p1) <- compileCoeffect (normalise c1) t vars
+      (s2, p2) <- compileCoeffect (normalise c2) t vars
+      (s3, p3) <- compileCoeffect (normalise c3) t vars
       -- s3 is an upper bound
       pa1 <- approximatedByOrEqualConstraint s1 s3
       pb1 <- approximatedByOrEqualConstraint s2 s3
@@ -250,7 +250,7 @@ compile vars (Lub _ c1 c2 c3@(CVar v) t) =
       return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
-  bindM2And' approximatedByOrEqualConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' approximatedByOrEqualConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Lt s c1 c2) =
   bindM2And' symGradeLess (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)

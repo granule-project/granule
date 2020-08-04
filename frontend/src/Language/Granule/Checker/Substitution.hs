@@ -541,6 +541,11 @@ substituteExpr ctxt (LetDiamondF sp ty rf pattern mty value expr) =
         pattern' <- substitute ctxt pattern
         mty' <- mapM (substitute ctxt) mty
         return $ LetDiamond sp ty' rf pattern' mty' value expr
+substituteExpr ctxt (TryCatchF sp ty rf e1 pattern mty e2 e3) =
+    do  ty' <- substitute ctxt ty
+        pattern' <- substitute ctxt pattern
+        mty' <- mapM (substitute ctxt) mty
+        return $ TryCatch sp ty' rf e1 pattern' mty' e2 e3
 substituteExpr ctxt (ValF sp ty rf value) =
     do  ty' <- substitute ctxt ty
         return $ Val sp ty' rf value
