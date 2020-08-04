@@ -433,6 +433,38 @@ instance Substitutable Pred where
         (\id k p -> substitute ctxt k >>= \k' -> return $ Exists id k' p)
         (\id k p -> substitute ctxt k >>= \k' -> return $ Forall id k' p)
 
+instance Substitutable PredPath where
+  substitute subst Top = return Top
+  substitute subst (ConjLeft path) = do
+    path' <- substitute subst path
+    return $ ConjLeft path'
+  substitute subst (ConjRight pred path) = do
+    pred' <- substitute subst pred
+    path' <- substitute subst path
+    return $ ConjRight pred' path'
+  substitute subst (DisjLeft path) = do
+    path' <- substitute subst path
+    return $ DisjLeft path'
+  substitute subst (DisjRight pred path) = do
+    pred' <- substitute subst pred
+    path' <- substitute subst path
+    return $ DisjRight pred' path'
+  substitute subst (ImplPremise path) = do
+    path' <- substitute subst path
+    return $ ImplPremise path'
+  substitute subst (ImplConclusion pred path) = do
+    pred' <- substitute subst pred
+    path' <- substitute subst path
+    return $ ImplConclusion pred' path'
+  substitute subst (ExistsBody id k path) = do
+    path' <- substitute subst path
+    k'    <- substitute subst k
+    return $ ExistsBody id k' path'
+  substitute subst (ForallBody id k path) = do
+    path' <- substitute subst path
+    k'    <- substitute subst k
+    return $ ForallBody id k' path'
+
 instance Substitutable Constraint where
   substitute ctxt (Eq s c1 c2 k) = do
     c1 <- substitute ctxt c1
@@ -737,17 +769,9 @@ updateTyVar s tyVar k = do
           let subst = case k of
                         KPromote t -> [(tyVar, SubstT t)]
                         _          -> [(tyVar, SubstK k)]
-          ps <- mapM (substitute subst) (predicateStack st)
+          ps <- substitute subst (predicateStack st)
           put st{ predicateStack = ps }
 
-          {- }
-          case demoteKindToType k of
-              Nothing -> return ()
-              Just t -> do
-                  ps <- mapM (substitute [(v, SubstK t, q))])
-                  modify (\st -> st{ predicateStack = map (rewriteBindersInPredicate [(v, (t, q))])
-                                                          (predicateStack st)})
-  -}
       Nothing -> throw UnboundVariableError{ errLoc = s, errId = tyVar }
   where
     rewriteCtxt :: Ctxt (Kind, Quantifier) -> Ctxt (Kind, Quantifier)

@@ -214,9 +214,90 @@ data Pred where
     Disj :: [Pred] -> Pred
     Impl :: Pred -> Pred -> Pred
     Con  :: Constraint -> Pred
-    NegPred  :: Pred -> Pred
+    NegPred  :: Pred -> Pred 
     Exists :: Id -> Kind -> Pred -> Pred
     Forall :: Id -> Kind -> Pred -> Pred
+
+-- Predicate zipper
+data PredPath =
+    Top
+  | ConjLeft       { parent :: PredPath }
+  | ConjRight      { conjLeft :: Pred, parent :: PredPath }
+  | DisjLeft       { parent :: PredPath }
+  | DisjRight      { disjLeft :: Pred, parent :: PredPath }
+  | ImplPremise    { parent :: PredPath }
+  | ImplConclusion { implPremise :: Pred, parent :: PredPath }
+  | ExistsBody     { existsId :: Id, existsKind :: Kind, parent :: PredPath }
+  | ForallBody     { forallId :: Id, forallKind :: Kind, parent :: PredPath }
+  deriving (Show, Eq)
+
+-- | moveRight traverses 'up' a predicate zipper until we reach an `open` two-node which
+-- | is waiting to be closed with a left-subtree, at which point it returns the remaining
+-- | path with the left subtree (so that a two-node with the left filled in can be made)
+moveRight :: PredPath -> (Pred, PredPath)
+moveRight path = (predTrans (Conj []), path')
+  where
+    (predTrans, path') = moveRight' path
+
+    -- Stop unwinding at an 'open' node
+    moveRight' (ImplPremise path) = (id, path)
+    moveRight' (ConjLeft path)    = (id, path)
+    moveRight' (DisjLeft path)    = (id, path)
+
+    -- Unwind the rest
+    moveRight' Top = (id, Top)
+
+    moveRight' (ConjRight left path) =
+      let (p, path') = moveRight' path
+      in  (p . (\right -> Conj [left, right]), path')
+
+    moveRight' (DisjRight left path) =
+      let (p, path') = moveRight' path
+      in  (p . (\right -> Disj [left, right]), path')
+
+    moveRight' (ImplConclusion prem path) =
+      let (p, path') = moveRight' path
+      in  (p . (\concl -> Impl prem concl), path')
+
+    moveRight' (ForallBody id kind path) =
+      let (p, path') = moveRight' path
+      in  (p . (\body -> Forall id kind body), path')
+
+    moveRight' (ExistsBody id kind path) =
+      let (p, path') = moveRight' path
+      in  (p . (\body -> Exists id kind body), path')
+
+pathToPredicate :: PredPath -> Pred
+pathToPredicate path = predTrans (Conj [])
+  where
+   predTrans = pathToPredicate' path
+
+    -- Stop unwinding at an 'open' node
+   pathToPredicate' (ImplPremise path) =
+     error $ "Internal bug. Path contains an open implication. Path was: " ++ show path
+   pathToPredicate' (ConjLeft path) =
+     error $ "Internal bug. Path contains an open conjunction. Path was: " ++ show path
+   pathToPredicate' (DisjLeft path) =
+     error $ "Internal bug. Path contains an open disjunction. Path was: " ++ show path
+
+    -- Unwind the rest
+   pathToPredicate' Top = id
+
+   pathToPredicate' (ConjRight left path) =
+      (pathToPredicate' path) . (\right -> Conj [left, right])
+
+   pathToPredicate' (DisjRight left path) =
+      (pathToPredicate' path) . (\right -> Disj [left, right])
+
+   pathToPredicate' (ImplConclusion prem path) =
+      (pathToPredicate' path) . (\concl -> Impl prem concl)
+
+   pathToPredicate' (ForallBody id kind path) =
+      (pathToPredicate' path) . (\body -> Forall id kind body)
+
+   pathToPredicate' (ExistsBody id kind path) =
+      (pathToPredicate' path) . (\body -> Exists id kind body)
+
 
 mkUniversals :: Ctxt Kind -> Pred -> Pred
 mkUniversals [] p = p
@@ -363,8 +444,8 @@ instance Pretty [Pred] where
 instance Pretty Pred where
   pretty =
     predFold
-     (intercalate " ∧ ")
-     (intercalate " ∨ ")
+     (\ps -> if null ps then "T" else intercalate " ∧ " ps)
+     (\ps -> if null ps then "F" else intercalate " ∨ " ps)
      (\p q -> "(" <> p <> " -> " <> q <> ")")
      pretty
      (\p -> "¬(" <> p <> ")")
@@ -385,111 +466,3 @@ universalsAsExistentials vars =
   where
     forallCase var kind p =
       if var `elem` vars then Exists var kind p else Forall var kind p
-
-
--- TODO: replace with use of `substitute`
-
--- given an context mapping coeffect type variables to coeffect typ,
--- then rewrite a set of constraints so that any occruences of the kind variable
--- are replaced with the coeffect type
-rewriteBindersInPredicate :: Ctxt (Kind, Quantifier) -> Pred -> Pred
-rewriteBindersInPredicate ctxt =
-    predFold
-      Conj
-      Disj
-      Impl
-      (\c -> Con $ foldr (uncurry updateConstraint') c ctxt)
-      NegPred
-      existsCase
-      forallCase
-  where
-    existsCase :: Id -> Kind -> Pred -> Pred
-    existsCase var (KVar kvar) p =
-      Exists var k' p
-        where
-          k' = case lookup kvar ctxt of
-                  Just (k, _) -> k
-                  Nothing -> KVar kvar
-    existsCase var k p = Exists var k p
-
-    forallCase :: Id -> Kind -> Pred -> Pred
-    forallCase var (KVar kvar) p =
-      Forall var k' p
-        where
-          k' = case lookup kvar ctxt of
-                  Just (k, _) -> k
-                  Nothing -> KVar kvar
-    forallCase var k p = Forall var k p
-
-    updateConstraint' :: Id -> (Kind, Quantifier) -> Constraint -> Constraint
-    updateConstraint' id (k, q) c =
-      case demoteKindToType k of
-        Just t -> updateConstraint id (t, q) c
-        Nothing -> c
-
-    -- `updateConstraint v k c` rewrites any occurence of the kind variable
-    -- `v` in the constraint `c` with the kind `k`
-    updateConstraint :: Id -> (Type, Quantifier) -> Constraint -> Constraint
-    updateConstraint ckindVar (ckind, _) (Eq s c1 c2 k) =
-      Eq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-        (case k of
-          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-          _ -> k)
-    updateConstraint ckindVar (ckind, _) (Neq s c1 c2 k) =
-            Neq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-              (case k of
-                TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-                _ -> k)
-
-    updateConstraint ckindVar (ckind, _) (ApproximatedBy s c1 c2 k) =
-      ApproximatedBy s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-        (case k of
-          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-          _  -> k)
-
-    updateConstraint ckindVar (ckind, _) (Lub s c1 c2 c3 k) =
-      Lub s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2) (updateCoeffect ckindVar ckind c3)
-        (case k of
-          TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-          _  -> k)
-
-    updateConstraint ckindVar (ckind, _) (NonZeroPromotableTo s x c t) =
-       NonZeroPromotableTo s x (updateCoeffect ckindVar ckind c)
-          (case t of
-             TyVar ckindVar' | ckindVar == ckindVar' -> ckind
-             _  -> t)
-
-    updateConstraint ckindVar (ckind, _) (Lt s c1 c2) =
-        Lt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    updateConstraint ckindVar (ckind, _) (Gt s c1 c2) =
-        Gt s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    updateConstraint ckindVar (ckind, _) (GtEq s c1 c2) =
-        GtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    updateConstraint ckindVar (ckind, _) (LtEq s c1 c2) =
-        LtEq s (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-
-    -- `updateCoeffect v k c` rewrites any occurence of the kind variable
-    -- `v` in the coeffect `c` with the kind `k`
-    updateCoeffect :: Id -> Type -> Coeffect -> Coeffect
-    updateCoeffect ckindVar ckind (CZero (TyVar ckindVar'))
-      | ckindVar == ckindVar' = CZero ckind
-    updateCoeffect ckindVar ckind (COne (TyVar ckindVar'))
-      | ckindVar == ckindVar' = COne ckind
-    updateCoeffect ckindVar ckind (CMeet c1 c2) =
-      CMeet (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CJoin c1 c2) =
-      CJoin (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CPlus c1 c2) =
-      CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CTimes c1 c2) =
-      CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CMinus c1 c2) =
-      CMinus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CExpon c1 c2) =
-      CExpon (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CInterval c1 c2) =
-      CInterval (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect _ _ c = c

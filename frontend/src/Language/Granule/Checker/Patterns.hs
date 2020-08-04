@@ -35,7 +35,7 @@ definiteUnification :: (?globals :: Globals)
 definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
-  when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
+  when isPoly $
     addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
@@ -180,7 +180,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
 
       mapM_ (\ty -> do
         pred <- compileTypeConstraintToConstraint s ty
-        addPredicate pred) constraints
+        predicate_addPredicate pred) constraints
 
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"

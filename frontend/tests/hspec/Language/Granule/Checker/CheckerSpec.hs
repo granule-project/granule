@@ -32,8 +32,8 @@ spec = let ?globals = mempty in do
 
        c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
        tyVars `shouldBe` [(mkId "a.0", promoteTypeToKind $ natInterval)]
-       pred `shouldBe`
-        [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)]]
+       (pathToPredicate pred) `shouldBe`
+        (Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)])
          --[Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
          --     , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
@@ -42,8 +42,8 @@ spec = let ?globals = mempty in do
                           [(varA, Discharged (tyVarK) (cNatOrdered 5))]
                           []
        c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
-       pred `shouldBe`
-         [Conj [Con (Lub nullSpan (cNatOrdered 5) (CZero natInterval) (CVar (mkId "a.0")) natInterval)]]
+       (pathToPredicate pred) `shouldBe`
+         (Conj [Con (Lub nullSpan (cNatOrdered 5) (CZero natInterval) (CVar (mkId "a.0")) natInterval)])
          -- [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
          --      ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
 
@@ -64,7 +64,7 @@ spec = let ?globals = mempty in do
                  [(varA, Discharged (tyVarK) (cNatOrdered 10))]
 
       it "contexts with matching discharged variables" $ do
-         (c, preds) <- (runCtxts intersectCtxtsWithWeaken)
+         (c, _) <- (runCtxts intersectCtxtsWithWeaken)
                  [(varA, Discharged (tyVarK) (cNatOrdered 5))]
                  []
          c `shouldBe`
@@ -96,7 +96,7 @@ runCtxts
   => (Span -> a -> a -> Checker b)
   -> a
   -> a
-  -> IO (b, [Pred])
+  -> IO (b, PredPath)
 runCtxts f a b = do
   (Right res, state) <- runChecker initState (f nullSpan a b)
   pure (res, predicateStack state)

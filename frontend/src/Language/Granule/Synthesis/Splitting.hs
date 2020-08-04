@@ -176,7 +176,9 @@ validateCase span ty pats = do
   where
     popFromPredicateStack = do
       st <- get
-      return . head . predicateStack $ st
+      case predicateStack st of
+        ConjRight pred _ -> return pred
+        _ -> error "Internal bug at popFromPredicateStack. Please report"
 
 -- Returns a context linking variables to a context linking their types to
 -- their data constructors. The list of potential IDs is drawn from name

@@ -279,7 +279,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
     elaborateEquation equation = do
       -- Erase the solver predicate between equations
         modify' $ \st -> st
-            { predicateStack = []
+            { predicateStack = Top
             , tyVarContext = []
             , guardContexts = []
             , uniqueVarIdCounterMap = mempty
@@ -287,9 +287,8 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         elaboratedEq <- checkEquation defCtxt defName equation tys
 
         -- Solve the generated constraints
-        checkerState <- get
-
-        let predicate = Conj $ predicateStack checkerState
+        st <- get
+        let predicate = pathToPredicate (predicateStack st)
         solveConstraints predicate (getSpan equation) defName
         pure elaboratedEq
 
@@ -310,12 +309,13 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(ForallTyS _ foralls c
   -- Add all the universals to the predicate
   _ <- mapM (uncurry universal) foralls
 
-  -- Create conjunct to capture the pattern constraints
-  newConjunct
+  -- Open up new implication
+  predicate_newImplication
 
   mapM_ (\ty -> do
+    predicate_newConjunct
     pred <- compileTypeConstraintToConstraint s ty
-    addPredicate pred) constraints
+    predicate_addPredicate pred) constraints
 
   -- Build the binding context for the branch pattern
   st <- get
@@ -326,8 +326,8 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(ForallTyS _ foralls c
   modify (\st -> st { patternConsumption =
                          zipWith joinConsumption consumptions (patternConsumption st) } )
 
-  -- Create conjunct to capture the body expression constraints
-  newConjunct
+  -- Move to conclude the implication, capturing the body expression constraints
+  predicate_concludingImplication
 
   -- Specialise the return type by the pattern generated substitution
   debugM "eqn" $ "### -- patternGam = " <> show patternGam
@@ -357,8 +357,11 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(ForallTyS _ foralls c
       -- Check that our consumption context approximations the binding
       ctxtApprox s localGam patternGam
 
-      -- Conclude the implication
-      concludeImplication s localVars
+      -- Apply the substitutions to the predicate
+      st <- get
+      debugM "substitutions at end are = " (pretty substFinal)
+      predicateStack' <- substitute substFinal (predicateStack st)
+      put $ st { predicateStack = predicateStack' }
 
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
@@ -478,7 +481,7 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
       unless eqT $ throw TypeError{ errLoc = s, tyExpected = sig, tyActual = t' }
       return (tau, subst)
 
-  newConjunct
+  predicate_newImplication
 
   (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
   debugM "binding from lam" $ pretty bindings
@@ -488,7 +491,7 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
     -- Check the body in the extended context
     tau'' <- substitute subst tau'
 
-    newConjunct
+    predicate_concludingImplication
 
     (gam', subst2, elaboratedE) <- checkExpr defs (bindings <> gam) pol False tau'' e
     -- Check linearity of locally bound variables
@@ -605,9 +608,11 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
     forM cases $ \(pat_i, e_i) -> do
 
       -- Build the binding context for the branch pattern
-      newConjunct
+      predicate_newConjunct
+      predicate_newImplication
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
-      newConjunct
+
+      predicate_concludingImplication
 
       -- Checking the case body
       (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
@@ -615,8 +620,8 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
-      -- Conclude the implication
-      concludeImplication (getSpan pat_i) eVars
+      -- Conclude the implication by closing off the current conjunct
+      predicate_concludeLeftConjunct
 
       -- Check linear use in anything Linear
       gamSoFar <- ctxtPlus s guardGam localGam
@@ -731,7 +736,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
 
       mapM_ (\ty -> do
         pred <- compileTypeConstraintToConstraint s ty
-        addPredicate pred) constraints
+        predicate_addPredicate pred) constraints
 
       -- Apply coercions
       ty <- substitute coercions' ty
@@ -756,9 +761,11 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
   branchTysAndCtxtsAndSubsts <-
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
-      newConjunct
+      predicate_newConjunct
+      predicate_newImplication
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
-      newConjunct
+
+      predicate_concludingImplication
 
       -- Synth the case body
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
@@ -767,7 +774,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
       -- Conclude
-      concludeImplication (getSpan pati) eVars
+      predicate_concludeLeftConjunct
 
       -- Check linear use in this branch
       gamSoFar <- ctxtPlus s guardGam localGam
@@ -921,7 +928,7 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) =
 
            mapM_ (\ty -> do
              pred <- compileTypeConstraintToConstraint s ty
-             addPredicate pred) constraints
+             predicate_addPredicate pred) constraints
 
            let elaborated = Val s ty' rf (Var ty' x)
            return (ty', [], [], elaborated)
