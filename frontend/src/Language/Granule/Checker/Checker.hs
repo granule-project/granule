@@ -859,10 +859,11 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
         return (ef1, opt, ty1)
     _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
 
-  addConstraint (ApproximatedBy s (CInterval (CNat 0) (CNat 1)) opt (TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat") ) )
-
+  (t, _) <- inferCoeffectType s opt
+  addConstraint (ApproximatedBy s (CZero t) opt t)
+ 
   -- Type clauses in the context of the binders from the pattern
-  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s (Box opt ty1) (PBox s () False p) NotFull
   pIrrefutable <- isIrrefutable s ty1 p
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
 
