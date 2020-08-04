@@ -846,6 +846,13 @@ checkKind s ctxt t k@(KUnion k1 k2) =
     const (checkKind s ctxt t k2) `catchError`
       const (throw KindError { errLoc = s, errTy = t, errK = k })
 
+-- KChk_sig
+checkKind s ctxt (TySig t k) k' = do
+  join <- k `joinKind` k'
+  case join of
+    Just (_, subst) -> return subst
+    Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+
 -- Fall through to synthesis if checking can not be done.
 checkKind s ctxt t k = do
   (k', subst) <- synthKind s ctxt t
@@ -955,6 +962,11 @@ synthKind s ctxt (TySet (t:ts)) = do
         -- If the kind cannot be demoted then we shouldn't be making a set
         Nothing -> throw KindCannotFormSet { errLoc = s,  errK = k }
 
+-- KChkS_sig
+synthKind s ctxt (TySig t k) = do
+  subst <- checkKind s ctxt t k
+  return (k, subst)
+
 synthKind s _ t = do
   debugM "Can't synth" (pretty t)
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
@@ -998,7 +1010,6 @@ closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
       putChecker
       return $ Just subst
 
--- TODO: Investigate the consequences of this.
 closedOperatorAtKind _ _ op (KVar _) = do
   return $ if closedOperation op then Just [] else Nothing
 
