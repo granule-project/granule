@@ -10,6 +10,7 @@ import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 
@@ -157,15 +158,20 @@ validateCase :: (?globals :: Globals)
   -> Checker Bool
 validateCase span ty pats = do
   st <- get
-  newConjunct
+  predicate_newConjunct
 
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
-  (_, _, localVars, _, _, _) <-
+  (_, _, localVars, subst, _, _) <-
     ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
+
+  predicate_concludeLeftConjunct
   pred <- popFromPredicateStack
 
-  -- Quantify the predicate by the existence of all local variables.
+  -- Quantify the predicate by the existence of all local variables
+  -- and apply the substitution from the pattern to update any variables
+  -- in the predicate
+  pred <- substitute subst pred
   let thm = foldr (uncurry Exists) pred localVars
   result <- liftIO $ provePredicate thm
 

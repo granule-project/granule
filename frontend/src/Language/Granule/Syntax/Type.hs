@@ -269,6 +269,20 @@ isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
     Just (t, t')
 isProduct _ = Nothing
 
+-- Calculate whether a coeffect expression could be used for any semiring
+isGenericCoeffectExpression :: Type -> Bool
+isGenericCoeffectExpression (TyInt 1) = True
+isGenericCoeffectExpression (TyInt 0) = True
+isGenericCoeffectExpression (TyInfix TyOpPlus c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression (TyInfix TyOpTimes c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression (TyInfix TyOpMeet c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression (TyInfix TyOpJoin c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression _ = False
+
 ----------------------------------------------------------------------
 -- Helpers
 

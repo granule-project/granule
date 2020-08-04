@@ -5,7 +5,6 @@
 module Language.Granule.Checker.Constraints.Compile where
 
 import Language.Granule.Checker.Kinds
-import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 

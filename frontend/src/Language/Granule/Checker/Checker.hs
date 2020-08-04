@@ -355,19 +355,18 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(ForallTyS _ foralls c
       localGam <- substitute subst localGam
 
       -- Check that our consumption context approximations the binding
-      ctxtApprox s localGam patternGam
+      subst'' <- ctxtApprox s localGam patternGam
+      substFinal <- combineManySubstitutions s [subst, subst', subst'']
 
       -- Apply the substitutions to the predicate
       st <- get
-      debugM "substitutions at end are = " (pretty substFinal)
       predicateStack' <- substitute substFinal (predicateStack st)
       put $ st { predicateStack = predicateStack' }
 
       -- Create elaborated equation
-      subst'' <- combineSubstitutions s subst subst'
       let elab = Equation s ty rf elaborated_pats elaboratedExpr
 
-      elab' <- substitute subst'' elab
+      elab' <- substitute substFinal elab
       return elab'
 
     -- Anything that was bound in the pattern but not used up
@@ -497,16 +496,15 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
     -- Check linearity of locally bound variables
     case checkLinearity bindings gam' of
        [] -> do
-          subst <- combineSubstitutions s subst1 subst2
+          subst <- combineManySubstitutions s [subst1, subst, subst2]
 
           -- Locally we should have this property (as we are under a binder)
-          ctxtApprox s (gam' `intersectCtxts` bindings) bindings
-
-          concludeImplication s localVars
+          subst' <- ctxtApprox s (gam' `intersectCtxts` bindings) bindings
 
           let elaborated = Val s ty rf (Abs ty elaboratedP t elaboratedE)
 
-          return (gam' `subtractCtxt` bindings, subst, elaborated)
+          substFinal <- combineSubstitutions s subst subst'
+          return (gam' `subtractCtxt` bindings, substFinal, elaborated)
 
        (p:ps) -> illLinearityMismatch s (p:|ps)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
@@ -573,10 +571,11 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     -- (the guard contexts come from a special context in the solver)
     guardGam <- allGuardContexts
     guardGam' <- filterM isLevelKinded guardGam
-    gam'' <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
+    (gam'', subst') <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
 
+    substFinal <- combineSubstitutions s subst subst'
     let elaborated = Val s ty rf (Promote tau elaboratedE)
-    return (gam'', subst, elaborated)
+    return (gam'', substFinal, elaborated)
   where
     -- Calculate whether a type assumption is level kinded
     isLevelKinded (_, as) = do
@@ -618,7 +617,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
+      subst'' <- ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
       -- Conclude the implication by closing off the current conjunct
       predicate_concludeLeftConjunct
@@ -629,8 +628,9 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
+           substFinal <- combineManySubstitutions s [subst, subst', subst'']
            return (localGam `subtractCtxt` patternGam
-                 , subst'
+                 , substFinal
                  , (elaborated_pat_i, elaborated_i))
 
         -- Anything that was bound in the pattern but not used correctly
@@ -771,7 +771,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
+      subst'' <- ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
       -- Conclude
       predicate_concludeLeftConjunct
@@ -781,8 +781,10 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       case checkLinearity patternGam gamSoFar of
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
-         [] -> return (tyCase
-                    , (localGam `subtractCtxt` patternGam, subst')
+         [] -> do
+            substFinal <- combineManySubstitutions s [subst, subst', subst'']
+            return (tyCase
+                    , (localGam `subtractCtxt` patternGam, substFinal)
                     , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
@@ -842,7 +844,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Check that usage matches the binding grades/linearity
   -- (performs the linearity check)
-  ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst3 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
@@ -851,7 +853,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
   ef <- effectMult s efTy ef1 ef2
   let t = Diamond ef ty2
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2, u]
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, u]
   -- Synth subst
   t' <- substitute substP t
 
@@ -894,7 +896,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   optionalSigEquality s mty ty1
 
   -- linearity check for e2 and e3
-  ctxtApprox s (gam2 `intersectCtxts` binders) binders
+  subst4 <- ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   --contexts/binding
   gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
@@ -909,7 +911,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   ef <- effectMult s efTy f g
   let t = Diamond ef ty
 
-  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst4, subst']
   -- Synth subst
   t' <- substitute substP t
 
@@ -947,7 +949,6 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) =
        return (ty, [(x, Discharged ty (COne k))], subst, elaborated)
 
 -- Specialised application for scale
-{- TODO: needs thought -}
 synthExpr defs gam pol
       (App s _ rf (Val s' _ rf' (Var _ v)) (Val s'' _ rf'' (NumFloat r))) | internalName v == "scale" = do
 
@@ -1005,8 +1006,9 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    let finalTy = Box (CVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
 
-   gam'' <- multAll s (freeVars e) (CVar var) gam'
-   return (finalTy, gam'', subst, elaborated)
+   (gam'', subst') <- multAll s (freeVars e) (CVar var) gam'
+   substFinal <- combineSubstitutions s subst subst'
+   return (finalTy, gam'', substFinal, elaborated)
 
 
 -- BinOp
@@ -1048,26 +1050,24 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
 
-  newConjunct
+  predicate_newImplication
 
   (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
-  newConjunct
+  predicate_concludingImplication
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
+     subst' <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
 
-     substFinal <- combineSubstitutions s substP subst
+     substFinal <- combineManySubstitutions s [substP, subst, subst']
      finalTy' <- substitute substP finalTy
-
-     concludeImplication s localVars
 
      return (finalTy', gam'' `subtractCtxt` bindings, substFinal, elaborated)
 
@@ -1077,29 +1077,27 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
 -- lambda in Church style (explicit type)
 synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
 
-  newConjunct
+  predicate_newImplication
 
   tyVar <- freshTyVarInContext (mkId "t") KType
   let sig = (TyVar tyVar)
 
   (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
 
-  newConjunct
+  predicate_concludingImplication
 
   pIrrefutable <- isIrrefutable s sig p
   if pIrrefutable then do
      (tau, gam'', subst, elaboratedE) <- synthExpr defs (bindings <> gam) pol e
 
      -- Locally we should have this property (as we are under a binder)
-     ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
+     subst' <- ctxtApprox s (gam'' `intersectCtxts` bindings) bindings
 
      let finalTy = FunTy Nothing sig tau
      let elaborated = Val s finalTy rf (Abs finalTy elaboratedP (Just sig) elaboratedE)
      finalTy' <- substitute substP finalTy
 
-     concludeImplication s localVars
-
-     subst <- combineSubstitutions s substP subst
+     subst <- combineManySubstitutions s [substP, subst, subst']
 
      return (finalTy', gam'' `subtractCtxt` bindings, subst, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
@@ -1116,14 +1114,7 @@ optionalSigEquality s (Just t) t' = do
 
 solveConstraints :: (?globals :: Globals) => Pred -> Span -> Id -> Checker ()
 solveConstraints predicate s name = do
-
-  -- Get the coeffect kind context and constraints
-  checkerState <- get
-  let predicate' = rewriteBindersInPredicate (tyVarContext checkerState) predicate
-
-  debugM "Solver predicate" $ pretty predicate'
-
-  result <- liftIO $ provePredicate predicate'
+  result <- liftIO $ provePredicate predicate
   case result of
     QED -> return ()
     NotValid msg -> do
@@ -1177,10 +1168,10 @@ rewriteMessage msg = do
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage
 ctxtApprox :: (?globals :: Globals) =>
-    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker ()
+    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker Substitution
 ctxtApprox s ctxt1 ctxt2 = do
   -- intersection contains those ids from ctxt1 which appears in ctxt2
-  intersection <-
+  intersectionAndSubstitutions <-
     -- For everything in the right context
     -- (which should come as an input to checking)
     forM ctxt2 $ \(id, ass2) ->
@@ -1188,9 +1179,8 @@ ctxtApprox s ctxt1 ctxt2 = do
       case lookup id ctxt1 of
         -- ... if so equate
         Just ass1 -> do
-          -- TODO: deal with the subst here
-          _ <- relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
-          return id
+          subst <- relateByAssumption s ApproximatedBy (id, ass1) (id, ass2)
+          return (id, subst)
         -- ... if not check to see if the missing variable is linear
         Nothing   ->
            case ass2 of
@@ -1198,55 +1188,18 @@ ctxtApprox s ctxt1 ctxt2 = do
              Linear t -> illLinearityMismatch s . pure $ LinearNotUsed id
              -- Else, this could be due to weakening so see if this is allowed
              Discharged t c -> do
-               -- TODO: deal with the subst here
-               (kind, _) <- inferCoeffectType s c
-               -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (CZero kind)) (id, ass2)
-               return id
+               (kind, subst) <- inferCoeffectType s c
+               subst' <- relateByAssumption s ApproximatedBy (id, Discharged t (CZero kind)) (id, ass2)
+               substFinal <- combineSubstitutions s subst subst'
+               return (id, substFinal)
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
+  let (intersection, substitutions) = unzip intersectionAndSubstitutions
   forM_ ctxt1 $ \(id, ass1) ->
     if (id `elem` intersection)
       then return ()
       else throw UnboundVariableError{ errLoc = s, errId = id }
-
-
--- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
---   and the typical pattern is that `ctxt2` represents a specification
---   (i.e. input to checking) and `ctxt1` represents actually usage
-ctxtEquals :: (?globals :: Globals) =>
-    Span -> Ctxt Assumption -> Ctxt Assumption -> Checker ()
-ctxtEquals s ctxt1 ctxt2 = do
-  -- intersection contains those ids from ctxt1 which appears in ctxt2
-  intersection <-
-    -- For everything in the right context
-    -- (which should come as an input to checking)
-    forM ctxt2 $ \(id, ass2) ->
-      -- See if it appears in the left context...
-      case lookup id ctxt1 of
-        -- ... if so equate
-        Just ass1 -> do
-          -- -- TODO: deal with the subst here
-          _ <- relateByAssumption s Eq (id, ass1) (id, ass2)
-          return id
-        -- ... if not check to see if the missing variable is linear
-        Nothing   ->
-           case ass2 of
-             -- Linear gets instantly reported
-             Linear t -> illLinearityMismatch s . pure $ LinearNotUsed id
-             -- Else, this could be due to weakening so see if this is allowed
-             Discharged t c -> do
-               -- TODO: deal with the subst here
-               (kind, _) <- inferCoeffectType s c
-               -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Discharged t (CZero kind)) (id, ass2)
-               return id
-  -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
-  -- then we have an issue!
-  forM_ ctxt1 $ \(id, ass1) ->
-    if (id `elem` intersection)
-      then return ()
-      else throw UnboundVariableError{ errLoc = s, errId = id }
+  combineManySubstitutions s substitutions
 
 {- | Take the least-upper bound of two contexts.
      If one context contains a linear variable that is not present in
@@ -1483,10 +1436,10 @@ checkGuardsForImpossibility s name = do
   let ps = head $ guardPredicates st
 
   -- For each guard predicate
-  forM_ ps $ \((ctxt, p), s) -> do
+  forM_ ps $ \p -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
-    let thm = universalsAsExistentials (getCtxtIds (tyVarContext st) ++ (getCtxtIds ctxt)) p
+    let thm = universalsAsExistentials (getCtxtIds (tyVarContext st)) p
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
