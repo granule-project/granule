@@ -183,7 +183,7 @@ validateCase span ty pats = do
     popFromPredicateStack = do
       st <- get
       case predicateStack st of
-        ConjRight pred _ -> return pred
+        ConjRight pred _ _ -> return pred
         _ -> error "Internal bug at popFromPredicateStack. Please report"
 
 -- Returns a context linking variables to a context linking their types to

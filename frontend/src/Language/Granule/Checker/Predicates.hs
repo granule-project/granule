@@ -214,19 +214,19 @@ data Pred where
     Disj :: [Pred] -> Pred
     Impl :: Pred -> Pred -> Pred
     Con  :: Constraint -> Pred
-    NegPred  :: Pred -> Pred 
+    NegPred  :: Pred -> Pred
     Exists :: Id -> Kind -> Pred -> Pred
     Forall :: Id -> Kind -> Pred -> Pred
 
 -- Predicate zipper
 data PredPath =
     Top
-  | ConjLeft       { parent :: PredPath }
-  | ConjRight      { conjLeft :: Pred, parent :: PredPath }
-  | DisjLeft       { parent :: PredPath }
-  | DisjRight      { disjLeft :: Pred, parent :: PredPath }
-  | ImplPremise    { parent :: PredPath }
-  | ImplConclusion { implPremise :: Pred, parent :: PredPath }
+  | ConjLeft       { parent :: PredPath, pinQuantifiers :: Bool }
+  | ConjRight      { conjLeft :: Pred, parent :: PredPath, pinQuantifiers :: Bool }
+  | DisjLeft       { parent :: PredPath, pinQuantifiers :: Bool }
+  | DisjRight      { disjLeft :: Pred, parent :: PredPath, pinQuantifiers :: Bool }
+  | ImplPremise    { parent :: PredPath , pinQuantifiers :: Bool}
+  | ImplConclusion { implPremise :: Pred, parent :: PredPath, pinQuantifiers :: Bool }
   | ExistsBody     { existsId :: Id, existsKind :: Kind, parent :: PredPath }
   | ForallBody     { forallId :: Id, forallKind :: Kind, parent :: PredPath }
   deriving (Show, Eq)
@@ -240,22 +240,22 @@ moveRight path = (predTrans (Conj []), path')
     (predTrans, path') = moveRight' path
 
     -- Stop unwinding at an 'open' node
-    moveRight' (ImplPremise path) = (id, path)
-    moveRight' (ConjLeft path)    = (id, path)
-    moveRight' (DisjLeft path)    = (id, path)
+    moveRight' (ImplPremise path _) = (id, path)
+    moveRight' (ConjLeft path _)    = (id, path)
+    moveRight' (DisjLeft path _)    = (id, path)
 
     -- Unwind the rest
     moveRight' Top = (id, Top)
 
-    moveRight' (ConjRight left path) =
+    moveRight' (ConjRight left path _) =
       let (p, path') = moveRight' path
       in  (p . (\right -> Conj [left, right]), path')
 
-    moveRight' (DisjRight left path) =
+    moveRight' (DisjRight left path _) =
       let (p, path') = moveRight' path
       in  (p . (\right -> Disj [left, right]), path')
 
-    moveRight' (ImplConclusion prem path) =
+    moveRight' (ImplConclusion prem path _) =
       let (p, path') = moveRight' path
       in  (p . (\concl -> Impl prem concl), path')
 
@@ -273,23 +273,23 @@ pathToPredicate path = predTrans (Conj [])
    predTrans = pathToPredicate' path
 
     -- Stop unwinding at an 'open' node
-   pathToPredicate' (ImplPremise path) =
+   pathToPredicate' (ImplPremise path _) =
      error $ "Internal bug. Path contains an open implication. Path was: " ++ show path
-   pathToPredicate' (ConjLeft path) =
+   pathToPredicate' (ConjLeft path _) =
      error $ "Internal bug. Path contains an open conjunction. Path was: " ++ show path
-   pathToPredicate' (DisjLeft path) =
+   pathToPredicate' (DisjLeft path _) =
      error $ "Internal bug. Path contains an open disjunction. Path was: " ++ show path
 
     -- Unwind the rest
    pathToPredicate' Top = id
 
-   pathToPredicate' (ConjRight left path) =
+   pathToPredicate' (ConjRight left path _) =
       (pathToPredicate' path) . (\right -> Conj [left, right])
 
-   pathToPredicate' (DisjRight left path) =
+   pathToPredicate' (DisjRight left path _) =
       (pathToPredicate' path) . (\right -> Disj [left, right])
 
-   pathToPredicate' (ImplConclusion prem path) =
+   pathToPredicate' (ImplConclusion prem path _) =
       (pathToPredicate' path) . (\concl -> Impl prem concl)
 
    pathToPredicate' (ForallBody id kind path) =
@@ -297,7 +297,6 @@ pathToPredicate path = predTrans (Conj [])
 
    pathToPredicate' (ExistsBody id kind path) =
       (pathToPredicate' path) . (\body -> Exists id kind body)
-
 
 mkUniversals :: Ctxt Kind -> Pred -> Pred
 mkUniversals [] p = p
@@ -392,11 +391,11 @@ predFold ::
   -> (Id -> Kind -> a -> a)
   -> Pred
   -> a
-predFold c d i a n e f (Conj ps)   = c (map (predFold c d i a n e f) ps)
-predFold c d i a n e f (Disj ps)   = d (map (predFold c d i a n e f) ps)
-predFold c d i a n e f (Impl p p') = i (predFold c d i a n e f p) (predFold c d i a n e f p')
-predFold _ _ _ a _  _ _ (Con cons)  = a cons
-predFold c d i a n e f (NegPred p) = n (predFold c d i a n e f p)
+predFold c d i a n e f (Conj ps)      = c (map (predFold c d i a n e f) ps)
+predFold c d i a n e f (Disj ps)      = d (map (predFold c d i a n e f) ps)
+predFold c d i a n e f (Impl p p')    = i (predFold c d i a n e f p) (predFold c d i a n e f p')
+predFold _ _ _ a _  _ _ (Con cons)    = a cons
+predFold c d i a n e f (NegPred p)    = n (predFold c d i a n e f p)
 predFold c d i a n e f (Exists x t p) = e x t (predFold c d i a n e f p)
 predFold c d i a n e f (Forall x t p) = f x t (predFold c d i a n e f p)
 
@@ -449,8 +448,8 @@ instance Pretty Pred where
      (\p q -> "(" <> p <> " -> " <> q <> ")")
      pretty
      (\p -> "¬(" <> p <> ")")
-     (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)
-     (\x t p -> "∀ " <> pretty x <> " : " <> pretty t <> " . " <> p)
+     (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . (" <> p <> ")")
+     (\x t p -> "∀ " <> pretty x <> " : " <> pretty t <> " . (" <> p <> ")")
 
 -- | Whether the predicate is empty, i.e. contains no constraints
 isTrivial :: Pred -> Bool

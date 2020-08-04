@@ -245,7 +245,7 @@ allGuardContexts = concat . guardContexts <$> get
 -- | Start a new implication
 predicate_newImplication :: Checker ()
 predicate_newImplication =
-  modify (\st -> st { predicateStack = ImplPremise (predicateStack st) } )
+  modify (\st -> st { predicateStack = ImplPremise (predicateStack st) False } )
 
 -- | Move from being in the implication premise to being in the implication conclusion
 predicate_concludingImplication :: Checker ()
@@ -254,25 +254,25 @@ predicate_concludingImplication = do
   -- Traverse up the zipper until an implication is reached
   let (premise, path') = moveRight (predicateStack st)
   -- Put the predicate zipper at the position of the conclusion
-  put $ st { predicateStack  = ImplConclusion { implPremise = premise, parent = path' }
+  put $ st { predicateStack  = ImplConclusion { implPremise = premise, parent = path', pinQuantifiers = False }
         , guardPredicates = addToGuardPredicate premise (guardPredicates st) }
 
 predicate_concludeLeftConjunct :: Checker ()
 predicate_concludeLeftConjunct = modify (\st ->
   let (leftConjunct, path') = moveRight (predicateStack st)
-  in st { predicateStack = ConjRight leftConjunct path' } )
+  in st { predicateStack = ConjRight leftConjunct path' False } )
 
 predicate_newConjunct :: Checker ()
 predicate_newConjunct = modify (\st ->
-  st { predicateStack = ConjLeft (predicateStack st) })
+  st { predicateStack = ConjLeft (predicateStack st) False })
 
 predicate_addPredicate :: Pred -> Checker ()
 predicate_addPredicate pred = modify (\st ->
-  st { predicateStack = ConjRight pred (predicateStack st) })
+  st { predicateStack = ConjRight pred (predicateStack st) False })
 
 addConstraint :: Constraint -> Checker ()
 addConstraint con = modify (\st ->
-  st { predicateStack = ConjRight (Con con) (predicateStack st) })
+  st { predicateStack = ConjRight (Con con) (predicateStack st) False })
 
 addToGuardPredicate :: Pred -> [[Pred]] -> [[Pred]]
 addToGuardPredicate p ([] : guardPredicates) = [p] : guardPredicates

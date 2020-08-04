@@ -435,27 +435,27 @@ instance Substitutable Pred where
 
 instance Substitutable PredPath where
   substitute subst Top = return Top
-  substitute subst (ConjLeft path) = do
+  substitute subst (ConjLeft path q) = do
     path' <- substitute subst path
-    return $ ConjLeft path'
-  substitute subst (ConjRight pred path) = do
+    return $ ConjLeft path' q
+  substitute subst (ConjRight pred path q) = do
     pred' <- substitute subst pred
     path' <- substitute subst path
-    return $ ConjRight pred' path'
-  substitute subst (DisjLeft path) = do
+    return $ ConjRight pred' path' q
+  substitute subst (DisjLeft path q) = do
     path' <- substitute subst path
-    return $ DisjLeft path'
-  substitute subst (DisjRight pred path) = do
+    return $ DisjLeft path' q
+  substitute subst (DisjRight pred path q) = do
     pred' <- substitute subst pred
     path' <- substitute subst path
-    return $ DisjRight pred' path'
-  substitute subst (ImplPremise path) = do
+    return $ DisjRight pred' path' q
+  substitute subst (ImplPremise path q) = do
     path' <- substitute subst path
-    return $ ImplPremise path'
-  substitute subst (ImplConclusion pred path) = do
+    return $ ImplPremise path' q
+  substitute subst (ImplConclusion pred path q) = do
     pred' <- substitute subst pred
     path' <- substitute subst path
-    return $ ImplConclusion pred' path'
+    return $ ImplConclusion pred' path' q
   substitute subst (ExistsBody id k path) = do
     path' <- substitute subst path
     k'    <- substitute subst k
