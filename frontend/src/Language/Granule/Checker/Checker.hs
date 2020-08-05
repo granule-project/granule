@@ -289,6 +289,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         -- Solve the generated constraints
         st <- get
         let predicate = pathToPredicate (predicateStack st)
+        debugM "solver predicate is" (pretty predicate)
         solveConstraints predicate (getSpan equation) defName
         pure elaboratedEq
 
