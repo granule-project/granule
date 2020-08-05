@@ -77,10 +77,7 @@ compileToSBV predicate =
                   return (varPred .&& pred'))
 
             Nothing ->
-              case k of
-                KType -> buildTheorem' solverVars p
-                _ ->
-                  solverError $ "Trying to make a fresh existential solver variable for a grade of kind: "
+              solverError $ "Trying to make a fresh existential solver variable for a grade of kind: "
                              <> show k <> " but I don't know how."
         else
           -- optimisation, if a variable does not appear free
@@ -97,15 +94,11 @@ compileToSBV predicate =
                   return (varPred .=> pred'))
 
             Nothing ->
-              case k of
-                KType -> buildTheorem' solverVars p
-                _ ->
-                  solverError $ "Trying to make a fresh existential solver variable for a grade of kind: "
+              solverError $ "Trying to make a fresh universal solver variable for a grade of kind: "
                              <> show k <> " but I don't know how."
         else
           -- optimisation, if a variable does not appear free
           buildTheorem' solverVars p
-
 
     buildTheorem' solverVars (Con cons) =
       compile solverVars cons

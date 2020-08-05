@@ -309,8 +309,11 @@ popCaseFrame =
 existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of
-    -- No need to add variables of kind Type to the predicate
-    KType -> return ()
+    -- No need to add variables of kind Type/Coeffect/Effect to the predicate
+    KType     -> return ()
+    KCoeffect -> return ()
+    KEffect   -> return ()
+    -- The rest
     k -> do
       st <- get
       if pinMode st
@@ -321,8 +324,11 @@ existential var k = do
 universal :: Id -> Kind -> Checker ()
 universal var k = do
   case k of
-    -- No need to add variables of kind Type to the predicate
-    KType -> return ()
+    -- No need to add variables of kind Type/Coeffect/Effect to the predicate
+    KType     -> return ()
+    KCoeffect -> return ()
+    KEffect   -> return ()
+    -- The rest
     k -> do
       st <- get
       if pinMode st
