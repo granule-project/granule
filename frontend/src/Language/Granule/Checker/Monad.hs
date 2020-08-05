@@ -133,6 +133,7 @@ data CheckerState = CS
             , uniqueVarIdCounter     :: Nat
             -- Local stack of constraints (can be used to build implications)
             , predicateStack :: PredPath
+            , pinMode        :: Bool
 
             -- Stack of a list of predicates from failed patterns/guards
             -- (i.e. from preceding cases) stored as a list of lists ("frames")
@@ -178,6 +179,7 @@ initState :: CheckerState
 initState = CS { uniqueVarIdCounterMap = M.empty
                , uniqueVarIdCounter = 0
                , predicateStack = Top
+               , pinMode = False
                , guardPredicates = [[]]
                , tyVarContext = []
                , guardContexts = []
@@ -247,6 +249,18 @@ predicate_newImplication :: Checker ()
 predicate_newImplication =
   modify (\st -> st { predicateStack = ImplPremise (predicateStack st) False } )
 
+predicate_pinQuantifiersAtTopOfThisScope :: Checker a -> Checker a
+predicate_pinQuantifiersAtTopOfThisScope m = do
+  -- Set pin mode and pin the stack
+  modify (\st ->
+    st { pinMode = True
+       , predicateStack = insertPin (predicateStack st) })
+  -- Computation to run bracketed
+  result <- m
+  -- Reset pin mode
+  modify (\st -> st { pinMode = False })
+  return result
+
 -- | Move from being in the implication premise to being in the implication conclusion
 predicate_concludingImplication :: Checker ()
 predicate_concludingImplication = do
@@ -297,8 +311,11 @@ existential var k = do
   case k of
     -- No need to add variables of kind Type to the predicate
     KType -> return ()
-    k ->
-      modify (\st -> st { predicateStack = ExistsBody var k (predicateStack st) })
+    k -> do
+      st <- get
+      if pinMode st
+        then modify (\st -> st { predicateStack = existentialAtPin var k (predicateStack st) })
+        else modify (\st -> st { predicateStack = ExistsBody var k (predicateStack st) })
 
 -- Create a local universal scope
 universal :: Id -> Kind -> Checker ()
@@ -306,8 +323,11 @@ universal var k = do
   case k of
     -- No need to add variables of kind Type to the predicate
     KType -> return ()
-    k ->
-      modify (\st -> st { predicateStack = ForallBody var k (predicateStack st) })
+    k -> do
+      st <- get
+      if pinMode st
+        then modify (\st -> st { predicateStack = universalAtPin var k (predicateStack st) })
+        else modify (\st -> st { predicateStack = ForallBody var k (predicateStack st) })
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
@@ -793,7 +813,6 @@ instance UserMsg CheckerError where
 
   color HoleMessage{} = Blue
   color _ = Red
-
 
 data LinearityMismatch
   = LinearNotUsed Id

@@ -590,7 +590,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
           _ -> False
 
 -- Check a case expression
-checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
+checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = predicate_pinQuantifiersAtTopOfThisScope $ do
 
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
@@ -629,6 +629,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- the variable bound in the pattern of this branch
         [] -> do
            substFinal <- combineManySubstitutions s [subst, subst', subst'']
+
            return (localGam `subtractCtxt` patternGam
                  , substFinal
                  , (elaborated_pat_i, elaborated_i))
@@ -747,7 +748,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
 
 -- Case synthesis
-synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
+synthExpr defs gam pol (Case s _ rf guardExpr cases) = predicate_pinQuantifiersAtTopOfThisScope $ do
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
   -- then synthesise the types of the branches

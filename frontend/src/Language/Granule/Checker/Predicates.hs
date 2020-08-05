@@ -4,6 +4,8 @@
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE DeriveGeneric #-}
 
+{-# options_ghc -Wno-incomplete-record-updates #-}
+
 module Language.Granule.Checker.Predicates where
 
 {-
@@ -231,6 +233,12 @@ data PredPath =
   | ForallBody     { forallId :: Id, forallKind :: Kind, parent :: PredPath }
   deriving (Show, Eq)
 
+pinHere :: PredPath -> Bool
+pinHere Top          = True
+pinHere ExistsBody{} = True
+pinHere ForallBody{} = True
+pinHere p = pinQuantifiers p
+
 -- | moveRight traverses 'up' a predicate zipper until we reach an `open` two-node which
 -- | is waiting to be closed with a left-subtree, at which point it returns the remaining
 -- | path with the left subtree (so that a two-node with the left filled in can be made)
@@ -297,6 +305,29 @@ pathToPredicate path = predTrans (Conj [])
 
    pathToPredicate' (ExistsBody id kind path) =
       (pathToPredicate' path) . (\body -> Exists id kind body)
+
+insertPin :: PredPath -> PredPath
+insertPin (ConjLeft path _) = ConjLeft path True
+insertPin (ConjRight pred path _) = ConjRight pred path True
+insertPin (DisjLeft path _) = DisjLeft path True
+insertPin (DisjRight pred path _) = DisjRight pred path True
+insertPin (ImplPremise path _) = ImplPremise path True
+insertPin (ImplConclusion pred path _) = ImplConclusion pred path True
+insertPin p = p
+
+existentialAtPin :: Id -> Kind -> PredPath -> PredPath
+existentialAtPin id k Top =  ExistsBody id k Top
+existentialAtPin id k p =
+  if pinHere p
+    then ExistsBody id k p
+    else p { parent = existentialAtPin id k (parent p) }
+
+universalAtPin :: Id -> Kind -> PredPath -> PredPath
+universalAtPin id k Top =  ForallBody id k Top
+universalAtPin id k p =
+  if pinHere p
+    then ForallBody id k p
+    else p { parent = universalAtPin id k (parent p) }
 
 mkUniversals :: Ctxt Kind -> Pred -> Pred
 mkUniversals [] p = p
