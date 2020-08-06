@@ -1,0 +1,34 @@
+-- examples for tropical semirings
+
+isAssocPlus1 : forall {a b : Type, n m k : Tropical} . (a [(n + m) + k] -> b) -> (a [n + (m + k)] -> b)
+isAssocPlus1 f = f
+
+isAssocPlus2 : forall {a b : Type, n m k : Tropical} . (a [n + (m + k)] -> b) -> (a [(n + m) + k] -> b)
+isAssocPlus2 f = f
+
+isAssocMult1 : forall {a b : Type, n m k : Tropical} . (a [(n * m) * k] -> b) -> (a [n * (m * k)] -> b)
+isAssocMult1 f = f
+
+isAssocMult2 : forall {a b : Type, n m k : Tropical} . (a [n * (m * k)] -> b) -> (a [(n * m) * k] -> b)
+isAssocMult2 f = f
+
+isDistrib1 : forall {a b : Type, n m k : Tropical} . (a [(n + m) * k] -> b) -> (a [(n * k) + (m * k)] -> b)
+isDistrib1 f = f
+
+isDistrib2 : forall {a b : Type, n m k : Tropical} . (a [(n * k) + (m * k)] -> b) -> (a [(n + m) * k] -> b)
+isDistrib2 f = f
+
+isCommutePlus : forall {a b : Type, n m : Tropical} . (a [n + m] -> b) -> (a [m + n] -> b)
+isCommutePlus f = f
+
+isCommuteMult : forall {a b : Type, n m : Tropical} . (a [n * m] -> b) -> (a [m * n] -> b)
+isCommuteMult f = f
+
+zeroPlusIdentity : forall {a b : Type, n : Tropical} . (a [n + (Inf : Tropical)] -> b) -> (a [n] -> b)
+zeroPlusIdentity f = f
+
+oneTimesIdentity : forall {a b : Type, n : Tropical} . (a [n * (1 : Tropical)] -> b) -> (a [n] -> b)
+oneTimesIdentity f = f
+
+zeroAbsorbs : forall {a b : Type, n : Tropical} . (a [n * (Inf : Tropical)] -> b) -> (a [Inf : Tropical] -> b)
+zeroAbsorbs f = f

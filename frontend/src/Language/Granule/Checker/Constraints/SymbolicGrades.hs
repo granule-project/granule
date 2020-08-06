@@ -8,6 +8,7 @@ module Language.Granule.Checker.Constraints.SymbolicGrades where
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
+import Language.Granule.Checker.Constraints.SExt
 import Language.Granule.Checker.Constraints.SNatX
 
 import Data.Functor.Identity
@@ -31,6 +32,7 @@ data SGrade =
      | SLevel    SInteger
      | SSet      (S.Set (Id, Type))
      | SExtNat   { sExtNat :: SNatX }
+     | STropical { sTropical :: Tropical }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
      | SPoint
@@ -111,6 +113,7 @@ match (SFloat _) (SFloat _) = True
 match (SLevel _) (SLevel _) = True
 match (SSet _) (SSet _) = True
 match (SExtNat _) (SExtNat _) = True
+match (STropical _) (STropical _) = True
 match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
 match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
@@ -154,6 +157,7 @@ applyToProducts _ _ _ a b =
 natLike :: SGrade -> Bool
 natLike (SNat _) = True
 natLike (SExtNat _) = True
+natLike (STropical _) = True
 natLike _ = False
 
 instance Mergeable SGrade where
@@ -162,6 +166,7 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SLevel n) (SLevel n') = SLevel (symbolicMerge s sb n n')
   symbolicMerge s sb (SSet n) (SSet n') = error "Can't symbolic merge sets yet"
   symbolicMerge s sb (SExtNat n) (SExtNat n') = SExtNat (symbolicMerge s sb n n')
+  symbolicMerge s sb (STropical n) (STropical n') = STropical (symbolicMerge s sb n n')
   symbolicMerge s sb (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (symbolicMerge s sb lb1 lb2) (symbolicMerge s sb ub1 ub2)
   symbolicMerge s sb SPoint SPoint = SPoint
@@ -218,6 +223,7 @@ symGradeEq (SFloat n) (SFloat n') = return $ n .== n'
 symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
 symGradeEq (SSet n) (SSet n')     = solverError "Can't compare symbolic sets yet"
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
+symGradeEq (STropical n) (STropical n') = return $ n .== n'
 symGradeEq SPoint SPoint          = return $ sTrue
 symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r
 symGradeEq s t | isSProduct s || isSProduct t =
@@ -271,6 +277,7 @@ symGradePlus (SSet s) (SSet t) = return $ SSet $ S.union s t
 symGradePlus (SLevel lev1) (SLevel lev2) = return $ SLevel $ lev1 `smax` lev2
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = return $ SExtNat (x + y)
+symGradePlus (STropical x) (STropical y) = pure $ STropical (plus x y)
 symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
     liftM2 SInterval (lb1 `symGradePlus` lb2) (ub1 `symGradePlus` ub2)
 symGradePlus SPoint SPoint = return $ SPoint
@@ -310,6 +317,7 @@ symGradeTimes (SLevel lev1) (SLevel lev2) = return $
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
 symGradeTimes (SOOZ s) (SOOZ r) = pure . SOOZ $ s .&& r
+symGradeTimes (STropical x) (STropical y) = pure $ STropical (times x y)
 
 symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
     liftM2 SInterval (comb symGradeMeet) (comb symGradeJoin)

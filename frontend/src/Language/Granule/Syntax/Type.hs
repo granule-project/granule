@@ -253,9 +253,10 @@ publicRepresentation  = 2
 unusedRepresentation :: Integer
 unusedRepresentation = 0
 
-nat, extendedNat :: Type
+nat, extendedNat, tropical :: Type
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
+tropical = TyCon $ mkId "Tropical"
 
 infinity :: Coeffect
 infinity = CInfinity (Just extendedNat)
