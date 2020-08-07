@@ -608,7 +608,9 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       newConjunct
 
       -- Checking the case body
-      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
+      tau' <- substitute subst tau
+      patternGam <- substitute subst patternGam
+      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
