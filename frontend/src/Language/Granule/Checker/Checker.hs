@@ -598,7 +598,9 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       newConjunct
 
       -- Checking the case body
-      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
+      tau' <- substitute subst tau
+      patternGam <- substitute subst patternGam
+      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
@@ -651,13 +653,13 @@ checkExpr defs gam pol topLevel tau e = do
   -- Now to do a type equality on check type `tau` and synth type `tau'`
   (tyEq, _, subst) <-
         if topLevel
-          -- If we are checking a top-level, then don't allow overapproximation
+          -- If we are checking a top-level, then allow overapproximation
           then do
-            debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
-            equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+            debugM "** Compare for equality " $ pretty tau' <> " <: " <> pretty tau
+            lEqualTypesWithPolarity (getSpan e) FstIsSpec tau tau'
           else do
-            debugM "** Compare for equality " $ pretty tau' <> " :> " <> pretty tau
-            lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+            debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
+            equalTypesWithPolarity (getSpan e) FstIsSpec tau tau'
 
   if tyEq
     then do
