@@ -152,7 +152,7 @@ import Prelude
 
 data () = ()
 
-use : forall {a : Type} . a -> a [1 : Nat]
+use : forall {a : Type} . a -> a [1]
 use = BUILTIN
 
 --------------------------------------------------------------------------------
