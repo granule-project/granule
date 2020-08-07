@@ -1035,6 +1035,8 @@ predicateOperatorAtKind s ctxt op (KPromote t) | predicateOperation op = do
     Right subst -> do
       putChecker
       return $ Just subst
+predicateOperatorAtKind s ctxt op k@(KVar _) =
+    return $ if predicateOperation op then Just [] else Nothing
 predicateOperatorAtKind _ _ _ _ = return Nothing
 
 -- | Determines if a type operator produces results of kind KPredicate.
