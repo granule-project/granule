@@ -860,10 +860,10 @@ checkKind s ctxt (TySig t k) k' = do
 
 -- Fall through to synthesis if checking can not be done.
 checkKind s ctxt t k = do
-  (k', subst) <- synthKind s ctxt t
+  (k', subst1) <- synthKind s ctxt t
   join <- k `joinKind` k'
   case join of
-    Just (_, subst) -> return subst
+    Just (_, subst2) -> combineSubstitutions s subst1 subst2
     Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
 synthKind :: (?globals :: Globals) =>
@@ -940,6 +940,10 @@ synthKind s ctxt (TyCon (internalName -> "Pure")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
   return (KPromote $ TyVar var, [])
 
+synthKind s ctxt (TyCon (internalName -> "Handled")) = do
+  var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") KEffect
+  return $ ((KFun (KPromote $ TyVar var) (KPromote $ TyVar var)), [])
+
 -- KChkS_con
 synthKind s ctxt (TyCon id) = do
   st <- get
@@ -1015,7 +1019,7 @@ closedOperatorAtKind s ctxt op (KPromote t) | coeffectResourceAlgebraOps op = do
       putChecker
       return $ Just subst
 
-closedOperatorAtKind _ _ op (KVar _) = do
+closedOperatorAtKind _ _ op (KVar _) =
   return $ if closedOperation op then Just [] else Nothing
 
 closedOperatorAtKind _ _ _ _ = return Nothing

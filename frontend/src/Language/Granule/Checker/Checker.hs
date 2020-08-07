@@ -153,7 +153,7 @@ checkDataCon
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
         st <- get
-        (tySchKind, _) <- synthKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty
+        _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty KType
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
@@ -167,15 +167,7 @@ checkDataCon
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
-
-        case tySchKind of
-          KType ->
-            registerDataConstructor tySch coercions
-
-          KPromote (TyCon k) | internalName k == "Protocol" ->
-            registerDataConstructor tySch coercions
-
-          _ -> throw KindMismatch{ errLoc = sp, tyActualK = Just ty, kExpected = KType, kActual = kind }
+        registerDataConstructor tySch coercions
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
