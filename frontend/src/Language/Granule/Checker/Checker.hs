@@ -663,13 +663,13 @@ checkExpr defs gam pol topLevel tau e = do
   -- Now to do a type equality on check type `tau` and synth type `tau'`
   (tyEq, _, subst) <-
         if topLevel
-          -- If we are checking a top-level, then don't allow overapproximation
+          -- If we are checking a top-level, then allow overapproximation
           then do
-            debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
-            equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+            debugM "** Compare for equality " $ pretty tau' <> " <: " <> pretty tau
+            lEqualTypesWithPolarity (getSpan e) FstIsSpec tau tau'
           else do
-            debugM "** Compare for equality " $ pretty tau' <> " :> " <> pretty tau
-            lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+            debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
+            equalTypesWithPolarity (getSpan e) FstIsSpec tau tau'
 
   if tyEq
     then do
