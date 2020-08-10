@@ -6,7 +6,7 @@ import Data.Maybe(catMaybes, mapMaybe)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Substitution (checkKind)
+import Language.Granule.Checker.SubstitutionAndKinding (checkKind)
 
 import Language.Granule.Context
 

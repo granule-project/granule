@@ -10,7 +10,7 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints.CompileNatKinded
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Substitution (joinKind, synthKind)
+import Language.Granule.Checker.SubstitutionAndKinding (joinKind, synthKind)
 
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span

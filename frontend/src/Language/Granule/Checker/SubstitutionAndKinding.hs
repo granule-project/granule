@@ -5,7 +5,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Granule.Checker.Substitution(
+module Language.Granule.Checker.SubstitutionAndKinding(
   Substitutable(..),
   Unifiable(..),
   checkKind,
