@@ -6,4 +6,4 @@ main =
          [()]           <- closeHandle h'
       in pure [c1])
     as [x] : Char in pure x
-    catch pure "A"
+    catch pure 'A'
