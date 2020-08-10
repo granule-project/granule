@@ -184,7 +184,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
           eInner <- e
           e1' <- evalIn ctxt eInner
           pmatch ctxt [(PBox s () False p, e2)] e1' >>=
-            \v -> 
+            \v ->
               case v of
                 Just e2' -> evalIn ctxt e2'
                 Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
@@ -371,7 +371,9 @@ builtIns =
     fork ctxt e@Abs{} = diamondConstr $ do
       c <- CC.newChan
       _ <- C.forkIO $
-         evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
+         evalIn ctxt (App nullSpan () False
+                       (valExpr e)
+                       (valExpr $ Ext () $ Chan c)) >> return ()
       return $ valExpr $ Ext () $ Chan c
     fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 

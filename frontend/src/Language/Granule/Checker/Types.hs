@@ -42,9 +42,7 @@ equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
-equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
+--- Flags
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)

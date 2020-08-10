@@ -40,7 +40,8 @@ definiteUnification s (Just (coeff, coeffTy)) ty = do
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
-polyShaped t = case leftmostOfApplication t of
+polyShaped t =
+  case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
       case mCardinality of
