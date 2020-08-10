@@ -39,13 +39,14 @@ definiteUnification s (Just (coeff, coeffTy)) ty = do
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
-polyShaped t = case leftmostOfApplication t of
+polyShaped t =
+  case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
       case mCardinality of
         Just (_, c, _) -> case length c of
           1 -> do
-            debugM "uniShaped constructor" (show t <> "\n" <> show c)
+            debugM "monoShaped constructor" (show t <> "\n" <> show c)
             pure False
           _ -> do
             debugM "polyShaped constructor" (show t <> "\n" <> show c)
@@ -172,8 +173,6 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
 
-      definiteUnification s outerBoxTy ty
-
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
 
@@ -217,13 +216,15 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
-          (as, bs, us, elabPs, consumptionOut) <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
+          ((as, bs, us, elabPs, consumptionOut), ty') <- unpeel ps dataConstructorIndexRewrittenAndSpecialised
 
           -- Combine the substitutions
           subst <- combineSubstitutions s (flipSubstitution unifiers) us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
+          ty' <- substitute subst ty'
+          definiteUnification s outerBoxTy ty'
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs
@@ -242,11 +243,11 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   where
     unpeel :: [Pattern ()] -- A list of patterns for each part of a data constructor pattern
             -> Type -- The remaining type of the constructor
-            -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption)
+            -> Checker ((Ctxt Assumption, Ctxt Kind, Substitution, [Pattern Type], Consumption), Type)
     unpeel = unpeel' ([],[],[],[],Full)
 
     -- Tail recursive version of unpeel
-    unpeel' acc [] t = return acc
+    unpeel' acc [] t = return (acc, t)
 
     unpeel' (as,bs,us,elabPs,consOut) (p:ps) (FunTy _ t t') = do
         (as',bs',us',elabP, consOut') <- ctxtFromTypedPattern' outerBoxTy s t p cons

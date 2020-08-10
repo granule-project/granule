@@ -1,11 +1,12 @@
 import Maybe
 
-main : Maybe Int
-main = reify (reflect (Some 4))
+-- Don't get this kind of isomorphic
+-- main : Maybe Int
+-- main = reify (reflect (Some 4))
 
-reflect : forall {a : Type} . Maybe a -> (() -> (a [0..1]) <MayFail>)
-reflect None = (\() -> throw);
-reflect (Some x) = (\() -> pure (use x))
+reflect : forall {a : Type} . Maybe a -> (() -> (Maybe a) <MayFail>)
+reflect None     () = let [()] <- throw in pure None;
+reflect (Some x) () = pure (Some x)
 
 reify : forall {a : Type} . (() -> (a [0..1]) <MayFail>) -> Maybe a
 reify f = fromPure (try f () as [x] in pure (Some x) catch pure (None))

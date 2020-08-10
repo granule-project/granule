@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/badtry.gr:3:5:
+Expected a type of the form `a <eff>[0..1]` but got `Int

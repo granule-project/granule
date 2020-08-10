@@ -217,7 +217,7 @@ readInt = BUILTIN
 --Exceptions
 --------------------------------------------------------------------------------
 
-throw : forall {a : Type} . (a [0..1]) <MayFail>
+throw : forall {a : Type} . (a [0]) <MayFail>
 throw = BUILTIN
 
 --------------------------------------------------------------------------------
@@ -264,6 +264,9 @@ unpackChan
   : forall {s : Protocol}
   . Chan s -> s
 unpackChan = BUILTIN
+
+-- trace : String -> () <>
+-- trace = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles
