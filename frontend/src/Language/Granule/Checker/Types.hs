@@ -64,9 +64,9 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -- Starting spec indication
   -> SpecIndicator
-  -- Left type (usually the inferred)
+  -- Left type (may be approximated by right type)
   -> Type
-  -- Right type (usually the specified)
+  -- Right type
   -> Type
   -- Result is a effectful, producing:
   --    * a boolean of the equality
@@ -112,7 +112,7 @@ equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
     else
       -- Otherwise throw a kind error
       case spec of
-        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k1, kActual = k2}
+        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t2, kExpected = k1, kActual = k2}
         _         -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k2, kActual = k1}
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
@@ -130,10 +130,7 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
 
 equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
   -- contravariant position (always approximate)
-  (eq1, u1) <-
-    case sp of
-      FstIsSpec -> equalTypesRelatedCoeffects s ApproximatedBy t1 t1' (flipIndicator sp) mode
-      _         -> equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'

@@ -665,11 +665,11 @@ checkExpr defs gam pol topLevel tau e = do
         if topLevel
           -- If we are checking a top-level, then allow overapproximation
           then do
-            debugM "** Compare for equality " $ pretty tau' <> " <: " <> pretty tau
-            lEqualTypesWithPolarity (getSpan e) FstIsSpec tau tau'
+            debugM "** Compare for approximation " $ pretty tau' <> " <: " <> pretty tau
+            lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
           else do
             debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
-            equalTypesWithPolarity (getSpan e) FstIsSpec tau tau'
+            equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
 
   if tyEq
     then do
