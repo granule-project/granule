@@ -244,8 +244,8 @@ unpackChan
   . Chan s -> s
 unpackChan = BUILTIN
 
-__trace : String -> () <>
-__trace = BUILTIN
+-- trace : String -> () <>
+-- trace = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles
