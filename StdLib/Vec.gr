@@ -166,7 +166,7 @@ pullVec (Cons [x] xs) = let [ys] = pullVec xs in [Cons x ys]
 
 --- pushVec pushes in non linearity of vector into the elements
 pushVec : ∀ {k : Nat, n : Nat, a : Type} . { k <= 1 } =>
-         (Vec n a) [k] → Vec n (a [k])
+         (Vec n a) [k + 1] → Vec n (a [k + 1])
 pushVec [Nil] = Nil;
 pushVec [Cons x xs] = Cons [x] (pushVec [xs])
 
