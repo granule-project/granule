@@ -47,7 +47,7 @@ polyShaped t =
       case mCardinality of
         Just (_, c, _) -> case length c of
           1 -> do
-            debugM "uniShaped constructor" (show t <> "\n" <> show c)
+            debugM "monoShaped constructor" (show t <> "\n" <> show c)
             pure False
           _ -> do
             debugM "polyShaped constructor" (show t <> "\n" <> show c)
