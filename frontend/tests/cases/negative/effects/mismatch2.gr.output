@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/effects/mismatch2.gr:3:5:
+Expected `Char` but got `Int`

@@ -1,0 +1,9 @@
+approx : forall {a : Type, b : Type}
+       . (a -> b [0..1])
+       -> (a -> b [1..1])
+approx f x = f x
+
+approxL : forall {a : Type, b : Type}
+        . (a [1..1] -> b)
+        -> (a [0..1] -> b)
+approxL f = f

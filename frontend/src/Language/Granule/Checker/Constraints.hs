@@ -169,6 +169,7 @@ freshCVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
+        "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
 freshCVarScoped quant name t q k | t == extendedNat = do
@@ -209,10 +210,10 @@ compile :: (?globals :: Globals) =>
   Ctxt SGrade -> Constraint -> Symbolic SBool
 
 compile vars (Eq _ c1 c2 t) =
-  bindM2And' eqConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' eqConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Neq _ c1 c2 t) =
-  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(CVar v) t) =
@@ -233,9 +234,9 @@ compile vars (Lub _ c1 c2 c3@(CVar v) t) =
       return (p1 .&& p2 .&& p3 .&& eq) -}
 
     _ -> do
-      (s1, p1) <- compileCoeffect c1 t vars
-      (s2, p2) <- compileCoeffect c2 t vars
-      (s3, p3) <- compileCoeffect c3 t vars
+      (s1, p1) <- compileCoeffect (normalise c1) t vars
+      (s2, p2) <- compileCoeffect (normalise c2) t vars
+      (s3, p3) <- compileCoeffect (normalise c3) t vars
       -- s3 is an upper bound
       pa1 <- approximatedByOrEqualConstraint s1 s3
       pb1 <- approximatedByOrEqualConstraint s2 s3
@@ -249,7 +250,7 @@ compile vars (Lub _ c1 c2 c3@(CVar v) t) =
       return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
-  bindM2And' approximatedByOrEqualConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' approximatedByOrEqualConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Lt s c1 c2) =
   bindM2And' symGradeLess (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
@@ -359,6 +360,7 @@ compileCoeffect (CZero k') k vars  =
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
+        "OOZ"       -> return (SOOZ sFalse, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
     (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
       return (SExtNat 0, sTrue)
@@ -384,6 +386,7 @@ compileCoeffect (COne k') k vars =
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
+        "OOZ"       -> return (SOOZ sTrue, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
 
     (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
@@ -450,6 +453,7 @@ approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
+approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   return $ if s == t then sTrue else sFalse
 

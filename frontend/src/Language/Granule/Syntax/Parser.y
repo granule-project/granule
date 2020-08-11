@@ -52,6 +52,9 @@ import Language.Granule.Utils hiding (mkSpan)
     else  { TokenElse _ }
     case  { TokenCase _ }
     of    { TokenOf _ }
+    try    { TokenTry _ }
+    as    { TokenAs _ }
+    catch    { TokenCatch _ }
     import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
@@ -373,7 +376,7 @@ Coeffect :: { Coeffect }
   | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { CSig $1 $3 }
   | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
 
 Set :: { [(String, Type)] }
@@ -413,6 +416,15 @@ Expr :: { Expr () () }
         in (mkSpan (getPos $1, getEnd $3)) >>=
               \sp -> return $ LetDiamond sp () False pat mt expr $3 }
 
+  | try Expr as '[' PAtom ']' in Expr catch Expr 
+      {% let e1 = $2; pat = $5; mt = Nothing; e2 = $8; e3 = $10
+        in (mkSpan (getPos $1, getEnd $10)) >>=
+              \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
+  | try Expr as '[' PAtom ']' ':' Type in Expr catch Expr 
+      {% let e1 = $2; pat = $5; mt = Just $8; e2 = $10; e3 = $12
+        in (mkSpan (getPos $1, getEnd $12)) >>=
+              \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
+  
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
              \sp -> return $ Case sp () False $2 $4 }
