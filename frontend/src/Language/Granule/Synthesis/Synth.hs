@@ -1150,16 +1150,16 @@ synthesiseInner resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') =
       sumElimHelper [] omega gamma resourceScheme goalTy
       `try`
       unitElimHelper [] omega gamma resourceScheme goalTy
-      `try`
-      constrElimHelper [] omega gamma resourceScheme goalTy
+      --`try`
+      --constrElimHelper [] omega gamma resourceScheme goalTy
     (False, []) ->
       (if not (isAtomic goalTy') then
           -- Right Sync : Focus on goalTy when goalTy is not atomic
           sumIntroHelper gamma resourceScheme goalTy
           `try`
           pairIntroHelper gamma resourceScheme goalTy
-          `try`
-          constrIntroHelper gamma resourceScheme goalTy
+          --`try`
+          --constrIntroHelper gamma resourceScheme goalTy
           `try`
           boxHelper gamma resourceScheme goalTy
           `try`
