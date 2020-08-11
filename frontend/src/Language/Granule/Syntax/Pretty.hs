@@ -266,7 +266,15 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
     "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
   pretty (App _ _ _ e1 e2) =
-    prettyNested e1 <> " " <> prettyNested e2
+    case globalsSynthesise ?globals of
+      Just True ->
+        if isConstr e1 then pretty e1 <> " " <> pretty e2
+        else prettyNested e1 <> " " <> prettyNested e2
+      _ -> prettyNested e1 <> " " <> prettyNested e2
+    where
+      isConstr (App _ _ _ e _) = isConstr e
+      isConstr (Val _ _ _ (Constr _ _ _)) = True
+      isConstr _ = False
 
   pretty (AppTy _ _ _ e1 t) =
     prettyNested e1 <> " @ " <> prettyNested t
