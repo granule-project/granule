@@ -7,7 +7,6 @@ module Language.Granule.Synthesis.Synth where
 --import Data.List
 --import Control.Monad (forM_)
 --import Debug.Trace
-import System.IO.Unsafe
 import qualified Data.Map as M
 import Data.Maybe
 
@@ -312,7 +311,7 @@ varHelper left (var@(x, a) : right) resourceScheme goalTy@(Forall _ binders cons
  (varHelper (var:left) right resourceScheme goalTy) `try`
    (do
 --    liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy'
-      (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
+      (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile  goalTy' (getAssumptionType a)
       if success then do
           (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
           boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
@@ -960,22 +959,30 @@ constrIntroHelper gamma mode goalTy@(Forall s binders constraints t) =
     synthSumConstrs (c:cases) gamma mode ty = do
       try (synthConstructor c gamma mode ty) (synthSumConstrs cases gamma mode ty)
 
-    synthConstructor c gamma mode ty = do
-      (exprs, delta, subst, bindings) <- synthProdConstrs c gamma mode ty
-      return (makeConstr exprs (mkId $ "idk") t, delta, subst, bindings)
+    synthConstructor (p:[], assmps, caseSubst) gamma mode ty = do
+      (exprs, delta, subst, bindings) <- synthProdConstrs (assmps, caseSubst) gamma mode ty
+      return (makeConstr exprs (constrName p) t, delta, subst, bindings)
+    synthConstructor _ gamma mode ty = none
 
-    synthProdConstrs (_, []) gamma mode ty = none
-    synthProdConstrs (_, (_, a):[]) gamma mode ty = do
-      (es, deltas, substs, bindings) <- synthesiseInner mode gamma [] (Forall s binders constraints (assumpToType a))
-      return ([(es, assumpToType a)], deltas, substs, bindings)
-    synthProdConstrs (pats, ((_, a):assms)) gamma mode ty = do
-      (es, deltas, substs, bindings) <- synthProdConstrs (pats, assms) gamma mode ty
+    synthProdConstrs ([], _) gamma mode ty = none
+    synthProdConstrs ((_, a):[], caseSubst) gamma mode ty = do
+      (es, deltas, subst, bindings) <- synthesiseInner mode gamma [] (Forall s binders constraints (assumpToType a))
+      subst' <- conv $ combineSubstitutions nullSpanNoFile caseSubst subst
+      return ([(es, assumpToType a)], deltas, subst', bindings)
+    synthProdConstrs (((_, a):assms), caseSubst) gamma mode ty = do
+      (es, deltas, subst, bindings) <- synthProdConstrs (assms, caseSubst) gamma mode ty
+      subst' <- conv $ combineSubstitutions nullSpanNoFile caseSubst subst
       (e2, delta2, subst2, bindings2) <- synthesiseInner mode deltas [] (Forall s binders constraints (assumpToType a))
-      subst <- conv $ combineSubstitutions nullSpanNoFile substs subst2
-      return ((e2, assumpToType a):es, delta2, subst, bindings ++ bindings2)
+      subst'' <- conv $ combineSubstitutions nullSpanNoFile subst2 subst'
+      return ((e2, assumpToType a):es, delta2, subst'', bindings ++ bindings2)
 
     assumpToType (Linear t) = t
     assumpToType (Discharged t c) = Box c t
+
+    constrName (PBox _ _ _ (PConstr _ _ _ id _)) = id
+    constrName (PConstr _ _ _ id _) = id
+    constrName (PVar _ _ _ id) = id
+    constrName _ = error $ "handle this better"
 
 constrElimHelper :: (?globals :: Globals)
   => Ctxt Assumption
