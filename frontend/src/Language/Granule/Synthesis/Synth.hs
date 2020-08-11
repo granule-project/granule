@@ -1023,19 +1023,21 @@ constrElimHelper left (var@(x, a):right) gamma mode goalTy =
 
   where
 
-    synthCases adt mode g o ((p:[], assmps):[]) goalTy = do
+    synthCases adt mode g o ((p:[], assmps, caseSubst):[]) goalTy = do
       let (g', o') = bindAssumptions assmps g o
       (e, delta, subst, bindings) <- synthesiseInner mode g' o' goalTy
+      returnSubst <- conv $ combineSubstitutions nullSpanNoFile caseSubst subst
       del' <- checkAssumptions mode delta assmps
       case transformPattern bindings adt (g' ++ o') p of
         Just (pat, bindings') -> do
-          return ([(pat, e)], del', subst, bindings')
+          return ([(pat, e)], del', returnSubst, bindings')
         Nothing -> none
 
-    synthCases adt mode g o ((p:[], assmps):cons) goalTy = do
+    synthCases adt mode g o ((p:[], assmps, caseSubst):cons) goalTy = do
       (exprs, delta, subst, bindings) <- synthCases adt mode g o cons goalTy
+      subst' <- conv $ combineSubstitutions nullSpanNoFile subst caseSubst
       let (g', o') = bindAssumptions assmps g o
-      (e, delta', subst', bindings') <- synthesiseInner mode g' o' goalTy
+      (e, delta', subst'', bindings') <- synthesiseInner mode g' o' goalTy
       del' <- checkAssumptions mode delta' assmps
       case transformPattern bindings' adt (g' ++ o') p of
         Just (pat, bindings'') ->
@@ -1045,7 +1047,7 @@ constrElimHelper left (var@(x, a):right) gamma mode goalTy =
                   Additive{} -> CJoin
           in do
             returnDelta <- ctxtMerge op del' delta
-            returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst subst'
+            returnSubst <- conv $ combineSubstitutions nullSpanNoFile subst' subst''
             return ((pat, e):exprs, returnDelta, returnSubst, bindings ++ bindings'')
         Nothing -> none
     synthCases adt mode g o _ goalTy = none
@@ -1135,7 +1137,6 @@ synthesiseInner resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') =
                       ++ pretty omega ++ ", for goal = " ++ pretty goalTy
                       ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
                       ++ ", isAtomic goalTy = " ++ show (isAtomic goalTy')
-
   case (isRAsync goalTy', omega) of
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
