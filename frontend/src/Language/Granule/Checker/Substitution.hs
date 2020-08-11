@@ -274,7 +274,27 @@ combineSubstitutions sp u1 u2 = do
            Nothing -> return [(v, s)]
            _       -> return []
       let uss = concat uss1 <> concat uss2
-      return $ reduceByTransitivity uss
+      let substs = reduceByTransitivity uss
+      -- HACK only for testing! --
+      cs <- get
+      case validateSubstsQuantification substs (tyVarContext cs) of
+        Just res -> return res
+        Nothing -> throw UnificationFailGeneric { errLoc = sp, errSubst1 = (SubstT $ TyVar $ mkId "a"), errSubst2 = (SubstT $ TyVar $ mkId "a") }
+
+        where
+          validateSubstsQuantification [] tyVars = Just []
+          validateSubstsQuantification (sub@(id, SubstT (TyVar id')):subst) tyVars = do
+            subst' <- validateSubstsQuantification subst tyVars
+            case ((lookup id tyVars), (lookup id' tyVars)) of
+              (Just (_, ForallQ), Just (_, ForallQ)) -> Nothing
+              (_, _) -> Just $ sub:subst'
+          validateSubstsQuantification (sub@(id, SubstT (TyApp _ _)):subst) tyVars = Nothing
+          validateSubstsQuantification (sub@(id, _):subst) tyVars = do
+            subst' <- validateSubstsQuantification subst tyVars
+            Just $ sub:subst'
+
+            
+
 
 reduceByTransitivity :: Substitution -> Substitution
 reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt

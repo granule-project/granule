@@ -38,6 +38,7 @@ import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 import Options.Applicative.Help.Pretty (string)
 
+import Language.Granule.Context
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
@@ -167,7 +168,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           let position = globalsHolePosition ?globals
           let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
           -- Associate the span with each generate cases
-          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (holeVars h) pats, e)) (cases h)) relevantHoles
+          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) relevantHoles
           rewriteHoles input noImportAst (keepBackup config) holeCases
           case globalsSynthesise ?globals of
             Just True -> do
@@ -381,6 +382,14 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
 
+        globalsSynthesisIndex <-
+          (optional . option (auto @Integer))
+            $ long "synth-index"
+            <> (help . unwords)
+            [ "Returns the given nth synthesised term where n is the given integer."
+            , "Defaults to"
+            , show synthesisIndex
+            ]
 
         grRewriter
           <- flag'
@@ -438,6 +447,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsAdditiveSynthesis
               , globalsAlternateSynthesisMode
+              , globalsSynthesisIndex
               }
             }
           )

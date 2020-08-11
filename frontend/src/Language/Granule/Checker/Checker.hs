@@ -438,7 +438,6 @@ checkExpr :: (?globals :: Globals)
 checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   st <- get
 
-  let holeCtxt = filter (\(id, a) -> id `elem` vars) ctxt
   let getIdName (Id n _) = n
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
@@ -452,12 +451,13 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      (_, cases) <- generateCases s constructors holeCtxt boundVariables
+      (_, cases) <- generateCases s constructors ctxt boundVariables
 
       -- If we are in synthesise mode, also try to synthesise a
       -- term for each case split goal *if* this is also a hole
       -- of interest
-      let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+      let fst3 (a, b, c) = a
+      let casesWithHoles = zip (map fst3 cases) (repeat (Hole s t True []))
       cases' <-
         case globalsSynthesise ?globals of
            Just True ->
@@ -474,8 +474,8 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
            -- Otherwise synthesise empty holes for each case
            -- (and throw away the binding information)
            _ -> return casesWithHoles
-
-      throw $ HoleMessage s t ctxt (tyVarContext st) boundVariables cases'
+      let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+      throw $ HoleMessage s t ctxt (tyVarContext st) holeVars cases'
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
@@ -1535,10 +1535,10 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
+  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption, Substitution)] -> Checker [([Pattern ()], Expr () Type)]
 programSynthesise ctxt vars ty patternss = do
   currentState <- get
-  forM patternss $ \(pattern, patternCtxt) -> do
+  forM patternss $ \(pattern, patternCtxt, substs) -> do
     -- Build a context which has the pattern context
     let ctxt' = patternCtxt
           -- ... plus anything from the original context not being cased upon
@@ -1548,7 +1548,7 @@ programSynthesise ctxt vars ty patternss = do
     let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
     synRes <-
        liftIO $ Syn.synthesiseProgram
-                    [] (if additiveSynthesisMode then (Syn.Additive mode) else (Syn.Subtractive mode))
+                    (if additiveSynthesisMode then (Syn.Additive mode) else (Syn.Subtractive mode))
                     ctxt' [] (Forall nullSpan [] [] ty) currentState
 
     case synRes of
