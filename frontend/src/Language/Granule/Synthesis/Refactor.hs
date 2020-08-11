@@ -1,6 +1,5 @@
 module Language.Granule.Synthesis.Refactor where
 
---import Debug.Trace
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern
@@ -53,6 +52,7 @@ refactorCase pats (Case _ _ _ (Val _ _ _ (Var _ name)) casePats) =
     _ -> concatMap (doCasePat pats) casePats
 refactorCase pats expr = [(pats, expr)]
 
+-- Refactors a case expression to pattern match on the ADT at the function equation level
 refactorCaseEqn :: Eq a => Equation v a -> [Equation v a]
 refactorCaseEqn (Equation sp name ref ant pats body) =
   let refactors = refactorCase pats body in
@@ -61,7 +61,6 @@ refactorCaseEqn (Equation sp name ref ant pats body) =
 doCasePat :: Eq a => [Pattern a] -> (Pattern a, Expr v a) -> [([Pattern a], Expr v a)]
 doCasePat totalPats (casePat, caseExpr) =
   refactorCase (casePat:totalPats) caseExpr
--- Refactors a case expression to pattern match on the ADT at the function equation level
 
 -- Given an Id and a list of patterns, return the pattern with the same Id and the remainder
 checkPatternId :: Id -> [Pattern a] -> Maybe ((Pattern a), [Pattern a])
