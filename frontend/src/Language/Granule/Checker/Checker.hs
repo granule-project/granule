@@ -9,7 +9,7 @@
 {-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
 module Language.Granule.Checker.Checker where
 
-import Control.Arrow (first, second)
+import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))

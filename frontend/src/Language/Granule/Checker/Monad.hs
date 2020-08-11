@@ -604,15 +604,18 @@ instance UserMsg CheckerError where
     <>
     (if null relevantVars
       then ""
-      else if null (snd cases)
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
+      else if null cases
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty relevantVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty relevantVars) <> ":\n     " <>
              intercalate "\n     " (formatCases relevantCases))
 
     where
-      -- Extract those cases which correspond to a variable in holeVars.
+      -- Extract those cases which correspond to a split variable in holeVars.
       relevantCases :: [[Pattern ()]]
-      relevantCases = map (map snd . filter ((`elem` holeVars) . fst) . zip (fst cases)) (snd cases)
+      relevantCases = map (map snd . filter fst . zip (map snd holeVars) . fst) cases
+
+      relevantVars :: [Id]
+      relevantVars = map fst (filter snd holeVars)
 
       formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
