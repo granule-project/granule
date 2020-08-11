@@ -382,6 +382,14 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
 
+        globalsSynthesisIndex <-
+          (optional . option (auto @Integer))
+            $ long "synth-index"
+            <> (help . unwords)
+            [ "Returns the given nth synthesised term where n is the given integer."
+            , "Defaults to"
+            , show synthesisIndex
+            ]
 
         grRewriter
           <- flag'
@@ -439,6 +447,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsAdditiveSynthesis
               , globalsAlternateSynthesisMode
+              , globalsSynthesisIndex
               }
             }
           )
