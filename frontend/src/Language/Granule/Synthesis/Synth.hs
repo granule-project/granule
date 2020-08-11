@@ -1332,10 +1332,6 @@ testGlobals = mempty
   , globalsTesting = Just True
   }
 
-testOutput :: Synthesiser a -> [a]
-testOutput res =
-  rights $ map fst $ fst $ unsafePerformIO $ runStateT (runSynthesiser res initState) mempty
-
 --testData :: Synthesiser a -> SynthesisData
 --testData res =
 --  snd $ unsafePerformIO $ runSynthesiser res initState
