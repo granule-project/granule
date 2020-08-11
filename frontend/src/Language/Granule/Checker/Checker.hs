@@ -456,7 +456,8 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
       -- If we are in synthesise mode, also try to synthesise a
       -- term for each case split goal *if* this is also a hole
       -- of interest
-      let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+      let fst3 (a, b, c) = a
+      let casesWithHoles = zip (map fst3 cases) (repeat (Hole s t True []))
       cases' <-
         case globalsSynthesise ?globals of
            Just True ->
@@ -1534,10 +1535,10 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
+  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption, Substitution)] -> Checker [([Pattern ()], Expr () Type)]
 programSynthesise ctxt vars ty patternss = do
   currentState <- get
-  forM patternss $ \(pattern, patternCtxt) -> do
+  forM patternss $ \(pattern, patternCtxt, substs) -> do
     -- Build a context which has the pattern context
     let ctxt' = patternCtxt
           -- ... plus anything from the original context not being cased upon

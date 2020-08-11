@@ -31,7 +31,7 @@ generateCases :: (?globals :: Globals)
   -> Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Assumption
   -> [Id]
-  -> Checker ([Id], [([Pattern ()], Ctxt Assumption)])
+  -> Checker ([Id], [([Pattern ()], Ctxt Assumption, Substitution)])
 generateCases span constructors ctxt toSplit = do
   -- Creates two subcontexts based on whether a variable should be split or not.
   let splitCtxt = relevantSubCtxt toSplit ctxt
@@ -60,8 +60,17 @@ generateCases span constructors ctxt toSplit = do
     Just eqTy -> do
       -- Filter the patterns if they are impossible.
       patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
-      let validPatterns = catMaybes patternsAndMaybeBinders
+      let validPatterns = (catMaybes patternsAndMaybeBinders)
       return (fst cases, validPatterns)
+
+--    where
+--      substsFold ([], []) (p, a, subst) = return ((p, a):[], subst)
+--      substsFold (curr, s) (p, a, subst) = do
+--        substs' <- combineSubstitutions nullSpanNoFile s subst
+--        return ((p, a):curr, substs')
+
+
+  
 
 -- Splits all variables in a given context into a list of patterns.
 splitAll ::
@@ -143,11 +152,15 @@ caseFilter :: (?globals :: Globals)
   => Span
   -> Type
   -> [Pattern ()]
-  -> Checker (Maybe ([Pattern ()], Ctxt Assumption))
+  -> Checker (Maybe ([Pattern ()], Ctxt Assumption, Substitution))
 caseFilter span ty pats = do
-  (result, local) <- peekChecker $ validateCase span ty pats
-  case result of
-    Right (Just binders) -> local >> return (Just (pats, binders))
+  res <- validateCase span ty pats
+  case res of
+    Just (ctxt, subst) -> do
+      (result, local) <- peekChecker $ return ctxt
+      case result of
+        Right (binders) -> local >> return (Just (pats, binders, subst))
+        _ -> return Nothing
     _ -> return Nothing
 
 -- Checks a case (i.e. list of patterns) against a type for validity.
@@ -156,14 +169,14 @@ validateCase :: (?globals :: Globals)
   => Span
   -> Type
   -> [Pattern ()]
-  -> Checker (Maybe (Ctxt Assumption))
+  -> Checker (Maybe (Ctxt Assumption, Substitution))
 validateCase span ty pats = do
   st <- get
   newConjunct
 
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
-  (binders, _, localVars, _, _, _) <-
+  (binders, _, localVars, subst, _, _) <-
     ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 
@@ -175,7 +188,7 @@ validateCase span ty pats = do
   (_, result) <- liftIO $ provePredicate thm tyVars
 
   case result of
-    QED -> return (Just binders)
+    QED -> return $ Just (binders, subst)
     _   -> return Nothing
 
   where
