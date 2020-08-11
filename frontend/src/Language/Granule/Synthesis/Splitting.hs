@@ -59,18 +59,8 @@ generateCases span constructors ctxt toSplit = do
     Nothing -> return ([], [])
     Just eqTy -> do
       -- Filter the patterns if they are impossible.
-      patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
-      let validPatterns = (catMaybes patternsAndMaybeBinders)
+      validPatterns <- filterM (caseFilter span eqTy) (snd cases)
       return (fst cases, validPatterns)
-
---    where
---      substsFold ([], []) (p, a, subst) = return ((p, a):[], subst)
---      substsFold (curr, s) (p, a, subst) = do
---        substs' <- combineSubstitutions nullSpanNoFile s subst
---        return ((p, a):curr, substs')
-
-
-  
 
 -- Splits all variables in a given context into a list of patterns.
 splitAll ::
@@ -176,7 +166,7 @@ validateCase span ty pats = do
 
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
-  (binders, _, localVars, subst, _, _) <-
+  (_, _, localVars, _, _, _) <-
     ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 

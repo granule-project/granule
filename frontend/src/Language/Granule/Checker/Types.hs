@@ -42,9 +42,7 @@ equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
-equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
+--- Flags
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
@@ -64,9 +62,9 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -- Starting spec indication
   -> SpecIndicator
-  -- Left type (usually the inferred)
+  -- Left type (may be approximated by right type)
   -> Type
-  -- Right type (usually the specified)
+  -- Right type
   -> Type
   -- Result is a effectful, producing:
   --    * a boolean of the equality
@@ -112,7 +110,7 @@ equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
     else
       -- Otherwise throw a kind error
       case spec of
-        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k1, kActual = k2}
+        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t2, kExpected = k1, kActual = k2}
         _         -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k2, kActual = k1}
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
@@ -130,10 +128,7 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
 
 equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
   -- contravariant position (always approximate)
-  (eq1, u1) <-
-    case sp of
-      FstIsSpec -> equalTypesRelatedCoeffects s ApproximatedBy t1 t1' (flipIndicator sp) mode
-      _         -> equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
@@ -147,7 +142,7 @@ equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
 
 equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Types = do
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
-  (eq', unif') <- equalTypesRelatedCoeffects s rel ef1 ef2 sp Effects
+  (eq', unif') <- equalTypesRelatedCoeffects s rel (handledNormalise s (Diamond ef1 t1) ef1) (handledNormalise s (Diamond ef2 t2) ef2) sp Effects
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
@@ -504,6 +499,7 @@ equalKinds sp k1 k2 = do
       Just (k, u) -> return (True, k, u)
       Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
 
+-- Checkers that two effects have the same type, and if so then returns that effect type
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
     mefTy1 <- isEffectType s ef1

@@ -154,9 +154,9 @@ using Granule's notation for sequencing effectful computations akin to Haskell
 ~~~ granule
 firstChar : Char <IO>
 firstChar = let
-  h <- openHandle ReadMode "examples/intro.gr.md";
-  (h, c) <- readChar h;
-  () <- closeHandle h
+  [h] <- openHandle ReadMode "examples/intro.gr.md";
+  [(h, c)] <- readChar h;
+  [()] <- closeHandle h
   in pure c
 ~~~
 
@@ -166,16 +166,16 @@ firstChar = let
 ~~~ grill2
 forgetful : Char <IO>
 forgetful = let
-  h <- openHandle ReadMode "examples/intro.gr.md";
-  (h, c) <- readChar h
+  [h] <- openHandle ReadMode "examples/intro.gr.md";
+  [(h, c)] <- readChar h
   in pure c
 
 
 outOfOrder : Char <IO>
 outOfOrder = let
-  h0 <- openHandle ReadMode "examples/intro.gr.md";
-  () <- closeHandle h0;
-  (h1, c) <- readChar h0
+  [h0] <- openHandle ReadMode "examples/intro.gr.md";
+  [()] <- closeHandle h0;
+  [(h1, c)] <- readChar h0
   in pure c
 ~~~
 
@@ -186,10 +186,10 @@ The paper also provides the example reading two characters:
 ~~~ granule
 twoChars : (Char, Char) <IO>
 twoChars = let
-  h <- openHandle ReadMode "examples/intro.gr.md";
-  (h, c_1) <- readChar h;
-  (h, c_2) <- readChar h;
-  () <- closeHandle h
+  [h] <- openHandle ReadMode "examples/intro.gr.md";
+  [(h, c_1)] <- readChar h;
+  [(h, c_2)] <- readChar h;
+  [()] <- closeHandle h
   in pure (c_1, c_2)
 ~~~
 
@@ -201,10 +201,10 @@ the mistakes of `forgetful` and `outOfOrder` together:
 ~~~ grill3
 bad : Char <IO>
 bad = let
-  h_1 <- openHandle ReadMode "somefile";
-  h_2 <- openHandle ReadMode "another";
-  () <- closeHandle h_1;
-  (h_1, c) <- readChar h_1
+  [h_1] <- openHandle ReadMode "somefile";
+  [h_2] <- openHandle ReadMode "another";
+  [()] <- closeHandle h_1;
+  [(h_1, c)] <- readChar h_1
   in pure c
 ~~~
 (`gr examples/intro.gr.md --literate-env-name grill3`)

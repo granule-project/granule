@@ -12,4 +12,4 @@ Found a goal: frontend/tests/cases/negative/splitting/second-arg.gr:6:11:
      n : ↑Nat
 
    Case splits for f:
-     n [f]
+     [f]

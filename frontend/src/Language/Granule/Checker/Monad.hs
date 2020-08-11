@@ -486,6 +486,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | ExpectedEffectType
     { errLoc :: Span, errTy :: Type }
+  | ExpectedOptionalEffectType
+      { errLoc :: Span, errTy :: Type }
   | LhsOfApplicationNotAFunction
     { errLoc :: Span, errTy :: Type }
   | FailedOperatorResolution
@@ -566,6 +568,7 @@ instance UserMsg CheckerError where
   title DataConstructorReturnTypeError{} = "Wrong return type in data constructor"
   title MalformedDataConstructorType{} = "Malformed data constructor type"
   title ExpectedEffectType{} = "Type error"
+  title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
@@ -601,18 +604,15 @@ instance UserMsg CheckerError where
     <>
     (if null relevantVars
       then ""
-      else if null cases
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty relevantVars)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty relevantVars) <> ":\n     " <>
+      else if null (snd cases)
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
              intercalate "\n     " (formatCases relevantCases))
 
     where
-      -- Extract those cases which correspond to a split variable in holeVars.
+      -- Extract those cases which correspond to a variable in holeVars.
       relevantCases :: [[Pattern ()]]
-      relevantCases = map (map snd . filter fst . zip (map snd holeVars) . fst) cases
-
-      relevantVars :: [Id]
-      relevantVars = map fst (filter snd holeVars)
+      relevantCases = map (map snd . filter ((`elem` holeVars) . fst) . zip (fst cases)) (snd cases)
 
       formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
@@ -658,6 +658,8 @@ instance UserMsg CheckerError where
       <> "` is promoted but its binding is linear; its binding should be under a box."
     NonLinearPattern ->
       "Wildcard pattern `_` allowing a value to be discarded"
+    HandlerLinearityMismatch ->
+      "Linearity of Handler clauses does not match"
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -787,7 +789,11 @@ instance UserMsg CheckerError where
 
   msg ExpectedEffectType{..}
     = "Expected a type of the form `a <eff>` but got `"
-    <> pretty errTy <> "` in subject of let"
+    <> pretty errTy
+
+  msg ExpectedOptionalEffectType{..}
+    = "Expected a type of the form `a <eff>[0..1]` but got `"
+    <> pretty errTy
 
   msg LhsOfApplicationNotAFunction{..}
     = "Expected a function type on the left-hand side of an application, but got `"
@@ -856,7 +862,7 @@ instance UserMsg CheckerError where
   msg InvalidHolePosition{} = "Hole occurs in synthesis position so the type is not yet known"
 
   msg UnknownResourceAlgebra{ errK, errTy }
-    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from effect term `" <> pretty errTy <> "`"
 
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
@@ -870,6 +876,7 @@ data LinearityMismatch
   | LinearUsedNonLinearly Id
   | NonLinearPattern
   | LinearUsedMoreThanOnce Id
+  | HandlerLinearityMismatch
   deriving (Eq, Show) -- for debugging
 
 freshenPred :: Pred -> Checker Pred
