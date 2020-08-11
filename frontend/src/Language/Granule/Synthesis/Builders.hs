@@ -92,13 +92,6 @@ makePair lTy rTy e1 e2 =
   App s rTy False (App s lTy False (Val s (ProdTy lTy rTy) False (Constr (ProdTy lTy rTy) (mkId ",") [])) e1) e2
   where s = nullSpanNoFile
 
-makeConstr :: [((Expr () Type), Type)] -> Id -> Type -> Expr () Type
-makeConstr terms name goal = buildTerm terms
-  where s = nullSpanNoFile
-        buildTerm [] = Val s goal False (Constr goal name [])
-        buildTerm ((e, ty):es) =
-          let e' = buildTerm es in
-            App s ty False e' e
 
 
 makePairUntyped :: Expr () () -> Expr () () -> Expr () ()
@@ -152,6 +145,14 @@ makeEitherCase :: Type -> Type -> Id -> Id -> Id -> Expr () Type -> Expr () Type
 makeEitherCase t1 t2 sId lId rId lExpr rExpr =
   Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PConstr s (SumTy t1 t2) False (mkId "Left") [(PVar s t1 False lId)], lExpr), (PConstr s (SumTy t1 t2) False (mkId "Right") [(PVar s t2 False rId)], rExpr)]
   where s = nullSpanNoFile
+
+makeConstr :: [((Expr () Type), Type)] -> Id -> Type -> Expr () Type
+makeConstr terms name goal = buildTerm $ reverse terms
+  where s = nullSpanNoFile
+        buildTerm [] = Val s goal False (Constr goal name [])
+        buildTerm ((e, ty):es) =
+          let e' = buildTerm es in
+            App s ty False e' e
 
 makeCase :: Type -> Id -> [(Pattern Type, Expr () Type)] -> Expr () Type
 makeCase ty var patterns =
