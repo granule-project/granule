@@ -41,6 +41,7 @@ data TypeOperator
   | TyOpExpon
   | TyOpMeet
   | TyOpJoin
+  | TyOpInterval
   deriving (Eq, Ord, Show, Rp.Data)
 
 
@@ -50,7 +51,7 @@ Example: `List n Int` in Granule
 -}
 data Type = FunTy (Maybe Id) Type Type      -- ^ Function type
           | TyCon Id                        -- ^ Type constructor
-          | Box Coeffect Type               -- ^ Coeffect type
+          | Box Type Type                   -- ^ Coeffect type
           | Diamond Type Type               -- ^ Effect type
           | TyVar Id                        -- ^ Type variable
           | TyApp Type Type                 -- ^ Type application
@@ -58,6 +59,7 @@ data Type = FunTy (Maybe Id) Type Type      -- ^ Function type
           | TyInfix TypeOperator Type Type  -- ^ Infix type operator
           | TySet [Type]                    -- ^ Type-level set
           | TySig Type Kind                 -- ^ Signature
+          | TyFloat Rational                -- ^ Type-level Float
     deriving (Eq, Ord, Show, Rp.Data)
 
 -- | Kinds
@@ -316,7 +318,7 @@ mFunTy :: Monad m => Maybe Id -> Type -> Type -> m Type
 mFunTy id x y   = return (FunTy id x y)
 mTyCon :: Monad m => Id -> m Type
 mTyCon          = return . TyCon
-mBox :: Monad m => Coeffect -> Type -> m Type
+mBox :: Monad m => Type -> Type -> m Type
 mBox c y        = return (Box c y)
 mDiamond :: Monad m => Type -> Type -> m Type
 mDiamond e y    = return (Diamond e y)
@@ -332,24 +334,27 @@ mTySet   :: Monad m => [Type] -> m Type
 mTySet xs       = return (TySet xs)
 mTySig   :: Monad m => Type -> Type -> Kind -> m Type
 mTySig t _ k      = return (TySig t k)
+mTyFloat :: Monad m => Rational -> m Type
+mTyFloat          = return . TyFloat
 
 -- Monadic algebra for types
 data TypeFold m a = TypeFold
   { tfFunTy   :: Maybe Id -> a -> a     -> m a
   , tfTyCon   :: Id                     -> m a
-  , tfBox     :: Coeffect -> a          -> m a
+  , tfBox     :: Type -> a              -> m a
   , tfDiamond :: a -> a                 -> m a
   , tfTyVar   :: Id                     -> m a
   , tfTyApp   :: a -> a                 -> m a
   , tfTyInt   :: Int                    -> m a
   , tfTyInfix :: TypeOperator -> a -> a -> m a
   , tfSet     :: [a]                    -> m a
-  , tfTySig   :: a -> Type -> Kind      -> m a  }
+  , tfTySig   :: a -> Type -> Kind      -> m a
+  , tfTyFloat :: Rational               -> m a }
 
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type
 baseTypeFold =
-  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTySig
+  TypeFold mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyInfix mTySet mTySig mTyFloat
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: Monad m => TypeFold m a -> Type -> m a
@@ -385,6 +390,7 @@ typeFoldM algebra = go
      -- This part of the fold is a bit different:
      -- actually pass the original type in here as well
      (tfTySig algebra) t' t k
+   go (TyFloat f) = tfTyFloat algebra f
 
 instance FirstParameter TypeScheme Span
 
@@ -409,9 +415,11 @@ instance Term Type where
       , tfTyInfix = \_ y z -> return $ y <> z
       , tfSet     = return . concat
       , tfTySig   = \t _ _ -> return t
+      , tfTyFloat = \_ -> return []
       }
 
     isLexicallyAtomic TyInt{} = True
+    isLexicallyAtomic TyFloat{} = True
     isLexicallyAtomic TyVar{} = True
     isLexicallyAtomic TySet{} = True
     isLexicallyAtomic TyCon{} = True

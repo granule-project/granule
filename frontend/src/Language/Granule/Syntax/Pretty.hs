@@ -124,6 +124,7 @@ instance Pretty Type where
     pretty (TyCon s)      = pretty s
     pretty (TyVar v)      = pretty v
     pretty (TyInt n)      = show n
+    pretty (TyFloat n)    = show n
 
     -- Non atoms
     pretty (FunTy Nothing t1 t2)  =
@@ -173,6 +174,7 @@ instance Pretty TypeOperator where
    TyOpExpon           -> "^"
    TyOpMeet            -> "∧"
    TyOpJoin            -> "∨"
+   TyOpInterval        -> ".."
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -276,7 +278,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
           <> pretty e1 <> " in " <> pretty e2
 
   pretty (TryCatch _ _ _ e1 v t e2 e3) =
-    "try " <> pretty e1 <> " as [" <> pretty v <> "] " <> (if t /= Nothing then ":" <> pretty t else "")   <> " in " 
+    "try " <> pretty e1 <> " as [" <> pretty v <> "] " <> (if t /= Nothing then ":" <> pretty t else "")   <> " in "
           <> pretty e2 <> " catch " <> pretty e3
 
   pretty (Val _ _ _ v) = pretty v

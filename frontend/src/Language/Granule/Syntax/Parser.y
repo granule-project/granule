@@ -318,7 +318,7 @@ Type :: { Type }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
-  | TyAtom '[' ']'                 { Box (CInterval (CZero extendedNat) infinity) $1 }
+  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (CZero extendedNat) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
 
 TyApp :: { Type }
@@ -326,7 +326,7 @@ TyApp :: { Type }
  | TyAtom                     { $1 }
 
 TyJuxt :: { Type }
-  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 } 
+  : TyJuxt '`' TyAtom '`'     { TyApp $3 $1 }
   | TyJuxt TyAtom             { TyApp $1 $2 }
   | TyAtom                    { $1 }
   | TyAtom '+' TyAtom         { TyInfix TyOpPlus $1 $3 }
@@ -356,32 +356,32 @@ TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
   |                           { [] }
 
-Coeffect :: { Coeffect }
-  : INT                         { let TokenInt _ x = $1 in CNat x }
-  | '∞'                         { infinity }
-  | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
-  | CONSTR                      { case (constrString $1) of
-                                    "Public" -> Level publicRepresentation
-                                    "Private" -> Level privateRepresentation
-                                    "Unused" -> Level unusedRepresentation
-                                    "Inf" -> infinity
-                                    x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
-  | VAR                         { CVar (mkId $ symString $1) }
-  | Coeffect '..' Coeffect      { CInterval $1 $3 }
-  | Coeffect '+' Coeffect       { CPlus $1 $3 }
-  | Coeffect '*' Coeffect       { CTimes $1 $3 }
-  | Coeffect '-' Coeffect       { CMinus $1 $3 }
-  | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect "/\\" Coeffect       { CMeet $1 $3 }
-  | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
-  | '(' Coeffect ')'            { $2 }
-  | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { CSig $1 $3 }
-  | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
+Coeffect :: { Type }
+  : INT                           { let TokenInt _ x = $1 in TyInt x }
+  | '∞'                           { infinity }
+  | FLOAT                         { let TokenFloat _ x = $1 in TyFloat $ myReadFloat x }
+  | CONSTR                        { case (constrString $1) of
+                                      "Public" -> TyInt (fromInteger publicRepresentation)
+                                      "Private" -> TyInt (fromInteger privateRepresentation)
+                                      "Unused" -> TyInt (fromInteger unusedRepresentation)
+                                      "Inf" -> infinity
+                                      x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
+  | VAR                           { TyVar (mkId $ symString $1) }
+  | Coeffect '..' Coeffect        { TyInfix TyOpInterval $1 $3 }
+  | Coeffect '+' Coeffect         { TyInfix TyOpPlus $1 $3 }
+  | Coeffect '*' Coeffect         { TyInfix TyOpTimes $1 $3 }
+  | Coeffect '-' Coeffect         { TyInfix TyOpMinus $1 $3 }
+  | Coeffect '^' Coeffect         { TyInfix TyOpExpon $1 $3 }
+  | Coeffect "/\\" Coeffect       { TyInfix TyOpMeet $1 $3 }
+  | Coeffect "\\/" Coeffect       { TyInfix TyOpJoin $1 $3 }
+  | '(' Coeffect ')'              { $2 }
+  | '{' CoeffSet '}'              { TySet $2 }
+  | Coeffect ':' Type             { TySig $1 (KPromote $3) }
+  | '(' Coeffect ',' Coeffect ')' { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
-Set :: { [(String, Type)] }
-  : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
-  | VAR ':' Type              { [(symString $1, $3)] }
+CoeffSet :: { [Type] }
+  : VAR ':' Type ',' CoeffSet  { $3 : $5 }
+  | VAR ':' Type               { [$3] }
 
 Effect :: { Type }
   : '{' EffSet '}'            { TySet $2 }
@@ -416,15 +416,15 @@ Expr :: { Expr () () }
         in (mkSpan (getPos $1, getEnd $3)) >>=
               \sp -> return $ LetDiamond sp () False pat mt expr $3 }
 
-  | try Expr as '[' PAtom ']' in Expr catch Expr 
+  | try Expr as '[' PAtom ']' in Expr catch Expr
       {% let e1 = $2; pat = $5; mt = Nothing; e2 = $8; e3 = $10
         in (mkSpan (getPos $1, getEnd $10)) >>=
               \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
-  | try Expr as '[' PAtom ']' ':' Type in Expr catch Expr 
+  | try Expr as '[' PAtom ']' ':' Type in Expr catch Expr
       {% let e1 = $2; pat = $5; mt = Just $8; e2 = $10; e3 = $12
         in (mkSpan (getPos $1, getEnd $12)) >>=
               \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
-  
+
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
              \sp -> return $ Case sp () False $2 $4 }
