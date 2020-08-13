@@ -894,11 +894,9 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   -- linearity check for e2 and e3
   ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
-  --contexts/binding
-  gamNew2 <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
-  gamNew3 <- ctxtPlus s (gam3 `subtractCtxt` binders) gam1
-
-  gam' <- if gamNew2 == gamNew3 then return gamNew2 else throw LinearityError{ errLoc = s, linearityMismatch = HandlerLinearityMismatch }
+  -- compute output contexts
+  (gam2u3, _) <- joinCtxts s (gam2 `subtractCtxt` binders) gam3
+  gam'        <- ctxtPlus s gam1 gam2u3
 
   --resulting effect type
   let f = TyApp (TyCon $ mkId "Handled") ef1
@@ -912,7 +910,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   t' <- substitute substP t
 
   let elaborated = TryCatch s t rf elaborated1 elaboratedP mty elaborated2 elaborated3
-  return (t, gamNew3, subst, elaborated)
+  return (t, gam', subst, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ rf (Var _ x)) =
