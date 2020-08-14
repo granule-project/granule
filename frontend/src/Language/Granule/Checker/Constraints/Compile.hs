@@ -10,7 +10,7 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints.CompileNatKinded
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.SubstitutionAndKinding (joinKind, synthKind)
+import Language.Granule.Checker.SubstitutionAndKinding (checkKind, synthKind)
 
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -22,29 +22,22 @@ compileTypeConstraintToConstraint ::
     (?globals :: Globals) => Span -> Type -> Checker Pred
 compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   st <- get
-  (k1, _) <- synthKind s (tyVarContext st) t1
-  -- TODO: Should this be checkKind?
-  (k2, _) <- synthKind s (tyVarContext st) t2
-  jK <- joinKind k1 k2
-  case jK of
-    Just (k, _) -> do
+  (k, _) <- synthKind s (tyVarContext st) t1
+  (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) t2 k)
+  case result of
+    Right _ -> do
+      putChecker
       case demoteKindToType k of
         Just coeffTy -> compileAtType s op t1 t2 coeffTy
         _ ->  error $ pretty s <> ": I don't know how to compile at kind " <> pretty k
-    Nothing ->
-      case k1 of
+    Left _ ->
+      case k of
         KVar v -> do
           st <- get
           case lookup v (tyVarContext st) of
             Just (_, ForallQ) | isGenericCoeffectExpression t2 -> compileAtType s op t1 t2 (TyVar v)
-            _                                                  -> throw $ UnificationError s t1 t2
-        _ -> case k2 of
-              KVar v -> do
-                st <- get
-                case lookup v (tyVarContext st) of
-                  Just (_, ForallQ) | isGenericCoeffectExpression t1 -> compileAtType s op t1 t2 (TyVar v)
-                  _                                                  -> throw $ UnificationError s t1 t2
-              _ -> throw $ UnificationError s t1 t2
+            _ -> throw $ UnificationError s t1 t2
+        _ -> throw $ UnificationError s t1 t2
 compileTypeConstraintToConstraint s t =
   error $ pretty s <> ": I don't know how to compile a constraint `" <> pretty t <> "`"
 

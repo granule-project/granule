@@ -47,5 +47,4 @@ compileNatKindedTypeToCoeffectAtType _ (TyCon (internalName -> "Pure")) (TyCon (
 compileNatKindedTypeToCoeffectAtType s (TySig t _) coeffTy =
   compileNatKindedTypeToCoeffectAtType s t coeffTy
 compileNatKindedTypeToCoeffectAtType s t coeffTy = do
-  debugM' "ty" (show t)
   throw $ KindError{errLoc = s, errTy = t, errK = KPromote coeffTy }

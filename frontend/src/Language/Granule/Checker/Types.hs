@@ -98,22 +98,13 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
-  st <- get
+  let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
-  -- TODO: Investigate if tyVarContext can just be retrieved inside the checker.
-  (k1, _) <- synthKind s (tyVarContext st) t1
-  -- TODO: Should be possible to use checkKind here with k1? Works for everything but "Pure".
-  (k2, _) <- synthKind s (tyVarContext st) t2
-  (eq, kind, unif) <- equalKinds s k1 k2
-  -- If so, proceed with equality on types of this kind
   st <- get
-  if eq
-    then equalTypesRelatedCoeffectsInner s rel t1 t2 kind spec mode
-    else
-      -- Otherwise throw a kind error
-      case spec of
-        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t2, kExpected = k1, kActual = k2}
-        _         -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k2, kActual = k1}
+  (k, _) <- synthKind s (tyVarContext st) t1'
+  st <- get
+  _ <- checkKind s (tyVarContext st) t2' k
+  equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
@@ -332,7 +323,7 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
         Right effTy -> do
           eq <- effApproximates s effTy t1 t2
           return (eq, [])
-        Left k -> throw $ KindMismatch s Nothing KEffect k
+        Left k -> debugM "G" "G" >> throw $ KindMismatch s Nothing KEffect k
 
     Types ->
       case k of
@@ -478,27 +469,6 @@ joinTypes s t1 t2 = do
                     else throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = KPromote efTy1, kActual = KPromote efTy2 }
             Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
         Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
-
--- TODO: eventually merge this with joinKind
-equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker (Bool, Kind, Substitution)
-equalKinds sp k1 k2 | k1 == k2 = return (True, k1, [])
-equalKinds sp (KPromote t1) (KPromote t2) = do
-    (eq, t, u) <- equalTypes sp t1 t2
-    return (eq, KPromote t, u)
-equalKinds sp (KFun k1 k1') (KFun k2 k2') = do
-    (eq, k, u) <- equalKinds sp k1 k2
-    (eq', k', u') <- equalKinds sp k1' k2'
-    u2 <- combineSubstitutions sp u u'
-    return $ (eq && eq', KFun k k', u2)
-equalKinds sp (KVar v) k = do
-    return (True, k, [(v, SubstK k)])
-equalKinds sp k (KVar v) = do
-    return (True, k, [(v, SubstK k)])
-equalKinds sp k1 k2 = do
-    jK <- joinKind k1 k2
-    case jK of
-      Just (k, u) -> return (True, k, u)
-      Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
 
 -- Checkers that two effects have the same type, and if so then returns that effect type
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
