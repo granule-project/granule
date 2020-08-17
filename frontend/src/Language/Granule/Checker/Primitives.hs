@@ -72,6 +72,27 @@ typeConstructors =
     , (mkId "MayFail", (KPromote (TyCon $ mkId "Exception"), [], False))
     ]
 
+-- Various predicates and functions on type operators
+closedOperation :: TypeOperator -> Bool
+closedOperation =
+  \case
+    TyOpPlus -> True
+    TyOpTimes -> True
+    TyOpMinus -> True
+    TyOpExpon -> True
+    TyOpMeet -> True
+    TyOpJoin -> True
+    _        -> False
+
+coeffectResourceAlgebraOps :: TypeOperator -> Bool
+coeffectResourceAlgebraOps =
+  \case
+    TyOpPlus -> True
+    TyOpTimes -> True
+    TyOpMeet -> True
+    TyOpJoin -> True
+    _ -> False
+
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
     TyOpLesser -> (kNat, kNat, KPredicate)
@@ -197,7 +218,7 @@ readInt = BUILTIN
 --Exceptions
 --------------------------------------------------------------------------------
 
-throw : forall {a : Type} . (a [0]) <MayFail>
+throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
 throw = BUILTIN
 
 --------------------------------------------------------------------------------
@@ -398,6 +419,11 @@ tick = BUILTIN
 --   : forall { a : Type }
 --   . a -> PtrCap a
 -- newPtr = BUILTIN
+
+-- newPtr'
+--   : forall { a : Type }
+--   . a -> (exists id . ((Ptr id) [], Cap a id)
+-- newPtr' = BUILTIN
 
 -- swapPtr
 --   : forall { a b : Type, id : Type }

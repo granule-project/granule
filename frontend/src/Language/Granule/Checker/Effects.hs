@@ -1,11 +1,10 @@
 {- Deals with effect algebras -}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Effects where
 
-import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Constraints.CompileNatKinded
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as P (setElements, typeConstructors)
