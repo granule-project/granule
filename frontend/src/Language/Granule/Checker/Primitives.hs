@@ -192,7 +192,7 @@ pure
   . a -> a <>
 pure = BUILTIN
 
-fromPure 
+fromPure
   : forall {a : Type}
   . a <Pure> -> a
 fromPure = BUILTIN
@@ -217,7 +217,7 @@ readInt = BUILTIN
 --Exceptions
 --------------------------------------------------------------------------------
 
-throw : forall {a : Type} . (a [0]) <MayFail>
+throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
 throw = BUILTIN
 
 --------------------------------------------------------------------------------
