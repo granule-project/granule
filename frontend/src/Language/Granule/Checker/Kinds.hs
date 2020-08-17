@@ -42,7 +42,7 @@ inferKindOfType s t = do
 
 inferKindOfTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker Kind
 inferKindOfTypeInContext s quantifiedVariables t =
-    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kSig) t
+    typeFoldM (TypeFold kFun kCon kBox kDiamond kVar kApp kInt kInfix kSet kSig kFloat) t
   where
     kSig k' t k = do
       if k' == k
@@ -86,7 +86,7 @@ inferKindOfTypeInContext s quantifiedVariables t =
 
     kBox c KType = do
        -- Infer the coeffect (fails if that is ill typed)
-       _ <- inferCoeffectType s c
+       _ <- undefined s c
        return KType
     kBox _ x = throw KindMismatch{ errLoc = s, tyActualK = Nothing, kExpected = KType, kActual = x }
 
@@ -125,6 +125,8 @@ inferKindOfTypeInContext s quantifiedVariables t =
         }
 
     kInt _ = return $ kConstr $ mkId "Nat"
+
+    kFloat _ = return $ KCoeffect
 
     kInfix (tyOps -> (k1exp, k2exp, kret)) k1act k2act = do
       kLub <- k1act `hasLub` k1exp

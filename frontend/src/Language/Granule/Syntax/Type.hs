@@ -259,8 +259,8 @@ nat, extendedNat :: Type
 nat = TyCon $ mkId "Nat"
 extendedNat = TyApp (TyCon $ mkId "Ext") (TyCon $ mkId "Nat")
 
-infinity :: Coeffect
-infinity = CInfinity (Just extendedNat)
+infinity :: Type
+infinity = TyCon (mkId "Infinity")
 
 isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t

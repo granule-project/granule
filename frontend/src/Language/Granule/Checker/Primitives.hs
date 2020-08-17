@@ -86,6 +86,7 @@ tyOps = \case
     TyOpExpon -> (kNat, kNat, kNat)
     TyOpMeet -> (kNat, kNat, kNat)
     TyOpJoin -> (kNat, kNat, kNat)
+    TyOpInterval -> (KCoeffect, KCoeffect, KCoeffect)
 
 dataTypes :: [DataDecl]
 dataTypes =
@@ -171,7 +172,7 @@ pure
   . a -> a <>
 pure = BUILTIN
 
-fromPure 
+fromPure
   : forall {a : Type}
   . a <Pure> -> a
 fromPure = BUILTIN

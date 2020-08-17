@@ -318,7 +318,7 @@ Type :: { Type }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
-  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (CZero extendedNat) infinity) $1 }
+  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyInt 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
 
 TyApp :: { Type }
