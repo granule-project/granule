@@ -919,9 +919,15 @@ synthKind s ctxt (TyInt n) = return (KPromote (TyCon (Id "Nat" "Nat")), [])
 
 -- KChkS_box
 synthKind s ctxt (Box c t) = do
-  _ <- inferCoeffectType s c
-  subst <- checkKind s ctxt t KType
-  return (KType, subst)
+  (kB, subst2) <- synthKind s ctxt c
+  case kB of
+    (KPromote b) -> do
+      st <- get
+      subst1 <- checkKind s (tyVarContext st) b KCoeffect
+      subst3 <- checkKind s (tyVarContext st) t KType
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (KType, subst)
+    _ -> throw KindError { errLoc = s, errTy = c, errK = kB }
 
 -- KChkS_dia
 synthKind s ctxt (Diamond e t) = do
@@ -1163,7 +1169,7 @@ mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
   => Span
   -> Coeffect
   -> Coeffect
-  -> Checker (Type, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+  -> Checker (Type, Substitution, (Type -> Type, Type -> Type))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
   (coeffTy1, subst1) <- inferCoeffectType s c1
   (coeffTy2, subst2) <- inferCoeffectType s c2

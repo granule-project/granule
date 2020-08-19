@@ -64,42 +64,6 @@ instance (Pretty a, Pretty b) => Pretty (Either a b) where
 
 -- Core pretty printers
 
-instance Pretty Coeffect where
-    pretty (CNat n) = show n
-    pretty (CFloat n) = show n
-    pretty (COne k) | k == TyCon (mkId "Nat") || k == extendedNat = "1"
-    pretty (CZero k) | k == TyCon (mkId "Nat") || k == extendedNat = "0"
-    pretty (COne k)  = "(1 : " <> pretty k <> ")"
-    pretty (CZero k) = "(0 : " <> pretty k <> ")"
-    pretty (Level x) = if x == privateRepresentation
-                             then "Private"
-                             else if x == publicRepresentation
-                                  then "Public"
-                                  else "Unused"
-    pretty (CExpon a b) = prettyNested a <> "^" <> prettyNested b
-    pretty (CVar c) = pretty c
-    pretty (CMeet c d) =
-      prettyNested c <> " /\\ " <> prettyNested d
-    pretty (CJoin c d) =
-      prettyNested c <> " \\/ " <> prettyNested d
-    pretty (CPlus c d) =
-      prettyNested c <> " + " <> prettyNested d
-    pretty (CTimes c d) =
-      prettyNested c <> " * " <> prettyNested d
-    pretty (CMinus c d) =
-      prettyNested c <> " - " <> prettyNested d
-    pretty (CSet xs) =
-      "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyNested t) xs) <> "}"
-    pretty (CSig c t) =
-      prettyNested c <> " : " <> prettyNested t
-
-    pretty (CInfinity (Just k))
-       | k == TyCon (mkId "Nat") || k == extendedNat = "∞"
-
-    pretty (CInfinity k) = "(∞ : " <> pretty k <> ")"
-    pretty (CInterval c1 c2) = prettyNested c1 <> ".." <> prettyNested c2
-    pretty (CProduct c1 c2) = "(" <> pretty c1 <> ", " <> pretty c2 <> ")"
-
 instance Pretty Kind where
     pretty KType          = "Type"
     pretty KEffect      = "Effect"

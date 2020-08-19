@@ -14,7 +14,7 @@ import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 
-import Data.Functor.Identity (runIdentity)
+import Data.Functor.Identity (Identity, runIdentity)
 import GHC.Generics (Generic)
 import qualified Text.Reprinter as Rp (Data)
 
@@ -128,125 +128,6 @@ instance Monad m => Freshenable m Kind where
     k1' <- freshen k1
     k2' <- freshen k2
     return $ KUnion k1' k2'
-
--- | Represents coeffect grades
-data Coeffect = CNat      Int
-              | CFloat    Rational
-              | CInfinity (Maybe Type)
-              | CInterval { lowerBound :: Coeffect, upperBound :: Coeffect }
-              | CVar      Id
-              | CPlus     Coeffect Coeffect
-              | CTimes    Coeffect Coeffect
-              | CMinus    Coeffect Coeffect
-              | CMeet     Coeffect Coeffect
-              | CJoin     Coeffect Coeffect
-              | CZero     Type
-              | COne      Type
-              | Level     Integer
-              | CSet      [(String, Type)]
-              | CSig      Coeffect Type
-              | CExpon    Coeffect Coeffect
-              | CProduct  Coeffect Coeffect
-    deriving (Eq, Ord, Show, Rp.Data)
-
--- Algebra for coeffects
-data CoeffectFold a = CoeffectFold
-  { cNat   :: Int -> a
-  , cFloat :: Rational -> a
-  , cInf   :: Maybe Type -> a
-  , cInterval :: a -> a -> a
-  , cVar   :: Id -> a
-  , cPlus  :: a -> a -> a
-  , cTimes :: a -> a -> a
-  , cMinus :: a -> a -> a
-  , cMeet  :: a -> a -> a
-  , cJoin  :: a -> a -> a
-  , cZero  :: Type -> a
-  , cOne   :: Type -> a
-  , cLevel :: Integer -> a
-  , cSet   :: [(String, Type)] -> a
-  , cSig   :: a -> Type -> a
-  , cExpon :: a -> a -> a
-  , cProd  :: a -> a -> a }
-
--- Base monadic algebra
-baseCoeffectFold :: CoeffectFold Coeffect
-baseCoeffectFold =
-  CoeffectFold
-    { cNat = CNat
-    , cFloat = CFloat
-    , cInf = CInfinity
-    , cInterval = CInterval
-    , cVar = CVar
-    , cPlus = CPlus
-    , cTimes = CTimes
-    , cMinus = CMinus
-    , cMeet = CMeet
-    , cJoin = CJoin
-    , cZero = CZero
-    , cOne = COne
-    , cLevel = Level
-    , cSet = CSet
-    , cSig = CSig
-    , cExpon = CExpon
-    , cProd = CProduct
-    }
-
--- | Fold on a `coeffect` type
-coeffectFold :: CoeffectFold a -> Coeffect -> a
-coeffectFold algebra = go
-  where
-    go (CNat n) =
-      (cNat algebra) n
-    go (CFloat r) =
-      (cFloat algebra) r
-    go (CInfinity i) =
-      (cInf algebra) i
-    go (CInterval l u) = let
-      l' = go l
-      u' = go u
-      in (cInterval algebra) l' u'
-    go (CVar v) =
-      (cVar algebra) v
-    go (CPlus c1 c2) = let
-      c1' = go c1
-      c2' = go c2
-      in (cPlus algebra) c1' c2'
-    go (CTimes c1 c2) = let
-      c1' = go c1
-      c2' = go c2
-      in (cTimes algebra) c1' c2'
-    go (CMinus c1 c2) = let
-      c1' = go c1
-      c2' = go c2
-      in (cMinus algebra) c1' c2'
-    go (CMeet c1 c2) = let
-      c1' = go c1
-      c2' = go c2
-      in (cMeet algebra) c1' c2'
-    go (CJoin c1 c2) = let
-      c1' = go c1
-      c2' = go c2
-      in (cJoin algebra) c1' c2'
-    go (CZero t) =
-      (cZero algebra) t
-    go (COne t) =
-      (cOne algebra) t
-    go (Level l) =
-      (cLevel algebra) l
-    go (CSet set) =
-      (cSet algebra) set
-    go (CSig c t) = let
-      c' = go c
-      in (cSig algebra) c' t
-    go (CExpon c1 c2) = let
-      c1' = go c1
-      c2' = go c2
-      in (cExpon algebra) c1' c2'
-    go (CProduct c1 c2) = let
-      c1' = go c1
-      c2' = go c2
-      in (cProd algebra) c1' c2'
 
 publicRepresentation, privateRepresentation :: Integer
 privateRepresentation = 1
@@ -392,6 +273,9 @@ typeFoldM algebra = go
      (tfTySig algebra) t' t k
    go (TyFloat f) = tfTyFloat algebra f
 
+typeFold :: TypeFold Identity a -> Type -> a
+typeFold algebra = runIdentity . typeFoldM algebra
+
 instance FirstParameter TypeScheme Span
 
 freeAtomsVars :: Type -> [Id]
@@ -426,36 +310,6 @@ instance Term Type where
     isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
     isLexicallyAtomic _ = False
 
-instance Term Coeffect where
-    freeVars (CVar v) = [v]
-    freeVars (CPlus c1 c2) = freeVars c1 <> freeVars c2
-    freeVars (CTimes c1 c2) = freeVars c1 <> freeVars c2
-    freeVars (CMinus c1 c2) = freeVars c1 <> freeVars c2
-    freeVars (CExpon c1 c2) = freeVars c1 <> freeVars c2
-    freeVars (CMeet c1 c2) = freeVars c1 <> freeVars c2
-    freeVars (CJoin c1 c2) = freeVars c1 <> freeVars c2
-    freeVars CNat{}  = []
-    freeVars CFloat{} = []
-    freeVars CInfinity{} = []
-    freeVars (CZero t) = freeVars t
-    freeVars (COne t) = freeVars t
-    freeVars Level{} = []
-    freeVars CSet{} = []
-    freeVars (CSig c k) = freeVars c <> freeVars k
-    freeVars (CInterval c1 c2) = freeVars c1 <> freeVars c2
-    freeVars (CProduct c1 c2) = freeVars c1 <> freeVars c2
-
-    isLexicallyAtomic CVar{} = True
-    isLexicallyAtomic CNat{} = True
-    isLexicallyAtomic CFloat{} = True
-    isLexicallyAtomic CZero{} = True
-    isLexicallyAtomic COne{} = True
-    isLexicallyAtomic Level{} = True
-    isLexicallyAtomic CProduct{} = True
-    isLexicallyAtomic CInfinity{} = True
-    isLexicallyAtomic _ = False
-
-
 ----------------------------------------------------------------------
 -- Freshenable instances
 
@@ -487,121 +341,40 @@ instance Freshenable m Type where
            -- function which does not get its name freshened
            Nothing -> return (TyVar $ mkId (sourceName v))
 
-instance Freshenable m Coeffect where
-    freshen (CVar v) = do
-      v' <- lookupVar Type v
-      case v' of
-        Just v' -> return $ CVar $ Id (sourceName v) v'
-        Nothing -> return $ CVar v
-
-    freshen (CInfinity (Just (TyVar i@(Id _ "")))) = do
-      t <- freshIdentifierBase Type i
-      return $ CInfinity $ Just $ TyVar t
-
-    freshen (CPlus c1 c2) = do
-      c1' <- freshen c1
-      c2' <- freshen c2
-      return $ CPlus c1' c2'
-
-    freshen (CTimes c1 c2) = do
-      c1' <- freshen c1
-      c2' <- freshen c2
-      return $ CTimes c1' c2'
-
-    freshen (CMinus c1 c2) = do
-      c1' <- freshen c1
-      c2' <- freshen c2
-      return $ CMinus c1' c2'
-
-    freshen (CExpon c1 c2) = do
-      c1' <- freshen c1
-      c2' <- freshen c2
-      return $ CExpon c1' c2'
-
-    freshen (CMeet c1 c2) = do
-      c1' <- freshen c1
-      c2' <- freshen c2
-      return $ CMeet c1' c2'
-
-    freshen (CJoin c1 c2) = do
-      c1' <- freshen c1
-      c2' <- freshen c2
-      return $ CJoin c1' c2'
-
-    freshen (CSet cs) = do
-       cs' <- mapM (\(s, t) -> freshen t >>= (\t' -> return (s, t'))) cs
-       return $ CSet cs'
-    freshen (CSig c k) = do
-      c' <- freshen c
-      k' <- freshen k
-      return $ CSig c' k'
-    freshen c@CInfinity{} = return c
-    freshen c@CFloat{} = return c
-
-    freshen (CZero t)  = do
-      t' <- freshen t
-      return $ CZero t'
-
-    freshen (COne t)  = do
-      t' <- freshen t
-      return $ COne t'
-
-    freshen c@Level{}  = return c
-    freshen c@CNat{}   = return c
-    freshen (CInterval c1 c2) = CInterval <$> freshen c1 <*> freshen c2
-    freshen (CProduct c1 c2) = CProduct <$> freshen c1 <*> freshen c2
-
 ----------------------------------------------------------------------
+
+level :: Type
+level = TyCon (mkId "Level")
 
 -- | Normalise a coeffect using the semiring laws and some
 --   local evaluation of natural numbers
 --   There is plenty more scope to make this more comprehensive
 --   None of this is stricly necessary but it improves type errors
 --   and speeds up some constarint solving.
-normalise :: Coeffect -> Coeffect
-normalise (CPlus (CZero _) n) = normalise n
-normalise (CPlus n (CZero _)) = normalise n
-normalise (CTimes (COne _) n) = normalise n
-normalise (CTimes n (COne _)) = normalise n
-normalise (COne (TyCon (Id _ "Nat"))) = CNat 1
-normalise (CZero (TyCon (Id _ "Nat"))) = CNat 0
-normalise (COne (TyCon (Id _ "Level"))) = Level 1
-normalise (CZero (TyCon (Id _ "Level"))) = Level 0
-normalise (COne (TyCon (Id _ "Q"))) = CFloat 1
-normalise (CZero (TyCon (Id _ "Q"))) = CFloat 0
-normalise (COne (TyApp (TyCon (Id "Interval" "Interval")) t)) =
-    (CInterval (normalise (COne t)) (normalise (COne t)))
-normalise (CZero (TyApp (TyCon (Id "Interval" "Interval")) t)) =
-        (CInterval (normalise (CZero t)) (normalise (CZero t)))
-
-normalise (CPlus (Level n) (Level m)) = Level (n `max` m)
-normalise (CTimes (Level n) (Level m)) = Level (n `min` m)
-normalise (CPlus (CFloat n) (CFloat m)) = CFloat (n + m)
-normalise (CTimes (CFloat n) (CFloat m)) = CFloat (n * m)
-normalise (CPlus (CNat n) (CNat m)) = CNat (n + m)
-normalise (CPlus n m) =
+normalise :: Type -> Type
+normalise (TyInfix TyOpPlus (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m)) = TyApp (TyCon (mkId "Level")) (n `max` m)
+normalise (TyInfix TyOpTimes (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m)) = TyApp (TyCon (mkId "Level")) (n `min` m)
+normalise (TyInfix TyOpPlus (TyFloat n) (TyFloat m)) = TyFloat (n + m)
+normalise (TyInfix TyOpTimes (TyFloat n) (TyFloat m)) = TyFloat (n * m)
+normalise (TyInfix TyOpPlus (TyInt n) (TyInt m)) = TyInt (n + m)
+normalise (TyInfix TyOpTimes (TyInt n) (TyInt m)) = TyInt (n * m)
+normalise (TyInfix TyOpPlus n m) =
     if (n == n') && (m == m')
-    then CPlus n m
-    else normalise (CPlus n' m')
+    then TyInfix TyOpPlus n m
+    else normalise (TyInfix TyOpPlus n' m')
   where
     n' = normalise n
     m' = normalise m
-normalise (CTimes n m) =
+normalise (TyInfix TyOpTimes n m) =
     if (n == n') && (m == m')
-    then CTimes n m
-    else normalise (CTimes n' m')
+    then TyInfix TyOpTimes n m
+    else normalise (TyInfix TyOpTimes n' m')
   where
     n' = normalise n
     m' = normalise m
 -- Push signatures in
-normalise (CSig (CPlus c1 c2) k) = CPlus (CSig (normalise c1) k) (CSig (normalise c2) k)
-normalise (CSig (CTimes c1 c2) k) = CTimes (CSig (normalise c1) k) (CSig (normalise c2) k)
-normalise (CSig (CMeet c1 c2) k) = CMeet (CSig (normalise c1) k) (CSig (normalise c2) k)
-normalise (CSig (CJoin c1 c2) k) = CJoin (CSig (normalise c1) k) (CSig (normalise c2) k)
-normalise (CSig (CNat 0) k) = CZero k
-normalise (CSig (CZero _)  k) = CZero k
-normalise (CSig (CNat 1) k) = COne k
-normalise (CSig (COne _)   k) = CZero k
-normalise (CSig (CInfinity _)  k) = CInfinity (Just k)
-
+normalise (TySig (TyInfix TyOpPlus c1 c2) k) = TyInfix TyOpPlus (TySig (normalise c1) k) (TySig (normalise c2) k)
+normalise (TySig (TyInfix TyOpTimes c1 c2) k) = TyInfix TyOpTimes (TySig (normalise c1) k) (TySig (normalise c2) k)
+normalise (TySig (TyInfix TyOpMeet c1 c2) k) = TyInfix TyOpMeet (TySig (normalise c1) k) (TySig (normalise c2) k)
+normalise (TySig (TyInfix TyOpJoin c1 c2) k) = TyInfix TyOpJoin (TySig (normalise c1) k) (TySig (normalise c2) k)
 normalise c = c
