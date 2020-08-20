@@ -32,7 +32,7 @@ isEffUnit s effTy eff =
         -- Nat case
         TyCon (internalName -> "Nat") -> do
             nat <- compileNatKindedTypeToCoeffect s eff
-            addConstraint (Eq s (CNat 0) nat (TyCon $ mkId "Nat"))
+            addConstraint (Eq s (TyInt 0) nat (TyCon $ mkId "Nat"))
             return True
         -- Session singleton case
         TyCon (internalName -> "Com") -> do
@@ -56,7 +56,7 @@ handledNormalise s effTy efs =
         TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "Success")) -> TyCon (mkId "Pure")
         TyApp (TyCon (internalName -> "Handled")) ef -> handledNormalise s effTy ef
         TyCon (internalName -> "Success") -> TyCon (mkId "Pure")
-        TySet efs' -> 
+        TySet efs' ->
             TySet (efs' \\ [TyCon (mkId "IOExcept")])
         _ -> efs
 
@@ -78,7 +78,7 @@ effApproximates s effTy eff1 eff2 =
             TyCon (internalName -> "Com") -> do
                 return True
             -- Exceptions
-            TyCon (internalName -> "Exception") -> 
+            TyCon (internalName -> "Exception") ->
                 case (eff1, eff2) of
                     (TyCon (internalName -> "Success"),_) ->
                         return True
@@ -127,9 +127,9 @@ effectMult sp effTy t1 t2 = do
         TyCon (internalName -> "Exception") ->
             case t1 of
                 --derived property Handled f * e = e
-                TyApp (TyCon (internalName -> "Handled")) _ -> 
+                TyApp (TyCon (internalName -> "Handled")) _ ->
                     return t2
-                TyCon (internalName -> "Success") -> 
+                TyCon (internalName -> "Success") ->
                     return t2
                 TyCon (internalName -> "MayFail") ->
                     return $ TyCon $ mkId "MayFail"
@@ -141,17 +141,17 @@ effectMult sp effTy t1 t2 = do
             --Handled, Handled
             (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
                 let ts1' = handledNormalise sp effTy t1
-                let ts2' = handledNormalise sp effTy t2 
+                let ts2' = handledNormalise sp effTy t2
                 t <- (effectMult sp effTy ts1' ts2')
                 return t
             --Handled, set
             (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
                 let ts1' = handledNormalise sp effTy t1
-                t <- (effectMult sp effTy ts1' t2) ; 
+                t <- (effectMult sp effTy ts1' t2) ;
                 return t
              --set, Handled
             (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
-                let ts2' = handledNormalise sp effTy t2 
+                let ts2' = handledNormalise sp effTy t2
                 t <- (effectMult sp effTy t1 ts2') ;
                 return t
             -- Actual sets, take the union
@@ -168,16 +168,16 @@ effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
     -- Unify the two variables into one
     nat1 <- compileNatKindedTypeToCoeffect s t1
     nat2 <- compileNatKindedTypeToCoeffect s t2
-    addConstraint (ApproximatedBy s nat1 (CVar nvar) t)
-    addConstraint (ApproximatedBy s nat2 (CVar nvar) t)
+    addConstraint (ApproximatedBy s nat1 (TyVar nvar) t)
+    addConstraint (ApproximatedBy s nat2 (TyVar nvar) t)
     return $ TyVar nvar
 
 effectUpperBound _ t@(TyCon (internalName -> "Com")) t1 t2 = do
     return $ TyCon $ mkId "Session"
 
 effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
-    let t1' = handledNormalise s t t1 
-    let t2' = handledNormalise s t t2 
+    let t1' = handledNormalise s t t1
+    let t2' = handledNormalise s t t2
     case (t1', t2') of
         (TyCon (internalName -> "Success"),TyCon (internalName -> "Success")) ->
             return t1'

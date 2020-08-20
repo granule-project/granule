@@ -432,23 +432,8 @@ rewriteBindersInPredicate ctxt =
 
     -- `updateCoeffect v k c` rewrites any occurence of the kind variable
     -- `v` in the coeffect `c` with the kind `k`
-    updateCoeffect :: Id -> Type -> Coeffect -> Coeffect
-    updateCoeffect ckindVar ckind (CZero (TyVar ckindVar'))
-      | ckindVar == ckindVar' = CZero ckind
-    updateCoeffect ckindVar ckind (COne (TyVar ckindVar'))
-      | ckindVar == ckindVar' = COne ckind
-    updateCoeffect ckindVar ckind (CMeet c1 c2) =
-      CMeet (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CJoin c1 c2) =
-      CJoin (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CPlus c1 c2) =
-      CPlus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CTimes c1 c2) =
-      CTimes (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CMinus c1 c2) =
-      CMinus (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CExpon c1 c2) =
-      CExpon (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
-    updateCoeffect ckindVar ckind (CInterval c1 c2) =
-      CInterval (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
+    updateCoeffect :: Id -> Type -> Type -> Type
+    updateCoeffect ckindVar ckind (TyVar ckindVar') | ckindVar == ckindVar' = ckind
+    updateCoeffect ckindVar ckind (TyInfix op c1 c2) =
+      TyInfix op (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
     updateCoeffect _ _ c = c

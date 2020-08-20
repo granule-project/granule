@@ -80,7 +80,7 @@ runAll f xs = do
 -- | Types of discharged coeffects
 data Assumption
   = Linear Type
-  | Discharged Type Coeffect
+  | Discharged Type Type
     deriving (Eq, Show)
 
 instance Term Assumption where
@@ -437,7 +437,7 @@ data CheckerError
   | UndefinedEqualityKindError
     { errLoc :: Span, errTy1 :: Type, errK1 :: Kind, errTy2 :: Type, errK2 :: Kind }
   | CoeffectUnificationError
-    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type, errC1 :: Coeffect, errC2 :: Coeffect }
+    { errLoc :: Span, errTy1 :: Type, errTy2 :: Type, errC1 :: Type, errC2 :: Type }
   | DataConstructorTypeVariableNameClash
     { errLoc :: Span, errDataConstructorId :: Id, errTypeConstructor :: Id, errVar :: Id }
   | DataConstructorNameClashError

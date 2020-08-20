@@ -6,7 +6,6 @@ module Language.Granule.Checker.Constraints.SymbolicGrades where
    in order for a solver to use.
 -}
 
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Constraints.SNatX
 
@@ -29,7 +28,7 @@ data SGrade =
        SNat      SInteger
      | SFloat    SFloat
      | SLevel    SInteger
-     | SSet      (S.Set (Id, Type))
+     | SSet      (S.Set Type)
      | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
@@ -98,7 +97,7 @@ sLtTree (SynPlus s s') (SynPlus t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s'
 sLtTree (SynTimes s s') (SynTimes t t') = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynMeet s s') (SynMeet t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
-sLtTree (SynMerge sb s s') (SynMerge sb' t t') = 
+sLtTree (SynMerge sb s s') (SynMerge sb' t t') =
   liftM2 (.&&) (return $ sb .== sb') (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
 sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
