@@ -14,6 +14,7 @@ module Language.Granule.Checker.SubstitutionAndKinding(
   freshPolymorphicInstance,
   joinKind,
   kindCheckDef,
+  mguCoeffectTypesFromCoeffects,
   replaceSynonyms,
   synthKind,
   updateTyVar) where
@@ -900,3 +901,22 @@ joinKind _ _ = return Nothing
 -- Universally quantifies everything in a context.
 universify :: Ctxt a -> Ctxt (a, Quantifier)
 universify = map (second (\k -> (k, ForallQ)))
+
+-- Find the most general unifier of two coeffects
+-- This is an effectful operation which can update the coeffect-kind
+-- contexts if a unification resolves a variable
+mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
+  => Span
+  -> Type
+  -> Type
+  -> Checker (Type, Substitution, (Type -> Type, Type -> Type))
+mguCoeffectTypesFromCoeffects s c1 c2 = do
+  st <- get
+  (coeffK1, subst1) <- synthKind s (tyVarContext st) c1
+  (coeffK2, subst2) <- synthKind s (tyVarContext st) c2
+  case (coeffK1, coeffK2) of
+    (KPromote coeffTy1, KPromote coeffTy2) -> do
+      (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (coeffTy, subst, res)
+    _ -> error $ "Cannot find most general unifier of non-coeffect(s): " <> show c1 <> ", " <> show c2

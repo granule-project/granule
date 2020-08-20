@@ -30,7 +30,7 @@ isGenericCoeffectExpression _ = False
 -- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
 --    set of used variables, (first param))
-multAll :: (?globals :: Globals) => Span -> [Id] -> Coeffect -> Ctxt Assumption -> Checker (Ctxt Assumption)
+multAll :: (?globals :: Globals) => Span -> [Id] -> Type -> Ctxt Assumption -> Checker (Ctxt Assumption)
 
 multAll _ _ _ [] = return []
 
@@ -42,7 +42,7 @@ multAll s vars c ((name, Discharged t c') : ctxt) | name `elem` vars = do
     ctxt' <- multAll s vars c ctxt
     -- TODO: do we want to throw away the subst?
     (_, _, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
-    return $ (name, Discharged t ((inj1 c) `CTimes` (inj2 c'))) : ctxt'
+    return $ (name, Discharged t (TyInfix TyOpTimes (inj1 c) (inj2 c'))) : ctxt'
 
 -- Ignore linear and non-relevant variables
 multAll s vars c ((_, Linear _) : ctxt) =

@@ -58,7 +58,7 @@ data Mode = Types | Effects
 equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> (Span -> Type -> Type -> Type -> Constraint)
   -- Starting spec indication
   -> SpecIndicator
   -- Left type (may be approximated by right type)
@@ -89,7 +89,7 @@ flipIndicator PatternCtxt = PatternCtxt
 equalTypesRelatedCoeffects :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> (Span -> Type -> Type -> Type -> Constraint)
   -> Type
   -> Type
   -- Indicates whether the first type or second type is a specification
@@ -109,7 +109,7 @@ equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
   -- Explain how coeffects should be related by a solver constraint
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> (Span -> Type -> Type -> Type -> Constraint)
   -> Type
   -> Type
   -> Kind
@@ -222,7 +222,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
           case result of
             Left err -> return ()
           -- Create solver vars for coeffects
-            Right _ -> putChecker >> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
+            Right _ -> putChecker >> addConstraint (Eq s (TyVar n) (TyVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif) ->
           return (True, unif ++ [(m, SubstT $ TyVar n)])
@@ -267,7 +267,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
         -- If the kind is Nat, then create a solver constraint
         Just (KPromote (TyCon (internalName -> "Nat")), unif) -> do
           nat <- compileNatKindedTypeToCoeffect s t
-          addConstraint (Eq s (CVar n) nat (TyCon $ mkId "Nat"))
+          addConstraint (Eq s (TyVar n) nat (TyCon $ mkId "Nat"))
           return (True, unif ++ [(n, SubstT t)])
 
         Just (_, unif) -> return (True, unif ++ [(n, SubstT t)])
@@ -366,7 +366,7 @@ sessionInequality s t1 t2 = throw TypeError{ errLoc = s, tyExpected = t1, tyActu
 isDualSession :: (?globals :: Globals)
     => Span
        -- Explain how coeffects should be related by a solver constraint
-    -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+    -> (Span -> Type -> Type -> Type -> Constraint)
     -> Type
     -> Type
     -- Indicates whether the first type or second type is a specification
@@ -415,17 +415,17 @@ joinTypes s (Box c t) (Box c' t') = do
   -- Create a fresh coeffect variable
   topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
-  addConstraint (ApproximatedBy s (inj1 c)  (CVar topVar) coeffTy)
-  addConstraint (ApproximatedBy s (inj2 c') (CVar topVar) coeffTy)
+  addConstraint (ApproximatedBy s (inj1 c)  (TyVar topVar) coeffTy)
+  addConstraint (ApproximatedBy s (inj2 c') (TyVar topVar) coeffTy)
   tUpper <- joinTypes s t t'
-  return $ Box (CVar topVar) tUpper
+  return $ Box (TyVar topVar) tUpper
 
 joinTypes s (TyInt n) (TyVar m) = do
   -- Create a fresh coeffect variable
   let ty = TyCon $ mkId "Nat"
   var <- freshTyVarInContext m (KPromote ty)
   -- Unify the two coeffects into one
-  addConstraint (Eq s (CNat n) (CVar var) ty)
+  addConstraint (Eq s (TyInt n) (TyVar var) ty)
   return $ TyInt n
 
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
@@ -438,8 +438,8 @@ joinTypes s (TyVar n) (TyVar m) = do
 
       nvar <- freshTyVarInContextWithBinding n kind BoundQ
       -- Unify the two variables into one
-      addConstraint (ApproximatedBy s (CVar n) (CVar nvar) t)
-      addConstraint (ApproximatedBy s (CVar m) (CVar nvar) t)
+      addConstraint (ApproximatedBy s (TyVar n) (TyVar nvar) t)
+      addConstraint (ApproximatedBy s (TyVar m) (TyVar nvar) t)
       return $ TyVar nvar
 
     _ -> error $ "Trying to join two type variables: " ++ pretty n ++ " and " ++ pretty m
@@ -502,7 +502,8 @@ isIndexedType = typeFoldM $
     , tfTyInt = \_ -> return False
     , tfTyInfix = \_ x y -> return (x || y)
     , tfSet = \_ -> return False
-    , tfTySig = \x _ _ -> return x }
+    , tfTySig = \x _ _ -> return x
+    , tfTyFloat = \_ -> return False }
 
 -- Given a type term, works out if its kind is actually an effect type (promoted)
 -- if so, returns `Right effTy` where `effTy` is the effect type

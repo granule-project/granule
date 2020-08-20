@@ -28,14 +28,14 @@ import Language.Granule.Utils
 --   a box pattern (or many nested box patterns)
 definiteUnification :: (?globals :: Globals)
   => Span
-  -> Maybe (Coeffect, Type) -- Outer coeffect
-  -> Type                   -- Type of the pattern
+  -> Maybe (Type, Type) -- Outer coeffect
+  -> Type               -- Type of the pattern
   -> Checker ()
 definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
   when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
-    addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+    addConstraint $ ApproximatedBy s (TyInt 1) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
@@ -78,7 +78,7 @@ ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 
 -- | Inner helper, which takes information about the enclosing coeffect
 ctxtFromTypedPattern' :: (?globals :: Globals) =>
-     Maybe (Coeffect, Type)    -- enclosing coeffect
+     Maybe (Type, Type)    -- enclosing coeffect
   -> Span
   -> Type
   -> Pattern ()
@@ -108,7 +108,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
 
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
-              addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
+              addConstraint $ ApproximatedBy s (TyInt 0) coeff coeffTy
 
               return ([], [], [], PWild s t rf, NotFull)
 
@@ -143,7 +143,12 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
 -- Pattern match on a modal box
 ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
-    (innerBoxTy, subst0) <- inferCoeffectType s coeff
+    (innerBoxTy, subst0) <- do
+      st <- get
+      innerBoxK <- synthKind s (tyVarContext st) coeff
+      case innerBoxK of
+        (KPromote t, subst) -> return (t, subst)
+        _ -> error $ "Cannot infer coeffect type of " <> show coeff
 
     (coeff, subst1, coeffTy) <- case outerBoxTy of
         -- Case: no enclosing [ ] pattern
