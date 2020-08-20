@@ -506,12 +506,12 @@ checkExpr defs gam pol topLevel tau
     (eq, _, subst) <- equalTypes s floatTy tau
     if eq then do
       -- Type check the argument
-      (gam, subst', elab) <- checkExpr defs gam pol topLevel (Box (CFloat (toRational x)) floatTy) e
+      (gam, subst', elab) <- checkExpr defs gam pol topLevel (Box (TyFloat (toRational x)) floatTy) e
 
       subst'' <- combineSubstitutions s subst subst'
 
       -- Create elborated AST
-      let scaleTy = FunTy Nothing floatTy (FunTy Nothing (Box (CFloat (toRational x)) floatTy) floatTy)
+      let scaleTy = FunTy Nothing floatTy (FunTy Nothing (Box (TyFloat (toRational x)) floatTy) floatTy)
       let elab' = App s floatTy rf
                     (App s' scaleTy rf' (Val s'' floatTy rf'' (Var floatTy v)) (Val s3 floatTy rf3 (NumFloat x))) elab
 
@@ -705,7 +705,7 @@ synthExpr defs gam pol
 
   (t, _, subst, elabE) <- synthExpr defs gam pol v
 
-  return (t, [(x, Discharged t (CZero (TyCon $ mkId "Level")))], subst, elabE)
+  return (t, [(x, Discharged t (TyInt 0))], subst, elabE)
 
 -- Constructors
 synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
@@ -852,7 +852,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
     _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
 
   (t, _) <- inferCoeffectType s opt
-  addConstraint (ApproximatedBy s (CZero t) opt t)
+  addConstraint (ApproximatedBy s (TyInt 0) opt t)
 
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s (Box opt ty1) (PBox s () False p) NotFull
@@ -930,7 +930,7 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) =
      Just (Discharged ty c) -> do
        (k, subst) <- inferCoeffectType s c
        let elaborated = Val s ty rf (Var ty x)
-       return (ty, [(x, Discharged ty (COne k))], subst, elaborated)
+       return (ty, [(x, Discharged ty (TyInt 1))], subst, elaborated)
 
 -- Specialised application for scale
 {- TODO: needs thought -}
@@ -939,7 +939,7 @@ synthExpr defs gam pol
 
   let floatTy = TyCon $ mkId "DFloat"
 
-  let scaleTyApplied = FunTy Nothing (Box (CFloat (toRational r)) floatTy) floatTy
+  let scaleTyApplied = FunTy Nothing (Box (TyFloat (toRational r)) floatTy) floatTy
   let scaleTy = FunTy Nothing floatTy scaleTyApplied
 
   let elab = App s scaleTy rf (Val s' scaleTy rf' (Var scaleTy v)) (Val s'' floatTy rf'' (NumFloat r))
@@ -988,10 +988,10 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
 
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
-   let finalTy = Box (CVar var) t
+   let finalTy = Box (TyVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
 
-   gam'' <- multAll s (freeVars e) (CVar var) gam'
+   gam'' <- multAll s (freeVars e) (TyVar var) gam'
    return (finalTy, gam'', subst, elaborated)
 
 
@@ -1192,7 +1192,7 @@ ctxtApprox s ctxt1 ctxt2 = do
                -- TODO: deal with the subst here
                (kind, _) <- inferCoeffectType s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (CZero kind)) (id, ass2)
+               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyInt 0)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1230,7 +1230,7 @@ ctxtEquals s ctxt1 ctxt2 = do
                -- TODO: deal with the subst here
                (kind, _) <- inferCoeffectType s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Discharged t (CZero kind)) (id, ass2)
+               _ <- relateByAssumption s Eq (id, Discharged t (TyInt 0)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1299,7 +1299,7 @@ intersectCtxtsWithWeaken s a b = do
    weaken (var, Discharged t c) = do
         -- TODO: deal with the subst here
        (kind, _) <- inferCoeffectType s c
-       return (var, Discharged t (CZero kind))
+       return (var, Discharged t (TyInt 0))
 
 {- | Given an input context and output context, check the usage of
      variables in the output, returning a list of usage mismatch
@@ -1323,7 +1323,7 @@ checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
 -- Assumption that the two assumps are for the same variable
 relateByAssumption :: (?globals :: Globals)
   => Span
-  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
+  -> (Span -> Type -> Type -> Type -> Constraint)
   -> (Id, Assumption)
   -> (Id, Assumption)
   -> Checker Substitution
@@ -1401,7 +1401,7 @@ freshVarsIn s vars ctxt = do
 
       -- Return the freshened var-type mapping
       -- and the new type variable
-      return ((var, Discharged t (CVar cvar)), Just (cvar, promoteTypeToKind ctype))
+      return ((var, Discharged t (TyVar cvar)), Just (cvar, promoteTypeToKind ctype))
 
     toFreshVar (var, Linear t) = return ((var, Linear t), Nothing)
 
@@ -1429,7 +1429,7 @@ extCtxt s ctxt var (Linear t) = do
          then do
            -- TODO: deal with the subst here
            (k, _) <- inferCoeffectType s c
-           return $ replace ctxt var (Discharged t (c `CPlus` COne k))
+           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus c (TyInt 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Linear t) : ctxt
 
@@ -1438,14 +1438,14 @@ extCtxt s ctxt var (Discharged t c) = do
   case lookup var ctxt of
     Just (Discharged t' c') ->
         if t == t'
-        then return $ replace ctxt var (Discharged t' (c `CPlus` c'))
+        then return $ replace ctxt var (Discharged t' (TyInfix TyOpPlus c c'))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Just (Linear t') ->
         if t == t'
         then do
            -- TODO: deal with the subst here
            (k, _) <- inferCoeffectType s c
-           return $ replace ctxt var (Discharged t (c `CPlus` COne k))
+           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus c (TyInt 1)))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Discharged t c) : ctxt
 

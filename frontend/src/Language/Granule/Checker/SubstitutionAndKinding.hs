@@ -12,6 +12,8 @@ module Language.Granule.Checker.SubstitutionAndKinding(
   combineSubstitutions,
   combineManySubstitutions,
   freshPolymorphicInstance,
+  inferCoeffectType,
+  inferCoeffectTypeAssumption,
   joinKind,
   kindCheckDef,
   mguCoeffectTypesFromCoeffects,
@@ -902,6 +904,21 @@ joinKind _ _ = return Nothing
 universify :: Ctxt a -> Ctxt (a, Quantifier)
 universify = map (second (\k -> (k, ForallQ)))
 
+-- | Infer the type of a coeffect term (giving its span as well)
+inferCoeffectType :: (?globals :: Globals) => Span -> Type -> Checker (Type, Substitution)
+inferCoeffectType s c = do
+  st <- get
+  (k, subst) <- synthKind s (tyVarContext st) c
+  case k of
+    (KPromote t) -> return (t, subst)
+    _ -> undefined
+
+inferCoeffectTypeAssumption :: (?globals :: Globals) => Span -> Assumption -> Checker (Maybe Type, Substitution)
+inferCoeffectTypeAssumption _ (Linear _) = return (Nothing, [])
+inferCoeffectTypeAssumption s (Discharged _ c) = do
+  (t, subst) <- inferCoeffectType s c
+  return (Just t, subst)
+
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind
 -- contexts if a unification resolves a variable
@@ -912,11 +929,8 @@ mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
   -> Checker (Type, Substitution, (Type -> Type, Type -> Type))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
   st <- get
-  (coeffK1, subst1) <- synthKind s (tyVarContext st) c1
-  (coeffK2, subst2) <- synthKind s (tyVarContext st) c2
-  case (coeffK1, coeffK2) of
-    (KPromote coeffTy1, KPromote coeffTy2) -> do
-      (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
-      subst <- combineManySubstitutions s [subst1, subst2, subst3]
-      return (coeffTy, subst, res)
-    _ -> error $ "Cannot find most general unifier of non-coeffect(s): " <> show c1 <> ", " <> show c2
+  (coeffTy1, subst1) <- inferCoeffectType s c1
+  (coeffTy2, subst2) <- inferCoeffectType s c2
+  (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
+  subst <- combineManySubstitutions s [subst1, subst2, subst3]
+  return (coeffTy, subst, res)

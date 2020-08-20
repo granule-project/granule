@@ -143,12 +143,7 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
 -- Pattern match on a modal box
 ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
-    (innerBoxTy, subst0) <- do
-      st <- get
-      innerBoxK <- synthKind s (tyVarContext st) coeff
-      case innerBoxK of
-        (KPromote t, subst) -> return (t, subst)
-        _ -> error $ "Cannot infer coeffect type of " <> show coeff
+    (innerBoxTy, subst0) <- inferCoeffectType s coeff
 
     (coeff, subst1, coeffTy) <- case outerBoxTy of
         -- Case: no enclosing [ ] pattern
