@@ -51,8 +51,8 @@ library:
   - Language.Granule.Checker.Patterns
   - Language.Granule.Checker.Predicates
   - Language.Granule.Checker.Primitives
+  - Language.Granule.Checker.SubstitutionAndKinding
   - Language.Granule.Checker.SubstitutionContexts
-  - Language.Granule.Checker.Substitution
   - Language.Granule.Checker.Types
   - Language.Granule.Syntax.Def
   - Language.Granule.Syntax.Expr
