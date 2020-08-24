@@ -25,6 +25,7 @@ import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
+import System.IO.Unsafe (unsafePerformIO)
 import Control.Exception (catch, throwIO, IOException)
 import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
@@ -366,40 +367,38 @@ builtIns =
   ]
   where
     fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    fork ctxt e@Abs{} = diamondConstr $ do
+    fork ctxt e@Abs{} = Ext () (unsafePerformIO $ do
       c <- CC.newChan
       _ <- C.forkIO $
-         evalIn ctxt (App nullSpan () False
-                       (valExpr e)
-                       (valExpr $ Ext () $ Chan c)) >> return ()
-      return $ valExpr $ Ext () $ Chan c
+         evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
+      return $ Chan c)
     fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    forkRep ctxt e@Abs{} = diamondConstr $ do
+    forkRep ctxt e@Abs{} = unsafePerformIO $ do
       c <- CC.newChan
       _ <- C.forkIO $
          evalIn ctxt (App nullSpan () False
                         (valExpr e)
                         (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
-      return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
+      return $ Promote () $ valExpr $ Ext () $ Chan c
     forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     recv :: (?globals :: Globals) => RValue -> RValue
-    recv (Ext _ (Chan c)) = diamondConstr $ do
+    recv (Ext _ (Chan c)) = unsafePerformIO $ do
       x <- CC.readChan c
-      return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
+      return $ Constr () (mkId ",") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> RValue
     send (Ext _ (Chan c)) = Ext () $ Primitive
-      (\v -> diamondConstr $ do
+      (\v -> unsafePerformIO $ do
          CC.writeChan c v
-         return $ valExpr $ Ext () $ Chan c)
+         return $ Ext () $ Chan c)
     send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
     close :: RValue -> RValue
-    close (Ext _ (Chan c)) = diamondConstr $ return $ valExpr $ Constr () (mkId "()") []
+    close (Ext _ (Chan c)) = unsafePerformIO $ return $ Constr () (mkId "()") []
     close rval = error $ "Runtime exception: trying to close a value which is not a channel"
 
     cast :: Int -> Double
