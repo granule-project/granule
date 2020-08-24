@@ -1,0 +1,4 @@
+main : ((Handle R) [0..1]) <IO>
+main = 
+        let f = "LICENSE"
+        in openHandle ReadMode f

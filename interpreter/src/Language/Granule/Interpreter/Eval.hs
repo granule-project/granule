@@ -411,7 +411,7 @@ builtIns =
         case x of
           (StringLiteral s) -> do
             h <- SIO.openFile (unpack s) mode
-            return $ valExpr $ Promote () $ valExpr $ Ext () $ Handle h
+            return $ valExpr $ Ext () $ Handle h
           rval -> error $ "Runtime exception: trying to open from a non string filename" <> show rval))
       where
         mode = case internalName m of
@@ -429,20 +429,20 @@ builtIns =
         case c of
           (CharLiteral c) -> do
             SIO.hPutChar h c
-            return $ valExpr $ Promote () $ valExpr $ Ext () $ Handle h
+            return $ valExpr $ Ext () $ Handle h
           _ -> error $ "Runtime exception: trying to put a non character value"))
     writeChar _ = error $ "Runtime exception: trying to put from a non handle value"
 
     readChar :: RValue -> RValue
     readChar (Ext _ (Handle h)) = diamondConstr $ do
           c <- SIO.hGetChar h
-          return $ valExpr $ Promote () $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
+          return $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
     readChar h = error $ "Runtime exception: trying to get from a non handle value" <> prettyDebug h
 
     closeHandle :: RValue -> RValue
     closeHandle (Ext _ (Handle h)) = diamondConstr $ do
          SIO.hClose h
-         return $ valExpr $ Promote () $ valExpr (Constr () (mkId "()") [])
+         return $ valExpr (Constr () (mkId "()") [])
     closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
