@@ -1,0 +1,7 @@
+data N where
+   Z : N;
+   S : (notZ : N) -> N
+
+succ : N -> N
+succ Z = ?;
+succ (S notZ0) = ?

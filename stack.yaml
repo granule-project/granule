@@ -1,4 +1,4 @@
-resolver: lts-13.21
+resolver: lts-15.13
 packages:
 - frontend/
 - interpreter/
@@ -10,6 +10,7 @@ extra-deps:
 - ConfigFile-1.1.4
 - text-replace-0.0.0.4
 - sbv-8.5
+- syz-0.2.0.0@sha256:7307acb8f6ae7720e7e235c974281ecee912703c1394ebcac19caf83d70bb492,2345
 
 # Override default flag values for local packages and extra-deps
 flags: {}

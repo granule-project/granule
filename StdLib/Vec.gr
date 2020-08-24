@@ -165,8 +165,8 @@ pullVec Nil = [Nil];
 pullVec (Cons [x] xs) = let [ys] = pullVec xs in [Cons x ys]
 
 --- pushVec pushes in non linearity of vector into the elements
-pushVec : ∀ {k : Nat, n : Nat, a : Type}
-         . (Vec n a) [1..k+1] → Vec n (a [1..k+1])
+pushVec : ∀ {k : Nat, n : Nat, a : Type} . { k <= 1 } =>
+         (Vec n a) [k + 1] → Vec n (a [k + 1])
 pushVec [Nil] = Nil;
 pushVec [Cons x xs] = Cons [x] (pushVec [xs])
 
@@ -179,7 +179,7 @@ copySpine (Cons x xs) = let
   in (Cons () ss, Cons x xs)
 
 data VecX a where
-  VecX : ∀ n . Vec n a → VecX a
+  VecX : ∀ {n : Nat} . Vec n a → VecX a
 
 -- import Maybe
 

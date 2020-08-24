@@ -1,5 +1,10 @@
-  # 0.7.7.3 (wip)
+  # 0.7.8.0-p (This is version is soon to be replaced by v0.8.0.0 and can
+	be seen as a (partial) pre-release for it).
+  - --synthesise mode
+  - Support for deriving simple distributive laws
   - Improved error messages
+  - Improved dependent kinds support
+  - Automatic case splitting and code rewriting features
 
   # 0.7.7.2
   - LLVM compiler separated into its own project to make building easier at the moment (see https://github.com/granule-project/granule-compiler-llvm).

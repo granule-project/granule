@@ -1,0 +1,29 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/head.gr:5:12:
+
+   Expected type is: `Maybe a`
+
+   Context:
+     xs : Vec n a
+
+   Type context:
+     a : Type
+     n : ↑Nat
+
+   Case splits for xs:
+     Nil           
+     (Cons xs0 xs1)
+
+Found a goal: frontend/tests/cases/negative/splitting/head.gr:8:13:
+
+   Expected type is: `a`
+
+   Context:
+     xs : Vec (n + 1) a
+
+   Type context:
+     a : Type
+     n : ↑Nat
+
+   Case splits for xs:
+     (Cons xs0 xs1)

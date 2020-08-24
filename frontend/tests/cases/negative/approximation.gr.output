@@ -1,3 +1,3 @@
 Type checking failed: 
-Grading error: frontend/tests/cases/negative/approximation.gr:2:1:
-4 is not approximatable by 2 for type Nat because Nat denotes precise usage.
+Type error: frontend/tests/cases/negative/approximation.gr:2:1:
+Expected 2 uses, but instead there are 4 actual uses.

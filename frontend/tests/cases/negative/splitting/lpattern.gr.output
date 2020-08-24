@@ -1,0 +1,45 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/lpattern.gr:4:18:
+
+   Expected type is: `Bool`
+
+   Context:
+     a : Bool
+     b : Bool
+     c : Bool
+     d : Bool
+     e : Bool
+
+   Case splits for a, b, c, d, e:
+     False False False False False
+     False False False False True 
+     False False False True  False
+     False False False True  True 
+     False False True  False False
+     False False True  False True 
+     False False True  True  False
+     False False True  True  True 
+     False True  False False False
+     False True  False False True 
+     False True  False True  False
+     False True  False True  True 
+     False True  True  False False
+     False True  True  False True 
+     False True  True  True  False
+     False True  True  True  True 
+     True  False False False False
+     True  False False False True 
+     True  False False True  False
+     True  False False True  True 
+     True  False True  False False
+     True  False True  False True 
+     True  False True  True  False
+     True  False True  True  True 
+     True  True  False False False
+     True  True  False False True 
+     True  True  False True  False
+     True  True  False True  True 
+     True  True  True  False False
+     True  True  True  False True 
+     True  True  True  True  False
+     True  True  True  True  True 

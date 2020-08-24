@@ -1,0 +1,2 @@
+poly : forall {a : Type, k : Coeffect, c : k} . a [ ((1 + 1):k) * c ] -> (a × a) [c]
+poly [x] = [(x, x)]

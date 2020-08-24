@@ -8,14 +8,13 @@ module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
 
-import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Constraints.CompileNatKinded
 
 import Language.Granule.Checker.Effects
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Helpers
@@ -42,17 +41,19 @@ equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
-equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
+--- Flags
+
+data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
+  deriving (Eq, Show)
+
+data Mode = Types | Effects
 
 {- | Check whether two types are equal, and at the same time
-     generate coeffect equality constraints and unify the
-     two types
+     generate (in)equality constraints and perform unification.
 
      The first argument is taken to be possibly approximated by the second
-     e.g., the first argument is inferred, the second is a specification
-     being checked against
+     e.g., the first argument is inferred, the second is a specification being
+     checked against.
 -}
 equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   => Span
@@ -60,9 +61,9 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -- Starting spec indication
   -> SpecIndicator
-  -- Left type (usually the inferred)
+  -- Left type (may be approximated by right type)
   -> Type
-  -- Right type (usually the specified)
+  -- Right type
   -> Type
   -- Result is a effectful, producing:
   --    * a boolean of the equality
@@ -70,16 +71,12 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   --    * the unifier
   -> Checker (Bool, Type, Substitution)
 equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 = do
-
-   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 spec
+   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 spec Types
    if eq
      then do
         t2 <- substitute unif t2
         return (eq, t2, unif)
      else return (eq, t1, [])
-
-data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
-  deriving (Eq, Show)
 
 flipIndicator :: SpecIndicator -> SpecIndicator
 flipIndicator FstIsSpec = SndIsSpec
@@ -97,21 +94,17 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Type
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
+  -- Flag to say whether this type is really a type or an effect
+  -> Mode
   -> Checker (Bool, Substitution)
-equalTypesRelatedCoeffects s rel t1 t2 sp = do
+equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
+  let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
-  k1 <- inferKindOfType s t1
-  k2 <- inferKindOfType s t2
-  -- Check the kinds are equal
-  (eq, kind, unif) <- equalKinds s k1 k2
-  -- If so, proceed with equality on types of this kind
-  if eq
-    then equalTypesRelatedCoeffectsInner s rel t1 t2 kind sp
-    else
-      -- Otherwise throw a kind error
-      case sp of
-        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k1, kActual = k2}
-        _         -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k2, kActual = k1}
+  st <- get
+  (k, _) <- synthKind s (tyVarContext st) t1'
+  st <- get
+  _ <- checkKind s (tyVarContext st) t2' k
+  equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
@@ -122,57 +115,57 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   -> Kind
   -- Indicates whether the first type or second type is a specification
   -> SpecIndicator
+  -- Flag to say whether this type is actually an effect or not
+  -> Mode
   -> Checker (Bool, Substitution)
 
-equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy t1 t2) fTy2@(FunTy t1' t2') _ sp = do
+equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
   -- contravariant position (always approximate)
-  (eq1, u1) <-
-    case sp of
-      FstIsSpec -> equalTypesRelatedCoeffects s ApproximatedBy t1 t1' (flipIndicator sp)
-      _         -> equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp)
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
-  (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
 
-equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _
+equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
   | internalName con1 /= "Pure" && internalName con2 /= "Pure" =
   return (con1 == con2, [])
 
-equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp
-  (eq', unif') <- equalTypesRelatedCoeffects s rel ef1 ef2 sp
+equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Types = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
+  (eq', unif') <- equalTypesRelatedCoeffects s rel (handledNormalise s (Diamond ef1 t1) ef1) (handledNormalise s (Diamond ef2 t2) ef2) sp Effects
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
-equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp = do
+equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
+
   -- Unify the coeffect kinds of the two coeffects
-  (kind, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- subst <- unify c c'
 
   -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
+  c' <- substitute subst c'
+  c  <- substitute subst c
+  kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
 
-  equalTypesRelatedCoeffects s rel t t' sp
-  --(eq, subst') <- equalTypesRelatedCoeffectsInner s rel uS t t' sp
-  --case subst of
-  --  Just subst -> do
---      substFinal <- combineSubstitutions s subst subst'
---      return (eq, substFinal)
-  --  Nothing -> return (False, [])
+  (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
-equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ | n == m = do
+  substU <- combineSubstitutions s subst subst'
+  return (eq, substU)
+
+equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ mode | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
     Just _ -> return (True, [])
     Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
 
-equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ = do
+equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
   checkerState <- get
   debugM "variable equality" $ pretty n <> " ~ " <> pretty m <> " where "
                             <> pretty (lookup n (tyVarContext checkerState)) <> " and "
@@ -224,12 +217,12 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ = do
       jK <- k1 `joinKind` k2
       case jK of
         Just (KPromote (TyCon kc), unif) -> do
-
-          k <- inferKindOfType s (TyCon kc)
+          st <- get
+          (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) (TyCon kc) KCoeffect)
+          case result of
+            Left err -> return ()
           -- Create solver vars for coeffects
-          if isCoeffectKind k
-            then addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
-            else return ()
+            Right _ -> putChecker >> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif) ->
           return (True, unif ++ [(m, SubstT $ TyVar n)])
@@ -237,28 +230,29 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ = do
           return (False, [])
 
 -- Duality is idempotent (left)
-equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp
+equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp mode
   | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffectsInner s rel t t' k sp
+  equalTypesRelatedCoeffectsInner s rel t t' k sp mode
 
 -- Duality is idempotent (right)
-equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) k sp
+equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) k sp mode
   | internalName d == "Dual" && internalName d' == "Dual" =
-  equalTypesRelatedCoeffectsInner s rel t t' k sp
+  equalTypesRelatedCoeffectsInner s rel t t' k sp mode
 
-equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
+equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffectsInner on TyVar"
           $ "span: " <> show s
           <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
 
+  debugM "context" $ pretty $ tyVarContext checkerState
+
   -- Do an occurs check for types
   case kind of
     KType ->
-       if n `elem` freeVars t
-         then throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
-         else return ()
+       when (n `elem` freeVars t) $
+        throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
     _ -> return ()
 
   case lookup n (tyVarContext checkerState) of
@@ -290,73 +284,64 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp = do
            addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
            return (True, unif ++ [(n, SubstT t)])
 
-         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t }
+         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
 
-    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
+    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
     Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
 
 
-equalTypesRelatedCoeffectsInner s rel t (TyVar n) k sp =
-  equalTypesRelatedCoeffectsInner s rel (TyVar n) t k (flipIndicator sp)
+equalTypesRelatedCoeffectsInner s rel t (TyVar n) k sp mode =
+  equalTypesRelatedCoeffectsInner s rel (TyVar n) t k (flipIndicator sp) mode
 
 -- Do duality check (left) [special case of TyApp rule]
-equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp
+equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
   | internalName d == "Dual" = isDualSession s rel t t' sp
 
-equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp
+equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
   | internalName d == "Dual" = isDualSession s rel t t' sp
 
 -- Equality on type application
-equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp = do
-  (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp
+equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
+  (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp mode
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
-  (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp
+  (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
   unifiers <- combineSubstitutions s u1 u2
   return (one && two, unifiers)
 
-equalTypesRelatedCoeffectsInner s rel t1 t2 k sp = do
-  effTyM <- isEffectTypeFromKind s k
-  case effTyM of
-    Right effTy -> do
-      -- If the kind of this equality is Effect
-      -- then use effect equality (and possible approximation)
-      eq <- effApproximates s effTy t1 t2
-      return (eq, [])
-    Left k ->
-      -- Look to see if we are doing equality on sets that are not effects
-      case (t1, t2) of
-        -- If so do set equality (no approximation)
-        (TySet ts1, TySet ts2) ->
-          return (all (`elem` ts2) ts1 && all (`elem` ts1) ts2, [])
+-- Equality on sets in types
+equalTypesRelatedCoeffectsInner s rel (TySet ts1) (TySet ts2) k sp Types =
+  -- TODO: make this more powerful
+  return (all (`elem` ts2) ts1 && all (`elem` ts1) ts2, [])
 
-        -- Otherwise look at other equalities
-        _ -> equalOtherKindedTypesGeneric s t1 t2 k
+equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
+  case mode of
+    Effects -> do
+      effTyM <- isEffectTypeFromKind s k
+      case effTyM of
+        Right effTy -> do
+          eq <- effApproximates s effTy t1 t2
+          return (eq, [])
+        Left k -> debugM "G" "G" >> throw $ KindMismatch s Nothing KEffect k
 
-{- | Equality on other types (e.g. Nat and Session members) -}
-equalOtherKindedTypesGeneric :: (?globals :: Globals)
-    => Span
-    -> Type
-    -> Type
-    -> Kind
-    -> Checker (Bool, Substitution)
-equalOtherKindedTypesGeneric s t1 t2 k = do
-  case k of
-    KPromote (TyCon (internalName -> "Nat")) -> do
-      c1 <- compileNatKindedTypeToCoeffect s t1
-      c2 <- compileNatKindedTypeToCoeffect s t2
-      addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
-      return (True, [])
+    Types ->
+      case k of
+        KPromote (TyCon (internalName -> "Nat")) -> do
+          debugM "equality on nats" (pretty t1 ++ " =? " ++ pretty t2)
+          c1 <- compileNatKindedTypeToCoeffect s t1
+          c2 <- compileNatKindedTypeToCoeffect s t2
+          addConstraint $ Eq s c1 c2 (TyCon $ mkId "Nat")
+          return (True, [])
 
-    KPromote (TyCon (internalName -> "Protocol")) ->
-      sessionInequality s t1 t2
+        KPromote (TyCon (internalName -> "Protocol")) ->
+          sessionInequality s t1 t2
 
-    KType -> throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
+        KType -> throw UnificationError{ errLoc = s, errTy1 = t1, errTy2 = t2}
 
-    _ ->
-      throw UndefinedEqualityKindError
-        { errLoc = s, errTy1 = t1, errK1 = k, errTy2 = t2, errK2 = k }
+        _ ->
+          throw UndefinedEqualityKindError
+            { errLoc = s, errTy1 = t1, errK1 = k, errTy2 = t2, errK2 = k }
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
@@ -390,7 +375,7 @@ isDualSession :: (?globals :: Globals)
 isDualSession sp rel (TyApp (TyApp (TyCon c) t) s) (TyApp (TyApp (TyCon c') t') s') ind
   |  (internalName c == "Send" && internalName c' == "Recv")
   || (internalName c == "Recv" && internalName c' == "Send") = do
-  (eq1, u1) <- equalTypesRelatedCoeffects sp rel t t' ind
+  (eq1, u1) <- equalTypesRelatedCoeffects sp rel t t' ind Types
   (eq2, u2) <- isDualSession sp rel s s' ind
   u <- combineSubstitutions sp u1 u2
   return (eq1 && eq2, u)
@@ -400,10 +385,10 @@ isDualSession _ _ (TyCon c) (TyCon c') _
   return (True, [])
 
 isDualSession sp rel t (TyVar v) ind =
-  equalTypesRelatedCoeffects sp rel (TyApp (TyCon $ mkId "Dual") t) (TyVar v) ind
+  equalTypesRelatedCoeffects sp rel (TyApp (TyCon $ mkId "Dual") t) (TyVar v) ind Types
 
 isDualSession sp rel (TyVar v) t ind =
-  equalTypesRelatedCoeffects sp rel (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind
+  equalTypesRelatedCoeffects sp rel (TyVar v) (TyApp (TyCon $ mkId "Dual") t) ind Types
 
 isDualSession sp _ t1 t2 _ = throw
   SessionDualityError{ errLoc = sp, errTy1 = t1, errTy2 = t2 }
@@ -413,10 +398,10 @@ isDualSession sp _ t1 t2 _ = throw
 joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
 joinTypes s t t' | t == t' = return t
 
-joinTypes s (FunTy t1 t2) (FunTy t1' t2') = do
+joinTypes s (FunTy id t1 t2) (FunTy _ t1' t2') = do
   t1j <- joinTypes s t1' t1 -- contravariance
   t2j <- joinTypes s t2 t2'
-  return (FunTy t1j t2j)
+  return (FunTy id t1j t2j)
 
 joinTypes _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
 
@@ -426,7 +411,7 @@ joinTypes s (Diamond ef t) (Diamond ef' t') = do
   return (Diamond ej tj)
 
 joinTypes s (Box c t) (Box c' t') = do
-  (coeffTy, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+  (coeffTy, _, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
   -- Create a fresh coeffect variable
   topVar <- freshTyVarInContext (mkId "") (promoteTypeToKind coeffTy)
   -- Unify the two coeffects into one
@@ -446,8 +431,8 @@ joinTypes s (TyInt n) (TyVar m) = do
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
-
-  kind <- inferKindOfType s (TyVar n)
+  st <- get
+  (kind, _) <- synthKind s (tyVarContext st) (TyVar n)
   case kind of
     KPromote t -> do
 
@@ -485,27 +470,7 @@ joinTypes s t1 t2 = do
             Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
         Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
--- TODO: eventually merge this with joinKind
-equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker (Bool, Kind, Substitution)
-equalKinds sp k1 k2 | k1 == k2 = return (True, k1, [])
-equalKinds sp (KPromote t1) (KPromote t2) = do
-    (eq, t, u) <- equalTypes sp t1 t2
-    return (eq, KPromote t, u)
-equalKinds sp (KFun k1 k1') (KFun k2 k2') = do
-    (eq, k, u) <- equalKinds sp k1 k2
-    (eq', k', u') <- equalKinds sp k1' k2'
-    u2 <- combineSubstitutions sp u u'
-    return $ (eq && eq', KFun k k', u2)
-equalKinds sp (KVar v) k = do
-    return (True, k, [(v, SubstK k)])
-equalKinds sp k (KVar v) = do
-    return (True, k, [(v, SubstK k)])
-equalKinds sp k1 k2 = do
-    jK <- joinKind k1 k2
-    case jK of
-      Just (k, u) -> return (True, k, u)
-      Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
-
+-- Checkers that two effects have the same type, and if so then returns that effect type
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
     mefTy1 <- isEffectType s ef1
@@ -526,7 +491,7 @@ twoEqualEffectTypes s ef1 ef2 = do
 isIndexedType :: Type -> Checker Bool
 isIndexedType = typeFoldM $
   TypeFold
-    { tfFunTy = \x y -> return (x || y)
+    { tfFunTy = \_ x y -> return (x || y)
     , tfTyCon = \c -> do {
         st <- get;
         return $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
@@ -536,4 +501,27 @@ isIndexedType = typeFoldM $
     , tfTyApp = \x y -> return (x || y)
     , tfTyInt = \_ -> return False
     , tfTyInfix = \_ x y -> return (x || y)
-    , tfSet = \_ -> return False }
+    , tfSet = \_ -> return False
+    , tfTySig = \x _ _ -> return x }
+
+-- Given a type term, works out if its kind is actually an effect type (promoted)
+-- if so, returns `Right effTy` where `effTy` is the effect type
+-- otherwise, returns `Left k` where `k` is the kind of the original type term
+isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
+isEffectType s ty = do
+  st <- get
+  (kind, _) <- synthKind s (tyVarContext st) ty
+  isEffectTypeFromKind s kind
+
+isEffectTypeFromKind :: (?globals :: Globals) => Span -> Kind -> Checker (Either Kind Type)
+isEffectTypeFromKind s kind =
+  case kind of
+    KPromote effTy -> do
+      st <- get
+      (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) effTy KEffect)
+      case result of
+        Right res -> do
+          putChecker
+          return $ Right effTy
+        Left err -> return $ Left kind
+    _ -> return $ Left kind

@@ -20,51 +20,78 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
 setElements :: [(Kind, Type)]
-setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO"), (KPromote $ TyCon $ mkId "ExcElem", TyCon $ mkId "Exception")]
 
 -- Associates type constuctors names to their:
 --    * kind
---    * cardinality (number of matchable constructors)
+--    * list of matchable constructor names
 --    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Kind, Cardinality, Bool))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (Kind, [Id], Bool))]
 typeConstructors =
-    [ (mkId "×", (KFun KCoeffect (KFun KCoeffect KCoeffect), Just 1, False))
-    , (mkId "Int",  (KType, Nothing, False))
-    , (mkId "Float", (KType, Nothing, False))
-    , (mkId "Char", (KType, Nothing, False))
-    , (mkId "String", (KType, Nothing, False))
-    , (mkId "Protocol", (KType, Nothing, False))
-    , (mkId "Nat",  (KUnion KCoeffect KEffect, Nothing, False))
-    , (mkId "Q",    (KCoeffect, Nothing, False)) -- Rationals
-    , (mkId "Level", (KCoeffect, Nothing, False)) -- Security level
-    , (mkId "Private", (KPromote (TyCon $ mkId "Level"), Nothing, False))
-    , (mkId "Public", (KPromote (TyCon $ mkId "Level"), Nothing, False))
-    , (mkId "Unused", (KPromote (TyCon $ mkId "Level"), Nothing, False))
-    , (mkId "Interval", (KFun KCoeffect KCoeffect, Nothing, False))
-    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), Nothing, False))
+    [ let prodId = mkId "×" in (prodId, (KFun KCoeffect (KFun KCoeffect KCoeffect), [prodId], False))
+    , (mkId "Int",  (KType, [], False))
+    , (mkId "Float", (KType, [], False))
+    , (mkId "Char", (KType, [], False))
+    , (mkId "String", (KType, [], False))
+    , (mkId "Protocol", (KType, [], False))
+    , (mkId "Nat",  (KUnion KCoeffect KEffect, [], False))
+    , (mkId "Q",    (KCoeffect, [], False)) -- Rationals
+    , (mkId "Level", (KCoeffect, [], False)) -- Security level
+    , (mkId "Private", (KPromote (TyCon $ mkId "Level"), [], False))
+    , (mkId "Public", (KPromote (TyCon $ mkId "Level"), [], False))
+    , (mkId "Unused", (KPromote (TyCon $ mkId "Level"), [], False))
+    , (mkId "OOZ", (KCoeffect, [], False)) -- 1 + 1 = 0
+    , (mkId "Interval", (KFun KCoeffect KCoeffect, [], False))
+    , (mkId "Set", (KFun (KVar $ mkId "k") (KFun (kConstr $ mkId "k") KCoeffect), [], False))
     -- Channels and protocol types
-    , (mkId "Send", (KFun KType (KFun protocol protocol), Nothing, False))
-    , (mkId "Recv", (KFun KType (KFun protocol protocol), Nothing, False))
-    , (mkId "End" , (protocol, Nothing, False))
-    , (mkId "Chan", (KFun protocol KType, Nothing, True))
-    , (mkId "Dual", (KFun protocol protocol, Nothing, True))
-    , (mkId "->", (KFun KType (KFun KType KType), Nothing, False))
+    , (mkId "Send", (KFun KType (KFun protocol protocol), [], False))
+    , (mkId "Recv", (KFun KType (KFun protocol protocol), [], False))
+    , (mkId "End" , (protocol, [], False))
+    , (mkId "Chan", (KFun protocol KType, [], True))
+    , (mkId "Dual", (KFun protocol protocol, [], True))
+    , (mkId "->", (KFun KType (KFun KType KType), [], False))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
-    , (mkId "Ext", (KFun KCoeffect KCoeffect, Nothing, True))
+    , (mkId "Ext", (KFun KCoeffect KCoeffect, [], True))
     -- Effect grade types - Sessions
-    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), Nothing, True))
-    , (mkId "Com", (KEffect, Nothing, False))
+    , (mkId "Session", (KPromote (TyCon $ mkId "Com"), [], True))
+    , (mkId "Com", (KEffect, [], False))
     -- Effect grade types - IO
-    , (mkId "IO", (KEffect, Nothing, False))
-    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
-    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), Nothing, False))
+    , (mkId "IO", (KEffect, [], False))
+    , (mkId "Stdout", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Stdin", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Stderr", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Open", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Read", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), [], False))
+    , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), [], False))
+
+    --Effect grade types - Exceptions
+    , (mkId "Exception", (KEffect, [], False))
+    , (mkId "Success", (KPromote (TyCon $ mkId "Exception"), [], False))
+    , (mkId "MayFail", (KPromote (TyCon $ mkId "Exception"), [], False))
     ]
+
+-- Various predicates and functions on type operators
+closedOperation :: TypeOperator -> Bool
+closedOperation =
+  \case
+    TyOpPlus -> True
+    TyOpTimes -> True
+    TyOpMinus -> True
+    TyOpExpon -> True
+    TyOpMeet -> True
+    TyOpJoin -> True
+    _        -> False
+
+coeffectResourceAlgebraOps :: TypeOperator -> Bool
+coeffectResourceAlgebraOps =
+  \case
+    TyOpPlus -> True
+    TyOpTimes -> True
+    TyOpMeet -> True
+    TyOpJoin -> True
+    _ -> False
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
@@ -100,32 +127,43 @@ dataTypes =
 binaryOperators :: Operator -> NonEmpty Type
 binaryOperators = \case
     OpPlus ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Float"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpMinus ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Float"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpTimes ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
+    OpDiv ->
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Int"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Float"))]
     OpEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpNotEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpLesserEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpLesser ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpGreater ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
     OpGreaterEq ->
-      FunTy (TyCon $ mkId "Int") (FunTy (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
-      :| [FunTy (TyCon $ mkId "Float") (FunTy (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))]
+      FunTy Nothing (TyCon $ mkId "Int") (FunTy Nothing (TyCon $ mkId "Int") (TyCon $ mkId "Bool"))
+      :| [FunTy Nothing (TyCon $ mkId "Float") (FunTy Nothing (TyCon $ mkId "Float") (TyCon $ mkId "Bool"))
+        , FunTy Nothing (TyCon $ mkId "DFloat") (FunTy Nothing (TyCon $ mkId "DFloat") (TyCon $ mkId "DFloat"))]
 
 -- TODO make a proper quasi quoter that parses this at compile time
 builtinSrc :: String
@@ -134,6 +172,9 @@ builtinSrc = [r|
 import Prelude
 
 data () = ()
+
+use : forall {a : Type} . a -> a [1]
+use = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Arithmetic
@@ -151,6 +192,11 @@ pure
   . a -> a <>
 pure = BUILTIN
 
+fromPure
+  : forall {a : Type}
+  . a <Pure> -> a
+fromPure = BUILTIN
+
 --------------------------------------------------------------------------------
 -- I/O
 --------------------------------------------------------------------------------
@@ -166,6 +212,13 @@ toStderr = BUILTIN
 
 readInt : Int <{Stdin}>
 readInt = BUILTIN
+
+--------------------------------------------------------------------------------
+--Exceptions
+--------------------------------------------------------------------------------
+
+throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
+throw = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Conversions
@@ -208,6 +261,9 @@ close : Chan End -> ()
 close = BUILTIN
 
 
+-- trace : String -> () <>
+-- trace = BUILTIN
+
 --------------------------------------------------------------------------------
 -- File Handles
 --------------------------------------------------------------------------------
@@ -228,31 +284,31 @@ openHandle
   : forall {m : HandleType}
   . IOMode m
   -> String
-  -> (Handle m) <{Open,IOExcept}>
+  -> ((Handle m) [0..1]) <{Open,IOExcept}>
 openHandle = BUILTIN
 
-readChar : Handle R -> (Handle R, Char) <{Read,IOExcept}>
+readChar : Handle R -> ((Handle R, Char) [0..1]) <{Read,IOExcept}>
 readChar = BUILTIN
 
-readChar' : Handle RW -> (Handle RW, Char) <{Read,IOExcept}>
+readChar' : Handle RW -> ((Handle RW, Char) [0..1]) <{Read,IOExcept}>
 readChar' = BUILTIN
 
-appendChar : Handle A -> Char -> (Handle A) <{Write,IOExcept}>
+appendChar : Handle A -> Char -> ((Handle A) [0..1]) <{Write,IOExcept}>
 appendChar = BUILTIN
 
-writeChar : Handle W -> Char -> (Handle W) <{Write,IOExcept}>
+writeChar : Handle W -> Char -> ((Handle W) [0..1]) <{Write,IOExcept}>
 writeChar = BUILTIN
 
-writeChar' : Handle RW -> Char -> (Handle RW) <{Write,IOExcept}>
+writeChar' : Handle RW -> Char -> ((Handle RW) [0..1]) <{Write,IOExcept}>
 writeChar' = BUILTIN
 
-closeHandle : forall {m : HandleType} . Handle m -> () <{Close,IOExcept}>
+closeHandle : forall {m : HandleType} . Handle m -> (() [0..1]) <{Close,IOExcept}>
 closeHandle = BUILTIN
 
-isEOF : Handle R -> (Handle R, Bool) <{Read,IOExcept}>
+isEOF : Handle R -> ((Handle R, Bool) [0..1]) <{Read,IOExcept}>
 isEOF = BUILTIN
 
-isEOF' : Handle RW -> (Handle RW, Bool) <{Read,IOExcept}>
+isEOF' : Handle RW -> ((Handle RW, Bool) [0..1]) <{Read,IOExcept}>
 isEOF' = BUILTIN
 
 
@@ -359,6 +415,11 @@ tick = BUILTIN
 --   . a -> PtrCap a
 -- newPtr = BUILTIN
 
+-- newPtr'
+--   : forall { a : Type }
+--   . a -> (exists id . ((Ptr id) [], Cap a id)
+-- newPtr' = BUILTIN
+
 -- swapPtr
 --   : forall { a b : Type, id : Type }
 --   . b -> Ptr id -> Cap a id -> (a × Cap b id)
@@ -383,4 +444,4 @@ builtins :: [(Id, TypeScheme)]
         Left err -> error err
 
       unDef :: Def () () -> (Id, TypeScheme)
-      unDef (Def _ name _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
+      unDef (Def _ name _ _ (Forall _ bs cs t)) = (name, Forall nullSpanBuiltin bs cs t)
