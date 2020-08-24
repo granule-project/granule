@@ -22,8 +22,6 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
-import Language.Granule.Checker.Kinds
-import Language.Granule.Checker.KindsImplicit
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.NameClash
@@ -31,8 +29,8 @@ import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Checker.Simplifier
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 import Language.Granule.Context
@@ -154,8 +152,8 @@ checkDataCon
                [(v, (k, ForallQ)) | (v, k) <- tyVarsD']
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
-        (tySchKind, _) <- inferKindOfTypeImplicits sp tyVars ty
-
+        st <- get
+        _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty KType
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
@@ -169,15 +167,7 @@ checkDataCon
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
-
-        case tySchKind of
-          KType ->
-            registerDataConstructor tySch coercions
-
-          KPromote (TyCon k) | internalName k == "Protocol" ->
-            registerDataConstructor tySch coercions
-
-          _ -> throw KindMismatch{ errLoc = sp, tyActualK = Just ty, kExpected = KType, kActual = kind }
+        registerDataConstructor tySch coercions
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
@@ -863,7 +853,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
 
   (t, _) <- inferCoeffectType s opt
   addConstraint (ApproximatedBy s (CZero t) opt t)
- 
+
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s (Box opt ty1) (PBox s () False p) NotFull
   pIrrefutable <- isIrrefutable s ty1 p
@@ -1117,7 +1107,7 @@ solveConstraints predicate s name = do
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
-  -- remove any variables bound already in the preciate
+  -- remove any variables bound already in the predicate
   coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
 
   debugM "tyVarContext" (pretty $ tyVarContext checkerState)
