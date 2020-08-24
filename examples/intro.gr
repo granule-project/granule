@@ -2,7 +2,7 @@
 -- But this is useful for experimenting with in `grepl`, e.g.
 
 -- $ grepl
--- > :l exmaples/intro.gr
+-- > :l examples/intro.gr
 
 -- grepl is a REPL a bit like ghci, so you can run code and inspect types, e.g.
 -- > :t id
@@ -36,30 +36,30 @@ flip f y x = f x y
 --  File handles and side effects
 firstChar : Char <IO>
 firstChar = let
-  h <- openHandle ReadMode "examples/intro.gr.md";
-  (h, c) <- readChar h;
-  () <- closeHandle h
+  [h] <- openHandle ReadMode "examples/intro.gr.md";
+  [(h, c)] <- readChar h;
+  [()] <- closeHandle h
   in pure c
 
 -- forgetful : Char <IO>
 -- forgetful = let
---   h <- openHandle ReadMode "examples/intro.gr.md";
---   (h, c) <- readChar h
+--   [h] <- openHandle ReadMode "examples/intro.gr.md";
+--   [(h, c)] <- readChar h
 --   in pure c
 
 -- outOfOrder : Char <IO>
 -- outOfOrder = let
---  h0 <- openHandle ReadMode "examples/intro.gr.md";
---  () <- closeHandle h0;
---  (h1, c) <- readChar h0
+--  [h0] <- openHandle ReadMode "examples/intro.gr.md";
+--  [()] <- closeHandle h0;
+--  [(h1, c)] <- readChar h0
 --  in pure c
 
 twoChars : (Char, Char) <IO>
 twoChars = let
-  h <- openHandle ReadMode "examples/intro.gr.md";
-  (h, c_1) <- readChar h;
-  (h, c_2) <- readChar h;
-  () <- closeHandle h
+  [h] <- openHandle ReadMode "examples/intro.gr.md";
+  [(h, c_1)] <- readChar h;
+  [(h, c_2)] <- readChar h;
+  [()] <- closeHandle h
   in pure (c_1, c_2)
 
 -- Non-linearity via modality

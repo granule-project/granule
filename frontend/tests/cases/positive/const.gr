@@ -2,5 +2,5 @@ closure : Int → (Int → Int)
 closure z = λx → x + z
 
 main : Int
-main = let [f] = [closure 42]
+main = let [f] : (Int -> Int) [2] = [closure 42]
        in f 2 + f 3

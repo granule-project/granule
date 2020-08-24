@@ -4,8 +4,6 @@
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE GeneralizedNewtypeDeriving #-}
-{-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE MultiParamTypeClasses #-}
 {-# LANGUAGE RecordWildCards #-}
 
@@ -15,13 +13,12 @@ module Language.Granule.Checker.Monad where
 
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
-import Data.List (intercalate)
+import Data.List (intercalate, transpose)
 import Data.List.NonEmpty (NonEmpty(..))
 import qualified Data.Map as M
 import Data.Semigroup (sconcat)
 import Control.Monad.State.Strict
 import Control.Monad.Except
-import Control.Monad.Fail (MonadFail)
 import Control.Monad.Identity
 import System.FilePath (takeBaseName)
 
@@ -112,7 +109,7 @@ data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 -- is checked elsewhere
 initialisePatternConsumptions :: [Equation v a] -> [Consumption]
 initialisePatternConsumptions [] = []
-initialisePatternConsumptions ((Equation _ _ pats _):_) =
+initialisePatternConsumptions ((Equation _ _ _ pats _):_) =
   map (\_ -> NotFull) pats
 
 -- Join information about consumption between branches
@@ -158,7 +155,7 @@ data CheckerState = CS
             -- Data type information
             --  map of type constructor names to their the kind, num of
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Kind, Cardinality, Bool)
+            , typeConstructors :: Ctxt (Kind, [Id], Bool)
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution)
 
@@ -168,6 +165,9 @@ data CheckerState = CS
 
             -- Names from modules which are hidden
             , allHiddenNames :: M.Map Id Id
+
+            -- The type of the current equation.
+            , equationTy :: Maybe Type
 
             -- Warning accumulator
             -- , warnings :: [Warning]
@@ -188,6 +188,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , deriv = Nothing
                , derivStack = []
                , allHiddenNames = M.empty
+               , equationTy = Nothing
                }
 
 -- *** Various helpers for manipulating the context
@@ -206,6 +207,12 @@ lookupDataConstructor sp constrName = do
         then return $ lookup constrName (dataConstructors st)
         -- Otheriwe this is truly hidden
         else return Nothing
+
+lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
+lookupPatternMatches sp constrName = do
+  let snd3 (a, b, c) = b
+  st <- get
+  return $ snd3 <$> lookup constrName (typeConstructors st)
 
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
@@ -388,7 +395,7 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier) }
+    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]]), holeVars :: [Id] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -440,7 +447,7 @@ data CheckerError
   | UnificationDisallowed
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | UnificationFail
-    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind }
+    { errLoc :: Span, errVar :: Id, errTy :: Type, errKind :: Kind, tyIsConcrete :: Bool }
   | UnificationFailGeneric
     { errLoc :: Span, errSubst1 :: Substitutors, errSubst2 :: Substitutors }
   | OccursCheckFail
@@ -463,6 +470,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | ExpectedEffectType
     { errLoc :: Span, errTy :: Type }
+  | ExpectedOptionalEffectType
+      { errLoc :: Span, errTy :: Type }
   | LhsOfApplicationNotAFunction
     { errLoc :: Span, errTy :: Type }
   | FailedOperatorResolution
@@ -493,9 +502,15 @@ data CheckerError
     { errLoc :: Span, tyConExpected :: Id, tyConActual :: Id }
   | InvalidTypeDefinition
     { errLoc :: Span, errTy :: Type }
+  | InvalidHolePosition
+    { errLoc :: Span }
   | UnknownResourceAlgebra
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | CaseOnIndexedType
+    { errLoc :: Span, errTy :: Type }
+  | OperatorUndefinedForKind
+    { errLoc :: Span, errK :: Kind, errTyOp :: TypeOperator }
+  | ImpossibleKindSynthesis
     { errLoc :: Span, errTy :: Type }
   deriving (Show, Eq)
 
@@ -505,7 +520,7 @@ instance UserMsg CheckerError where
 
   title HoleMessage{} = "Found a goal"
   title TypeError{} = "Type error"
-  title GradingError{} = "Grading error"
+  title GradingError{} = "Type error"
   title KindMismatch{} = "Kind mismatch"
   title KindError{} = "Kind error"
   title KindCannotFormSet{} = "Kind error"
@@ -541,6 +556,7 @@ instance UserMsg CheckerError where
   title DataConstructorReturnTypeError{} = "Wrong return type in data constructor"
   title MalformedDataConstructorType{} = "Malformed data constructor type"
   title ExpectedEffectType{} = "Type error"
+  title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
@@ -556,24 +572,47 @@ instance UserMsg CheckerError where
   title NameClashDefs{} = "Definition name clash"
   title UnexpectedTypeConstructor{} = "Wrong return type in value constructor"
   title InvalidTypeDefinition{} = "Invalid type definition"
+  title InvalidHolePosition{} = "Invalid hole position"
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
+  title OperatorUndefinedForKind{} = "Kind error"
+  title ImpossibleKindSynthesis{} = "Kind error"
 
   msg HoleMessage{..} =
-    (case holeTy of
-      Nothing -> "\n   Hole occurs in synthesis position so the type is not yet known"
-      Just ty -> "\n   Expected type is: `" <> pretty ty <> "`")
+    "\n   Expected type is: `" <> pretty holeTy <> "`"
     <>
     -- Print the context if there is anything to use
     (if null context
       then ""
-      else "\n\n   Context:" <> (concatMap (\x -> "\n     " ++ pretty x) context))
+      else "\n\n   Context:" <> concatMap (\x -> "\n     " ++ pretty x) context)
     <>
     (if null tyContext
       then ""
-      else "\n\n   Type context:" <> (concatMap (\(v, (t , _)) ->  "\n     "
+      else "\n\n   Type context:" <> concatMap (\(v, (t , _)) ->  "\n     "
                                                 <> pretty v
-                                                <> " : " <> pretty t) tyContext) <> "\n")
+                                                <> " : " <> pretty t) tyContext)
+    <>
+    (if null (fst cases)
+      then ""
+      else if null (snd cases)
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
+             intercalate "\n     " (formatCases relevantCases))
+
+    where
+      -- Extract those cases which correspond to a variable in holeVars.
+      relevantCases :: [[Pattern ()]]
+      relevantCases = map (map snd . filter ((`elem` holeVars) . fst) . zip (fst cases)) (snd cases)
+
+      formatCases :: [[Pattern ()]] -> [String]
+      formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
+
+      -- Pad all strings in a list so they match the length of the longest.
+      padToLongest :: [String] -> [String]
+      padToLongest xs =
+        let size = maximum (map length xs)
+        in  map (\s -> s ++ replicate (size - length s) ' ') xs
+
 
   msg TypeError{..} = if pretty tyExpected == pretty tyActual
     then "Expected `" <> pretty tyExpected <> "` but got `" <> pretty tyActual <> "` coming from a different binding"
@@ -609,6 +648,8 @@ instance UserMsg CheckerError where
       <> "` is promoted but its binding is linear; its binding should be under a box."
     NonLinearPattern ->
       "Wildcard pattern `_` allowing a value to be discarded"
+    HandlerLinearityMismatch ->
+      "Linearity of Handler clauses does not match"
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -701,8 +742,8 @@ instance UserMsg CheckerError where
     = "Trying to unify `" <> pretty errSubst1 <> "` and `" <> pretty errSubst2 <> "`"
 
   msg UnificationFail{..}
-    = "Cannot unify universally quantified type variable `" <> pretty errVar <> "`"
-    <> "` of kind `" <> pretty errKind <> "` with a concrete type `" <> pretty errTy <> "`"
+    = "Cannot unify universally quantified type variable `" <> pretty errVar
+    <> "` of kind `" <> pretty errKind <> "` with " <> (if tyIsConcrete then "a concrete type " else "") <> "`" <> pretty errTy <> "`"
 
   msg SessionDualityError{..}
     = "Session type `" <> pretty errTy1 <> "` is not dual to `" <> pretty errTy2 <> "`"
@@ -738,7 +779,11 @@ instance UserMsg CheckerError where
 
   msg ExpectedEffectType{..}
     = "Expected a type of the form `a <eff>` but got `"
-    <> pretty errTy <> "` in subject of let"
+    <> pretty errTy
+
+  msg ExpectedOptionalEffectType{..}
+    = "Expected a type of the form `a <eff>[0..1]` but got `"
+    <> pretty errTy
 
   msg LhsOfApplicationNotAFunction{..}
     = "Expected a function type on the left-hand side of an application, but got `"
@@ -804,11 +849,19 @@ instance UserMsg CheckerError where
   msg InvalidTypeDefinition{ errTy }
     = "The type `" <> pretty errTy <> "` is not valid in a datatype definition."
 
+  msg InvalidHolePosition{} = "Hole occurs in synthesis position so the type is not yet known"
+
   msg UnknownResourceAlgebra{ errK, errTy }
-    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from effect term `" <> pretty errTy <> "`"
 
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
+
+  msg OperatorUndefinedForKind{ errK, errTyOp }
+    = "Operator " <> pretty errTyOp <> " is not defined for type-level terms of kind " <> pretty errK
+
+  msg ImpossibleKindSynthesis{ errTy }
+    = "Cannot synthesis a kind for `" <> pretty errTy <> "`"
 
   color HoleMessage{} = Blue
   color _ = Red
@@ -819,6 +872,7 @@ data LinearityMismatch
   | LinearUsedNonLinearly Id
   | NonLinearPattern
   | LinearUsedMoreThanOnce Id
+  | HandlerLinearityMismatch
   deriving (Eq, Show) -- for debugging
 
 freshenPred :: Pred -> Checker Pred

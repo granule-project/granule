@@ -1,0 +1,2 @@
+flip : forall { a : Type, b : Type } . (a, b) -> (b, a)
+flip (pair0, pair1) = ?

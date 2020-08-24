@@ -1,0 +1,13 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/lambda.gr:2:12:
+
+   Expected type is: `a`
+
+   Context:
+     x : a
+
+   Type context:
+     a : Type
+
+   Case splits for x:
+     x

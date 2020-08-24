@@ -48,8 +48,8 @@ foldr_list [f] z xs =
     Empty -> z;
     Next x xs -> f x (foldr_list [f] z xs)
 
-pushList : forall {k : Coeffect, c : k, a : Type}
-         . (List a) [c+1] -> List (a [c+1])
+pushList : forall {k : Coeffect, c : k, a : Type} . {(1 : k) <= c}
+         => (List a) [c] -> List (a [c])
 pushList [Empty]     = Empty;
 pushList [Next x xs] = Next [x] (pushList [xs])
 

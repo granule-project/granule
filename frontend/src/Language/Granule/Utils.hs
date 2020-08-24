@@ -7,7 +7,7 @@
 module Language.Granule.Utils where
 
 import Control.Applicative ((<|>))
-import Control.Exception (SomeException, catch, try)
+import Control.Exception (SomeException, catch, throwIO, try)
 import Control.Monad (when, forM)
 import Data.List ((\\), nub, sortBy)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -17,9 +17,12 @@ import Data.Ord
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.LocalTime (getTimeZone, utc, utcToLocalTime)
 import Debug.Trace (trace, traceM)
-import System.IO (hPutStrLn, stderr)
+import System.Directory (removeFile, renameFile)
+import System.FilePath (splitFileName)
+import System.IO (hClose, hPutStr, hPutStrLn, openTempFile, stderr)
 import System.IO.Unsafe (unsafePerformIO)
 import "Glob" System.FilePath.Glob (glob)
+
 
 import Language.Granule.Syntax.Span
 
@@ -37,6 +40,8 @@ data Globals = Globals
   , globalsIncludePath         :: Maybe FilePath
   , globalsSourceFilePath      :: Maybe FilePath
   , globalsEntryPoint          :: Maybe String
+  , globalsRewriteHoles        :: Maybe Bool
+  , globalsHolePosition        :: Maybe Pos
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
@@ -79,6 +84,8 @@ instance Semigroup Globals where
       , globalsSourceFilePath      = globalsSourceFilePath      g1 <|> globalsSourceFilePath      g2
       , globalsTesting             = globalsTesting             g1 <|> globalsTesting             g2
       , globalsEntryPoint          = globalsEntryPoint          g1 <|> globalsEntryPoint          g2
+      , globalsRewriteHoles        = globalsRewriteHoles        g1 <|> globalsRewriteHoles        g2
+      , globalsHolePosition        = globalsHolePosition        g1 <|> globalsHolePosition        g2
       }
 
 instance Monoid Globals where
@@ -95,6 +102,8 @@ instance Monoid Globals where
     , globalsSourceFilePath      = Nothing
     , globalsTesting             = Nothing
     , globalsEntryPoint          = Nothing
+    , globalsRewriteHoles        = Nothing
+    , globalsHolePosition        = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general
@@ -126,6 +135,11 @@ nullSpan = Span (0, 0) (0, 0) sourceFilePath
 debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
 debugM explanation message =
     when debugging $ traceM $
+      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
+
+debugM' :: (?globals :: Globals, Applicative f) => String -> String -> f ()
+debugM' explanation message =
+    when True $ traceM $
       ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
 -- | Print to terminal when debugging e.g.:
@@ -261,3 +275,21 @@ duplicatesBy proj
   = mapMaybe (\case x1 :| x2 : xs -> Just (x2, x1 :| xs); _ -> Nothing)
   . NonEmpty.groupBy (\x1 x2 -> proj x1 == proj x2)
   . sortBy (comparing proj)
+
+-- Writes a file to the system. A backup can be kept if required.
+writeSrcFile :: FilePath -> Bool -> String -> IO String
+writeSrcFile file keepOldFile contents = do
+  (tempFile, tempHd) <- uncurry openTempFile (splitFileName file)
+  -- write the processed source to the temporary file
+  try (hPutStr tempHd contents) >>= \case
+    Right () -> do
+      hClose tempHd
+      -- if we are keeping the original source file, then rename it
+      when keepOldFile (renameFile file (file <> ".bak"))
+      -- move the temp file to the original source file path
+      renameFile tempFile file
+      return contents
+    Left (e :: SomeException) -> do
+      hClose tempHd
+      removeFile tempFile
+      throwIO e

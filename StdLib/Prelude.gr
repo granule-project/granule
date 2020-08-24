@@ -88,11 +88,14 @@ uncurry f (x, y) = f x y
 
 --- Coeffectful composition
 comp : forall {k : Coeffect, n : k, m : k, a : Type, b : Type, c : Type} .
-       (b [n] -> c) -> (a [m] -> b) [n] -> a [m * n] -> c
+       (b [n] -> c) -> (a [m] -> b) [n] -> a [n * m] -> c
 comp g [f] = \[x] -> g [f [x]]
 
 unbox : forall {a : Type, k : Coeffect} . a [1 : k] -> a
 unbox [x] = x
+
+disject : forall {a : Type, k : Coeffect, n : k, m : k} . a [m * n] -> (a [n]) [m]
+disject [x] = [[x]]
 
 --- Push coeffects on a pair into the left and right elements
 push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]

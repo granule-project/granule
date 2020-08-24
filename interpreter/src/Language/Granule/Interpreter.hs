@@ -27,8 +27,8 @@ import Data.Either (isRight)
 import Data.List (intercalate, isPrefixOf, stripPrefix)
 import Data.List.Extra (breakOn)
 import Data.List.NonEmpty (NonEmpty, toList)
+import qualified Data.List.NonEmpty as NonEmpty (filter)
 import Data.Maybe (fromMaybe)
-import Data.Semigroup ((<>))
 import Data.Version (showVersion)
 import System.Exit
 
@@ -39,12 +39,14 @@ import Options.Applicative
 import Options.Applicative.Help.Pretty (string)
 
 import Language.Granule.Checker.Checker
-import Language.Granule.Checker.Monad (CheckerError)
+import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
 import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
+import Language.Granule.Synthesis.RewriteHoles
 import Language.Granule.Utils
 import Paths_granule_interpreter (version)
 
@@ -75,17 +77,17 @@ runGrOnFiles globPatterns config = let ?globals = grGlobals config in do
               (keepBackup config)
               path
               (literateEnvName config)
-            result <- run src
+            result <- run config src
             printResult result
             return result
     if all isRight (concat results) then exitSuccess else exitFailure
 
 runGrOnStdIn :: GrConfig -> IO ()
-runGrOnStdIn GrConfig{..}
+runGrOnStdIn config@GrConfig{..}
   = let ?globals = grGlobals{ globalsSourceFilePath = Just "stdin" } in do
       printInfo "Reading from stdin: confirm input with `enter+ctrl-d` or exit with `ctrl-c`"
       debugM "Globals" (show ?globals)
-      result <- getContents >>= run
+      result <- getContents >>= run config
       printResult result
       if isRight result then exitSuccess else exitFailure
 
@@ -103,9 +105,10 @@ printResult = \case
 -}
 run
   :: (?globals :: Globals)
-  => String
+  => GrConfig
+  -> String
   -> IO (Either InterpreterError InterpreterResult)
-run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
+run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags input) <> ?globals in do
     result <- try $ parseAndDoImportsAndFreshenDefs input
     case result of
       Left (e :: SomeException) -> return . Left . ParseError $ show e
@@ -117,7 +120,11 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
         checked <- try $ check ast
         case checked of
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
-          Right (Left errs) -> return . Left $ CheckerError errs
+          Right (Left errs) ->
+            case (globalsRewriteHoles ?globals, getHoleMessages errs) of
+              (Just True, holes@(_:_)) -> do
+                runHoleSplitter input config errs holes
+              _ -> return . Left $ CheckerError errs
           Right (Right ast') -> do
             if noEval then do
               printSuccess "OK"
@@ -134,6 +141,32 @@ run input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrFlags in
                 Right (Just result) -> do
                   return . Right $ InterpreterResult result
 
+  where
+    getHoleMessages :: NonEmpty CheckerError -> [CheckerError]
+    getHoleMessages es =
+      NonEmpty.filter (\ e -> case e of HoleMessage{} -> True; _ -> False) es
+
+    runHoleSplitter :: (?globals :: Globals)
+      => String
+      -> GrConfig
+      -> NonEmpty CheckerError
+      -> [CheckerError]
+      -> IO (Either InterpreterError InterpreterResult)
+    runHoleSplitter input config errs holes = do
+      noImportResult <- try $ parseAndFreshenDefs input
+      case noImportResult of
+        Left (e :: SomeException) -> return . Left . ParseError . show $ e
+        Right noImportAst -> do
+          let position = globalsHolePosition ?globals
+          let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
+          let relevantCases = map cases relevantHoles
+          let holeCases = concatMap (\ cs -> map (zip (fst cs)) (snd cs)) relevantCases
+          rewriteHoles input noImportAst (keepBackup config) holeCases
+          return . Left . CheckerError $ errs
+
+    holeInPosition :: Pos -> CheckerError -> Bool
+    holeInPosition pos (HoleMessage sp _ _ _ _ _) = spanContains pos sp
+    holeInPosition _ _ = False
 
 -- | Get the flags embedded in the first line of a file, e.g.
 -- "-- gr --no-eval"
@@ -158,7 +191,7 @@ parseGrFlags
 
 
 data GrConfig = GrConfig
-  { grRewriter    :: Maybe (String -> String)
+  { grRewriter        :: Maybe (String -> String)
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
   , grGlobals         :: Globals
@@ -300,6 +333,23 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help ("Program entry point. Defaults to " <> show entryPoint)
             <> metavar "ID"
 
+        globalsRewriteHoles <-
+          flag Nothing (Just True)
+            $ long "rewrite-holes"
+            <> help "WARNING: Destructively overwrite equations containing holes to pattern match on generated case-splits."
+
+        globalsHoleLine <-
+          optional . option (auto @Int)
+            $ long "hole-line"
+            <> help "The line where the hole you wish to rewrite is located."
+            <> metavar "LINE"
+
+        globalsHoleCol <-
+          optional . option (auto @Int)
+            $ long "hole-column"
+            <> help "The column where the hole you wish to rewrite is located."
+            <> metavar "COL"
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -338,6 +388,8 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsIncludePath
               , globalsSourceFilePath = Nothing
               , globalsEntryPoint
+              , globalsRewriteHoles
+              , globalsHolePosition = (,) <$> globalsHoleLine <*> globalsHoleCol
               }
             }
           )

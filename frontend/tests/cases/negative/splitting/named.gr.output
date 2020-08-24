@@ -1,0 +1,11 @@
+Type checking failed: 
+Found a goal: frontend/tests/cases/negative/splitting/named.gr:6:10:
+
+   Expected type is: `N`
+
+   Context:
+     x : N
+
+   Case splits for x:
+     Z        
+     (S notZ0)
