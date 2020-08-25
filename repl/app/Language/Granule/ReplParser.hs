@@ -31,6 +31,7 @@ symbol     = Token.symbol tokenizer
 
 data REPLExpr =
       ShowDef String
+    | Holes
     | DumpState
     | LoadFile [FilePath]
     | AddModule [FilePath]
@@ -100,6 +101,8 @@ evalParser = do
 
 -- unfoldTermParser = replTermCmdParser "u" "unfold" Unfold
 
+showHolesParser = replIntCmdParser "holes" "holes" Holes
+
 dumpStateParser = replIntCmdParser "dump" "dump" DumpState
 
 loadFileParser = replFileCmdParser "l" "load" LoadFile
@@ -133,6 +136,7 @@ pathParser' = endBy pathParser eof
 -- lineParser =
 
 lineParser = try dumpStateParser
+          <|> try showHolesParser
           <|> try loadFileParser
           <|> try addModuleParser
           <|> try reloadFileParser

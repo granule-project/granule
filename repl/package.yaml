@@ -30,3 +30,4 @@ executables:
     - parsec
     - text
     - transformers >=0.5
+    - clock >= 0.8

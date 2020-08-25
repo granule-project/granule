@@ -12,6 +12,10 @@ data N (n : Nat) where
   Z : N 0;
   S : N n -> N (n+1)
 
+copyNat : forall {n : Nat} . N n -> (N n, N n)
+copyNat Z = (Z, Z);
+copyNat (S n) = let (x, y) = copyNat n in (S x, S y)
+
 --- Convert an indexed natural number to an untyped int
 natToInt
   : forall {n : Nat}

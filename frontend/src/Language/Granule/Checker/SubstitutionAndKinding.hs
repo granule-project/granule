@@ -497,11 +497,11 @@ instance Substitutable Constraint where
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
 instance Substitutable (Equation () Type) where
-  substitute ctxt (Equation sp ty rf patterns expr) =
+  substitute ctxt (Equation sp name ty rf patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
          expr' <- substitute ctxt expr
-         return $ Equation sp ty' rf pat' expr'
+         return $ Equation sp name ty' rf pat' expr'
 
 substituteValue :: (?globals::Globals)
                 => Substitution
@@ -533,6 +533,10 @@ substituteExpr :: (?globals::Globals)
 substituteExpr ctxt (AppF sp ty rf fn arg) =
     do  ty' <- substitute ctxt ty
         return $ App sp ty' rf fn arg
+substituteExpr ctxt (AppTyF sp ty rf fn t) =
+    do  ty' <- substitute ctxt ty
+        t' <- substitute ctxt t
+        return $ AppTy sp ty' rf fn t'
 substituteExpr ctxt (BinopF sp ty rf op lhs rhs) =
     do  ty' <- substitute ctxt ty
         return $ Binop sp ty' rf op lhs rhs
@@ -778,7 +782,6 @@ updateTyVar s tyVar k = do
     rewriteCtxt ((name, (KVar kindVar, q)) : ctxt)
      | tyVar == kindVar = (name, (k, q)) : rewriteCtxt ctxt
     rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
-
 
 --------------------------------------------------------------------------------
 -- Below this point is the KindsAlgorithmic module, moved here to temporarily --

@@ -1,0 +1,251 @@
+------------------ HILB ------------------
+
+Usage reminder (0 or arguments in the order given below):
+
+ granule-synth-eval                           (all modes, all *.gr files, 10 tries)
+ granule-synth-eval file                      (all modes, 1 file, 10 tries)
+ granule-synth-eval file|. trials             (all modes, 1 file or whole dir, custom trials)
+ granule-synth-eval file|. trials [modes...]  (select modes, 1 file or whole dir, custom trials)
+
+ Available modes are: add addp sub subd
+
+ Prefix any of the option combinations with + to get the per-file rather than per-mode output
+
+Trials = 20
+
+
+ & \multicolumn{3}{c}{Additive}&\multicolumn{3}{c}{Additive pruning}&\multicolumn{3}{c}{Subtractive}&\multicolumn{3}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} \\ \hline\hline 
+%
+and1                      & \success{} &   3.55 (\stderr{  0.11}) &   1       & \success{} &   3.98 (\stderr{  0.15}) &   1       & \success{} &   5.09 (\stderr{  0.08}) &   1       & \success{} &   4.51 (\stderr{  0.15}) &   1      \\ 
+%
+and2                      & \success{} &   5.29 (\stderr{  0.35}) &   1       & \success{} &   7.23 (\stderr{  0.18}) &   1       & \success{} &   6.82 (\stderr{  0.16}) &   1       & \success{} &   7.27 (\stderr{  0.14}) &   1      \\ 
+%
+and3                      & \success{} &   0.46 (\stderr{  0.01}) &   0       & \success{} &   0.14 (\stderr{  0.00}) &   0       & \success{} &   0.07 (\stderr{  0.01}) &   0       & \success{} &   0.57 (\stderr{  0.00}) &   0      \\ 
+%
+i                         & \success{} &   0.04 (\stderr{  0.00}) &   0       & \success{} &   0.05 (\stderr{  0.00}) &   0       & \success{} &   0.05 (\stderr{  0.00}) &   0       & \success{} &   0.06 (\stderr{  0.00}) &   0      \\ 
+%
+k                         & \success{} &   5.07 (\stderr{  0.29}) &   1       & \success{} &   4.10 (\stderr{  0.13}) &   1       & \success{} &   7.36 (\stderr{  0.16}) &   1       & \success{} &   4.58 (\stderr{  0.14}) &   1      \\ 
+%
+or1                       & \success{} &   0.07 (\stderr{  0.00}) &   0       & \success{} &   0.06 (\stderr{  0.00}) &   0       & \success{} &   0.07 (\stderr{  0.00}) &   0       & \success{} &   0.08 (\stderr{  0.00}) &   0      \\ 
+%
+or2                       & \success{} &   0.06 (\stderr{  0.00}) &   0       & \success{} &   0.09 (\stderr{  0.00}) &   0       & \success{} &   0.07 (\stderr{  0.01}) &   0       & \success{} &   0.11 (\stderr{  0.00}) &   0      \\ 
+%
+or3                       & \success{} &  14.30 (\stderr{  0.55}) &   2       & \success{} &  10.98 (\stderr{  0.43}) &   2       & \success{} & 208.45 (\stderr{  5.09}) &  15       & \success{} & 189.72 (\stderr{  6.07}) &  15      \\ 
+%
+s                         & \success{} &   5.64 (\stderr{  0.37}) &   1       & \success{} &  18.19 (\stderr{  1.63}) &   1       & \success{} &  35.17 (\stderr{  1.09}) &   3       & \success{} &  39.90 (\stderr{  0.93}) &   3      \\ 
+%
+\
+\\ 
+%
+ & \multicolumn{4}{c}{Additive}&\multicolumn{4}{c}{Additive pruning}&\multicolumn{4}{c}{Subtractive}&\multicolumn{4}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ \\ \hline\hline 
+%
+and1                      & \success{} &   3.26 (\stderr{  0.10}) &   1       &   5.00 & \success{} &   3.86 (\stderr{  0.15}) &   1       &   5.00 & \success{} &   4.95 (\stderr{  0.08}) &   1       &   5.00 & \success{} &   4.14 (\stderr{  0.13}) &   1       &   5.00\\ % SmtT/T = 91.72266756435239%, 97.07956660592583%, 97.22846044903764%, 91.72748035567392%
+%
+and2                      & \success{} &   4.84 (\stderr{  0.31}) &   1       &   5.00 & \success{} &   7.01 (\stderr{  0.18}) &   1       &   5.00 & \success{} &   6.64 (\stderr{  0.15}) &   1       &   5.00 & \success{} &   6.64 (\stderr{  0.13}) &   1       &   5.00\\ % SmtT/T = 91.45878605865848%, 97.04850084657674%, 97.27183636390755%, 91.2835422293809%
+%
+and3                      & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00\\ % SmtT/T = 0.0%, 0.0%, 0.0%, 0.0%
+%
+i                         & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00\\ % SmtT/T = 0.0%, 0.0%, 0.0%, 0.0%
+%
+k                         & \success{} &   4.93 (\stderr{  0.28}) &   1       &   5.00 & \success{} &   3.98 (\stderr{  0.13}) &   1       &   5.00 & \success{} &   7.18 (\stderr{  0.16}) &   1       &   5.00 & \success{} &   4.46 (\stderr{  0.13}) &   1       &   5.00\\ % SmtT/T = 97.293454684562%, 97.29592079106675%, 97.5410426778464%, 97.340743664526%
+%
+or1                       & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00\\ % SmtT/T = 0.0%, 0.0%, 0.0%, 0.0%
+%
+or2                       & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00\\ % SmtT/T = 0.0%, 0.0%, 0.0%, 0.0%
+%
+or3                       & \success{} &  13.39 (\stderr{  0.51}) &   2       &   7.00 & \success{} &  10.10 (\stderr{  0.40}) &   2       &   7.00 & \success{} & 206.61 (\stderr{  5.06}) &  15       &  13.47 & \success{} & 188.08 (\stderr{  6.02}) &  15       &  13.47\\ % SmtT/T = 93.63617744525628%, 91.99239572163873%, 99.11991680503775%, 99.13605059242519%
+%
+s                         & \success{} &   5.25 (\stderr{  0.34}) &   1       &   6.00 & \success{} &  17.83 (\stderr{  1.60}) &   1       &  10.00 & \success{} &  34.65 (\stderr{  1.07}) &   3       &  11.00 & \success{} &  39.54 (\stderr{  0.92}) &   3       &  11.00\\ % SmtT/T = 93.17243394174801%, 98.02063780828341%, 98.5200024151581%, 99.09757045484994%
+%
+------------------ COMP ------------------
+
+Usage reminder (0 or arguments in the order given below):
+
+ granule-synth-eval                           (all modes, all *.gr files, 10 tries)
+ granule-synth-eval file                      (all modes, 1 file, 10 tries)
+ granule-synth-eval file|. trials             (all modes, 1 file or whole dir, custom trials)
+ granule-synth-eval file|. trials [modes...]  (select modes, 1 file or whole dir, custom trials)
+
+ Available modes are: add addp sub subd
+
+ Prefix any of the option combinations with + to get the per-file rather than per-mode output
+
+Trials = 20
+
+
+ & \multicolumn{3}{c}{Additive}&\multicolumn{3}{c}{Additive pruning}&\multicolumn{3}{c}{Subtractive}&\multicolumn{3}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} \\ \hline\hline 
+%
+01                        & \success{} &  14.16 (\stderr{  0.31}) &   5       & \success{} &  23.26 (\stderr{  2.29}) &   5       & \success{} & 257.29 (\stderr{  1.58}) &  10       & \success{} & 487.10 (\stderr{  3.83}) &  13      \\ 
+%
+cbn                       & \success{} &  17.41 (\stderr{  0.89}) &   3       & \success{} &  20.99 (\stderr{  0.08}) &   3       & \success{} & 169.29 (\stderr{  1.93}) &   6       & \success{} & 255.17 (\stderr{  2.23}) &   8      \\ 
+%
+cbv                       & \success{} &  37.34 (\stderr{  0.29}) &   5       & \success{} &  28.29 (\stderr{  2.29}) &   5       & \success{} & 292.10 (\stderr{  2.29}) &  10       & \success{} & 768.63 (\stderr{  1.86}) &  14      \\ 
+%
+coeff-gen                 & \success{} &  36.25 (\stderr{  2.77}) &   2       & \success{} &  33.68 (\stderr{  1.14}) &   2       & \fail{}  &  86.13 (\stderr{  6.21}) &   8       & \fail{}  &  94.56 (\stderr{  2.29}) &   8      \\ 
+%
+coeff-nat                 & \success{} &  33.68 (\stderr{  0.80}) &   2       & \success{} &  26.52 (\stderr{  0.94}) &   2       & \fail{}  & 112.95 (\stderr{  3.91}) &   8       & \success{} &  97.30 (\stderr{  2.97}) &   7      \\ 
+%
+mult                      & \success{} &   0.72 (\stderr{  0.01}) &   0       & \success{} &   0.18 (\stderr{  0.00}) &   0       & \success{} &   0.12 (\stderr{  0.00}) &   0       & \success{} &   0.34 (\stderr{  0.01}) &   0      \\ 
+%
+\
+\\ 
+%
+ & \multicolumn{4}{c}{Additive}&\multicolumn{4}{c}{Additive pruning}&\multicolumn{4}{c}{Subtractive}&\multicolumn{4}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ \\ \hline\hline 
+%
+01                        & \success{} &  13.33 (\stderr{  0.30}) &   5       &   9.00 & \success{} &  22.40 (\stderr{  2.20}) &   5       &   9.00 & \success{} & 255.85 (\stderr{  1.56}) &  10       &  40.10 & \success{} & 484.42 (\stderr{  3.80}) &  13       &  46.69\\ % SmtT/T = 94.15207506712949%, 96.33460726204297%, 99.4430383493159%, 99.44962404287753%
+%
+cbn                       & \success{} &  16.73 (\stderr{  0.85}) &   3       &   7.67 & \success{} &  20.14 (\stderr{  0.08}) &   3       &   7.67 & \success{} & 167.75 (\stderr{  1.90}) &   6       &  42.00 & \success{} & 254.09 (\stderr{  2.21}) &   8       &  36.25\\ % SmtT/T = 96.10898458875384%, 95.94642124196297%, 99.09370911902724%, 99.57511530751367%
+%
+cbv                       & \success{} &  35.61 (\stderr{  0.28}) &   5       &  10.20 & \success{} &  27.23 (\stderr{  2.20}) &   5       &  10.20 & \success{} & 288.87 (\stderr{  2.27}) &  10       &  48.20 & \success{} & 765.37 (\stderr{  1.85}) &  14       &  60.00\\ % SmtT/T = 95.35699239418123%, 96.26352205948763%, 98.89429723853816%, 99.57620005899265%
+%
+coeff-gen                 & \success{} &  35.73 (\stderr{  2.73}) &   2       &  11.00 & \success{} &  33.20 (\stderr{  1.12}) &   2       &  11.00 & \fail{}  &  84.91 (\stderr{  6.13}) &   8       &  10.00 & \fail{}  &  93.38 (\stderr{  2.27}) &   8       &  12.25\\ % SmtT/T = 98.56402734403206%, 98.57575788693961%, 98.58814384433559%, 98.7597227699482%
+%
+coeff-nat                 & \success{} &  33.13 (\stderr{  0.79}) &   2       &  11.00 & \success{} &  26.07 (\stderr{  0.92}) &   2       &  11.00 & \fail{}  & 111.48 (\stderr{  3.86}) &   8       &  10.00 & \success{} &  96.34 (\stderr{  2.95}) &   7       &  27.57\\ % SmtT/T = 98.38012293327651%, 98.30056794570457%, 98.70404446602389%, 99.01366901544829%
+%
+mult                      & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00 & \success{} &   0.00 (\stderr{  0.00}) &   0       &   0.00\\ % SmtT/T = 0.0%, 0.0%, 0.0%, 0.0%
+%
+------------------ PUSH ------------------
+
+Usage reminder (0 or arguments in the order given below):
+
+ granule-synth-eval                           (all modes, all *.gr files, 10 tries)
+ granule-synth-eval file                      (all modes, 1 file, 10 tries)
+ granule-synth-eval file|. trials             (all modes, 1 file or whole dir, custom trials)
+ granule-synth-eval file|. trials [modes...]  (select modes, 1 file or whole dir, custom trials)
+
+ Available modes are: add addp sub subd
+
+ Prefix any of the option combinations with + to get the per-file rather than per-mode output
+
+Trials = 20
+
+
+ & \multicolumn{3}{c}{Additive}&\multicolumn{3}{c}{Additive pruning}&\multicolumn{3}{c}{Subtractive}&\multicolumn{3}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} \\ \hline\hline 
+%
+func-bang                 & \success{} &   8.02 (\stderr{  0.53}) &   2       & \success{} &   8.02 (\stderr{  0.22}) &   2       & \success{} &  66.56 (\stderr{  0.99}) &   4       & \success{} &  93.37 (\stderr{  1.64}) &   5      \\ 
+%
+func-gen                  & \success{} &  27.50 (\stderr{  1.04}) &   2       & \success{} &  35.68 (\stderr{  1.76}) &   2       & \fail{}  &  48.57 (\stderr{  3.20}) &   4       & \fail{}  &  52.22 (\stderr{  2.66}) &   4      \\ 
+%
+func-nat                  & \success{} &  22.36 (\stderr{  1.53}) &   2       & \success{} &  30.21 (\stderr{  0.90}) &   2       & \fail{}  &  50.97 (\stderr{  2.49}) &   4       & \success{} &  68.43 (\stderr{  2.23}) &   5      \\ 
+%
+\
+\\ 
+%
+ & \multicolumn{4}{c}{Additive}&\multicolumn{4}{c}{Additive pruning}&\multicolumn{4}{c}{Subtractive}&\multicolumn{4}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ \\ \hline\hline 
+%
+func-bang                 & \success{} &   7.75 (\stderr{  0.51}) &   2       &   7.00 & \success{} &   7.75 (\stderr{  0.21}) &   2       &   7.00 & \success{} &  65.95 (\stderr{  0.98}) &   4       &  20.75 & \success{} &  92.84 (\stderr{  1.63}) &   5       &  20.40\\ % SmtT/T = 96.59191662428735%, 96.62787344842337%, 99.0829078454632%, 99.42871133352583%
+%
+func-gen                  & \success{} &  27.29 (\stderr{  1.04}) &   2       &   8.00 & \success{} &  35.40 (\stderr{  1.75}) &   2       &   8.00 & \fail{}  &  48.07 (\stderr{  3.17}) &   4       &   9.00 & \fail{}  &  51.60 (\stderr{  2.63}) &   4       &  13.00\\ % SmtT/T = 99.21968175849916%, 99.23415586746484%, 98.98421606755177%, 98.81756617959527%
+%
+func-nat                  & \success{} &  22.16 (\stderr{  1.52}) &   2       &   8.00 & \success{} &  29.95 (\stderr{  0.89}) &   2       &   8.00 & \fail{}  &  50.46 (\stderr{  2.47}) &   4       &   9.00 & \success{} &  67.74 (\stderr{  2.21}) &   5       &  21.40\\ % SmtT/T = 99.10321648585591%, 99.14445233334497%, 98.99110894143934%, 98.99139018091734%
+%
+------------------ PULL ------------------
+
+Usage reminder (0 or arguments in the order given below):
+
+ granule-synth-eval                           (all modes, all *.gr files, 10 tries)
+ granule-synth-eval file                      (all modes, 1 file, 10 tries)
+ granule-synth-eval file|. trials             (all modes, 1 file or whole dir, custom trials)
+ granule-synth-eval file|. trials [modes...]  (select modes, 1 file or whole dir, custom trials)
+
+ Available modes are: add addp sub subd
+
+ Prefix any of the option combinations with + to get the per-file rather than per-mode output
+
+Trials = 20
+
+
+ & \multicolumn{3}{c}{Additive}&\multicolumn{3}{c}{Additive pruning}&\multicolumn{3}{c}{Subtractive}&\multicolumn{3}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} \\ \hline\hline 
+%
+either-bang               & \success{} &   8.08 (\stderr{  0.47}) &   2       & \success{} &   8.43 (\stderr{  0.51}) &   2       & \success{} &  64.35 (\stderr{  0.51}) &   4       & \success{} & 106.30 (\stderr{  2.90}) &   6      \\ 
+%
+either-gen                & \success{} &  35.13 (\stderr{  1.88}) &   2       & \success{} &  28.19 (\stderr{  2.16}) &   2       & \fail{}  &  11.26 (\stderr{  0.12}) &   1       & \fail{}  &  19.29 (\stderr{  1.77}) &   1      \\ 
+%
+either-nat                & \success{} &  30.87 (\stderr{  1.13}) &   2       & \success{} &  23.22 (\stderr{  0.85}) &   2       & \fail{}  &  18.98 (\stderr{  1.10}) &   1       & \success{} &  81.54 (\stderr{  4.06}) &   6      \\ 
+%
+pair-bang                 & \success{} &  13.62 (\stderr{  0.31}) &   2       & \success{} &  27.26 (\stderr{  0.52}) &   2       & \success{} &  68.63 (\stderr{  2.18}) &   4       & \success{} &  94.66 (\stderr{  1.42}) &   5      \\ 
+%
+pair-gen                  & \success{} &  30.43 (\stderr{  1.74}) &   2       & \fail{}  &  31.25 (\stderr{  2.67}) &   2       & \fail{}  &  23.12 (\stderr{  0.92}) &   2       & \fail{}  &  25.51 (\stderr{  0.85}) &   2      \\ 
+%
+pair-nat                  & \success{} &  29.54 (\stderr{  0.61}) &   2       & \fail{}  &  24.54 (\stderr{  0.83}) &   2       & \fail{}  &  30.60 (\stderr{  0.87}) &   2       & \success{} &  69.96 (\stderr{  1.56}) &   5      \\ 
+%
+\
+\\ 
+%
+ & \multicolumn{4}{c}{Additive}&\multicolumn{4}{c}{Additive pruning}&\multicolumn{4}{c}{Subtractive}&\multicolumn{4}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ \\ \hline\hline 
+%
+either-bang               & \success{} &   7.80 (\stderr{  0.46}) &   2       &   7.00 & \success{} &   7.98 (\stderr{  0.48}) &   2       &   7.00 & \success{} &  63.88 (\stderr{  0.51}) &   4       &  20.00 & \success{} & 105.75 (\stderr{  2.89}) &   6       &  17.67\\ % SmtT/T = 96.5881950451746%, 94.5740003229598%, 99.27713947458527%, 99.48086810558809%
+%
+either-gen                & \success{} &  34.83 (\stderr{  1.87}) &   2       &   8.00 & \success{} &  27.96 (\stderr{  2.14}) &   2       &   8.00 & \fail{}  &  11.08 (\stderr{  0.12}) &   1       &   9.00 & \fail{}  &  18.95 (\stderr{  1.74}) &   1       &  13.00\\ % SmtT/T = 99.16098475110618%, 99.1563305605489%, 98.36899578238092%, 98.24231496428149%
+%
+either-nat                & \success{} &  30.59 (\stderr{  1.12}) &   2       &   8.00 & \success{} &  22.83 (\stderr{  0.84}) &   2       &   8.00 & \fail{}  &  18.68 (\stderr{  1.08}) &   1       &   9.00 & \success{} &  81.06 (\stderr{  4.05}) &   6       &  18.67\\ % SmtT/T = 99.07561368421862%, 98.34973687137666%, 98.47085581797582%, 99.41607289977956%
+%
+pair-bang                 & \success{} &  12.88 (\stderr{  0.29}) &   2       &   7.00 & \success{} &  27.01 (\stderr{  0.52}) &   2       &  11.00 & \success{} &  67.93 (\stderr{  2.15}) &   4       &  20.75 & \success{} &  94.12 (\stderr{  1.42}) &   5       &  20.40\\ % SmtT/T = 94.58590470867946%, 99.0845867082757%, 98.98477945287729%, 99.43516114591627%
+%
+pair-gen                  & \success{} &  30.21 (\stderr{  1.73}) &   2       &   8.00 & \fail{}  &  30.44 (\stderr{  2.61}) &   2       &  11.00 & \fail{}  &  22.63 (\stderr{  0.90}) &   2       &   9.00 & \fail{}  &  25.00 (\stderr{  0.84}) &   2       &  17.00\\ % SmtT/T = 99.26492290249853%, 97.40654882844406%, 97.91370183303367%, 98.01448512910827%
+%
+pair-nat                  & \success{} &  29.30 (\stderr{  0.61}) &   2       &   9.00 & \fail{}  &  24.05 (\stderr{  0.82}) &   2       &  12.00 & \fail{}  &  29.90 (\stderr{  0.85}) &   2       &  10.00 & \success{} &  69.55 (\stderr{  1.56}) &   5       &  22.40\\ % SmtT/T = 99.17492313743828%, 98.03229167211805%, 97.7170734347567%, 99.41999076481608%
+%
+------------------ MISC ------------------
+
+Usage reminder (0 or arguments in the order given below):
+
+ granule-synth-eval                           (all modes, all *.gr files, 10 tries)
+ granule-synth-eval file                      (all modes, 1 file, 10 tries)
+ granule-synth-eval file|. trials             (all modes, 1 file or whole dir, custom trials)
+ granule-synth-eval file|. trials [modes...]  (select modes, 1 file or whole dir, custom trials)
+
+ Available modes are: add addp sub subd
+
+ Prefix any of the option combinations with + to get the per-file rather than per-mode output
+
+Trials = 20
+
+
+ & \multicolumn{3}{c}{Additive}&\multicolumn{3}{c}{Additive pruning}&\multicolumn{3}{c}{Subtractive}&\multicolumn{3}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} & & \multicolumn{1}{c}{$\mu{T}$ (ms)} & \multicolumn{1}{c}{\textsc{smt}} \\ \hline\hline 
+%
+eitherInterval            & \success{} &   3.58 (\stderr{  0.11}) &   1       & \success{} &   5.91 (\stderr{  0.13}) &   1       & \success{} &  47.63 (\stderr{  0.72}) &   3       & \success{} &  81.11 (\stderr{  1.39}) &   5      \\ 
+%
+flob                      & \success{} &  16.88 (\stderr{  0.97}) &   3       & \success{} &  42.68 (\stderr{  1.52}) &   3       & \success{} & 13934.53 (\stderr{  7.20}) & 858       & \success{} & 553.04 (\stderr{  1.98}) &  33      \\ 
+%
+fromMaybe                 & \success{} &   6.49 (\stderr{  0.14}) &   1       & \success{} &   4.47 (\stderr{  0.24}) &   1       & \success{} &  26.89 (\stderr{  0.88}) &   2       & \success{} &  30.17 (\stderr{  1.29}) &   2      \\ 
+%
+security                  & \success{} &  13.04 (\stderr{  0.29}) &   2       & \success{} &  31.24 (\stderr{  2.21}) &   2       & \success{} &  43.69 (\stderr{  0.99}) &   3       & \success{} &  60.95 (\stderr{  4.04}) &   4      \\ 
+%
+share                     & \success{} & 250.89 (\stderr{ 15.07}) &  44       & \success{} &  74.75 (\stderr{  1.46}) &   6       & \success{} & 197.03 (\stderr{  4.52}) &  17       & \success{} & 200.64 (\stderr{  6.02}) &  17      \\ 
+%
+\
+\\ 
+%
+ & \multicolumn{4}{c}{Additive}&\multicolumn{4}{c}{Additive pruning}&\multicolumn{4}{c}{Subtractive}&\multicolumn{4}{c}{Subtractive with division}\\ \hline 
+%
+ Benchmark &  & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ & & $\mu\textsc{smt}T$ (ms) & \textsc{smt} & $\mu|P|$ \\ \hline\hline 
+%
+eitherInterval            & \success{} &   3.37 (\stderr{  0.10}) &   1       &   8.00 & \success{} &   5.56 (\stderr{  0.12}) &   1       &   8.00 & \success{} &  47.23 (\stderr{  0.71}) &   3       &  20.33 & \success{} &  80.63 (\stderr{  1.38}) &   5       &  17.60\\ % SmtT/T = 94.24318168490886%, 94.00818576107508%, 99.16476193786855%, 99.40502702936833%
+%
+flob                      & \success{} &  14.72 (\stderr{  0.84}) &   3       &   9.33 & \success{} &  41.26 (\stderr{  1.46}) &   3       &  21.00 & \success{} & 13759.59 (\stderr{  7.33}) & 858       &  28.98 & \success{} & 549.00 (\stderr{  1.97}) &  33       &  23.39\\ % SmtT/T = 87.20718711553963%, 96.66344603646803%, 98.74459420697474%, 99.26976061794241%
+%
+fromMaybe                 & \success{} &   6.23 (\stderr{  0.13}) &   1       &   6.00 & \success{} &   4.30 (\stderr{  0.23}) &   1       &   6.00 & \success{} &  26.52 (\stderr{  0.86}) &   2       &   9.00 & \success{} &  29.95 (\stderr{  1.28}) &   2       &   9.00\\ % SmtT/T = 95.99990989687032%, 96.05406953458599%, 98.64193441438381%, 99.27687247675169%
+%
+security                  & \success{} &  12.60 (\stderr{  0.28}) &   2       &   6.50 & \success{} &  30.95 (\stderr{  2.18}) &   2       &  10.50 & \success{} &  43.15 (\stderr{  0.98}) &   3       &  21.00 & \success{} &  60.50 (\stderr{  4.02}) &   4       &  17.50\\ % SmtT/T = 96.65712083977185%, 99.07232272007357%, 98.77466936877484%, 99.26694822774964%
+%
+share                     & \success{} & 233.86 (\stderr{ 14.01}) &  44       &  12.05 & \success{} &  71.59 (\stderr{  1.41}) &   6       &  87.33 & \success{} & 193.99 (\stderr{  4.47}) &  17       &  34.47 & \success{} & 198.81 (\stderr{  5.97}) &  17       &  34.47\\ % SmtT/T = 93.2122558175236%, 95.76644429133057%, 98.45541454820574%, 99.0862799915542%
+%

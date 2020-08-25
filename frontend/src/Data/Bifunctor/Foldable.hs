@@ -21,7 +21,7 @@ module Data.Bifunctor.Foldable where
 import Data.Bifunctor hiding (second)
 import Data.Bitraversable
 import Control.Monad ((<=<))
-import Data.Kind
+import Data.Kind (Type)
 
 newtype Fix2 f g = Fix2 { unFix :: (f (Fix2 f g) (Fix2 g f)) }
 

@@ -1,0 +1,2 @@
+comp-cbv :  forall {a b c : Type} . (a [] -> b []) [] -> (b [] -> c []) [] -> (a [] -> c []) []
+comp-cbv = ?

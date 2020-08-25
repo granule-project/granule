@@ -34,6 +34,7 @@ data Globals = Globals
   , globalsNoEval              :: Maybe Bool
   , globalsSuppressInfos       :: Maybe Bool
   , globalsSuppressErrors      :: Maybe Bool
+  , globalsIgnoreHoles         :: Maybe Bool
   , globalsTimestamp           :: Maybe Bool
   , globalsTesting             :: Maybe Bool -- ^ whether we are currently running a test (e.g. for pretty printing)
   , globalsSolverTimeoutMillis :: Maybe Integer
@@ -42,19 +43,29 @@ data Globals = Globals
   , globalsEntryPoint          :: Maybe String
   , globalsRewriteHoles        :: Maybe Bool
   , globalsHolePosition        :: Maybe Pos
+  , globalsSynthesise          :: Maybe Bool
+  , globalsBenchmark           :: Maybe Bool
+  , globalsBenchmarkRaw        :: Maybe Bool
+  , globalsAdditiveSynthesis   :: Maybe Bool
+  , globalsAlternateSynthesisMode :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, additiveSynthesisMode, alternateSynthesisMode :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
 noEval            = fromMaybe False $ globalsNoEval ?globals
 suppressInfos     = fromMaybe False $ globalsSuppressInfos ?globals
 suppressErrors    = fromMaybe False $ globalsSuppressErrors ?globals
+ignoreHoles       = fromMaybe False $ globalsIgnoreHoles ?globals
 timestamp         = fromMaybe False $ globalsTimestamp ?globals
 testing           = fromMaybe False $ globalsTesting ?globals
+benchmarking      = fromMaybe False $ globalsBenchmark ?globals
+benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
+additiveSynthesisMode = fromMaybe False $ globalsAdditiveSynthesis ?globals
+alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -78,6 +89,7 @@ instance Semigroup Globals where
       , globalsNoEval              = globalsNoEval              g1 <|> globalsNoEval              g2
       , globalsSuppressInfos       = globalsSuppressInfos       g1 <|> globalsSuppressInfos       g2
       , globalsSuppressErrors      = globalsSuppressErrors      g1 <|> globalsSuppressErrors      g2
+      , globalsIgnoreHoles         = globalsIgnoreHoles         g1 <|> globalsIgnoreHoles         g2
       , globalsTimestamp           = globalsTimestamp           g1 <|> globalsTimestamp           g2
       , globalsSolverTimeoutMillis = globalsSolverTimeoutMillis g1 <|> globalsSolverTimeoutMillis g2
       , globalsIncludePath         = globalsIncludePath         g1 <|> globalsIncludePath         g2
@@ -86,6 +98,11 @@ instance Semigroup Globals where
       , globalsEntryPoint          = globalsEntryPoint          g1 <|> globalsEntryPoint          g2
       , globalsRewriteHoles        = globalsRewriteHoles        g1 <|> globalsRewriteHoles        g2
       , globalsHolePosition        = globalsHolePosition        g1 <|> globalsHolePosition        g2
+      , globalsSynthesise          = globalsSynthesise          g1 <|> globalsSynthesise          g2
+      , globalsBenchmark           = globalsBenchmark           g1 <|> globalsBenchmark           g2
+      , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
+      , globalsAdditiveSynthesis   = globalsAdditiveSynthesis   g1 <|> globalsAdditiveSynthesis   g2
+      , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
       }
 
 instance Monoid Globals where
@@ -96,6 +113,7 @@ instance Monoid Globals where
     , globalsNoEval              = Nothing
     , globalsSuppressInfos       = Nothing
     , globalsSuppressErrors      = Nothing
+    , globalsIgnoreHoles         = Nothing
     , globalsTimestamp           = Nothing
     , globalsSolverTimeoutMillis = Nothing
     , globalsIncludePath         = Nothing
@@ -104,6 +122,11 @@ instance Monoid Globals where
     , globalsEntryPoint          = Nothing
     , globalsRewriteHoles        = Nothing
     , globalsHolePosition        = Nothing
+    , globalsSynthesise          = Nothing
+    , globalsBenchmark           = Nothing
+    , globalsBenchmarkRaw        = Nothing
+    , globalsAdditiveSynthesis   = Nothing
+    , globalsAlternateSynthesisMode = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general
