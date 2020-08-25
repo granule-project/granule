@@ -149,6 +149,15 @@ evalIn ctxt (App s _ _ e1 e2) = do
       _ -> error $ show v1
       -- _ -> error "Cannot apply value"
 
+-- Deriving applications get resolved to their names
+evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull"] = do
+  -- Replace with a deriving variable
+  evalIn ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
+
+-- Other type applications have no run time component (currently)
+evalIn ctxt (AppTy s _ _ e t) = do
+  evalIn ctxt e
+
 evalIn ctxt (Binop _ _ _ op e1 e2) = do
      v1 <- evalIn ctxt e1
      v2 <- evalIn ctxt e2
@@ -202,7 +211,7 @@ evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
            OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
 -}
 
-evalIn ctxt (Val _ _ _ (Var _ x)) =
+evalIn ctxt (Val _ _ _ (Var _ x)) = do
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
@@ -446,7 +455,7 @@ builtIns =
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
-evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ rf [] e]) _ : defs) = do
+evalDefs ctxt (Def _ var _ (EquationList _ _ _ [Equation _ _ _ rf [] e]) _ : defs) = do
     val <- evalIn ctxt e
     case extend ctxt var val of
       Just ctxt -> evalDefs ctxt defs
@@ -466,11 +475,12 @@ instance RuntimeRep EquationList where
   toRuntimeRep (EquationList s i rf eqns) = EquationList s i rf (map toRuntimeRep eqns)
 
 instance RuntimeRep Equation where
-  toRuntimeRep (Equation s a rf ps e) = Equation s a rf ps (toRuntimeRep e)
+  toRuntimeRep (Equation s name a rf ps e) = Equation s name a rf ps (toRuntimeRep e)
 
 instance RuntimeRep Expr where
   toRuntimeRep (Val s a rf v) = Val s a rf (toRuntimeRep v)
   toRuntimeRep (App s a rf e1 e2) = App s a rf (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (AppTy s a rf e1 t) = AppTy s a rf (toRuntimeRep e1) t
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)

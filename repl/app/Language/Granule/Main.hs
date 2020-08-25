@@ -16,6 +16,7 @@ import System.Directory
 import Data.List (nub)
 
 import qualified Data.Map as M
+import qualified Data.List.NonEmpty as NonEmpty (NonEmpty, filter, fromList)
 import qualified Language.Granule.Checker.Monad as Checker
 import Control.Exception (try)
 import Control.Monad.State
@@ -56,10 +57,17 @@ data ReplState =
     , currentADTs :: ADT
     , files :: [FilePath]
     , defns  :: M.Map String (Def () (), [String])
+    , ignoreHolesMode :: Bool
     }
 
+showHolesREPL :: REPLStateIO ()
+showHolesREPL = modify (\state -> state {ignoreHolesMode = False})
+
+ignoreHolesREPL :: REPLStateIO ()
+ignoreHolesREPL = modify (\state -> state {ignoreHolesMode = True})
+
 initialState :: ReplState
-initialState = ReplState 0 [] [] M.empty
+initialState = ReplState 0 [] [] M.empty True
 
 type REPLStateIO a = StateT ReplState (Ex.ExceptT ReplError IO) a
 
@@ -71,7 +79,7 @@ main = do
   -- Welcome message
   putStrLn $ "\ESC[34;1mWelcome to Granule interactive mode (grepl). Version " <> showVersion version <> "\ESC[0m"
 
-  -- Get the .granue config
+  -- Get the .granule config
   globals <- Interpreter.getGrConfig >>= (return . Interpreter.grGlobals . snd)
 
   -- Run the REPL loop
@@ -85,7 +93,7 @@ main = do
         Just [] -> loop st
         Just input
           | input == ":q" || input == ":quit" ->
-            liftIO (putStrLn "Leaving Granule.")
+            liftIO (putStrLn "Leaving Granule interactive.")
 
           | input == ":h" || input == ":help" ->
             liftIO (putStrLn helpMenu) >> loop st
@@ -118,6 +126,7 @@ helpMenu = unlines
       ,":debug <filepath>         (:d)  Run Granule debugger and display output while loading a file"
       ,":dump                     ()    Display the context"
       ,":load <filepath>          (:l)  Load an external file into the context"
+      ,":holes                    ()    Show goal information"
       ,":module <filepath>        (:m)  Add file/module to the current context"
       ,":reload                   (:r)  Reload last file loaded into REPL"
       ,"-----------------------------------------------------------------------------------"
@@ -190,6 +199,11 @@ handleCMD s =
           modify (\st -> st { currentADTs = [], defns = M.empty })
           processFilesREPL files readToQueue
           return ()
+
+    handleLine Holes = do
+      showHolesREPL
+      handleLine Reload
+      ignoreHolesREPL
 
     handleLine (CheckType exprString) = do
       expr <- parseExpression exprString
@@ -287,10 +301,28 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
 
                 Left errs -> do
                   st <- get
-                  Ex.throwError (TypeCheckerError errs (files st))
+                  let holeErrors = getHoleMessages errs
+                  if ignoreHolesMode st && length holeErrors == length errs
+                    then do
+                      let (AST dd def _ _ _) = ast
+                      forM_ def $ \idef -> loadInQueue idef
+                      modify (\st -> st { currentADTs = dd <> currentADTs st })
+                      liftIO $ printInfo $ (green $ path <> ", checked ")
+                                        <> (blue $ "(but with " ++ show (length holeErrors) ++ " holes).")
+                    else
+                      let errs' = NonEmpty.fromList $ relevantMessages (ignoreHolesMode st) errs
+                      in Ex.throwError (TypeCheckerError errs' (files st))
       Left e -> do
        st <- get
        Ex.throwError (ParseError e (files st))
+
+getHoleMessages :: NonEmpty.NonEmpty Checker.CheckerError -> [Checker.CheckerError]
+getHoleMessages es =
+  NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> True; _ -> False) es
+
+relevantMessages :: Bool -> NonEmpty.NonEmpty Checker.CheckerError -> [Checker.CheckerError]
+relevantMessages ignoreHoles es =
+  NonEmpty.filter (\ e -> case e of Checker.HoleMessage{} -> not ignoreHoles; _ -> True) es
 
 loadInQueue :: (?globals::Globals) => Def () () -> REPLStateIO  ()
 loadInQueue def@(Def _ id _ _ _) = do
@@ -334,5 +366,5 @@ buildCheckerState dataDecls = do
 buildDef :: Int -> TypeScheme -> Expr () () -> Def () ()
 buildDef rfv ts ex =
   Def nullSpanInteractive id False
-   (EquationList nullSpanInteractive id False [Equation nullSpanInteractive () False [] ex]) ts
+   (EquationList nullSpanInteractive id False [Equation nullSpanInteractive id () False [] ex]) ts
   where id = mkId (" repl" <> show rfv)

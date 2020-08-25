@@ -1,0 +1,8 @@
+-- push example
+data Either a b = Left a | Right b
+
+foo : forall {a : Type, b : Type, s : Semiring, r : s} . {1 <= r} => (Either a b) [r] -> Either (a [r]) (b [r])
+foo = push @Either
+
+main : Either (Int []) (Int [])
+main = foo [Left 1]

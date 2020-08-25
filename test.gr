@@ -1,0 +1,5 @@
+push : forall {a : Type, b : Type, n : Nat } . (a, b) [n + 1] -> (a [n], b)
+push  = ?
+
+foo : forall {a : Type, n : Nat} . a [n + 1] -> (a, a [n])
+foo [x1] = (x1, [x1])
