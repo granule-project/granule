@@ -20,7 +20,9 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
 setElements :: [(Kind, Type)]
-setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO"),
+               (KPromote $ TyCon $ mkId "EffectOps", TyCon $ mkId "Effect")
+              ]
 
 -- Associates type constuctors names to their:
 --    * kind
@@ -52,6 +54,10 @@ typeConstructors =
     , (mkId "->", (KFun KType (KFun KType KType), [], False))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, [], True))
+    -- Effect operations
+    , (mkId "EffectOps", (KPromote (TySet --KSet??
+            (FunTy Type (TyCon $ mkId "EffectOp"))), [], False))
+    , (mkId "EffectOp", (KEffect, [], False))
     -- Effect grade types - Sessions
     , (mkId "Session", (KPromote (TyCon $ mkId "Com"), [], True))
     , (mkId "Com", (KEffect, [], False))
@@ -65,7 +71,6 @@ typeConstructors =
     , (mkId "Write", (KPromote (TyCon $ mkId "IOElem"), [], False))
     , (mkId "IOExcept", (KPromote (TyCon $ mkId "IOElem"), [], False))
     , (mkId "Close", (KPromote (TyCon $ mkId "IOElem"), [], False))
-
     --Effect grade types - Exceptions
     , (mkId "Exception", (KEffect, [], False))
     , (mkId "Success", (KPromote (TyCon $ mkId "Exception"), [], False))

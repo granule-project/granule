@@ -55,7 +55,7 @@ import Language.Granule.Utils hiding (mkSpan)
     try    { TokenTry _ }
     as    { TokenAs _ }
     catch    { TokenCatch _ }
-    handles  { TokenHandles _ }
+    handle  { TokenHandle _ }
     import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
@@ -426,9 +426,9 @@ Expr :: { Expr () () }
         in (mkSpan (getPos $1, getEnd $12)) >>=
               \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
   
-  | '(' Expr ')' handles Oprs
-    {% (mkSpan (getPos $1, lastSpan $5)) >>=
-             \sp -> return $ Handled sp () False $2 $5 }
+  | '(' Expr ')' handle ':' Type Oprs
+    {% (mkSpan (getPos $1, lastSpan $7)) >>=
+             \sp -> return $ Handled sp () False $2 $6 $7 }
 
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=

@@ -190,7 +190,20 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
          -- (cf. TRY_BETA_2)
         (\(e :: IOException) -> evalIn ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
-          
+
+evalIn ctxt (Handled s a r expr ht oprs) =
+  do 
+  k <- pmatch ctxt oprs expr
+  case k of
+    Just k' -> 
+      --check k' : returntype -> ht
+      case expr of
+        (Pure _ expr') -> evalIn ctxt (FunTy k' expr') -- (handled pure rule)
+        expr' ->  evalIn ctxt (Handled s a r (FunTy k' expr') oprs) -- (handled op rule)
+    Nothing -> error $ "Incomplete pattern match:\n handled operations: "
+             <> pretty oprs <> "\n  expr: " <> pretty expr
+
+
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
