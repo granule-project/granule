@@ -115,6 +115,9 @@ instance Pretty Type where
     pretty (TyApp t1 t2)  =
       pretty t1 <> " " <> prettyNested t2
 
+    pretty (TyInfix TyOpInterval t1 t2) =
+      prettyNested t1 <> pretty TyOpInterval <> prettyNested t2
+
     pretty (TyInfix op t1 t2) =
       prettyNested t1 <> " " <> pretty op <> " " <> prettyNested t2
 

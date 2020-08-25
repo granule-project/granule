@@ -20,9 +20,9 @@ import qualified Data.Text as T
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
-import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Exhaustivity
+import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.NameClash
 import Language.Granule.Checker.Patterns
@@ -1427,8 +1427,9 @@ extCtxt s ctxt var (Linear t) = do
     Just (Discharged t' c) ->
        if t == t'
          then do
+           st <- get
            -- TODO: deal with the subst here
-           (k, _) <- inferCoeffectType s c
+           _ <- checkKind s (tyVarContext st) c KCoeffect
            return $ replace ctxt var (Discharged t (TyInfix TyOpPlus c (TyInt 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Linear t) : ctxt
@@ -1443,8 +1444,9 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Linear t') ->
         if t == t'
         then do
+           st <- get
            -- TODO: deal with the subst here
-           (k, _) <- inferCoeffectType s c
+           _ <- checkKind s (tyVarContext st) c KCoeffect
            return $ replace ctxt var (Discharged t (TyInfix TyOpPlus c (TyInt 1)))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Discharged t c) : ctxt

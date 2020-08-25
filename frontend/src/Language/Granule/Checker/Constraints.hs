@@ -215,7 +215,6 @@ compile vars (Neq _ c1 c2 t) =
 
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
-
   case t of
     {-
     -- An alternate procedure for computing least-upper bounds

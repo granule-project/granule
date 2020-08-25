@@ -82,6 +82,7 @@ closedOperation =
     TyOpExpon -> True
     TyOpMeet -> True
     TyOpJoin -> True
+    TyOpInterval -> True
     _        -> False
 
 coeffectResourceAlgebraOps :: TypeOperator -> Bool
@@ -91,6 +92,7 @@ coeffectResourceAlgebraOps =
     TyOpTimes -> True
     TyOpMeet -> True
     TyOpJoin -> True
+    TyOpInterval -> True
     _ -> False
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)

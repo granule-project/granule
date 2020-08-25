@@ -711,6 +711,12 @@ synthKind s ctxt (TyInfix op t1 t2) | predicateOperation op = do
       return (KPredicate, subst)
     Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
 
+{-synthKind s ctxt (TyInfix TyOpInterval t1 t2) = do
+  (k, subst1) <- synthKind s ctxt t1
+  subst2 <- checkKind s ctxt t2 k
+  subst <- combineSubstitutions s subst1 subst2
+  return (KPromote $ TyInfix TyOpInterval t1 t2, subst)-}
+
 -- KChkS_opRing and KChkS_effOpp
 synthKind s ctxt (TyInfix op t1 t2) | closedOperation op = do
   (k, subst1) <- synthKind s ctxt t1
@@ -904,20 +910,66 @@ joinKind _ _ = return Nothing
 universify :: Ctxt a -> Ctxt (a, Quantifier)
 universify = map (second (\k -> (k, ForallQ)))
 
+-- TODO: Should this be using synthKind rather than inferCoeffectTypeInContext?
 -- | Infer the type of a coeffect term (giving its span as well)
 inferCoeffectType :: (?globals :: Globals) => Span -> Type -> Checker (Type, Substitution)
-inferCoeffectType s c = do
+{-inferCoeffectType s c = do
   st <- get
   (k, subst) <- synthKind s (tyVarContext st) c
   case k of
     (KPromote t) -> return (t, subst)
-    _ -> undefined
+    _ -> undefined-}
+inferCoeffectType s c = do
+  st <- get
+  inferCoeffectTypeInContext s (map (\(id, (k, _)) -> (id, k)) (tyVarContext st)) c
 
 inferCoeffectTypeAssumption :: (?globals :: Globals) => Span -> Assumption -> Checker (Maybe Type, Substitution)
 inferCoeffectTypeAssumption _ (Linear _) = return (Nothing, [])
 inferCoeffectTypeAssumption s (Discharged _ c) = do
   (t, subst) <- inferCoeffectType s c
   return (Just t, subst)
+
+inferCoeffectTypeInContext :: (?globals :: Globals) => Span -> Ctxt Kind -> Type -> Checker (Type, Substitution)
+-- Coeffect constants have an obvious kind
+inferCoeffectTypeInContext _ _ (TyApp (TyCon (internalName -> "Level")) _) = return (TyCon $ mkId "Level", [])
+inferCoeffectTypeInContext _ _ (TyInt _) = return (TyCon $ mkId "Nat", [])
+inferCoeffectTypeInContext _ _ (TyFloat _) = return (TyCon $ mkId "Q", [])
+inferCoeffectTypeInContext _ _ (TySet _) = return (TyCon $ mkId "Set", [])
+inferCoeffectTypeInContext s ctxt (isProduct -> Just (c1, c2)) = do
+  (k1, subst1) <- inferCoeffectTypeInContext s ctxt c1
+  (k2, subst2) <- inferCoeffectTypeInContext s ctxt c2
+  subst <- combineSubstitutions s subst1 subst2
+  return (TyApp (TyApp (TyCon $ mkId "×") k1) k2, subst)
+
+inferCoeffectTypeInContext s ctxt (TyInfix TyOpInterval c1 c2) = do
+  (k, substitution, _) <- mguCoeffectTypesFromCoeffects s c1 c2
+  return (TyApp (TyCon $ mkId "Interval") k, substitution)
+
+-- Take the join for compound coeffect epxressions
+inferCoeffectTypeInContext s _ (TyInfix _ c c')  = (\(a, b, _) -> (a, b)) <$> mguCoeffectTypesFromCoeffects s c c'
+
+-- Coeffect variables should have a type in the cvar->kind context
+inferCoeffectTypeInContext s ctxt (TyVar cvar) = do
+  st <- get
+  case lookup cvar ctxt of
+    Nothing -> do
+      throw UnboundTypeVariable{ errLoc = s, errId = cvar }
+      -- state <- get
+      -- let newType = TyVar $ "ck" <> show (uniqueVarId state)
+      -- We don't know what it is yet though, so don't update the coeffect kind ctxt
+      -- put (state { uniqueVarId = uniqueVarId state + 1 })
+      -- return newType
+    Just (KVar name) -> return (TyVar name, [])
+    Just (KPromote t) -> checkKind s (universify ctxt) t KCoeffect >> return (t, [])
+    Just k -> throw KindMismatch { errLoc = s
+                                 , tyActualK = Just $ TyVar cvar
+                                 , kExpected = KPromote (TyVar $ mkId "coeffectType")
+                                 , kActual = k }
+
+inferCoeffectTypeInContext s ctxt (TySig _ (KPromote t)) = checkKind s (universify ctxt) t KCoeffect >> return (t, [])
+-- Unknown infinity defaults to the interval of extended nats version
+inferCoeffectTypeInContext s ctxt (TyCon (internalName -> "Infinity")) = return (TyApp (TyCon $ mkId "Interval") extendedNat, [])
+inferCoeffectTypeInContext s _ t = throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind

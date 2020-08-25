@@ -323,7 +323,7 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
         Right effTy -> do
           eq <- effApproximates s effTy t1 t2
           return (eq, [])
-        Left k -> debugM "G" "G" >> throw $ KindMismatch s Nothing KEffect k
+        Left k -> throw $ KindMismatch s Nothing KEffect k
 
     Types ->
       case k of
