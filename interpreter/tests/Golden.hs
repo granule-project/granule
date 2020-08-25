@@ -2,8 +2,10 @@ import Control.Exception (catch, throwIO)
 import Control.Monad (unless)
 import Data.Algorithm.Diff (getGroupedDiff)
 import Data.Algorithm.DiffOutput (ppDiff)
+import Data.List (sort)
 import Test.Tasty (defaultMain, TestTree, testGroup)
-import Test.Tasty.Golden (findByExtension, goldenVsFile)
+import Test.Tasty.Golden (goldenVsFile)
+import qualified Test.Tasty.Golden as G
 import Test.Tasty.Golden.Advanced (goldenTest)
 import System.Directory (renameFile, setCurrentDirectory)
 import System.Exit (ExitCode)
@@ -31,6 +33,9 @@ main = do
       _ <- mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
       throwIO e
     )
+
+findByExtension :: [FilePath] -> FilePath -> IO [FilePath]
+findByExtension exs path = G.findByExtension exs path >>= (return . sort)
 
 goldenTestsNegative :: IO TestTree
 goldenTestsNegative = do

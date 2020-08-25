@@ -48,12 +48,10 @@ foldr_list [f] z xs =
     Empty -> z;
     Next x xs -> f x (foldr_list [f] z xs)
 
--- TODO: reinstate when the new kinding algorithm is in place
-
--- pushList : forall {k : Coeffect, c : k, a : Type} . {(1 : k) <= c}
---         => (List a) [c] -> List (a [c])
--- pushList [Empty]     = Empty;
--- pushList [Next x xs] = Next [x] (pushList [xs])
+pushList : forall {k : Coeffect, c : k, a : Type} . {(1 : k) <= c}
+         => (List a) [c] -> List (a [c])
+pushList [Empty]     = Empty;
+pushList [Next x xs] = Next [x] (pushList [xs])
 
 pullList : forall {k : Coeffect, c : k, a : Type}
          . List (a [c]) -> (List a) [c]
