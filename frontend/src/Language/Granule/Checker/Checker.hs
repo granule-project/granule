@@ -23,8 +23,6 @@ import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Effects
 import Language.Granule.Checker.Constraints
-import Language.Granule.Checker.Kinds
-import Language.Granule.Checker.KindsImplicit
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.NameClash
@@ -32,8 +30,8 @@ import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as Primitives
 import Language.Granule.Checker.Simplifier
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 import Language.Granule.Context
@@ -160,8 +158,8 @@ checkDataCon
                [(v, (k, ForallQ)) | (v, k) <- tyVarsD']
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
-        (tySchKind, _) <- inferKindOfTypeImplicits sp tyVars ty
-
+        st <- get
+        _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty KType
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
@@ -175,15 +173,7 @@ checkDataCon
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
-
-        case tySchKind of
-          KType ->
-            registerDataConstructor tySch coercions
-
-          KPromote (TyCon k) | internalName k == "Protocol" ->
-            registerDataConstructor tySch coercions
-
-          _ -> throw KindMismatch{ errLoc = sp, tyActualK = Just ty, kExpected = KType, kActual = kind }
+        registerDataConstructor tySch coercions
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
@@ -633,7 +623,9 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       newConjunct
 
       -- Checking the case body
-      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau e_i
+      tau' <- substitute subst tau
+      patternGam <- substitute subst patternGam
+      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
@@ -686,13 +678,13 @@ checkExpr defs gam pol topLevel tau e = do
   -- Now to do a type equality on check type `tau` and synth type `tau'`
   (tyEq, _, subst) <-
         if topLevel
-          -- If we are checking a top-level, then don't allow overapproximation
+          -- If we are checking a top-level, then allow overapproximation
           then do
+            debugM "** Compare for approximation " $ pretty tau' <> " <: " <> pretty tau
+            lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
+          else do
             debugM "** Compare for equality " $ pretty tau' <> " = " <> pretty tau
             equalTypesWithPolarity (getSpan e) SndIsSpec tau' tau
-          else do
-            debugM "** Compare for equality " $ pretty tau' <> " :> " <> pretty tau
-            lEqualTypesWithPolarity (getSpan e) SndIsSpec tau' tau
 
   if tyEq
     then do
@@ -858,7 +850,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Check that usage matches the binding grades/linearity
   -- (performs the linearity check)
-  ctxtEquals s (gam2 `intersectCtxts` binders) binders
+  ctxtApprox s (gam2 `intersectCtxts` binders) binders
 
   gamNew <- ctxtPlus s (gam2 `subtractCtxt` binders) gam1
 
@@ -873,6 +865,67 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   let elaborated = LetDiamond s t rf elaboratedP optionalTySig elaborated1 elaborated2
   return (t, gamNew, subst, elaborated)
+
+
+synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
+  (sig, gam1, subst1, elaborated1) <- synthExpr defs gam pol e1
+
+  -- Check that a graded possibility type was inferred
+  (ef1, opt, ty1) <- case sig of
+    Diamond ef1 (Box opt ty1) ->
+        return (ef1, opt, ty1)
+    _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
+
+  (t, _) <- inferCoeffectType s opt
+  addConstraint (ApproximatedBy s (CZero t) opt t)
+
+  -- Type clauses in the context of the binders from the pattern
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s (Box opt ty1) (PBox s () False p) NotFull
+  pIrrefutable <- isIrrefutable s ty1 p
+  unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
+
+  -- as branch
+  (tau2, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
+
+  -- catch branch
+  (tau3, gam3, subst3, elaborated3) <- synthExpr defs gam pol e3
+
+  -- check e2 and e3 are diamonds
+  (ef2, ty2) <- case tau2 of
+      Diamond ef2 ty2 -> return (ef2, ty2)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
+  (ef3, ty3) <- case tau3 of
+      Diamond ef3 ty3 -> return (ef3, ty3)
+      t -> throw ExpectedEffectType{ errLoc = s, errTy = t }
+
+  --to better match the typing rule both continuation types should be equal
+  (b, ty, _) <- equalTypes s ty2 ty3
+  b <- case b of
+      True -> return b
+      False -> throw TypeError{ errLoc = s, tyExpected = ty2, tyActual = ty3}
+
+  optionalSigEquality s mty ty1
+
+  -- linearity check for e2 and e3
+  ctxtApprox s (gam2 `intersectCtxts` binders) binders
+
+  -- compute output contexts
+  (gam2u3, _) <- joinCtxts s (gam2 `subtractCtxt` binders) gam3
+  gam'        <- ctxtPlus s gam1 gam2u3
+
+  --resulting effect type
+  let f = TyApp (TyCon $ mkId "Handled") ef1
+  (efTy, subst') <- twoEqualEffectTypes s ef1 ef2
+  g <- effectUpperBound s efTy ef2 ef3
+  ef <- effectMult s efTy f g
+  let t = Diamond ef ty
+
+  subst <- combineManySubstitutions s [substP, subst1, subst2, subst3, subst']
+  -- Synth subst
+  t' <- substitute substP t
+
+  let elaborated = TryCatch s t rf elaborated1 elaboratedP mty elaborated2 elaborated3
+  return (t, gam', subst, elaborated)
 
 -- Variables
 synthExpr defs gam _ (Val s _ rf (Var _ x)) =
@@ -1109,7 +1162,7 @@ solveConstraints predicate s name = do
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
   coeffectVars <- justCoeffectTypesConverted s ctxtCk
-  -- remove any variables bound already in the preciate
+  -- remove any variables bound already in the predicate
   coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
 
   debugM "tyVarContext" (pretty $ tyVarContext checkerState)

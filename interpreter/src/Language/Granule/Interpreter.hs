@@ -373,9 +373,9 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help "Suppress information from holes (treat holes as well-typed)"
 
         globalsAdditiveSynthesis <-
-          flag Nothing (Just True)
-           $ long "additive"
-            <> help "Use additive mode for synthesis, rather than subtractive (default)."
+          flag (Just True) Nothing
+           $ long "subtractive"
+            <> help "Use subtractive mode for synthesis, rather than additive (default)."
 
         globalsAlternateSynthesisMode <-
           flag Nothing (Just True)

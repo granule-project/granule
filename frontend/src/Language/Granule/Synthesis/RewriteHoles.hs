@@ -103,12 +103,16 @@ holeRefactorExpr :: Expr () Type -> Expr () () -> Expr () ()
 holeRefactorExpr goal (Hole sp a _ _) = void goal
 holeRefactorExpr goal (App sp a rf e1 e2) =
   App sp a rf (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
+holeRefactorExpr goal (AppTy sp a rf e t) =
+  AppTy sp a rf (holeRefactorExpr goal e) t
 holeRefactorExpr goal (Binop sp a rf op e1 e2) =
   Binop sp a rf op (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (LetDiamond sp a rf pat ty e1 e2) =
   LetDiamond sp a rf pat ty (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (Case sp a rf e cases) =
   Case sp a rf (holeRefactorExpr goal e) (map (second (holeRefactorExpr goal)) cases)
+holeRefactorExpr goal (TryCatch sp a rf e1 pat ty e2 e3) =
+  TryCatch sp a rf (holeRefactorExpr goal e1) pat ty (holeRefactorExpr goal e2) (holeRefactorExpr goal e3)
 -- TODO: for maximum expressivity with holes we should recursively refacor inside values as well (as they contain exprs)
 holeRefactorExpr goal (Val sp a rf v) = Val sp a rf (holeRefactorVal goal v)
 
