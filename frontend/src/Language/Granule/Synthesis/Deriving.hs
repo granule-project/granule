@@ -11,12 +11,11 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Context
 
 import Language.Granule.Checker.Predicates (Constraint(..))
-import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates (Quantifier(..))
 import Language.Granule.Checker.Types (SpecIndicator(..), equalTypesRelatedCoeffectsAndUnify)
 import Language.Granule.Checker.Variables
-import Language.Granule.Checker.Substitution(substitute, freshPolymorphicInstance)
 import Language.Granule.Checker.SubstitutionContexts
 
 import Language.Granule.Synthesis.Builders
@@ -38,7 +37,8 @@ derivePush s ty = do
   cVar <- freshIdentifierBase "r" >>= (return . mkId)
 
   -- Get kind of type constructor
-  kind <- inferKindOfType nullSpanNoFile ty
+  st <- get
+  (kind, _) <- synthKind nullSpanNoFile (tyVarContext st) ty
   -- Generate fresh type variables and apply them to the kind constructor
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (CVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
@@ -256,7 +256,8 @@ derivePull s ty = do
   cVar <- freshIdentifierBase "r" >>= (return . mkId)
 
   -- Get kind of type constructor
-  kind <- inferKindOfType nullSpanNoFile ty
+  st <- get
+  (kind, _) <- synthKind nullSpanNoFile (tyVarContext st) ty
   -- Generate fresh type variables and apply them to the kind constructor
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (CVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext

@@ -2,7 +2,7 @@
 -- But this is useful for experimenting with in `grepl`, e.g.
 
 -- $ grepl
--- > :l exmaples/intro.gr
+-- > :l examples/intro.gr
 
 -- grepl is a REPL a bit like ghci, so you can run code and inspect types, e.g.
 -- > :t id

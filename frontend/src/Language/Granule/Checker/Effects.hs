@@ -1,11 +1,10 @@
 {- Deals with effect algebras -}
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 
 module Language.Granule.Checker.Effects where
 
-import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Constraints.CompileNatKinded
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import qualified Language.Granule.Checker.Primitives as P (setElements, typeConstructors)
@@ -17,7 +16,7 @@ import Language.Granule.Syntax.Span
 
 import Language.Granule.Utils
 
-import Data.List (nub)
+import Data.List (nub, (\\))
 import Data.Maybe (mapMaybe)
 
 -- Describe all effect types that are based on a union-emptyset monoid
@@ -38,14 +37,28 @@ isEffUnit s effTy eff =
         -- Session singleton case
         TyCon (internalName -> "Com") -> do
             return True
-        -- IO set case
+        TyCon (internalName -> "Exception") ->
+            case eff of
+                TyCon (internalName -> "Success") -> return True
+                _ -> return False
         -- Any union-set effects, like IO
         TyCon c | unionSetLike c ->
             case eff of
                 (TySet []) -> return True
                 _          -> return False
-        -- Unknown
+        --Unknown
         _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = KPromote effTy }
+
+handledNormalise :: Span -> Type -> Type -> Type
+handledNormalise s effTy efs =
+    case efs of
+        TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "MayFail")) -> TyCon (mkId "Pure")
+        TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "Success")) -> TyCon (mkId "Pure")
+        TyApp (TyCon (internalName -> "Handled")) ef -> handledNormalise s effTy ef
+        TyCon (internalName -> "Success") -> TyCon (mkId "Pure")
+        TySet efs' -> 
+            TySet (efs' \\ [TyCon (mkId "IOExcept")])
+        _ -> efs
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
 -- resource algebra
@@ -64,19 +77,37 @@ effApproximates s effTy eff1 eff2 =
             -- Session singleton case
             TyCon (internalName -> "Com") -> do
                 return True
-            -- IO set case
-            -- Any union-set effects, like IO
-            TyCon c | unionSetLike c ->
-                case eff1 of
-                    (TyCon (internalName -> "Pure")) -> return True
-                    (TySet efs1) ->
-                        case eff2 of
-                            (TySet efs2) ->
-                                -- eff1 is a subset of eff2
-                                return $ all (\ef1 -> ef1 `elem` efs2) efs1
-                            _ -> return False
+            -- Exceptions
+            TyCon (internalName -> "Exception") -> 
+                case (eff1, eff2) of
+                    (TyCon (internalName -> "Success"),_) ->
+                        return True
+                    (TyApp (TyCon (internalName -> "Handled")) _, _) ->
+                        return True
+                    (TyCon (internalName -> "MayFail"),TyCon (internalName -> "MayFail")) ->
+                        return True
                     _ -> return False
-            -- Unknown effect resource algebra
+        -- Any union-set effects, like IO
+            TyCon c | unionSetLike c ->
+                case (eff1, eff2) of
+                    (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
+                        let efs1' = handledNormalise s effTy eff1
+                        let efs2' = handledNormalise s effTy eff2
+                        effApproximates s effTy efs1' efs2'
+                    --Handled, set
+                    (TyApp (TyCon (internalName -> "Handled")) efs1, TySet efs2) -> do
+                        let efs1' = handledNormalise s effTy eff1
+                        effApproximates s effTy efs1' eff2
+                    --set, Handled
+                    (TySet efs1, TyApp (TyCon (internalName -> "Handled")) efs2) -> do
+                        let efs2' = handledNormalise s effTy eff1
+                        effApproximates s effTy eff1 efs2'
+                    -- Actual sets, take the union
+                    (TySet efs1, TySet efs2) ->
+                        -- eff1 is a subset of eff2
+                        return $ all (\ef1 -> ef1 `elem` efs2) efs1
+                    _ -> return False
+                    -- Unknown effect resource algebra
             _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = KPromote effTy }
 
 effectMult :: Span -> Type -> Type -> Type -> Checker Type
@@ -93,9 +124,36 @@ effectMult sp effTy t1 t2 = do
         TyCon (internalName -> "Com") ->
           return $ TyCon $ mkId "Session"
 
+        TyCon (internalName -> "Exception") ->
+            case t1 of
+                --derived property Handled f * e = e
+                TyApp (TyCon (internalName -> "Handled")) _ -> 
+                    return t2
+                TyCon (internalName -> "Success") -> 
+                    return t2
+                TyCon (internalName -> "MayFail") ->
+                    return $ TyCon $ mkId "MayFail"
+                _ -> throw $ TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
+
         -- Any union-set effects, like IO
         TyCon c | unionSetLike c ->
           case (t1, t2) of
+            --Handled, Handled
+            (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
+                let ts1' = handledNormalise sp effTy t1
+                let ts2' = handledNormalise sp effTy t2 
+                t <- (effectMult sp effTy ts1' ts2')
+                return t
+            --Handled, set
+            (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
+                let ts1' = handledNormalise sp effTy t1
+                t <- (effectMult sp effTy ts1' t2) ; 
+                return t
+             --set, Handled
+            (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
+                let ts2' = handledNormalise sp effTy t2 
+                t <- (effectMult sp effTy t1 ts2') ;
+                return t
             -- Actual sets, take the union
             (TySet ts1, TySet ts2) ->
               return $ TySet $ nub (ts1 <> ts2)
@@ -116,6 +174,22 @@ effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
 
 effectUpperBound _ t@(TyCon (internalName -> "Com")) t1 t2 = do
     return $ TyCon $ mkId "Session"
+
+effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
+    let t1' = handledNormalise s t t1 
+    let t2' = handledNormalise s t t2 
+    case (t1', t2') of
+        (TyCon (internalName -> "Success"),TyCon (internalName -> "Success")) ->
+            return t1'
+        (TyCon (internalName -> "MayFail"),_) ->
+            return t1'
+        (_,TyCon (internalName -> "MayFail")) ->
+            return t2'
+        (TyCon (internalName -> "Pure"), _) ->
+            return t1'
+        (_, TyCon (internalName -> "Pure")) ->
+            return t2'
+        _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1', errTy2 = t2' }
 
 effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
     case t1 of

@@ -25,6 +25,9 @@ import Data.Text (cons, pack, uncons, unpack, snoc, unsnoc)
 import qualified Data.Text.IO as Text
 import Control.Monad (when, foldM)
 
+import System.IO.Unsafe (unsafePerformIO)
+import Control.Exception (catch, throwIO, IOException)
+import GHC.IO.Exception (IOErrorType( OtherError ))
 import qualified Control.Concurrent as C (forkIO)
 import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Chan)
 -- import Foreign.Marshal.Alloc (free, malloc)
@@ -32,6 +35,8 @@ import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Ch
 -- import Foreign.Storable (peek, poke)
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
+
+import System.IO.Error (mkIOError)
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -170,12 +175,32 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
         -- (cf. LET_BETA)
         pResult  <- pmatch ctxt [(p, e2)] v1'
         case pResult of
-          Just e2' -> evalIn ctxt e2'
+          Just e2' -> do
+              evalIn ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: "
                       <> prettyDebug other
 
+evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
+  v1 <- evalIn ctxt e1
+  case v1 of
+    (isDiaConstr -> Just e) -> do
+        -- (cf. TRY_BETA_1)
+      catch ( do
+          eInner <- e
+          e1' <- evalIn ctxt eInner
+          pmatch ctxt [(PBox s () False p, e2)] e1' >>=
+            \v ->
+              case v of
+                Just e2' -> evalIn ctxt e2'
+                Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
+        )
+         -- (cf. TRY_BETA_2)
+        (\(e :: IOException) -> evalIn ctxt e3)
+    other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
+          
+{-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
   (Abs () (PVar nullSpan () False $ mkId " x") Nothing (Val nullSpan () False
@@ -184,6 +209,7 @@ evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
          (Val nullSpan () False (Var () (mkId " y")))
          (Binop nullSpan () False
            OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
+-}
 
 evalIn ctxt (Val _ _ _ (Var _ x)) = do
     case lookup x ctxt of
@@ -266,7 +292,9 @@ builtIns =
   [
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
+  , (mkId "use", Ext () $ Primitive $ \v -> Promote () (Val nullSpan () False v))
   , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () False v))
+  , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) ->  v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "intToFloat", Ext () $ Primitive $ \(NumInt n) -> NumFloat (cast n))
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
@@ -285,7 +313,7 @@ builtIns =
         hFlush stdout
         val <- Text.getLine
         return $ Val nullSpan () False (NumInt $ read $ unpack val))
-
+  , (mkId "throw", diamondConstr (throwIO $ mkIOError OtherError "exc" Nothing Nothing))
   , (mkId "toStdout", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
@@ -341,44 +369,45 @@ builtIns =
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)
+  -- , (mkId "trace",   Ext () $ Primitive $ \(StringLiteral s) -> diamondConstr $ do { Text.putStr s; hFlush stdout; return $ Val nullSpan () False (Constr () (mkId "()") []) })
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
   ]
   where
     fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    fork ctxt e@Abs{} = diamondConstr $ do
+    fork ctxt e@Abs{} = Ext () (unsafePerformIO $ do
       c <- CC.newChan
       _ <- C.forkIO $
          evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
-      return $ valExpr $ Ext () $ Chan c
+      return $ Chan c)
     fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    forkRep ctxt e@Abs{} = diamondConstr $ do
+    forkRep ctxt e@Abs{} = unsafePerformIO $ do
       c <- CC.newChan
       _ <- C.forkIO $
          evalIn ctxt (App nullSpan () False
                         (valExpr e)
                         (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
-      return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
+      return $ Promote () $ valExpr $ Ext () $ Chan c
     forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     recv :: (?globals :: Globals) => RValue -> RValue
-    recv (Ext _ (Chan c)) = diamondConstr $ do
+    recv (Ext _ (Chan c)) = unsafePerformIO $ do
       x <- CC.readChan c
-      return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
+      return $ Constr () (mkId ",") [x, Ext () $ Chan c]
     recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> RValue
     send (Ext _ (Chan c)) = Ext () $ Primitive
-      (\v -> diamondConstr $ do
+      (\v -> unsafePerformIO $ do
          CC.writeChan c v
-         return $ valExpr $ Ext () $ Chan c)
+         return $ Ext () $ Chan c)
     send e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
 
     close :: RValue -> RValue
-    close (Ext _ (Chan c)) = diamondConstr $ return $ valExpr $ Constr () (mkId "()") []
+    close (Ext _ (Chan c)) = unsafePerformIO $ return $ Constr () (mkId "()") []
     close rval = error $ "Runtime exception: trying to close a value which is not a channel"
 
     cast :: Int -> Double
@@ -416,7 +445,7 @@ builtIns =
     readChar (Ext _ (Handle h)) = diamondConstr $ do
           c <- SIO.hGetChar h
           return $ valExpr (Constr () (mkId ",") [Ext () $ Handle h, CharLiteral c])
-    readChar _ = error $ "Runtime exception: trying to get from a non handle value"
+    readChar h = error $ "Runtime exception: trying to get from a non handle value" <> prettyDebug h
 
     closeHandle :: RValue -> RValue
     closeHandle (Ext _ (Handle h)) = diamondConstr $ do
@@ -454,6 +483,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (AppTy s a rf e1 t) = AppTy s a rf (toRuntimeRep e1) t
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
+  toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
   toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
 

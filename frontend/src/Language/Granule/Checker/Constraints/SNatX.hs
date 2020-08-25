@@ -2,7 +2,6 @@
 
 {-# LANGUAGE DeriveAnyClass  #-}
 {-# LANGUAGE DeriveGeneric   #-}
-{-# LANGUAGE BlockArguments  #-}
 {-# LANGUAGE ScopedTypeVariables #-}
 
 -- | Represents the extended natural numbers in the solver
