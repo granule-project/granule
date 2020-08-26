@@ -4,8 +4,8 @@ module Language.Granule.Checker.Simplifier where
 
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Helpers (freeVars)
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
 

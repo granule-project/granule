@@ -1,0 +1,5 @@
+main : ((Handle R) [0..1]) <IO>
+main = let f <- "LICENSE" in main2 f
+
+main2 : String -> ((Handle R) [0..1]) <IO>
+main2 f = let h = openHandle ReadMode "LICENSE" in h

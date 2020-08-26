@@ -38,9 +38,11 @@ import "Glob" System.FilePath.Glob (glob)
 import Options.Applicative
 import Options.Applicative.Help.Pretty (string)
 
+import Language.Granule.Context
 import Language.Granule.Checker.Checker
 import Language.Granule.Checker.Monad (CheckerError(..))
 import Language.Granule.Interpreter.Eval
+import Language.Granule.Syntax.Def (extendASTWith)
 import Language.Granule.Syntax.Preprocessor
 import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Preprocessor.Ascii
@@ -120,18 +122,24 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         checked <- try $ check ast
         case checked of
           Left (e :: SomeException) -> return .  Left . FatalError $ displayException e
-          Right (Left errs) ->
-            case (globalsRewriteHoles ?globals, getHoleMessages errs) of
-              (Just True, holes@(_:_)) -> do
-                runHoleSplitter input config errs holes
-              _ -> return . Left $ CheckerError errs
-          Right (Right ast') -> do
+          Right (Left errs) -> do
+            let holeErrors = getHoleMessages errs
+            if ignoreHoles && length holeErrors == length errs
+              then do
+                printSuccess $ "OK " ++ (blue $ "(but with " ++ show (length holeErrors) ++ " holes)")
+                return $ Right NoEval
+              else
+                case (globalsRewriteHoles ?globals, holeErrors) of
+                  (Just True, holes@(_:_)) ->
+                    runHoleSplitter input config errs holes
+                  _ -> return . Left $ CheckerError errs
+          Right (Right (ast', derivedDefs)) -> do
             if noEval then do
               printSuccess "OK"
               return $ Right NoEval
             else do
               printSuccess "OK, evaluating..."
-              result <- try $ eval ast
+              result <- try $ eval (extendASTWith derivedDefs ast)
               case result of
                 Left (e :: SomeException) ->
                   return . Left . EvalError $ displayException e
@@ -159,10 +167,14 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
         Right noImportAst -> do
           let position = globalsHolePosition ?globals
           let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
-          let relevantCases = map cases relevantHoles
-          let holeCases = concatMap (\ cs -> map (zip (fst cs)) (snd cs)) relevantCases
+          -- Associate the span with each generate cases
+          let holeCases = concatMap (\h -> map (\(pats, e) -> (errLoc h, zip (getCtxtIds (holeVars h)) pats, e)) (cases h)) relevantHoles
           rewriteHoles input noImportAst (keepBackup config) holeCases
-          return . Left . CheckerError $ errs
+          case globalsSynthesise ?globals of
+            Just True -> do
+              printSuccess "Synthesised"
+              return $ Right NoEval
+            _         -> return . Left . CheckerError $ errs
 
     holeInPosition :: Pos -> CheckerError -> Bool
     holeInPosition pos (HoleMessage sp _ _ _ _ _) = spanContains pos sp
@@ -350,6 +362,27 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help "The column where the hole you wish to rewrite is located."
             <> metavar "COL"
 
+        globalsSynthesise <-
+          flag Nothing (Just True)
+            $ long "synthesise"
+            <> help "Turn on program synthesis. Must be used in conjunction with hole-line and hole-column"
+
+        globalsIgnoreHoles <-
+          flag Nothing (Just True)
+            $ long "ignore-holes"
+            <> help "Suppress information from holes (treat holes as well-typed)"
+
+        globalsAdditiveSynthesis <-
+          flag (Just True) Nothing
+           $ long "subtractive"
+            <> help "Use subtractive mode for synthesis, rather than additive (default)."
+
+        globalsAlternateSynthesisMode <-
+          flag Nothing (Just True)
+           $ long "alternate"
+            <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
+
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -369,6 +402,16 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             <> help ("Name of the code environment to check in literate files. Defaults to "
                     <> show (literateEnvName mempty))
 
+        globalsBenchmark <-
+          flag Nothing (Just True)
+           $ long "benchmark"
+           <> help "Compute benchmarking results for the synthesis procedure."
+
+        globalsBenchmarkRaw <-
+          flag Nothing (Just True)
+           $ long "raw-data"
+           <> help "Show raw data of benchmarking data for synthesis."
+
         pure
           ( globPatterns
           , GrConfig
@@ -382,6 +425,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsNoEval
               , globalsSuppressInfos
               , globalsSuppressErrors
+              , globalsIgnoreHoles
               , globalsTimestamp
               , globalsTesting = Nothing
               , globalsSolverTimeoutMillis
@@ -390,6 +434,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsEntryPoint
               , globalsRewriteHoles
               , globalsHolePosition = (,) <$> globalsHoleLine <*> globalsHoleCol
+              , globalsSynthesise
+              , globalsBenchmark
+              , globalsBenchmarkRaw
+              , globalsAdditiveSynthesis
+              , globalsAlternateSynthesisMode
               }
             }
           )

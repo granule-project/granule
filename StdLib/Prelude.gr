@@ -91,7 +91,7 @@ comp : forall {k : Coeffect, n : k, m : k, a : Type, b : Type, c : Type} .
        (b [n] -> c) -> (a [m] -> b) [n] -> a [n * m] -> c
 comp g [f] = \[x] -> g [f [x]]
 
-unbox : forall {a : Type, k : Coeffect} . a [1 : k] -> a
+unbox : forall {a : Type, k : Semiring} . a [1 : k] -> a
 unbox [x] = x
 
 disject : forall {a : Type, k : Coeffect, n : k, m : k} . a [m * n] -> (a [n]) [m]

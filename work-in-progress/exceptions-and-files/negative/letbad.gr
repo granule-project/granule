@@ -1,0 +1,6 @@
+main : ((Handle W) [0..1]) <IO>
+main = 
+    let f = "LICENSE" in
+     let x = 'A' in
+      let h = openHandle WriteMode f in
+        writeChar h x

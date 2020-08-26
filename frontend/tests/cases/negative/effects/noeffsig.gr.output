@@ -1,3 +1,0 @@
-Type checking failed:
-Unification error: frontend\tests\cases\negative\effects\noeffsig.gr:3:5:
-Type `Char <{Open, IOExcept, Read, Close}>` is not unifiable with the type `Char`

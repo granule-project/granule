@@ -1,16 +1,15 @@
 module Language.Granule.Synthesis.Splitting (generateCases) where
 
 import Control.Arrow (second)
-import Control.Monad (filterM)
 import Control.Monad.State.Strict (get, liftIO)
 import Data.List (partition)
-import Data.Maybe (fromJust, fromMaybe, isJust, mapMaybe)
+import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, mapMaybe)
 
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Patterns
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 
@@ -32,7 +31,7 @@ generateCases :: (?globals :: Globals)
   -> Ctxt (Ctxt (TypeScheme, Substitution))
   -> Ctxt Assumption
   -> [Id]
-  -> Checker ([Id], [[Pattern ()]])
+  -> Checker ([Id], [([Pattern ()], Ctxt Assumption)])
 generateCases span constructors ctxt toSplit = do
   -- Creates two subcontexts based on whether a variable should be split or not.
   let splitCtxt = relevantSubCtxt toSplit ctxt
@@ -60,7 +59,8 @@ generateCases span constructors ctxt toSplit = do
     Nothing -> return ([], [])
     Just eqTy -> do
       -- Filter the patterns if they are impossible.
-      validPatterns <- filterM (caseFilter span eqTy) (snd cases)
+      patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
+      let validPatterns = catMaybes patternsAndMaybeBinders
       return (fst cases, validPatterns)
 
 -- Splits all variables in a given context into a list of patterns.
@@ -143,26 +143,27 @@ caseFilter :: (?globals :: Globals)
   => Span
   -> Type
   -> [Pattern ()]
-  -> Checker Bool
+  -> Checker (Maybe ([Pattern ()], Ctxt Assumption))
 caseFilter span ty pats = do
   (result, local) <- peekChecker $ validateCase span ty pats
   case result of
-    Right True -> local >> return True
-    _ -> return False
+    Right (Just binders) -> local >> return (Just (pats, binders))
+    _ -> return Nothing
 
 -- Checks a case (i.e. list of patterns) against a type for validity.
+-- If it is valid, return Just of the binding envionrment geneated
 validateCase :: (?globals :: Globals)
   => Span
   -> Type
   -> [Pattern ()]
-  -> Checker Bool
+  -> Checker (Maybe (Ctxt Assumption))
 validateCase span ty pats = do
   st <- get
   predicate_newConjunct
 
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
-  (_, _, localVars, subst, _, _) <-
+  (binders, _, localVars, subst, _, _) <-
     ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
 
   predicate_concludeLeftConjunct
@@ -176,8 +177,8 @@ validateCase span ty pats = do
   result <- liftIO $ provePredicate thm
 
   case result of
-    QED -> return True
-    _ -> return False
+    (_, QED) -> return (Just binders)
+    _   -> return Nothing
 
   where
     popFromPredicateStack = do

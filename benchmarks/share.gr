@@ -1,0 +1,3 @@
+g : forall {a : Type, b : Type} . a [4] -> a [6] -> (((((a, a), a), a), a) -> b) [2] -> (b, b)
+g = ?
+-- g [x] [y] [f] = (f ((((x, x), x), x), y), f (((((y, y), y), y), y)))

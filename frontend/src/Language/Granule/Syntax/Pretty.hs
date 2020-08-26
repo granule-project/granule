@@ -195,14 +195,14 @@ instance Pretty v => Pretty (Def v a) where
     pretty (Def _ v _ eqs (ForallTyS _ [] [] t))
       = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
     pretty (Def _ v _ eqs tySch)
-      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> pretty eqs
+      = pretty v <> " : " <> pretty tySch <> "\n" <> pretty eqs
 
 instance Pretty v => Pretty (EquationList v a) where
-  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map (prettyEqn v) eqs
+  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map pretty eqs
 
-prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
-prettyEqn v (Equation _ _ _ ps e) =
-  pretty v <> " " <> unwords (map prettyNested ps) <> " = " <> pretty e
+instance Pretty v => Pretty (Equation v a) where
+  pretty (Equation _ v _ _ ps e) =
+     pretty v <> (if length ps == 0 then "" else " ") <> unwords (map prettyNested ps) <> " = " <> pretty e
 
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
@@ -267,6 +267,9 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
 
   pretty (App _ _ _ e1 e2) =
     prettyNested e1 <> " " <> prettyNested e2
+
+  pretty (AppTy _ _ _ e1 t) =
+    prettyNested e1 <> " @ " <> prettyNested t
 
   pretty (Binop _ _ _ op e1 e2) =
     pretty e1 <> " " <> pretty op <> " " <> pretty e2
