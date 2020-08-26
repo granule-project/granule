@@ -2,6 +2,7 @@
 {-# LANGUAGE TypeFamilies #-}
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
@@ -733,27 +734,27 @@ synthKind s ctxt (TyInt n) = return (KPromote (TyCon (Id "Nat" "Nat")), [])
 
 -- KChkS_box
 synthKind s ctxt (Box c t) = do
-  (kB, subst2) <- synthKind s ctxt c
-  case kB of
-    (KPromote b) -> do
-      st <- get
-      subst1 <- checkKind s (tyVarContext st) b KCoeffect
-      subst3 <- checkKind s (tyVarContext st) t KType
-      subst <- combineManySubstitutions s [subst1, subst2, subst3]
-      return (KType, subst)
-    _ -> throw KindError { errLoc = s, errTy = c, errK = kB }
+  (innerK, subst2) <- synthKind s ctxt c >>= (\case
+     (KPromote b, s) -> return (b, s)
+     (KVar v, s) -> return (TyVar v, s)
+     (k, _) -> throw KindError { errLoc = s, errTy = c, errK = k })
+  st <- get
+  subst1 <- checkKind s (tyVarContext st) innerK KCoeffect
+  subst3 <- checkKind s (tyVarContext st) t KType
+  subst <- combineManySubstitutions s [subst1, subst2, subst3]
+  return (KType, subst)
 
 -- KChkS_dia
 synthKind s ctxt (Diamond e t) = do
-  (kB, subst2) <- synthKind s ctxt e
-  case kB of
-    (KPromote b) -> do
-      st <- get
-      subst1 <- checkKind s (tyVarContext st) b KEffect
-      subst3 <- checkKind s (tyVarContext st) t KType
-      subst <- combineManySubstitutions s [subst1, subst2, subst3]
-      return (KType, subst)
-    _ -> throw KindError { errLoc = s, errTy = e, errK = kB }
+  (innerK, subst2) <- synthKind s ctxt e >>= (\case
+     (KPromote b, s) -> return (b, s)
+     (KVar v, s) -> return (TyVar v, s)
+     (k, _) -> throw KindError { errLoc = s, errTy = c, errK = k })
+  st <- get
+  subst1 <- checkKind s (tyVarContext st) innerK KEffect
+  subst3 <- checkKind s (tyVarContext st) t KType
+  subst <- combineManySubstitutions s [subst1, subst2, subst3]
+  return (KType, subst)
 
 synthKind s ctxt (TyCon (internalName -> "Pure")) = do
   -- Create a fresh type variable
@@ -921,7 +922,9 @@ inferCoeffectType :: (?globals :: Globals) => Span -> Type -> Checker (Type, Sub
     _ -> undefined-}
 inferCoeffectType s c = do
   st <- get
-  inferCoeffectTypeInContext s (map (\(id, (k, _)) -> (id, k)) (tyVarContext st)) c
+  r <- inferCoeffectTypeInContext s (map (\(id, (k, _)) -> (id, k)) (tyVarContext st)) c
+  debugM "Inferred coeffect type" (show c <> "\n" <> show r)
+  return r
 
 inferCoeffectTypeAssumption :: (?globals :: Globals) => Span -> Assumption -> Checker (Maybe Type, Substitution)
 inferCoeffectTypeAssumption _ (Linear _) = return (Nothing, [])
