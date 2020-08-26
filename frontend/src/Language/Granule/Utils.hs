@@ -46,13 +46,13 @@ data Globals = Globals
   , globalsSynthesise          :: Maybe Bool
   , globalsBenchmark           :: Maybe Bool
   , globalsBenchmarkRaw        :: Maybe Bool
-  , globalsAdditiveSynthesis   :: Maybe Bool
+  , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, additiveSynthesisMode, alternateSynthesisMode :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -64,7 +64,7 @@ timestamp         = fromMaybe False $ globalsTimestamp ?globals
 testing           = fromMaybe False $ globalsTesting ?globals
 benchmarking      = fromMaybe False $ globalsBenchmark ?globals
 benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
-additiveSynthesisMode = fromMaybe False $ globalsAdditiveSynthesis ?globals
+subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?globals
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
 
 -- | Accessor for the solver timeout with a default value
@@ -101,7 +101,7 @@ instance Semigroup Globals where
       , globalsSynthesise          = globalsSynthesise          g1 <|> globalsSynthesise          g2
       , globalsBenchmark           = globalsBenchmark           g1 <|> globalsBenchmark           g2
       , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
-      , globalsAdditiveSynthesis   = globalsAdditiveSynthesis   g1 <|> globalsAdditiveSynthesis   g2
+      , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
       }
 
@@ -125,7 +125,7 @@ instance Monoid Globals where
     , globalsSynthesise          = Nothing
     , globalsBenchmark           = Nothing
     , globalsBenchmarkRaw        = Nothing
-    , globalsAdditiveSynthesis   = Nothing
+    , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
     }
 
