@@ -37,6 +37,7 @@ typeConstructors =
     , (mkId "Nat",  (KUnion KCoeffect KEffect, [], False))
     , (mkId "Q",    (KCoeffect, [], False)) -- Rationals
     , (mkId "Level", (KCoeffect, [], False)) -- Security level
+    , (mkId "Infinity", (KPromote (TyCon $ mkId "Nat"), [], False))
     , (mkId "Private", (KPromote (TyCon $ mkId "Level"), [], False))
     , (mkId "Public", (KPromote (TyCon $ mkId "Level"), [], False))
     , (mkId "Unused", (KPromote (TyCon $ mkId "Level"), [], False))

@@ -968,7 +968,7 @@ inferCoeffectTypeInContext s ctxt (TyVar cvar) = do
 
 inferCoeffectTypeInContext s ctxt (TySig _ (KPromote t)) = checkKind s (universify ctxt) t KCoeffect >> return (t, [])
 -- Unknown infinity defaults to the interval of extended nats version
-inferCoeffectTypeInContext s ctxt (TyCon (internalName -> "Infinity")) = return (TyApp (TyCon $ mkId "Interval") extendedNat, [])
+inferCoeffectTypeInContext s ctxt (TyCon (internalName -> "Infinity")) = return (extendedNat, [])
 inferCoeffectTypeInContext s _ t = throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
 -- Find the most general unifier of two coeffects

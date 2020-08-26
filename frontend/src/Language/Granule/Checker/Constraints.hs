@@ -297,11 +297,11 @@ compileCoeffect (TyInt n) (isProduct -> Just (t1, TyCon k)) vars | internalName 
   (g, p) <- compileCoeffect (TyInt 1) t1 vars
   return (SProduct g (SLevel . fromInteger . toInteger $ n), p)
 
+compileCoeffect (TyCon (internalName -> "Infinity")) t _ | t == extendedNat =
+  return (SExtNat SNatX.inf, sTrue)
 -- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
 -- TODO: see if we can erase this, does it actually happen anymore?
-compileCoeffect (TyApp (TyCon (internalName -> "Infinity")) (TyVar _)) _ _ = return (zeroToInfinity, sTrue)
-compileCoeffect (TyApp (TyCon (internalName -> "Infinity")) _) t _| t == extendedNat =
-  return (SExtNat SNatX.inf, sTrue)
+compileCoeffect (TyCon (internalName -> "Infinity")) _ _ = return (zeroToInfinity, sTrue)
 
 compileCoeffect (TyInt n) k _ | k == nat =
   return (SNat  . fromInteger . toInteger $ n, sTrue)
