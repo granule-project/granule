@@ -372,8 +372,8 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             $ long "ignore-holes"
             <> help "Suppress information from holes (treat holes as well-typed)"
 
-        globalsAdditiveSynthesis <-
-          flag (Just True) Nothing
+        globalsSubtractiveSynthesis <-
+          flag Nothing (Just True)
            $ long "subtractive"
             <> help "Use subtractive mode for synthesis, rather than additive (default)."
 
@@ -437,7 +437,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsSynthesise
               , globalsBenchmark
               , globalsBenchmarkRaw
-              , globalsAdditiveSynthesis
+              , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
               }
             }

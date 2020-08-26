@@ -1600,7 +1600,7 @@ programSynthesise ctxt vars ty patternss = do
     let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
     synRes <-
        liftIO $ Syn.synthesiseProgram
-                    [] (if additiveSynthesisMode then (Syn.Additive mode) else (Syn.Subtractive mode))
+                    [] (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                     ctxt' [] (Forall nullSpan [] [] ty) currentState
 
     case synRes of
