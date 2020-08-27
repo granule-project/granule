@@ -1,0 +1,2 @@
+comp-01 :  forall {a b c : Type} . (a [] -> b []) [] -> (b [] -> c []) [] -> (a [] -> c) []
+comp-01 = ?

@@ -65,6 +65,7 @@ instance Show SynTree where
   show (SynMerge sb s t) = "(if " ++ show sb ++ " (" ++ show s ++ ") (" ++ show t ++ "))"
 
 sEqTree :: SynTree -> SynTree -> Symbolic SBool
+
 sEqTree (SynPlus s s') (SynPlus t t') =
   liftM2 (.||) (liftM2 (.&&) (sEqTree s t) (sEqTree s' t'))
                 -- + is commutative
@@ -91,14 +92,14 @@ sEqTree (SynMerge sb s s') (SynMerge sb' t t')  =
 
 sEqTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sEqTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .=== n'
-sEqTree _ _ = return $ sFalse
+sEqTree s t = return sFalse
 
 sLtTree :: SynTree -> SynTree -> Symbolic SBool
 sLtTree (SynPlus s s') (SynPlus t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynTimes s s') (SynTimes t t') = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynMeet s s') (SynMeet t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
-sLtTree (SynMerge sb s s') (SynMerge sb' t t') = 
+sLtTree (SynMerge sb s s') (SynMerge sb' t t') =
   liftM2 (.&&) (return $ sb .== sb') (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
 sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
@@ -111,7 +112,7 @@ match (SFloat _) (SFloat _) = True
 match (SLevel _) (SLevel _) = True
 match (SSet _) (SSet _) = True
 match (SExtNat _) (SExtNat _) = True
-match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match t1 t2
+match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match s2 t2
 match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
 match (SUnknown _) (SUnknown _) = True
@@ -330,11 +331,11 @@ symGradeTimes s t | isSProduct s || isSProduct t =
 -- units and absorption directly encoded
 symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t'@(SynLeaf (Just u'))) =
   return $
-    ite (u .== 1) (SUnknown (SynLeaf (Just u')))
-      (ite (u' .== 1) (SUnknown (SynLeaf (Just u)))
-        (ite (u .== 0) (SUnknown (SynLeaf (Just 0)))
-          (ite (u' .== 0) (SUnknown (SynLeaf (Just 0)))
-             (SUnknown (SynTimes t t')))))
+     ite (u .== 1) (SUnknown (SynLeaf (Just u')))
+       (ite (u' .== 1) (SUnknown (SynLeaf (Just u)))
+         (ite (u .== 0) (SUnknown (SynLeaf (Just 0)))
+           (ite (u' .== 0) (SUnknown (SynLeaf (Just 0)))
+              (SUnknown (SynTimes t t')))))
 
 symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t') =
   return $
@@ -342,9 +343,9 @@ symGradeTimes (SUnknown t@(SynLeaf (Just u))) (SUnknown t') =
       (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
 
 symGradeTimes (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
-  return $
-    ite (u .== 1) (SUnknown t)
-      (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
+   return $
+     ite (u .== 1) (SUnknown t)
+       (ite (u .== 0) (SUnknown (SynLeaf (Just 0))) (SUnknown (SynTimes t t')))
 
 symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)
