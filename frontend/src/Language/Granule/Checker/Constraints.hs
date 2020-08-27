@@ -342,6 +342,9 @@ compileCoeffect c@(TyInfix TyOpExpon n m) k vars = do
     (SNat n1, SNat n2) -> return (SNat (n1 .^ n2), p1 .&& p2)
     _ -> solverError $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
+compileCoeffect (TyInfix TyOpInterval c@(TyVar v1) (TyVar v2)) (isInterval -> Just t) vars =
+  compileCoeffect c t vars
+
 compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   (lower, p1) <- compileCoeffect lb t vars
   (upper, p2) <- compileCoeffect ub t vars

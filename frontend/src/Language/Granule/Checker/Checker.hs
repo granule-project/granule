@@ -23,6 +23,7 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Effects
+import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.NameClash
 import Language.Granule.Checker.Patterns
@@ -647,7 +648,6 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
 -- All other expressions must be checked using synthesis
 checkExpr defs gam pol topLevel tau e = do
-
   (tau', gam', subst', elaboratedE) <- synthExpr defs gam pol e
 
   -- Now to do a type equality on check type `tau` and synth type `tau'`
@@ -1112,7 +1112,7 @@ solveConstraints predicate s name = do
 
   debugM "tyVarContext" (pretty $ tyVarContext checkerState)
   debugM "context into the solver" (pretty $ coeffectVars)
-  debugM "Solver predicate" $ pretty predicate
+  debugM "Solver predicate" $ pretty predicate <> "\n" <> show predicate
 
   result <- liftIO $ provePredicate predicate coeffectVars
   case result of
@@ -1256,13 +1256,19 @@ joinCtxts s ctxt1 ctxt2 = do
     -- Make an context with fresh coeffect variables for all
     -- the variables which are in both ctxt1 and ctxt2...
     (varCtxt, tyVars) <- freshVarsIn s (map fst ctxt) ctxt
+    (_, tyVars') <- freshVarsIn s (map fst ctxt') ctxt'
+    tyVars'' <- zip (map fst tyVars) <$> zipWithM generalise (map snd tyVars) (map snd tyVars')
 
     -- ... and make these fresh coeffects the upper-bound of the coeffects
     -- in ctxt and ctxt'
     _ <- zipWith3M_ (relateByLUB s) ctxt ctxt' varCtxt
     -- Return the common upper-bound context of ctxt1 and ctxt2
-    return (varCtxt, tyVars)
+    return (varCtxt, tyVars'')
   where
+    generalise k1 k2 =
+      case (k1, k2) of
+        (KPromote t1, KPromote t2) -> (KPromote . (\(a, _, _) -> a)) <$> mguCoeffectTypes s t1 t2
+        _ -> return k1
     zipWith3M_ :: Monad m => (a -> b -> c -> m d) -> [a] -> [b] -> [c] -> m [d]
     zipWith3M_ f _ _ [] = return []
     zipWith3M_ f _ [] _ = return []

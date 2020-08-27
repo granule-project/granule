@@ -749,7 +749,7 @@ synthKind s ctxt (Diamond e t) = do
   (innerK, subst2) <- synthKind s ctxt e >>= (\case
      (KPromote b, s) -> return (b, s)
      (KVar v, s) -> return (TyVar v, s)
-     (k, _) -> throw KindError { errLoc = s, errTy = c, errK = k })
+     (k, _) -> throw KindError { errLoc = s, errTy = t, errK = k })
   st <- get
   subst1 <- checkKind s (tyVarContext st) innerK KEffect
   subst3 <- checkKind s (tyVarContext st) t KType
