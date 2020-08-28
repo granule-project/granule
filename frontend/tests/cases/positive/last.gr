@@ -1,0 +1,7 @@
+data Vec (m : Nat) a where
+    Nil : Vec 0 a;
+    Cons : a -> Vec m a -> Vec (m + 1) a
+
+last : forall { a : Type, k : Nat } . Vec (k + 1) (a [0..1]) -> a
+last (Cons [x] Nil) = x;
+last (Cons [_] xs) = last xs

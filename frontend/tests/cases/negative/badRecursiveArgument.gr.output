@@ -1,4 +1,4 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/badRecursiveArgument.gr:7:1:
 The following theorem associated with `fibble` is falsifiable:
-	((n0 + 1) + 1 = ((n0 + 1) + 1) + 1) ∧ (n0 + 1 = (n0 + 1) + 1)
+	∀ n0.0 : ↑Nat,t7.0 : ↑Nat,t6.0 : ↑Nat . (¬((t6.0 = 0) ∧ (t6.0 = n0.0 + 1)) -> ((n0 + 1) + 1 = ((n0 + 1) + 1) + 1) ∧ (n0 + 1 = (n0 + 1) + 1))

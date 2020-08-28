@@ -274,7 +274,7 @@ popCaseFrame =
 -- implication
 -- The first parameter is a list of any
 -- existential variables being introduced in this implication
-concludeImplication :: (?globals :: Globals) => Span -> Ctxt Kind -> Checker ()
+concludeImplication :: Span -> Ctxt Kind -> Checker ()
 concludeImplication s localCtxt = do
   checkerState <- get
   case predicateStack checkerState of
@@ -304,12 +304,11 @@ concludeImplication s localCtxt = do
            let (Impl freshPrevGuardCtxt _ freshPrevGuardPred) = freshenedPrevGuardPred
            -- let existentialPred = NegPred $ foldr (uncurry Exists) freshPrevGuardPred freshPrevGuardCtxt
            -- Implication of p .&& negated previous guards => p'
-           let impl@(Impl _ antecedent _) =
+           let impl@(Impl implCtxt antecedent _) =
                 if isTrivial freshPrevGuardPred
                   then Impl localCtxt p p'
                   else Impl (localCtxt <> freshPrevGuardCtxt) (Conj [p, freshPrevGuardPred]) p'
-           let knowledge = ((localCtxt, antecedent), s) : previousGuards
-           debugM "theorem" (pretty impl)
+           let knowledge = ((implCtxt, antecedent), s) : previousGuards
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
            modify (\st -> st { predicateStack = pushPred impl stack
