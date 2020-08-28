@@ -21,6 +21,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
 setElements :: [(Kind, Type)]
 setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO"),
+               (KPromote $ TyCon $ mkId "EffectOp", TyCon $ mkId "EffectOps")
                (KPromote $ TyCon $ mkId "EffectOps", TyCon $ mkId "Effect")
               ]
 
@@ -55,9 +56,10 @@ typeConstructors =
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
     , (mkId "Ext", (KFun KCoeffect KCoeffect, [], True))
     -- Effect operations
-    , (mkId "EffectOps", (KPromote (TySet --KSet??
-            (FunTy Type (TyCon $ mkId "EffectOp"))), [], False))
-    , (mkId "EffectOp", (KEffect, [], False))
+    , (mkId "EffectOps", (KEffect, [], False))
+    -- Effect operations - State
+    , (mkId "GetOp", (KPromote (TyCon $ mkId "EffectOp"), [], False))
+    , (mkId "PutOp", (KPromote (TyCon $ mkId "EffectOp"), [], False))
     -- Effect grade types - Sessions
     , (mkId "Session", (KPromote (TyCon $ mkId "Com"), [], True))
     , (mkId "Com", (KEffect, [], False))
@@ -224,6 +226,16 @@ readInt = BUILTIN
 
 throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
 throw = BUILTIN
+
+--------------------------------------------------------------------------------
+--State
+--------------------------------------------------------------------------------
+
+data Get : Type -> Type -> EffectOp where
+      GetOp :  Get s s
+
+data Put : Type -> Type -> EffectOp where
+      PutOp :  s -> Put s ()
 
 --------------------------------------------------------------------------------
 -- Conversions
