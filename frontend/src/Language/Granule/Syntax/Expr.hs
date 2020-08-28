@@ -156,6 +156,7 @@ instance Functor (Expr ev) where
   fmap f (Binop s a b op t1 t2) = Binop s (f a) b op (fmap f t1) (fmap f t2)
   fmap f (LetDiamond s a b ps mt e1 e2) = LetDiamond s (f a) b (fmap f ps) mt (fmap f e1) (fmap f e2)
   fmap f (TryCatch s a b e p mt e1 e2) = TryCatch s (f a) b (fmap f e) (fmap f p) mt (fmap f e1) (fmap f e2)
+  fmap f (Handled s a b expr ht os) = Handled s (f a) b (fmap f expr) ht (map (\(o, e) -> (fmap f o, fmap f e)) os)
   fmap f (Val s a b val) = Val s (f a) b (fmap f val)
   fmap f (Case s a b expr pats) = Case s (f a) b (fmap f expr) (map (\(p, e) -> (fmap f p, fmap f e)) pats)
   fmap f (Hole s a b ids)  = Hole s (f a) b ids

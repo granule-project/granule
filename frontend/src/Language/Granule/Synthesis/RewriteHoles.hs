@@ -109,6 +109,8 @@ holeRefactorExpr goal (Binop sp a rf op e1 e2) =
   Binop sp a rf op (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (LetDiamond sp a rf pat ty e1 e2) =
   LetDiamond sp a rf pat ty (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
+holeRefactorExpr goal (Handled sp a rf e t oprs) =
+  Handled sp a rf (holeRefactorExpr goal e) t (map (second (holeRefactorExpr goal)) oprs)
 holeRefactorExpr goal (Case sp a rf e cases) =
   Case sp a rf (holeRefactorExpr goal e) (map (second (holeRefactorExpr goal)) cases)
 holeRefactorExpr goal (TryCatch sp a rf e1 pat ty e2 e3) =
@@ -138,31 +140,6 @@ refactorPattern p@PFloat {} _ _ = p
 refactorPattern (PConstr sp () _ id ps) id' subpat =
   let ps' = map (\p -> refactorPattern p id' subpat) ps
   in PConstr sp () (any patRefactored ps') id ps'
-
-
--- Refactors an equation by refactoring the expression in its body.
-holeRefactorEqn :: Equation () () -> Equation () ()
-holeRefactorEqn eqn = eqn {equationBody = holeRefactorExpr (equationBody eqn)}
-
--- Refactors an expression by 'emptying' all holes, i.e. removing the variables
--- contained in it. This is done recursively.
-holeRefactorExpr :: Expr () () -> Expr () ()
-holeRefactorExpr (Hole sp a _ []) = Hole sp a False []
-holeRefactorExpr (Hole sp a _ _) = Hole sp a True []
-holeRefactorExpr (App sp a rf e1 e2) =
-  App sp a rf (holeRefactorExpr e1) (holeRefactorExpr e2)
-holeRefactorExpr (Binop sp a rf op e1 e2) =
-  Binop sp a rf op (holeRefactorExpr e1) (holeRefactorExpr e2)
-holeRefactorExpr (LetDiamond sp a rf pat ty e1 e2) =
-  LetDiamond sp a rf pat ty (holeRefactorExpr e1) (holeRefactorExpr e2)
-holeRefactorExpr (TryCatch sp a rf e1 pat ty e2 e3) =
-  TryCatch sp a rf (holeRefactorExpr e1) pat ty (holeRefactorExpr e2) (holeRefactorExpr e3)
-holeRefactorExpr (Handled sp a rf e t oprs) =
-  Handled sp a rf (holeRefactorExpr e) t (map (second holeRefactorExpr) oprs)
-holeRefactorExpr (Case sp a rf e cases) =
-  Case sp a rf (holeRefactorExpr e) (map (second holeRefactorExpr) cases)
--- TODO: for maximum expressivity with holes we should recursively refactor inside values as well (as they contain exprs)
-holeRefactorExpr v@Val {} = v
 
 -- Finds associated cases for a given equation, based on spans.
 findRelevantCase :: Equation () () -> [(Span, Ctxt (Pattern ()), Expr () Type)] -> [(Span, Ctxt (Pattern ()), Expr () Type)]
