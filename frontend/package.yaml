@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.7.8.0'
+version: '0.8.0.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
 copyright: 2018-19 authors
@@ -92,6 +92,8 @@ library:
   - syz >=0.2.0.0
   - text >=1.1.2
   - split
+  - logict == 0.7.0.2
+  - clock
 
 tests:
   frontend-spec:
@@ -108,6 +110,7 @@ tests:
     - containers
     - transformers >=0.5
     - bifunctors
+
 #  zfrontend-doctest: # the "z" is to make them run after hspec
 #    main: doctest.hs
 #    source-dirs: tests

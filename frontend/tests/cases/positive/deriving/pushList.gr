@@ -1,0 +1,6 @@
+data List a where
+  Nil : List a;
+  Cons : a -> List a -> List a
+
+pushL : forall {a : Type, r : Nat} . {1 <= r} => (List a) [r] -> List (a [r])
+pushL = push @List

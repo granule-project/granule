@@ -27,7 +27,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
--- import Debug.Trace
+import qualified System.Clock as Clock
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
@@ -558,20 +558,30 @@ provePredicate
   :: (?globals :: Globals)
   => Pred                    -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
-  -> IO SolverResult
+  -> IO (Double, SolverResult)
 provePredicate predicate vars
   | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
-      return QED
+      return (0.0, QED)
   | otherwise = do
       let (sbvTheorem, _, unsats) = compileToSBV predicate vars
+
+      -- Benchmarking start
+      start  <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
+      -- Prove -----------
       ThmResult thmRes <- proveWith defaultSMTCfg $ do --  -- proveWith cvc4 {verbose=True}
         case solverTimeoutMillis of
           n | n <= 0 -> return ()
           n -> setTimeOut n
         sbvTheorem
+      ------------------
+      -- Benchmarking end
+      -- Force the result
+      _ <- return $ thmRes `seq` thmRes
+      end    <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
+      let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
 
-      return $ case thmRes of
+      return $ (duration, case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
         Unsatisfiable {} -> QED
         ProofError _ msgs _ -> SolverProofError $ unlines msgs
@@ -596,7 +606,7 @@ provePredicate predicate vars
                   -}
                    NotValid $ "is " <> show (ThmResult thmRes)
             Right (True, _) -> NotValid "returned probable model."
-            Left str -> OtherSolverError str
+            Left str -> OtherSolverError str)
 
 -- Useful combinators here
 -- Generalises `bindM2` to functions which return also a symbolic grades

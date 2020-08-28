@@ -27,6 +27,12 @@ data TypeScheme =
     Type          -- type
   deriving (Eq, Show, Generic, Rp.Data)
 
+trivialScheme :: Type -> TypeScheme
+trivialScheme = Forall nullSpanNoFile [] []
+
+unforall :: TypeScheme -> Type
+unforall (Forall _ _ _ t) = t
+
 -- Constructors and operators are just strings
 data TypeOperator
   = TyOpLesser
@@ -148,7 +154,7 @@ isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
 isProduct :: Type -> Maybe (Type, Type)
-isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" =
+isProduct (TyApp (TyApp (TyCon c) t) t') | internalName c == "×" || internalName c == "," =
     Just (t, t')
 isProduct _ = Nothing
 
@@ -168,6 +174,18 @@ arity _             = 0
 resultType :: Type -> Type
 resultType (FunTy _ _ t) = resultType t
 resultType t = t
+
+resultKind :: Kind -> Kind
+resultKind (KFun _ k) = resultKind k
+resultKind k = k
+
+parameterTypes :: Type -> [Type]
+parameterTypes (FunTy _ t1 t2) = t1 : parameterTypes t2
+parameterTypes t               = []
+
+parameterKinds :: Kind -> [Kind]
+parameterKinds (KFun k1 k2) = k1 : parameterKinds k2
+parameterKinds t            = []
 
 -- | Get the leftmost type of an application
 -- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")

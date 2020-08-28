@@ -3,25 +3,25 @@ import Maybe
 readMany : Int → Handle R → (Handle R, String) <IO> 
 readMany 0 h = pure (h, "");
 readMany n h =
-  let [(h, c)]  ← readChar h;
+  let (h, c)  ← readChar h;
       (h, cs) ← readMany (n - 1) h
   in pure (h, stringCons c cs)
 
 readFile : String -> String <{Open,Read,Close,IOExcept}>
 readFile filename =
-  let [h]       <- openHandle ReadMode filename;
-      [(h, cs)] <- readUntilEnd h;
-      [()]       <- closeHandle [h]
+  let h      <- openHandle ReadMode filename;
+      (h, cs) <- readUntilEnd h;
+      ()       <- closeHandle h
   in pure cs
 
-readUntilEnd : Handle R -> ((Handle R, String) [0..1]) <{Read,IOExcept}> 
+readUntilEnd : Handle R -> (Handle R, String) <{Read,IOExcept}> 
 readUntilEnd h =
-  let [(h, eof)] <- isEOF h in
+  let (h, eof) <- isEOF h in
     case eof of
-      True -> pure [(h, "")];
+      True -> pure (h, "");
       False ->
-        let [(h, c)] <- readChar h;
-            [(h, str)] <- readUntilEnd h
-        in pure [(h, stringCons c str)]
+        let (h, c) <- readChar h;
+            (h, str) <- readUntilEnd h
+        in pure (h, stringCons c str)
 
 

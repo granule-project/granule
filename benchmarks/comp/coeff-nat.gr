@@ -1,0 +1,3 @@
+comp : forall {n m : Nat, a : Type, b : Type, c : Type} .
+       (a [m] -> b) [n] -> (b [n] -> c) -> a [n * m] -> c
+comp = ?
