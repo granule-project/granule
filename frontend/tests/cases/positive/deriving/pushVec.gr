@@ -1,0 +1,10 @@
+data Vec (n : Nat) (a : Type) where
+    Nil : Vec 0 a;
+    Cons : forall {n : Nat} . a -> Vec n a -> Vec (n+1) a
+
+pushVec : ∀ {k : Nat, n : Nat, a : Type} . {1 <= k}
+      => (Vec n a) [k] → Vec n (a [k])
+pushVec = push @Vec
+
+main : Vec 3 (Int [1])
+main = pushVec [Cons 1 (Cons 2 (Cons 3 Nil))]

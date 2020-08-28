@@ -28,32 +28,32 @@ import Control.Monad.State.Strict
 desugar :: Def v () -> Def v ()
 -- desugar adt@ADT{} = adt
 desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
-  Def s var rf (EquationList s var rf [typeDirectedDesugarEquation (mkSingleEquation (equations eqs))]) tys
+  Def s var rf (EquationList s var rf [typeDirectedDesugarEquation (mkSingleEquation var (equations eqs))]) tys
   where
-    typeDirectedDesugarEquation (Equation s a rf ps body) =
-      Equation s a rf []
+    typeDirectedDesugarEquation (Equation s name a rf ps body) =
+      Equation s name a rf []
         -- Desugar the body
-        (evalState (typeDirectedDesugar (Equation s a rf ps body) ty) (0 :: Int))
+        (evalState (typeDirectedDesugar (Equation s name a rf ps body) ty) (0 :: Int))
 
-    typeDirectedDesugar (Equation _ _ _ [] e) _ = return e
-    typeDirectedDesugar (Equation s a rf (p : ps) e) (FunTy _ t1 t2) = do
-      e' <- typeDirectedDesugar (Equation s a rf ps e) t2
+    typeDirectedDesugar (Equation _ _ _ _ [] e) _ = return e
+    typeDirectedDesugar (Equation s name a rf (p : ps) e) (FunTy _ t1 t2) = do
+      e' <- typeDirectedDesugar (Equation s name a rf ps e) t2
       return $ Val nullSpanNoFile () False $ Abs () p (Just t1) e'
     -- Error cases
-    typeDirectedDesugar (Equation s _ _ pats@(_ : _) e) t =
+    typeDirectedDesugar (Equation s _ _ _ pats@(_ : _) e) t =
       error $ "(" <> show s
            <> "): Equation of " <> sourceName var <> " expects at least " <> show (length pats)
            <> " arguments, but signature specifies: " <> show (arity t)
 
     -- Fold function equations into a single case expression
-    mkSingleEquation eqs =
-      Equation nullSpanNoFile () False (map (PVar nullSpanNoFile () False) vars)
+    mkSingleEquation name eqs =
+      Equation nullSpanNoFile name () False (map (PVar nullSpanNoFile () False) vars)
         (Case nullSpanNoFile () False guard cases)
 
       where
         numArgs =
           case eqs of
-            ((Equation _ _ _ ps _):_) -> length ps
+            ((Equation _ _ _ _ ps _):_) -> length ps
             _                         -> 0
 
         -- List of variables to represent each argument
@@ -65,5 +65,5 @@ desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
         guardVars = map (\i -> Val nullSpanNoFile () False (Var () i)) vars
 
         -- case for each equation
-        cases = map (\(Equation _ _ _ pats expr) ->
+        cases = map (\(Equation _ _ _ _ pats expr) ->
            (foldl (ppair nullSpanNoFile ()) (PWild nullSpanNoFile () False) pats, expr)) eqs

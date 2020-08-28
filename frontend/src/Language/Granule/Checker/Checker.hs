@@ -6,9 +6,10 @@
 {-# LANGUAGE ScopedTypeVariables #-}
 {-# LANGUAGE ViewPatterns #-}
 
+{-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
 module Language.Granule.Checker.Checker where
 
-import Control.Arrow (first, second)
+import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -44,7 +45,9 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
+import Language.Granule.Synthesis.Deriving
 import Language.Granule.Synthesis.Splitting
+import qualified Language.Granule.Synthesis.Synth as Syn
 
 import Language.Granule.Utils
 
@@ -53,8 +56,8 @@ import Language.Granule.Utils
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
-  -> IO (Either (NonEmpty CheckerError) (AST () Type))
-check ast@(AST dataDecls defs imports hidden name) =
+  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
+check ast@(AST dataDecls defs imports hidden name) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
@@ -62,7 +65,10 @@ check ast@(AST dataDecls defs imports hidden name) =
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
-      pure $ AST dataDecls defs imports hidden name)
+      -- Add on any definitions computed by the type checker (derived)
+      st <- get
+      let derivedDefs = map (snd . snd) (derivedDefinitions st)
+      pure $ (AST dataDecls defs imports hidden name, derivedDefs))
 
 -- Synthing the type of a single expression in the context of an asy
 synthExprInIsolation :: (?globals :: Globals)
@@ -294,7 +300,7 @@ checkEquation :: (?globals :: Globals) =>
   -> TypeScheme      -- Type scheme
   -> Checker (Equation () Type)
 
-checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls constraints ty) = do
+checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
@@ -353,7 +359,7 @@ checkEquation defCtxt id (Equation s () rf pats expr) tys@(Forall _ foralls cons
 
       -- Create elaborated equation
       subst'' <- combineSubstitutions s subst subst'
-      let elab = Equation s ty rf elaborated_pats elaboratedExpr
+      let elab = Equation s name ty rf elaborated_pats elaboratedExpr
 
       elab' <- substitute subst'' elab
       return elab'
@@ -427,22 +433,41 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
 
   let getIdName (Id n _) = n
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
-  let unboundVariables = filter (\ x -> isNothing (lookup (getIdName x) (map (first getIdName) ctxt))) vars
+  let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
-    [] ->
-      case vars of
-        (_:_) -> do
-          let snd3 (a, b, c) = b
-          let pats = map (second snd3) (typeConstructors st)
-          constructors <- mapM (\ (a, b) -> do
-            dc <- mapM (lookupDataConstructor s) b
-            let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-            return (a, sd)) pats
-          cases <- generateCases s constructors ctxt boundVariables
-          throw $ HoleMessage s t ctxt (tyVarContext st) cases boundVariables
-        [] -> throw $ HoleMessage s t ctxt (tyVarContext st) ([], []) []
+    [] -> do
+      let snd3 (a, b, c) = b
+      let pats = map (second snd3) (typeConstructors st)
+      constructors <- mapM (\ (a, b) -> do
+        dc <- mapM (lookupDataConstructor s) b
+        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+        return (a, sd)) pats
+      (_, cases) <- generateCases s constructors ctxt boundVariables
+
+      -- If we are in synthesise mode, also try to synthesise a
+      -- term for each case split goal *if* this is also a hole
+      -- of interest
+      let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+      cases' <-
+        case globalsSynthesise ?globals of
+           Just True ->
+              -- Check to see if this hole is something we are interested in
+              case globalsHolePosition ?globals of
+                -- Synth everything mode
+                Nothing -> programSynthesise ctxt vars t cases
+                Just pos ->
+                  if spanContains pos s
+                    -- This is a hole we want to synth on
+                    then  programSynthesise ctxt vars t cases
+                    -- This is not a hole we want to synth on
+                    else  return casesWithHoles
+           -- Otherwise synthesise empty holes for each case
+           -- (and throw away the binding information)
+           _ -> return casesWithHoles
+      let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+      throw $ HoleMessage s t ctxt (tyVarContext st) holeVars cases'
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
@@ -920,15 +945,8 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) =
      Nothing ->
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
-         Just tyScheme  -> do
-           (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
-
-           mapM_ (\ty -> do
-             pred <- compileTypeConstraintToConstraint s ty
-             addPredicate pred) constraints
-
-           let elaborated = Val s ty' rf (Var ty' x)
-           return (ty', [], [], elaborated)
+         Just tyScheme  ->
+           freshenTySchemeForVar s rf x tyScheme
 
          -- Couldn't find it
          Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
@@ -1101,6 +1119,43 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
      return (finalTy', gam'' `subtractCtxt` bindings, subst, elaborated)
   else throw RefutablePatternError{ errLoc = s, errPat = p }
 
+synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
+
+  -- Check to see if this type application is an instance of a deriving construct
+  case e1 of
+    (Val _ _ _ (Var _ (internalName -> "push"))) -> do
+      st <- get
+      let name = mkId $ "push@" ++ pretty ty
+      case lookup (mkId "push", ty) (derivedDefinitions st) of
+        Just (tyScheme, _) ->
+          freshenTySchemeForVar s rf name tyScheme
+
+        Nothing -> do
+          -- Get this derived
+          (typScheme, def) <- derivePush s ty
+          debugM "derived push:" (pretty def)
+
+          -- Register the definition that has been derived
+          modify (\st -> st { derivedDefinitions = ((mkId "push", ty), (typScheme, def)) : derivedDefinitions st })
+
+          -- return this variable expression in place here
+          freshenTySchemeForVar s rf name typScheme
+    (Val _ _ _ (Var _ (internalName -> "pull"))) -> do
+      st <- get
+      let name = mkId $ "pull" ++ pretty ty
+      case lookup (mkId "pull", ty) (derivedDefinitions st) of
+        Just (tyScheme, _) ->
+          freshenTySchemeForVar s rf name tyScheme
+
+        Nothing -> do
+          -- Get this derived
+          (typScheme, def) <- derivePull s ty
+          -- Register the definition that has been derived
+          modify (\st -> st { derivedDefinitions = ((mkId "pull", ty), (typScheme, def)) : derivedDefinitions st })
+          -- return this variable expression in place here
+          freshenTySchemeForVar s rf name typScheme
+    _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
+
 synthExpr _ _ _ e =
   throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
@@ -1125,7 +1180,7 @@ solveConstraints predicate s name = do
   debugM "context into the solver" (pretty $ coeffectVars)
   debugM "Solver predicate" $ pretty predicate
 
-  result <- liftIO $ provePredicate predicate coeffectVars
+  (_, result) <- liftIO $ provePredicate predicate coeffectVars
   case result of
     QED -> return ()
     NotValid msg -> do
@@ -1493,7 +1548,7 @@ checkGuardsForImpossibility s name = do
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
-    result <- liftIO $ provePredicate thm tyVars
+    (_, result) <- liftIO $ provePredicate thm tyVars
 
     p <- simplifyPred thm
 
@@ -1527,3 +1582,43 @@ checkGuardsForImpossibility s name = do
         }
 
       SolverProofError msg -> error msg
+
+--
+freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
+freshenTySchemeForVar s rf id tyScheme = do
+  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
+
+  mapM_ (\ty -> do
+    pred <- compileTypeConstraintToConstraint s ty
+    addPredicate pred) constraints
+
+  let elaborated = Val s ty' rf (Var ty' id)
+  return (ty', [], [], elaborated)
+
+
+-- Hook into the synthesis engine.
+programSynthesise :: (?globals :: Globals) =>
+  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
+programSynthesise ctxt vars ty patternss = do
+  currentState <- get
+  forM patternss $ \(pattern, patternCtxt) -> do
+    -- Build a context which has the pattern context
+    let ctxt' = patternCtxt
+          -- ... plus anything from the original context not being cased upon
+            ++ filter (\(id, a) -> not (id `elem` vars)) ctxt
+
+    -- Run the synthesiser in this context
+    let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
+    synRes <-
+       liftIO $ Syn.synthesiseProgram
+                    [] (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
+                    ctxt' [] (Forall nullSpan [] [] ty) currentState
+
+    case synRes of
+      -- Nothing synthed, so create a blank hole instead
+      []    -> do
+        debugM "Synthesiser" $ "No programs synthesised for " <> pretty ty
+        return (pattern, Hole nullSpan ty True [])
+      ((t, _, _):_) -> do
+        debugM "Synthesiser" $ "Synthesised: " <> pretty t
+        return (pattern, t)

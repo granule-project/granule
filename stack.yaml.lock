@@ -32,6 +32,13 @@ packages:
       sha256: a5438cf5c8f701d8e2aa6543ca3d591224b83dcc379063da5ed68727da0bb1ad
   original:
     hackage: syz-0.2.0.0@sha256:7307acb8f6ae7720e7e235c974281ecee912703c1394ebcac19caf83d70bb492,2345
+- completed:
+    hackage: clock-0.8@sha256:b4ae207e2d3761450060a0d0feb873269233898039c76fceef9cc1a544067767,4113
+    pantry-tree:
+      size: 446
+      sha256: d9ac8ce6a19812fe74cb1e74228e6e624eda19021ff4d12e24611f88abacd38a
+  original:
+    hackage: clock-0.8
 snapshots:
 - completed:
     size: 496112
