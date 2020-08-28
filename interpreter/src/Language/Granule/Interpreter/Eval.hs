@@ -207,8 +207,8 @@ evalIn ctxt (Handled s a r expr ht oprs) =
   case k of
     Just k' -> 
       case e of
-        (Pure _ e') -> evalIn ctxt (k' e') -- (handled pure rule)
-        e' -> evalIn ctxt (Handled s a r (k' e') ht oprs) -- (handled op rule)
+        (Pure _ e') -> evalIn ctxt (App s a r k' expr) -- (handled pure rule)
+        _ -> evalIn ctxt (Handled s a r (App s a r k' expr) ht oprs) -- (handled op rule)
     Nothing -> error $ "Incomplete pattern match:\n handled operations: "
              <> pretty oprs <> "\n  expr: " <> pretty expr
 

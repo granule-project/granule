@@ -126,10 +126,11 @@ checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (kp@($ KPromote ($ TyCon ($ mkId "EffectOp"))),_,_) -> do
+                Just (kind,_,_) -> 
+                  case kind of
+                    KPromote (TyCon (internalName -> "EffectOp")) -> kind
                   -- generate a context of type schemes for the effect operations being generated here
-                  return kp
-                Just (kind,_,_) -> kind
+                    kind -> kind
                 Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs

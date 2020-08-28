@@ -110,7 +110,7 @@ holeRefactorExpr goal (Binop sp a rf op e1 e2) =
 holeRefactorExpr goal (LetDiamond sp a rf pat ty e1 e2) =
   LetDiamond sp a rf pat ty (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (Handled sp a rf e t oprs) =
-  Handled sp a rf (holeRefactorExpr goal e) t (map (second (holeRefactorExpr goal)) oprs)
+  Handled sp a rf (holeRefactorExpr goal e) t (map (\(p,tv,e') -> (p,tv, holeRefactorExpr goal e)) oprs)
 holeRefactorExpr goal (Case sp a rf e cases) =
   Case sp a rf (holeRefactorExpr goal e) (map (second (holeRefactorExpr goal)) cases)
 holeRefactorExpr goal (TryCatch sp a rf e1 pat ty e2 e3) =

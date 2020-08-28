@@ -429,9 +429,9 @@ Expr :: { Expr () () }
         in (mkSpan (getPos $1, getEnd $12)) >>=
               \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
   
-  | '(' Expr ')' handle ':' Type Oprs
-    {% (mkSpan (getPos $1, lastSpan $7)) >>=
-             \sp -> return $ Handled sp () False $2 $6 $7 }
+  | '(' Expr ')' handle ':' TypeScheme '{' Oprs '}'
+    {% (mkSpan (getPos $1, lastSpan $8)) >>=
+             \sp -> return $ Handled sp () False $2 $6 $8 }
 
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
@@ -483,16 +483,15 @@ MultiLetEff
       }
   | in Expr                   { $2 }
 
-Oprs :: { [(Pattern (), Expr () () )] }
+Oprs :: { [(Pattern (), [Type], Expr () ())] }
  : Opr OprsNext             { $1 : $2 }
 
-OprsNext :: { [(Pattern (), Expr () ())] }
+OprsNext :: { [(Pattern (), [Type], Expr () ())] }
   : ';' Oprs                 { $2 }
   | {- empty -}               { [] }
 
-Opr :: { (Pattern (), Expr () ()) }
-  : PAtom '->' Expr           { ($1, $3) }
-  | NAryConstr '->' Expr      { ($1, $3) }
+Opr :: { (Pattern (), [Type], Expr () ()) }
+  : PAtom TyParams '->' Expr           { ($1, $2, $4) }
 
 Cases :: { [(Pattern (), Expr () () )] }
  : Case CasesNext             { $1 : $2 }

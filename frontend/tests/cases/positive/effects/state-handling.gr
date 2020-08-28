@@ -1,8 +1,8 @@
-y : forall {s : Type, eff : EffectOps} . b <eff> -> s -> (b, s) <eff \ {Get s, Put s}>
+y : forall {s : Type, eff : EffectOps} . b <eff> -> s -> (b, s) <eff> -- \ {Get s, Put s}
 y = \e ->  
  (e)
-  handle : forall {a : Type} . s -> (a, s) -- this is handleType {
-     pure   x -> \s -> (x, s);
-     put s1 k -> \s0 -> k () s1;  -- k : returnType -> handleType
-     get    k -> \s0 -> k s0 s0 
+  handle : forall {a : Type} . s -> (a, s) {
+     pure x -> \s -> (x, s);
+     put s1 k -> \s0 -> k () s1;
+     get k -> \s0 -> k s0 s0 
   }   
