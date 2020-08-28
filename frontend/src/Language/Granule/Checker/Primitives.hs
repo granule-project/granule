@@ -21,7 +21,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
 setElements :: [(Kind, Type)]
 setElements = [(KPromote $ TyCon $ mkId "IOElem", TyCon $ mkId "IO"),
-               (KPromote $ TyCon $ mkId "EffectOp", TyCon $ mkId "EffectOps")
+               (KPromote $ TyCon $ mkId "EffectOp", TyCon $ mkId "EffectOps"),
                (KPromote $ TyCon $ mkId "EffectOps", TyCon $ mkId "Effect")
               ]
 
