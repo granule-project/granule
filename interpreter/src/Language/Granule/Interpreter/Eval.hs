@@ -193,13 +193,13 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
 
 evalIn ctxt (Handled s a r expr ht oprs) =
   do 
-  k <- pmatch ctxt oprs expr
+  e <- evalIn ctxt expr
+  k <- pmatch ctxt oprs e
   case k of
     Just k' -> 
-      --check k' : returntype -> ht
-      case expr of
-        (Pure _ expr') -> evalIn ctxt (FunTy k' expr') -- (handled pure rule)
-        expr' ->  evalIn ctxt (Handled s a r (FunTy k' expr') oprs) -- (handled op rule)
+      case e of
+        (Pure _ e') -> evalIn ctxt (k' e') -- (handled pure rule)
+        e' -> evalIn ctxt (Handled s a r (k' e') ht oprs) -- (handled op rule)
     Nothing -> error $ "Incomplete pattern match:\n handled operations: "
              <> pretty oprs <> "\n  expr: " <> pretty expr
 
@@ -487,6 +487,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
+  toRuntimeRep (Handled s a rf e t os) = Handled s a rf (toRuntimeRep e) t (map (\(o, e) -> (o, toRuntimeRep e)) os)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
   toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
 

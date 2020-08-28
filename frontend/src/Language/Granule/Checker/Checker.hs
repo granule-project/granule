@@ -120,6 +120,9 @@ checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
+                Just (kp@($ KPromote ($ TyCon ($ mkId "EffectOp"))),_,_) -> do
+                  -- generate a context of type schemes for the effect operations being generated here
+                  return kp
                 Just (kind,_,_) -> kind
                 Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
@@ -644,6 +647,14 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
   let elaborated = Case s tau rf elaboratedGuard elaboratedCases
   return (g, subst, elaborated)
+
+{-checkExpr defs gam pol True tau (Handled s _ rf expr ht oprs) = do
+-- check oprs includes pure
+-- check pattern arity matches usage
+-- check that all k are of type returnType -> handleType
+-- check handletype matches pure return type
+-- check expected type matches handletype
+-}
 
 -- All other expressions must be checked using synthesis
 checkExpr defs gam pol topLevel tau e = do
