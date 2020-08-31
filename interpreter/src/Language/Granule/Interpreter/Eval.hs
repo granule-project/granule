@@ -497,7 +497,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
-  toRuntimeRep (Handled s a rf e t os) = Handled s a rf (toRuntimeRep e) t (map (\(o, e) -> (o, toRuntimeRep e)) os)
+  toRuntimeRep (Handled s a rf e t os) = Handled s a rf (toRuntimeRep e) t (map (\(o, (ps,_)) -> (o, (map (\(p, e) -> (p, toRuntimeRep e)) ps) )) os)
   toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
   toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
 

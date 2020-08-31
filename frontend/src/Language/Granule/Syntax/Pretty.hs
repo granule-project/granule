@@ -284,7 +284,7 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
 
   pretty (Handled _ _ _ e t os) = "(" <> pretty e <> ")" <> " handle " 
                       <> ":" <> pretty t <> "{\n      "
-                      <> intercalate ";\n      " (map (\(p, e') -> pretty p <> " -> " <> pretty e') os) <> "}"
+                      <> intercalate ";\n      " (map (\(o,(ps, e')) -> pretty o <> pretty ps <> " -> " <> pretty e') os) <> "}"
 
   pretty (Val _ _ _ v) = pretty v
   pretty (Case _ _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "

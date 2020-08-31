@@ -483,15 +483,15 @@ MultiLetEff
       }
   | in Expr                   { $2 }
 
-Oprs :: { [(Pattern (), Expr () ())] }
+Oprs :: { [(Pattern (), ([Pattern ()], Expr () ()))] }
  : Opr OprsNext             { $1 : $2 }
 
-OprsNext :: { [(Pattern (), Expr () ())] }
+OprsNext :: { [(Pattern (), ([Pattern ()], Expr () ()))] }
   : ';' Oprs                 { $2 }
   | {- empty -}               { [] }
 
-Opr :: { (Pattern (), Expr () ()) }
-  : PAtom TyParams '->' Expr      { ($1, Abs () $2 Nothing $4) }
+Opr :: { (Pattern (), ([Pattern ()], Expr () ())) }
+  : PAtom Pats '->' Expr      { ($1, ($2,$4)) }
 
 Cases :: { [(Pattern (), Expr () () )] }
  : Case CasesNext             { $1 : $2 }
