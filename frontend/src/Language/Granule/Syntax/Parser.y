@@ -364,9 +364,9 @@ Coeffect :: { Type }
   | '∞'                           { infinity }
   | FLOAT                         { let TokenFloat _ x = $1 in TyFloat $ myReadFloat x }
   | CONSTR                        { case (constrString $1) of
-                                      "Public" -> TyInt (fromInteger publicRepresentation)
-                                      "Private" -> TyInt (fromInteger privateRepresentation)
-                                      "Unused" -> TyInt (fromInteger unusedRepresentation)
+                                      "Public" -> TyApp (TyCon (mkId "Level")) (TyInt (fromInteger publicRepresentation))
+                                      "Private" -> TyApp (TyCon (mkId "Level")) (TyInt (fromInteger privateRepresentation))
+                                      "Unused" -> TyApp (TyCon (mkId "Level")) (TyInt (fromInteger unusedRepresentation))
                                       "Inf" -> infinity
                                       x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
   | VAR                           { TyVar (mkId $ symString $1) }

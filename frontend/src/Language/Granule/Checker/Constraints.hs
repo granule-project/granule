@@ -285,15 +285,15 @@ compileCoeffect :: (?globals :: Globals) =>
 
 compileCoeffect (TySig c (KPromote k)) _ ctxt = compileCoeffect c k ctxt
 
-compileCoeffect (TyInt n) (TyCon k) _ | internalName k == "Level" =
+compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (TyCon (internalName -> "Level")) _ =
   return (SLevel . fromInteger . toInteger $ n, sTrue)
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
-compileCoeffect (TyInt n) (isProduct -> Just (TyCon k, t2)) vars | internalName k == "Level" = do
+compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (TyCon (internalName -> "Level"), t2)) vars = do
   (g, p) <- compileCoeffect (TyInt 1) t2 vars
   return (SProduct (SLevel . fromInteger . toInteger $ n) g, p)
 
-compileCoeffect (TyInt n) (isProduct -> Just (t1, TyCon k)) vars | internalName k == "Level" = do
+compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (t1, TyCon (internalName -> "Level"))) vars = do
   (g, p) <- compileCoeffect (TyInt 1) t1 vars
   return (SProduct g (SLevel . fromInteger . toInteger $ n), p)
 
@@ -341,9 +341,6 @@ compileCoeffect c@(TyInfix TyOpExpon n m) k vars = do
   case (g1, g2) of
     (SNat n1, SNat n2) -> return (SNat (n1 .^ n2), p1 .&& p2)
     _ -> solverError $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
-
-compileCoeffect (TyInfix TyOpInterval c@(TyVar v1) (TyVar v2)) (isInterval -> Just t) vars =
-  compileCoeffect c t vars
 
 compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   (lower, p1) <- compileCoeffect lb t vars
@@ -477,6 +474,12 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 (.&&) (approximatedByOrEqualConstraint lb2 lb1)
                 (approximatedByOrEqualConstraint ub1 ub2)
+
+approximatedByOrEqualConstraint s1 s2@(SInterval _ _) =
+  approximatedByOrEqualConstraint (SInterval s1 s1) s2
+
+approximatedByOrEqualConstraint s1@(SInterval _ _) s2 =
+  approximatedByOrEqualConstraint s1 (SInterval s2 s2)
 
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
   lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
