@@ -97,7 +97,7 @@ data ExprF ev a expr value =
      -- let p <- e1 in e2
   | TryCatchF Span a Bool expr (Pattern a) (Maybe Type) expr expr
      -- try e1 as p : t in e2 catch e3
-  | HandledF Span a Bool expr TypeScheme [(Pattern a, [Type], expr)]
+  | HandledF Span a Bool expr TypeScheme [(Pattern a, expr)]
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
   | HoleF Span a Bool [Id]
@@ -156,7 +156,7 @@ instance Functor (Expr ev) where
   fmap f (Binop s a b op t1 t2) = Binop s (f a) b op (fmap f t1) (fmap f t2)
   fmap f (LetDiamond s a b ps mt e1 e2) = LetDiamond s (f a) b (fmap f ps) mt (fmap f e1) (fmap f e2)
   fmap f (TryCatch s a b e p mt e1 e2) = TryCatch s (f a) b (fmap f e) (fmap f p) mt (fmap f e1) (fmap f e2)
-  fmap f (Handled s a b expr ht os) = Handled s (f a) b (fmap f expr) ht (map (\(p, tv, e) -> (fmap f p, tv, fmap f e)) os)
+  fmap f (Handled s a b expr ht os) = Handled s (f a) b (fmap f expr) ht (map (\(p, e) -> (fmap f p, fmap f e)) os)
   fmap f (Val s a b val) = Val s (f a) b (fmap f val)
   fmap f (Case s a b expr pats) = Case s (f a) b (fmap f expr) (map (\(p, e) -> (fmap f p, fmap f e)) pats)
   fmap f (Hole s a b ids)  = Hole s (f a) b ids
@@ -312,8 +312,8 @@ instance Term (Expr v a) where
     freeVars (Binop _ _ _ _ e1 e2)        = freeVars e1 <> freeVars e2
     freeVars (LetDiamond _ _ _ p _ e1 e2) = freeVars e1 <> (freeVars e2 \\ boundVars p)
     freeVars (TryCatch _ _ _ e1 p _ e2 e3) = freeVars e1 <> (freeVars e2 \\ boundVars p) <> freeVars e3
-    freeVars (Handled _ _ _ e _ os) = freeVars e <> (concatMap (freeVars . (\(_,_,ex) -> ex)) os
-                                      \\ concatMap (boundVars . (\(p,_,_) -> p)) os) 
+    freeVars (Handled _ _ _ e _ os) = freeVars e <> (concatMap (freeVars . snd) os
+                                      \\ concatMap (boundVars . fst) os) 
     freeVars (Val _ _ _ e)                = freeVars e
     freeVars (Case _ _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
@@ -323,7 +323,7 @@ instance Term (Expr v a) where
     hasHole (Binop _ _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (LetDiamond _ _ _ p _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (TryCatch _ _ _ e1 p _ e2 e3) = hasHole e1 || hasHole e2 || hasHole e3
-    hasHole (Handled _ _ _ e t os) = hasHole e || (or (map (hasHole . (\(_,_,ex) -> ex)) os))
+    hasHole (Handled _ _ _ e _ os) = hasHole e || (or (map (hasHole . snd) os))
     hasHole (Val _ _ _ e) = hasHole e
     hasHole (Case _ _ _ e cases) = hasHole e || (or (map (hasHole . snd) cases))
     hasHole Hole{} = True
@@ -349,7 +349,7 @@ instance Substitutable Expr where
 
     subst es v (Handled s a rf expr t oprs) = 
       Handled s a rf (subst es v expr) t
-              (map (\(p, tv, e) -> (p, tv, subst es v e)) oprs)
+              (map (second (subst es v)) oprs)
 
     subst es v (Val _ _ _ val) =
       subst es v val
@@ -392,12 +392,11 @@ instance Monad m => Freshenable m (Expr v a) where
 
     freshen (Handled s a rf expr t oprs) = do
       expr    <- freshen expr
-      oprs <- forM oprs $ \(p, tv, e) -> do
+      oprs <- forM oprs $ \(p, e) -> do
                   p <- freshen p
-                  tv <- freshen tv
                   e <- freshen e
                   removeFreshenings (boundVars p)
-                  return (p, tv, e)
+                  return (p, e)
       return (Handled s a rf expr t oprs)
 
     freshen (Binop s a rf op e1 e2) = do

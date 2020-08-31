@@ -129,6 +129,7 @@ checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
                 Just (kind,_,_) -> 
                   case kind of
                     KPromote (TyCon (internalName -> "EffectOp")) -> kind
+                    
                   -- generate a context of type schemes for the effect operations being generated here
                     kind -> kind
                 Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
