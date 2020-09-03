@@ -12,6 +12,7 @@ module Language.Granule.Checker.Checker where
 import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
+import Control.Monad.Extra (mapMaybeM)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
@@ -61,10 +62,11 @@ check ast@(AST dataDecls defs imports hidden name) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      effOpCtxt <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      --list of lists, needs to be list
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
-      defs <- runAll (checkDef defCtxt) defs
+      defs <- runAll (checkDef (defCtxt ++ effOpCtxt)) defs
       -- Add on any definitions computed by the type checker (derived)
       st <- get
       let derivedDefs = map (snd . snd) (derivedDefinitions st)
@@ -79,7 +81,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
-      _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      effOpCtxt  <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       -- Since we need to return a type scheme, have a look first
@@ -122,26 +124,21 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> KType -- default to `Type`
     mkKind (v:vs) = KFun v (mkKind vs)
 
-checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
+checkDataCons :: (?globals :: Globals) => DataDecl -> Checker [(Id, TypeScheme)]
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (kind,_,_) -> 
-                  case kind of
-                    KPromote (TyCon (internalName -> "EffectOp")) -> kind
-                    
-                  -- generate a context of type schemes for the effect operations being generated here
-                    kind -> kind
+                Just (kind,_,_) -> kind
                 Nothing -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    mapM_ (checkDataCon name kind tyVars) dataConstrs
+    mapMaybeM (checkDataCon name kind tyVars) dataConstrs
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
   -> DataConstr -- ^ The data constructor to check
-  -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
+  -> Checker (Maybe (Id, TypeScheme)) -- ^ Return @Just ()@ on success, @Nothing@ on failure
 checkDataCon
   tName
   kind
@@ -179,6 +176,10 @@ checkDataCon
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
         registerDataConstructor tySch coercions
+
+        case kind of 
+          KPromote (TyCon (internalName -> "EffectOp")) -> return (Just (dName, tySch))
+          _ -> return Nothing
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where

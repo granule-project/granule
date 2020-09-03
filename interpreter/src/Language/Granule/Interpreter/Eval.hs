@@ -200,7 +200,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
         (\(e :: IOException) -> evalIn ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
 
---evalIn ctxt (Handled s a r expr ht oprs) =
+evalIn ctxt (Handled s a r expr ht oprs) = fail $ "Fail" --dummy
 
 
 {-
