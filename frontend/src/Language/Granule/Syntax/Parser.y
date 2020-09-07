@@ -101,6 +101,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '?'   { TokenEmptyHole _ }
     '{!'  { TokenHoleStart _ }
     '!}'  { TokenHoleEnd _ }
+    '@'   { TokenAt _ }
 
 %right '∘'
 %right in
@@ -186,12 +187,12 @@ Binding :: { (String, Equation () ()) }
   : VAR '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $3)
-          return (symString $1, Equation span () False [] $3) }
+          return (symString $1, Equation span (mkId $ symString $1) () False [] $3) }
 
   | VAR Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
-          return (symString $1, Equation span () False $2 $4) }
+          return (symString $1, Equation span (mkId $ symString $1) () False $2 $4) }
 
 -- this was probably a silly idea @buggymcbugfix
   -- | '|' Pats '=' Expr
@@ -306,6 +307,7 @@ Kind :: { Kind }
   | CONSTR                    { case constrString $1 of
                                   "Type"      -> KType
                                   "Coeffect"  -> KCoeffect
+                                  "Semiring"  -> KCoeffect
                                   "Predicate" -> KPredicate
                                   s          -> kConstr $ mkId s }
   | '(' TyJuxt TyAtom ')'     { KPromote (TyApp $2 $3) }
@@ -346,6 +348,7 @@ Constraint :: { Type }
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
+  | '(' ',' ')'               { TyCon $ mkId "," }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
@@ -376,7 +379,7 @@ Coeffect :: { Coeffect }
   | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
   | '(' Coeffect ')'            { $2 }
   | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { normalise (CSig $1 $3) }
+  | Coeffect ':' Type           { CSig $1 $3 }
   | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
 
 Set :: { [(String, Type)] }
@@ -503,6 +506,7 @@ Juxt :: { Expr () () }
   : Juxt '`' Atom '`'         {% (mkSpan (getStart $1, getEnd $3)) >>= \sp -> return $ App sp () False $3 $1 }
   | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () False $1 $2 }
   | Atom                      { $1 }
+  | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
 
 Hole :: { Expr () () }
   : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }

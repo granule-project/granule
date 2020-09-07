@@ -60,6 +60,7 @@ tokens :-
   @int                          { \p s -> TokenInt p $ read s }
   @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
   @stringLiteral                { \p s -> TokenStringLiteral p $ read s }
+  "@"                           { \p s -> TokenAt p }
   "->"                          { \p s -> TokenArrow p }
   "→"                           { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
@@ -176,6 +177,7 @@ data Token
   | TokenEmptyHole AlexPosn
   | TokenHoleStart AlexPosn
   | TokenHoleEnd AlexPosn
+  | TokenAt AlexPosn
 
   deriving (Eq, Show, Generic)
 

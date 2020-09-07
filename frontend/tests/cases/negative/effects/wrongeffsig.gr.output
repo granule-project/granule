@@ -1,3 +1,0 @@
-Type checking failed:
-Type error: frontend\tests\cases\negative\effects\wrongeffsig.gr:3:5:
-Expected `Char <{Open}>` but got `Char <{Open, IOExcept, Read, Close}>`

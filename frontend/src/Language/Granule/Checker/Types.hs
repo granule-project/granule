@@ -8,14 +8,13 @@ module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
 
-import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Constraints.CompileNatKinded
 
 import Language.Granule.Checker.Effects
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Helpers
@@ -42,9 +41,7 @@ equalTypes :: (?globals :: Globals)
   => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
 equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 
-equalTypesWithUniversalSpecialisation :: (?globals :: Globals)
-  => Span -> Type -> Type -> Checker (Bool, Type, Substitution)
-equalTypesWithUniversalSpecialisation s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
+--- Flags
 
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
@@ -64,9 +61,9 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -- Starting spec indication
   -> SpecIndicator
-  -- Left type (usually the inferred)
+  -- Left type (may be approximated by right type)
   -> Type
-  -- Right type (usually the specified)
+  -- Right type
   -> Type
   -- Result is a effectful, producing:
   --    * a boolean of the equality
@@ -101,19 +98,13 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
+  let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
-  k1 <- inferKindOfType s t1
-  k2 <- inferKindOfType s t2
-  -- Check the kinds are equal
-  (eq, kind, unif) <- equalKinds s k1 k2
-  -- If so, proceed with equality on types of this kind
-  if eq
-    then equalTypesRelatedCoeffectsInner s rel t1 t2 kind spec mode
-    else
-      -- Otherwise throw a kind error
-      case spec of
-        FstIsSpec -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k1, kActual = k2}
-        _         -> throw $ KindMismatch { errLoc = s, tyActualK = Just t1, kExpected = k2, kActual = k1}
+  st <- get
+  (k, _) <- synthKind s (tyVarContext st) t1'
+  st <- get
+  _ <- checkKind s (tyVarContext st) t2' k
+  equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
@@ -130,10 +121,7 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
 
 equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
   -- contravariant position (always approximate)
-  (eq1, u1) <-
-    case sp of
-      FstIsSpec -> equalTypesRelatedCoeffects s ApproximatedBy t1 t1' (flipIndicator sp) mode
-      _         -> equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
+  (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
@@ -229,12 +217,12 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
       jK <- k1 `joinKind` k2
       case jK of
         Just (KPromote (TyCon kc), unif) -> do
-
-          k <- inferKindOfType s (TyCon kc)
+          st <- get
+          (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) (TyCon kc) KCoeffect)
+          case result of
+            Left err -> return ()
           -- Create solver vars for coeffects
-          if isCoeffectKind k
-            then addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
-            else return ()
+            Right _ -> putChecker >> addConstraint (Eq s (CVar n) (CVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif) ->
           return (True, unif ++ [(m, SubstT $ TyVar n)])
@@ -263,9 +251,8 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
   -- Do an occurs check for types
   case kind of
     KType ->
-       if n `elem` freeVars t
-         then throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
-         else return ()
+       when (n `elem` freeVars t) $
+        throw OccursCheckFail { errLoc = s, errVar = n, errTy = t }
     _ -> return ()
 
   case lookup n (tyVarContext checkerState) of
@@ -299,8 +286,8 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
 
          _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
 
-    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
-    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/dorchard/granule/issues"
+    (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
+    (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
     Nothing -> throw UnboundTypeVariable { errLoc = s, errId = n }
 
 
@@ -336,7 +323,7 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
         Right effTy -> do
           eq <- effApproximates s effTy t1 t2
           return (eq, [])
-        Left k -> throw $ KindMismatch s Nothing KEffect k
+        Left k -> debugM "G" "G" >> throw $ KindMismatch s Nothing KEffect k
 
     Types ->
       case k of
@@ -444,8 +431,8 @@ joinTypes s (TyInt n) (TyVar m) = do
 joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
 
 joinTypes s (TyVar n) (TyVar m) = do
-
-  kind <- inferKindOfType s (TyVar n)
+  st <- get
+  (kind, _) <- synthKind s (tyVarContext st) (TyVar n)
   case kind of
     KPromote t -> do
 
@@ -483,27 +470,6 @@ joinTypes s t1 t2 = do
             Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
         Left _ -> throw $ NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
--- TODO: eventually merge this with joinKind
-equalKinds :: (?globals :: Globals) => Span -> Kind -> Kind -> Checker (Bool, Kind, Substitution)
-equalKinds sp k1 k2 | k1 == k2 = return (True, k1, [])
-equalKinds sp (KPromote t1) (KPromote t2) = do
-    (eq, t, u) <- equalTypes sp t1 t2
-    return (eq, KPromote t, u)
-equalKinds sp (KFun k1 k1') (KFun k2 k2') = do
-    (eq, k, u) <- equalKinds sp k1 k2
-    (eq', k', u') <- equalKinds sp k1' k2'
-    u2 <- combineSubstitutions sp u u'
-    return $ (eq && eq', KFun k k', u2)
-equalKinds sp (KVar v) k = do
-    return (True, k, [(v, SubstK k)])
-equalKinds sp k (KVar v) = do
-    return (True, k, [(v, SubstK k)])
-equalKinds sp k1 k2 = do
-    jK <- joinKind k1 k2
-    case jK of
-      Just (k, u) -> return (True, k, u)
-      Nothing -> throw $ KindsNotEqual { errLoc = sp, errK1 = k1, errK2 = k2 }
-
 -- Checkers that two effects have the same type, and if so then returns that effect type
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
@@ -537,3 +503,25 @@ isIndexedType = typeFoldM $
     , tfTyInfix = \_ x y -> return (x || y)
     , tfSet = \_ -> return False
     , tfTySig = \x _ _ -> return x }
+
+-- Given a type term, works out if its kind is actually an effect type (promoted)
+-- if so, returns `Right effTy` where `effTy` is the effect type
+-- otherwise, returns `Left k` where `k` is the kind of the original type term
+isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
+isEffectType s ty = do
+  st <- get
+  (kind, _) <- synthKind s (tyVarContext st) ty
+  isEffectTypeFromKind s kind
+
+isEffectTypeFromKind :: (?globals :: Globals) => Span -> Kind -> Checker (Either Kind Type)
+isEffectTypeFromKind s kind =
+  case kind of
+    KPromote effTy -> do
+      st <- get
+      (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) effTy KEffect)
+      case result of
+        Right res -> do
+          putChecker
+          return $ Right effTy
+        Left err -> return $ Left kind
+    _ -> return $ Left kind

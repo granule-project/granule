@@ -1,0 +1,8 @@
+-- push example
+data Either a b = Left a | Right b
+
+foo : forall {a : Type, b : Type, n : Nat} . Either (a [n]) (b [n]) -> (Either a b) [n]
+foo = pull @Either
+
+main : (Either Int Int) [1]
+main = pull @Either (Left [42])

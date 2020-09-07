@@ -21,7 +21,7 @@ mguCoeffectTypes s t1 t2 = do
     Just x -> return x
     -- Cannot unify so form a product
     Nothing -> return
-      (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [], 
+      (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [],
                   (\x -> CProduct x (COne t2), \x -> CProduct (COne t1) x))
 
 -- Inner definition which does not throw its error, and which operates on just the types
@@ -49,7 +49,21 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
       throw $ UnificationFail s kv2 (TyVar kv1) KCoeffect False
 
     (Just (KCoeffect, _), Just (k, _)) -> throw $ KindMismatch s Nothing KCoeffect k
-    (Just (k, _), Just (_, _))         -> throw $ KindMismatch s Nothing KCoeffect k
+
+    (Just (KEffect, _), Just (KEffect, InstanceQ)) -> do
+      updateCoeffectType kv2 (KVar kv1)
+      return $ Just (TyVar kv1, [(kv2, SubstK $ KVar kv1)], (id, id))
+
+    (Just (KEffect, InstanceQ), Just (KEffect, _)) -> do
+      updateCoeffectType kv1 (KVar kv2)
+      return $ Just (TyVar kv2, [(kv1, SubstK $ KVar kv2)], (id, id))
+
+    (Just (KEffect, ForallQ), Just (KEffect, ForallQ)) -> do
+      throw $ UnificationFail s kv2 (TyVar kv1) KEffect False
+
+    (Just (KEffect, _), Just (k, _)) -> throw $ KindMismatch s Nothing KEffect k
+    (Just (k, _), Just (_, _))       -> throw $ KindMismatch s Nothing KCoeffect k
+
 
 
 -- Left-hand side is a poly variable, but Just is concrete

@@ -53,7 +53,7 @@ data Constraint =
   | Neq Span Coeffect Coeffect Type
   | ApproximatedBy Span Coeffect Coeffect Type
 
-  -- 
+  --
   | Lub Span Coeffect Coeffect Coeffect Type
 
   -- NonZeroPromotableTo s x c means that:

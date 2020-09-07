@@ -11,6 +11,7 @@
 
 module Language.Granule.Checker.Monad where
 
+import Data.Maybe (mapMaybe)
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
 import Data.List (intercalate, transpose)
@@ -83,6 +84,10 @@ data Assumption
   | Discharged Type Coeffect
     deriving (Eq, Show)
 
+getAssumptionType :: Assumption -> Type
+getAssumptionType (Linear t) = t
+getAssumptionType (Discharged t _) = t
+
 instance Term Assumption where
   freeVars (Linear t) = freeVars t
   freeVars (Discharged t c) = freeVars t ++ freeVars c
@@ -109,7 +114,7 @@ data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 -- is checked elsewhere
 initialisePatternConsumptions :: [Equation v a] -> [Consumption]
 initialisePatternConsumptions [] = []
-initialisePatternConsumptions ((Equation _ _ _ pats _):_) =
+initialisePatternConsumptions ((Equation _ _ _ _ pats _):_) =
   map (\_ -> NotFull) pats
 
 -- Join information about consumption between branches
@@ -153,7 +158,7 @@ data CheckerState = CS
             , patternConsumption :: [Consumption]
 
             -- Data type information
-            --  map of type constructor names to their the kind, num of
+            --  map of type constructor names to their the kind,
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
             , typeConstructors :: Ctxt (Kind, [Id], Bool)
             -- map of data constructors and their types and substitutions
@@ -169,6 +174,9 @@ data CheckerState = CS
             -- The type of the current equation.
             , equationTy :: Maybe Type
 
+            -- Definitions that have been triggered during type checking
+            -- by the auto deriver (so we know we need them in the interpreter)
+            , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () ()))]
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -189,6 +197,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
+               , derivedDefinitions = []
                }
 
 -- *** Various helpers for manipulating the context
@@ -395,7 +404,14 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Type, context :: Ctxt Assumption, tyContext :: Ctxt (Kind, Quantifier), cases :: ([Id], [[Pattern ()]]), holeVars :: [Id] }
+    { errLoc      :: Span,
+      holeTy      :: Type,
+      context     :: Ctxt Assumption,
+      tyContext   :: Ctxt (Kind, Quantifier),
+      -- Tracks whether a variable is split
+      holeVars :: Ctxt Bool,
+      -- Used for synthesising programs
+      cases       :: [([Pattern ()], Expr () Type)] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type, tyActual :: Type }
   | GradingError
@@ -508,6 +524,10 @@ data CheckerError
     { errLoc :: Span, errTy :: Type, errK :: Kind }
   | CaseOnIndexedType
     { errLoc :: Span, errTy :: Type }
+  | OperatorUndefinedForKind
+    { errLoc :: Span, errK :: Kind, errTyOp :: TypeOperator }
+  | ImpossibleKindSynthesis
+    { errLoc :: Span, errTy :: Type }
   deriving (Show, Eq)
 
 
@@ -571,6 +591,8 @@ instance UserMsg CheckerError where
   title InvalidHolePosition{} = "Invalid hole position"
   title UnknownResourceAlgebra{} = "Type error"
   title CaseOnIndexedType{} = "Type error"
+  title OperatorUndefinedForKind{} = "Kind error"
+  title ImpossibleKindSynthesis{} = "Kind error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -586,17 +608,20 @@ instance UserMsg CheckerError where
                                                 <> pretty v
                                                 <> " : " <> pretty t) tyContext)
     <>
-    (if null (fst cases)
+    (if null relevantVars
       then ""
-      else if null (snd cases)
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty holeVars)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty holeVars) <> ":\n     " <>
+      else if null cases
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty relevantVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty relevantVars) <> ":\n     " <>
              intercalate "\n     " (formatCases relevantCases))
 
     where
-      -- Extract those cases which correspond to a variable in holeVars.
+      -- Extract those cases which correspond to a split variable in holeVars.
       relevantCases :: [[Pattern ()]]
-      relevantCases = map (map snd . filter ((`elem` holeVars) . fst) . zip (fst cases)) (snd cases)
+      relevantCases = map (map snd . filter fst . zip (map snd holeVars) . fst) cases
+
+      relevantVars :: [Id]
+      relevantVars = map fst (filter snd holeVars)
 
       formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
@@ -851,6 +876,12 @@ instance UserMsg CheckerError where
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
 
+  msg OperatorUndefinedForKind{ errK, errTyOp }
+    = "Operator " <> pretty errTyOp <> " is not defined for type-level terms of kind " <> pretty errK
+
+  msg ImpossibleKindSynthesis{ errTy }
+    = "Cannot synthesis a kind for `" <> pretty errTy <> "`"
+
   color HoleMessage{} = Blue
   color _ = Red
 
@@ -873,3 +904,20 @@ freshenPred pred = do
     -- Update the unique counter in the checker
     put (st { uniqueVarIdCounter = counter freshenerState })
     return pred'
+
+-- help to get a map from type constructor names to a map from data constructor names to their types and subst
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution)))
+getDataConstructors tyCon = do
+  st <- get
+  let tyCons   = typeConstructors st
+  let dataCons = dataConstructors st
+  return $
+    case lookup tyCon tyCons of
+      Just (k, dataConsNames, _) ->
+          case resultKind k of
+            KType ->
+              Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames
+            _ ->
+              -- Ignore not Type thing
+              Nothing
+      Nothing -> Nothing

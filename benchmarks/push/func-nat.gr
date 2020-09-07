@@ -1,0 +1,2 @@
+push : forall {a : Type, b : Type, c : Nat} . (a -> b) [c] -> a [c] -> b [c]
+push = ?
