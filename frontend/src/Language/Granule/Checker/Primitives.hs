@@ -231,10 +231,9 @@ throw = BUILTIN
 --State
 --------------------------------------------------------------------------------
 
-data Get : Type -> Type -> EffectOp where
+data Get (s : Type) : Type -> EffectOp where
       GetOp :  Get s s
-
-data Put : Type -> Type -> EffectOp where
+data Put (s : Type) : Type -> EffectOp where
       PutOp :  s -> Put s ()
 
 --------------------------------------------------------------------------------

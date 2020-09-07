@@ -66,7 +66,7 @@ check ast@(AST dataDecls defs imports hidden name) = do
       --list of lists, needs to be list
       defs <- runAll kindCheckDef defs
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
-      defs <- runAll (checkDef (defCtxt ++ effOpCtxt)) defs
+      defs <- runAll (checkDef (defCtxt ++ (concat effOpCtxt))) defs
       -- Add on any definitions computed by the type checker (derived)
       st <- get
       let derivedDefs = map (snd . snd) (derivedDefinitions st)
@@ -175,11 +175,13 @@ checkDataCon
         -- Reconstruct the data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
-        registerDataConstructor tySch coercions
-
-        case kind of 
+        
+        case kind of
+          KType -> do
+            registerDataConstructor tySch coercions
+            return Nothing
           KPromote (TyCon (internalName -> "EffectOp")) -> return (Just (dName, tySch))
-          _ -> return Nothing
+          _ -> throw KindMismatch{ errLoc = sp, tyActualK = Just ty, kExpected = KType, kActual = kind }
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
