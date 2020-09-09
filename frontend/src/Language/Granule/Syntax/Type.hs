@@ -344,13 +344,19 @@ instance Freshenable m TypeScheme where
 instance Freshenable m Type where
   freshen =
     typeFoldM (baseTypeFold { tfTyVar = freshenTyVar,
-                              tfBox = freshenTyBox })
+                              tfBox = freshenTyBox,
+                              tfTySig = freshenTySig })
     where
 
       freshenTyBox c t = do
         c' <- freshen c
         t' <- freshen t
         return $ Box c' t'
+
+      freshenTySig t' _ k = do
+        k' <- freshen k
+        return $TySig t' k'
+
       freshenTyVar v = do
         v' <- lookupVar Type v
         case v' of
