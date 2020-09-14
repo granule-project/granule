@@ -13,6 +13,7 @@
 
 module Language.Granule.Checker.Monad where
 
+import Data.Maybe (mapMaybe)
 import Data.Either (partitionEithers)
 import Data.Foldable (toList)
 import Data.List (intercalate, transpose)
@@ -87,9 +88,13 @@ runAll f xs = do
 
 -- | Types of discharged coeffects
 data Assumption
-  = Linear (Type Zero)
+  = Linear     (Type Zero)
   | Discharged (Type Zero) Coeffect
     deriving (Eq, Show)
+
+getAssumptionType :: Assumption -> Type Zero
+getAssumptionType (Linear t) = t
+getAssumptionType (Discharged t _) = t
 
 instance Term Assumption where
   freeVars (Linear t) = freeVars t
@@ -117,7 +122,7 @@ data Consumption = Full | NotFull | Empty deriving (Eq, Show)
 -- is checked elsewhere
 initialisePatternConsumptions :: [Equation v a] -> [Consumption]
 initialisePatternConsumptions [] = []
-initialisePatternConsumptions ((Equation _ _ _ pats _):_) =
+initialisePatternConsumptions ((Equation _ _ _ _ pats _):_) =
   map (\_ -> NotFull) pats
 
 -- Join information about consumption between branches
@@ -161,7 +166,7 @@ data CheckerState = CS
             , patternConsumption :: [Consumption]
 
             -- Data type information
-            --  map of type constructor names to their the kind, num of
+            --  map of type constructor names to their the kind,
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
             , typeConstructors :: Ctxt (TypeWithLevel, [Id], Bool)
             -- map of data constructors and their types and substitutions
@@ -177,6 +182,9 @@ data CheckerState = CS
             -- The type of the current equation.
             , equationTy :: Maybe (Type Zero)
 
+            -- Definitions that have been triggered during type checking
+            -- by the auto deriver (so we know we need them in the interpreter)
+            , derivedDefinitions :: [((Id, Type Zero), (TypeScheme, Def () ()))]
             -- Warning accumulator
             -- , warnings :: [Warning]
             }
@@ -197,6 +205,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , derivStack = []
                , allHiddenNames = M.empty
                , equationTy = Nothing
+               , derivedDefinitions = []
                }
 
 -- *** Various helpers for manipulating the context
@@ -233,6 +242,16 @@ peekChecker k = do
   checkerState <- get
   (result, localState) <- liftIO $ runChecker checkerState k
   pure (result, put localState)
+
+(<|>) :: Checker a -> Checker a -> Checker a
+m1 <|> m2 = do
+  (result, putCheckerComputation) <- peekChecker m1
+  case result of
+    -- Failed
+    Left _ -> m2
+    Right res -> do
+      putCheckerComputation
+      return res
 
 pushGuardContext :: Ctxt Assumption -> Checker ()
 pushGuardContext ctxt = do
@@ -347,7 +366,7 @@ appendPred _ p = error $ "Cannot append a predicate to " <> show p
 
 addPredicate :: Pred -> Checker ()
 addPredicate p = do
-  
+
   checkerState <- get
   case predicateStack checkerState of
     (p' : stack) ->
@@ -402,7 +421,14 @@ illLinearityMismatch sp ms = throwError $ fmap (LinearityError sp) ms
 {- Helpers for error messages and checker control flow -}
 data CheckerError
   = HoleMessage
-    { errLoc :: Span , holeTy :: Maybe (Type Zero), context :: Ctxt Assumption, tyContext :: Ctxt (TypeWithLevel, Quantifier), cases :: ([Id], [[Pattern ()]]) }
+    { errLoc      :: Span,
+      holeTy      :: Type Zero,
+      context     :: Ctxt Assumption,
+      tyContext   :: Ctxt (TypeWithLevel, Quantifier),
+      -- Tracks whether a variable is split
+      holeVars :: Ctxt Bool,
+      -- Used for synthesising programs
+      cases       :: [([Pattern ()], Expr () (Type Zero))] }
   | TypeError
     { errLoc :: Span, tyExpected :: Type Zero, tyActual :: Type Zero }
   | TypeErrorAtLevel
@@ -414,7 +440,7 @@ data CheckerError
   | SortMismatch
     { errLoc :: Span, kActualS :: Maybe (Type One), sExpected :: Type Two, sActual :: Type Two }
   | KindError
-    { errLoc :: Span, errTy :: Type Zero, errK :: Kind }
+    { errLoc :: Span, errTyL :: TypeWithLevel, errKL :: TypeWithLevel }
   | KindCannotFormSet
     { errLoc :: Span, errK :: Kind }
   | KindsNotEqual
@@ -481,6 +507,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type Zero }
   | ExpectedEffectType
     { errLoc :: Span, errTy :: Type Zero }
+  | ExpectedOptionalEffectType
+    { errLoc :: Span, errTy :: Type Zero }
   | LhsOfApplicationNotAFunction
     { errLoc :: Span, errTy :: Type Zero }
   | FailedOperatorResolution
@@ -525,8 +553,9 @@ data CheckerError
     { errLoc :: Span, errTyL1 :: TypeWithLevel, errTyL2 :: TypeWithLevel }
   | WrongLevel
     { errLoc :: Span, errTyL :: TypeWithLevel, level :: IsLevel }
-  deriving Show
-
+  | ImpossibleKindSynthesis
+    { errLoc :: Span, errTy :: Type Zero }
+  deriving (Show)
 
 instance UserMsg CheckerError where
   location = errLoc
@@ -571,6 +600,7 @@ instance UserMsg CheckerError where
   title DataConstructorReturnTypeError{} = "Wrong return type in data constructor"
   title MalformedDataConstructorType{} = "Malformed data constructor type"
   title ExpectedEffectType{} = "Type error"
+  title ExpectedOptionalEffectType{} = "Type error"
   title LhsOfApplicationNotAFunction{} = "Type error"
   title FailedOperatorResolution{} = "Operator resolution failed"
   title NeedTypeSignature{} = "Type signature needed"
@@ -593,6 +623,7 @@ instance UserMsg CheckerError where
   title PromotionError{} = "Type error"
   title LevelMismatchUnification{} = "Type error"
   title WrongLevel{} = "Type error"
+  title ImpossibleKindSynthesis{} = "Kind error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -608,16 +639,26 @@ instance UserMsg CheckerError where
                                                 <> pretty v
                                                 <> " : " <> pretty t) tyContext)
     <>
-    (if null (fst cases)
+    (if null relevantVars
       then ""
-      else if null (snd cases)
-        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty $ fst cases)
-        else "\n\n   Case splits for " <> intercalate ", " (map pretty $ fst cases) <> ":\n     " <>
-             intercalate "\n     " (formatCases (snd cases)))
+      else if null cases
+        then "\n\n   No case splits could be found for: " <> intercalate ", " (map pretty relevantVars)
+        else "\n\n   Case splits for " <> intercalate ", " (map pretty relevantVars) <> ":\n     " <>
+             intercalate "\n     " (formatCases relevantCases))
 
     where
+      -- Extract those cases which correspond to a split variable in holeVars.
+      relevantCases :: [[Pattern ()]]
+      relevantCases = map (map snd . filter fst . zip (map snd holeVars) . fst) cases
+
+      relevantVars :: [Id]
+      relevantVars = map fst (filter snd holeVars)
+
+      formatCases :: [[Pattern ()]] -> [String]
       formatCases = map unwords . transpose . map padToLongest . transpose . map (map prettyNested)
 
+      -- Pad all strings in a list so they match the length of the longest.
+      padToLongest :: [String] -> [String]
       padToLongest xs =
         let size = maximum (map length xs)
         in  map (\s -> s ++ replicate (size - length s) ' ') xs
@@ -645,8 +686,8 @@ instance UserMsg CheckerError where
         Just k -> "Expected sort `" <> pretty sExpected <> "` for kind `" <> pretty k <> "` but actual sort is `" <> pretty sActual <> "`"
 
   msg KindError{..}
-    = "Type `" <> pretty errTy
-    <> "` does not have expected kind `" <> pretty errK <> "`"
+    = "Type `" <> pretty errTyL
+    <> "` does not have expected kind `" <> pretty errKL <> "`"
 
   msg KindCannotFormSet{..}
     = "Types of kind `" <> pretty errK <> "` cannot be used in a type-level set."
@@ -667,6 +708,8 @@ instance UserMsg CheckerError where
       <> "` is promoted but its binding is linear; its binding should be under a box."
     NonLinearPattern ->
       "Wildcard pattern `_` allowing a value to be discarded"
+    HandlerLinearityMismatch ->
+      "Linearity of Handler clauses does not match"
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -796,7 +839,11 @@ instance UserMsg CheckerError where
 
   msg ExpectedEffectType{..}
     = "Expected a type of the form `a <eff>` but got `"
-    <> pretty errTy <> "` in subject of let"
+    <> pretty errTy
+
+  msg ExpectedOptionalEffectType{..}
+    = "Expected a type of the form `a <eff>[0..1]` but got `"
+    <> pretty errTy
 
   msg LhsOfApplicationNotAFunction{..}
     = "Expected a function type on the left-hand side of an application, but got `"
@@ -865,7 +912,7 @@ instance UserMsg CheckerError where
   msg InvalidHolePosition{} = "Hole occurs in synthesis position so the type is not yet known"
 
   msg UnknownResourceAlgebra{ errK, errTy }
-    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from " <> pretty errTy
+    = "There is no resource algebra defined for `" <> pretty errK <> "`, arising from effect term `" <> pretty errTy <> "`"
 
   msg CaseOnIndexedType{ errTy }
     = "Cannot use a `case` pattern match on indexed type " <> pretty errTy <> ". Define a specialised function instead."
@@ -883,6 +930,9 @@ instance UserMsg CheckerError where
     = "Type `" <> pretty errTy <> "` is at level " <> pretty l
      <> " but it is trying to be used at a level " <> pretty l' <> " setting."
 
+  msg ImpossibleKindSynthesis{ errTy }
+    = "Cannot synthesis a kind for `" <> pretty errTy <> "`"
+
   color HoleMessage{} = Blue
   color _ = Red
 
@@ -892,6 +942,7 @@ data LinearityMismatch
   | LinearUsedNonLinearly Id
   | NonLinearPattern
   | LinearUsedMoreThanOnce Id
+  | HandlerLinearityMismatch
   deriving (Eq, Show) -- for debugging
 
 freshenPred :: Pred -> Checker Pred
@@ -904,3 +955,20 @@ freshenPred pred = do
     -- Update the unique counter in the checker
     put (st { uniqueVarIdCounter = counter freshenerState })
     return pred'
+
+-- help to get a map from type constructor names to a map from data constructor names to their types and subst
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution)))
+getDataConstructors tyCon = do
+  st <- get
+  let tyCons   = typeConstructors st
+  let dataCons = dataConstructors st
+  return $
+    case lookup tyCon tyCons of
+      Just (TypeWithLevel _ k, dataConsNames, _) ->
+          case resultType k of
+            Type _ ->
+              Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames
+            _ ->
+              -- Ignore not Type thing
+              Nothing
+      Nothing -> Nothing

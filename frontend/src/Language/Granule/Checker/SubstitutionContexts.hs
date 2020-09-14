@@ -17,14 +17,12 @@ type Substitution = Ctxt Substitutors
      of several things... -}
 data Substitutors =
     SubstT  (Type Zero)
-  | SubstC  Coeffect
-  | SubstK  Kind
-  | SubstS (Type Two)
+  | SubstK  (Type One)
+  | SubstS  (Type Two)
   deriving (Eq, Show)
 
 instance Pretty Substitutors where
   pretty (SubstT t) = pretty t
-  pretty (SubstC c) = pretty c
   pretty (SubstK k) = pretty k
   pretty (SubstS s) = pretty s
 
@@ -32,8 +30,6 @@ instance Term Substitution where
   freeVars [] = []
   freeVars ((v, SubstT t):subst) =
     freeVars t ++ freeVars subst
-  freeVars ((v, SubstC c):subst) =
-    freeVars c ++ freeVars subst
   freeVars ((v, SubstK k):subst) =
     freeVars k ++ freeVars subst
   freeVars ((v, SubstS s):subst) =

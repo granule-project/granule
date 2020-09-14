@@ -1,0 +1,2 @@
+vec5 : forall {a : Type, b : Type} . (a -> b) [5] -> ((((a, a), a), a), a) -> ((((b, b), b), b), b)
+vec5 = ?

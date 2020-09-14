@@ -6,7 +6,9 @@
 module Language.Granule.Checker.Flatten
           (mguCoeffectTypes, flattenable) where
 
+import Data.Functor.Identity (runIdentity)
 import Control.Monad.State.Strict
+
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
@@ -14,6 +16,9 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Utils
+
+cProduct :: Type l -> Type l -> Type l
+cProduct x y = TyApp (TyApp (TyCon (mkId ", ")) x) y
 
 mguCoeffectTypes :: (?globals :: Globals)
                  => Span -> Type One -> Type One -> Checker (Type One, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect))
@@ -24,7 +29,7 @@ mguCoeffectTypes s t1 t2 = do
     -- Cannot unify so form a product
     Nothing -> return
       (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [],
-                  (\x -> CProduct x (COne t2), \x -> CProduct (COne t1) x))
+                  (\x -> cProduct x (TyInt 1), \x -> cProduct (TyInt 1) x))
 
 -- Inner definition which does not throw its error, and which operates on just the types
 mguCoeffectTypes' :: (?globals :: Globals)
@@ -85,13 +90,13 @@ mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
 -- `Nat` can unify with `Q` to `Q`
 mguCoeffectTypes' s (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =
     return $ Just $ (TyCon $ mkId "Q", [], (id, inj))
-  where inj = coeffectFold $ baseCoeffectFold
-                { cNat = \x -> CFloat (fromInteger . toInteger $ x) }
+  where inj =  runIdentity . typeFoldM0 baseTypeFoldZero
+                { tfTyInt0 = \x -> return $ TyRational (fromInteger . toInteger $ x) }
 
 mguCoeffectTypes' s (TyCon (internalName -> "Nat")) (TyCon (internalName -> "Q")) =
     return $ Just $ (TyCon $ mkId "Q", [], (inj, id))
-  where inj = coeffectFold $ baseCoeffectFold
-                { cNat = \x -> CFloat (fromInteger . toInteger $ x) }
+  where inj = runIdentity . typeFoldM0 baseTypeFoldZero 
+                { tfTyInt0 = \x -> return $ TyRational (fromInteger . toInteger $ x) }
 
 -- `Nat` can unify with `Ext Nat` to `Ext Nat`
 mguCoeffectTypes' s t (TyCon (internalName -> "Nat")) | t == extendedNat =
@@ -102,22 +107,22 @@ mguCoeffectTypes' s (TyCon (internalName -> "Nat")) t | t == extendedNat =
 
 -- Unifying a product of (t, t') with t yields (t, t') [and the symmetric versions]
 mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t1 == coeffTy2 =
-  return $ Just (coeffTy1, [], (id, \x -> CProduct x (COne t2)))
+  return $ Just (coeffTy1, [], (id, \x -> cProduct x (TyInt 1)))
 
 mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t2 == coeffTy2 =
-  return $ Just (coeffTy1, [], (id, \x -> CProduct (COne t1) x))
+  return $ Just (coeffTy1, [], (id, \x -> cProduct (TyInt 1) x))
 
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t1 == coeffTy1 =
-  return $ Just (coeffTy2, [], (\x -> CProduct x (COne t2), id))
+  return $ Just (coeffTy2, [], (\x -> cProduct x (TyInt 1), id))
 
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t2 == coeffTy1 =
-  return $ Just (coeffTy2, [], (\x -> CProduct (COne t1) x, id))
+  return $ Just (coeffTy2, [], (\x -> cProduct (TyInt 1) x, id))
 
 -- Unifying with an interval
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =
-  return $ Just (coeffTy2, [], (\x -> CInterval x x, id))
+  return $ Just (coeffTy2, [], (\x -> TyInfix TyOpInterval x x, id))
 mguCoeffectTypes' s coeffTy1@(isInterval -> Just t') coeffTy2 | coeffTy2 == t' =
-  return $ Just (coeffTy1, [], (id, \x -> CInterval x x))
+  return $ Just (coeffTy1, [], (id, \x -> TyInfix TyOpInterval x x))
 
 -- Unifying inside an interval (recursive case)
 
@@ -130,8 +135,8 @@ mguCoeffectTypes' s (isInterval -> Just t) (isInterval -> Just t') = do
     Just (upperTy, subst, (inj1, inj2)) ->
       return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (inj1', inj2'))
             where
-              inj1' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj1 c1) (inj1 c2) }
-              inj2' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj2 c1) (inj2 c2) }
+              inj1' = runIdentity . typeFoldM0 baseTypeFoldZero { tfTyInfix0 = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj1 c1) (inj1 c2); _ -> TyInfix op c1 c2 }
+              inj2' = runIdentity . typeFoldM0 baseTypeFoldZero { tfTyInfix0 = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj2 c1) (inj2 c2); _ -> TyInfix op c1 c2 }
     Nothing -> return Nothing
 
 mguCoeffectTypes' s t (isInterval -> Just t') = do
@@ -140,8 +145,8 @@ mguCoeffectTypes' s t (isInterval -> Just t') = do
   coeffecTyUpper <- mguCoeffectTypes' s t t'
   case coeffecTyUpper of
     Just (upperTy, subst, (inj1, inj2)) ->
-      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (\x -> CInterval (inj1 x) (inj1 x), inj2'))
-            where inj2' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj2 c1) (inj2 c2) }
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (\x -> TyInfix TyOpInterval (inj1 x) (inj1 x), inj2'))
+            where inj2' = runIdentity . typeFoldM0 baseTypeFoldZero { tfTyInfix0 = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj2 c1) (inj2 c2); _ -> TyInfix op c1 c2 }
 
     Nothing -> return Nothing
 
@@ -151,8 +156,8 @@ mguCoeffectTypes' s (isInterval -> Just t') t = do
   coeffecTyUpper <- mguCoeffectTypes' s t' t
   case coeffecTyUpper of
     Just (upperTy, subst, (inj1, inj2)) ->
-      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (inj1', \x -> CInterval (inj2 x) (inj2 x)))
-            where inj1' = coeffectFold baseCoeffectFold{ cInterval = \c1 c2 -> CInterval (inj1 c1) (inj1 c2) }
+      return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (inj1', \x -> TyInfix TyOpInterval (inj2 x) (inj2 x)))
+            where inj1' = runIdentity . typeFoldM0 baseTypeFoldZero { tfTyInfix0 = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj1 c1) (inj1 c2); _ -> TyInfix op c1 c2 }
 
     Nothing -> return Nothing
 
@@ -166,10 +171,10 @@ flattenable :: (?globals :: Globals)
             => Type One -> Type One -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Substitution, Type One))
 flattenable t1 t2
  | t1 == t2 = case t1 of
-    t1 | t1 == extendedNat -> return $ Just (CTimes, [], t1)
+    t1 | t1 == extendedNat -> return $ Just (TyInfix TyOpTimes, [], t1)
 
-    TyCon (internalName -> "Nat")   -> return $ Just (CTimes, [], t1)
-    TyCon (internalName -> "Level") -> return $ Just (CMeet, [], t1)
+    TyCon (internalName -> "Nat")   -> return $ Just (TyInfix TyOpTimes, [], t1)
+    TyCon (internalName -> "Level") -> return $ Just (TyInfix TyOpMeet, [], t1)
 
     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
 
@@ -177,10 +182,10 @@ flattenable t1 t2
  | otherwise =
       case (t1, t2) of
         (t1, TyCon (internalName -> "Nat")) | t1 == extendedNat ->
-          return $ Just (CTimes, [], t1)
+          return $ Just (TyInfix TyOpTimes, [], t1)
 
         (TyCon (internalName -> "Nat"), t2) | t2 == extendedNat ->
-          return $ Just (CTimes, [], t2)
+          return $ Just (TyInfix TyOpTimes, [], t2)
 
         (t1, t2) -> do
           -- If we have a unification, then use the flattenable
@@ -191,6 +196,6 @@ flattenable t1 t2
               case flatM of
                 Just (op, subst', t) ->
                   return $ Just (\c1 c2 -> op (inj1 c1) (inj2 c2), subst', t)
-                Nothing      -> return $ Just (CProduct, subst, TyCon (mkId "×") .@ t1 .@ t2)
-            Nothing        -> return $ Just (CProduct, [], TyCon (mkId "×") .@ t1 .@ t2)
+                Nothing      -> return $ Just (cProduct, subst, TyCon (mkId "×") .@ t1 .@ t2)
+            Nothing        -> return $ Just (cProduct, [], TyCon (mkId "×") .@ t1 .@ t2)
 

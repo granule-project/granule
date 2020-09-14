@@ -6,7 +6,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Identifiers
 
 import Test.Hspec
-import Language.Granule.Checker.Substitution
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Monad
 import Language.Granule.Utils
@@ -17,7 +17,7 @@ spec = do
     it "unif test" $ do
       let ?globals = mempty{ globalsTesting = Just True }
       Right us <- evalChecker initState $
-             unify (Box (CVar $ mkId "x") (TyCon $ mkId "Bool"))
-                   (Box (COne (TyCon $ mkId "Nat")) (TyVar $ mkId "a"))
+             unify (Box (TyVar $ mkId "x") (TyCon $ mkId "Bool"))
+                   (Box (TySig (TyInt 1) (promoteTypeToKind $ TyCon $ mkId "Nat")) (TyVar $ mkId "a"))
       us `shouldBe` (Just [(mkId "a", SubstT $ TyCon $ mkId "Bool")
-                          , (mkId "x", SubstC $ COne (TyCon $ mkId "Nat"))])
+                          , (mkId "x", SubstT $ TySig (TyInt 1) (promoteTypeToKind $ TyCon $ mkId "Nat"))])

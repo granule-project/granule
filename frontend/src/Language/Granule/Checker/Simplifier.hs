@@ -4,8 +4,8 @@ module Language.Granule.Checker.Simplifier where
 
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Helpers (freeVars)
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Monad
 
@@ -120,7 +120,7 @@ removeTrivialIds =
 collectSubst :: Pred -> Substitution
 collectSubst (Conj ps) = concatMap collectSubst ps
 -- For a pair of variables, substitute the right for the left
-collectSubst (Con (Eq _ (CVar v1) (CVar v2) _)) = [(v1, SubstC (CVar v2))]
-collectSubst (Con (Eq _ (CVar v) c _)) = [(v, SubstC c)]
-collectSubst (Con (Eq _ c (CVar v) _)) = [(v, SubstC c)]
+collectSubst (Con (Eq _ (TyVar v1) (TyVar v2) _)) = [(v1, SubstT (TyVar v2))]
+collectSubst (Con (Eq _ (TyVar v) c _)) = [(v, SubstT c)]
+collectSubst (Con (Eq _ c (TyVar v) _)) = [(v, SubstT c)]
 collectSubst _ = []

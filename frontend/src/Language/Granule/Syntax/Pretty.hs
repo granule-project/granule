@@ -65,42 +65,6 @@ instance (Pretty a, Pretty b) => Pretty (Either a b) where
 
 -- Core pretty printers
 
-instance Pretty Coeffect where
-    pretty (CNat n) = show n
-    pretty (CFloat n) = show n
-    pretty (COne k) | k == TyCon (mkId "Nat") || k == extendedNat = "1"
-    pretty (CZero k) | k == TyCon (mkId "Nat") || k == extendedNat = "0"
-    pretty (COne k)  = "(1 : " <> pretty k <> ")"
-    pretty (CZero k) = "(0 : " <> pretty k <> ")"
-    pretty (Level x) = if x == privateRepresentation
-                             then "Private"
-                             else if x == publicRepresentation
-                                  then "Public"
-                                  else "Unused"
-    pretty (CExpon a b) = prettyNested a <> "^" <> prettyNested b
-    pretty (CVar c) = pretty c
-    pretty (CMeet c d) =
-      prettyNested c <> " /\\ " <> prettyNested d
-    pretty (CJoin c d) =
-      prettyNested c <> " \\/ " <> prettyNested d
-    pretty (CPlus c d) =
-      prettyNested c <> " + " <> prettyNested d
-    pretty (CTimes c d) =
-      prettyNested c <> " * " <> prettyNested d
-    pretty (CMinus c d) =
-      prettyNested c <> " - " <> prettyNested d
-    pretty (CSet xs) =
-      "{" <> intercalate "," (map (\(name, t) -> name <> " : " <> prettyNested t) xs) <> "}"
-    pretty (CSig c t) =
-      prettyNested c <> " : " <> prettyNested t
-
-    pretty (CInfinity (Just k))
-       | k == TyCon (mkId "Nat") || k == extendedNat = "∞"
-
-    pretty (CInfinity k) = "(∞ : " <> pretty k <> ")"
-    pretty (CInterval c1 c2) = prettyNested c1 <> ".." <> prettyNested c2
-    pretty (CProduct c1 c2) = "(" <> pretty c1 <> ", " <> pretty c2 <> ")"
-
 instance Pretty (ULevel l) where
   pretty = show . (toInt 0)
     where
@@ -128,6 +92,7 @@ instance Pretty (Type l) where
     pretty (TyCon s)      = pretty s
     pretty (TyVar v)      = pretty v
     pretty (TyInt n)      = show n
+    pretty (TyRational n) = show n
 
     -- Non atoms
     pretty (Type LZero) = "Type"
@@ -159,6 +124,9 @@ instance Pretty (Type l) where
     pretty (TyApp t1 t2)  =
       pretty t1 <> " " <> prettyNested t2
 
+    pretty (TyInfix TyOpInterval t1 t2) =
+      prettyNested t1 <> pretty TyOpInterval <> prettyNested t2
+
     pretty (TyInfix op t1 t2) =
       prettyNested t1 <> " " <> pretty op <> " " <> prettyNested t2
 
@@ -173,7 +141,6 @@ instance Pretty (Type l) where
                     <> intercalate "; " (map (\(p, t') -> pretty p
                     <> " : " <> pretty t') ps) <> ")"
 
-    pretty (KUnion k1 k2) = "(" <> prettyNested k1 <> " ∪ " <> prettyNested k2 <> ")"
 
 instance Pretty TypeOperator where
   pretty = \case
@@ -189,6 +156,7 @@ instance Pretty TypeOperator where
    TyOpExpon           -> "^"
    TyOpMeet            -> "∧"
    TyOpJoin            -> "∨"
+   TyOpInterval        -> ".."
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =
@@ -211,14 +179,14 @@ instance Pretty v => Pretty (Def v a) where
     pretty (Def _ v _ eqs (Forall _ [] [] t))
       = pretty v <> " : " <> pretty t <> "\n" <> pretty eqs
     pretty (Def _ v _ eqs tySch)
-      = pretty v <> "\n  : " <> pretty tySch <> "\n" <> pretty eqs
+      = pretty v <> " : " <> pretty tySch <> "\n" <> pretty eqs
 
 instance Pretty v => Pretty (EquationList v a) where
-  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map (prettyEqn v) eqs
+  pretty (EquationList _ v _ eqs) = intercalate ";\n" $ map pretty eqs
 
-prettyEqn :: (?globals :: Globals, Pretty v) => Id -> Equation v a -> String
-prettyEqn v (Equation _ _ _ ps e) =
-  pretty v <> " " <> unwords (map prettyNested ps) <> " = " <> pretty e
+instance Pretty v => Pretty (Equation v a) where
+  pretty (Equation _ v _ _ ps e) =
+     pretty v <> (if length ps == 0 then "" else " ") <> unwords (map prettyNested ps) <> " = " <> pretty e
 
 instance Pretty DataDecl where
     pretty (DataDecl _ tyCon tyVars kind dataConstrs) =
@@ -236,7 +204,7 @@ instance Pretty DataConstr where
 instance Pretty (Pattern a) where
     pretty (PVar _ _ _ v)     = pretty v
     pretty (PWild _ _ _)      = "_"
-    pretty (PBox _ _ _ p)     = "[" <> pretty p <> "]"
+    pretty (PBox _ _ _ p)     = "[" <> prettyNested p <> "]"
     pretty (PInt _ _ _ n)     = show n
     pretty (PFloat _ _ _ n)   = show n
     pretty (PConstr _ _ _ name args) | internalName name == "," = intercalate ", " (map prettyNested args)
@@ -284,12 +252,19 @@ instance Pretty (Value v a) => Pretty (Expr v a) where
   pretty (App _ _ _ e1 e2) =
     prettyNested e1 <> " " <> prettyNested e2
 
+  pretty (AppTy _ _ _ e1 t) =
+    prettyNested e1 <> " @ " <> prettyNested t
+
   pretty (Binop _ _ _ op e1 e2) =
     pretty e1 <> " " <> pretty op <> " " <> pretty e2
 
   pretty (LetDiamond _ _ _ v t e1 e2) =
     "let " <> pretty v <> " :" <> pretty t <> " <- "
           <> pretty e1 <> " in " <> pretty e2
+
+  pretty (TryCatch _ _ _ e1 v t e2 e3) =
+    "try " <> pretty e1 <> " as [" <> pretty v <> "] " <> (if t /= Nothing then ":" <> pretty t else "")   <> " in "
+          <> pretty e2 <> " catch " <> pretty e3
 
   pretty (Val _ _ _ v) = pretty v
   pretty (Case _ _ _ e ps) = "\n    (case " <> pretty e <> " of\n      "

@@ -10,6 +10,7 @@
 
 data Either a b where Left a | Right b
 
+-- TODO: latest version can generalise this to `c : k, k : Semiring`
 pushEither : forall {a : Type, b : Type, c : Nat} . {c <= 1} =>
              (Either a b) [c] -> Either (a [c]) (b [c])
 pushEither [Left x]  = Left [x];

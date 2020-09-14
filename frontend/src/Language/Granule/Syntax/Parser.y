@@ -54,6 +54,9 @@ import Language.Granule.Utils hiding (mkSpan)
     else  { TokenElse _ }
     case  { TokenCase _ }
     of    { TokenOf _ }
+    try    { TokenTry _ }
+    as    { TokenAs _ }
+    catch    { TokenCatch _ }
     import { TokenImport _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
@@ -100,6 +103,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '?'   { TokenEmptyHole _ }
     '{!'  { TokenHoleStart _ }
     '!}'  { TokenHoleEnd _ }
+    '@'   { TokenAt _ }
 
 %right '∘'
 %right in
@@ -185,12 +189,12 @@ Binding :: { (String, Equation () ()) }
   : VAR '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $3)
-          return (symString $1, Equation span () False [] $3) }
+          return (symString $1, Equation span (mkId $ symString $1) () False [] $3) }
 
   | VAR Pats '=' Expr
       {% do
           span <- mkSpan (getPos $1, getEnd $4)
-          return (symString $1, Equation span () False $2 $4) }
+          return (symString $1, Equation span (mkId $ symString $1) () False $2 $4) }
 
 -- this was probably a silly idea @buggymcbugfix
   -- | '|' Pats '=' Expr
@@ -322,7 +326,7 @@ Type :: { Type Zero }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
-  | TyAtom '[' ']'                 { Box (CInterval (CZero extendedNat) infinity) $1 }
+  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyInt 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }
 
@@ -361,6 +365,7 @@ Constraint :: { Type Zero }
 
 TyAtom :: { Type Zero }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
+  | '(' ',' ')'               { TyCon $ mkId "," }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyInt x }
   | '(' Type ')'              { $2 }
@@ -372,33 +377,28 @@ TyParams :: { [Type Zero] }
   |                           { [] }
 
 Coeffect :: { Coeffect }
-  : INT                         { let TokenInt _ x = $1 in CNat x }
-  | '∞'                         { infinity }
-  | FLOAT                       { let TokenFloat _ x = $1 in CFloat $ myReadFloat x }
-  | CONSTR                      { case (constrString $1) of
-                                    "Public" -> Level publicRepresentation
-                                    "Private" -> Level privateRepresentation
-                                    "Unused" -> Level unusedRepresentation
-                                    "Inf" -> infinity
-                                    x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
-  | VAR                         { CVar (mkId $ symString $1) }
-  | Coeffect '..' Coeffect      { CInterval $1 $3 }
-  | Coeffect '+' Coeffect       { CPlus $1 $3 }
-  | Coeffect '*' Coeffect       { CTimes $1 $3 }
-  | Coeffect '-' Coeffect       { CMinus $1 $3 }
-  | Coeffect '^' Coeffect       { CExpon $1 $3 }
-  | Coeffect "/\\" Coeffect       { CMeet $1 $3 }
-  | Coeffect "\\/" Coeffect       { CJoin $1 $3 }
-  | '(' Coeffect ')'            { $2 }
-  | '{' Set '}'                 { CSet $2 }
-  | Coeffect ':' Type           { case tyPromote $3 of
-                                    Just ty -> normalise (CSig $1 ty)
-                                    Nothing -> error $ "Type " ++ (show $3) ++ " cannot be used as a kind" }
-  | '(' Coeffect ',' Coeffect ')' { CProduct $2 $4 }
+  : INT                           { let TokenInt _ x = $1 in TyInt x }
+  | '∞'                           { infinity }
+  | FLOAT                         { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }
+  | CONSTR                        { case (constrString $1) of
+                                      "Inf" -> infinity
+                                      x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
+  | VAR                           { TyVar (mkId $ symString $1) }
+  | Coeffect '..' Coeffect        { TyInfix TyOpInterval $1 $3 }
+  | Coeffect '+' Coeffect         { TyInfix TyOpPlus $1 $3 }
+  | Coeffect '*' Coeffect         { TyInfix TyOpTimes $1 $3 }
+  | Coeffect '-' Coeffect         { TyInfix TyOpMinus $1 $3 }
+  | Coeffect '^' Coeffect         { TyInfix TyOpExpon $1 $3 }
+  | Coeffect "/\\" Coeffect       { TyInfix TyOpMeet $1 $3 }
+  | Coeffect "\\/" Coeffect       { TyInfix TyOpJoin $1 $3 }
+  | '(' Coeffect ')'              { $2 }
+  | '{' CoeffSet '}'              { TySet $2 }
+  | Coeffect ':' Kind             { TySig $1 $3 }
+  | '(' Coeffect ',' Coeffect ')' { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
 
-Set :: { [(String, Type Zero)] }
-  : VAR ':' Type ',' Set      { (symString $1, $3) : $5 }
-  | VAR ':' Type              { [(symString $1, $3)] }
+CoeffSet :: { [Type Zero] }
+  : VAR ':' Type ',' CoeffSet  { $3 : $5 }
+  | VAR ':' Type               { [$3] }
 
 Effect :: { Type Zero }
   : '{' EffSet '}'            { TySet $2 }
@@ -432,6 +432,15 @@ Expr :: { Expr () () }
       {% let (_, pat, mt, expr) = $2
         in (mkSpan (getPos $1, getEnd $3)) >>=
               \sp -> return $ LetDiamond sp () False pat mt expr $3 }
+
+  | try Expr as '[' PAtom ']' in Expr catch Expr
+      {% let e1 = $2; pat = $5; mt = Nothing; e2 = $8; e3 = $10
+        in (mkSpan (getPos $1, getEnd $10)) >>=
+              \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
+  | try Expr as '[' PAtom ']' ':' Type in Expr catch Expr
+      {% let e1 = $2; pat = $5; mt = Just $8; e2 = $10; e3 = $12
+        in (mkSpan (getPos $1, getEnd $12)) >>=
+              \sp -> return $ TryCatch sp () False e1 pat mt e2 e3 }
 
   | case Expr of Cases
     {% (mkSpan (getPos $1, lastSpan $4)) >>=
@@ -511,6 +520,7 @@ Juxt :: { Expr () () }
   : Juxt '`' Atom '`'         {% (mkSpan (getStart $1, getEnd $3)) >>= \sp -> return $ App sp () False $3 $1 }
   | Juxt Atom                 {% (mkSpan (getStart $1, getEnd $2)) >>= \sp -> return $ App sp () False $1 $2 }
   | Atom                      { $1 }
+  | Juxt '@' TyAtom           {% (mkSpan (getStart $1, getEnd $1)) >>= \sp -> return $ AppTy sp () False $1 $3 } -- TODO: span is not very accurate here
 
 Hole :: { Expr () () }
   : '{!' Vars1 '!}'           {% (mkSpan (fst . getPosToSpan $ $1, second (+2) . snd . getPosToSpan $ $3)) >>= \sp -> return $ Hole sp () False (map mkId $2) }

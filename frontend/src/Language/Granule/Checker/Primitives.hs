@@ -20,7 +20,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 -- Given a name to the powerset of a set of particular elements,
 -- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
-setElements :: [(Kind, Type Zero)]
+setElements :: [(Type One, Type One)]
 setElements = [(TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
 kindConstructor :: [(Id, (Type (Succ One), [Id], Bool))]
@@ -42,9 +42,9 @@ typeConstructors =
     , (mkId "Char", (TypeWithLevel (LSucc LZero) $ Type LZero, [], False))
     , (mkId "String", (TypeWithLevel (LSucc LZero) $ Type LZero, [], False))
     , (mkId "Protocol", (TypeWithLevel (LSucc LZero) $ Type LZero, [], False))
-    , (mkId "Nat",  (TypeWithLevel (LSucc (LSucc LZero)) $ KUnion (tyCon "Coeffect") (tyCon "Effect"), [], False))
-    , (mkId "Q",    (TypeWithLevel (LSucc (LSucc LZero)) $ tyCon "Coeffect", [], False)) -- Rationals
-    , (mkId "Level", (TypeWithLevel (LSucc (LSucc LZero)) $ tyCon "Coeffect", [], False)) -- Security level
+    , (mkId "Q",    (TypeWithLevel (LSucc (LSucc LZero)) $ kcoeffect, [], False)) -- Rationals
+    , (mkId "Level", (TypeWithLevel (LSucc (LSucc LZero)) $ kcoeffect, [], False)) -- Security level
+    , (mkId "OOZ", (TypeWithLevel (LSucc (LSucc LZero)) $ kcoeffect, [], False)) -- 1 + 1 = 0
     , (mkId "Private", (TypeWithLevel (LSucc LZero) $ tyCon "Level", [], False))
     , (mkId "Public", (TypeWithLevel (LSucc LZero) $ tyCon "Level", [], False))
     , (mkId "Unused", (TypeWithLevel (LSucc LZero) $ tyCon "Level", [], False))
@@ -61,9 +61,9 @@ typeConstructors =
     , (mkId "Ext", (TypeWithLevel (LSucc (LSucc LZero)) $ funTy (tyCon "Coeffect") (tyCon "Coeffect"), [], True))
     -- Effect grade types - Sessions
     , (mkId "Session", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "Com", [], True))
-    , (mkId "Com", (TypeWithLevel (LSucc (LSucc LZero)) $ (tyCon "Effect"), [], False))
+    , (mkId "Com", (TypeWithLevel (LSucc (LSucc LZero)) keffect, [], False))
     -- Effect grade types - IO
-    , (mkId "IO", (TypeWithLevel (LSucc (LSucc LZero)) $ (tyCon "Effect"), [], False))
+    , (mkId "IO", (TypeWithLevel (LSucc (LSucc LZero)) keffect, [], False))
     , (mkId "Stdout", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", [], False))
     , (mkId "Stdin", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", [], False))
     , (mkId "Stderr", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", [], False))
@@ -72,6 +72,11 @@ typeConstructors =
     , (mkId "Write", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", [], False))
     , (mkId "IOExcept", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", [], False))
     , (mkId "Close", (TypeWithLevel (LSucc LZero) $ TyCon $ mkId "IOElem", [], False))
+
+    --Effect grade types - Exceptions
+    , (mkId "Exception", (TypeWithLevel (LSucc (LSucc LZero)) keffect, [], False))
+    , (mkId "Success", (TypeWithLevel LZero (TyCon $ mkId "Exception"), [], False))
+    , (mkId "MayFail", (TypeWithLevel LZero (TyCon $ mkId "Exception"), [], False))
     ]
 
 -- Various predicates and functions on type operators
@@ -84,6 +89,7 @@ closedOperation =
     TyOpExpon -> True
     TyOpMeet -> True
     TyOpJoin -> True
+    TyOpInterval -> True
     _        -> False
 
 coeffectResourceAlgebraOps :: TypeOperator -> Bool
@@ -93,6 +99,7 @@ coeffectResourceAlgebraOps =
     TyOpTimes -> True
     TyOpMeet -> True
     TyOpJoin -> True
+    TyOpInterval -> True
     _ -> False
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
@@ -109,6 +116,7 @@ tyOps = \case
     TyOpExpon -> (kNat, kNat, kNat)
     TyOpMeet -> (kNat, kNat, kNat)
     TyOpJoin -> (kNat, kNat, kNat)
+    TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
 
 dataTypes :: [DataDecl]
 dataTypes =
@@ -175,6 +183,9 @@ import Prelude
 
 data () = ()
 
+use : forall {a : Type} . a -> a [1]
+use = BUILTIN
+
 --------------------------------------------------------------------------------
 -- Arithmetic
 --------------------------------------------------------------------------------
@@ -191,6 +202,11 @@ pure
   . a -> a <>
 pure = BUILTIN
 
+fromPure
+  : forall {a : Type}
+  . a <Pure> -> a
+fromPure = BUILTIN
+
 --------------------------------------------------------------------------------
 -- I/O
 --------------------------------------------------------------------------------
@@ -206,6 +222,13 @@ toStderr = BUILTIN
 
 readInt : Int <{Stdin}>
 readInt = BUILTIN
+
+--------------------------------------------------------------------------------
+--Exceptions
+--------------------------------------------------------------------------------
+
+throw : forall {a : Type, k : Coeffect} . (a [0 : k]) <MayFail>
+throw = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Conversions
@@ -226,31 +249,30 @@ showInt = BUILTIN
 
 fork
   : forall {s : Protocol, k : Coeffect, c : k}
-  . ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
+  . ((Chan s) [c] -> ()) -> (Chan (Dual s)) [c]
 fork = BUILTIN
 
 forkLinear
   : forall {s : Protocol}
-  . (Chan s -> () <Session>) -> (Chan (Dual s)) <Session>
+  . (Chan s -> ()) -> Chan (Dual s)
 forkLinear = BUILTIN
 
 send
   : forall {a : Type, s : Protocol}
-  . Chan (Send a s) -> a -> (Chan s) <Session>
+  . Chan (Send a s) -> a -> Chan s
 send = BUILTIN
 
 recv
   : forall {a : Type, s : Protocol}
-  . Chan (Recv a s) -> (a, Chan s) <Session>
+  . Chan (Recv a s) -> (a, Chan s)
 recv = BUILTIN
 
-close : Chan End -> () <Session>
+close : Chan End -> ()
 close = BUILTIN
 
-unpackChan
-  : forall {s : Protocol}
-  . Chan s -> s
-unpackChan = BUILTIN
+
+-- trace : String -> () <>
+-- trace = BUILTIN
 
 --------------------------------------------------------------------------------
 -- File Handles

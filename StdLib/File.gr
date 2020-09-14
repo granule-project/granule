@@ -1,6 +1,6 @@
 import Maybe
 
-readMany : Int → Handle R → (Handle R, String) <IO>
+readMany : Int → Handle R → (Handle R, String) <IO> 
 readMany 0 h = pure (h, "");
 readMany n h =
   let (h, c)  ← readChar h;
@@ -9,12 +9,12 @@ readMany n h =
 
 readFile : String -> String <{Open,Read,Close,IOExcept}>
 readFile filename =
-  let h       <- openHandle ReadMode filename;
+  let h      <- openHandle ReadMode filename;
       (h, cs) <- readUntilEnd h;
-      _       <- closeHandle h
+      ()       <- closeHandle h
   in pure cs
 
-readUntilEnd : Handle R -> (Handle R, String) <{Read,IOExcept}>
+readUntilEnd : Handle R -> (Handle R, String) <{Read,IOExcept}> 
 readUntilEnd h =
   let (h, eof) <- isEOF h in
     case eof of

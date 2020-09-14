@@ -28,25 +28,30 @@ spec = let ?globals = mempty in do
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
        ((c, tyVars), pred) <- runCtxts joinCtxts
-              [(varA, Discharged tyVarK (CSig (CNat 5) natInterval))]
+              [(varA, Discharged tyVarK (TySig (TyInt 5) (promoteTypeToKind natInterval)))]
               [(varA, Discharged tyVarK (cNatOrdered 10))]
 
-       c `shouldBe` [(varA, Discharged tyVarK (CVar (mkId "a.0")))]
+<<<<<<< HEAD
+       c `shouldBe` [(varA, Discharged tyVarK (TyVar (mkId "a.0")))]
        tyVars `shouldBe` [(mkId "a.0", natInterval)]
+=======
+       c `shouldBe` [(varA, Discharged tyVarK (TyVar (mkId "a.0")))]
+       tyVars `shouldBe` [(mkId "a.0", promoteTypeToKind natInterval)]
+>>>>>>> coeffect-into-type
        pred `shouldBe`
-        [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)]]
-         --[Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (CVar (mkId "a.0")) natInterval)
-         --     , Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
+        [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (TyVar (mkId "a.0")) natInterval)]]
+         --[Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (TyVar (mkId "a.0")) natInterval)
+         --     , Con (ApproximatedBy nullSpan (cNatOrdered 5) (TyVar (mkId "a.0")) natInterval)]]
 
      it "join ctxts with discharged assumption in one" $ do
        ((c, _), pred) <- runCtxts joinCtxts
                           [(varA, Discharged (tyVarK) (cNatOrdered 5))]
                           []
-       c `shouldBe` [(varA, Discharged (tyVarK) (CVar (mkId "a.0")))]
+       c `shouldBe` [(varA, Discharged (tyVarK) (TyVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (Lub nullSpan (cNatOrdered 5) (CZero natInterval) (CVar (mkId "a.0")) natInterval)]]
-         -- [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (CVar (mkId "a.0")) natInterval)
-         --      ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (CVar (mkId "a.0")) natInterval)]]
+         [Conj [Con (Lub nullSpan (cNatOrdered 5) (TyInt 0) (TyVar (mkId "a.0")) natInterval)]]
+         -- [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (TyVar (mkId "a.0")) natInterval)
+         --      ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (TyVar (mkId "a.0")) natInterval)]]
 
 
     describe "intersectCtxtsWithWeaken" $ do
@@ -76,8 +81,7 @@ spec = let ?globals = mempty in do
                  []
                  [(varA, Discharged (tyVarK) (cNatOrdered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (CZero
-                     (TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat"))))]
+                 [(varA, Discharged (tyVarK) (cNatOrdered 0))]
 
 
     describe "elaborator tests" $
@@ -89,7 +93,7 @@ spec = let ?globals = mempty in do
         annotation (extractMainExpr defElab) `shouldBe` ((TyCon $ mkId "Int") :: Type Zero)
 
 extractMainExpr :: Def v a -> Expr v a
-extractMainExpr (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ e]) _) = e
+extractMainExpr (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ _ e]) _) = e
 extractMainExpr _ = undefined
 
 runCtxts
@@ -102,8 +106,8 @@ runCtxts f a b = do
   (Right res, state) <- runChecker initState (f nullSpan a b)
   pure (res, predicateStack state)
 
-cNatOrdered  :: Int -> Coeffect
-cNatOrdered x = CSig (CNat x) natInterval
+cNatOrdered  :: Int -> Type
+cNatOrdered x = TySig (TyInt x) (promoteTypeToKind natInterval)
 
 natInterval :: Type One
 natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")

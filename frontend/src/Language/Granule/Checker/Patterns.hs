@@ -16,9 +16,8 @@ import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecI
 import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Kinds
+import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Context
@@ -40,17 +39,18 @@ definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
   when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
-    addConstraint $ ApproximatedBy s (COne coeffTy) coeff coeffTy
+    addConstraint $ ApproximatedBy s (TyInt 1) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type Zero -> Checker Bool
-polyShaped t = case leftmostOfApplication t of
+polyShaped t =
+  case leftmostOfApplication t of
     TyCon k -> do
       mCardinality <- lookup k <$> gets typeConstructors
       case mCardinality of
         Just (_, c, _) -> case length c of
           1 -> do
-            debugM "uniShaped constructor" (show t <> "\n" <> show c)
+            debugM "monoShaped constructor" (show t <> "\n" <> show c)
             pure False
           _ -> do
             debugM "polyShaped constructor" (show t <> "\n" <> show c)
@@ -103,7 +103,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
         -- add a constraint that 0 approaximates the effect of the enclosing
         -- box patterns.
         case outerCoeff of
-          -- Can only have a wildcard under a box if the type of the pattern is unishaped
+          -- Can only have a wildcard not under a box if the type of the pattern is unishaped
           Nothing -> do
             isPoly <- polyShaped t
             if isPoly
@@ -112,7 +112,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
 
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
-              addConstraint $ ApproximatedBy s (CZero coeffTy) coeff coeffTy
+              addConstraint $ ApproximatedBy s (TyInt 0) coeff coeffTy
 
               return ([], [], [], PWild s t rf, NotFull)
 
@@ -146,9 +146,7 @@ ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
 
 -- Pattern match on a modal box
 ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
-
     (innerBoxTy, subst0) <- inferCoeffectType s coeff
-
     (coeff, subst1, coeffTy) <- case outerBoxTy of
         -- Case: no enclosing [ ] pattern
         Nothing -> return (coeff, [], innerBoxTy)
@@ -176,8 +174,6 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
-
-      definiteUnification s outerBoxTy ty
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
@@ -231,6 +227,8 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
+          ty' <- substitute subst ty'
+          definiteUnification s outerBoxTy ty'
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs

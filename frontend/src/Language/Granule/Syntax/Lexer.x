@@ -52,11 +52,15 @@ tokens :-
   else                          { \p s -> TokenElse p }
   case                          { \p s -> TokenCase p }
   of                            { \p s -> TokenOf p }
+  try                           { \p s -> TokenTry p }
+  as                            { \p s -> TokenAs p }
+  catch                         { \p s -> TokenCatch p }
   ∞                             { \p s -> TokenInfinity p }
   @float                        { \p s -> TokenFloat p s }
   @int                          { \p s -> TokenInt p $ read s }
   @charLiteral                  { \p s -> TokenCharLiteral p $ read s }
   @stringLiteral                { \p s -> TokenStringLiteral p $ read s }
+  "@"                           { \p s -> TokenAt p }
   "->"                          { \p s -> TokenArrow p }
   "→"                           { \p s -> TokenArrow p }
   "<-"                          { \p s -> TokenBind p }
@@ -121,6 +125,9 @@ data Token
   | TokenHiding AlexPosn
   | TokenCase   AlexPosn
   | TokenOf     AlexPosn
+  | TokenTry    AlexPosn
+  | TokenAs     AlexPosn
+  | TokenCatch  AlexPosn
   | TokenInfinity AlexPosn
   | TokenLambda AlexPosn
   | TokenLetBox AlexPosn
@@ -170,6 +177,7 @@ data Token
   | TokenEmptyHole AlexPosn
   | TokenHoleStart AlexPosn
   | TokenHoleEnd AlexPosn
+  | TokenAt AlexPosn
 
   deriving (Eq, Show, Generic)
 

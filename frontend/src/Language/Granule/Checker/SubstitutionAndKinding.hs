@@ -3,30 +3,53 @@
 {-# LANGUAGE InstanceSigs #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE FlexibleInstances #-}
+{-# LANGUAGE LambdaCase #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
-module Language.Granule.Checker.Substitution where
+module Language.Granule.Checker.SubstitutionAndKinding(
+  Substitutable(..),
+  Unifiable(..),
+  checkKind,
+  combineSubstitutions,
+  combineManySubstitutions,
+  freshPolymorphicInstance,
+  inferCoeffectType,
+  inferCoeffectTypeAssumption,
+  joinKind,
+  kindCheckDef,
+  mguCoeffectTypesFromCoeffects,
+  replaceSynonyms,
+  synthKind,
+  updateTyVar) where
 
+import Control.Arrow (second)
 import Control.Monad
+import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
-import Data.Maybe (mapMaybe)
 import Data.Bifunctor.Foldable (bicataM)
+import Data.Foldable (foldrM)
+import Data.Functor.Identity (runIdentity)
+import Data.List (elemIndex, sortBy)
+import Data.Maybe (fromMaybe, mapMaybe)
 
 import Language.Granule.Context
+
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr hiding (Substitutable)
-import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Helpers hiding (freshIdentifierBase)
 import Language.Granule.Syntax.Identifiers
+import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
-import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Effects (effectTop)
+import Language.Granule.Checker.Flatten (mguCoeffectTypes)
 import Language.Granule.Checker.Monad
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.Primitives (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
+import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
 --import Language.Granule.Checker.Normalise
 
@@ -46,10 +69,6 @@ instance Substitutable Substitutors where
       SubstT t -> do
         t <- substitute subst t
         return $ SubstT t
-
-      SubstC c -> do
-        c <- substitute subst c
-        return $ SubstC c
 
       SubstK k -> do
         k <- substitute subst k
@@ -105,6 +124,9 @@ instance Substitutable (Type l) where
   substitute subst (TyInt n) =
     return $ TyInt n
 
+  substitute subst (TyRational n) =
+    return $ TyRational n
+
   substitute subst (TyInfix op t1 t2) = do
     t1' <- substitute subst t1
     t2' <- substitute subst t2
@@ -122,8 +144,6 @@ instance Substitutable (Type l) where
                         return (pat', branch')) cases
     return $ TyCase guard' cases'
 
-  substitute subst (KUnion k1 k2) = do
-    return $ KUnion k1 k2
 
   substitute subst (TySig t1 t2) = do
     t1' <- substitute subst t1
@@ -159,107 +179,6 @@ instance Substitutable (Type Two) where
   substitute _ = error "TODO: Cannot currently substitute into Sorts"
 -}
 
-instance Substitutable Coeffect where
-
-    substitute subst (CPlus c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CPlus c1' c2'
-
-    substitute subst (CJoin c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CJoin c1' c2'
-
-    substitute subst (CMeet c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CMeet c1' c2'
-
-    substitute subst (CTimes c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CTimes c1' c2'
-
-    substitute subst (CMinus c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CMinus c1' c2'
-
-    substitute subst (CExpon c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CExpon c1' c2'
-
-    substitute subst (CInterval c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CInterval c1' c2'
-
-    substitute subst (CProduct c1 c2) = do
-        c1' <- substitute subst c1
-        c2' <- substitute subst c2
-        return $ CProduct c1' c2'
-
-    substitute subst (CVar v) =
-        case lookup v subst of
-            Just (SubstC c) -> do
-                checkerState <- get
-                case lookup v (tyVarContext checkerState) of
-                    -- If the coeffect variable has a poly kind then update it with the
-                    -- kind of c
-                    --Result of lookup: (TypeWithLevel, quantifier)
-                    Just (TypeWithLevel _ (TyVar kv), q) -> do
-                        (coeffK, _) <- inferCoeffectType nullSpan c
-                        put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (TypeWithLevel (LSucc LZero) coeffK, q) }
-
-                    _ -> return ()
-                return c
-
-            -- Substitution of a ty var becomes a coeffect var
-            Just (SubstT (TyVar v')) ->
-              return $ CVar v'
-
-            -- Substitution of a type (that is not just a variable) can
-            -- be done if we convert the type term into a coeffect term
-            -- NOTE: This will go away when we merge the Coeffect syntax just into Type
-            Just (SubstT t) -> do
-                k <- inferKindOfType nullSpan t
-                (k', _) <- inferCoeffectType nullSpan (CVar v)
-                jK <- joinKind k k'
-                case jK of
-                    Just (TyCon (internalName -> "Nat"), _) ->
-                        compileNatKindedTypeToCoeffect nullSpan t
-                    _ -> return (CVar v)
-
-            _  -> return $ CVar v
-
-    substitute subst (CInfinity k) = do
-        k <- substitute subst k
-        return $ CInfinity k
-
-    substitute subst (COne k) = do
-        k <- substitute subst k
-        return $ COne k
-
-    substitute subst (CZero k) = do
-        k <- substitute subst k
-        return $ CZero k
-
-    substitute subst (CSet tys) = do
-        tys <- mapM (\(v, t) -> substitute subst t >>= (\t' -> return (v, t'))) tys
-        return $ CSet tys
-
-    substitute subst (CSig c k) = do
-        c <- substitute subst c
-        k <- substitute subst k
-        return $ CSig c k
-
-    substitute _ c@CNat{}      = return c
-    substitute _ c@CFloat{}    = return c
-    substitute _ c@Level{}     = return c
-
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
   substitute s (Just t) = substitute s t >>= return . Just
@@ -283,7 +202,6 @@ combineManySubstitutions s (subst:ss) = do
 removeReflexivePairs :: Substitution -> Substitution
 removeReflexivePairs [] = []
 removeReflexivePairs ((v, SubstT (TyVar v')):subst) | v == v' = removeReflexivePairs subst
-removeReflexivePairs ((v, SubstC (CVar v')):subst) | v == v' = removeReflexivePairs subst
 removeReflexivePairs ((v, SubstK (TyVar v')):subst) | v == v' = removeReflexivePairs subst
 removeReflexivePairs ((v, e):subst) = (v, e) : removeReflexivePairs subst
 
@@ -342,15 +260,18 @@ reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt
   apply the substitution returning a pair of contexts, one for parts
   of the context where a substitution occurred, and one where substitution
   did not occur
->>> let ?globals = mempty in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", SubstT $ TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (CVar $ mkId "b"))])
-Just ([((Id "y" "y"),Linear (TyInt 0))],[((Id "x" "x"),Linear (TyVar (Id "x" "x"))),((Id "z" "z"),Discharged (TyVar (Id "z" "z")) (CVar (Id "b" "b")))])
+>>> let ?globals = mempty in evalChecker initState (runMaybeT $ substCtxt [(mkId "y", SubstT $ TyInt 0)] [(mkId "x", Linear (TyVar $ mkId "x")), (mkId "y", Linear (TyVar $ mkId "y")), (mkId "z", Discharged (TyVar $ mkId "z") (TyVar $ mkId "b"))])
+Just ([((Id "y" "y"),Linear (TyInt 0))],[((Id "x" "x"),Linear (TyVar (Id "x" "x"))),((Id "z" "z"),Discharged (TyVar (Id "z" "z")) (TyVar (Id "b" "b")))])
 -}
 
 instance Substitutable (Ctxt Assumption) where
 
   substitute subst ctxt = do
     (ctxt0, ctxt1) <- substCtxt subst ctxt
-    return (ctxt0 <> ctxt1)
+    let ctxtIds = getCtxtIds ctxt
+    let combined = ctxt0 <> ctxt1
+    -- Ensure that the resulting ctxt preserves the ordering of the input ctxt.
+    return $ sortBy (\ (x, _) (y, _) -> elemIndex x ctxtIds `compare` elemIndex y ctxtIds) combined
 
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
   -> Checker (Ctxt Assumption, Ctxt Assumption)
@@ -373,7 +294,6 @@ substAssumption subst (v, Discharged t c) = do
     c <- substitute subst c
     return (v, Discharged t c)
 
-
 -- | Apply a name map to a type to rename the type variables
 renameType :: (?globals :: Globals) => [(Id, Id)] -> Type Zero -> Checker (Type Zero)
 renameType subst = typeFoldM0 $ baseTypeFoldZero
@@ -382,7 +302,7 @@ renameType subst = typeFoldM0 $ baseTypeFoldZero
   }
   where
     renameBox renameMap c t = do
-      c' <- substitute (map (\(v, var) -> (v, SubstC $ CVar var)) renameMap) c
+      c' <- substitute (map (\(v, var) -> (v, SubstT $ TyVar var)) renameMap) c
       t' <- renameType renameMap t
       return $ Box c' t'
     renameTyVar renameMap v =
@@ -537,11 +457,11 @@ instance Substitutable Constraint where
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
 instance Substitutable (Equation () (Type Zero)) where
-  substitute ctxt (Equation sp ty rf patterns expr) =
+  substitute ctxt (Equation sp name ty rf patterns expr) =
       do ty' <- substitute ctxt ty
          pat' <- mapM (substitute ctxt) patterns
          expr' <- substitute ctxt expr
-         return $ Equation sp ty' rf pat' expr'
+         return $ Equation sp name ty' rf pat' expr'
 
 substituteValue :: (?globals::Globals)
                 => Substitution
@@ -573,6 +493,10 @@ substituteExpr :: (?globals::Globals)
 substituteExpr ctxt (AppF sp ty rf fn arg) =
     do  ty' <- substitute ctxt ty
         return $ App sp ty' rf fn arg
+substituteExpr ctxt (AppTyF sp ty rf fn t) =
+    do  ty' <- substitute ctxt ty
+        t' <- substitute ctxt t
+        return $ AppTy sp ty' rf fn t'
 substituteExpr ctxt (BinopF sp ty rf op lhs rhs) =
     do  ty' <- substitute ctxt ty
         return $ Binop sp ty' rf op lhs rhs
@@ -581,6 +505,11 @@ substituteExpr ctxt (LetDiamondF sp ty rf pattern mty value expr) =
         pattern' <- substitute ctxt pattern
         mty' <- mapM (substitute ctxt) mty
         return $ LetDiamond sp ty' rf pattern' mty' value expr
+substituteExpr ctxt (TryCatchF sp ty rf e1 pattern mty e2 e3) =
+    do  ty' <- substitute ctxt ty
+        pattern' <- substitute ctxt pattern
+        mty' <- mapM (substitute ctxt) mty
+        return $ TryCatch sp ty' rf e1 pattern' mty' e2 e3
 substituteExpr ctxt (ValF sp ty rf value) =
     do  ty' <- substitute ctxt ty
         return $ Val sp ty' rf value
@@ -627,22 +556,6 @@ class Unifiable t where
 
 instance Unifiable Substitutors where
     unify (SubstT t) (SubstT t') = unify t t'
-    unify (SubstT t) (SubstC c') = do
-        -- We can unify a type with a coeffect, if the type is actually a Nat
-        k <- inferKindOfType nullSpan t
-        (k', subst) <- inferCoeffectType nullSpan c'
-        jK <- joinKind k k'
-        case jK of
-            Just (TyCon k, _) | internalName k == "Nat" -> do
-                c <- compileNatKindedTypeToCoeffect nullSpan t
-                substM <- unify c c'
-                case substM of
-                  Nothing -> return $ Just subst
-                  Just subst' -> combineManySubstitutions nullSpan [subst, subst'] >>= (return . Just)
-            _ -> return Nothing
-
-    unify (SubstC c') (SubstT t) = unify (SubstT t) (SubstC c')
-    unify (SubstC c) (SubstC c') = unify c c'
     unify (SubstK k) (SubstK k') = unify k k'
     unify _ _ = return Nothing
 
@@ -668,14 +581,13 @@ instance Unifiable (Type Zero) where
         u1 <<>> u2
     unify (TyInt i) (TyInt j) | i == j = return $ Just []
     unify t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
-        k <- inferKindOfType nullSpan t
-        k' <- inferKindOfType nullSpan t
+        st <- get
+        (k, _) <- synthKind nullSpan (tyVarContext st) t
+        (k', _) <- synthKind nullSpan (tyVarContext st) t
         jK <- joinKind k k'
         case jK of
             Just (TyCon (internalName -> "Nat"), _) -> do
-                c  <- compileNatKindedTypeToCoeffect nullSpan t
-                c' <- compileNatKindedTypeToCoeffect nullSpan t'
-                addConstraint $ Eq nullSpan c c' (TyCon $ mkId "Nat")
+                addConstraint $ Eq nullSpan t t' (TyCon $ mkId "Nat")
                 return $ Just []
 
             _ | o == o' -> do
@@ -686,75 +598,6 @@ instance Unifiable (Type Zero) where
             _ -> return $ Nothing
     -- No unification
     unify _ _ = return $ Nothing
-
-instance Unifiable Coeffect where
-    unify (CVar v) c = do
-        checkerState <- get
-        subst <- case lookup v (tyVarContext checkerState) of
-            -- If the coeffect variable has a poly kind then update it with the
-            -- kind of c
-            Just (TypeWithLevel _ (TyVar kv), q) -> do
-                    (coeffK, subst) <- inferCoeffectType nullSpan c
-                    put $ checkerState { tyVarContext = replace (tyVarContext checkerState)
-                                                                    v (TypeWithLevel (LSucc LZero) coeffK, q) }
-                    return subst
-
-            Just (k, q) ->
-                case c of
-                    CVar v' ->
-                        case lookup v' (tyVarContext checkerState) of
-                            Just (TypeWithLevel _ (TyVar _), q) -> do
-                                -- The type of v is known and c is a variable with a poly kind
-                                put $ checkerState
-                                    { tyVarContext = replace (tyVarContext checkerState) v' (k, q) }
-                                return []
-                            _ -> return []
-                    _ -> return []
-            Nothing -> return []
-        -- Standard result of unifying with a variable
-        return $ Just $ subst ++ [(v, SubstC c)]
-
-    unify c (CVar v) = unify (CVar v) c
-    unify (CPlus c1 c2) (CPlus c1' c2') = do
-        u1 <- unify c1 c1'
-        u2 <- unify c2 c2'
-        u1 <<>> u2
-
-    unify (CTimes c1 c2) (CTimes c1' c2') = do
-        u1 <- unify c1 c1'
-        u2 <- unify c2 c2'
-        u1 <<>> u2
-
-    unify (CMeet c1 c2) (CMeet c1' c2') = do
-        u1 <- unify c1 c1'
-        u2 <- unify c2 c2'
-        u1 <<>> u2
-
-    unify (CJoin c1 c2) (CJoin c1' c2') = do
-        u1 <- unify c1 c1'
-        u2 <- unify c2 c2'
-        u1 <<>> u2
-
-    unify (CInfinity k) (CInfinity k') = do
-        unify k k'
-
-    unify (CZero k) (CZero k') = do
-        unify k k'
-
-    unify (COne k) (COne k') = do
-        unify k k'
-
-    unify (CSet tys) (CSet tys') = do
-        ums <- zipWithM (\x y -> unify (snd x) (snd y)) tys tys'
-        foldM (<<>>) (Just []) ums
-
-    unify (CSig c ck) (CSig c' ck') = do
-        u1 <- unify c c'
-        u2 <- unify ck ck'
-        u1 <<>> u2
-
-    unify c c' =
-        if c == c' then return $ Just [] else return Nothing
 
 instance Unifiable Kind where
     unify (TyVar v) k =
@@ -774,37 +617,19 @@ instance Unifiable t => Unifiable (Maybe t) where
 
 updateTyVar :: (?globals :: Globals) => Span -> Id -> Kind -> Checker ()
 updateTyVar s tyVar k = do
-    -- CLEAN
-    --liftIO $ putStrLn $ "updating " <> pretty tyVar <> " to " <> pretty k
     -- Updated the kind of type variable `v` in the context
     st <- get
     -- Get the current quantification
     case lookup tyVar (tyVarContext st) of
       Just (_, q) -> do
-          st <- get
-          -- liftIO $ putStrLn $ "\n\ntyVarContext before = " <> pretty (tyVarContext st)
           modify (\st -> st{ tyVarContext = rewriteCtxt (tyVarContext st) })
-          st <- get
-          -- liftIO $ putStrLn $ "\ntyVarContext after = " <> pretty (tyVarContext st)
           -- Rewrite the predicate
+
           st <- get
           let subst = [(tyVar, SubstK k)]
-          {-
-          let subst = case k of
-                        TyPromote t -> [(tyVar, SubstT t)]
-                        _          -> [(tyVar, SubstK k)]
-          -}
           ps <- mapM (substitute subst) (predicateStack st)
           put st{ predicateStack = ps }
 
-          {- }
-          case demoteKindToType k of
-              Nothing -> return ()
-              Just t -> do
-                  ps <- mapM (substitute [(v, SubstK t, q))])
-                  modify (\st -> st{ predicateStack = map (rewriteBindersInPredicate [(v, (t, q))])
-                                                          (predicateStack st)})
-  -}
       Nothing -> throw UnboundVariableError{ errLoc = s, errId = tyVar }
   where
     rewriteCtxt :: Ctxt (TypeWithLevel, Quantifier) -> Ctxt (TypeWithLevel, Quantifier)
@@ -814,3 +639,341 @@ updateTyVar s tyVar k = do
     rewriteCtxt ((name, (TypeWithLevel (LSucc LZero) (TyVar kindVar), q)) : ctxt)
      | tyVar == kindVar = (name, (TypeWithLevel (LSucc LZero) k, q)) : rewriteCtxt ctxt
     rewriteCtxt (x : ctxt) = x : rewriteCtxt ctxt
+
+--------------------------------------------------------------------------------
+-- Below this point is the KindsAlgorithmic module, moved here to temporarily --
+-- get around cyclic module dependencies.                                     --
+--------------------------------------------------------------------------------
+
+-- module Language.Granule.Checker.KindsAlgorithmic where
+
+-- | Check the kind of a definition
+-- Currently we expect that a type scheme has kind ktype
+kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
+kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
+  let localTyVarContext = universify quantifiedVariables
+
+  -- Set up the quantified variables in the type variable context
+  modify (\st -> st { tyVarContext = localTyVarContext })
+  forM_ constraints $ \constraint -> checkKind s localTyVarContext constraint kpredicate
+
+  ty <- return $ replaceSynonyms ty
+  unifiers <- checkKind s localTyVarContext ty ktype
+
+  -- Rewrite the quantified variables with their possibly updated kinds (inferred)
+  qVars <- mapM (\(v, a) -> substitute unifiers a >>= (\b -> return (v, b))) quantifiedVariables
+  modify (\st -> st { tyVarContext = [] })
+
+  -- Update the def with the resolved quantifications
+  return (Def s id rf eqs (Forall s' qVars constraints ty))
+
+-- Replace any constructor IDs with their top-element
+-- (i.e., IO gets replaces with the set of all effects as an alias)
+replaceSynonyms :: Type Zero -> Type Zero
+replaceSynonyms = runIdentity . typeFoldM0 (baseTypeFoldZero { tfTyCon0 = conCase })
+  where
+    conCase conId = let tyConId = TyCon conId in return $ fromMaybe tyConId (effectTop tyConId)
+
+checkKind :: (?globals :: Globals) =>
+  Span -> Ctxt (TypeWithLevel, Quantifier) -> Type l -> Type (Succ l) -> Checker Substitution
+
+-- KChk_funk
+checkKind s ctxt (FunTy _ t1 t2) k = do
+  subst1 <- checkKind s ctxt t1 k
+  subst2 <- checkKind s ctxt t2 k
+  combineSubstitutions s subst1 subst2
+
+-- KChk_app
+checkKind s ctxt (TyApp t1 t2) k2 = do
+  (k1, subst1) <- synthKind s ctxt t2
+  subst2 <- checkKind s ctxt t1 (FunTy Nothing k1 k2)
+  combineSubstitutions s subst1 subst2
+
+-- KChk_opRing and KChk_effOp combined (i.e. closed operators)
+checkKind s ctxt t@(TyInfix op t1 t2) k | closedOperation op = do
+  maybeSubst <- closedOperatorAtKind s ctxt op k
+  case maybeSubst of
+    Just subst3 -> do
+      subst1 <- checkKind s ctxt t1 k
+      subst2 <- checkKind s ctxt t2 k
+      combineManySubstitutions s [subst1, subst2, subst3]
+    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
+
+-- KChk_coeffZero and KChk_coeffOne combined
+checkKind s ctxt (TyInt 0) t =
+  case t of
+    -- 0 : Nat
+    TyCon (internalName -> "Nat") -> return []
+    -- 0 : R if R : Coeffect
+    _ -> checkKind s ctxt t kcoeffect
+
+-- KChk_effOne
+checkKind s ctxt (TyInt 1) t =
+  case t of
+    -- 1 : Nat
+    TyCon (internalName -> "Nat") -> return []
+    -- 1 : R if R : Coeffect or R : Effect
+    _ -> (checkKind s ctxt t kcoeffect) <|> (checkKind s ctxt t keffect)
+
+-- KChk_sig
+checkKind s ctxt (TySig t k) k' = do
+  join <- k `joinKind` k'
+  case join of
+    Just (_, subst) -> return subst
+    Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+
+-- KChck_Nat
+-- "Nat" belonds to Coeffect, Effect, and Type kinds
+checkKind s ctxt (TyCon (internalName -> "Nat")) (TyCon (internalName -> "Coeffect")) =
+  return []
+checkKind s ctxt (TyCon (internalName -> "Nat")) (TyCon (internalName -> "Effect")) =
+  return []
+checkKind s ctxt (TyCon (internalName -> "Nat")) (Type (LSucc LZero)) =
+  return []
+
+-- Fall through to synthesis if checking can not be done.
+checkKind s ctxt t k = do
+  (k', subst1) <- synthKind s ctxt t
+  join <- k `joinKind` k'
+  case join of
+    Just (_, subst2) -> combineSubstitutions s subst1 subst2
+    Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+
+synthKind :: (?globals :: Globals) =>
+  Span -> Ctxt (TypeWithLevel, Quantifier) -> Type l -> Checker (Type (Succ l), Substitution)
+
+-- KChkS_var and KChkS_instVar
+synthKind s ctxt t@(TyVar x) = do
+  m <- lookupAtLevel s x ctxt (LSucc (getLevel t))
+  case m of
+    Just k -> return (k, [])
+    Nothing     -> throw UnboundTypeVariable { errLoc = s, errId = x }
+
+-- -- KChkS_fun
+-- synthKind s ctxt (FunTy _ t1 t2) = do
+--   subst1 <- checkKind s ctxt t1 ktype
+--   subst2 <- checkKind s ctxt t2 ktype
+--   subst <- combineSubstitutions s subst1 subst2
+--   return (ktype, subst)
+
+-- KChkS_app
+synthKind s ctxt (TyApp t1 t2) = do
+  (funK, subst1) <- synthKind s ctxt t1
+  case funK of
+    (FunTy _ k1 k2) -> do
+      subst2 <- checkKind s ctxt t2 k1
+      subst <- combineSubstitutions s subst1 subst2
+      return (k2, subst)
+    _ -> throw KindError { errLoc = s, errTyL = typeWithLevel t1, errKL = typeWithLevel funK }
+
+-- KChkS_predOp
+synthKind s ctxt (TyInfix op t1 t2) | predicateOperation op = do
+  (k, subst1) <- synthKind s ctxt t1
+  maybeSubst <- predicateOperatorAtKind s ctxt op k
+  case maybeSubst of
+    Just subst3 -> do
+      subst2 <- checkKind s ctxt t2 k
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (kpredicate, subst)
+    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
+
+-- KChkS_opRing and KChkS_effOpp
+synthKind s ctxt (TyInfix op t1 t2) | closedOperation op = do
+  (k, subst1) <- synthKind s ctxt t1
+  maybeSubst <- closedOperatorAtKind s ctxt op k
+  case maybeSubst of
+    Just subst3 -> do
+      subst2 <- checkKind s ctxt t2 k
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (k, subst)
+    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
+
+-- KChkS_effOne, KChkS_coeffZero and KChkS_coeffOne
+synthKind s ctxt (TyInt n) = return (TyCon (Id "Nat" "Nat"), [])
+
+-- KChkS_box
+synthKind s ctxt (Box c t) = do
+  (innerK, subst2) <- synthKind s ctxt c
+  st <- get
+  subst1 <- checkKind s (tyVarContext st) innerK kcoeffect
+  subst3 <- checkKind s (tyVarContext st) t ktype
+  subst <- combineManySubstitutions s [subst1, subst2, subst3]
+  return (ktype, subst)
+
+-- KChkS_dia
+synthKind s ctxt (Diamond e t) = do
+  (innerK, subst2) <- synthKind s ctxt e
+  st <- get
+  subst1 <- checkKind s (tyVarContext st) innerK keffect
+  subst3 <- checkKind s (tyVarContext st) t ktype
+  subst <- combineManySubstitutions s [subst1, subst2, subst3]
+  return (ktype, subst)
+
+synthKind s ctxt (TyCon (internalName -> "Pure")) = do
+  -- Create a fresh type variable
+  var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
+  return (TyVar var, [])
+
+synthKind s ctxt (TyCon (internalName -> "Handled")) = do
+  var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
+  return $ ((FunTy Nothing (TyVar var) (TyVar var)), [])
+
+-- KChkS_con
+synthKind s ctxt t@(TyCon id) = do
+  st <- get
+  m <- lookupAtLevel s id (typeConstructors st) (LSucc (getLevel t))
+  case m of
+    Just kind' -> return (kind', [])
+    Nothing -> do
+      mConstructor <- lookupDataConstructor s id
+      case mConstructor of
+        Just (Forall _ [] [] t, _) ->
+          case typePromote t of
+            Just t' -> return (t', [])
+            Nothing -> error $ pretty s <> "I'm afraid I can't yet promote the data constructor:"  <> pretty id
+        Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty id
+        Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
+
+-- KChkS_set
+synthKind s ctxt (TySet (t:ts)) = do
+  (k, subst1) <- synthKind s ctxt t
+  substs <- foldrM (\t' res -> (:res) <$> checkKind s ctxt t' k) [] ts
+  subst <- combineManySubstitutions s (subst1:substs)
+  case lookup k setElements of
+    -- Lift this alias to the kind level
+    Just t  -> return (t, subst)
+    Nothing -> return (TyApp (TyCon $ mkId "Set") k, subst)
+
+-- KChkS_sig
+synthKind s ctxt (TySig t k) = do
+  subst <- checkKind s ctxt t k
+  return (k, subst)
+
+synthKind s _ t = do
+  debugM "Can't synth" (pretty t)
+  throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
+
+-- | `closedOperatorAtKind` takes an operator `op` and a kind `k` and returns a
+-- substitution if this is a valid operator at kind `k -> k -> k`.
+closedOperatorAtKind :: (?globals :: Globals) =>
+  Span -> Ctxt (TypeWithLevel, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
+
+-- Nat case
+closedOperatorAtKind _ _ op (TyCon (internalName -> "Nat")) =
+  return $ if closedOperation op then Just [] else Nothing
+
+-- * case
+closedOperatorAtKind s ctxt TyOpTimes t = do
+  -- See if the type is a coeffect
+  (result, putChecker) <- peekChecker (checkKind s ctxt t kcoeffect)
+  case result of
+    Left _ -> do
+      -- If not, see if the type is an effect
+      (result', putChecker') <- peekChecker (checkKind s ctxt t keffect)
+      case result' of
+        -- Not a closed operator at this kind
+        Left  _ -> return Nothing
+        -- Yes it is an effect type
+        Right subst -> do
+          putChecker'
+          return $ Just subst
+    -- Yes it is a coeffect type
+    Right subst -> do
+      putChecker
+      return $ Just subst
+
+-- Any other "coeffect operators" case
+closedOperatorAtKind s ctxt op t | coeffectResourceAlgebraOps op = do
+  -- See if the type is a coeffect
+  (result, putChecker) <- peekChecker (checkKind s ctxt t kcoeffect)
+  case result of
+    Left _ -> return Nothing
+    Right subst -> do
+      putChecker
+      return $ Just subst
+
+closedOperatorAtKind _ _ op (TyVar _) =
+  return $ if closedOperation op then Just [] else Nothing
+
+closedOperatorAtKind _ _ _ _ = return Nothing
+
+-- | `predicateOperatorAtKind` takes an operator `op` and a kind `k` and returns
+-- a substitution if this is a valid operator at kind `k -> k -> kpredicate`.
+predicateOperatorAtKind :: (?globals :: Globals) =>
+  Span -> Ctxt (TypeWithLevel, Quantifier) -> TypeOperator -> Type l -> Checker (Maybe Substitution)
+predicateOperatorAtKind s ctxt op t | predicateOperation op = do
+  (result, putChecker) <- peekChecker (checkKind s ctxt t kcoeffect)
+  case result of
+    Left _ -> return Nothing
+    Right subst -> do
+      putChecker
+      return $ Just subst
+predicateOperatorAtKind s ctxt op k@(TyVar _) =
+    return $ if predicateOperation op then Just [] else Nothing
+predicateOperatorAtKind _ _ _ _ = return Nothing
+
+-- | Determines if a type operator produces results of kind kpredicate.
+predicateOperation :: TypeOperator -> Bool
+predicateOperation op = (\(_, _, c) -> c) (tyOps op) == kpredicate
+
+-- | Compute the join of two kinds, if it exists
+joinKind :: (?globals :: Globals) => Kind -> Kind -> Checker (Maybe (Kind, Substitution))
+
+joinKind k1 k2 | k1 == k2 = return $ Just (k1, [])
+
+joinKind (TyVar v) k = do
+  st <- get
+  case lookup v (tyVarContext st) of
+    Just (_, q) | q == InstanceQ || q == BoundQ -> return $ Just (k, [(v, SubstK k)])
+    -- Occurs if an implicitly quantified variable has arisen
+    Nothing -> return $ Just (k, [(v, SubstK k)])
+    -- Don't unify with universal variables
+    _ -> return Nothing
+
+joinKind k1 k2@(TyVar _) = joinKind k2 k1
+
+joinKind (FunTy _ k1 k2) (FunTy _ k3 k4) = do
+  jK1 <- joinKind k1 k3
+  jK2 <- joinKind k2 k4
+  case (jK1, jK2) of
+    (Just (k5, subst1), Just (k6, subst2)) -> do
+      subst <- combineSubstitutions nullSpan subst1 subst2
+      return $ Just (FunTy Nothing k5 k6, subst)
+    _ -> return Nothing
+
+joinKind _ _ = return Nothing
+
+-- Universally quantifies everything in a context.
+universify :: Ctxt Kind -> Ctxt (TypeWithLevel, Quantifier)
+universify = map (second (\k -> (typeWithLevel k, ForallQ)))
+
+-- TODO: Should this be using synthKind rather than inferCoeffectTypeInContext?
+-- | Infer the type of a coeffect term (giving its span as well)
+inferCoeffectType :: (?globals :: Globals) => Span -> Type Zero -> Checker (Type One, Substitution)
+inferCoeffectType s c = do
+  st <- get
+  r <- synthKind s (tyVarContext st) c
+  debugM "Inferred coeffect type" (show c <> "\n" <> show r)
+  return r
+
+inferCoeffectTypeAssumption :: (?globals :: Globals) => Span -> Assumption -> Checker (Maybe (Type One), Substitution)
+inferCoeffectTypeAssumption _ (Linear _) = return (Nothing, [])
+inferCoeffectTypeAssumption s (Discharged _ c) = do
+  (t, subst) <- inferCoeffectType s c
+  return (Just t, subst)
+
+-- Find the most general unifier of two coeffects
+-- This is an effectful operation which can update the coeffect-kind
+-- contexts if a unification resolves a variable
+mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
+  => Span
+  -> Type Zero
+  -> Type Zero
+  -> Checker (Type One, Substitution, (Type Zero -> Type Zero, Type Zero -> Type Zero))
+mguCoeffectTypesFromCoeffects s c1 c2 = do
+  st <- get
+  (coeffTy1, subst1) <- inferCoeffectType s c1
+  (coeffTy2, subst2) <- inferCoeffectType s c2
+  (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
+  subst <- combineManySubstitutions s [subst1, subst2, subst3]
+  return (coeffTy, subst, res)

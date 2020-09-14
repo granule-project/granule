@@ -9,15 +9,16 @@
 
 module Language.Granule.Syntax.Pattern where
 
+import Data.Data
+import GHC.Generics (Generic)
+import qualified Text.Reprinter as Rp
+
 import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.FirstParameter
 import Language.Granule.Syntax.Annotated
 import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
-
-import GHC.Generics (Generic)
-import Data.Data
 
 -- | Language.Granule.Syntax of patterns
 data Pattern a
@@ -137,3 +138,16 @@ instance Freshenable m (Pattern a) where
   freshen p@PWild {} = return p
   freshen p@PInt {} = return p
   freshen p@PFloat {} = return p
+
+patRefactored :: Pattern a -> Bool
+patRefactored (PVar _ _ rf _) = rf
+patRefactored (PWild _ _ rf) = rf
+patRefactored (PBox _ _ rf _) = rf
+patRefactored (PInt _ _ rf _) = rf
+patRefactored (PFloat _ _ rf _) = rf
+patRefactored (PConstr _ _ rf _ _) = rf
+
+instance Rp.Refactorable (Pattern a) where
+  isRefactored def = if patRefactored def then Just Rp.Replace else Nothing
+
+  getSpan = convSpan . getFirstParameter

@@ -89,12 +89,15 @@ pattern Ext a extv = (ExprFix2 (ExtF a extv))
 -- | and annotations `a`).
 data ExprF ev a expr value =
     AppF Span a Bool expr expr
+  | AppTyF Span a Bool expr (Type Zero)
   | BinopF Span a Bool Operator expr expr
   | LetDiamondF Span a Bool (Pattern a) (Maybe (Type Zero)) expr expr
      -- Graded monadic composition (like Haskell do)
      -- let p : t <- e1 in e2
      -- or
      -- let p <- e1 in e2
+  | TryCatchF Span a Bool expr (Pattern a) (Maybe (Type Zero)) expr expr
+     -- try e1 as p : t in e2 catch e3
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
   | HoleF Span a Bool [Id]
@@ -124,12 +127,37 @@ type Expr = ExprFix2 ExprF ValueF
 type UnfixedExpr ev a = UnExprFix2 ExprF ValueF ev a
 
 pattern App sp a rf fexp argexp = (ExprFix2 (AppF sp a rf fexp argexp))
+pattern AppTy sp a rf fexp ty = (ExprFix2 (AppTyF sp a rf fexp ty))
 pattern Binop sp a rf op lhs rhs = (ExprFix2 (BinopF sp a rf op lhs rhs))
 pattern LetDiamond sp a rf pat mty nowexp nextexp = (ExprFix2 (LetDiamondF sp a rf pat mty nowexp nextexp))
+pattern TryCatch sp a rf t1 pat mty t2 t3 = (ExprFix2 (TryCatchF sp a rf t1 pat mty t2 t3))
 pattern Val sp a rf val = (ExprFix2 (ValF sp a rf val))
 pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
-pattern Hole sp a rf vars = ExprFix2 (HoleF sp a rf vars)
-{-# COMPLETE App, Binop, LetDiamond, Val, Case, Hole #-}
+pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
+{-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
+
+-- Cannot be automatically derived unfortunately
+instance Functor (Value ev) where
+  fmap f (Abs a pats mt e) = Abs (f a) (fmap f pats) mt (fmap f e)
+  fmap f (Promote a e)     = Promote (f a) (fmap f e)
+  fmap f (Pure a e)        = Pure (f a) (fmap f e)
+  fmap f (Constr a idv vals) = Constr (f a) idv (map (fmap f) vals)
+  fmap f (Var a idv)       = Var (f a) idv
+  fmap f (Ext a ev)        = Ext (f a) ev
+  fmap f (NumInt n)        = NumInt n
+  fmap f (NumFloat n)      = NumFloat n
+  fmap f (CharLiteral c)   = CharLiteral c
+  fmap f (StringLiteral s) = StringLiteral s
+
+instance Functor (Expr ev) where
+  fmap f (App s a rf e1 e2) = App s (f a) rf (fmap f e1) (fmap f e2)
+  fmap f (AppTy s a rf e1 t) = AppTy s (f a) rf (fmap f e1) t
+  fmap f (Binop s a b op t1 t2) = Binop s (f a) b op (fmap f t1) (fmap f t2)
+  fmap f (LetDiamond s a b ps mt e1 e2) = LetDiamond s (f a) b (fmap f ps) mt (fmap f e1) (fmap f e2)
+  fmap f (TryCatch s a b e p mt e1 e2) = TryCatch s (f a) b (fmap f e) (fmap f p) mt (fmap f e1) (fmap f e2)
+  fmap f (Val s a b val) = Val s (f a) b (fmap f val)
+  fmap f (Case s a b expr pats) = Case s (f a) b (fmap f expr) (map (\(p, e) -> (fmap f p, fmap f e)) pats)
+  fmap f (Hole s a b ids)  = Hole s (f a) b ids
 
 instance Bifunctor (f ev a)
     => Birecursive (ExprFix2 f g ev a) (ExprFix2 g f ev a) where
@@ -167,6 +195,7 @@ instance Rp.Refactorable (Expr ev a) where
   isRefactored (App _ _ True _ _) = Just Rp.Replace
   isRefactored (Binop _ _ True _ _ _) = Just Rp.Replace
   isRefactored (LetDiamond _ _ True _ _ _ _) = Just Rp.Replace
+  isRefactored (TryCatch _ _ True _ _ _ _ _) = Just Rp.Replace
   isRefactored (Val _ _ True _) = Just Rp.Replace
   isRefactored (Case _ _ True _ _) = Just Rp.Replace
   isRefactored (Hole _ _ True _) = Just Rp.Replace
@@ -269,18 +298,30 @@ instance Monad m => Freshenable m (Value v a) where
     freshen v@StringLiteral{} = return v
     freshen v@Ext{} = return v
 
+freshenId :: Monad m => Id -> Freshener m Id
+freshenId v = do
+      v' <- lookupVar ValueL v
+      case v' of
+         Just v' -> return (Id (sourceName v) v')
+         -- This case happens if we are referring to a defined
+         -- function which does not get its name freshened
+         Nothing -> return (Id (sourceName v) (sourceName v))
+
 instance Term (Expr v a) where
     freeVars (App _ _ _ e1 e2)            = freeVars e1 <> freeVars e2
+    freeVars (AppTy _ _ _ e1 e2)          = freeVars e1 <> freeVars e2
     freeVars (Binop _ _ _ _ e1 e2)        = freeVars e1 <> freeVars e2
     freeVars (LetDiamond _ _ _ p _ e1 e2) = freeVars e1 <> (freeVars e2 \\ boundVars p)
+    freeVars (TryCatch _ _ _ e1 p _ e2 e3) = freeVars e1 <> (freeVars e2 \\ boundVars p) <> freeVars e3
     freeVars (Val _ _ _ e)                = freeVars e
     freeVars (Case _ _ _ e cases)         = freeVars e <> (concatMap (freeVars . snd) cases
                                       \\ concatMap (boundVars . fst) cases)
-    freeVars Hole{} = []
+    freeVars (Hole _ _ _ vars) = vars
 
     hasHole (App _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (Binop _ _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (LetDiamond _ _ _ p _ e1 e2) = hasHole e1 || hasHole e2
+    hasHole (TryCatch _ _ _ e1 p _ e2 e3) = hasHole e1 || hasHole e2 || hasHole e3
     hasHole (Val _ _ _ e) = hasHole e
     hasHole (Case _ _ _ e cases) = hasHole e || (or (map (hasHole . snd) cases))
     hasHole Hole{} = True
@@ -292,11 +333,17 @@ instance Substitutable Expr where
     subst es v (App s a rf e1 e2) =
       App s a rf (subst es v e1) (subst es v e2)
 
+    subst es v (AppTy s a rf e1 t) =
+      AppTy s a rf (subst es v e1) t
+
     subst es v (Binop s a rf op e1 e2) =
       Binop s a rf op (subst es v e1) (subst es v e2)
 
     subst es v (LetDiamond s a rf w t e1 e2) =
       LetDiamond s a rf w t (subst es v e1) (subst es v e2)
+
+    subst es v (TryCatch s a rf e1 p t e2 e3) =
+      TryCatch s a rf (subst es v e1) p t (subst es v e2) (subst es v e3)
 
     subst es v (Val _ _ _ val) =
       subst es v val
@@ -313,6 +360,11 @@ instance Monad m => Freshenable m (Expr v a) where
       e2 <- freshen e2
       return $ App s a rf e1 e2
 
+    freshen (AppTy s a rf e1 t) = do
+      e1 <- freshen e1
+      t <- freshen t
+      return $ AppTy s a rf e1 t
+
     freshen (LetDiamond s a rf p t e1 e2) = do
       e1 <- freshen e1
       p  <- freshen p
@@ -321,6 +373,16 @@ instance Monad m => Freshenable m (Expr v a) where
                 Nothing -> return Nothing
                 Just ty -> freshen ty >>= (return . Just)
       return $ LetDiamond s a rf p t e1 e2
+
+    freshen (TryCatch s a rf e1 p t e2 e3) = do
+      e1 <- freshen e1
+      p <- freshen p
+      t   <- case t of
+                Nothing -> return Nothing
+                Just ty -> freshen ty >>= (return . Just)
+      e2 <- freshen e2
+      e3 <- freshen e3
+      return $ TryCatch s a rf e1 p t e2 e3
 
     freshen (Binop s a rf op e1 e2) = do
       e1 <- freshen e1
@@ -340,4 +402,8 @@ instance Monad m => Freshenable m (Expr v a) where
      v <- freshen v
      return (Val s a rf v)
 
-    freshen v@Hole{} = return v
+    freshen (Hole s a rf vars) = do
+      -- Freshen hole variables like they are normal variables
+      vars' <- mapM freshenId vars
+      return $ Hole s a rf vars'
+

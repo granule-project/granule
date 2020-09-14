@@ -15,8 +15,6 @@ module Language.Granule.Checker.Constraints where
 --import Data.Foldable (foldrM)
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
-import Control.Arrow (first)
-import Control.Exception (assert)
 import Control.Monad (liftM2)
 
 import Language.Granule.Checker.Predicates
@@ -31,7 +29,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
--- import Debug.Trace
+import qualified System.Clock as Clock
 
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
@@ -55,7 +53,7 @@ compileToSBV predicate tyVarContext =
       buildTheorem' solverVars predicate
 
     buildTheoremNew ((v, (t, q)) : ctxt) solverVars =
-      freshCVarScoped compileQuantScoped (internalName v) t q
+      freshSolverVarScoped compileQuantScoped (internalName v) t q
          (\(varPred, solverVar) -> do
              pred <- buildTheoremNew ctxt ((v, solverVar) : solverVars)
              case q of
@@ -86,7 +84,7 @@ compileToSBV predicate tyVarContext =
       if v `elem` (freeVars p)
         -- optimisation
         then
-          freshCVarScoped compileQuantScoped (internalName v) k InstanceQ
+          freshSolverVarScoped compileQuantScoped (internalName v) k InstanceQ
             (\(varPred, solverVar) -> do
               pred' <- buildTheorem' ((v, solverVar) : solverVars) p
               return (varPred .&& pred'))
@@ -98,7 +96,7 @@ compileToSBV predicate tyVarContext =
       if v `elem` (freeVars p <> freeVars p')
         -- If the quantified variable appears in the theorem
         then
-          freshCVarScoped compileQuantScoped (internalName v) k ForallQ
+          freshSolverVarScoped compileQuantScoped (internalName v) k ForallQ
                 (\(varPred, solverVar) -> do
                   pred' <- buildTheorem' ((v, solverVar) : solverVars) (Impl vs p p')
                   return (varPred .=> pred'))
@@ -115,18 +113,18 @@ compileToSBV predicate tyVarContext =
 zeroToInfinity :: SGrade
 zeroToInfinity = SInterval (SExtNat $ SNatX.SNatX 0) (SExtNat SNatX.inf)
 
-freshCVarScoped ::
+freshSolverVarScoped ::
     (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
   -> String
   -> Type One
   -> Quantifier
   -> ((SBool, SGrade) -> Symbolic SBool)
   -> Symbolic SBool
-freshCVarScoped quant name (isInterval -> Just t) q k =
+freshSolverVarScoped quant name (isInterval -> Just t) q k =
 
-  freshCVarScoped quant (name <> ".lower") t q
+  freshSolverVarScoped quant (name <> ".lower") t q
    (\(predLb, solverVarLb) ->
-      freshCVarScoped quant (name <> ".upper") t q
+      freshSolverVarScoped quant (name <> ".upper") t q
        (\(predUb, solverVarUb) -> do
           -- Respect the meaning of intervals
           lessEq <- symGradeLessEq solverVarLb solverVarUb
@@ -134,19 +132,19 @@ freshCVarScoped quant name (isInterval -> Just t) q k =
             , SInterval solverVarLb solverVarUb )
           ))
 
-freshCVarScoped quant name (isProduct -> Just (t1, t2)) q k =
+freshSolverVarScoped quant name (isProduct -> Just (t1, t2)) q k =
 
-  freshCVarScoped quant (name <> ".fst") t1 q
+  freshSolverVarScoped quant (name <> ".fst") t1 q
     (\(predFst, solverVarFst) ->
-      freshCVarScoped quant (name <> ".snd") t2 q
+      freshSolverVarScoped quant (name <> ".snd") t2 q
         (\(predSnd, solverVarSnd) ->
           k (predFst .&& predSnd, SProduct solverVarFst solverVarSnd)))
 
-freshCVarScoped quant name (TyCon (internalName -> "Q")) q k =
+freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
   -- Floats (rationals)
     quant q name (\solverVar -> k (sTrue, SFloat solverVar))
 
-freshCVarScoped quant name (TyCon conName) q k =
+freshSolverVarScoped quant name (TyCon conName) q k =
     -- Integer based
     quant q name (\solverVar ->
       case internalName conName of
@@ -155,17 +153,18 @@ freshCVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
+        "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
-freshCVarScoped quant name t q k | t == extendedNat = do
+freshSolverVarScoped quant name t q k | t == extendedNat = do
    quant q name (\solverVar ->
     k (SNatX.representationConstraint solverVar
      , SExtNat (SNatX.SNatX solverVar)))
 
-freshCVarScoped quant name (TyVar v) q k =
+freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
-freshCVarScoped _ _ t _ _ =
+freshSolverVarScoped _ _ t _ _ =
   solverError $ "Trying to make a fresh solver variable for a grade of type: "
       <> show t <> " but I don't know how."
 
@@ -195,14 +194,13 @@ compile :: (?globals :: Globals) =>
   Ctxt SGrade -> Constraint -> Symbolic SBool
 
 compile vars (Eq _ c1 c2 t) =
-  bindM2And' eqConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' eqConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Neq _ c1 c2 t) =
-  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
-compile vars (Lub _ c1 c2 c3@(CVar v) t) =
-
+compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
   case t of
     {-
     -- An alternate procedure for computing least-upper bounds
@@ -219,14 +217,14 @@ compile vars (Lub _ c1 c2 c3@(CVar v) t) =
       return (p1 .&& p2 .&& p3 .&& eq) -}
 
     _ -> do
-      (s1, p1) <- compileCoeffect c1 t vars
-      (s2, p2) <- compileCoeffect c2 t vars
-      (s3, p3) <- compileCoeffect c3 t vars
+      (s1, p1) <- compileCoeffect (normalise c1) t vars
+      (s2, p2) <- compileCoeffect (normalise c2) t vars
+      (s3, p3) <- compileCoeffect (normalise c3) t vars
       -- s3 is an upper bound
       pa1 <- approximatedByOrEqualConstraint s1 s3
       pb1 <- approximatedByOrEqualConstraint s2 s3
       --- and it is the least such upper bound
-      pc <- freshCVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
+      pc <- freshSolverVarScoped compileQuantScoped (internalName v <> ".up") t ForallQ
               (\(py, y) -> do
                 pc1 <- approximatedByOrEqualConstraint s1 y
                 pc2 <- approximatedByOrEqualConstraint s2 y
@@ -235,7 +233,7 @@ compile vars (Lub _ c1 c2 c3@(CVar v) t) =
       return (p1 .&& p2 .&& p3 .&& pa1 .&& pb1 .&& pc)
 
 compile vars (ApproximatedBy _ c1 c2 t) =
-  bindM2And' approximatedByOrEqualConstraint (compileCoeffect c1 t vars) (compileCoeffect c2 t vars)
+  bindM2And' approximatedByOrEqualConstraint (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Lt s c1 c2) =
   bindM2And' symGradeLess (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
@@ -253,14 +251,14 @@ compile vars (GtEq s c1 c2) =
 -- NonZeroPromotableTo s c means that:
 compile vars (NonZeroPromotableTo s x c t) = do
   -- exists x .
-  freshCVarScoped compileQuantScoped (internalName x) t InstanceQ
+  freshSolverVarScoped compileQuantScoped (internalName x) t InstanceQ
    (\(req, xVar) -> do
 
     -- x != 0
-    nonZero <- compile ((x, xVar) : vars) (Neq s (CZero t) (CVar x) t)
+    nonZero <- compile ((x, xVar) : vars) (Neq s (TyInt 0) (TyVar x) t)
 
     -- x * 1 == c
-    promotableToC <- compile ((x, xVar) : vars) (Eq s (CTimes (COne t) (CVar x)) c t)
+    promotableToC <- compile ((x, xVar) : vars) (Eq s (TyInfix TyOpTimes (TyInt 1) (TyVar x)) c t)
 
     return (req .&& nonZero .&& promotableToC))
 
@@ -269,134 +267,145 @@ compile vars c = error $ "Internal bug: cannot compile " <> show c
 -- | Compile a coeffect term into its symbolic representation
 -- | (along with any additional predicates)
 compileCoeffect :: (?globals :: Globals) =>
-  Coeffect -> Type One -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
+  Coeffect -> Type (Succ Zero) -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
-compileCoeffect (CSig c k) _ ctxt = compileCoeffect c k ctxt
+compileCoeffect (TySig c k) _ ctxt = compileCoeffect c k ctxt
 
-compileCoeffect (Level n) (TyCon k) _ | internalName k == "Level" =
+compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
+  let n = case internalName name of
+            "Unused"  -> unusedRepresentation
+            "Private" -> privateRepresentation
+            "Public"  -> publicRepresentation
+            c         -> error $ "Cannot compile " <> show c
+
   return (SLevel . fromInteger . toInteger $ n, sTrue)
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
-compileCoeffect (Level n) (isProduct -> Just (TyCon k, t2)) vars | internalName k == "Level" = do
-  (g, p) <- compileCoeffect (COne t2) t2 vars
+compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (TyCon (internalName -> "Level"), t2)) vars = do
+  (g, p) <- compileCoeffect (TyInt 1) t2 vars
   return (SProduct (SLevel . fromInteger . toInteger $ n) g, p)
 
-compileCoeffect (Level n) (isProduct -> Just (t1, TyCon k)) vars | internalName k == "Level" = do
-  (g, p) <- compileCoeffect (COne t1) t1 vars
+compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (t1, TyCon (internalName -> "Level"))) vars = do
+  (g, p) <- compileCoeffect (TyInt 1) t1 vars
   return (SProduct g (SLevel . fromInteger . toInteger $ n), p)
 
+compileCoeffect (TyCon (internalName -> "Infinity")) t _ | t == extendedNat =
+  return (SExtNat SNatX.inf, sTrue)
 -- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
 -- TODO: see if we can erase this, does it actually happen anymore?
-compileCoeffect (CInfinity (Just (TyVar _))) _ _ = return (zeroToInfinity, sTrue)
-compileCoeffect (CInfinity Nothing) _ _ = return (zeroToInfinity, sTrue)
-compileCoeffect (CInfinity _) t _| t == extendedNat =
-  return (SExtNat SNatX.inf, sTrue)
+compileCoeffect (TyCon (internalName -> "Infinity")) _ _ = return (zeroToInfinity, sTrue)
 
-compileCoeffect (CNat n) k _ | k == nat =
+-- Effect 0 : Nat
+compileCoeffect (TyCon (internalName -> "Pure")) (TyCon (internalName -> "Nat")) _ =
+  return (SNat 0, sTrue)
+
+compileCoeffect (TyInt n) k _ | k == nat =
   return (SNat  . fromInteger . toInteger $ n, sTrue)
 
-compileCoeffect (CNat n) k _ | k == extendedNat =
+compileCoeffect (TyInt n) k _ | k == extendedNat =
   return (SExtNat . fromInteger . toInteger $ n, sTrue)
 
-compileCoeffect (CFloat r) (TyCon k) _ | internalName k == "Q" =
+compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
-compileCoeffect (CSet xs) (TyCon k) _ | internalName k == "Set" =
-  return (SSet . S.fromList $ map (first mkId) xs, sTrue)
+compileCoeffect (TySet xs) (TyCon k) _ | internalName k == "Set" =
+  return (SSet . S.fromList $ xs, sTrue)
 
-compileCoeffect (CVar v) _ vars =
+compileCoeffect (TyVar v) _ vars =
    case lookup v vars of
     Just cvar -> return (cvar, sTrue)
     _ -> solverError $ "Looking up a variable '" <> show v <> "' in " <> show vars
 
-compileCoeffect c@(CMeet n m) k vars =
+compileCoeffect c@(TyInfix TyOpMeet n m) k vars =
   bindM2And symGradeMeet (compileCoeffect n k vars) (compileCoeffect m k vars)
 
-compileCoeffect c@(CJoin n m) k vars =
+compileCoeffect c@(TyInfix TyOpJoin n m) k vars =
   bindM2And symGradeJoin (compileCoeffect n k vars) (compileCoeffect m k vars)
 
-compileCoeffect c@(CPlus n m) k vars =
+compileCoeffect c@(TyInfix TyOpPlus n m) k vars =
   bindM2And symGradePlus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
-compileCoeffect c@(CTimes n m) k vars =
+compileCoeffect c@(TyInfix TyOpTimes n m) k vars =
   bindM2And symGradeTimes (compileCoeffect n k vars) (compileCoeffect m k vars)
 
-compileCoeffect c@(CMinus n m) k vars =
+compileCoeffect c@(TyInfix TyOpMinus n m) k vars =
   bindM2And symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
 
-compileCoeffect c@(CExpon n m) k vars = do
+compileCoeffect c@(TyInfix TyOpExpon n m) k vars = do
   (g1, p1) <- compileCoeffect n k vars
   (g2, p2) <- compileCoeffect m k vars
   case (g1, g2) of
     (SNat n1, SNat n2) -> return (SNat (n1 .^ n2), p1 .&& p2)
     _ -> solverError $ "Failed to compile: " <> pretty c <> " of kind " <> pretty k
 
-compileCoeffect c@(CInterval lb ub) (isInterval -> Just t) vars = do
+compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   (lower, p1) <- compileCoeffect lb t vars
   (upper, p2) <- compileCoeffect ub t vars
   intervalConstraint <- symGradeLessEq lower upper
   return $ (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
 
-compileCoeffect (CZero k') k vars  =
-  case (k', k) of
-    (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
-      case internalName k' of
+compileCoeffect (TyInt 0) k vars  =
+  case k of
+    TyCon k ->
+      case internalName k of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
-        _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
-    (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
+        "OOZ"       -> return (SOOZ sFalse, sTrue)
+        _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
+    otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
 
-    (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
+    (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (CZero t1) t1' vars)
-        (compileCoeffect (CZero t2) t2' vars)
+        (compileCoeffect (TyInt 0) t1 vars)
+        (compileCoeffect (TyInt 0) t2 vars)
 
-    (isInterval -> Just t, isInterval -> Just t') ->
+    (isInterval -> Just t) ->
       liftM2And SInterval
-        (compileCoeffect (CZero t) t' vars)
-        (compileCoeffect (CZero t) t' vars)
+        (compileCoeffect (TyInt 0) t vars)
+        (compileCoeffect (TyInt 0) t vars)
 
-    (TyVar _, _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
-    _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k'
+    (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
-compileCoeffect (COne k') k vars =
-  case (k', k) of
-    (TyCon k', TyCon k) -> assert (internalName k' == internalName k) $
-      case internalName k' of
+    _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k
+
+compileCoeffect (TyInt 1) k vars =
+  case k of
+    TyCon k ->
+      case internalName k of
         "Level"     -> return (SLevel (literal privateRepresentation), sTrue)
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
-        _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
+        "OOZ"       -> return (SOOZ sTrue, sTrue)
+        _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
-    (otherK', otherK) | (otherK' == extendedNat || otherK == extendedNat) ->
+    otherK | otherK == extendedNat ->
       return (SExtNat 1, sTrue)
 
-    (isProduct -> Just (t1, t2), isProduct -> Just (t1', t2')) ->
+    (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (COne t1) t1' vars)
-        (compileCoeffect (COne t2) t2' vars)
+        (compileCoeffect (TyInt 1) t1 vars)
+        (compileCoeffect (TyInt 1) t2 vars)
 
-    -- Build an interval for 1
-    (isInterval -> Just t, isInterval -> Just t') -> do
+    (isInterval -> Just t) ->
       liftM2And SInterval
-          (compileCoeffect (COne t) t' vars)
-          (compileCoeffect (COne t) t' vars)
+        (compileCoeffect (TyInt 1) t vars)
+        (compileCoeffect (TyInt 1) t vars)
 
-    (TyVar _, _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
+    (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
-    _ -> solverError $ "I don't know how to compile a 1 for " <> pretty k'
+    _ -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
-compileCoeffect (CProduct c1 c2) (isProduct -> Just (t1, t2)) vars =
+compileCoeffect (isProduct -> Just (c1, c2)) (isProduct -> Just (t1, t2)) vars =
   liftM2And SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
 
 -- For grade-polymorphic coeffects, that have come from a nat
 -- expression (sometimes this is just from a compounded expression of 1s),
 -- perform the injection from Natural numbers to arbitrary semirings
-compileCoeffect (CNat n) (TyVar _) _ | n > 0 =
+compileCoeffect (TyInt n) (TyVar _) _ | n > 0 =
   return (SUnknown (injection n), sTrue)
     where
       injection 0 = SynLeaf (Just 0)
@@ -436,6 +445,7 @@ approximatedByOrEqualConstraint (SNat n) (SNat m)      = return $ n .== m
 approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
+approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
 approximatedByOrEqualConstraint (SSet s) (SSet t) =
   return $ if s == t then sTrue else sFalse
 
@@ -460,6 +470,12 @@ approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2)
 approximatedByOrEqualConstraint (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 (.&&) (approximatedByOrEqualConstraint lb2 lb1)
                 (approximatedByOrEqualConstraint ub1 ub2)
+
+approximatedByOrEqualConstraint s1 s2@(SInterval _ _) =
+  approximatedByOrEqualConstraint (SInterval s1 s1) s2
+
+approximatedByOrEqualConstraint s1@(SInterval _ _) s2 =
+  approximatedByOrEqualConstraint s1 (SInterval s2 s2)
 
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
   lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
@@ -489,7 +505,7 @@ trivialUnsatisfiableConstraints
     unsat c@(Eq _ c1 c2 _)  = if (c1 `neqC` c2) then [c] else []
     unsat c@(Neq _ c1 c2 _) = if (c1 `neqC` c2) then [] else [c]
     unsat c@(ApproximatedBy{}) = approximatedByC c
-    unsat c@(NonZeroPromotableTo _ _ (CZero _) _) = [c]
+    unsat c@(NonZeroPromotableTo _ _ (TyInt 0) _) = [c]
     unsat (NonZeroPromotableTo _ _ _ _) = []
     -- TODO: look at this information
     unsat Lub{} = []
@@ -501,31 +517,30 @@ trivialUnsatisfiableConstraints
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
     approximatedByC :: Constraint -> [Constraint]
-    approximatedByC c@(ApproximatedBy _ (CNat n) (CNat m) _) | n /= m = [c]
-    approximatedByC c@(ApproximatedBy _ (Level n) (Level m) _) | n > m = [c]
-    approximatedByC c@(ApproximatedBy _ (CFloat n) (CFloat m) _) | n > m = [c]
+    approximatedByC c@(ApproximatedBy _ (TyInt n) (TyInt m) _) | n /= m = [c]
+    approximatedByC c@(ApproximatedBy _ (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m) _) | n > m = [c]
+    approximatedByC c@(ApproximatedBy _ (TyRational n) (TyRational m) _) | n > m = [c]
     -- Nat like intervals
     approximatedByC c@(ApproximatedBy _
-                        (CInterval (CNat lb1) (CNat ub1))
-                        (CInterval (CNat lb2) (CNat ub2)) _)
+                        (TyInfix TyOpInterval (TyInt lb1) (TyInt ub1))
+                        (TyInfix TyOpInterval (TyInt lb2) (TyInt ub2)) _)
         | not $ (lb2 <= lb1) && (ub1 <= ub2) = [c]
 
-    approximatedByC (ApproximatedBy s (CProduct c1 c2) (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+    approximatedByC (ApproximatedBy s (isProduct -> Just (c1, c2)) (isProduct -> Just (d1, d2)) (isProduct -> Just (t1, t2))) =
       (approximatedByC (ApproximatedBy s c1 d1 t1)) ++ (approximatedByC (ApproximatedBy s c2 d2 t2))
 
-    approximatedByC (ApproximatedBy s c (CProduct d1 d2) (isProduct -> Just (t1, t2))) =
+    approximatedByC (ApproximatedBy s c (isProduct -> Just (d1, d2)) (isProduct -> Just (t1, t2))) =
       (approximatedByC (ApproximatedBy s c d1 t1)) ++ (approximatedByC (ApproximatedBy s c d2 t2))
 
-    approximatedByC (ApproximatedBy s (CProduct c1 c2) d (isProduct -> Just (t1, t2))) =
+    approximatedByC (ApproximatedBy s (isProduct -> Just (c1, c2)) d (isProduct -> Just (t1, t2))) =
       (approximatedByC (ApproximatedBy s c1 d t1)) ++ (approximatedByC (ApproximatedBy s c2 d t2))
 
     approximatedByC _ = []
 
     -- Attempt to see if one coeffect is trivially not equal to the other
-    neqC :: Coeffect -> Coeffect -> Bool
-    neqC (CNat n) (CNat m) = n /= m
-    neqC (Level n) (Level m)   = n /= m
-    neqC (CFloat n) (CFloat m) = n /= m
+    neqC :: Type l -> Type l -> Bool
+    neqC (TyInt n) (TyInt m) = n /= m
+    neqC (TyRational n) (TyRational m) = n /= m
     --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
     --   neqC lb1 lb2 || neqC ub1 ub2
     neqC _ _                   = False
@@ -542,20 +557,30 @@ provePredicate
   :: (?globals :: Globals)
   => Pred                        -- Predicate
   -> Ctxt (Type One, Quantifier) -- Free variable quantifiers
-  -> IO SolverResult
+  -> IO (Double, SolverResult)
 provePredicate predicate vars
   | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
-      return QED
+      return (0.0, QED)
   | otherwise = do
       let (sbvTheorem, _, unsats) = compileToSBV predicate vars
+
+      -- Benchmarking start
+      start  <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
+      -- Prove -----------
       ThmResult thmRes <- proveWith defaultSMTCfg $ do --  -- proveWith cvc4 {verbose=True}
         case solverTimeoutMillis of
           n | n <= 0 -> return ()
           n -> setTimeOut n
         sbvTheorem
+      ------------------
+      -- Benchmarking end
+      -- Force the result
+      _ <- return $ thmRes `seq` thmRes
+      end    <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
+      let duration = (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
 
-      return $ case thmRes of
+      return $ (duration, case thmRes of
         -- we're good: the negation of the theorem is unsatisfiable
         Unsatisfiable {} -> QED
         ProofError _ msgs _ -> SolverProofError $ unlines msgs
@@ -580,7 +605,7 @@ provePredicate predicate vars
                   -}
                    NotValid $ "is " <> show (ThmResult thmRes)
             Right (True, _) -> NotValid "returned probable model."
-            Left str -> OtherSolverError str
+            Left str -> OtherSolverError str)
 
 -- Useful combinators here
 -- Generalises `bindM2` to functions which return also a symbolic grades

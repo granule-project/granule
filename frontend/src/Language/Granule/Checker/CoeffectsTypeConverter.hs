@@ -1,12 +1,13 @@
 {-# LANGUAGE GADTs #-}
 module Language.Granule.Checker.CoeffectsTypeConverter(justCoeffectTypesConverted, tyVarContextExistential) where
 
+import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
 import Data.Maybe(catMaybes, mapMaybe)
 
-import Language.Granule.Checker.Kinds
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
+import Language.Granule.Checker.SubstitutionAndKinding (checkKind)
 
 import Language.Granule.Context
 
@@ -19,13 +20,11 @@ justCoeffectTypesConverted :: (?globals::Globals, Show a)
   => Span -> [(a, (TypeWithLevel, b))] -> Checker [(a, (Type One, b))]
 justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
   where
-    convert (var, (TypeWithLevel (LSucc LZero) t, q)) = do
-      debugM "convert" ("var = " ++ show var ++ ", t = " ++ show t)
-      k <- inferKindOfType s t
-      debugM "convert" ("k = " ++ show k)
-      if isCoeffectKind k
-        then return $ Just (var, (t, q))
-        else return Nothing
+    convert (var, (TypeWithLevel (LSucc LZero) t, q)) = (do
+      st <- get
+      k <- checkKind s (tyVarContext st) t kcoeffect
+      return $ Just (var, (t, q))) `catchError` const (return Nothing)
+
     convert _ = return Nothing
 -- justCoeffectTypesConvertedVars :: (?globals::Globals)
 --   => Span -> [(Id, Kind)] -> Checker (Ctxt (Type One))
