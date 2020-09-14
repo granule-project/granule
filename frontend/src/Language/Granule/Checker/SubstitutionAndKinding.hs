@@ -603,14 +603,14 @@ updateTyVar s tyVar k = do
 -- Currently we expect that a type scheme has kind KType
 kindCheckDef :: (?globals :: Globals) => Def v t -> Checker (Def v t)
 kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = do
-  -- Set up the quantified variables in the type variable context
-  modify (\st -> st { tyVarContext = universify quantifiedVariables })
-  st <- get
-  forM_ constraints $ \constraint -> checkKind s (tyVarContext st) constraint KPredicate
+  let localTyVarContext = universify quantifiedVariables
 
-  st <- get
+  -- Set up the quantified variables in the type variable context
+  modify (\st -> st { tyVarContext = localTyVarContext })
+  forM_ constraints $ \constraint -> checkKind s localTyVarContext constraint KPredicate
+
   ty <- return $ replaceSynonyms ty
-  unifiers <- checkKind s (tyVarContext st) ty KType
+  unifiers <- checkKind s localTyVarContext ty KType
 
   -- Rewrite the quantified variables with their possibly updated kinds (inferred)
   qVars <- mapM (\(v, a) -> substitute unifiers a >>= (\b -> return (v, b))) quantifiedVariables
