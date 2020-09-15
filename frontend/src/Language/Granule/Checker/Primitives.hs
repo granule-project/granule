@@ -19,7 +19,15 @@ nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 -- Given a name to the powerset of a set of particular elements,
--- where (Y, PY) in setElements means that PY is an alias for the powerset of Y.
+-- where (Y, PY) in setElements means that PY is an alias for the powerset of Y
+
+-- e.g. {Stdin} in Set IOElem
+-- and  {Stdin} in IO
+
+-- Note that Set IOElem in Effect
+--           IO         in Effect
+-- 
+
 setElements :: [(Type One, Type One)]
 setElements = [(TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
