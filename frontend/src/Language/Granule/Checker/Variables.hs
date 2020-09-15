@@ -7,7 +7,6 @@ import Control.Monad.State.Strict
 
 import qualified Data.Map as M
 
-import Language.Granule.Context
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 
@@ -53,10 +52,14 @@ registerTyVarInContext :: HasLevel l => Id -> Type l -> Quantifier -> Checker ()
 registerTyVarInContext v t q = do
     modify (\st -> st { tyVarContext = (v, (TypeWithLevel (getLevel t) t, q)) : tyVarContext st })
 
-lookupAtLevel :: (FirstParameter f TypeWithLevel)
+-- | Generalised lookup function that works over a key-value pair map
+-- where the values contain TypeWithLevel values but you want to
+-- extract values at the level specified by the last parameter `l`
+-- in the call `lookupAtLevel s k ctxt l`
+lookupAtLevel :: (FirstParameter value TypeWithLevel, Eq key)
               => Span
-              -> Id
-              -> Ctxt f
+              -> key
+              -> [(key, value)]
               -> ULevel l
               -> Checker (Maybe (Type l))
 lookupAtLevel s v ctxt level =

@@ -817,11 +817,12 @@ synthKind s ctxt t@(TyCon id) = do
         Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 
 -- KChkS_set
-synthKind s ctxt (TySet (t:ts)) = do
+synthKind s ctxt t0@(TySet (t:ts)) = do
   (k, subst1) <- synthKind s ctxt t
   substs <- foldrM (\t' res -> (:res) <$> checkKind s ctxt t' k) [] ts
   subst <- combineManySubstitutions s (subst1:substs)
-  case lookup k setElements of
+  m <- lookupAtLevel s k setElements (getLevel t)
+  case m of
     -- Lift this alias to the kind level
     Just t  -> return (t, subst)
     Nothing -> return (TyApp (TyCon $ mkId "Set") k, subst)
