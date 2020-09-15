@@ -767,26 +767,8 @@ synthKind s ctxt (TyApp t1 t2) = do
     _ -> throw KindError { errLoc = s, errTyL = typeWithLevel t1, errKL = typeWithLevel funK }
 
 -- KChkS_predOp
-synthKind s ctxt (TyInfix op t1 t2) | predicateOperation op = do
-  (k, subst1) <- synthKind s ctxt t1
-  maybeSubst <- predicateOperatorAtKind s ctxt op k
-  case maybeSubst of
-    Just subst3 -> do
-      subst2 <- checkKind s ctxt t2 k
-      subst <- combineManySubstitutions s [subst1, subst2, subst3]
-      return (kpredicate, subst)
-    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
-
--- KChkS_opRing and KChkS_effOpp
-synthKind s ctxt (TyInfix op t1 t2) | closedOperation op = do
-  (k, subst1) <- synthKind s ctxt t1
-  maybeSubst <- closedOperatorAtKind s ctxt op k
-  case maybeSubst of
-    Just subst3 -> do
-      subst2 <- checkKind s ctxt t2 k
-      subst <- combineManySubstitutions s [subst1, subst2, subst3]
-      return (k, subst)
-    Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
+synthKind s ctxt t@(TyInfix op t1 t2) =
+  synthForOperator s (getLevel t) ctxt op t1 t2
 
 -- KChkS_effOne, KChkS_coeffZero and KChkS_coeffOne
 synthKind s ctxt (TyInt n) = return (TyCon (Id "Nat" "Nat"), [])
@@ -853,10 +835,44 @@ synthKind s _ t = do
   debugM "Can't synth" (pretty t)
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
+synthForOperator :: (?globals :: Globals, HasLevel l)
+  => Span
+  -> ULevel l
+  -> Ctxt (TypeWithLevel, Quantifier)
+  -> TypeOperator
+  -> Type l
+  -> Type l
+  -> Checker (Type (Succ l), Substitution)
+synthForOperator s LZero ctxt op t1 t2 = do
+  if predicateOperation op || closedOperation op
+    then do
+      (k, subst1) <- synthKind s ctxt t1
+      maybeSubst <- if predicateOperation op
+                      then predicateOperatorAtKind s ctxt op k
+                      else closedOperatorAtKind s ctxt op k
+      case maybeSubst of
+        Just subst3 -> do
+          subst2 <- checkKind s ctxt t2 k
+          subst <- combineManySubstitutions s [subst1, subst2, subst3]
+          if predicateOperation op
+            then return (kpredicate, subst)
+            else return (k, subst)
+
+        Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
+    else throw ImpossibleKindSynthesis { errLoc = s, errTy = TyInfix op t1 t2 }
+
+-- Cannot apply tese operators at a higher-level
+synthForOperator s l ctxt op t1 t2 =
+  throw $ WrongLevel s (typeWithLevel (TyInfix op t1 t2)) (IsLevel LZero)
+
 -- | `closedOperatorAtKind` takes an operator `op` and a kind `k` and returns a
 -- substitution if this is a valid operator at kind `k -> k -> k`.
-closedOperatorAtKind :: (?globals :: Globals) =>
-  Span -> Ctxt (TypeWithLevel, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
+closedOperatorAtKind :: (?globals :: Globals)
+  => Span
+  -> Ctxt (TypeWithLevel, Quantifier)
+  -> TypeOperator
+  -> Kind
+  -> Checker (Maybe Substitution)
 
 -- Nat case
 closedOperatorAtKind _ _ op (TyCon (internalName -> "Nat")) =
@@ -900,7 +916,7 @@ closedOperatorAtKind _ _ _ _ = return Nothing
 -- | `predicateOperatorAtKind` takes an operator `op` and a kind `k` and returns
 -- a substitution if this is a valid operator at kind `k -> k -> kpredicate`.
 predicateOperatorAtKind :: (?globals :: Globals) =>
-  Span -> Ctxt (TypeWithLevel, Quantifier) -> TypeOperator -> Type l -> Checker (Maybe Substitution)
+  Span -> Ctxt (TypeWithLevel, Quantifier) -> TypeOperator -> Kind -> Checker (Maybe Substitution)
 predicateOperatorAtKind s ctxt op t | predicateOperation op = do
   (result, putChecker) <- peekChecker (checkKind s ctxt t kcoeffect)
   case result of
