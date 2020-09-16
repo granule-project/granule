@@ -65,16 +65,6 @@ instance (Pretty a, Pretty b) => Pretty (Either a b) where
 
 -- Core pretty printers
 
-instance Pretty (ULevel l) where
-  pretty = show . (toInt 0)
-    where
-      toInt :: Int -> ULevel l' -> Int
-      toInt n LZero = n
-      toInt n (LSucc l') = toInt (n + 1) l'
-
-instance Pretty IsLevel where
-  pretty (IsLevel l) = pretty l
-
 instance Pretty TypeScheme where
     pretty (Forall _ vs cs t) = kVars vs <> constraints cs <> pretty t
       where
@@ -84,10 +74,7 @@ instance Pretty TypeScheme where
         constraints [] = ""
         constraints cs = "{" <> intercalate ", " (map pretty cs) <> "} =>\n    "
 
-instance Pretty TypeWithLevel where
-    pretty (TypeWithLevel l t) = pretty t
-
-instance Pretty (Type l) where
+instance Pretty Type where
     -- Atoms
     pretty (TyCon s)      = pretty s
     pretty (TyVar v)      = pretty v
@@ -95,7 +82,7 @@ instance Pretty (Type l) where
     pretty (TyRational n) = show n
 
     -- Non atoms
-    pretty (Type LZero) = "Type"
+    pretty (Type 0) = "Type"
 
     pretty (Type l) =
       "Type " <> pretty l

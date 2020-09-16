@@ -34,7 +34,7 @@ import qualified System.Clock as Clock
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type One, Quantifier)
+  => Pred -> Ctxt (Type, Quantifier)
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
 compileToSBV predicate tyVarContext =
   (buildTheoremNew (reverse tyVarContext) []
@@ -48,7 +48,7 @@ compileToSBV predicate tyVarContext =
 
     predicate' = rewriteBindersInPredicate tyVarContext predicate
 
-    buildTheoremNew :: Ctxt (Type One, Quantifier) -> Ctxt SGrade -> Symbolic SBool
+    buildTheoremNew :: Ctxt (Type, Quantifier) -> Ctxt SGrade -> Symbolic SBool
     buildTheoremNew [] solverVars =
       buildTheorem' solverVars predicate
 
@@ -116,7 +116,7 @@ zeroToInfinity = SInterval (SExtNat $ SNatX.SNatX 0) (SExtNat SNatX.inf)
 freshSolverVarScoped ::
     (forall a . QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool)
   -> String
-  -> Type One
+  -> Type
   -> Quantifier
   -> ((SBool, SGrade) -> Symbolic SBool)
   -> Symbolic SBool
@@ -267,7 +267,7 @@ compile vars c = error $ "Internal bug: cannot compile " <> show c
 -- | Compile a coeffect term into its symbolic representation
 -- | (along with any additional predicates)
 compileCoeffect :: (?globals :: Globals) =>
-  Coeffect -> Type (Succ Zero) -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
+  Coeffect -> Type -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
 compileCoeffect (TySig c k) _ ctxt = compileCoeffect c k ctxt
 
@@ -538,7 +538,7 @@ trivialUnsatisfiableConstraints
     approximatedByC _ = []
 
     -- Attempt to see if one coeffect is trivially not equal to the other
-    neqC :: Type l -> Type l -> Bool
+    neqC :: Type -> Type -> Bool
     neqC (TyInt n) (TyInt m) = n /= m
     neqC (TyRational n) (TyRational m) = n /= m
     --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
@@ -556,7 +556,7 @@ data SolverResult
 provePredicate
   :: (?globals :: Globals)
   => Pred                        -- Predicate
-  -> Ctxt (Type One, Quantifier) -- Free variable quantifiers
+  -> Ctxt (Type, Quantifier) -- Free variable quantifiers
   -> IO (Double, SolverResult)
 provePredicate predicate vars
   | isTrivial predicate = do

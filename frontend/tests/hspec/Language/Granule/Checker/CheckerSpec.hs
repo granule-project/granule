@@ -28,16 +28,11 @@ spec = let ?globals = mempty in do
     describe "joinCtxts" $ do
      it "join ctxts with discharged assumption in both" $ do
        ((c, tyVars), pred) <- runCtxts joinCtxts
-              [(varA, Discharged tyVarK (TySig (TyInt 5) (promoteTypeToKind natInterval)))]
+              [(varA, Discharged tyVarK (TySig (TyInt 5) natInterval))]
               [(varA, Discharged tyVarK (cNatOrdered 10))]
 
-<<<<<<< HEAD
        c `shouldBe` [(varA, Discharged tyVarK (TyVar (mkId "a.0")))]
        tyVars `shouldBe` [(mkId "a.0", natInterval)]
-=======
-       c `shouldBe` [(varA, Discharged tyVarK (TyVar (mkId "a.0")))]
-       tyVars `shouldBe` [(mkId "a.0", promoteTypeToKind natInterval)]
->>>>>>> coeffect-into-type
        pred `shouldBe`
         [Conj [Con (Lub nullSpan (cNatOrdered 5) (cNatOrdered 10) (TyVar (mkId "a.0")) natInterval)]]
          --[Conj [Con (ApproximatedBy nullSpan (cNatOrdered 10) (TyVar (mkId "a.0")) natInterval)
@@ -90,7 +85,7 @@ spec = let ?globals = mempty in do
         -- \x -> x + 1
         (AST _ (def1:_) _ _ _) <- parseAndDoImportsAndFreshenDefs "foo : Int -> Int\nfoo x = x + 1"
         (Right defElab, _) <- runChecker initState (checkDef [] def1)
-        annotation (extractMainExpr defElab) `shouldBe` ((TyCon $ mkId "Int") :: Type Zero)
+        annotation (extractMainExpr defElab) `shouldBe` ((TyCon $ mkId "Int") :: Type)
 
 extractMainExpr :: Def v a -> Expr v a
 extractMainExpr (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ _ e]) _) = e
@@ -107,8 +102,8 @@ runCtxts f a b = do
   pure (res, predicateStack state)
 
 cNatOrdered  :: Int -> Type
-cNatOrdered x = TySig (TyInt x) (promoteTypeToKind natInterval)
+cNatOrdered x = TySig (TyInt x) natInterval
 
-natInterval :: Type One
+natInterval :: Type
 natInterval = TyApp (TyCon $ mkId "Interval") (TyCon $ mkId "Nat")
 

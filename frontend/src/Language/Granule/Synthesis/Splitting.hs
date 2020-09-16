@@ -4,7 +4,6 @@
 module Language.Granule.Synthesis.Splitting (generateCases) where
 
 import Control.Arrow (second)
-import Control.Monad (filterM)
 import Control.Monad.State.Strict (get, liftIO)
 import Data.List (partition)
 import Data.Maybe (catMaybes, fromJust, fromMaybe, isJust, mapMaybe)
@@ -145,7 +144,7 @@ splitBoxed span constructors ctxt = do
 -- Wrapper around validateCase which updates the state when the case is valid.
 caseFilter :: (?globals :: Globals)
   => Span
-  -> Type Zero
+  -> Type
   -> [Pattern ()]
   -> Checker (Maybe ([Pattern ()], Ctxt Assumption))
 caseFilter span ty pats = do
@@ -158,7 +157,7 @@ caseFilter span ty pats = do
 -- If it is valid, return Just of the binding envionrment geneated
 validateCase :: (?globals :: Globals)
   => Span
-  -> Type Zero
+  -> Type
   -> [Pattern ()]
   -> Checker (Maybe (Ctxt Assumption))
 validateCase span ty pats = do
@@ -172,7 +171,7 @@ validateCase span ty pats = do
   pred <- popFromPredicateStack
 
   -- Build the type variable environment for proving the predicate
-  tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted span
+  tyVars <- tyVarContextExistential >>= justCoeffectTypes span
 
   -- Quantify the predicate by the existence of all local variables.
   let thm = foldr (uncurry Exists) pred localVars
@@ -220,7 +219,8 @@ getAssumConstr a =
     (Discharged t _) -> getTypeConstr t
     (Linear t) -> getTypeConstr t
   where
-    getTypeConstr :: Type Zero -> Maybe Id
+    getTypeConstr :: Type -> Maybe Id
+    getTypeConstr (Type _) = Nothing
     getTypeConstr (FunTy _ t1 _) = Nothing
     getTypeConstr (TyCon id) = Just id
     getTypeConstr (Box _ t) = getTypeConstr t
@@ -231,7 +231,6 @@ getAssumConstr a =
     getTypeConstr (TyInt _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _) = Nothing
-    getTypeConstr (TySig t _) = getTypeConstr t
     getTypeConstr (TyCase _ cases) =
       if allSame (map snd cases)
         then getTypeConstr . snd . head $ cases
@@ -295,7 +294,7 @@ buildBoxPattern span = PBox span () False
 tsTypeNames :: TypeScheme -> [Maybe Id]
 tsTypeNames (Forall _ _ _ t) = typeNames t
    where
-     typeNames :: Type Zero -> [Maybe Id]
+     typeNames :: Type -> [Maybe Id]
      typeNames (FunTy id _ t2) = id : typeNames t2
      typeNames _ = []
 

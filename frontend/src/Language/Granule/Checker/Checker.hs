@@ -59,7 +59,7 @@ import Language.Granule.Utils
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
-  -> IO (Either (NonEmpty CheckerError) (AST () (Type Zero), [Def () ()]))
+  -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
 check ast@(AST dataDecls defs imports hidden name) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
       _    <- checkNameClashes ast
@@ -79,7 +79,7 @@ check ast@(AST dataDecls defs imports hidden name) = do
 synthExprInIsolation :: (?globals :: Globals)
   => AST () ()
   -> Expr () ()
-  -> IO (Either (NonEmpty CheckerError) (Either TypeScheme TypeWithLevel))
+  -> IO (Either (NonEmpty CheckerError) (Either TypeScheme Type))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
       _    <- checkNameClashes ast
@@ -120,20 +120,20 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (TypeWithLevel (LSucc LZero) tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
+      st{ typeConstructors = (name, (tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
   where
     ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
-    mkKind [] = case kindAnn of Just k -> k; Nothing -> Type LZero -- default to `Type`
+    mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
     mkKind (v:vs) = FunTy Nothing v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (TypeWithLevel (LSucc LZero) kind, _ ,_) -> kind
+                Just (kind, _ ,_) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
-    modify' $ \st -> st { tyVarContext = [(v, (TypeWithLevel (LSucc LZero) k, ForallQ)) | (v, k) <- tyVars] }
+    modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
 
 checkDataCon :: (?globals :: Globals)
@@ -160,8 +160,8 @@ checkDataCon
         -- This subset of the context is for existentials
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
         modify $ \st -> st { tyVarContext =
-               [(v, (TypeWithLevel (LSucc LZero) k, ForallQ)) | (v, k) <- tyVarsD']
-            ++ [(v, (TypeWithLevel (LSucc LZero) k, InstanceQ)) | (v, k) <- tyVarsDExists]
+               [(v, (k, ForallQ)) | (v, k) <- tyVarsD']
+            ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
 
         -- Check we are making something that is actually a type
@@ -234,9 +234,9 @@ checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
 checkAndGenerateSubstitution ::
        Span                     -- ^ Location of this application
     -> Id                       -- ^ Name of the type constructor
-    -> Type Zero                -- ^ Type of the data constructor
+    -> Type                -- ^ Type of the data constructor
     -> [Kind]                   -- ^ Types of the remaining data type indices
-    -> Checker (Type Zero, Substitution, Ctxt Kind)
+    -> Checker (Type, Substitution, Ctxt Kind)
 checkAndGenerateSubstitution sp tName ty ixkinds =
     checkAndGenerateSubstitution' sp tName ty (reverse ixkinds)
   where
@@ -261,7 +261,7 @@ checkAndGenerateSubstitution sp tName ty ixkinds =
 checkDef :: (?globals :: Globals)
          => Ctxt TypeScheme  -- context of top-level definitions
          -> Def () ()        -- definition
-         -> Checker (Def () (Type Zero))
+         -> Checker (Def () Type)
 checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
                  tys@(Forall s_t foralls constraints ty)) = do
     -- duplicate forall bindings
@@ -273,14 +273,14 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
     modify (\st -> st { guardPredicates = [[]]
                       , patternConsumption = initialisePatternConsumptions equations } )
 
-    elaboratedEquations :: [Equation () (Type Zero)] <- runAll elaborateEquation equations
+    elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
     checkGuardsForImpossibility s defName
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
   where
-    elaborateEquation :: Equation () () -> Checker (Equation () (Type Zero))
+    elaborateEquation :: Equation () () -> Checker (Equation () Type)
     elaborateEquation equation = do
       -- Erase the solver predicate between equations
         modify' $ \st -> st
@@ -307,19 +307,14 @@ checkEquation :: (?globals :: Globals) =>
   -> Id              -- Name of the definition
   -> Equation () ()  -- Equation
   -> TypeScheme      -- Type scheme
-  -> Checker (Equation () (Type Zero))
+  -> Checker (Equation () Type)
 
 checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
   duplicateBinderCheck s pats
 
   -- Freshen the type context
-  modify (\st -> st { tyVarContext =
-                           ctxtMap (\k ->
-                             case k of
-                              TyCon (internalName -> "Effect")   -> (TypeWithLevel (LSucc (LSucc LZero)) (TyCon $ mkId "Effect"), ForallQ)
-                              TyCon (internalName -> "Coeffect") -> (TypeWithLevel (LSucc (LSucc LZero)) (TyCon $ mkId "Coeffect"), ForallQ)
-                              k -> (TypeWithLevel (LSucc LZero) k, ForallQ)) foralls})
+  modify (\st -> st { tyVarContext = ctxtMap (\k -> (k, ForallQ)) foralls})
 
   -- Create conjunct to capture the pattern constraints
   newConjunct
@@ -390,7 +385,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     -- e.g. Given a pattern: Cons x xs
     --      and a type:      Vec (n+1) t -> Vec n t
     --      returns:         t -> Vec n t -> Vec n t
-    refineEquationTy :: [(Id, Assumption)] -> Type Zero -> Type Zero
+    refineEquationTy :: [(Id, Assumption)] -> Type -> Type
     refineEquationTy patternGam ty =
       case patternGam of
         [] -> ty
@@ -406,7 +401,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     patternArity (PConstr _ _ _ _ ps) = sum (map patternArity ps)
     patternArity _ = 1
 
-    replaceParameters :: [[Type Zero]] -> Type Zero -> Type Zero
+    replaceParameters :: [[Type]] -> Type -> Type
     replaceParameters [] ty = ty
     replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
     replaceParameters ((t:ts):tss) ty =
@@ -414,7 +409,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     replaceParameters _ t = error $ "Expecting function type: " <> pretty t
 
     -- Convert an id+assumption to a type.
-    assumptionToType :: (Id, Assumption) -> Type Zero
+    assumptionToType :: (Id, Assumption) -> Type
     assumptionToType (_, Linear t) = t
     assumptionToType (_, Discharged t _) = t
 
@@ -439,9 +434,9 @@ checkExpr :: (?globals :: Globals)
           -> Ctxt Assumption   -- local typing context
           -> Polarity         -- polarity of <= constraints
           -> Bool             -- whether we are top-level or not
-          -> Type Zero        -- type
+          -> Type        -- type
           -> Expr () ()       -- expression
-          -> Checker (Ctxt Assumption, Substitution, Expr () (Type Zero))
+          -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
 checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
@@ -720,7 +715,7 @@ synthExpr :: (?globals :: Globals)
           -> Ctxt Assumption   -- ^ Local typing context
           -> Polarity          -- ^ Polarity of subgrading
           -> Expr () ()        -- ^ Expression
-          -> Checker (Type Zero, Ctxt Assumption, Substitution, Expr () (Type Zero))
+          -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
 synthExpr _ ctxt _ (Hole s _ _ _) = throw $ InvalidHolePosition s
@@ -1019,7 +1014,7 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Create a fresh kind variable for this coeffect
    vark <- freshIdentifierBase $ "kprom_[" <> pretty (startPos s) <> "]"
    -- remember this new kind variable in the kind environment
-   modify (\st -> st { tyVarContext = (mkId vark, ((TypeWithLevel (LSucc (LSucc LZero)) $ TyCon (mkId "Coeffect")), InstanceQ)) : tyVarContext st })
+   modify (\st -> st { tyVarContext = (mkId vark, (kcoeffect, InstanceQ)) : tyVarContext st })
 
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
    var <- freshTyVarInContext (mkId $ "prom_[" <> pretty (startPos s) <> "]") (TyVar $ mkId vark)
@@ -1052,7 +1047,7 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
   where
     -- No matching type were found (meaning there is a type error)
     selectFirstByType t1 t2 [] = throw FailedOperatorResolution
-        { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> var "..." }
+        { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> tyVar "..." }
 
     selectFirstByType t1 t2 ((FunTy _ opt1 (FunTy _ opt2 resultTy)):ops) = do
       -- Attempt to use this typing
@@ -1103,7 +1098,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
 
   newConjunct
 
-  tyVar <- freshTyVarInContext (mkId "t") (Type LZero)
+  tyVar <- freshTyVarInContext (mkId "t") (Type 0)
   let sig = (TyVar tyVar)
 
   (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
@@ -1169,7 +1164,7 @@ synthExpr _ _ _ e =
   throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
 -- Check an optional type signature for equality against a type
-optionalSigEquality :: (?globals :: Globals) => Span -> Maybe (Type Zero) -> Type Zero -> Checker ()
+optionalSigEquality :: (?globals :: Globals) => Span -> Maybe Type -> Type -> Checker ()
 optionalSigEquality _ Nothing _ = pure ()
 optionalSigEquality s (Just t) t' = do
   _ <- equalTypes s t' t
@@ -1181,7 +1176,7 @@ solveConstraints predicate s name = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
-  coeffectVars <- justCoeffectTypesConverted s ctxtCk
+  coeffectVars <- justCoeffectTypes s ctxtCk
   -- remove any variables bound already in the predicate
   coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
 
@@ -1224,7 +1219,7 @@ rewriteMessage msg = do
 
     return $ T.unpack (T.unlines msgLines')
   where
-    convertLine line (v, (TypeWithLevel _ k, _)) =
+    convertLine line (v, (k, _)) =
         -- Try to replace line variables in the line
        let line' = T.replace (T.pack (internalName v)) (T.pack (sourceName v)) line
        -- If this succeeds we might want to do some other replacements
@@ -1340,7 +1335,8 @@ joinCtxts s ctxt1 ctxt2 = do
     -- Return the common upper-bound context of ctxt1 and ctxt2
     return (varCtxt, tyVars'')
   where
-    generalise = mguCoeffectTypes s
+    fst3 (a, _, _) = a
+    generalise t1 t2 = fst3 <$> mguCoeffectTypes s t1 t2
 
     zipWith3M_ :: Monad m => (a -> b -> c -> m d) -> [a] -> [b] -> [c] -> m [d]
     zipWith3M_ f _ _ [] = return []
@@ -1402,7 +1398,7 @@ checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
 -- Assumption that the two assumps are for the same variable
 relateByAssumption :: (?globals :: Globals)
   => Span
-  -> (Span -> Coeffect -> Coeffect -> Type One -> Constraint)
+  -> (Span -> Coeffect -> Coeffect -> Type -> Constraint)
   -> (Id, Assumption)
   -> (Id, Assumption)
   -> Checker Substitution
@@ -1476,7 +1472,7 @@ freshVarsIn s vars ctxt = do
       freshName <- freshIdentifierBase (internalName var)
       let cvar = mkId freshName
       -- Update the coeffect kind context
-      modify (\s -> s { tyVarContext = (cvar, (TypeWithLevel (LSucc LZero) ctype, InstanceQ)) : tyVarContext s })
+      modify (\s -> s { tyVarContext = (cvar, (ctype, InstanceQ)) : tyVarContext s })
 
       -- Return the freshened var-type mapping
       -- and the new type variable
@@ -1541,7 +1537,7 @@ justLinear ((x, Linear t) : xs) = (x, Linear t) : justLinear xs
 justLinear ((x, _) : xs) = justLinear xs
 
 checkGuardsForExhaustivity :: (?globals :: Globals)
-  => Span -> Id -> Type Zero -> [Equation () ()] -> Checker ()
+  => Span -> Id -> Type -> [Equation () ()] -> Checker ()
 checkGuardsForExhaustivity s name ty eqs = do
   debugM "Guard exhaustivity" "todo"
   return ()
@@ -1553,7 +1549,7 @@ checkGuardsForImpossibility s name = do
   let ps = head $ guardPredicates st
 
   -- Convert all universal variables to existential
-  tyVars <- tyVarContextExistential >>= justCoeffectTypesConverted s
+  tyVars <- tyVarContextExistential >>= justCoeffectTypes s
 
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do

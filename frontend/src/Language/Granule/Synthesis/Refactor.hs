@@ -8,7 +8,7 @@ import Language.Granule.Syntax.Type
 
 -- Refactors a definition which contains abstractions in its equations
 -- by pushing these abstractions into equation patterns
-refactorDef :: Def () (Type Zero) -> Def () (Type Zero)
+refactorDef :: Def () Type -> Def () Type
 refactorDef (Def sp id ref (EquationList sp' id' ref' eqns) tyS) =
   Def sp id ref (EquationList sp' id' ref' (map refactorEqn eqns)) tyS
 

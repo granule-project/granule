@@ -18,6 +18,6 @@ spec = do
       let ?globals = mempty{ globalsTesting = Just True }
       Right us <- evalChecker initState $
              unify (Box (TyVar $ mkId "x") (TyCon $ mkId "Bool"))
-                   (Box (TySig (TyInt 1) (promoteTypeToKind $ TyCon $ mkId "Nat")) (TyVar $ mkId "a"))
+                   (Box (TySig (TyInt 1) (TyCon $ mkId "Nat")) (TyVar $ mkId "a"))
       us `shouldBe` (Just [(mkId "a", SubstT $ TyCon $ mkId "Bool")
-                          , (mkId "x", SubstT $ TySig (TyInt 1) (promoteTypeToKind $ TyCon $ mkId "Nat"))])
+                          , (mkId "x", SubstT $ TySig (TyInt 1) (TyCon $ mkId "Nat"))])

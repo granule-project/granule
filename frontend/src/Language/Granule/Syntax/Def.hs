@@ -112,7 +112,7 @@ instance Rp.Refactorable (Equation v a) where
 
   getSpan = convSpan . equationSpan
 
-definitionType :: Def v a -> Type Zero
+definitionType :: Def v a -> Type
 definitionType Def { defTypeScheme = ts } =
     ty where (Forall _ _ _ ty) = ts
 
@@ -133,7 +133,7 @@ data DataConstr
   = DataConstrIndexed
     { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrTypeScheme :: TypeScheme } -- ^ GADTs
   | DataConstrNonIndexed
-    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type Zero] } -- ^ ADTs
+    { dataConstrSpan :: Span, dataConstrId :: Id, dataConstrParams :: [Type] } -- ^ ADTs
   deriving (Eq, Show, Generic, Typeable, Data)
 
 -- | Is the data type an indexed data type, or just a plain ADT?

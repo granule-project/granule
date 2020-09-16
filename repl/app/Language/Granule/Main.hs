@@ -241,7 +241,7 @@ parseExpression exprString = do
     Left err -> Ex.throwError (ParseError' err)
     Right exprAst -> return exprAst
 
-synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either TypeScheme TypeWithLevel)
+synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either TypeScheme Type)
 synthTypeFromInputExpr exprAst = do
   st <- get
   -- Build the AST and then try to synth the type

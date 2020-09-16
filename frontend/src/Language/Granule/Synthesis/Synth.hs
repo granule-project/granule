@@ -51,7 +51,7 @@ solve = do
   cs <- conv $ State.get
   let pred = Conj $ predicateStack cs
   debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
-  tyVars <- conv $ justCoeffectTypesConverted nullSpanNoFile (tyVarContext cs)
+  tyVars <- conv $ justCoeffectTypes nullSpanNoFile (tyVarContext cs)
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   (smtTime', result) <- liftIO $ provePredicate pred tyVars

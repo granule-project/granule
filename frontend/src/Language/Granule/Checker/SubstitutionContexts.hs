@@ -16,9 +16,9 @@ type Substitution = Ctxt Substitutors
 {-| Substitutors are things we want to substitute in... they may be one
      of several things... -}
 data Substitutors =
-    SubstT  (Type Zero)
-  | SubstK  (Type One)
-  | SubstS  (Type Two)
+    SubstT  Type
+  | SubstK  Type
+  | SubstS  Type
   deriving (Eq, Show)
 
 instance Pretty Substitutors where

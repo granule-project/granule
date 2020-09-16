@@ -1,5 +1,5 @@
 {-# LANGUAGE GADTs #-}
-module Language.Granule.Checker.CoeffectsTypeConverter(justCoeffectTypesConverted, tyVarContextExistential) where
+module Language.Granule.Checker.CoeffectsTypeConverter(justCoeffectTypes, tyVarContextExistential) where
 
 import Control.Monad.Except (catchError)
 import Control.Monad.State.Strict
@@ -16,25 +16,24 @@ import Language.Granule.Syntax.Type
 
 import Language.Granule.Utils
 
-justCoeffectTypesConverted :: (?globals::Globals, Show a)
-  => Span -> [(a, (TypeWithLevel, b))] -> Checker [(a, (Type One, b))]
-justCoeffectTypesConverted s xs = mapM convert xs >>= (return . catMaybes)
+justCoeffectTypes :: (?globals :: Globals)
+  => Span -> [(a, (Type, b))] -> Checker [(a, (Type, b))]
+justCoeffectTypes s xs = mapM convert xs >>= (return . catMaybes)
   where
-    convert (var, (TypeWithLevel (LSucc LZero) t, q)) = (do
+    convert (var, (t, q)) = (do
       st <- get
       k <- checkKind s (tyVarContext st) t kcoeffect
       return $ Just (var, (t, q))) `catchError` const (return Nothing)
 
-    convert _ = return Nothing
--- justCoeffectTypesConvertedVars :: (?globals::Globals)
---   => Span -> [(Id, Kind)] -> Checker (Ctxt (Type One))
--- justCoeffectTypesConvertedVars s env = do
+-- justCoeffectTypesVars :: (?globals::Globals)
+--   => Span -> [(Id, Kind)] -> Checker (Ctxt Type)
+-- justCoeffectTypesVars s env = do
 --   let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
---   env' <- justCoeffectTypesConverted s implicitUniversalMadeExplicit
+--   env' <- justCoeffectTypes s implicitUniversalMadeExplicit
 --   return $ stripQuantifiers env'
 -- Convert all universal variables to existential
 
-tyVarContextExistential :: Checker (Ctxt (TypeWithLevel, Quantifier))
+tyVarContextExistential :: Checker (Ctxt (Type, Quantifier))
 tyVarContextExistential = do
   st <- get
   return $ mapMaybe (\(v, (k, q)) ->

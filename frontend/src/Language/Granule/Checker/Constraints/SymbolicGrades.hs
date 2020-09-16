@@ -29,7 +29,7 @@ data SGrade =
        SNat      SInteger
      | SFloat    SFloat
      | SLevel    SInteger
-     | SSet      (S.Set (Type Zero))
+     | SSet      (S.Set Type)
      | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)

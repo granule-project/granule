@@ -30,7 +30,7 @@ import Control.Monad (zipWithM, forM)
   operations based on types.
   -}
 
-derivePush :: (?globals :: Globals) => Span -> Type Zero -> Checker (TypeScheme, Def () ())
+derivePush :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
 derivePush s ty = do
   -- Create fresh variables for the grades
   kVar <- freshIdentifierBase "k" >>= (return . mkId)
@@ -96,7 +96,7 @@ derivePush s ty = do
 derivePush' :: (?globals :: Globals)
             => Span
             -> Bool
-            -> Type Zero -> Ctxt Id -> Ctxt Kind -> Type Zero -> Expr () () -> Checker (Type Zero, Expr () (), Bool)
+            -> Type -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Bool)
 
 -- Type variable case: push_alpha arg = arg
 derivePush' topLevel s c _sigma gamma argTy@(TyVar n) arg = do
@@ -356,7 +356,7 @@ fullyApplyType' k _ _ _ =
 -- | type parameters
 objectMappingWithBox :: (?globals :: Globals)
                    => Type -> Kind -> Type -> Maybe Type
-objectMappingWithBox t k r = objectMappingWithBox' t (reverse $ parameterKinds k) r
+objectMappingWithBox t k r = objectMappingWithBox' t (reverse $ parameterTypes k) r
 
 objectMappingWithBox' :: (?globals :: Globals)
                     => Type -> [Kind] -> Type -> Maybe Type

@@ -51,14 +51,14 @@ boolDataCons :: (?globals :: Globals) => Ctxt (Ctxt (TypeScheme, Substitution))
 boolDataCons =
   [(boolId, [(falseId, (Forall nullSpan [] [] (TyCon boolId), [])), (trueId, (Forall nullSpan [] [] (TyCon boolId), []))])]
 
-boolTyCons :: Ctxt (TypeWithLevel, [Id], Bool)
-boolTyCons = [(boolId, (TypeWithLevel (LSucc LZero) (Type LZero), [falseId, trueId], False))]
+boolTyCons :: Ctxt (Type, [Id], Bool)
+boolTyCons = [(boolId, (Type 0, [falseId, trueId], False))]
 
 runSplitter :: (?globals :: Globals)
-  => Type Zero
+  => Type
   -> Ctxt (Ctxt (TypeScheme, Substitution))
-  -> Ctxt (TypeWithLevel, [Id], Bool)
-  -> Ctxt (TypeWithLevel, Quantifier)
+  -> Ctxt (Type, [Id], Bool)
+  -> Ctxt (Type, Quantifier)
   -> Ctxt Assumption
   -> [Id]
   -> IO ([Id], [[Pattern ()]])

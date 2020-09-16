@@ -19,7 +19,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
 compileTypeConstraintToConstraint ::
-    (?globals :: Globals) => Span -> Type Zero -> Checker Pred
+    (?globals :: Globals) => Span -> Type -> Checker Pred
 compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   st <- get
   (k, _) <- synthKind s (tyVarContext st) t1
@@ -27,10 +27,10 @@ compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   case result of
     Right _ -> do
       putChecker
-      compileAtType s op t1 t2 coeffTy
+      compileAtType s op t1 t2 k
     Left _ ->
       case k of
-        KVar v -> do
+        TyVar v -> do
           st <- get
           case lookup v (tyVarContext st) of
             Just (_, ForallQ) | isGenericCoeffectExpression t2 -> compileAtType s op t1 t2 (TyVar v)
@@ -39,7 +39,7 @@ compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
 compileTypeConstraintToConstraint s t =
   error $ pretty s <> ": I don't know how to compile a constraint `" <> pretty t <> "`"
 
-compileAtType :: (?globals :: Globals) => Span -> TypeOperator -> Type Zero -> Type Zero -> Type One -> Checker Pred
+compileAtType :: (?globals :: Globals) => Span -> TypeOperator -> Type -> Type -> Type -> Checker Pred
 compileAtType s op c1 c2 coeffTy = do
   case op of
     TyOpEq -> return $ Con (Eq s c1 c2 coeffTy)

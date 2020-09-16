@@ -49,7 +49,7 @@ instance Eq (UnExprFix2 f g ev a) => Eq (ExprFix2 f g ev a) where
 -- | an annotation since this should be provided by a `Val` constructor
 -- | in an expression
 data ValueF ev a value expr =
-      AbsF a (Pattern a) (Maybe (Type Zero)) expr
+      AbsF a (Pattern a) (Maybe Type) expr
     | PromoteF a expr
     | PureF a expr
     | ConstrF a Id [value]
@@ -89,14 +89,14 @@ pattern Ext a extv = (ExprFix2 (ExtF a extv))
 -- | and annotations `a`).
 data ExprF ev a expr value =
     AppF Span a Bool expr expr
-  | AppTyF Span a Bool expr (Type Zero)
+  | AppTyF Span a Bool expr Type
   | BinopF Span a Bool Operator expr expr
-  | LetDiamondF Span a Bool (Pattern a) (Maybe (Type Zero)) expr expr
+  | LetDiamondF Span a Bool (Pattern a) (Maybe Type) expr expr
      -- Graded monadic composition (like Haskell do)
      -- let p : t <- e1 in e2
      -- or
      -- let p <- e1 in e2
-  | TryCatchF Span a Bool expr (Pattern a) (Maybe (Type Zero)) expr expr
+  | TryCatchF Span a Bool expr (Pattern a) (Maybe Type) expr expr
      -- try e1 as p : t in e2 catch e3
   | ValF Span a Bool value
   | CaseF Span a Bool expr [(Pattern a, expr)]
@@ -184,7 +184,7 @@ instance SecondParameter (Expr ev a) a where
 instance Annotated (Expr ev a) a where
     annotation = getSecondParameter
 
-instance Annotated (Value ev (Type Zero)) (Type Zero) where
+instance Annotated (Value ev Type) Type where
     annotation (NumInt _) = TyCon (mkId "Int")
     annotation (NumFloat _) = TyCon (mkId "Float")
     annotation (StringLiteral _) = TyCon (mkId "String")
@@ -215,14 +215,14 @@ pair :: Expr v () -> Expr v () -> Expr v ()
 pair e1 e2 = App s () False (App s () False (Val s () False (Constr () (mkId "(,)") [])) e1) e2
              where s = nullSpanNoFile
 
-typedPair :: Value v (Type Zero) -> Value v (Type Zero) -> Value v (Type Zero)
+typedPair :: Value v Type -> Value v Type -> Value v Type
 typedPair left right =
     Constr ty (mkId "(,)") [left, right]
     where ty = pairType leftType rightType
           leftType = annotation left
           rightType = annotation right
 
-pairType :: Type l -> Type l -> Type l
+pairType :: Type -> Type -> Type
 pairType leftType rightType =
     TyApp (TyApp (TyCon (Id "," ",")) leftType) rightType
 

@@ -14,7 +14,6 @@ import Language.Granule.Checker.Variables
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
-import Language.Granule.Syntax.Pretty
 
 import Language.Granule.Utils
 
@@ -28,7 +27,7 @@ unionSetLike _ = False
 
 -- `isEffUnit sp effTy eff` checks whether `eff` of effect type `effTy`
 -- is equal to the unit element of the algebra.
-isEffUnit :: (?globals :: Globals) => Span -> Type Zero -> Type Zero -> Checker Bool
+isEffUnit :: Span -> Type -> Type -> Checker Bool
 isEffUnit s effTy eff =
     case effTy of
         -- Nat case
@@ -48,12 +47,9 @@ isEffUnit s effTy eff =
                 (TySet []) -> return True
                 _          -> return False
         -- Unknown
-        _ -> do
-            effTy' <- tryTyPromote s effTy
-            debugM "U isEffUnit effTy" (pretty effTy)
-            throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = effTy' }
+        _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = effTy }
 
-handledNormalise :: Span -> Type One -> Type Zero -> Type Zero
+handledNormalise :: Span -> Type -> Type -> Type
 handledNormalise s effTy efs =
     case efs of
         TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "MayFail")) -> TyCon (mkId "Pure")
@@ -66,7 +62,7 @@ handledNormalise s effTy efs =
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
 -- resource algebra
-effApproximates :: Span -> Type One -> Type Zero -> Type Zero -> Checker Bool
+effApproximates :: Span -> Type -> Type -> Type -> Checker Bool
 effApproximates s effTy eff1 eff2 =
     -- as 1 <= e for all e
     if isPure eff1 then return True
@@ -112,7 +108,7 @@ effApproximates s effTy eff1 eff2 =
             -- Unknown effect resource algebra
             _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = effTy }
 
-effectMult :: (?globals :: Globals) => Span -> Type One -> Type Zero -> Type Zero -> Checker (Type Zero)
+effectMult :: (?globals :: Globals) => Span -> Type -> Type -> Type -> Checker Type
 effectMult sp effTy t1 t2 = do
   if isPure t1 then return t2
   else if isPure t2 then return t1
@@ -164,7 +160,7 @@ effectMult sp effTy t1 t2 = do
         _ -> do
           throw $ UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = effTy }
 
-effectUpperBound :: Span -> Type One -> Type Zero -> Type Zero -> Checker (Type Zero)
+effectUpperBound :: Span -> Type -> Type -> Type -> Checker Type
 effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
     nvar <- freshTyVarInContextWithBinding (mkId "n") t BoundQ
     -- Unify the two variables into one
@@ -189,7 +185,7 @@ effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
             return t1'
         (_, TyCon (internalName -> "Pure")) ->
             return t2'
-        _ -> throw NoUpperBoundError{ errLoc = s, errTy1L = type0 t1', errTy2L = type0 t2' }
+        _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1', errTy2 = t2' }
 
 effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
     case t1 of
@@ -201,17 +197,17 @@ effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
                 -- Unit right
                 TyCon (internalName -> "Pure") ->
                     return t1
-                _ -> throw NoUpperBoundError{ errLoc = s, errTy1L = type0 t1, errTy2L = type0 t2 }
+                _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
         -- Unift left
         TyCon (internalName -> "Pure") ->
             return t2
-        _ ->  throw NoUpperBoundError{ errLoc = s, errTy1L = type0 t1, errTy2L = type0 t2 }
+        _ ->  throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 effectUpperBound s effTy t1 t2 =
     throw UnknownResourceAlgebra{ errLoc = s, errTy = t1, errK = effTy }
 
 -- "Top" element of the effect
-effectTop :: Type Zero -> Maybe (Type Zero)
+effectTop :: Type -> Maybe Type
 effectTop (TyCon (internalName -> "Nat")) = Nothing
 effectTop (TyCon (internalName -> "Com")) = Just $ TyCon $ mkId "Session"
 -- Otherwise
@@ -221,20 +217,17 @@ effectTop (TyCon (internalName -> "Com")) = Just $ TyCon $ mkId "Session"
 effectTop t = do
     -- Compute the full-set of elements based on the the kinds of elements
     -- in the primitives
-    t' <- tyPromote t
-    elemKind <- lookup t' (map swap P.setElements)
+    elemKind <- lookup t (map swap P.setElements)
     return (TySet (map TyCon (allConstructorsMatchingElemKind elemKind)))
   where
     swap (a, b) = (b, a)
     -- find all elements of the matching element type
     allConstructorsMatchingElemKind :: Kind -> [Id]
     allConstructorsMatchingElemKind elemKind = mapMaybe (go elemKind) P.typeConstructors
-    go :: Kind -> (Id, (TypeWithLevel, a, Bool)) -> Maybe Id
-    go elemKind (con, (TypeWithLevel (LSucc LZero) k, _, _)) =
+    go :: Kind -> (Id, (Type, a, Bool)) -> Maybe Id
+    go elemKind (con, (k, _, _)) =
         if k == elemKind then Just con else Nothing
-    -- Level doesn't match
-    go elemKind _ = Nothing
 
-isPure :: Type Zero -> Bool
+isPure :: Type -> Bool
 isPure (TyCon c) = internalName c == "Pure"
 isPure _ = False
