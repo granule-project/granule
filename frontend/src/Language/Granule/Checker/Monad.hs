@@ -237,6 +237,14 @@ peekChecker k = do
   (result, localState) <- liftIO $ runChecker checkerState k
   pure (result, put localState)
 
+attemptChecker :: Checker a -> Checker (Bool, Checker ())
+attemptChecker k = do
+  checkerState <- get
+  (result, localState) <- liftIO $ runChecker checkerState k
+  case result of
+    Right _ -> return (True, put localState)
+    Left  _ -> return (False, put localState)
+
 (<|>) :: Checker a -> Checker a -> Checker a
 m1 <|> m2 = do
   (result, putCheckerComputation) <- peekChecker m1

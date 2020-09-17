@@ -4,7 +4,7 @@
 {-# LANGUAGE GADTs #-}
 
 module Language.Granule.Checker.Flatten
-          (mguCoeffectTypes, flattenable) where
+          (mguCoeffectTypes, flattenable, Injections) where
 
 import Data.Functor.Identity (runIdentity)
 import Control.Monad.State.Strict
@@ -17,11 +17,13 @@ import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Utils
 
+type Injections = (Coeffect -> Coeffect, Coeffect -> Coeffect)
+
 cProduct :: Type -> Type -> Type
 cProduct x y = TyApp (TyApp (TyCon (mkId ", ")) x) y
 
 mguCoeffectTypes :: (?globals :: Globals)
-                 => Span -> Type -> Type -> Checker (Type, Substitution, (Coeffect -> Coeffect, Coeffect -> Coeffect))
+                 => Span -> Type -> Type -> Checker (Type, Substitution, Injections)
 mguCoeffectTypes s t1 t2 = do
   upper <- mguCoeffectTypes' s t1 t2
   case upper of

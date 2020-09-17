@@ -46,6 +46,8 @@ typeConstructors =
     , (mkId "Char",   (Type 0, [], False))
     , (mkId "String", (Type 0, [], False))
     , (mkId "Protocol", (Type 0, [], False))
+    -- Coeffect types
+    , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
     -- Security levels

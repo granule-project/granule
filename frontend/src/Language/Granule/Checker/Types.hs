@@ -16,7 +16,6 @@ import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionAndKinding
 import Language.Granule.Checker.SubstitutionContexts
-import Language.Granule.Checker.Variables
 import Language.Granule.Checker.Normalise
 
 import Language.Granule.Syntax.Helpers
@@ -219,9 +218,9 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
               <> "\n" <> pretty m <> " : " <> show t2
   where
     tyVarConstraint (k1, n) (k2, m) = do
-      jK <- k1 `joinKind` k2
+      jK <- joinTypes s k1 k2
       case jK of
-        Just (TyCon kc, unif) -> do
+        Just (TyCon kc, unif, _) -> do
           st <- get
           (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) (TyCon kc) kcoeffect)
           case result of
@@ -229,7 +228,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
             -- Create solver vars for coeffects
             Right _ -> putChecker >> addConstraint (Eq s (TyVar n) (TyVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
-        Just (_, unif) ->
+        Just (_, unif, _) ->
           return (True, unif ++ [(m, SubstT $ TyVar n)])
         Nothing ->
           return (False, [])
@@ -265,25 +264,25 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
     -- We can unify an instance with a concrete type
     (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ) -> do --  && sp /= PatternCtxt
 
-      jK <-  k1 `joinKind` kind
+      jK <-  joinTypes s k1 kind
       case jK of
         Nothing -> throw UnificationKindError
           { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = kind }
 
         -- If the kind is Nat, then create a solver constraint
-        Just (TyCon (internalName -> "Nat"), unif) -> do
+        Just (TyCon (internalName -> "Nat"), unif, _) -> do
           addConstraint (Eq s (TyVar n) t (TyCon $ mkId "Nat"))
           return (True, unif ++ [(n, SubstT t)])
 
-        Just (_, unif) -> return (True, unif ++ [(n, SubstT t)])
+        Just (_, unif, _) -> return (True, unif ++ [(n, SubstT t)])
 
     (Just (k1, ForallQ)) -> do
 
        -- If the kind if nat then set up and equation as there might be a
        -- pausible equation involving the quantified variable
-       jK <- k1 `joinKind` kind
+       jK <- joinTypes s k1 kind
        case jK of
-         Just (TyCon (Id "Nat" "Nat"), unif) -> do
+         Just (TyCon (Id "Nat" "Nat"), unif, _) -> do
            addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Nat")
            return (True, unif ++ [(n, SubstT t)])
 
@@ -428,68 +427,6 @@ isDualSession sp _ t1 t2 _ = throw
   SessionDualityError{ errLoc = sp, errTy1 = t1, errTy2 = t2 }
 
 
--- Essentially equality on types but join on any coeffects
-joinTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker Type
-joinTypes s t t' | t == t' = return t
-
-joinTypes s (FunTy id t1 t2) (FunTy _ t1' t2') = do
-  t1j <- joinTypes s t1' t1 -- contravariance
-  t2j <- joinTypes s t2 t2'
-  return (FunTy id t1j t2j)
-
-joinTypes _ (TyCon t) (TyCon t') | t == t' = return (TyCon t)
-
-joinTypes s (Diamond ef t) (Diamond ef' t') = do
-  tj <- joinTypes s t t'
-  ej <- joinTypes s ef ef'
-  return (Diamond ej tj)
-
-joinTypes s (Box c t) (Box c' t') = do
-  (coeffTy, _, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
-  -- Create a fresh coeffect variable
-  topVar <- freshTyVarInContext (mkId "") coeffTy
-  -- Unify the two coeffects into one
-  addConstraint (ApproximatedBy s (inj1 c)  (TyVar topVar) coeffTy)
-  addConstraint (ApproximatedBy s (inj2 c') (TyVar topVar) coeffTy)
-  tUpper <- joinTypes s t t'
-  return $ Box (TyVar topVar) tUpper
-
--- TODO: Replace how this Nat is constructed?
-joinTypes s (TyInt n) (TyVar m) = do
-  -- Create a fresh coeffect variable
-  let ty = TyCon $ mkId "Nat"
-  var <- freshTyVarInContext m ty
-  -- Unify the two coeffects into one
-  addConstraint (Eq s (TyInt n) (TyVar var) ty)
-  return $ TyInt n
-
-joinTypes s (TyVar n) (TyInt m) = joinTypes s (TyInt m) (TyVar n)
-
-joinTypes s (TyVar n) (TyVar m) = do
-  st <- get
-  (kind, _) <- synthKind s (tyVarContext st) (TyVar n)
-
-  nvar <- freshTyVarInContextWithBinding n kind BoundQ
-  -- Unify the two variables into one
-  addConstraint (ApproximatedBy s (TyVar n) (TyVar nvar) kind)
-  addConstraint (ApproximatedBy s (TyVar m) (TyVar nvar) kind)
-  return $ TyVar nvar
-
-joinTypes s (TyApp t1 t2) (TyApp t1' t2') = do
-  t1'' <- joinTypes s t1 t1'
-  t2'' <- joinTypes s t2 t2'
-  return (TyApp t1'' t2'')
-
--- TODO: Create proper substitutions
-joinTypes s (TyVar _) t = return t
-joinTypes s t (TyVar _) = return t
-
-joinTypes s t1 t2 = do
-    throw $ NoUpperBoundError{
-          errLoc = s
-        , errTy1 = t1
-        , errTy2 = t2
-        }
 
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
