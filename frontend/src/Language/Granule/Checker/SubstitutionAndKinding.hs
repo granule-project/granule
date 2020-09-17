@@ -728,6 +728,18 @@ synthKind s ctxt (FunTy _ t1 t2) = do
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst)
 
+-- KChkS_interval
+synthKind s ctxt (TyApp (TyApp (TyCon (internalName -> "..")) t1) t2) = do
+  (k1, subst1) <- synthKind s ctxt t1
+  (k2, subst2) <- synthKind s ctxt t2
+  jkm <- joinKind k1 k2
+  case jkm of
+    Just (jk, subst3) -> do
+      subst <- combineManySubstitutions s [subst1, subst2, subst3]
+      return (TyApp (tyCon "Interval") jk, subst)
+    Nothing ->
+      throw $ UnificationError s k1 k2
+
 -- KChkS_app
 synthKind s ctxt (TyApp t1 t2) = do
   (funK, subst1) <- synthKind s ctxt t1
