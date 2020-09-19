@@ -732,7 +732,7 @@ checkKind s ctxt t k = do
 -- returns a substitution and an elebaroted type `t'` along with it.
 synthKind :: (?globals :: Globals) =>
   Span -> Ctxt (Type, Quantifier) -> Type -> Checker (Kind, Substitution, Type)
-synthKind s = synthKind' s False
+synthKind s ctxt t = synthKind' s (not (containsTypeSig t)) ctxt t
 
 synthKind' :: (?globals :: Globals) =>
      Span
@@ -747,14 +747,14 @@ synthKind' s overloadToNat ctxt t@(TyVar x) = do
 
 -- -- KChkS_fun
 synthKind' s overloadToNat ctxt (FunTy name t1 t2) = do
-  (k, subst1, t1') <- synthKind s ctxt t1
+  (k, subst1, t1') <- synthKind' s overloadToNat ctxt t1
   (subst2, t2') <- checkKind s ctxt t2 k
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst, FunTy name t1' t2')
 
 -- KChkS_app
 synthKind' s overloadToNat ctxt (TyApp t1 t2) = do
-  (funK, subst1, t1') <- synthKind s ctxt t1
+  (funK, subst1, t1') <- synthKind' s overloadToNat ctxt t1
   case funK of
     (FunTy _ k1 k2) -> do
       (subst2, t2') <- checkKind s ctxt t2 k1
@@ -773,7 +773,7 @@ synthKind' s overloadToNat ctxt (TyInfix TyOpInterval t1 t2) = do
 
 -- KChkS_predOp
 synthKind' s overloadToNat ctxt t@(TyInfix op t1 t2) =
-  synthForOperator s ctxt op t1 t2
+  synthForOperator s overloadToNat ctxt op t1 t2
 
 -- KChkS_int
 synthKind' s _ _ t@(TyInt n) = do
@@ -787,6 +787,7 @@ synthKind' s overloadToNat _ t@(TyGrade n) | overloadToNat =
 synthKind' s overloadToNat _ t@(TyGrade n) | not overloadToNat = do
   -- TODO: is it problematic that we choose a semiring (coeffect)-kinded type
   -- rather than an effect one?
+  liftIO $ putStrLn $ ("o = " ++ show overloadToNat ++ " t = " ++ pretty t)
   var <- freshTyVarInContext (mkId $ "semiring[" <> pretty (startPos s) <> "]") kcoeffect
   return (TyVar var, [], t)
 
@@ -853,16 +854,17 @@ synthKind' s _ _ t =
 
 synthForOperator :: (?globals :: Globals)
   => Span
+  -> Bool -- flag whether overloading to Nat is allowed
   -> Ctxt (Type, Quantifier)
   -> TypeOperator
   -> Type
   -> Type
   -> Checker (Kind, Substitution, Type)
-synthForOperator s ctxt op t1 t2 = do
+synthForOperator s overloadToNat ctxt op t1 t2 = do
   if predicateOperation op || closedOperation op
     then do
-      (k1, subst1, t1') <- synthKind s ctxt t1
-      (k2, subst2, t2') <- synthKind s ctxt t2
+      (k1, subst1, t1') <- synthKind' s overloadToNat ctxt t1
+      (k2, subst2, t2') <- synthKind' s overloadToNat ctxt t2
 
       maybeSubst <- if predicateOperation op
                       then predicateOperatorAtKind s ctxt op k1
