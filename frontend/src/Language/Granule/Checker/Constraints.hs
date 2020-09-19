@@ -247,21 +247,6 @@ compile vars (LtEq s c1 c2) =
 compile vars (GtEq s c1 c2) =
   bindM2And' symGradeGreaterEq (compileCoeffect c1 (TyCon $ mkId "Nat") vars) (compileCoeffect c2 (TyCon $ mkId "Nat") vars)
 
--- TODO: I think this is deprecated (DAO 12/08/2019)
--- NonZeroPromotableTo s c means that:
-compile vars (NonZeroPromotableTo s x c t) = do
-  -- exists x .
-  freshSolverVarScoped compileQuantScoped (internalName x) t InstanceQ
-   (\(req, xVar) -> do
-
-    -- x != 0
-    nonZero <- compile ((x, xVar) : vars) (Neq s (TyInt 0) (TyVar x) t)
-
-    -- x * 1 == c
-    promotableToC <- compile ((x, xVar) : vars) (Eq s (TyInfix TyOpTimes (TyInt 1) (TyVar x)) c t)
-
-    return (req .&& nonZero .&& promotableToC))
-
 compile vars c = error $ "Internal bug: cannot compile " <> show c
 
 -- | Compile a coeffect term into its symbolic representation
@@ -305,6 +290,12 @@ compileCoeffect (TyInt n) k _ | k == nat =
 compileCoeffect (TyInt n) k _ | k == extendedNat =
   return (SExtNat . fromInteger . toInteger $ n, sTrue)
 
+compileCoeffect (TyGrade n) k _ | k == nat =
+  return (SNat  . fromInteger . toInteger $ n, sTrue)
+
+compileCoeffect (TyGrade n) k _ | k == extendedNat =
+  return (SExtNat . fromInteger . toInteger $ n, sTrue)
+
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
@@ -344,7 +335,7 @@ compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   intervalConstraint <- symGradeLessEq lower upper
   return $ (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
 
-compileCoeffect (TyInt 0) k vars  =
+compileCoeffect (TyGrade 0) k vars  =
   case k of
     TyCon k ->
       case internalName k of
@@ -359,19 +350,19 @@ compileCoeffect (TyInt 0) k vars  =
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (TyInt 0) t1 vars)
-        (compileCoeffect (TyInt 0) t2 vars)
+        (compileCoeffect (TyGrade 0) t1 vars)
+        (compileCoeffect (TyGrade 0) t2 vars)
 
     (isInterval -> Just t) ->
       liftM2And SInterval
-        (compileCoeffect (TyInt 0) t vars)
-        (compileCoeffect (TyInt 0) t vars)
+        (compileCoeffect (TyGrade 0) t vars)
+        (compileCoeffect (TyGrade 0) t vars)
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
     _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k
 
-compileCoeffect (TyInt 1) k vars =
+compileCoeffect (TyGrade 1) k vars =
   case k of
     TyCon k ->
       case internalName k of
@@ -387,13 +378,13 @@ compileCoeffect (TyInt 1) k vars =
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (TyInt 1) t1 vars)
-        (compileCoeffect (TyInt 1) t2 vars)
+        (compileCoeffect (TyGrade 1) t1 vars)
+        (compileCoeffect (TyGrade 1) t2 vars)
 
     (isInterval -> Just t) ->
       liftM2And SInterval
-        (compileCoeffect (TyInt 1) t vars)
-        (compileCoeffect (TyInt 1) t vars)
+        (compileCoeffect (TyGrade 1) t vars)
+        (compileCoeffect (TyGrade 1) t vars)
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -402,10 +393,9 @@ compileCoeffect (TyInt 1) k vars =
 compileCoeffect (isProduct -> Just (c1, c2)) (isProduct -> Just (t1, t2)) vars =
   liftM2And SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
 
--- For grade-polymorphic coeffects, that have come from a nat
--- expression (sometimes this is just from a compounded expression of 1s),
--- perform the injection from Natural numbers to arbitrary semirings
-compileCoeffect (TyInt n) (TyVar _) _ | n > 0 =
+-- For grade-polymorphic expressions
+-- perform the injection from natural numbers to arbitrary semirings
+compileCoeffect (TyGrade n) (TyVar _) _ | n > 0 =
   return (SUnknown (injection n), sTrue)
     where
       injection 0 = SynLeaf (Just 0)
@@ -505,8 +495,6 @@ trivialUnsatisfiableConstraints
     unsat c@(Eq _ c1 c2 _)  = if (c1 `neqC` c2) then [c] else []
     unsat c@(Neq _ c1 c2 _) = if (c1 `neqC` c2) then [] else [c]
     unsat c@(ApproximatedBy{}) = approximatedByC c
-    unsat c@(NonZeroPromotableTo _ _ (TyInt 0) _) = [c]
-    unsat (NonZeroPromotableTo _ _ _ _) = []
     -- TODO: look at this information
     unsat Lub{} = []
     unsat (Lt _ c1 c2) = []

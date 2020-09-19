@@ -553,6 +553,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type, level :: Int }
   | ImpossibleKindSynthesis
     { errLoc :: Span, errTy :: Type }
+  | NaturalNumberAtWrongKind
+    { errLoc :: Span, errTy :: Type, errK :: Kind }
   deriving (Show)
 
 instance UserMsg CheckerError where
@@ -620,6 +622,7 @@ instance UserMsg CheckerError where
   title OperatorUndefinedForKind{} = "Kind error"
   title WrongLevel{} = "Type error"
   title ImpossibleKindSynthesis{} = "Kind error"
+  title NaturalNumberAtWrongKind{} = "Kind error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -922,6 +925,9 @@ instance UserMsg CheckerError where
 
   msg ImpossibleKindSynthesis{ errTy }
     = "Cannot synthesis a kind for `" <> pretty errTy <> "`"
+
+  msg NaturalNumberAtWrongKind{ errTy, errK }
+    = "Natural number `" <> pretty errTy <> "` is not a member of `" <> pretty errK <> "`"
 
   color HoleMessage{} = Blue
   color _ = Red

@@ -31,7 +31,7 @@ mguCoeffectTypes s t1 t2 = do
     -- Cannot unify so form a product
     Nothing -> return
       (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [],
-                  (\x -> cProduct x (TyInt 1), \x -> cProduct (TyInt 1) x))
+                  (\x -> cProduct x (TyGrade 1), \x -> cProduct (TyGrade 1) x))
 
 -- Inner definition which does not throw its error, and which operates on just the types
 mguCoeffectTypes' :: (?globals :: Globals)
@@ -66,6 +66,7 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
 
 -- Left-hand side is a poly variable, but Just is concrete
 mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
+  debugM "HERE" (show s)
   st <- get
   case lookup kv1 (tyVarContext st) of
     Nothing -> throw $ UnboundVariableError s kv1
@@ -77,15 +78,7 @@ mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
 
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
-
-  st <- get
-  case lookup kv2 (tyVarContext st) of
-    Nothing -> throw $ UnboundVariableError s kv2
-    Just (k, ForallQ) ->
-      throw $ UnificationFail s kv2 coeffTy1 k True
-    Just (k, _) -> do -- InstanceQ or BoundQ
-      updateCoeffectType kv2 coeffTy1
-      return $ Just (coeffTy1, [(kv2, SubstK coeffTy1)], (id, id))
+  mguCoeffectTypes' s (TyVar kv2) coeffTy1
 
 -- `Nat` can unify with `Q` to `Q`
 mguCoeffectTypes' s (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =
@@ -107,16 +100,16 @@ mguCoeffectTypes' s (TyCon (internalName -> "Nat")) t | t == extendedNat =
 
 -- Unifying a product of (t, t') with t yields (t, t') [and the symmetric versions]
 mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t1 == coeffTy2 =
-  return $ Just (coeffTy1, [], (id, \x -> cProduct x (TyInt 1)))
+  return $ Just (coeffTy1, [], (id, \x -> cProduct x (TyGrade 1)))
 
 mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t2 == coeffTy2 =
-  return $ Just (coeffTy1, [], (id, \x -> cProduct (TyInt 1) x))
+  return $ Just (coeffTy1, [], (id, \x -> cProduct (TyGrade 1) x))
 
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t1 == coeffTy1 =
-  return $ Just (coeffTy2, [], (\x -> cProduct x (TyInt 1), id))
+  return $ Just (coeffTy2, [], (\x -> cProduct x (TyGrade 1), id))
 
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t2 == coeffTy1 =
-  return $ Just (coeffTy2, [], (\x -> cProduct (TyInt 1) x, id))
+  return $ Just (coeffTy2, [], (\x -> cProduct (TyGrade 1) x, id))
 
 -- Unifying with an interval
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =

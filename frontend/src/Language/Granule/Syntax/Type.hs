@@ -50,6 +50,7 @@ data Type where
     TyApp   :: Type -> Type -> Type                 -- ^ Type application
     TyInt   :: Int -> Type                          -- ^ Type-level Int
     TyRational :: Rational -> Type                  -- ^ Type-level Rational
+    TyGrade :: Int -> Type                          -- ^ Graded element
     TyInfix :: TypeOperator -> Type -> Type -> Type -- ^ Infix type operator
 
     TySet   :: [Type] -> Type                 -- ^ Type-level set
@@ -169,6 +170,38 @@ isProduct _ = Nothing
 ----------------------------------------------------------------------
 -- # Helpers
 
+-- Calculate whether a type could be used a generic semiring/grade expression
+isGenericCoeffectExpression :: Type -> Bool
+isGenericCoeffectExpression (TyGrade _) = True
+isGenericCoeffectExpression (TyInfix TyOpPlus c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression (TyInfix TyOpTimes c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression (TyInfix TyOpMeet c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression (TyInfix TyOpJoin c1 c2) =
+  isGenericCoeffectExpression c1 && isGenericCoeffectExpression c2
+isGenericCoeffectExpression _ = False
+
+-- Contains signature?
+containsTypeSig :: Type -> Bool
+containsTypeSig =
+  runIdentity . typeFoldM (TypeFold
+      { tfTy = \_ -> return $ False
+      , tfFunTy = \_ x y -> return (x || y)
+      , tfTyCon = \_ -> return False
+      , tfBox = \x y -> return (x || y)
+      , tfDiamond = \x y -> return $ (x || y)
+      , tfTyVar = \_ -> return False
+      , tfTyApp = \x y -> return (x || y)
+      , tfTyInt = \_ -> return False
+      , tfTyRational = \_ -> return False
+      , tfTyGrade = \_ -> return False
+      , tfTyInfix = \_ x y -> return (x || y)
+      , tfSet = \_ -> return  False
+      , tfTyCase = \_ _ -> return False
+      , tfTySig = \_ _ _ -> return True })
+
 -- | Compute the arity of a function type
 arity :: Type -> Int
 arity (FunTy _ _ t) = 1 + arity t
@@ -220,6 +253,8 @@ mTyInt :: Monad m => Int -> m Type
 mTyInt       = return . TyInt
 mTyRational :: Monad m => Rational -> m Type
 mTyRational          = return . TyRational
+mTyGrade :: Monad m => Int -> m Type
+mTyGrade     = return . TyGrade
 mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
 mTySet   :: Monad m => [Type] -> m Type
@@ -240,6 +275,7 @@ data TypeFold m a = TypeFold
   , tfTyApp   :: a -> a             -> m a
   , tfTyInt   :: Int                -> m a
   , tfTyRational :: Rational        -> m a
+  , tfTyGrade :: Int                -> m a
   , tfTyInfix :: TypeOperator -> a -> a -> m a
   , tfSet     :: [a]                -> m a
   , tfTyCase  :: a -> [(a, a)]      -> m a
@@ -249,7 +285,7 @@ data TypeFold m a = TypeFold
 -- Base monadic algebra
 baseTypeFold :: Monad m => TypeFold m Type --Type
 baseTypeFold =
-  TypeFold mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyRational mTyInfix mTySet mTyCase mTySig
+  TypeFold mTy mFunTy mTyCon mBox mDiamond mTyVar mTyApp mTyInt mTyRational mTyGrade mTyInfix mTySet mTyCase mTySig
 
 -- | Monadic fold on a `Type` value
 typeFoldM :: forall m a . Monad m => TypeFold m a -> Type -> m a
@@ -277,6 +313,7 @@ typeFoldM algebra = go
      (tfTyApp algebra) t1' t2'
    go (TyInt i) = (tfTyInt algebra) i
    go (TyRational i) = (tfTyRational algebra) i
+   go (TyGrade i) = (tfTyGrade algebra) i
    go (TyInfix op t1 t2) = do
      t1' <- go t1
      t2' <- go t2
@@ -314,6 +351,7 @@ instance Term Type where
       , tfTyApp   = \(Const x) (Const y) -> return $ Const (x <> y)
       , tfTyInt   = \_ -> return (Const [])
       , tfTyRational  = \_ -> return (Const [])
+      , tfTyGrade     = \_ -> return (Const [])
       , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
       , tfSet     = return . Const . concat . map getConst
       , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
@@ -322,6 +360,7 @@ instance Term Type where
 
     isLexicallyAtomic TyInt{} = True
     isLexicallyAtomic TyRational{} = True
+    isLexicallyAtomic TyGrade{} = True
     isLexicallyAtomic TyVar{} = True
     isLexicallyAtomic TySet{} = True
     isLexicallyAtomic TyCon{} = True
@@ -377,6 +416,7 @@ normalise (TyInfix TyOpPlus (TyApp (TyCon (internalName -> "Level")) n) (TyApp (
 normalise (TyInfix TyOpTimes (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m)) = TyApp (TyCon (mkId "Level")) (n `min` m)
 normalise (TyInfix TyOpPlus (TyRational n) (TyRational m)) = TyRational (n + m)
 normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)
+normalise (TyInfix TyOpPlus (TyGrade n) (TyGrade m)) = TyGrade (n + m)
 normalise (TyInfix TyOpPlus (TyInt n) (TyInt m)) = TyInt (n + m)
 normalise (TyInfix TyOpTimes (TyInt n) (TyInt m)) = TyInt (n * m)
 normalise (TyInfix TyOpPlus n m) =

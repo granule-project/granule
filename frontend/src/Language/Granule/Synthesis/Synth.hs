@@ -108,7 +108,7 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
         -- g - g' = c
         -- therefore
         -- g = c + g'
-        (kind, _) <- conv $ inferCoeffectType nullSpan g
+        (kind, _, _) <- conv $ synthKindHere nullSpan g
         var <- conv $ freshTyVarInContext (mkId $ "c") kind
         conv $ existential var kind
         conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) g') g kind)
@@ -136,7 +136,7 @@ ctxtDivByCoeffect g1 ((x, Discharged t g2):xs) =
       return ((x, Discharged t var): ctxt)
   where
     gradeDiv g g' = do
-      (kind, _) <- conv $ inferCoeffectType nullSpan g
+      (kind, _, _) <- conv $ synthKindHere nullSpan g
       var <- conv $ freshTyVarInContext (mkId $ "c") kind
       conv $ existential var kind
       conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes g (TyVar var)) g' kind)
@@ -156,9 +156,9 @@ ctxtMerge _ [] [] = return []
 --  * Can meet/join an empty context to one that has graded assumptions
 ctxtMerge operator [] ((x, Discharged t g) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
-  (kind, _) <- conv $ inferCoeffectType nullSpan g
+  (kind, _, _) <- conv $ synthKindHere nullSpan g
   ctxt' <- ctxtMerge operator [] ctxt
-  return $ (x, Discharged t (operator (TyInt 0) g)) : ctxt'
+  return $ (x, Discharged t (operator (TyGrade 0) g)) : ctxt'
 
 --  * Cannot meet/join an empty context to one with linear assumptions
 ctxtMerge _ [] ((_, Linear t) : ctxt) = none
@@ -179,8 +179,8 @@ ctxtMerge operator ((x, Discharged t1 g1) : ctxt1') ctxt2 = do
     Nothing -> do
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
-      (kind, _) <- conv $ inferCoeffectType nullSpan g1
-      return $ (x, Discharged t1 (operator g1 (TyInt 0))) : ctxt'
+      (kind, _, _) <- conv $ synthKindHere nullSpan g1
+      return $ (x, Discharged t1 (operator g1 (TyGrade 0))) : ctxt'
 
 ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
   case lookupAndCutout x ctxt2 of
@@ -275,12 +275,12 @@ useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt Assumption -> Resour
 -- Subtractive
 useVar (name, Linear t) gamma Subtractive{} = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma Subtractive{} = do
-  (kind, _) <- conv $ inferCoeffectType nullSpan grade
+  (kind, _, _) <- conv $ synthKindHere nullSpan grade
   var <- conv $ freshTyVarInContext (mkId $ "c") kind
   conv $ existential var kind
   -- conv $ addPredicate (Impl [] (Con (Neq nullSpanNoFile (CZero kind) grade kind))
   --                              (Con (ApproximatedBy nullSpanNoFile (CPlus (TyVar var) (COne kind)) grade kind)))
-  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyInt 0)) grade kind)
+  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyGrade 0)) grade kind)
   res <- solve
   case res of
     True -> do
@@ -291,8 +291,8 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
 -- Additive
 useVar (name, Linear t) _ Additive{} = return (True, [(name, Linear t)], t)
 useVar (name, Discharged t grade) _ Additive{} = do
-  (kind, _) <- conv $ inferCoeffectType nullSpan grade
-  return (True, [(name, (Discharged t (TyInt 1)))], t)
+  (kind, _, _) <- conv $ synthKindHere nullSpan grade
+  return (True, [(name, (Discharged t (TyGrade 1)))], t)
 
 varHelper :: (?globals :: Globals)
   => Ctxt DataDecl
@@ -495,8 +495,8 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
           case lookupAndCutout x2 delta of
             Just (delta', (Discharged _ grade_s)) -> do
               -- Check that: 0 <= s
-              (kind, _) <- conv $ inferCoeffectType nullSpan grade_s
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInt 0) grade_s kind)
+              (kind, _, _) <- conv $ synthKindHere nullSpan grade_s
+              conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade 0) grade_s kind)
               res <- solve
               -- If we succeed, create the let binding
               boolToSynthesiser res (makeUnbox x2 x1 goalTy tyBoxA tyA e, delta', subst)
@@ -525,7 +525,7 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
 
             case lookupAndCutout x2 delta' of
               Just (delta'', (Discharged _ usage)) -> do
-                (kind, _) <- conv $ inferCoeffectType nullSpan grade
+                (kind, _, _) <- conv $ synthKindHere nullSpan grade
 
                 debugM "check" (pretty usage ++ " <=? " ++ pretty grade)
                 conv $ addConstraint (ApproximatedBy nullSpanNoFile usage grade kind)
@@ -536,8 +536,8 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                   False -> do
                     none
               _ -> do
-                (kind, _) <- conv $ inferCoeffectType nullSpan grade
-                conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInt 0) grade kind)
+                (kind, _, _) <- conv $ synthKindHere nullSpan grade
+                conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade 0) grade kind)
                 res <- solve
                 case res of
                   True ->
@@ -811,8 +811,8 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                     case a of
                       Linear{} -> return False;
                       Discharged _ grade -> do
-                        (kind, _) <-  conv $ inferCoeffectType nullSpan grade
-                        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInt 0) grade kind)
+                        (kind, _, _) <-  conv $ synthKindHere nullSpan grade
+                        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade 0) grade kind)
                         solve) ctxt
       if and consumed
         then return result
@@ -827,7 +827,7 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                       Just (Discharged _ grade) ->
                         case a of
                           Discharged _ grade' -> do
-                            (kind, _) <- conv $ inferCoeffectType nullSpan grade
+                            (kind, _, _) <- conv $ synthKindHere nullSpan grade
                             conv $ addConstraint (ApproximatedBy nullSpanNoFile grade' grade kind)
                             solve
                           _ -> return False
@@ -923,7 +923,6 @@ sizeOfConstraint (Eq _ c1 c2 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
 sizeOfConstraint (Neq _ c1 c2 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
 sizeOfConstraint (ApproximatedBy _ c1 c2 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
 sizeOfConstraint (Lub _ c1 c2 c3 _) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2) + (sizeOfCoeffect c3)
-sizeOfConstraint (NonZeroPromotableTo _ _ c _) = 1 + (sizeOfCoeffect c)
 sizeOfConstraint (Lt _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
 sizeOfConstraint (Gt _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
 sizeOfConstraint (LtEq _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
@@ -931,8 +930,8 @@ sizeOfConstraint (GtEq _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
 
 sizeOfCoeffect :: Type -> Integer
 sizeOfCoeffect (TyInfix _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
-sizeOfCoeffect (TyInt 0) = 0
-sizeOfCoeffect (TyInt 1) = 0
+sizeOfCoeffect (TyGrade _) = 0
+sizeOfCoeffect (TyInt _) = 0
 sizeOfCoeffect (TyVar _) = 0
 sizeOfCoeffect _ = 0
 

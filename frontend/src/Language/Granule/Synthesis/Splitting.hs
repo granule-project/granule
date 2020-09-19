@@ -229,6 +229,8 @@ getAssumConstr a =
     getTypeConstr (TySig t _) = getTypeConstr t
     getTypeConstr (TyVar _) = Nothing
     getTypeConstr (TyInt _) = Nothing
+    getTypeConstr (TyRational _) = Nothing
+    getTypeConstr (TyGrade _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
     getTypeConstr (TySet _) = Nothing
     getTypeConstr (TyCase _ cases) =
@@ -240,7 +242,6 @@ getAssumConstr a =
        allSame [x] = True
        allSame (x:(y:xs)) =
          if x == y then allSame xs else False
-    getTypeConstr (TyRational _) = Nothing
 
 -- Given a function type, expand grades on parameters to be more permissive,
 -- for the purpose of generating theorems. Exact natural number grades greater
@@ -250,8 +251,11 @@ getAssumConstr a =
 -- single usage from the pattern match.
 expandGrades :: Type -> Type
 expandGrades (FunTy id t1 t2) = FunTy id (expandGrades t1) (expandGrades t2)
+expandGrades (Box (TyInfix TyOpInterval (TyGrade lower) (TyGrade upper)) t) | lower > 1 =
+  Box (TyInfix TyOpInterval (TyGrade 1) (TyGrade upper)) t
 expandGrades (Box (TyInfix TyOpInterval (TyInt lower) (TyInt upper)) t) | lower > 1 =
   Box (TyInfix TyOpInterval (TyInt 1) (TyInt upper)) t
+expandGrades (Box (TyGrade n) t) | n > 1 = Box (TyInfix TyOpInterval (TyGrade 1) (TyGrade n)) t
 expandGrades (Box (TyInt n) t) | n > 1 = Box (TyInfix TyOpInterval (TyInt 1) (TyInt n)) t
 expandGrades ty = ty
 

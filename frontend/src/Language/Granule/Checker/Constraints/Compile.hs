@@ -7,7 +7,6 @@ module Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToCons
 
 import Control.Monad.State.Strict
 
-import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionAndKinding (checkKind, synthKind)
@@ -22,7 +21,7 @@ compileTypeConstraintToConstraint ::
     (?globals :: Globals) => Span -> Type -> Checker Pred
 compileTypeConstraintToConstraint s (TyInfix op t1 t2) = do
   st <- get
-  (k, _) <- synthKind s (tyVarContext st) t1
+  (k, _, _) <- synthKind s (tyVarContext st) t1
   (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) t2 k)
   case result of
     Right _ -> do

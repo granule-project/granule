@@ -38,7 +38,7 @@ derivePush s ty = do
 
   -- Get kind of type constructor
   st <- get
-  (kind, _) <- synthKind nullSpanNoFile (tyVarContext st) ty
+  (kind, _, _) <- synthKind nullSpanNoFile (tyVarContext st) ty
   -- Generate fresh type variables and apply them to the kind constructor
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
@@ -60,7 +60,7 @@ derivePush s ty = do
   -- Build derived type scheme
   let constraints =
         if isPoly
-          then [TyInfix TyOpLesserEq (TyInt 1) (TyVar cVar)]
+          then [TyInfix TyOpLesserEq (TyGrade 1) (TyVar cVar)]
           else []
   let tyS = Forall s
               ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
@@ -257,7 +257,7 @@ derivePull s ty = do
 
   -- Get kind of type constructor
   st <- get
-  (kind, _) <- synthKind nullSpanNoFile (tyVarContext st) ty
+  (kind, _, _) <- synthKind nullSpanNoFile (tyVarContext st) ty
   -- Generate fresh type variables and apply them to the kind constructor
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext

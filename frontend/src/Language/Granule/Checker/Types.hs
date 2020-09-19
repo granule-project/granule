@@ -105,7 +105,7 @@ equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
   st <- get
-  (k, _) <- synthKind s (tyVarContext st) t1'
+  (k, _, _) <- synthKind s (tyVarContext st) t1'
   st <- get
   _ <- checkKind s (tyVarContext st) t2' k
   equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
@@ -459,6 +459,7 @@ isIndexedType t = do
       , tfTyApp = \(Const x) (Const y) -> return $ Const (x || y)
       , tfTyInt = \_ -> return $ Const False
       , tfTyRational = \_ -> return $ Const False
+      , tfTyGrade = \_ -> return $ Const False
       , tfTyInfix = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfSet = \_ -> return $ Const False
       , tfTyCase = \_ _ -> return $ Const False
@@ -471,7 +472,7 @@ isIndexedType t = do
 isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
 isEffectType s ty = do
   st <- get
-  (effTy, _) <- synthKind s (tyVarContext st) ty
+  (effTy, _, _) <- synthKind s (tyVarContext st) ty
   (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) effTy keffect)
   case result of
     Right res -> do

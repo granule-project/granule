@@ -79,6 +79,7 @@ instance Pretty Type where
     pretty (TyCon s)      = pretty s
     pretty (TyVar v)      = pretty v
     pretty (TyInt n)      = show n
+    pretty (TyGrade n)    = show n
     pretty (TyRational n) = show n
 
     -- Non atoms
