@@ -352,13 +352,13 @@ compileCoeffect (TyGrade k' 0) k vars = do
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (TyGrade k' 0) t1 vars)
-        (compileCoeffect (TyGrade k' 0) t2 vars)
+        (compileCoeffect (TyGrade (Just t1) 0) t1 vars)
+        (compileCoeffect (TyGrade (Just t2) 0) t2 vars)
 
     (isInterval -> Just t) ->
       liftM2And SInterval
-        (compileCoeffect (TyGrade k' 0) t vars)
-        (compileCoeffect (TyGrade k' 0) t vars)
+        (compileCoeffect (TyGrade (Just t) 0) t vars)
+        (compileCoeffect (TyGrade (Just t) 0) t vars)
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
@@ -381,13 +381,13 @@ compileCoeffect (TyGrade k' 1) k vars = do
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (TyGrade k' 1) t1 vars)
-        (compileCoeffect (TyGrade k' 1) t2 vars)
+        (compileCoeffect (TyGrade (Just t1) 1) t1 vars)
+        (compileCoeffect (TyGrade (Just t2) 1) t2 vars)
 
     (isInterval -> Just t) ->
       liftM2And SInterval
-        (compileCoeffect (TyGrade k' 1) t vars)
-        (compileCoeffect (TyGrade k' 1) t vars)
+        (compileCoeffect (TyGrade (Just t) 1) t vars)
+        (compileCoeffect (TyGrade (Just t) 1) t vars)
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 

@@ -172,7 +172,7 @@ checkDataCon
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
 
         -- Create a version of the data constructor that matches the data type head
-        -- but with a list of coercions 
+        -- but with a list of coercions
 
         ixKinds <- mapM (substitute substFromFreshening) (indexKinds kind)
         (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty ixKinds
