@@ -114,7 +114,9 @@ instance Substitutable Type where
     return $ Diamond e t'
 
   substitute subst (TyVar v) =
-    return $ TyVar v
+    case lookup v subst of
+      Just (SubstT t) -> return t
+      _               -> mTyVar v
 
   substitute subst (TyApp t1 t2) = do
     t1' <- substitute subst t1
