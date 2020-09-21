@@ -158,7 +158,7 @@ ctxtMerge operator [] ((x, Discharged t g) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
   (kind, _, _) <- conv $ synthKindHere nullSpan g
   ctxt' <- ctxtMerge operator [] ctxt
-  return $ (x, Discharged t (operator (TyGrade 0) g)) : ctxt'
+  return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
 --  * Cannot meet/join an empty context to one with linear assumptions
 ctxtMerge _ [] ((_, Linear t) : ctxt) = none
@@ -180,7 +180,7 @@ ctxtMerge operator ((x, Discharged t1 g1) : ctxt1') ctxt2 = do
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
       (kind, _, _) <- conv $ synthKindHere nullSpan g1
-      return $ (x, Discharged t1 (operator g1 (TyGrade 0))) : ctxt'
+      return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
 ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
   case lookupAndCutout x ctxt2 of
@@ -280,7 +280,7 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
   conv $ existential var kind
   -- conv $ addPredicate (Impl [] (Con (Neq nullSpanNoFile (CZero kind) grade kind))
   --                              (Con (ApproximatedBy nullSpanNoFile (CPlus (TyVar var) (COne kind)) grade kind)))
-  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyGrade 0)) grade kind)
+  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyGrade (Just kind) 0)) grade kind)
   res <- solve
   case res of
     True -> do
@@ -292,7 +292,7 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
 useVar (name, Linear t) _ Additive{} = return (True, [(name, Linear t)], t)
 useVar (name, Discharged t grade) _ Additive{} = do
   (kind, _, _) <- conv $ synthKindHere nullSpan grade
-  return (True, [(name, (Discharged t (TyGrade 1)))], t)
+  return (True, [(name, (Discharged t (TyGrade (Just kind) 1)))], t)
 
 varHelper :: (?globals :: Globals)
   => Ctxt DataDecl
@@ -496,7 +496,7 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
             Just (delta', (Discharged _ grade_s)) -> do
               -- Check that: 0 <= s
               (kind, _, _) <- conv $ synthKindHere nullSpan grade_s
-              conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade 0) grade_s kind)
+              conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade_s kind)
               res <- solve
               -- If we succeed, create the let binding
               boolToSynthesiser res (makeUnbox x2 x1 goalTy tyBoxA tyA e, delta', subst)
@@ -537,7 +537,7 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                     none
               _ -> do
                 (kind, _, _) <- conv $ synthKindHere nullSpan grade
-                conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade 0) grade kind)
+                conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
                 res <- solve
                 case res of
                   True ->
@@ -812,7 +812,7 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                       Linear{} -> return False;
                       Discharged _ grade -> do
                         (kind, _, _) <-  conv $ synthKindHere nullSpan grade
-                        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade 0) grade kind)
+                        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
                         solve) ctxt
       if and consumed
         then return result
@@ -930,7 +930,7 @@ sizeOfConstraint (GtEq _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
 
 sizeOfCoeffect :: Type -> Integer
 sizeOfCoeffect (TyInfix _ c1 c2) = 1 + (sizeOfCoeffect c1) + (sizeOfCoeffect c2)
-sizeOfCoeffect (TyGrade _) = 0
+sizeOfCoeffect (TyGrade _ _) = 0
 sizeOfCoeffect (TyInt _) = 0
 sizeOfCoeffect (TyVar _) = 0
 sizeOfCoeffect _ = 0

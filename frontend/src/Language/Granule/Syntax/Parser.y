@@ -321,7 +321,7 @@ Type :: { Type }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
-  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade 0) infinity) $1 }
+  | TyAtom '[' ']'                 { Box (TyInfix TyOpInterval (TyGrade (Just extendedNat) 0) infinity) $1 }
   | TyAtom '<' Effect '>'          { Diamond $3 $1 }
   | case Type of TyCases { TyCase $2 $4 }
 
@@ -372,7 +372,7 @@ TyParams :: { [Type] }
   |                           { [] }
 
 Coeffect :: { Coeffect }
-  : INT                           { let TokenInt _ x = $1 in TyGrade x }
+  : INT                           { let TokenInt _ x = $1 in TyGrade (Just $ tyCon "Nat") x }
   | '.' INT                       { let TokenInt _ x = $2 in TyInt x }
   | '∞'                           { infinity }
   | FLOAT                         { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }

@@ -39,7 +39,7 @@ definiteUnification _ Nothing _ = return ()
 definiteUnification s (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
   when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
-    addConstraint $ ApproximatedBy s (TyGrade 1) coeff coeffTy
+    addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
@@ -112,7 +112,7 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
 
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
-              addConstraint $ ApproximatedBy s (TyGrade 0) coeff coeffTy
+              addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
 
               return ([], [], [], PWild s t rf, NotFull)
 

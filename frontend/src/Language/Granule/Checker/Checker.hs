@@ -761,7 +761,7 @@ synthExpr defs gam pol
 
   (t, _, subst, elabE) <- synthExpr defs gam pol v
 
-  return (t, [(x, Discharged t (TyGrade 0))], subst, elabE)
+  return (t, [(x, Discharged t (TyGrade Nothing 0))], subst, elabE)
 
 -- Constructors
 synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
@@ -927,7 +927,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
     _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
 
   (t, _, _) <- synthKindHere s opt
-  addConstraint (ApproximatedBy s (TyGrade 0) opt t)
+  addConstraint (ApproximatedBy s (TyGrade (Just t) 0) opt t)
 
   -- Type clauses in the context of the binders from the pattern
   (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s (Box opt ty1) (PBox s () False p) NotFull
@@ -1000,7 +1000,7 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
      Just (Discharged ty c) -> do
        (k, subst, _) <- synthKindHere s c
        let elaborated = Val s ty rf (Var ty x)
-       return (ty, [(x, Discharged ty (TyGrade 1))], subst, elaborated)
+       return (ty, [(x, Discharged ty (TyGrade (Just k) 1))], subst, elaborated)
 
 -- Specialised application for scale
 {- TODO: needs thought -}
@@ -1309,7 +1309,7 @@ ctxtApprox s ctxt1 ctxt2 = do
                -- TODO: deal with the subst here
                (kind, subst, _) <- synthKindHere s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade 0)) (id, ass2)
+               _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1347,7 +1347,7 @@ ctxtEquals s ctxt1 ctxt2 = do
                -- TODO: deal with the subst here
                (kind, _, _) <- synthKindHere s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Discharged t (TyGrade 0)) (id, ass2)
+               _ <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1421,7 +1421,7 @@ intersectCtxtsWithWeaken s a b = do
    weaken (var, Discharged t c) = do
         -- TODO: deal with the subst here
        (kind, _, _) <- synthKindHere s c
-       return (var, Discharged t (TyGrade 0))
+       return (var, Discharged t (TyGrade (Just kind) 0))
 
 {- | Given an input context and output context, check the usage of
      variables in the output, returning a list of usage mismatch
@@ -1549,10 +1549,8 @@ extCtxt s ctxt var (Linear t) = do
     Just (Discharged t' c) ->
        if t == t'
          then do
-           st <- get
-           -- TODO: deal with the subst here
-           (_, cElaborated) <- checkKind s (tyVarContext st) c kcoeffect
-           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade 1)))
+          (k, subst, cElaborated) <- synthKindHere s c
+          return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Linear t) : ctxt
 
@@ -1566,10 +1564,8 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Linear t') ->
         if t == t'
         then do
-           st <- get
-           -- TODO: deal with the subst here
-           (_, cElab) <- checkKind s (tyVarContext st) c kcoeffect
-           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElab (TyGrade 1)))
+          (k, subst, cElaborated) <- synthKindHere s c
+          return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Discharged t c) : ctxt
 

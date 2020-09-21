@@ -16,6 +16,7 @@ module Language.Granule.Checker.Constraints where
 import Data.SBV hiding (kindOf, name, symbolic)
 import qualified Data.Set as S
 import Control.Monad (liftM2)
+import Control.Monad.IO.Class
 
 import Language.Granule.Checker.Predicates
 import Language.Granule.Context (Ctxt)
@@ -290,10 +291,10 @@ compileCoeffect (TyInt n) k _ | k == nat =
 compileCoeffect (TyInt n) k _ | k == extendedNat =
   return (SExtNat . fromInteger . toInteger $ n, sTrue)
 
-compileCoeffect (TyGrade n) k _ | k == nat =
+compileCoeffect (TyGrade k' n) k _ | k == nat && (k' == Nothing || k' == Just nat) =
   return (SNat  . fromInteger . toInteger $ n, sTrue)
 
-compileCoeffect (TyGrade n) k _ | k == extendedNat =
+compileCoeffect (TyGrade k' n) k _ | k == extendedNat && (k' == Nothing || k' == Just extendedNat)=
   return (SExtNat . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
@@ -335,10 +336,11 @@ compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   intervalConstraint <- symGradeLessEq lower upper
   return $ (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
 
-compileCoeffect (TyGrade 0) k vars  =
+compileCoeffect (TyGrade k' 0) k vars = do
+  k <- matchTypes k k'
   case k of
-    TyCon k ->
-      case internalName k of
+    (TyCon k') ->
+      case internalName k' of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
@@ -350,19 +352,20 @@ compileCoeffect (TyGrade 0) k vars  =
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (TyGrade 0) t1 vars)
-        (compileCoeffect (TyGrade 0) t2 vars)
+        (compileCoeffect (TyGrade k' 0) t1 vars)
+        (compileCoeffect (TyGrade k' 0) t2 vars)
 
     (isInterval -> Just t) ->
       liftM2And SInterval
-        (compileCoeffect (TyGrade 0) t vars)
-        (compileCoeffect (TyGrade 0) t vars)
+        (compileCoeffect (TyGrade k' 0) t vars)
+        (compileCoeffect (TyGrade k' 0) t vars)
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
     _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k
 
-compileCoeffect (TyGrade 1) k vars =
+compileCoeffect (TyGrade k' 1) k vars = do
+  k <- matchTypes k k'
   case k of
     TyCon k ->
       case internalName k of
@@ -378,13 +381,13 @@ compileCoeffect (TyGrade 1) k vars =
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
-        (compileCoeffect (TyGrade 1) t1 vars)
-        (compileCoeffect (TyGrade 1) t2 vars)
+        (compileCoeffect (TyGrade k' 1) t1 vars)
+        (compileCoeffect (TyGrade k' 1) t2 vars)
 
     (isInterval -> Just t) ->
       liftM2And SInterval
-        (compileCoeffect (TyGrade 1) t vars)
-        (compileCoeffect (TyGrade 1) t vars)
+        (compileCoeffect (TyGrade k' 1) t vars)
+        (compileCoeffect (TyGrade k' 1) t vars)
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -395,7 +398,9 @@ compileCoeffect (isProduct -> Just (c1, c2)) (isProduct -> Just (t1, t2)) vars =
 
 -- For grade-polymorphic expressions
 -- perform the injection from natural numbers to arbitrary semirings
-compileCoeffect (TyGrade n) (TyVar _) _ | n > 0 =
+compileCoeffect (TyGrade k' n) k@(TyVar _) _ | n > 0 = do
+  -- Check that we have agreement here
+  _ <- matchTypes k k'
   return (SUnknown (injection n), sTrue)
     where
       injection 0 = SynLeaf (Just 0)
@@ -614,3 +619,8 @@ bindM2And' k ma mb = do
 
 liftM2And :: Monad m => (t1 -> t2 -> b) -> m (t1, SBool) -> m (t2, SBool) -> m (b, SBool)
 liftM2And k = bindM2And (\a b -> return (k a b))
+
+matchTypes :: MonadIO m => Type -> Maybe Type -> m Type
+matchTypes t Nothing = return t
+matchTypes t (Just t') | t == t' = return t
+matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ show t ++ " and " ++ show t'

@@ -124,8 +124,12 @@ instance Substitutable Type where
   substitute subst (TyInt n) =
     return $ TyInt n
 
-  substitute subst (TyGrade n) =
-    return $ TyGrade n
+  substitute subst (TyGrade Nothing n) =
+    return $ TyGrade Nothing n
+
+  substitute subst (TyGrade (Just t) n) = do
+    t' <- substitute subst t
+    return $ TyGrade (Just t') n
 
   substitute subst (TyRational n) =
     return $ TyRational n
@@ -686,17 +690,26 @@ checkKind s ctxt t@(TyInt n) k =
     _ -> throw $ NaturalNumberAtWrongKind s t k
 
 -- KChk_effOne
-checkKind s ctxt t@(TyGrade n) k =
-  case n of
-    0 -> do -- Can only be a semiring element
-      (subst, _) <- checkKind s ctxt k kcoeffect
-      return (subst, t)
-    1 -> do -- Can be a monoid or semiring element
-      (subst, _) <- (checkKind s ctxt k kcoeffect) <|> (checkKind s ctxt k keffect)
-      return (subst, t)
-    _ -> do -- Can only be a semiring element formed by repeated 1 + ...
-      (subst, _) <- checkKind s ctxt k kcoeffect
-      return (subst, t)
+checkKind s ctxt t@(TyGrade mk n) k = do
+  let k' = fromMaybe k mk
+  jK <- maybe (return (Just (k, [], Nothing))) (\k' -> joinTypes s k' k) mk
+  case jK of
+    Just (k, subst, _) -> 
+      case n of
+        0 -> do -- Can only be a semiring element
+          (subst', _) <- checkKind s ctxt t kcoeffect
+          substFinal <- combineSubstitutions s subst subst'
+          return (substFinal, TyGrade (Just k) n)
+        1 -> do -- Can be a monoid or semiring element
+          (subst', _) <- (checkKind s ctxt k kcoeffect) <|> (checkKind s ctxt k keffect)
+          substFinal <- combineSubstitutions s subst subst'
+          return (substFinal, TyGrade (Just k) n)
+        _ -> do -- Can only be a semiring element formed by repeated 1 + ...
+          (subst', _) <- checkKind s ctxt k kcoeffect
+          substFinal <- combineSubstitutions s subst subst'
+          return (substFinal, TyGrade (Just k) n)
+    Nothing ->
+      throw $ UnificationError s k k'
 
 -- KChk_sig
 checkKind s ctxt (TySig t k) k' = do
@@ -780,11 +793,15 @@ synthKind' s _ _ t@(TyInt n) = do
   return (TyCon (Id "Nat" "Nat"), [], t)
 
 -- KChkS_grade [overload to Nat]
-synthKind' s overloadToNat _ t@(TyGrade n) | overloadToNat =
+synthKind' s overloadToNat _ t@(TyGrade Nothing n) | overloadToNat =
   return (tyCon "Nat", [], TyInt n)
 
 -- KChkS_grade [don't overload to Nat]
-synthKind' s overloadToNat _ t@(TyGrade n) | not overloadToNat = do
+synthKind' s overloadToNat _ t@(TyGrade (Just k) n) =
+  return (k, [], t)
+
+-- KChkS_grade [don't overload to Nat]
+synthKind' s overloadToNat _ t@(TyGrade Nothing n) | not overloadToNat = do
   -- TODO: is it problematic that we choose a semiring (coeffect)-kinded type
   -- rather than an effect one?
   liftIO $ putStrLn $ ("o = " ++ show overloadToNat ++ " t = " ++ pretty t)

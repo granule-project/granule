@@ -123,6 +123,10 @@ equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   -> Mode
   -> Checker (Bool, Substitution)
 
+-- Base equality (helps to make things fast here)
+equalTypesRelatedCoeffectsInner s rel t1 t2 _ _ _ | t1 == t2 =
+  return (True, [])
+
 equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
@@ -459,7 +463,7 @@ isIndexedType t = do
       , tfTyApp = \(Const x) (Const y) -> return $ Const (x || y)
       , tfTyInt = \_ -> return $ Const False
       , tfTyRational = \_ -> return $ Const False
-      , tfTyGrade = \_ -> return $ Const False
+      , tfTyGrade = \_ _ -> return $ Const False
       , tfTyInfix = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfSet = \_ -> return $ Const False
       , tfTyCase = \_ _ -> return $ Const False

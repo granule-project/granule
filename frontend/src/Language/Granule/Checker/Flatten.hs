@@ -31,7 +31,7 @@ mguCoeffectTypes s t1 t2 = do
     -- Cannot unify so form a product
     Nothing -> return
       (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [],
-                  (\x -> cProduct x (TyGrade 1), \x -> cProduct (TyGrade 1) x))
+                  (\x -> cProduct x (TyGrade (Just t2) 1), \x -> cProduct (TyGrade (Just t1) 1) x))
 
 -- Inner definition which does not throw its error, and which operates on just the types
 mguCoeffectTypes' :: (?globals :: Globals)
@@ -100,16 +100,16 @@ mguCoeffectTypes' s (TyCon (internalName -> "Nat")) t | t == extendedNat =
 
 -- Unifying a product of (t, t') with t yields (t, t') [and the symmetric versions]
 mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t1 == coeffTy2 =
-  return $ Just (coeffTy1, [], (id, \x -> cProduct x (TyGrade 1)))
+  return $ Just (coeffTy1, [], (id, \x -> cProduct x (TyGrade (Just t2) 1)))
 
 mguCoeffectTypes' s coeffTy1@(isProduct -> Just (t1, t2)) coeffTy2 | t2 == coeffTy2 =
-  return $ Just (coeffTy1, [], (id, \x -> cProduct (TyGrade 1) x))
+  return $ Just (coeffTy1, [], (id, \x -> cProduct (TyGrade (Just t1) 1) x))
 
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t1 == coeffTy1 =
-  return $ Just (coeffTy2, [], (\x -> cProduct x (TyGrade 1), id))
+  return $ Just (coeffTy2, [], (\x -> cProduct x (TyGrade (Just t2) 1), id))
 
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t2 == coeffTy1 =
-  return $ Just (coeffTy2, [], (\x -> cProduct (TyGrade 1) x, id))
+  return $ Just (coeffTy2, [], (\x -> cProduct (TyGrade (Just t1) 1) x, id))
 
 -- Unifying with an interval
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =
