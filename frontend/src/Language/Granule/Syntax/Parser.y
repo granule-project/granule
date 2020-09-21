@@ -372,7 +372,7 @@ TyParams :: { [Type] }
   |                           { [] }
 
 Coeffect :: { Coeffect }
-  : INT                           { let TokenInt _ x = $1 in TyGrade (Just $ tyCon "Nat") x }
+  : INT                           { let TokenInt _ x = $1 in TyGrade Nothing x }
   | '.' INT                       { let TokenInt _ x = $2 in TyInt x }
   | '∞'                           { infinity }
   | FLOAT                         { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }

@@ -806,16 +806,13 @@ synthKind' s overloadToNat _ t@(TyGrade (Just k) n) =
 synthKind' s overloadToNat _ t@(TyGrade Nothing n) | not overloadToNat = do
   -- TODO: is it problematic that we choose a semiring (coeffect)-kinded type
   -- rather than an effect one?
-  liftIO $ putStrLn $ ("o = " ++ show overloadToNat ++ " t = " ++ pretty t)
   var <- freshTyVarInContext (mkId $ "semiring[" <> pretty (startPos s) <> "]") kcoeffect
   return (TyVar var, [], t)
 
 -- KChkS_box
 synthKind' s _ ctxt (Box c t) = do
   -- Deal with the grade term
-  liftIO $ putStrLn ("Boxct " ++ pretty c ++ " not contains sig = " ++ (show $ not (containsTypeSig c)))
   (coeffTy, subst0, c') <- synthKind' s (not (containsTypeSig c)) ctxt c
-  liftIO $ putStrLn $ "coeffTy = " ++ pretty coeffTy
   (subst1, _) <- checkKind s ctxt coeffTy kcoeffect
   -- Then the inner type
   (subst2, t') <- checkKind s ctxt t ktype
