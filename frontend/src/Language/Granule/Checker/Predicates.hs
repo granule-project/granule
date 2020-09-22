@@ -408,6 +408,7 @@ rewriteBindersInPredicate ctxt =
     -- `updateCoeffect v k c` rewrites any occurence of the kind variable
     -- `v` with the kind `k` in the coeffect `c`
     updateCoeffect :: Id -> Type -> Type -> Type
+    updateCoeffect ckindVar ckind (TyGrade (Just (TyVar ckindVar')) c) | ckindVar == ckindVar' = TyGrade (Just ckind) c
     updateCoeffect ckindVar ckind (TySig c (TyVar ckindVar')) | ckindVar == ckindVar' = TySig c ckind
     updateCoeffect ckindVar ckind (TyInfix op c1 c2) =
       TyInfix op (updateCoeffect ckindVar ckind c1) (updateCoeffect ckindVar ckind c2)
