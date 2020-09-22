@@ -128,7 +128,6 @@ derivePush' s topLevel c _sigma gamma argTy@(ProdTy t1 t2) arg = do
 
 -- General type constructor case:
 derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
-  debugM "derive-push" ("TyCon case " <> pretty argTy)
   -- First check whether this has already been derived or not
   -- (also deals with recursive types)
   st <- get
@@ -152,7 +151,6 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                       return (Just (t2', App s () True (makeVarUntyped (mkId $ "push@" <> pretty name)) arg))
                     else do
                       -- Couldn't do the equality.
-                      debugM "derive-push" ("no eq for " ++ pretty argTy ++ " and " ++ pretty t1)
                       return Nothing
               _ -> return Nothing
           Nothing -> return Nothing
@@ -185,8 +183,6 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, _constraint, coercions') <-
                       freshPolymorphicInstance BoundQ True tySch coercions
-
-                debugM "deriv-push - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
 
                 -- [Note: this does not register the constraints associated with the data constrcutor]
                 dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
@@ -341,7 +337,7 @@ fullyApplyType' (FunTy _ t1 t2) r baseTy argTy = do
   -- Apply to the "argument of push" type
   let argTy'  =
        case t1 of
-         (TyCon (internalName -> "Type")) -> TyApp argTy (Box r (TyVar tyVar))
+         (Type _) -> TyApp argTy (Box r (TyVar tyVar))
          _     -> TyApp argTy (TyVar tyVar)
   -- Induction
   (ids, baseTy'', argTy'') <- fullyApplyType' t2 r baseTy' argTy'
@@ -367,7 +363,7 @@ objectMappingWithBox' (TyApp t1 t2) (k:ks) r = do
   t <- objectMappingWithBox' t1 ks r
   case k of
     -- Only added boxes on types
-    (TyCon (internalName -> "Type"))
+    (Type _)
           -> return $ TyApp t (Box r t2)
     _     -> return $ TyApp t t2
 

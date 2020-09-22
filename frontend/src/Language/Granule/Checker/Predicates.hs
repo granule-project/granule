@@ -344,8 +344,7 @@ instance Pretty Pred where
 isTrivial :: Pred -> Bool
 isTrivial = predFold and or (\_ lhs rhs -> rhs) (const False) id (\_ _ p -> p)
 
--- TODO: replace with use of `substitute`
-
+-- TODO: consider replacing this with use of `substitute`?
 -- given a context mapping coeffect type variables to coeffect typ,
 -- then rewrite a set of constraints so that any occruences of the kind variable
 -- are replaced with the coeffect type
