@@ -1190,6 +1190,7 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
 
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
+
     (Val _ _ _ (Var _ (internalName -> "pull"))) -> do
       st <- get
       let name = mkId $ "pull" ++ pretty ty

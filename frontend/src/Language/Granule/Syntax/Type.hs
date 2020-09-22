@@ -275,7 +275,7 @@ data TypeFold m a = TypeFold
   , tfTyApp   :: a -> a             -> m a
   , tfTyInt   :: Int                -> m a
   , tfTyRational :: Rational        -> m a
-  , tfTyGrade :: Maybe Type -> Int  -> m a
+  , tfTyGrade :: Maybe a   -> Int  -> m a
   , tfTyInfix :: TypeOperator -> a -> a -> m a
   , tfSet     :: [a]                -> m a
   , tfTyCase  :: a -> [(a, a)]      -> m a
@@ -313,7 +313,10 @@ typeFoldM algebra = go
      (tfTyApp algebra) t1' t2'
    go (TyInt i) = (tfTyInt algebra) i
    go (TyRational i) = (tfTyRational algebra) i
-   go (TyGrade t i) = (tfTyGrade algebra) t i
+   go (TyGrade Nothing i) = (tfTyGrade algebra) Nothing i
+   go (TyGrade (Just t) i) = do
+     t' <- go t
+     (tfTyGrade algebra) (Just t') i
    go (TyInfix op t1 t2) = do
      t1' <- go t1
      t2' <- go t2

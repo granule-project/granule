@@ -94,70 +94,13 @@ instance Substitutable Substitution where
         <> "` to a non variable type: `" <> show t <> "`"
 
 instance Substitutable Type where
-  substitute subst (Type l) =
-    return $ Type l
-
-  substitute subst (FunTy name t1 t2) = do
-    t1' <- substitute subst t1
-    t2' <- substitute subst t2
-    return $ FunTy name t1' t2'
-
-  substitute subst (TyCon name) =
-    return $ TyCon name
-
-  substitute subst (Box c t) = do
-    t' <- substitute subst t
-    return $ Box c t'
-
-  substitute subst (Diamond e t) = do
-    t' <- substitute subst t
-    return $ Diamond e t'
-
-  substitute subst (TyVar v) =
-    case lookup v subst of
-      Just (SubstT t) -> return t
-      _               -> mTyVar v
-
-  substitute subst (TyApp t1 t2) = do
-    t1' <- substitute subst t1
-    t2' <- substitute subst t2
-    return $ TyApp t1' t2'
-
-  substitute subst (TyInt n) =
-    return $ TyInt n
-
-  substitute subst (TyGrade Nothing n) =
-    return $ TyGrade Nothing n
-
-  substitute subst (TyGrade (Just t) n) = do
-    t' <- substitute subst t
-    return $ TyGrade (Just t') n
-
-  substitute subst (TyRational n) =
-    return $ TyRational n
-
-  substitute subst (TyInfix op t1 t2) = do
-    t1' <- substitute subst t1
-    t2' <- substitute subst t2
-    return $ TyInfix op t1' t2'
-
-  substitute subst (TySet elems) = do
-    elems' <- mapM (substitute subst) elems
-    return $ TySet elems'
-
-  substitute subst (TyCase guard cases) = do
-    guard' <- substitute subst guard
-    cases' <- mapM (\(pat, branch) -> do
-                        pat' <- substitute subst pat
-                        branch' <- substitute subst branch
-                        return (pat', branch')) cases
-    return $ TyCase guard' cases'
-
-
-  substitute subst (TySig t1 t2) = do
-    t1' <- substitute subst t1
-    t2' <- substitute subst t2
-    return $ TySig t1' t2'
+  substitute subst = typeFoldM (baseTypeFold
+                              { tfTyVar = varSubst })
+    where
+      varSubst v =
+         case lookup v subst of
+           Just (SubstT t) -> return t
+           _               -> mTyVar v
 
 instance Substitutable t => Substitutable (Maybe t) where
   substitute s Nothing = return Nothing
