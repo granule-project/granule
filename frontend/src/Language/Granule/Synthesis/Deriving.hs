@@ -60,7 +60,7 @@ derivePush s ty = do
   -- Build derived type scheme
   let constraints =
         if isPoly
-          then [TyInfix TyOpLesserEq (TyGrade (Just kind) 1) (TyVar cVar)]
+          then [TyInfix TyOpLesserEq (TyGrade (Just (TyVar kVar)) 1) (TyVar cVar)]
           else []
   let tyS = Forall s
               ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
@@ -330,7 +330,7 @@ fullyApplyType k r t = fullyApplyType' k r t t
 
 fullyApplyType' :: (?globals :: Globals)
                     => Kind -> Type -> Type -> Type -> Checker (Ctxt (Kind, Quantifier), Type, Type)
-fullyApplyType' (TyCon (internalName -> "Type")) r baseTy argTy =
+fullyApplyType' (Type _) r baseTy argTy =
   return ([], baseTy, argTy)
 
 fullyApplyType' (FunTy _ t1 t2) r baseTy argTy = do
