@@ -475,11 +475,11 @@ isIndexedType t = do
 -- otherwise, returns `Left k` where `k` is the kind of the original type term
 isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
 isEffectType s ty = do
+  (effTy, _, _) <- synthKindHere s ty
   st <- get
-  (effTy, _, _) <- synthKind s (tyVarContext st) ty
   (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) effTy keffect)
   case result of
     Right res -> do
       putChecker
       return $ Right effTy
-    Left err -> return $ Left ty
+    Left err -> return $ Left effTy
