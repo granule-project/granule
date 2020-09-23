@@ -72,6 +72,7 @@ typeConstructors =
     , (mkId "Session",  (tyCon "Com", [], True))
     , (mkId "Com",      (keffect, [], False))
     -- Effect grade types - IO
+    , (mkId "IOElem",   (ktype, [], False))
     , (mkId "IO",       (keffect, [], False))
     , (mkId "Stdout",   (tyCon "IOElem", [], False))
     , (mkId "Stdin",    (tyCon "IOElem", [], False))
