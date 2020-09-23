@@ -97,9 +97,10 @@ instance Substitutable Type where
   substitute subst = typeFoldM (baseTypeFold
                               { tfTyVar = varSubst })
     where
-      varSubst v =
-         case lookup v subst of
+      varSubst v = do
+        case lookup v subst of
            Just (SubstT t) -> return t
+           Just (SubstK t) -> return t
            _               -> mTyVar v
 
 instance Substitutable t => Substitutable (Maybe t) where
@@ -311,10 +312,15 @@ instance Substitutable Pred where
       predFoldM
         (return . Conj)
         (return . Disj)
-        (\ids p1 p2 -> return $ Impl ids p1 p2)
-        (\c -> substitute ctxt c >>= return . Con)
+        (\idks p1 p2 -> do
+             -- Apply substitution to id-kind pairs
+             idks' <- mapM (\(id, k) -> substitute ctxt k >>= (\k -> return (id, k))) idks
+             return $ Impl idks' p1 p2)
+        -- Apply substitution also to the constraint
+        (\c -> substitute ctxt c >>= (return . Con))
         (return . NegPred)
-        (\ids k p -> substitute ctxt k >>= \k' -> return $ Exists ids k' p)
+        -- Apply substitution also to the kinding
+        (\id k p -> (substitute ctxt k) >>= (\k -> return $ Exists id k p))
 
 instance Substitutable Constraint where
   substitute ctxt (Eq s c1 c2 k) = do
