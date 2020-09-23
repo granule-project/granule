@@ -857,6 +857,11 @@ closedOperatorAtKind :: (?globals :: Globals)
 closedOperatorAtKind _ _ op (TyCon (internalName -> "Nat")) =
   return $ if closedOperation op then Just [] else Nothing
 
+-- Expontentiation on effects also allowed
+closedOperatorAtKind s ctxt TyOpExpon t = do
+  _ <- checkKind s ctxt t keffect
+  return $ Just []
+
 -- * case
 closedOperatorAtKind s ctxt TyOpTimes t = do
   -- See if the type is a coeffect
