@@ -290,7 +290,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
             , uniqueVarIdCounterMap = mempty
             }
         debugM "elaborateEquation" "checkEquation"
-        elaboratedEq <- checkEquation defCtxt defName equation tys
+        (elaboratedEq, subst) <- checkEquation defCtxt defName equation tys
         debugM "elaborateEquation" "checkEquation done"
 
         -- Solve the generated constraints
@@ -298,6 +298,8 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
         let predicate = Conj $ predicateStack checkerState
         debugM "elaborateEquation" "solveEq"
+        debugM "FINAL SUBST" (pretty subst)
+        predicate <- substitute subst predicate
         solveConstraints predicate (getSpan equation) defName
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
@@ -307,7 +309,7 @@ checkEquation :: (?globals :: Globals) =>
   -> Id              -- Name of the definition
   -> Equation () ()  -- Equation
   -> TypeScheme      -- Type scheme
-  -> Checker (Equation () Type)
+  -> Checker (Equation () Type, Substitution)
 
 checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls constraints ty) = do
   -- Check that the lhs doesn't introduce any duplicate binders
@@ -373,7 +375,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
       let elab = Equation s name ty rf elaborated_pats elaboratedExpr
 
       elab' <- substitute subst'' elab
-      return elab'
+      return (elab', subst'')
 
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
