@@ -378,7 +378,7 @@ Coeffect :: { Coeffect }
   | FLOAT                         { let TokenFloat _ x = $1 in TyRational $ myReadFloat x }
   | CONSTR                        { case (constrString $1) of
                                       "Inf" -> infinity
-                                      x -> error $ "Unknown coeffect constructor `" <> x <> "`" }
+                                      x -> TyCon $ mkId x }
   | VAR                           { TyVar (mkId $ symString $1) }
   | Coeffect '..' Coeffect        { TyInfix TyOpInterval $1 $3 }
   | Coeffect '+' Coeffect         { TyInfix TyOpPlus $1 $3 }
