@@ -104,11 +104,11 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
-  st <- get
-  (k, _, _) <- synthKind s (tyVarContext st) t1'
-  st <- get
-  _ <- checkKind s (tyVarContext st) t2' k
-  equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
+  (k, subst, _) <- synthKindHere s t1'
+  (subst', _) <- checkKindHere s t2' k
+  (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
+  substFinal <- combineManySubstitutions s [subst,subst',subst'']
+  return (eqT, substFinal)
 
 equalTypesRelatedCoeffectsInner :: (?globals :: Globals)
   => Span
@@ -149,7 +149,6 @@ equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Typ
 
 equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
-  debugM "equalTypesRelatedCoeffectsInner (pretty)" $ pretty c <> " == " <> pretty c'
   debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
 
   -- Unify the coeffect kinds of the two coeffects
@@ -225,8 +224,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
       jK <- joinTypes s k1 k2
       case jK of
         Just (TyCon kc, unif, _) -> do
-          st <- get
-          (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) (TyCon kc) kcoeffect)
+          (result, putChecker) <- peekChecker (checkKindHere s (TyCon kc) kcoeffect)
           case result of
             Left err -> return ()
             -- Create solver vars for coeffects
@@ -353,10 +351,9 @@ equalTypesRelatedCoeffectsInner s rel (TySet ts1) (TySet ts2) k sp Types =
   return (all (`elem` ts2) ts1 && all (`elem` ts1) ts2, [])
 
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
-  st <- get
   case mode of
     Effects -> do
-      (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) k keffect)
+      (result, putChecker) <- peekChecker (checkKindHere s k keffect)
       case result of
         Right res -> do
           putChecker
@@ -476,8 +473,7 @@ isIndexedType t = do
 isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
 isEffectType s ty = do
   (effTy, _, _) <- synthKindHere s ty
-  st <- get
-  (result, putChecker) <- peekChecker (checkKind s (tyVarContext st) effTy keffect)
+  (result, putChecker) <- peekChecker (checkKindHere s effTy keffect)
   case result of
     Right res -> do
       putChecker

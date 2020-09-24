@@ -7,7 +7,7 @@ import Data.Maybe(catMaybes, mapMaybe)
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.SubstitutionAndKinding (checkKind)
+import Language.Granule.Checker.SubstitutionAndKinding (checkKindHere)
 
 import Language.Granule.Context
 
@@ -21,8 +21,7 @@ justCoeffectTypes :: (?globals :: Globals)
 justCoeffectTypes s xs = mapM convert xs >>= (return . catMaybes)
   where
     convert (var, (t, q)) = (do
-      st <- get
-      k <- checkKind s (tyVarContext st) t kcoeffect
+      k <- checkKindHere s t kcoeffect
       return $ Just (var, (t, q))) `catchError` const (return Nothing)
 
 -- justCoeffectTypesVars :: (?globals::Globals)

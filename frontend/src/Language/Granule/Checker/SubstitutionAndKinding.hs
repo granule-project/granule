@@ -10,17 +10,18 @@
 module Language.Granule.Checker.SubstitutionAndKinding(
   Substitutable(..),
   Unifiable(..),
-  checkKind,
   combineSubstitutions,
   combineManySubstitutions,
   freshPolymorphicInstance,
+  synthKind,
   synthKindHere,
   synthKindHereAssumption,
+  checkKind,
+  checkKindHere,
   joinTypes,
   kindCheckDef,
   mguCoeffectTypesFromCoeffects,
   replaceSynonyms,
-  synthKind,
   updateTyVar,
   unify) where
 
@@ -489,9 +490,8 @@ instance Unifiable Type where
         lift $ combineSubstitutionsHere u1 u2
 
     unify' t@(TyInfix o t1 t2) t'@(TyInfix o' t1' t2') = do
-        st <- get
-        (_, subst, k)   <- lift $ synthKind nullSpan (tyVarContext st) t
-        (_, subst', k') <- lift $ synthKind nullSpan (tyVarContext st) t
+        (_, subst, k)   <- lift $ synthKindHere nullSpan t
+        (_, subst', k') <- lift $ synthKindHere nullSpan t
         jK <- lift $ joinTypes nullSpan k k'
         case jK of
             Just (k, subst, _) -> do
@@ -645,10 +645,10 @@ checkKind s ctxt t@(TyGrade mk n) k = do
   let k' = fromMaybe k mk
   jK <- maybe (return (Just (k, [], Nothing))) (\k' -> joinTypes s k' k) mk
   case jK of
-    Just (k, subst, _) -> 
+    Just (k, subst, _) ->
       case n of
         0 -> do -- Can only be a semiring element
-          (subst', _) <- checkKind s ctxt t kcoeffect
+          (subst', _) <- checkKind s ctxt k kcoeffect
           substFinal <- combineSubstitutions s subst subst'
           return (substFinal, TyGrade (Just k) n)
         1 -> do -- Can be a monoid or semiring element
@@ -771,9 +771,8 @@ synthKind' s _ ctxt (Box c t) = do
 -- KChkS_dia
 synthKind' s _ ctxt (Diamond e t) = do
   (innerK, subst2, e') <- synthKind s ctxt e
-  st <- get
-  (subst1, _) <- checkKind s (tyVarContext st) innerK keffect
-  (subst3, t') <- checkKind s (tyVarContext st) t ktype
+  (subst1, _)  <- checkKind s ctxt innerK keffect
+  (subst3, t') <- checkKind s ctxt t ktype
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (ktype, subst, Diamond e' t')
 
@@ -1015,14 +1014,16 @@ joinTypes' s t1 t2 = do
 universify :: Ctxt Kind -> Ctxt (Type, Quantifier)
 universify = map (second (\k -> (k, ForallQ)))
 
--- TODO: Should this be using synthKind rather than synthKindHereInContext?
--- | Infer the type of a coeffect term (giving its span as well)
+-- Wrapper that also gets
 synthKindHere :: (?globals :: Globals) => Span -> Type -> Checker (Kind, Substitution, Type)
-synthKindHere s c = do
+synthKindHere s t = do
   st <- get
-  r <- synthKind s (tyVarContext st) c
-  debugM "Inferred coeffect type" (show c <> "\n" <> show r)
-  return r
+  synthKind s (tyVarContext st) t
+
+checkKindHere :: (?globals :: Globals) => Span -> Type -> Kind -> Checker (Substitution, Type)
+checkKindHere s t k = do
+  st <- get
+  checkKind s (tyVarContext st) t k
 
 synthKindHereAssumption :: (?globals :: Globals) => Span -> Assumption -> Checker (Maybe Type, Substitution)
 synthKindHereAssumption _ (Linear _) = return (Nothing, [])
@@ -1040,9 +1041,8 @@ mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
   -> Checker (Type, Substitution, (Type -> Type, Type -> Type))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
   debugM "mguCoeffectTypesFromCoeffects" (show c1 <> ", " <> show c2)
-  st <- get
-  (coeffTy1, subst1, _) <- synthKind s (tyVarContext st) c1
-  (coeffTy2, subst2, _) <- synthKind s (tyVarContext st) c2
+  (coeffTy1, subst1, _) <- synthKindHere s c1
+  (coeffTy2, subst2, _) <- synthKindHere s c2
   (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (coeffTy, subst, res)
