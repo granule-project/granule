@@ -20,7 +20,7 @@ import Language.Granule.Utils
 type Injections = (Coeffect -> Coeffect, Coeffect -> Coeffect)
 
 cProduct :: Type -> Type -> Type
-cProduct x y = TyApp (TyApp (TyCon (mkId ", ")) x) y
+cProduct x y = TyApp (TyApp (TyCon (mkId ",")) x) y
 
 mguCoeffectTypes :: (?globals :: Globals)
                  => Span -> Type -> Type -> Checker (Type, Substitution, Injections)
