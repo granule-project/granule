@@ -396,16 +396,15 @@ compileCoeffect (TyGrade k' 1) k vars = do
 compileCoeffect (isProduct -> Just (c1, c2)) (isProduct -> Just (t1, t2)) vars =
   liftM2And SProduct (compileCoeffect c1 t1 vars) (compileCoeffect c2 t2 vars)
 
--- For grade-polymorphic expressions
--- perform the injection from natural numbers to arbitrary semirings
-compileCoeffect (TyGrade k' n) k@(TyVar _) _ | n > 0 = do
+-- Perform the injection from natural numbers to arbitrary semirings
+compileCoeffect (TyGrade k' n) k vars | n > 0 = do
   -- Check that we have agreement here
   _ <- matchTypes k k'
-  return (SUnknown (injection n), sTrue)
+  compileCoeffect (injection n) k vars
     where
-      injection 0 = SynLeaf (Just 0)
-      injection 1 = SynLeaf (Just 1)
-      injection n = SynPlus (SynLeaf (Just 1)) (injection (n-1))
+      injection 0 = TyGrade (Just k) 0
+      injection 1 = TyGrade (Just k) 1
+      injection n = TyInfix TyOpPlus (TyGrade (Just k) 1) (injection (n-1))
 
 -- Trying to compile a coeffect from a promotion that was never
 -- constrained further
