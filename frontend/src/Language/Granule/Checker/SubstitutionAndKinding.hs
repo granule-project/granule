@@ -716,6 +716,13 @@ synthKind' s overloadToNat ctxt (FunTy name t1 t2) = do
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst, FunTy name t1' t2')
 
+-- KChkS_pair
+-- synthKind' s overloadToNat ctxt (TyApp (TyApp (TyCon (internalName -> ",")) t1) t2) = do
+--   (k1, subst1, t1') <- synthKind' s overloadToNat ctxt t1
+--   (k2, subst2, t2') <- synthKind' s overloadToNat ctxt t2
+--   subst <- combineSubstitutions s subst1 subst2
+--   return (TyApp (TyApp (TyCon $ mkId ",") k1) k2, subst, TyApp (TyApp (TyCon $ mkId ",") t1') t2')
+
 -- KChkS_app
 synthKind' s overloadToNat ctxt (TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKind' s overloadToNat ctxt t1
@@ -976,16 +983,6 @@ joinTypes' _ (TyVar v) t = do
     _ -> fail "Cannot unify with a universal"
 
 joinTypes' s t1 t2@(TyVar _) = joinTypes' s t2 t1
-
--- joinTypes s (TyVar n) (TyVar m) = do
---   st <- get
---   (kind, _) <- synthKind s (tyVarContext st) (TyVar n)
-
---   nvar <- freshTyVarInContextWithBinding n kind BoundQ
---   -- Unify the two variables into one
---   addConstraint (ApproximatedBy s (TyVar n) (TyVar nvar) kind)
---   addConstraint (ApproximatedBy s (TyVar m) (TyVar nvar) kind)
---   return $ TyVar nvar
 
 joinTypes' s (TyApp t1 t2) (TyApp t1' t2') = do
   (t1'', subst1, _) <- joinTypes' s t1 t1'

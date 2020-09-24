@@ -49,6 +49,8 @@ isEffUnit s effTy eff =
         -- Unknown
         _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = effTy }
 
+-- TODO: effTy here seems redundant - I think
+-- this could be implemented more generally
 handledNormalise :: Span -> Type -> Type -> Type
 handledNormalise s effTy efs =
     case efs of
