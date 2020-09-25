@@ -160,12 +160,13 @@ checkDataCon
         -- This subset of the context is for existentials
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
         modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVarsD']
+               [(v, (k, ForallQ)) | (v, k) <- tyVarsT <> tyVarsD']
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
 
         -- Check we are making something that is actually a type
-        _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
+        -- _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
+        _ <- checkKind sp ty ktype
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
@@ -616,7 +617,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     -- Calculate whether a type assumption is level kinded
     isLevelKinded (_, as) = do
         -- TODO: should deal with the subst
-        (ty, _) <- synthKindHereAssumption s as
+        (ty, _) <- synthKindAssumption s as
         return $ case ty of
           Just (TyCon (internalName -> "Level"))
             -> True
@@ -928,7 +929,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
         return (ef1, opt, ty1)
     _ -> throw ExpectedOptionalEffectType{ errLoc = s, errTy = sig }
 
-  (t, _, _) <- synthKindHere s opt
+  (t, _, _) <- synthKind s opt
   addConstraint (ApproximatedBy s (TyGrade (Just t) 0) opt t)
 
   -- Type clauses in the context of the binders from the pattern
@@ -1000,7 +1001,7 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
        return (ty, [(x, Linear ty)], [], elaborated)
 
      Just (Discharged ty c) -> do
-       (k, subst, _) <- synthKindHere s c
+       (k, subst, _) <- synthKind s c
        let elaborated = Val s ty rf (Var ty x)
        return (ty, [(x, Discharged ty (TyGrade (Just k) 1))], subst, elaborated)
 
@@ -1310,7 +1311,7 @@ ctxtApprox s ctxt1 ctxt2 = do
              -- Else, this could be due to weakening so see if this is allowed
              Discharged t c -> do
                -- TODO: deal with the subst here
-               (kind, subst, _) <- synthKindHere s c
+               (kind, subst, _) <- synthKind s c
                -- TODO: deal with the subst here
                _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
                return id
@@ -1348,7 +1349,7 @@ ctxtEquals s ctxt1 ctxt2 = do
              -- Else, this could be due to weakening so see if this is allowed
              Discharged t c -> do
                -- TODO: deal with the subst here
-               (kind, _, _) <- synthKindHere s c
+               (kind, _, _) <- synthKind s c
                -- TODO: deal with the subst here
                _ <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
                return id
@@ -1423,7 +1424,7 @@ intersectCtxtsWithWeaken s a b = do
        return (var, Linear t)
    weaken (var, Discharged t c) = do
         -- TODO: deal with the subst here
-       (kind, _, _) <- synthKindHere s c
+       (kind, _, _) <- synthKind s c
        return (var, Discharged t (TyGrade (Just kind) 0))
 
 {- | Given an input context and output context, check the usage of
@@ -1517,7 +1518,7 @@ freshVarsIn s vars ctxt = do
     toFreshVar :: (Id, Assumption) -> Checker ((Id, Assumption), Maybe (Id, Kind))
     toFreshVar (var, Discharged t c) = do
       -- TODO: deal with the subst here
-      (ctype, _, _) <- synthKindHere s c
+      (ctype, _, _) <- synthKind s c
       -- Create a fresh variable
       freshName <- freshIdentifierBase (internalName var)
       let cvar = mkId freshName
@@ -1552,7 +1553,7 @@ extCtxt s ctxt var (Linear t) = do
     Just (Discharged t' c) ->
        if t == t'
          then do
-          (k, subst, cElaborated) <- synthKindHere s c
+          (k, subst, cElaborated) <- synthKind s c
           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Linear t) : ctxt
@@ -1567,7 +1568,7 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Linear t') ->
         if t == t'
         then do
-          (k, subst, cElaborated) <- synthKindHere s c
+          (k, subst, cElaborated) <- synthKind s c
           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Discharged t c) : ctxt

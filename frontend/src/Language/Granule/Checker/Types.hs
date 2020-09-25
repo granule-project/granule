@@ -104,8 +104,8 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
-  (k, subst, _) <- synthKindHere s t1'
-  (subst', _) <- checkKindHere s t2' k
+  (k, subst, _) <- synthKind s t1'
+  (subst', _) <- checkKind s t2' k
   (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
   substFinal <- combineManySubstitutions s [subst,subst',subst'']
   return (eqT, substFinal)
@@ -224,7 +224,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
       jK <- joinTypes s k1 k2
       case jK of
         Just (TyCon kc, unif, _) -> do
-          (result, putChecker) <- peekChecker (checkKindHere s (TyCon kc) kcoeffect)
+          (result, putChecker) <- peekChecker (checkKind s (TyCon kc) kcoeffect)
           case result of
             Left err -> return ()
             -- Create solver vars for coeffects
@@ -353,7 +353,7 @@ equalTypesRelatedCoeffectsInner s rel (TySet ts1) (TySet ts2) k sp Types =
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
   case mode of
     Effects -> do
-      (result, putChecker) <- peekChecker (checkKindHere s k keffect)
+      (result, putChecker) <- peekChecker (checkKind s k keffect)
       case result of
         Right res -> do
           putChecker
@@ -472,8 +472,8 @@ isIndexedType t = do
 -- otherwise, returns `Left k` where `k` is the kind of the original type term
 isEffectType :: (?globals :: Globals) => Span -> Type -> Checker (Either Kind Type)
 isEffectType s ty = do
-  (effTy, _, _) <- synthKindHere s ty
-  (result, putChecker) <- peekChecker (checkKindHere s effTy keffect)
+  (effTy, _, _) <- synthKind s ty
+  (result, putChecker) <- peekChecker (checkKind s effTy keffect)
   case result of
     Right res -> do
       putChecker

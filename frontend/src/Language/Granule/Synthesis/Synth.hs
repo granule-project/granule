@@ -108,7 +108,7 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
         -- g - g' = c
         -- therefore
         -- g = c + g'
-        (kind, _, _) <- conv $ synthKindHere nullSpan g
+        (kind, _, _) <- conv $ synthKind nullSpan g
         var <- conv $ freshTyVarInContext (mkId $ "c") kind
         conv $ existential var kind
         conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) g') g kind)
@@ -136,7 +136,7 @@ ctxtDivByCoeffect g1 ((x, Discharged t g2):xs) =
       return ((x, Discharged t var): ctxt)
   where
     gradeDiv g g' = do
-      (kind, _, _) <- conv $ synthKindHere nullSpan g
+      (kind, _, _) <- conv $ synthKind nullSpan g
       var <- conv $ freshTyVarInContext (mkId $ "c") kind
       conv $ existential var kind
       conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpTimes g (TyVar var)) g' kind)
@@ -156,7 +156,7 @@ ctxtMerge _ [] [] = return []
 --  * Can meet/join an empty context to one that has graded assumptions
 ctxtMerge operator [] ((x, Discharged t g) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
-  (kind, _, _) <- conv $ synthKindHere nullSpan g
+  (kind, _, _) <- conv $ synthKind nullSpan g
   ctxt' <- ctxtMerge operator [] ctxt
   return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
@@ -179,7 +179,7 @@ ctxtMerge operator ((x, Discharged t1 g1) : ctxt1') ctxt2 = do
     Nothing -> do
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
-      (kind, _, _) <- conv $ synthKindHere nullSpan g1
+      (kind, _, _) <- conv $ synthKind nullSpan g1
       return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
 ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
@@ -275,7 +275,7 @@ useVar :: (?globals :: Globals) => (Id, Assumption) -> Ctxt Assumption -> Resour
 -- Subtractive
 useVar (name, Linear t) gamma Subtractive{} = return (True, gamma, t)
 useVar (name, Discharged t grade) gamma Subtractive{} = do
-  (kind, _, _) <- conv $ synthKindHere nullSpan grade
+  (kind, _, _) <- conv $ synthKind nullSpan grade
   var <- conv $ freshTyVarInContext (mkId $ "c") kind
   conv $ existential var kind
   -- conv $ addPredicate (Impl [] (Con (Neq nullSpanNoFile (CZero kind) grade kind))
@@ -291,7 +291,7 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
 -- Additive
 useVar (name, Linear t) _ Additive{} = return (True, [(name, Linear t)], t)
 useVar (name, Discharged t grade) _ Additive{} = do
-  (kind, _, _) <- conv $ synthKindHere nullSpan grade
+  (kind, _, _) <- conv $ synthKind nullSpan grade
   return (True, [(name, (Discharged t (TyGrade (Just kind) 1)))], t)
 
 varHelper :: (?globals :: Globals)
@@ -495,7 +495,7 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
           case lookupAndCutout x2 delta of
             Just (delta', (Discharged _ grade_s)) -> do
               -- Check that: 0 <= s
-              (kind, _, _) <- conv $ synthKindHere nullSpan grade_s
+              (kind, _, _) <- conv $ synthKind nullSpan grade_s
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade_s kind)
               res <- solve
               -- If we succeed, create the let binding
@@ -525,7 +525,7 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
 
             case lookupAndCutout x2 delta' of
               Just (delta'', (Discharged _ usage)) -> do
-                (kind, _, _) <- conv $ synthKindHere nullSpan grade
+                (kind, _, _) <- conv $ synthKind nullSpan grade
 
                 debugM "check" (pretty usage ++ " <=? " ++ pretty grade)
                 conv $ addConstraint (ApproximatedBy nullSpanNoFile usage grade kind)
@@ -536,7 +536,7 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                   False -> do
                     none
               _ -> do
-                (kind, _, _) <- conv $ synthKindHere nullSpan grade
+                (kind, _, _) <- conv $ synthKind nullSpan grade
                 conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
                 res <- solve
                 case res of
@@ -811,7 +811,7 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                     case a of
                       Linear{} -> return False;
                       Discharged _ grade -> do
-                        (kind, _, _) <-  conv $ synthKindHere nullSpan grade
+                        (kind, _, _) <-  conv $ synthKind nullSpan grade
                         conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
                         solve) ctxt
       if and consumed
@@ -827,7 +827,7 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                       Just (Discharged _ grade) ->
                         case a of
                           Discharged _ grade' -> do
-                            (kind, _, _) <- conv $ synthKindHere nullSpan grade
+                            (kind, _, _) <- conv $ synthKind nullSpan grade
                             conv $ addConstraint (ApproximatedBy nullSpanNoFile grade' grade kind)
                             solve
                           _ -> return False

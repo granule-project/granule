@@ -37,7 +37,7 @@ derivePush s ty = do
   cVar <- freshIdentifierBase "r" >>= (return . mkId)
 
   -- Get kind of type constructor
-  (kind, _, _) <- synthKindHere nullSpanNoFile ty
+  (kind, _, _) <- synthKind nullSpanNoFile ty
   -- Generate fresh type variables and apply them to the kind constructor
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
@@ -251,7 +251,7 @@ derivePull s ty = do
   cVar <- freshIdentifierBase "r" >>= (return . mkId)
 
   -- Get kind of type constructor
-  (kind, _, _) <- synthKindHere nullSpanNoFile ty
+  (kind, _, _) <- synthKind nullSpanNoFile ty
   -- Generate fresh type variables and apply them to the kind constructor
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
