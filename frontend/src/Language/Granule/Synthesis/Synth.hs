@@ -822,7 +822,7 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
     -- and all graded assumptions should have usages which approximate their original assumption
     Additive{} -> do
       consumed <- mapM (\(id, a) ->
-                    case lookup id gamma of
+                    case lookup id ctxt of
                       Just (Linear{}) -> return True;
                       Just (Discharged _ grade) ->
                         case a of
@@ -831,7 +831,7 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                             conv $ addConstraint (ApproximatedBy nullSpanNoFile grade' grade kind)
                             solve
                           _ -> return False
-                      Nothing -> return False) ctxt
+                      Nothing -> return False) (gamma ++ omega)
       if and consumed
         then return result
         else none
