@@ -824,14 +824,20 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
       consumed <- mapM (\(id, a) ->
                     case lookup id ctxt of
                       Just (Linear{}) -> return True;
-                      Just (Discharged _ grade) ->
+                      Just (Discharged _ gradeUsed) ->
                         case a of
-                          Discharged _ grade' -> do
-                            (kind, _) <- conv $ inferCoeffectType nullSpan grade
-                            conv $ addConstraint (ApproximatedBy nullSpanNoFile grade' grade kind)
+                          Discharged _ gradeSpec -> do
+                            (kind, _) <- conv $ inferCoeffectType nullSpan gradeUsed
+                            conv $ addConstraint (ApproximatedBy nullSpanNoFile gradeUsed gradeSpec kind)
                             solve
                           _ -> return False
-                      Nothing -> return False) (gamma ++ omega)
+                      Nothing ->
+                        case a of
+                          Discharged _ gradeSpec -> do
+                            (kind, _) <- conv $ inferCoeffectType nullSpan gradeSpec
+                            conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) gradeSpec kind)
+                            solve
+                          _ -> return False) (gamma ++ omega)
       if and consumed
         then return result
         else none
