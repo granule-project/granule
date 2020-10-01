@@ -369,6 +369,9 @@ builtIns =
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)
+  , (mkId "grecv",    Ext () $ Primitive recv)
+  , (mkId "gsend",    Ext () $ Primitive send)
+  , (mkId "gclose",   Ext () $ Primitive close)
   -- , (mkId "trace",   Ext () $ Primitive $ \(StringLiteral s) -> diamondConstr $ do { Text.putStr s; hFlush stdout; return $ Val nullSpan () False (Constr () (mkId "()") []) })
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr

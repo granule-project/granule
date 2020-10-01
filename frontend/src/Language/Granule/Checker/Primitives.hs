@@ -64,6 +64,7 @@ typeConstructors =
     , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "End" , (protocol, [], False))
     , (mkId "Chan", (funTy protocol (Type 0), [], True))
+    , (mkId "LChan", (funTy protocol (Type 0), [], True))
     , (mkId "Dual", (funTy protocol protocol, [], True))
     , (mkId "->", (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
     -- Top completion on a coeffect, e.g., Ext Nat is extended naturals (with ∞)
@@ -259,26 +260,39 @@ showInt = BUILTIN
 
 fork
   : forall {s : Protocol, k : Coeffect, c : k}
-  . ((Chan s) [c] -> ()) -> (Chan (Dual s)) [c]
+  . ((Chan s) [c] -> () <Session>) -> ((Chan (Dual s)) [c]) <Session>
 fork = BUILTIN
 
 forkLinear
   : forall {s : Protocol}
-  . (Chan s -> ()) -> Chan (Dual s)
+  . (LChan s -> ()) -> LChan (Dual s)
 forkLinear = BUILTIN
 
 send
   : forall {a : Type, s : Protocol}
-  . Chan (Send a s) -> a -> Chan s
+  . LChan (Send a s) -> a -> LChan s
 send = BUILTIN
 
 recv
   : forall {a : Type, s : Protocol}
-  . Chan (Recv a s) -> (a, Chan s)
+  . LChan (Recv a s) -> (a, LChan s)
 recv = BUILTIN
 
-close : Chan End -> ()
+close : LChan End -> ()
 close = BUILTIN
+
+gsend
+  : forall {a : Type, s : Protocol}
+  . Chan (Send a s) -> a -> (Chan s) <Session>
+gsend = BUILTIN
+
+grecv
+  : forall {a : Type, s : Protocol}
+  . Chan (Recv a s) -> (a, Chan s) <Session>
+grecv = BUILTIN
+
+gclose : Chan End -> () <Session>
+gclose = BUILTIN
 
 
 -- trace : String -> () <>

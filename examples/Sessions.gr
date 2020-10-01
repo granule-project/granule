@@ -1,14 +1,14 @@
 import Bool
 import Vec
 
-fooClient : Chan (Send Bool (Recv Int End)) → Int
+fooClient : LChan (Send Bool (Recv Int End)) → Int
 fooClient c =
   let c      = send c True;
       (n, c) = recv c;
       _      = close c
   in n
 
-fooServer : Chan (Dual (Send Bool (Recv Int End))) → ()
+fooServer : LChan (Dual (Send Bool (Recv Int End))) → ()
 fooServer c =
   let (b, c) = recv c;
       c      = if b then send c 1 else send c 0
@@ -24,32 +24,59 @@ example =
 -- length 'n', then send every element of the vector on the
 -- channel
 sendVec : ∀ {n : Nat, a : Type} .
-   (Chan (Send a End)) [n] → Vec n a → ()
+   (Chan (Send a End)) [n] → Vec n a → () <Session>
 
-sendVec [c] Nil = ();
+sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
-       let c'  = send c x;
-           _   = close c'
+       let c'  <- gsend c x;
+           _   <- gclose c'
        in sendVec [c] xs
 
 recvVec : ∀ {n : Nat, a : Type} .
-   N n → (Chan (Recv a End)) [n] → (Vec n a)
-recvVec Z [c] = Nil;
+   N n → (Chan (Recv a End)) [n] → (Vec n a) <Session>
+recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
-       let (x, c') = recv c;
-           _       = close c';
-           xs      = recvVec n [c]
-       in Cons x xs
+       let (x, c') <- grecv c;
+           _       <- gclose c';
+           xs      <- recvVec n [c]
+       in pure (Cons x xs)
 
 example2 : ∀ {n : Nat, a : Type}
-         . N n → Vec n a → (Vec n a)
+         . N n → Vec n a → (Vec n a) <Session>
 example2 n list =
-  let c = fork (λc → sendVec c list)
+  let c <- fork (λc → sendVec c list)
   in recvVec n c
 
-main : (Vec 5 Int, Int)
+main : (Vec 5 Int, Int) <Session>
 main =
   let
-    xs = example2 (S (S (S (S (S Z))))) (Cons 1 (Cons 1 (Cons 2 (Cons 3 (Cons 5 Nil)))));
-    a = example
-  in (xs, a)
+    xs <- example2 (S (S (S (S (S Z))))) (Cons 1 (Cons 1 (Cons 2 (Cons 3 (Cons 5 Nil)))));
+    a <- pure (example)
+  in pure (xs, a)
+
+--------------------------------
+-- map g . map f = map (g . f)
+
+dropChar : Char -> ()
+dropChar x = dropChar x
+
+dropString : String -> ()
+dropString s =
+  case stringUncons s of
+   None -> ();
+   Some (x, s) ->
+    let () = dropChar x in dropString s
+
+foo : forall {a b c : Type, n : Nat} . (LChan (Send String End)) [2*n] -> (a -> b) [n] -> (b -> c) [n] -> Vec n a -> Vec n c
+foo [c] [f] [g] xs =
+  map [\x -> let c' = send c "World" in (let () = close c' in g x)]
+    (map [\x -> let c' = send c "Hello" in (let () = close c' in f x)] xs)
+
+useFoo : forall {a b c : Type, n : Nat} . (a -> b) [n] -> (b -> c) [n] -> Vec n a -> Vec n c
+useFoo f g xs =
+  let c = [forkLinear (\c -> let (s, c) = recv c in let () = close c in dropString s)] in foo c f g xs
+
+
+-- withRef : (Ref a -> Ref b) -> a -> b
+-- updateRef : Ref a -> b -> Ref b
+-- readRef : Ref a -> (a, Ref a)
