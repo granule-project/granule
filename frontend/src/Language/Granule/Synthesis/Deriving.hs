@@ -289,18 +289,25 @@ derivePull s ty = do
     Nothing -> error "shouldn't be reachable"
 
 
-derivePull'  :: (?globals :: Globals) =>  Span -> Ctxt Id -> Ctxt Kind -> Type -> Expr () () -> Checker (Type, Expr () (), Maybe Coeffect)
-
-derivePull' s _sigma gamma argTy@(Box c t) arg = do
-  (returnTy, expr, coeff) <- derivePull' s _sigma gamma t arg
+derivePull'  :: (?globals :: Globals)
+  => Span
+  -> Bool
+  -> Ctxt Kind
+  -> Type
+  -> Expr () ()
+  -> Checker (Type, Expr () (), Maybe Coeffect)
+derivePull' s topLevel gamma argTy@(Box c t) arg = do
+  (returnTy, expr, coeff) <- derivePull' s topLevel gamma t arg
   case coeff of
     Just c' -> return (returnTy, expr, Just $ CMeet c c')
-    _ -> return (returnTy, expr, Just $ CMeet c c)
+    _ -> return (returnTy, expr, Just $ c)
 
-derivePull' s _sigma gamma argTy@(TyVar n) arg = do
+derivePull' s topLevel gamma argTy@(TyVar n) arg = do
   case lookup n gamma of
-    Just _ -> return (TyVar n, arg, Nothing)
-    Nothing -> error "do this in a bit"
+    Just _ -> return (argTy, arg, Nothing)
+    Nothing -> return (argTy, arg, Nothing)
+
+     -- error "do this in a bit"
      -- do
      -- -- For arguments which are type variables but not parameters
      -- -- to this type constructor, then we need to do an unboxing
@@ -308,12 +315,12 @@ derivePull' s _sigma gamma argTy@(TyVar n) arg = do
      -- let expr = makeUnboxUntyped x arg (makeVarUntyped x)
      -- return (argTy, expr)
 
-derivePull' s _sigma gamma argTy@(ProdTy t1 t2) arg = do
+derivePull' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
   -- Induction
-  (leftTy, leftExpr, lCoeff)   <- derivePull' s _sigma gamma t1 (makeVarUntyped x)
-  (rightTy, rightExpr, rCoeff) <- derivePull' s _sigma gamma t2 (makeVarUntyped y)
+  (leftTy, leftExpr, lCoeff)   <- derivePull' s topLevel gamma t1 (makeVarUntyped x)
+  (rightTy, rightExpr, rCoeff) <- derivePull' s topLevel gamma t2 (makeVarUntyped y)
 --  let coeffs = (singleton c1) `union` (singleton c2) `union` rCoeffs `union` lCoeffs
   let returnTy = (ProdTy leftTy rightTy)
   case (lCoeff, rCoeff) of
@@ -322,9 +329,151 @@ derivePull' s _sigma gamma argTy@(ProdTy t1 t2) arg = do
     (_, _) -> return (returnTy, makePairElimPUntyped' pbox arg x y
                      (makeBoxUntyped (makePairUntyped leftExpr rightExpr)), Nothing)
 
+-- General type constructor case:
+derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
+  debugM "derive-pull" ("TyCon case " <> pretty argTy)
+  -- First check whether this has already been derived or not
+  -- (also deals with recursive types)
+  st <- get
+  alreadyDefined <-
+    if topLevel
+      then return Nothing
+      else
+        case lookup (mkId "pull", TyCon name) (derivedDefinitions st) of
+          -- We have it in context, so now we need to apply its type
+          Just (tyScheme, _) -> do
+            -- freshen the type
+            (pullTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
+            case pullTy of
+              t@(FunTy _ t1 t2) -> do
+                  -- Its argument must be unified with argTy here
+                  --(eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
+                  (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec argTy t1
+                  if eq
+                    -- Success!
+                    then do
+                      t2' <- substitute subst t2
+                      return (Just (t2', App s () True (makeVarUntyped (mkId $ "pull@" <> pretty name)) arg, Nothing))
+                    else do
+                      -- Couldn't do the equality.
+                      debugM "derive-pull" ("no eq for " ++ pretty argTy ++ " and " ++ pretty t1)
+                      return Nothing
+              _ -> return Nothing
+          Nothing -> return Nothing
+
+  case alreadyDefined of
+    Just (pullResTy, pullExpr, coeff) -> return (pullResTy, pullExpr, coeff)
+    Nothing ->
+      -- Not already defined...
+      -- Get the kind of this type constructor
+      case lookup name (typeConstructors st) of
+        Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
+        Just (kind, _, _) -> do
+
+          -- Get all the data constructors of this type
+          mConstructors <- getDataConstructors name
+          case mConstructors of
+            Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
+            Just constructors -> do
+
+              -- For each constructor, build a pattern match and an introduction:
+              cases <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ ty), coercions)) -> do
+                debugM "deriv-pull - coercions" (show coercions)
+
+                -- Instantiate the data constructor
+                (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
+                      freshPolymorphicInstance BoundQ True tySch coercions
+
+                debugM "deriv-pull - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
+
+               -- [Note: this does not register the constraints associated with the data constrcutor]
+                dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+
+                debugM "deriv-pull - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
+                debugM "deriv-pull - eq with" (pretty (resultType dataConstructorTypeFresh) ++ " = " ++ pretty argTy)
+                -- Perform an equality between the result type of the data constructor and the argument type here
+
+                areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt argTy (resultType dataConstructorTypeFresh)
+                debugM "deriv-pull areEq" (show areEq)
+                case areEq of
+                  -- This creates a unification
+                  (False, _, _) ->
+                      error $ "Cannot derive pull for data constructor " <> pretty dataConsName
+                  (True, _, unifiers) -> do
+                    -- Unify and specialise the data constructor type
+                    dataConsType <- substitute (unifiers) dataConstructorTypeFresh
+                    debugM "deriv-pull dataConsType" (pretty dataConsType)
+                    debugM "deriv-pull unifiers" (show unifiers)
+
+                    -- Create a variable for each parameter
+                    let consParamsTypes = parameterTypes dataConsType
+
+                    debugM "paramterTypes: " (pretty consParamsTypes)
+                    consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
+                    debugM "consParamsVars: " (pretty consParamsVars)
+
+                    -- Build the pattern for this case
+                    let consPattern =
+                          PConstr s () True dataConsName (zipWith (\ty var -> PBox s () True (PVar s () True var)) consParamsTypes consParamsVars)
+                    debugM "derive-pull" ("consPattern " <> pretty consPattern )
+                    -- Push on all the parameters of a the constructor
+                    retTysAndExprs <- zipWithM (\ty var -> do
+                      debugM "derive-pull" ("Deriving argument of case for " <> pretty dataConsName <> " at type " <> pretty ty)
+                      derivePull' s False gamma ty (makeVarUntyped var))
+                                      consParamsTypes consParamsVars
+                    let (_retTys, exprs, coeffs) = unzip3 retTysAndExprs
+                    let coeffs' = coeffectMeet coeffs
+                    debugM "retTys: " (show _retTys)
+                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType (reverse exprs) dataConsType
+                    let bodyExpr' = (\bExpr -> case coeffs' of
+                                             Just c -> makeBoxUntyped bExpr
+                                             Nothing -> bExpr)
+                                           bodyExpr
+                    return (_retTys, consPattern, bodyExpr', coeffs'))
+
+              -- Got all the branches to make the following case now
+
+              -- Construct the return type from the individual return types of each type argument
+
+              let (returnTys, pats, exprs, coeffs) = unzip4 cases
+
+              debugM "coeffs: " (show coeffs)
+              debugM "ty: " (show argTy)
+              let ty = reconstructTy (concat returnTys) argTy
+              case coeffs of
+                c:cs -> do
+                  let patExprs = zip pats exprs
+                  debugM "res: " (pretty (Case s () True arg patExprs))
+                  return (ty, Case s () True arg patExprs, c)
+                _ -> error $ "help"
+
+      where
+
+        unzip4 [] = ([], [], [], [])
+        unzip4 ((a,b,c,d):xs) = (a:as, b:bs, c:cs, d:ds)
+             where (as, bs, cs, ds) = unzip4 xs
+
+        reconstructTy returnTys (Box c ty) =
+          if ty `elem` returnTys then
+            ty
+          else
+            Box c (reconstructTy returnTys ty)
+        reconstructTy returnTys (TyApp t1 t2) = TyApp (reconstructTy returnTys t1) (reconstructTy returnTys t2)
+        reconstructTy returnTys (FunTy s t1 t2) = FunTy s (reconstructTy returnTys t1) (reconstructTy returnTys t2)
+        reconstructTy _ ty = ty
+
+        coeffectMeet (Just c:[]) = Just c
+        coeffectMeet (Just c:cs) = do
+          c' <- coeffectMeet cs
+          return $ CMeet c c'
+        coeffectMeet _ = Nothing
+
+
   -- Build eliminator
 
 derivePull' _ _ _ ty _ = error $ "still to come!" <> show ty
+
+
 
 -- Given a kind for a type constructor, fully apply the type constructor
 -- generator with fresh type variables for each parameter and return a type-variable
