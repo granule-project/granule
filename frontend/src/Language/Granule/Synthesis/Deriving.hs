@@ -262,9 +262,16 @@ derivePull s ty = do
   (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (CVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
 
+  st0 <- get
+  modify (\st -> st { -- derivedDefinitions =
+                       -- ((mkId "pull", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined))
+                       --  : derivedDefinitions st,
+                    tyVarContext = tyVarContext st ++ [(kVar, (KCoeffect, ForallQ)), (cVar, (KPromote (TyVar kVar), ForallQ))] ++ localTyVarContext })
+
   z <- freshIdentifierBase "z" >>= (return . mkId)
   (returnTy, bodyExpr, coeff) <-
-    derivePull' s [] tyVars returnTy' (makeVarUntyped z)
+    derivePull' s True tyVars returnTy' (makeVarUntyped z)
+
 
   case coeff of
     Just c -> do
