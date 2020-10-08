@@ -1,5 +1,5 @@
 module Language.Granule.Synthesis.Deriving
-  (derivePush, derivePull) where
+  (derivePush, derivePull, deriveCopyShape) where
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -532,3 +532,82 @@ deleteVar' :: Eq a => a -> [(a, t)] -> [(a, t)]
 deleteVar' _ [] = []
 deleteVar' x ((y, b) : m) | x == y = deleteVar' x m
                           | otherwise = (y, b) : deleteVar' x m
+
+
+
+deriveCopyShape :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
+deriveCopyShape s ty = do
+
+  -- Create fresh variables for the grades
+  kVar <- freshIdentifierBase "k" >>= (return . mkId)
+  cVar <- freshIdentifierBase "r" >>= (return . mkId)
+
+  -- Get kind of type constructor
+  st <- get
+  (kind, _) <- synthKind nullSpanNoFile (tyVarContext st) ty
+  -- Generate fresh type variables and apply them to the kind constructor
+  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (CVar cVar) ty
+--  let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
+  debugM  "copyShape: " (show returnTy')
+  debugM  "copyShape - BaseTy " (show baseTy)
+  debugM  "copyShape - local tyVasr " (show localTyVarContext)
+
+ -- st0 <- get
+ -- modify (\st -> st {
+    --  tyVarContext = tyVarContext st ++ [(kVar, (KCoeffect, ForallQ)), (cVar, (KPromote (TyVar kVar), ForallQ))] ++ localTyVarContext })
+  z <- freshIdentifierBase "z" >>= (return . mkId)
+  ((shapeTy, returnTy), bodyExpr) <- deriveCopyShape' s True [] baseTy (makeVarUntyped z)
+  let tyS = Forall s
+              --([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
+              []
+              []
+              (FunTy Nothing ty (ProdTy shapeTy returnTy))
+  let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
+  debugM "copyShape expr" (pretty expr)
+  let name = mkId $ "copyShape@" ++ pretty ty
+  return $ (tyS, Def s name True (EquationList s name True [Equation s name () True [] expr]) tyS)
+
+
+deriveCopyShape' :: (?globals :: Globals)
+  => Span
+  -> Bool
+  -> Ctxt Kind
+  -> Type
+  -> Expr () ()
+  -> Checker ((Type, Type), (Expr () ()))
+deriveCopyShape' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
+  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg)
+
+deriveCopyShape' _ _ _ argTy@(TyVar name) arg = do
+  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg)
+
+deriveCopyShape' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
+  x <- freshIdentifierBase "x" >>= (return . mkId)
+  y <- freshIdentifierBase "y" >>= (return . mkId)
+
+  ((lShapeTy, lTy), lExpr) <- deriveCopyShape' s topLevel gamma t1 (makeVarUntyped x)
+  ((rShapeTy, rTy), rExpr) <- deriveCopyShape' s topLevel gamma t2 (makeVarUntyped y)
+
+  s <- freshIdentifierBase "s" >>= (return . mkId)
+  x' <- freshIdentifierBase "x" >>= (return . mkId)
+
+  s' <- freshIdentifierBase "s" >>= (return . mkId)
+  y' <- freshIdentifierBase "y" >>= (return . mkId)
+
+  -- Construct the copy expression (maybe move to builders?)
+  let expr = makePairElimPUntyped id arg x y
+    (makePairElimPUntyped id lExpr s x'
+      (makePairElimPUntyped id rExpr s' y'
+       (makePairUntyped
+         (makePairUntyped
+           (makeVarUntyped s) (makeVarUntyped s'))
+         (makePairUntyped
+           (makeVarUntyped x') (makeVarUntyped y')))))
+
+  return ((ProdTy lShapeTy rShapeTy, ProdTy lTy rTy), expr)
+
+deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg
+  | name `elem` [ mkId "Int", mkId "Float", mkId "Char", mkId "String"] = do -- Find a better way to indicate what primitives are copiable
+  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg)
+
+deriveCopyShape' s topLevel gamma argTy arg = error ((show argTy) <> "not implemnted yet")
