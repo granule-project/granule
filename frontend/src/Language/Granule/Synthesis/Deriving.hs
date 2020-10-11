@@ -264,16 +264,21 @@ derivePull s ty = do
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
 
   st0 <- get
-  modify (\st -> st { -- derivedDefinitions =
-                       -- ((mkId "pull", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined))
-                       --  : derivedDefinitions st,
+  modify (\st -> st {  derivedDefinitions =
+                        ((mkId "pull", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined)) : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ [(kVar, (KCoeffect, ForallQ)), (cVar, (KPromote (TyVar kVar), ForallQ))] ++ localTyVarContext })
 
+  debugM "derivePull type" (show returnTy')
   z <- freshIdentifierBase "z" >>= (return . mkId)
   (returnTy, bodyExpr, coeff) <-
     derivePull' s True tyVars returnTy' (makeVarUntyped z)
 
+  modify (\st -> st { derivedDefinitions = deleteVar' (mkId "pull", ty) (derivedDefinitions st)
+                    -- Restore type variables and predicate stack
+                    , tyVarContext = tyVarContext st0
+                    , predicateStack = predicateStack st0 } )
 
+  debugM "derivePull return type" (show returnTy)
   case coeff of
     Just c -> do
       let tyS = Forall s
@@ -308,7 +313,6 @@ derivePull' s topLevel gamma argTy@(TyVar n) arg = do
     Just _ -> return (argTy, arg, Nothing)
     Nothing -> return (argTy, arg, Nothing)
 
-     -- error "do this in a bit"
      -- do
      -- -- For arguments which are type variables but not parameters
      -- -- to this type constructor, then we need to do an unboxing
