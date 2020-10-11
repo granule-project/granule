@@ -150,7 +150,7 @@ evalIn ctxt (App s _ _ e1 e2) = do
       -- _ -> error "Cannot apply value"
 
 -- Deriving applications get resolved to their names
-evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull"] = do
+evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape"] = do
   -- Replace with a deriving variable
   evalIn ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
