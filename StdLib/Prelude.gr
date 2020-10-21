@@ -27,9 +27,9 @@ const x [y] = x
 
 --- linear function composition (the composition operator `g ∘ f` resolves
 --- to whatever is bound to `compose`)
-compose : forall a : Type, b : Type, c : Type
+lcompose : forall a : Type, b : Type, c : Type
   . (b -> c) -> (a -> b) -> (a -> c)
-compose g f = \x -> g (f x)
+lcompose g f = \x -> g (f x)
 
 --- Apply f to x until p holds
 until : forall a : Type

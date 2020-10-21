@@ -1208,6 +1208,21 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           modify (\st -> st { derivedDefinitions = ((mkId "pull", ty), (typScheme, def)) : derivedDefinitions st })
           -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
+    (Val _ _ _ (Var _ (internalName -> "copyShape"))) -> do
+      st <- get
+      let name = mkId $ "copyShape@" ++ pretty ty
+      case lookup (mkId "copyShape", ty) (derivedDefinitions st) of
+        Just (tyScheme, _) ->
+          freshenTySchemeForVar s rf name tyScheme
+        Nothing -> do
+          -- Get this derived
+          (typScheme, def) <- deriveCopyShape s ty
+          -- Register the definition that has been derived
+          modify (\st -> st { derivedDefinitions = ((mkId "copyShape", ty), (typScheme, def)) : derivedDefinitions st })
+          -- return this variable expression in place here
+          debugM "derived copyShape:" (pretty def)
+          debugM "derived copyShape tys:" (show typScheme)
+          freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
 synthExpr _ _ _ e = do

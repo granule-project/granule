@@ -319,6 +319,7 @@ instance Term (Expr v a) where
     freeVars (Hole _ _ _ vars) = vars
 
     hasHole (App _ _ _ e1 e2) = hasHole e1 || hasHole e2
+    hasHole (AppTy _ _ _ e _) = hasHole e
     hasHole (Binop _ _ _ _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (LetDiamond _ _ _ p _ e1 e2) = hasHole e1 || hasHole e2
     hasHole (TryCatch _ _ _ e1 p _ e2 e3) = hasHole e1 || hasHole e2 || hasHole e3
