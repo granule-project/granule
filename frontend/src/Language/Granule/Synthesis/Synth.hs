@@ -507,18 +507,18 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
 
 unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
   (unboxHelper decls (var : left) right gamma add goalTy) `try`
-   (case getAssumptionType a of
-     (Box grade t') -> do
-       let omega = var:(left ++ right)
+   (case a of
+     (Linear (Box grade t')) -> do
+       let omega = (left ++ right)
        (canUse, omega', t) <- useVar var omega add
        if canUse
           then do
             x2 <- freshIdentifier
-            omega1 <- ctxtSubtract omega omega'
-            let (gamma', omega1') = bindToContext (x2, Discharged t' grade) gamma omega1 (isLAsync t')
+            -- omega1 <- ctxtSubtract omega omega'
+            let (gamma', omega') = bindToContext (x2, Discharged t' grade) gamma omega (isLAsync t')
 
             -- Synthesise the body of a `let` unboxing
-            (e, delta, subst) <- synthesiseInner decls True add gamma' omega1' goalTy
+            (e, delta, subst) <- synthesiseInner decls True add gamma' omega' goalTy
 
             -- Add usage at the binder to the usage in the body
             delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
@@ -557,8 +557,8 @@ pairElimHelper :: (?globals :: Globals)
 pairElimHelper decls left [] _ _ _ = none
 pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
   (pairElimHelper decls (var:left) right gamma sub goalTy) `try`
-   (case getAssumptionType a of
-      (ProdTy t1 t2) -> do
+   (case a of
+      (Linear (ProdTy t1 t2)) -> do
         debugM "synthDebug" $ "Trying to eliminate product type " ++ pretty a
 
         let omega = left ++ right
@@ -581,19 +581,19 @@ pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
 
 pairElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
   (pairElimHelper decls (var:left) right gamma add goalTy) `try`
-    (case getAssumptionType a of
-      (ProdTy t1 t2) -> do
-        let omega = (var:left) ++ right
-        (canUse, omega', t) <- useVar var omega add
+    (case a of
+      (Linear (ProdTy t1 t2)) -> do
+        let omega = left ++ right
+        (canUse, singleUse, _) <- useVar var omega add
         if canUse
           then do
             lId <- freshIdentifier
             rId <- freshIdentifier
-            omega1 <- ctxtSubtract omega omega'
-            let (gamma', omega1')   = bindToContext (lId, Linear t1) gamma omega1 (isLAsync t1)
-            let (gamma'', omega1'') = bindToContext (rId, Linear t2) gamma' omega1' (isLAsync t2)
-            (e, delta, subst) <- synthesiseInner decls True add gamma'' omega1'' goalTy
-            delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
+--            omega1 <- ctxtSubtract omega singleUse
+            let (gamma', omega')   = bindToContext (lId, Linear t1) gamma omega (isLAsync t1)
+            let (gamma'', omega'') = bindToContext (rId, Linear t2) gamma' omega' (isLAsync t2)
+            (e, delta, subst) <- synthesiseInner decls True add gamma'' omega'' goalTy
+            delta' <- maybeToSynthesiser $ ctxtAdd singleUse delta
             case lookupAndCutout lId delta' of
               Just (delta', Linear _) ->
                 case lookupAndCutout rId delta' of
@@ -602,6 +602,54 @@ pairElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy 
               _ -> none
           else none
       _ -> none)
+
+
+derelictionHelper :: (?globals :: Globals)
+  => Ctxt DataDecl
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> Ctxt Assumption
+  -> ResourceScheme AltOrDefault
+  -> TypeScheme
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
+derelictionHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
+  (derelictionHelper decls (var:left) right gamma add goalTy) `try`
+  (case a of
+     Discharged ty g -> do
+       let omega = left ++ right
+       (canUse, singleUse, _) <- useVar var omega add
+       if canUse
+         then do
+           y <- freshIdentifier
+           let (gamma', omega') = bindToContext (y, Linear ty) gamma omega (isLAsync ty)
+           (e, delta, subst) <- synthesiseInner decls True add gamma' omega' goalTy
+           case lookupAndCutout y delta of
+             Just (delta', Linear _) -> do
+               delta'' <- maybeToSynthesiser $ ctxtAdd singleUse delta'
+               return (Language.Granule.Syntax.Expr.subst (makeVar x goalTy) y e, delta'', subst)
+             _ -> none
+         else none
+     _ -> none)
+derelictionHelper decls left (var@(x, a):right) gamma (sub@(Subtractive mode)) goalTy =
+  (derelictionHelper decls (var:left) right gamma sub goalTy) `try`
+  (case a of
+     Discharged ty g -> do
+       let omega = left ++ right
+       (canUse, omega', _) <- useVar var omega sub
+       if canUse
+         then do
+           y <- freshIdentifier
+           let (gamma', omega'') = bindToContext (y, Linear ty) gamma omega' (isLAsync ty)
+           (e, delta, subst) <- synthesiseInner decls True sub gamma' omega'' goalTy
+           case lookup y delta of
+             Nothing -> do
+               return (Language.Granule.Syntax.Expr.subst (makeVar x goalTy) y e, delta, subst)
+             _ -> none
+         else none
+     _ -> none)
+derelictionHelper _ _ _ _ _ _ = none
+
+
 
 unitIntroHelper ::
      Ctxt DataDecl
@@ -726,15 +774,15 @@ sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
   (sumElimHelper decls (var:left) right gamma add goalTy) `try`
   let omega = (var:left) ++ right in do
   (canUse, omega', t) <- useVar var omega add
-  case (canUse, t) of
-    (True, SumTy t1 t2) -> do
+  case (canUse, a) of
+    (True, Linear (SumTy t1 t2)) -> do
       l <- freshIdentifier
       r <- freshIdentifier
-      omega1 <- ctxtSubtract omega omega'
-      let (gamma', omega1') = bindToContext (l, Linear t1) gamma omega1 (isLAsync t1)
-      let (gamma'', omega1'') = bindToContext (r, Linear t2) gamma omega1 (isLAsync t2)
-      (e1, delta1, subst1) <- synthesiseInner decls True add gamma' omega1' goalTy
-      (e2, delta2, subst2) <- synthesiseInner decls True add gamma'' omega1'' goalTy
+      -- omega1 <- ctxtSubtract omega omega'
+      let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega' (isLAsync t1)
+      let (gamma'', omega''') = bindToContext (r, Linear t2) gamma omega' (isLAsync t2)
+      (e1, delta1, subst1) <- synthesiseInner decls True add gamma' omega'' goalTy
+      (e2, delta2, subst2) <- synthesiseInner decls True add gamma'' omega''' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) -> do
@@ -774,6 +822,8 @@ synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binde
       sumElimHelper decls [] omega gamma resourceScheme goalTy
       `try`
       unitElimHelper decls [] omega gamma resourceScheme goalTy
+      `try`
+      derelictionHelper decls [] omega gamma resourceScheme goalTy
     (False, []) ->
       (if not (isAtomic goalTy') then
           -- Right Sync : Focus on goalTy when goalTy is not atomic
