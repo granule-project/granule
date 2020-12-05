@@ -91,10 +91,13 @@ comp : forall {k : Coeffect, n : k, m : k, a : Type, b : Type, c : Type} .
        (b [n] -> c) -> (a [m] -> b) [n] -> a [n * m] -> c
 comp g [f] = \[x] -> g [f [x]]
 
+boxmap : forall {a b : Type, s : Semiring, r : s} . (a -> b) [r] -> a [r] -> b [r]
+boxmap [f] [x] = [f x]
+
 unbox : forall {a : Type, k : Semiring} . a [1 : k] -> a
 unbox [x] = x
 
-disject : forall {a : Type, k : Coeffect, n : k, m : k} . a [m * n] -> (a [n]) [m]
+disject : forall {a : Type, k : Semiring, n : k, m : k} . a [m * n] -> (a [n]) [m]
 disject [x] = [[x]]
 
 --- Push coeffects on a pair into the left and right elements
