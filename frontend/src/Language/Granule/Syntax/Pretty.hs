@@ -76,6 +76,7 @@ instance Pretty TypeScheme where
 
 instance Pretty Type where
     -- Atoms
+    pretty (TyCon s) | internalName s == "Infinity" = "∞"
     pretty (TyCon s)      = pretty s
     pretty (TyVar v)      = pretty v
     pretty (TyInt n)      = show n
