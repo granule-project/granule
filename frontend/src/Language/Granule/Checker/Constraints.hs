@@ -496,8 +496,8 @@ trivialUnsatisfiableConstraints
 
     -- All the (trivially) unsatisfiable constraints
     unsat :: Constraint -> [Constraint]
-    unsat c@(Eq _ c1 c2 _)  = if (c1 `neqC` c2) then [c] else []
-    unsat c@(Neq _ c1 c2 _) = if (c1 `neqC` c2) then [] else [c]
+    unsat c@(Eq _ c1 c2 _)  = if (normalise c1 `neqC` normalise c2) then [c] else []
+    unsat c@(Neq _ c1 c2 _) = if (normalise c1 `neqC` normalise c2) then [] else [c]
     unsat c@(ApproximatedBy{}) = approximatedByC c
     -- TODO: look at this information
     unsat Lub{} = []
