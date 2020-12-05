@@ -20,7 +20,7 @@ readUntilEnd h =
     case eof of
       True -> pure (h, "");
       False ->
-        let (h, c) <- readChar h;
+        let (h, c)   <- readChar h;
             (h, str) <- readUntilEnd h
         in pure (h, stringCons c str)
 

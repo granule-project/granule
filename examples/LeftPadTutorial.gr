@@ -94,7 +94,7 @@ sub (S m') (S n') = sub m' n'
 -- of `leftPad`:
 
 leftPad : forall {t : Type, m : Nat, n : Nat}
-        . {m >= n} => Vec n t -> t [m - n] -> N m -> Vec m t
+        . {m .>= n} => Vec n t -> t [m - n] -> N m -> Vec m t
 leftPad str c n =
   let (m, str) = length' str
   in append (replicate (sub n m) c) str

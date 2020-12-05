@@ -8,11 +8,11 @@ data Expr expr where
   App expr expr;
   Abs Int expr
 
-map_expr : ∀ a : Type, b : Type . (a → b) [] → Expr a → Expr b
+map_expr : ∀ {a : Type, b : Type} . (a → b) [] → Expr a → Expr b
 map_expr [f] e = case e of
   Var i → Var i;
   App e1 e2 → App (f e1) (f e2);
   Abs i e → Abs i (f e)
 
-cata : ∀ a : Type . (Expr a → a) [] → Fix Expr → a
+cata : ∀ {a : Type} . (Expr a → a) [] → Fix Expr → a
 cata [alg] = alg ∘ map_expr [cata [alg]] ∘ unfix
