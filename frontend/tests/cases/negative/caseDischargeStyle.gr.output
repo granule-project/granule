@@ -3,4 +3,6 @@ Type error: frontend/tests/cases/negative/caseDischargeStyle.gr:7:3:
 Variable `y` is used as graded variable, but it is bound as a linear variable.
 
 Type error: frontend/tests/cases/negative/caseDischargeStyle.gr:14:3:
-Expected 1 uses, but instead there are 0 actual uses.
+Falsifiable theorem: frontend/tests/cases/negative/caseDischargeStyle.gr:13:1:
+The following theorem associated with `fooB` is falsifiable:
+   ((0 : Nat) = 1) ∧ (1 = 1)

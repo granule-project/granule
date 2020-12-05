@@ -535,7 +535,10 @@ trivialUnsatisfiableConstraints
     neqC (TyRational n) (TyRational m) = n /= m
     --neqC (CInterval lb1 ub1) (CInterval lb2 ub2) =
     --   neqC lb1 lb2 || neqC ub1 ub2
-    neqC _ _                   = False
+    neqC (TySig r t) (TySig r' t') | t == t' = neqC r r'
+    neqC (TySig r t) r' = neqC r r'
+    neqC r (TySig r' t) = neqC r r'
+    neqC _ _            = False
 
 data SolverResult
   = QED

@@ -1,6 +1,6 @@
-id : forall a. a -> a
+id : forall {a} . a -> a
 id x = x
 
-bar : forall d e. (d × e) -> (e × d)
+bar : forall {d e} . (d × e) -> (e × d)
 bar (x, y) = (y, x)
 

@@ -271,6 +271,8 @@ NAryConstr :: { Pattern () }
 
 ForallSig :: { [(Id, Kind)] }
  : '{' VarSigs '}' { $2 }
+ | Vars1   { flip concatMap $1 (\id -> let k = mkId ("_k" <> id)
+                                       in [(mkId id, TyVar k)]) }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
  : forall ForallSig '.'                          { (((getPos $1, getPos $3), $2), []) }

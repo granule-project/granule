@@ -1,2 +1,2 @@
-foo : forall {a b c} . (a -> a) [] -> (b × c) -> (b × c)
+foo : forall {a b c : Type} . (a -> a) [] -> (b × c) -> (b × c)
 foo [f] (x,y) = (f x, f y)

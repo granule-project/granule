@@ -44,7 +44,11 @@ spec = let ?globals = mempty in do
                           []
        c `shouldBe` [(varA, Discharged (tyVarK) (TyVar (mkId "a.0")))]
        pred `shouldBe`
-         [Conj [Con (Lub nullSpan (cNatOrdered 5) (TyInt 0) (TyVar (mkId "a.0")) natInterval)]]
+         [Conj [Con (Lub (Span {startPos = (0,0), endPos = (0,0), filename = ""})
+            (TySig (TyInt 5) 
+              (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat"))))
+              (TyGrade (Just (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat")))) 0)
+              (TyVar (Id "a.0" "a.0")) (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat"))))]]
          -- [Conj [Con (ApproximatedBy nullSpan (CZero natInterval) (TyVar (mkId "a.0")) natInterval)
          --      ,Con (ApproximatedBy nullSpan (cNatOrdered 5) (TyVar (mkId "a.0")) natInterval)]]
 
@@ -76,7 +80,7 @@ spec = let ?globals = mempty in do
                  []
                  [(varA, Discharged (tyVarK) (cNatOrdered 5))]
          c `shouldBe`
-                 [(varA, Discharged (tyVarK) (cNatOrdered 0))]
+                 [(varA, Discharged (tyVarK) (TyGrade (Just (TyApp (TyCon (Id "Interval" "Interval")) (TyCon (Id "Nat" "Nat")))) 0))]
 
 
     describe "elaborator tests" $
