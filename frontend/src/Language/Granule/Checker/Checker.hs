@@ -1248,7 +1248,7 @@ solveConstraints predicate s name = do
 
   debugM "tyVarContext" (pretty $ tyVarContext checkerState)
   debugM "context into the solver" (pretty $ coeffectVars)
-  debugM "Solver predicate" $ pretty predicate <> "\n" <> show predicate
+  debugM "Solver predicate" $ pretty predicate -- <> "\n" <> show predicate
 
   (_, result) <- liftIO $ provePredicate predicate coeffectVars
   case result of

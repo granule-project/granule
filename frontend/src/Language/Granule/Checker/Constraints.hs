@@ -498,7 +498,8 @@ trivialUnsatisfiableConstraints
     unsat :: Constraint -> [Constraint]
     unsat c@(Eq _ c1 c2 _)  = if (normalise c1 `neqC` normalise c2) then [c] else []
     unsat c@(Neq _ c1 c2 _) = if (normalise c1 `neqC` normalise c2) then [] else [c]
-    unsat c@(ApproximatedBy{}) = approximatedByC c
+    unsat c@(ApproximatedBy s c1 c2 t) =
+        approximatedByC (ApproximatedBy s (normalise c1) (normalise c2) t)
     -- TODO: look at this information
     unsat Lub{} = []
     unsat (Lt _ c1 c2) = []
@@ -509,8 +510,14 @@ trivialUnsatisfiableConstraints
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other
     approximatedByC :: Constraint -> [Constraint]
+    approximatedByC c@(ApproximatedBy s (TySig r t) (TySig r' t') tm) | t == t' =
+      approximatedByC (ApproximatedBy s r r' tm)
+    approximatedByC c@(ApproximatedBy s (TySig r t) r' tm) =
+      approximatedByC (ApproximatedBy s r r' tm)
+    approximatedByC c@(ApproximatedBy s r (TySig r' t') tm) =
+      approximatedByC (ApproximatedBy s r r' tm)
     approximatedByC c@(ApproximatedBy _ (TyInt n) (TyInt m) _) | n /= m = [c]
-    approximatedByC c@(ApproximatedBy _ (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m) _) | n > m = [c]
+    approximatedByC c@(ApproximatedBy _ (TyCon (internalName -> "Public")) (TyCon (internalName -> "Private")) _) = [c]
     approximatedByC c@(ApproximatedBy _ (TyRational n) (TyRational m) _) | n > m = [c]
     -- Nat like intervals
     approximatedByC c@(ApproximatedBy _
