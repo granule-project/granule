@@ -1,4 +1,4 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/semiringsDontHaveCommutativeMult.gr:2:1:
 The following theorem associated with `poly` is falsifiable:
-	(c * ((1 : k) + (1 : k)) ≤ ((1 : k) + (1 : k)) * c)
+	(c * (2 : k) ≤ (((1 : k)) + ((1 : k))) * c)

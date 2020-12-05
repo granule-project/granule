@@ -1,3 +1,4 @@
 Type checking failed: 
-Type error: frontend/tests/cases/negative/patternCoeffect.gr:7:3:
-Expected 2 uses, but instead there are 3 actual uses.
+Falsifiable theorem: frontend/tests/cases/negative/patternCoeffect.gr:6:1:
+The following theorem associated with `bar` is falsifiable:
+	(3 = 2)

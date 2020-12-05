@@ -9,13 +9,13 @@ Found a goal: frontend/tests/cases/negative/hole2.gr:11:40:
      xs : Vec n0.0 a
 
    Type context:
-     n0 : ↑Nat
+     n0 : Nat
      b0 : Type
      a0 : Type
-     t11.0 : ↑Nat
+     t11.0 : Nat
      t10.0 : Type
      t9.0 : Type
-     n0.0 : ↑Nat
+     n0.0 : Nat
      a : Type
      b : Type
-     n : ↑Nat
+     n : Nat

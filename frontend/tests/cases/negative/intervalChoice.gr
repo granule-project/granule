@@ -4,7 +4,7 @@ data Choice a b = OneOf (a [0..1]) (b [0..1]) -- TODO: don't export
 choice : forall {a : Type, b : Type} . a [0..1] -> b [0..1] -> Choice a b
 choice [x] [y] = OneOf [x] [y]
 
-choose1 : forall a : Type, b : Type . Choice a b -> a
+choose1 : forall {a : Type, b : Type} . Choice a b -> a
 choose1 (OneOf [x] [_]) = x
 
 b : Int [1..1] -> Int [0..1] -> Int

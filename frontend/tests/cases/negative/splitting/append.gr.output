@@ -9,8 +9,8 @@ Found a goal: frontend/tests/cases/negative/splitting/append.gr:8:18:
 
    Type context:
      a : Type
-     n : ↑Nat
-     m : ↑Nat
+     n : Nat
+     m : Nat
 
    Case splits for xs, ys:
      (Cons xs0 xs1) (Cons ys0 ys1)

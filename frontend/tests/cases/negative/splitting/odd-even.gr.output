@@ -8,7 +8,7 @@ Found a goal: frontend/tests/cases/negative/splitting/odd-even.gr:6:17:
      ys : Vec ((2 * n) + 1) a
 
    Type context:
-     n : ↑Nat
+     n : Nat
      a : Type
 
    Case splits for xs, ys:

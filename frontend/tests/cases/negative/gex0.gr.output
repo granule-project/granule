@@ -1,3 +1,4 @@
 Type checking failed: 
-Type error: frontend/tests/cases/negative/gex0.gr:4:39:
-Expected 1 uses, but instead there are 2 actual uses.
+Falsifiable theorem: frontend/tests/cases/negative/gex0.gr:4:1:
+The following theorem associated with `main` is falsifiable:
+	((2 : Nat) = 1)

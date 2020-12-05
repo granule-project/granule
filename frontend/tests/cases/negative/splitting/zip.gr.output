@@ -8,7 +8,7 @@ Found a goal: frontend/tests/cases/negative/splitting/zip.gr:6:13:
      ys : Vec n b
 
    Type context:
-     n : ↑Nat
+     n : Nat
      a : Type
      b : Type
 

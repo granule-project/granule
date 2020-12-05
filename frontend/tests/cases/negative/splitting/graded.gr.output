@@ -4,7 +4,7 @@ Found a goal: frontend/tests/cases/negative/splitting/graded.gr:2:11:
    Expected type is: `(b, a)`
 
    Context:
-     x : .[(a, b)]. (0..∞)
+     x : .[(a, b)]. ((0 : Ext Nat)..∞)
 
    Type context:
      a : Type

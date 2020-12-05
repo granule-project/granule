@@ -8,7 +8,7 @@ Found a goal: frontend/tests/cases/negative/splitting/head.gr:5:12:
 
    Type context:
      a : Type
-     n : ↑Nat
+     n : Nat
 
    Case splits for xs:
      Nil           
@@ -23,7 +23,7 @@ Found a goal: frontend/tests/cases/negative/splitting/head.gr:8:13:
 
    Type context:
      a : Type
-     n : ↑Nat
+     n : Nat
 
    Case splits for xs:
      (Cons xs0 xs1)

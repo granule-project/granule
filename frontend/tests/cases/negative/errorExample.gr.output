@@ -1,5 +1,4 @@
 Type checking failed: 
-Type error: frontend/tests/cases/negative/errorExample.gr:4:1:
 Falsifiable theorem: frontend/tests/cases/negative/errorExample.gr:4:1:
 The following theorem associated with `dub` is falsifiable:
 	((2 : Nat) = 1)

@@ -1,3 +1,4 @@
 Type checking failed: 
-Type error: frontend/tests/cases/negative/exactNat.gr:2:1:
-1..1 is not approximatable by 2..2 for type Interval Nat
+Falsifiable theorem: frontend/tests/cases/negative/exactNat.gr:2:1:
+The following theorem associated with `dub` is falsifiable:
+	((1 : Interval Nat) ≤ 2..2)

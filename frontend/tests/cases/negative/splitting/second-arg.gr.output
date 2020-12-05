@@ -9,7 +9,7 @@ Found a goal: frontend/tests/cases/negative/splitting/second-arg.gr:6:11:
 
    Type context:
      a : Type
-     n : ↑Nat
+     n : Nat
 
    Case splits for f:
      [f]

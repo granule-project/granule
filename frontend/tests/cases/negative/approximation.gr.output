@@ -1,3 +1,4 @@
 Type checking failed: 
-Type error: frontend/tests/cases/negative/approximation.gr:2:1:
-Expected 2 uses, but instead there are 4 actual uses.
+Falsifiable theorem: frontend/tests/cases/negative/approximation.gr:2:1:
+The following theorem associated with `bar` is falsifiable:
+	(4 = 2)

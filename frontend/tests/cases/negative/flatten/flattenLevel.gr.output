@@ -1,4 +1,4 @@
 Type checking failed: 
 Counter example: frontend/tests/cases/negative/flatten/flattenLevel.gr:2:1:
 The following theorem associated with `flattenLevel` is falsifiable:
-	(k \/ l ≤ l /\ k)
+	(k ∨ l ≤ l ∧ k)
