@@ -849,20 +849,28 @@ synthForOperator :: (?globals :: Globals)
   -> Type
   -> Checker (Kind, Substitution, Type)
 synthForOperator s overloadToNat op t1 t2 = do
+  debugM "synthForOperator" ("ov = " ++ show overloadToNat ++ "op = " ++ pretty op ++ " is closed = " ++ show (closedOperation op))
   if predicateOperation op || closedOperation op
     then do
+      debugM "t1" (show t1)
       (k1, subst1, t1') <- synthKind' s overloadToNat t1
+      debugM "synthForOperator" ("k1 = " ++ pretty k1)
       (k2, subst2, t2') <- synthKind' s overloadToNat t2
+      debugM "synthForOperator" ("k2 = " ++ pretty k2)
+
+      (k3, substK, (inj1, inj2)) <- mguCoeffectTypes s k1 k2
+      debugM "synthForOperator" ("unif k1 k2 = " ++ pretty k3)
+
 
       maybeSubst <- if predicateOperation op
-                      then predicateOperatorAtKind s op k1
-                      else closedOperatorAtKind s op k1
+                      then predicateOperatorAtKind s op k3
+                      else closedOperatorAtKind s op k3
       case maybeSubst of
         Just subst3 -> do
-          subst <- combineManySubstitutions s [subst1, subst2, subst3]
+          subst <- combineManySubstitutions s [subst1, subst2, subst3, substK]
           if predicateOperation op
-            then return (kpredicate, subst, TyInfix op t1' t2')
-            else return (k1, subst, TyInfix op t1' t2')
+            then return (kpredicate, subst, TyInfix op (inj1 t1') (inj2 t2'))
+            else return (k3, subst, TyInfix op (inj1 t1') (inj2 t2'))
 
         Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k1 }
     else throw ImpossibleKindSynthesis { errLoc = s, errTy = TyInfix op t1 t2 }
