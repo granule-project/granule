@@ -17,16 +17,16 @@ data Maybe a = None | Some a
 --- If the Maybe value is None, the function returns the default value.
 --- Otherwise, it applies the function to the value inside the Some and
 -- returns the result.
-maybe : forall a : Type, b : Type
+maybe : forall {a : Type, b : Type}
       . b [0..1] -> (a -> b) [0..1] -> Maybe a -> b
 maybe [d] [_] None = d;
 maybe [_] [f] (Some x) = f x
 
 -- Monady interface for Maybe
-returnMb : forall a : Type . a -> Maybe a
+returnMb : forall {a : Type} . a -> Maybe a
 returnMb = Some
 
-bindMb : forall a : Type, b : Type
+bindMb : forall {a : Type, b : Type}
      . Maybe a -> (a -> Maybe b) [0..1] -> Maybe b
 bindMb None [_] = None;
 bindMb (Some x) [k] = k x
@@ -34,16 +34,16 @@ bindMb (Some x) [k] = k x
 --- The fromMaybe function takes a default value and and Maybe value. If the
 -- Maybe is None, it returns the default values; otherwise, it returns the value
 -- contained in the Maybe.
-fromMaybe : forall a : Type
+fromMaybe : forall {a : Type}
           . a [0..1] -> Maybe a -> a
 fromMaybe [d] None = d;
 fromMaybe [_] (Some x) = x
 
 --- Whether a `Maybe a` value is `Some a`
-isSome : forall a : Type . Maybe (a [0]) -> Bool
+isSome : forall {a : Type} . Maybe (a [0]) -> Bool
 isSome None = False;
 isSome (Some [_]) = True
 
 --- Whether a `Maybe a` value is `None`
-isNone : forall a : Type . Maybe (a [0]) -> Bool
+isNone : forall {a : Type} . Maybe (a [0]) -> Bool
 isNone m = not (isSome m)

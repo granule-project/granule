@@ -3,7 +3,7 @@ data Vec : Nat → Type → Type where
    Nil  : ∀ {a : Type, n : Nat} . Vec 0 a;
    Cons : ∀ {a : Type, n : Nat} . a → Vec n a → Vec (n+1) a
 
-everyOther : ∀ a : Type, b : Type, n : Nat
+everyOther : ∀ {a : Type, b : Type, n : Nat}
           . (a → b) [n] → Vec (n) (a [0..1]) → Vec n b
 everyOther [f] Nil = Nil;
 everyOther [f] (Cons [x] (Cons [_] xs)) = Cons (f x) (everyOther [f] xs)

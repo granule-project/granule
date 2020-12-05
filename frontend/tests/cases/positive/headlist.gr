@@ -4,7 +4,7 @@ data Result a where Ok a | Failed (String [0..1])
 
 data List a where Empty; Next a (List a)
 
-head_list : ∀ a : Type . (List a) [0..1] → Result a
+head_list : ∀ {a : Type} . (List a) [0..1] → Result a
 head_list xs =
   case xs of
     [Empty]      → Failed ["Empty list!"];

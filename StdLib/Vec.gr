@@ -40,7 +40,7 @@ map [_] Nil = Nil;
 map [f] (Cons x xs) = Cons (f x) (map [f] xs)
 
 -- Safe random-access indexing from a vector
-index : forall a : Type, n m : Nat
+index : forall {a : Type, n m : Nat}
      . {m > n} => N n -> (Vec m a) [0..1] -> a
 index Z     [Cons x _]   = x;
 index (S k) [Cons _ xs'] = index k [xs']

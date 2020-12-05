@@ -27,14 +27,14 @@ push = Cons
 peek : forall {n : Nat, a : Type} . (Vec (n+1) a) [1..2] -> (a, Vec (n+1) a)
 peek [Cons x xs] = (x, Cons x xs)
 
-peek' : forall m : Ext Nat, a, n . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
+peek' : forall {m : Ext Nat, a, n} . Vec (n+1) (a [m..m+1]) -> (a, Vec (n+1) (a [m..m]))
 peek' (Cons [x] xs) = (x, Cons [x] xs)
 
 -- Patient database example
 
 data Patient = Patient (String [Public]) (String [Private])
 
-sampleCities : forall n k . N k -> (Vec (n+k) Patient) [0..1] -> Vec k (String [Public])
+sampleCities : forall {n k} . N k -> (Vec (n+k) Patient) [0..1] -> Vec k (String [Public])
 sampleCities Z [_] = Nil;
 sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities n [ps])
 
@@ -44,7 +44,7 @@ sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities
 
 -- Session types example
 
-sendVec : forall n a .
+sendVec : forall {n a} .
         (Chan (Send a End)) [n]
      -> Vec n a -> () <Session>
 sendVec [c] Nil = pure ();
@@ -53,7 +53,7 @@ sendVec [c] (Cons x xs) =
       ()  <- close c'
   in sendVec [c] xs
 
-recvVec : forall n a .
+recvVec : forall {n a} .
   N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Session>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =

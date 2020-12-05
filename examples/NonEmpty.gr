@@ -2,7 +2,7 @@ data NonEmpty a where
   Next : a → NonEmpty a → NonEmpty a;
   NonEmpty : a → NonEmpty a
 
-head : ∀ a : Type . (NonEmpty a) [0..1] → a
+head : ∀ { a : Type } . (NonEmpty a) [0..1] → a
 head [Next x _] = x;
 head [NonEmpty x] = x
 

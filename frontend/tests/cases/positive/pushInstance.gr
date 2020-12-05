@@ -2,5 +2,5 @@ import Maybe
 import Prelude
 
 -- Shows a use of push specialised to a concrete coeffect type
-fromMaybeLeftPair' : forall a , b . (a, b) [0..1] -> Maybe a -> (a, b)
+fromMaybeLeftPair' : forall {a , b} . (a, b) [0..1] -> Maybe a -> (a, b)
 fromMaybeLeftPair' z m = let (x, [y]) = push z in (fromMaybe x m, y)

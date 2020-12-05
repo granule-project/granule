@@ -17,20 +17,20 @@ data Graph a where
   Overlay : Graph a -> Graph a -> Graph a;
   Connect : Graph a -> Graph a -> Graph a
 
-vertices : forall a : Type . List a -> Graph a
+vertices : forall {a : Type} . List a -> Graph a
 vertices = foldr_list [Overlay ∘ Vertex] EmptyG
 
-edge : forall a : Type . a -> a -> Graph a
+edge : forall {a : Type} . a -> a -> Graph a
 edge x y = Connect (Vertex x) (Vertex y)
 
-mapG : forall a : Type, b : Type . (a -> b) [0..∞] -> Graph a -> Graph b
+mapG : forall {a : Type, b : Type} . (a -> b) [0..∞] -> Graph a -> Graph b
 mapG [f] g = case g of
   EmptyG -> EmptyG;
   Vertex a -> Vertex (f a);
   Overlay g1 g2 -> Overlay (mapG [f] g1) (mapG [f] g2);
   Connect g1 g2 -> Connect (mapG [f] g1) (mapG [f] g2)
 
-foldG' : forall a : Type, b : Type
+foldG' : forall {a : Type, b : Type}
       . b [0..∞]
       -> (a -> b) [0..∞]
       -> (b -> b -> b) [0..∞]
@@ -45,7 +45,7 @@ foldG' [e] [v] [o] [c] g =
     Overlay g1 g2 -> o (rec g1) (rec g2);
     Connect g1 g2 -> c (rec g1) (rec g2)
 
-foldG : forall a : Type, b : Type
+foldG : forall {a : Type, b : Type}
       . b [0..∞]
       -> (a -> b) [0..∞]
       -> (b -> b -> b) [0..∞]
@@ -59,24 +59,24 @@ foldG [e] [v] [o] [c] g =
     Overlay g1 g2 -> o (foldG [e] [v] [o] [c] g1) (foldG [e] [v] [o] [c] g2);
     Connect g1 g2 -> c (foldG [e] [v] [o] [c] g1) (foldG [e] [v] [o] [c] g2)
 
-isEmpty : forall a : Type . Graph (a [0]) -> Bool
+isEmpty : forall {a : Type} . Graph (a [0]) -> Bool
 isEmpty = foldG [True] [const False] [and'] [and']
 
 hasVertex : Int [0..Inf] -> Graph Int -> Bool
 hasVertex [x] = foldG [False] [\(x' : Int) -> x == x'] [or'] [or']
 
-toList : forall a : Type . Graph a -> List a
+toList : forall {a : Type} . Graph a -> List a
 toList = foldG [Empty] [singleton_list] [append_list] [append_list]
 
-transpose : forall a : Type . Graph a -> Graph a
+transpose : forall {a : Type} . Graph a -> Graph a
 transpose = foldG [EmptyG] [Vertex] [Overlay] [flip Connect]
 
 add : Int -> Int -> Int
 add x y = x + y
 
 --- Count number of leaves of the graph expression
-size : forall a : Type . Graph (a [0]) -> Int
+size : forall {a : Type} . Graph (a [0]) -> Int
 size = foldG [1] [const 1] [add] [add]
 
-vertexcount : forall a : Type . Graph (a [0]) -> Int
+vertexcount : forall {a : Type} . Graph (a [0]) -> Int
 vertexcount = foldG [0] [const 1] [add] [add]

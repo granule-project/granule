@@ -9,7 +9,7 @@ data Bool where
   False : Bool
 
 --- The isSome function returns True iff its argument is of the form Some _.
-isSome : ∀ a : Type . Maybe (a [0]) → Bool
+isSome : ∀ {a : Type} . Maybe (a [0]) → Bool
 isSome m =
   case m of
     (Some [x]) → True;

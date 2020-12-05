@@ -1,2 +1,2 @@
-flattenLevel : ∀ k : Level, l : Level . (Int [k]) [l] → Int [k ∨ l]
+flattenLevel : ∀ { k : Level, l : Level } . (Int [k]) [l] → Int [k ∨ l]
 flattenLevel [[x]] = [x]

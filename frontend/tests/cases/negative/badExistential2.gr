@@ -1,5 +1,5 @@
 data Dyn where
-  Dyn : forall a : Type . a -> Dyn
+  Dyn : forall {a : Type} . a -> Dyn
 
 -- Bad resolution of existential
 f : Dyn -> Int

@@ -271,7 +271,6 @@ NAryConstr :: { Pattern () }
 
 ForallSig :: { [(Id, Kind)] }
  : '{' VarSigs '}' { $2 }
- | VarSigs         { $1 }
 
 Forall :: { (((Pos, Pos), [(Id, Kind)]), [Type]) }
  : forall ForallSig '.'                          { (((getPos $1, getPos $3), $2), []) }

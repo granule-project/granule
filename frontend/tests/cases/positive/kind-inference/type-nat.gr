@@ -7,6 +7,6 @@ data N (n : Nat) where
   S : N n -> N (n+1)
 
 -- Implicit kinds inferred
-leng : forall t n. Vec n (t [0]) -> N n
+leng : forall {t n} . Vec n (t [0]) -> N n
 leng Nil = Z;
 leng (Cons [_] xs) = S (leng xs)

@@ -6,7 +6,7 @@ data Succ a where
 
 data Vec n a where
   Nil : Vec Zero a;
-  Cons : ∀ m : Type . a → Vec m a → Vec (Succ m) a
+  Cons : ∀ {m : Type} . a → Vec m a → Vec (Succ m) a
 
 test : Vec (Succ Zero) Int
 test = Cons 1 Nil

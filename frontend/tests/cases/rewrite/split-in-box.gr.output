@@ -8,7 +8,5 @@ data Vec (n : Nat) (a : Type) where
 
 take : forall {a : Type, n : Nat, k : Nat} . N k -> (Vec (n+k) a) [0..1] -> Vec k a
 take Z [vec] = ?;
-take (S Z) [Nil] = ?;
 take (S Z) [(Cons vec0 vec1)] = ?;
-take (S (S m0)) [Nil] = ?;
 take (S (S m0)) [(Cons vec0 vec1)] = ?
