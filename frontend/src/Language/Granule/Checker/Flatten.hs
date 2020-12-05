@@ -20,7 +20,14 @@ import Language.Granule.Utils
 type Injections = (Coeffect -> Coeffect, Coeffect -> Coeffect)
 
 cProduct :: Type -> Type -> Type
-cProduct x y = TyApp (TyApp (TyCon (mkId ",")) x) y
+cProduct x y = TyApp (TyApp (TyCon (mkId ",,")) x) y
+
+
+-- Compute the most general unification between two coeffect types
+-- which produces their unification, a substitution, and a pair of injections
+-- for terms of the previous types. i.e.,
+--  if `mguCoeffectTypes t1 t2` yields type `t3` and injections `(i1, i2)`
+--  then if `r1 : t1` and `r2 : t2` then `i1 r1 : t3` and `i2 t2 : t3`.
 
 mguCoeffectTypes :: (?globals :: Globals)
                  => Span -> Type -> Type -> Checker (Type, Substitution, Injections)
@@ -30,7 +37,7 @@ mguCoeffectTypes s t1 t2 = do
     Just x -> return x
     -- Cannot unify so form a product
     Nothing -> return
-      (TyApp (TyApp (TyCon (mkId "×")) t1) t2, [],
+      (TyApp (TyApp (TyCon (mkId ",,")) t1) t2, [],
                   (\x -> cProduct x (TyGrade (Just t2) 1), \x -> cProduct (TyGrade (Just t1) 1) x))
 
 -- Inner definition which does not throw its error, and which operates on just the types
@@ -68,10 +75,15 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
 mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
   debugM "HERE" (show s)
   st <- get
+
   case lookup kv1 (tyVarContext st) of
     Nothing -> throw $ UnboundVariableError s kv1
+
+    -- Cannot unify if the type variable is univrssal
     Just (k, ForallQ) ->
       throw $ UnificationFail s kv1 coeffTy2 k True
+
+    -- Can unify if the type variable is a unification var
     Just (k, _) -> do -- InstanceQ or BoundQ
       updateCoeffectType kv1 coeffTy2
       return $ Just (coeffTy2, [(kv1, SubstK coeffTy2)], (id, id))
@@ -114,6 +126,7 @@ mguCoeffectTypes' s coeffTy1 coeffTy2@(isProduct -> Just (t1, t2)) | t2 == coeff
 -- Unifying with an interval
 mguCoeffectTypes' s coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =
   return $ Just (coeffTy2, [], (\x -> TyInfix TyOpInterval x x, id))
+
 mguCoeffectTypes' s coeffTy1@(isInterval -> Just t') coeffTy2 | coeffTy2 == t' =
   return $ Just (coeffTy1, [], (id, \x -> TyInfix TyOpInterval x x))
 
@@ -125,7 +138,7 @@ mguCoeffectTypes' s (isInterval -> Just t) (isInterval -> Just t') = do
   -- This is done in a local type checking context as `mguCoeffectType` can cause unification
   coeffecTyUpper <- mguCoeffectTypes' s t t'
   case coeffecTyUpper of
-    Just (upperTy, subst, (inj1, inj2)) ->
+    Just (upperTy, subst, (inj1, inj2)) -> do
       return $ Just (TyApp (TyCon $ mkId "Interval") upperTy, subst, (inj1', inj2'))
             where
               inj1' = runIdentity . typeFoldM baseTypeFold { tfTyInfix = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj1 c1) (inj1 c2); _ -> TyInfix op c1 c2 }
@@ -189,6 +202,6 @@ flattenable t1 t2
               case flatM of
                 Just (op, subst', t) ->
                   return $ Just (\c1 c2 -> op (inj1 c1) (inj2 c2), subst', t)
-                Nothing      -> return $ Just (cProduct, subst, TyCon (mkId "×") .@ t1 .@ t2)
-            Nothing        -> return $ Just (cProduct, [], TyCon (mkId "×") .@ t1 .@ t2)
+                Nothing      -> return $ Just (cProduct, subst, TyCon (mkId ",,") .@ t1 .@ t2)
+            Nothing        -> return $ Just (cProduct, [], TyCon (mkId ",,") .@ t1 .@ t2)
 

@@ -709,23 +709,36 @@ synthKind' s overloadToNat t@(TyVar x) = do
     Just (k, _) -> return (k, [], t)
     Nothing     -> throw UnboundTypeVariable { errLoc = s, errId = x }
 
+
 -- -- KChkS_fun
+--
+--      t1 => k    t2 <= k
+--   ----------------------- Fun
+--        t1 -> t2 => k
+
 synthKind' s overloadToNat (FunTy name t1 t2) = do
   (k, subst1, t1') <- synthKind' s overloadToNat t1
-  (subst2, t2') <- checkKind s t2 k
+  (subst2   , t2') <- checkKind s t2 k
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst, FunTy name t1' t2')
 
 -- KChkS_pair
--- synthKind' s overloadToNat (TyApp (TyApp (TyCon (internalName -> ",")) t1) t2) = do
---   (k1, subst1, t1') <- synthKind' s overloadToNat t1
---   (k2, subst2, t2') <- synthKind' s overloadToNat t2
---   subst <- combineSubstitutions s subst1 subst2
---   return (TyApp (TyApp (TyCon $ mkId ",") k1) k2, subst, TyApp (TyApp (TyCon $ mkId ",") t1') t2')
+synthKind' s overloadToNat (TyApp (TyApp (TyCon (internalName -> ",,")) t1) t2) = do
+  (k1, subst1, t1') <- synthKind' s overloadToNat t1
+  (k2, subst2, t2') <- synthKind' s overloadToNat t2
+  subst <- combineSubstitutions s subst1 subst2
+  return (TyApp (TyApp (TyCon $ mkId ",,") k1) k2, subst, TyApp (TyApp (TyCon $ mkId ",,") t1') t2')
 
 -- KChkS_app
+--
+--      t1 => k1 -> k2    t2 <= k1
+--   ------------------------------ Fun
+--        t1 t2 => k
+--
 synthKind' s overloadToNat (TyApp t1 t2) = do
+  debugM "synthKind" (pretty (TyApp t1 t2))
   (funK, subst1, t1') <- synthKind' s overloadToNat t1
+  debugM "synthKind t1 kind" (show funK)
   case funK of
     (FunTy _ k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
@@ -734,6 +747,11 @@ synthKind' s overloadToNat (TyApp t1 t2) = do
     _ -> throw KindError { errLoc = s, errTy = t1, errKL = funK }
 
 -- KChkS_interval
+--
+--      t1 => k1        t2 => k2     k1 ~ k2 =  k3
+--   ----------------------------------------------- interval
+--        t1 .. t2 => Interval k3
+--
 synthKind' s overloadToNat (TyInfix TyOpInterval t1 t2) = do
   (coeffTy1, subst1, t1') <- synthKind' s overloadToNat t1
   (coeffTy2, subst2, t2') <- synthKind' s overloadToNat t2

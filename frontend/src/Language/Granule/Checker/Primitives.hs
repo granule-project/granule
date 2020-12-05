@@ -40,7 +40,7 @@ kindConstructor =
 typeConstructors :: [(Id, (Type, [Id], Bool))] -- TODO Cardinality is not a good term
 typeConstructors =
     [ (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
-    , (mkId "×",      (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ", "], False))
+    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
     , (mkId "Int",    (Type 0, [], False))
     , (mkId "Float",  (Type 0, [], False))
     , (mkId "Char",   (Type 0, [], False))

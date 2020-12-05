@@ -110,6 +110,9 @@ instance Pretty Type where
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "×" =
       "(" <> pretty t1 <> " × " <> pretty t2 <> ")"
 
+    pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == ",," =
+      "(" <> pretty t1 <> " × " <> pretty t2 <> ")"
+
     pretty (TyApp t1 t2)  =
       pretty t1 <> " " <> prettyNested t2
 

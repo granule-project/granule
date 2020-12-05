@@ -394,7 +394,8 @@ Coeffect :: { Coeffect }
   | '(' Coeffect ')'              { $2 }
   | '{' CoeffSet '}'              { TySet $2 }
   | Coeffect ':' Kind             { TySig $1 $3 }
-  | '(' Coeffect ',' Coeffect ')' { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
+  | '(' Coeffect ',' ',' Coeffect ')' { TyApp (TyApp (TyCon $ mkId ",,") $2) $5 }
+  | '(' Coeffect '×' Coeffect ')'     { TyApp (TyApp (TyCon $ mkId ",,") $2) $4 }
 
 CoeffSet :: { [Type] }
   : VAR ':' Type ',' CoeffSet  { $3 : $5 }
