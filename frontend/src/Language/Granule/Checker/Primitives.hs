@@ -115,10 +115,12 @@ coeffectResourceAlgebraOps =
 
 tyOps :: TypeOperator -> (Kind, Kind, Kind)
 tyOps = \case
-    TyOpLesser -> (kNat, kNat, (TyCon (mkId "Predicate")))
-    TyOpLesserEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
-    TyOpGreater -> (kNat, kNat, (TyCon (mkId "Predicate")))
-    TyOpGreaterEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpLesserNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpLesserEqNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpLesserEq -> (tyVar "k", tyVar "k", (TyCon (mkId "Predicate")))
+    TyOpGreaterNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
+    TyOpGreaterEq -> (tyVar "k", tyVar "k", (TyCon (mkId "Predicate")))
+    TyOpGreaterEqNat -> (kNat, kNat, (TyCon (mkId "Predicate")))
     TyOpEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
     TyOpNotEq -> (kNat, kNat, (TyCon (mkId "Predicate")))
     TyOpPlus -> (kNat, kNat, kNat)

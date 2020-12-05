@@ -66,10 +66,12 @@ deriving instance Typeable Type
 
 -- Constructors and operators are just strings
 data TypeOperator
-  = TyOpLesser
+  = TyOpLesserNat
   | TyOpLesserEq
-  | TyOpGreater
+  | TyOpLesserEqNat
+  | TyOpGreaterNat
   | TyOpGreaterEq
+  | TyOpGreaterEqNat
   | TyOpEq
   | TyOpNotEq
   | TyOpPlus

@@ -133,10 +133,12 @@ instance Pretty Type where
 
 instance Pretty TypeOperator where
   pretty = \case
-   TyOpLesser          -> "<"
+   TyOpLesserNat       -> "<"
    TyOpLesserEq        -> "≤"
-   TyOpGreater         -> ">"
+   TyOpLesserEqNat     -> ".≤"
+   TyOpGreaterNat      -> ">"
    TyOpGreaterEq       -> "≥"
+   TyOpGreaterEqNat    -> ".≥"
    TyOpEq              -> "≡"
    TyOpNotEq           -> "≠"
    TyOpPlus            -> "+"

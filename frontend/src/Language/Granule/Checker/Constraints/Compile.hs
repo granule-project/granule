@@ -42,8 +42,10 @@ compileAtType s op c1 c2 coeffTy = do
   case op of
     TyOpEq -> return $ Con (Eq s c1 c2 coeffTy)
     TyOpNotEq -> return $ Con (Neq s c1 c2 coeffTy)
-    TyOpLesser -> return $ Con (Lt s c1 c2)
-    TyOpGreater -> return $ Con (Gt s c1 c2)
-    TyOpLesserEq -> return $ Con (LtEq s c1 c2)
-    TyOpGreaterEq -> return $ Con (GtEq s c1 c2)
+    TyOpLesserNat -> return $ Con (Lt s c1 c2)
+    TyOpGreaterNat -> return $ Con (Gt s c1 c2)
+    TyOpLesserEq -> return $ Con (ApproximatedBy s c1 c2 coeffTy)
+    TyOpGreaterEq -> return $ Con (ApproximatedBy s c2 c1 coeffTy)
+    TyOpLesserEqNat -> return $ Con (LtEq s c1 c2)
+    TyOpGreaterEqNat -> return $ Con (GtEq s c1 c2)
     _ -> error $ pretty s <> ": I don't know how to compile binary operator " <> pretty op

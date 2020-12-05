@@ -350,21 +350,26 @@ TyCase :: { (Type, Type) }
   : Type '->' Type           { ($1, $3) }
 
 Constraint :: { Type }
-  : TyAtom '>' TyAtom         { TyInfix TyOpGreater $1 $3 }
-  | TyAtom '<' TyAtom         { TyInfix TyOpLesser $1 $3 }
+  : TyAtom '>' TyAtom         { TyInfix TyOpGreaterNat $1 $3 }
+  | TyAtom '<' TyAtom         { TyInfix TyOpLesserNat $1 $3 }
   | TyAtom '<=' TyAtom        { TyInfix TyOpLesserEq $1 $3 }
+  | TyAtom '.' '<=' TyAtom    { TyInfix TyOpLesserEqNat $1 $4 }
   | TyAtom '>=' TyAtom        { TyInfix TyOpGreaterEq $1 $3 }
+  | TyAtom '.' '>=' TyAtom    { TyInfix TyOpGreaterEqNat $1 $4 }
   | TyAtom '==' TyAtom        { TyInfix TyOpEq $1 $3 }
   | TyAtom '/=' TyAtom        { TyInfix TyOpNotEq $1 $3 }
+
 
 TyAtom :: { Type }
   : CONSTR                    { TyCon $ mkId $ constrString $1 }
   | '(' ',' ')'               { TyCon $ mkId "," }
   | VAR                       { TyVar (mkId $ symString $1) }
-  | INT                       { let TokenInt _ x = $1 in TyInt x }
+  | INT                       { let TokenInt _ x = $1 in TyGrade Nothing x }
+  | '.' INT                   { let TokenInt _ x = $2 in TyInt x }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
   | TyAtom ':' Kind           { TySig $1 $3 }
+
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
