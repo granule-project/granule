@@ -43,7 +43,7 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
-import Language.Granule.Checker.Effects (effectTop)
+import Language.Granule.Checker.Effects (effectTop, effectUpperBound)
 import Language.Granule.Checker.Flatten (mguCoeffectTypes, Injections)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -970,10 +970,16 @@ joinTypes' s (FunTy id t1 t2) (FunTy _ t1' t2') = do
   subst <- lift $ combineSubstitutions s subst1 subst2
   return (FunTy id t1j t2j, subst, Nothing)
 
-joinTypes' s (Diamond ef t) (Diamond ef' t') = do
-  (tj, subst1, _) <- joinTypes' s t t'
-  (ej, subst2, _) <- joinTypes' s ef ef'
-  subst <- lift $ combineSubstitutions s subst1 subst2
+joinTypes' s (Diamond ef1 t1) (Diamond ef2 t2) = do
+  (tj, subst0, _) <- joinTypes' s t1 t2
+  -- Calculate the effect type for the effects here
+  (efty1, subst1, ef1') <- lift $ synthKind s ef1
+  (efty2, subst2, ef2') <- lift $ synthKind s ef2
+  -- Compute the upper bound on the types
+  (efftj, subst3, _) <- joinTypes' s efty1 efty2
+  -- Computes the upper bound on the effects
+  ej <- lift $ effectUpperBound s efftj ef1' ef2'
+  subst <- lift $ combineManySubstitutions s [subst0, subst1, subst2, subst3]
   return (Diamond ej tj, subst, Nothing)
 
 joinTypes' s (Box c t) (Box c' t') = do

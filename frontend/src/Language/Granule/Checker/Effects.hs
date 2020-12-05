@@ -189,7 +189,7 @@ effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
             return t2'
         _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1', errTy2 = t2' }
 
-effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c = do
+effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c =
     case t1 of
         TySet efs1 ->
             case t2 of
