@@ -423,6 +423,13 @@ normalise (TyInfix TyOpTimes (TyApp (TyCon (internalName -> "Level")) n) (TyApp 
 normalise (TyInfix TyOpPlus (TyRational n) (TyRational m)) = TyRational (n + m)
 normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)
 normalise (TyInfix TyOpPlus (TyGrade k n) (TyGrade k' m)) | k == k' = TyGrade k (n + m)
+
+-- simple units
+normalise (TyInfix TyOpTimes r (TyGrade _ 1)) = r
+normalise (TyInfix TyOpTimes (TyGrade _ 1) r) = r
+normalise (TyInfix TyOpPlus r (TyGrade _ 0)) = r
+normalise (TyInfix TyOpPlus (TyGrade _ 0) r) = r
+
 normalise (TyInfix TyOpPlus (TyInt n) (TyInt m)) = TyInt (n + m)
 normalise (TyInfix TyOpTimes (TyInt n) (TyInt m)) = TyInt (n * m)
 normalise (TyInfix TyOpPlus n m) =
