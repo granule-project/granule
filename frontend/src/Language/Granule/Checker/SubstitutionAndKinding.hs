@@ -686,7 +686,9 @@ checkKind s t@(TyCon (internalName -> "Nat")) (Type 0) =
 
 -- Fall through to synthesis if checking can not be done.
 checkKind s t k = do
+  -- Synth
   (k', subst1, t') <- synthKind s t
+  -- See if we can do a join (equality+) on the synthed kind and the one coming as specification here.
   join <- joinTypes s k k'
   case join of
     Just (_, subst2, _) -> do
