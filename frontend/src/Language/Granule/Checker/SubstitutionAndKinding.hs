@@ -597,6 +597,10 @@ replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
 checkKind :: (?globals :: Globals) =>
   Span -> Type -> Kind -> Checker (Substitution, Type)
 
+-- Avoid weird "type in type" style invocations.
+checkKind s t k | t == k = do
+  throw $ KindError s t k
+
 -- KChk_funk
 checkKind s (FunTy name t1 t2) k = do
   (subst1, t1') <- checkKind s t1 k

@@ -27,19 +27,25 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 setElements :: [(Type, Type)]
 setElements = [(TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
 
-kindConstructor :: [(Id, (Type, [Id], Bool))]
-kindConstructor =
-  [ (mkId "Coeffect",  (Type 0, [], False))
-  , (mkId "Effect",    (Type 0, [], False))
-  , (mkId "Predicate", (Type 0, [], False)) ]
+-- Lists all type constructors for which there cannot exist a unification (upper bound/mgu) with another
+-- Typically these are type constructors that are not used as resource algebras
+isDistinguishedConstructor :: Id -> Bool
+isDistinguishedConstructor x = elem x distinguishedConstructors
+
+distinguishedConstructors :: [Id]
+distinguishedConstructors =
+  map mkId ["Coeffect", "Effect", "Type", "Predicate", "Int", "Float", "String", "Protocol"]
 
 -- Associates type constuctors names to their:
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
 --    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Type, [Id], Bool))] -- TODO Cardinality is not a good term
+typeConstructors :: [(Id, (Type, [Id], Bool))]
 typeConstructors =
-    [ (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
+    [ (mkId "Coeffect",  (Type 0, [], False))
+    , (mkId "Effect",    (Type 0, [], False))
+    , (mkId "Predicate", (Type 0, [], False))
+    , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
     , (mkId "Int",    (Type 0, [], False))
     , (mkId "Float",  (Type 0, [], False))
