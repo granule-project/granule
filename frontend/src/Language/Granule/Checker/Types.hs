@@ -6,6 +6,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
+-- | Type equality (and inequalities when grades are involved)
 module Language.Granule.Checker.Types where
 
 import Control.Monad.State.Strict
@@ -396,6 +397,7 @@ sessionInequality s (TyCon c) (TyCon c')
 sessionInequality s t1 t2 =
   throw TypeErrorAtLevel { errLoc = s, tyExpectedL = t1, tyActualL = t2 }
 
+-- | Is this protocol dual to the other?
 isDualSession :: (?globals :: Globals)
     => Span
        -- Explain how coeffects should be related by a solver constraint
@@ -428,8 +430,7 @@ isDualSession sp rel (TyVar v) t ind =
 isDualSession sp _ t1 t2 _ = throw
   SessionDualityError{ errLoc = sp, errTy1 = t1, errTy2 = t2 }
 
-
-
+-- | Check if two effect terms have the same effect type
 twoEqualEffectTypes :: (?globals :: Globals) => Span -> Type -> Type -> Checker (Type, Substitution)
 twoEqualEffectTypes s ef1 ef2 = do
     mefTy1 <- isEffectType s ef1
