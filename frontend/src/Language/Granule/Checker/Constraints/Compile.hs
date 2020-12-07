@@ -9,7 +9,7 @@ import Control.Monad.State.Strict
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.SubstitutionAndKinding (checkKind, synthKind)
+import Language.Granule.Checker.Kinding (checkKind, synthKind)
 
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span

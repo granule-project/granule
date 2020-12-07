@@ -11,7 +11,8 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Context
 
 import Language.Granule.Checker.Predicates (Constraint(..))
-import Language.Granule.Checker.SubstitutionAndKinding
+import Language.Granule.Checker.Kinding
+import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates (Quantifier(..))
 import Language.Granule.Checker.Types (SpecIndicator(..), equalTypesRelatedCoeffectsAndUnify)
