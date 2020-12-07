@@ -1,0 +1,2 @@
+copy : forall {a : Type} . a [2] -> (a, a)
+copy = ?
