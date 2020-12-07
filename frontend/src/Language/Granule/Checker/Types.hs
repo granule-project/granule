@@ -76,7 +76,7 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   --    * the unifier
   -> Checker (Bool, Type, Substitution)
 equalTypesRelatedCoeffectsAndUnify s rel spec t1 t2 = do
-   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 spec Types
+   (eq, unif) <- equalTypesRelatedCoeffects s rel (normaliseType t1) (normaliseType t2) spec Types
    if eq
      then do
         t2 <- substitute unif t2
