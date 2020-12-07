@@ -350,7 +350,8 @@ symGradeTimes (SUnknown um) (SUnknown un) =
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
 
--- | Minus operation on symbolic grades
+-- | Minus operation on symbolic grades (if the user writes -)
+-- | (OPTIONAL)
 symGradeMinus :: SGrade -> SGrade -> Symbolic SGrade
 symGradeMinus (SNat n1) (SNat n2) = return $ SNat $ ite (n1 .< n2) 0 (n1 - n2)
 symGradeMinus (SSet s) (SSet t) = return $ SSet $ s S.\\ t
