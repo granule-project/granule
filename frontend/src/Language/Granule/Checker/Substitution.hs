@@ -59,14 +59,6 @@ instance Substitutable Substitutors where
         t <- substitute subst t
         return $ SubstT t
 
-      SubstK k -> do
-        k <- substitute subst k
-        return $ SubstK k
-
-      SubstS sort -> do
-        sort <- substitute subst sort
-        return $ SubstS sort
-
 -- Speciale case of substituting a substition
 instance Substitutable Substitution where
   substitute subst [] = return []
@@ -89,7 +81,6 @@ instance Substitutable Type where
       varSubst v = do
         case lookup v subst of
            Just (SubstT t) -> return t
-           Just (SubstK t) -> return t
            _               -> mTyVar v
 
 instance Substitutable t => Substitutable (Maybe t) where
@@ -106,7 +97,6 @@ combineManySubstitutions s (subst:ss) = do
 removeReflexivePairs :: Substitution -> Substitution
 removeReflexivePairs [] = []
 removeReflexivePairs ((v, SubstT (TyVar v')):subst) | v == v' = removeReflexivePairs subst
-removeReflexivePairs ((v, SubstK (TyVar v')):subst) | v == v' = removeReflexivePairs subst
 removeReflexivePairs ((v, e):subst) = (v, e) : removeReflexivePairs subst
 
 -- | Combines substitutions which may fail if there are conflicting
@@ -453,8 +443,6 @@ unify x y = runMaybeT $ unify' x y
 
 instance Unifiable Substitutors where
     unify' (SubstT t) (SubstT t') = unify' t t'
-    unify' (SubstK k) (SubstK k') = unify' k k'
-    unify' _ _ = fail ""
 
 instance Unifiable Type where
     unify' t t' | t == t' = return []
@@ -539,7 +527,7 @@ updateTyVar s tyVar k = do
           -- Rewrite the predicate
 
           st <- get
-          let subst = [(tyVar, SubstK k)]
+          let subst = [(tyVar, SubstT k)]
           ps <- mapM (substitute subst) (predicateStack st)
           put st{ predicateStack = ps }
 

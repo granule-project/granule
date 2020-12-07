@@ -55,11 +55,11 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
     (_, Nothing) -> throw $ UnboundVariableError s kv2
     (Just (TyCon (internalName -> "Coeffect"), _), Just (TyCon (internalName -> "Coeffect"), InstanceQ)) -> do
       updateCoeffectType kv2 (TyVar kv1)
-      return $ Just (TyVar kv1, [(kv2, SubstK $ TyVar kv1)], (id, id))
+      return $ Just (TyVar kv1, [(kv2, SubstT $ TyVar kv1)], (id, id))
 
     (Just (TyCon (internalName -> "Coeffect"), InstanceQ), Just (TyCon (internalName -> "Coeffect"), _)) -> do
       updateCoeffectType kv1 (TyVar kv2)
-      return $ Just (TyVar kv2, [(kv1, SubstK $ TyVar kv2)], (id, id))
+      return $ Just (TyVar kv2, [(kv1, SubstT $ TyVar kv2)], (id, id))
 
     (Just (TyCon (internalName -> "Coeffect"), ForallQ), Just (TyCon (internalName -> "Coeffect"), ForallQ)) ->
       throw $ UnificationFail s kv2 (TyVar kv1) (TyCon $ mkId "Coeffect") False
@@ -86,7 +86,7 @@ mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
     -- Can unify if the type variable is a unification var
     Just (k, _) -> do -- InstanceQ or BoundQ
       updateCoeffectType kv1 coeffTy2
-      return $ Just (coeffTy2, [(kv1, SubstK coeffTy2)], (id, id))
+      return $ Just (coeffTy2, [(kv1, SubstT coeffTy2)], (id, id))
 
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
