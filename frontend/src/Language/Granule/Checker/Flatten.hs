@@ -73,7 +73,6 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
 
 -- Left-hand side is a poly variable, but Just is concrete
 mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
-  debugM "HERE" (show s)
   st <- get
 
   case lookup kv1 (tyVarContext st) of

@@ -220,9 +220,7 @@ synthKind' s overloadToNat (TyApp (TyApp (TyCon (internalName -> ",,")) t1) t2) 
 --        t1 t2 => k
 --
 synthKind' s overloadToNat (TyApp t1 t2) = do
-  debugM "synthKind" (pretty (TyApp t1 t2))
   (funK, subst1, t1') <- synthKind' s overloadToNat t1
-  debugM "synthKind t1 kind" (show funK)
   case funK of
     (FunTy _ k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
@@ -333,18 +331,11 @@ synthForOperator :: (?globals :: Globals)
   -> Type
   -> Checker (Kind, Substitution, Type)
 synthForOperator s overloadToNat op t1 t2 = do
-  debugM "synthForOperator" ("ov = " ++ show overloadToNat ++ "op = " ++ pretty op ++ " is closed = " ++ show (closedOperation op))
   if predicateOperation op || closedOperation op
     then do
-      debugM "t1" (show t1)
       (k1, subst1, t1') <- synthKind' s overloadToNat t1
-      debugM "synthForOperator" ("k1 = " ++ pretty k1)
       (k2, subst2, t2') <- synthKind' s overloadToNat t2
-      debugM "synthForOperator" ("k2 = " ++ pretty k2)
-
       (k3, substK, (inj1, inj2)) <- mguCoeffectTypes s k1 k2
-      debugM "synthForOperator" ("unif k1 k2 = " ++ pretty k3)
-
 
       maybeSubst <- if predicateOperation op
                       then predicateOperatorAtKind s op k3
@@ -539,11 +530,8 @@ mguCoeffectTypesFromCoeffects :: (?globals :: Globals)
   -> Type
   -> Checker (Type, Substitution, (Type -> Type, Type -> Type))
 mguCoeffectTypesFromCoeffects s c1 c2 = do
-  debugM "mguCoeffectTypesFromCoeffects" (show c1 <> ", " <> show c2)
   (coeffTy1, subst1, _) <- synthKind s c1
-  debugM "coeffTy1 = " (pretty coeffTy1)
   (coeffTy2, subst2, _) <- synthKind s c2
-  debugM "coeffTy2 = " (pretty coeffTy2)
   (coeffTy, subst3, res) <- mguCoeffectTypes s coeffTy1 coeffTy2
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (coeffTy, subst, res)
