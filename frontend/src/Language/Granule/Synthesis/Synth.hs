@@ -263,33 +263,67 @@ useVar (name, Discharged t grade) _ Additive{} = do
   (kind, _) <- conv $ inferCoeffectType nullSpan grade
   return (True, [(name, (Discharged t (COne kind)))], t)
 
+
+type Bindings = [(Id, (Id, Type))]
+
+{--
+Subtractive
+
+------------------------ :: lin_var
+Γ, x : A ⊢ A ⇒ x ; Γ
+
+      ∃s. s + 1 = r
+------------------------ :: gr_var
+Γ, x : [A] r ⊢ A ⇒ x ; Γ, x : [A] s
+
+Additive
+
+------------------------ :: lin_var
+Γ, x : A ⊢ A ⇒ x ; x : A
+
+------------------------ :: gr_var
+Γ, x : [A] r ⊢ A ⇒ x ; x : [A] 1
+
+--}
 varHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
+  => Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-varHelper decls left [] _ _ = none
-varHelper decls left (var@(x, a) : right) resourceScheme goalTy@(Forall _ binders constraints goalTy') =
- (varHelper decls (var:left) right resourceScheme goalTy) `try`
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+varHelper left [] _ _ = none
+varHelper left (var@(x, a) : right) resourceScheme goalTy@(Forall _ binders constraints goalTy') =
+ (varHelper (var:left) right resourceScheme goalTy) `try`
    (do
---    liftIO $ putStrLn $ "synth eq on (" <> pretty var <> ") " <> pretty t <> " and " <> pretty goalTy'
       (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
       if success then do
           (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
-          boolToSynthesiser canUse (makeVar x goalTy, gamma, subst)
+          boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
       else none)
 
+
+{--
+Subtractive
+
+x ∉ Δ
+Γ, x : A ⊢ B ⇒ t ; Δ
+------------------------ :: abs
+Γ ⊢ A → B ⇒ λx . t ; Δ
+
+Additive
+
+Γ, x : A ⊢ B ⇒ t ; Δ, x : A
+------------------------ :: abs
+Γ ⊢ A → B ⇒ λx . t ; Δ
+
+--}
 absHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
+  => Ctxt Assumption
   -> Ctxt Assumption
-  -> Ctxt Assumption
-  -> Bool
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-absHelper decls gamma omega allowLam resourceScheme goalTy@(Forall _ binders constraints (FunTy name t1 t2)) = do
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+absHelper gamma omega resourceScheme goalTy@(Forall _ binders constraints (FunTy name t1 t2)) = do
     -- Fresh var
     id <- useBinderNameOrFreshen name
 
@@ -394,7 +428,7 @@ appHelper left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binde
           -- Extend context (focussed) with x2 : B
           let (gamma', omega') = bindToContext (x2, Linear tyB) omega [] (isLAsync tyB)
           -- Synthesise new goal binding result `x2`
-          (e1, delta1, sub1) <- synthesiseInner decls True add gamma' omega' goalTy
+          (e1, delta1, sub1, bindings1) <- synthesiseInner False add gamma' omega' goalTy
           -- Make sure that `x2` appears in the result
           case lookupAndCutout x2 delta1 of
             Just (delta1',  Linear _) -> do
@@ -502,7 +536,7 @@ unboxHelper left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
           let (gamma', omega'') = bindToContext (x2, Discharged tyA grade_r) gamma omega' (isLAsync tyA)
           -- Synthesise inner
           debugM "synthDebug" $ "Inside unboxing try to synth for " ++ pretty goalTy ++ " under " ++ pretty [(x2, Discharged tyA grade_r)]
-          (e, delta, subst) <- synthesiseInner decls True sub gamma' omega'' goalTy
+          (e, delta, subst, bindings) <- synthesiseInner False sub gamma' omega'' goalTy
           ---
           case lookupAndCutout x2 delta of
             Just (delta', (Discharged _ grade_s)) -> do
@@ -536,10 +570,10 @@ unboxHelper left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
           then do
             x2 <- freshIdentifier
             -- omega1 <- ctxtSubtract omega omega'
-            let (gamma', omega') = bindToContext (x2, Discharged t' grade) gamma omega (isLAsync t')
+            let (gamma', omega'') = bindToContext (x2, Discharged t' grade) gamma omega (isLAsync t')
 
             -- Synthesise the body of a `let` unboxing
-            (e, delta, subst) <- synthesiseInner decls True add gamma' omega' goalTy
+            (e, delta, subst, bindings) <- synthesiseInner False add gamma' omega'' goalTy
 
             -- Add usage at the binder to the usage in the body
             delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
@@ -682,12 +716,12 @@ pairElimHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
 --            omega1 <- ctxtSubtract omega singleUse
             let (gamma', omega')   = bindToContext (lId, Linear t1) gamma omega (isLAsync t1)
             let (gamma'', omega'') = bindToContext (rId, Linear t2) gamma' omega' (isLAsync t2)
-            (e, delta, subst) <- synthesiseInner decls True add gamma'' omega'' goalTy
+            (e, delta, subst, bindings) <- synthesiseInner False add gamma'' omega'' goalTy
             delta' <- maybeToSynthesiser $ ctxtAdd singleUse delta
             case lookupAndCutout lId delta' of
               Just (delta', Linear _) ->
                 case lookupAndCutout rId delta' of
-                  Just (delta''', Linear _) -> return (makePairElim x lId rId goalTy t1 t2 e, delta''', subst)
+                  Just (delta''', Linear _) -> return (makePairElim x lId rId goalTy t1 t2 e, delta''', subst, bindings)
                   _ -> none
               _ -> none
           else none
@@ -941,47 +975,48 @@ synthesiseInner inDereliction resourceScheme gamma omega goalTy@(Forall _ binder
   case (isRAsync goalTy', omega) of
     (True, omega) ->
       -- Right Async : Decompose goalTy until synchronous
-      absHelper decls gamma omega allowLam resourceScheme goalTy `try` none
+      absHelper gamma omega resourceScheme goalTy `try` none
     (False, omega@(x:xs)) ->
       -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
-      unboxHelper decls [] omega gamma resourceScheme goalTy
+      unboxHelper [] omega gamma resourceScheme goalTy
       `try`
-      pairElimHelper decls [] omega gamma resourceScheme goalTy
+      pairElimHelper [] omega gamma resourceScheme goalTy
       `try`
-      sumElimHelper decls [] omega gamma resourceScheme goalTy
+      sumElimHelper [] omega gamma resourceScheme goalTy
       `try`
-      unitElimHelper decls [] omega gamma resourceScheme goalTy
+      unitElimHelper [] omega gamma resourceScheme goalTy
       `try`
-      derelictionHelper decls [] omega gamma resourceScheme goalTy
+      if inDereliction then do
+        none
+      else
+        derelictionHelper [] omega gamma resourceScheme goalTy
     (False, []) ->
       (if not (isAtomic goalTy') then
           -- Right Sync : Focus on goalTy when goalTy is not atomic
-          sumIntroHelper decls gamma resourceScheme goalTy
+          sumIntroHelper gamma resourceScheme goalTy
           `try`
-          pairIntroHelper decls gamma resourceScheme goalTy
+          pairIntroHelper gamma resourceScheme goalTy
           `try`
-          boxHelper decls gamma resourceScheme goalTy
+          boxHelper gamma resourceScheme goalTy
           `try`
-          unitIntroHelper decls gamma resourceScheme goalTy
+          unitIntroHelper gamma resourceScheme goalTy
        else none)
        -- Or can always try to do left sync:
        `try` (do
             -- Transition to synchronous (focused) search
             -- Left Sync: App rule + Init rules
-            varHelper decls [] gamma resourceScheme goalTy
+            varHelper [] gamma resourceScheme goalTy
             `try`
-            appHelper decls [] gamma resourceScheme goalTy)
+            appHelper [] gamma resourceScheme goalTy)
 
 synthesise :: (?globals :: Globals)
-           => Ctxt DataDecl      -- ADT Definitions
-           -> Bool                 -- whether a function is allowed at this point
-           -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
+           => ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
            -> Ctxt Assumption    -- (unfocused) free variables
            -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-synthesise decls allowLam resourceScheme gamma omega goalTy = do
-  result@(expr, ctxt, subst) <- synthesiseInner decls allowLam resourceScheme gamma omega goalTy
+synthesise resourceScheme gamma omega goalTy = do
+  result@(expr, ctxt, subst, bindings) <- synthesiseInner False resourceScheme gamma omega goalTy
   case resourceScheme of
     Subtractive{} -> do
       -- All linear variables should be gone
