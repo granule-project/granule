@@ -432,7 +432,7 @@ eqConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
 
 eqConstraint x y =
-  solverError $ "Kind error trying to generate equality " <> show x <> " = " <> show y
+  symGradeEq x y
 
 -- | Generate less-than-equal constraints for two symbolic coeffects
 approximatedByOrEqualConstraint :: SGrade -> SGrade -> Symbolic SBool
