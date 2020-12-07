@@ -20,7 +20,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span (Span, encompasses)
-import Language.Granule.Synthesis.Refactor (refactorEqn)
+import Language.Granule.Synthesis.Refactor (refactorEqn, refactorCaseEqn)
 
 import Language.Granule.Utils
 
@@ -74,10 +74,8 @@ holeRefactorEqnList cases eqns =
   eqns {equations = newEquations, equationsRefactored = refactored}
   where
     allUpdated = map updateEqn (equations eqns)
-    newEquations = concatMap fst allUpdated
+    newEquations = concatMap refactorCaseEqn (concatMap fst allUpdated)
     refactored = any snd allUpdated
-    -- Updates an individual equation with the relevant cases, returning a tuple
-    -- containing the new equation(s) and whether a refactoring was performed.
     updateEqn :: Equation () () -> ([Equation () ()], Bool)
     updateEqn eqn =
       let relCases = findRelevantCase eqn cases
@@ -104,18 +102,15 @@ holeRefactorExpr :: Expr () Type -> Expr () () -> Expr () ()
 holeRefactorExpr goal (Hole sp a _ _) = void goal
 holeRefactorExpr goal (App sp a rf e1 e2) =
   App sp a rf (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
-holeRefactorExpr goal (AppTy sp a rf e t) =
-  AppTy sp a rf (holeRefactorExpr goal e) t
 holeRefactorExpr goal (Binop sp a rf op e1 e2) =
   Binop sp a rf op (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (LetDiamond sp a rf pat ty e1 e2) =
   LetDiamond sp a rf pat ty (holeRefactorExpr goal e1) (holeRefactorExpr goal e2)
 holeRefactorExpr goal (Case sp a rf e cases) =
   Case sp a rf (holeRefactorExpr goal e) (map (second (holeRefactorExpr goal)) cases)
-holeRefactorExpr goal (TryCatch sp a rf e1 pat ty e2 e3) =
-  TryCatch sp a rf (holeRefactorExpr goal e1) pat ty (holeRefactorExpr goal e2) (holeRefactorExpr goal e3)
 -- TODO: for maximum expressivity with holes we should recursively refacor inside values as well (as they contain exprs)
 holeRefactorExpr goal (Val sp a rf v) = Val sp a rf (holeRefactorVal goal v)
+holeRefactorExpr goal (TryCatch{}) = error "To do: implement hole refactoring for try catch"
 
 holeRefactorVal :: Expr () Type -> Value () () -> Value () ()
 holeRefactorVal goal (Abs a p mt expr) = Abs a p mt (holeRefactorExpr goal expr)
