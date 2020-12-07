@@ -34,7 +34,7 @@ peek' (Cons [x] xs) = (x, Cons [x] xs)
 
 data Patient = Patient (String [Public]) (String [Private])
 
-sampleCities : forall {n k} . N k -> (Vec (n+k) Patient) [0..1] -> Vec k (String [Public])
+sampleCities : forall {n : Nat, k : Nat} . N k -> (Vec (n+k) Patient) [0..1] -> Vec k (String [Public])
 sampleCities Z [_] = Nil;
 sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities n [ps])
 
@@ -44,21 +44,21 @@ sampleCities (S n) [Cons (Patient [city] [name]) ps] = Cons [city] (sampleCities
 
 -- Session types example
 
-sendVec : forall {n a} .
+sendVec : forall {n : Nat, a} .
         (Chan (Send a End)) [n]
      -> Vec n a -> () <Session>
 sendVec [c] Nil = pure ();
 sendVec [c] (Cons x xs) =
-  let c'  <- send c x;
-      ()  <- close c'
+  let c'  <- gsend c x;
+      ()  <- gclose c'
   in sendVec [c] xs
 
-recvVec : forall {n a} .
+recvVec : forall {n : Nat, a} .
   N n -> (Chan (Recv a End)) [n] -> (Vec n a) <Session>
 recvVec Z [c] = pure Nil;
 recvVec (S n) [c] =
-  let (x, c') <- recv c;
-      ()      <- close c';
+  let (x, c') <- grecv c;
+      ()      <- gclose c';
       xs      <- recvVec n [c]
   in pure (Cons x xs)
 
