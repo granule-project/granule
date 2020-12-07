@@ -9,6 +9,8 @@
 {-# LANGUAGE GADTs #-}
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns -Wno-deprecations #-}
+
+-- | Core type checker
 module Language.Granule.Checker.Checker where
 
 import Control.Arrow (second)

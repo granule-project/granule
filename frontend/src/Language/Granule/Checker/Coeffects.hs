@@ -13,6 +13,7 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
+-- | Operations on coeffects
 import Language.Granule.Utils
 
 -- | Multiply an context by a coeffect

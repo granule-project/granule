@@ -1,11 +1,9 @@
 {-# LANGUAGE DeriveGeneric  #-}
 {-# LANGUAGE DataKinds #-}
 
+-- | Provides a symbolic representation of grades (coeffects, effects, indices)
+-- in order for a solver to use.
 module Language.Granule.Checker.Constraints.SymbolicGrades where
-
-{- Provides a symbolic representation of grades (coeffects, effects, indices)
-   in order for a solver to use.
--}
 
 import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Constraints.SNatX

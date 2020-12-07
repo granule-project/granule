@@ -1,8 +1,8 @@
-{- Deals with interactions between coeffect resource algebras -}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
+-- | Deals with interactions between coeffect resource algebras
 module Language.Granule.Checker.Flatten
           (mguCoeffectTypes, flattenable, Injections) where
 

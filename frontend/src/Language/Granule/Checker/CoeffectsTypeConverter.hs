@@ -24,14 +24,6 @@ justCoeffectTypes s xs = mapM convert xs >>= (return . catMaybes)
       k <- checkKind s t kcoeffect
       return $ Just (var, (t, q))) `catchError` const (return Nothing)
 
--- justCoeffectTypesVars :: (?globals::Globals)
---   => Span -> [(Id, Kind)] -> Checker (Ctxt Type)
--- justCoeffectTypesVars s env = do
---   let implicitUniversalMadeExplicit = map (\(var, k) -> (var, (k, ForallQ))) env
---   env' <- justCoeffectTypes s implicitUniversalMadeExplicit
---   return $ stripQuantifiers env'
--- Convert all universal variables to existential
-
 tyVarContextExistential :: Checker (Ctxt (Type, Quantifier))
 tyVarContextExistential = do
   st <- get

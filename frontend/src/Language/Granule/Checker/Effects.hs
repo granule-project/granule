@@ -4,6 +4,7 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
+-- | Implements effect algebras
 module Language.Granule.Checker.Effects where
 
 import Language.Granule.Checker.Monad

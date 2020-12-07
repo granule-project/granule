@@ -1,5 +1,6 @@
 {-# LANGUAGE ImplicitParams #-}
 
+-- | Simplifier for predicates (useful for error messages)
 module Language.Granule.Checker.Simplifier where
 
 import Language.Granule.Syntax.Type

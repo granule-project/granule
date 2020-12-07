@@ -1,5 +1,3 @@
--- Defines the 'Checker' monad used in the type checker
--- and various interfaces for working within this monad
 
 {-# LANGUAGE DeriveFunctor #-}
 {-# LANGUAGE FlexibleInstances #-}
@@ -11,6 +9,8 @@
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
+-- | Defines the 'Checker' monad used in the type checker
+-- | and various interfaces for working within this monad
 module Language.Granule.Checker.Monad where
 
 import Data.Maybe (mapMaybe)

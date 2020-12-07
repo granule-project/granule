@@ -3,6 +3,7 @@
 {-# LANGUAGE QuasiQuotes #-}
 {-# LANGUAGE DataKinds #-}
 
+-- | Primitive data types and type constructors
 module Language.Granule.Checker.Primitives where
 
 import Data.List.NonEmpty (NonEmpty(..))

@@ -1,3 +1,4 @@
+-- | Check if there are name clashes within namespaces
 module Language.Granule.Checker.NameClash where
 
 import Control.Monad.Except (throwError)
@@ -7,7 +8,6 @@ import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Utils
 
--- | Check if there are name clashes within namespaces
 checkNameClashes :: AST () () -> Checker ()
 checkNameClashes (AST dataDecls defs _ _ _) =
     case concat [typeConstructorErrs, dataConstructorErrs, defErrs] of

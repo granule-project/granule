@@ -3,6 +3,7 @@
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE DataKinds #-}
 
+-- | Provides helpers for compiling constraints
 module Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToConstraint) where
 
 import Control.Monad.State.Strict

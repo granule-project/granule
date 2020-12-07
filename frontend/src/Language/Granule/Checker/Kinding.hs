@@ -7,6 +7,7 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
+-- | Kind checking and inference algorithms
 module Language.Granule.Checker.Kinding where
 
 import Control.Arrow (second)
@@ -28,7 +29,8 @@ import Language.Granule.Checker.Effects (effectTop, effectUpperBound)
 import Language.Granule.Checker.Flatten (mguCoeffectTypes, Injections)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import Language.Granule.Checker.Primitives (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
+import Language.Granule.Checker.Primitives
+    (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
@@ -63,7 +65,7 @@ replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
   where
     conCase conId = let tyConId = TyCon conId in return $ fromMaybe tyConId (effectTop tyConId)
 
-
+------------------------------------------------------------
 
 -- `checkKind s gam t k` checks with `gam |- t :: k` is derivable
 -- and also returns an elaborated type term `t'` in the case that
@@ -169,6 +171,8 @@ checkKind s t k = do
       substFinal <- combineSubstitutions s subst1 subst2
       return (substFinal, t')
     Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+
+------------------------------------------------------------
 
 -- Given `synthKind gam t` it synthesis a `k` such that `gam |- t :: k` and
 -- returns a substitution and an elebaroted type `t'` along with it.

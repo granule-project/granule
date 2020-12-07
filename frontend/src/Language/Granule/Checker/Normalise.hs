@@ -1,3 +1,4 @@
+-- | Type normaliser
 module Language.Granule.Checker.Normalise where
 
 import Language.Granule.Syntax.Type

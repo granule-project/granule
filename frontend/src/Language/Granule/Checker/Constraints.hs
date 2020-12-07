@@ -8,8 +8,7 @@
 {-# LANGUAGE GADTs #-}
 
 
-{- Deals with compilation of coeffects into symbolic representations of SBV -}
-
+-- | Deals with compilation of coeffects into symbolic representations of SBV
 module Language.Granule.Checker.Constraints where
 
 --import Data.Foldable (foldrM)

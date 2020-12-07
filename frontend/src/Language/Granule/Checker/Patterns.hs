@@ -5,6 +5,7 @@
 
 {-# options_ghc -fno-warn-incomplete-uni-patterns #-}
 
+-- | Type checking patterns
 module Language.Granule.Checker.Patterns where
 
 import Control.Monad.Except (throwError)

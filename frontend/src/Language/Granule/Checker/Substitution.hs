@@ -7,6 +7,8 @@
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE FlexibleContexts #-}
 
+-- Provides the core functionality for substitutions
+
 module Language.Granule.Checker.Substitution(
   Substitutable(..),
   Unifiable(..),
