@@ -14,9 +14,9 @@ data DoorCmd : Type → Type where
   CloseDoor : DoorH Opened → DoorCmd (DoorH Closed)
 
 data DoorLang : Type → Type where
-  Return : ∀ a : Type . a → DoorLang a;
-  Action : ∀ a : Type . DoorCmd a → DoorLang a;
-  ThenWith : ∀ a : Type, b : Type . DoorLang a → (a → DoorLang b) → DoorLang b
+  Return : ∀ {a : Type} . a → DoorLang a;
+  Action : ∀ {a : Type} . DoorCmd a → DoorLang a;
+  ThenWith : ∀ {a : Type, b : Type} . DoorLang a → (a → DoorLang b) → DoorLang b
 
 doorOK : DoorH Closed → DoorLang (DoorH Opened)
 doorOK h = -- do
