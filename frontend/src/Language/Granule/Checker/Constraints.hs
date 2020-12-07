@@ -251,6 +251,8 @@ compile vars c = error $ "Internal bug: cannot compile " <> show c
 
 -- | Compile a coeffect term into its symbolic representation
 -- | (along with any additional predicates)
+-- |
+-- | `compileCoeffect r t context` compiles grade `r` of type `t`.
 compileCoeffect :: (?globals :: Globals) =>
   Coeffect -> Type -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
