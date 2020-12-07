@@ -24,12 +24,16 @@ main = do
   negative <- goldenTestsNegative
   positive <- goldenTestsPositive
   rewrite <- goldenTestsRewrite
+  synthesis <- goldenTestsSynthesis
 
   catch
-    (defaultMain $ testGroup "Golden tests" [negative, positive, rewrite])
+    (defaultMain $ testGroup "Golden tests" [negative, positive, rewrite, synthesis])
     (\(e :: ExitCode) -> do
       -- Move all of the backup files back to their original place.
       backupFiles <- findByExtension [".bak"]  "frontend/tests/cases/rewrite"
+      _ <- mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
+      -- and for synthesis
+      backupFiles <- findByExtension [".bak"]  "frontend/tests/cases/synthesis"
       _ <- mapM_ (\backup -> renameFile backup (dropExtension backup)) backupFiles
       throwIO e
     )
@@ -107,6 +111,37 @@ goldenTestsRewrite = do
       src <- readFile fp
       let ?globals = goldenGlobals {
         globalsSourceFilePath = Just fp,
+        globalsRewriteHoles = Just True,
+        globalsIncludePath = Just "StdLib" }
+      _ <- Interpreter.run (mempty { Interpreter.grKeepBackup = Just True }) src
+      return ()
+
+goldenTestsSynthesis :: IO TestTree
+goldenTestsSynthesis = do
+  let dir = "frontend/tests/cases/synthesis"
+
+  -- get example files, but discard the excluded ones
+  files <- findByExtension granuleFileExtensions dir
+
+  -- ensure we don't have spurious output files without associated tests
+  outfiles <- findByExtension [".output"] dir
+  failOnOrphanOutfiles files outfiles
+
+  return $ testGroup
+    "Golden synthesis examples"
+    (map grGolden' files)
+
+  where
+    grGolden' :: FilePath -> TestTree
+    grGolden' file =
+      goldenVsFile file file (file <> ".output") (runGr file)
+
+    runGr :: FilePath -> IO ()
+    runGr fp = do
+      src <- readFile fp
+      let ?globals = goldenGlobals {
+        globalsSourceFilePath = Just fp,
+        globalsSynthesise = Just True,
         globalsRewriteHoles = Just True,
         globalsIncludePath = Just "StdLib" }
       _ <- Interpreter.run (mempty { Interpreter.grKeepBackup = Just True }) src
