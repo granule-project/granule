@@ -320,6 +320,35 @@ synthKind' s _ (TySig t k) = do
   (subst, t') <- checkKind s t k
   return (k, subst, TySig t' k)
 
+synthKind' s overloadToNat (TyCase t branches) | length branches > 0 = do
+  -- Synthesise the kind of the guard (which must be the kind of the branches)
+  (k, subst, t') <- synthKind' s overloadToNat t
+  -- Check the patterns are kinded by the guard kind, and synth the kinds
+  -- for the branches
+  branchesInfo <-
+    forM branches (\(tyPat, tyBranch) -> do
+      (subst_i, tyPat') <- checkKind s tyPat k
+      (k_i, subst'_i, tyBranch') <- synthKind' s overloadToNat tyBranch
+      subst <- combineSubstitutions s subst_i subst'_i
+      return ((tyPat', tyBranch'), (subst, (tyBranch', k_i))))
+  -- Split up the info
+  let (branches', substsAndKinds) = unzip branchesInfo
+  let (substs, branchesAndKinds) = unzip substsAndKinds
+  substIntermediate <- combineManySubstitutions s (subst:substs)
+  -- Check that we can join all the kinds of the branches, and combine all the substitutions
+  (kind, substFinal) <- foldM (\(kJoined, subst) (branchTy, k) -> do
+        joined <- joinTypes s k kJoined
+        case joined of
+          Just (kNext, subst', _) -> do
+            subst' <- combineSubstitutions s subst subst'
+            return (kNext, subst')
+          Nothing ->
+            throw KindMismatch { errLoc = s, tyActualK = Just branchTy, kExpected = kJoined, kActual = k })
+      (snd $ head branchesAndKinds, substIntermediate)
+      (tail branchesAndKinds)
+  --
+  return (kind, substFinal, TyCase t' branches')
+
 synthKind' s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
