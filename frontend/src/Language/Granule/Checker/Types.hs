@@ -70,7 +70,7 @@ equalTypesRelatedCoeffectsAndUnify :: (?globals :: Globals)
   -> Type
   -- Right type
   -> Type
-  -- Result is a effectful, producing:
+-- Result is a effectful, producing:
   --    * a boolean of the equality
   --    * the most specialised type (after the unifier is applied)
   --    * the unifier

@@ -1,3 +1,3 @@
 Type checking failed: 
-Kind mismatch: frontend/tests/cases/negative/kind-mismatch.gr:5:1:
+Kind error: frontend/tests/cases/negative/kind-mismatch.gr:5:1:
 Type `Coeffect` does not have expected kind `Coeffect`
