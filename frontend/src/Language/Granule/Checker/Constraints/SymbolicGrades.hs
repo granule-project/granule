@@ -27,6 +27,7 @@ data SGrade =
        SNat      SInteger
      | SFloat    SFloat
      | SLevel    SInteger
+     | SSec      SBool -- Hi = True, Lo = False
      | SSet      (S.Set Type)
      | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
@@ -115,6 +116,7 @@ match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
 match (SUnknown _) (SUnknown _) = True
 match (SOOZ _) (SOOZ _) = True
+match (SSec _) (SSec _) = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -172,6 +174,8 @@ instance Mergeable SGrade where
     SUnknown (SynLeaf (Just (symbolicMerge s sb u u')))
 
   symbolicMerge s sb (SUnknown a) (SUnknown b) = SUnknown (SynMerge sb a b)
+  symbolicMerge s sb (SSec a) (SSec b) = SSec (symbolicMerge s sb a b)
+
   symbolicMerge _ _ s t = error $ cannotDo "symbolicMerge" s t
 
 symGradeLess :: SGrade -> SGrade -> Symbolic SBool
@@ -223,6 +227,7 @@ symGradeEq s t | isSProduct s || isSProduct t =
     either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
 
 symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
+symGradeEq (SSec n) (SSec n') = return $ n .== n'
 symGradeEq s t = solverError $ cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -242,6 +247,7 @@ symGradeMeet s t | isSProduct s || isSProduct t =
 symGradeMeet (SUnknown (SynLeaf (Just n))) (SUnknown (SynLeaf (Just n'))) =
   return $ SUnknown (SynLeaf (Just (n `smin` n')))
 symGradeMeet (SUnknown t) (SUnknown t') = return $ SUnknown (SynMeet t t')
+symGradeMeet (SSec a) (SSec b) = return $ SSec (a .&& b)
 symGradeMeet s t = solverError $ cannotDo "meet" s t
 
 -- | Join operation on symbolic grades
@@ -261,6 +267,7 @@ symGradeJoin s t | isSProduct s || isSProduct t =
 symGradeJoin (SUnknown (SynLeaf (Just n))) (SUnknown (SynLeaf (Just n'))) =
   return $ SUnknown (SynLeaf (Just (n `smax` n')))
 symGradeJoin (SUnknown t) (SUnknown t') = return $ SUnknown (SynJoin t t')
+symGradeJoin (SSec a) (SSec b) = return $ SSec (a .|| b)
 symGradeJoin s t = solverError $ cannotDo "join" s t
 
 -- | Plus operation on symbolic grades
@@ -291,6 +298,8 @@ symGradePlus (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
 
 symGradePlus (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynPlus um un)
+
+symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
 
 symGradePlus s t = solverError $ cannotDo "plus" s t
 
@@ -347,6 +356,8 @@ symGradeTimes (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
 
 symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)
+
+symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
 

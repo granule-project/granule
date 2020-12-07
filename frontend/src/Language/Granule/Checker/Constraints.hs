@@ -144,6 +144,9 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
   -- Floats (rationals)
     quant q name (\solverVar -> k (sTrue, SFloat solverVar))
 
+freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
+    quant q name (\solverVar -> k (sTrue, SSec solverVar))
+
 freshSolverVarScoped quant name (TyCon conName) q k =
     -- Integer based
     quant q name (\solverVar ->
@@ -184,10 +187,13 @@ instance QuantifiableScoped Integer where
   universalScoped v = forAll [v]
   existentialScoped v = forSome [v]
 
-instance QuantifiableScoped Float where
+instance QuantifiableScoped Bool where
   universalScoped v = forAll [v]
   existentialScoped v = forSome [v]
 
+instance QuantifiableScoped Float where
+  universalScoped v = forAll [v]
+  existentialScoped v = forSome [v]
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals) =>
@@ -267,6 +273,12 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
 
   return (SLevel . fromInteger . toInteger $ n, sTrue)
 
+compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
+  case internalName name of
+    "Hi" -> return (SSec sTrue, sTrue)
+    "Lo" -> return (SSec sFalse, sTrue)
+    c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
+
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
 compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (TyCon (internalName -> "Level"), t2)) vars = do
   (g, p) <- compileCoeffect (TyInt 1) t2 vars
@@ -343,6 +355,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
     (TyCon k') ->
       case internalName k' of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
+        "Sec"       -> return (SSec sTrue, sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
@@ -371,6 +384,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
     TyCon k ->
       case internalName k of
         "Level"     -> return (SLevel (literal privateRepresentation), sTrue)
+        "Sec"       -> return (SSec sFalse, sTrue)
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
@@ -450,6 +464,14 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     $ ite (l .== literal unusedRepresentation) sTrue
       $ ite (l .== literal privateRepresentation) sTrue
         $ ite (k .== literal publicRepresentation) sTrue sFalse
+
+approximatedByOrEqualConstraint (SSec a) (SSec b) =
+  -- Lo <= Lo   (False <= False)
+  -- Lo <= Hi   (False <= True)
+  -- Hi <= Lo   (True  <= False)
+  -- but not Lo <= Hi (False <= True)
+  -- This this is flipped implication
+  return (b .=> a)
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts approximatedByOrEqualConstraint (.&&) (const sTrue) s t)

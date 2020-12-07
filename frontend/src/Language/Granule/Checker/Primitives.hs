@@ -62,6 +62,10 @@ typeConstructors =
     , (mkId "Private",  (tyCon "Level", [], False))
     , (mkId "Public",   (tyCon "Level", [], False))
     , (mkId "Unused",   (tyCon "Level", [], False))
+    -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
+    , (mkId "Sec",  (kcoeffect, [], False))
+    , (mkId "Hi",    (tyCon "Sec", [], False))
+    , (mkId "Lo",    (tyCon "Sec", [], False))
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
