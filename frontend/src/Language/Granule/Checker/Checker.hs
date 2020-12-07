@@ -1123,6 +1123,7 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           -- Get this derived
           (typScheme, def) <- derivePush s ty
           debugM "derived push:" (pretty def)
+          debugM "derived push tys:" (show typScheme)
 
           -- Register the definition that has been derived
           modify (\st -> st { derivedDefinitions = ((mkId "push", ty), (typScheme, def)) : derivedDefinitions st })
@@ -1615,7 +1616,7 @@ programSynthesise ctxt vars ty patternss = do
     let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
     synRes <-
        liftIO $ Syn.synthesiseProgram
-                    [] (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
+                    (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                     ctxt' [] (Forall nullSpan [] [] ty) currentState
 
     case synRes of

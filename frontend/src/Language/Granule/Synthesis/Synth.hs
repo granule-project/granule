@@ -6,14 +6,11 @@ module Language.Granule.Synthesis.Synth where
 
 --import Data.List
 --import Control.Monad (forM_)
---import Debug.Trace
-import System.IO.Unsafe
+--import System.IO.Unsafe
 import qualified Data.Map as M
 
-import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Type
-import Language.Granule.Syntax.SecondParameter
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -30,16 +27,15 @@ import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
 import Language.Granule.Checker.Variables
 import Language.Granule.Synthesis.Builders
-import Language.Granule.Synthesis.Refactor
 import Language.Granule.Synthesis.Monad
 
 import Data.Either (rights)
 import Control.Monad.Except
-import qualified Control.Monad.State.Strict as State (get, modify)
 --import Control.Monad.Trans.List
 --import Control.Monad.Writer.Lazy
 import Control.Monad.State.Strict
 
+import qualified Control.Monad.State.Strict as State (get)
 import qualified System.Clock as Clock
 
 import Language.Granule.Utils
@@ -235,33 +231,6 @@ data AltOrDefault = Default | Alternative
 data ResourceScheme a = Additive a | Subtractive a
   deriving (Show, Eq)
 
--- Reprint Expr as a top-level declaration
-reprintAsDef :: Id -> TypeScheme -> Expr () Type -> Def () Type
-reprintAsDef id goalTy expr =
-  refactorDef $
-    Def
-      { defSpan = nullSpanNoFile,
-        defId = id,
-        defRefactored = False,
-        defEquations =
-          EquationList
-            { equationsSpan = nullSpanNoFile,
-              equationsId = id,
-              equationsRefactored = False,
-              equations =
-              [ Equation
-                { equationSpan = nullSpanNoFile,
-                  equationId = id,
-                  equationRefactored = True,
-                  equationAnnotation = getSecondParameter expr,
-                  equationPatterns = [],
-                  equationBody = expr
-                }
-              ]
-            }
-          ,
-      defTypeScheme = goalTy
-      }
 
 bindToContext :: (Id, Assumption) -> Ctxt Assumption -> Ctxt Assumption -> Bool -> (Ctxt Assumption, Ctxt Assumption)
 bindToContext var gamma omega True = (gamma, omega ++ [var])
@@ -333,33 +302,47 @@ absHelper decls gamma omega allowLam resourceScheme goalTy@(Forall _ binders con
 
     -- Synthesis body
     debugM "synthDebug" $ "Lambda-binding " ++ pretty [(id, Linear t1)]
-    (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
+    (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
 
-    -- Check resource use at the end
-    case (resourceScheme, lookupAndCutout id delta) of
-      (Additive{}, Just (delta', Linear _)) ->
+    let (absBuilder, bindings') =
+          case lookupAndCutout id bindings of
+            Just (bs, (boundVar, boxTy)) -> (makeAbsUnbox boxTy boundVar, bs)
+            Nothing -> (makeAbs id, bindings)
+      in
+      -- Check resource use at the end
+      case (resourceScheme, lookupAndCutout id delta) of
+        (Additive{}, Just (delta', Linear _)) -> do
         -- `id` was used
-        return (makeAbs id e goalTy, delta', subst)
-      (Subtractive{}, Nothing) ->
+          return (absBuilder e goalTy, delta', subst, bindings')
+        (Subtractive{}, Nothing) -> do
         -- `id` was used
-        return (makeAbs id e goalTy, delta, subst)
-      _ ->
+          return (absBuilder e goalTy, delta, subst, bindings')
+        _ -> do
         -- `id` was not used!
-        none
-absHelper _ _ _ _ _ _ = none
+          none
+absHelper _ _ _ _ = none
 
 
 appHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
+  => Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-appHelper decls left [] _ _ = none
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+appHelper left [] _ _ = none
 
-appHelper decls left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ binders constraints _ ) =
-  (appHelper decls (var : left) right sub goalTy) `try`
+{-
+Subtractive
+
+x2 ∉ Δ1
+Γ, x2 : B ⊢ C ⇒ t1 ; Δ1
+Δ1 ⊢ A ⇒ t2 ; Δ2
+------------------------ :: app
+Γ, x1 : A → B ⊢ C ⇒ [(x1 t2) / x2] t1 ; Δ2
+
+-}
+appHelper left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ binders constraints _ ) =
+  (appHelper (var : left) right sub goalTy) `try`
   (case getAssumptionType a of
     (FunTy _ t1 t2) -> do
       debugM "synthDebug" ("Trying to use a function " ++ pretty var ++ " to get goal " ++ pretty goalTy)
@@ -372,20 +355,35 @@ appHelper decls left (var@(x, a) : right) (sub@Subtractive{}) goalTy@(Forall _ b
           let (gamma', omega'') = bindToContext (id, Linear t2) omega' [] (isLAsync t2)
 
           debugM "synthDebug" ("Inside app, try to synth the goal " ++ pretty goalTy ++ " under context of " ++ pretty [(id, Linear t2)])
-          (e1, delta1, sub1) <- synthesiseInner decls True sub gamma' omega'' goalTy
+          (e1, delta1, sub1, bindings1) <- synthesiseInner False sub gamma' omega'' goalTy
           case lookup id delta1 of
             Nothing -> do
               -- Check that `id` was used by `e1` (and thus is not in `delta1`)
               debugM "synthDebug" ("Inside app, try to synth the argument at type " ++ pretty t1)
-              (e2, delta2, sub2) <- synthesiseInner decls True sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
+              (e2, delta2, sub2, bindings2) <- synthesiseInner False sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
               subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
-              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst)
+              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst, bindings1 ++ bindings2)
             _ -> none
         else none
     _ -> none)
+{-
+Additive
 
-appHelper decls left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binders constraints _ ) =
-  (appHelper decls (var : left) right add goalTy) `try`
+Γ, x2 : B ⊢ C ⇒ t1 ; Δ1, x2 : B
+Γ ⊢ A ⇒ t2 ; Δ2
+------------------------ :: app
+Γ, x1 : A → B ⊢ C ⇒ [(x1 t2) / x2] t1 ; (Δ1 + Δ2), x1: A → B
+
+Additive (Pruning)
+
+Γ, x2 : B ⊢ C ⇒ t1 ; Δ1, x2 : B
+Γ - Δ1 ⊢ A ⇒ t2 ; Δ2
+------------------------ :: app
+Γ, x1 : A → B ⊢ C ⇒ [(x1 t2) / x2] t1 ; (Δ1 + Δ2), x1: A → B
+
+-}
+appHelper left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binders constraints _ ) =
+  (appHelper (var : left) right add goalTy) `try`
   (case getAssumptionType a of
     (FunTy _ tyA tyB) -> do
       let omega = left ++ right
@@ -408,76 +406,90 @@ appHelper decls left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _
                   Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
 
               -- Synthesise the argument
-              (e2, delta2, sub2) <- synthesiseInner decls True add gamma2 [] (Forall nullSpanNoFile binders constraints tyA)
+              (e2, delta2, sub2, bindings2) <- synthesiseInner False add gamma2 [] (Forall nullSpanNoFile binders constraints tyA)
 
               -- Add the results
               deltaOut <- maybeToSynthesiser $ ctxtAdd useContextOut delta1'
               deltaOut' <- maybeToSynthesiser $ ctxtAdd deltaOut delta2
 
               subst <- conv $ combineSubstitutions nullSpan sub1 sub2
-              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1, deltaOut', subst)
+              return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy tyA) x2 e1, deltaOut', subst, bindings1 ++ bindings2)
             _ -> none
         else none
     _ -> none)
 
+{-
+Subtractive
+
+Γ ⊢ A ⇒ t ; Δ
+------------------------ :: box
+Γ ⊢ [] r A ⇒ t ; Γ - r * (G - Δ)
+
+Additive
+
+Γ ⊢ A ⇒ t ; Δ
+---------------------------- :: box
+Γ ⊢ [] r A ⇒ [t] ; r * Δ
+
+-}
 boxHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
+  => Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-boxHelper decls gamma resourceScheme goalTy =
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+boxHelper gamma resourceScheme goalTy =
   case goalTy of
     (Forall _ binders constraints (Box g t)) -> do
       case resourceScheme of
         Additive{} ->
           do
-            (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
+            (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
             delta' <- ctxtMultByCoeffect g delta
-            return (makeBox goalTy e, delta', subst)
+            return (makeBox goalTy e, delta', subst, bindings)
         Subtractive Default ->
           do
-            (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
+            (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
             used <- ctxtSubtract gamma delta
             -- Compute what was used to synth e
             delta' <- ctxtMultByCoeffect g used
             delta'' <- ctxtSubtract gamma delta'
-            return (makeBox goalTy e, delta'', subst)
+            return (makeBox goalTy e, delta'', subst, bindings)
 
         Subtractive Alternative -> do
           debugM "synthDebug" $ "div for " <> pretty goalTy
           gamma' <- ctxtDivByCoeffect g gamma
           debugM "synthDebug" $ "gamma = " <> pretty gamma
           debugM "synthDebug" $ "gamma' = " <> pretty gamma'
-          (e, delta, subst) <- synthesiseInner decls True resourceScheme gamma' [] (Forall nullSpanNoFile binders constraints t)
+          (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma' [] (Forall nullSpanNoFile binders constraints t)
           delta' <- ctxtMultByCoeffect g delta
           res <- solve
           case res of
             True -> do
-              return (makeBox goalTy e, delta', subst)
+              return (makeBox goalTy e, delta', subst, bindings)
             False -> none
     _ -> none
 
 
 unboxHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
+  => Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-unboxHelper decls left [] _ _ _ = none
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+unboxHelper left [] _ _ _ = none
 
 {-
+Subtractive
+0 <= s
+Γ, x2 : [A] r ⊢ B ⇒ e ; Δ, x2 : [A] s
+-------------------------------------------- :: unbox
+Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in e; Δ
 
- G, x2 : [A]r |- B =>- e : Delta, x2 : [A]s   0 <= s
--------------------------------------------------------
-  G, x1 : []r A |- B =>- let [x2] = x1 in e; Delta
 -}
 
-unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
-  (unboxHelper decls (var : left) right gamma sub goalTy) `try` do
+unboxHelper left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
+  (unboxHelper (var : left) right gamma sub goalTy) `try` do
     (case getAssumptionType a of
       tyBoxA@(Box grade_r tyA) -> do
         debugM "synthDebug" $ "Trying to unbox " ++ pretty tyBoxA
@@ -499,14 +511,23 @@ unboxHelper decls left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) grade_s kind)
               res <- solve
               -- If we succeed, create the let binding
-              boolToSynthesiser res (makeUnbox x2 x1 goalTy tyBoxA tyA e, delta', subst)
+              boolToSynthesiser res (e, delta', subst, (x1, (x2, Box grade_r tyA)):bindings)
 
             _ -> none
         else none
       _ -> none)
 
-unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
-  (unboxHelper decls (var : left) right gamma add goalTy) `try`
+{-
+Additive
+
+s <= r
+Γ, x2 : [A] r ⊢ B ⇒ t ; D, x2 : [A] s
+--------------------------------------------------------- :: unbox
+Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in t ; Δ, x1 : [] r A
+
+-}
+unboxHelper left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
+  (unboxHelper (var : left) right gamma add goalTy) `try`
    (case a of
      (Linear (Box grade t')) -> do
        let omega = (left ++ right)
@@ -532,7 +553,7 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                 res <- solve
                 case res of
                   True -> do
-                    return (makeUnbox x2 x goalTy t t' e,  delta'', subst)
+                    return (e,  delta'', subst, (x, (x2, Box grade t')):bindings)
                   False -> do
                     none
               _ -> do
@@ -541,22 +562,83 @@ unboxHelper decls left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                 res <- solve
                 case res of
                   True ->
-                    return (makeUnbox x2 x goalTy t t' e,  delta', subst)
+                    return (e,  delta', subst, (x, (x2, Box grade t')):bindings)
                   False -> none
           else none
      _ -> none)
 
+{-
+Subtractive
+
+Γ ⊢ A ⇒ t1 ; Δ1
+Δ1 ⊢ B ⇒ t2 ; Δ2
+------------------------ :: pair_intro
+Γ ⊢ A * B ⇒ (t1, t2) ; Δ2
+
+Additive
+
+Γ ⊢ A ⇒ t1 ; Δ1
+Γ ⊢ B ⇒ t2 ; Δ2
+------------------------------ :: pair_intro
+Γ ⊢ A ⊗ B ⇒ (t1, t2) ; Δ1 + Δ2
+
+Additive Pruning
+
+Γ |- A ⇒ t1 ; Δ1
+Γ - Δ1 |- B ⇒ t2 ; Δ2
+------------------------------- :: pair_intro
+Γ |- A ⊗ B ⇒ (t1, t2) ; Δ1 + Δ2
+
+-}
+pairIntroHelper :: (?globals :: Globals)
+  => Ctxt Assumption
+  -> ResourceScheme AltOrDefault
+  -> TypeScheme
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+pairIntroHelper gamma (sub@Subtractive{}) goalTy =
+  case goalTy of
+    (Forall _ binders constraints (ProdTy t1 t2)) -> do
+      (e1, delta1, subst1, bindings1) <- synthesiseInner False sub gamma [] (Forall nullSpanNoFile binders constraints t1)
+      (e2, delta2, subst2, bindings2) <- synthesiseInner False sub delta1 [] (Forall nullSpanNoFile binders constraints t2)
+      subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
+      return (makePair t1 t2 e1 e2, delta2, subst, bindings1 ++ bindings2)
+    _ -> none
+pairIntroHelper gamma (add@(Additive mode)) goalTy =
+  case goalTy of
+    (Forall _ binders constraints (ProdTy t1 t2)) -> do
+      (e1, delta1, subst1, bindings1) <- synthesiseInner False add gamma [] (Forall nullSpanNoFile binders constraints t1)
+
+      gamma' <- case mode of
+                  Default     -> return gamma              -- no-prunes
+                  Alternative -> ctxtSubtract gamma delta1 -- pruning
+
+      (e2, delta2, subst2, bindings2) <- synthesiseInner False add gamma' [] (Forall nullSpanNoFile binders constraints t2)
+      delta3 <- maybeToSynthesiser $ ctxtAdd delta1 delta2
+      subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
+      return (makePair t1 t2 e1 e2, delta3, subst, bindings1 ++ bindings2)
+    _ -> none
+
+
 pairElimHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
+  => Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-pairElimHelper decls left [] _ _ _ = none
-pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
-  (pairElimHelper decls (var:left) right gamma sub goalTy) `try`
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+pairElimHelper left [] _ _ _ = none
+{-
+Subtractive
+
+x1 ∉ Δ
+x2 ∉ Δ
+Γ, x1 : A, x2 : B ⊢ C ⇒ t2 ; Δ
+------------------------------------------------ :: pair_elim
+Γ, x3 : A ⊗ B ⊢ C ⇒ let x1, x2 = x3 in t2 ; Δ
+
+-}
+pairElimHelper left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
+  (pairElimHelper (var:left) right gamma sub goalTy) `try`
    (case a of
       (Linear (ProdTy t1 t2)) -> do
         debugM "synthDebug" $ "Trying to eliminate product type " ++ pretty a
@@ -571,16 +653,24 @@ pairElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
             let (gamma'', omega''') = bindToContext (rId, Linear t2) gamma' omega'' (isLAsync t2)
 
             debugM "synthDebug" $ "Synthesiser inside product elim for goal " ++ pretty goalTy
-            (e, delta, subst) <- synthesiseInner decls True sub gamma'' omega''' goalTy
+            (e, delta, subst, bindings) <- synthesiseInner False sub gamma'' omega''' goalTy
             case (lookup lId delta, lookup rId delta) of
               -- both `lId` and `rId` were used in `e`
-              (Nothing, Nothing) -> return (makePairElim x lId rId goalTy t1 t2 e, delta, subst)
+              (Nothing, Nothing) -> return (makePairElim x lId rId goalTy t1 t2 e, delta, subst, bindings)
               _ -> none
           else none
       _ -> none)
 
-pairElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
-  (pairElimHelper decls (var:left) right gamma add goalTy) `try`
+{-
+Additive
+
+Γ, x1 : A, x2 : B ⊢ C ⇒ t2 ; Δ, x1 : A, x2 : B
+------------------------------------------------------------ :: pair_elim
+Γ, x3 : A ⊗ B ⊢ C ⇒ let x1, x2 = x3 in t2 ; Δ, x3 : A ⊗ B
+
+-}
+pairElimHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
+  (pairElimHelper (var:left) right gamma add goalTy) `try`
     (case a of
       (Linear (ProdTy t1 t2)) -> do
         let omega = left ++ right
@@ -605,33 +695,32 @@ pairElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy 
 
 
 derelictionHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
+  => Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-derelictionHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
-  (derelictionHelper decls (var:left) right gamma add goalTy) `try`
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+derelictionHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
+  (derelictionHelper (var:left) right gamma add goalTy) `try`
   (case a of
      Discharged ty g -> do
-       let omega = left ++ right
+       let omega = (var:left) ++ right
        (canUse, singleUse, _) <- useVar var omega add
        if canUse
          then do
            y <- freshIdentifier
            let (gamma', omega') = bindToContext (y, Linear ty) gamma omega (isLAsync ty)
-           (e, delta, subst) <- synthesiseInner decls True add gamma' omega' goalTy
+           (e, delta, subst, bindings) <- synthesiseInner True add gamma' omega' goalTy
            case lookupAndCutout y delta of
              Just (delta', Linear _) -> do
                delta'' <- maybeToSynthesiser $ ctxtAdd singleUse delta'
-               return (Language.Granule.Syntax.Expr.subst (makeVar x goalTy) y e, delta'', subst)
+               return (Language.Granule.Syntax.Expr.subst (makeVar x goalTy) y e, delta'', subst, bindings)
              _ -> none
          else none
      _ -> none)
-derelictionHelper decls left (var@(x, a):right) gamma (sub@(Subtractive mode)) goalTy =
-  (derelictionHelper decls (var:left) right gamma sub goalTy) `try`
+derelictionHelper left (var@(x, a):right) gamma (sub@(Subtractive mode)) goalTy =
+  (derelictionHelper (var:left) right gamma sub goalTy) `try`
   (case a of
      Discharged ty g -> do
        let omega = left ++ right
@@ -640,117 +729,152 @@ derelictionHelper decls left (var@(x, a):right) gamma (sub@(Subtractive mode)) g
          then do
            y <- freshIdentifier
            let (gamma', omega'') = bindToContext (y, Linear ty) gamma omega' (isLAsync ty)
-           (e, delta, subst) <- synthesiseInner decls True sub gamma' omega'' goalTy
+           (e, delta, subst, bindings) <- synthesiseInner True sub gamma' omega'' goalTy
            case lookup y delta of
              Nothing -> do
-               return (Language.Granule.Syntax.Expr.subst (makeVar x goalTy) y e, delta, subst)
+               return (Language.Granule.Syntax.Expr.subst (makeVar x goalTy) y e, delta, subst, bindings)
              _ -> none
          else none
      _ -> none)
-derelictionHelper _ _ _ _ _ _ = none
+derelictionHelper _ _ _ _ _ = none
 
 
+{-
+Subtractive
 
+--------------- :: unit_intro
+Γ ⊢ 1 ⇒ () ; Γ
+
+
+Additive
+
+--------------- :: unit_intro
+Γ ⊢ 1 ⇒ () ; ∅
+
+-}
 unitIntroHelper ::
-     Ctxt DataDecl
-  -> Ctxt Assumption
+     Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-unitIntroHelper decls gamma resourceScheme goalTy =
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+unitIntroHelper gamma resourceScheme goalTy =
   case goalTy of
     (Forall _ binders constraints (TyCon (internalName -> "()"))) -> do
       case resourceScheme of
-        Additive{} -> return (makeUnitIntro, [], [])
-        Subtractive{} -> return (makeUnitIntro, gamma, [])
+        Additive{} -> return (makeUnitIntro, [], [], [])
+        Subtractive{} -> return (makeUnitIntro, gamma, [], [])
     _ -> none
 
-pairIntroHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
+
+
+unitElimHelper :: (?globals :: Globals)
+  => Ctxt Assumption
+  -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-pairIntroHelper decls gamma (sub@Subtractive{}) goalTy =
-  case goalTy of
-    (Forall _ binders constraints (ProdTy t1 t2)) -> do
-      (e1, delta1, subst1) <- synthesiseInner decls True sub gamma [] (Forall nullSpanNoFile binders constraints t1)
-      (e2, delta2, subst2) <- synthesiseInner decls True sub delta1 [] (Forall nullSpanNoFile binders constraints t2)
-      subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
-      return (makePair t1 t2 e1 e2, delta2, subst)
-    _ -> none
-pairIntroHelper decls gamma (add@(Additive mode)) goalTy =
-  case goalTy of
-    (Forall _ binders constraints (ProdTy t1 t2)) -> do
-      (e1, delta1, subst1) <- synthesiseInner decls True add gamma [] (Forall nullSpanNoFile binders constraints t1)
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+unitElimHelper left [] _ _ _ = none
+{-
+Subtractive
 
-      gamma' <- case mode of
-                  Default     -> return gamma              -- no-prunes
-                  Alternative -> ctxtSubtract gamma delta1 -- pruning
+Γ ⊢ C ⇒ t ; Δ
+---------------------------------- :: unit_elim
+Γ, x : 1 ⊢ C ⇒ let () = x in t ; Δ
 
-      (e2, delta2, subst2) <- synthesiseInner decls True add gamma' [] (Forall nullSpanNoFile binders constraints t2)
-      delta3 <- maybeToSynthesiser $ ctxtAdd delta1 delta2
-      subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
-      return (makePair t1 t2 e1 e2, delta3, subst)
-    _ -> none
+-}
+unitElimHelper left (var@(x,a):right) gamma (sub@Subtractive{}) goalTy = do
+  (unitElimHelper (var:left) right gamma sub goalTy) `try`
+    case (getAssumptionType a) of
+      (TyCon (internalName -> "()")) -> do
+        (e, delta, subst, bindings) <- synthesiseInner False sub gamma (left ++ right) goalTy
+        return (makeUnitElim x e goalTy, delta, subst, bindings)
+      _ -> none
+{-
+Additive
+
+Γ ⊢ C ⇒ t ; D
+------------------------------------------ :: unit_elim
+Γ, x : 1 ⊢ C ⇒ let () = x in t ; Δ, x : 1
+
+-}
+unitElimHelper left (var@(x,a):right) gamma (add@Additive{}) goalTy =
+  (unitElimHelper (var:left) right gamma add goalTy) `try`
+    case (getAssumptionType a) of
+      (TyCon (internalName -> "()")) -> do
+        (e, delta, subst, bindings) <- synthesiseInner False add gamma (left ++ right) goalTy
+        return (makeUnitElim x e goalTy, (var:delta), subst, bindings)
+      _ -> none
 
 
+{-
+Subtractive
+
+Γ ⊢ A ⇒ t ; D
+------------------------ :: sum_intro_left
+Γ ⊢ A ⊕ B ⇒ inl t ; Δ
+
+
+Γ ⊢ B ⇒ t ; D
+------------------------ :: sum_intro_right
+Γ ⊢ A ⊕ B ⇒ inr t ; Δ
+
+
+Additive
+
+Γ ⊢ A ⇒ t ; Δ
+------------------------ :: sum_intro_left
+Γ ⊢ A ⊕ B ⇒ inl t ; Δ
+
+
+Γ ⊢ B ⇒ t ; Δ
+------------------------ :: sum_intro_right
+Γ ⊢ A ⊕ B ⇒ inr t ; Δ
+
+-}
 sumIntroHelper :: (?globals :: Globals)
-  => Ctxt DataDecl -> Ctxt Assumption -> ResourceScheme AltOrDefault -> TypeScheme -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-sumIntroHelper decls gamma resourceScheme goalTy =
+  => Ctxt Assumption
+  -> ResourceScheme AltOrDefault
+  -> TypeScheme
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+sumIntroHelper gamma resourceScheme goalTy =
   case goalTy of
     (Forall _ binders constraints (SumTy t1 t2)) -> do
       try
         (do
-            (e1, delta1, subst1) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t1)
-            return (makeEitherLeft t1 t2 e1, delta1, subst1)
+            (e1, delta1, subst1, bindings1) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t1)
+            return (makeEitherLeft t1 t2 e1, delta1, subst1, bindings1)
 
         )
         (do
-            (e2, delta2, subst2) <- synthesiseInner decls True resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t2)
-            return (makeEitherRight t1 t2 e2, delta2, subst2)
+            (e2, delta2, subst2, bindings2) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t2)
+            return (makeEitherRight t1 t2 e2, delta2, subst2, bindings2)
 
         )
     _ -> none
 
 
-unitElimHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
-  -> Ctxt Assumption
-  -> Ctxt Assumption
-  -> ResourceScheme AltOrDefault
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-unitElimHelper decls left [] _ _ _ = none
-unitElimHelper decls left (var@(x,a):right) gamma (sub@Subtractive{}) goalTy = do
-  (unitElimHelper decls (var:left) right gamma sub goalTy) `try`
-    case (getAssumptionType a) of
-      (TyCon (internalName -> "()")) -> do
-        (e, delta, subst) <- synthesiseInner decls True sub gamma (left ++ right) goalTy
-        return (makeUnitElim x e goalTy, delta, subst)
-      _ -> none
-
-unitElimHelper decls left (var@(x,a):right) gamma (add@Additive{}) goalTy =
-  (unitElimHelper decls (var:left) right gamma add goalTy) `try`
-    case (getAssumptionType a) of
-      (TyCon (internalName -> "()")) -> do
-        (e, delta, subst) <- synthesiseInner decls True add gamma (left ++ right) goalTy
-        return (makeUnitElim x e goalTy, (var:delta), subst)
-      _ -> none
-
-
 sumElimHelper :: (?globals :: Globals)
-  => Ctxt DataDecl
-  -> Ctxt Assumption
+  => Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-sumElimHelper decls left [] _ _ _ = none
-sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
-  (sumElimHelper decls (var:left) right gamma sub goalTy) `try`
+  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+sumElimHelper left [] _ _ _ = none
+{-
+Subtractive
+
+x2 ∉ Δ1
+x3 ∉ Δ2
+Γ, x2 : A ⊢ C ⇒ t1 ; Δ1
+Γ, x3 : B ⊢ C ⇒ t2 ; Δ2
+-------------------------------------------------------------------- :: sum_elim
+Γ, x1 : A ⊕ B ⊢ C ⇒ case x1 of inl x2 → t1 | inr x3 → t2 ; Δ1 ⊓ Δ2
+
+-}
+sumElimHelper left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
+  (sumElimHelper (var:left) right gamma sub goalTy) `try`
   let omega = left ++ right in do
   (canUse, omega', t) <- useVar var omega sub
   case (canUse, t) of
@@ -759,51 +883,56 @@ sumElimHelper decls left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
       r <- freshIdentifier
       let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega' (isLAsync t1)
       let (gamma'', omega''') = bindToContext (r, Linear t2) gamma omega' (isLAsync t2)
-      (e1, delta1, subst1) <- synthesiseInner decls True sub gamma' omega'' goalTy
-      (e2, delta2, subst2) <- synthesiseInner decls True sub gamma'' omega''' goalTy
+      (e1, delta1, subst1, bindings1) <- synthesiseInner False sub gamma' omega'' goalTy
+      (e2, delta2, subst2, bindings2) <- synthesiseInner False sub gamma'' omega''' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookup l delta1, lookup r delta2) of
           (Nothing, Nothing) -> do
             -- Both `l` and `r` were used in `delta1` and `delta2` respectively
             delta3 <- ctxtMerge CMeet delta1 delta2
-            return (makeCase t1 t2 x l r e1 e2, delta3, subst)
+            return (makeCase t1 t2 x l r e1 e2, delta3, subst, bindings1 ++ bindings2)
           _ -> none
     _ -> none
+{-
+Additive
 
-sumElimHelper decls left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
-  (sumElimHelper decls (var:left) right gamma add goalTy) `try`
-  let omega = (var:left) ++ right in do
+G, x2 : A ⊢ C ⇒ t1 ; Δ1, x2 : A
+G, x3 : B ⊢ C ⇒ t2 ; Δ2, x3 : B
+----------------------------------------------------------------------------------- :: sum_elim
+G, x1 : A ⊕ B ⊢ C ⇒ case x1 of inl x2 → t1 | inr x3 → t2 ; (Δ1 ⊔ Δ2), x1 : A ⊕ B
+-}
+sumElimHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
+  (sumElimHelper (var:left) right gamma add goalTy) `try`
+  let omega = left ++ right in do
   (canUse, omega', t) <- useVar var omega add
   case (canUse, a) of
     (True, Linear (SumTy t1 t2)) -> do
       l <- freshIdentifier
       r <- freshIdentifier
-      -- omega1 <- ctxtSubtract omega omega'
-      let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega' (isLAsync t1)
-      let (gamma'', omega''') = bindToContext (r, Linear t2) gamma omega' (isLAsync t2)
-      (e1, delta1, subst1) <- synthesiseInner decls True add gamma' omega'' goalTy
-      (e2, delta2, subst2) <- synthesiseInner decls True add gamma'' omega''' goalTy
+      --omega1 <- ctxtSubtract omega omega'
+      let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega (isLAsync t1)
+      let (gamma'', omega''') = bindToContext (r, Linear t2) gamma omega (isLAsync t2)
+      (e1, delta1, subst1, bindings1) <- synthesiseInner False add gamma' omega'' goalTy
+      (e2, delta2, subst2, bindings2) <- synthesiseInner False add gamma'' omega''' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) -> do
             delta3 <- ctxtMerge CJoin delta1' delta2'
             delta3' <- maybeToSynthesiser $ ctxtAdd omega' delta3
-            return (makeCase t1 t2 x l r e1 e2, delta3', subst)
+            return (makeCase t1 t2 x l r e1 e2, delta3', subst, bindings1 ++ bindings2)
           _ -> none
     _ -> none
 
 
 
 synthesiseInner :: (?globals :: Globals)
-           => Ctxt DataDecl      -- ADT Definitions
-           -> Bool                 -- whether a function is allowed at this point
+           => Bool               -- Does this call immediately follow a dereliction?
            -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
            -> Ctxt Assumption    -- (unfocused) free variables
            -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
-           -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-
-synthesiseInner decls allowLam resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') = do
+           -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
+synthesiseInner inDereliction resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') = do
   debugM "synthDebug" $ "Synth inner with gamma = " ++ pretty gamma ++ ", and omega = "
                       ++ pretty omega ++ ", for goal = " ++ pretty goalTy
                       ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
@@ -865,7 +994,7 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                         conv $ addConstraint (ApproximatedBy nullSpanNoFile (CZero kind) grade kind)
                         solve) ctxt
       if and consumed
-        then return result
+        then return (expr, ctxt, subst)
         else none
 
     -- All linear variables should have been used
@@ -889,22 +1018,21 @@ synthesise decls allowLam resourceScheme gamma omega goalTy = do
                             solve
                           _ -> return False) (gamma ++ omega)
       if and consumed
-        then return result
+        then return (expr, ctxt, subst)
         else none
 
 -- Run from the checker
 synthesiseProgram :: (?globals :: Globals)
-           => Ctxt DataDecl      -- ADT Definitions
-           -> ResourceScheme AltOrDefault       -- whether the synthesis is in additive mode or not
+           => ResourceScheme AltOrDefault       -- whether the synthesis is in additive mode or not
            -> Ctxt Assumption    -- (unfocused) free variables
            -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
            -> CheckerState
            -> IO [(Expr () Type, Ctxt Assumption, Substitution)]
-synthesiseProgram decls resourceScheme gamma omega goalTy checkerState = do
+synthesiseProgram resourceScheme gamma omega goalTy checkerState = do
   start <- liftIO $ Clock.getTime Clock.Monotonic
   -- %%
-  let synRes = synthesise decls True resourceScheme gamma omega goalTy
+  let synRes = synthesise resourceScheme gamma omega goalTy
   (synthResults, aggregate) <- (runStateT (runSynthesiser synRes checkerState) mempty)
   let results = rights (map fst synthResults)
   -- Force eval of first result (if it exists) to avoid any laziness when benchmarking
@@ -999,10 +1127,10 @@ sizeOfCoeffect _ = 0
 --------------------------------
 -- Testing code
 
-topLevel :: (?globals :: Globals) => TypeScheme -> ResourceScheme AltOrDefault -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-topLevel ts@(Forall _ binders constraints ty) resourceScheme = do
-  conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders})
-  synthesise [] True resourceScheme [] [] ts
+--topLevel :: (?globals :: Globals) => TypeScheme -> ResourceScheme AltOrDefault -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
+--topLevel ts@(Forall _ binders constraints ty) resourceScheme = do
+--  conv $ State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) binders})
+--  synthesise [] True resourceScheme [] [] ts
 
 testGlobals :: Globals
 testGlobals = mempty
@@ -1011,29 +1139,29 @@ testGlobals = mempty
   , globalsTesting = Just True
   }
 
-testSyn :: Bool -> IO ()
-testSyn useReprint =
-  let ty =
---        FunTy Nothing (Box (CInterval (CNat 2) (CNat 3)) (TyVar $ mkId "b") ) (FunTy Nothing (SumTy (TyVar $ mkId "a") (TyVar $ mkId "c")) (SumTy (ProdTy (TyVar $ mkId "a") (Box (CInterval (CNat 2) (CNat 2)) (TyVar $ mkId "b") )) (ProdTy (TyVar $ mkId "c") (Box (CInterval (CNat 3) (CNat 3)) (TyVar $ mkId "b") ))))
---        FunTy Nothing (TyVar $ mkId "a") (SumTy (TyVar $ mkId "b") (TyVar $ mkId "a"))
-        FunTy Nothing (Box (CNat 3) (TyVar $ mkId "a")) (FunTy Nothing (Box (CNat 6) (TyVar $ mkId "b") ) (Box (CNat 3) (ProdTy (ProdTy (TyVar $ mkId "b") (TyVar $ mkId "b")) (TyVar $ mkId "a")) ))
---        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
---        FunTy Nothing (FunTy Nothing (TyVar $ mkId "a") (FunTy Nothing (TyVar $ mkId "b") (TyVar $ mkId "c"))) (FunTy Nothing (TyVar $ mkId "b") (FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "c")))
---        FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "a")
---        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
-        in
-    let ts = (Forall nullSpanNoFile [(mkId "a", KType), (mkId "b", KType), (mkId "c", KType)] [] ty) in
-    let ?globals = testGlobals in do
-     -- State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) [(mkId "a", KType)]})
-    let res = testOutput $ topLevel ts (Subtractive Default) in -- [(mkId "y", Linear (TyVar $ mkId "b")), (mkId "x", Linear (TyVar $ mkId "a"))] [] ty
-        if length res == 0
-        then  (putStrLn "No inhabitants found.")
-        else  (forM_ res (\(ast, _, sub) -> putStrLn $
-                           (if useReprint then pretty (reprintAsDef (mkId "f") ts ast) else pretty ast) ++ "\n" ++ (show sub) ))
-
-testOutput :: Synthesiser a -> [a]
-testOutput res =
-  rights $ map fst $ fst $ unsafePerformIO $ runStateT (runSynthesiser res initState) mempty
+--testSyn :: Bool -> IO ()
+--testSyn useReprint =
+--  let ty =
+----        FunTy Nothing (Box (CInterval (CNat 2) (CNat 3)) (TyVar $ mkId "b") ) (FunTy Nothing (SumTy (TyVar $ mkId "a") (TyVar $ mkId "c")) (SumTy (ProdTy (TyVar $ mkId "a") (Box (CInterval (CNat 2) (CNat 2)) (TyVar $ mkId "b") )) (ProdTy (TyVar $ mkId "c") (Box (CInterval (CNat 3) (CNat 3)) (TyVar $ mkId "b") ))))
+----        FunTy Nothing (TyVar $ mkId "a") (SumTy (TyVar $ mkId "b") (TyVar $ mkId "a"))
+--        FunTy Nothing (Box (CNat 3) (TyVar $ mkId "a")) (FunTy Nothing (Box (CNat 6) (TyVar $ mkId "b") ) (Box (CNat 3) (ProdTy (ProdTy (TyVar $ mkId "b") (TyVar $ mkId "b")) (TyVar $ mkId "a")) ))
+----        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
+----        FunTy Nothing (FunTy Nothing (TyVar $ mkId "a") (FunTy Nothing (TyVar $ mkId "b") (TyVar $ mkId "c"))) (FunTy Nothing (TyVar $ mkId "b") (FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "c")))
+----        FunTy Nothing (TyVar $ mkId "a") (TyVar $ mkId "a")
+----        FunTy Nothing (Box (CNat 2) (TyVar $ mkId "a")) (ProdTy (TyVar $ mkId "a") (TyVar $ mkId "a"))
+--        in
+--    let ts = (Forall nullSpanNoFile [(mkId "a", KType), (mkId "b", KType), (mkId "c", KType)] [] ty) in
+--    let ?globals = testGlobals in do
+--     -- State.modify (\st -> st { tyVarContext = map (\(n, c) -> (n, (c, ForallQ))) [(mkId "a", KType)]})
+--    let res = testOutput $ topLevel ts (Subtractive Default) in -- [(mkId "y", Linear (TyVar $ mkId "b")), (mkId "x", Linear (TyVar $ mkId "a"))] [] ty
+--        if length res == 0
+--        then  (putStrLn "No inhabitants found.")
+--        else  (forM_ res (\(ast, _, sub) -> putStrLn $
+--                           (if useReprint then pretty (reprintAsDef (mkId "f") ts ast) else pretty ast) ++ "\n" ++ (show sub) ))
+--
+--testOutput :: Synthesiser a -> [a]
+--testOutput res =
+--  rights $ map fst $ fst $ unsafePerformIO $ runStateT (runSynthesiser res initState) mempty
 
 --testData :: Synthesiser a -> SynthesisData
 --testData res =
