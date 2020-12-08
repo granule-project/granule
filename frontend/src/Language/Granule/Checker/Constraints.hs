@@ -467,10 +467,10 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
 
 approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Lo <= Lo   (False <= False)
-  -- Lo <= Hi   (False <= True)
-  -- Hi <= Lo   (True  <= False)
-  -- but not Lo <= Hi (False <= True)
-  -- This this is flipped implication
+  -- Hi <= Hi   (True <= True)
+  -- Hi <= Lo   (True <= False)
+  -- but not Lo <= Hi   (False  <= True)
+  -- So this is flipped implication
   return (b .=> a)
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
