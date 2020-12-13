@@ -2,8 +2,8 @@
 
 data Balanced (diff : Nat) where
   Init : Balanced 0;
-  Open : Balanced diff → Balanced (diff + 1);
-  Close : Balanced (diff + 1) → Balanced diff
+  BOpen : Balanced diff → Balanced (diff + 1);
+  BClose : Balanced (diff + 1) → Balanced diff
 
 test : Balanced 0
-test = Close (Open Init)
+test = BClose (BOpen Init)

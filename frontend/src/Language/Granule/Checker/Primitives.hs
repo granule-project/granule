@@ -80,16 +80,7 @@ typeConstructors =
     , (mkId "Session",  (tyCon "Com", [], True))
     , (mkId "Com",      (keffect, [], False))
     -- Effect grade types - IO
-    , (mkId "IOElem",   (ktype, [], False))
     , (mkId "IO",       (keffect, [], False))
-    , (mkId "Stdout",   (tyCon "IOElem", [], False))
-    , (mkId "Stdin",    (tyCon "IOElem", [], False))
-    , (mkId "Stderr",   (tyCon "IOElem", [], False))
-    , (mkId "Open",     (tyCon "IOElem", [], False))
-    , (mkId "Read",     (tyCon "IOElem", [], False))
-    , (mkId "Write",    (tyCon "IOElem", [], False))
-    , (mkId "IOExcept", (tyCon "IOElem", [], False))
-    , (mkId "Close",    (tyCon "IOElem", [], False))
 
     --Effect grade types - Exceptions
     , (mkId "Exception", (keffect, [], False))
@@ -234,6 +225,8 @@ fromPure = BUILTIN
 --------------------------------------------------------------------------------
 -- I/O
 --------------------------------------------------------------------------------
+
+data IOElem = Stdout | Stdin | Stderr | Open | Read | Write | IOExcept | Close
 
 fromStdin : String <{Stdin}>
 fromStdin = BUILTIN
