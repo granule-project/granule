@@ -38,6 +38,8 @@ data SGrade =
      -- |
      -- | Grade '0' denotes even usage, and grade '1' denotes odd usage.
      | SOOZ SBool
+     -- LNL
+     | SLNL SBool -- True = NonLin, False = Lin
 
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
@@ -104,6 +106,8 @@ sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
 sLtTree _ _ = return $ sFalse
 
+---- SGrade operations
+
 -- Work out if two symbolic grades are of the same type
 match :: SGrade -> SGrade -> Bool
 match (SNat _) (SNat _) = True
@@ -117,6 +121,7 @@ match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
 match (SUnknown _) (SUnknown _) = True
 match (SOOZ _) (SOOZ _) = True
 match (SSec _) (SSec _) = True
+match (SLNL _) (SLNL _) = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -175,6 +180,7 @@ instance Mergeable SGrade where
 
   symbolicMerge s sb (SUnknown a) (SUnknown b) = SUnknown (SynMerge sb a b)
   symbolicMerge s sb (SSec a) (SSec b) = SSec (symbolicMerge s sb a b)
+  symbolicMerge s sb (SLNL a) (SLNL b) = SLNL (symbolicMerge s sb a b)
 
   symbolicMerge _ _ s t = error $ cannotDo "symbolicMerge" s t
 
@@ -228,6 +234,7 @@ symGradeEq s t | isSProduct s || isSProduct t =
 
 symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
 symGradeEq (SSec n) (SSec n') = return $ n .== n'
+symGradeEq (SLNL n) (SLNL m) = return $ n .== m
 symGradeEq s t = solverError $ cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -300,6 +307,7 @@ symGradePlus (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynPlus um un)
 
 symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
+symGradePlus (SLNL a) (SLNL b) = return $ SLNL sTrue
 
 symGradePlus s t = solverError $ cannotDo "plus" s t
 
@@ -358,6 +366,7 @@ symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)
 
 symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
+symGradeTimes (SLNL a) (SLNL b) = return $ SLNL $ a .&& b
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
 

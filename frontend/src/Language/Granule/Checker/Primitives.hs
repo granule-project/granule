@@ -57,6 +57,10 @@ typeConstructors =
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
+    , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
+    -- LNL members
+    , (mkId "Lin",        (tyCon "LNL", [], False))
+    , (mkId "NonLin",     (tyCon "LNL", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))

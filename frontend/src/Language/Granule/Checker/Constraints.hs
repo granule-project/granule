@@ -147,6 +147,9 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
 freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
 
+freshSolverVarScoped quant name (TyCon (internalName -> "LNL")) q k =
+    quant q name (\solverVar -> k (sTrue, SLNL solverVar))
+
 freshSolverVarScoped quant name (TyCon conName) q k =
     -- Integer based
     quant q name (\solverVar ->
@@ -273,6 +276,12 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
 
   return (SLevel . fromInteger . toInteger $ n, sTrue)
 
+compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
+  case internalName name of
+    "Lin"    -> return (SLNL sFalse, sTrue)
+    "NonLin" -> return (SLNL sTrue, sTrue)
+    c -> error $ "Cannot compile " <> show c <> " as a LNL semiring"
+
 compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec sTrue, sTrue)
@@ -360,6 +369,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
+        "LNL"       -> return (SLNL sTrue, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
@@ -389,6 +399,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
+        "LNL"       -> return (SLNL sFalse, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -472,6 +483,11 @@ approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- but not Lo <= Hi   (False  <= True)
   -- So this is flipped implication
   return (b .=> a)
+
+approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
+  -- Lin (F) <= NonLin (T)
+  -- but not (NonLin (T) <= Lin (F))
+  return (a .=> b)
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts approximatedByOrEqualConstraint (.&&) (const sTrue) s t)

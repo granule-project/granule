@@ -1,2 +1,8 @@
-copy : ∀ {a : Type, n : Nat} . a [n+1] -> a × a [n]
+copy : ∀ {a : Type} . a [NonLin] -> (a, a [NonLin])
 copy [x] = (x, [x])
+
+drop : forall {a : Type} . a [NonLin] -> a
+drop [x] = x
+
+extract : forall {a : Type} . a [Lin] -> a
+extract [x] = x
