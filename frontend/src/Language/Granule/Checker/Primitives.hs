@@ -20,22 +20,14 @@ nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
 -- Given a name to the powerset of a set of particular elements,
--- where (Y, PY) in setElements means that PY is an alias for the powerset of Y
+-- where (Y, PY) in setElements means that PY is an alias for the
+-- (full) powerset of Y
 
 -- e.g. {Stdin} in Set IOElem in Effect
 -- and  {Stdin} in IO         in Effect
 
 setElements :: [(Type, Type)]
 setElements = [(TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
-
--- Lists all type constructors for which there cannot exist a unification (upper bound/mgu) with another
--- Typically these are type constructors that are not used as resource algebras
-isDistinguishedConstructor :: Id -> Bool
-isDistinguishedConstructor x = elem x distinguishedConstructors
-
-distinguishedConstructors :: [Id]
-distinguishedConstructors =
-  map mkId ["Coeffect", "Effect", "Type", "Predicate", "Int", "Float", "String", "Protocol"]
 
 -- Associates type constuctors names to their:
 --    * kind

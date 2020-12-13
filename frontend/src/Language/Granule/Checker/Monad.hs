@@ -924,7 +924,7 @@ instance UserMsg CheckerError where
      <> " but it is trying to be used at a level " <> pretty l' <> " setting."
 
   msg ImpossibleKindSynthesis{ errTy }
-    = "Cannot synthesis a kind for `" <> pretty errTy <> "`"
+    = "Cannot synthesise a kind for `" <> pretty errTy <> "`"
 
   msg NaturalNumberAtWrongKind{ errTy, errK }
     = "Natural number `" <> pretty errTy <> "` is not a member of `" <> pretty errK <> "`"
