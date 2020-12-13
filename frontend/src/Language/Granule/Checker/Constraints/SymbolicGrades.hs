@@ -47,6 +47,18 @@ data SGrade =
                                  -- but if Nothing then these values are incomparable
     deriving (Show, Generic)
 
+-- Specialised representation for `Level`
+publicRepresentation, privateRepresentation, unusedRepresentation :: Integer
+privateRepresentation = 1
+publicRepresentation  = 2
+unusedRepresentation  = 0
+
+-- Representation for `Sec`
+hiRepresentation, loRepresentation :: SBool
+hiRepresentation = sTrue
+loRepresentation = sFalse
+
+-- Representation of semiring terms as a `SynTree`
 data SynTree =
     SynPlus SynTree SynTree
   | SynTimes SynTree SynTree

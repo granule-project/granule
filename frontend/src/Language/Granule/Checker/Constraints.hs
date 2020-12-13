@@ -284,8 +284,8 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
-    "Hi" -> return (SSec sTrue, sTrue)
-    "Lo" -> return (SSec sFalse, sTrue)
+    "Hi" -> return (SSec hiRepresentation, sTrue)
+    "Lo" -> return (SSec loRepresentation, sTrue)
     c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
@@ -358,13 +358,19 @@ compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   intervalConstraint <- symGradeLessEq lower upper
   return $ (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
 
+compileCoeffect (TyCon name) (isInterval -> Just t) vars | t == extendedNat = do
+  case internalName name of
+    "Lin"    -> return (SInterval (SExtNat 1) (SExtNat 1), sTrue)
+    "NonLin" -> return (SInterval (SExtNat 0) (SExtNat SNatX.inf), sTrue)
+    c -> error $ "Cannot compile " <> show c <> " as a Interval (Extended Nat) semiring"
+
 compileCoeffect (TyGrade k' 0) k vars = do
   k <- matchTypes k k'
   case k of
     (TyCon k') ->
       case internalName k' of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
-        "Sec"       -> return (SSec sTrue, sTrue)
+        "Sec"       -> return (SSec hiRepresentation, sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)
@@ -394,7 +400,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
     TyCon k ->
       case internalName k of
         "Level"     -> return (SLevel (literal privateRepresentation), sTrue)
-        "Sec"       -> return (SSec sFalse, sTrue)
+        "Sec"       -> return (SSec loRepresentation, sTrue)
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "Set"       -> return (SSet (S.fromList []), sTrue)

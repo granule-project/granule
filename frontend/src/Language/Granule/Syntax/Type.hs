@@ -143,13 +143,6 @@ kNat, protocol :: Type
 kNat     = tyCon "Nat"
 protocol = tyCon "Protocol"
 
-publicRepresentation, privateRepresentation :: Integer
-privateRepresentation = 1
-publicRepresentation  = 2
-
-unusedRepresentation :: Integer
-unusedRepresentation = 0
-
 nat, extendedNat :: Type
 nat = tyCon "Nat"
 extendedNat = TyApp (tyCon "Ext") (tyCon "Nat")
