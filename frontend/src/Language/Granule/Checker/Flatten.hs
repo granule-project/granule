@@ -4,7 +4,7 @@
 
 -- | Deals with interactions between coeffect resource algebras
 module Language.Granule.Checker.Flatten
-          (mguCoeffectTypes, flattenable, Injections) where
+          (mguCoeffectTypes, flattenable, flattenType, Injections) where
 
 import Data.Functor.Identity (runIdentity)
 import Control.Monad.State.Strict
@@ -204,3 +204,74 @@ flattenable t1 t2
                 Nothing      -> return $ Just (cProduct, subst, TyCon (mkId ",,") .@ t1 .@ t2)
             Nothing        -> return $ Just (cProduct, [], TyCon (mkId ",,") .@ t1 .@ t2)
 
+
+
+flattenType :: (?globals :: Globals)
+            => Type -> Type -> Checker (Maybe Type)
+
+flattenType t t' | t == t' = return $ Just t
+
+flattenType (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
+  st <- get
+  case (lookup kv1 $ tyVarContext st, lookup kv2 $ tyVarContext st) of
+    (Just (TyCon (internalName -> "Coeffect"), _), Just (TyCon (internalName -> "Coeffect"), InstanceQ)) ->
+      return $ Just $ TyVar kv1
+    (Just (TyCon (internalName -> "Coeffect"), InstanceQ), Just (TyCon (internalName -> "Coeffect"), _)) -> do
+      return $ Just $ TyVar kv2
+    _ -> return Nothing
+
+flattenType (TyVar kv1) coeffTy2 = do
+  st <- get
+  case (lookup kv1 $ tyVarContext st) of
+    Just (_k, q) | q /= ForallQ ->
+      return $ Just coeffTy2
+    _ -> return Nothing
+
+flattenType coeffTy1 (TyVar kv2) = flattenType (TyVar kv2) coeffTy1
+
+flattenType (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =
+  return $ Just $ TyCon $ mkId "Q"
+
+flattenType (TyCon (internalName -> "Nat")) (TyCon (internalName -> "Q")) =
+  return $ Just $ TyCon $ mkId "Q"
+
+flattenType t (TyCon (internalName -> "Nat")) | t == extendedNat =
+  return $ Just extendedNat
+
+flattenType (TyCon (internalName -> "Nat")) t | t == extendedNat =
+  return $ Just extendedNat
+
+flattenType coeffTy1@(isProduct -> Just (t1, _t2)) coeffTy2 | t1 == coeffTy2 =
+  return $ Just coeffTy1
+
+flattenType coeffTy1@(isProduct -> Just (_t1, t2)) coeffTy2 | t2 == coeffTy2 =
+  return $ Just coeffTy1
+
+flattenType coeffTy1 coeffTy2@(isProduct -> Just (t1, _t2)) | t1 == coeffTy1 =
+  return $ Just coeffTy2
+
+flattenType coeffTy1 coeffTy2@(isProduct -> Just (_t1, t2)) | t2 == coeffTy1 =
+  return $ Just coeffTy2
+
+flattenType coeffTy1 coeffTy2@(isInterval -> Just t') | coeffTy1 == t' =
+  return $ Just coeffTy2
+
+flattenType coeffTy1@(isInterval -> Just t') coeffTy2 | coeffTy2 == t' =
+  return $ Just coeffTy1
+
+flattenType (isInterval -> Just t) (isInterval -> Just t') = do
+  flattenType t t' >>= fromUpperType
+
+flattenType t (isInterval -> Just t') = do
+  flattenType t t' >>= fromUpperType
+
+flattenType (isInterval -> Just t') t = do
+  flattenType t t' >>= fromUpperType
+
+flattenType _coeffTy1 _coeffTy2 = return Nothing
+
+fromUpperType :: Maybe Type -> Checker (Maybe Type)
+fromUpperType upperTy =
+  case upperTy of
+    Just ty -> return $ Just $ TyApp (TyCon $ mkId "Interval") ty
+    Nothing -> return Nothing
