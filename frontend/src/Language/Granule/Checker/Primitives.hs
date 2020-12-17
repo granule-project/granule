@@ -19,15 +19,11 @@ import Language.Granule.Syntax.Expr (Operator(..))
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
--- Given a name to the powerset of a set of particular elements,
--- where (Y, PY) in setElements means that PY is an alias for the
--- (full) powerset of Y
-
--- e.g. {Stdin} in Set IOElem in Effect
--- and  {Stdin} in IO         in Effect
-
-setElements :: [(Type, Type)]
-setElements = [(TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
+-- A list of type alias as Id -> Type pairs
+typeAliases :: [(Id, Type)]
+typeAliases =
+  -- IO = Set IOElem
+  [(mkId "IO", TyApp (tyCon "Set") (tyCon "IOElem"))]
 
 -- Associates type constuctors names to their:
 --    * kind

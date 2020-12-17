@@ -40,6 +40,7 @@ import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
+import Language.Granule.Checker.TypeAliases
 import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
@@ -64,8 +65,9 @@ import Language.Granule.Utils
 check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
-check ast@(AST dataDecls defs imports hidden name) = do
+check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
+      ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)

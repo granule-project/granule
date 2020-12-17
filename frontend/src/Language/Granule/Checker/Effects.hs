@@ -9,7 +9,7 @@ module Language.Granule.Checker.Effects where
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import qualified Language.Granule.Checker.Primitives as P (setElements, typeConstructors)
+import qualified Language.Granule.Checker.Primitives as P (typeConstructors)
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Identifiers
