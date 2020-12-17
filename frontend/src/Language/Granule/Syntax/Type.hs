@@ -157,6 +157,10 @@ isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
+isSet :: Type -> Maybe Type
+isSet (TyApp (TyCon c) t) | internalName c == "Set" = Just t
+isSet _ = Nothing
+
 isProduct :: Type -> Maybe (Type, Type)
 isProduct (TyApp (TyApp (TyCon c) t) t')
   | internalName c == "×" || internalName c == "," || internalName c == ",," =

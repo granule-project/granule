@@ -30,7 +30,7 @@ import Language.Granule.Checker.Flatten (mguCoeffectTypes, Injections)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives
-    (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
+    (closedOperation, coeffectResourceAlgebraOps, tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
