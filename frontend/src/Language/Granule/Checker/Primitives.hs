@@ -22,8 +22,10 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 -- A list of type alias as Id -> Type pairs
 typeAliases :: [(Id, Type)]
 typeAliases =
-  -- IO = Set IOElem
-  [(mkId "IO", TyApp (tyCon "Set") (tyCon "IOElem"))]
+    -- IO = {p | p in IOElem}
+    [(mkId "IO", TySet (map tyCon ioElems))]
+  where
+    ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
 -- Associates type constuctors names to their:
 --    * kind
