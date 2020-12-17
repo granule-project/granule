@@ -61,7 +61,6 @@ typeConstructors =
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
-    , (mkId "Set", ((TyVar $ mkId "k") .-> ((tyCon "k") .-> kcoeffect), [], False))
     -- Channels and protocol types
     , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
