@@ -12,7 +12,7 @@ keepPrivate [x] = [x]
 keepPrivateOk : forall {a : Type} . a [Lo] -> a [Hi]
 keepPrivateOk [x] = [x]
 
-data Bool = True | False
+--data Bool = True | False -- Get's imported by Prelude below
 
 publicNot : Bool [Lo] -> Bool
 publicNot [True] = False;
@@ -23,6 +23,20 @@ publicNot [False] = True
 -- privateNot [True] = False;
 -- privateNot [False] = True
 
-comp : forall {a : Type, b : Type, c : Type, l : Sec} .
+comp' : forall {a : Type, b : Type, c : Type} .
        (a [Lo] -> b) [Lo] -> (b [Hi] -> c) -> (a [Hi] -> c)
-comp [f] g = \[x] -> g [f [x]]
+comp' [f] g [x] = g [f [x]]
+
+-- Note that the above composition is also derivable from the standard
+-- library's definition of composition
+import Prelude
+
+comp'' : forall {a : Type, b : Type, c : Type} .
+       (a [Lo] -> b) [Lo] -> (b [Hi] -> c) -> (a [Hi] -> c)
+comp'' = flip comp
+
+------------------------------------------------------------
+-- Another example
+
+exampleBad : forall {a : Type, b : Type} . (a [Lo] -> b) -> a [Hi] -> b
+exampleBad f [x] = f [x]

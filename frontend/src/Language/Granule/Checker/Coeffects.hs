@@ -34,7 +34,6 @@ multAll s vars c ((name, Linear t) : ctxt) | name `elem` vars = do
 
 multAll s vars c ((name, Discharged t c') : ctxt) | name `elem` vars = do
     (ctxt', subst') <- multAll s vars c ctxt
-    -- TODO: do we want to throw away the subst?
     (_, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
     substFinal <- combineSubstitutions s subst subst'
     return $ ((name, Discharged t (TyInfix TyOpTimes (inj1 c) (inj2 c'))) : ctxt', substFinal)

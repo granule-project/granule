@@ -488,6 +488,7 @@ approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Hi <= Lo   (True <= False)
   -- but not Lo <= Hi   (False  <= True)
   -- So this is flipped implication
+  --return (a .== b)
   return (b .=> a)
 
 approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
