@@ -13,7 +13,8 @@ module Language.Granule.Checker.Constraints where
 
 --import Data.Foldable (foldrM)
 import Data.SBV hiding (kindOf, name, symbolic)
-import qualified Data.Set as S
+import qualified Data.SBV.Set as S
+import Data.Maybe (mapMaybe)
 import Control.Monad (liftM2)
 import Control.Monad.IO.Class
 
@@ -170,9 +171,12 @@ freshSolverVarScoped quant name t q k | t == extendedNat = do
 freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
-freshSolverVarScoped _ _ t _ _ =
-  solverError $ "Trying to make a fresh solver variable for a grade of type: "
-      <> show t <> " but I don't know how."
+freshSolverVarScoped quant name (Language.Granule.Syntax.Type.isSet -> elemTy) q k =
+  quant q name (\solverVar -> k (sTrue, SSet solverVar))
+
+-- freshSolverVarScoped _ _ t _ _ =
+--   solverError $ "Trying to make a fresh solver variable for a grade of type: "
+--       <> show t <> " but I don't know how."
 
 -- | What is the SBV representation of a quantifier
 compileQuantScoped :: QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
@@ -197,6 +201,11 @@ instance QuantifiableScoped Bool where
 instance QuantifiableScoped Float where
   universalScoped v = forAll [v]
   existentialScoped v = forSome [v]
+
+instance QuantifiableScoped (RCSet SSetElem) where
+  universalScoped v = forAll [v]
+  existentialScoped v = forSome [v]
+
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
 compile :: (?globals :: Globals) =>
@@ -323,7 +332,10 @@ compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
 compileCoeffect (TySet xs) (TyCon k) _ | internalName k == "Set" =
-  return (SSet . S.fromList $ xs, sTrue)
+    return (SSet . S.fromList $ mapMaybe justTyConNames xs, sTrue)
+  where
+    justTyConNames (TyCon x) = Just (internalName x)
+    justTyConNames t = error $ "Cannot have a type " ++ show t ++ " in a symbolic list"
 
 compileCoeffect (TyVar v) _ vars =
    case lookup v vars of
@@ -472,8 +484,7 @@ approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
-approximatedByOrEqualConstraint (SSet s) (SSet t) =
-  return $ if s == t then sTrue else sFalse
+approximatedByOrEqualConstraint (SSet s) (SSet t) = pure $ s `S.isSubsetOf` t
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     -- Private <= Public
