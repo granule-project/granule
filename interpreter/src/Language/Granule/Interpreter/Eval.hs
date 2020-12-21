@@ -199,7 +199,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
          -- (cf. TRY_BETA_2)
         (\(e :: IOException) -> evalIn ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
-          
+
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
