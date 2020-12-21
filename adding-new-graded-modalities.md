@@ -1,12 +1,11 @@
-# Rough guide to adding new graded necessity modalities (graded
-# by pre-ordered semirings) to Granule
+# Rough guide to adding new graded necessity modalities (graded by pre-ordered semirings) to Granule
 
 All source files in this guide are relative to
 frontend/src/Language/Granule
 unless otherwise stated.
 
-I assume here you are adding a new graded modality
-whose semiring is called Fruit
+For the sake of examples, I' assume here you are adding a new graded modality
+whose semiring is called `Fruit`
 
 ## 1. Syntax
 
@@ -113,26 +112,26 @@ by the SMT backend like `SInteger`, `SBool`.
     - `symGradeTimes` - semiring multiplication
 
 - Now you need to go into the `Constraints` module (Checker/Constraints.hs)
-and updated `freshSolverVarScoped` which works out how to compile a symbolic variable
-for all the different kinds of grade. This function is specialised
-on the type of grade (third argument), so you will most likely want to
-add a new case for your particular semiring type. e.g.,
-add a case matching `(TyCon (internalName -> "Fruit"))`. You
-can look at the others for the general pattern, but this is a CPS-style
-functiom, where the last argument is the continuation in which you
-are binding this fresh solver variable. For example:
+ and updated `freshSolverVarScoped` which works out how to compile a symbolic variable
+ for all the different kinds of grade. This function is specialised
+ on the type of grade (third argument), so you will most likely want to
+ add a new case for your particular semiring type. e.g.,
+ add a case matching `(TyCon (internalName -> "Fruit"))`. You
+ can look at the others for the general pattern, but this is a CPS-style
+ functiom, where the last argument is the continuation in which you
+ are binding this fresh solver variable. For example:
 
-    freshSolverVarScoped quant name (TyCon (internalName -> "Fruit")) q k =
-        quant q name (\solverVar -> k (cond, SFruit solverVar))
+      freshSolverVarScoped quant name (TyCon (internalName -> "Fruit")) q k =
+          quant q name (\solverVar -> k (cond, SFruit solverVar))
 
-where `cond` is a symbolic SMT expression giving any constraints on the
-fresh variables (e.g., if there is some representational constraints involved).
-Otherwise the type of `solverVar` will get resolved to whatever you said
-the representation is. Look at the other cases for inspiration!
+ where `cond` is a symbolic SMT expression giving any constraints on the
+ fresh variables (e.g., if there is some representational constraints involved).
+ Otherwise the type of `solverVar` will get resolved to whatever you said
+ the representation is. Look at the other cases for inspiration!
 
-Depending on your SMT representation you may need to add an instance
-of `QuantifiableScoped`. But if you are just using integers, bools, floats,
-or combinations of other `SymGrade`s, then you won't need to.
+ Depending on your SMT representation you may need to add an instance
+ of `QuantifiableScoped`. But if you are just using integers, bools, floats,
+ or combinations of other `SymGrade`s, then you won't need to.
 
 - You will probably need to add several cases to the `compileCoeffect`
 function which explains how to translate/compile the type representation of
@@ -144,13 +143,13 @@ grades into `SGrade`s:
       Note the first parameter is the grade term, the second is the type of it,
       so you probably want to match on the second paramter first, e.g.
 
-          compileCoeffect grade (TyCon (internalName -> "Sec")) _ = do
-              .....
+           compileCoeffect grade (TyCon (internalName -> "Sec")) _ = do
+               .....
 
-             return (SSec rep, cond)
+              return (SSec rep, cond)
 
-      where `rep` is your SMT representation and `cond` is any other conditions
-      that come with this (might just be `sTrue`, i.e., no further constraints).
+     where `rep` is your SMT representation and `cond` is any other conditions
+     that come with this (might just be `sTrue`, i.e., no further constraints).
 
     - Find the case of `compileCoeffect` dealing with `TyGrade k' 0` - this is
     where you need to say how `0` (semiring additive unit) is compiled. This is a big `case` matching on

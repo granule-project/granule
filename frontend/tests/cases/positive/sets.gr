@@ -1,0 +1,22 @@
+data Foo = FooA | FooB | FooC
+
+foo : Int [{FooA, FooB}]
+foo = [42]
+
+test : forall {a : Type, b : Type, c d : Set Foo}
+     . (a [c] -> b) [d] -> a [c * d] -> b [d]
+test [f] [x] = [f [x]]
+
+-- Subsets allowed
+bar : Int [{FooA}]
+bar = foo
+
+-- 0 grade is the empty set
+weak : forall {a : Type} . a [{} : Set Foo] -> ()
+weak [x] = ()
+
+-- 1 grade is the universal set
+extract : forall {a : Type} . a [{FooA, FooB, FooC}] -> a
+extract [x] = x
+
+

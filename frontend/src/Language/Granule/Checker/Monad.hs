@@ -225,6 +225,12 @@ lookupPatternMatches sp constrName = do
   st <- get
   return $ snd3 <$> lookup constrName (typeConstructors st)
 
+-- Return the data constructors of all types in the environment
+allDataConstructorNames :: Checker (Ctxt [Id])
+allDataConstructorNames = do
+  st <- get
+  return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
+
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
 discarded, the rhs result computation must be run! This is useful for

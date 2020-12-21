@@ -9,7 +9,7 @@ module Language.Granule.Checker.Effects where
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import qualified Language.Granule.Checker.Primitives as P (setElements, typeConstructors)
+import qualified Language.Granule.Checker.Primitives as P (typeConstructors)
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Identifiers
@@ -20,11 +20,6 @@ import Language.Granule.Utils
 
 import Data.List (nub, (\\))
 import Data.Maybe (mapMaybe)
-
--- Describe all effect types that are based on a union-emptyset monoid
-unionSetLike :: Id -> Bool
-unionSetLike (internalName -> "IO") = True
-unionSetLike _ = False
 
 -- `isEffUnit sp effTy eff` checks whether `eff` of effect type `effTy`
 -- is equal to the unit element of the algebra.
@@ -43,7 +38,7 @@ isEffUnit s effTy eff =
                 TyCon (internalName -> "Success") -> return True
                 _ -> return False
         -- Any union-set effects, like IO
-        TyCon c | unionSetLike c ->
+        (isSet -> Just elemTy) ->
             case eff of
                 (TySet []) -> return True
                 _          -> return False
@@ -88,8 +83,8 @@ effApproximates s effTy eff1 eff2 =
                     (TyCon (internalName -> "MayFail"),TyCon (internalName -> "MayFail")) ->
                         return True
                     _ -> return False
-        -- Any union-set effects, like IO
-            TyCon c | unionSetLike c ->
+            -- Any union-set effects, like IO
+            (isSet -> Just elemTy) ->
                 case (eff1, eff2) of
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
                         let efs1' = handledNormalise s effTy eff1
@@ -137,7 +132,7 @@ effectMult sp effTy t1 t2 = do
                 _ -> throw $ TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
 
         -- Any union-set effects, like IO
-        TyCon c | unionSetLike c ->
+        (isSet -> Just elemTy) ->
           case (t1, t2) of
             --Handled, Handled
             (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
@@ -190,7 +185,7 @@ effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
             return t2'
         _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1', errTy2 = t2' }
 
-effectUpperBound s t@(TyCon c) t1 t2 | unionSetLike c =
+effectUpperBound s (isSet -> Just elemTy) t1 t2 =
     case t1 of
         TySet efs1 ->
             case t2 of
@@ -217,19 +212,19 @@ effectTop (TyCon (internalName -> "Com")) = Just $ TyCon $ mkId "Session"
 -- Based on an effect type, provide its top-element, which for set-like effects
 -- like IO can later be aliased to the name of effect type,
 -- i.e., a <IO> is an alias for a <{Read, Write, ... }>
-effectTop t = do
+effectTop (isSet -> Just elemTy) =
     -- Compute the full-set of elements based on the the kinds of elements
     -- in the primitives
-    elemKind <- lookup t (map swap P.setElements)
-    return (TySet (map TyCon (allConstructorsMatchingElemKind elemKind)))
+    return (TySet (map TyCon allConstructorsMatchingElemKind))
   where
-    swap (a, b) = (b, a)
     -- find all elements of the matching element type
-    allConstructorsMatchingElemKind :: Kind -> [Id]
-    allConstructorsMatchingElemKind elemKind = mapMaybe (go elemKind) P.typeConstructors
-    go :: Kind -> (Id, (Type, a, Bool)) -> Maybe Id
-    go elemKind (con, (k, _, _)) =
-        if k == elemKind then Just con else Nothing
+    allConstructorsMatchingElemKind :: [Id]
+    allConstructorsMatchingElemKind = mapMaybe go P.typeConstructors
+
+    go :: (Id, (Type, a, Bool)) -> Maybe Id
+    go (con, (k, _, _)) = if k == elemTy then Just con else Nothing
+effectTop _ = Nothing
+
 
 isPure :: Type -> Bool
 isPure (TyCon c) = internalName c == "Pure"

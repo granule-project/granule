@@ -30,7 +30,7 @@ import Language.Granule.Checker.Flatten (mguCoeffectTypes, Injections)
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Primitives
-    (closedOperation, coeffectResourceAlgebraOps, setElements, tyOps)
+    (closedOperation, coeffectResourceAlgebraOps, tyOps)
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.Variables
@@ -83,6 +83,15 @@ checkKind s (FunTy name t1 t2) k = do
   (subst2, t2') <- checkKind s t2 k
   substFinal <- combineSubstitutions s subst1 subst2
   return (substFinal, FunTy name t1 t2)
+
+-- KChk_SetKind
+checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
+  -- Sets as coeffects can be themselves over a coeffect type or some other type
+  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+
+checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) =
+  -- Sets as effects can be themselves over an effect type or some other type
+  (checkKind s t keffect) <|> (checkKind s t ktype)
 
 -- KChk_app
 checkKind s (TyApp t1 t2) k2 = do
@@ -213,6 +222,15 @@ synthKind' s overloadToNat (TyApp (TyApp (TyCon (internalName -> ",,")) t1) t2) 
   subst <- combineSubstitutions s subst1 subst2
   return (TyApp (TyApp (TyCon $ mkId ",,") k1) k2, subst, TyApp (TyApp (TyCon $ mkId ",,") t1') t2')
 
+-- KChkS_SetKind
+synthKind' s overloadToNat (TyApp (TyCon (internalName -> "Set")) t) = do
+  (k, subst, t') <- synthKind' s overloadToNat t
+  case k of
+    -- For set over type, default to the kind being Effect
+    Type 0 -> return (keffect, subst, TyApp (TyCon (mkId "Set")) t')
+    -- otherwise kind of the set depends on the kind of the elements
+    k      -> return (k, subst, TyApp (TyCon (mkId "Set")) t')
+
 -- KChkS_app
 --
 --      t1 => k1 -> k2    t2 <= k1
@@ -310,10 +328,12 @@ synthKind' s overloadToNat t0@(TySet (t:ts)) = do
   substsAndTs' <- mapM (\t' -> checkKind s t' k) ts
   let (substs, ts') = unzip substsAndTs'
   subst <- combineManySubstitutions s (subst1:substs)
-  case lookup k setElements of
-    -- Lift this alias to the kind level
-    Just t  -> return (t, subst, TySet (t':ts'))
-    Nothing -> return (TyApp (TyCon $ mkId "Set") k, subst, TySet (t':ts'))
+  return (TyApp (TyCon $ mkId "Set") k, subst, TySet (t':ts'))
+
+-- KChkS_set (empty) -- gives a polymorphic type to the elements
+synthKind' s overloadToNat (TySet []) = do
+  var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") ktype
+  return (TyApp (TyCon $ mkId "Set") (TyVar var), [], TySet [])
 
 -- KChkS_sig
 synthKind' s _ (TySig t k) = do

@@ -5,7 +5,6 @@
 -- in order for a solver to use.
 module Language.Granule.Checker.Constraints.SymbolicGrades where
 
-import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Constraints.SNatX
 
 import Data.Functor.Identity
@@ -17,7 +16,7 @@ import Control.Exception
 import qualified Data.Text as T
 import GHC.Generics (Generic)
 import Data.SBV hiding (kindOf, name, symbolic)
-import qualified Data.Set as S
+import qualified Data.SBV.Set as S
 
 solverError :: MonadIO m => String -> m a
 solverError msg = liftIO $ throwIO . ErrorCall $ msg
@@ -28,7 +27,7 @@ data SGrade =
      | SFloat    SFloat
      | SLevel    SInteger
      | SSec      SBool -- Hi = True, Lo = False
-     | SSet      (S.Set Type)
+     | SSet      (SSet SSetElem)
      | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
@@ -44,8 +43,12 @@ data SGrade =
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
      | SUnknown SynTree
-                                 -- but if Nothing then these values are incomparable
+
     deriving (Show, Generic)
+
+-- Symbolic elements (TODO: generalise in the future as needed)
+-- For now only strings can be set elements
+type SSetElem = [Char]
 
 -- Specialised representation for `Level`
 publicRepresentation, privateRepresentation, unusedRepresentation :: Integer
@@ -237,7 +240,7 @@ symGradeEq (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradeEq (SNat n) (SNat n')     = return $ n .== n'
 symGradeEq (SFloat n) (SFloat n') = return $ n .== n'
 symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
-symGradeEq (SSet n) (SSet n')     = solverError "Can't compare symbolic sets yet"
+symGradeEq (SSet n) (SSet n')     = return $ n .== n'
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
 symGradeEq SPoint SPoint          = return $ sTrue
 symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r
@@ -328,7 +331,7 @@ symGradeTimes :: SGrade -> SGrade -> Symbolic SGrade
 symGradeTimes (SNat n1) (SNat n2) = return $ SNat (n1 * n2)
 symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
-symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.union s t
+symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.intersection s t
 symGradeTimes (SLevel lev1) (SLevel lev2) = return $
     ite (lev1 .== literal unusedRepresentation)
         (SLevel $ literal unusedRepresentation)

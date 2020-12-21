@@ -1,4 +1,0 @@
-Type checking failed: 
-Counter example: frontend/tests/cases/negative/headAlt3.gr:9:1:
-The following theorem associated with `headAlt'` is falsifiable:
-	((n > 0) -> (0..1 ≤ 0..1) ∧ (n0 > 1))
