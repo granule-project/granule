@@ -38,6 +38,7 @@ data REPLExpr =
     | Reload
     | CheckType String
     | Eval String
+    | HeapEval String
     | RunParser String
     | RunLexer String
     | Debuger [FilePath]
@@ -119,6 +120,8 @@ showAstParser = replTyCmdParser "s" "show" ShowDef
 
 runParserRepl = replTyCmdParser "p" "parse" RunParser
 
+runHeapModel = replTyCmdParser "heap" "heap" HeapEval
+
 
 runLexer = replTyCmdParser "x" "lexer" RunLexer
 
@@ -145,6 +148,7 @@ lineParser = try dumpStateParser
           <|> try showAstParser
           <|> try runParserRepl
           <|> try runLexer
+          <|> try runHeapModel
           -- <|> try unfoldTermParser5
           -- <|> try showASTParser
           <|> evalParser

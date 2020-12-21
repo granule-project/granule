@@ -38,6 +38,7 @@ import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
 import Language.Granule.Interpreter.Eval
+import Language.Granule.Interpreter.HeapModel
 import qualified Language.Granule.Interpreter as Interpreter
 
 import Language.Granule.ReplError
@@ -228,7 +229,29 @@ handleCMD s =
           result <- liftIO' $ try $ replEval (freeVarCounter st) astNew
           case result of
               Left e -> Ex.throwError (EvalError e)
-              Right Nothing -> liftIO $ print "if here fix"
+              Right Nothing -> liftIO $ putStrLn "Evaluation failed."
+              Right (Just result) -> liftIO $ putStrLn $ pretty result
+        -- If this was actually just a type, return it as is
+        Right kind -> liftIO $ putStrLn exprString
+
+    handleLine (HeapEval exprString) = do
+      expr <- parseExpression exprString
+      ty <- synthTypeFromInputExpr expr
+      case ty of
+        -- Well-typed, with `tyScheme`
+        Left tyScheme -> do
+          st <- get
+          let ndef = buildDef (freeVarCounter st) tyScheme expr
+          -- Update the free var counter
+          modify (\st -> st { freeVarCounter = freeVarCounter st + 1 })
+
+          let fv = freeVars expr
+          let ast = buildRelevantASTdefinitions fv (defns st)
+          let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
+          result <- liftIO' $ try $ replHeapEval (freeVarCounter st) astNew
+          case result of
+              Left e -> Ex.throwError (EvalError e)
+              Right Nothing -> liftIO $ putStrLn "No result from heap evaluation"
               Right (Just result) -> liftIO $ putStrLn $ pretty result
         -- If this was actually just a type, return it as is
         Right kind -> liftIO $ putStrLn exprString
@@ -271,6 +294,13 @@ replEval val (AST dataDecls defs _ _ _) = do
       Nothing -> return Nothing
       Just (Pure _ e)    -> fmap Just (evalIn bindings e)
       Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just val           -> return $ Just val
+
+replHeapEval :: (?globals :: Globals) => Int -> AST () () -> IO (Maybe (Value () ()))
+replHeapEval val (AST dataDecls defs _ _ _) = do
+    bindings <- heapEvalDefs defs
+    case lookup (mkId (" repl" <> show val)) bindings of
+      Nothing -> return Nothing
       Just val           -> return $ Just val
 
 liftIO' :: IO a -> REPLStateIO a

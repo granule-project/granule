@@ -49,6 +49,7 @@ library:
   exposed-modules:
   - Language.Granule.Interpreter
   - Language.Granule.Interpreter.Eval
+  - Language.Granule.Interpreter.HeapModel
   - Language.Granule.Interpreter.Desugar
 
 executables:
