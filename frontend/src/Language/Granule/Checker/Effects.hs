@@ -223,8 +223,8 @@ effectTop (isSet -> Just elemTy) =
 
     go :: (Id, (Type, a, Bool)) -> Maybe Id
     go (con, (k, _, _)) = if k == elemTy then Just con else Nothing
-
 effectTop _ = Nothing
+
 
 isPure :: Type -> Bool
 isPure (TyCon c) = internalName c == "Pure"

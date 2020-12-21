@@ -51,7 +51,8 @@ solve = do
   tyVars <- conv $ justCoeffectTypes nullSpanNoFile (tyVarContext cs)
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
-  (smtTime', result) <- liftIO $ provePredicate pred tyVars
+  constructors <- conv $ allDataConstructorNames
+  (smtTime', result) <- liftIO $ provePredicate pred tyVars constructors
   -- Force the result
   _ <- return $ result `seq` result
   end    <- liftIO $ Clock.getTime Clock.Monotonic

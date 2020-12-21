@@ -331,7 +331,7 @@ symGradeTimes :: SGrade -> SGrade -> Symbolic SGrade
 symGradeTimes (SNat n1) (SNat n2) = return $ SNat (n1 * n2)
 symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
-symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.union s t
+symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.intersection s t
 symGradeTimes (SLevel lev1) (SLevel lev2) = return $
     ite (lev1 .== literal unusedRepresentation)
         (SLevel $ literal unusedRepresentation)

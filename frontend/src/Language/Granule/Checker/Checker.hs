@@ -1257,7 +1257,8 @@ solveConstraints predicate s name = do
   debugM "context into the solver" (pretty $ coeffectVars)
   debugM "Solver predicate" $ pretty predicate -- <> "\n" <> show predicate
 
-  (_, result) <- liftIO $ provePredicate predicate coeffectVars
+  constructors <- allDataConstructorNames
+  (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
   case result of
     QED -> return ()
     NotValid msg -> do
@@ -1628,7 +1629,8 @@ checkGuardsForImpossibility s name = do
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
-    (_, result) <- liftIO $ provePredicate thm tyVars
+    constructors <- allDataConstructorNames
+    (_, result) <- liftIO $ provePredicate thm tyVars constructors
 
     p <- simplifyPred thm
 

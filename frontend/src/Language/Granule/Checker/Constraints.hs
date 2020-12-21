@@ -7,12 +7,11 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-
 -- | Deals with compilation of coeffects into symbolic representations of SBV
 module Language.Granule.Checker.Constraints where
 
 --import Data.Foldable (foldrM)
-import Data.SBV hiding (kindOf, name, symbolic)
+import Data.SBV hiding (kindOf, name, symbolic, isSet)
 import qualified Data.SBV.Set as S
 import Data.Maybe (mapMaybe)
 import Control.Monad (liftM2)
@@ -35,9 +34,11 @@ import qualified System.Clock as Clock
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type, Quantifier)
+  => Pred
+  -> Ctxt (Type, Quantifier)
+  -> Ctxt [Id]
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
-compileToSBV predicate tyVarContext =
+compileToSBV predicate tyVarContext constructors =
   (buildTheoremNew (reverse tyVarContext) []
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
@@ -108,7 +109,7 @@ compileToSBV predicate tyVarContext =
           buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
-      compile solverVars cons
+      let ?constructors = constructors in compile solverVars cons
 
 -- | Symbolic coeffect representing 0..Inf
 zeroToInfinity :: SGrade
@@ -208,7 +209,7 @@ instance QuantifiableScoped (RCSet SSetElem) where
 
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
-compile :: (?globals :: Globals) =>
+compile :: (?globals :: Globals, ?constructors :: Ctxt [Id]) =>
   Ctxt SGrade -> Constraint -> Symbolic SBool
 
 compile vars (Eq _ c1 c2 t) =
@@ -271,7 +272,7 @@ compile vars c = error $ "Internal bug: cannot compile " <> show c
 -- | (along with any additional predicates)
 -- |
 -- | `compileCoeffect r t context` compiles grade `r` of type `t`.
-compileCoeffect :: (?globals :: Globals) =>
+compileCoeffect :: (?globals :: Globals, ?constructors :: Ctxt [Id]) =>
   Coeffect -> Type -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
 compileCoeffect (TySig c k) _ ctxt = compileCoeffect c k ctxt
@@ -331,7 +332,7 @@ compileCoeffect (TyGrade k' n) k _ | k == extendedNat && (k' == Nothing || k' ==
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
-compileCoeffect (TySet xs) (TyCon k) _ | internalName k == "Set" =
+compileCoeffect (TySet xs) (Language.Granule.Syntax.Type.isSet -> elemTy) _ =
     return (SSet . S.fromList $ mapMaybe justTyConNames xs, sTrue)
   where
     justTyConNames (TyCon x) = Just (internalName x)
@@ -385,7 +386,6 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Sec"       -> return (SSec hiRepresentation, sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
-        "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
         "LNL"       -> return (SLNL sTrue, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
@@ -402,6 +402,9 @@ compileCoeffect (TyGrade k' 0) k vars = do
         (compileCoeffect (TyGrade (Just t) 0) t vars)
         (compileCoeffect (TyGrade (Just t) 0) t vars)
 
+    (isSet -> Just elemTy) ->
+       return (SSet (S.fromList []), sTrue)
+
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
     _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k
@@ -415,7 +418,6 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Sec"       -> return (SSec loRepresentation, sTrue)
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
-        "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL sFalse, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
@@ -432,6 +434,16 @@ compileCoeffect (TyGrade k' 1) k vars = do
       liftM2And SInterval
         (compileCoeffect (TyGrade (Just t) 1) t vars)
         (compileCoeffect (TyGrade (Just t) 1) t vars)
+
+    (isSet -> Just elemTy) ->
+      case elemTy of
+        TyCon tyConName ->
+          case lookup tyConName ?constructors of
+            Just constructorNames ->
+              return (SSet (S.fromList $ map internalName constructorNames), sTrue)
+            Nothing ->
+              solverError $ "I can't find the data constructors of " <> pretty tyConName
+        _ -> solverError $ "Cannot make the universal set of elements for type " <> pretty elemTy
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -615,13 +627,14 @@ provePredicate
   :: (?globals :: Globals)
   => Pred                        -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
+  -> Ctxt [Id]
   -> IO (Double, SolverResult)
-provePredicate predicate vars
+provePredicate predicate vars constructors
   | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return (0.0, QED)
   | otherwise = do
-      let (sbvTheorem, _, unsats) = compileToSBV predicate vars
+      let (sbvTheorem, _, unsats) = compileToSBV predicate vars constructors
 
       -- Benchmarking start
       start  <- if benchmarking then Clock.getTime Clock.Monotonic else return 0
