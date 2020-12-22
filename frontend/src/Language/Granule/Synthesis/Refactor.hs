@@ -35,6 +35,7 @@ bubbleUpPatterns e pats = (pats, e)
 refactorCase :: Eq a => [Pattern a] -> Expr v a -> [([Pattern a], Expr v a)]
 refactorCase pats (Case _ _ _ (Val _ _ _ (Var _ name)) casePats) =
   concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
+refactorCase pats e = [(pats, e)]
 
 -- Refactors a case expression to pattern match on the ADT at the function equation level
 refactorCaseEqn :: Eq a => Equation v a -> [Equation v a]
