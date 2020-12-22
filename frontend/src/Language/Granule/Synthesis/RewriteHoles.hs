@@ -16,11 +16,10 @@ import Language.Granule.Context
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Def
 import Language.Granule.Syntax.Expr
-import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span (Span, encompasses)
-import Language.Granule.Synthesis.Refactor (refactorEqn, refactorCaseEqn)
+import Language.Granule.Synthesis.Refactor (refactorEqn, refactorPattern, refactorCaseEqn)
 
 import Language.Granule.Utils
 
@@ -118,22 +117,6 @@ holeRefactorVal goal (Promote a expr)  = Promote a (holeRefactorExpr goal expr)
 holeRefactorVal goal (Pure a expr)     = Pure a (holeRefactorExpr goal expr)
 holeRefactorVal goal (Constr a v vals) = Constr a v (map (holeRefactorVal goal) vals)
 holeRefactorVal goal v = v
-
--- Refactors a pattern by traversing to the rewritten variable and replacing
--- the variable with the subpattern.
-refactorPattern :: Pattern () -> Id -> Pattern () -> Pattern ()
-refactorPattern p@(PVar _ _ _ id) id' subpat
-  | id == id' = subpat
-  | otherwise = p
-refactorPattern p@PWild {} _ _ = p
-refactorPattern (PBox sp () _ p) id' subpat =
-  let p' = refactorPattern p id' subpat
-  in PBox sp () (patRefactored p') p'
-refactorPattern p@PInt {} _ _ = p
-refactorPattern p@PFloat {} _ _ = p
-refactorPattern (PConstr sp () _ id ps) id' subpat =
-  let ps' = map (\p -> refactorPattern p id' subpat) ps
-  in PConstr sp () (any patRefactored ps') id ps'
 
 -- Finds associated cases for a given equation, based on spans.
 findRelevantCase :: Equation () () -> [(Span, Ctxt (Pattern ()), Expr () Type)] -> [(Span, Ctxt (Pattern ()), Expr () Type)]

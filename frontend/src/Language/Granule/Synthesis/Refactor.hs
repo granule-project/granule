@@ -15,36 +15,22 @@ refactorDef (Def sp id ref (EquationList sp' id' ref' eqns) tyS) =
 
 refactorEqn :: Equation v a -> Equation v a
 refactorEqn (Equation sp name ref annotation pats body) =
-  Equation sp name ref annotation pats body
-    -- where
-    --   (newPats, newBody) = bubbleUpPatterns body pats
-
--- replace p v p' replaces the pattern p' for every occurence of v inside of p
-replace :: Pattern a -> Id -> Pattern a -> Pattern a
-replace pat@(PVar _ _ _ name) var pat' =
-  if name == var then pat' else pat
-replace (PBox s a b pat) var pat' =
-  PBox s a b (replace pat var pat')
-replace (PConstr s ty a id constrs) var pat' =
-  PConstr s ty a id (replaceInPats constrs var pat')
-replace pat _ _ = pat
+  Equation sp name ref annotation newPats newBody
+    where
+      (newPats, newBody) = bubbleUpPatterns body pats
 
 replaceInPats :: [Pattern a] -> Id -> Pattern a -> [Pattern a]
-replaceInPats pats var pat' = map (\pat -> replace pat var pat') pats
+replaceInPats pats var pat' = map (\pat -> refactorPattern pat var pat') pats
 
 -- Collect patterns and rewrite beta-redexes into richer patterns
 bubbleUpPatterns :: Expr v a -> [Pattern a] -> ([Pattern a], Expr v a)
-
 -- Top-level lambda => add the pattern `p` to the list of patterns and recurse
 bubbleUpPatterns (Val _ _ _ (Abs _ p _ e)) pats =
   bubbleUpPatterns e (pats ++ [p])
-
 -- Beta-redex whose argument is a variable
 bubbleUpPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e)) (Val _ _ _ (Var _ x))) pats =
   bubbleUpPatterns e (replaceInPats pats x p)
-
 bubbleUpPatterns e pats = (pats, e)
-
 
 refactorCase :: Eq a => [Pattern a] -> Expr v a -> [([Pattern a], Expr v a)]
 refactorCase pats (Case _ _ _ (Val _ _ _ (Var _ name)) casePats) =
@@ -83,3 +69,21 @@ checkPatternId id (p@(PBox _ _ _ p'):rest) = do
   (p'', rest') <- checkPatternId id (p':rest)
   return  (p'', p:rest')
 checkPatternId id _ = Nothing
+
+-- Refactors a pattern by traversing to the rewritten variable and replacing
+-- -- the variable with the subpattern.
+
+-- refactorPattern p v p' replaces the pattern p' for every occurence of v inside of p
+refactorPattern :: Pattern a -> Id -> Pattern a -> Pattern a
+refactorPattern p@(PVar _ _ _ id) id' subpat
+  | id == id' = subpat
+  | otherwise = p
+refactorPattern p@PWild {} _ _ = p
+refactorPattern (PBox sp a _ p) id' subpat =
+  let p' = refactorPattern p id' subpat
+  in PBox sp a (patRefactored p') p'
+refactorPattern p@PInt {} _ _ = p
+refactorPattern p@PFloat {} _ _ = p
+refactorPattern (PConstr sp a _ id ps) id' subpat =
+  let ps' = map (\p -> refactorPattern p id' subpat) ps
+  in PConstr sp a (any patRefactored ps') id ps'
