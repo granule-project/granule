@@ -1,8 +1,8 @@
 name: granule-frontend
 version: '0.8.0.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
-author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Preston Keel
-copyright: 2018-19 authors
+author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel
+copyright: 2018-20 authors
 license: BSD3
 github: granule-project/granule
 dependencies:
