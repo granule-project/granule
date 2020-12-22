@@ -1,0 +1,3 @@
+comp : forall {k : Coeffect, n m : k, a : Type, b : Type, c : Type} .
+       (a [m] -> b) [n] -> (b [n] -> c) -> a [n * m] -> c
+comp [u] y [v] = y [u [v]]
