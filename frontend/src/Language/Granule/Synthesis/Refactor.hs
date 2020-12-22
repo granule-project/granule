@@ -15,35 +15,35 @@ refactorDef (Def sp id ref (EquationList sp' id' ref' eqns) tyS) =
 
 refactorEqn :: Equation v a -> Equation v a
 refactorEqn (Equation sp name ref annotation pats body) =
-  Equation sp name ref annotation (pats ++ getPatterns body) (exprBody body)
-    where
-      getPatterns e = boxPatterns e (exprPatterns e)
+  Equation sp name ref annotation pats body
+    -- where
+    --   (newPats, newBody) = bubbleUpPatterns body pats
 
-      replace (pat@(PVar _ _ _ name):xs) var pat' =
-        if name == var then
-          (pat' : (replace xs var pat'))
-        else
-          (pat : (replace xs var pat'))
-      replace (pat@(PBox {}):xs) var pat' =
-        pat : (replace xs var pat')
-      replace ((PConstr s ty a id constrs):xs) var pat' =
-        (PConstr s ty a id (replace constrs var pat')) : replace xs var pat'
-      replace pats _ _ = pats
+-- replace p v p' replaces the pattern p' for every occurence of v inside of p
+replace :: Pattern a -> Id -> Pattern a -> Pattern a
+replace pat@(PVar _ _ _ name) var pat' =
+  if name == var then pat' else pat
+replace (PBox s a b pat) var pat' =
+  PBox s a b (replace pat var pat')
+replace (PConstr s ty a id constrs) var pat' =
+  PConstr s ty a id (replaceInPats constrs var pat')
+replace pat _ _ = pat
 
-      exprPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) _) = exprPatterns e
-      exprPatterns (Val _ _ _ (Abs _ p _ e)) = p  : exprPatterns e
-      exprPatterns e = []
+replaceInPats :: [Pattern a] -> Id -> Pattern a -> [Pattern a]
+replaceInPats pats var pat' = map (\pat -> replace pat var pat') pats
 
-      boxPatterns (Val _ _ _ (Abs _ p _ e)) pats = boxPatterns e pats
-      boxPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e )) (Val _ _ _ (Var _ name))) pats =
-        boxPatterns e pats'
-         where
-          pats' = replace pats name p
-      boxPatterns e pats = pats
+-- Collect patterns and rewrite beta-redexes into richer patterns
+bubbleUpPatterns :: Expr v a -> [Pattern a] -> ([Pattern a], Expr v a)
 
-      exprBody (App _ _ _ (Val _ _ _ (Abs _ _ _ e )) _) = exprBody e
-      exprBody (Val _ _ _ (Abs _ _ _ e)) = exprBody e
-      exprBody e = e
+-- Top-level lambda => add the pattern `p` to the list of patterns and recurse
+bubbleUpPatterns (Val _ _ _ (Abs _ p _ e)) pats =
+  bubbleUpPatterns e (pats ++ [p])
+
+-- Beta-redex whose argument is a variable
+bubbleUpPatterns (App _ _ _ (Val _ _ _ (Abs _ p _ e)) (Val _ _ _ (Var _ x))) pats =
+  bubbleUpPatterns e (replaceInPats pats x p)
+
+bubbleUpPatterns e pats = (pats, e)
 
 
 refactorCase :: Eq a => [Pattern a] -> Expr v a -> [([Pattern a], Expr v a)]
