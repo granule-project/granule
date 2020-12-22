@@ -339,22 +339,17 @@ absHelper gamma omega resourceScheme goalTy@(Forall _ binders constraints (FunTy
     debugM "synthDebug" $ "Lambda-binding " ++ pretty [(id, Linear t1)]
     (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma' omega' (Forall nullSpanNoFile binders constraints t2)
 
-    let (absBuilder, bindings') =
-          case lookupAndCutout id bindings of
-            Just (bs, (boundVar, boxTy)) -> (makeAbsUnbox boxTy boundVar, bs)
-            Nothing -> (makeAbs id, bindings)
-      in
-      -- Check resource use at the end
-      case (resourceScheme, lookupAndCutout id delta) of
-        (Additive{}, Just (delta', Linear _)) -> do
-        -- `id` was used
-          return (absBuilder e goalTy, delta', subst, bindings')
-        (Subtractive{}, Nothing) -> do
-        -- `id` was used
-          return (absBuilder e goalTy, delta, subst, bindings')
-        _ -> do
-        -- `id` was not used!
-          none
+    -- Check resource use at the end
+    case (resourceScheme, lookupAndCutout id delta) of
+      (Additive{}, Just (delta', Linear _)) -> do
+      -- `id` was used
+        return (makeAbs id e goalTy, delta', subst, bindings)
+      (Subtractive{}, Nothing) -> do
+      -- `id` was used
+        return (makeAbs id e goalTy, delta, subst, bindings)
+      _ -> do
+      -- `id` was not used!
+        none
 absHelper _ _ _ _ = none
 
 
@@ -546,7 +541,7 @@ unboxHelper left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
               conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade_s kind)
               res <- solve
               -- If we succeed, create the let binding
-              boolToSynthesiser res (e, delta', subst, (x1, (x2, Box grade_r tyA)):bindings)
+              boolToSynthesiser res (makeUnbox x2 x1 goalTy (Box grade_r tyA) tyA e, delta', subst, (x1, (x2, Box grade_r tyA)):bindings)
 
             _ -> none
         else none
@@ -588,7 +583,7 @@ unboxHelper left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                 res <- solve
                 case res of
                   True -> do
-                    return (e,  delta'', subst, (x, (x2, Box grade t')):bindings)
+                    return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta'', subst, (x, (x2, Box grade t')):bindings)
                   False -> do
                     none
               _ -> do
@@ -597,7 +592,7 @@ unboxHelper left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
                 res <- solve
                 case res of
                   True ->
-                    return (e,  delta', subst, (x, (x2, Box grade t')):bindings)
+                    return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta', subst, (x, (x2, Box grade t')):bindings)
                   False -> none
           else none
      _ -> none)
