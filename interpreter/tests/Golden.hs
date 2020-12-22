@@ -127,23 +127,42 @@ goldenTestsSynthesis = do
   outfiles <- findByExtension [".output"] dir
   failOnOrphanOutfiles files outfiles
 
+  -- subtractive synthesis check
+  let hdir = "frontend/tests/cases/synthesis/hilbert"
+  hfiles <- findByExtension granuleFileExtensions hdir
+
   return $ testGroup
     "Golden synthesis examples"
-    (map grGolden' files)
+    [testGroup 
+       "Main: Additive" (map (grGolden' mainGlobals) files)
+    -- Do extra tests, running additive pruning and subtractive on the hilbert benchmarks
+   , testGroup
+       "Additive(pruning)" (map (grGolden' subtractiveGlobals) hfiles)
+   , testGroup
+       "Subtractive" (map (grGolden' additivePruningGlobals) hfiles)]
 
   where
-    grGolden' :: FilePath -> TestTree
-    grGolden' file =
-      goldenVsFile file file (file <> ".output") (runGr file)
-
-    runGr :: FilePath -> IO ()
-    runGr fp = do
-      src <- readFile fp
-      let ?globals = goldenGlobals {
+    mainGlobals :: FilePath -> Globals
+    mainGlobals fp = goldenGlobals {
         globalsSourceFilePath = Just fp,
         globalsSynthesise = Just True,
         globalsRewriteHoles = Just True,
         globalsIncludePath = Just "StdLib" }
+
+    subtractiveGlobals :: FilePath -> Globals
+    subtractiveGlobals fp = (mainGlobals fp) { globalsSubtractiveSynthesis = Just True }
+
+    additivePruningGlobals :: FilePath -> Globals
+    additivePruningGlobals fp = (mainGlobals fp) { globalsAlternateSynthesisMode = Just True }
+
+    grGolden' :: (FilePath -> Globals) -> FilePath -> TestTree
+    grGolden' gl file =
+      goldenVsFile file file (file <> ".output") (runGr gl file)
+
+    runGr :: (FilePath -> Globals) -> FilePath -> IO ()
+    runGr gl fp = do
+      src <- readFile fp
+      let ?globals = gl fp
       _ <- Interpreter.run (mempty { Interpreter.grKeepBackup = Just True }) src
       return ()
 
