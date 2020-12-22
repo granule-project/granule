@@ -4,5 +4,4 @@ fromEither : forall {a : Type, b : Type, c : Type} .
             (a -> c) [0..1] ->
             (b -> c) [0..1] ->
             Either a b -> c
-fromEither (Left w) [u] u [v] v = u w;
-fromEither (Right p) [u] u [v] v = v p
+fromEither = ?
