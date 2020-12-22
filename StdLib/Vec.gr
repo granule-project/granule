@@ -140,6 +140,19 @@ replicate
 replicate Z [c] = Nil;
 replicate (S n) [c] = Cons c (replicate n [c])
 
+-- Interesting examples when thinking about irrelevance:
+
+rep
+  : forall {a : Type, n : Nat}
+  . N n -> a -> Vec 1 a
+rep Z c = Cons c Nil;
+rep (S n) c = rep n c
+
+repE
+  : forall {a : Type, n : Nat}
+  . (N n) [0] -> a -> Vec 1 a
+repE [n] c = Cons c Nil
+
 --- Make a vector of length n with all integers from 0 to n-1
 ---     > range (S (S (S (S Z))))
 ---     Cons 0 (Cons 1 (Cons 2 (Cons 3 Nil)))
