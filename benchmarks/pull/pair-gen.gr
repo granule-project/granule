@@ -1,2 +1,2 @@
-pull : forall {a : Type, b : Type, k : Coeffect, c : k} . (a [c], b [c]) -> (a, b) [c]
+pull : forall {a : Type, b : Type, k : Semiring, c : k} . (a [c], b [c]) -> (a, b) [c]
 pull = ?
