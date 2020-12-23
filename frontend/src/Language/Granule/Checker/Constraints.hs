@@ -7,13 +7,13 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
-
 -- | Deals with compilation of coeffects into symbolic representations of SBV
 module Language.Granule.Checker.Constraints where
 
 --import Data.Foldable (foldrM)
-import Data.SBV hiding (kindOf, name, symbolic)
-import qualified Data.Set as S
+import Data.SBV hiding (kindOf, name, symbolic, isSet)
+import qualified Data.SBV.Set as S
+import Data.Maybe (mapMaybe)
 import Control.Monad (liftM2)
 import Control.Monad.IO.Class
 
@@ -34,9 +34,11 @@ import qualified System.Clock as Clock
 -- | Compile constraint into an SBV symbolic bool, along with a list of
 -- | constraints which are trivially unequal (if such things exist) (e.g., things like 1=0).
 compileToSBV :: (?globals :: Globals)
-  => Pred -> Ctxt (Type, Quantifier)
+  => Pred
+  -> Ctxt (Type, Quantifier)
+  -> Ctxt [Id]
   -> (Symbolic SBool, Symbolic SBool, [Constraint])
-compileToSBV predicate tyVarContext =
+compileToSBV predicate tyVarContext constructors =
   (buildTheoremNew (reverse tyVarContext) []
   , undefined -- buildTheorem sNot (compileQuant . flipQuant)
   , trivialUnsatisfiableConstraints predicate')
@@ -107,7 +109,7 @@ compileToSBV predicate tyVarContext =
           buildTheorem' solverVars (Impl vs p p')
 
     buildTheorem' solverVars (Con cons) =
-      compile solverVars cons
+      let ?constructors = constructors in compile solverVars cons
 
 -- | Symbolic coeffect representing 0..Inf
 zeroToInfinity :: SGrade
@@ -144,6 +146,12 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
   -- Floats (rationals)
     quant q name (\solverVar -> k (sTrue, SFloat solverVar))
 
+freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
+    quant q name (\solverVar -> k (sTrue, SSec solverVar))
+
+freshSolverVarScoped quant name (TyCon (internalName -> "LNL")) q k =
+    quant q name (\solverVar -> k (sTrue, SLNL solverVar))
+
 freshSolverVarScoped quant name (TyCon conName) q k =
     -- Integer based
     quant q name (\solverVar ->
@@ -164,9 +172,12 @@ freshSolverVarScoped quant name t q k | t == extendedNat = do
 freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
-freshSolverVarScoped _ _ t _ _ =
-  solverError $ "Trying to make a fresh solver variable for a grade of type: "
-      <> show t <> " but I don't know how."
+freshSolverVarScoped quant name (Language.Granule.Syntax.Type.isSet -> elemTy) q k =
+  quant q name (\solverVar -> k (sTrue, SSet solverVar))
+
+-- freshSolverVarScoped _ _ t _ _ =
+--   solverError $ "Trying to make a fresh solver variable for a grade of type: "
+--       <> show t <> " but I don't know how."
 
 -- | What is the SBV representation of a quantifier
 compileQuantScoped :: QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
@@ -184,13 +195,21 @@ instance QuantifiableScoped Integer where
   universalScoped v = forAll [v]
   existentialScoped v = forSome [v]
 
+instance QuantifiableScoped Bool where
+  universalScoped v = forAll [v]
+  existentialScoped v = forSome [v]
+
 instance QuantifiableScoped Float where
+  universalScoped v = forAll [v]
+  existentialScoped v = forSome [v]
+
+instance QuantifiableScoped (RCSet SSetElem) where
   universalScoped v = forAll [v]
   existentialScoped v = forSome [v]
 
 
 -- Compile a constraint into a symbolic bool (SBV predicate)
-compile :: (?globals :: Globals) =>
+compile :: (?globals :: Globals, ?constructors :: Ctxt [Id]) =>
   Ctxt SGrade -> Constraint -> Symbolic SBool
 
 compile vars (Eq _ c1 c2 t) =
@@ -253,7 +272,7 @@ compile vars c = error $ "Internal bug: cannot compile " <> show c
 -- | (along with any additional predicates)
 -- |
 -- | `compileCoeffect r t context` compiles grade `r` of type `t`.
-compileCoeffect :: (?globals :: Globals) =>
+compileCoeffect :: (?globals :: Globals, ?constructors :: Ctxt [Id]) =>
   Coeffect -> Type -> [(Id, SGrade)] -> Symbolic (SGrade, SBool)
 
 compileCoeffect (TySig c k) _ ctxt = compileCoeffect c k ctxt
@@ -266,6 +285,18 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
             c         -> error $ "Cannot compile " <> show c
 
   return (SLevel . fromInteger . toInteger $ n, sTrue)
+
+compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
+  case internalName name of
+    "Lin"    -> return (SLNL sFalse, sTrue)
+    "NonLin" -> return (SLNL sTrue, sTrue)
+    c -> error $ "Cannot compile " <> show c <> " as a LNL semiring"
+
+compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
+  case internalName name of
+    "Hi" -> return (SSec hiRepresentation, sTrue)
+    "Lo" -> return (SSec loRepresentation, sTrue)
+    c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
 compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (TyCon (internalName -> "Level"), t2)) vars = do
@@ -301,8 +332,11 @@ compileCoeffect (TyGrade k' n) k _ | k == extendedNat && (k' == Nothing || k' ==
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
-compileCoeffect (TySet xs) (TyCon k) _ | internalName k == "Set" =
-  return (SSet . S.fromList $ xs, sTrue)
+compileCoeffect (TySet xs) (Language.Granule.Syntax.Type.isSet -> elemTy) _ =
+    return (SSet . S.fromList $ mapMaybe justTyConNames xs, sTrue)
+  where
+    justTyConNames (TyCon x) = Just (internalName x)
+    justTyConNames t = error $ "Cannot have a type " ++ show t ++ " in a symbolic list"
 
 compileCoeffect (TyVar v) _ vars =
    case lookup v vars of
@@ -337,16 +371,23 @@ compileCoeffect c@(TyInfix TyOpInterval lb ub) (isInterval -> Just t) vars = do
   intervalConstraint <- symGradeLessEq lower upper
   return $ (SInterval lower upper, p1 .&& p2 .&& intervalConstraint)
 
+compileCoeffect (TyCon name) (isInterval -> Just t) vars | t == extendedNat = do
+  case internalName name of
+    "Lin"    -> return (SInterval (SExtNat 1) (SExtNat 1), sTrue)
+    "NonLin" -> return (SInterval (SExtNat 0) (SExtNat SNatX.inf), sTrue)
+    c -> error $ "Cannot compile " <> show c <> " as a Interval (Extended Nat) semiring"
+
 compileCoeffect (TyGrade k' 0) k vars = do
   k <- matchTypes k k'
   case k of
     (TyCon k') ->
       case internalName k' of
         "Level"     -> return (SLevel (literal unusedRepresentation), sTrue)
+        "Sec"       -> return (SSec hiRepresentation, sTrue)
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
-        "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
+        "LNL"       -> return (SLNL sTrue, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
@@ -361,6 +402,9 @@ compileCoeffect (TyGrade k' 0) k vars = do
         (compileCoeffect (TyGrade (Just t) 0) t vars)
         (compileCoeffect (TyGrade (Just t) 0) t vars)
 
+    (isSet -> Just elemTy) ->
+       return (SSet (S.fromList []), sTrue)
+
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
     _ -> solverError $ "I don't know how to compile a 0 for " <> pretty k
@@ -371,10 +415,11 @@ compileCoeffect (TyGrade k' 1) k vars = do
     TyCon k ->
       case internalName k of
         "Level"     -> return (SLevel (literal privateRepresentation), sTrue)
+        "Sec"       -> return (SSec loRepresentation, sTrue)
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
-        "Set"       -> return (SSet (S.fromList []), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
+        "LNL"       -> return (SLNL sFalse, sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -389,6 +434,16 @@ compileCoeffect (TyGrade k' 1) k vars = do
       liftM2And SInterval
         (compileCoeffect (TyGrade (Just t) 1) t vars)
         (compileCoeffect (TyGrade (Just t) 1) t vars)
+
+    (isSet -> Just elemTy) ->
+      case elemTy of
+        TyCon tyConName ->
+          case lookup tyConName ?constructors of
+            Just constructorNames ->
+              return (SSet (S.fromList $ map internalName constructorNames), sTrue)
+            Nothing ->
+              solverError $ "I can't find the data constructors of " <> pretty tyConName
+        _ -> solverError $ "Cannot make the universal set of elements for type " <> pretty elemTy
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -441,8 +496,7 @@ approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
-approximatedByOrEqualConstraint (SSet s) (SSet t) =
-  return $ if s == t then sTrue else sFalse
+approximatedByOrEqualConstraint (SSet s) (SSet t) = pure $ s `S.isSubsetOf` t
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     -- Private <= Public
@@ -450,6 +504,20 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     $ ite (l .== literal unusedRepresentation) sTrue
       $ ite (l .== literal privateRepresentation) sTrue
         $ ite (k .== literal publicRepresentation) sTrue sFalse
+
+approximatedByOrEqualConstraint (SSec a) (SSec b) =
+  -- Lo <= Lo   (False <= False)
+  -- Hi <= Hi   (True <= True)
+  -- Hi <= Lo   (True <= False)
+  -- but not Lo <= Hi   (False  <= True)
+  -- So this is flipped implication
+  --return (a .== b)
+  return (b .=> a)
+
+approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
+  -- Lin (F) <= NonLin (T)
+  -- but not (NonLin (T) <= Lin (F))
+  return (a .=> b)
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts approximatedByOrEqualConstraint (.&&) (const sTrue) s t)
@@ -560,13 +628,14 @@ provePredicate
   :: (?globals :: Globals)
   => Pred                        -- Predicate
   -> Ctxt (Type, Quantifier) -- Free variable quantifiers
+  -> Ctxt [Id]
   -> IO (Double, SolverResult)
-provePredicate predicate vars
+provePredicate predicate vars constructors
   | isTrivial predicate = do
       debugM "solveConstraints" "Skipping solver because predicate is trivial."
       return (0.0, QED)
   | otherwise = do
-      let (sbvTheorem, _, unsats) = compileToSBV predicate vars
+      let (sbvTheorem, _, unsats) = compileToSBV predicate vars constructors
 
       -- Benchmarking start
       start  <- if benchmarking then Clock.getTime Clock.Monotonic else return 0

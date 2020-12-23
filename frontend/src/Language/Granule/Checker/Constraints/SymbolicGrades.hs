@@ -5,7 +5,6 @@
 -- in order for a solver to use.
 module Language.Granule.Checker.Constraints.SymbolicGrades where
 
-import Language.Granule.Syntax.Type
 import Language.Granule.Checker.Constraints.SNatX
 
 import Data.Functor.Identity
@@ -17,7 +16,7 @@ import Control.Exception
 import qualified Data.Text as T
 import GHC.Generics (Generic)
 import Data.SBV hiding (kindOf, name, symbolic)
-import qualified Data.Set as S
+import qualified Data.SBV.Set as S
 
 solverError :: MonadIO m => String -> m a
 solverError msg = liftIO $ throwIO . ErrorCall $ msg
@@ -27,7 +26,8 @@ data SGrade =
        SNat      SInteger
      | SFloat    SFloat
      | SLevel    SInteger
-     | SSet      (S.Set Type)
+     | SSec      SBool -- Hi = True, Lo = False
+     | SSet      (SSet SSetElem)
      | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
@@ -37,13 +37,31 @@ data SGrade =
      -- |
      -- | Grade '0' denotes even usage, and grade '1' denotes odd usage.
      | SOOZ SBool
+     -- LNL
+     | SLNL SBool -- True = NonLin, False = Lin
 
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
      | SUnknown SynTree
-                                 -- but if Nothing then these values are incomparable
+
     deriving (Show, Generic)
 
+-- Symbolic elements (TODO: generalise in the future as needed)
+-- For now only strings can be set elements
+type SSetElem = [Char]
+
+-- Specialised representation for `Level`
+publicRepresentation, privateRepresentation, unusedRepresentation :: Integer
+privateRepresentation = 1
+publicRepresentation  = 2
+unusedRepresentation  = 0
+
+-- Representation for `Sec`
+hiRepresentation, loRepresentation :: SBool
+hiRepresentation = sTrue
+loRepresentation = sFalse
+
+-- Representation of semiring terms as a `SynTree`
 data SynTree =
     SynPlus SynTree SynTree
   | SynTimes SynTree SynTree
@@ -103,6 +121,8 @@ sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
 sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
 sLtTree _ _ = return $ sFalse
 
+---- SGrade operations
+
 -- Work out if two symbolic grades are of the same type
 match :: SGrade -> SGrade -> Bool
 match (SNat _) (SNat _) = True
@@ -115,6 +135,8 @@ match SPoint SPoint = True
 match (SProduct s1 s2) (SProduct t1 t2) = match s1 t1 && match s2 t2
 match (SUnknown _) (SUnknown _) = True
 match (SOOZ _) (SOOZ _) = True
+match (SSec _) (SSec _) = True
+match (SLNL _) (SLNL _) = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -172,6 +194,9 @@ instance Mergeable SGrade where
     SUnknown (SynLeaf (Just (symbolicMerge s sb u u')))
 
   symbolicMerge s sb (SUnknown a) (SUnknown b) = SUnknown (SynMerge sb a b)
+  symbolicMerge s sb (SSec a) (SSec b) = SSec (symbolicMerge s sb a b)
+  symbolicMerge s sb (SLNL a) (SLNL b) = SLNL (symbolicMerge s sb a b)
+
   symbolicMerge _ _ s t = error $ cannotDo "symbolicMerge" s t
 
 symGradeLess :: SGrade -> SGrade -> Symbolic SBool
@@ -215,7 +240,7 @@ symGradeEq (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradeEq (SNat n) (SNat n')     = return $ n .== n'
 symGradeEq (SFloat n) (SFloat n') = return $ n .== n'
 symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
-symGradeEq (SSet n) (SSet n')     = solverError "Can't compare symbolic sets yet"
+symGradeEq (SSet n) (SSet n')     = return $ n .== n'
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
 symGradeEq SPoint SPoint          = return $ sTrue
 symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r
@@ -223,6 +248,8 @@ symGradeEq s t | isSProduct s || isSProduct t =
     either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
 
 symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
+symGradeEq (SSec n) (SSec n') = return $ n .== n'
+symGradeEq (SLNL n) (SLNL m) = return $ n .== m
 symGradeEq s t = solverError $ cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -242,6 +269,7 @@ symGradeMeet s t | isSProduct s || isSProduct t =
 symGradeMeet (SUnknown (SynLeaf (Just n))) (SUnknown (SynLeaf (Just n'))) =
   return $ SUnknown (SynLeaf (Just (n `smin` n')))
 symGradeMeet (SUnknown t) (SUnknown t') = return $ SUnknown (SynMeet t t')
+symGradeMeet (SSec a) (SSec b) = return $ SSec (a .&& b)
 symGradeMeet s t = solverError $ cannotDo "meet" s t
 
 -- | Join operation on symbolic grades
@@ -261,6 +289,7 @@ symGradeJoin s t | isSProduct s || isSProduct t =
 symGradeJoin (SUnknown (SynLeaf (Just n))) (SUnknown (SynLeaf (Just n'))) =
   return $ SUnknown (SynLeaf (Just (n `smax` n')))
 symGradeJoin (SUnknown t) (SUnknown t') = return $ SUnknown (SynJoin t t')
+symGradeJoin (SSec a) (SSec b) = return $ SSec (a .|| b)
 symGradeJoin s t = solverError $ cannotDo "join" s t
 
 -- | Plus operation on symbolic grades
@@ -292,6 +321,9 @@ symGradePlus (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
 symGradePlus (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynPlus um un)
 
+symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
+symGradePlus (SLNL a) (SLNL b) = return $ SLNL sTrue
+
 symGradePlus s t = solverError $ cannotDo "plus" s t
 
 -- | Times operation on symbolic grades
@@ -299,7 +331,7 @@ symGradeTimes :: SGrade -> SGrade -> Symbolic SGrade
 symGradeTimes (SNat n1) (SNat n2) = return $ SNat (n1 * n2)
 symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
-symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.union s t
+symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.intersection s t
 symGradeTimes (SLevel lev1) (SLevel lev2) = return $
     ite (lev1 .== literal unusedRepresentation)
         (SLevel $ literal unusedRepresentation)
@@ -347,6 +379,9 @@ symGradeTimes (SUnknown t) (SUnknown t'@(SynLeaf (Just u))) =
 
 symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)
+
+symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
+symGradeTimes (SLNL a) (SLNL b) = return $ SLNL $ a .&& b
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
 

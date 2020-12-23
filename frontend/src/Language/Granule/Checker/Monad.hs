@@ -225,6 +225,12 @@ lookupPatternMatches sp constrName = do
   st <- get
   return $ snd3 <$> lookup constrName (typeConstructors st)
 
+-- Return the data constructors of all types in the environment
+allDataConstructorNames :: Checker (Ctxt [Id])
+allDataConstructorNames = do
+  st <- get
+  return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
+
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
 discarded, the rhs result computation must be run! This is useful for
@@ -924,7 +930,7 @@ instance UserMsg CheckerError where
      <> " but it is trying to be used at a level " <> pretty l' <> " setting."
 
   msg ImpossibleKindSynthesis{ errTy }
-    = "Cannot synthesis a kind for `" <> pretty errTy <> "`"
+    = "Cannot synthesise a kind for `" <> pretty errTy <> "`"
 
   msg NaturalNumberAtWrongKind{ errTy, errK }
     = "Natural number `" <> pretty errTy <> "` is not a member of `" <> pretty errK <> "`"

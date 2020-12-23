@@ -159,7 +159,7 @@ range' (S n) [i] = Cons i (range' n [i + 1])
 
 --- pullVec pulls non linearity in elements into a non linearity on the whole vector
 pullVec
-  : forall {a : Type, c : Coeffect, k : c, n : Nat}
+  : forall {a : Type, c : Semiring, k : c, n : Nat}
   . Vec n (a [k]) -> (Vec n a) [k]
 pullVec Nil = [Nil];
 pullVec (Cons [x] xs) = let [ys] = pullVec xs in [Cons x ys]
@@ -167,8 +167,7 @@ pullVec (Cons [x] xs) = let [ys] = pullVec xs in [Cons x ys]
 --- pushVec pushes in non linearity of vector into the elements
 pushVec : ∀ {k : Nat, n : Nat, a : Type} . {1 <= k}
       => (Vec n a) [k] → Vec n (a [k])
-pushVec [Nil] = Nil;
-pushVec [Cons x xs] = Cons [x] (pushVec [xs])
+pushVec = push @Vec
 
 copySpine
   : forall {a : Type, n : Nat}
