@@ -62,8 +62,8 @@ buildInitialHeap e = ([], e)
 ctxtPlusZip :: Ctxt Grade -> Ctxt Grade -> Ctxt Grade
 ctxtPlusZip [] ctxt' = ctxt'
 ctxtPlusZip ((i, g) : ctxt) ctxt' =
-  case lookup i ctxt' of
-    Just g' -> (i, TyInfix TyOpPlus g g') : ctxtPlusZip ctxt ctxt'
+  case lookupAndCutout i ctxt' of
+    Just (ctxt', g') -> (i, TyInfix TyOpPlus g g') : ctxtPlusZip ctxt ctxt'
     Nothing -> (i, g) : ctxtPlusZip ctxt ctxt'
 
 -- Multi-step relation
