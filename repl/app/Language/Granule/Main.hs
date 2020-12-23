@@ -234,7 +234,7 @@ handleCMD s =
         -- If this was actually just a type, return it as is
         Right kind -> liftIO $ putStrLn exprString
 
-    handleLine (HeapEval exprString) = do
+    handleLine (HeapEval steps exprString) = do
       expr <- parseExpression exprString
       ty <- synthTypeFromInputExpr expr
       case ty of
@@ -248,7 +248,7 @@ handleCMD s =
           let fv = freeVars expr
           let ast = buildRelevantASTdefinitions fv (defns st)
           let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
-          result <- liftIO' $ try $ replHeapEval (freeVarCounter st) astNew expr
+          result <- liftIO' $ try $ replHeapEval (freeVarCounter st) astNew expr steps
           case result of
               Left e -> Ex.throwError (EvalError e)
               Right Nothing -> liftIO $ putStrLn "No result from heap evaluation"
@@ -296,9 +296,9 @@ replEval val (AST dataDecls defs _ _ _) = do
       Just (Promote _ e) -> fmap Just (evalIn bindings e)
       Just val           -> return $ Just val
 
-replHeapEval :: (?globals :: Globals) => Int -> AST () () -> Expr () () -> IO (Maybe String) -- Maybe (Expr () ()))
-replHeapEval val (AST dataDecls defs _ _ _) expr = do
-  return $ heapEvalJustExprAndReport expr
+replHeapEval :: (?globals :: Globals) => Int -> AST () () -> Expr () () -> Int -> IO (Maybe String) -- Maybe (Expr () ()))
+replHeapEval val (AST dataDecls defs _ _ _) expr steps = do
+  return $ heapEvalJustExprAndReport expr steps
     -- bindings <- heapEvalDefs (mkId (" repl" <> show val)) defs
     -- case lookup (mkId (" repl" <> show val)) bindings of
     --   Nothing -> return Nothing

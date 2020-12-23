@@ -38,7 +38,7 @@ data REPLExpr =
     | Reload
     | CheckType String
     | Eval String
-    | HeapEval String
+    | HeapEval Int String
     | RunParser String
     | RunLexer String
     | Debuger [FilePath]
@@ -70,6 +70,18 @@ replTyCmdParser short long c = do
     eof
     if (cmd == long || cmd == short)
     then return $ c term
+    else fail $ "Command \":"<>cmd<>"\" is unrecognized."
+
+replHeapEvalCmdParser short long c = do
+    symbol ":"
+    cmd <- many lower
+    ws
+    num <- many digit
+    ws
+    term <- many1 anyChar
+    eof
+    if (cmd == long || cmd == short)
+    then return $ c (read num) term
     else fail $ "Command \":"<>cmd<>"\" is unrecognized."
 
 replTySchCmdParser short long c = do
@@ -120,7 +132,7 @@ showAstParser = replTyCmdParser "s" "show" ShowDef
 
 runParserRepl = replTyCmdParser "p" "parse" RunParser
 
-runHeapModel = replTyCmdParser "heap" "heap" HeapEval
+runHeapModel = replHeapEvalCmdParser "heap" "heap" HeapEval
 
 
 runLexer = replTyCmdParser "x" "lexer" RunLexer

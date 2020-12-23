@@ -27,6 +27,8 @@ comp' : forall {a : Type, b : Type, c : Type} .
        (a [Lo] -> b) [Lo] -> (b [Hi] -> c) -> (a [Hi] -> c)
 comp' [f] g [x] = g [f [x]]
 
+-- (\([f] : (Int [Lo] -> Int) [Lo]) -> \(g : (Int [Hi] -> Int)) -> \([x] : Int [Hi]) -> g [f [x]])
+
 -- Note that the above composition is also derivable from the standard
 -- library's definition of composition
 import Prelude

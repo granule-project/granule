@@ -29,11 +29,11 @@ heapEvalDefs defs defName = return []
 
 -- (\([x] : Int [2]) -> x)
 -- Key hook in for now
-heapEvalJustExprAndReport :: (?globals :: Globals) => Expr () () -> Maybe String
-heapEvalJustExprAndReport e =
+heapEvalJustExprAndReport :: (?globals :: Globals) => Expr () () -> Int -> Maybe String
+heapEvalJustExprAndReport e steps =
     Just (concatMap report res)
   where
-    res = evalState (heapEvalJustExpr e) 0
+    res = evalState (heapEvalJustExpr e steps) 0
     report (expr, (heap, grades, inner)) =
         "Expr = " ++ pretty expr
        ++ "\n Heap = " ++ prettyHeap heap
@@ -42,13 +42,13 @@ heapEvalJustExprAndReport e =
        ++ "\n"
     prettyHeap = pretty
 
-heapEvalJustExpr :: Expr () () -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
-heapEvalJustExpr e@(Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) _)) =
-  smallHeapRedux heap e' (TyGrade Nothing 1)
+heapEvalJustExpr :: Expr () () ->  Int -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
+heapEvalJustExpr e@(Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) _)) steps =
+  multiSmallHeapRedux heap e' (TyGrade Nothing 1) steps
    where
     (heap, e') = buildInitialHeap e
 
-heapEvalJustExpr _ = return []
+heapEvalJustExpr _ _ = return []
 
 buildInitialHeap :: Expr () () -> (Heap, Expr () ())
 buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) e)) = 
@@ -58,6 +58,24 @@ buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) 
      (heap, e') = buildInitialHeap e
 
 buildInitialHeap e = ([], e)
+
+ctxtPlusZip :: Ctxt Grade -> Ctxt Grade -> Ctxt Grade
+ctxtPlusZip [] ctxt' = ctxt'
+ctxtPlusZip ((i, g) : ctxt) ctxt' =
+  case lookup i ctxt' of
+    Just g' -> (i, TyInfix TyOpPlus g g') : ctxtPlusZip ctxt ctxt'
+    Nothing -> (i, g) : ctxtPlusZip ctxt ctxt'
+
+-- Multi-step relation
+multiSmallHeapRedux :: Heap -> Expr () () -> Grade -> Int -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
+multiSmallHeapRedux heap e r 0 = return [(e, (heap, [], []))]
+multiSmallHeapRedux heap e r steps = do
+  res <- smallHeapRedux heap e r
+  ress <-
+    mapM (\(b1, (heap', u', gamma1)) -> do
+      res' <- multiSmallHeapRedux heap' b1 r (steps - 1)
+      return $ map (\(b, (heap'', u'', gamm2)) -> (b, (heap'', ctxtPlusZip u' u'', gamma1 ++ gamm2))) res') res
+  return $ concat ress
 
 -- Functionalisation of the main small-step reduction relation
 smallHeapRedux :: Heap -> Expr () () -> Grade -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
