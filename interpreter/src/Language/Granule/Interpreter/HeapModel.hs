@@ -5,8 +5,10 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pattern
+import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Span
 import Language.Granule.Context
---import Language.Granule.Utils
+import Language.Granule.Utils
 
 import Control.Monad.State
 
@@ -17,11 +19,45 @@ type Grade = Type
 type Heap = Ctxt (Grade, Expr () ())
   -- Ctxt (Grade, (Ctxt Type, Expr () (), Type))
 
+-- Stubs
 heapEval :: AST () () -> IO (Maybe Val)
 heapEval _ = return Nothing
 
-heapEvalDefs :: [Def () ()] -> IO (Ctxt Val)
-heapEvalDefs defs = return []
+heapEvalDefs :: [Def () ()] -> Id -> IO (Ctxt Val)
+heapEvalDefs defs defName = return []
+
+
+-- (\([x] : Int [2]) -> x)
+-- Key hook in for now
+heapEvalJustExprAndReport :: (?globals :: Globals) => Expr () () -> Maybe String
+heapEvalJustExprAndReport e =
+    Just (concatMap report res)
+  where
+    res = evalState (heapEvalJustExpr e) 0
+    report (expr, (heap, grades, inner)) =
+        "Expr = " ++ pretty expr
+       ++ "\n Heap = " ++ prettyHeap heap
+       ++ "\n Output grades = " ++ pretty grades
+       ++ "\n Embedded context = " ++ pretty inner
+       ++ "\n"
+    prettyHeap = pretty
+
+heapEvalJustExpr :: Expr () () -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
+heapEvalJustExpr e@(Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) _)) =
+  smallHeapRedux heap e' (TyGrade Nothing 1)
+   where
+    (heap, e') = buildInitialHeap e
+
+heapEvalJustExpr _ = return []
+
+buildInitialHeap :: Expr () () -> (Heap, Expr () ())
+buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) e)) = 
+    (h0 : heap, e')
+  where
+     h0        = (v, (r, (Val nullSpanNoFile () False (Var () v))))
+     (heap, e') = buildInitialHeap e
+
+buildInitialHeap e = ([], e)
 
 -- Functionalisation of the main small-step reduction relation
 smallHeapRedux :: Heap -> Expr () () -> Grade -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
