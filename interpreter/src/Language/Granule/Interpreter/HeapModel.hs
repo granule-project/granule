@@ -26,8 +26,13 @@ heapEval _ = return Nothing
 heapEvalDefs :: [Def () ()] -> Id -> IO (Ctxt Val)
 heapEvalDefs defs defName = return []
 
-
+-- Examples
 -- (\([x] : Int [2]) -> x)
+-- (\([x] : Int [2]) -> \([y] : Int [0]) -> x)
+-- (\(f : (Int -> (Int -> Int))) -> \(g : Int -> Int) -> \([x] : Int [2]) -> (f x) (g x))
+-- (\([f] : (Int [Lo] -> Int) [Lo]) -> \(g : (Int [Hi] -> Int)) -> \([x] : Int [Hi]) -> g [f [x]])
+
+
 -- Key hook in for now
 heapEvalJustExprAndReport :: (?globals :: Globals) => Expr () () -> Int -> Maybe String
 heapEvalJustExprAndReport e steps =
@@ -43,18 +48,23 @@ heapEvalJustExprAndReport e steps =
     prettyHeap = pretty
 
 heapEvalJustExpr :: Expr () () ->  Int -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
-heapEvalJustExpr e@(Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) _)) steps =
+heapEvalJustExpr e steps =
   multiSmallHeapRedux heap e' (TyGrade Nothing 1) steps
    where
     (heap, e') = buildInitialHeap e
 
-heapEvalJustExpr _ _ = return []
-
 buildInitialHeap :: Expr () () -> (Heap, Expr () ())
-buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) e)) = 
+-- Graded abstraction
+buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) e)) =
     (h0 : heap, e')
   where
      h0        = (v, (r, (Val nullSpanNoFile () False (Var () v))))
+     (heap, e') = buildInitialHeap e
+-- Linear abstraction treated as graded 1
+buildInitialHeap (Val _ _ _ (Abs _ (PVar _ _ _ v) (Just a) e)) =
+    (h0 : heap, e')
+  where
+     h0        = (v, (TyGrade Nothing 1, (Val nullSpanNoFile () False (Var () v))))
      (heap, e') = buildInitialHeap e
 
 buildInitialHeap e = ([], e)
@@ -115,4 +125,4 @@ smallHeapRedux heap (App s a b e1 e2) r = do
 
 -- Catch all
 smallHeapRedux heap e t =
-  return []
+  return [(e, (heap, [], []))]
