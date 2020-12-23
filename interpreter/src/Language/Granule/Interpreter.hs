@@ -55,9 +55,12 @@ import Paths_granule_interpreter (version)
 main :: IO ()
 main = do
     (globPatterns, config) <- getGrConfig
-    if null globPatterns
-      then runGrOnStdIn config
-      else runGrOnFiles globPatterns config
+    if grShowVersion config
+      then putStrLn $ "Granule version " <> showVersion version
+      else
+        if null globPatterns
+          then runGrOnStdIn config
+          else runGrOnFiles globPatterns config
 
 -- | Run the checker and interpreter on a bunch of files
 runGrOnFiles :: [FilePath] -> GrConfig -> IO ()
@@ -206,6 +209,7 @@ data GrConfig = GrConfig
   { grRewriter        :: Maybe (String -> String)
   , grKeepBackup      :: Maybe Bool
   , grLiterateEnvName :: Maybe String
+  , grShowVersion     :: Bool
   , grGlobals         :: Globals
   }
 
@@ -224,6 +228,7 @@ instance Semigroup GrConfig where
     , grKeepBackup      = grKeepBackup      c1 <|> grKeepBackup      c2
     , grLiterateEnvName = grLiterateEnvName c1 <|> grLiterateEnvName c2
     , grGlobals         = grGlobals         c1 <>  grGlobals         c2
+    , grShowVersion     = grShowVersion     c1 ||  grShowVersion     c2
     }
 
 instance Monoid GrConfig where
@@ -232,6 +237,7 @@ instance Monoid GrConfig where
     , grKeepBackup      = Nothing
     , grLiterateEnvName = Nothing
     , grGlobals         = mempty
+    , grShowVersion     = False
     }
 
 getGrConfig :: IO ([FilePath], GrConfig)
@@ -290,6 +296,11 @@ parseGrConfig = info (go <**> helper) $ briefDesc
           flag Nothing (Just True)
             $ long "debug"
             <> help "Debug mode"
+
+        grShowVersion <-
+          flag False True
+            $ long "version"
+            <> help "Show version"
 
         globalsSuppressInfos <-
           flag Nothing (Just True)
@@ -382,7 +393,6 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
 
-
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -418,6 +428,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             { grRewriter
             , grKeepBackup
             , grLiterateEnvName
+            , grShowVersion
             , grGlobals = Globals
               { globalsDebugging
               , globalsNoColors

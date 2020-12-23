@@ -70,7 +70,7 @@ makeUnbox name1 name2 tyS boxTy varTy =
 makeUnboxP :: Id -> Expr () Type -> TypeScheme -> Type -> Type -> Expr () Type -> Expr () Type
 makeUnboxP name1 expr (Forall _ _ _ goalTy) boxTy varTy e  =
   App s goalTy False
-  (Val s boxTy False
+  (Val s (FunTy Nothing boxTy goalTy) False
     (Abs (FunTy Nothing boxTy goalTy)
       (PBox s boxTy False
         (PVar s varTy False name1)) (Just boxTy) e))

@@ -1,0 +1,2 @@
+vec10 : forall {a : Type, b : Type} . (a -> b) [10] -> (((((((((a, a), a), a), a), a), a), a), a), a) -> (((((((((b, b), b), b), b), b), b), b), b), b)
+vec10 = ?

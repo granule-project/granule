@@ -1,0 +1,2 @@
+pullPair : forall {a : Type, b : Type, s : Semiring, r : s} . (a [r], b [r]) -> (a, b) [r]
+pullPair ([v], [u]) = [(v, u)]

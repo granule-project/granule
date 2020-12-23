@@ -1,0 +1,12 @@
+-- Interesting examples when thinking about irrelevance:
+
+rep
+  : forall {a : Type, n : Nat}
+  . N n -> a -> Vec 1 a
+rep Z c = Cons c Nil;
+rep (S n) c = rep n c
+
+repE
+  : forall {a : Type, n : Nat}
+  . (N n) [0] -> a -> Vec 1 a
+repE [n] c = Cons c Nil
