@@ -1,5 +1,5 @@
 name: granule-frontend
-version: '0.8.0.0'
+version: '0.8.1.0'
 synopsis: The Granule abstract-syntax-tree, parser and type checker libraries
 author: Dominic Orchard, Vilem-Benjamin Liepelt, Harley Eades III, Jack Hughes, Preston Keel
 copyright: 2018-20 authors
