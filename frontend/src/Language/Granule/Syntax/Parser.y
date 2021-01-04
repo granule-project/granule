@@ -510,6 +510,7 @@ Form :: { Expr () () }
   : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpPlus $1 $3 }
   | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpMinus $1 $3 }
   | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpTimes $1 $3 }
+  | Form '/' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpDiv $1 $3 }
   | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpLesser $1 $3 }
   | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpGreater $1 $3 }
   | Form '<=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpLesserEq $1 $3 }
