@@ -150,10 +150,6 @@ data CheckerState = CS
             -- and their quantification
             , tyVarContext   :: Ctxt (Type, Quantifier)
 
-            -- Guard contexts (all the guards in scope)
-            -- which get promoted  by branch promotions
-            , guardContexts :: [Ctxt Assumption]
-
             -- Records the amount of consumption by patterns in equation equation
             -- used to work out whether an abstract type has been definitly unified with
             -- and can therefore be linear
@@ -191,7 +187,6 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , predicateStack = []
                , guardPredicates = [[]]
                , tyVarContext = []
-               , guardContexts = []
                , patternConsumption = []
                , typeConstructors = Primitives.typeConstructors
                , dataConstructors = []
@@ -260,23 +255,6 @@ m1 <|> m2 = do
     Right res -> do
       putCheckerComputation
       return res
-
-pushGuardContext :: Ctxt Assumption -> Checker ()
-pushGuardContext ctxt = do
-  modify (\state ->
-    state { guardContexts = ctxt : guardContexts state })
-
-popGuardContext :: Checker (Ctxt Assumption)
-popGuardContext = do
-  state <- get
-  let (c, cs) = case guardContexts state of
-                  (c:cs) -> (c,cs)
-                  [] -> error "Internal error. Empty guard context."
-  put (state { guardContexts = cs })
-  return c
-
-allGuardContexts :: Checker (Ctxt Assumption)
-allGuardContexts = concat . guardContexts <$> get
 
 -- | Start a new conjunction frame on the predicate stack
 newConjunct :: Checker ()
