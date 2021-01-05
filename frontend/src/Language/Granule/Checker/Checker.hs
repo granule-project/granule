@@ -611,16 +611,17 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     -- inside a guard from an enclosing case that have kind Level
     -- This prevents control-flow attacks and is a special case for Level
     -- (the guard contexts come from a special context in the solver)
-    guardGam <- allGuardContexts
-    guardGam' <- filterM isLevelKinded guardGam
-    (gam'', subst') <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
+    --guardGam <- allGuardContexts
+    --guardGam' <- filterM isLevelKinded guardGam
+    --(gam'', subst') <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
+    (gam'', subst') <- multAll s vars demand gam'
 
     substFinal <- combineSubstitutions s subst subst'
 
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
   where
-    -- Calculate whether a type assumption is level kinded
+    {--- Calculate whether a type assumption is level kinded
     isLevelKinded (_, as) = do
         -- TODO: should deal with the subst
         (ty, _) <- synthKindAssumption s as
@@ -631,13 +632,14 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
                       (TyCon (internalName -> "Level")))
             -> True
           _ -> False
+          -}
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   debugM "checkExpr[Case]" (pretty s <> " : " <> pretty tau)
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
-  pushGuardContext guardGam
+  --pushGuardContext guardGam
 
   -- Dependent / GADT pattern matches not allowed in a case
   ixed <- isIndexedType guardTy
@@ -682,7 +684,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   checkGuardsForImpossibility s $ mkId "case"
 
   -- Pop from stacks related to case
-  _ <- popGuardContext
+  --_ <- popGuardContext
   popCaseFrame
 
   -- Find the upper-bound of the contexts
