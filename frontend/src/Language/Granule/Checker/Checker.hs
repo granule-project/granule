@@ -606,19 +606,19 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
 
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
-    -- Causes a promotion of any typing assumptions that came from variable
-    -- inside a guard from an enclosing case that have kind Level
-    -- This prevents control-flow attacks and is a special case for Level
-    -- (the guard contexts come from a special context in the solver)
     --guardGam <- allGuardContexts
     --guardGam' <- filterM isLevelKinded guardGam
     --(gam'', subst') <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
     (gam'', subst') <- multAll s vars demand gam'
+    -- Causes a promotion of any ghost typing assumptions that came
+    -- an enclosing case.
+    -- This prevents control-flow attacks and is a special case for Level
+    (gamGhost, subst'') <- multAll s (map fst (allGhostVariables gam)) demand (allGhostVariables gam)
 
-    substFinal <- combineSubstitutions s subst subst'
+    substFinal <- combineManySubstitutions s [subst, subst', subst'']
 
     let elaborated = Val s ty rf (Promote tau elaboratedE)
-    return (gam'', substFinal, elaborated)
+    return (gam'' <> gamGhost, substFinal, elaborated)
   where
     {--- Calculate whether a type assumption is level kinded
     isLevelKinded (_, as) = do
@@ -652,15 +652,16 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
+      ghostCtxt <- freshGhostVariableContext
       newConjunct
 
       -- Checking the case body
       tau' <- substitute subst tau
       patternGam <- substitute subst patternGam
-      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> gam) pol False tau' e_i
+      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> ghostCtxt <> gam) pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
+      ctxtApprox s (localGam `intersectCtxts` (patternGam <> ghostCtxt)) (patternGam <> ghostCtxt)
 
       -- Conclude the implication
       concludeImplication (getSpan pat_i) eVars
@@ -671,7 +672,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-           return (localGam `subtractCtxt` patternGam
+           return (localGam `subtractCtxt` patternGam `subtractCtxt` ghostCtxt
                  , subst'
                  , (elaborated_pat_i, elaborated_i))
 
@@ -814,13 +815,14 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
+      ghostCtxt <- freshGhostVariableContext
       newConjunct
 
       -- Synth the case body
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
+      ctxtApprox s (localGam `intersectCtxts` (patternGam <> ghostCtxt)) (patternGam <> ghostCtxt)
 
       -- Conclude
       concludeImplication (getSpan pati) eVars
@@ -831,13 +833,14 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
          [] -> return (tyCase
-                    , (localGam `subtractCtxt` patternGam, subst')
+                    , (localGam `subtractCtxt` patternGam `subtractCtxt` ghostCtxt, subst')
                     , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
   checkGuardsForImpossibility s $ mkId "case"
 
+  -- Pop from stacks related to case
   popCaseFrame
 
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
@@ -1072,9 +1075,12 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
 
    (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
-   substFinal <- combineSubstitutions s subst subst'
 
-   return (finalTy, gam'', substFinal, elaborated)
+   (gamGhost, subst'') <- multAll s (map fst (allGhostVariables gam)) (TyVar var) (allGhostVariables gam)
+
+   substFinal <- combineManySubstitutions s [subst, subst', subst'']
+
+   return (finalTy, gam'' <> gamGhost, substFinal, elaborated)
 
 
 -- BinOp
@@ -1703,3 +1709,18 @@ programSynthesise ctxt vars ty patternss = do
       ((t, _, _):_) -> do
         debugM "Synthesiser" $ "Synthesised: " <> pretty t
         return (pattern, t)
+
+-- | Create a ghost variable context. Use in `case` and
+freshGhostVariableContext :: Checker (Ctxt Assumption)
+freshGhostVariableContext = do
+  varGhost <- freshIdentifierBase "ghost"
+  -- return a singleton context giving the ghost variable a type ".Ghost" which
+  -- cannot come from user code (could be anything)
+  return [(mkId varGhost, Discharged (TyCon $ mkId ".Ghost") (TyGrade Nothing 1))]
+
+allGhostVariables :: Ctxt Assumption -> Ctxt Assumption
+allGhostVariables =
+    filter isGhost
+  where
+    isGhost (_, Discharged (TyCon (internalName -> ".Ghost")) _) = True
+    isGhost _ = False

@@ -15,3 +15,10 @@ leak' x =
       case x of
         [True]  →  [True];
         [False] →  [False]
+
+okay : Bool [Private] → Bool [Private]
+okay x =
+      case x of
+        [True]  →  [True];
+        [False] →  [False]
+
