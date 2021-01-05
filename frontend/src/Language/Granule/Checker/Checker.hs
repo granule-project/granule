@@ -293,7 +293,6 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         modify' $ \st -> st
             { predicateStack = []
             , tyVarContext = []
-            , guardContexts = []
             , uniqueVarIdCounterMap = mempty
             }
         debugM "elaborateEquation" "checkEquation"
@@ -639,7 +638,6 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   debugM "checkExpr[Case]" (pretty s <> " : " <> pretty tau)
   -- Synthesise the type of the guardExpr
   (guardTy, guardGam, substG, elaboratedGuard) <- synthExpr defs gam pol guardExpr
-  --pushGuardContext guardGam
 
   -- Dependent / GADT pattern matches not allowed in a case
   ixed <- isIndexedType guardTy
@@ -684,7 +682,6 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   checkGuardsForImpossibility s $ mkId "case"
 
   -- Pop from stacks related to case
-  --_ <- popGuardContext
   popCaseFrame
 
   -- Find the upper-bound of the contexts
