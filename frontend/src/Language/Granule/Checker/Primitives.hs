@@ -19,23 +19,13 @@ import Language.Granule.Syntax.Expr (Operator(..))
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
--- Given a name to the powerset of a set of particular elements,
--- where (Y, PY) in setElements means that PY is an alias for the powerset of Y
-
--- e.g. {Stdin} in Set IOElem in Effect
--- and  {Stdin} in IO         in Effect
-
-setElements :: [(Type, Type)]
-setElements = [(TyCon $ mkId "IOElem", TyCon $ mkId "IO")]
-
--- Lists all type constructors for which there cannot exist a unification (upper bound/mgu) with another
--- Typically these are type constructors that are not used as resource algebras
-isDistinguishedConstructor :: Id -> Bool
-isDistinguishedConstructor x = elem x distinguishedConstructors
-
-distinguishedConstructors :: [Id]
-distinguishedConstructors =
-  map mkId ["Coeffect", "Effect", "Type", "Predicate", "Int", "Float", "String", "Protocol"]
+-- A list of type alias as Id -> Type pairs
+typeAliases :: [(Id, Type)]
+typeAliases =
+    -- IO = {p | p in IOElem}
+    [(mkId "IO", TySet (map tyCon ioElems))]
+  where
+    ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
 -- Associates type constuctors names to their:
 --    * kind
@@ -57,15 +47,22 @@ typeConstructors =
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
+    , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
+    -- LNL members
+    , (mkId "Lin",        (tyCon "LNL", [], False))
+    , (mkId "NonLin",     (tyCon "LNL", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))
     , (mkId "Public",   (tyCon "Level", [], False))
     , (mkId "Unused",   (tyCon "Level", [], False))
+    -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
+    , (mkId "Sec",  (kcoeffect, [], False))
+    , (mkId "Hi",    (tyCon "Sec", [], False))
+    , (mkId "Lo",    (tyCon "Sec", [], False))
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
-    , (mkId "Set", ((TyVar $ mkId "k") .-> ((tyCon "k") .-> kcoeffect), [], False))
     -- Channels and protocol types
     , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
     , (mkId "Recv", (funTy (Type 0) (funTy protocol protocol), [], False))
@@ -80,16 +77,7 @@ typeConstructors =
     , (mkId "Session",  (tyCon "Com", [], True))
     , (mkId "Com",      (keffect, [], False))
     -- Effect grade types - IO
-    , (mkId "IOElem",   (ktype, [], False))
     , (mkId "IO",       (keffect, [], False))
-    , (mkId "Stdout",   (tyCon "IOElem", [], False))
-    , (mkId "Stdin",    (tyCon "IOElem", [], False))
-    , (mkId "Stderr",   (tyCon "IOElem", [], False))
-    , (mkId "Open",     (tyCon "IOElem", [], False))
-    , (mkId "Read",     (tyCon "IOElem", [], False))
-    , (mkId "Write",    (tyCon "IOElem", [], False))
-    , (mkId "IOExcept", (tyCon "IOElem", [], False))
-    , (mkId "Close",    (tyCon "IOElem", [], False))
 
     --Effect grade types - Exceptions
     , (mkId "Exception", (keffect, [], False))
@@ -234,6 +222,8 @@ fromPure = BUILTIN
 --------------------------------------------------------------------------------
 -- I/O
 --------------------------------------------------------------------------------
+
+data IOElem = Stdout | Stdin | Stderr | Open | Read | Write | IOExcept | Close
 
 fromStdin : String <{Stdin}>
 fromStdin = BUILTIN

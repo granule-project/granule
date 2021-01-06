@@ -400,8 +400,16 @@ Coeffect :: { Coeffect }
   | '(' Coeffect '×' Coeffect ')'     { TyApp (TyApp (TyCon $ mkId ",,") $2) $4 }
 
 CoeffSet :: { [Type] }
-  : VAR ':' Type ',' CoeffSet  { $3 : $5 }
-  | VAR ':' Type               { [$3] }
+  : CoeffSetElems       { $1 }
+  |                     { [] }
+
+CoeffSetElems :: { [Type] }
+  : CoeffSetElem ',' CoeffSetElems  { $1 : $3 }
+  | CoeffSetElem                    { [$1] }
+
+CoeffSetElem :: { Type }
+  : CONSTR      { TyCon $ mkId $ constrString $1 }
+
 
 Effect :: { Type }
   : '{' EffSet '}'            { TySet $2 }

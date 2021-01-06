@@ -143,13 +143,6 @@ kNat, protocol :: Type
 kNat     = tyCon "Nat"
 protocol = tyCon "Protocol"
 
-publicRepresentation, privateRepresentation :: Integer
-privateRepresentation = 1
-publicRepresentation  = 2
-
-unusedRepresentation :: Integer
-unusedRepresentation = 0
-
 nat, extendedNat :: Type
 nat = tyCon "Nat"
 extendedNat = TyApp (tyCon "Ext") (tyCon "Nat")
@@ -163,6 +156,10 @@ infinity = tyCon "Infinity"
 isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
+
+isSet :: Type -> Maybe Type
+isSet (TyApp (TyCon c) t) | internalName c == "Set" = Just t
+isSet _ = Nothing
 
 isProduct :: Type -> Maybe (Type, Type)
 isProduct (TyApp (TyApp (TyCon c) t) t')

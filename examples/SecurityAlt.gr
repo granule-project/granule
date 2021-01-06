@@ -1,0 +1,28 @@
+publicOk : forall {a : Type} .  a [Lo] -> a
+publicOk [x] = x
+
+-- Ill-typed
+-- privBad : forall {a : Type} .  a [Hi] -> a
+-- privBad [x] = x
+
+keepPrivate : forall {a : Type} . a [Hi] -> a [Hi]
+keepPrivate [x] = [x]
+
+-- Subtyping with Hi <= Lo allows this
+keepPrivateOk : forall {a : Type} . a [Lo] -> a [Hi]
+keepPrivateOk [x] = [x]
+
+data Bool = True | False
+
+publicNot : Bool [Lo] -> Bool
+publicNot [True] = False;
+publicNot [False] = True
+
+-- Ill-typed
+-- privateNot : Bool [Hi] -> Bool
+-- privateNot [True] = False;
+-- privateNot [False] = True
+
+comp : forall {a : Type, b : Type, c : Type, l : Sec} .
+       (a [Lo] -> b) [Lo] -> (b [Hi] -> c) -> (a [Hi] -> c)
+comp [f] g = \[x] -> g [f [x]]

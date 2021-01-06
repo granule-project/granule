@@ -24,6 +24,7 @@ import qualified Data.Text as T
 
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints.Compile
+import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Exhaustivity
@@ -39,6 +40,7 @@ import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Types
+import Language.Granule.Checker.TypeAliases
 import Language.Granule.Checker.Variables
 import Language.Granule.Context
 
@@ -63,8 +65,9 @@ import Language.Granule.Utils
 check :: (?globals :: Globals)
   => AST () ()
   -> IO (Either (NonEmpty CheckerError) (AST () Type, [Def () ()]))
-check ast@(AST dataDecls defs imports hidden name) = do
+check ast@(AST _ _ _ hidden _) = do
   evalChecker (initState { allHiddenNames = hidden }) $ (do
+      ast@(AST dataDecls defs imports hidden name) <- return $ replaceTypeAliases ast
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
@@ -1254,7 +1257,8 @@ solveConstraints predicate s name = do
   debugM "context into the solver" (pretty $ coeffectVars)
   debugM "Solver predicate" $ pretty predicate -- <> "\n" <> show predicate
 
-  (_, result) <- liftIO $ provePredicate predicate coeffectVars
+  constructors <- allDataConstructorNames
+  (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
   case result of
     QED -> return ()
     NotValid msg -> do
@@ -1625,7 +1629,8 @@ checkGuardsForImpossibility s name = do
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
-    (_, result) <- liftIO $ provePredicate thm tyVars
+    constructors <- allDataConstructorNames
+    (_, result) <- liftIO $ provePredicate thm tyVars constructors
 
     p <- simplifyPred thm
 

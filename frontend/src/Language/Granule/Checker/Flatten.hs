@@ -171,7 +171,7 @@ mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 
 
 -- | Find out whether a coeffect if flattenable, and if so get the operation
--- | used to representing flattening on the grades
+-- | used to represent flattening on the grades
 flattenable :: (?globals :: Globals)
             => Type -> Type -> Checker (Maybe ((Coeffect -> Coeffect -> Coeffect), Substitution, Type))
 flattenable t1 t2
@@ -186,6 +186,12 @@ flattenable t1 t2
     _ -> return $ Nothing
  | otherwise =
       case (t1, t2) of
+        (isInterval -> Just t, TyCon (internalName -> "LNL")) | t == extendedNat ->
+          return $ Just (TyInfix TyOpTimes, [], TyApp (TyCon $ mkId "Interval") extendedNat)
+
+        (TyCon (internalName -> "LNL"), isInterval -> Just t) | t == extendedNat ->
+          return $ Just (TyInfix TyOpTimes, [], TyApp (TyCon $ mkId "Interval") extendedNat)
+
         (t1, TyCon (internalName -> "Nat")) | t1 == extendedNat ->
           return $ Just (TyInfix TyOpTimes, [], t1)
 
