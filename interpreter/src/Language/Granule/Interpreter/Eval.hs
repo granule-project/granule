@@ -363,37 +363,36 @@ builtIns =
                True -> Constr () (mkId "True") []
                False -> Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
-  , (mkId "forkLinear", Ext () $ PrimitiveClosure fork)
-  , (mkId "forkRep", Ext () $ PrimitiveClosure forkRep)
+  , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
   , (mkId "close",   Ext () $ Primitive close)
-  , (mkId "grecv",    Ext () $ Primitive recv)
-  , (mkId "gsend",    Ext () $ Primitive send)
-  , (mkId "gclose",   Ext () $ Primitive close)
+  , (mkId "grecv",    Ext () $ Primitive grecv)
+  , (mkId "gsend",    Ext () $ Primitive gsend)
+  , (mkId "gclose",   Ext () $ Primitive gclose)
   -- , (mkId "trace",   Ext () $ Primitive $ \(StringLiteral s) -> diamondConstr $ do { Text.putStr s; hFlush stdout; return $ Val nullSpan () False (Constr () (mkId "()") []) })
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
   ]
   where
-    fork :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    fork ctxt e@Abs{} = Ext () (unsafePerformIO $ do
+    forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
+    forkLinear ctxt e@Abs{} = Ext () (unsafePerformIO $ do
       c <- CC.newChan
       _ <- C.forkIO $
          evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
       return $ Chan c)
-    fork ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+    forkLinear ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    forkRep ctxt e@Abs{} = unsafePerformIO $ do
+    forkRep ctxt e@Abs{} = diamondConstr $ do
       c <- CC.newChan
       _ <- C.forkIO $
          evalIn ctxt (App nullSpan () False
                         (valExpr e)
                         (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
-      return $ Promote () $ valExpr $ Ext () $ Chan c
+      return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
     forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     recv :: (?globals :: Globals) => RValue -> RValue
@@ -412,6 +411,23 @@ builtIns =
     close :: RValue -> RValue
     close (Ext _ (Chan c)) = unsafePerformIO $ return $ Constr () (mkId "()") []
     close rval = error $ "Runtime exception: trying to close a value which is not a channel"
+
+    grecv :: (?globals :: Globals) => RValue -> RValue
+    grecv (Ext _ (Chan c)) = diamondConstr $ do
+      x <- CC.readChan c
+      return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
+    grecv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
+
+    gsend :: (?globals :: Globals) => RValue -> RValue
+    gsend (Ext _ (Chan c)) = Ext () $ Primitive
+      (\v -> diamondConstr $ do
+         CC.writeChan c v
+         return $ valExpr $ Ext () $ Chan c)
+    gsend e = error $ "Bug in Granule. Trying to send from: " <> prettyDebug e
+
+    gclose :: RValue -> RValue
+    gclose (Ext _ (Chan c)) = diamondConstr $ return $ valExpr $ Constr () (mkId "()") []
+    gclose rval = error $ "Runtime exception: trying to close a value which is not a channel"
 
     cast :: Int -> Double
     cast = fromInteger . toInteger

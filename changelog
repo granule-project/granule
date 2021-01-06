@@ -1,3 +1,7 @@
+  # 0.8.1.0 (work in progress)
+  - New semirings: 'Sec' and 'Set t' for some type 't'
+  - Bug fixes related to session types
+
   # 0.8.0.0
   - --synthesise mode
   - Support for deriving simple distributive laws
