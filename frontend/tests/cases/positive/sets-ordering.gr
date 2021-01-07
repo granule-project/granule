@@ -1,0 +1,28 @@
+data X = B | C | D
+
+all : Int [{B, C, D}]
+all = [42]
+
+some : Int [{B, C}]
+some = [42]
+
+none : Int [{} : Set X]
+none = [42]
+
+extract : forall {a : Type, s : Semiring} . a [1 : s] -> a
+extract [x] = x
+
+weak : forall {a : Type} . a [{} : Set X] -> ()
+weak [_] = ()
+
+good1 : ()
+good1 = weak some
+
+good2 : ()
+good2 = weak all
+
+good3 : ()
+good3 = weak none
+
+good4 : Int
+good4 = extract all
