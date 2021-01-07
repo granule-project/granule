@@ -48,19 +48,13 @@ foldr_list [f] z xs =
     Empty -> z;
     Next x xs -> f x (foldr_list [f] z xs)
 
--- pushList : forall {k : Coeffect, c : k, a : Type} . {(1 : k) <= c}
---          => (List a) [c] -> List (a [c])
--- pushList [Empty]     = Empty;
--- pushList [Next x xs] = Next [x] (pushList [xs])
+pushList : forall {s : Semiring, r : s, a : Type}
+         . {(1 : s) <= r} => (List a) [r] -> List (a [r])
+pushList = push @List
 
-pullList : forall {k : Coeffect, c : k, a : Type}
-         . List (a [c]) -> (List a) [c]
-pullList xs =
-    case xs of
-       Empty -> [Empty];
-       (Next [x] xs) ->
-         case pullList xs of
-          [ys] -> [Next x ys]
+pullList : forall {s : Semiring, r : s, a : Type}
+         . List (a [r]) -> (List a) [r]
+pullList = pull @List
 
 append_list : forall {a : Type} . List a -> List a -> List a
 append_list xs ys = case xs of
