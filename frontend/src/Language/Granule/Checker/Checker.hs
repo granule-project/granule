@@ -1203,7 +1203,7 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
 
     (Val _ _ _ (Var _ (internalName -> "pull"))) -> do
       st <- get
-      let name = mkId $ "pull" ++ pretty ty
+      let name = mkId $ "pull@" ++ pretty ty
       case lookup (mkId "pull", ty) (derivedDefinitions st) of
         Just (tyScheme, _) ->
           freshenTySchemeForVar s rf name tyScheme

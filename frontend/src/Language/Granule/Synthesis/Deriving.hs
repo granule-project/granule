@@ -143,6 +143,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
             case pushTy of
               t@(FunTy _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
+                  debugM "derive-push" ("eq on argTy = " <> pretty (Box c argTy) <> " t1 = " <> pretty t1)
                   (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
                   if eq
                     -- Success!
@@ -254,40 +255,39 @@ derivePull s ty = do
   -- Get kind of type constructor
   (kind, _, _) <- synthKind nullSpanNoFile ty
   -- Generate fresh type variables and apply them to the kind constructor
-  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
+  (localTyVarContext, baseTy, argTy) <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
 
+  debugM "pull : " (pretty (FunTy Nothing argTy (Box (TyVar cVar) baseTy)))
   st0 <- get
   modify (\st -> st {  derivedDefinitions =
-                        ((mkId "pull", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined)) : derivedDefinitions st,
+                        ((mkId "pull", ty), (trivialScheme $ FunTy Nothing argTy (Box (TyVar cVar) baseTy), undefined)) : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ [(kVar, (kcoeffect, ForallQ)), (cVar, (TyVar kVar, ForallQ))] ++ localTyVarContext })
 
-  debugM "derivePull type" (show returnTy')
   z <- freshIdentifierBase "z" >>= (return . mkId)
   (returnTy, bodyExpr, coeff) <-
-    derivePull' s True tyVars returnTy' (makeVarUntyped z)
+    derivePull' s True tyVars argTy (makeVarUntyped z)
 
   modify (\st -> st { derivedDefinitions = deleteVar' (mkId "pull", ty) (derivedDefinitions st)
                     -- Restore type variables and predicate stack
                     , tyVarContext = tyVarContext st0
                     , predicateStack = predicateStack st0 } )
 
-  debugM "derivePull return type" (show returnTy)
-  case coeff of
-    Just c -> do
-      let tyS = Forall s
-              ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
-              []
-              (FunTy Nothing returnTy' (Box c returnTy))
-      let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
-      let name = mkId $ "pull@" ++ pretty ty
+  let coeff' = case coeff of
+                Just c -> c
+                Nothing -> TyVar cVar
 
-      return $
-        (tyS, Def s name True
-            (EquationList s name True
-               [Equation s name () True [] expr]) tyS)
-    Nothing -> error "shouldn't be reachable"
+  let tyS = Forall s
+          ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
+          []
+          (FunTy Nothing argTy (Box coeff' baseTy))
+  let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
+  let name = mkId $ "pull@" ++ pretty ty
 
+  return $
+    (tyS, Def s name True
+        (EquationList s name True
+            [Equation s name () True [] expr]) tyS)
 
 derivePull'  :: (?globals :: Globals)
   => Span
@@ -349,10 +349,12 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               t@(FunTy _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
                   --(eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
+                  debugM "derive-pull" ("eq on argTy = " <> pretty argTy <> " t1 = " <> pretty t1)
                   (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec argTy t1
                   if eq
                     -- Success!
                     then do
+                      debugM "derive-pull" "already defined okay"
                       t2' <- substitute subst t2
                       return (Just (t2', App s () True (makeVarUntyped (mkId $ "pull@" <> pretty name)) arg, Nothing))
                     else do
