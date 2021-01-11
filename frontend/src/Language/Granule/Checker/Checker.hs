@@ -116,8 +116,11 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
         -- Otherwise, do synth
         _ -> do
-          (ty, _, _, _) <- synthExpr defCtxt [] Positive expr
-          return $ Left $ Forall nullSpanNoFile [] [] ty
+          (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
+          liftIO $ putStrLn $ pretty subst
+          -- Apply the outcoming substitution
+          ty' <- substitute subst ty
+          return $ Left $ Forall nullSpanNoFile [] [] ty'
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?

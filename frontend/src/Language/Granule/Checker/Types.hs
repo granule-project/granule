@@ -162,9 +162,18 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
 
+  -- Create a substitution if we can (i.e., if one grade is a variable)
+  -- as this typically greatly improves error messages and repl interaction
+  let substExtra =
+        case c of
+          TyVar v -> [(v, SubstT c')]
+          _ -> case c' of
+                TyVar v -> [(v, SubstT c)]
+                _       -> []
+
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 
-  substU <- combineSubstitutions s subst subst'
+  substU <- combineManySubstitutions s [subst, subst', substExtra]
   return (eq, substU)
 
 equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ mode | n == m = do
