@@ -18,6 +18,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
+import Data.List (isPrefixOf)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -309,10 +310,13 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         let predicate = Conj $ predicateStack checkerState
         debugM "elaborateEquation" "solveEq"
         debugM "FINAL SUBST" (pretty subst)
-        predicate <- substitute subst predicate
+        predicate <- substitute (removePromSubsts subst) predicate
         solveConstraints predicate (getSpan equation) defName
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
+
+    removePromSubsts = filter (not . isPromVar)
+    isPromVar (id, _) = "prom_[" `isPrefixOf` (internalName id)
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions
