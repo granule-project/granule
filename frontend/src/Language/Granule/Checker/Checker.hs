@@ -51,7 +51,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern (Pattern(..))
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
-import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Type hiding (Polarity)
 
 import Language.Granule.Synthesis.Deriving
 import Language.Granule.Synthesis.Splitting

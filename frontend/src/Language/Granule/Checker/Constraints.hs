@@ -172,12 +172,12 @@ freshSolverVarScoped quant name t q k | t == extendedNat = do
 freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
-freshSolverVarScoped quant name (Language.Granule.Syntax.Type.isSet -> elemTy) q k =
-  quant q name (\solverVar -> k (sTrue, SSet solverVar))
+freshSolverVarScoped quant name (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) q k =
+  quant q name (\solverVar -> k (sTrue, SSet polarity solverVar))
 
--- freshSolverVarScoped _ _ t _ _ =
---   solverError $ "Trying to make a fresh solver variable for a grade of type: "
---       <> show t <> " but I don't know how."
+freshSolverVarScoped _ _ t _ _ =
+   solverError $ "Trying to make a fresh solver variable for a grade of type: "
+       <> show t <> " but I don't know how."
 
 -- | What is the SBV representation of a quantifier
 compileQuantScoped :: QuantifiableScoped a => Quantifier -> String -> (SBV a -> Symbolic SBool) -> Symbolic SBool
@@ -332,8 +332,8 @@ compileCoeffect (TyGrade k' n) k _ | k == extendedNat && (k' == Nothing || k' ==
 compileCoeffect (TyRational r) (TyCon k) _ | internalName k == "Q" =
   return (SFloat  . fromRational $ r, sTrue)
 
-compileCoeffect (TySet xs) (Language.Granule.Syntax.Type.isSet -> elemTy) _ =
-    return (SSet . S.fromList $ mapMaybe justTyConNames xs, sTrue)
+compileCoeffect (TySet _ xs) (Language.Granule.Syntax.Type.isSet -> Just (elemTy, polarity)) _ =
+    return ((SSet polarity) . S.fromList $ mapMaybe justTyConNames xs, sTrue)
   where
     justTyConNames (TyCon x) = Just (internalName x)
     justTyConNames t = error $ "Cannot have a type " ++ show t ++ " in a symbolic list"
@@ -402,8 +402,10 @@ compileCoeffect (TyGrade k' 0) k vars = do
         (compileCoeffect (TyGrade (Just t) 0) t vars)
         (compileCoeffect (TyGrade (Just t) 0) t vars)
 
-    (isSet -> Just elemTy) ->
-       return (SSet (S.fromList []), sTrue)
+    (isSet -> Just (elemTy, polarity)) ->
+      case polarity of
+        Normal   -> setEmpty polarity
+        Opposite -> setUniverse polarity elemTy
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 0)), sTrue)
 
@@ -435,15 +437,10 @@ compileCoeffect (TyGrade k' 1) k vars = do
         (compileCoeffect (TyGrade (Just t) 1) t vars)
         (compileCoeffect (TyGrade (Just t) 1) t vars)
 
-    (isSet -> Just elemTy) ->
-      case elemTy of
-        TyCon tyConName ->
-          case lookup tyConName ?constructors of
-            Just constructorNames ->
-              return (SSet (S.fromList $ map internalName constructorNames), sTrue)
-            Nothing ->
-              solverError $ "I can't find the data constructors of " <> pretty tyConName
-        _ -> solverError $ "Cannot make the universal set of elements for type " <> pretty elemTy
+    (isSet -> Just (elemTy, polarity)) ->
+      case polarity of
+        Normal   -> setUniverse polarity elemTy
+        Opposite -> setEmpty polarity
 
     (TyVar _) -> return (SUnknown (SynLeaf (Just 1)), sTrue)
 
@@ -496,7 +493,12 @@ approximatedByOrEqualConstraint (SFloat n) (SFloat m)  = return $ n .<= m
 approximatedByOrEqualConstraint SPoint SPoint          = return $ sTrue
 approximatedByOrEqualConstraint (SExtNat x) (SExtNat y) = return $ x .== y
 approximatedByOrEqualConstraint (SOOZ s) (SOOZ r) = pure $ s .== r
-approximatedByOrEqualConstraint (SSet s) (SSet t) = pure $ s `S.isSubsetOf` t
+approximatedByOrEqualConstraint (SSet Normal s) (SSet Normal t) =
+  pure $ s `S.isSubsetOf` t
+
+approximatedByOrEqualConstraint (SSet Opposite s) (SSet Opposite t) =
+  pure $ t `S.isSubsetOf` s
+
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     -- Private <= Public
@@ -702,3 +704,18 @@ matchTypes :: MonadIO m => Type -> Maybe Type -> m Type
 matchTypes t Nothing = return t
 matchTypes t (Just t') | t == t' = return t
 matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ show t ++ " and " ++ show t'
+
+-- Get universe set for the parameter ttpe
+setUniverse :: (?globals :: Globals, ?constructors :: Ctxt [Id])
+            => Polarity -> Type -> Symbolic (SGrade, SBool)
+setUniverse polarity elemTy =
+  case elemTy of
+    TyCon tyConName ->
+      case lookup tyConName ?constructors of
+        Just constructorNames ->
+          return (SSet polarity (S.fromList $ map internalName constructorNames), sTrue)
+        _ -> solverError $ "I can't find the data constructors of " <> pretty elemTy
+    _ -> solverError $ "I can't find the data constructors of " <> pretty elemTy
+
+setEmpty :: Polarity -> Symbolic (SGrade, SBool)
+setEmpty polarity = return (SSet polarity $ S.fromList [], sTrue)

@@ -394,7 +394,8 @@ Coeffect :: { Coeffect }
   | Coeffect "/\\" Coeffect       { TyInfix TyOpMeet $1 $3 }
   | Coeffect "\\/" Coeffect       { TyInfix TyOpJoin $1 $3 }
   | '(' Coeffect ')'              { $2 }
-  | '{' CoeffSet '}'              { TySet $2 }
+  | '{' CoeffSet '}'              { TySet Normal $2 }
+  | '{' CoeffSet '}' '.'          { TySet Opposite $2 }
   | Coeffect ':' Kind             { TySig $1 $3 }
   | '(' Coeffect ',' ',' Coeffect ')' { TyApp (TyApp (TyCon $ mkId ",,") $2) $5 }
   | '(' Coeffect '×' Coeffect ')'     { TyApp (TyApp (TyCon $ mkId ",,") $2) $4 }
@@ -412,7 +413,7 @@ CoeffSetElem :: { Type }
 
 
 Effect :: { Type }
-  : '{' EffSet '}'            { TySet $2 }
+  : '{' EffSet '}'            { TySet Normal $2 }
   | {- EMPTY -}               { TyCon $ mkId "Pure" }
   | TyJuxt                    { $1 }
 

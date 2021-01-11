@@ -123,8 +123,9 @@ instance Pretty Type where
     pretty (TyInfix op t1 t2) =
       prettyNested t1 <> " " <> pretty op <> " " <> prettyNested t2
 
-    pretty (TySet ts) =
-      "{" <> intercalate ", " (map pretty ts) <> "}"
+    pretty (TySet polarity ts) =
+        "{" <> intercalate ", " (map pretty ts) <> "}"
+      <> (if polarity == Opposite then "." else "")
 
     pretty (TySig t k) =
       "(" ++ pretty t ++ " : " ++ pretty k ++ ")"

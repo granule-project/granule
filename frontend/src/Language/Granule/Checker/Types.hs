@@ -155,7 +155,6 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
 
   -- Unify the coeffect kinds of the two coeffects
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
-  -- subst <- unify c c'
 
   -- Add constraint for the coeffect (using ^op for the ordering compared with the order of equality)
   c' <- substitute subst c'
@@ -348,7 +347,7 @@ equalTypesRelatedCoeffectsInner s rel (TyCase t1 b1) (TyCase t1' b1') k sp mode 
         checkBs bs (r && r1 && r2) unifiers
 
 -- Equality on sets in types
-equalTypesRelatedCoeffectsInner s rel (TySet ts1) (TySet ts2) k sp Types =
+equalTypesRelatedCoeffectsInner s rel (TySet _ ts1) (TySet _ ts2) k sp Types =
   -- TODO: make this more powerful
   return (all (`elem` ts2) ts1 && all (`elem` ts1) ts2, [])
 
@@ -464,7 +463,7 @@ isIndexedType t = do
       , tfTyRational = \_ -> return $ Const False
       , tfTyGrade = \_ _ -> return $ Const False
       , tfTyInfix = \_ (Const x) (Const y) -> return $ Const (x || y)
-      , tfSet = \_ -> return $ Const False
+      , tfSet = \_ _ -> return $ Const False
       , tfTyCase = \_ _ -> return $ Const False
       , tfTySig = \(Const b) _ _ -> return $ Const b } t
   return $ getConst b

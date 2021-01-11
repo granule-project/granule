@@ -38,6 +38,10 @@ type Coeffect = Type
 type Effect   = Type
 type Kind     = Type
 
+-- Represents polairty information for lattices
+data Polarity = Normal | Opposite
+ deriving (Eq, Show, Ord, Data, Typeable)
+
 -- | Type syntax (includes effect, coeffect, and predicate terms)
 data Type where
     Type    :: Int -> Type                          -- ^ Universe construction
@@ -53,7 +57,7 @@ data Type where
     TyGrade :: Maybe Type -> Int -> Type            -- ^ Graded element
     TyInfix :: TypeOperator -> Type -> Type -> Type -- ^ Infix type operator
 
-    TySet   :: [Type] -> Type                 -- ^ Type-level set
+    TySet   :: Polarity -> [Type] -> Type     -- ^ Type-level set
     TyCase  :: Type -> [(Type, Type)] -> Type -- ^ Type-level case
 
     TySig   :: Type -> Kind -> Type           -- ^ Kind signature
@@ -157,9 +161,14 @@ isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
-isSet :: Type -> Maybe Type
-isSet (TyApp (TyCon c) t) | internalName c == "Set" = Just t
+isSet :: Type -> Maybe (Type, Polarity)
+isSet (TyApp (TyCon c) t) | internalName c == "Set"  = Just (t, Normal)
+isSet (TyApp (TyCon c) t) | internalName c == "SetOp" = Just (t, Opposite)
 isSet _ = Nothing
+
+setConstructor :: Polarity -> Type
+setConstructor Normal   = TyCon $ mkId "Set"
+setConstructor Opposite = TyCon $ mkId "SetOp"
 
 isProduct :: Type -> Maybe (Type, Type)
 isProduct (TyApp (TyApp (TyCon c) t) t')
@@ -198,7 +207,7 @@ containsTypeSig =
       , tfTyRational = \_ -> return False
       , tfTyGrade = \_ _ -> return False
       , tfTyInfix = \_ x y -> return (x || y)
-      , tfSet = \_ -> return  False
+      , tfSet = \_ _ -> return  False
       , tfTyCase = \_ _ -> return False
       , tfTySig = \_ _ _ -> return True })
 
@@ -257,8 +266,8 @@ mTyGrade :: Monad m => Maybe Type -> Int -> m Type
 mTyGrade t c = return $ TyGrade t c
 mTyInfix :: Monad m => TypeOperator -> Type -> Type -> m Type
 mTyInfix op x y  = return (TyInfix op x y)
-mTySet   :: Monad m => [Type] -> m Type
-mTySet xs    = return (TySet xs)
+mTySet   :: Monad m => Polarity -> [Type] -> m Type
+mTySet p xs    = return (TySet p xs)
 mTyCase :: Monad m => Type -> [(Type, Type)] -> m Type
 mTyCase x cs = return (TyCase x cs)
 mTySig   :: Monad m => Type -> Type -> Type -> m Type
@@ -277,7 +286,7 @@ data TypeFold m a = TypeFold
   , tfTyRational :: Rational        -> m a
   , tfTyGrade :: Maybe a   -> Int  -> m a
   , tfTyInfix :: TypeOperator -> a -> a -> m a
-  , tfSet     :: [a]                -> m a
+  , tfSet     :: Polarity -> [a]    -> m a
   , tfTyCase  :: a -> [(a, a)]      -> m a
   , tfTySig   :: a -> Type -> (a -> m a)
   }
@@ -321,9 +330,9 @@ typeFoldM algebra = go
      t1' <- go t1
      t2' <- go t2
      (tfTyInfix algebra) op t1' t2'
-   go (TySet ts) = do
+   go (TySet p ts) = do
     ts' <- mapM go ts
-    (tfSet algebra) ts'
+    (tfSet algebra) p ts'
    go (TySig t k) = do
      t' <- go t
      k' <- go k
@@ -356,7 +365,7 @@ instance Term Type where
       , tfTyRational  = \_ -> return (Const [])
       , tfTyGrade     = \_ _ -> return (Const [])
       , tfTyInfix = \_ (Const y) (Const z) -> return $ Const (y <> z)
-      , tfSet     = return . Const . concat . map getConst
+      , tfSet     = \_ -> return . Const . concat . map getConst
       , tfTyCase  = \(Const t) cs -> return . Const $ t <> (concat . concat) [[a,b] | (Const a, Const b) <- cs]
       , tfTySig   = \(Const t) _ (Const k) -> return $ Const (t <> k)
       }

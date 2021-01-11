@@ -233,7 +233,7 @@ getAssumConstr a =
     getTypeConstr (TyRational _) = Nothing
     getTypeConstr (TyGrade _ _) = Nothing
     getTypeConstr (TyInfix _ _ _) = Nothing
-    getTypeConstr (TySet _) = Nothing
+    getTypeConstr (TySet _ _) = Nothing
     getTypeConstr (TyCase _ cases) =
       if allSame (map snd cases)
         then getTypeConstr . snd . head $ cases
