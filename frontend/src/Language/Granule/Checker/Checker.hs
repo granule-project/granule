@@ -118,7 +118,6 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         -- Otherwise, do synth
         _ -> do
           (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
-          liftIO $ putStrLn $ pretty subst
           -- Apply the outcoming substitution
           ty' <- substitute subst ty
           return $ Left $ Forall nullSpanNoFile [] [] ty'
