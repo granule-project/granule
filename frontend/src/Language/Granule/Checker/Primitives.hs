@@ -60,6 +60,9 @@ typeConstructors =
     , (mkId "Sec",  (kcoeffect, [], False))
     , (mkId "Hi",    (tyCon "Sec", [], False))
     , (mkId "Lo",    (tyCon "Sec", [], False))
+    -- Uniqueness
+    , (mkId "Uniqueness", (kcoeffect, [], False))
+    , (mkId "NonUnique", (tyCon "Uniqueness", [], False))
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
@@ -466,6 +469,19 @@ tick = BUILTIN
 --   . Ptr id -> Cap a id -> a
 -- freePtr = BUILTIN
 
+--------------------------------------------------------------------------------
+-- Uniqueness monadic operations
+--------------------------------------------------------------------------------
+
+nonuniqueReturn
+  : forall {a : Type}
+  . a -> a [NonUnique]
+nonuniqueReturn = BUILTIN
+
+nonuniqueBind
+  : forall {a b : Type}
+  . (a -> b [NonUnique]) -> a [NonUnique] -> b [NonUnique]
+nonuniqueBind = BUILTIN
 
 |]
 
