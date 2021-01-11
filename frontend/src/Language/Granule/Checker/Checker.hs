@@ -118,6 +118,14 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         -- Otherwise, do synth
         _ -> do
           (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
+          --
+          -- Solve the generated constraints
+          checkerState <- get
+
+          let predicate = Conj $ predicateStack checkerState
+          predicate <- substitute (removePromSubsts subst) predicate
+          solveConstraints predicate (getSpan expr) (mkId "grepl")
+
           -- Apply the outcoming substitution
           ty' <- substitute subst ty
           return $ Left $ Forall nullSpanNoFile [] [] ty'
@@ -314,7 +322,9 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
 
-    removePromSubsts = filter (not . isPromVar)
+removePromSubsts :: Substitution -> Substitution
+removePromSubsts = filter (not . isPromVar)
+ where
     isPromVar (id, _) = "prom_[" `isPrefixOf` (internalName id)
 
 checkEquation :: (?globals :: Globals) =>
