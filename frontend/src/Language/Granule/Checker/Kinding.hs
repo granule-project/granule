@@ -14,7 +14,6 @@ import Control.Arrow (second)
 import Control.Monad
 import Control.Monad.State.Strict
 import Control.Monad.Trans.Maybe
-import Data.Functor.Identity (runIdentity)
 import Data.Maybe (fromMaybe)
 
 import Language.Granule.Context
@@ -48,7 +47,7 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
   modify (\st -> st { tyVarContext = localTyVarContext })
   forM_ constraints $ \constraint -> checkKind s constraint kpredicate
 
-  ty <- return $ replaceSynonyms ty
+  ty <- replaceSynonyms ty
   (unifiers, tyElaborated) <- checkKind s ty ktype
 
   -- Rewrite the quantified variables with their possibly updated kinds (inferred)
@@ -60,10 +59,14 @@ kindCheckDef (Def s id rf eqs (Forall s' quantifiedVariables constraints ty)) = 
 
 -- Replace any constructor IDs with their top-element
 -- (i.e., IO gets replaces with the set of all effects as an alias)
-replaceSynonyms :: Type -> Type
-replaceSynonyms = runIdentity . typeFoldM (baseTypeFold { tfTyCon = conCase })
+replaceSynonyms :: Type -> Checker Type
+replaceSynonyms ty =
+    typeFoldM (baseTypeFold { tfTyCon = conCase }) ty
   where
-    conCase conId = let tyConId = TyCon conId in return $ fromMaybe tyConId (effectTop tyConId)
+    conCase conId = do
+      let tyConId = TyCon conId
+      effTop <- effectTop tyConId
+      return $ fromMaybe tyConId effTop
 
 ------------------------------------------------------------
 
@@ -90,6 +93,14 @@ checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "C
   (checkKind s t kcoeffect) <|> (checkKind s t ktype)
 
 checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) =
+  -- Sets as effects can be themselves over an effect type or some other type
+  (checkKind s t keffect) <|> (checkKind s t ktype)
+
+checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) =
+  -- Sets as coeffects can be themselves over a coeffect type or some other type
+  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+
+checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) =
   -- Sets as effects can be themselves over an effect type or some other type
   (checkKind s t keffect) <|> (checkKind s t ktype)
 
@@ -323,17 +334,17 @@ synthKind' s _ t@(TyCon id) = do
         Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 
 -- KChkS_set
-synthKind' s overloadToNat t0@(TySet (t:ts)) = do
+synthKind' s overloadToNat t0@(TySet p (t:ts)) = do
   (k, subst1, t') <- synthKind' s overloadToNat t
   substsAndTs' <- mapM (\t' -> checkKind s t' k) ts
   let (substs, ts') = unzip substsAndTs'
   subst <- combineManySubstitutions s (subst1:substs)
-  return (TyApp (TyCon $ mkId "Set") k, subst, TySet (t':ts'))
+  return (TyApp (setConstructor p) k, subst, TySet p (t':ts'))
 
 -- KChkS_set (empty) -- gives a polymorphic type to the elements
-synthKind' s overloadToNat (TySet []) = do
+synthKind' s overloadToNat (TySet p []) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") ktype
-  return (TyApp (TyCon $ mkId "Set") (TyVar var), [], TySet [])
+  return (TyApp (setConstructor p) (TyVar var), [], TySet p [])
 
 -- KChkS_sig
 synthKind' s _ (TySig t k) = do

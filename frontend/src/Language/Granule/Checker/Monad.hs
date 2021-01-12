@@ -231,6 +231,14 @@ allDataConstructorNames = do
   st <- get
   return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
 
+allDataConstructorNamesForType :: Type -> Checker [Id]
+allDataConstructorNamesForType ty = do
+    st <- get
+    return $ mapMaybe go (typeConstructors st)
+  where
+    go :: (Id, (Type, a, Bool)) -> Maybe Id
+    go (con, (k, _, _)) = if k == ty then Just con else Nothing
+
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
 discarded, the rhs result computation must be run! This is useful for

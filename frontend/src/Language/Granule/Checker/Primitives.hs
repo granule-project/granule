@@ -23,7 +23,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 typeAliases :: [(Id, Type)]
 typeAliases =
     -- IO = {p | p in IOElem}
-    [(mkId "IO", TySet (map tyCon ioElems))]
+    [(mkId "IO", TySet Normal (map tyCon ioElems))]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 

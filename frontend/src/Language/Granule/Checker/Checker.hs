@@ -18,6 +18,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
+import Data.List (isPrefixOf)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -51,7 +52,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern (Pattern(..))
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
-import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Type hiding (Polarity)
 
 import Language.Granule.Synthesis.Deriving
 import Language.Granule.Synthesis.Splitting
@@ -116,8 +117,18 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
         -- Otherwise, do synth
         _ -> do
-          (ty, _, _, _) <- synthExpr defCtxt [] Positive expr
-          return $ Left $ Forall nullSpanNoFile [] [] ty
+          (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
+          --
+          -- Solve the generated constraints
+          checkerState <- get
+
+          let predicate = Conj $ predicateStack checkerState
+          predicate <- substitute (removePromSubsts subst) predicate
+          solveConstraints predicate (getSpan expr) (mkId "grepl")
+
+          -- Apply the outcoming substitution
+          ty' <- substitute subst ty
+          return $ Left $ Forall nullSpanNoFile [] [] ty'
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -306,10 +317,15 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         let predicate = Conj $ predicateStack checkerState
         debugM "elaborateEquation" "solveEq"
         debugM "FINAL SUBST" (pretty subst)
-        predicate <- substitute subst predicate
+        predicate <- substitute (removePromSubsts subst) predicate
         solveConstraints predicate (getSpan equation) defName
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
+
+removePromSubsts :: Substitution -> Substitution
+removePromSubsts = filter (not . isPromVar)
+ where
+    isPromVar (id, _) = "prom_[" `isPrefixOf` (internalName id)
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions
