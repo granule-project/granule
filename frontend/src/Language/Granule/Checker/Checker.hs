@@ -621,32 +621,28 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
             -- Otherwise we need to discharge only things that get used
             else freeVars e
 
+    -- Checker the expression being promoted
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
-    -- Causes a promotion of any typing assumptions that came from variable
-    -- inside a guard from an enclosing case that have kind Level
-    -- This prevents control-flow attacks and is a special case for Level
-    -- (the guard contexts come from a special context in the solver)
-    guardGam <- allGuardContexts
-    guardGam' <- filterM isLevelKinded guardGam
-    (gam'', subst') <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
+    -- Multiply the grades of all the used varibles here
+    (gam'', subst') <- multAll s vars demand gam'
 
     substFinal <- combineSubstitutions s subst subst'
 
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
   where
-    -- Calculate whether a type assumption is level kinded
-    isLevelKinded (_, as) = do
-        -- TODO: should deal with the subst
-        (ty, _) <- synthKindAssumption s as
-        return $ case ty of
-          Just (TyCon (internalName -> "Level"))
-            -> True
-          Just (TyApp (TyCon (internalName -> "Interval"))
-                      (TyCon (internalName -> "Level")))
-            -> True
-          _ -> False
+    -- -- Calculate whether a type assumption is level kinded
+    -- isLevelKinded (_, as) = do
+    --     -- TODO: should deal with the subst
+    --     (ty, _) <- synthKindAssumption s as
+    --     return $ case ty of
+    --       Just (TyCon (internalName -> "Level"))
+    --         -> True
+    --       Just (TyApp (TyCon (internalName -> "Interval"))
+    --                   (TyCon (internalName -> "Level")))
+    --         -> True
+    --       _ -> False
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
@@ -1083,14 +1079,16 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
    var <- freshTyVarInContext (mkId $ "prom_[" <> pretty (startPos s) <> "]") (tyVar vark)
 
+   -- Synth type of promoted expression
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
+
+   -- Multiply the grades of all the used variables here
+   (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
+
+   substFinal <- combineSubstitutions s subst subst'
 
    let finalTy = Box (TyVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
-
-   (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
-   substFinal <- combineSubstitutions s subst subst'
-
    return (finalTy, gam'', substFinal, elaborated)
 
 
