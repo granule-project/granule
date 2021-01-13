@@ -157,7 +157,15 @@ instance Pretty Constraint where
     pretty (ApproximatedBy _ c1 c2 k) =
       case k of
         -- Nat is discrete
-        TyCon (internalName -> "Nat") -> "(" <> pretty c1 <> " = " <> pretty c2 <> ")"
+        TyCon (internalName -> "Nat") ->
+            "(" <> pretty c1 <> " = " <> pretty c2 <> ")"
+        -- Sets (subset)
+        TyApp (TyCon (internalName -> "Set")) _ ->
+            "(" <> pretty c1 <> " ⊆ " <> pretty c2 <> ")"
+        -- Sets (superset)
+        TyApp (TyCon (internalName -> "SetOp")) _ ->
+            "(" <> pretty c1 <> " ⊇ " <> pretty c2 <> ")"
+
         _ -> "(" <> pretty c1 <> " ≤ " <> pretty c2 <> ")" -- <> " @ " <> pretty k
 
     pretty (Lub _ c1 c2 c3 _) =
