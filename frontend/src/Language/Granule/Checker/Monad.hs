@@ -536,7 +536,7 @@ data CheckerError
   | SolverErrorFalsifiableTheorem
     { errLoc :: Span, errDefId :: Id, errPred :: Pred }
   | SolverError
-    { errLoc :: Span, errMsg :: String }
+    { errLoc :: Span, errMsg :: String, errPred :: Pred }
   | SolverTimeout
     { errLoc :: Span, errSolverTimeoutMillis :: Integer, errDefId :: Id, errContext :: String, errPred :: Pred }
   | UnifyGradedLinear
@@ -880,7 +880,7 @@ instance UserMsg CheckerError where
     <> "` is falsifiable:\n\t"
     <> pretty errPred
 
-  msg SolverError{..} = errMsg
+  msg SolverError{..} = errMsg <> " for theorem:\n\t" <> pretty errPred
 
   msg SolverTimeout{errSolverTimeoutMillis, errDefId, errContext, errPred}
     = "Solver timed out with limit of " <> show errSolverTimeoutMillis

@@ -1310,7 +1310,10 @@ solveConstraints predicate s name = do
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout ->
         throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis, errDefId = name, errContext = "grading", errPred = predicate }
-    OtherSolverError msg -> throw SolverError{ errLoc = s, errMsg = msg }
+    OtherSolverError msg -> do
+      simplPred <- simplifyPred predicate
+      msg' <- rewriteMessage msg
+      throw SolverError{ errLoc = s, errMsg = msg', errPred = simplPred }
     SolverProofError msg -> error msg
 
 -- Rewrite an error message coming from the solver
