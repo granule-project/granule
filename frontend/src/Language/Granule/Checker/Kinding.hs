@@ -160,6 +160,17 @@ checkKind s t@(TyGrade mk n) k = do
     Nothing ->
       throw $ UnificationError s k k'
 
+-- KChk_set
+checkKind s t@(TySet p elems) (TyApp (TyCon setConstructor) elemTy)
+  | internalName setConstructor == "Set" || internalName setConstructor == "SetOp" = do
+    case elems of
+      [] -> return ([], t)
+      _ -> do
+        results <- mapM (\elem -> checkKind s elem elemTy) elems
+        let (substs, elems') = unzip results
+        substFinal <- combineManySubstitutions s substs
+        return (substFinal, TySet p elems')
+
 -- KChk_sig
 checkKind s (TySig t k) k' = do
   join <- joinTypes s k k'
@@ -334,12 +345,12 @@ synthKind' s _ t@(TyCon id) = do
         Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 
 -- KChkS_set
-synthKind' s overloadToNat t0@(TySet p (t:ts)) = do
-  (k, subst1, t') <- synthKind' s overloadToNat t
-  substsAndTs' <- mapM (\t' -> checkKind s t' k) ts
-  let (substs, ts') = unzip substsAndTs'
+synthKind' s overloadToNat t0@(TySet p (elem:elems)) = do
+  (k, subst1, elem') <- synthKind' s overloadToNat elem
+  results <- mapM (\elem -> checkKind s elem k) elems
+  let (substs, elems') = unzip results
   subst <- combineManySubstitutions s (subst1:substs)
-  return (TyApp (setConstructor p) k, subst, TySet p (t':ts'))
+  return (TyApp (setConstructor p) k, subst, TySet p (elem':elems'))
 
 -- KChkS_set (empty) -- gives a polymorphic type to the elements
 synthKind' s overloadToNat (TySet p []) = do

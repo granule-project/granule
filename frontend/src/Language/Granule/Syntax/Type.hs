@@ -162,7 +162,7 @@ isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
 
 isSet :: Type -> Maybe (Type, Polarity)
-isSet (TyApp (TyCon c) t) | internalName c == "Set"  = Just (t, Normal)
+isSet (TyApp (TyCon c) t) | internalName c == "Set"   = Just (t, Normal)
 isSet (TyApp (TyCon c) t) | internalName c == "SetOp" = Just (t, Opposite)
 isSet _ = Nothing
 
