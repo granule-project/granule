@@ -789,7 +789,7 @@ instance UserMsg CheckerError where
     <> "`" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
 
   msg UndefinedEqualityError{..}
-    = "Equality is not defined at kind"
+    = "Equality is not defined at kind "
     <> pretty errKL
     <> "\t\n from equality between "
     <> "'" <> pretty errTy2 <> "' and '" <> pretty errTy1 <> "' equal."

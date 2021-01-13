@@ -381,8 +381,12 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
         (TyCon (internalName -> "Protocol")) ->
           sessionInequality s t1 t2
         _ ->
-          throw UndefinedEqualityError
-            { errLoc = s, errTy1 = t1, errTy2 = t2, errKL = k }
+          case sp of
+            FstIsSpec ->
+              throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
+            _ ->
+              throw $ TypeError { errLoc = s, tyExpected = t1, tyActual = t2 }
+
 
 -- Essentially use to report better error messages when two session type
 -- are not equality
