@@ -1198,7 +1198,7 @@ synthExpr defs gam pol (App s _ rf e e') = do
          subst <- combineSubstitutions s subst1 subst2
 
          -- Synth subst
-         tau    <- substitute subst2 tau
+         tau    <- substitute subst tau
 
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)
