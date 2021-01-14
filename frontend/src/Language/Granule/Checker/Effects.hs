@@ -174,7 +174,7 @@ effectMult sp effTy t1 t2 = do
 
 effectUpperBound :: Span -> Type -> Type -> Type -> Checker Type
 effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
-    nvar <- freshTyVarInContextWithBinding (mkId "n") t BoundQ
+    nvar <- freshTyVarInContextWithBinding (mkId "n") t InstanceQ
     -- Unify the two variables into one
     addConstraint (ApproximatedBy s t1 (TyVar nvar) t)
     addConstraint (ApproximatedBy s t2 (TyVar nvar) t)
