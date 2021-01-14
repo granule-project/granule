@@ -220,8 +220,10 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
     (Just (k1, ForallQ), Just (k2, BoundQ)) ->
       tyVarConstraint (k2, m) (k1, n)
 
-    (Just (k1, BoundQ), Just (k2, ForallQ)) ->
-      tyVarConstraint (k1, n) (k2, m)
+    -- We can unify an instance variable `n` to a universal `m`
+    -- creating a substitution `n |-> m`
+    (Just (n_k, InstanceQ), Just (m_k, ForallQ)) ->
+        tyVarConstraint (n_k, n) (m_k, m)
 
 
     -- We can unify two instance type variables
@@ -252,11 +254,15 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
               <> pretty n <> " : " <> show t1
               <> "\n" <> pretty m <> " : " <> show t2
   where
-    tyVarConstraint (k1, n) (k2, m) = do
-      jK <- joinTypes s k1 k2
+    -- First parameter *must* be a unification variable
+    tyVarConstraint :: (Kind, Id) -> (Kind, Id) -> Checker (Bool, Substitution)
+    tyVarConstraint (a_k, a) (b_k, b) = do
+      -- Find upper bound of the two kinds `jK`
+      jK <- joinTypes s a_k b_k
       case jK of
-        Just (TyCon kc, unif, _) -> do
-          (result, putChecker) <- peekChecker (checkKind s (TyCon kc) kcoeffect)
+        -- Find out if the kind is a coeffect
+        Just (t, subst, _) -> do
+          (result, putChecker) <- peekChecker (checkKind s t kcoeffect)
           case result of
             Left err -> return ()
             -- Create solver vars for coeffects
