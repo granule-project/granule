@@ -199,7 +199,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
         Nothing -> return ()
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
-          freshPolymorphicInstance BoundQ True tySch coercions
+          freshPolymorphicInstance InstanceQ True tySch coercions
 
       mapM_ (\ty -> do
         pred <- compileTypeConstraintToConstraint s ty
