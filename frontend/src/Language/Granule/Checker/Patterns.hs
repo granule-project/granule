@@ -210,10 +210,10 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
                          <> "\n###\t coercions =  " <> show coercions
                          <> "\n###\n"
       debugM "ctxt" $ "\n### FRESH POLY ###\n####\t dConTyFresh = "
-                      <> show dataConstructorTypeFresh
-                      <> "\n###\t ctxt = " <> show freshTyVarsCtxt
-                      <> "\n###\t freshTyVarSubst = " <> show freshTyVarSubst
-                      <> "\n###\t coercions' =  " <> show coercions'
+                      <> pretty dataConstructorTypeFresh
+                      <> "\n###\t ctxt = " <> pretty freshTyVarsCtxt
+                      <> "\n###\t freshTyVarSubst = " <> pretty freshTyVarSubst
+                      <> "\n###\t coercions' =  " <> pretty coercions'
 
       dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
 
@@ -237,8 +237,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- Debugging
           debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
           debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
-          debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
-          debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
+          debugM "ctxt" $ "### drewrit = " <> pretty dataConstructorIndexRewritten
+          debugM "ctxt" $ "### drewritAndSpec = " <> pretty dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
           (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
             ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
