@@ -768,13 +768,16 @@ deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
   return (TyCon $ mkId "()", makeUnitIntroUntyped)
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Int" "Int")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "dropInt")) arg))
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg))
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Char" "Char")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "dropChar")) arg))
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg))
+
+deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Float" "Float")) arg = do
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg))
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "String" "String")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "dropString")) arg))
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg))
 
 deriveDrop' _ _ _ argTy@(TyVar name) arg = do
   return (TyCon $ mkId "()", makeUnitIntroUntyped)
