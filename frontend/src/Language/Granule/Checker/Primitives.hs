@@ -280,6 +280,11 @@ forkLinear
   . (LChan s -> ()) -> LChan (Dual s)
 forkLinear = BUILTIN
 
+forkLinear'
+  : forall {p : Protocol, s : Semiring}
+  . ((LChan p) [1 : s] -> ()) -> LChan (Dual p)
+forkLinear' = BUILTIN
+
 send
   : forall {a : Type, s : Protocol}
   . LChan (Send a s) -> a -> LChan s

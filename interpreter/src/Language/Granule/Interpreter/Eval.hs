@@ -199,7 +199,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
          -- (cf. TRY_BETA_2)
         (\(e :: IOException) -> evalIn ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
-          
+
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
@@ -368,6 +368,7 @@ builtIns =
                False -> Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
+  , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
@@ -388,6 +389,16 @@ builtIns =
          evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
       return $ Chan c)
     forkLinear ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
+    forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
+    forkLinear' ctxt e@Abs{} = Ext () (unsafePerformIO $ do
+      c <- CC.newChan
+      _ <- C.forkIO $
+         evalIn ctxt (App nullSpan () False
+                        (valExpr e)
+                        (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
+      return $ Chan c)
+    forkLinear' ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
     forkRep ctxt e@Abs{} = diamondConstr $ do
