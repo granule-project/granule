@@ -1,0 +1,27 @@
+
+redeem : forall {p, q : Type} . (p [NonUnique] -> q) -> p -> q
+redeem f x = f (nonuniqueReturn x)
+
+-- Can't implement this as we can't go from p (linear) to p []
+redeem' : forall {p, q : Type} . (p [] -> q) -> p -> q
+redeem' = ?
+
+weaken : forall {p, q, r : Type} . (q -> r) -> p [NonUnique] -> q -> r
+weaken f [a] b = f b
+
+weaken' : forall {p, q, r : Type} . (q -> r) -> p [] -> q -> r
+weaken' f [a] b = f b
+
+contract : forall {p, q : Type} . (p [NonUnique] -> p [NonUnique] -> q) -> p [NonUnique] -> q
+contract f [a] = f [a] [a]
+
+contract' : forall {p, q : Type} . (p [] -> p [] -> q) -> p [] -> q
+contract' f [a] = f [a] [a]
+
+-- Can't implement this as we can't go from p [NonUnique] to p
+derelict : forall {p, q, r : Type} . (p -> q) -> p [NonUnique] -> q
+-- derelict f [a] = f a
+derelict = ?
+
+derelict' : forall {p, q, r : Type} . (p -> q) -> p [] -> q
+derelict' f [a] = f a
