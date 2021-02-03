@@ -30,6 +30,13 @@ type Grade = Type
 type Heap = Ctxt (Grade, Expr Symbolic ())
   -- Ctxt (Grade, (Ctxt Type, Expr () (), Type))
 
+isSVal :: Expr Symbolic () -> Bool
+isSVal (Val _ _ _ (Ext _ (Symbolic _))) = True
+isSVal _ = False
+
+for :: [a] -> (a -> b) -> [b]
+for = flip map
+
 -- Stubs
 heapEval :: AST Symbolic () -> IO (Maybe Val)
 heapEval _ = return Nothing
@@ -127,6 +134,26 @@ smallHeapRedux heap
   --
   let heap' = (x, (TyInfix TyOpTimes r q, b)) : heap
   return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , TyInfix TyOpTimes r q)]))]
+
+-- [Pair R] (specialised)
+smallHeapRedux heap
+     (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (internalName -> ",") [])) e1) e2) r | isSVal e1 = do
+ -- Evaluate right
+    res <- smallHeapRedux heap e2 r
+    return $ for res
+              (\(e2', env)
+                    -> (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (mkId ",") [])) e1) e2'
+                      , env))
+
+-- [Pair L] (specialised)
+smallHeapRedux heap
+     (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (internalName -> ",") [])) e1) e2) r = do
+ -- Evaluate left
+    res <- smallHeapRedux heap e1 r
+    return $ for res
+              (\(e1', env)
+                    -> (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (mkId ",") [])) e1') e2
+                      , env))
 
 -- [Small-AppL]
 smallHeapRedux heap (App s a b e1 e2) r = do
