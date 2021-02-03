@@ -1,3 +1,5 @@
+{-# LANGUAGE ViewPatterns #-}
+
 module Language.Granule.Interpreter.HeapModel where
 
 import Language.Granule.Syntax.Def
@@ -12,18 +14,27 @@ import Language.Granule.Utils
 
 import Control.Monad.State
 
+--import Debug.Trace
+
+-- Represent symbolic values in the heap semantics
+data Symbolic = Symbolic Id
+  deriving Show
+
+instance Pretty Symbolic where
+  pretty (Symbolic x) = "?" ++ internalName x
+
 -- Some type alises
-type Val   = Value () ()
+type Val   = Value Symbolic ()
 type Grade = Type
 -- Heap map
-type Heap = Ctxt (Grade, Expr () ())
+type Heap = Ctxt (Grade, Expr Symbolic ())
   -- Ctxt (Grade, (Ctxt Type, Expr () (), Type))
 
 -- Stubs
-heapEval :: AST () () -> IO (Maybe Val)
+heapEval :: AST Symbolic () -> IO (Maybe Val)
 heapEval _ = return Nothing
 
-heapEvalDefs :: [Def () ()] -> Id -> IO (Ctxt Val)
+heapEvalDefs :: [Def Symbolic ()] -> Id -> IO (Ctxt Val)
 heapEvalDefs defs defName = return []
 
 -- Examples
@@ -32,9 +43,8 @@ heapEvalDefs defs defName = return []
 -- (\(f : (Int -> (Int -> Int))) -> \(g : Int -> Int) -> \([x] : Int [2]) -> (f x) (g x))
 -- (\([f] : (Int [Lo] -> Int) [Lo]) -> \(g : (Int [Hi] -> Int)) -> \([x] : Int [Hi]) -> g [f [x]])
 
-
 -- Key hook in for now
-heapEvalJustExprAndReport :: (?globals :: Globals) => Expr () () -> Int -> Maybe String
+heapEvalJustExprAndReport :: (?globals :: Globals) => Expr Symbolic () -> Int -> Maybe String
 heapEvalJustExprAndReport e steps =
     Just (concatMap report res)
   where
@@ -47,18 +57,18 @@ heapEvalJustExprAndReport e steps =
        ++ "\n"
     prettyHeap = pretty
 
-heapEvalJustExpr :: Expr () () ->  Int -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
+heapEvalJustExpr :: Expr Symbolic () ->  Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
 heapEvalJustExpr e steps =
   multiSmallHeapRedux heap e' (TyGrade Nothing 1) steps
    where
     (heap, e') = buildInitialHeap e
 
-buildInitialHeap :: Expr () () -> (Heap, Expr () ())
+buildInitialHeap :: Expr Symbolic () -> (Heap, Expr Symbolic ())
 -- Graded abstraction
 buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) e)) =
     (h0 : heap, e')
   where
-     h0        = (v, (r, (Val nullSpanNoFile () False (Var () v))))
+     h0        = (v, (r, (Val nullSpanNoFile () False (Ext () (Symbolic v)))))
      (heap, e') = buildInitialHeap e
 -- Linear abstraction treated as graded 1
 buildInitialHeap (Val _ _ _ (Abs _ (PVar _ _ _ v) (Just a) e)) =
@@ -77,7 +87,7 @@ ctxtPlusZip ((i, g) : ctxt) ctxt' =
     Nothing -> (i, g) : ctxtPlusZip ctxt ctxt'
 
 -- Multi-step relation
-multiSmallHeapRedux :: Heap -> Expr () () -> Grade -> Int -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
+multiSmallHeapRedux :: Heap -> Expr Symbolic () -> Grade -> Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
 multiSmallHeapRedux heap e r 0 = return [(e, (heap, [], []))]
 multiSmallHeapRedux heap e r steps = do
   res <- smallHeapRedux heap e r
@@ -88,7 +98,7 @@ multiSmallHeapRedux heap e r steps = do
   return $ concat ress
 
 -- Functionalisation of the main small-step reduction relation
-smallHeapRedux :: Heap -> Expr () () -> Grade -> State Integer [(Expr () (), (Heap, Ctxt Grade, Ctxt Grade))]
+smallHeapRedux :: Heap -> Expr Symbolic () -> Grade -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
 
 -- [Small-Var]
 smallHeapRedux heap (Val _ _ _ (Var _ x)) r = do
@@ -122,6 +132,7 @@ smallHeapRedux heap
 smallHeapRedux heap (App s a b e1 e2) r = do
   res <- smallHeapRedux heap e1 r
   return $ map (\(e1', (h, resourceOut, gammaOut)) -> (App s a b e1' e2, (h, resourceOut, gammaOut))) res
+
 
 -- Catch all
 smallHeapRedux heap e t =
