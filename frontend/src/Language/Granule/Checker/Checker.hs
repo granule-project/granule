@@ -614,6 +614,10 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
 -- Promotion
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
+
+    -- if closed and not public, can't promote to level kind
+    allowPromotion >>= \allow -> unless allow $ invalidPromotion
+
     let vars =
           if hasHole e
             -- If we are promoting soemthing with a hole, then put all free variables in scope
@@ -631,18 +635,35 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
 
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
+
   where
-    -- -- Calculate whether a type assumption is level kinded
-    -- isLevelKinded (_, as) = do
-    --     -- TODO: should deal with the subst
-    --     (ty, _) <- synthKindAssumption s as
-    --     return $ case ty of
-    --       Just (TyCon (internalName -> "Level"))
-    --         -> True
-    --       Just (TyApp (TyCon (internalName -> "Interval"))
-    --                   (TyCon (internalName -> "Level")))
-    --         -> True
-    --       _ -> False
+
+    -- Calculate whether a type assumption is level kinded
+    isLevelKinded = do
+      (k,_subst,_) <- synthKind (getSpan e) demand
+      return $ case k of
+        TyCon (internalName -> "Level") -> True
+        TyApp (TyCon (internalName -> "Interval"))
+          (TyCon (internalName -> "Level")) -> True
+        _oth -> False
+
+    -- Determine if the level type is Public
+    isLevelPublic =
+      case demand of
+        TyCon (internalName -> "Public") -> True
+        _oth -> False
+
+    -- determine if e is a closed term
+    hasNoFreeVars = null $ freeVars e
+
+    -- Allow promotion if Public or not Level kinded or has free vars
+    allowPromotion = do
+      levelKind <- isLevelKinded
+      return $ not levelKind || isLevelPublic || not hasNoFreeVars
+
+    -- Throw type error when we try to promote at a non-Public level
+    invalidPromotion =
+      throw $ InvalidPromotionError (getSpan e) demand
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
