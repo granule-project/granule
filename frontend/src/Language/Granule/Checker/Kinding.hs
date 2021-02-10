@@ -374,7 +374,7 @@ synthKindWithConfiguration s _ t@(TyCon id) = do
     Nothing -> do
       mConstructor <- lookupDataConstructor s id
       case mConstructor of
-        Just (Forall _ [] [] tDat, _) -> return (tDat, [], t)
+        Just (Forall _ [] [] tDat, _, _) -> return (tDat, [], t)
         Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty id
         Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 

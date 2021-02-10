@@ -31,7 +31,7 @@ import Language.Granule.Utils
 -- the context, but only splits those in the toSplit list.
 generateCases :: (?globals :: Globals)
   => Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> [Id]
   -> Checker ([Id], [([Pattern ()], Ctxt Assumption)])
@@ -69,7 +69,7 @@ generateCases span constructors ctxt toSplit = do
 -- Splits all variables in a given context into a list of patterns.
 splitAll ::
      Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> Checker (Ctxt [Pattern ()])
 splitAll span constructors ctxt = do
@@ -94,7 +94,7 @@ splitAll span constructors ctxt = do
 -- a tuple of patterns and unsplittable variable IDs.
 splitNotBoxed ::
      Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> Checker (Ctxt [Pattern ()], [Id])
 splitNotBoxed _ _ [] = pure ([], [])
@@ -121,7 +121,7 @@ splitNotBoxed span constructors ctxt = do
 -- split that once.
 splitBoxed ::
      Span
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> Checker (Ctxt [Pattern ()])
 splitBoxed _ _ [] = pure []
@@ -191,7 +191,7 @@ validateCase span ty pats = do
 -- their data constructors. The list of potential IDs is drawn from name
 -- annotations on types in data definitions.
 relevantDataConstrs ::
-     Ctxt (Ctxt (TypeScheme, Substitution))
+     Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Id
   -> Ctxt (Ctxt [Maybe Id])
 relevantDataConstrs constructors types =
@@ -203,7 +203,8 @@ relevantDataConstrs constructors types =
     getConstructorInfo dataId = do
         dataIdsConstrs <- lookup dataId constructors
         let consNames = map fst dataIdsConstrs
-        let consTyNames = map (tsTypeNames . fst . snd) dataIdsConstrs
+        let fst3 (a, b, c) = a
+        let consTyNames = map (tsTypeNames . fst3 . snd) dataIdsConstrs
         return (zip consNames consTyNames)
     -- A list of all identifiers in context, e.g. x, xs.
     varIdentifiers :: [Id]
