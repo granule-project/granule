@@ -13,7 +13,6 @@
 -- | Core type checker
 module Language.Granule.Checker.Checker where
 
-import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -145,7 +144,7 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
     Nothing -> modify' $ \st ->
       st{ typeConstructors = (name, (tyConKind, ids, typeIndicesPositions d)) : typeConstructors st }
   where
-    ids = map dataConstrId ds -- the IDs of data constructors
+   -- ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
     mkKind (v:vs) = FunTy Nothing v (mkKind vs)
@@ -501,10 +500,21 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] -> do
+      let snd3 (a, b, c) = b
+      let pats = map (\(x, y) -> (x, (fst $ unzip $ snd3 y))) (typeConstructors st)
+      constructors <- mapM (\ (a, b) -> do
+        dc <- mapM (lookupDataConstructor s) b
+        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+        return (a, sd)) pats
+      (_, cases) <- generateCases s constructors ctxt boundVariables
 
-      case globalsSynthesise ?globals of
-        Just True -> do
-          synthedExpr <- do
+      -- If we are in synthesise mode, also try to synthesise a
+      -- term for each case split goal *if* this is also a hole
+      -- of interest
+      let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+      cases' <-
+        case globalsSynthesise ?globals of
+           Just True ->
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
