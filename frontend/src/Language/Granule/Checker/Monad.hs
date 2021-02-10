@@ -172,7 +172,7 @@ data CheckerState = CS
             --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
             , typeConstructors :: Ctxt (Type, [Id], Bool)
             -- map of data constructors and their types and substitutions
-            , dataConstructors :: Ctxt (TypeScheme, Substitution)
+            , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
 
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
@@ -223,7 +223,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- Look up a data constructor, taking into account the possibility that it
 -- may be hidden to the current module
-lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution))
+lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution, [Int]))
 lookupDataConstructor sp constrName = do
   st <- get
   case M.lookup constrName (allHiddenNames st) of
@@ -1025,7 +1025,7 @@ freshenPred pred = do
     return pred'
 
 -- help to get a map from type constructor names to a map from data constructor names to their types and subst
-getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution)))
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution, [Int])))
 getDataConstructors tyCon = do
   st <- get
   let tyCons   = typeConstructors st

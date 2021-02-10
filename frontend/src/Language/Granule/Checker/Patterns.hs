@@ -190,7 +190,8 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just (tySch, coercions) -> do
+    Just (tySch, coercions, boundVars) -> do
+
 
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
@@ -200,15 +201,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
       -- get fresh instance of the data constructors type
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
-          freshPolymorphicInstance InstanceQ True tySch coercions
+          freshPolymorphicInstance InstanceQ True tySch coercions boundVars
 
+      -- register any constraints of the data constructor into the solver
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
-      -- register any constraints of the data constructor into the solver
-      mapM_ (\ty -> do
-        pred <- compileTypeConstraintToConstraint s ty
-        addPredicate pred) constraints
-
+      
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
                          <> "\n###\t tySch = " <> pretty tySch
@@ -242,15 +240,9 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
           -- Debugging
           debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
-<<<<<<< HEAD
-          debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
-          debugM "ctxt" $ "### drewrit = " <> pretty dataConstructorIndexRewritten
-          debugM "ctxt" $ "### drewritAndSpec = " <> pretty dataConstructorIndexRewrittenAndSpecialised <> "\n"
-=======
                         <> "\n\t### dfresh = " <> show dataConstructorTypeFresh
                         <> "\n\t### drewrit = " <> show dataConstructorIndexRewritten
                         <> "\n\t### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
->>>>>>> 241dac74 (dont flip substitution)
 
           -- Recursively apply pattern matching on the internal patterns to the constructor pattern
           (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
