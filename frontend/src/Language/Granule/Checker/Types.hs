@@ -194,42 +194,54 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
     (Just (_, ForallQ), Just (_, ForallQ)) ->
         return (False, [])
 
-    -- We can unify two instance unification variables
-    (Just (n_k, InstanceQ), Just (m_k, InstanceQ)) ->
-        tyVarConstraint (n_k, n) (m_k, m)
+    -- We can unify a universal a dependently bound universal
+    (Just (k1, ForallQ), Just (k2, BoundQ)) ->
+      tyVarConstraint (k2, m) (k1, n)
 
-    -- We can unify an instance variable `n` to a universal `m`
-    -- creating a substitution `n |-> m`
-    (Just (n_k, InstanceQ), Just (m_k, ForallQ)) ->
-        tyVarConstraint (n_k, n) (m_k, m)
+    (Just (k1, BoundQ), Just (k2, ForallQ)) ->
+      tyVarConstraint (k1, n) (k2, m)
 
-    -- We can unify an instance variable `m` to a universal `n`
-    -- creating a substitution `m |-> n`
-    (Just (n_k, ForallQ), Just (m_k, InstanceQ)) ->
-        tyVarConstraint (m_k, m) (n_k, n)
+
+    -- We can unify two instance type variables
+    (Just (k1, InstanceQ), Just (k2, BoundQ)) ->
+        tyVarConstraint (k1, n) (k2, m)
+
+    -- We can unify two instance type variables
+    (Just (k1, BoundQ), Just (k2, InstanceQ)) ->
+        tyVarConstraint (k1, n) (k2, m)
+
+    -- We can unify two instance type variables
+    (Just (k1, InstanceQ), Just (k2, InstanceQ)) ->
+        tyVarConstraint (k1, n) (k2, m)
+
+    -- We can unify two instance type variables
+    (Just (k1, BoundQ), Just (k2, BoundQ)) ->
+        tyVarConstraint (k1, n) (k2, m)
+
+    -- But we can unify a forall and an instance
+    (Just (k1, InstanceQ), Just (k2, ForallQ)) ->
+        tyVarConstraint (k1, n) (k2, m)
+
+    -- But we can unify a forall and an instance
+    (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
+        tyVarConstraint (k1, n) (k2, m)
 
     (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
               <> pretty n <> " : " <> show t1
               <> "\n" <> pretty m <> " : " <> show t2
   where
-    -- First parameter *must* be a unification variable
-    tyVarConstraint :: (Kind, Id) -> (Kind, Id) -> Checker (Bool, Substitution)
-    tyVarConstraint (a_k, a) (b_k, b) = do
-      -- Find upper bound of the two kinds `jK`
-      jK <- joinTypes s a_k b_k
+    tyVarConstraint (k1, n) (k2, m) = do
+      jK <- joinTypes s k1 k2
       case jK of
-        -- Find out if the kind is a coeffect
-        Just (t, subst, _) -> do
-          (result, putChecker) <- peekChecker (checkKind s t kcoeffect)
+        Just (TyCon kc, unif, _) -> do
+          (result, putChecker) <- peekChecker (checkKind s (TyCon kc) kcoeffect)
           case result of
             Left err -> return ()
             -- Create solver vars for coeffects
-            Right _ -> putChecker >> addConstraint (Eq s (TyVar a) (TyVar b) t)
-          -- Combine new substitution [a |-> b] with rest
-          subst' <- combineSubstitutions s subst [(a, SubstT $ TyVar b)]
-          return (True, subst')
-
-        -- Cannot unify the kinds - so non-equal
+            Right _ -> putChecker >> addConstraint (Eq s (TyVar n) (TyVar m) (TyCon kc))
+          return (True, unif ++ [(n, SubstT $ TyVar m)])
+        Just (_, unif, _) ->
+          return (True, unif ++ [(m, SubstT $ TyVar n)])
         Nothing ->
           return (False, [])
 
