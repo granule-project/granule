@@ -106,14 +106,10 @@ typeConstructors =
     , (mkId "MayFail", (tyCon "Exception", [], []))
 
     -- Arrays
-<<<<<<< HEAD
     , (mkId "FloatArray", (Type 0, [], []))
-=======
-    , (mkId "FloatArray", (Type 0, [], False))
-
+  
     -- Capability related things
-    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], True))
->>>>>>> eb3d002a (new feature, extending set coeffects, providing capability tracking)
+    , (mkId "CapabilityType", (funTy (tyCon "Capability") (Type 0), [], [1]))
     ]
 
 -- Various predicates and functions on type operators
