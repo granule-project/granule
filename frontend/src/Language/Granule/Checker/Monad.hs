@@ -206,7 +206,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- Look up a data constructor, taking into account the possibility that it
 -- may be hidden to the current module
-lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution))
+lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution, [Id]))
 lookupDataConstructor sp constrName = do
   st <- get
   case M.lookup constrName (allHiddenNames st) of
@@ -967,7 +967,7 @@ freshenPred pred = do
     return pred'
 
 -- help to get a map from type constructor names to a map from data constructor names to their types and subst
-getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution)))
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution, [Id])))
 getDataConstructors tyCon = do
   st <- get
   let tyCons   = typeConstructors st

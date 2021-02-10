@@ -203,14 +203,18 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> TypeScheme   -- ^ Type scheme to freshen
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
-
+  -> [Id]
   -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution = do
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution boundVars = do
+   
+  
+   
+   
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
     renameMap <- cumulativeMapM instantiateVariable kinds
@@ -262,8 +266,13 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
          else do
 
-           var' <- freshTyVarInContextWithBinding var k quantifier
-           return (var, Left (k, var'))
+           if elem var boundVars 
+             then do
+               var' <- freshTyVarInContextWithBinding var k BoundQ
+               return (var, Left (k, var'))
+             else do
+               var' <- freshTyVarInContextWithBinding var k quantifier
+               return (var, Left (k, var'))
 
     -- Apply `f` but as we go apply the resulting substitution forwards on the rest of the list
     cumulativeMapM f [] = return []

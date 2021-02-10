@@ -24,6 +24,7 @@ import qualified Data.Text as T
 
 import Language.Granule.Checker.CoeffectsTypeConverter
 import Language.Granule.Checker.Constraints.Compile
+    ( compileTypeConstraintToConstraint )
 import Language.Granule.Checker.Constraints.SymbolicGrades
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
@@ -100,7 +101,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         (Val s _ _ (Constr _ c [])) -> do
           mConstructor <- lookupDataConstructor s c
           case mConstructor of
-            Just (tySch, _) -> return $ Left tySch
+            Just (tySch, _, _) -> return $ Left tySch
             Nothing -> do
               st <- get
               -- Or see if this is a kind constructors
@@ -172,16 +173,32 @@ checkDataCon
         -- Only relevant type variables get included
         let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
         let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
+        
+        st <- get
+
+        -- debugM "type indicies" (show $ typeConstructors st)
 
         -- Add the type variables from the data constructor into the environment
         -- The main universal context
         let tyVarsD' = relevantSubCtxt (freeVars $ resultType ty) tyVars_justD
+
         -- This subset of the context is for existentials
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
+
+        let tyConsIndices = fromJust $ lookup tName (typeConstructors st) 
+
+        let snd3 (a, b, c) = b
+        let relevantIndices = fromJust (lookup dName $ snd3 tyConsIndices) 
+        let tyVarsForall = (tyVarsT <> tyVarsD')-- `deleteVars` relevantIndices
+
+        let tyIndices = relevantSubCtxt relevantIndices tyVarsT
+
+ 
         modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVarsT <> tyVarsD']
+               [(v, (k, ForallQ)) | (v, k) <- tyVarsForall <> tyIndices]
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
+
 
         -- Check we are making something that is actually a type
         -- _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
@@ -189,7 +206,7 @@ checkDataCon
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
-             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
+             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) [] []
 
         -- Create a version of the data constructor that matches the data type head
         -- but with a list of coercions
@@ -197,20 +214,21 @@ checkDataCon
         ixKinds <- mapM (substitute substFromFreshening) (indexKinds kind)
         (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty ixKinds
 
-        -- Reconstruct the data constructor's new type scheme
+        -- Reconstruct th e data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
 
-        registerDataConstructor tySch coercions
+
+        registerDataConstructor tySch coercions $ dependentBoundVars substFromFreshening tyIndices
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
     indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
     indexKinds k = []
 
-    registerDataConstructor dataConstrTy subst = do
+    registerDataConstructor dataConstrTy subst boundVars = do
       st <- get
-      case extend (dataConstructors st) dName (dataConstrTy, subst) of
+      case extend (dataConstructors st) dName (dataConstrTy, subst, boundVars) of
         Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
         Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
 
@@ -220,6 +238,13 @@ checkDataCon
         , errTypeConstructor = tName
         , errVar = v
         }
+    
+    dependentBoundVars ((v, SubstT (TyVar v')):substs) tyIndices = 
+      case lookup v tyIndices of
+        Just _ -> v' : dependentBoundVars substs tyIndices 
+        _ -> dependentBoundVars substs tyIndices 
+    dependentBoundVars ((v, SubstT _):substs) tyIndices = dependentBoundVars substs tyIndices
+    dependentBoundVars [] _ = []
 
 checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
   = checkDataCon tName kind tyVars
@@ -793,11 +818,11 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
   st <- get
   mConstructor <- lookupDataConstructor s c
   case mConstructor of
-    Just (tySch, coercions) -> do
+    Just (tySch, coercions, _) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
 
       mapM_ (\ty -> do
         pred <- compileTypeConstraintToConstraint s ty
@@ -1702,7 +1727,7 @@ checkGuardsForImpossibility s name = do
 --
 freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 freshenTySchemeForVar s rf id tyScheme = do
-  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
+  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
 
   mapM_ (\ty -> do
     pred <- compileTypeConstraintToConstraint s ty
