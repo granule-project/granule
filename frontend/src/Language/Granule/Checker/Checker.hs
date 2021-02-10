@@ -13,7 +13,6 @@
 -- | Core type checker
 module Language.Granule.Checker.Checker where
 
-import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -137,9 +136,9 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
+      st{ typeConstructors = (name, (tyConKind, typeIndicesOfDataType d, isIndexedDataType d)) : typeConstructors st }
   where
-    ids = map dataConstrId ds -- the IDs of data constructors
+   -- ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
     mkKind (v:vs) = FunTy Nothing v (mkKind vs)
@@ -148,10 +147,13 @@ checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (kind, _ ,_) -> kind
+                Just (kind, _ , _) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
-    modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
+    modify' $ \st -> st { tyVarContext = [(v, (k, if isIndexed v st then BoundQ else ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars) dataConstrs
+  where 
+    snd3 (a, b, c) = b
+    isIndexed x st = elem x . concat . snd . unzip . snd3 $ fromJust $ lookup name (typeConstructors st)
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
@@ -476,7 +478,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] -> do
       let snd3 (a, b, c) = b
-      let pats = map (second snd3) (typeConstructors st)
+      let pats = map (\(x, y) -> (x, (fst $ unzip $ snd3 y))) (typeConstructors st)
       constructors <- mapM (\ (a, b) -> do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
