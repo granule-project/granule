@@ -135,13 +135,32 @@ combineSubstitutions sp u1 u2 = do
                        combineSubstitutions sp [(v, sUnified)] us
 
               return $ concat unifs
-      -- Any remaining unifiers that are in u2 but not u1
-      uss2 <- forM u2 $ \(v, s) ->
-         case lookup v u1 of
-           Nothing -> return [(v, s)]
-           _       -> return []
-      let uss = concat uss1 <> concat uss2
-      return $ reduceByTransitivity uss
+
+      -- Check we're not unifying two universals to the same substitutor
+      errs <- checkValid [] $ flipSubstitution $ concat uss1 
+      case errs of 
+        Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
+        Nothing -> do
+          -- Any remaining unifiers that are in u2 but not u1
+          uss2 <- forM u2 $ \(v, s) ->
+              case lookup v u1 of
+                  Nothing -> return [(v, s)]
+                  _       -> return []
+          let uss = concat uss1 <> concat uss2
+          return $ reduceByTransitivity uss
+
+checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
+checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
+  st <- get
+  case lookup v' (tyVarContext  st) of
+    Just (_, ForallQ) -> 
+      if v `elem` vars then
+        return $ Just (TyVar v, TyVar v')
+      else 
+         checkValid (v : vars) substs
+    _ -> checkValid vars substs 
+checkValid vars (sub:substs) = checkValid vars substs
+checkValid _ []  = return $ Nothing
 
 reduceByTransitivity :: Substitution -> Substitution
 reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt
