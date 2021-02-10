@@ -13,6 +13,7 @@
 -- | Core type checker
 module Language.Granule.Checker.Checker where
 
+import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -144,7 +145,7 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
     Nothing -> modify' $ \st ->
       st{ typeConstructors = (name, (tyConKind, ids, typeIndicesPositions d)) : typeConstructors st }
   where
-   -- ids = map dataConstrId ds -- the IDs of data constructors
+    ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
     mkKind (v:vs) = FunTy Nothing v (mkKind vs)
@@ -232,7 +233,7 @@ checkDataCon
 
         registerDataConstructor tySch coercions typeIndices 
 
-      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
+      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)  
   where
     indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
     indexKinds k = []
@@ -324,6 +325,10 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
+<<<<<<< HEAD
+=======
+    checkGuardsForImpossibility s defName constraints
+>>>>>>> dad498de (merge changes from fixSubstIndices)
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
@@ -501,7 +506,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] -> do
       let snd3 (a, b, c) = b
-      let pats = map (\(x, y) -> (x, (fst $ unzip $ snd3 y))) (typeConstructors st)
+      let pats = map (second snd3) (typeConstructors st)
       constructors <- mapM (\ (a, b) -> do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
@@ -1200,7 +1205,7 @@ synthExpr defs gam pol (App s _ rf e e') = do
          subst <- combineSubstitutions s subst1 subst2
 
          -- Synth subst
-         tau    <- substitute subst tau
+         tau    <- substitute subst2 tau
 
          let elaborated = App s tau rf elaboratedL elaboratedR
          return (tau, gamNew, subst, elaborated)

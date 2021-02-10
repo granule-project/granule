@@ -169,17 +169,10 @@ data CheckerState = CS
 
             -- Data type information
             --  map of type constructor names to their the kind,
-<<<<<<< HEAD
             --  data constructors, and which (if any) parameters are actually indices
             , typeConstructors :: Ctxt (Type, [Id], [Int])
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
-=======
-            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Type, [(Id, [Id])], Bool)
-            -- map of data constructors and their types and substitutions
-            , dataConstructors :: Ctxt (TypeScheme, Substitution, [Id])
->>>>>>> b279bba8 (store type pindices in typeConstructors)
 
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
@@ -243,21 +236,16 @@ lookupDataConstructor sp constrName = do
 
 lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
 lookupPatternMatches sp constrName = do
-  st <- get
   let snd3 (a, b, c) = b
-  return $ fst . unzip . snd3 <$> lookup constrName (typeConstructors st)
+  st <- get
+  return $ snd3 <$> lookup constrName (typeConstructors st)
 
 -- Return the data constructors of all types in the environment
 allDataConstructorNames :: Checker (Ctxt [Id])
 allDataConstructorNames = do
   st <- get
-<<<<<<< HEAD
-  return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
-  
-=======
   return $ ctxtMap (\(_, datas, _) -> fst $ unzip $ datas) (typeConstructors st)
 
->>>>>>> b279bba8 (store type pindices in typeConstructors)
 allDataConstructorNamesForType :: Type -> Checker [Id]
 allDataConstructorNamesForType ty = do
     st <- get
@@ -1043,7 +1031,7 @@ getDataConstructors tyCon = do
       Just (k, dataConsNames, _) ->
           case resultType k of
             Type _ ->
-              Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) (fst . unzip $ dataConsNames)
+              Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames
             _ ->
               -- Ignore not Type thing
               Nothing
