@@ -154,6 +154,24 @@ isIndexedDataType (DataDecl _ id tyVars _ constrs) =
     -- Defaults to `true` (acutally an ill-formed case for data types)
     noMatchOnEndType _ _ = True
 
+-- | Given a data decleration, return the type parameters which are type indicies
+typeIndicesOfDataType :: DataDecl -> [(Id, [Id])]
+typeIndicesOfDataType (DataDecl _ _ tyVars _ constrs) = 
+    map constructorIndices constrs 
+  where 
+    constructorIndices :: DataConstr -> (Id, [Id])
+    constructorIndices dataConstr@(DataConstrNonIndexed _ id _) = (id, [])
+    constructorIndices dataConstr@(DataConstrIndexed _ id (Forall _ _ _ ty)) = (id, findIndices (reverse tyVars) ty) 
+      
+    findIndices ((v, _):tyVars) (TyApp t1 t2) =
+      case t2 of
+        TyVar v' | v == v' -> findIndices tyVars t1
+        _                  -> freeVars t2 <> findIndices tyVars t1
+    findIndices tyVars (FunTy _ _ t) = findIndices tyVars t
+    findIndices [] (TyCon _) = []
+    -- Defaults to `true` (acutally an ill-formed case for data types)
+    findIndices _ _ = []
+
 
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
 nonIndexedToIndexedDataConstr _     _      d@DataConstrIndexed{} = d
