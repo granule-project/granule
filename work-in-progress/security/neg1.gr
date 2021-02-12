@@ -1,0 +1,15 @@
+data Bool where
+  True : Bool;
+  False : Bool
+
+sneaky_bool : (LChan (Send Bool End)) [Public] → Bool → Bool
+sneaky_bool [c] x =
+  let c = send c x in
+  let () = close c in
+  False
+
+sneaky_fun : (LChan (Send Bool End)) [Public] → Bool [Private] → Bool [Private]
+sneaky_fun [c] x =
+      case x of
+        [True]  →  [sneaky_bool [c] True];
+        [False] →  [sneaky_bool [c] False]
