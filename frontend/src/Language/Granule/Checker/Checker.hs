@@ -650,8 +650,8 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
         TyCon (internalName -> "Public") -> True
         _oth -> False
 
-    -- determine if e is a closed term
-    hasNoFreeVars = not (hasHole e) && null (freeVars e)
+    -- determine if e is a closed term with no ghost variables
+    hasNoFreeVars = (not (hasHole e) && null (freeVars e)) && (null $ allGhostVariables gam)
 
     -- Allow promotion if Public or not Level kinded or has free vars
     allowPromotion = do
@@ -805,7 +805,7 @@ synthExpr defs gam pol
 
 -- Constructors
 synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
-  debugM "synthExpr[Constr]" (pretty s)
+  debugM "synthExpr[Constr]" (pretty s <> " : " <> pretty c)
   -- Should be provided in the type checkers environment
   st <- get
   mConstructor <- lookupDataConstructor s c

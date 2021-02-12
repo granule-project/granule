@@ -947,7 +947,7 @@ instance UserMsg CheckerError where
     = "Natural number `" <> pretty errTy <> "` is not a member of `" <> pretty errK <> "`"
 
   msg InvalidPromotionError{ errTy }
-    = "Invalid promotion to `" <> pretty errTy <> "`"
+    = "Invalid promotion of closed term to `" <> pretty errTy <> "`"
 
   color HoleMessage{} = Blue
   color _ = Red
