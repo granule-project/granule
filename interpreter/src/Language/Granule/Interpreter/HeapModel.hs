@@ -160,6 +160,36 @@ smallHeapRedux heap (App s a b e1 e2) r = do
   res <- smallHeapRedux heap e1 r
   return $ map (\(e1', (h, resourceOut, gammaOut)) -> (App s a b e1' e2, (h, resourceOut, gammaOut))) res
 
+-- [Case-beta] ONLY MATCHES Left-Right patterns for either
+smallHeapRedux heap
+   (Case s a b (App _ _ _ (Val _ _ _ (Constr _ (internalName -> constr) [])) e)
+        [(PConstr _ _ _ (internalName -> "Left") [PVar _ _ _ varl], el)
+        ,(PConstr _ _ _ (internalName -> "Right") [PVar _ _ _ varr], er)]) r = do
+
+    -- fresh variable
+    st <- get
+    let x = mkId $ "w" ++ show st
+    put $ st+1
+    --
+     -- A&B and Grade determine `q` from a syntactic grade
+     -- We don't have that here (we could get it out of the typing...)
+    let q = TyGrade Nothing 1
+    let heap' = (x, (TyInfix TyOpTimes r q, e)) : heap
+    --
+    let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
+    let embeddedCtxt = [(x , TyInfix TyOpTimes r q)]
+    -- Expression is e1 or e2 (with x replaying varl or varr)
+    let eFinal = case constr of
+                  "Left" -> subst (Val s () False (Var () x)) varl el
+                  "Right" -> subst (Val s () False (Var () x)) varr er
+                  _ -> undefined
+    return [(eFinal, (heap' , resourceOut, embeddedCtxt))]
+
+-- [Case-cong]
+smallHeapRedux heap (Case s a b e ps) r = do
+  res <- smallHeapRedux heap e r
+  return $ map (\(e', (h, resourceOut, gammaOut)) -> (Case s a b e' ps, (h, resourceOut, gammaOut))) res
+
 
 -- Catch all
 smallHeapRedux heap e t =
