@@ -237,7 +237,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
 
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
+        tyVarConstraint (k2, m) (k1 , n)
 
     (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
               <> pretty n <> " : " <> show t1
@@ -254,7 +254,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
             Right _ -> putChecker >> addConstraint (Eq s (TyVar n) (TyVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif, _) ->
-          return (True, unif ++ [(m, SubstT $ TyVar n)])
+          return (True, unif ++ [(n, SubstT $ TyVar m)])
         Nothing ->
           return (False, [])
 
