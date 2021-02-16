@@ -485,8 +485,25 @@ instance Unifiable Substitutors where
 
 instance Unifiable Type where
     unify' t t' | t == t' = return []
-    unify' (TyVar v) t    = return [(v, SubstT t)]
-    unify' t (TyVar v)    = return [(v, SubstT t)]
+    unify' (TyVar v) (TyVar v') = do 
+      st <- get
+      case lookup v (tyVarContext st) of 
+        Just (_, ForallQ) -> 
+          case lookup v' (tyVarContext st) of
+            Just (_, ForallQ) -> 
+              error "what are you doing! "
+            _ -> return [(v', SubstT $ TyVar v)]
+        _ -> return [(v, SubstT $ TyVar v')]    
+    unify' (TyVar v) t    = do
+      st <- get
+      case lookup v (tyVarContext st) of 
+        Just (_, ForallQ) -> error "you died" 
+        _ -> return [(v, SubstT t)]
+    unify' t (TyVar v)    = do
+      st <- get
+      case lookup v (tyVarContext st) of 
+        Just (_, ForallQ) -> error "you died" 
+        _ -> return [(v, SubstT t)]
     unify' (FunTy _ t1 t2) (FunTy _ t1' t2') = do
         u1 <- unify' t1 t1'
         u2 <- unify' t2 t2'
