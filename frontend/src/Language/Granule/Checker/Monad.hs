@@ -161,10 +161,10 @@ data CheckerState = CS
 
             -- Data type information
             --  map of type constructor names to their the kind,
-            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
-            , typeConstructors :: Ctxt (Type, [(Id, [Id])], Bool)
+            --  data constructors, and whether ßindexed (True = Indexed, False = Not-indexed)
+            , typeConstructors :: Ctxt (Type, [Id], Bool)
             -- map of data constructors and their types and substitutions
-            , dataConstructors :: Ctxt (TypeScheme, Substitution, [Id])
+            , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
 
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
@@ -206,7 +206,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- Look up a data constructor, taking into account the possibility that it
 -- may be hidden to the current module
-lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution, [Id]))
+lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution, [Int]))
 lookupDataConstructor sp constrName = do
   st <- get
   case M.lookup constrName (allHiddenNames st) of
@@ -221,16 +221,16 @@ lookupDataConstructor sp constrName = do
 
 lookupPatternMatches :: Span -> Id -> Checker (Maybe [Id])
 lookupPatternMatches sp constrName = do
-  st <- get
   let snd3 (a, b, c) = b
-  return $ fst . unzip . snd3 <$> lookup constrName (typeConstructors st)
+  st <- get
+  return $ snd3 <$> lookup constrName (typeConstructors st)
 
 -- Return the data constructors of all types in the environment
 allDataConstructorNames :: Checker (Ctxt [Id])
 allDataConstructorNames = do
   st <- get
-  return $ ctxtMap (\(_, datas, _) -> fst $ unzip $ datas) (typeConstructors st)
-
+  return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
+  
 allDataConstructorNamesForType :: Type -> Checker [Id]
 allDataConstructorNamesForType ty = do
     st <- get
@@ -967,7 +967,7 @@ freshenPred pred = do
     return pred'
 
 -- help to get a map from type constructor names to a map from data constructor names to their types and subst
-getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution, [Id])))
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution, [Int])))
 getDataConstructors tyCon = do
   st <- get
   let tyCons   = typeConstructors st
@@ -977,7 +977,7 @@ getDataConstructors tyCon = do
       Just (k, dataConsNames, _) ->
           case resultType k of
             Type _ ->
-              Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) (fst . unzip $ dataConsNames)
+              Just $ mapMaybe (\dataCon -> lookup dataCon dataCons >>= (\x -> return (dataCon, x))) dataConsNames
             _ ->
               -- Ignore not Type thing
               Nothing

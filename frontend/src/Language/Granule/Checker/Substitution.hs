@@ -139,8 +139,8 @@ combineSubstitutions sp u1 u2 = do
       -- Check we're not unifying two universals to the same substitutor
       errs <- checkValid [] $ flipSubstitution $ concat uss1 
       case errs of 
-        Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
-        Nothing -> do
+      --  Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
+        _ -> do
           -- Any remaining unifiers that are in u2 but not u1
           uss2 <- forM u2 $ \(v, s) ->
               case lookup v u1 of
@@ -222,21 +222,22 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> TypeScheme   -- ^ Type scheme to freshen
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
-  -> [Id]
+  -> [Int]        -- ^ Type Indices if this is a data constructor for an indexed type
   -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
        -- a substitution from the visible instance variable to their originals
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
-freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution boundVars = do
-   
+freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
   
-   
-   
+
+    let boundTypes = typesFromIndices ty 0 indices
+    debugM "freshPoly boundVars: " (show boundTypes)
+ 
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-    renameMap <- cumulativeMapM instantiateVariable kinds
+    renameMap <- cumulativeMapM (instantiateVariable boundTypes) kinds 
 
     -- Applying the rename map to itself (one part at time), to accommodate dependency here
     renameMap <- selfRename renameMap
@@ -273,8 +274,8 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     -- Left of id means a succesful instance variable created
     -- Right of id means that this is an existential and so an (externally visisble)
      --    instance variable is not generated
-    instantiateVariable :: (Id, Kind) -> Checker (Id, Either (Kind, Id) (Kind, Id))
-    instantiateVariable (var, k) =
+    instantiateVariable :: [Id] -> (Id, Kind) ->  Checker (Id, Either (Kind, Id) (Kind, Id))
+    instantiateVariable boundTypes (var, k)  =
       if isDataConstructor && (var `notElem` freeVars (resultType ty))
                            && (var `notElem` freeVars (ixSubstitution))
          then do
@@ -285,7 +286,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
          else do
 
-           if elem var boundVars 
+           if elem var boundTypes 
              then do
                var' <- freshTyVarInContextWithBinding var k BoundQ
                return (var, Left (k, var'))
@@ -313,6 +314,16 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     justLefts = mapMaybe conv
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
+
+    typesFromIndices :: Type -> Int -> [Int] -> [Id]
+    typesFromIndices (TyApp t1 (TyVar t2)) index indices = 
+      if index `elem` indices 
+        then
+          t2 : typesFromIndices t1 (index+1) indices
+        else
+          typesFromIndices t1 (index+1) indices
+    typesFromIndices (FunTy _ _ t) index indices = typesFromIndices t (index+1) indices
+    typesFromIndices _ _ _ = []
 
 instance Substitutable Pred where
   substitute ctxt =

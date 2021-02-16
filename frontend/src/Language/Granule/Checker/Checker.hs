@@ -13,6 +13,7 @@
 -- | Core type checker
 module Language.Granule.Checker.Checker where
 
+import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
@@ -137,35 +138,36 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
   = lookup name <$> gets typeConstructors >>= \case
     Just _ -> throw TypeConstructorNameClash{ errLoc = sp, errId = name }
     Nothing -> modify' $ \st ->
-      st{ typeConstructors = (name, (tyConKind, typeIndicesOfDataType d, isIndexedDataType d)) : typeConstructors st }
+      st{ typeConstructors = (name, (tyConKind, ids, isIndexedDataType d)) : typeConstructors st }
   where
-   -- ids = map dataConstrId ds -- the IDs of data constructors
+    ids = map dataConstrId ds -- the IDs of data constructors
     tyConKind = mkKind (map snd tyVars)
     mkKind [] = case kindAnn of Just k -> k; Nothing -> Type 0 -- default to `Type`
     mkKind (v:vs) = FunTy Nothing v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
-checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
+checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
                 Just (kind, _ , _) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
-    modify' $ \st -> st { tyVarContext = [(v, (k, if isIndexed v st then BoundQ else ForallQ)) | (v, k) <- tyVars] }
-    mapM_ (checkDataCon name kind tyVars) dataConstrs
+    modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
+    mapM_ (checkDataCon name kind tyVars (typeIndices d)) dataConstrs
   where 
-    snd3 (a, b, c) = b
-    isIndexed x st = elem x . concat . snd . unzip . snd3 $ fromJust $ lookup name (typeConstructors st)
+  
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
+  -> [(Id, [Int])] -- ^ Type Indices of this data constructor
   -> DataConstr -- ^ The data constructor to check
   -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
 checkDataCon
   tName
   kind
   tyVarsT
+  indices
   d@(DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) = do
     case map fst $ intersectCtxts tyVarsT tyVarsD of
       [] -> do -- no clashes
@@ -185,17 +187,13 @@ checkDataCon
         -- This subset of the context is for existentials
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
 
-        let tyConsIndices = fromJust $ lookup tName (typeConstructors st) 
 
-        let snd3 (a, b, c) = b
-        let relevantIndices = fromJust (lookup dName $ snd3 tyConsIndices) 
-        let tyVarsForall = (tyVarsT <> tyVarsD')-- `deleteVars` relevantIndices
+        let tyVarsForall = (tyVarsT <> tyVarsD')
 
-        let tyIndices = relevantSubCtxt relevantIndices tyVarsT
 
  
         modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVarsForall <> tyIndices]
+               [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
             ++ tyVarContext st }
 
@@ -217,9 +215,11 @@ checkDataCon
         -- Reconstruct th e data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
+        let typeIndices = case lookup dName indices of 
+              Just inds -> inds 
+              _ -> []
 
-
-        registerDataConstructor tySch coercions $ dependentBoundVars substFromFreshening tyIndices
+        registerDataConstructor tySch coercions typeIndices 
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
@@ -239,15 +239,8 @@ checkDataCon
         , errVar = v
         }
     
-    dependentBoundVars ((v, SubstT (TyVar v')):substs) tyIndices = 
-      case lookup v tyIndices of
-        Just _ -> v' : dependentBoundVars substs tyIndices 
-        _ -> dependentBoundVars substs tyIndices 
-    dependentBoundVars ((v, SubstT _):substs) tyIndices = dependentBoundVars substs tyIndices
-    dependentBoundVars [] _ = []
-
-checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
-  = checkDataCon tName kind tyVars
+checkDataCon tName kind tyVars indices d@DataConstrNonIndexed{}
+  = checkDataCon tName kind tyVars indices
     $ nonIndexedToIndexedDataConstr tName tyVars d
 
 
@@ -503,7 +496,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] -> do
       let snd3 (a, b, c) = b
-      let pats = map (\(x, y) -> (x, (fst $ unzip $ snd3 y))) (typeConstructors st)
+      let pats = map (second snd3) (typeConstructors st)
       constructors <- mapM (\ (a, b) -> do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
