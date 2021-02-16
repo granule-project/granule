@@ -1,0 +1,13 @@
+-- examples copied from nonlinear.gr to check that One behaves like 
+-- Lin and Omega behaves like NonLin
+
+copy : ∀ {a : Type} . a [Omega] -> (a, a [Omega])
+copy [x] = (x, [x])
+
+drop : forall {a : Type} . a [Omega] -> a
+drop [x] = x
+
+extract : forall {a : Type} . a [One] -> a
+extract [x] = x
+
+-- todo: add some examples experimenting with Beta

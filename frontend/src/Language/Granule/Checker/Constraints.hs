@@ -165,6 +165,10 @@ freshSolverVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
+        "Borrowing" -> k (solverVar .== literal oneRepresentation
+                     .|| solverVar .== literal betaRepresentation
+                     .|| solverVar .== literal omegaRepresentation
+                       , SBorrow solverVar)
         "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
@@ -296,6 +300,15 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
     "NonLin" -> return (SLNL sTrue, sTrue)
     c -> error $ "Cannot compile " <> show c <> " as a LNL semiring"
 
+compileCoeffect (TyCon name) (TyCon (internalName -> "Borrowing")) _ = do
+  let n = case internalName name of
+            "One"   -> oneRepresentation
+            "Beta"  -> betaRepresentation
+            "Omega" -> omegaRepresentation
+            c       -> error $ "Cannot compile " <> show c <> " as a Borrowing semiring"
+
+  return (SBorrow . fromInteger . toInteger $ n, sTrue)
+
 compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec hiRepresentation, sTrue)
@@ -395,6 +408,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
         "LNL"       -> return (SLNL sTrue, sTrue)
+        "Borrowing" -> return (SBorrow (literal omegaRepresentation), sTrue)
         "Uniqueness" -> return (SNonUnique, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
@@ -428,6 +442,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL sFalse, sTrue)
+        "Borrowing" -> return (SBorrow (literal oneRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -525,6 +540,8 @@ approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
   -- Lin (F) <= NonLin (T)
   -- but not (NonLin (T) <= Lin (F))
   return (a .=> b)
+
+approximatedByOrEqualConstraint (SBorrow a) (SBorrow b) = return $ a .<= b
 
 approximatedByOrEqualConstraint SNonUnique SNonUnique = return $ sTrue
 

@@ -51,6 +51,11 @@ typeConstructors =
     -- LNL members
     , (mkId "Lin",        (tyCon "LNL", [], False))
     , (mkId "NonLin",     (tyCon "LNL", [], False))
+    -- Borrowing
+    , (mkId "Borrowing", (kcoeffect, [], False))
+    , (mkId "One",       (tyCon "Borrowing", [], False))
+    , (mkId "Beta",      (tyCon "Borrowing", [], False))
+    , (mkId "Omega",     (tyCon "Borrowing", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))
