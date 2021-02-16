@@ -139,8 +139,8 @@ combineSubstitutions sp u1 u2 = do
       -- Check we're not unifying two universals to the same substitutor
       errs <- checkValid [] $ flipSubstitution $ concat uss1 
       case errs of 
-        Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
-        Nothing -> do
+      --  Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
+        _ -> do
           -- Any remaining unifiers that are in u2 but not u1
           uss2 <- forM u2 $ \(v, s) ->
               case lookup v u1 of
@@ -225,7 +225,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> TypeScheme   -- ^ Type scheme to freshen
   -> Substitution -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
-  -> [Int]
+  -> [Int]        -- ^ Type Indices if this is a data constructor for an indexed type
   -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
@@ -233,15 +233,13 @@ freshPolymorphicInstance :: (?globals :: Globals)
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
-   
-   
+  
+
     let boundTypes = typesFromIndices ty 0 indices
     debugM "freshPoly boundVars: " (show boundTypes)
  
-   
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-
     renameMap <- cumulativeMapM (instantiateVariable boundTypes) kinds 
 
     -- Applying the rename map to itself (one part at time), to accommodate dependency here
@@ -331,6 +329,16 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     typesFromIndices (FunTy _ _ t) index indices = typesFromIndices t (index+1) indices
     typesFromIndices _ _ _ = []
 
+
+    typesFromIndices :: Type -> Int -> [Int] -> [Id]
+    typesFromIndices (TyApp t1 (TyVar t2)) index indices = 
+      if index `elem` indices 
+        then
+          t2 : typesFromIndices t1 (index+1) indices
+        else
+          typesFromIndices t1 (index+1) indices
+    typesFromIndices (FunTy _ _ t) index indices = typesFromIndices t (index+1) indices
+    typesFromIndices _ _ _ = []
 
 instance Substitutable Pred where
   substitute ctxt =

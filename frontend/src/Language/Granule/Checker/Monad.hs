@@ -168,7 +168,7 @@ data CheckerState = CS
 
             -- Data type information
             --  map of type constructor names to their the kind,
-            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
+            --  data constructors, and whether ßindexed (True = Indexed, False = Not-indexed)
             , typeConstructors :: Ctxt (Type, [Id], Bool)
             -- map of data constructors and their types and substitutions
             , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
@@ -241,7 +241,7 @@ allDataConstructorNames :: Checker (Ctxt [Id])
 allDataConstructorNames = do
   st <- get
   return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
-
+  
 allDataConstructorNamesForType :: Type -> Checker [Id]
 allDataConstructorNamesForType ty = do
     st <- get

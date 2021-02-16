@@ -32,14 +32,14 @@ typeAliases =
 --    * kind
 --    * list of (finite) matchable constructor names (but not the actual set of constructor names which could be infinite)
 --    * boolean flag on whether they are indexed types or not
-typeConstructors :: [(Id, (Type, [(Id, [Id])], Bool))]
+typeConstructors :: [(Id, (Type, [Id], Bool))]
 typeConstructors =
     [ (mkId "Coeffect",  (Type 0, [], False))
     , (mkId "Effect",    (Type 0, [], False))
     , (mkId "Guarantee", (Type 0, [], False))
     , (mkId "Predicate", (Type 0, [], False))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
-    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [(mkId ",,", [])], False))
+    , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
     , (mkId "Int",    (Type 0, [], False))
     , (mkId "Float",  (Type 0, [], False))
     , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty

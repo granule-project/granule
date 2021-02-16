@@ -191,8 +191,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just (tySch, coercions, boundVars) -> do
+    Just (tySch, coercions, indices) -> do
 
+      debugM "patterns : tySch: " $ show tySch
+      debugM "patterns : coercions: " $ show coercions
+      debugM "patterns : constructorName: " $ show dataC
+      debugM "patterns : indices: " $ show indices
 
       case outerBoxTy of
         Just (coeff, coeffTy) ->
@@ -200,7 +204,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
         Nothing -> return ()
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
-          freshPolymorphicInstance InstanceQ True tySch coercions boundVars
+          freshPolymorphicInstance InstanceQ True tySch coercions indices
 
       mapM_ (\ty -> do
         pred <- compileTypeConstraintToConstraint s ty
@@ -246,8 +250,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
             ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
+          let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers 
+
+          debugM "ctxt" $ "unifiers': " <> show unifiers' 
+
           -- Combine the substitutions
-          subst <- combineSubstitutions s (flipSubstitution unifiers) us
+          subst <- combineSubstitutions s (flipSubstitution unifiers') us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
