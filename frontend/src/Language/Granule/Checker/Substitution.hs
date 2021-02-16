@@ -259,7 +259,6 @@ freshPolymorphicInstance :: (?globals :: Globals)
        -- a correspondigly freshened version of the parameter substitution
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
 
-
     let boundTypes = typesFromIndices ty 0 indices
     debugM "freshPoly boundVars: " (show boundTypes)
 
@@ -342,24 +341,10 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     justLefts = mapMaybe conv
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
-    
 
     typesFromIndices :: Type -> Int -> [Int] -> [Id]
     typesFromIndices (TyApp t1 (TyVar t2)) index indices = 
       if index `elem` indices 
-        then
-          t2 : typesFromIndices t1 (index+1) indices
-        else
-          typesFromIndices t1 (index+1) indices
-    typesFromIndices (FunTy _ _ t) index indices = typesFromIndices t (index+1) indices
-    typesFromIndices _ _ _ = []
-
-
-
-
-    typesFromIndices :: Type -> Int -> [Int] -> [Id]
-    typesFromIndices (TyApp t1 (TyVar t2)) index indices =
-      if index `elem` indices
         then
           t2 : typesFromIndices t1 (index+1) indices
         else

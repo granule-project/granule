@@ -157,25 +157,22 @@ checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
                 Just (kind, _ , _) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    let paramsAndIndices = discriminateTypeIndicesOfDataType d
-    mapM_ (checkDataCon name kind tyVars (typeIndices d) paramsAndIndices) dataConstrs
-  where
-
+    mapM_ (checkDataCon name kind tyVars (typeIndices d)) dataConstrs
+  where 
+  
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
   -> [(Id, [Int])] -- ^ Type Indices of this data constructor
-  -> ([(Id, Kind)], [(Id, Kind)]) -- ^ type parameters and indices
   -> DataConstr -- ^ The data constructor to check
   -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
 checkDataCon
   tName
   kind
-  tyVarsT'
+  tyVarsT
   indices
-  (tyVarsParams, tyVarsIndices)
   d@(DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) = do
     case map fst $ intersectCtxts tyVarsT' tyVarsD of
       [] -> do -- no clashes
@@ -198,8 +195,7 @@ checkDataCon
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
 
 
-        let tyVarsForall = (tyVarsParams <> tyVarsD')
-
+        let tyVarsForall = (tyVarsT <> tyVarsD')
 
         modify $ \st -> st { tyVarContext =
                [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
@@ -233,7 +229,7 @@ checkDataCon
 
         registerDataConstructor tySch coercions typeIndices 
 
-      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)  
+      (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
     indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
     indexKinds k = []
@@ -250,9 +246,9 @@ checkDataCon
         , errTypeConstructor = tName
         , errVar = v
         }
-
-checkDataCon tName kind tyVars indices info d@DataConstrNonIndexed{}
-  = checkDataCon tName kind tyVars indices info
+    
+checkDataCon tName kind tyVars indices d@DataConstrNonIndexed{}
+  = checkDataCon tName kind tyVars indices
     $ nonIndexedToIndexedDataConstr tName tyVars d
 
 
