@@ -300,7 +300,7 @@ replEval val (AST dataDecls defs _ _ _) = do
 
 replHeapEval :: (?globals :: Globals) => Int -> AST () () -> Expr () () -> Int -> IO (Maybe String) -- Maybe (Expr () ()))
 replHeapEval val (AST dataDecls defs _ _ _) expr steps = do
-  return $ heapEvalJustExprAndReport (unsafeCoerce expr) steps
+  return $ heapEvalJustExprAndReport (unsafeCoerce defs) (unsafeCoerce expr) steps
     -- bindings <- heapEvalDefs (mkId (" repl" <> show val)) defs
     -- case lookup (mkId (" repl" <> show val)) bindings of
     --   Nothing -> return Nothing

@@ -11,10 +11,9 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Context
 import Language.Granule.Utils
+import Language.Granule.Interpreter.Desugar
 
 import Control.Monad.State
-
---import Debug.Trace
 
 -- Represent symbolic values in the heap semantics
 data Symbolic = Symbolic Id
@@ -51,11 +50,11 @@ heapEvalDefs defs defName = return []
 -- (\([f] : (Int [Lo] -> Int) [Lo]) -> \(g : (Int [Hi] -> Int)) -> \([x] : Int [Hi]) -> g [f [x]])
 
 -- Key hook in for now
-heapEvalJustExprAndReport :: (?globals :: Globals) => Expr Symbolic () -> Int -> Maybe String
-heapEvalJustExprAndReport e steps =
+heapEvalJustExprAndReport :: (?globals :: Globals) => [Def Symbolic ()] -> Expr Symbolic () -> Int -> Maybe String
+heapEvalJustExprAndReport defs e steps =
     Just (concatMap report res)
   where
-    res = evalState (heapEvalJustExpr e steps) 0
+    res = evalState (heapEvalJustExpr defs e steps) 0
     report (expr, (heap, grades, inner)) =
         "Expr = " ++ pretty expr
        ++ "\n Heap = " ++ prettyHeap heap
@@ -64,13 +63,16 @@ heapEvalJustExprAndReport e steps =
        ++ "\n"
     prettyHeap = pretty
 
-heapEvalJustExpr :: Expr Symbolic () ->  Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
-heapEvalJustExpr e steps =
-  multiSmallHeapRedux heap e' (TyGrade Nothing 1) steps
+heapEvalJustExpr :: (?globals :: Globals)
+   => [Def Symbolic ()] -> Expr Symbolic () ->  Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
+heapEvalJustExpr defs e steps =
+  multiSmallHeapRedux defCtxt heap e' (TyGrade Nothing 1) steps
    where
-    (heap, e') = buildInitialHeap e
+     defCtxt = map (\def -> (defId def, desugar def)) defs
+     (heap, e') = buildInitialHeap e
 
-buildInitialHeap :: Expr Symbolic () -> (Heap, Expr Symbolic ())
+buildInitialHeap :: (?globals :: Globals)
+   => Expr Symbolic () -> (Heap, Expr Symbolic ())
 -- Graded abstraction
 buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) e)) =
     (h0 : heap, e')
@@ -81,7 +83,7 @@ buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) 
 buildInitialHeap (Val _ _ _ (Abs _ (PVar _ _ _ v) (Just a) e)) =
     (h0 : heap, e')
   where
-     h0        = (v, (TyGrade Nothing 1, (Val nullSpanNoFile () False (Var () v))))
+     h0        = (v, (TyGrade Nothing 1, (Val nullSpanNoFile () False (Ext () (Symbolic v)))))
      (heap, e') = buildInitialHeap e
 
 buildInitialHeap e = ([], e)
@@ -94,21 +96,23 @@ ctxtPlusZip ((i, g) : ctxt) ctxt' =
     Nothing -> (i, g) : ctxtPlusZip ctxt ctxt'
 
 -- Multi-step relation
-multiSmallHeapRedux :: Heap -> Expr Symbolic () -> Grade -> Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
-multiSmallHeapRedux heap e r 0 = return [(e, (heap, [], []))]
-multiSmallHeapRedux heap e r steps = do
-  res <- smallHeapRedux heap e r
+multiSmallHeapRedux :: (?globals :: Globals)
+   => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
+multiSmallHeapRedux defs heap e r 0 = return [(e, (heap, [], []))]
+multiSmallHeapRedux defs heap e r steps = do
+  res <- smallHeapRedux defs heap e r
   ress <-
     mapM (\(b1, (heap', u', gamma1)) -> do
-      res' <- multiSmallHeapRedux heap' b1 r (steps - 1)
+      res' <- multiSmallHeapRedux defs heap' b1 r (steps - 1)
       return $ map (\(b, (heap'', u'', gamm2)) -> (b, (heap'', ctxtPlusZip u' u'', gamma1 ++ gamm2))) res') res
   return $ concat ress
 
 -- Functionalisation of the main small-step reduction relation
-smallHeapRedux :: Heap -> Expr Symbolic () -> Grade -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
+smallHeapRedux :: (?globals :: Globals)
+               => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
 
 -- [Small-Var]
-smallHeapRedux heap (Val _ _ _ (Var _ x)) r = do
+smallHeapRedux defs heap (Val _ _ _ (Var _ x)) r = do
   case lookupAndCutout x heap of
     Just (heap', (rq, aExpr)) ->
     --Just (heap', (rq, (gamma, aExpr, aType))) ->
@@ -121,12 +125,22 @@ smallHeapRedux heap (Val _ _ _ (Var _ x)) r = do
 
       in return [(aExpr, (heapHere : heap', resourceOut , gammaOut))]
 
-    -- Heap not well-formed
-    Nothing -> return []
+    -- Heap does not contain the variable, so maybe it's a definition we are
+    -- getting
+    Nothing ->
+      case lookup x defs of
+        -- Invalid heap and definition environment
+        Nothing -> return []
+        -- Since the desugaring has been run there should be only one equations
+        Just (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ [] expr]) _) ->
+          -- Substitute body of the function here
+          return [(expr, (heap, [], []))]
+        Just d ->
+          error $ "Internal bug: def was in the wrong format for the heap model: " ++ pretty d
 
 -- -- [Small-AppBeta] adapted to a Granule graded beta redux, e.g., (\[x] -> a) [b]
-smallHeapRedux heap
-    (App _ _ _ (Val _ _ _ (Abs _ (PVar _ _ _ y) (Just (Box q aType')) a)) (Val s _ _ (Promote _ b))) r = do
+smallHeapRedux defs heap
+    (App _ _ _ (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ y)) (Just (Box q aType')) a)) (Val s _ _ (Promote _ b))) r = do
   -- fresh variable
   st <- get
   let x = mkId $ "x" ++ show st
@@ -136,8 +150,8 @@ smallHeapRedux heap
   return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , TyInfix TyOpTimes r q)]))]
 
 -- [Small-AppBeta] [NO GRADE ANNOTATIONS] adapted to a Granule graded beta redux, e.g., (\[x] -> a) [b]
-smallHeapRedux heap
-    (App _ _ _ (Val _ _ _ (Abs _ (PVar _ _ _ y) _ a)) (Val s _ _ (Promote _ b))) r = do
+smallHeapRedux defs heap
+    (App _ _ _ (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ y)) _ a)) (Val s _ _ (Promote _ b))) r = do
   -- fresh variable
   st <- get
   let x = mkId $ "x" ++ show st
@@ -146,40 +160,52 @@ smallHeapRedux heap
   let heap' = (x, (r, b)) : heap
   return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))]
 
+-- [Small-AppBetaLinear] - Linear beta-redux, because Granule
+smallHeapRedux defs heap
+    (App _ _ _ (Val s _ _ (Abs _ (PVar _ _ _ y) _ a)) b) r = do
+  -- fresh variable
+  st <- get
+  let x = mkId $ "x" ++ show st
+  put $ st+1
+  --
+  let heap' = (x, (r, b)) : heap
+  return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))]
+
+
 -- [Pair R] (specialised)
-smallHeapRedux heap
+smallHeapRedux defs heap
      (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (internalName -> ",") [])) e1) e2) r | isSVal e1 = do
  -- Evaluate right
-    res <- smallHeapRedux heap e2 r
+    res <- smallHeapRedux defs heap e2 r
     return $ for res
               (\(e2', env)
                     -> (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (mkId ",") [])) e1) e2'
                       , env))
 
 -- [Pair L] (specialised)
-smallHeapRedux heap
+smallHeapRedux defs heap
      (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (internalName -> ",") [])) e1) e2) r = do
  -- Evaluate left
-    res <- smallHeapRedux heap e1 r
+    res <- smallHeapRedux defs heap e1 r
     return $ for res
               (\(e1', env)
                     -> (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (mkId ",") [])) e1') e2
                       , env))
 
 -- [Small-AppL]
-smallHeapRedux heap (App s a b e1 e2) r = do
-  res <- smallHeapRedux heap e1 r
+smallHeapRedux defs heap (App s a b e1 e2) r = do
+  res <- smallHeapRedux defs heap e1 r
   return $ map (\(e1', (h, resourceOut, gammaOut)) -> (App s a b e1' e2, (h, resourceOut, gammaOut))) res
 
--- [Case-beta] ONLY MATCHES Left-Right patterns for either
-smallHeapRedux heap
+-- [Case-Sum-Beta] Matches Left-Right patterns for either
+smallHeapRedux defs heap
    (Case s a b (App _ _ _ (Val _ _ _ (Constr _ (internalName -> constr) [])) e)
         [(PConstr _ _ _ (internalName -> "Left") [PVar _ _ _ varl], el)
         ,(PConstr _ _ _ (internalName -> "Right") [PVar _ _ _ varr], er)]) r = do
 
     -- fresh variable
     st <- get
-    let x = mkId $ "w" ++ show st
+    let x = mkId $ (if (constr == "Left") then (internalName varl) else (internalName varr)) ++ "." ++ (show st)
     put $ st+1
     --
      -- A&B and Grade determine `q` from a syntactic grade
@@ -196,12 +222,47 @@ smallHeapRedux heap
                   _ -> undefined
     return [(eFinal, (heap' , resourceOut, embeddedCtxt))]
 
+-- [Case-Product-Beta]
+smallHeapRedux defs heap
+  (Case s a b (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ (internalName -> ",") [])) e1) e2)
+        [(PConstr _ _ _ (internalName -> ",") [PVar _ _ _ var1, PVar _ _ _ var2], e)]) r = do
+  -- fresh variables
+  st <- get
+  let x1 = mkId $ internalName var1 ++ "." ++ (show st)
+  let x2 = mkId $ internalName var2 ++ "." ++ (show (st + 1))
+  put $ st+1
+  --
+  let heap' = (x1, (r, e1)) : (x2, (r, e2)) : heap
+  --
+  let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
+  let embeddedCtxt = [(x1 , r), (x2, r)]
+  -- Expression is e1 or e2 (with x replaying varl or varr)
+  return [(e, (heap' , resourceOut, embeddedCtxt))]
+
+-- [Case-Box-Beta]
+smallHeapRedux defs heap
+  (Case s a b (Val _ _ _ (Promote _ e)) [(PBox _ _ _ (PVar _ _ _ var), e')]) r = do
+  -- fresh variables
+  st <- get
+  let x = mkId $ internalName var ++ "." ++ (show st)
+  put $ st+1
+  --
+  let heap' = (x, (r, e)) : heap
+  --
+  let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
+  let embeddedCtxt = [(x, r)]
+  -- Expression is e1 or e2 (with x replaying varl or varr)
+  return [(e', (heap' , resourceOut, embeddedCtxt))]
+
 -- [Case-cong]
-smallHeapRedux heap (Case s a b e ps) r = do
-  res <- smallHeapRedux heap e r
+smallHeapRedux defs heap (Case s a b e ps) r = do
+  res <- ("CASE HEAD REDUX on " ++ show e ++ "\n with pats = " ++ show ps) `trace` smallHeapRedux defs heap e r
   return $ map (\(e', (h, resourceOut, gammaOut)) -> (Case s a b e' ps, (h, resourceOut, gammaOut))) res
 
+-- -- [Value]
+-- smallHeapRedux defs heap (App _ _ _ (Val s' a' b' (Constr a'' id es)) e) r =
+--   return $ (Val s' a' b' (Constr a'' id (es ++ [e])), (heap, [], []))
 
 -- Catch all
-smallHeapRedux heap e t =
+smallHeapRedux _ heap e t =
   return [(e, (heap, [], []))]
