@@ -15,6 +15,8 @@ import Language.Granule.Interpreter.Desugar
 
 import Control.Monad.State
 
+--import Debug.Trace
+
 -- Represent symbolic values in the heap semantics
 data Symbolic = Symbolic Id
   deriving Show
@@ -141,10 +143,8 @@ smallHeapRedux defs heap (Val _ _ _ (Var _ x)) r = do
 -- -- [Small-AppBeta] adapted to a Granule graded beta redux, e.g., (\[x] -> a) [b]
 smallHeapRedux defs heap
     (App _ _ _ (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ y)) (Just (Box q aType')) a)) (Val s _ _ (Promote _ b))) r = do
-  -- fresh variable
-  st <- get
-  let x = mkId $ "x" ++ show st
-  put $ st+1
+  --
+  x <- freshVariable y
   --
   let heap' = (x, (TyInfix TyOpTimes r q, b)) : heap
   return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , TyInfix TyOpTimes r q)]))]
@@ -152,10 +152,8 @@ smallHeapRedux defs heap
 -- [Small-AppBeta] [NO GRADE ANNOTATIONS] adapted to a Granule graded beta redux, e.g., (\[x] -> a) [b]
 smallHeapRedux defs heap
     (App _ _ _ (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ y)) _ a)) (Val s _ _ (Promote _ b))) r = do
-  -- fresh variable
-  st <- get
-  let x = mkId $ "x" ++ show st
-  put $ st+1
+  --
+  x <- freshVariable y
   --
   let heap' = (x, (r, b)) : heap
   return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))]
@@ -163,34 +161,20 @@ smallHeapRedux defs heap
 -- [Small-AppBetaLinear] - Linear beta-redux, because Granule
 smallHeapRedux defs heap
     (App _ _ _ (Val s _ _ (Abs _ (PVar _ _ _ y) _ a)) b) r = do
-  -- fresh variable
-  st <- get
-  let x = mkId $ "x" ++ show st
-  put $ st+1
+  --
+  x <- freshVariable y
   --
   let heap' = (x, (r, b)) : heap
   return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))]
 
+-- [App beta]
+smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
+  return [(Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))]
 
--- [Pair R] (specialised)
-smallHeapRedux defs heap
-     (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (internalName -> ",") [])) e1) e2) r | isSVal e1 = do
- -- Evaluate right
-    res <- smallHeapRedux defs heap e2 r
-    return $ for res
-              (\(e2', env)
-                    -> (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (mkId ",") [])) e1) e2'
-                      , env))
-
--- [Pair L] (specialised)
-smallHeapRedux defs heap
-     (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (internalName -> ",") [])) e1) e2) r = do
- -- Evaluate left
-    res <- smallHeapRedux defs heap e1 r
-    return $ for res
-              (\(e1', env)
-                    -> (App s a b (App s' a' b' (Val s'' a'' b'' (Constr a3 (mkId ",") [])) e1') e2
-                      , env))
+-- [App Value]
+smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) e) r = do
+  res <- smallHeapRedux defs heap e r
+  return $ for res (\(e', env) -> (App s a b (Val s' a' b' (Constr a'' id vs)) e', env))
 
 -- [Small-AppL]
 smallHeapRedux defs heap (App s a b e1 e2) r = do
@@ -204,9 +188,7 @@ smallHeapRedux defs heap
         ,(PConstr _ _ _ (internalName -> "Right") [PVar _ _ _ varr], er)]) r = do
 
     -- fresh variable
-    st <- get
-    let x = mkId $ (if (constr == "Left") then (internalName varl) else (internalName varr)) ++ "." ++ (show st)
-    put $ st+1
+    x <- freshVariable (if constr == "Left" then varl else varr)
     --
      -- A&B and Grade determine `q` from a syntactic grade
      -- We don't have that here (we could get it out of the typing...)
@@ -227,32 +209,28 @@ smallHeapRedux defs heap
   (Case s a b (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ (internalName -> ",") [])) e1) e2)
         [(PConstr _ _ _ (internalName -> ",") [PVar _ _ _ var1, PVar _ _ _ var2], e)]) r = do
   -- fresh variables
-  st <- get
-  let x1 = mkId $ internalName var1 ++ "." ++ (show st)
-  let x2 = mkId $ internalName var2 ++ "." ++ (show (st + 1))
-  put $ st+1
+  x1 <- freshVariable var1
+  x2 <- freshVariable var2
   --
   let heap' = (x1, (r, e1)) : (x2, (r, e2)) : heap
   --
   let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
   let embeddedCtxt = [(x1 , r), (x2, r)]
   -- Expression is e1 or e2 (with x replaying varl or varr)
-  return [(e, (heap' , resourceOut, embeddedCtxt))]
+  return [(subst (Val s () False (Var () x1)) var1 (subst (Val s () False (Var () x2)) var2 e), (heap' , resourceOut, embeddedCtxt))]
 
 -- [Case-Box-Beta]
 smallHeapRedux defs heap
   (Case s a b (Val _ _ _ (Promote _ e)) [(PBox _ _ _ (PVar _ _ _ var), e')]) r = do
   -- fresh variables
-  st <- get
-  let x = mkId $ internalName var ++ "." ++ (show st)
-  put $ st+1
+  x <- freshVariable var
   --
   let heap' = (x, (r, e)) : heap
   --
   let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
   let embeddedCtxt = [(x, r)]
   -- Expression is e1 or e2 (with x replaying varl or varr)
-  return [(e', (heap' , resourceOut, embeddedCtxt))]
+  return [(subst (Val s () False (Var () x)) var e', (heap' , resourceOut, embeddedCtxt))]
 
 -- [Case-cong]
 smallHeapRedux defs heap (Case s a b e ps) r = do
@@ -266,3 +244,22 @@ smallHeapRedux defs heap (Case s a b e ps) r = do
 -- Catch all
 smallHeapRedux _ heap e t =
   return [(e, (heap, [], []))]
+
+-- Things that cannot be reduced further by this model
+isValue :: Value a b -> Bool
+isValue Abs{} = True
+isValue Promote{} = True
+isValue (Constr _ _ vs) = all isValue vs
+isValue NumInt{} = True
+isValue NumFloat{} = True
+isValue CharLiteral{} = True
+isValue StringLiteral{} = True
+isValue Ext{} = True
+isValue _ = False
+
+freshVariable :: Id -> State Integer Id
+freshVariable x = do
+  st <- get
+  let x' = mkId $ (internalName x) ++ "." ++ show st
+  put $ st+1
+  return x'
