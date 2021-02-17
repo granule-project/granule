@@ -212,12 +212,12 @@ letBox s pat e1 e2 =
   App s () False (Val s () False (Abs () (PBox s () False pat) Nothing e2)) e1
 
 pair :: Expr v () -> Expr v () -> Expr v ()
-pair e1 e2 = App s () False (App s () False (Val s () False (Constr () (mkId "(,)") [])) e1) e2
+pair e1 e2 = App s () False (App s () False (Val s () False (Constr () (mkId ",") [])) e1) e2
              where s = nullSpanNoFile
 
 typedPair :: Value v Type -> Value v Type -> Value v Type
 typedPair left right =
-    Constr ty (mkId "(,)") [left, right]
+    Constr ty (mkId ",") [left, right]
     where ty = pairType leftType rightType
           leftType = annotation left
           rightType = annotation right

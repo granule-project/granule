@@ -1,4 +1,4 @@
--- Provides the desugaring step of the language
+-- Provides the desugaring step of the interpreter
 
 module Language.Granule.Interpreter.Desugar where
 
@@ -10,21 +10,21 @@ import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 import Control.Monad.State.Strict
 
-{- | 'desugar' erases pattern matches in function definitions
-   with coeffect binders.
-   This is used to simplify the operational semantics and compilation (future).
+{- | 'desugar' pushes function-equation pattern matches inside the
+      function as lambda bindings and `case` expressions.
+
+   This is used to simplify the operational semantics and compilation.
 
    e.g., for a definition 'd' in code as:
-         f : Int |1| -> ...
-         f |x| = e
+         f : Int [1] -> ...
+         f [x] = e
 
     then desugar d produces
-         f : Int |1| -> ...
-         f = \|x| : Int -> e
+         f : Int [1] -> ...
+         f = \([x] : Int [1]) -> e
 
    Note that the explicit typing from the type signature is pushed
-   inside of the definition to give an explicit typing on the coeffect-let
-   binding. -}
+   inside of the definition to give an explicit typing on the abstraction -}
 desugar :: Def v () -> Def v ()
 -- desugar adt@ADT{} = adt
 desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
@@ -60,10 +60,9 @@ desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
         vars = [mkId (" internal" ++ show i) | i <- [1..numArgs]]
 
         -- Guard expression
-        guard = foldl pair unitVal guardVars
-        unitVal = Val nullSpanNoFile () False (Constr () (mkId "()") [])
+        guard = foldl1 pair guardVars
         guardVars = map (\i -> Val nullSpanNoFile () False (Var () i)) vars
 
         -- case for each equation
         cases = map (\(Equation _ _ _ _ pats expr) ->
-           (foldl (ppair nullSpanNoFile ()) (PWild nullSpanNoFile () False) pats, expr)) eqs
+           (foldl1 (ppair nullSpanNoFile ()) pats, expr)) eqs

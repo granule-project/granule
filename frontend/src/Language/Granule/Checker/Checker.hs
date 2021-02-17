@@ -241,7 +241,7 @@ checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
 checkAndGenerateSubstitution ::
        Span                     -- ^ Location of this application
     -> Id                       -- ^ Name of the type constructor
-    -> Type                -- ^ Type of the data constructor
+    -> Type                     -- ^ Type of the data constructor
     -> [Kind]                   -- ^ Types of the remaining data type indices
     -> Checker (Type, Substitution, Ctxt Kind)
 checkAndGenerateSubstitution sp tName ty ixkinds =
