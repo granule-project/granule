@@ -256,7 +256,7 @@ smallHeapRedux defs heap
 
 -- [Case-cong]
 smallHeapRedux defs heap (Case s a b e ps) r = do
-  res <- ("CASE HEAD REDUX on " ++ show e ++ "\n with pats = " ++ show ps) `trace` smallHeapRedux defs heap e r
+  res <- smallHeapRedux defs heap e r
   return $ map (\(e', (h, resourceOut, gammaOut)) -> (Case s a b e' ps, (h, resourceOut, gammaOut))) res
 
 -- -- [Value]
