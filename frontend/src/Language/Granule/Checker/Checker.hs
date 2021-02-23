@@ -350,8 +350,11 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   modify (\st -> st { patternConsumption =
                          zipWith joinConsumption consumptions (patternConsumption st) } )
 
+  -- Determine if matching on type with more than one constructor
+  isPolyShaped <- polyShaped tau
+
   -- create ghost variable context
-  ghostCtxt <- freshGhostVariableContext
+  ghostCtxt <- if isPolyShaped then freshGhostVariableContext else return []
 
   -- Create conjunct to capture the body expression constraints
   newConjunct
@@ -676,6 +679,9 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
   ixed <- isIndexedType guardTy
   when ixed (throw $ CaseOnIndexedType s guardTy)
 
+  -- Determine if matching on type with more than one constructor
+  isPolyShaped <- polyShaped guardTy
+
   newCaseFrame
 
   -- Check each of the branches
@@ -685,7 +691,8 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
-      ghostCtxt <- freshGhostVariableContext
+      -- introduce ghost variables if type is polyshaped
+      ghostCtxt <- if isPolyShaped then freshGhostVariableContext else return []
       newConjunct
 
       -- Checking the case body
@@ -846,6 +853,9 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
   ixed <- isIndexedType guardTy
   when ixed (throw $ CaseOnIndexedType s guardTy)
 
+  -- Determine if matching on type with more than one constructor
+  isPolyShaped <- polyShaped guardTy
+
   newCaseFrame
 
   branchTysAndCtxtsAndSubsts <-
@@ -853,7 +863,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
-      ghostCtxt <- freshGhostVariableContext
+      ghostCtxt <- if isPolyShaped then freshGhostVariableContext else return []
       newConjunct
 
       -- Synth the case body
