@@ -1,5 +1,5 @@
 module Language.Granule.Synthesis.Deriving
-  (derivePush, derivePull, deriveCopyShape) where
+  (derivePush, derivePull, deriveCopyShape, deriveDrop) where
 
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
@@ -143,6 +143,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
             case pushTy of
               t@(FunTy _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
+                  debugM "derive-push" ("eq on argTy = " <> pretty (Box c argTy) <> " t1 = " <> pretty t1)
                   (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
                   if eq
                     -- Success!
@@ -254,40 +255,39 @@ derivePull s ty = do
   -- Get kind of type constructor
   (kind, _, _) <- synthKind nullSpanNoFile ty
   -- Generate fresh type variables and apply them to the kind constructor
-  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
+  (localTyVarContext, baseTy, argTy) <- fullyApplyType kind (TyVar cVar) ty
   let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
 
+  debugM "pull : " (pretty (FunTy Nothing argTy (Box (TyVar cVar) baseTy)))
   st0 <- get
   modify (\st -> st {  derivedDefinitions =
-                        ((mkId "pull", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined)) : derivedDefinitions st,
+                        ((mkId "pull", ty), (trivialScheme $ FunTy Nothing argTy (Box (TyVar cVar) baseTy), undefined)) : derivedDefinitions st,
                     tyVarContext = tyVarContext st ++ [(kVar, (kcoeffect, ForallQ)), (cVar, (TyVar kVar, ForallQ))] ++ localTyVarContext })
 
-  debugM "derivePull type" (show returnTy')
   z <- freshIdentifierBase "z" >>= (return . mkId)
   (returnTy, bodyExpr, coeff) <-
-    derivePull' s True tyVars returnTy' (makeVarUntyped z)
+    derivePull' s True tyVars argTy (makeVarUntyped z)
 
   modify (\st -> st { derivedDefinitions = deleteVar' (mkId "pull", ty) (derivedDefinitions st)
                     -- Restore type variables and predicate stack
                     , tyVarContext = tyVarContext st0
                     , predicateStack = predicateStack st0 } )
 
-  debugM "derivePull return type" (show returnTy)
-  case coeff of
-    Just c -> do
-      let tyS = Forall s
-              ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
-              []
-              (FunTy Nothing returnTy' (Box c returnTy))
-      let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
-      let name = mkId $ "pull@" ++ pretty ty
+  let coeff' = case coeff of
+                Just c -> c
+                Nothing -> TyVar cVar
 
-      return $
-        (tyS, Def s name True
-            (EquationList s name True
-               [Equation s name () True [] expr]) tyS)
-    Nothing -> error "shouldn't be reachable"
+  let tyS = Forall s
+          ([(kVar, kcoeffect), (cVar, (TyVar kVar))] ++ tyVars)
+          []
+          (FunTy Nothing argTy (Box coeff' baseTy))
+  let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
+  let name = mkId $ "pull@" ++ pretty ty
 
+  return $
+    (tyS, Def s name True
+        (EquationList s name True
+            [Equation s name () True [] expr]) tyS)
 
 derivePull'  :: (?globals :: Globals)
   => Span
@@ -349,10 +349,12 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               t@(FunTy _ t1 t2) -> do
                   -- Its argument must be unified with argTy here
                   --(eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec (Box c argTy) t1
+                  debugM "derive-pull" ("eq on argTy = " <> pretty argTy <> " t1 = " <> pretty t1)
                   (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec argTy t1
                   if eq
                     -- Success!
                     then do
+                      debugM "derive-pull" "already defined okay"
                       t2' <- substitute subst t2
                       return (Just (t2', App s () True (makeVarUntyped (mkId $ "pull@" <> pretty name)) arg, Nothing))
                     else do
@@ -719,3 +721,77 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
 
 
 deriveCopyShape' s topLevel gamma argTy arg = error ((show argTy) <> "not implemented yet")
+
+
+deriveDrop :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
+deriveDrop s ty = do
+
+  -- Create fresh variables for the grades
+  kVar <- freshIdentifierBase "k" >>= (return . mkId)
+  cVar <- freshIdentifierBase "r" >>= (return . mkId)
+
+  -- Get kind of type constructor
+  (kind, _, _) <- synthKind nullSpanNoFile ty
+  -- Generate fresh type variables and apply them to the kind constructor
+  (localTyVarContext, baseTy, returnTy') <- fullyApplyType kind (TyVar cVar) ty
+  let tyVars = map (\(id, (t, _)) -> (id, t)) localTyVarContext
+  st0 <- get
+  modify (\st -> st { derivedDefinitions =
+                        ((mkId "drop", ty), (trivialScheme $ FunTy Nothing ty returnTy', undefined))
+                         : derivedDefinitions st,
+                    tyVarContext = tyVarContext st ++ localTyVarContext })
+
+  z <- freshIdentifierBase "z" >>= (return . mkId)
+  (returnTy, bodyExpr) <- deriveDrop' s True tyVars baseTy (makeVarUntyped z)
+  let tyS = Forall s
+              tyVars
+              []
+              (FunTy Nothing baseTy returnTy)
+  let expr = Val s () True $ Abs () (PVar s () True z) Nothing bodyExpr
+  let name = mkId $ "drop@" ++ pretty ty
+  let def = Def s name True (EquationList s name True [Equation s name () True [] expr]) tyS
+  modify (\st -> st { derivedDefinitions = deleteVar' (mkId "drop", ty) (derivedDefinitions st)
+                    -- Restore type variables and predicate stack
+                    , tyVarContext = tyVarContext st0
+                    , predicateStack = predicateStack st0 } )
+  return $ (tyS, def)
+
+
+deriveDrop' :: (?globals :: Globals)
+  => Span
+  -> Bool
+  -> Ctxt Kind
+  -> Type
+  -> Expr () ()
+  -> Checker (Type, Expr () ())
+deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
+  return (TyCon $ mkId "()", makeUnitIntroUntyped)
+
+deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Int" "Int")) arg = do
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg))
+
+deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Char" "Char")) arg = do
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg))
+
+deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Float" "Float")) arg = do
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg))
+
+deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "String" "String")) arg = do
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg))
+
+deriveDrop' _ _ _ argTy@(TyVar name) arg = do
+  return (TyCon $ mkId "()", makeUnitIntroUntyped)
+
+deriveDrop' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
+  x <- freshIdentifierBase "x" >>= (return . mkId)
+  y <- freshIdentifierBase "y" >>= (return . mkId)
+
+  (lTy, lExpr) <- deriveDrop' s topLevel gamma t1 (makeVarUntyped x)
+  (rTy, rExpr) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
+
+  let expr = makePairElimPUntyped id arg x y (makeUnitElimPUntyped id lExpr (makeUnitElimPUntyped id rExpr makeUnitIntroUntyped))
+
+  return (ProdTy lTy rTy, expr)
+
+
+deriveDrop' s topLevel gamma argTy arg = error ((show argTy) <> "not implemented yet")

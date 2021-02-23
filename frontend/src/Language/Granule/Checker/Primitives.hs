@@ -23,7 +23,7 @@ nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 typeAliases :: [(Id, Type)]
 typeAliases =
     -- IO = {p | p in IOElem}
-    [(mkId "IO", TySet (map tyCon ioElems))]
+    [(mkId "IO", TySet Normal (map tyCon ioElems))]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
@@ -198,6 +198,15 @@ compose : forall {a : Type, b : Type, c : Type}
   . (b -> c) -> (a -> b) -> (a -> c)
 compose g f = \x -> g (f x)
 
+dropInt : Int -> ()
+dropInt = BUILTIN
+
+dropChar : Char -> ()
+dropChar = BUILTIN
+
+dropString : String -> ()
+dropString = BUILTIN
+
 --------------------------------------------------------------------------------
 -- Arithmetic
 --------------------------------------------------------------------------------
@@ -270,6 +279,11 @@ forkLinear
   : forall {s : Protocol}
   . (LChan s -> ()) -> LChan (Dual s)
 forkLinear = BUILTIN
+
+forkLinear'
+  : forall {p : Protocol, s : Semiring}
+  . ((LChan p) [1 : s] -> ()) -> LChan (Dual p)
+forkLinear' = BUILTIN
 
 send
   : forall {a : Type, s : Protocol}

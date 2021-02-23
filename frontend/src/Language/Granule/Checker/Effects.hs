@@ -9,7 +9,6 @@ module Language.Granule.Checker.Effects where
 
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
-import qualified Language.Granule.Checker.Primitives as P (typeConstructors)
 import Language.Granule.Checker.Variables
 
 import Language.Granule.Syntax.Identifiers
@@ -18,8 +17,7 @@ import Language.Granule.Syntax.Span
 
 import Language.Granule.Utils
 
-import Data.List (nub, (\\))
-import Data.Maybe (mapMaybe)
+import Data.List (nub, (\\), intersect)
 
 -- `isEffUnit sp effTy eff` checks whether `eff` of effect type `effTy`
 -- is equal to the unit element of the algebra.
@@ -37,11 +35,21 @@ isEffUnit s effTy eff =
             case eff of
                 TyCon (internalName -> "Success") -> return True
                 _ -> return False
-        -- Any union-set effects, like IO
-        (isSet -> Just elemTy) ->
-            case eff of
-                (TySet []) -> return True
-                _          -> return False
+        -- Set effects
+        (isSet -> Just (elemTy, polarity)) ->
+          case polarity of
+            Normal ->
+              case eff of
+                  -- Is empty set
+                  (TySet Normal []) -> return True
+                  _                 -> return False
+            Opposite -> do
+              case eff of
+                  -- Is universal set
+                  (TySet Opposite elems) -> do
+                    constructors <- allDataConstructorNamesForType elemTy
+                    return $ all (\uelem -> (TyCon uelem) `elem` elems) constructors
+                  _ -> return False
         -- Unknown
         _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff, errK = effTy }
 
@@ -54,8 +62,8 @@ handledNormalise s effTy efs =
         TyApp (TyCon (internalName -> "Handled")) (TyCon (internalName -> "Success")) -> TyCon (mkId "Pure")
         TyApp (TyCon (internalName -> "Handled")) ef -> handledNormalise s effTy ef
         TyCon (internalName -> "Success") -> TyCon (mkId "Pure")
-        TySet efs' ->
-            TySet (efs' \\ [TyCon (mkId "IOExcept")])
+        TySet p efs' ->
+            TySet p (efs' \\ [TyCon (mkId "IOExcept")])
         _ -> efs
 
 -- `effApproximates s effTy eff1 eff2` checks whether `eff1 <= eff2` for the `effTy`
@@ -84,24 +92,27 @@ effApproximates s effTy eff1 eff2 =
                         return True
                     _ -> return False
             -- Any union-set effects, like IO
-            (isSet -> Just elemTy) ->
+            (isSet -> Just (elemTy, _)) ->
                 case (eff1, eff2) of
                     (TyApp (TyCon (internalName -> "Handled")) efs1, TyApp (TyCon (internalName -> "Handled")) efs2)-> do
                         let efs1' = handledNormalise s effTy eff1
                         let efs2' = handledNormalise s effTy eff2
                         effApproximates s effTy efs1' efs2'
                     --Handled, set
-                    (TyApp (TyCon (internalName -> "Handled")) efs1, TySet efs2) -> do
+                    (TyApp (TyCon (internalName -> "Handled")) efs1, TySet _ efs2) -> do
                         let efs1' = handledNormalise s effTy eff1
                         effApproximates s effTy efs1' eff2
                     --set, Handled
-                    (TySet efs1, TyApp (TyCon (internalName -> "Handled")) efs2) -> do
+                    (TySet _ efs1, TyApp (TyCon (internalName -> "Handled")) efs2) -> do
                         let efs2' = handledNormalise s effTy eff1
                         effApproximates s effTy eff1 efs2'
-                    -- Actual sets, take the union
-                    (TySet efs1, TySet efs2) ->
+                    -- Both sets
+                    (TySet Normal efs1, TySet Normal efs2) ->
                         -- eff1 is a subset of eff2
                         return $ all (\ef1 -> ef1 `elem` efs2) efs1
+                    (TySet Opposite efs1, TySet Opposite efs2) ->
+                        -- eff1 is a superset of eff2
+                        return $ all (\ef2 -> ef2 `elem` efs1) efs2
                     _ -> return False
             -- Unknown effect resource algebra
             _ -> throw $ UnknownResourceAlgebra { errLoc = s, errTy = eff1, errK = effTy }
@@ -129,10 +140,11 @@ effectMult sp effTy t1 t2 = do
                     return t2
                 TyCon (internalName -> "MayFail") ->
                     return $ TyCon $ mkId "MayFail"
-                _ -> throw $ TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
+                -- TODO: This type error is not very good. It actual points to a set when sets are not involved
+                _ -> throw $ TypeError { errLoc = sp, tyExpected = TySet Normal [TyVar $ mkId "?"], tyActual = t1 }
 
         -- Any union-set effects, like IO
-        (isSet -> Just elemTy) ->
+        (isSet -> Just (elemTy, polarity)) ->
           case (t1, t2) of
             --Handled, Handled
             (TyApp (TyCon (internalName -> "Handled")) ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
@@ -141,20 +153,22 @@ effectMult sp effTy t1 t2 = do
                 t <- (effectMult sp effTy ts1' ts2')
                 return t
             --Handled, set
-            (TyApp (TyCon (internalName -> "Handled")) ts1, TySet ts2) -> do
+            (TyApp (TyCon (internalName -> "Handled")) ts1, TySet _ ts2) -> do
                 let ts1' = handledNormalise sp effTy t1
                 t <- (effectMult sp effTy ts1' t2) ;
                 return t
              --set, Handled
-            (TySet ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
+            (TySet _ ts1, TyApp (TyCon (internalName -> "Handled")) ts2) -> do
                 let ts2' = handledNormalise sp effTy t2
                 t <- (effectMult sp effTy t1 ts2') ;
                 return t
             -- Actual sets, take the union
-            (TySet ts1, TySet ts2) ->
-              return $ TySet $ nub (ts1 <> ts2)
+            (TySet p1 ts1, TySet p2 ts2) | p1 == p2 ->
+              case p1 of
+                Normal   -> return $ TySet p1 (nub (ts1 <> ts2))
+                Opposite -> return $ TySet p1 (nub (ts1 `intersect` ts2))
             _ -> throw $
-                  TypeError { errLoc = sp, tyExpected = TySet [TyVar $ mkId "?"], tyActual = t1 }
+                  TypeError { errLoc = sp, tyExpected = TySet Normal [TyVar $ mkId "?"], tyActual = t1 }
         _ -> do
           throw $ UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = effTy }
 
@@ -185,45 +199,65 @@ effectUpperBound s t@(TyCon (internalName -> "Exception")) t1 t2 = do
             return t2'
         _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1', errTy2 = t2' }
 
-effectUpperBound s (isSet -> Just elemTy) t1 t2 =
+effectUpperBound s (isSet -> Just (elemTy, Normal)) t1 t2 =
     case t1 of
-        TySet efs1 ->
+        TySet Normal efs1 ->
             case t2 of
-                TySet efs2 ->
+                TySet Normal efs2 ->
                     -- Both sets, take the union
-                    return $ TySet (nub (efs1 ++ efs2))
+                    return $ TySet Normal (nub (efs1 ++ efs2))
                 -- Unit right
                 TyCon (internalName -> "Pure") ->
                     return t1
                 _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
-        -- Unift left
+        -- Unit left
         TyCon (internalName -> "Pure") ->
             return t2
+
+        _ ->  throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+
+effectUpperBound s (isSet -> Just (elemTy, Opposite)) t1 t2 =
+    case t1 of
+        -- Opposite sets
+        TySet Opposite efs1 ->
+            case t2 of
+                TySet Opposite efs2 ->
+                    -- Both sets, take the union
+                    return $ TySet Opposite (nub (efs1 `intersect` efs2))
+                -- Unit right
+                TyCon (internalName -> "Pure") -> do
+                    allConstructorsMatchingForElemTy <- allDataConstructorNamesForType elemTy
+                    return (TySet Opposite (map TyCon allConstructorsMatchingForElemTy))
+
+                _ -> throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
+        -- Unit left
+        TyCon (internalName -> "Pure") -> do
+            allConstructorsMatchingForElemTy <- allDataConstructorNamesForType elemTy
+            return (TySet Opposite (map TyCon allConstructorsMatchingForElemTy))
+
         _ ->  throw NoUpperBoundError{ errLoc = s, errTy1 = t1, errTy2 = t2 }
 
 effectUpperBound s effTy t1 t2 =
     throw UnknownResourceAlgebra{ errLoc = s, errTy = t1, errK = effTy }
 
 -- "Top" element of the effect
-effectTop :: Type -> Maybe Type
-effectTop (TyCon (internalName -> "Nat")) = Nothing
-effectTop (TyCon (internalName -> "Com")) = Just $ TyCon $ mkId "Session"
+effectTop :: Type -> Checker (Maybe Type)
+effectTop (TyCon (internalName -> "Nat")) = return $ Nothing
+effectTop (TyCon (internalName -> "Com")) = return $ Just $ TyCon $ mkId "Session"
 -- Otherwise
 -- Based on an effect type, provide its top-element, which for set-like effects
 -- like IO can later be aliased to the name of effect type,
 -- i.e., a <IO> is an alias for a <{Read, Write, ... }>
-effectTop (isSet -> Just elemTy) =
+effectTop (isSet -> Just (elemTy, Normal)) = do
     -- Compute the full-set of elements based on the the kinds of elements
     -- in the primitives
-    return (TySet (map TyCon allConstructorsMatchingElemKind))
-  where
-    -- find all elements of the matching element type
-    allConstructorsMatchingElemKind :: [Id]
-    allConstructorsMatchingElemKind = mapMaybe go P.typeConstructors
+    allConstructorsMatchingForElemTy <- allDataConstructorNamesForType elemTy
+    return (Just $ TySet Normal (map TyCon allConstructorsMatchingForElemTy))
 
-    go :: (Id, (Type, a, Bool)) -> Maybe Id
-    go (con, (k, _, _)) = if k == elemTy then Just con else Nothing
-effectTop _ = Nothing
+effectTop (isSet -> Just (elemTy, Opposite)) =
+    return (Just $ TySet Opposite [])
+
+effectTop _ = return Nothing
 
 
 isPure :: Type -> Bool

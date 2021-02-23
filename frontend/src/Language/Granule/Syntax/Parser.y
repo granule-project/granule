@@ -371,12 +371,14 @@ TyAtom :: { Type }
   | '(' Type ')'              { $2 }
   | '(' Type ',' Type ')'     { TyApp (TyApp (TyCon $ mkId ",") $2) $4 }
   | TyAtom ':' Kind           { TySig $1 $3 }
-
+  | '{' CoeffSet '}'              { TySet Normal $2 }
+  | '{' CoeffSet '}' '.'          { TySet Opposite $2 }
 
 TyParams :: { [Type] }
   : TyAtom TyParams           { $1 : $2 } -- use right recursion for simplicity -- VBL
   |                           { [] }
 
+-- TODO: For maximum flexibility, Coeffect needs to be merged into TyAtom I think.
 Coeffect :: { Coeffect }
   : INT                           { let TokenInt _ x = $1 in TyGrade Nothing x }
   | '.' INT                       { let TokenInt _ x = $2 in TyInt x }
@@ -394,7 +396,8 @@ Coeffect :: { Coeffect }
   | Coeffect "/\\" Coeffect       { TyInfix TyOpMeet $1 $3 }
   | Coeffect "\\/" Coeffect       { TyInfix TyOpJoin $1 $3 }
   | '(' Coeffect ')'              { $2 }
-  | '{' CoeffSet '}'              { TySet $2 }
+  | '{' CoeffSet '}'              { TySet Normal $2 }
+  | '{' CoeffSet '}' '.'          { TySet Opposite $2 }
   | Coeffect ':' Kind             { TySig $1 $3 }
   | '(' Coeffect ',' ',' Coeffect ')' { TyApp (TyApp (TyCon $ mkId ",,") $2) $5 }
   | '(' Coeffect '×' Coeffect ')'     { TyApp (TyApp (TyCon $ mkId ",,") $2) $4 }
@@ -412,7 +415,7 @@ CoeffSetElem :: { Type }
 
 
 Effect :: { Type }
-  : '{' EffSet '}'            { TySet $2 }
+  : '{' EffSet '}'            { TySet Normal $2 }
   | {- EMPTY -}               { TyCon $ mkId "Pure" }
   | TyJuxt                    { $1 }
 
@@ -518,6 +521,7 @@ Form :: { Expr () () }
   : Form '+' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpPlus $1 $3 }
   | Form '-' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpMinus $1 $3 }
   | Form '*' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpTimes $1 $3 }
+  | Form '/' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpDiv $1 $3 }
   | Form '<' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpLesser $1 $3 }
   | Form '>' Form  {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpGreater $1 $3 }
   | Form '<=' Form {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Binop sp () False OpLesserEq $1 $3 }

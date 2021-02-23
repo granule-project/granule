@@ -6,6 +6,7 @@
 module Language.Granule.Checker.Constraints.SymbolicGrades where
 
 import Language.Granule.Checker.Constraints.SNatX
+import Language.Granule.Syntax.Type
 
 import Data.Functor.Identity
 import Control.Monad.IO.Class
@@ -27,7 +28,7 @@ data SGrade =
      | SFloat    SFloat
      | SLevel    SInteger
      | SSec      SBool -- Hi = True, Lo = False
-     | SSet      (SSet SSetElem)
+     | SSet      Polarity (SSet SSetElem)
      | SExtNat   { sExtNat :: SNatX }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
@@ -128,7 +129,7 @@ match :: SGrade -> SGrade -> Bool
 match (SNat _) (SNat _) = True
 match (SFloat _) (SFloat _) = True
 match (SLevel _) (SLevel _) = True
-match (SSet _) (SSet _) = True
+match (SSet p _) (SSet p' _) | p == p' = True
 match (SExtNat _) (SExtNat _) = True
 match (SInterval s1 s2) (SInterval t1 t2) = match s1 t1 && match s2 t2
 match SPoint SPoint = True
@@ -181,7 +182,7 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SNat n) (SNat n') = SNat (symbolicMerge s sb n n')
   symbolicMerge s sb (SFloat n) (SFloat n') = SFloat (symbolicMerge s sb n n')
   symbolicMerge s sb (SLevel n) (SLevel n') = SLevel (symbolicMerge s sb n n')
-  symbolicMerge s sb (SSet n) (SSet n') = error "Can't symbolic merge sets yet"
+  symbolicMerge s sb (SSet _ n) (SSet _ n') = error "Can't symbolic merge sets yet"
   symbolicMerge s sb (SExtNat n) (SExtNat n') = SExtNat (symbolicMerge s sb n n')
   symbolicMerge s sb (SInterval lb1 ub1) (SInterval lb2 ub2) =
     SInterval (symbolicMerge s sb lb1 lb2) (symbolicMerge s sb ub1 ub2)
@@ -206,7 +207,7 @@ symGradeLess (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradeLess (SNat n) (SNat n')     = return $ n .< n'
 symGradeLess (SFloat n) (SFloat n') = return $ n .< n'
 symGradeLess (SLevel n) (SLevel n') = return $ n .< n'
-symGradeLess (SSet n) (SSet n')     = solverError "Can't compare symbolic sets yet"
+symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
 symGradeLess (SUnknown s) (SUnknown t) = sLtTree s t
@@ -240,7 +241,7 @@ symGradeEq (SInterval lb1 ub1) (SInterval lb2 ub2) =
 symGradeEq (SNat n) (SNat n')     = return $ n .== n'
 symGradeEq (SFloat n) (SFloat n') = return $ n .== n'
 symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
-symGradeEq (SSet n) (SSet n')     = return $ n .== n'
+symGradeEq (SSet p n) (SSet p' n') | p == p' = return $ n .== n'
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
 symGradeEq SPoint SPoint          = return $ sTrue
 symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r
@@ -255,7 +256,8 @@ symGradeEq s t = solverError $ cannotDo ".==" s t
 -- | Meet operation on symbolic grades
 symGradeMeet :: SGrade -> SGrade -> Symbolic SGrade
 symGradeMeet (SNat n1) (SNat n2)     = return $ SNat $ n1 `smin` n2
-symGradeMeet (SSet s) (SSet t)       = return $ SSet $ S.intersection s t
+symGradeMeet (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
+symGradeMeet (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
 symGradeMeet (SLevel s) (SLevel t)   = return $ SLevel $ s `smin` t
 symGradeMeet (SFloat n1) (SFloat n2) = return $ SFloat $ n1 `smin` n2
 symGradeMeet (SExtNat x) (SExtNat y) = return $ SExtNat $
@@ -275,7 +277,8 @@ symGradeMeet s t = solverError $ cannotDo "meet" s t
 -- | Join operation on symbolic grades
 symGradeJoin :: SGrade -> SGrade -> Symbolic SGrade
 symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
-symGradeJoin (SSet s) (SSet t)   = return $ SSet $ S.intersection s t
+symGradeJoin (SSet Normal s) (SSet Normal t)   = return $ SSet Normal $ S.intersection s t
+symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeJoin (SLevel s) (SLevel t) = return $ SLevel $ s `smax` t
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $
@@ -295,7 +298,8 @@ symGradeJoin s t = solverError $ cannotDo "join" s t
 -- | Plus operation on symbolic grades
 symGradePlus :: SGrade -> SGrade -> Symbolic SGrade
 symGradePlus (SNat n1) (SNat n2) = return $ SNat (n1 + n2)
-symGradePlus (SSet s) (SSet t) = return $ SSet $ S.union s t
+symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
+symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
 symGradePlus (SLevel lev1) (SLevel lev2) = return $ SLevel $ lev1 `smax` lev2
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = return $ SExtNat (x + y)
@@ -331,7 +335,8 @@ symGradeTimes :: SGrade -> SGrade -> Symbolic SGrade
 symGradeTimes (SNat n1) (SNat n2) = return $ SNat (n1 * n2)
 symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
-symGradeTimes (SSet s) (SSet t) = return $ SSet $ S.intersection s t
+symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
+symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeTimes (SLevel lev1) (SLevel lev2) = return $
     ite (lev1 .== literal unusedRepresentation)
         (SLevel $ literal unusedRepresentation)
@@ -389,7 +394,7 @@ symGradeTimes s t = solverError $ cannotDo "times" s t
 -- | (OPTIONAL)
 symGradeMinus :: SGrade -> SGrade -> Symbolic SGrade
 symGradeMinus (SNat n1) (SNat n2) = return $ SNat $ ite (n1 .< n2) 0 (n1 - n2)
-symGradeMinus (SSet s) (SSet t) = return $ SSet $ s S.\\ t
+symGradeMinus (SSet p s) (SSet p' t) | p == p' = return $ SSet p (s S.\\ t)
 symGradeMinus (SExtNat x) (SExtNat y) = return $ SExtNat (x - y)
 symGradeMinus (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 SInterval (lb1 `symGradeMinus` lb2) (ub1 `symGradeMinus` ub2)

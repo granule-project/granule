@@ -231,6 +231,14 @@ allDataConstructorNames = do
   st <- get
   return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
 
+allDataConstructorNamesForType :: Type -> Checker [Id]
+allDataConstructorNamesForType ty = do
+    st <- get
+    return $ mapMaybe go (typeConstructors st)
+  where
+    go :: (Id, (Type, a, Bool)) -> Maybe Id
+    go (con, (k, _, _)) = if k == ty then Just con else Nothing
+
 {- | Given a computation in the checker monad, peek the result without
 actually affecting the current checker environment. Unless the value is
 discarded, the rhs result computation must be run! This is useful for
@@ -528,7 +536,7 @@ data CheckerError
   | SolverErrorFalsifiableTheorem
     { errLoc :: Span, errDefId :: Id, errPred :: Pred }
   | SolverError
-    { errLoc :: Span, errMsg :: String }
+    { errLoc :: Span, errMsg :: String, errPred :: Pred }
   | SolverTimeout
     { errLoc :: Span, errSolverTimeoutMillis :: Integer, errDefId :: Id, errContext :: String, errPred :: Pred }
   | UnifyGradedLinear
@@ -781,7 +789,7 @@ instance UserMsg CheckerError where
     <> "`" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"
 
   msg UndefinedEqualityError{..}
-    = "Equality is not defined at kind"
+    = "Equality is not defined at kind "
     <> pretty errKL
     <> "\t\n from equality between "
     <> "'" <> pretty errTy2 <> "' and '" <> pretty errTy1 <> "' equal."
@@ -872,7 +880,7 @@ instance UserMsg CheckerError where
     <> "` is falsifiable:\n\t"
     <> pretty errPred
 
-  msg SolverError{..} = errMsg
+  msg SolverError{..} = errMsg <> " for theorem:\n\t" <> pretty errPred
 
   msg SolverTimeout{errSolverTimeoutMillis, errDefId, errContext, errPred}
     = "Solver timed out with limit of " <> show errSolverTimeoutMillis

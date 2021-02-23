@@ -55,17 +55,8 @@ main =
   in pure (xs, a)
 
 --------------------------------
+-- More complex example relating to showing
 -- map g . map f = map (g . f)
-
-dropChar : Char -> ()
-dropChar x = dropChar x
-
-dropString : String -> ()
-dropString s =
-  case stringUncons s of
-   None -> ();
-   Some (x, s) ->
-    let () = dropChar x in dropString s
 
 foo : forall {a b c : Type, n : Nat} . (LChan (Send String End)) [2*n] -> (a -> b) [n] -> (b -> c) [n] -> Vec n a -> Vec n c
 foo [c] [f] [g] xs =
@@ -75,8 +66,3 @@ foo [c] [f] [g] xs =
 useFoo : forall {a b c : Type, n : Nat} . (a -> b) [n] -> (b -> c) [n] -> Vec n a -> Vec n c
 useFoo f g xs =
   let c = [forkLinear (\c -> let (s, c) = recv c in let () = close c in dropString s)] in foo c f g xs
-
-
--- withRef : (Ref a -> Ref b) -> a -> b
--- updateRef : Ref a -> b -> Ref b
--- readRef : Ref a -> (a, Ref a)

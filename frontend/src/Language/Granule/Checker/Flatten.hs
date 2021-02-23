@@ -183,6 +183,9 @@ flattenable t1 t2
 
     TyApp (TyCon (internalName -> "Interval")) t ->  flattenable t t
 
+    -- Sets can use multiply to fold two levels
+    (isSet -> Just (elemType, polarity)) -> return $ Just (TyInfix TyOpTimes, [], t1)
+
     _ -> return $ Nothing
  | otherwise =
       case (t1, t2) of

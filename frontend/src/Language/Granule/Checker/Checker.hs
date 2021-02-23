@@ -18,6 +18,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
+import Data.List (isPrefixOf)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -51,7 +52,7 @@ import Language.Granule.Syntax.Expr
 import Language.Granule.Syntax.Pattern (Pattern(..))
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
-import Language.Granule.Syntax.Type
+import Language.Granule.Syntax.Type hiding (Polarity)
 
 import Language.Granule.Synthesis.Deriving
 import Language.Granule.Synthesis.Splitting
@@ -116,8 +117,18 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
 
         -- Otherwise, do synth
         _ -> do
-          (ty, _, _, _) <- synthExpr defCtxt [] Positive expr
-          return $ Left $ Forall nullSpanNoFile [] [] ty
+          (ty, _, subst, _) <- synthExpr defCtxt [] Positive expr
+          --
+          -- Solve the generated constraints
+          checkerState <- get
+
+          let predicate = Conj $ predicateStack checkerState
+          predicate <- substitute (removePromSubsts subst) predicate
+          solveConstraints predicate (getSpan expr) (mkId "grepl")
+
+          -- Apply the outcoming substitution
+          ty' <- substitute subst ty
+          return $ Left $ Forall nullSpanNoFile [] [] ty'
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?
@@ -306,10 +317,15 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         let predicate = Conj $ predicateStack checkerState
         debugM "elaborateEquation" "solveEq"
         debugM "FINAL SUBST" (pretty subst)
-        predicate <- substitute subst predicate
+        predicate <- substitute (removePromSubsts subst) predicate
         solveConstraints predicate (getSpan equation) defName
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
+
+removePromSubsts :: Substitution -> Substitution
+removePromSubsts = filter (not . isPromVar)
+ where
+    isPromVar (id, _) = "prom_[" `isPrefixOf` (internalName id)
 
 checkEquation :: (?globals :: Globals) =>
      Ctxt TypeScheme -- context of top-level definitions
@@ -605,32 +621,28 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
             -- Otherwise we need to discharge only things that get used
             else freeVars e
 
+    -- Checker the expression being promoted
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
-    -- Causes a promotion of any typing assumptions that came from variable
-    -- inside a guard from an enclosing case that have kind Level
-    -- This prevents control-flow attacks and is a special case for Level
-    -- (the guard contexts come from a special context in the solver)
-    guardGam <- allGuardContexts
-    guardGam' <- filterM isLevelKinded guardGam
-    (gam'', subst') <- multAll s (vars <> map fst guardGam') demand (gam' <> guardGam')
+    -- Multiply the grades of all the used varibles here
+    (gam'', subst') <- multAll s vars demand gam'
 
     substFinal <- combineSubstitutions s subst subst'
 
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
   where
-    -- Calculate whether a type assumption is level kinded
-    isLevelKinded (_, as) = do
-        -- TODO: should deal with the subst
-        (ty, _) <- synthKindAssumption s as
-        return $ case ty of
-          Just (TyCon (internalName -> "Level"))
-            -> True
-          Just (TyApp (TyCon (internalName -> "Interval"))
-                      (TyCon (internalName -> "Level")))
-            -> True
-          _ -> False
+    -- -- Calculate whether a type assumption is level kinded
+    -- isLevelKinded (_, as) = do
+    --     -- TODO: should deal with the subst
+    --     (ty, _) <- synthKindAssumption s as
+    --     return $ case ty of
+    --       Just (TyCon (internalName -> "Level"))
+    --         -> True
+    --       Just (TyApp (TyCon (internalName -> "Interval"))
+    --                   (TyCon (internalName -> "Level")))
+    --         -> True
+    --       _ -> False
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
@@ -1067,14 +1079,16 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Create a fresh coeffect variable for the coeffect of the promoted expression
    var <- freshTyVarInContext (mkId $ "prom_[" <> pretty (startPos s) <> "]") (tyVar vark)
 
+   -- Synth type of promoted expression
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
+
+   -- Multiply the grades of all the used variables here
+   (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
+
+   substFinal <- combineSubstitutions s subst subst'
 
    let finalTy = Box (TyVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
-
-   (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
-   substFinal <- combineSubstitutions s subst subst'
-
    return (finalTy, gam'', substFinal, elaborated)
 
 
@@ -1203,7 +1217,7 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
 
     (Val _ _ _ (Var _ (internalName -> "pull"))) -> do
       st <- get
-      let name = mkId $ "pull" ++ pretty ty
+      let name = mkId $ "pull@" ++ pretty ty
       case lookup (mkId "pull", ty) (derivedDefinitions st) of
         Just (tyScheme, _) ->
           freshenTySchemeForVar s rf name tyScheme
@@ -1229,6 +1243,21 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           -- return this variable expression in place here
           debugM "derived copyShape:" (pretty def)
           debugM "derived copyShape tys:" (show typScheme)
+          freshenTySchemeForVar s rf name typScheme
+    (Val _ _ _ (Var _ (internalName -> "drop"))) -> do
+      st <- get
+      let name = mkId $ "drop@" ++ pretty ty
+      case lookup (mkId "drop", ty) (derivedDefinitions st) of
+        Just (tyScheme, _) ->
+          freshenTySchemeForVar s rf name tyScheme
+        Nothing -> do
+          -- Get this derived
+          (typScheme, def) <- deriveDrop s ty
+          -- Register the definition that has been derived
+          modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
+          -- return this variable expression in place here
+          debugM "derived drop:" (pretty def)
+          debugM "derived drop tys:" (show typScheme)
           freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 
@@ -1279,7 +1308,10 @@ solveConstraints predicate s name = do
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout ->
         throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis, errDefId = name, errContext = "grading", errPred = predicate }
-    OtherSolverError msg -> throw SolverError{ errLoc = s, errMsg = msg }
+    OtherSolverError msg -> do
+      simplPred <- simplifyPred predicate
+      msg' <- rewriteMessage msg
+      throw SolverError{ errLoc = s, errMsg = msg', errPred = simplPred }
     SolverProofError msg -> error msg
 
 -- Rewrite an error message coming from the solver
