@@ -379,6 +379,13 @@ instance Term Type where
     isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
     isLexicallyAtomic _ = False
 
+substType :: Type -> Id -> Type -> Type
+substType t x t' = runIdentity $ typeFoldM (baseTypeFold { tfTyVar = varCase }) t'
+  where
+    varCase x'
+      | internalName x == internalName x' = return t
+      | otherwise                         = return $ TyVar x'
+
 ----------------------------------------------------------------------
 -- Freshenable instances
 
