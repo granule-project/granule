@@ -48,7 +48,9 @@ desugar (Def s var rf eqs tys@(Forall _ _ _ ty)) =
     -- Fold function equations into a single case expression
     mkSingleEquation name eqs =
       Equation nullSpanNoFile name () False (map (PVar nullSpanNoFile () False) vars)
-        (Case nullSpanNoFile () False guard cases)
+        (if numArgs == 0
+          then snd $ head $ cases
+          else Case nullSpanNoFile () False guard cases)
 
       where
         numArgs =
