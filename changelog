@@ -1,6 +1,8 @@
-  # 0.8.1.0 (work in progress)
-  - New semirings: 'Sec' and 'Set t' for some type 't'
+  # 0.8.1.0
+  - New semirings: `Sec` and `Set t` for some type `t` (and `SetOp t`)
   - Bug fixes related to session types
+  - Some more type aliases added
+  - Generic deriving coverage improved (especially with `drop`)
 
   # 0.8.0.0
   - --synthesise mode
