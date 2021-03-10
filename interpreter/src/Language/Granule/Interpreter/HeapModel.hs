@@ -54,7 +54,7 @@ heapEvalDefs defs defName = return []
 -- Key hook in for now
 heapEvalJustExprAndReport :: (?globals :: Globals) => [Def Symbolic ()] -> Expr Symbolic () -> Int -> Maybe String
 heapEvalJustExprAndReport defs e steps =
-    Just (concatMap report res)
+    Just (report res)
   where
     res = evalState (heapEvalJustExpr defs e steps) 0
     report (expr, (heap, grades, inner)) =
@@ -66,7 +66,7 @@ heapEvalJustExprAndReport defs e steps =
     prettyHeap = pretty
 
 heapEvalJustExpr :: (?globals :: Globals)
-   => [Def Symbolic ()] -> Expr Symbolic () ->  Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
+   => [Def Symbolic ()] -> Expr Symbolic () ->  Int -> State Integer (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 heapEvalJustExpr defs e steps =
   multiSmallHeapRedux defCtxt heap e' (TyGrade Nothing 1) steps
    where
@@ -99,19 +99,16 @@ ctxtPlusZip ((i, g) : ctxt) ctxt' =
 
 -- Multi-step relation
 multiSmallHeapRedux :: (?globals :: Globals)
-   => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> Int -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
-multiSmallHeapRedux defs heap e r 0 = return [(e, (heap, [], []))]
+   => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> Int -> State Integer (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
+multiSmallHeapRedux defs heap e r 0 = return (e, (heap, [], []))
 multiSmallHeapRedux defs heap e r steps = do
-  res <- smallHeapRedux defs heap e r
-  ress <-
-    mapM (\(b1, (heap', u', gamma1)) -> do
-      res' <- multiSmallHeapRedux defs heap' b1 r (steps - 1)
-      return $ map (\(b, (heap'', u'', gamm2)) -> (b, (heap'', ctxtPlusZip u' u'', gamma1 ++ gamm2))) res') res
-  return $ concat ress
+  res@(b1, (heap', u', gamma1)) <- smallHeapRedux defs heap e r
+  res'@(b, (heap'', u'', gamm2)) <- multiSmallHeapRedux defs heap' b1 r (steps - 1)
+  return (b, (heap'', ctxtPlusZip u' u'', gamma1 ++ gamm2))
 
 -- Functionalisation of the main small-step reduction relation
 smallHeapRedux :: (?globals :: Globals)
-               => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> State Integer [(Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))]
+               => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> State Integer (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 
 -- [Small-Var]
 smallHeapRedux defs heap (Val _ _ _ (Var _ x)) r = do
@@ -125,18 +122,18 @@ smallHeapRedux defs heap (Val _ _ _ (Var _ x)) r = do
         --heapHere    = (x, (TyInfix TyOpMinus rq r, (gamma, aExpr, aType)))
         heapHere    = (x, (TyInfix TyOpMinus rq r, aExpr))
 
-      in return [(aExpr, (heapHere : heap', resourceOut , gammaOut))]
+      in return (aExpr, (heapHere : heap', resourceOut , gammaOut))
 
     -- Heap does not contain the variable, so maybe it's a definition we are
     -- getting
     Nothing ->
       case lookup x defs of
-        -- Invalid heap and definition environment
-        Nothing -> return []
+        -- Possibly a built in
+        Nothing -> error $ "Unknown thing " ++ pretty x
         -- Since the desugaring has been run there should be only one equations
         Just (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ [] expr]) _) ->
           -- Substitute body of the function here
-          return [(expr, (heap, [], []))]
+          return (expr, (heap, [], []))
         Just d ->
           error $ "Internal bug: def was in the wrong format for the heap model: " ++ pretty d
 
@@ -147,7 +144,7 @@ smallHeapRedux defs heap
   x <- freshVariable y
   --
   let heap' = (x, (TyInfix TyOpTimes r q, b)) : heap
-  return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , TyInfix TyOpTimes r q)]))]
+  return (subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , TyInfix TyOpTimes r q)]))
 
 -- [Small-AppBeta] [NO GRADE ANNOTATIONS] adapted to a Granule graded beta redux, e.g., (\[x] -> a) [b]
 smallHeapRedux defs heap
@@ -156,7 +153,7 @@ smallHeapRedux defs heap
   x <- freshVariable y
   --
   let heap' = (x, (r, b)) : heap
-  return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))]
+  return (subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))
 
 -- [Small-AppBetaLinear] - Linear beta-redux, because Granule
 smallHeapRedux defs heap
@@ -165,21 +162,26 @@ smallHeapRedux defs heap
   x <- freshVariable y
   --
   let heap' = (x, (r, b)) : heap
-  return [(subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))]
+  return (subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))
 
 -- [App beta]
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
-  return [(Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))]
+  return (Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))
 
 -- [App Value]
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) e) r = do
-  res <- smallHeapRedux defs heap e r
-  return $ for res (\(e', env) -> (App s a b (Val s' a' b' (Constr a'' id vs)) e', env))
+  res@(e', env) <- smallHeapRedux defs heap e r
+  return $ (App s a b (Val s' a' b' (Constr a'' id vs)) e', env)
+
+-- COMMUNICATION MODELS
+smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "recv"))) e) r = do
+  error "Eval receive now"
+                 
 
 -- [Small-AppL]
 smallHeapRedux defs heap (App s a b e1 e2) r = do
-  res <- smallHeapRedux defs heap e1 r
-  return $ map (\(e1', (h, resourceOut, gammaOut)) -> (App s a b e1' e2, (h, resourceOut, gammaOut))) res
+  res@(e1', (h, resourceOut, gammaOut)) <- smallHeapRedux defs heap e1 r
+  return (App s a b e1' e2, (h, resourceOut, gammaOut))
 
 -- [Case-Sum-Beta] Matches Left-Right patterns for either
 smallHeapRedux defs heap
@@ -202,7 +204,7 @@ smallHeapRedux defs heap
                   "Left" -> subst (Val s () False (Var () x)) varl el
                   "Right" -> subst (Val s () False (Var () x)) varr er
                   _ -> undefined
-    return [(eFinal, (heap' , resourceOut, embeddedCtxt))]
+    return (eFinal, (heap' , resourceOut, embeddedCtxt))
 
 -- [Case-Product-Beta]
 smallHeapRedux defs heap
@@ -217,7 +219,7 @@ smallHeapRedux defs heap
   let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
   let embeddedCtxt = [(x1 , r), (x2, r)]
   -- Expression is e1 or e2 (with x replaying varl or varr)
-  return [(subst (Val s () False (Var () x1)) var1 (subst (Val s () False (Var () x2)) var2 e), (heap' , resourceOut, embeddedCtxt))]
+  return (subst (Val s () False (Var () x1)) var1 (subst (Val s () False (Var () x2)) var2 e), (heap' , resourceOut, embeddedCtxt))
 
 -- [Case-Box-Beta]
 smallHeapRedux defs heap
@@ -230,12 +232,15 @@ smallHeapRedux defs heap
   let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
   let embeddedCtxt = [(x, r)]
   -- Expression is e1 or e2 (with x replaying varl or varr)
-  return [(subst (Val s () False (Var () x)) var e', (heap' , resourceOut, embeddedCtxt))]
+  return (subst (Val s () False (Var () x)) var e', (heap' , resourceOut, embeddedCtxt))
 
 -- [Case-cong]
 smallHeapRedux defs heap (Case s a b e ps) r = do
-  res <- smallHeapRedux defs heap e r
-  return $ map (\(e', (h, resourceOut, gammaOut)) -> (Case s a b e' ps, (h, resourceOut, gammaOut))) res
+  res@(e', (h, resourceOut, gammaOut)) <- smallHeapRedux defs heap e r
+  return (Case s a b e' ps, (h, resourceOut, gammaOut))
+
+smallHeapRedux defs heap (Val s a b (Promote a' e)) r = do
+  return (e, (heap, [], []))
 
 -- -- [Value]
 -- smallHeapRedux defs heap (App _ _ _ (Val s' a' b' (Constr a'' id es)) e) r =
@@ -243,7 +248,17 @@ smallHeapRedux defs heap (Case s a b e ps) r = do
 
 -- Catch all
 smallHeapRedux _ heap e t =
-  return [(e, (heap, [], []))]
+  return (e, (heap, [], []))
+
+-- Corresponds to H |- t |> p ~> H' |- t' |> p' | Delta
+smallPatternHeapStep :: (?globals :: Globals)
+  => Ctxt (Def Symbolic ()) -> Grade
+  -> Heap ->  Expr Symbolic () -> Pattern () -> State Integer (Heap, Expr Symbolic (), Pattern (), Ctxt Grade)
+smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
+  (t', (heap', resourceOut, _)) <- smallHeapRedux defs h t r
+  return (heap', t', p, resourceOut)  
+
+smallPatternHeapStep defs r h t _ = error "WIP"
 
 -- Things that cannot be reduced further by this model
 isValue :: Value a b -> Bool
