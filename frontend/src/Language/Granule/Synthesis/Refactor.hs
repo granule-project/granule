@@ -32,9 +32,12 @@ bubbleUpPatterns gradedVars (Val _ _ _ (Abs _ p _ e)) pats =
 bubbleUpPatterns gradedVars (App _ _ _ (Val _ _ _ (Abs _ p@(PBox _ _ _ (PVar _ _ _ id)) _ e)) (Val _ _ _ (Var _ x))) pats =
   bubbleUpPatterns (id : gradedVars) e (replaceInPats pats x p)
 
+-- Only fold patterns on things which are linear (i.e., not from a box)
+-- Beta-redex whose argument is a variable
 bubbleUpPatterns gradedVars (App _ _ _ (Val _ _ _ (Abs _ p _ e)) (Val _ _ _ (Var _ x))) pats | not (x `elem` gradedVars) =
   bubbleUpPatterns gradedVars e (replaceInPats pats x p)
 
+-- In the case the `x` came from an unboxing pattern, skip over this beta redex
 bubbleUpPatterns gradedVars (App s a b (Val s' a' b' (Abs s'' p mt e)) (Val s3 a3 b3 (Var a4 x))) pats =
   let
     (pats', e') = bubbleUpPatterns gradedVars e pats
