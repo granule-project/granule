@@ -23,12 +23,15 @@ replaceInPats :: [Pattern a] -> Id -> Pattern a -> [Pattern a]
 replaceInPats pats var pat' = map (\pat -> refactorPattern pat var pat') pats
 
 -- Collect patterns and rewrite beta-redexes into richer patterns
+-- (first parameter is used to remember which variables originated from a box and therefore
+-- which should not have their pattern matches folded into)
 bubbleUpPatterns :: [Id] -> Expr v a -> [Pattern a] -> ([Pattern a], Expr v a)
 -- Top-level lambda => add the pattern `p` to the list of patterns and recurse
 bubbleUpPatterns gradedVars (Val _ _ _ (Abs _ p _ e)) pats =
   bubbleUpPatterns gradedVars e (pats ++ [p])
 
--- Beta-redex whose argument is a variable
+-- Beta-redex whose argument is a variable and the pattern is a box pattern
+-- (so also remember that `id` is now a graded variable)
 bubbleUpPatterns gradedVars (App _ _ _ (Val _ _ _ (Abs _ p@(PBox _ _ _ (PVar _ _ _ id)) _ e)) (Val _ _ _ (Var _ x))) pats =
   bubbleUpPatterns (id : gradedVars) e (replaceInPats pats x p)
 
