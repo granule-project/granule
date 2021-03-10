@@ -75,18 +75,18 @@ heapEvalJustExpr defs e steps =
 
 buildInitialHeap :: (?globals :: Globals)
    => Expr Symbolic () -> (Heap, Expr Symbolic ())
--- Graded abstraction
+-- Graded abstraction (special typed rule - cf Grad)
 buildInitialHeap (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ v)) (Just (Box r a)) e)) =
     (h0 : heap, e')
   where
      h0        = (v, (r, (Val nullSpanNoFile () False (Ext () (Symbolic v)))))
      (heap, e') = buildInitialHeap e
 -- Linear abstraction treated as graded 1
-buildInitialHeap (Val _ _ _ (Abs _ (PVar _ _ _ v) (Just a) e)) =
-    (h0 : heap, e')
+buildInitialHeap (Val _ _ _ (Abs _ p _ e)) =
+    (h0 ++ heap, e')
   where
-     h0        = (v, (TyGrade Nothing 1, (Val nullSpanNoFile () False (Ext () (Symbolic v)))))
-     (heap, e') = buildInitialHeap e
+    h0        = toHeap p
+    (heap, e') = buildInitialHeap e
 
 buildInitialHeap e = ([], e)
 
@@ -278,3 +278,9 @@ freshVariable x = do
   let x' = mkId $ (internalName x) ++ "." ++ show st
   put $ st+1
   return x'
+
+toHeap :: Pattern a -> Heap
+toHeap (PVar _ _ _ v)       = [(v, (TyGrade Nothing 1, (Val nullSpanNoFile () False (Ext () (Symbolic v)))))]
+toHeap (PBox _ _ _ p)       = toHeap p
+toHeap (PConstr _ _ _ _ ps) = concatMap toHeap ps
+toHeap _ = []
