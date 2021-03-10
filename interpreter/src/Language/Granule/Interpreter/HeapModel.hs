@@ -270,6 +270,13 @@ isValue NumFloat{} = True
 isValue CharLiteral{} = True
 isValue StringLiteral{} = True
 isValue Ext{} = True
+isValue (Var _ id) =
+  -- some primitives count as values
+  case internalName id of
+    "recv" -> True
+    "send" -> True
+    "forkLinear" -> True
+    _ -> False
 isValue _ = False
 
 freshVariable :: Id -> State Integer Id
