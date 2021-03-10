@@ -525,7 +525,7 @@ unboxHelper left (var@(x1, a) : right) gamma (sub@Subtractive{}) goalTy =
       tyBoxA@(Box grade_r tyA) -> do
         debugM "synthDebug" $ "Trying to unbox " ++ pretty tyBoxA
 
-        let omega = left ++ right
+        let omega = (left ++ right)
         (canUse, omega', _) <- useVar var omega sub
         if canUse then do
           --
@@ -557,11 +557,11 @@ s <= r
 Γ, x1 : [] r A ⊢ B ⇒ let [x2] = x1 in t ; Δ, x1 : [] r A
 
 -}
-unboxHelper left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
-  (unboxHelper (var : left) right gamma add goalTy) `try`
+unboxHelper left (var@(x, a) : right) gamma add@(Additive mode) goalTy =
+  unboxHelper (var : left) right gamma add goalTy `try`
    (case a of
      (Linear (Box grade t')) -> do
-       let omega = (left ++ right)
+       let omega = left ++ right
        (canUse, omega', t) <- useVar var omega add
        if canUse
           then do
@@ -576,25 +576,21 @@ unboxHelper left (var@(x, a) : right) gamma (add@(Additive mode)) goalTy =
             delta' <- maybeToSynthesiser $ ctxtAdd omega' delta
 
             case lookupAndCutout x2 delta' of
-              Just (delta'', (Discharged _ usage)) -> do
+              Just (delta'', Discharged _ usage) -> do
                 (kind, _, _) <- conv $ synthKind nullSpan grade
 
                 debugM "check" (pretty usage ++ " <=? " ++ pretty grade)
                 conv $ addConstraint (ApproximatedBy nullSpanNoFile usage grade kind)
                 res <- solve
-                case res of
-                  True -> do
-                    return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta'', subst, (x, (x2, Box grade t')):bindings)
-                  False -> do
-                    none
+                if res then (do
+                  return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta'', subst, (x, (x2, Box grade t')):bindings)) else (do
+                  none)
               _ -> do
                 (kind, _, _) <- conv $ synthKind nullSpan grade
                 conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
                 res <- solve
-                case res of
-                  True ->
-                    return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta', subst, (x, (x2, Box grade t')):bindings)
-                  False -> none
+                if res then
+                  return (makeUnbox x2 x goalTy t' (Box grade t') e,  delta', subst, (x, (x2, Box grade t')):bindings) else none
           else none
      _ -> none)
 
@@ -629,6 +625,7 @@ pairIntroHelper :: (?globals :: Globals)
 pairIntroHelper gamma (sub@Subtractive{}) goalTy =
   case goalTy of
     (Forall _ binders constraints (ProdTy t1 t2)) -> do
+      debugM "Inside pair intro helper" ""
       (e1, delta1, subst1, bindings1) <- synthesiseInner False sub gamma [] (Forall nullSpanNoFile binders constraints t1)
       (e2, delta2, subst2, bindings2) <- synthesiseInner False sub delta1 [] (Forall nullSpanNoFile binders constraints t2)
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
@@ -736,13 +733,14 @@ derelictionHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
   (derelictionHelper (var:left) right gamma add goalTy) `try`
   (case a of
      Discharged ty g -> do
-       let omega = (var:left) ++ right
+       let omega = left ++ right
        (canUse, singleUse, _) <- useVar var omega add
        if canUse
          then do
            y <- freshIdentifier
+           debugM "in dereliction helper with gamma: " $ show gamma ++ " and omega " ++ show omega
            let (gamma', omega') = bindToContext (y, Linear ty) gamma omega (isLAsync ty)
-           (e, delta, subst, bindings) <- synthesiseInner True add gamma' omega' goalTy
+           (e, delta, subst, bindings) <- synthesiseInner True add gamma' (var:omega') goalTy
            case lookupAndCutout y delta of
              Just (delta', Linear _) -> do
                delta'' <- maybeToSynthesiser $ ctxtAdd singleUse delta'
@@ -954,7 +952,10 @@ sumElimHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
           _ -> none
     _ -> none
 
-
+linearVars :: Ctxt Assumption -> Ctxt Assumption
+linearVars (var@(x, Linear a):xs) = var : linearVars xs
+linearVars ((x, Discharged{}):xs) = linearVars xs
+linearVars [] = []
 
 synthesiseInner :: (?globals :: Globals)
            => Bool               -- Does this call immediately follow a dereliction?
@@ -969,11 +970,11 @@ synthesiseInner inDereliction resourceScheme gamma omega goalTy@(Forall _ binder
                       ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
                       ++ ", isAtomic goalTy = " ++ show (isAtomic goalTy')
 
-  case (isRAsync goalTy', omega) of
-    (True, omega) ->
+  case (isRAsync goalTy', linearVars omega) of
+    (True, _) ->
       -- Right Async : Decompose goalTy until synchronous
       absHelper gamma omega resourceScheme goalTy `try` none
-    (False, omega@(x:xs)) ->
+    (False, x:xs) ->
       -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
       unboxHelper [] omega gamma resourceScheme goalTy
       `try`
@@ -986,7 +987,7 @@ synthesiseInner inDereliction resourceScheme gamma omega goalTy@(Forall _ binder
       if inDereliction then do
         none
       else
-        derelictionHelper [] omega gamma resourceScheme goalTy
+       derelictionHelper [] omega gamma resourceScheme goalTy
     (False, []) ->
       (if not (isAtomic goalTy') then
           -- Right Sync : Focus on goalTy when goalTy is not atomic
@@ -997,6 +998,9 @@ synthesiseInner inDereliction resourceScheme gamma omega goalTy@(Forall _ binder
           boxHelper gamma resourceScheme goalTy
           `try`
           unitIntroHelper gamma resourceScheme goalTy
+                `try`
+          if inDereliction then do none
+          else derelictionHelper [] omega gamma resourceScheme goalTy
        else none)
        -- Or can always try to do left sync:
        `try` (do
