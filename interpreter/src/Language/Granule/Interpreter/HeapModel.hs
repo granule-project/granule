@@ -13,6 +13,8 @@ import Language.Granule.Context
 import Language.Granule.Utils
 import Language.Granule.Interpreter.Desugar
 
+import Data.Foldable
+
 import Control.Monad.State
 
 --import Debug.Trace
@@ -176,7 +178,7 @@ smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) e) r = do
 -- COMMUNICATION MODELS
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "recv"))) e) r = do
   error "Eval receive now"
-                 
+
 
 -- [Small-AppL]
 smallHeapRedux defs heap (App s a b e1 e2) r = do
@@ -250,15 +252,55 @@ smallHeapRedux defs heap (Val s a b (Promote a' e)) r = do
 smallHeapRedux _ heap e t =
   return (e, (heap, [], []))
 
+-- Corresponds to H |- t |> p ~> H'
+smallPatternMatch :: Heap ->  Expr Symbolic () -> Pattern () -> Maybe Heap
+smallPatternMatch h t (PVar _ _ _ v) = Just ((v, (undefined, t)) : h)
+
+smallPatternMatch h t (PWild _ _ _) = Just h
+
+smallPatternMatch h (Val _ _ _ (Promote _ t)) (PBox _ _ _ p) =
+  smallPatternMatch h t p
+
+smallPatternMatch h (Val s a b (Constr _ _ vs)) (PConstr _ _ _ id ps) =
+  foldrM (\(vi, pi) -> \hi -> smallPatternMatch hi (Val s a b vi) pi) h (zip vs ps)
+
+smallPatternMatch _ _ _ = Nothing
+
+smallPatternMismatch :: Heap -> Expr Symbolic () -> Pattern () -> Bool
+smallPatternMismatch h t p = undefined
+  -- case smallPatternMatch h t p >> smallof
+  --   Nothing ->
+
 -- Corresponds to H |- t |> p ~> H' |- t' |> p' | Delta
 smallPatternHeapStep :: (?globals :: Globals)
   => Ctxt (Def Symbolic ()) -> Grade
-  -> Heap ->  Expr Symbolic () -> Pattern () -> State Integer (Heap, Expr Symbolic (), Pattern (), Ctxt Grade)
-smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
-  (t', (heap', resourceOut, _)) <- smallHeapRedux defs h t r
-  return (heap', t', p, resourceOut)  
+  -> Heap ->  Expr Symbolic () -> Pattern () -> State Integer (Maybe (Heap, Expr Symbolic (), Pattern (), Ctxt Grade))
 
-smallPatternHeapStep defs r h t _ = error "WIP"
+smallPatternHeapStep defs r h e@(Val s a b (Constr _ _ vs)) p@(PConstr _ _ _ c ps) = do
+  let (yes, notYets) = partitionByMaybe (\(vi, pi) -> smallPatternMatch h (Val s a b vi) pi) (zip vs ps)
+  case yes of
+    [] -> undefined
+    _ ->
+      case notYets of
+
+        ((vk, pk) : vps) -> smallPatternHeapStep defs r h (Val s a b vk) pk
+        _ -> return Nothing
+
+-- smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
+--   (t', (heap', resourceOut, _)) <- smallHeapRedux defs h t r
+--   return (heap', t', p, resourceOut)
+
+smallPatternHeapStep defs r h t p = return Nothing
+
+
+partitionByMaybe :: (a -> Maybe b) -> [a] -> ([b], [a])
+partitionByMaybe f [] = ([], [])
+partitionByMaybe f (x : xs) =
+  case f x of
+    Nothing -> ([], xs)
+    Just b ->
+      let (bs, as) = partitionByMaybe f xs
+      in  (b : bs, as)
 
 -- Things that cannot be reduced further by this model
 isValue :: Value a b -> Bool
