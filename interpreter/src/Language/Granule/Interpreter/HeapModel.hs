@@ -184,19 +184,21 @@ smallHeapRedux defs heap
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
   return (Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))
 
--- COMMUNICATION MODELS
-smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "recv"))) e) r = do
-  error "Eval receive now"
-
 -- [Small-AppL]
 smallHeapRedux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
   res@(e1', (h, resourceOut, gammaOut)) <- smallHeapRedux defs heap e1 r
   return (App s a b e1' e2, (h, resourceOut, gammaOut))
 
 -- [App Value]
-smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) e) r = do
-  res@(e', env) <- smallHeapRedux defs heap e r
-  return $ (App s a b (Val s' a' b' (Constr a'' id vs)) e', env)
+smallHeapRedux defs heap (App s a b e1 e2) r | isValueExpr e1 = do
+  (e2', env) <- smallHeapRedux defs heap e2 r
+  return $ (App s a b e1 e2', env)
+
+
+-- COMMUNICATION MODELS
+smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "recv"))) e) r = do
+  error $ "Eval receive now for " ++ pretty e
+
 
 -- [Case-Sum-Beta] Matches Left-Right patterns for either
 smallHeapRedux defs heap
@@ -443,6 +445,7 @@ isValue (Var _ id) =
     "recv" -> True
     "send" -> True
     "forkLinear" -> True
+    "forkLinear'" -> True
     _ -> False
 isValue _ = False
 
