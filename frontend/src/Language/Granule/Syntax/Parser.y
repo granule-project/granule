@@ -9,6 +9,7 @@ module Language.Granule.Syntax.Parser where
 import Control.Arrow (second)
 import Control.Monad (forM, when, unless)
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
 import Control.Monad.Trans.Class (lift)
 import Data.Char (isSpace)
 import Data.Foldable (toList)
@@ -39,7 +40,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %name tscheme TypeScheme
 %tokentype { Token }
 %error { parseError }
-%monad { ReaderT String (Either String) }
+%monad { StateT [String] (ReaderT String (Either String)) }
 
 %token
     nl    { TokenNL _ }
@@ -577,20 +578,20 @@ Atom :: { Expr () () }
 
 {
 
-mkSpan :: (Pos, Pos) -> ReaderT String (Either String) Span
+mkSpan :: (Pos, Pos) -> StateT [String] (ReaderT String (Either String)) Span
 mkSpan (start, end) = do
-  filename <- ask
+  filename <- lift $ ask
   return $ Span start end filename
 
-parseError :: [Token] -> ReaderT String (Either String) a
-parseError [] = lift $ Left "Premature end of file"
-parseError t  =  do
-    file <- ask
-    lift . Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
+parseError :: [Token] -> StateT [String] (ReaderT String (Either String)) a
+parseError [] = lift $ lift $ Left "Premature end of file"
+parseError t = do
+    file <- lift $ ask
+    lift $ lift $ Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
 parseDefs :: FilePath -> String -> Either String (AST () ())
-parseDefs file input = runReaderT (topLevel $ scanTokens input) file
+parseDefs file input = runReaderT (evalStateT (topLevel $ scanTokens input) []) file
 
 parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
 parseAndDoImportsAndFreshenDefs input = do
