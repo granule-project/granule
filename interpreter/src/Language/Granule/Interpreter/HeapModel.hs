@@ -166,7 +166,22 @@ smallHeapRedux defs heap
   let heap' = (x, (r, b)) : heap
   return (subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))
 
--- [App beta]
+smallHeapRedux defs heap
+   t@(App s a b (Val s' a' b' (Abs a'' p mt e)) e') r = do
+      case smallPatternMatch heap e' p of
+        Nothing -> do
+          -- Cannot match so do a pattern step eval instead
+          mres <- smallPatternHeapStep defs r heap e' p
+          case mres of
+            NoMatch -> return (t, (heap, [], [])) -- cannot do anything
+            Match heap' -> return (e, (heap', [], []))
+            Step heap' e'' out ->
+              return (App s a b (Val s' a' b' (Abs a'' p mt e)) e'', (heap', out, []))
+        Just heap' -> return (e, (heap', [], []))
+
+
+
+-- [App Value - constr beta / turns an application into a 'constr' term]
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
   return (Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))
 
@@ -271,36 +286,145 @@ smallPatternMismatch h t p = undefined
   -- case smallPatternMatch h t p >> smallof
   --   Nothing ->
 
+data PatternResult =
+    Match Heap
+  | NoMatch
+  | Step Heap (Expr Symbolic ()) (Ctxt Grade)
+
 -- Corresponds to H |- t |> p ~> H' |- t' |> p' | Delta
 smallPatternHeapStep :: (?globals :: Globals)
   => Ctxt (Def Symbolic ()) -> Grade
-  -> Heap ->  Expr Symbolic () -> Pattern () -> State Integer (Maybe (Heap, Expr Symbolic (), Pattern (), Ctxt Grade))
+  -> Heap
+  -> Expr Symbolic ()
+  -> Pattern ()
+  -> State Integer PatternResult
 
+smallPatternHeapStep defs r h e p@(PConstr _ _ _ c ps) =
+  patternZip defs r h e c (toSnocList ps)
+
+smallPatternHeapStep defs r heap e p = do
+  case smallPatternMatch heap e p of
+    Nothing -> do
+      (e', (heap', out, _)) <- smallHeapRedux defs heap e r
+      return $ Step heap' e' out
+
+    Just heap' -> return $ Match heap'
+
+
+{- }
 smallPatternHeapStep defs r h e@(Val s a b (Constr _ _ vs)) p@(PConstr _ _ _ c ps) = do
-  let (yes, notYets) = partitionByMaybe (\(vi, pi) -> smallPatternMatch h (Val s a b vi) pi) (zip vs ps)
+  case partitionPatternReuslt $ map (\(vi, pi) -> smallPatternHeapStep defs r h (Val s a b vi) pi) (zip vs ps) of
+    Nothing -> return NoMath
+    Just (_, )
   case yes of
     [] -> undefined
     _ ->
       case notYets of
 
-        ((vk, pk) : vps) -> smallPatternHeapStep defs r h (Val s a b vk) pk
+        ((vk, pk) : vps) -> do
+          smallHeapRedux defs heap
         _ -> return Nothing
+
+-- [CaseStepCon]
+smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
+  (t', (heap, out, _) <- smallHeapRedux defs heap t r
+  return (Step heap t' out)
+
 
 -- smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
 --   (t', (heap', resourceOut, _)) <- smallHeapRedux defs h t r
 --   return (heap', t', p, resourceOut)
+-}
 
-smallPatternHeapStep defs r h t p = return Nothing
+-- smallPatternHeapStep defs r h t p = return NoMatch
 
 
-partitionByMaybe :: (a -> Maybe b) -> [a] -> ([b], [a])
-partitionByMaybe f [] = ([], [])
-partitionByMaybe f (x : xs) =
-  case f x of
-    Nothing -> ([], xs)
-    Just b ->
-      let (bs, as) = partitionByMaybe f xs
-      in  (b : bs, as)
+toSnocList :: [a] -> SnocList a
+toSnocList xs = toSnocList' xs Nil
+  where
+    toSnocList' :: [a] -> (SnocList a -> SnocList a)
+    toSnocList' []  = id
+    toSnocList' (x : xs) = (toSnocList' xs) . (\z -> Snoc z x)
+
+
+fromSnocList :: SnocList a -> [a]
+fromSnocList Nil = []
+fromSnocList (Snoc xs x) = fromSnocList xs ++ [x]
+
+data SnocList a = Snoc (SnocList a) a | Nil
+
+patternZip :: (?globals :: Globals) =>
+     Ctxt (Def Symbolic ())
+  -> Grade
+  -> Heap
+  -> Expr Symbolic ()
+  -> Id
+  -> SnocList (Pattern ())
+  -> State Integer PatternResult
+
+-- Constructor match
+patternZip defs r heap (Val s a b (Constr _ id' [])) id Nil | id == id' =
+  return $ Match heap
+
+-- Applied constructor match
+patternZip defs r heap (Val s a b (Constr s' id' (v:vs))) id ps | id == id' =
+  case fromSnocList ps of
+    (p' : ps') ->
+      -- try the first var against the first pattern
+      case smallPatternMatch heap (Val s a b v) p' of
+        Nothing -> return $ NoMatch
+        -- success to recurse
+        Just heap' ->
+          patternZip defs r heap' (Val s a b (Constr s' id' vs)) id (toSnocList ps')
+    [] -> error "Bug"
+  
+patternZip defs r heap (App s a b e1 e2) id (Snoc ps p) = do
+  res <- patternZip defs r heap e1 id ps
+  case res of
+    NoMatch -> return NoMatch
+    Match heap' -> do
+      -- everything else matches so now try to step here
+      res <- smallPatternHeapStep defs r heap' e2 p
+      case res of
+        Step heap'' e2' out -> return $ Step heap'' (App s a b e1 e2') out
+        other               -> return other
+    Step heap' e1' out -> return $ Step heap' (App s a b e1' e2) out
+
+patternZip defs r heap e id ps = do
+  (e', (heap', out, _)) <- smallHeapRedux defs heap e r
+  return $ Step heap' e' out
+
+{-
+patternZip ::
+     Ctxt (Def Symbolic ())
+  -> Grade
+  -> Heap
+  -> Id
+  -> [Expr Symbolic ()] -> [Pattern Symbolic ()] -> Expr Symbolic () -> State Integer PatternResult
+patternZip defs r h id (e:es) (p:ps) acc = do
+  case smallPatternHeapStep defs r h e p of
+    NoMatch   -> return NoMatch
+    (Match h') -> do
+      res <- patternZip defs r h' es ps
+      case res of
+        NoMatch -> return NoMatch
+        Match h -> return $ Match h
+        (Step h' es' out) -> return $ Step h' (unreassociatedNestedAppConstr' es') out
+    (Step h e' out) -> return $ Step h (unreassociatedNestedAppConstr id (e':es)) 
+    
+
+
+partitionPatternReuslt :: [PatternResult] -> Maybe ([Heap], [(Heap, Expr Symbolic (), Ctxt Grade)])
+partitionPatternReuslt (NoMatch:_) = Nothing
+
+partitionPatternReuslt ((Match h):rs) = do
+  (as, bs) <- partitionPatternReuslt rs
+  return (h : as, bs)
+
+partitionPatternReuslt ((Step h e out):rs) = do
+  (as, bs) <- partitionByMaybe rs
+  return (as, (h, e, out) : bs)
+-}
 
 -- Things that cannot be reduced further by this model
 isValue :: Value a b -> Bool
