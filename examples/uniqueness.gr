@@ -16,19 +16,13 @@ derelict' f [a] = f a
 redeem' : forall {p, q : Type} . (p [] -> q) -> p -> q
 redeem' = ?
 
--- Weakening is allowed for unrestricted values...
-weaken : forall {p, q, r : Type} . (q [Unique] -> r [Unique]) -> p [] -> q [Unique] -> r [Unique]
-weaken f [a] b = f b
+-- Contraction is allowed for unrestricted values...
+dup : forall {p : Type} . p [Unique] -> (p, p)
+dup a = let [u] = uniqueReturn a in (u, u)
 
-weaken' : forall {p, q, r : Type} . (q -> r) -> p [] -> q -> r
-weaken' f [a] b = f b
-
--- ...and so is contraction!
-contract : forall {p, q : Type} . (p [] -> p [] -> q [Unique]) -> p [] -> q [Unique]
-contract f [a] = f [a] [a]
-
-contract' : forall {p, q : Type} . (p [] -> p [] -> q) -> p [] -> q
-contract' f [a] = f [a] [a]
+-- ...and so is weakening!
+fst : forall {p, q : Type} . (p, q [Unique]) -> p
+fst (a, b) = let [u] = uniqueReturn b in a
 
 -- If we start with a unique cake, we can't have it and eat it too...
 badDesire : Cake [Unique] -> (Happy, Cake [Unique])
@@ -36,4 +30,4 @@ badDesire uniqueCake = ?
 
 -- ...unless we are willing to accept that our cake won't be unique any more :)
 goodDesire : Cake [Unique] -> (Happy, Cake)
-goodDesire uniqueCake = let [cake] = uniqueReturn lotsOfCake in (eat cake, have cake)
+goodDesire uniqueCake = let [cake] = uniqueReturn uniqueCake in (eat cake, have cake)
