@@ -479,8 +479,8 @@ tick = BUILTIN
 --------------------------------------------------------------------------------
 
 uniqueReturn
-  : forall {a : Type, k : Coeffect, c : k}
-  . a [Unique] -> a [c]
+  : forall {a : Type}
+  . a [Unique] -> a []
 uniqueReturn = BUILTIN
 
 uniqueBind

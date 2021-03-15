@@ -1,27 +1,39 @@
+import Cake
 
+-- Fine, since we can go from unique to unrestricted (forget a uniqueness guarantee)
 redeem : forall {p, q : Type} . (p [] -> q [Unique]) -> p [Unique] -> q [Unique]
 redeem f x = f (uniqueReturn x)
 
--- Can't implement this as we can't go from p (linear) to p []
+-- Can't implement this as we can't go from unrestricted to unique (generate a uniqueness guarantee)
+derelict : forall {p, q, r : Type} . (p [Unique] -> q [Unique]) -> p [] -> q [Unique]
+derelict = ?
+
+-- Fine, since we can go from unrestricted to linear (impose a linearity restriction)
+derelict' : forall {p, q, r : Type} . (p -> q) -> p [] -> q
+derelict' f [a] = f a
+
+-- Can't implement this as we can't go from linear to unrestricted (bypass a linearity restriction)
 redeem' : forall {p, q : Type} . (p [] -> q) -> p -> q
 redeem' = ?
 
+-- Weakening is allowed for unrestricted values...
 weaken : forall {p, q, r : Type} . (q [Unique] -> r [Unique]) -> p [] -> q [Unique] -> r [Unique]
 weaken f [a] b = f b
 
 weaken' : forall {p, q, r : Type} . (q -> r) -> p [] -> q -> r
 weaken' f [a] b = f b
 
+-- ...and so is contraction!
 contract : forall {p, q : Type} . (p [] -> p [] -> q [Unique]) -> p [] -> q [Unique]
 contract f [a] = f [a] [a]
 
 contract' : forall {p, q : Type} . (p [] -> p [] -> q) -> p [] -> q
 contract' f [a] = f [a] [a]
 
--- Can't implement this as we can't go from p [] to p [Unique]
-derelict : forall {p, q, r : Type} . (p [Unique] -> q [Unique]) -> p [] -> q [Unique]
--- derelict f [a] = f a
-derelict = ?
+-- If we start with a unique cake, we can't have it and eat it too...
+badDesire : Cake [Unique] -> (Happy, Cake [Unique])
+badDesire uniqueCake = ?
 
-derelict' : forall {p, q, r : Type} . (p -> q) -> p [] -> q
-derelict' f [a] = f a
+-- ...unless we are willing to accept that our cake won't be unique any more :)
+goodDesire : Cake [Unique] -> (Happy, Cake)
+goodDesire uniqueCake = let [cake] = uniqueReturn lotsOfCake in (eat cake, have cake)
