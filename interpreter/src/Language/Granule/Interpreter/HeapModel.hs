@@ -113,7 +113,7 @@ smallHeapRedux :: (?globals :: Globals)
                => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> State Integer (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 
 -- [Small-Var]
-smallHeapRedux defs heap (Val _ _ _ (Var _ x)) r = do
+smallHeapRedux defs heap t@(Val _ _ _ (Var _ x)) r = do
   case lookupAndCutout x heap of
     Just (heap', (rq, aExpr)) ->
     --Just (heap', (rq, (gamma, aExpr, aType))) ->
@@ -131,7 +131,7 @@ smallHeapRedux defs heap (Val _ _ _ (Var _ x)) r = do
     Nothing ->
       case lookup x defs of
         -- Possibly a built in
-        Nothing -> error $ "Unknown thing " ++ pretty x
+        Nothing -> return (t, (heap, [], []))
         -- Since the desugaring has been run there should be only one equations
         Just (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ [] expr]) _) ->
           -- Substitute body of the function here
@@ -180,25 +180,23 @@ smallHeapRedux defs heap
         Just heap' -> return (e, (heap', [], []))
 
 
-
 -- [App Value - constr beta / turns an application into a 'constr' term]
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
   return (Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))
-
--- [App Value]
-smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) e) r = do
-  res@(e', env) <- smallHeapRedux defs heap e r
-  return $ (App s a b (Val s' a' b' (Constr a'' id vs)) e', env)
 
 -- COMMUNICATION MODELS
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "recv"))) e) r = do
   error "Eval receive now"
 
-
 -- [Small-AppL]
-smallHeapRedux defs heap (App s a b e1 e2) r = do
+smallHeapRedux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
   res@(e1', (h, resourceOut, gammaOut)) <- smallHeapRedux defs heap e1 r
   return (App s a b e1' e2, (h, resourceOut, gammaOut))
+
+-- [App Value]
+smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) e) r = do
+  res@(e', env) <- smallHeapRedux defs heap e r
+  return $ (App s a b (Val s' a' b' (Constr a'' id vs)) e', env)
 
 -- [Case-Sum-Beta] Matches Left-Right patterns for either
 smallHeapRedux defs heap
@@ -281,11 +279,6 @@ smallPatternMatch h (Val s a b (Constr _ _ vs)) (PConstr _ _ _ id ps) =
 
 smallPatternMatch _ _ _ = Nothing
 
-smallPatternMismatch :: Heap -> Expr Symbolic () -> Pattern () -> Bool
-smallPatternMismatch h t p = undefined
-  -- case smallPatternMatch h t p >> smallof
-  --   Nothing ->
-
 data PatternResult =
     Match Heap
   | NoMatch
@@ -338,6 +331,10 @@ smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
 
 -- smallPatternHeapStep defs r h t p = return NoMatch
 
+leftMostIsConstr :: Expr a b -> Bool
+leftMostIsConstr (App _ _ _ (Val _ _ _ (Constr _ x _)) _) = True
+leftMostIsConstr (App _ _ _ e1 e2) = leftMostIsConstr e1
+leftMostIsConstr _ = False
 
 toSnocList :: [a] -> SnocList a
 toSnocList xs = toSnocList' xs Nil
@@ -378,7 +375,7 @@ patternZip defs r heap (Val s a b (Constr s' id' (v:vs))) id ps | id == id' =
           patternZip defs r heap' (Val s a b (Constr s' id' vs)) id (toSnocList ps')
     [] -> error "Bug"
   
-patternZip defs r heap (App s a b e1 e2) id (Snoc ps p) = do
+patternZip defs r heap (App s a b e1 e2) id (Snoc ps p) | leftMostIsConstr e1 = do
   res <- patternZip defs r heap e1 id ps
   case res of
     NoMatch -> return NoMatch
@@ -427,6 +424,10 @@ partitionPatternReuslt ((Step h e out):rs) = do
 -}
 
 -- Things that cannot be reduced further by this model
+isValueExpr :: Expr a b -> Bool
+isValueExpr (Val _ _ _ v) = isValue v
+isValueExpr _ = False
+
 isValue :: Value a b -> Bool
 isValue Abs{} = True
 isValue Promote{} = True
