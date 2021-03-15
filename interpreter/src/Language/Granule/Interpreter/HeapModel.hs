@@ -184,6 +184,11 @@ smallHeapRedux defs heap
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
   return (Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))
 
+
+-- COMMUNICATION MODELS
+smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "forkLinear'"))) e) r | isValueExpr e = do
+  error $ "Eval forkLinear' now for " ++ pretty e
+
 -- [Small-AppL]
 smallHeapRedux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
   res@(e1', (h, resourceOut, gammaOut)) <- smallHeapRedux defs heap e1 r
@@ -195,7 +200,7 @@ smallHeapRedux defs heap (App s a b e1 e2) r | isValueExpr e1 = do
   return $ (App s a b e1 e2', env)
 
 
--- COMMUNICATION MODELS
+
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "recv"))) e) r = do
   error $ "Eval receive now for " ++ pretty e
 
