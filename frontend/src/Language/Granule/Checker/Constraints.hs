@@ -154,7 +154,7 @@ freshSolverVarScoped quant name (TyCon (internalName -> "LNL")) q k =
 
 freshSolverVarScoped (quant :: Quantifier -> String -> (SBV Integer -> Symbolic SBool) -> Symbolic SBool) 
                       name (TyCon (internalName -> "Uniqueness")) q k =
-    quant q name (\solverVar -> k (sTrue, SNonUnique))
+    quant q name (\solverVar -> k (sTrue, SUnique))
 
 freshSolverVarScoped quant name (TyCon conName) q k =
     -- Integer based
@@ -316,7 +316,7 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
     c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "Uniqueness")) _ = do
-  return (SNonUnique, sTrue)
+  return (SUnique, sTrue)
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
 compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (TyCon (internalName -> "Level"), t2)) vars = do
@@ -409,7 +409,6 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "OOZ"       -> return (SOOZ sFalse, sTrue)
         "LNL"       -> return (SLNL sTrue, sTrue)
         "Borrowing" -> return (SBorrow (literal omegaRepresentation), sTrue)
-        "Uniqueness" -> return (SNonUnique, sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
@@ -442,6 +441,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL sFalse, sTrue)
+        "Uniqueness" -> return (SUnique, sTrue)
         "Borrowing" -> return (SBorrow (literal oneRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
@@ -543,7 +543,7 @@ approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
 
 approximatedByOrEqualConstraint (SBorrow a) (SBorrow b) = return $ a .<= b
 
-approximatedByOrEqualConstraint SNonUnique SNonUnique = return $ sTrue
+approximatedByOrEqualConstraint SUnique SUnique = return $ sTrue
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts approximatedByOrEqualConstraint (.&&) (const sTrue) s t)

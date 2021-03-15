@@ -67,7 +67,7 @@ typeConstructors =
     , (mkId "Lo",    (tyCon "Sec", [], False))
     -- Uniqueness
     , (mkId "Uniqueness", (kcoeffect, [], False))
-    , (mkId "NonUnique", (tyCon "Uniqueness", [], False))
+    , (mkId "Unique", (tyCon "Uniqueness", [], False))
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
@@ -478,15 +478,15 @@ tick = BUILTIN
 -- Uniqueness monadic operations
 --------------------------------------------------------------------------------
 
-nonuniqueReturn
-  : forall {a : Type}
-  . a -> a [NonUnique]
-nonuniqueReturn = BUILTIN
+uniqueReturn
+  : forall {a : Type, k : Coeffect, c : k}
+  . a [Unique] -> a [c]
+uniqueReturn = BUILTIN
 
-nonuniqueBind
-  : forall {a b : Type}
-  . (a -> b [NonUnique]) -> a [NonUnique] -> b [NonUnique]
-nonuniqueBind = BUILTIN
+uniqueBind
+  : forall {a b : Type, k : Coeffect, c : k}
+  . (a [Unique] -> b [c]) -> a [c] -> b [c]
+uniqueBind = BUILTIN
 
 |]
 

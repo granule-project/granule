@@ -42,7 +42,7 @@ data SGrade =
      -- Borrowing
      | SBorrow SInteger
      -- Uniqueness
-     | SNonUnique
+     | SUnique
 
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
@@ -148,7 +148,7 @@ match (SOOZ _) (SOOZ _) = True
 match (SSec _) (SSec _) = True
 match (SLNL _) (SLNL _) = True
 match (SBorrow _) (SBorrow _) = True
-match SNonUnique SNonUnique = True
+match SUnique SUnique = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -209,7 +209,7 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SSec a) (SSec b) = SSec (symbolicMerge s sb a b)
   symbolicMerge s sb (SLNL a) (SLNL b) = SLNL (symbolicMerge s sb a b)
   symbolicMerge s sb (SBorrow a) (SBorrow b) = SBorrow (symbolicMerge s sb a b)
-  symbolicMerge s sb SNonUnique SNonUnique = SNonUnique
+  symbolicMerge s sb SUnique SUnique = SUnique
 
   symbolicMerge _ _ s t = error $ cannotDo "symbolicMerge" s t
 
@@ -266,7 +266,7 @@ symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
 symGradeEq (SSec n) (SSec n') = return $ n .== n'
 symGradeEq (SLNL n) (SLNL m) = return $ n .== m
 symGradeEq (SBorrow n) (SBorrow m) = return $ n .== m
-symGradeEq SNonUnique SNonUnique = return $ sTrue
+symGradeEq SUnique SUnique = return $ sTrue
 symGradeEq s t = solverError $ cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -341,7 +341,6 @@ symGradePlus (SUnknown um) (SUnknown un) =
 symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
 symGradePlus (SLNL a) (SLNL b) = return $ SLNL sTrue
 symGradePlus (SBorrow a) (SBorrow b) = return $ SBorrow (a `smax` b `smax` literal betaRepresentation)
-symGradePlus SNonUnique SNonUnique = return $ SNonUnique
 
 symGradePlus s t = solverError $ cannotDo "plus" s t
 
@@ -374,6 +373,7 @@ symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
         b `f` ub1ub2
 
 symGradeTimes SPoint SPoint = return SPoint
+symGradeTimes SUnique SUnique = return $ SUnique
 symGradeTimes s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeTimes SProduct id s t)
 
@@ -414,7 +414,6 @@ symGradeMinus (SExtNat x) (SExtNat y) = return $ SExtNat (x - y)
 symGradeMinus (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 SInterval (lb1 `symGradeMinus` lb2) (ub1 `symGradeMinus` ub2)
 symGradeMinus SPoint SPoint = return $ SPoint
-symGradeMinus SNonUnique SNonUnique = return $ SNonUnique
 symGradeMinus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMinus SProduct id s t)
 symGradeMinus s t = solverError $ cannotDo "minus" s t
