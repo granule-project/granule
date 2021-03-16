@@ -175,7 +175,6 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
           rewriteHoles input noImportAst (keepBackup config) holeCases
           case globalsSynthesise ?globals of
             Just True -> do
-              printSuccess "Synthesised"
               return $ Right NoEval
             _         -> return . Left . CheckerError $ errs
 
