@@ -48,6 +48,7 @@ data Globals = Globals
   , globalsBenchmarkRaw        :: Maybe Bool
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
+  , globalsSynthTimeoutMillis  :: Maybe Integer
   } deriving (Read, Show)
 
 -- | Accessors for global flags with default values
@@ -70,6 +71,10 @@ alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?global
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
 solverTimeoutMillis = fromMaybe 10000 $ globalsSolverTimeoutMillis ?globals
+
+-- | Accessor for the synthesis timeout with a default value
+synthTimeoutMillis :: (?globals :: Globals) => Integer
+synthTimeoutMillis = fromMaybe 10000 $ globalsSynthTimeoutMillis ?globals
 
 -- | Accessors for global file paths with default values
 includePath, sourceFilePath :: (?globals :: Globals) => FilePath
@@ -103,6 +108,7 @@ instance Semigroup Globals where
       , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
+      , globalsSynthTimeoutMillis = globalsSynthTimeoutMillis g1 <|> globalsSynthTimeoutMillis g2
       }
 
 instance Monoid Globals where
@@ -127,6 +133,7 @@ instance Monoid Globals where
     , globalsBenchmarkRaw        = Nothing
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
+    , globalsSynthTimeoutMillis  = Nothing
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general

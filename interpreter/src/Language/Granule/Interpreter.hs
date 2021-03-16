@@ -343,6 +343,15 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , show solverTimeoutMillis <> "ms."
             ]
 
+        globalsSynthTimeoutMillis <-
+          (optional . option (auto @Integer))
+            $ long "synth-timeout"
+            <> (help . unwords)
+            [ "Synthesis timeout in milliseconds (negative for unlimited)"
+            , "Defaults to"
+            , show solverTimeoutMillis <> "ms."
+            ]
+
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"
@@ -450,6 +459,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
+              , globalsSynthTimeoutMillis
               }
             }
           )

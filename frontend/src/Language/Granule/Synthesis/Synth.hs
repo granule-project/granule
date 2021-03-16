@@ -385,12 +385,12 @@ appHelper startTime left (var@(x, a) : right) sub@Subtractive{} goalTy@(Forall _
           let (gamma', omega'') = bindToContext (id, Linear t2) omega' [] (isLAsync t2)
 
           debugM "synthDebug" ("Inside app, try to synth the goal " ++ pretty goalTy ++ " under context of " ++ pretty [(id, Linear t2)])
-          (e1, delta1, sub1, bindings1) <- synthesiseInner False sub gamma' omega'' goalTy
+          (e1, delta1, sub1, bindings1) <- synthesiseInner startTime False sub gamma' omega'' goalTy
           case lookup id delta1 of
             Nothing -> do
               -- Check that `id` was used by `e1` (and thus is not in `delta1`)
               debugM "synthDebug" ("Inside app, try to synth the argument at type " ++ pretty t1)
-              (e2, delta2, sub2, bindings2) <- synthesiseInner False sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
+              (e2, delta2, sub2, bindings2) <- synthesiseInner startTime False sub delta1 [] (Forall nullSpanNoFile binders constraints t1)
               subst <- conv $ combineSubstitutions nullSpanNoFile sub1 sub2
               return (Language.Granule.Syntax.Expr.subst (makeApp x e2 goalTy t) id e1, delta2, subst, bindings1 ++ bindings2)
             _ -> none
@@ -412,8 +412,8 @@ Additive (Pruning)
 Γ, x1 : A → B ⊢ C ⇒ [(x1 t2) / x2] t1 ; (Δ1 + Δ2), x1: A → B
 
 -}
-appHelper left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binders constraints _ ) =
-  (appHelper (var : left) right add goalTy) `try`
+appHelper startTime left (var@(x, a) : right) add@(Additive mode) goalTy@(Forall _ binders constraints _ ) =
+  appHelper startTime (var : left) right add goalTy `try`
   (case getAssumptionType a of
     (FunTy _ tyA tyB) -> do
       let omega = left ++ right
@@ -422,9 +422,10 @@ appHelper left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binde
         then do
           x2 <- freshIdentifier
           -- Extend context (focussed) with x2 : B
+
           let (gamma', omega') = bindToContext (x2, Linear tyB) omega [] (isLAsync tyB)
           -- Synthesise new goal binding result `x2`
-          (e1, delta1, sub1, bindings1) <- synthesiseInner False add gamma' omega' goalTy
+          (e1, delta1, sub1, bindings1) <- synthesiseInner startTime False add gamma' omega' goalTy
           -- Make sure that `x2` appears in the result
           case lookupAndCutout x2 delta1 of
             Just (delta1',  Linear _) -> do
@@ -436,7 +437,7 @@ appHelper left (var@(x, a) : right) (add@(Additive mode)) goalTy@(Forall _ binde
                   Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
 
               -- Synthesise the argument
-              (e2, delta2, sub2, bindings2) <- synthesiseInner False add gamma2 [] (Forall nullSpanNoFile binders constraints tyA)
+              (e2, delta2, sub2, bindings2) <- synthesiseInner startTime False add gamma2 [] (Forall nullSpanNoFile binders constraints tyA)
 
               -- Add the results
               deltaOut <- maybeToSynthesiser $ ctxtAdd useContextOut delta1'
@@ -463,51 +464,49 @@ Additive
 
 -}
 boxHelper :: (?globals :: Globals)
-  => Ctxt Assumption
+  => Clock.TimeSpec
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-boxHelper gamma resourceScheme goalTy =
+boxHelper startTime gamma resourceScheme goalTy =
   case goalTy of
     (Forall _ binders constraints (Box g t)) -> do
       case resourceScheme of
         Additive{} ->
           do
-            (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
+            (e, delta, subst, bindings) <- synthesiseInner startTime False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
             delta' <- ctxtMultByCoeffect g delta
             return (makeBox goalTy e, delta', subst, bindings)
         Subtractive Default ->
           do
-            (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
+            (e, delta, subst, bindings) <- synthesiseInner startTime False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t)
             used <- ctxtSubtract gamma delta
             -- Compute what was used to synth e
             delta' <- ctxtMultByCoeffect g used
             delta'' <- ctxtSubtract gamma delta'
-            return (makeBox goalTy e, delta'', subst, bindings)
+            res <- solve
+            boolToSynthesiser res (makeBox goalTy e, delta'', subst, bindings)
 
         Subtractive Alternative -> do
-          debugM "synthDebug" $ "div for " <> pretty goalTy
           gamma' <- ctxtDivByCoeffect g gamma
-          debugM "synthDebug" $ "gamma = " <> pretty gamma
-          debugM "synthDebug" $ "gamma' = " <> pretty gamma'
-          (e, delta, subst, bindings) <- synthesiseInner False resourceScheme gamma' [] (Forall nullSpanNoFile binders constraints t)
+          (e, delta, subst, bindings) <- synthesiseInner startTime False resourceScheme gamma' [] (Forall nullSpanNoFile binders constraints t)
           delta' <- ctxtMultByCoeffect g delta
           res <- solve
-          case res of
-            True -> do
-              return (makeBox goalTy e, delta', subst, bindings)
-            False -> none
+          if res then
+            return (makeBox goalTy e, delta', subst, bindings) else none
     _ -> none
 
 
 unboxHelper :: (?globals :: Globals)
-  => Ctxt Assumption
+  => Clock.TimeSpec
+  -> Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-unboxHelper left [] _ _ _ = none
+unboxHelper _ left [] _ _ _ = none
 
 {-
 Subtractive
@@ -616,29 +615,29 @@ Additive Pruning
 
 -}
 pairIntroHelper :: (?globals :: Globals)
-  => Ctxt Assumption
+  => Clock.TimeSpec
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-pairIntroHelper gamma (sub@Subtractive{}) goalTy =
+pairIntroHelper startTime gamma sub@Subtractive{} goalTy =
   case goalTy of
     (Forall _ binders constraints (ProdTy t1 t2)) -> do
-      debugM "Inside pair intro helper" ""
-      (e1, delta1, subst1, bindings1) <- synthesiseInner False sub gamma [] (Forall nullSpanNoFile binders constraints t1)
-      (e2, delta2, subst2, bindings2) <- synthesiseInner False sub delta1 [] (Forall nullSpanNoFile binders constraints t2)
+      (e1, delta1, subst1, bindings1) <- synthesiseInner startTime False sub gamma [] (Forall nullSpanNoFile binders constraints t1)
+      (e2, delta2, subst2, bindings2) <- synthesiseInner startTime False sub delta1 [] (Forall nullSpanNoFile binders constraints t2)
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       return (makePair t1 t2 e1 e2, delta2, subst, bindings1 ++ bindings2)
     _ -> none
-pairIntroHelper gamma (add@(Additive mode)) goalTy =
+pairIntroHelper startTime gamma add@(Additive mode) goalTy =
   case goalTy of
     (Forall _ binders constraints (ProdTy t1 t2)) -> do
-      (e1, delta1, subst1, bindings1) <- synthesiseInner False add gamma [] (Forall nullSpanNoFile binders constraints t1)
-
+      (e1, delta1, subst1, bindings1) <- synthesiseInner startTime False add gamma [] (Forall nullSpanNoFile binders constraints t1)
       gamma' <- case mode of
                   Default     -> return gamma              -- no-prunes
                   Alternative -> ctxtSubtract gamma delta1 -- pruning
 
-      (e2, delta2, subst2, bindings2) <- synthesiseInner False add gamma' [] (Forall nullSpanNoFile binders constraints t2)
+      (e2, delta2, subst2, bindings2) <- synthesiseInner startTime False add gamma' [] (Forall nullSpanNoFile binders constraints t2)
+
       delta3 <- maybeToSynthesiser $ ctxtAdd delta1 delta2
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       return (makePair t1 t2 e1 e2, delta3, subst, bindings1 ++ bindings2)
@@ -646,13 +645,14 @@ pairIntroHelper gamma (add@(Additive mode)) goalTy =
 
 
 pairElimHelper :: (?globals :: Globals)
-  => Ctxt Assumption
+  => Clock.TimeSpec
+  -> Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-pairElimHelper left [] _ _ _ = none
+pairElimHelper _ left [] _ _ _ = none
 {-
 Subtractive
 
@@ -677,8 +677,7 @@ pairElimHelper startTime left (var@(x, a):right) gamma sub@Subtractive{} goalTy 
             let (gamma', omega'') = bindToContext (lId, Linear t1) gamma omega' (isLAsync t1)
             let (gamma'', omega''') = bindToContext (rId, Linear t2) gamma' omega'' (isLAsync t2)
 
-            debugM "synthDebug" $ "Synthesiser inside product elim for goal " ++ pretty goalTy
-            (e, delta, subst, bindings) <- synthesiseInner False sub gamma'' omega''' goalTy
+            (e, delta, subst, bindings) <- synthesiseInner startTime False sub gamma'' omega''' goalTy
             case (lookup lId delta, lookup rId delta) of
               -- both `lId` and `rId` were used in `e`
               (Nothing, Nothing) -> return (makePairElim x lId rId goalTy t1 t2 e, delta, subst, bindings)
@@ -694,20 +693,21 @@ Additive
 Γ, x3 : A ⊗ B ⊢ C ⇒ let x1, x2 = x3 in t2 ; Δ, x3 : A ⊗ B
 
 -}
-pairElimHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
-  (pairElimHelper (var:left) right gamma add goalTy) `try`
+pairElimHelper startTime left (var@(x, a):right) gamma add@(Additive mode) goalTy =
+  pairElimHelper startTime (var:left) right gamma add goalTy `try`
     (case a of
       (Linear (ProdTy t1 t2)) -> do
         let omega = left ++ right
         (canUse, singleUse, _) <- useVar var omega add
         if canUse
           then do
+            debugM "in pair elim" ""
             lId <- freshIdentifier
             rId <- freshIdentifier
 --            omega1 <- ctxtSubtract omega singleUse
             let (gamma', omega')   = bindToContext (lId, Linear t1) gamma omega (isLAsync t1)
             let (gamma'', omega'') = bindToContext (rId, Linear t2) gamma' omega' (isLAsync t2)
-            (e, delta, subst, bindings) <- synthesiseInner False add gamma'' omega'' goalTy
+            (e, delta, subst, bindings) <- synthesiseInner startTime False add gamma'' omega'' goalTy
             delta' <- maybeToSynthesiser $ ctxtAdd singleUse delta
             case lookupAndCutout lId delta' of
               Just (delta', Linear _) ->
@@ -926,13 +926,14 @@ unitIntroHelper gamma resourceScheme goalTy =
 
 
 unitElimHelper :: (?globals :: Globals)
-  => Ctxt Assumption
+  => Clock.TimeSpec
+  -> Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-unitElimHelper left [] _ _ _ = none
+unitElimHelper _ left [] _ _ _ = none
 {-
 Subtractive
 
@@ -941,13 +942,13 @@ Subtractive
 Γ, x : 1 ⊢ C ⇒ let () = x in t ; Δ
 
 -}
-unitElimHelper left (var@(x,a):right) gamma (sub@Subtractive{}) goalTy = do
-  (unitElimHelper (var:left) right gamma sub goalTy) `try`
-    case (getAssumptionType a) of
-      (TyCon (internalName -> "()")) -> do
-        (e, delta, subst, bindings) <- synthesiseInner False sub gamma (left ++ right) goalTy
-        return (makeUnitElim x e goalTy, delta, subst, bindings)
-      _ -> none
+unitElimHelper startTime left (var@(x,a):right) gamma sub@Subtractive{} goalTy =
+  unitElimHelper startTime (var:left) right gamma sub goalTy `try`
+  case getAssumptionType a of
+    (TyCon (internalName -> "()")) -> do
+      (e, delta, subst, bindings) <- synthesiseInner startTime False sub gamma (left ++ right) goalTy
+      return (makeUnitElim x e goalTy, delta, subst, bindings)
+    _ -> none
 {-
 Additive
 
@@ -956,12 +957,12 @@ Additive
 Γ, x : 1 ⊢ C ⇒ let () = x in t ; Δ, x : 1
 
 -}
-unitElimHelper left (var@(x,a):right) gamma (add@Additive{}) goalTy =
-  (unitElimHelper (var:left) right gamma add goalTy) `try`
-    case (getAssumptionType a) of
+unitElimHelper startTime left (var@(x,a):right) gamma add@Additive{} goalTy =
+  unitElimHelper startTime (var:left) right gamma add goalTy `try`
+    case getAssumptionType a of
       (TyCon (internalName -> "()")) -> do
-        (e, delta, subst, bindings) <- synthesiseInner False add gamma (left ++ right) goalTy
-        return (makeUnitElim x e goalTy, (var:delta), subst, bindings)
+        (e, delta, subst, bindings) <- synthesiseInner startTime False add gamma (left ++ right) goalTy
+        return (makeUnitElim x e goalTy, var:delta, subst, bindings)
       _ -> none
 
 
@@ -991,35 +992,37 @@ Additive
 
 -}
 sumIntroHelper :: (?globals :: Globals)
-  => Ctxt Assumption
+  => Clock.TimeSpec
+  -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-sumIntroHelper gamma resourceScheme goalTy =
+sumIntroHelper startTime gamma resourceScheme goalTy =
   case goalTy of
-    (Forall _ binders constraints (SumTy t1 t2)) -> do
+    (Forall _ binders constraints (SumTy t1 t2)) ->
       try
-        (do
-            (e1, delta1, subst1, bindings1) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t1)
-            return (makeEitherLeft t1 t2 e1, delta1, subst1, bindings1)
+      (do
+          (e1, delta1, subst1, bindings1) <- synthesiseInner startTime False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t1)
+          return (makeEitherLeft t1 t2 e1, delta1, subst1, bindings1)
 
-        )
-        (do
-            (e2, delta2, subst2, bindings2) <- synthesiseInner False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t2)
-            return (makeEitherRight t1 t2 e2, delta2, subst2, bindings2)
+      )
+      (do
+          (e2, delta2, subst2, bindings2) <- synthesiseInner startTime False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t2)
+          return (makeEitherRight t1 t2 e2, delta2, subst2, bindings2)
 
-        )
+      )
     _ -> none
 
 
 sumElimHelper :: (?globals :: Globals)
-  => Ctxt Assumption
+  => Clock.TimeSpec
+  -> Ctxt Assumption
   -> Ctxt Assumption
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-sumElimHelper left [] _ _ _ = none
+sumElimHelper _ left [] _ _ _ = none
 {-
 Subtractive
 
@@ -1031,8 +1034,8 @@ x3 ∉ Δ2
 Γ, x1 : A ⊕ B ⊢ C ⇒ case x1 of inl x2 → t1 | inr x3 → t2 ; Δ1 ⊓ Δ2
 
 -}
-sumElimHelper left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
-  (sumElimHelper (var:left) right gamma sub goalTy) `try`
+sumElimHelper startTime left (var@(x, a):right) gamma sub@Subtractive{} goalTy =
+  sumElimHelper startTime (var:left) right gamma sub goalTy `try`
   let omega = left ++ right in do
   (canUse, omega', t) <- useVar var omega sub
   case (canUse, t) of
@@ -1041,8 +1044,8 @@ sumElimHelper left (var@(x, a):right) gamma (sub@Subtractive{}) goalTy =
       r <- freshIdentifier
       let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega' (isLAsync t1)
       let (gamma'', omega''') = bindToContext (r, Linear t2) gamma omega' (isLAsync t2)
-      (e1, delta1, subst1, bindings1) <- synthesiseInner False sub gamma' omega'' goalTy
-      (e2, delta2, subst2, bindings2) <- synthesiseInner False sub gamma'' omega''' goalTy
+      (e1, delta1, subst1, bindings1) <- synthesiseInner startTime False sub gamma' omega'' goalTy
+      (e2, delta2, subst2, bindings2) <- synthesiseInner startTime False sub gamma'' omega''' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookup l delta1, lookup r delta2) of
           (Nothing, Nothing) -> do
@@ -1059,8 +1062,8 @@ G, x3 : B ⊢ C ⇒ t2 ; Δ2, x3 : B
 ----------------------------------------------------------------------------------- :: sum_elim
 G, x1 : A ⊕ B ⊢ C ⇒ case x1 of inl x2 → t1 | inr x3 → t2 ; (Δ1 ⊔ Δ2), x1 : A ⊕ B
 -}
-sumElimHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
-  (sumElimHelper (var:left) right gamma add goalTy) `try`
+sumElimHelper startTime left (var@(x, a):right) gamma add@(Additive mode) goalTy =
+  sumElimHelper startTime (var:left) right gamma add goalTy `try`
   let omega = left ++ right in do
   (canUse, omega', t) <- useVar var omega add
   case (canUse, a) of
@@ -1070,8 +1073,8 @@ sumElimHelper left (var@(x, a):right) gamma (add@(Additive mode)) goalTy =
       --omega1 <- ctxtSubtract omega omega'
       let (gamma', omega'') = bindToContext (l, Linear t1) gamma omega (isLAsync t1)
       let (gamma'', omega''') = bindToContext (r, Linear t2) gamma omega (isLAsync t2)
-      (e1, delta1, subst1, bindings1) <- synthesiseInner False add gamma' omega'' goalTy
-      (e2, delta2, subst2, bindings2) <- synthesiseInner False add gamma'' omega''' goalTy
+      (e1, delta1, subst1, bindings1) <- synthesiseInner startTime False add gamma' omega'' goalTy
+      (e2, delta2, subst2, bindings2) <- synthesiseInner startTime False add gamma'' omega''' goalTy
       subst <- conv $ combineSubstitutions nullSpanNoFile subst1 subst2
       case (lookupAndCutout l delta1, lookupAndCutout r delta2) of
           (Just (delta1', Linear _), Just (delta2', Linear _)) -> do
@@ -1087,66 +1090,70 @@ linearVars ((x, Discharged{}):xs) = linearVars xs
 linearVars [] = []
 
 synthesiseInner :: (?globals :: Globals)
-           => Bool               -- Does this call immediately follow a dereliction?
+           => Clock.TimeSpec
+           -> Bool               -- Does this call immediately follow a dereliction?
            -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
            -> Ctxt Assumption    -- (unfocused) free variables
            -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-synthesiseInner inDereliction resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') = do
+synthesiseInner startTime inDereliction resourceScheme gamma omega goalTy@(Forall _ binders _ goalTy') = do
   debugM "synthDebug" $ "Synth inner with gamma = " ++ pretty gamma ++ ", and omega = "
                       ++ pretty omega ++ ", for goal = " ++ pretty goalTy
                       ++ ", isRAsync goalTy = " ++ show (isRAsync goalTy')
                       ++ ", isAtomic goalTy = " ++ show (isAtomic goalTy')
-
-  case (isRAsync goalTy', linearVars omega) of
-    (True, _) ->
-      -- Right Async : Decompose goalTy until synchronous
-      absHelper gamma omega resourceScheme goalTy `try` none
-    (False, x:xs) ->
-      -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
-      unboxHelper [] omega gamma resourceScheme goalTy
-      `try`
-      pairElimHelper [] omega gamma resourceScheme goalTy
-      `try`
-      sumElimHelper [] omega gamma resourceScheme goalTy
-      `try`
-      unitElimHelper [] omega gamma resourceScheme goalTy
-      `try`
-      if inDereliction then do
-        none
-      else
-       derelictionHelper [] omega gamma resourceScheme goalTy
-    (False, []) ->
-      (if not (isAtomic goalTy') then
-          -- Right Sync : Focus on goalTy when goalTy is not atomic
-          sumIntroHelper gamma resourceScheme goalTy
-          `try`
-          pairIntroHelper gamma resourceScheme goalTy
-          `try`
-          boxHelper gamma resourceScheme goalTy
-          `try`
-          unitIntroHelper gamma resourceScheme goalTy
-                `try`
-          if inDereliction then do none
-          else derelictionHelper [] omega gamma resourceScheme goalTy
-       else none)
-       -- Or can always try to do left sync:
-       `try` (do
-            -- Transition to synchronous (focused) search
-            -- Left Sync: App rule + Init rules
-            varHelper [] gamma resourceScheme goalTy
+  currentTime    <- liftIO $ Clock.getTime Clock.Monotonic
+  let elapsedTime = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec currentTime startTime)) / (10^(6 :: Integer)::Double)
+  if elapsedTime > synthTimeoutMillis && synthTimeoutMillis > 0 then none else
+    case (isRAsync goalTy', omega) of
+      (True, _) ->
+        -- Right Async : Decompose goalTy until synchronous
+        absHelper startTime gamma omega resourceScheme goalTy
+      (False, x:xs) ->
+        -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
+        unboxHelper startTime [] omega gamma resourceScheme goalTy
+        `try`
+        pairElimHelper startTime [] omega gamma resourceScheme goalTy
+        `try`
+        gradedPairElimHelper startTime [] omega gamma resourceScheme goalTy
+        `try`
+        sumElimHelper startTime [] omega gamma resourceScheme goalTy
+        `try`
+        unitElimHelper startTime [] omega gamma resourceScheme goalTy
+     --   `try` 
+     --   if inDereliction then
+     --     none
+     --   else
+     --     derelictionHelper startTime [] omega gamma resourceScheme goalTy
+      (False, []) ->
+        (if not (isAtomic goalTy') then
+            -- Right Sync : Focus on goalTy when goalTy is not atomic
+            sumIntroHelper startTime gamma resourceScheme goalTy
             `try`
-            appHelper [] gamma resourceScheme goalTy)
+            pairIntroHelper startTime gamma resourceScheme goalTy
+            `try`
+            boxHelper startTime gamma resourceScheme goalTy
+            `try`
+            unitIntroHelper gamma resourceScheme goalTy
+      --            `try` 
+       --     if inDereliction then none
+       --     else derelictionHelper startTime [] omega gamma resourceScheme goalTy
+         else none)
+        -- Or can always try to do left sync:
+        `try` (
+              varHelper [] gamma resourceScheme goalTy
+              `try`
+              appHelper startTime [] gamma resourceScheme goalTy)
 
 synthesise :: (?globals :: Globals)
-           => ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
+           => Clock.TimeSpec
+           -> ResourceScheme AltOrDefault      -- whether the synthesis is in additive mode or not
            -> Ctxt Assumption    -- (unfocused) free variables
            -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
-synthesise resourceScheme gamma omega goalTy = do
-  result@(expr, ctxt, subst, bindings) <- synthesiseInner False resourceScheme gamma omega goalTy
+synthesise startTime resourceScheme gamma omega goalTy = do
+  result@(expr, ctxt, subst, bindings) <- synthesiseInner startTime False resourceScheme gamma omega goalTy
   case resourceScheme of
     Subtractive{} -> do
       -- All linear variables should be gone
