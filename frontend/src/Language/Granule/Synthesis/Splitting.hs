@@ -219,6 +219,7 @@ getAssumConstr a =
   case a of
     (Discharged t _) -> getTypeConstr t
     (Linear t) -> getTypeConstr t
+    (Ghost t _) -> getTypeConstr t
   where
     getTypeConstr :: Type -> Maybe Id
     getTypeConstr (Type _) = Nothing

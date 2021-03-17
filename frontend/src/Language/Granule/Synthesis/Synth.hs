@@ -101,22 +101,30 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
       ctx <- ctxtSubtract gam' del
       return ((x, Discharged t g3):ctx)
     _ -> none
-    where
-      gradeSub g g' = do
-        -- g - g' = c
-        -- therefore
-        -- g = c + g'
-        (kind, _, _) <- conv $ synthKind nullSpan g
-        var <- conv $ freshTyVarInContext (mkId $ "c") kind
-        conv $ existential var kind
-        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) g') g kind)
-        -- maximality
-        varOther' <- conv $ freshIdentifierBase "cOther"
-        let varOther = mkId varOther'
-        conv $ addPredicate (Impl [(varOther, kind)]
-                                (Conj [Con $ ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar varOther) g') g kind])
-                                (Conj [Con $ ApproximatedBy nullSpanNoFile (TyVar varOther) (TyVar var) kind]))
-        return $ TyVar var
+ctxtSubtract gam ((x, Ghost t g2):del) =
+  case lookupAndCutout x gam of
+    Just (gam', Discharged t2 g1) -> do
+      g3 <- g1 `gradeSub` g2
+      ctx <- ctxtSubtract gam' del
+      return ((x, Ghost t g3) : ctx)
+    _ -> none
+
+gradeSub :: (?globals::Globals) => Type -> Type -> Synthesiser Type
+gradeSub g g' = do
+  -- g - g' = c
+  -- therefore
+  -- g = c + g'
+  (kind, _, _) <- conv $ synthKind nullSpan g
+  var <- conv $ freshTyVarInContext (mkId $ "c") kind
+  conv $ existential var kind
+  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) g') g kind)
+  -- maximality
+  varOther' <- conv $ freshIdentifierBase "cOther"
+  let varOther = mkId varOther'
+  conv $ addPredicate (Impl [(varOther, kind)]
+                          (Conj [Con $ ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar varOther) g') g kind])
+                          (Conj [Con $ ApproximatedBy nullSpanNoFile (TyVar varOther) (TyVar var) kind]))
+  return $ TyVar var
 
 ctxtMultByCoeffect :: Type -> Ctxt Assumption -> Synthesiser (Ctxt Assumption)
 ctxtMultByCoeffect _ [] = return []
@@ -158,6 +166,13 @@ ctxtMerge operator [] ((x, Discharged t g) : ctxt) = do
   ctxt' <- ctxtMerge operator [] ctxt
   return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
+-- TODO: handle new ghost variable
+ctxtMerge operator [] ((x, Ghost t g) : ctxt) = do
+  -- Left context has no `x`, so assume it has been weakened (0 gade)
+  (kind, _, _) <- conv $ synthKind nullSpan g
+  ctxt' <- ctxtMerge operator [] ctxt
+  return $ (x, Ghost t (operator (TyGrade (Just kind) 0) g)) : ctxt'
+
 --  * Cannot meet/join an empty context to one with linear assumptions
 ctxtMerge _ [] ((_, Linear t) : ctxt) = none
 
@@ -169,8 +184,28 @@ ctxtMerge operator ((x, Discharged t1 g1) : ctxt1') ctxt2 = do
         then do
           ctxt' <- ctxtMerge operator ctxt1' ctxt2'
           return $ (x, Discharged t1 (operator g1 g2)) : ctxt'
-
         else none
+
+    Just (_, Ghost{}) -> none
+
+    Just (_, Linear _) -> none -- mode mismatch
+
+    Nothing -> do
+      -- Right context has no `x`, so assume it has been weakened (0 gade)
+      ctxt' <- ctxtMerge operator ctxt1' ctxt2
+      (kind, _, _) <- conv $ synthKind nullSpan g1
+      return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
+
+ctxtMerge operator ((x, Ghost t1 g1) : ctxt1') ctxt2 = do
+  case lookupAndCutout x ctxt2 of
+    Just (ctxt2', Ghost t2 g2) ->
+      if t1 == t2 -- Just in case but should always be true
+        then do
+          ctxt' <- ctxtMerge operator ctxt1' ctxt2'
+          return $ (x, Ghost t1 (operator g1 g2)) : ctxt'
+        else none
+
+    Just (_, Discharged{}) -> none
 
     Just (_, Linear _) -> none -- mode mismatch
 
@@ -190,6 +225,7 @@ ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
         else none
 
     Just (_, Discharged{}) -> none -- mode mismatch
+    Just (_, Ghost{}) -> none -- mode mismatch
 
     Nothing -> none -- Cannot weaken a linear thing
 
@@ -203,6 +239,15 @@ ctxtAdd ((x, Discharged t1 g1):xs) ys =
     Nothing -> do
       ctxt <- ctxtAdd xs ys
       return $ (x, Discharged t1 g1) : ctxt
+    _ -> Nothing
+ctxtAdd ((x, Ghost t1 g1):xs) ys =
+  case lookupAndCutout x ys of
+    Just (ys', Ghost t2 g2) -> do
+      ctxt <- ctxtAdd xs ys'
+      return $ (x, Ghost t1 (TyInfix TyOpPlus g1 g2)) : ctxt
+    Nothing -> do
+      ctxt <- ctxtAdd xs ys
+      return $ (x, Ghost t1 g1) : ctxt
     _ -> Nothing
 ctxtAdd ((x, Linear t1):xs) ys =
   case lookup x ys of
@@ -258,12 +303,26 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
       return (True, replace gamma name (Discharged t (TyVar var)), t)
     False -> do
       return (False, [], t)
+useVar (name, Ghost t grade) gamma Subtractive{} = do
+  (kind, _, _) <- conv $ synthKind nullSpan grade
+  var <- conv $ freshTyVarInContext (mkId $ "c") kind
+  conv $ existential var kind
+  conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyGrade (Just kind) 0)) grade kind)
+  res <- solve
+  case res of
+    True -> do
+      return (True, replace gamma name (Ghost t (TyVar var)), t)
+    False -> do
+      return (False, [], t)
 
 -- Additive
 useVar (name, Linear t) _ Additive{} = return (True, [(name, Linear t)], t)
 useVar (name, Discharged t grade) _ Additive{} = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
   return (True, [(name, (Discharged t (TyGrade (Just kind) 1)))], t)
+useVar (name, Ghost t grade) _ Additive{} = do
+  (kind, _, _) <- conv $ synthKind nullSpan grade
+  return (True, [(name, (Ghost t (TyGrade (Just kind) 1)))], t)
 
 
 type Bindings = [(Id, (Id, Type))]
@@ -1024,7 +1083,12 @@ synthesise resourceScheme gamma omega goalTy = do
                       Discharged _ grade -> do
                         (kind, _, _) <-  conv $ synthKind nullSpan grade
                         conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
-                        solve) ctxt
+                        solve
+                      Ghost _ grade -> do
+                        (kind, _, _) <-  conv $ synthKind nullSpan grade
+                        conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
+                        solve
+                       ) ctxt
       if and consumed
         then return (expr, ctxt, subst)
         else none
@@ -1036,6 +1100,14 @@ synthesise resourceScheme gamma omega goalTy = do
                     case lookup id ctxt of
                       Just (Linear{}) -> return True;
                       Just (Discharged _ gradeUsed) ->
+                        case a of
+                          Discharged _ gradeSpec -> do
+                            (kind, _, _) <- conv $ synthKind nullSpan gradeUsed
+                            conv $ addConstraint (ApproximatedBy nullSpanNoFile gradeUsed gradeSpec kind)
+                            solve
+                          _ -> return False
+                      -- TODO: handling of new ghost variables
+                      Just (Ghost _ gradeUsed) ->
                         case a of
                           Discharged _ gradeSpec -> do
                             (kind, _, _) <- conv $ synthKind nullSpan gradeUsed

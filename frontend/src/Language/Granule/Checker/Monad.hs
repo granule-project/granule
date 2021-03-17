@@ -84,19 +84,23 @@ runAll f xs = do
 data Assumption
   = Linear     Type
   | Discharged Type Coeffect
+  | Ghost      Type Coeffect
     deriving (Eq, Show)
 
 getAssumptionType :: Assumption -> Type
 getAssumptionType (Linear t) = t
 getAssumptionType (Discharged t _) = t
+getAssumptionType (Ghost t c) = t
 
 instance Term Assumption where
   freeVars (Linear t) = freeVars t
   freeVars (Discharged t c) = freeVars t ++ freeVars c
+  freeVars (Ghost t c) = freeVars t ++ freeVars c
 
 instance Pretty Assumption where
     pretty (Linear ty) = pretty ty
     pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
+    pretty (Ghost t c) = "ghost(" <> pretty t <> "," <> pretty c <> ")"
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
    pretty (a, b) = pretty a <> " : " <> pretty b

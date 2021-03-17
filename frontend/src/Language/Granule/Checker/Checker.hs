@@ -18,6 +18,7 @@ import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
+import Data.List (partition)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -436,6 +437,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     assumptionToType :: (Id, Assumption) -> Type
     assumptionToType (_, Linear t) = t
     assumptionToType (_, Discharged t _) = t
+    assumptionToType (_, Ghost t _) = t
 
 -- Polarities are used to understand when a type is
 -- `expected` vs. `actual` (i.e., for error messages)
@@ -1060,6 +1062,11 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
        let elaborated = Val s ty rf (Var ty x)
        return (ty, [(x, Discharged ty (TyGrade (Just k) 1))], subst, elaborated)
 
+     Just (Ghost ty c) -> do
+       (k, subst, _) <- synthKind s c
+       let elaborated = Val s ty rf (Var ty x)
+       return (ty, [(x, Ghost ty (TyGrade (Just k) 1))], subst, elaborated)
+
 -- Specialised application for scale
 {- TODO: needs thought -}
 synthExpr defs gam pol
@@ -1406,6 +1413,13 @@ ctxtApprox s ctxt1 ctxt2 = do
                -- TODO: deal with the subst here
                _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
                return id
+             -- TODO: handle new ghost variables
+             Ghost t c -> do
+               -- TODO: deal with the subst here
+               (kind, subst, _) <- synthKind s c
+               -- TODO: deal with the subst here
+               _ <- relateByAssumption s ApproximatedBy (id, Ghost t (TyGrade (Just kind) 0)) (id, ass2)
+               return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
   forM_ ctxt1 $ \(id, ass1) ->
@@ -1443,6 +1457,13 @@ ctxtEquals s ctxt1 ctxt2 = do
                (kind, _, _) <- synthKind s c
                -- TODO: deal with the subst here
                _ <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
+               return id
+             -- TODO: handle new ghost variables
+             Ghost t c -> do
+               -- TODO: deal with the subst here
+               (kind, _, _) <- synthKind s c
+               -- TODO: deal with the subst here
+               _ <- relateByAssumption s Eq (id, Ghost t (TyGrade (Just kind) 0)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1517,6 +1538,11 @@ intersectCtxtsWithWeaken s a b = do
         -- TODO: deal with the subst here
        (kind, _, _) <- synthKind s c
        return (var, Discharged t (TyGrade (Just kind) 0))
+   weaken (var, Ghost t c) = do
+       -- TODO: handle new ghost variables
+       -- TODO: do we want to weaken ghost variables?
+       (kind, _, _) <- synthKind s c
+       return (var, Ghost t (TyGrade (Just kind) 0))
 
 {- | Given an input context and output context, check the usage of
      variables in the output, returning a list of usage mismatch
@@ -1530,9 +1556,16 @@ checkLinearity ((v, Linear _):inCtxt) outCtxt =
     Just Linear{} -> checkLinearity inCtxt outCtxt
     -- Bad: linear variable was discharged (boxed var but binder not unboxed)
     Just Discharged{} -> LinearUsedNonLinearly v : checkLinearity inCtxt outCtxt
+    -- TODO: handle new ghost variables
+    Just Ghost{} -> LinearUsedNonLinearly v : checkLinearity inCtxt outCtxt
     Nothing -> LinearNotUsed v : checkLinearity inCtxt outCtxt
 
 checkLinearity ((_, Discharged{}):inCtxt) outCtxt =
+  -- Discharged things can be discarded, so it doesn't matter what
+  -- happens with them
+  checkLinearity inCtxt outCtxt
+-- TODO: handle new ghost variables
+checkLinearity ((_, Ghost{}):inCtxt) outCtxt =
   -- Discharged things can be discarded, so it doesn't matter what
   -- happens with them
   checkLinearity inCtxt outCtxt
@@ -1620,6 +1653,14 @@ freshVarsIn s vars ctxt = do
       -- and the new type variable
       return ((var, Discharged t (TyVar cvar)), Just (cvar, ctype))
 
+    -- TODO: handle new ghost variables
+    toFreshVar (var, Ghost t c) = do
+      (ctype, _, _) <- synthKind s c
+      freshName <- freshIdentifierBase (internalName var)
+      let cvar = mkId freshName
+      modify (\s -> s { tyVarContext = (cvar, (ctype, InstanceQ)) : tyVarContext s })
+      return ((var, Ghost t (TyVar cvar)), Just (cvar, ctype))
+
     toFreshVar (var, Linear t) = return ((var, Linear t), Nothing)
 
 
@@ -1647,6 +1688,12 @@ extCtxt s ctxt var (Linear t) = do
           (k, subst, cElaborated) <- synthKind s c
           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+    Just (Ghost t' c) ->
+       if t == t'
+         then do
+          (k, subst, cElaborated) <- synthKind s c
+          return $ replace ctxt var (Ghost t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
+         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Linear t) : ctxt
 
 extCtxt s ctxt var (Discharged t c) = do
@@ -1655,6 +1702,29 @@ extCtxt s ctxt var (Discharged t c) = do
     Just (Discharged t' c') ->
         if t == t'
         then return $ replace ctxt var (Discharged t' (TyInfix TyOpPlus c c'))
+        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+    Just (Ghost t' c') ->
+        if t == t'
+        then return $ replace ctxt var (Ghost t' (TyInfix TyOpPlus c c'))
+        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+    Just (Linear t') ->
+        if t == t'
+        then do
+          (k, subst, cElaborated) <- synthKind s c
+          return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
+        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+    Nothing -> return $ (var, Discharged t c) : ctxt
+
+extCtxt s ctxt var (Ghost t c) = do
+
+  case lookup var ctxt of
+    Just (Discharged t' c') ->
+        if t == t'
+        then return $ replace ctxt var (Discharged t' (TyInfix TyOpPlus c c'))
+        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+    Just (Ghost t' c') ->
+        if t == t'
+        then return $ replace ctxt var (Ghost t' (TyInfix TyOpPlus c c'))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Just (Linear t') ->
         if t == t'
@@ -1773,18 +1843,19 @@ programSynthesise ctxt vars ty patternss = do
         debugM "Synthesiser" $ "Synthesised: " <> pretty t
         return (pattern, t)
 
--- | Create a ghost variable context. Use in `case` and
+allGhostVariables :: Ctxt Assumption -> Ctxt Assumption
+allGhostVariables = filter isGhost
+
 freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
-  varGhost <- freshIdentifierBase "ghost"
-  -- return a singleton context giving the ghost variable a type ".Ghost" which
-  -- cannot come from user code (could be anything)
-  return [(mkId varGhost, Discharged (TyCon $ mkId ".Ghost") (TyGrade Nothing 1))]
+  return [(mkId ".var.ghost", Ghost (tyCon ".ghost") (tyCon "Public"))]
 
--- | Filter context to select only ghost variables
-allGhostVariables :: Ctxt Assumption -> Ctxt Assumption
-allGhostVariables =
-    filter isGhost
-  where
-    isGhost (_, Discharged (TyCon (internalName -> ".Ghost")) _) = True
-    isGhost _ = False
+ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
+ghostVariableContextMeet env =
+  let (env',ghosts) = partition isGhost env
+      newGrade      = foldr (TyInfix TyOpMeet) (tyCon "Public") $ map ((\(Discharged _ ce) -> ce) . snd) ghosts
+  in do return $ (mkId ".var.ghost", Ghost (tyCon ".type.ghost") newGrade) : env'
+
+isGhost :: (a, Assumption) -> Bool
+isGhost (_, Ghost _ _) = True
+isGhost _ = False

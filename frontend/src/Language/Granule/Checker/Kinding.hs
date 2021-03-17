@@ -591,6 +591,9 @@ synthKindAssumption _ (Linear _) = return (Nothing, [])
 synthKindAssumption s (Discharged _ c) = do
   (t, subst, _) <- synthKind s c
   return (Just t, subst)
+synthKindAssumption s (Ghost _ c) = do
+  (t, subst, _) <- synthKind s c
+  return (Just t, subst)
 
 -- Find the most general unifier of two coeffects
 -- This is an effectful operation which can update the coeffect-kind

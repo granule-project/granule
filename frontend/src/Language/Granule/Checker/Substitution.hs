@@ -194,6 +194,10 @@ substAssumption subst (v, Discharged t c) = do
     t <- substitute subst t
     c <- substitute subst c
     return (v, Discharged t c)
+substAssumption subst (v, Ghost t c) = do
+    t <- substitute subst t
+    c <- substitute subst c
+    return (v, Discharged t c)
 
 -- | Get a fresh polymorphic instance of a type scheme and list of instantiated type variables
 -- and their new names.
