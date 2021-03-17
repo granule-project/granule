@@ -1587,8 +1587,25 @@ relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
   addConstraint (rel s (inj1 c1) (inj2 c2) kind)
   return subst
 
+-- TODO: handle new ghost variables
+relateByAssumption s rel (_, Ghost _ c1) (_, Ghost _ c2) = do
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
+  return subst
+relateByAssumption s rel (_, Ghost _ c1) (_, Discharged _ c2) = do
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
+  return subst
+relateByAssumption s rel (_, Discharged _ c1) (_, Ghost _ c2) = do
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
+  return subst
+
+
 -- Linear binding and a graded binding (likely from a promotion)
-relateByAssumption s _ (idX, _) (idY, _) =
+relateByAssumption s _ (idX, xc) (idY, yc) = do
+  debugM "relateByAssumption" (pretty s <> ", " <> pretty idX <> ", " <> pretty idY)
+  debugM "relateByAssumption" (pretty xc <> ", " <> pretty yc)
   if idX == idY
     then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
     else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
@@ -1608,6 +1625,12 @@ relateByLUB _ (_, Linear _) (_, Linear _) (_, Linear _) = return []
 
 -- Discharged coeffect assumptions
 relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = do
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
+  return subst
+
+-- TODO: handle new ghost variables
+relateByLUB s (_, Ghost _ c1) (_, Ghost _ c2) (_, Ghost _ c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
   addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
   return subst
