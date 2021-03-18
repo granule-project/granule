@@ -21,8 +21,18 @@ import Control.Monad.State
 --import Debug.Trace
 
 -- Represent symbolic values in the heap semantics
-data Symbolic = Symbolic Id | Chan [Value Symbolic ()]
+data Symbolic = Symbolic Id | Chan [Expr Symbolic ()]
   deriving Show
+
+isChan :: Expr Symbolic b -> Bool
+isChan (Val _ _ _ (Ext _ (Chan _))) = True
+isChan _ = False
+
+isChanInHeap :: Id -> Heap -> Bool
+isChanInHeap x heap =
+  case lookup x heap of
+    Nothing -> False
+    Just (_, expr) -> isChan expr
 
 instance Pretty Symbolic where
   pretty (Symbolic x) = "?" ++ internalName x
@@ -122,18 +132,21 @@ smallHeapRedux :: (?globals :: Globals)
               -> State ([Process], Integer) (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 
 -- [Small-Var]
-smallHeapRedux defs heap t@(Val _ _ _ (Var _ x)) r = do
+smallHeapRedux defs heap t@(Val _ _ _ (Var _ x)) r | not (isChanInHeap x heap) = do
   case lookupAndCutout x heap of
     Just (heap', (rq, aExpr)) ->
-    --Just (heap', (rq, (gamma, aExpr, aType))) ->
-      let
-        gammaOut    = []
-        resourceOut = [(x, r)]
-        -- Represent (possibly undefined resource minus here)
-        --heapHere    = (x, (TyInfix TyOpMinus rq r, (gamma, aExpr, aType)))
-        heapHere    = (x, (TyInfix TyOpMinus rq r, aExpr))
+      if isChan aExpr 
+        then return (t, (heap, [], []))
+        else
+          --Just (heap', (rq, (gamma, aExpr, aType))) ->
+            let
+              gammaOut    = []
+              resourceOut = [(x, r)]
+              -- Represent (possibly undefined resource minus here)
+              --heapHere    = (x, (TyInfix TyOpMinus rq r, (gamma, aExpr, aType)))
+              heapHere    = (x, (TyInfix TyOpMinus rq r, aExpr))
 
-      in return (aExpr, (heapHere : heap', resourceOut , gammaOut))
+            in return (aExpr, (heapHere : heap', resourceOut , gammaOut))
 
     -- Heap does not contain the variable, so maybe it's a definition we are
     -- getting
@@ -196,9 +209,22 @@ smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _
 
 -- COMMUNICATION MODELS
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "forkLinear'"))) e) r | isValueExpr e = do
+  v <- freshVariable (mkId "c")
   let chan = Val s' a' b' (Ext () (Chan []))
-  fork (App s a b e chan)
-  return (chan, (heap, [], []))
+  let chanVar = Val s' a' b' (Var () v)
+  fork (App s a b e (Val s' a' b' (Promote a' chanVar)))
+  return (chanVar, ((v, (TyGrade Nothing 1, chan)) : heap, [], []))
+
+smallHeapRedux defs heap t@(App s a b (UApp (UVal (UVar (internalName -> "send'"))) chan@(UVal (UVar c))) e) r =
+  case lookupAndCutout c heap of
+    Nothing -> return (t, (heap, [], []))
+    Just (heap', (rq, (Val _ _ _ (Ext _ (Chan queue))))) -> do
+      -- send on the channel
+      let heap'' = (c, (rq, (Val s () True $ Ext () $ Chan (queue ++ [e])))) : heap'
+      let resourceOut = [(c, r)]
+      return (chan, (heap'', resourceOut, []))
+    Just _ -> 
+      return (t, (heap, [], []))
 
 -- [Small-AppL]
 smallHeapRedux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
@@ -273,7 +299,8 @@ smallHeapRedux defs heap (Case s a b e ps) r = do
   return (Case s a b e' ps, (h, resourceOut, gammaOut))
 
 smallHeapRedux defs heap (Val s a b (Promote a' e)) r = do
-  return (e, (heap, [], []))
+  (e', env) <- smallHeapRedux defs heap e r
+  return (e', env)
 
 -- -- [Value]
 -- smallHeapRedux defs heap (App _ _ _ (Val s' a' b' (Constr a'' id es)) e) r =

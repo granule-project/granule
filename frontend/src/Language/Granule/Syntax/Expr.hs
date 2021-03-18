@@ -136,6 +136,27 @@ pattern Case sp a rf swexp arms = (ExprFix2 (CaseF sp a rf swexp arms))
 pattern Hole sp a rf vs = ExprFix2 (HoleF sp a rf vs)
 {-# COMPLETE App, Binop, LetDiamond, TryCatch, Val, Case, Hole #-}
 
+-- Unadorned expression patterns
+pattern UApp fexp argexp <- (ExprFix2 (AppF sp a rf fexp argexp))
+pattern UAppTy fexp ty <- (ExprFix2 (AppTyF sp a rf fexp ty))
+pattern UBinop lhs rhs <- (ExprFix2 (BinopF sp a rf op lhs rhs))
+pattern ULetDiamond pat mty nowexp nextexp <- (ExprFix2 (LetDiamondF sp a rf pat mty nowexp nextexp))
+pattern UTryCatch t1 pat mty t2 t3 <- (ExprFix2 (TryCatchF sp a rf t1 pat mty t2 t3))
+pattern UVal val <- (ExprFix2 (ValF sp a rf val))
+pattern UCase swexp arms <- (ExprFix2 (CaseF sp a rf swexp arms))
+pattern UHole vs <- ExprFix2 (HoleF sp a rf vs)
+-- Unadorned value expressions
+pattern UAbs arg mty ex <- (ExprFix2 (AbsF a arg mty ex))
+pattern UPromote ex <- (ExprFix2 (PromoteF a ex))
+pattern UPure ex <- (ExprFix2 (PureF a ex))
+pattern UConstr ident vals <- (ExprFix2 (ConstrF a ident vals))
+pattern UVar ident <- (ExprFix2 (VarF a ident))
+pattern UNumInt n <- (ExprFix2 (NumIntF n))
+pattern UNumFloat n <- (ExprFix2 (NumFloatF n))
+pattern UCharLiteral ch <- (ExprFix2 (CharLiteralF ch))
+pattern UStringLiteral str <- (ExprFix2 (StringLiteralF str))
+pattern UExt extv <- (ExprFix2 (ExtF a extv))
+
 -- Cannot be automatically derived unfortunately
 instance Functor (Value ev) where
   fmap f (Abs a pats mt e) = Abs (f a) (fmap f pats) mt (fmap f e)
