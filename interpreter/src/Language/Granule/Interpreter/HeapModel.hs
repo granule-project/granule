@@ -280,8 +280,23 @@ smallHeapRedux defs heap (Val s a b (Promote a' e)) r = do
 --   return $ (Val s' a' b' (Constr a'' id (es ++ [e])), (heap, [], []))
 
 -- Catch all
-smallHeapRedux _ heap e t =
-  return (e, (heap, [], []))
+smallHeapRedux defs heap e t = do
+  -- No reduction can be done on `e` so let's try a concurrent process
+  (processes, n) <- get
+  case processes of
+    [] -> -- No processes so just return this one
+      return (e, (heap, [], []))
+    (p:processes') -> do
+      -- Remove this process for now
+      put (processes', n)
+      -- Try to reduce it
+      (p', env) <- smallHeapRedux defs heap p t
+      -- Get the current state and add this process to the back
+      (processes'', m) <- get
+      put (processes'' ++ [p'], m)
+      --
+      return (e, env)
+
 
 -- Corresponds to H |- t |> p ~> H'
 smallPatternMatch :: Heap ->  Expr Symbolic () -> Pattern () -> Maybe Heap
