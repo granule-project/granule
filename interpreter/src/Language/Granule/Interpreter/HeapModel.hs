@@ -14,17 +14,19 @@ import Language.Granule.Utils
 import Language.Granule.Interpreter.Desugar
 
 import Data.Foldable
+import Data.List (intercalate)
 
 import Control.Monad.State
 
 --import Debug.Trace
 
 -- Represent symbolic values in the heap semantics
-data Symbolic = Symbolic Id
+data Symbolic = Symbolic Id | Chan [Value Symbolic ()]
   deriving Show
 
 instance Pretty Symbolic where
   pretty (Symbolic x) = "?" ++ internalName x
+  pretty (Chan xs) = "<" ++ intercalate "," (map pretty xs) ++ ">"
 
 -- Some type alises
 type Val   = Value Symbolic ()
@@ -32,6 +34,8 @@ type Grade = Type
 -- Heap map
 type Heap = Ctxt (Grade, Expr Symbolic ())
   -- Ctxt (Grade, (Ctxt Type, Expr () (), Type))
+
+type Process = Expr Symbolic ()
 
 isSVal :: Expr Symbolic () -> Bool
 isSVal (Val _ _ _ (Ext _ (Symbolic _))) = True
@@ -58,17 +62,18 @@ heapEvalJustExprAndReport :: (?globals :: Globals) => [Def Symbolic ()] -> Expr 
 heapEvalJustExprAndReport defs e steps =
     Just (report res)
   where
-    res = evalState (heapEvalJustExpr defs e steps) 0
+    (res, (processes, _)) = runState (heapEvalJustExpr defs e steps) ([], 0)
     report (expr, (heap, grades, inner)) =
         "Expr = " ++ pretty expr
        ++ "\n Heap = " ++ prettyHeap heap
        ++ "\n Output grades = " ++ pretty grades
-       ++ "\n Embedded context = " ++ pretty inner
+       ++ "\n Processes = " ++ intercalate " | " (map pretty processes)
+       -- ++ "\n Embedded context = " ++ pretty inner
        ++ "\n"
     prettyHeap = pretty
 
 heapEvalJustExpr :: (?globals :: Globals)
-   => [Def Symbolic ()] -> Expr Symbolic () ->  Int -> State Integer (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
+   => [Def Symbolic ()] -> Expr Symbolic () ->  Int -> State ([Process], Integer) (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 heapEvalJustExpr defs e steps =
   multiSmallHeapRedux defCtxt heap e' (TyGrade Nothing 1) steps
    where
@@ -101,7 +106,7 @@ ctxtPlusZip ((i, g) : ctxt) ctxt' =
 
 -- Multi-step relation
 multiSmallHeapRedux :: (?globals :: Globals)
-   => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> Int -> State Integer (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
+   => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> Int -> State ([Process], Integer) (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 multiSmallHeapRedux defs heap e r 0 = return (e, (heap, [], []))
 multiSmallHeapRedux defs heap e r steps = do
   res@(b1, (heap', u', gamma1)) <- smallHeapRedux defs heap e r
@@ -110,7 +115,11 @@ multiSmallHeapRedux defs heap e r steps = do
 
 -- Functionalisation of the main small-step reduction relation
 smallHeapRedux :: (?globals :: Globals)
-               => Ctxt (Def Symbolic ()) -> Heap -> Expr Symbolic () -> Grade -> State Integer (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
+              => Ctxt (Def Symbolic ())
+              -> Heap
+              -> Expr Symbolic ()
+              -> Grade
+              -> State ([Process], Integer) (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 
 -- [Small-Var]
 smallHeapRedux defs heap t@(Val _ _ _ (Var _ x)) r = do
@@ -187,7 +196,9 @@ smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _
 
 -- COMMUNICATION MODELS
 smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "forkLinear'"))) e) r | isValueExpr e = do
-  error $ "Eval forkLinear' now for " ++ pretty e
+  let chan = Val s' a' b' (Ext () (Chan []))
+  fork (App s a b e chan)
+  return (chan, (heap, [], []))
 
 -- [Small-AppL]
 smallHeapRedux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
@@ -297,7 +308,7 @@ smallPatternHeapStep :: (?globals :: Globals)
   -> Heap
   -> Expr Symbolic ()
   -> Pattern ()
-  -> State Integer PatternResult
+  -> State ([Process], Integer) PatternResult
 
 smallPatternHeapStep defs r h e p@(PConstr _ _ _ c ps) =
   patternZip defs r h e c (toSnocList ps)
@@ -364,7 +375,7 @@ patternZip :: (?globals :: Globals) =>
   -> Expr Symbolic ()
   -> Id
   -> SnocList (Pattern ())
-  -> State Integer PatternResult
+  -> State ([Process], Integer) PatternResult
 
 -- Constructor match
 patternZip defs r heap (Val s a b (Constr _ id' [])) id Nil | id == id' =
@@ -404,7 +415,7 @@ patternZip ::
   -> Grade
   -> Heap
   -> Id
-  -> [Expr Symbolic ()] -> [Pattern Symbolic ()] -> Expr Symbolic () -> State Integer PatternResult
+  -> [Expr Symbolic ()] -> [Pattern Symbolic ()] -> Expr Symbolic () -> State ([Process], Integer) PatternResult
 patternZip defs r h id (e:es) (p:ps) acc = do
   case smallPatternHeapStep defs r h e p of
     NoMatch   -> return NoMatch
@@ -454,11 +465,11 @@ isValue (Var _ id) =
     _ -> False
 isValue _ = False
 
-freshVariable :: Id -> State Integer Id
+freshVariable :: Id -> State ([Process], Integer) Id
 freshVariable x = do
-  st <- get
+  (ps, st) <- get
   let x' = mkId $ (internalName x) ++ "." ++ show st
-  put $ st+1
+  put $ (ps, st+1)
   return x'
 
 toHeap :: Pattern a -> Heap
@@ -466,3 +477,8 @@ toHeap (PVar _ _ _ v)       = [(v, (TyGrade Nothing 1, (Val nullSpanNoFile () Fa
 toHeap (PBox _ _ _ p)       = toHeap p
 toHeap (PConstr _ _ _ _ ps) = concatMap toHeap ps
 toHeap _ = []
+
+fork :: Expr Symbolic () -> State ([Process], Integer) ()
+fork e = do
+  (ps, n) <- get
+  put (e : ps, n)
