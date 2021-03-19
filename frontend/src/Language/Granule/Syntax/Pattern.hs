@@ -34,6 +34,7 @@ instance Term (Pattern a) where
   freeVars _ = []
   hasHole _ = False
 
+  isLexicallyAtomic (PConstr _ _ _ id pats) | internalName id == ", " || internalName id == "," = True
   isLexicallyAtomic (PConstr _ _ _ _ pats) = null pats
   isLexicallyAtomic _  = True
 
