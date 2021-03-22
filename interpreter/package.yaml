@@ -18,6 +18,7 @@ dependencies:
 - text
 - logict == 0.7.0.2
 - clock
+- transformers >=0.5
 
 default-extensions:
 - LambdaCase
@@ -59,6 +60,7 @@ executables:
     ghc-options: -main-is Language.Granule.Interpreter
     dependencies:
     - granule-interpreter
+    - transformers >=0.5
 
 tests:
   gr-golden:

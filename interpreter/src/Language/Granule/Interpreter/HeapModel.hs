@@ -17,6 +17,7 @@ import Data.Foldable
 import Data.List (intercalate)
 
 import Control.Monad.State
+import Control.Monad.Trans.Maybe
 
 -- import Debug.Trace
 
@@ -132,12 +133,27 @@ smallHeapRedux :: (?globals :: Globals)
               -> Grade
               -> State ([Process], Integer) (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
 
+smallHeapRedux defs heap t r = do
+  res <- runMaybeT (smallHeapReduxAux defs heap t r)
+  case res of
+    -- No reduction so try to reduce one of the parallel processes
+    Nothing -> smallHeapReduxPar defs heap t r
+    -- Redux
+    Just res' -> return res'
+
+smallHeapReduxAux :: (?globals :: Globals)
+              => Ctxt (Def Symbolic ())
+              -> Heap
+              -> Expr Symbolic ()
+              -> Grade
+              -> MaybeT (State ([Process], Integer)) (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
+
 -- [Small-Var]
-smallHeapRedux defs heap t@(Val _ _ _ (Var _ x)) r | not (isChanInHeap x heap) = do
+smallHeapReduxAux defs heap t@(Val _ _ _ (Var _ x)) r | not (isChanInHeap x heap) = do
   case lookupAndCutout x heap of
     Just (heap', (rq, aExpr)) ->
       if isChan aExpr
-        then return (t, (heap, [], []))
+        then noRedux
         else
           --Just (heap', (rq, (gamma, aExpr, aType))) ->
             let
@@ -154,7 +170,7 @@ smallHeapRedux defs heap t@(Val _ _ _ (Var _ x)) r | not (isChanInHeap x heap) =
     Nothing ->
       case lookup x defs of
         -- Possibly a built in
-        Nothing -> return (t, (heap, [], []))
+        Nothing -> noRedux
         -- Since the desugaring has been run there should be only one equations
         Just (Def _ _ _ (EquationList _ _ _ [Equation _ _ _ _ [] expr]) _) ->
           -- Substitute body of the function here
@@ -163,57 +179,57 @@ smallHeapRedux defs heap t@(Val _ _ _ (Var _ x)) r | not (isChanInHeap x heap) =
           error $ "Internal bug: def was in the wrong format for the heap model: " ++ pretty d
 
 -- -- [Small-AppBeta] adapted to a Granule graded beta redux, e.g., (\[x] -> a) [b]
-smallHeapRedux defs heap
+smallHeapReduxAux defs heap
     (App _ _ _ (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ y)) (Just (Box q aType')) a)) (Val s _ _ (Promote _ b))) r = do
   --
-  x <- freshVariable y
+  x <- freshVariable' y
   --
   let heap' = (x, (TyInfix TyOpTimes r q, b)) : heap
   return (subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , TyInfix TyOpTimes r q)]))
 
 -- [Small-AppBeta] [NO GRADE ANNOTATIONS] adapted to a Granule graded beta redux, e.g., (\[x] -> a) [b]
-smallHeapRedux defs heap
+smallHeapReduxAux defs heap
     (App _ _ _ (Val _ _ _ (Abs _ (PBox _ _ _ (PVar _ _ _ y)) _ a)) (Val s _ _ (Promote _ b))) r = do
   --
-  x <- freshVariable y
+  x <- freshVariable' y
   --
   let heap' = (x, (r, b)) : heap
   return (subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))
 
 -- [Small-AppBetaLinear] - Linear beta-redux, because Granule
-smallHeapRedux defs heap
+smallHeapReduxAux defs heap
     (App _ _ _ (Val s _ _ (Abs _ (PVar _ _ _ y) _ a)) b) r = do
   --
-  x <- freshVariable y
+  x <- freshVariable' y
   --
   let heap' = (x, (r, b)) : heap
   return (subst (Val s () False (Var () x)) y a, (heap' , ctxtMap (const (TyGrade Nothing 0)) heap, [(x , r)]))
 
 -- [BETA]
-smallHeapRedux defs heap
+smallHeapReduxAux defs heap
    t@(App s a b (Val s' a' b' (Abs a'' p mt e)) e') r = do
       case smallPatternMatch heap e' p of
         Nothing -> do
           -- Cannot match so do a pattern step eval instead
           mres <- smallPatternHeapStep defs r heap e' p
           case mres of
-            NoMatch -> return (t, (heap, [], [])) -- cannot do anything
-            Match heap' -> return (e, (heap', [], []))
+            NoMatch -> noRedux -- cannot do anything
+            Match heap' -> return  (e, (heap', [], []))
             Step heap' e'' out ->
               return (App s a b (Val s' a' b' (Abs a'' p mt e)) e'', (heap', out, []))
         Just heap' -> return (e, (heap', [], []))
 
 
 -- [App Value - constr beta / turns an application into a 'constr' term]
-smallHeapRedux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
+smallHeapReduxAux defs heap (App s a b (Val s' a' b' (Constr a'' id vs)) (Val _ _ _ v)) r | isValue v =
   return (Val s' a' b' (Constr a'' id (vs ++ [v])), (heap, [], []))
 
 
 -- COMMUNICATION MODELS
-smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "forkLinear'"))) e) r = do
+smallHeapReduxAux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "forkLinear'"))) e) r = do
 
   -- Name/'pointer' for the channel
-  v <- freshVariable (mkId "c")
+  v <- freshVariable' (mkId "c")
 
   -- Make a new channel and put it in the heap
   let chan = Val s' a' b' (Ext () (Chan []))
@@ -223,61 +239,54 @@ smallHeapRedux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "forkL
   let chanPointer = Val s' a' b' (Ext () (ChanPointer v))
 
   -- Fork the process
-  fork (App s a b e (Val s' a' b' (Promote a' chanPointer)))
+  lift $ fork (App s a b e (Val s' a' b' (Promote a' chanPointer)))
 
   -- Return
   return (chanPointer, (localHeap ++ heap, [], []))
 
-smallHeapRedux defs heap t@(App s a b (UApp (UVal (UVar (internalName -> "send'"))) chan@(UVal (Ext () (ChanPointer chanPointer)))) e) r =
-  case lookupAndCutout chanPointer heap of
-    Nothing -> return (t, (heap, [], []))
-    Just (heap', (rq, (Val _ _ _ (Ext _ (Chan queue))))) -> do
-      -- send on the channel
-      let heap'' = (chanPointer, (rq, (Val s () True $ Ext () $ Chan (queue ++ [e])))) : heap'
-      return (chan, (heap'', [], []))
-    Just _ ->
-      return (t, (heap, [], []))
-
-
-smallHeapRedux defs heap t@(App s a b (Val s' a' b' (Var _ (internalName -> "recv"))) chan@(UVal (Ext () (ChanPointer chanPointer)))) r = do
-  case lookupAndCutout chanPointer heap of
-    Nothing ->
-      return (t, (heap, [], []))
-
-    -- nothing to receive yet
-    Just (heap', (rq, (Val _ _ _ (Ext _ (Chan []))))) ->
-      return (t, (heap, [], []))
-
-    Just (heap', (rq, (Val ss () bb (Ext () (Chan (e:es)))))) -> do
-      let localHeap = [(chanPointer, (rq, Val ss () bb (Ext () (Chan es))))]
-      return (App s a b (App s a b (Val s a b (Constr a (mkId ",") [])) e) chan, (heap' ++ localHeap, [], []))
-
-    Just _ ->
-      return (t, (heap, [], []))
-
 -- [Small-AppL]
-smallHeapRedux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
-  res@(e1', (h, resourceOut, gammaOut)) <- smallHeapRedux defs heap e1 r
+smallHeapReduxAux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
+  res@(e1', (h, resourceOut, gammaOut)) <- smallHeapReduxAux defs heap e1 r
   return (App s a b e1' e2, (h, resourceOut, gammaOut))
 
 -- [App Value]
-smallHeapRedux defs heap (App s a b e1 e2) r | isValueExpr e1 = do
-  (e2', env) <- smallHeapRedux defs heap e2 r
-  return $ (App s a b e1 e2', env)
+smallHeapReduxAux defs heap t@(App s a b e1 e2) r | isValueExpr e1 = do
+  case (e1, e2) of
+    -- Send case
+    (UApp (UVal (UVar (internalName -> "send'"))) chan@(UVal (Ext () (ChanPointer chanPointer))), e) ->
+      case lookupAndCutout chanPointer heap of
+        Nothing -> noRedux
+        Just (heap', (rq, (Val _ _ _ (Ext _ (Chan queue))))) -> do
+          -- send on the channel
+          let heap'' = (chanPointer, (rq, (Val s () True $ Ext () $ Chan (queue ++ [e])))) : heap'
+          return (chan, (heap'', [], []))
+        Just _ -> noRedux
 
+    (Val s' a' b' (Var _ (internalName -> "recv")), chan@(UVal (Ext () (ChanPointer chanPointer)))) ->
+      case lookupAndCutout chanPointer heap of
+        Nothing -> noRedux
 
+        -- nothing to receive yet
+        Just (heap', (rq, (Val _ _ _ (Ext _ (Chan []))))) -> noRedux
 
+        Just (heap', (rq, (Val ss () bb (Ext () (Chan (e:es)))))) -> do
+          let localHeap = [(chanPointer, (rq, Val ss () bb (Ext () (Chan es))))]
+          return (App s a b (App s a b (Val s a b (Constr a (mkId ",") [])) e) chan, (heap' ++ localHeap, [], []))
 
+        Just _ -> noRedux
 
+    _ -> do
+      (e2', env) <- smallHeapReduxAux defs heap e2 r
+      return (App s a b e1 e2', env)
 
 -- [Case-Sum-Beta] Matches Left-Right patterns for either
-smallHeapRedux defs heap
+smallHeapReduxAux defs heap
    (Case s a b (App _ _ _ (Val _ _ _ (Constr _ (internalName -> constr) [])) e)
         [(PConstr _ _ _ (internalName -> "Left") [PVar _ _ _ varl], el)
         ,(PConstr _ _ _ (internalName -> "Right") [PVar _ _ _ varr], er)]) r = do
 
     -- fresh variable
-    x <- freshVariable (if constr == "Left" then varl else varr)
+    x <- freshVariable' (if constr == "Left" then varl else varr)
     --
      -- A&B and Grade determine `q` from a syntactic grade
      -- We don't have that here (we could get it out of the typing...)
@@ -294,12 +303,12 @@ smallHeapRedux defs heap
     return (eFinal, (heap' , resourceOut, embeddedCtxt))
 
 -- [Case-Product-Beta]
-smallHeapRedux defs heap
+smallHeapReduxAux defs heap
   (Case s a b (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ (internalName -> ",") [])) e1) e2)
         [(PConstr _ _ _ (internalName -> ",") [PVar _ _ _ var1, PVar _ _ _ var2], e)]) r = do
   -- fresh variables
-  x1 <- freshVariable var1
-  x2 <- freshVariable var2
+  x1 <- freshVariable' var1
+  x2 <- freshVariable' var2
   --
   let heap' = (x1, (r, e1)) : (x2, (r, e2)) : heap
   --
@@ -309,10 +318,10 @@ smallHeapRedux defs heap
   return (subst (Val s () False (Var () x1)) var1 (subst (Val s () False (Var () x2)) var2 e), (heap' , resourceOut, embeddedCtxt))
 
 -- [Case-Box-Beta]
-smallHeapRedux defs heap
+smallHeapReduxAux defs heap
   (Case s a b (Val _ _ _ (Promote _ e)) [(PBox _ _ _ (PVar _ _ _ var), e')]) r = do
   -- fresh variables
-  x <- freshVariable var
+  x <- freshVariable' var
   --
   let heap' = (x, (r, e)) : heap
   --
@@ -322,12 +331,12 @@ smallHeapRedux defs heap
   return (subst (Val s () False (Var () x)) var e', (heap' , resourceOut, embeddedCtxt))
 
 -- [Case-cong]
-smallHeapRedux defs heap (Case s a b e ps) r = do
-  res@(e', (h, resourceOut, gammaOut)) <- smallHeapRedux defs heap e r
+smallHeapReduxAux defs heap (Case s a b e ps) r = do
+  res@(e', (h, resourceOut, gammaOut)) <- smallHeapReduxAux defs heap e r
   return (Case s a b e' ps, (h, resourceOut, gammaOut))
 
-smallHeapRedux defs heap (Val s a b (Promote a' e)) r = do
-  (e', env) <- smallHeapRedux defs heap e r
+smallHeapReduxAux defs heap (Val s a b (Promote a' e)) r = do
+  (e', env) <- smallHeapReduxAux defs heap e r
   return (e', env)
 
 -- -- [Value]
@@ -335,7 +344,20 @@ smallHeapRedux defs heap (Val s a b (Promote a' e)) r = do
 --   return $ (Val s' a' b' (Constr a'' id (es ++ [e])), (heap, [], []))
 
 -- Catch all
-smallHeapRedux defs heap e t = do
+smallHeapReduxAux defs heap t r = noRedux
+
+noRedux :: Monad m => MaybeT m a
+noRedux = MaybeT $ return Nothing
+
+-- Used when no reduction can be done on the 'main' expression and instead
+-- we should try to reduce a process
+smallHeapReduxPar :: (?globals :: Globals)
+              => Ctxt (Def Symbolic ())
+              -> Heap
+              -> Expr Symbolic ()
+              -> Grade
+              -> State ([Process], Integer) (Expr Symbolic (), (Heap, Ctxt Grade, Ctxt Grade))
+smallHeapReduxPar defs heap e r = do
   -- No reduction can be done on `e` so let's try a concurrent process
   (processes, n) <- get
   case processes of
@@ -344,14 +366,17 @@ smallHeapRedux defs heap e t = do
     (p:processes') -> do
       -- Remove this process for now
       put (processes', n)
-      -- Try to reduce it
-      (p', env) <- smallHeapRedux defs heap p t
-      -- Get the current state and add this process to the back
-      (processes'', m) <- get
-      put (processes'' ++ [p'], m)
-      --
-      return (e, env)
-
+      -- Try to reduce it (using the version which won't do parallel reduction itself)
+      res <- runMaybeT $ smallHeapReduxAux defs heap p r
+      case res of
+        Just (p', env) -> do
+          -- Get the current state and add this process to the back
+          (processes'', m) <- get
+          put (processes'' ++ [p'], m)
+          --
+          return (e, env)
+        Nothing ->
+          return (e, (heap, [], []))
 
 -- Corresponds to H |- t |> p ~> H'
 smallPatternMatch :: Heap ->  Expr Symbolic () -> Pattern () -> Maybe Heap
@@ -378,7 +403,7 @@ smallPatternHeapStep :: (?globals :: Globals)
   -> Heap
   -> Expr Symbolic ()
   -> Pattern ()
-  -> State ([Process], Integer) PatternResult
+  -> MaybeT (State ([Process], Integer)) PatternResult
 
 smallPatternHeapStep defs r h e p@(PConstr _ _ _ c ps) =
   patternZip defs r h e c (toSnocList ps)
@@ -386,7 +411,7 @@ smallPatternHeapStep defs r h e p@(PConstr _ _ _ c ps) =
 smallPatternHeapStep defs r heap e p = do
   case smallPatternMatch heap e p of
     Nothing -> do
-      (e', (heap', out, _)) <- smallHeapRedux defs heap e r
+      (e', (heap', out, _)) <- smallHeapReduxAux defs heap e r
       return $ Step heap' e' out
 
     Just heap' -> return $ Match heap'
@@ -445,7 +470,7 @@ patternZip :: (?globals :: Globals) =>
   -> Expr Symbolic ()
   -> Id
   -> SnocList (Pattern ())
-  -> State ([Process], Integer) PatternResult
+  -> MaybeT (State ([Process], Integer)) PatternResult
 
 -- Constructor match
 patternZip defs r heap (Val s a b (Constr _ id' [])) id Nil | id == id' =
@@ -476,7 +501,7 @@ patternZip defs r heap (App s a b e1 e2) id (Snoc ps p) | leftMostIsConstr e1 = 
     Step heap' e1' out -> return $ Step heap' (App s a b e1' e2) out
 
 patternZip defs r heap e id ps = do
-  (e', (heap', out, _)) <- smallHeapRedux defs heap e r
+  (e', (heap', out, _)) <- smallHeapReduxAux defs heap e r
   return $ Step heap' e' out
 
 {-
@@ -533,6 +558,9 @@ isValue (Var _ id) =
     "forkLinear'" -> True
     _ -> False
 isValue _ = False
+
+freshVariable' :: Id -> MaybeT (State ([Process], Integer)) Id 
+freshVariable' = lift . freshVariable
 
 freshVariable :: Id -> State ([Process], Integer) Id
 freshVariable x = do
