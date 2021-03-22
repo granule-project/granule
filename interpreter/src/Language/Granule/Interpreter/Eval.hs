@@ -293,6 +293,7 @@ builtIns =
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
   , (mkId "use", Ext () $ Primitive $ \v -> Promote () (Val nullSpan () False v))
+
   , (mkId "drop@Int", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Char", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Float", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))

@@ -19,10 +19,10 @@ import Data.List (intercalate)
 import Control.Monad.State
 import Control.Monad.Trans.Maybe
 
--- import Debug.Trace
+--import Debug.Trace
 
 -- Represent symbolic values in the heap semantics
-data Symbolic = Symbolic Id | ChanPointer Id | Chan [Expr Symbolic ()]
+data Symbolic = Symbolic Id | ChanPointer Id | Chan (Maybe [Expr Symbolic ()])
   deriving Show
 
 isChan :: Expr Symbolic b -> Bool
@@ -37,7 +37,8 @@ isChanInHeap x heap =
 
 instance Pretty Symbolic where
   pretty (Symbolic x) = "?" ++ internalName x
-  pretty (Chan xs) = "<" ++ intercalate "," (map pretty xs) ++ ">"
+  pretty (Chan (Just xs)) = "<" ++ intercalate "," (map pretty xs) ++ ">"
+  pretty (Chan Nothing) = "|half-closed|"
   pretty (ChanPointer x) = "*" ++ pretty x
 
 -- Some type alises
@@ -232,7 +233,7 @@ smallHeapReduxAux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "fo
   v <- freshVariable' (mkId "c")
 
   -- Make a new channel and put it in the heap
-  let chan = Val s' a' b' (Ext () (Chan []))
+  let chan = Val s' a' b' (Ext () (Chan (Just [])))
   let localHeap = [(v, (TyGrade Nothing 1, chan))]
 
   -- Make chan pointer
@@ -244,40 +245,61 @@ smallHeapReduxAux defs heap (App s a b (Val s' a' b' (Var _ (internalName -> "fo
   -- Return
   return (chanPointer, (localHeap ++ heap, [], []))
 
--- [Small-AppL]
-smallHeapReduxAux defs heap (App s a b e1 e2) r | not (isValueExpr e1) = do
-  res@(e1', (h, resourceOut, gammaOut)) <- smallHeapReduxAux defs heap e1 r
-  return (App s a b e1' e2, (h, resourceOut, gammaOut))
-
+-- [Small-AppL] /
 -- [App Value]
-smallHeapReduxAux defs heap t@(App s a b e1 e2) r | isValueExpr e1 = do
+smallHeapReduxAux defs heap t@(App s a b e1 e2) r = do
   case (e1, e2) of
     -- Send case
-    (UApp (UVal (UVar (internalName -> "send'"))) chan@(UVal (Ext () (ChanPointer chanPointer))), e) ->
+    (UApp (UVal (UVar (internalName -> "send"))) chan@(UVal (Ext () (ChanPointer chanPointer))), e) ->
       case lookupAndCutout chanPointer heap of
         Nothing -> noRedux
-        Just (heap', (rq, (Val _ _ _ (Ext _ (Chan queue))))) -> do
+        Just (heap', (rq, (Val _ _ _ (Ext _ (Chan (Just queue)))))) -> do
           -- send on the channel
-          let heap'' = (chanPointer, (rq, (Val s () True $ Ext () $ Chan (queue ++ [e])))) : heap'
+          let heap'' = (chanPointer, (rq, (Val s () True $ Ext () $ Chan (Just $ queue ++ [e])))) : heap'
           return (chan, (heap'', [], []))
+        -- not in the right state
         Just _ -> noRedux
 
+    -- Receive case
     (Val s' a' b' (Var _ (internalName -> "recv")), chan@(UVal (Ext () (ChanPointer chanPointer)))) ->
       case lookupAndCutout chanPointer heap of
         Nothing -> noRedux
 
-        -- nothing to receive yet
-        Just (heap', (rq, (Val _ _ _ (Ext _ (Chan []))))) -> noRedux
-
-        Just (heap', (rq, (Val ss () bb (Ext () (Chan (e:es)))))) -> do
-          let localHeap = [(chanPointer, (rq, Val ss () bb (Ext () (Chan es))))]
+        -- something to receive
+        Just (heap', (rq, (Val ss () bb (Ext () (Chan (Just (e:es))))))) -> do
+          let localHeap = [(chanPointer, (rq, Val ss () bb (Ext () (Chan $ Just es))))]
           return (App s a b (App s a b (Val s a b (Constr a (mkId ",") [])) e) chan, (heap' ++ localHeap, [], []))
+
+        -- not in the right state (okay, maybe nothing received yet)
+        Just _ -> noRedux
+
+    -- Close case
+    (UVal (UVar (internalName -> "close")), chan@(UVal (Ext () (ChanPointer chanPointer)))) ->
+
+      case lookupAndCutout chanPointer heap of
+        Nothing -> noRedux
+
+        -- allowed to close as its empty (one side)
+        Just (heap', (rq, (Val ss () bb (Ext _ (Chan (Just [])))))) -> do
+          let localHeap = [(chanPointer, (rq, Val ss () bb (Ext () (Chan Nothing))))]
+          return ((Val s a b (Constr () (mkId "()") [])), (heap' ++ localHeap, [], []))
+
+        -- allowed to close and delete as its been closed on one side already
+        Just (heap', (rq, (Val _ _ _ (Ext _ (Chan Nothing))))) ->
+          return ((Val s a b (Constr () (mkId "()") [])), (heap', [], []))
+
+
 
         Just _ -> noRedux
 
-    _ -> do
-      (e2', env) <- smallHeapReduxAux defs heap e2 r
-      return (App s a b e1 e2', env)
+    _ ->
+      if isValueExpr e1
+        then do
+          (e2', env) <- smallHeapReduxAux defs heap e2 r
+          return (App s a b e1 e2', env)
+        else do
+          (e1', env) <- smallHeapReduxAux defs heap e1 r
+          return (App s a b e1' e2, env)
 
 -- [Case-Sum-Beta] Matches Left-Right patterns for either
 smallHeapReduxAux defs heap
@@ -375,12 +397,14 @@ smallHeapReduxPar defs heap e r = do
           put (processes'' ++ [p'], m)
           --
           return (e, env)
-        Nothing ->
+        Nothing -> do
+          -- put the un reduced process p back, but on the end
+          put (processes' ++ [p], n)
           return (e, (heap, [], []))
 
 -- Corresponds to H |- t |> p ~> H'
 smallPatternMatch :: Heap ->  Expr Symbolic () -> Pattern () -> Maybe Heap
-smallPatternMatch h t (PVar _ _ _ v) = Just ((v, (undefined, t)) : h)
+smallPatternMatch h t (PVar _ _ _ v) = Just ((v, (TyGrade Nothing 1, t)) : h)
 
 smallPatternMatch h t (PWild _ _ _) = Just h
 
@@ -416,34 +440,6 @@ smallPatternHeapStep defs r heap e p = do
 
     Just heap' -> return $ Match heap'
 
-
-{- }
-smallPatternHeapStep defs r h e@(Val s a b (Constr _ _ vs)) p@(PConstr _ _ _ c ps) = do
-  case partitionPatternReuslt $ map (\(vi, pi) -> smallPatternHeapStep defs r h (Val s a b vi) pi) (zip vs ps) of
-    Nothing -> return NoMath
-    Just (_, )
-  case yes of
-    [] -> undefined
-    _ ->
-      case notYets of
-
-        ((vk, pk) : vps) -> do
-          smallHeapRedux defs heap
-        _ -> return Nothing
-
--- [CaseStepCon]
-smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
-  (t', (heap, out, _) <- smallHeapRedux defs heap t r
-  return (Step heap t' out)
-
-
--- smallPatternHeapStep defs r h t p@(PConstr _ _ _ c ps) = do
---   (t', (heap', resourceOut, _)) <- smallHeapRedux defs h t r
---   return (heap', t', p, resourceOut)
--}
-
--- smallPatternHeapStep defs r h t p = return NoMatch
-
 leftMostIsConstr :: Expr a b -> Bool
 leftMostIsConstr (App _ _ _ (Val _ _ _ (Constr _ x _)) _) = True
 leftMostIsConstr (App _ _ _ e1 e2) = leftMostIsConstr e1
@@ -455,7 +451,6 @@ toSnocList xs = toSnocList' xs Nil
     toSnocList' :: [a] -> (SnocList a -> SnocList a)
     toSnocList' []  = id
     toSnocList' (x : xs) = (toSnocList' xs) . (\z -> Snoc z x)
-
 
 fromSnocList :: SnocList a -> [a]
 fromSnocList Nil = []
@@ -552,11 +547,12 @@ isValue Ext{} = True
 isValue (Var _ id) =
   -- some primitives count as values
   case internalName id of
-    "recv" -> True
-    "send" -> True
-    "forkLinear" -> True
+    "recv"        -> True
+    "send"        -> True
+    "forkLinear"  -> True
     "forkLinear'" -> True
-    _ -> False
+    "close"       -> True
+    _             -> False
 isValue _ = False
 
 freshVariable' :: Id -> MaybeT (State ([Process], Integer)) Id 
