@@ -437,7 +437,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     assumptionToType :: (Id, Assumption) -> Type
     assumptionToType (_, Linear t) = t
     assumptionToType (_, Discharged t _) = t
-    assumptionToType (_, Ghost t _) = t
+    assumptionToType (_, Ghost _) = ghostType
 
 -- Polarities are used to understand when a type is
 -- `expected` vs. `actual` (i.e., for error messages)
@@ -1062,10 +1062,10 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
        let elaborated = Val s ty rf (Var ty x)
        return (ty, [(x, Discharged ty (TyGrade (Just k) 1))], subst, elaborated)
 
-     Just (Ghost ty c) -> do
+     Just (Ghost c) -> do
        (k, subst, _) <- synthKind s c
-       let elaborated = Val s ty rf (Var ty x)
-       return (ty, [(x, Ghost ty (TyGrade (Just k) 1))], subst, elaborated)
+       let elaborated = Val s ghostType rf (Var ghostType x)
+       return (ghostType, [(x, Ghost (TyGrade (Just k) 1))], subst, elaborated)
 
 -- Specialised application for scale
 {- TODO: needs thought -}
@@ -1414,11 +1414,11 @@ ctxtApprox s ctxt1 ctxt2 = do
                _ <- relateByAssumption s ApproximatedBy (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
                return id
              -- TODO: handle new ghost variables
-             Ghost t c -> do
+             Ghost c -> do
                -- TODO: deal with the subst here
                (kind, subst, _) <- synthKind s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s ApproximatedBy (id, Ghost t (TyGrade (Just kind) 0)) (id, ass2)
+               _ <- relateByAssumption s ApproximatedBy (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1459,11 +1459,11 @@ ctxtEquals s ctxt1 ctxt2 = do
                _ <- relateByAssumption s Eq (id, Discharged t (TyGrade (Just kind) 0)) (id, ass2)
                return id
              -- TODO: handle new ghost variables
-             Ghost t c -> do
+             Ghost c -> do
                -- TODO: deal with the subst here
                (kind, _, _) <- synthKind s c
                -- TODO: deal with the subst here
-               _ <- relateByAssumption s Eq (id, Ghost t (TyGrade (Just kind) 0)) (id, ass2)
+               _ <- relateByAssumption s Eq (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
                return id
   -- Last we sanity check, if there is anything in ctxt1 that is not in ctxt2
   -- then we have an issue!
@@ -1538,11 +1538,11 @@ intersectCtxtsWithWeaken s a b = do
         -- TODO: deal with the subst here
        (kind, _, _) <- synthKind s c
        return (var, Discharged t (TyGrade (Just kind) 0))
-   weaken (var, Ghost t c) = do
+   weaken (var, Ghost c) = do
        -- TODO: handle new ghost variables
        -- TODO: do we want to weaken ghost variables?
        (kind, _, _) <- synthKind s c
-       return (var, Ghost t (TyGrade (Just kind) 0))
+       return (var, Ghost (TyGrade (Just kind) 0))
 
 {- | Given an input context and output context, check the usage of
      variables in the output, returning a list of usage mismatch
@@ -1588,15 +1588,7 @@ relateByAssumption s rel (_, Discharged _ c1) (_, Discharged _ c2) = do
   return subst
 
 -- TODO: handle new ghost variables
-relateByAssumption s rel (_, Ghost _ c1) (_, Ghost _ c2) = do
-  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
-  return subst
-relateByAssumption s rel (_, Ghost _ c1) (_, Discharged _ c2) = do
-  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
-  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
-  return subst
-relateByAssumption s rel (_, Discharged _ c1) (_, Ghost _ c2) = do
+relateByAssumption s rel (_, Ghost c1) (_, Ghost c2) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
   addConstraint (rel s (inj1 c1) (inj2 c2) kind)
   return subst
@@ -1630,7 +1622,7 @@ relateByLUB s (_, Discharged _ c1) (_, Discharged _ c2) (_, Discharged _ c3) = d
   return subst
 
 -- TODO: handle new ghost variables
-relateByLUB s (_, Ghost _ c1) (_, Ghost _ c2) (_, Ghost _ c3) = do
+relateByLUB s (_, Ghost c1) (_, Ghost c2) (_, Ghost c3) = do
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
   addConstraint (Lub s (inj1 c1) (inj2 c2) c3 kind)
   return subst
@@ -1677,12 +1669,12 @@ freshVarsIn s vars ctxt = do
       return ((var, Discharged t (TyVar cvar)), Just (cvar, ctype))
 
     -- TODO: handle new ghost variables
-    toFreshVar (var, Ghost t c) = do
+    toFreshVar (var, Ghost c) = do
       (ctype, _, _) <- synthKind s c
       freshName <- freshIdentifierBase (internalName var)
       let cvar = mkId freshName
       modify (\s -> s { tyVarContext = (cvar, (ctype, InstanceQ)) : tyVarContext s })
-      return ((var, Ghost t (TyVar cvar)), Just (cvar, ctype))
+      return ((var, Ghost (TyVar cvar)), Just (cvar, ctype))
 
     toFreshVar (var, Linear t) = return ((var, Linear t), Nothing)
 
@@ -1711,12 +1703,12 @@ extCtxt s ctxt var (Linear t) = do
           (k, subst, cElaborated) <- synthKind s c
           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
-    Just (Ghost t' c) ->
-       if t == t'
+    Just (Ghost c) ->
+       if t == ghostType
          then do
           (k, subst, cElaborated) <- synthKind s c
-          return $ replace ctxt var (Ghost t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
-         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+          return $ replace ctxt var (Ghost (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
+         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
     Nothing -> return $ (var, Linear t) : ctxt
 
 extCtxt s ctxt var (Discharged t c) = do
@@ -1726,10 +1718,10 @@ extCtxt s ctxt var (Discharged t c) = do
         if t == t'
         then return $ replace ctxt var (Discharged t' (TyInfix TyOpPlus c c'))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
-    Just (Ghost t' c') ->
-        if t == t'
-        then return $ replace ctxt var (Ghost t' (TyInfix TyOpPlus c c'))
-        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+    Just (Ghost c') ->
+        if t == ghostType
+        then return $ replace ctxt var (Ghost (TyInfix TyOpPlus c c'))
+        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
     Just (Linear t') ->
         if t == t'
         then do
@@ -1738,17 +1730,17 @@ extCtxt s ctxt var (Discharged t c) = do
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Discharged t c) : ctxt
 
-extCtxt s ctxt var (Ghost t c) = do
-
+extCtxt s ctxt var (Ghost c) = do
+  let t = ghostType
   case lookup var ctxt of
     Just (Discharged t' c') ->
         if t == t'
         then return $ replace ctxt var (Discharged t' (TyInfix TyOpPlus c c'))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
-    Just (Ghost t' c') ->
-        if t == t'
-        then return $ replace ctxt var (Ghost t' (TyInfix TyOpPlus c c'))
-        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+    Just (Ghost c') ->
+        if t == ghostType
+        then return $ replace ctxt var (Ghost (TyInfix TyOpPlus c c'))
+        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
     Just (Linear t') ->
         if t == t'
         then do
@@ -1871,14 +1863,14 @@ allGhostVariables = filter isGhost
 
 freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
-  return [(mkId ".var.ghost", Ghost (tyCon ".ghost") (tyCon "Public"))]
+  return [(mkId ".var.ghost", Ghost (tyCon "Public"))]
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
 ghostVariableContextMeet env =
   let (env',ghosts) = partition isGhost env
-      newGrade      = foldr (TyInfix TyOpMeet) (tyCon "Public") $ map ((\(Discharged _ ce) -> ce) . snd) ghosts
-  in do return $ (mkId ".var.ghost", Ghost (tyCon ".type.ghost") newGrade) : env'
+      newGrade      = foldr1 (TyInfix TyOpMeet) $ map ((\(Discharged _ ce) -> ce) . snd) ghosts
+  in do return $ (mkId ".var.ghost", Ghost newGrade) : env'
 
 isGhost :: (a, Assumption) -> Bool
-isGhost (_, Ghost _ _) = True
+isGhost (_, Ghost _) = True
 isGhost _ = False

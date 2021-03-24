@@ -101,12 +101,12 @@ ctxtSubtract gam ((x, Discharged t g2):del) =
       ctx <- ctxtSubtract gam' del
       return ((x, Discharged t g3):ctx)
     _ -> none
-ctxtSubtract gam ((x, Ghost t g2):del) =
+ctxtSubtract gam ((x, Ghost g2):del) =
   case lookupAndCutout x gam of
     Just (gam', Discharged t2 g1) -> do
       g3 <- g1 `gradeSub` g2
       ctx <- ctxtSubtract gam' del
-      return ((x, Ghost t g3) : ctx)
+      return ((x, Ghost g3) : ctx)
     _ -> none
 
 gradeSub :: (?globals::Globals) => Type -> Type -> Synthesiser Type
@@ -167,11 +167,11 @@ ctxtMerge operator [] ((x, Discharged t g) : ctxt) = do
   return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
 -- TODO: handle new ghost variable
-ctxtMerge operator [] ((x, Ghost t g) : ctxt) = do
+ctxtMerge operator [] ((x, Ghost g) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
   (kind, _, _) <- conv $ synthKind nullSpan g
   ctxt' <- ctxtMerge operator [] ctxt
-  return $ (x, Ghost t (operator (TyGrade (Just kind) 0) g)) : ctxt'
+  return $ (x, Ghost (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
 --  * Cannot meet/join an empty context to one with linear assumptions
 ctxtMerge _ [] ((_, Linear t) : ctxt) = none
@@ -196,14 +196,11 @@ ctxtMerge operator ((x, Discharged t1 g1) : ctxt1') ctxt2 = do
       (kind, _, _) <- conv $ synthKind nullSpan g1
       return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
-ctxtMerge operator ((x, Ghost t1 g1) : ctxt1') ctxt2 = do
+ctxtMerge operator ((x, Ghost g1) : ctxt1') ctxt2 = do
   case lookupAndCutout x ctxt2 of
-    Just (ctxt2', Ghost t2 g2) ->
-      if t1 == t2 -- Just in case but should always be true
-        then do
-          ctxt' <- ctxtMerge operator ctxt1' ctxt2'
-          return $ (x, Ghost t1 (operator g1 g2)) : ctxt'
-        else none
+    Just (ctxt2', Ghost g2) ->
+      do ctxt' <- ctxtMerge operator ctxt1' ctxt2'
+         return $ (x, Ghost (operator g1 g2)) : ctxt'
 
     Just (_, Discharged{}) -> none
 
@@ -213,7 +210,7 @@ ctxtMerge operator ((x, Ghost t1 g1) : ctxt1') ctxt2 = do
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
       (kind, _, _) <- conv $ synthKind nullSpan g1
-      return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
+      return $ (x, Ghost (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
 ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
   case lookupAndCutout x ctxt2 of
@@ -240,14 +237,14 @@ ctxtAdd ((x, Discharged t1 g1):xs) ys =
       ctxt <- ctxtAdd xs ys
       return $ (x, Discharged t1 g1) : ctxt
     _ -> Nothing
-ctxtAdd ((x, Ghost t1 g1):xs) ys =
+ctxtAdd ((x, Ghost g1):xs) ys =
   case lookupAndCutout x ys of
-    Just (ys', Ghost t2 g2) -> do
+    Just (ys', Ghost g2) -> do
       ctxt <- ctxtAdd xs ys'
-      return $ (x, Ghost t1 (TyInfix TyOpPlus g1 g2)) : ctxt
+      return $ (x, Ghost (TyInfix TyOpPlus g1 g2)) : ctxt
     Nothing -> do
       ctxt <- ctxtAdd xs ys
-      return $ (x, Ghost t1 g1) : ctxt
+      return $ (x, Ghost g1) : ctxt
     _ -> Nothing
 ctxtAdd ((x, Linear t1):xs) ys =
   case lookup x ys of
@@ -303,7 +300,7 @@ useVar (name, Discharged t grade) gamma Subtractive{} = do
       return (True, replace gamma name (Discharged t (TyVar var)), t)
     False -> do
       return (False, [], t)
-useVar (name, Ghost t grade) gamma Subtractive{} = do
+useVar (name, Ghost grade) gamma Subtractive{} = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
   var <- conv $ freshTyVarInContext (mkId $ "c") kind
   conv $ existential var kind
@@ -311,18 +308,18 @@ useVar (name, Ghost t grade) gamma Subtractive{} = do
   res <- solve
   case res of
     True -> do
-      return (True, replace gamma name (Ghost t (TyVar var)), t)
+      return (True, replace gamma name (Ghost (TyVar var)), ghostType)
     False -> do
-      return (False, [], t)
+      return (False, [], ghostType)
 
 -- Additive
 useVar (name, Linear t) _ Additive{} = return (True, [(name, Linear t)], t)
 useVar (name, Discharged t grade) _ Additive{} = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
   return (True, [(name, (Discharged t (TyGrade (Just kind) 1)))], t)
-useVar (name, Ghost t grade) _ Additive{} = do
+useVar (name, Ghost grade) _ Additive{} = do
   (kind, _, _) <- conv $ synthKind nullSpan grade
-  return (True, [(name, (Ghost t (TyGrade (Just kind) 1)))], t)
+  return (True, [(name, (Ghost (TyGrade (Just kind) 1)))], ghostType)
 
 
 type Bindings = [(Id, (Id, Type))]
@@ -1084,7 +1081,7 @@ synthesise resourceScheme gamma omega goalTy = do
                         (kind, _, _) <-  conv $ synthKind nullSpan grade
                         conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
                         solve
-                      Ghost _ grade -> do
+                      Ghost grade -> do
                         (kind, _, _) <-  conv $ synthKind nullSpan grade
                         conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyGrade (Just kind) 0) grade kind)
                         solve
@@ -1107,7 +1104,7 @@ synthesise resourceScheme gamma omega goalTy = do
                             solve
                           _ -> return False
                       -- TODO: handling of new ghost variables
-                      Just (Ghost _ gradeUsed) ->
+                      Just (Ghost gradeUsed) ->
                         case a of
                           Discharged _ gradeSpec -> do
                             (kind, _, _) <- conv $ synthKind nullSpan gradeUsed

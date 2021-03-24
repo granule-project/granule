@@ -591,7 +591,7 @@ synthKindAssumption _ (Linear _) = return (Nothing, [])
 synthKindAssumption s (Discharged _ c) = do
   (t, subst, _) <- synthKind s c
   return (Just t, subst)
-synthKindAssumption s (Ghost _ c) = do
+synthKindAssumption s (Ghost c) = do
   (t, subst, _) <- synthKind s c
   return (Just t, subst)
 
