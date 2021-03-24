@@ -166,7 +166,9 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
     let elabP = PBox sp t rf elabPinner
     substU <- combineManySubstitutions s [subst0, subst1, subst]
-    return (ctxt, eVars, substU, elabP, NotFull)
+    -- GHOST variable made from coeff added to assumptions
+    let ghostCtxt = [(mkId ".var.ghost", Ghost coeff)]
+    return (ghostCtxt ++ ctxt, eVars, substU, elabP, NotFull)
 
 ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC

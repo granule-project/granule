@@ -379,9 +379,11 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   patternGam <- substitute subst patternGam
 
+  combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt
+
   -- Check the body
   (localGam, subst', elaboratedExpr) <-
-       checkExpr defCtxt (patternGam <> ghostCtxt) Positive True tau expr
+       checkExpr defCtxt combinedGam Positive True tau expr
 
   case checkLinearity patternGam localGam of
     [] -> do
@@ -700,7 +702,8 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       -- Checking the case body
       tau' <- substitute subst tau
       patternGam <- substitute subst patternGam
-      (localGam, subst', elaborated_i) <- checkExpr defs (patternGam <> ghostCtxt <> gam) pol False tau' e_i
+      combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt
+      (localGam, subst', elaborated_i) <- checkExpr defs combinedGam pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` (patternGam <> ghostCtxt)) (patternGam <> ghostCtxt)
