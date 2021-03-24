@@ -344,7 +344,10 @@ concludeImplication s localCtxt = do
                   else (Impl (localCtxt <> freshPrevGuardCxt)
                                  (Conj [p, freshPrevGuardPred]) p')
 
-           let knowledge = ((implCtxt, implAntecedent), s) : previousGuards
+           -- Build the guard theorem to also include all of the 'context' of things
+           -- which also need to hold (held in `stack`)
+           let guardTheorem = Conj (implAntecedent : stack)
+           let knowledge = ((implCtxt, guardTheorem), s) : previousGuards
 
            -- Store `p` (impliciation antecedent) to use in later cases
            -- on the top of the guardPredicates stack
