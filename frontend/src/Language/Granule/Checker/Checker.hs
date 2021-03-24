@@ -1870,8 +1870,8 @@ freshGhostVariableContext = do
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
 ghostVariableContextMeet env =
-  let (env',ghosts) = partition isGhost env
-      newGrade      = foldr1 (TyInfix TyOpMeet) $ map ((\(Discharged _ ce) -> ce) . snd) ghosts
+  let (ghosts,env') = partition isGhost env
+      newGrade      = foldr1 (TyInfix TyOpMeet) $ map ((\(Ghost ce) -> ce) . snd) ghosts
   -- if there's no ghost variable in env, don't add one
   in if null ghosts then return env' else return $ (mkId ".var.ghost", Ghost newGrade) : env'
 
