@@ -205,25 +205,41 @@ checkKind s t k = do
 
 ------------------------------------------------------------
 
+-- Represents how to resolve a grade which has no type annotation
+data ResolutionConfig =
+    GradeToNat              -- ^ Resolve untyped grades as Nat
+   | GradeToPolyAsCoeffect  -- ^ Resolve untyped grades to a fresh unification variable which is Coeffect kinded
+   | GradeToPolyAsEffect    -- ^ Resolve untyped grades to a fresh unification variable which is Effect kinded
+  deriving Eq
+
+defaultResolutionBehaviour :: Type -> ResolutionConfig
+defaultResolutionBehaviour t =
+  if (not (containsTypeSig t))
+    -- no type signatures here so try to guess grades as Nat (often a bad choice!)
+    then GradeToNat
+    -- if there is a type signature then try to treat untyped grades as coeffect by default
+    else GradeToPolyAsCoeffect
+
 -- Given `synthKind gam t` it synthesis a `k` such that `gam |- t :: k` and
 -- returns a substitution and an elebaroted type `t'` along with it.
 synthKind :: (?globals :: Globals) =>
   Span -> Type -> Checker (Kind, Substitution, Type)
-synthKind s t = synthKind' s (not (containsTypeSig t)) t
+synthKind s t =
+  synthKindWithConfiguration s (defaultResolutionBehaviour t) t
 
-synthKind' :: (?globals :: Globals) =>
+-- Parameterisable core of `synthKind`
+synthKindWithConfiguration :: (?globals :: Globals) =>
      Span
-  -> Bool  -- Special flag: True means we can treat TyGrade as a Nat because there are no signatures
+  -> ResolutionConfig -- Special flag: explains how to resolve untyped grades
   -> Type
   -> Checker (Kind, Substitution, Type)
 
 -- KChkS_var and KChkS_instVar
-synthKind' s overloadToNat t@(TyVar x) = do
+synthKindWithConfiguration s config t@(TyVar x) = do
   st <- get
   case lookup x (tyVarContext st) of
     Just (k, _) -> return (k, [], t)
     Nothing     -> throw UnboundTypeVariable { errLoc = s, errId = x }
-
 
 -- -- KChkS_fun
 --
@@ -231,22 +247,22 @@ synthKind' s overloadToNat t@(TyVar x) = do
 --   ----------------------- Fun
 --        t1 -> t2 => k
 
-synthKind' s overloadToNat (FunTy name t1 t2) = do
-  (k, subst1, t1') <- synthKind' s overloadToNat t1
+synthKindWithConfiguration s config (FunTy name t1 t2) = do
+  (k, subst1, t1') <- synthKindWithConfiguration s config t1
   (subst2   , t2') <- checkKind s t2 k
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst, FunTy name t1' t2')
 
 -- KChkS_pair
-synthKind' s overloadToNat (TyApp (TyApp (TyCon (internalName -> ",,")) t1) t2) = do
-  (k1, subst1, t1') <- synthKind' s overloadToNat t1
-  (k2, subst2, t2') <- synthKind' s overloadToNat t2
+synthKindWithConfiguration s config (TyApp (TyApp (TyCon (internalName -> ",,")) t1) t2) = do
+  (k1, subst1, t1') <- synthKindWithConfiguration s config t1
+  (k2, subst2, t2') <- synthKindWithConfiguration s config t2
   subst <- combineSubstitutions s subst1 subst2
   return (TyApp (TyApp (TyCon $ mkId ",,") k1) k2, subst, TyApp (TyApp (TyCon $ mkId ",,") t1') t2')
 
 -- KChkS_SetKind
-synthKind' s overloadToNat (TyApp (TyCon (internalName -> "Set")) t) = do
-  (k, subst, t') <- synthKind' s overloadToNat t
+synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = do
+  (k, subst, t') <- synthKindWithConfiguration s config t
   case k of
     -- For set over type, default to the kind being Effect
     Type 0 -> return (keffect, subst, TyApp (TyCon (mkId "Set")) t')
@@ -259,8 +275,8 @@ synthKind' s overloadToNat (TyApp (TyCon (internalName -> "Set")) t) = do
 --   ------------------------------ Fun
 --        t1 t2 => k
 --
-synthKind' s overloadToNat (TyApp t1 t2) = do
-  (funK, subst1, t1') <- synthKind' s overloadToNat t1
+synthKindWithConfiguration s config (TyApp t1 t2) = do
+  (funK, subst1, t1') <- synthKindWithConfiguration s config t1
   case funK of
     (FunTy _ k1 k2) -> do
       (subst2, t2') <- checkKind s t2 k1
@@ -274,41 +290,42 @@ synthKind' s overloadToNat (TyApp t1 t2) = do
 --   ----------------------------------------------- interval
 --        t1 .. t2 => Interval k3
 --
-synthKind' s overloadToNat (TyInfix TyOpInterval t1 t2) = do
-  (coeffTy1, subst1, t1') <- synthKind' s overloadToNat t1
-  (coeffTy2, subst2, t2') <- synthKind' s overloadToNat t2
+synthKindWithConfiguration s config (TyInfix TyOpInterval t1 t2) = do
+  (coeffTy1, subst1, t1') <- synthKindWithConfiguration s config t1
+  (coeffTy2, subst2, t2') <- synthKindWithConfiguration s config t2
   (jcoeffTy, subst3, (inj1, inj2)) <- mguCoeffectTypes s coeffTy1 coeffTy2
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   -- Apply injections in the elaborated term
   return (TyApp (tyCon "Interval") jcoeffTy, subst, TyInfix TyOpInterval (inj1 t1') (inj2 t2'))
 
 -- KChkS_predOp
-synthKind' s overloadToNat t@(TyInfix op t1 t2) =
-  synthForOperator s overloadToNat op t1 t2
+synthKindWithConfiguration s config t@(TyInfix op t1 t2) =
+  synthForOperator s config op t1 t2
 
 -- KChkS_int
-synthKind' s _ t@(TyInt n) = do
+synthKindWithConfiguration s _ t@(TyInt n) = do
   return (TyCon (Id "Nat" "Nat"), [], t)
 
--- KChkS_grade [overload to Nat]
-synthKind' s overloadToNat t@(TyGrade Nothing n) | overloadToNat =
-  return (tyCon "Nat", [], TyInt n)
-
--- KChkS_grade [don't overload to Nat]
-synthKind' s overloadToNat t@(TyGrade (Just k) n) =
+-- KChkS_grade [with type already resolved]
+synthKindWithConfiguration s config t@(TyGrade (Just k) n) =
   return (k, [], t)
 
--- KChkS_grade [don't overload to Nat]
-synthKind' s overloadToNat t@(TyGrade Nothing n) | not overloadToNat = do
-  -- TODO: is it problematic that we choose a semiring (coeffect)-kinded type
-  -- rather than an effect one?
-  var <- freshTyVarInContext (mkId $ "semiring[" <> pretty (startPos s) <> "]") kcoeffect
-  return (TyVar var, [], t)
+-- KChkS_grade [type not resolve]
+synthKindWithConfiguration s config t@(TyGrade Nothing n) = do
+  case config of
+    GradeToPolyAsCoeffect -> do
+      var <- freshTyVarInContext (mkId $ "semiring[" <> pretty (startPos s) <> "]") kcoeffect
+      return (TyVar var, [], t)
+    GradeToPolyAsEffect -> do
+      var <- freshTyVarInContext (mkId $ "monoid[" <> pretty (startPos s) <> "]") keffect
+      return (TyVar var, [], t)
+    GradeToNat ->
+      return (tyCon "Nat", [], TyInt n)
 
 -- KChkS_box
-synthKind' s _ (Box c t) = do
+synthKindWithConfiguration s _ (Box c t) = do
   -- Deal with the grade term
-  (coeffTy, subst0, c') <- synthKind' s (not (containsTypeSig c)) c
+  (coeffTy, subst0, c') <- synthKindWithConfiguration s (defaultResolutionBehaviour c) c
   (subst1, _) <- checkKind s coeffTy kcoeffect
   -- Then the inner type
   (subst2, t') <- checkKind s t ktype
@@ -316,24 +333,24 @@ synthKind' s _ (Box c t) = do
   return (ktype, subst, Box c' t')
 
 -- KChkS_dia
-synthKind' s _ (Diamond e t) = do
+synthKindWithConfiguration s _ (Diamond e t) = do
   (innerK, subst2, e') <- synthKind s e
   (subst1, _)  <- checkKind s innerK keffect
   (subst3, t') <- checkKind s t ktype
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (ktype, subst, Diamond e' t')
 
-synthKind' s _ t@(TyCon (internalName -> "Pure")) = do
+synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
   -- Create a fresh type variable
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
   return (TyVar var, [], t)
 
-synthKind' s _ t@(TyCon (internalName -> "Handled")) = do
+synthKindWithConfiguration s _ t@(TyCon (internalName -> "Handled")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
   return $ ((FunTy Nothing (TyVar var) (TyVar var)), [], t)
 
 -- KChkS_con
-synthKind' s _ t@(TyCon id) = do
+synthKindWithConfiguration s _ t@(TyCon id) = do
   st <- get
   case lookup id (typeConstructors st)  of
     Just (kind', _, _) -> return (kind', [], t)
@@ -345,32 +362,32 @@ synthKind' s _ t@(TyCon id) = do
         Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 
 -- KChkS_set
-synthKind' s overloadToNat t0@(TySet p (elem:elems)) = do
-  (k, subst1, elem') <- synthKind' s overloadToNat elem
+synthKindWithConfiguration s config t0@(TySet p (elem:elems)) = do
+  (k, subst1, elem') <- synthKindWithConfiguration s config elem
   results <- mapM (\elem -> checkKind s elem k) elems
   let (substs, elems') = unzip results
   subst <- combineManySubstitutions s (subst1:substs)
   return (TyApp (setConstructor p) k, subst, TySet p (elem':elems'))
 
 -- KChkS_set (empty) -- gives a polymorphic type to the elements
-synthKind' s overloadToNat (TySet p []) = do
+synthKindWithConfiguration s config (TySet p []) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") ktype
   return (TyApp (setConstructor p) (TyVar var), [], TySet p [])
 
 -- KChkS_sig
-synthKind' s _ (TySig t k) = do
+synthKindWithConfiguration s _ (TySig t k) = do
   (subst, t') <- checkKind s t k
   return (k, subst, TySig t' k)
 
-synthKind' s overloadToNat (TyCase t branches) | length branches > 0 = do
+synthKindWithConfiguration s config (TyCase t branches) | length branches > 0 = do
   -- Synthesise the kind of the guard (which must be the kind of the branches)
-  (k, subst, t') <- synthKind' s overloadToNat t
+  (k, subst, t') <- synthKindWithConfiguration s config t
   -- Check the patterns are kinded by the guard kind, and synth the kinds
   -- for the branches
   branchesInfo <-
     forM branches (\(tyPat, tyBranch) -> do
       (subst_i, tyPat') <- checkKind s tyPat k
-      (k_i, subst'_i, tyBranch') <- synthKind' s overloadToNat tyBranch
+      (k_i, subst'_i, tyBranch') <- synthKindWithConfiguration s config tyBranch
       subst <- combineSubstitutions s subst_i subst'_i
       return ((tyPat', tyBranch'), (subst, (tyBranch', k_i))))
   -- Split up the info
@@ -391,21 +408,21 @@ synthKind' s overloadToNat (TyCase t branches) | length branches > 0 = do
   --
   return (kind, substFinal, TyCase t' branches')
 
-synthKind' s _ t =
+synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 
 synthForOperator :: (?globals :: Globals)
   => Span
-  -> Bool -- flag whether overloading to Nat is allowed
+  -> ResolutionConfig
   -> TypeOperator
   -> Type
   -> Type
   -> Checker (Kind, Substitution, Type)
-synthForOperator s overloadToNat op t1 t2 = do
+synthForOperator s config op t1 t2 = do
   if predicateOperation op || closedOperation op
     then do
-      (k1, subst1, t1') <- synthKind' s overloadToNat t1
-      (k2, subst2, t2') <- synthKind' s overloadToNat t2
+      (k1, subst1, t1') <- synthKindWithConfiguration s config t1
+      (k2, subst2, t2') <- synthKindWithConfiguration s config t2
       (k3, substK, (inj1, inj2)) <- mguCoeffectTypes s k1 k2
 
       maybeSubst <- if predicateOperation op
