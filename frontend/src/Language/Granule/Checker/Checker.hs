@@ -780,9 +780,20 @@ synthExpr defs gam pol
     (App s _ _ (Val _ _ _ (Var _ (sourceName -> "weak__"))) v@(Val _ _ _ (Var _ x))) = do
   debugM "synthExpr[weak__]" (pretty s)
 
-  (t, _, subst, elabE) <- synthExpr defs gam pol v
+  -- Check the variable is actually a graded variable
+  case lookup x gam of
+    Nothing ->         throw UnboundVariableError{ errLoc = s, errId = x }
+    Just (Linear _) -> throw LinearityError{ errLoc = s, linearityMismatch = LinearUsedNonLinearly x }
+    Just (Discharged _ r) -> do
+      -- Infer the type of the variable
+      (t, _, subst, elabE) <- synthExpr defs gam pol v
 
-  return (t, [(x, Discharged t (TyGrade Nothing 0))], subst, elabE)
+      -- Get the type of the grade
+      (gradeType, subst', _) <- synthKind s r
+      substF <- combineSubstitutions s subst subst'
+
+      -- Return usage as 0 : gradeType
+      return (t, [(x, Discharged t (TyGrade (Just gradeType) 0))], substF, elabE)
 
 -- Constructors
 synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
