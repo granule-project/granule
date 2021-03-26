@@ -21,6 +21,9 @@ import Control.Monad.Trans.Maybe
 
 --import Debug.Trace
 
+--trace :: a -> b -> b
+--trace _ y = y
+
 -- Represent symbolic values in the heap semantics
 data Symbolic = Symbolic Id | ChanPointer Id | Chan (Maybe [Expr Symbolic ()])
   deriving Show
@@ -301,61 +304,13 @@ smallHeapReduxAux defs heap t@(App s a b e1 e2) r = do
           (e1', env) <- smallHeapReduxAux defs heap e1 r
           return (App s a b e1' e2, env)
 
--- [Case-Sum-Beta] Matches Left-Right patterns for either
-smallHeapReduxAux defs heap
-   (Case s a b (App _ _ _ (Val _ _ _ (Constr _ (internalName -> constr) [])) e)
-        [(PConstr _ _ _ (internalName -> "Left") [PVar _ _ _ varl], el)
-        ,(PConstr _ _ _ (internalName -> "Right") [PVar _ _ _ varr], er)]) r = do
-
-    -- fresh variable
-    x <- freshVariable' (if constr == "Left" then varl else varr)
-    --
-     -- A&B and Grade determine `q` from a syntactic grade
-     -- We don't have that here (we could get it out of the typing...)
-    let q = TyGrade Nothing 1
-    let heap' = (x, (TyInfix TyOpTimes r q, e)) : heap
-    --
-    let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
-    let embeddedCtxt = [(x , TyInfix TyOpTimes r q)]
-    -- Expression is e1 or e2 (with x replaying varl or varr)
-    let eFinal = case constr of
-                  "Left" -> subst (Val s () False (Var () x)) varl el
-                  "Right" -> subst (Val s () False (Var () x)) varr er
-                  _ -> undefined
-    return (eFinal, (heap' , resourceOut, embeddedCtxt))
-
--- [Case-Product-Beta]
-smallHeapReduxAux defs heap
-  (Case s a b (App _ _ _ (App _ _ _ (Val _ _ _ (Constr _ (internalName -> ",") [])) e1) e2)
-        [(PConstr _ _ _ (internalName -> ",") [PVar _ _ _ var1, PVar _ _ _ var2], e)]) r = do
-  -- fresh variables
-  x1 <- freshVariable' var1
-  x2 <- freshVariable' var2
-  --
-  let heap' = (x1, (r, e1)) : (x2, (r, e2)) : heap
-  --
-  let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
-  let embeddedCtxt = [(x1 , r), (x2, r)]
-  -- Expression is e1 or e2 (with x replaying varl or varr)
-  return (subst (Val s () False (Var () x1)) var1 (subst (Val s () False (Var () x2)) var2 e), (heap' , resourceOut, embeddedCtxt))
-
--- [Case-Box-Beta]
-smallHeapReduxAux defs heap
-  (Case s a b (Val _ _ _ (Promote _ e)) [(PBox _ _ _ (PVar _ _ _ var), e')]) r = do
-  -- fresh variables
-  x <- freshVariable' var
-  --
-  let heap' = (x, (r, e)) : heap
-  --
-  let resourceOut = ctxtMap (const (TyGrade Nothing 0)) heap
-  let embeddedCtxt = [(x, r)]
-  -- Expression is e1 or e2 (with x replaying varl or varr)
-  return (subst (Val s () False (Var () x)) var e', (heap' , resourceOut, embeddedCtxt))
-
--- [Case-cong]
-smallHeapReduxAux defs heap (Case s a b e ps) r = do
-  res@(e', (h, resourceOut, gammaOut)) <- smallHeapReduxAux defs heap e r
-  return (Case s a b e' ps, (h, resourceOut, gammaOut))
+-- [case]
+smallHeapReduxAux defs heap (Case s a b e branches@((pi, ei):ps)) r = do
+  mres <- smallPatternHeapStep defs r heap e pi
+  case mres of
+    NoMatch             -> return (Case s a b e ps, (heap, [], [])) -- cannot do anything
+    Match heap'         -> return (ei, (heap', [], []))
+    Step heap' e' out   -> return (Case s a b e' branches, (heap', out, []))
 
 smallHeapReduxAux defs heap (Val s a b (Promote a' e)) r = do
   (e', env) <- smallHeapReduxAux defs heap e r
@@ -420,6 +375,7 @@ data PatternResult =
     Match Heap
   | NoMatch
   | Step Heap (Expr Symbolic ()) (Ctxt Grade)
+  deriving Show
 
 -- Corresponds to H |- t |> p ~> H' |- t' |> p' | Delta
 smallPatternHeapStep :: (?globals :: Globals)
@@ -499,51 +455,20 @@ patternZip defs r heap e id ps = do
   (e', (heap', out, _)) <- smallHeapReduxAux defs heap e r
   return $ Step heap' e' out
 
-{-
-patternZip ::
-     Ctxt (Def Symbolic ())
-  -> Grade
-  -> Heap
-  -> Id
-  -> [Expr Symbolic ()] -> [Pattern Symbolic ()] -> Expr Symbolic () -> State ([Process], Integer) PatternResult
-patternZip defs r h id (e:es) (p:ps) acc = do
-  case smallPatternHeapStep defs r h e p of
-    NoMatch   -> return NoMatch
-    (Match h') -> do
-      res <- patternZip defs r h' es ps
-      case res of
-        NoMatch -> return NoMatch
-        Match h -> return $ Match h
-        (Step h' es' out) -> return $ Step h' (unreassociatedNestedAppConstr' es') out
-    (Step h e' out) -> return $ Step h (unreassociatedNestedAppConstr id (e':es))
-
-
-
-partitionPatternReuslt :: [PatternResult] -> Maybe ([Heap], [(Heap, Expr Symbolic (), Ctxt Grade)])
-partitionPatternReuslt (NoMatch:_) = Nothing
-
-partitionPatternReuslt ((Match h):rs) = do
-  (as, bs) <- partitionPatternReuslt rs
-  return (h : as, bs)
-
-partitionPatternReuslt ((Step h e out):rs) = do
-  (as, bs) <- partitionByMaybe rs
-  return (as, (h, e, out) : bs)
--}
-
 -- Things that cannot be reduced further by this model
 isValueExpr :: Expr a b -> Bool
 isValueExpr (Val _ _ _ v) = isValue v
 isValueExpr _ = False
 
 isValue :: Value a b -> Bool
-isValue Promote{} = True -- TODO: PROBABLY NOT
+isValue Promote{} = True
 isValue (Constr _ _ vs) = all isValue vs
 isValue NumInt{} = True
 isValue NumFloat{} = True
 isValue CharLiteral{} = True
 isValue StringLiteral{} = True
 isValue Ext{} = True
+isValue (Abs{}) = True
 isValue (Var _ id) =
   -- some primitives count as values
   case internalName id of
