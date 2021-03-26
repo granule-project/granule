@@ -314,7 +314,7 @@ smallHeapReduxAux defs heap (Case s a b e branches@((pi, ei):ps)) r = do
 
 smallHeapReduxAux defs heap (Val s a b (Promote a' e)) r = do
   (e', env) <- smallHeapReduxAux defs heap e r
-  return (e', env)
+  return (Val s a b (Promote a' e'), env)
 
 -- -- [Value]
 -- smallHeapRedux defs heap (App _ _ _ (Val s' a' b' (Constr a'' id es)) e) r =
