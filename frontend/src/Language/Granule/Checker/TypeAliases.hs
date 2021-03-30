@@ -64,13 +64,23 @@ replaceInMaybeType :: Maybe Type -> Maybe Type
 replaceInMaybeType Nothing = Nothing
 replaceInMaybeType (Just t) = Just (replaceInType t)
 
+-- TODO: generalise to allow synonymous with arbitrary number of
+--  type arguments (currently only allows 0 or 1)
 replaceInType :: Type -> Type
 replaceInType =
-    runIdentity . typeFoldM (baseTypeFold { tfTyCon = tyCons })
+    runIdentity . typeFoldM (baseTypeFold { tfTyCon = tyCons, tfTyApp = tyApp })
   where
+    tyApp (TyCon x) t = return $
+      -- could be application of a constructor
+      case lookup x typeAliases of
+        Just ([var], t') -> substType t var t'
+        _                -> TyApp (TyCon x) t
+
+    tyApp t1 t2 = return $ TyApp t1 t2
+
     tyCons id = return $
       case lookup id typeAliases of
-        Just t  -> t
-        Nothing -> TyCon id
+        Just ([], t)  -> t
+        _             -> TyCon id
 
 

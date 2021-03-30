@@ -19,11 +19,12 @@ import Language.Granule.Syntax.Expr (Operator(..))
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
--- A list of type alias as Id -> Type pairs
-typeAliases :: [(Id, Type)]
+-- A list of type alias as Id -> ([Tyvar], Type) pairs
+typeAliases :: [(Id, ([Id], Type))]
 typeAliases =
     -- IO = {p | p in IOElem}
-    [(mkId "IO", TySet Normal (map tyCon ioElems))]
+    [(mkId "IO", ([], TySet Normal (map tyCon ioElems)))
+    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
@@ -43,6 +44,7 @@ typeConstructors =
     , (mkId "Char",   (Type 0, [], False))
     , (mkId "String", (Type 0, [], False))
     , (mkId "Protocol", (Type 0, [], False))
+    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
