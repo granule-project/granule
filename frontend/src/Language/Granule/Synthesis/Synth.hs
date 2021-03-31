@@ -171,6 +171,7 @@ ctxtMerge operator [] ((x, Ghost g) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
   (kind, _, _) <- conv $ synthKind nullSpan g
   ctxt' <- ctxtMerge operator [] ctxt
+  debugM "ctxtMerge ghost" (pretty kind <> ", " <> pretty g)
   return $ (x, Ghost (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
 --  * Cannot meet/join an empty context to one with linear assumptions
@@ -210,6 +211,7 @@ ctxtMerge operator ((x, Ghost g1) : ctxt1') ctxt2 = do
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
       (kind, _, _) <- conv $ synthKind nullSpan g1
+      debugM "ctxtMerge ghost" (pretty kind <> ", " <> pretty g1)
       return $ (x, Ghost (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
 ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 = do
@@ -305,6 +307,7 @@ useVar (name, Ghost grade) gamma Subtractive{} = do
   var <- conv $ freshTyVarInContext (mkId $ "c") kind
   conv $ existential var kind
   conv $ addConstraint (ApproximatedBy nullSpanNoFile (TyInfix TyOpPlus (TyVar var) (TyGrade (Just kind) 0)) grade kind)
+  debugM "useVar ghost" (pretty kind <> ", " <> pretty grade)
   res <- solve
   case res of
     True -> do

@@ -355,7 +355,8 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   isPolyShaped <- polyShaped tau
 
   -- create ghost variable context
-  ghostCtxt <- if isPolyShaped then freshGhostVariableContext else return []
+  -- ghostCtxt <- if isPolyShaped then freshGhostVariableContext else return []
+  ghostCtxt <- freshGhostVariableContext
 
   -- Create conjunct to capture the body expression constraints
   newConjunct
@@ -828,6 +829,19 @@ synthExpr defs gam pol
 
       -- Return usage as 0 : gradeType
       return (t, [(x, Discharged t (TyGrade (Just gradeType) 0))], substF, elabE)
+    Just (Ghost r) -> do
+      -- Infer the type of the variable
+      (t, _, subst, elabE) <- synthExpr defs gam pol v
+
+      -- Get the type of the grade
+      (gradeType, subst', _) <- synthKind s r
+      substF <- combineSubstitutions s subst subst'
+
+      debugM "secret weaken ghost" (pretty gradeType <> ", " <> pretty r)
+
+      -- Return usage as 0 : gradeType
+      return (t, [(x, Ghost (TyGrade (Just gradeType) 0))], substF, elabE)
+
 
 -- Constructors
 synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
@@ -1079,6 +1093,7 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
      Just (Ghost c) -> do
        (k, subst, _) <- synthKind s c
        let elaborated = Val s ghostType rf (Var ghostType x)
+       debugM "synthExpr[Var] ghost" (pretty k <> ", " <> pretty c)
        return (ghostType, [(x, Ghost (TyGrade (Just k) 1))], subst, elaborated)
 
 -- Specialised application for scale
@@ -1431,6 +1446,7 @@ ctxtApprox s ctxt1 ctxt2 = do
              Ghost c -> do
                -- TODO: deal with the subst here
                (kind, subst, _) <- synthKind s c
+               debugM "ctxtApprox ghost" (pretty kind <> ", " <> pretty c)
                -- TODO: deal with the subst here
                _ <- relateByAssumption s ApproximatedBy (id, Ghost (TyGrade (Just kind) 0)) (id, ass2)
                return id
@@ -1556,6 +1572,7 @@ intersectCtxtsWithWeaken s a b = do
        -- TODO: handle new ghost variables
        -- TODO: do we want to weaken ghost variables?
        (kind, _, _) <- synthKind s c
+       debugM "weaken ghost" (pretty kind <> ", " <> pretty c)
        return (var, Ghost (TyGrade (Just kind) 0))
 
 {- | Given an input context and output context, check the usage of
@@ -1721,6 +1738,7 @@ extCtxt s ctxt var (Linear t) = do
        if t == ghostType
          then do
           (k, subst, cElaborated) <- synthKind s c
+          debugM "extCtxt ghost" (pretty k <> ", " <> pretty c)
           return $ replace ctxt var (Ghost (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
     Nothing -> return $ (var, Linear t) : ctxt
@@ -1877,14 +1895,17 @@ allGhostVariables = filter isGhost
 
 freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
-  return [(mkId ".var.ghost", Ghost (tyCon "Public"))]
+  return [(mkId ".var.ghost", Ghost (tyCon "Unused"))]
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
 ghostVariableContextMeet env =
   let (ghosts,env') = partition isGhost env
-      newGrade      = foldr1 (TyInfix TyOpMeet) $ map ((\(Ghost ce) -> ce) . snd) ghosts
-  -- if there's no ghost variable in env, don't add one
-  in if null ghosts then return env' else return $ (mkId ".var.ghost", Ghost newGrade) : env'
+      newGrade      = foldr (TyInfix TyOpMeet) (tyCon "Unused") $ map ((\(Ghost ce) -> ce) . snd) ghosts
+  in return $ (mkId ".var.ghost", Ghost newGrade) : env'
+  -- let (ghosts,env') = partition isGhost env
+  --     newGrade      = foldr1 (TyInfix TyOpMeet) $ map ((\(Ghost ce) -> ce) . snd) ghosts
+  -- -- if there's no ghost variable in env, don't add one
+  -- in if null ghosts then return env' else return $ (mkId ".var.ghost", Ghost newGrade) : env'
 
 isGhost :: (a, Assumption) -> Bool
 isGhost (_, Ghost _) = True
