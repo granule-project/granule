@@ -16,6 +16,16 @@ import Language.Granule.Syntax.Type
 -- | Operations on coeffects
 import Language.Granule.Utils
 
+-- Calculate whether a type assumption is level kinded
+isLevelKinded :: (?globals :: Globals) => Span -> Type -> Checker Bool
+-- TODO- extend this to include products (recursively decompose)
+isLevelKinded s t = do
+    (k,_subst,_) <- synthKind s t
+    return $ case k of
+        TyCon (internalName -> "Level") -> True
+        TyApp (TyCon (internalName -> "Interval")) (TyCon (internalName -> "Level")) -> True
+        _oth -> False
+
 -- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
 --    set of used variables, (first param))

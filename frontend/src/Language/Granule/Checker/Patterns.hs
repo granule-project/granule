@@ -12,9 +12,11 @@ import Control.Monad.Except (throwError)
 import Control.Monad.State.Strict
 import Data.List.NonEmpty (NonEmpty(..))
 
+import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
 import Language.Granule.Checker.Flatten
+import Language.Granule.Checker.Ghost
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.Kinding
@@ -166,9 +168,7 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
 
     let elabP = PBox sp t rf elabPinner
     substU <- combineManySubstitutions s [subst0, subst1, subst]
-    -- GHOST variable made from coeff added to assumptions
-    let ghostCtxt = [(mkId ".var.ghost", Ghost coeff)]
-    return (ghostCtxt ++ ctxt, eVars, substU, elabP, NotFull)
+    return (ctxt, eVars, substU, elabP, NotFull)
 
 ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
@@ -222,7 +222,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewrit = " <> show dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
-          (as, _, bs, us, elabPs, consumptionsOut) <-
+          (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
             ctxtFromTypedPatterns' outerBoxTy s dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
@@ -236,7 +236,20 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs
-          return (as, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
+
+          -- Level tracking
+          -- GHOST variable made from coeff added to assumptions
+          ghostCtxt <-
+                case outerBoxTy of
+                  Nothing -> do
+                    isPoly <- polyShaped ty
+                    return $ if isPoly then [(mkId ".var.ghost", Ghost (TyGrade Nothing 1))] else []
+                  Just (coeff, _) -> do
+                    isPoly <- polyShaped ty
+                    isLevely <- isLevelKinded s ty
+                    return $ if isLevely && isPoly then [(mkId ".var.ghost", Ghost coeff)] else []
+
+          return (bindingContexts <> ghostCtxt, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
                   elabP,                          -- elaborated pattern
@@ -287,7 +300,9 @@ ctxtFromTypedPatterns' outerCoeff s (FunTy _ t1 t2) (pat:pats) (cons:consumption
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
-  return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
+  -- TODO: probably you can make the first part of this component be calculated more efficiently
+  newLocalGam <- ghostVariableContextMeet $ localGam <> localGam'
+  return (newLocalGam, ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
 ctxtFromTypedPatterns' _ s ty (p:ps) _ = do
   -- This means we have patterns left over, but the type is not a
