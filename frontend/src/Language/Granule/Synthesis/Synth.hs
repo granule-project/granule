@@ -1473,19 +1473,19 @@ synthesiseProgram resourceScheme gamma omega goalTy checkerState = do
 
   -- <benchmarking-output>
   when benchmarking $
-      if benchmarkingRawData then do
+      if benchmarkingRawData then
         putStrLn $ "Measurement "
-              <> "{ smtCalls = " <> show (smtCallsCount aggregate)
-              <> ", synthTime = " <> show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
-              <> ", proverTime = " <> show (proverTime aggregate)
-              <> ", solverTime = " <> show (Language.Granule.Synthesis.Monad.smtTime aggregate)
-              <> ", meanTheoremSize = " <> show (if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
-              <> ", success = " <> (if null results then "False" else "True")
-              <> " } "
+            <> "{ smtCalls = " <> show (smtCallsCount aggregate)
+            <> ", synthTime = " <> show (fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double))
+            <> ", proverTime = " <> show (proverTime aggregate)
+            <> ", solverTime = " <> show (Language.Granule.Synthesis.Monad.smtTime aggregate)
+            <> ", meanTheoremSize = " <> show (if smtCallsCount aggregate == 0 then 0 else fromInteger (theoremSizeTotal aggregate) / fromInteger (smtCallsCount aggregate))
+            <> ", success = " <> (if null results then "False" else "True")
+            <> " } "
       else do
         -- Output benchmarking info
-        putStrLn $ "-------------------------------------------------"
-        putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty $ expr; _ -> "NO SYNTHESIS")
+        putStrLn "-------------------------------------------------"
+        putStrLn $ "Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty expr; _ -> "NO SYNTHESIS")
         putStrLn $ "-------- Synthesiser benchmarking data (" ++ show resourceScheme ++ ") -------"
         putStrLn $ "Total smtCalls     = " ++ show (smtCallsCount aggregate)
         putStrLn $ "Total smtTime    (ms) = "  ++ show (Language.Granule.Synthesis.Monad.smtTime aggregate)
