@@ -375,11 +375,13 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   modify (\st -> st { equationTy = Just equationTy'' })
 
   patternGam <- substitute subst patternGam
+  debugM "context in checkEquation 1" $ (show patternGam)
   
   -- Introduce ambient coeffect
   ghostCtxt <- freshGhostVariableContext
   combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt
 
+  debugM "context in checkEquation 2" $ (show combinedGam)
   -- Check the body
   (localGam, subst', elaboratedExpr) <-
        checkExpr defCtxt combinedGam Positive True tau expr
@@ -692,7 +694,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       -- Checking the case body
       tau' <- substitute subst tau
       patternGam <- substitute subst patternGam
-      combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt
+      combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt <> gam
       (localGam, subst', elaborated_i) <- checkExpr defs combinedGam pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type

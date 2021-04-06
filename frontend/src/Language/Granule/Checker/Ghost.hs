@@ -14,8 +14,10 @@ allGhostVariables = filter isGhost
 
 freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
-  return [(mkId ".var.ghost", Ghost (TyGrade Nothing 0))]
-   -- Ghost (tyCon "Private"))]
+  -- TODO: fix this, don't specialize ghost to level kind
+  return [(mkId ".var.ghost",
+           Ghost (tyCon "Private"))]
+           -- Ghost (TyGrade Nothing 0))]
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
 ghostVariableContextMeet env =

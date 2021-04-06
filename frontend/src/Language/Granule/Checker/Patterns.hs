@@ -242,12 +242,13 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           ghostCtxt <-
                 case outerBoxTy of
                   Nothing -> do
-                    isPoly <- polyShaped ty
-                    return $ if isPoly then [(mkId ".var.ghost", Ghost (TyGrade Nothing 1))] else []
+                    return [(mkId ".var.ghost", Ghost (TyGrade Nothing 1))]
                   Just (coeff, _) -> do
-                    isPoly <- polyShaped ty
                     isLevely <- isLevelKinded s ty
-                    return $ if isLevely && isPoly then [(mkId ".var.ghost", Ghost coeff)] else []
+                    return $ if isLevely then [(mkId ".var.ghost", Ghost coeff)] else []
+
+
+          debugM "context in ctxtFromTypedPattern' PConstr" $ show (bindingContexts <> ghostCtxt)
 
           return (bindingContexts <> ghostCtxt, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
