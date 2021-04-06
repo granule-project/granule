@@ -162,7 +162,8 @@ ctxtMerge operator [] ((x, Discharged t g) : ctxt) = do
   -- Left context has no `x`, so assume it has been weakened (0 gade)
   (kind, _, _) <- conv $ synthKind nullSpan g
   ctxt' <- ctxtMerge operator [] ctxt
-  return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
+  return $ (x, Discharged t g) : ctxt'
+--  return $ (x, Discharged t (operator (TyGrade (Just kind) 0) g)) : ctxt'
 
 --  * Cannot meet/join an empty context to one with linear assumptions
 ctxtMerge _ [] ((_, Linear t) : ctxt) = none
@@ -184,7 +185,8 @@ ctxtMerge operator ((x, Discharged t1 g1) : ctxt1') ctxt2 =
       -- Right context has no `x`, so assume it has been weakened (0 gade)
       ctxt' <- ctxtMerge operator ctxt1' ctxt2
       (kind, _, _) <- conv $ synthKind nullSpan g1
-      return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
+      return $ (x, Discharged t1 g1) : ctxt'
+      --return $ (x, Discharged t1 (operator g1 (TyGrade (Just kind) 0))) : ctxt'
 
 ctxtMerge operator ((x, Linear t1) : ctxt1') ctxt2 =
   case lookupAndCutout x ctxt2 of
