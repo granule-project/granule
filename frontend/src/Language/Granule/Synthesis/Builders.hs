@@ -144,6 +144,29 @@ makeCase t1 t2 sId lId rId lExpr rExpr =
   Case s (SumTy t1 t2) False (Val s (SumTy t1 t2) False (Var (SumTy t1 t2) sId)) [(PConstr s (SumTy t1 t2) False (mkId "Left") [(PVar s t1 False lId)], lExpr), (PConstr s (SumTy t1 t2) False (mkId "Right") [(PVar s t2 False rId)], rExpr)]
   where s = nullSpanNoFile
 
+makeCase' :: Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Expr () Type
+makeCase' ty id exprPats goal = 
+  Case s goal False (Val s ty False (Var ty id)) exprPats
+  where s = nullSpanNoFile 
+
+makeBoxCase :: Type -> Type -> Id -> [(Pattern Type, Expr () Type)] -> Type -> Expr () Type
+makeBoxCase ty grade id exprPats goal = 
+  Case s goal False (Val s (Box ty grade) False (Promote (Box ty grade) (Val s ty False (Var ty id)))) exprPats
+  where s = nullSpanNoFile 
+
+makeNullaryConstructor :: Id -> Expr () Type
+makeNullaryConstructor id =
+  Val nullSpanNoFile (TyCon id) True
+    (Constr (TyCon id) id [])
+
+makeConstr :: [((Expr () Type), Type)] -> Id -> Type -> Expr () Type
+makeConstr terms name goal = buildTerm terms
+  where s = nullSpanNoFile
+        buildTerm [] = Val s goal False (Constr goal name [])
+        buildTerm ((e, ty):es) =
+          let e' = buildTerm es in
+            App s ty False e' e
+
 makeUnitElim :: Id -> Expr () Type -> TypeScheme -> Expr () Type
 makeUnitElim name e tyS = makeUnitElimP id
     (Val s (TyCon (Id "()" "()")) False (Var (TyCon (Id "()" "()")) name)) e tyS
