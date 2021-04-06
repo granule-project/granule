@@ -501,7 +501,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
         dc <- mapM (lookupDataConstructor s) b
         let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
         return (a, sd)) pats
-      (_, cases) <- generateCases s constructors ctxt boundVariables
+      (_, cases) <- generateCases s constructors ctxt boundVariables Nothing
 
       -- If we are in synthesise mode, also try to synthesise a
       -- term for each case split goal *if* this is also a hole

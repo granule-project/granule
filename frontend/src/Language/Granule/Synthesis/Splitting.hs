@@ -34,8 +34,9 @@ generateCases :: (?globals :: Globals)
   -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt Assumption
   -> [Id]
+  -> Maybe Type
   -> Checker ([Id], [([Pattern ()], Ctxt Assumption)])
-generateCases span constructors ctxt toSplit = do
+generateCases span constructors ctxt toSplit funTy = do
   -- Creates two subcontexts based on whether a variable should be split or not.
   let splitCtxt = relevantSubCtxt toSplit ctxt
   let noSplitCtxt = deleteVars ctxt toSplit
@@ -55,14 +56,16 @@ generateCases span constructors ctxt toSplit = do
   -- Convert the patterns into cases (i.e. Cartesian product across patterns).
   let cases = combineCases orderedPatterns
 
+
   -- The Nothing case should be unreachable, as this function is only ever
   -- called after checkEquation, where equationTy is set.
   st <- get
   case equationTy st of
     Nothing -> return ([], [])
     Just eqTy -> do
+      let ty = fromMaybe eqTy funTy
       -- Filter the patterns if they are impossible.
-      patternsAndMaybeBinders <- mapM (caseFilter span eqTy) (snd cases)
+      patternsAndMaybeBinders <- mapM (caseFilter span ty) (snd cases)
       let validPatterns = catMaybes patternsAndMaybeBinders
       return (fst cases, validPatterns)
 
