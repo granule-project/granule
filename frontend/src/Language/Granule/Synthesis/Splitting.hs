@@ -260,7 +260,8 @@ expandGrades (Box (TyInfix TyOpInterval (TyGrade k lower) (TyGrade k' upper)) t)
   Box (TyInfix TyOpInterval (TyGrade k 1) (TyGrade k' upper)) t
 expandGrades (Box (TyInfix TyOpInterval (TyInt lower) (TyInt upper)) t) | lower > 1 =
   Box (TyInfix TyOpInterval (TyInt 1) (TyInt upper)) t
-expandGrades (Box (TyGrade k n) t) | n > 1 = Box (TyInfix TyOpInterval (TyGrade k 1) (TyGrade k n)) t
+expandGrades (Box (TyGrade k n) t) | n > 1 = -- Box (TyGrade k n) t
+ Box (TyInfix TyOpInterval (TyGrade k 1) (TyGrade k n)) t
 expandGrades (Box (TyInt n) t) | n > 1 = Box (TyInfix TyOpInterval (TyInt 1) (TyInt n)) t
 expandGrades ty = ty
 
