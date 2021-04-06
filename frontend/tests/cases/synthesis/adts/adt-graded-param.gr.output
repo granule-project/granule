@@ -1,5 +1,4 @@
-
 data Test c where First c 
 
 f : forall { a : Type } . (Test (a [2])) -> (a, a)
-f = ?
+f (First x1) = let [z] = x1 in (z, z)
