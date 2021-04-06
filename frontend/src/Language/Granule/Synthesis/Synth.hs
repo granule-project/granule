@@ -1365,7 +1365,7 @@ synthesiseInner startTime inDereliction resourceScheme gamma omega goalTy@(Foral
                       ++ ", isAtomic goalTy = " ++ show (isAtomic goalTy')
   currentTime    <- liftIO $ Clock.getTime Clock.Monotonic
   let elapsedTime = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec currentTime startTime)) / (10^(6 :: Integer)::Double)
-  if elapsedTime > synthTimeoutMillis && synthTimeoutMillis > 0 then none else
+  if elapsedTime > synthTimeoutMillis && synthTimeoutMillis > 0 then Synthesiser (lift $ fail "Timeout")  else
     case (isRAsync goalTy', omega) of
       (True, _) ->
         -- Right Async : Decompose goalTy until synchronous
