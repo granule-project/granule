@@ -289,7 +289,9 @@ buildConstructorPatterns span id constructors = do
     genFresh ids = do
       let baseIds = map (fromMaybe id) ids
       freshStrings <- mapM (freshIdentifierBase . (\(Id x _) -> x)) baseIds
-      return $ map mkId freshStrings
+      return $ map (mkId . removeDots) freshStrings
+
+    removeDots xs =  [ x | x <- xs, x `notElem` "." ]
 
 -- Given an identifier, builds the base pattern for that identifier, paired
 -- with the identifier itself.
