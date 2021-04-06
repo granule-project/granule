@@ -1,0 +1,2 @@
+quad : forall {a b c d : Type} . ((a , b), (c, d)) [1..2] -> (((a, c), (a, d)), ((b, c), (b, d)))
+quad = ? 

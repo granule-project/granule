@@ -1,0 +1,8 @@
+quad : forall {a b c d : Type} . ((a , b), (c, d)) [1..2] -> (((a, c), (a, d)), ((b, c), (b, d)))
+quad [y] = 
+    (case [y] of
+      [(y0, y1)] -> 
+    (case [y1] of
+      [(y10, y11)] -> 
+    (case [y0] of
+      [(y00, y01)] -> (((y00, y10), (y00, y11)), ((y01, y10), (y01, y11))))))

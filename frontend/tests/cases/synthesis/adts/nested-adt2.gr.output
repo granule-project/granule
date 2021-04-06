@@ -1,0 +1,7 @@
+data Test c where First c | Second c
+
+f : forall { a : Type } . (Test (Test a)) -> a
+f (First (First x10)) = x10;
+f (First (Second x11)) = x11;
+f (Second (First x20)) = x20;
+f (Second (Second x21)) = x21

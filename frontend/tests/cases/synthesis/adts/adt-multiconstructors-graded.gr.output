@@ -1,0 +1,7 @@
+data Test c where First c | Second c
+
+f : forall { a : Type } . (Test a) [1..2] -> (a, a)
+f [y] = 
+    (case [y] of
+      [First y0] -> (y0, y0);
+      [Second y1] -> (y1, y1))

@@ -1,0 +1,11 @@
+data Test c d where First c d | Second c d
+
+f : forall { a b : Type } . (Test (Test a b) (Test a b)) -> ((a, b), (a, b))
+f (First (First x14 x15) (First x20 x21)) = ((x14, x15), (x20, x21));
+f (First (Second x16 x17) (First x20 x21)) = ((x16, x17), (x20, x21));
+f (First (First x10 x11) (Second x22 x23)) = ((x10, x11), (x22, x23));
+f (First (Second x12 x13) (Second x22 x23)) = ((x12, x13), (x22, x23));
+f (Second (First x34 x35) (First x40 x41)) = ((x34, x35), (x40, x41));
+f (Second (Second x36 x37) (First x40 x41)) = ((x36, x37), (x40, x41));
+f (Second (First x30 x31) (Second x42 x43)) = ((x30, x31), (x42, x43));
+f (Second (Second x32 x33) (Second x42 x43)) = ((x32, x33), (x42, x43))

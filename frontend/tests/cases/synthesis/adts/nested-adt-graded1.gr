@@ -1,0 +1,4 @@
+data Test c where First c 
+
+f : forall { a : Type } . (Test (Test (a [3]))) -> (a, (a, a))
+f = ?

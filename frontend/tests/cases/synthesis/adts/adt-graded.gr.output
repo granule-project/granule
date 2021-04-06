@@ -1,0 +1,6 @@
+data Test c where First c 
+
+f : forall { a : Type } . (Test a) [2] -> a [2]
+f [y] = 
+    (case [y] of
+      [First y0] -> [y0])
