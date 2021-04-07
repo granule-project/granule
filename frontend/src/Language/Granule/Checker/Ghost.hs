@@ -14,9 +14,8 @@ allGhostVariables = filter isGhost
 
 freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
-  -- TODO: fix this, don't specialize ghost to level kind
-  return [(mkId ".var.ghost",
-           Ghost (tyCon "Private"))]
+  return [(mkId ".var.ghost.fresh",
+           Ghost defaultGhost)]
            -- Ghost (TyGrade Nothing 0))]
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
@@ -27,8 +26,12 @@ ghostVariableContextMeet env =
   let (ghosts,env') = partition isGhost env
       newGrade      = foldr1 (TyInfix TyOpMeet) $ map ((\(Ghost ce) -> ce) . snd) ghosts
   -- if there's no ghost variable in env, don't add one
-  in if null ghosts then return env' else return $ (mkId ".var.ghost", Ghost newGrade) : env'
+  in if null ghosts then return env' else return $ (mkId ".var.ghost.meet", Ghost newGrade) : env'
 
 isGhost :: (a, Assumption) -> Bool
 isGhost (_, Ghost _) = True
 isGhost _ = False
+
+defaultGhost :: Coeffect
+defaultGhost = TyGrade (Just $ tyCon "Level") 0
+-- defaultGhost = TyGrade Nothing 0

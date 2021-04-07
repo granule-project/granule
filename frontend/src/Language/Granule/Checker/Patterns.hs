@@ -243,11 +243,14 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
                 case outerBoxTy of
                   Nothing -> do
                     debugM "ctxtFromTypedPattern no ghost" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
-                    return []
+                    return [(mkId ".var.ghost.pattern", Ghost defaultGhost)] -- []
                     -- return [(mkId ".var.ghost", Ghost (TyGrade Nothing 1))]
                   Just (coeff, _) -> do
                     isLevely <- isLevelKinded s ty
-                    return $ if isLevely then [(mkId ".var.ghost", Ghost coeff)] else []
+                    debugM "ctxtFromTypedPattern outerBoxTy" $ "ty: " <> show outerBoxTy <> "\n" <> show (Ghost coeff)
+                    return $ if isLevely
+                             then [(mkId ".var.ghost.pattern", Ghost coeff)]
+                             else [(mkId ".var.ghost.pattern", Ghost defaultGhost)]
 
 
           debugM "context in ctxtFromTypedPattern' PConstr" $ show (bindingContexts <> ghostCtxt)

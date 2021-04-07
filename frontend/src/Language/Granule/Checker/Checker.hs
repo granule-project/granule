@@ -688,12 +688,13 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
       -- introduce ghost variables if type is polyshaped
-      ghostCtxt <- if isPolyShaped then freshGhostVariableContext else return []
+      ghostCtxt <- freshGhostVariableContext
       newConjunct
 
       -- Checking the case body
       tau' <- substitute subst tau
       patternGam <- substitute subst patternGam
+      debugM "checkExpr[Case] patternGam" $ show patternGam
       combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt <> gam
       (localGam, subst', elaborated_i) <- checkExpr defs combinedGam pol False tau' e_i
 
@@ -883,7 +884,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
-      ghostCtxt <- if isPolyShaped then freshGhostVariableContext else return []
+      ghostCtxt <-  freshGhostVariableContext
       newConjunct
 
       -- Synth the case body
@@ -1615,11 +1616,22 @@ relateByAssumption s rel (_, Ghost c1) (_, Ghost c2) = do
   addConstraint (rel s (inj1 c1) (inj2 c2) kind)
   return subst
 
+relateByAssumption s rel (_, Discharged _ c1) (_, Ghost c2) = do
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
+  return subst
+
+relateByAssumption s rel (_, Ghost c1) (_, Discharged _ c2) = do
+  (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c1 c2
+  addConstraint (rel s (inj1 c1) (inj2 c2) kind)
+  return subst
+
 
 -- Linear binding and a graded binding (likely from a promotion)
 relateByAssumption s _ (idX, xc) (idY, yc) = do
   debugM "relateByAssumption" (pretty s <> ", " <> pretty idX <> ", " <> pretty idY)
-  debugM "relateByAssumption" (pretty xc <> ", " <> pretty yc)
+  debugM "relateByAssumption" (pretty s <> ", " <> pretty xc <> ", " <> pretty yc)
+  debugM "relateByAssumption" (pretty s <> ", " <> show xc <> ", " <> show yc)
   if idX == idY
     then throw UnifyGradedLinear{ errLoc = s, errLinearOrGraded = idX }
     else error $ "Internal bug: " <> pretty idX <> " does not match " <> pretty idY
