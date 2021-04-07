@@ -857,7 +857,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
       ty <- substitute coercions' ty
 
       let elaborated = Val s ty rf (Constr ty c [])
-          outputCtxt = [(mkId ".var.ghost", Ghost (TyGrade Nothing 1))]  -- ghostGam -- []
+          outputCtxt = [] -- [(mkId ".var.ghost", Ghost (TyGrade Nothing 1))]  -- ghostGam -- []
       return (ty, outputCtxt, [], elaborated)
 
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
