@@ -98,6 +98,7 @@ closedOperation =
     TyOpMeet -> True
     TyOpJoin -> True
     TyOpInterval -> True
+    TyOpConverge -> True
     _        -> False
 
 coeffectResourceAlgebraOps :: TypeOperator -> Bool
@@ -127,6 +128,7 @@ tyOps = \case
     TyOpMeet -> (kNat, kNat, kNat)
     TyOpJoin -> (kNat, kNat, kNat)
     TyOpInterval -> (tyVar "k", tyVar "k", tyVar "k")
+    TyOpConverge -> (kNat, kNat, kNat)
 
 dataTypes :: [DataDecl]
 dataTypes =

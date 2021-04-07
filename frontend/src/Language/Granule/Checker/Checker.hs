@@ -636,9 +636,11 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     -- Multiply the grades of all the used varibles here
     (gam'', subst') <- multAll s vars demand gam'
 
+    meetGam <- ghostVariableContextMeet gam
+
     -- Causes a promotion of any ghost typing assumptions that came from an enclosing case.
     -- This prevents control-flow attacks and is a special case for Level
-    (gamGhost, subst'') <- multAll s (map fst (allGhostVariables gam)) demand (allGhostVariables gam)
+    (gamGhost, subst'') <- multAll s (map fst (allGhostVariables meetGam)) demand (allGhostVariables meetGam)
 
     substFinal <- combineManySubstitutions s [subst, subst', subst'']
 
@@ -1150,7 +1152,9 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Multiply the grades of all the used variables here
    (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
 
-   (gamGhost, subst'') <- multAll s (map fst (allGhostVariables gam)) (TyVar var) (allGhostVariables gam)
+   meetGam <- ghostVariableContextMeet gam
+
+   (gamGhost, subst'') <- multAll s (map fst (allGhostVariables meetGam)) (TyVar var) (allGhostVariables meetGam)
    substFinal <- combineManySubstitutions s [subst, subst', subst'']
    let finalTy = Box (TyVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
