@@ -621,7 +621,8 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
     -- if closed and not public, can't promote to level kind
-    allowPromotion >>= \allow -> unless allow $ invalidPromotion
+    allow <- allowPromotion
+    unless allow $ invalidPromotion
 
     let vars =
           if hasHole e
@@ -657,12 +658,19 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
         _oth -> False
 
     -- determine if e is a closed term with no ghost variables
-    hasNoFreeVars = (not (hasHole e) && null (freeVars e)) && (null $ allGhostVariables gam)
+    hasNoFreeVars = (not (hasHole e) && null (freeVars e))
 
     -- Allow promotion if Public or not Level kinded or has free vars
     allowPromotion = do
       levelKind <- isLevelKinded (getSpan e) demand
-      return $ not levelKind || isLevelPublic || not hasNoFreeVars
+      noSignificantGhost <- hasNoSignificantGhost
+      return $ not levelKind || not isLevelPublic || not hasNoFreeVars || not noSignificantGhost
+
+    hasNoSignificantGhost = do
+      ghost <- ghostVariableContextMeet gam
+      case head $ allGhostVariables ghost of
+        (_,Ghost ce) -> return $ ce == defaultGhost
+        _ -> error $ "Checker.checkExpr[Box]: Missing ghost variable"
 
     -- Throw type error when we try to promote at a non-Public level
     invalidPromotion =
