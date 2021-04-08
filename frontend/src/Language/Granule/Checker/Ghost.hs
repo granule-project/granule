@@ -24,7 +24,7 @@ ghostVariableContextMeet env =
   --     newGrade      = foldr (TyInfix TyOpMeet) (tyCon "Unused") $ map ((\(Ghost ce) -> ce) . snd) ghosts
   -- in return $ (mkId ".var.ghost", Ghost newGrade) : env'
   let (ghosts,env') = partition isGhost env
-      newGrade = foldr1 (TyInfix ghostOp) $ map ((\(Ghost ce) -> ce) . snd) ghosts
+      newGrade = foldr1 converge $ map ((\(Ghost ce) -> ce) . snd) ghosts
   -- if there's no ghost variable in env, don't add one
   in if null ghosts then return env' else return $ (mkId ".var.ghost.meet", Ghost newGrade) : env'
 
@@ -38,3 +38,7 @@ defaultGhost = TyGrade (Just $ tyCon "Level") 0
 
 ghostOp :: TypeOperator
 ghostOp = TyOpConverge
+
+converge :: Coeffect -> Coeffect -> Coeffect
+converge (TyGrade (Just k) 0) (TyGrade (Just _k) 0) = TyGrade (Just k) 0
+converge c1 c2 = TyInfix ghostOp c1 c2
