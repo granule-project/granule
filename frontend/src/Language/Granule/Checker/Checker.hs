@@ -642,6 +642,8 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     -- This prevents control-flow attacks and is a special case for Level
     (gamGhost, subst'') <- multAll s (map fst (allGhostVariables meetGam)) demand (allGhostVariables meetGam)
 
+    debugM "checkExpr[Box].ghostGam" $ pretty gamGhost
+
     substFinal <- combineManySubstitutions s [subst, subst', subst'']
 
     let elaborated = Val s ty rf (Promote tau elaboratedE)
