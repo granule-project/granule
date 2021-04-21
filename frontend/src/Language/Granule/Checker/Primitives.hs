@@ -58,6 +58,7 @@ typeConstructors =
     , (mkId "Private",  (tyCon "Level", [], False))
     , (mkId "Public",   (tyCon "Level", [], False))
     , (mkId "Unused",   (tyCon "Level", [], False))
+    , (mkId "Dunno",    (tyCon "Level", [], False))
     -- Alternate security levels (a la Gaboardi et al. 2016 and Abel-Bernardy 2020)
     , (mkId "Sec",  (kcoeffect, [], False))
     , (mkId "Hi",    (tyCon "Sec", [], False))

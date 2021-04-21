@@ -52,10 +52,11 @@ data SGrade =
 type SSetElem = [Char]
 
 -- Specialised representation for `Level`
-publicRepresentation, privateRepresentation, unusedRepresentation :: Integer
+publicRepresentation, privateRepresentation, unusedRepresentation, dunnoRepresentation :: Integer
 privateRepresentation = 1
 publicRepresentation  = 2
 unusedRepresentation  = 0
+dunnoRepresentation   = 3
 
 -- Representation for `Sec`
 hiRepresentation, loRepresentation :: SBool
@@ -337,7 +338,12 @@ symGradeConverge (SLevel lev1) (SLevel lev2) = do
     return $ ite (lev1 .== literal privateRepresentation)
                  (SLevel $ literal privateRepresentation)
                  $ ite (lev2 .== literal privateRepresentation)
-                       (SLevel $ literal privateRepresentation) v
+                       (SLevel $ literal privateRepresentation)
+                       $ ite (lev1 .== literal dunnoRepresentation)
+                             (SLevel lev2)
+                             $ ite (lev2 .== literal dunnoRepresentation)
+                                   (SLevel lev1)
+                                   v
 symGradeConverge s1 s2 = symGradeTimes s1 s2
 
 -- | Times operation on symbolic grades
