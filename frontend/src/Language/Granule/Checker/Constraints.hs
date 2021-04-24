@@ -441,7 +441,6 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL sFalse, sTrue)
-        "Uniqueness" -> return (SUnique, sTrue)
         "Borrowing" -> return (SBorrow (literal oneRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 

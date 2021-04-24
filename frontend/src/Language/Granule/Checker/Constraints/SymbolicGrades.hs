@@ -373,7 +373,6 @@ symGradeTimes (SInterval lb1 ub1) (SInterval lb2 ub2) =
         b `f` ub1ub2
 
 symGradeTimes SPoint SPoint = return SPoint
-symGradeTimes SUnique SUnique = return $ SUnique
 symGradeTimes s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeTimes SProduct id s t)
 
