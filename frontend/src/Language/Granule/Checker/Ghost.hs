@@ -14,7 +14,7 @@ allGhostVariables = filter isGhost
 
 freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
-  return [(mkId ".var.ghost.fresh",
+  return [(mkId ghostName,
            Ghost defaultGhost)]
            -- Ghost (TyGrade Nothing 0))]
 
@@ -26,13 +26,14 @@ ghostVariableContextMeet env =
   let (ghosts,env') = partition isGhost env
       newGrade = foldr1 converge $ map ((\(Ghost ce) -> ce) . snd) ghosts
   -- if there's no ghost variable in env, don't add one
-  in if null ghosts then return env' else return $ (mkId ".var.ghost.meet", Ghost newGrade) : env'
+  in if null ghosts then return env' else return $ (mkId ghostName, Ghost newGrade) : env'
 
 isGhost :: (a, Assumption) -> Bool
 isGhost (_, Ghost _) = True
 isGhost _ = False
 
 defaultGhost :: Coeffect
+-- defaultGhost = TyGrade (Just $ tyCon "Level") 3 -- dunno label
 defaultGhost = TyGrade (Just $ tyCon "Level") 0
 -- defaultGhost = TyGrade Nothing 0
 
@@ -42,3 +43,6 @@ ghostOp = TyOpConverge
 converge :: Coeffect -> Coeffect -> Coeffect
 converge (TyGrade (Just k) 0) (TyGrade (Just _k) 0) = TyGrade (Just k) 0
 converge c1 c2 = TyInfix ghostOp c1 c2
+
+ghostName :: String
+ghostName = ".var.ghost"

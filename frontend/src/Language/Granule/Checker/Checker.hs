@@ -620,7 +620,7 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
-    -- if closed and not public, can't promote to level kind
+    -- if closed and public, can't promote
     allow <- allowPromotion
     unless allow $ invalidPromotion
 
@@ -631,24 +631,23 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
             -- Otherwise we need to discharge only things that get used
             else freeVars e
 
+
     -- Checker the expression being promoted
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
-    -- Multiply the grades of all the used varibles here
-    (gam'', subst') <- multAll s vars demand gam'
-
+    -- This prevents control-flow attacks and is a special case for Level:
+    -- we compute the meet of all ghosts, and include the resulting ghost in the free vars
     meetGam <- ghostVariableContextMeet gam
+    let ghostGam = allGhostVariables meetGam
+    let vars' = vars ++ (map fst $ ghostGam) -- ghost acts like free var
 
-    -- Causes a promotion of any ghost typing assumptions that came from an enclosing case.
-    -- This prevents control-flow attacks and is a special case for Level
-    (gamGhost, subst'') <- multAll s (map fst (allGhostVariables meetGam)) demand (allGhostVariables meetGam)
+    -- Multiply the grades of all the used varibles here
+    (gam'', subst') <- multAll s vars' demand (gam' <> ghostGam)
 
-    debugM "checkExpr[Box].ghostGam" $ pretty gamGhost
-
-    substFinal <- combineManySubstitutions s [subst, subst', subst'']
+    substFinal <- combineManySubstitutions s [subst, subst']
 
     let elaborated = Val s ty rf (Promote tau elaboratedE)
-    return (gam'' <> gamGhost, substFinal, elaborated)
+    return (gam'' <> ghostGam, substFinal, elaborated)
 
   where
     -- Determine if the level type is Public
@@ -657,14 +656,15 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
         TyCon (internalName -> "Public") -> True
         _oth -> False
 
-    -- determine if e is a closed term with no ghost variables
+    -- determine if e is a closed term
     hasNoFreeVars = (not (hasHole e) && null (freeVars e))
 
-    -- Allow promotion if Public or not Level kinded or has free vars
+    -- Allow promotion if not Public or not Level kinded or has free vars
     allowPromotion = do
       levelKind <- isLevelKinded (getSpan e) demand
       noSignificantGhost <- hasNoSignificantGhost
-      return $ not levelKind || not isLevelPublic || not hasNoFreeVars || not noSignificantGhost
+      return $ not levelKind || not isLevelPublic || not hasNoFreeVars
+      -- return $ not levelKind || not isLevelPublic || not hasNoFreeVars || not noSignificantGhost
 
     hasNoSignificantGhost = do
       ghost <- ghostVariableContextMeet gam
