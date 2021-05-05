@@ -380,6 +380,8 @@ builtIns =
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
+  , (mkId "uniqueReturn",  Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (Val nullSpan () False v))
+  , (mkId "uniqueBind",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False f)) -> Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue

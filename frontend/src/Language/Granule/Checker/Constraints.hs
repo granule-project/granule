@@ -215,6 +215,10 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
 freshSolverVarScoped quant name (TyCon (internalName -> "LNL")) q k =
     quant q name (\solverVar -> k (sTrue, SLNL solverVar))
 
+freshSolverVarScoped (quant :: Quantifier -> String -> (SBV Integer -> Symbolic SBool) -> Symbolic SBool) 
+                      name (TyCon (internalName -> "Uniqueness")) q k =
+    quant q name (\solverVar -> k (sTrue, SUnique))
+
 freshSolverVarScoped quant name (TyCon conName) q k =
     -- Integer based
     quant q name (\solverVar ->
@@ -224,6 +228,10 @@ freshSolverVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
+        "Borrowing" -> k (solverVar .== literal oneRepresentation
+                     .|| solverVar .== literal betaRepresentation
+                     .|| solverVar .== literal omegaRepresentation
+                       , SBorrow solverVar)
         "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
@@ -355,11 +363,23 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
     "NonLin" -> return (SLNL sTrue, sTrue)
     c -> error $ "Cannot compile " <> show c <> " as a LNL semiring"
 
+compileCoeffect (TyCon name) (TyCon (internalName -> "Borrowing")) _ = do
+  let n = case internalName name of
+            "One"   -> oneRepresentation
+            "Beta"  -> betaRepresentation
+            "Omega" -> omegaRepresentation
+            c       -> error $ "Cannot compile " <> show c <> " as a Borrowing semiring"
+
+  return (SBorrow . fromInteger . toInteger $ n, sTrue)
+
 compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec hiRepresentation, sTrue)
     "Lo" -> return (SSec loRepresentation, sTrue)
     c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
+
+compileCoeffect (TyCon name) (TyCon (internalName -> "Uniqueness")) _ = do
+  return (SUnique, sTrue)
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
 compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (TyCon (internalName -> "Level"), t2)) vars = do
@@ -451,6 +471,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
         "LNL"       -> return (SLNL sTrue, sTrue)
+        "Borrowing" -> return (SBorrow (literal omegaRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
@@ -485,6 +506,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
         "LNL"       -> return (SLNL sFalse, sTrue)
+        "Borrowing" -> return (SBorrow (literal oneRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -582,6 +604,10 @@ approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
   -- Lin (F) <= NonLin (T)
   -- but not (NonLin (T) <= Lin (F))
   return (a .=> b)
+
+approximatedByOrEqualConstraint (SBorrow a) (SBorrow b) = return $ a .<= b
+
+approximatedByOrEqualConstraint SUnique SUnique = return $ sTrue
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts approximatedByOrEqualConstraint (.&&) (const sTrue) s t)

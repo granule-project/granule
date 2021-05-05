@@ -157,6 +157,9 @@ level = tyCon "Level"
 infinity :: Type
 infinity = tyCon "Infinity"
 
+uniqueness :: Type
+uniqueness = tyCon "Uniqueness"
+
 isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing

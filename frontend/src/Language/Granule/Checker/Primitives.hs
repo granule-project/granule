@@ -53,6 +53,11 @@ typeConstructors =
     -- LNL members
     , (mkId "Lin",        (tyCon "LNL", [], False))
     , (mkId "NonLin",     (tyCon "LNL", [], False))
+    -- Borrowing
+    , (mkId "Borrowing", (kcoeffect, [], False))
+    , (mkId "One",       (tyCon "Borrowing", [], False))
+    , (mkId "Beta",      (tyCon "Borrowing", [], False))
+    , (mkId "Omega",     (tyCon "Borrowing", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))
@@ -62,6 +67,9 @@ typeConstructors =
     , (mkId "Sec",  (kcoeffect, [], False))
     , (mkId "Hi",    (tyCon "Sec", [], False))
     , (mkId "Lo",    (tyCon "Sec", [], False))
+    -- Uniqueness
+    , (mkId "Uniqueness", (kcoeffect, [], False))
+    , (mkId "Unique", (tyCon "Uniqueness", [], False))
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
@@ -482,6 +490,19 @@ tick = BUILTIN
 --   . Ptr id -> Cap a id -> a
 -- freePtr = BUILTIN
 
+--------------------------------------------------------------------------------
+-- Uniqueness monadic operations
+--------------------------------------------------------------------------------
+
+uniqueReturn
+  : forall {a : Type}
+  . a [Unique] -> a []
+uniqueReturn = BUILTIN
+
+uniqueBind
+  : forall {a b : Type, k : Coeffect, c : k}
+  . (a [Unique] -> b [c]) -> a [c] -> b [c]
+uniqueBind = BUILTIN
 
 |]
 
