@@ -207,7 +207,9 @@ symGradeLess (SInterval lb1 ub1) (SInterval lb2 ub2) =
 
 symGradeLess (SNat n) (SNat n')     = return $ n .< n'
 symGradeLess (SFloat n) (SFloat n') = return $ n .< n'
-symGradeLess (SLevel n) (SLevel n') = return $ n .< n'
+symGradeLess (SLevel n) (SLevel n') = -- return $ n .< n'
+  -- dunno is not less than anything
+  return $ ite ((n .== literal dunnoRepresentation) .|| (n' .== literal dunnoRepresentation)) sFalse (n .< n')
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
@@ -280,7 +282,10 @@ symGradeJoin :: SGrade -> SGrade -> Symbolic SGrade
 symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
 symGradeJoin (SSet Normal s) (SSet Normal t)   = return $ SSet Normal $ S.intersection s t
 symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
-symGradeJoin (SLevel s) (SLevel t) = return $ SLevel $ s `smax` t
+symGradeJoin (SLevel s) (SLevel t) =
+  return $ SLevel $ ite (s .== literal dunnoRepresentation) t
+                  $ ite (t .== literal dunnoRepresentation) s
+                  $ s `smax` t
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $
   ite (isInf x .|| isInf y) inf (SNatX (xVal x `smax` xVal y))
@@ -301,7 +306,10 @@ symGradePlus :: SGrade -> SGrade -> Symbolic SGrade
 symGradePlus (SNat n1) (SNat n2) = return $ SNat (n1 + n2)
 symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
 symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
-symGradePlus (SLevel lev1) (SLevel lev2) = return $ SLevel $ lev1 `smax` lev2
+symGradePlus (SLevel lev1) (SLevel lev2) =
+  return $ SLevel $ ite (lev1 .== literal dunnoRepresentation) lev2
+                  $ ite (lev2 .== literal dunnoRepresentation) lev1
+                  $ lev1 `smax` lev2
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = return $ SExtNat (x + y)
 symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
@@ -339,11 +347,7 @@ symGradeConverge (SLevel lev1) (SLevel lev2) = do
                  (SLevel $ literal privateRepresentation)
                  $ ite (lev2 .== literal privateRepresentation)
                        (SLevel $ literal privateRepresentation)
-                       $ ite (lev1 .== literal dunnoRepresentation)
-                             (SLevel lev2)
-                             $ ite (lev2 .== literal dunnoRepresentation)
-                                   (SLevel lev1)
-                                   v
+                       v
 symGradeConverge s1 s2 = symGradeTimes s1 s2
 
 -- | Times operation on symbolic grades
@@ -353,12 +357,16 @@ symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
 symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
-symGradeTimes (SLevel lev1) (SLevel lev2) = return $
-    ite (lev1 .== literal unusedRepresentation)
-        (SLevel $ literal unusedRepresentation)
-      $ ite (lev2 .== literal unusedRepresentation)
-            (SLevel $ literal unusedRepresentation)
-            (SLevel $ lev1 `smax` lev2)
+symGradeTimes (SLevel lev1) (SLevel lev2) =
+  return $ ite (lev1 .== literal unusedRepresentation)
+               (SLevel $ literal unusedRepresentation)
+         $ ite (lev2 .== literal unusedRepresentation)
+               (SLevel $ literal unusedRepresentation)
+         $ ite (lev1 .== literal dunnoRepresentation)
+               (SLevel lev2)
+         $ ite (lev2 .== literal dunnoRepresentation)
+               (SLevel lev1)
+               (SLevel $ lev1 `smax` lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
 symGradeTimes (SOOZ s) (SOOZ r) = pure . SOOZ $ s .&& r

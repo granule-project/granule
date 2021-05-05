@@ -20,9 +20,6 @@ freshGhostVariableContext = do
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
 ghostVariableContextMeet env =
-  -- let (ghosts,env') = partition isGhost env
-  --     newGrade      = foldr (TyInfix TyOpMeet) (tyCon "Unused") $ map ((\(Ghost ce) -> ce) . snd) ghosts
-  -- in return $ (mkId ".var.ghost", Ghost newGrade) : env'
   let (ghosts,env') = partition isGhost env
       newGrade = foldr1 converge $ map ((\(Ghost ce) -> ce) . snd) ghosts
   -- if there's no ghost variable in env, don't add one
@@ -33,15 +30,16 @@ isGhost (_, Ghost _) = True
 isGhost _ = False
 
 defaultGhost :: Coeffect
--- defaultGhost = TyGrade (Just $ tyCon "Level") 3 -- dunno label
-defaultGhost = TyGrade (Just $ tyCon "Level") 0
--- defaultGhost = TyGrade Nothing 0
+defaultGhost = TyGrade (Just $ tyCon "Level") 3 -- dunno label
+-- defaultGhost = TyGrade (Just $ tyCon "Level") 0
 
 ghostOp :: TypeOperator
 ghostOp = TyOpConverge
 
+-- do converge operator, avoid building big chains of operators on 0 or 3
 converge :: Coeffect -> Coeffect -> Coeffect
 converge (TyGrade (Just k) 0) (TyGrade (Just _k) 0) = TyGrade (Just k) 0
+converge (TyGrade (Just k) 3) (TyGrade (Just _k) 3) = TyGrade (Just k) 3
 converge c1 c2 = TyInfix ghostOp c1 c2
 
 ghostName :: String
