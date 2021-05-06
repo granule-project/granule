@@ -30,7 +30,8 @@ isGhost (_, Ghost _) = True
 isGhost _ = False
 
 defaultGhost :: Coeffect
-defaultGhost = TyGrade (Just $ tyCon "Level") 3 -- dunno label
+defaultGhost = tyCon "Dunno"
+-- defaultGhost = TyGrade (Just $ tyCon "Level") 3 -- dunno label
 -- defaultGhost = TyGrade (Just $ tyCon "Level") 0
 
 ghostOp :: TypeOperator
@@ -40,6 +41,10 @@ ghostOp = TyOpConverge
 converge :: Coeffect -> Coeffect -> Coeffect
 converge (TyGrade (Just k) 0) (TyGrade (Just _k) 0) = TyGrade (Just k) 0
 converge (TyGrade (Just k) 3) (TyGrade (Just _k) 3) = TyGrade (Just k) 3
+converge (TyGrade (Just k) 3) ce = ce
+converge ce (TyGrade (Just k) 3) = ce
+converge (TyCon (internalName -> "Dunno")) ce = ce
+converge ce (TyCon (internalName -> "Dunno")) = ce
 converge c1 c2 = TyInfix ghostOp c1 c2
 
 ghostName :: String

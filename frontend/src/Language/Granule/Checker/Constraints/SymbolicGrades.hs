@@ -207,9 +207,9 @@ symGradeLess (SInterval lb1 ub1) (SInterval lb2 ub2) =
 
 symGradeLess (SNat n) (SNat n')     = return $ n .< n'
 symGradeLess (SFloat n) (SFloat n') = return $ n .< n'
-symGradeLess (SLevel n) (SLevel n') = -- return $ n .< n'
+symGradeLess (SLevel n) (SLevel n') = return $ n .< n'
   -- dunno is not less than anything
-  return $ ite ((n .== literal dunnoRepresentation) .|| (n' .== literal dunnoRepresentation)) sFalse (n .< n')
+  -- return $ ite ((n .== literal dunnoRepresentation) .|| (n' .== literal dunnoRepresentation)) sFalse (n .< n')
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue

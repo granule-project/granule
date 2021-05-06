@@ -620,10 +620,6 @@ checkExpr defs gam pol topLevel tau (App s _ rf e1 e2) = do
 checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     debugM "checkExpr[Box]" (pretty s <> " : " <> pretty ty)
 
-    -- if closed and public, can't promote
-    allow <- allowPromotion
-    unless allow $ invalidPromotion
-
     let vars =
           if hasHole e
             -- If we are promoting soemthing with a hole, then put all free variables in scope
@@ -631,14 +627,16 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
             -- Otherwise we need to discharge only things that get used
             else freeVars e
 
-
     -- Checker the expression being promoted
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
 
     -- This prevents control-flow attacks and is a special case for Level:
     -- we compute the meet of all ghosts, and include the resulting ghost in the free vars
-    meetGam <- ghostVariableContextMeet gam
-    let ghostGam = allGhostVariables meetGam
+    [ghost] <- ghostVariableContextMeet gam >>= return . allGhostVariables
+    let ghostGam =
+          case ghost of
+            (_, Ghost (TyCon (internalName -> "Dunno"))) -> [] -- don't bother with dunno level
+            _oth -> [ghost]
     let vars' = vars ++ (map fst $ ghostGam) -- ghost acts like free var
 
     -- Multiply the grades of all the used varibles here
@@ -649,32 +647,6 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'' <> ghostGam, substFinal, elaborated)
 
-  where
-    -- Determine if the level type is Public
-    isLevelPublic =
-      case demand of
-        TyCon (internalName -> "Public") -> True
-        _oth -> False
-
-    -- determine if e is a closed term
-    hasNoFreeVars = (not (hasHole e) && null (freeVars e))
-
-    -- Allow promotion if not Public or not Level kinded or has free vars
-    allowPromotion = do
-      levelKind <- isLevelKinded (getSpan e) demand
-      noSignificantGhost <- hasNoSignificantGhost
-      return $ not levelKind || not isLevelPublic || not hasNoFreeVars
-      -- return $ not levelKind || not isLevelPublic || not hasNoFreeVars || not noSignificantGhost
-
-    hasNoSignificantGhost = do
-      ghost <- ghostVariableContextMeet gam
-      case head $ allGhostVariables ghost of
-        (_,Ghost ce) -> return $ ce == defaultGhost
-        _ -> error $ "Checker.checkExpr[Box]: Missing ghost variable"
-
-    -- Throw type error when we try to promote at a non-Public level
-    invalidPromotion =
-      throw $ InvalidPromotionError (getSpan e) demand
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
@@ -1162,13 +1134,10 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Multiply the grades of all the used variables here
    (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
 
-   meetGam <- ghostVariableContextMeet gam
-
-   (gamGhost, subst'') <- multAll s (map fst (allGhostVariables meetGam)) (TyVar var) (allGhostVariables meetGam)
-   substFinal <- combineManySubstitutions s [subst, subst', subst'']
+   substFinal <- combineManySubstitutions s [subst, subst']
    let finalTy = Box (TyVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
-   return (finalTy, gam'' <> gamGhost, substFinal, elaborated)
+   return (finalTy, gam'', substFinal, elaborated)
 
 -- BinOp
 synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
