@@ -93,6 +93,9 @@ typeConstructors =
     , (mkId "Exception", (keffect, [], False))
     , (mkId "Success", (tyCon "Exception", [], False))
     , (mkId "MayFail", (tyCon "Exception", [], False))
+
+    -- Arrays
+    , (mkId "FloatArray", (Type 0, [], False))
     ]
 
 -- Various predicates and functions on type operators
@@ -504,6 +507,21 @@ uniqueBind
   . (a [Unique] -> b [c]) -> a [c] -> b [c]
 uniqueBind = BUILTIN
 
+--------------------------------------------------------------------------------
+-- Mutable arrays
+--------------------------------------------------------------------------------
+
+newFloatArray : Int -> FloatArray [Unique]
+newFloatArray = BUILTIN
+
+readFloatArray : FloatArray [Unique] -> Int -> (Float, FloatArray [Unique])
+readFloatArray = BUILTIN
+
+writeFloatArray : FloatArray [Unique] -> Int -> Float -> FloatArray [Unique]
+writeFloatArray = BUILTIN
+
+lengthFloatArray : FloatArray [Unique] -> (Int, FloatArray [Unique])
+lengthFloatArray = BUILTIN
 |]
 
 
