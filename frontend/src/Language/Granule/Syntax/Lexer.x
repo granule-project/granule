@@ -109,6 +109,7 @@ tokens :-
   "?"                           { \p _ -> TokenEmptyHole p }
   "{!"                          { \p _ -> TokenHoleStart p }
   "!}"                          { \p _ -> TokenHoleEnd p}
+  "!"                           { \p _ -> TokenBang p}
 
 {
 
@@ -178,6 +179,7 @@ data Token
   | TokenHoleStart AlexPosn
   | TokenHoleEnd AlexPosn
   | TokenAt AlexPosn
+  | TokenBang AlexPosn
 
   deriving (Eq, Show, Generic)
 
