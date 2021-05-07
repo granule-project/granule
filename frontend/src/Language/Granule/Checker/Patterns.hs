@@ -161,6 +161,7 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
 
+    addConstraint (Hsup s coeff coeff innerBoxTy)
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 

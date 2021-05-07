@@ -289,6 +289,9 @@ compile vars (Eq _ c1 c2 t) =
 compile vars (Neq _ c1 c2 t) =
   bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
+compile vars (Hsup _ c1 c2 t) =
+  bindM2And' (\c1' c2' -> fmap sNot (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
   case t of
@@ -665,6 +668,7 @@ trivialUnsatisfiableConstraints
     unsat (Gt _ c1 c2) = []
     unsat (LtEq _ c1 c2) = []
     unsat (GtEq _ c1 c2) = []
+    unsat (Hsup _ c1 c2 _) = []
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other

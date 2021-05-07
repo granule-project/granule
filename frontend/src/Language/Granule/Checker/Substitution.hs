@@ -340,6 +340,12 @@ instance Substitutable Constraint where
   substitute ctxt (LtEq s c1 c2) = LtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
   substitute ctxt (GtEq s c1 c2) = GtEq s <$> substitute ctxt c1 <*> substitute ctxt c2
 
+  substitute ctxt (Hsup s c1 c2 k) = do
+    c1 <- substitute ctxt c1
+    c2 <- substitute ctxt c2
+    k <- substitute ctxt k
+    return $ Hsup s c1 c2 k
+
 instance Substitutable (Equation () Type) where
   substitute ctxt (Equation sp name ty rf patterns expr) =
       do ty' <- substitute ctxt ty

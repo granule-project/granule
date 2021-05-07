@@ -422,6 +422,13 @@ symGradeMinus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMinus SProduct id s t)
 symGradeMinus s t = solverError $ cannotDo "minus" s t
 
+
+symGradeHsup :: SGrade -> SGrade -> Symbolic SBool
+-- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed
+symGradeHsup (SLNL n) (SLNL m) = return (n .== sTrue .&& m .== sTrue)
+-- | For all other grades, allow pushing 
+symGradeHsup s1 s2 = return sFalse
+
 cannotDo :: String -> SGrade -> SGrade -> String
 cannotDo op (SUnknown s) (SUnknown t) =
   "It is unknown whether "
