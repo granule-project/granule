@@ -173,6 +173,9 @@ effectMult sp effTy t1 t2 = do
           throw $ UnknownResourceAlgebra { errLoc = sp, errTy = t1, errK = effTy }
 
 effectUpperBound :: Span -> Type -> Type -> Type -> Checker Type
+-- Upper bound is always idempotent
+effectUpperBound s _ t1 t2 | t1 == t2 = return $ t1
+
 effectUpperBound s t@(TyCon (internalName -> "Nat")) t1 t2 = do
     nvar <- freshTyVarInContextWithBinding (mkId "n") t BoundQ
     -- Unify the two variables into one
