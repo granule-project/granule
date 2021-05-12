@@ -290,7 +290,7 @@ compile vars (Neq _ c1 c2 t) =
   bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 compile vars (Hsup _ c1 c2 t) =
-  bindM2And' (\c1' c2' -> fmap (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+  bindM2And' (\c1' c2' -> (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(TyVar v) t) =

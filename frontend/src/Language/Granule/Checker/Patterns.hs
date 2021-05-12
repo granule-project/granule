@@ -161,7 +161,6 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
             Nothing -> throw DisallowedCoeffectNesting
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
 
-    addConstraint (Hsup s coeff coeff innerBoxTy)
 
     (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
 
@@ -177,6 +176,11 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
+
+      case outerBoxTy of 
+        Just (coeff, coeffTy) -> do
+          addConstraint (Hsup s coeff coeff coeffTy)
+        Nothing -> return ()
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
