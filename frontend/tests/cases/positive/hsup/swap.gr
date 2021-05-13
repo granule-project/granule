@@ -1,0 +1,2 @@
+swap : forall {a b : Type} . (a, b) [One] -> (b, a) [One]
+swap [p] = [let (x, y) = p in (y, x)]

@@ -1,0 +1,2 @@
+pushOneMany : forall {a b : Type} . (a, b) [One] -> (a [Many], b [One])
+pushOneMany [(x, y)] = ([x], [y]) 
