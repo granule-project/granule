@@ -212,9 +212,6 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
 freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
 
-freshSolverVarScoped quant name (TyCon (internalName -> "LNL")) q k =
-    quant q name (\solverVar -> k (sTrue, SLNL solverVar))
-
 freshSolverVarScoped (quant :: Quantifier -> String -> (SBV Integer -> Symbolic SBool) -> Symbolic SBool) 
                       name (TyCon (internalName -> "Uniqueness")) q k =
     quant q name (\solverVar -> k (sTrue, SUnique))
@@ -228,6 +225,10 @@ freshSolverVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
+        "LNL"    -> k (solverVar .== literal zeroRep
+                  .|| solverVar .== literal oneRep
+                  .|| solverVar .== literal manyRep
+                    , SLNL solverVar)
         "Borrowing" -> k (solverVar .== literal oneRepresentation
                      .|| solverVar .== literal betaRepresentation
                      .|| solverVar .== literal omegaRepresentation
@@ -361,10 +362,13 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
   return (SLevel . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
-  case internalName name of
-    "Lin"    -> return (SLNL sFalse, sTrue)
-    "NonLin" -> return (SLNL sTrue, sTrue)
-    c -> error $ "Cannot compile " <> show c <> " as a LNL semiring"
+  let n = case internalName name of
+            "Zero"    -> zeroRep
+            "One"     -> oneRep
+            "Many"    -> manyRep
+            c         -> error $ "Cannot compile " <> show c <> " as an LNL semiring"
+          
+  return (SLNL . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "Borrowing")) _ = do
   let n = case internalName name of
@@ -473,7 +477,7 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
-        "LNL"       -> return (SLNL sTrue, sTrue)
+        "LNL"       -> return (SLNL (literal zeroRep), sTrue)
         "Borrowing" -> return (SBorrow (literal omegaRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
@@ -508,7 +512,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
-        "LNL"       -> return (SLNL sFalse, sTrue)
+        "LNL"       -> return (SLNL (literal oneRep), sTrue)
         "Borrowing" -> return (SBorrow (literal oneRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
@@ -603,10 +607,7 @@ approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- So this is flipped implication
   return (b .=> a)
 
-approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
-  -- Lin (F) <= NonLin (T)
-  -- but not (NonLin (T) <= Lin (F))
-  return (a .=> b)
+approximatedByOrEqualConstraint (SLNL a) (SLNL b) = return $ a .<= b
 
 approximatedByOrEqualConstraint (SBorrow a) (SBorrow b) = return $ a .<= b
 
