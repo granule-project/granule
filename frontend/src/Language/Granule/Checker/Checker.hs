@@ -1248,13 +1248,18 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           freshenTySchemeForVar s rf name tyScheme
         Nothing -> do
           -- Get this derived
-          (typScheme, def) <- deriveCopyShape s ty
+          (typScheme, mdef) <- deriveCopyShape s ty
           -- Register the definition that has been derived
-          modify (\st -> st { derivedDefinitions = ((mkId "copyShape", ty), (typScheme, def)) : derivedDefinitions st })
-          -- return this variable expression in place here
-          debugM "derived copyShape:" (pretty def)
+          case mdef of
+            Nothing  -> return ()
+            Just def -> do
+              debugM "derived copyShape:" (pretty def)
+              modify (\st -> st { derivedDefinitions = ((mkId "copyShape", ty), (typScheme, def)) : derivedDefinitions st })
+
           debugM "derived copyShape tys:" (show typScheme)
+          -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
+
     (Val _ _ _ (Var _ (internalName -> "drop"))) -> do
       st <- get
       let name = mkId $ "drop@" ++ pretty ty
@@ -1263,12 +1268,16 @@ synthExpr defs gam pol e@(AppTy s _ rf e1 ty) = do
           freshenTySchemeForVar s rf name tyScheme
         Nothing -> do
           -- Get this derived
-          (typScheme, def) <- deriveDrop s ty
+          (typScheme, mdef) <- deriveDrop s ty
           -- Register the definition that has been derived
-          modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
-          -- return this variable expression in place here
-          debugM "derived drop:" (pretty def)
+          case mdef of
+            Nothing  -> return ()
+            Just def -> do
+              debugM "derived drop:" (pretty def)
+              modify (\st -> st { derivedDefinitions = ((mkId "drop", ty), (typScheme, def)) : derivedDefinitions st })
+
           debugM "derived drop tys:" (show typScheme)
+          -- return this variable expression in place here
           freshenTySchemeForVar s rf name typScheme
     _ -> throw NeedTypeSignature{ errLoc = getSpan e, errExpr = e }
 

@@ -34,8 +34,11 @@ cartesianProduct xs ys =
 ---------------------------------------------------
 
 -- Example:
-invAbs : Float [2] -> Vec 2 Float
-invAbs [x] = Cons x (Cons (0.0 - x) Nil)
+invAbs : Float -> Vec 2 Float
+invAbs x = let (x', x'') = copyShape @Float x in Cons x' (Cons (0.0 - x'') Nil)
 
 invAbsTwice : Vec 4 Float
-invAbsTwice = (pushVec [invAbs [2.0]]) `bind` [\(x : Float [2]) -> invAbs x]
+invAbsTwice = (invAbs 2.0) `bind` [invAbs]
+
+main : Vec 4 Float
+main = invAbsTwice

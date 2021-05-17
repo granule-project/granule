@@ -539,7 +539,7 @@ deleteVar' x ((y, b) : m) | x == y = deleteVar' x m
 
 
 
-deriveCopyShape :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
+deriveCopyShape :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Maybe (Def () ()))
 deriveCopyShape s ty = do
 
   -- Create fresh variables for the grades
@@ -565,7 +565,7 @@ deriveCopyShape s ty = do
  -- modify (\st -> st {
     --  tyVarContext = tyVarContext st ++ [(kVar, (KCoeffect, ForallQ)), (cVar, (KPromote (TyVar kVar), ForallQ))] ++ localTyVarContext })
   z <- freshIdentifierBase "z" >>= (return . mkId)
-  ((shapeTy, returnTy), bodyExpr) <- deriveCopyShape' s True tyVars baseTy (makeVarUntyped z)
+  ((shapeTy, returnTy), bodyExpr, primitive) <- deriveCopyShape' s True tyVars baseTy (makeVarUntyped z)
   let tyS = Forall s
               --([(kVar, KCoeffect), (cVar, KPromote (TyVar kVar))] ++ tyVars)
               tyVars
@@ -579,7 +579,9 @@ deriveCopyShape s ty = do
                     -- Restore type variables and predicate stack
                     , tyVarContext = tyVarContext st0
                     , predicateStack = predicateStack st0 } )
-  return $ (tyS, def)
+  if primitive
+    then return (tyS, Nothing)
+    else return (tyS, Just def)
 
 
 deriveCopyShape' :: (?globals :: Globals)
@@ -588,19 +590,19 @@ deriveCopyShape' :: (?globals :: Globals)
   -> Ctxt Kind
   -> Type
   -> Expr () ()
-  -> Checker ((Type, Type), (Expr () ()))
+  -> Checker ((Type, Type), (Expr () ()), Bool)
 deriveCopyShape' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
-  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg)
+  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg, False)
 
 deriveCopyShape' _ _ _ argTy@(TyVar name) arg = do
-  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg)
+  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg, False)
 
 deriveCopyShape' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
 
-  ((lShapeTy, lTy), lExpr) <- deriveCopyShape' s topLevel gamma t1 (makeVarUntyped x)
-  ((rShapeTy, rTy), rExpr) <- deriveCopyShape' s topLevel gamma t2 (makeVarUntyped y)
+  ((lShapeTy, lTy), lExpr, _) <- deriveCopyShape' s topLevel gamma t1 (makeVarUntyped x)
+  ((rShapeTy, rTy), rExpr, _) <- deriveCopyShape' s topLevel gamma t2 (makeVarUntyped y)
 
   -- Variables for matching on result of copyShape on left side of pair
   s <- freshIdentifierBase "s" >>= (return . mkId)
@@ -615,8 +617,11 @@ deriveCopyShape' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
            (makeVarUntyped s) (makeVarUntyped s'))
          (makePairUntyped
            (makeVarUntyped x') (makeVarUntyped y')))))
-  return ((ProdTy lShapeTy rShapeTy, ProdTy lTy rTy), expr)
+  return ((ProdTy lShapeTy rShapeTy, ProdTy lTy rTy), expr, False)
 
+deriveCopyShape' _ _ _ argTy@(leftmostOfApplication -> TyCon (internalName -> id)) arg |
+  id == "Int" || id == "Char" || id == "Float" || id == "String "= do
+  return ((argTy, argTy), (App nullSpanNoFile () False (makeVarUntyped (mkId $ "copyShape@" <> id)) arg), True)
 
 deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
   st <- get
@@ -637,14 +642,14 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     -- Success!
                     then do
                       t3' <- substitute subst t3
-                      return (Just ((t2, t3'), App s () True (makeVarUntyped (mkId $ "copyShape@" <> pretty name)) arg))
+                      return (Just ((t2, t3'), App s () True (makeVarUntyped (mkId $ "copyShapea@" <> pretty name)) arg))
                     else do
                       -- Couldn't do the equality.
                       return Nothing
               _ -> return Nothing
           Nothing -> return Nothing
   case alreadyDefined of
-    Just (copyShapeResTy, copyShapeExpr) -> return (copyShapeResTy, copyShapeExpr)
+    Just (copyShapeResTy, copyShapeExpr) -> return (copyShapeResTy, copyShapeExpr, False)
     Nothing ->
       -- Not already defined...
       -- Get the kind of this type constructor
@@ -690,7 +695,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     retTysAndExprs <- zipWithM (\ty var -> do
                             deriveCopyShape' s False gamma ty (makeVarUntyped var))
                               consParamsTypes consParamsVars
-                    let (_, exprs) = unzip retTysAndExprs
+                    let (_, exprs, _) = unzip3 retTysAndExprs
 --                    let (shapeTys, retTys') = unzip _retTys
                     s' <- freshIdentifierBase "s" >>= (return . mkId)
                     x' <- freshIdentifierBase "x" >>= (return . mkId)
@@ -709,7 +714,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
               debugM "copyShape retTys:" (show $ exprs)
               let returnShapeTy = mkShapeReturnTy argTy
               -- Got all the branches to make the following case now
-              return ((returnShapeTy, argTy), Case s () True arg exprs)
+              return ((returnShapeTy, argTy), Case s () True arg exprs, False)
 
       where
         mkShapeReturnTy (TyApp t1 t2) = TyApp (mkShapeReturnTy t1) (TyCon $ mkId "()")
@@ -717,13 +722,10 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
         mkShapeReturnTy (TyVar id) = TyCon $ mkId "()"
         mkShapeReturnTy ty = ty
 
-
-
-
 deriveCopyShape' s topLevel gamma argTy arg = error ((show argTy) <> "not implemented yet")
 
 
-deriveDrop :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
+deriveDrop :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Maybe (Def () ()))
 deriveDrop s ty = do
 
   -- Create fresh variables for the grades
@@ -742,7 +744,7 @@ deriveDrop s ty = do
                     tyVarContext = tyVarContext st ++ localTyVarContext })
 
   z <- freshIdentifierBase "z" >>= (return . mkId)
-  (returnTy, bodyExpr) <- deriveDrop' s True tyVars baseTy (makeVarUntyped z)
+  (returnTy, bodyExpr, primitive) <- deriveDrop' s True tyVars baseTy (makeVarUntyped z)
   let tyS = Forall s
               tyVars
               []
@@ -754,7 +756,9 @@ deriveDrop s ty = do
                     -- Restore type variables and predicate stack
                     , tyVarContext = tyVarContext st0
                     , predicateStack = predicateStack st0 } )
-  return $ (tyS, def)
+  if primitive
+    then return (tyS, Nothing)
+    else return (tyS, Just def)
 
 
 deriveDrop' :: (?globals :: Globals)
@@ -763,35 +767,35 @@ deriveDrop' :: (?globals :: Globals)
   -> Ctxt Kind
   -> Type
   -> Expr () ()
-  -> Checker (Type, Expr () ())
+  -> Checker (Type, Expr () (), Bool)
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
-  return (TyCon $ mkId "()", makeUnitIntroUntyped)
+  return (TyCon $ mkId "()", makeUnitIntroUntyped, False)
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Int" "Int")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg))
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Int")) arg), True)
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Char" "Char")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg))
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Char")) arg), True)
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "Float" "Float")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg))
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@Float")) arg), True)
 
 deriveDrop' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "String" "String")) arg = do
-  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg))
+  return (TyCon $ mkId "()", (App nullSpanNoFile () False (makeVarUntyped (mkId "drop@String")) arg), True)
 
 deriveDrop' _ _ _ argTy@(TyVar name) arg = do
-  return (TyCon $ mkId "()", makeUnitIntroUntyped)
+  return (TyCon $ mkId "()", makeUnitIntroUntyped, False)
 
 deriveDrop' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
   y <- freshIdentifierBase "y" >>= (return . mkId)
 
-  (lTy, lExpr) <- deriveDrop' s topLevel gamma t1 (makeVarUntyped x)
-  (rTy, rExpr) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
+  (lTy, lExpr, _) <- deriveDrop' s topLevel gamma t1 (makeVarUntyped x)
+  (rTy, rExpr, _) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
 
   let expr = makePairElimPUntyped id arg x y (makeUnitElimPUntyped id lExpr (makeUnitElimPUntyped id rExpr makeUnitIntroUntyped))
 
-  return (ProdTy lTy rTy, expr)
+  return (ProdTy lTy rTy, expr, False)
 
 
 deriveDrop' s topLevel gamma argTy arg = error ((show argTy) <> "not implemented yet")
