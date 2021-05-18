@@ -26,6 +26,33 @@ isLevelKinded s t = do
         TyApp (TyCon (internalName -> "Interval")) (TyCon (internalName -> "Level")) -> True
         _oth -> False
 
+-- | Multiply a context by a coeffect
+--   (Derelict and promote all variables which are not discharged)
+ctxtMult :: (?globals :: Globals)
+        => Span
+        -> Type
+        -> Ctxt Assumption
+        -> Checker (Ctxt Assumption, Substitution)
+
+ctxtMult _ _ [] = return ([], [])
+
+ctxtMult s c ((name, Linear t) : ctxt) = do
+    (ctxt', subst) <- ctxtMult s c ctxt
+    return $ ((name, Discharged t c) : ctxt', subst)
+
+ctxtMult s c ((name, Discharged t c') : ctxt) = do
+    (ctxt', subst') <- ctxtMult s c ctxt
+    (_, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+    substFinal <- combineSubstitutions s subst subst'
+    return ((name, Discharged t (TyInfix TyOpTimes (inj1 c) (inj2 c'))) : ctxt', substFinal)
+
+ctxtMult s c ((name, Ghost c') : ctxt) = do
+    (ctxt', subst') <- ctxtMult s c ctxt
+    (_, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
+    substFinal <- combineSubstitutions s subst subst'
+    return ((name, Ghost (TyInfix TyOpTimes (inj1 c) (inj2 c'))) : ctxt', substFinal)
+
+
 -- | Multiply an context by a coeffect
 --   (Derelict and promote all variables which are not discharged and are in th
 --    set of used variables, (first param))
