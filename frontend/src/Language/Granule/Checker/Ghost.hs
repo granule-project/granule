@@ -16,7 +16,6 @@ freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
   return [(mkId ghostName,
            Ghost defaultGhost)]
-           -- Ghost (TyGrade Nothing 0))]
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
 ghostVariableContextMeet env =
@@ -31,21 +30,13 @@ isGhost _ = False
 
 defaultGhost :: Coeffect
 defaultGhost = tyCon "Dunno"
--- defaultGhost = TyGrade (Just $ tyCon "Level") 3 -- dunno label
--- defaultGhost = TyGrade (Just $ tyCon "Level") 0
 
 ghostOp :: TypeOperator
 ghostOp = TyOpConverge
 
--- do converge operator, avoid building big chains of operators on 0 or 3
+-- do converge operator
 converge :: Coeffect -> Coeffect -> Coeffect
-converge (TyGrade (Just k) 0) (TyGrade (Just _k) 0) = TyGrade (Just k) 0
-converge (TyGrade (Just k) 3) (TyGrade (Just _k) 3) = TyGrade (Just k) 3
-converge (TyGrade (Just k) 3) ce = ce
-converge ce (TyGrade (Just k) 3) = ce
-converge (TyCon (internalName -> "Dunno")) ce = ce
-converge ce (TyCon (internalName -> "Dunno")) = ce
-converge c1 c2 = TyInfix ghostOp c1 c2
+converge = TyInfix ghostOp
 
 ghostName :: String
 ghostName = ".var.ghost"

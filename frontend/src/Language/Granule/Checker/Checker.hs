@@ -632,12 +632,10 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
 
     -- This prevents control-flow attacks and is a special case for Level:
     -- we compute the meet of all ghosts, and include the resulting ghost in the free vars
-    [ghost] <- ghostVariableContextMeet gam >>= return . allGhostVariables
-    let ghostGam =
-          case ghost of
-            (_, Ghost (TyCon (internalName -> "Dunno"))) -> [] -- don't bother with dunno level
-            _oth -> [ghost]
+    ghostGam <- ghostVariableContextMeet gam >>= return . allGhostVariables
     let vars' = vars ++ (map fst $ ghostGam) -- ghost acts like free var
+
+    debugM "checkExpr[Box].ghost" (pretty s <> " : " <> pretty ghostGam)
 
     -- Multiply the grades of all the used varibles here
     (gam'', subst') <- multAll s vars' demand (gam' <> ghostGam)
@@ -831,8 +829,6 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
 
       (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
 
-      -- -- pull in all gh,lGhostVariables gam
-
       mapM_ (\ty -> do
         pred <- compileTypeConstraintToConstraint s ty
         addPredicate pred) constraints
@@ -841,7 +837,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
       ty <- substitute coercions' ty
 
       let elaborated = Val s ty rf (Constr ty c [])
-          outputCtxt = [(mkId ghostName, Ghost $ TyGrade (Just $ tyCon "Level") 1)]-- [(mkId ".var.ghost", Ghost (TyGrade Nothing 1))]  -- ghostGam -- []
+          outputCtxt = [(mkId ghostName, Ghost $ TyGrade (Just $ tyCon "Level") 1)]
       return (ty, outputCtxt, [], elaborated)
 
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
@@ -1129,13 +1125,17 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    -- Synth type of promoted expression
    (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
 
+   -- include ghost variable in free vars
+   ghostGam <- ghostVariableContextMeet gam >>= return . allGhostVariables
+   let vars = freeVars e ++ (map fst $ ghostGam)
+
    -- Multiply the grades of all the used variables here
-   (gam'', subst') <- multAll s (freeVars e) (TyVar var) gam'
+   (gam'', subst') <- multAll s vars (TyVar var) (gam' <> ghostGam)
 
    substFinal <- combineManySubstitutions s [subst, subst']
    let finalTy = Box (TyVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
-   return (finalTy, gam'', substFinal, elaborated)
+   return (finalTy, gam'' <> ghostGam, substFinal, elaborated)
 
 -- BinOp
 synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
