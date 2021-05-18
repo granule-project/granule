@@ -671,19 +671,18 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
-      -- introduce ghost variables if type is polyshaped
-      ghostCtxt <- freshGhostVariableContext
       newConjunct
 
       -- Checking the case body
       tau' <- substitute subst tau
       patternGam <- substitute subst patternGam
       debugM "checkExpr[Case] patternGam" $ show patternGam
-      combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt <> gam
+      -- combine ghost variables from pattern using converge/meet
+      combinedGam <- ghostVariableContextMeet $ patternGam <> gam
       (localGam, subst', elaborated_i) <- checkExpr defs combinedGam pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` (patternGam <> ghostCtxt)) (patternGam <> ghostCtxt)
+      ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam)
 
       -- Conclude the implication
       concludeImplication (getSpan pat_i) eVars
@@ -694,7 +693,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         -- Return the resulting computed context, without any of
         -- the variable bound in the pattern of this branch
         [] -> do
-           return (localGam `subtractCtxt` patternGam `subtractCtxt` ghostCtxt
+           return (localGam `subtractCtxt` patternGam
                  , subst'
                  , (elaborated_pat_i, elaborated_i))
 
@@ -868,14 +867,13 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       -- Build the binding context for the branch pattern
       newConjunct
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
-      ghostCtxt <-  freshGhostVariableContext
       newConjunct
 
       -- Synth the case body
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
 
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` (patternGam <> ghostCtxt)) (patternGam <> ghostCtxt)
+      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
 
       -- Conclude
       concludeImplication (getSpan pati) eVars
@@ -886,7 +884,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          -- Return the resulting computed context, without any of
          -- the variable bound in the pattern of this branch
          [] -> return (tyCase
-                    , (localGam `subtractCtxt` patternGam `subtractCtxt` ghostCtxt, subst')
+                    , (localGam `subtractCtxt` patternGam, subst')
                     , (elaborated_pat_i, elaborated_i))
          p:ps -> illLinearityMismatch s (p:|ps)
 
