@@ -12,10 +12,16 @@ import Data.List (partition)
 allGhostVariables :: Ctxt Assumption -> Ctxt Assumption
 allGhostVariables = filter isGhost
 
+-- | Default (singleton) ghost variable context
 freshGhostVariableContext :: Checker (Ctxt Assumption)
 freshGhostVariableContext = do
   return [(mkId ghostName,
            Ghost defaultGhost)]
+
+-- | (Singleton) ghost variable context where the ghost is used
+usedGhostVariableContext :: Ctxt Assumption
+usedGhostVariableContext =
+  [(mkId ghostName, Ghost (TyGrade (Just $ tyCon "Level") 1))]
 
 ghostVariableContextMeet :: Ctxt Assumption -> Checker (Ctxt Assumption)
 ghostVariableContextMeet env =
