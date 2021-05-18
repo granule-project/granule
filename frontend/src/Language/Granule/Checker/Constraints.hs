@@ -570,10 +570,11 @@ approximatedByOrEqualConstraint (SSet Opposite s) (SSet Opposite t) =
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     -- Private <= Public
   return
-    $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
-      $ ite (l .== literal unusedRepresentation) sTrue
-        $ ite (l .== literal privateRepresentation) sTrue
-          $ ite (k .== literal publicRepresentation) sTrue sFalse
+    $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
+      $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
+        $ ite (l .== literal unusedRepresentation) sTrue
+          $ ite (l .== literal privateRepresentation) sTrue
+            $ ite (k .== literal publicRepresentation) sTrue sFalse
 
 approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Lo <= Lo   (False <= False)
