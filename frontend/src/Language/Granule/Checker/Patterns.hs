@@ -253,7 +253,10 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
 
           debugM "context in ctxtFromTypedPattern' PConstr" $ show (bindingContexts <> ghostCtxt)
 
-          return (bindingContexts <> ghostCtxt, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
+          -- Apply context converge # of all the inner binding contexts and the local ghost context here
+          outputContext <- ghostVariableContextMeet (bindingContexts <> ghostCtxt)
+
+          return (outputContext, -- ctxtSubbed <> ctxtUnsubbed,     -- concatenate the contexts
                   freshTyVarsCtxt <> bs,          -- concat the context of new type variables
                   subst,                          -- returned the combined substitution
                   elabP,                          -- elaborated pattern
