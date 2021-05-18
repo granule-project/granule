@@ -376,10 +376,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
-  
+
   -- Introduce ambient coeffect
-  ghostCtxt <- freshGhostVariableContext
-  combinedGam <- ghostVariableContextMeet $ patternGam <> ghostCtxt
+  combinedGam <- ghostVariableContextMeet $ patternGam <> freshGhostVariableContext
 
   debugM "context in checkEquation 2" $ (show combinedGam)
   -- Check the body
@@ -515,18 +514,18 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
   debugM "checkExpr[NumInt]" (pretty s <> " : " <> pretty ty)
   let elaborated = Val s ty rf (NumInt n)
-  return ([], [], elaborated)
+  return (usedGhostVariableContext, [], elaborated)
 
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "Float" = do
   debugM "checkExpr[NumFloat]" (pretty s <> " : " <> pretty ty)
   let elaborated = Val s ty rf (NumFloat n)
-  return ([], [], elaborated)
+  return (usedGhostVariableContext, [], elaborated)
 
 -- Differentially private floats
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DFloat" = do
   debugM "checkExpr[NumFloat-Dfloat]" (pretty s <> " : " <> pretty ty)
   let elaborated = Val s ty rf (NumFloat n)
-  return ([], [], elaborated)
+  return (usedGhostVariableContext, [], elaborated)
 
 checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
   debugM "checkExpr[FunTy]" (pretty s <> " : " <> pretty ty)
@@ -766,22 +765,22 @@ synthExpr _ ctxt _ (Hole s _ _ _) = do
 synthExpr _ _ _ (Val s _ rf (NumInt n))  = do
   debugM "synthExpr[NumInt]" (pretty s)
   let t = TyCon $ mkId "Int"
-  return (t, [], [], Val s t rf (NumInt n))
+  return (t, usedGhostVariableContext, [], Val s t rf (NumInt n))
 
 synthExpr _ _ _ (Val s _ rf (NumFloat n)) = do
   debugM "synthExpr[NumFloat]" (pretty s)
   let t = TyCon $ mkId "Float"
-  return (t, [], [], Val s t rf (NumFloat n))
+  return (t, usedGhostVariableContext, [], Val s t rf (NumFloat n))
 
 synthExpr _ _ _ (Val s _ rf (CharLiteral c)) = do
   debugM "synthExpr[Char]" (pretty s)
   let t = TyCon $ mkId "Char"
-  return (t, [], [], Val s t rf (CharLiteral c))
+  return (t, usedGhostVariableContext, [], Val s t rf (CharLiteral c))
 
 synthExpr _ _ _ (Val s _ rf (StringLiteral c)) = do
   debugM "synthExpr[String]" (pretty s)
   let t = TyCon $ mkId "String"
-  return (t, [], [], Val s t rf (StringLiteral c))
+  return (t, usedGhostVariableContext, [], Val s t rf (StringLiteral c))
 
 -- Secret syntactic weakening
 synthExpr defs gam pol
@@ -801,7 +800,7 @@ synthExpr defs gam pol
       substF <- combineSubstitutions s subst subst'
 
       -- Return usage as 0 : gradeType
-      return (t, [(x, Discharged t (TyGrade (Just gradeType) 0))], substF, elabE)
+      return (t, weakenedGhostVariableContext <> [(x, Discharged t (TyGrade (Just gradeType) 0))], substF, elabE)
     Just (Ghost r) -> do
       -- Infer the type of the variable
       (t, _, subst, elabE) <- synthExpr defs gam pol v
@@ -813,7 +812,7 @@ synthExpr defs gam pol
       debugM "secret weaken ghost" (pretty gradeType <> ", " <> pretty r)
 
       -- Return usage as 0 : gradeType
-      return (t, [(x, Ghost (TyGrade (Just gradeType) 0))], substF, elabE)
+      return (t, weakenedGhostVariableContext <> [(x, Ghost (TyGrade (Just gradeType) 0))], substF, elabE)
 
 
 -- Constructors
@@ -837,7 +836,7 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
       ty <- substitute coercions' ty
 
       let elaborated = Val s ty rf (Constr ty c [])
-          outputCtxt = [(mkId ghostName, Ghost $ TyGrade (Just $ tyCon "Level") 1)]
+          outputCtxt = usedGhostVariableContext
       return (ty, outputCtxt, [], elaborated)
 
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = c }
@@ -1060,12 +1059,8 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
        let elaborated = Val s ty rf (Var ty x)
        return (ty, [(x, Discharged ty (TyGrade (Just k) 1))], subst, elaborated)
 
-     Just (Ghost c) -> do
-       --TODO: not really needed.s
-       (k, subst, _) <- synthKind s c
-       let elaborated = Val s ghostType rf (Var ghostType x)
-       debugM "synthExpr[Var] ghost" (pretty k <> ", " <> pretty c)
-       return (ghostType, [(x, Ghost (TyGrade (Just k) 1))], subst, elaborated)
+     -- cannot use a Ghost variable explicitly
+     Just (Ghost c) -> throw UnboundVariableError{ errLoc = s, errId = x }
 
 -- Specialised application for scale
 {- TODO: needs thought -}
@@ -1080,7 +1075,7 @@ synthExpr defs gam pol
 
   let elab = App s scaleTy rf (Val s' scaleTy rf' (Var scaleTy v)) (Val s'' floatTy rf'' (NumFloat r))
 
-  return (scaleTyApplied, [], [], elab)
+  return (scaleTyApplied, weakenedGhostVariableContext, [], elab)
 
 -- Application
 synthExpr defs gam pol (App s _ rf e e') = do
