@@ -1043,12 +1043,12 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
      -- In the local context
      Just (Linear ty)       -> do
        let elaborated = Val s ty rf (Var ty x)
-       return (ty, [(x, Linear ty)], [], elaborated)
+       return (ty, weakenedGhostVariableContext <> [(x, Linear ty)], [], elaborated)
 
      Just (Discharged ty c) -> do
        (k, subst, _) <- synthKind s c
        let elaborated = Val s ty rf (Var ty x)
-       return (ty, [(x, Discharged ty (TyGrade (Just k) 1))], subst, elaborated)
+       return (ty, weakenedGhostVariableContext <> [(x, Discharged ty (TyGrade (Just k) 1))], subst, elaborated)
 
      -- cannot use a Ghost variable explicitly
      Just (Ghost c) -> throw UnboundVariableError{ errLoc = s, errId = x }
@@ -1515,6 +1515,7 @@ intersectCtxtsWithWeaken s a b = do
   where
    isNonLinearAssumption :: (Id, Assumption) -> Bool
    isNonLinearAssumption (_, Discharged _ _) = True
+   isNonLinearAssumption (_, Ghost _)        = True
    isNonLinearAssumption _                   = False
 
    weaken :: (Id, Assumption) -> Checker (Id, Assumption)
