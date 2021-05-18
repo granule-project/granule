@@ -676,8 +676,8 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       patternGam <- substitute subst patternGam
       debugM "checkExpr[Case] patternGam" $ show patternGam
       -- combine ghost variables from pattern using converge/meet
-      combinedGam <- ghostVariableContextMeet $ patternGam <> gam
-      (localGam, subst', elaborated_i) <- checkExpr defs combinedGam pol False tau' e_i
+      innerGam <- ghostVariableContextMeet $ patternGam <> gam
+      (localGam, subst', elaborated_i) <- checkExpr defs innerGam pol False tau' e_i
 
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam)
@@ -865,8 +865,9 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
       newConjunct
 
-      -- Synth the case body
-      (tyCase, localGam, subst', elaborated_i) <- synthExpr defs (patternGam <> gam) pol ei
+      -- combine ghost variables from pattern using converge/meet
+      innerGam <- ghostVariableContextMeet (patternGam <> gam)
+      (tyCase, localGam, subst', elaborated_i) <- synthExpr defs innerGam pol ei
 
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
