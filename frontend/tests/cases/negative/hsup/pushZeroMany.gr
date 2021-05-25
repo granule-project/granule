@@ -1,0 +1,2 @@
+pushZeroMany : forall {a b : Type} . (a, b) [Zero] -> (a [Many], b [Zero])
+pushZeroMany [(x, y)] = ([x], [y]) 

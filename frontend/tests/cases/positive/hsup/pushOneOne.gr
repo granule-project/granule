@@ -1,0 +1,2 @@
+pushOneOne : forall {a b : Type} . (a, b) [One] -> (a [One], b [One])
+pushOneOne [(x, y)] = ([x], [y]) 

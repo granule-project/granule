@@ -177,6 +177,11 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
 
+      case outerBoxTy of 
+        Just (coeff, coeffTy) -> do
+          addConstraint (Hsup s coeff coeff coeffTy)
+        Nothing -> return ()
+
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance BoundQ True tySch coercions
 

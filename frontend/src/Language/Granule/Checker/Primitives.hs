@@ -51,8 +51,9 @@ typeConstructors =
     , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
     , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
     -- LNL members
-    , (mkId "Lin",        (tyCon "LNL", [], False))
-    , (mkId "NonLin",     (tyCon "LNL", [], False))
+    , (mkId "Zero",        (tyCon "LNL", [], False))
+    , (mkId "One",     (tyCon "LNL", [], False))
+    , (mkId "Many",     (tyCon "LNL", [], False))
     -- Borrowing
     , (mkId "Borrowing", (kcoeffect, [], False))
     , (mkId "One",       (tyCon "Borrowing", [], False))

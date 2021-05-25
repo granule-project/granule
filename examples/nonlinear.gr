@@ -1,8 +1,8 @@
-copy : ∀ {a : Type} . a [NonLin] -> (a, a [NonLin])
+copy : ∀ {a : Type} . a [Many] -> (a, a [Many])
 copy [x] = (x, [x])
 
-drop : forall {a : Type} . a [NonLin] -> a
+drop : forall {a : Type} . a [Many] -> a
 drop [x] = x
 
-extract : forall {a : Type} . a [Lin] -> a
+extract : forall {a : Type} . a [One] -> a
 extract [x] = x

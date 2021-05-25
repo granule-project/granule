@@ -1,12 +1,12 @@
 -- gr --no-eval
 
-data Zero where
+data Z where
 
-data Succ a where
+data S a where
 
 data Vec n a where
-  Nil : Vec Zero a;
-  Cons : ∀ {m : Type} . a → Vec m a → Vec (Succ m) a
+  Nil : Vec Z a;
+  Cons : ∀ {m : Type} . a → Vec m a → Vec (S m) a
 
-test : Vec (Succ Zero) Int
+test : Vec (S Z) Int
 test = Cons 1 Nil

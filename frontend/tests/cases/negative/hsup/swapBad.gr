@@ -1,0 +1,2 @@
+swapBad : forall {a b : Type} . (a, b) [Many] -> (b, a) [Many]
+swapBad [(x, y)] = [(y, x)] 

@@ -39,7 +39,7 @@ data SGrade =
      -- | Grade '0' denotes even usage, and grade '1' denotes odd usage.
      | SOOZ SBool
      -- LNL
-     | SLNL SBool -- True = NonLin, False = Lin
+     | SLNL SInteger -- 0 = Zero, 1 = One, 2 = Many
      -- Borrowing
      | SBorrow SInteger
      -- Uniqueness
@@ -71,6 +71,11 @@ oneRepresentation, betaRepresentation, omegaRepresentation :: Integer
 oneRepresentation   = 1
 betaRepresentation  = 2
 omegaRepresentation = 3
+
+zeroRep, oneRep, manyRep :: Integer
+zeroRep = 0
+oneRep  = 1
+manyRep = 2
 
 -- Representation of semiring terms as a `SynTree`
 data SynTree =
@@ -343,7 +348,9 @@ symGradePlus (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynPlus um un)
 
 symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
-symGradePlus (SLNL a) (SLNL b) = return $ SLNL sTrue
+symGradePlus (SLNL a) (SLNL b) = return $ ite (a .== (literal zeroRep)) (SLNL b)
+                                            (ite (b .== (literal zeroRep)) (SLNL a) (SLNL (literal manyRep)))
+
 symGradePlus (SBorrow a) (SBorrow b) = return $ SBorrow (a `smax` b `smax` literal betaRepresentation)
 
 symGradePlus s t = solverError $ cannotDo "plus" s t
@@ -404,7 +411,8 @@ symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)
 
 symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
-symGradeTimes (SLNL a) (SLNL b) = return $ SLNL $ a .&& b
+symGradeTimes (SLNL a) (SLNL b) = return $ ite (a .== (literal zeroRep)) (SLNL (literal zeroRep))
+                                            (ite (b .== (literal zeroRep)) (SLNL (literal zeroRep)) (SLNL $ a `smax` b))
 symGradeTimes (SBorrow a) (SBorrow b) = return $ SBorrow $ a `smax` b
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
@@ -421,6 +429,13 @@ symGradeMinus SPoint SPoint = return $ SPoint
 symGradeMinus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMinus SProduct id s t)
 symGradeMinus s t = solverError $ cannotDo "minus" s t
+
+
+symGradeHsup :: SGrade -> SGrade -> Symbolic SBool
+-- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed
+symGradeHsup (SLNL n) (SLNL m) = return (n .== (literal oneRep) .&& m .== (literal oneRep))
+-- | For all other grades, allow pushing 
+symGradeHsup s1 s2 = return sTrue
 
 cannotDo :: String -> SGrade -> SGrade -> String
 cannotDo op (SUnknown s) (SUnknown t) =
