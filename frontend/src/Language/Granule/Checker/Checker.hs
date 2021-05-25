@@ -871,7 +871,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
   -- Finds the upper-bound return type between all branches
   (branchType, substBT) <-
          foldM (\(ty2, subst) (ty1, sp) -> do
-                           jm <- joinTypes sp ty1 ty2
+                           jm <- joinTypesForEqualCoeffectGrades sp ty1 ty2
                            case jm of
                              Just (ty, subst', _) -> do
                                substF <- combineSubstitutions sp subst subst'

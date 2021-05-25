@@ -512,7 +512,6 @@ predicateOperation op = (\(_, _, c) -> c) (tyOps op) == kpredicate
 
 -- | Compute the join of two types, if it exists
 -- | (including injections in the case of coeffect types)
-
 joinTypes :: (?globals :: Globals)
           => Span
           -> Type
@@ -520,39 +519,56 @@ joinTypes :: (?globals :: Globals)
           -> Checker (Maybe (Type, Substitution, Maybe Injections))
 joinTypes s t1 t2 = runMaybeT (joinTypes' s t1 t2)
 
+-- Join types but force grades to be equal
+joinTypesForEqualCoeffectGrades :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> Checker (Maybe (Type, Substitution, Maybe Injections))
+joinTypesForEqualCoeffectGrades s t1 t2 = runMaybeT (joinTypes'' s t1 t2 Eq)
+
+-- Wrapper over `jointTypes'` that uses approximation
 joinTypes' :: (?globals :: Globals)
           => Span
           -> Type
           -> Type
           -> MaybeT Checker (Type, Substitution, Maybe Injections)
-joinTypes' s t t' | t == t' = return (t, [], Nothing)
+joinTypes' s t t' = joinTypes'' s t t' ApproximatedBy
 
-joinTypes' s (FunTy id t1 t2) (FunTy _ t1' t2') = do
-  (t1j, subst1, _) <- joinTypes' s t1' t1 -- contravariance
-  (t2j, subst2, _) <- joinTypes' s t2 t2'
+joinTypes'' :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> (Span -> Type -> Type -> Type -> Constraint) -- how to build a constraint for grades
+          -> MaybeT Checker (Type, Substitution, Maybe Injections)
+joinTypes'' s t t' rel | t == t' = return (t, [], Nothing)
+
+joinTypes'' s (FunTy id t1 t2) (FunTy _ t1' t2') rel = do
+  (t1j, subst1, _) <- joinTypes'' s t1' t1 rel -- contravariance
+  (t2j, subst2, _) <- joinTypes'' s t2 t2' rel
   subst <- lift $ combineSubstitutions s subst1 subst2
   return (FunTy id t1j t2j, subst, Nothing)
 
-joinTypes' s (Diamond ef1 t1) (Diamond ef2 t2) = do
-  (tj, subst0, _) <- joinTypes' s t1 t2
+joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel = do
+  (tj, subst0, _) <- joinTypes'' s t1 t2 rel
   -- Calculate the effect type for the effects here
   (efty1, subst1, ef1') <- lift $ synthKind s ef1
   (efty2, subst2, ef2') <- lift $ synthKind s ef2
   -- Compute the upper bound on the types
-  (efftj, subst3, _) <- joinTypes' s efty1 efty2
+  (efftj, subst3, _) <- joinTypes'' s efty1 efty2 rel
   -- Computes the upper bound on the effects
   ej <- lift $ effectUpperBound s efftj ef1' ef2'
   subst <- lift $ combineManySubstitutions s [subst0, subst1, subst2, subst3]
   return (Diamond ej tj, subst, Nothing)
 
-joinTypes' s (Box c t) (Box c' t') = do
+joinTypes'' s (Box c t) (Box c' t') rel = do
   (coeffTy, subst, (inj1, inj2)) <- lift $ mguCoeffectTypesFromCoeffects s c c'
   -- Create a fresh coeffect variable
   topVar <- lift $ freshTyVarInContext (mkId "") coeffTy
   -- Unify the two coeffects into one
-  lift $ addConstraint (ApproximatedBy s (inj1 c)  (TyVar topVar) coeffTy)
-  lift $ addConstraint (ApproximatedBy s (inj2 c') (TyVar topVar) coeffTy)
-  (tUpper, subst', _) <- joinTypes' s t t'
+  lift $ addConstraint (rel s (inj1 c)  (TyVar topVar) coeffTy)
+  lift $ addConstraint (rel s (inj2 c') (TyVar topVar) coeffTy)
+  (tUpper, subst', _) <- joinTypes'' s t t' rel
   substFinal <- lift $ combineSubstitutions s subst subst'
   return (Box (TyVar topVar) tUpper, substFinal, Nothing)
 
@@ -566,7 +582,7 @@ joinTypes' s (Box c t) (Box c' t') = do
 --   addConstraint (Eq s (TyInt n) (TyVar var) ty)
 --   return $ TyInt n
 
-joinTypes' _ (TyVar v) t = do
+joinTypes'' _ (TyVar v) t rel = do
   st <- get
   case lookup v (tyVarContext st) of
     Just (_, q) | q == InstanceQ || q == BoundQ -> return (t, [(v, SubstT t)], Nothing)
@@ -575,15 +591,15 @@ joinTypes' _ (TyVar v) t = do
     -- Don't unify with universal variables
     _ -> fail "Cannot unify with a universal"
 
-joinTypes' s t1 t2@(TyVar _) = joinTypes' s t2 t1
+joinTypes'' s t1 t2@(TyVar _) rel = joinTypes'' s t2 t1 rel
 
-joinTypes' s (TyApp t1 t2) (TyApp t1' t2') = do
-  (t1'', subst1, _) <- joinTypes' s t1 t1'
-  (t2'', subst2, _) <- joinTypes' s t2 t2'
+joinTypes'' s (TyApp t1 t2) (TyApp t1' t2') rel = do
+  (t1'', subst1, _) <- joinTypes'' s t1 t1' rel
+  (t2'', subst2, _) <- joinTypes'' s t2 t2' rel
   subst <- lift $ combineSubstitutions s subst1 subst2
   return (TyApp t1'' t2'', subst, Nothing)
 
-joinTypes' s t1 t2 = do
+joinTypes'' s t1 t2 rel = do
   st <- get
   (isCoeffect1, putChecker1) <- lift $ attemptChecker (checkKind s t1 kcoeffect)
   (isCoeffect2, putChecker2) <- lift $ attemptChecker (checkKind s t2 kcoeffect)
