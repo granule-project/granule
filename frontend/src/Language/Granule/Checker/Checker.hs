@@ -1034,8 +1034,10 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
      Nothing ->
        -- Try definitions in scope
        case lookup x (defs <> Primitives.builtins) of
-         Just tyScheme  ->
-           freshenTySchemeForVar s rf x tyScheme
+         Just tyScheme  -> do
+           (ty, ctxt, subst, elab) <- freshenTySchemeForVar s rf x tyScheme
+           -- Mark ghost variable as used.
+           return (ty, usedGhostVariableContext <> ctxt, subst, elab)
 
          -- Couldn't find it
          Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
