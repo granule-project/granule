@@ -571,7 +571,7 @@ approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     -- Private <= Public
   return
     $ ite (l .== literal unusedRepresentation) sTrue
-      $ ite (l .== literal privateRepresentation) sTrue
+      $ ite ((l .== literal privateRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
         $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
           $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
             $ ite (l .== literal privateRepresentation) sTrue
