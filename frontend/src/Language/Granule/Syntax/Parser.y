@@ -59,6 +59,7 @@ import Language.Granule.Utils hiding (mkSpan)
     as    { TokenAs _ }
     catch    { TokenCatch _ }
     import { TokenImport _ _ }
+    language { TokenPragma _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
