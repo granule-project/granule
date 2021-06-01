@@ -794,8 +794,90 @@ deriveDrop' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
   (rTy, rExpr, _) <- deriveDrop' s topLevel gamma t2 (makeVarUntyped y)
 
   let expr = makePairElimPUntyped id arg x y (makeUnitElimPUntyped id lExpr (makeUnitElimPUntyped id rExpr makeUnitIntroUntyped))
+  debugM "expr: " (pretty expr)
 
-  return (ProdTy lTy rTy, expr, False)
+  return (TyCon $ mkId "()", expr, False)
 
 
-deriveDrop' s topLevel gamma argTy arg = error ((show argTy) <> "not implemented yet")
+deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
+  st <- get
+  alreadyDefined <-
+    if topLevel
+      then return Nothing
+      else
+        case lookup (mkId "drop", TyCon name) (derivedDefinitions st) of
+          -- We have it in context, so now we need to apply its type
+          Just (tyScheme, _) -> do
+            -- freshen the type
+            (dropTy, _, _, _constraints, _) <- freshPolymorphicInstance InstanceQ False tyScheme []
+            case dropTy of
+              t@(FunTy _ t1 t2) -> do
+                  -- Its argument must be unified with argTy here
+                  (eq, tRes, subst) <- equalTypesRelatedCoeffectsAndUnify s Eq FstIsSpec argTy t1
+                  if eq
+                    -- Success!
+                    then do
+                      return (Just (TyCon $ mkId "()", App s () True (makeVarUntyped (mkId $ "drop@" <> pretty name)) arg))
+                    else do
+                      -- Couldn't do the equality.
+                      return Nothing
+              _ -> return Nothing
+          Nothing -> return Nothing
+  case alreadyDefined of
+    Just (dropTy, dropExpr) -> return (dropTy, dropExpr, False)
+    Nothing ->
+      -- Not already defined...
+      -- Get the kind of this type constructor
+      case lookup name (typeConstructors st) of
+        Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
+        Just (kind, _, _) -> do
+
+          -- Get all the data constructors of this type
+          mConstructors <- getDataConstructors name
+          case mConstructors of
+            Nothing -> throw UnboundVariableError { errLoc = s, errId = name }
+            Just constructors -> do
+
+              -- For each constructor, build a pattern match and an introduction:
+              exprs <- forM constructors (\(dataConsName, (tySch@(Forall _ _ _ dataConsType), coercions)) -> do
+
+                -- Instantiate the data constructor
+                (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
+                      freshPolymorphicInstance BoundQ True tySch coercions
+                -- [Note: this does not register the constraints associated with the data constrcutor]
+                dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
+                debugM "deriveDrop dataConstructorTypeFresh: " (show dataConstructorTypeFresh)
+                -- Perform an equality between the result type of the data constructor and the argument type here
+                areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt  argTy (resultType dataConstructorTypeFresh)
+                case areEq of
+                  -- This creates a unification
+                  (False, _, _) ->
+                      error $ "Cannot derive drop for data constructor " <> pretty dataConsName
+                  (True, _, unifiers) -> do
+                    -- Unify and specialise the data constructor type
+                    dataConsType <- substitute (flipSubstitution unifiers) dataConstructorTypeFresh
+
+                    debugM "deriveDrop dataConsType: " (show dataConsType)
+                    -- Create a variable for each parameter
+                    let consParamsTypes = parameterTypes dataConsType
+                    consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
+
+                    -- Build the pattern for this case
+                    let consPattern =
+                          PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
+
+                    -- Drop on all the parameters of a the constructor
+                    retTysAndExprs <- zipWithM (\ty var -> do
+                            deriveDrop' s False gamma ty (makeVarUntyped var))
+                              consParamsTypes consParamsVars
+                    let (_, exprs, _) = unzip3 retTysAndExprs
+                    x <- freshIdentifierBase "x" >>= (return . mkId)
+                    let bodyExpr = mkConstructorApplication s dataConsName dataConsType  exprs dataConsType
+                    let dropExpr = makeUnitIntroUntyped
+                    let caseExpr = Case s () True bodyExpr [(PVar s () True x, dropExpr)]
+                    return (consPattern, caseExpr))
+
+              -- Got all the branches to make the following case now
+              return (TyCon $ mkId "()", Case s () True arg exprs, False)
+
+deriveDrop' s topLevel gamma argTy arg = error (show argTy <> "not implemented yet")
