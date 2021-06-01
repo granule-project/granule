@@ -1,0 +1,4 @@
+language base
+
+foo : Int
+foo = 42

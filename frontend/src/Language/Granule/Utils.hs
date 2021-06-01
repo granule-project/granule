@@ -48,7 +48,17 @@ data Globals = Globals
   , globalsBenchmarkRaw        :: Maybe Bool
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
+  , globalsExtensions           :: [Extensions]
   } deriving (Read, Show)
+
+-- | Allowed extensions
+data Extensions = Base
+ deriving (Eq, Read, Show)
+
+-- | Parse valid extension names
+parseExtensions :: String -> Maybe Extensions
+parseExtensions ('b':'a':'s':'e':[]) = Just Base
+parseExtensions _ = Nothing
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
@@ -103,6 +113,7 @@ instance Semigroup Globals where
       , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
+      , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
       }
 
 instance Monoid Globals where
@@ -127,6 +138,7 @@ instance Monoid Globals where
     , globalsBenchmarkRaw        = Nothing
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
+    , globalsExtensions = [Base]
     }
 
 -- | A class for messages that are shown to the user. TODO: make more general
