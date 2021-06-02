@@ -288,7 +288,8 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
     pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile path
 
     case pf of
-      Right ast -> do
+      Right (ast, extensions) ->
+            let ?globals = ?globals { globalsExtensions = extensions } in do
             debugM "AST" (show ast)
             debugM "Pretty-printed AST:" $ pretty ast
             checked <- liftIO' $ check ast

@@ -532,7 +532,7 @@ builtins :: [(Id, TypeScheme)]
   (types, map unDef defs)
     where
       AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
-        Right ast -> ast
+        Right (ast, _) -> ast
         Left err -> error err
 
       unDef :: Def () () -> (Id, TypeScheme)

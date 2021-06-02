@@ -38,7 +38,7 @@ tokens :-
   "--".*                        ;
   "{-" (\\.|[^\{\-]|\n)* "-}"   ;
   import$white+@importFilePath  { \p s -> TokenImport p s }
-  language$white+$alphanum        { \p s -> TokenPragma p s }
+  language$white+               { \p s -> TokenPragma p s }
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   ∀                             { \p s -> TokenForall p }

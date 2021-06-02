@@ -48,15 +48,15 @@ data Globals = Globals
   , globalsBenchmarkRaw        :: Maybe Bool
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
-  , globalsExtensions           :: [Extensions]
+  , globalsExtensions           :: [Extension]
   } deriving (Read, Show)
 
 -- | Allowed extensions
-data Extensions = Base
+data Extension = Base
  deriving (Eq, Read, Show)
 
 -- | Parse valid extension names
-parseExtensions :: String -> Maybe Extensions
+parseExtensions :: String -> Maybe Extension
 parseExtensions ('b':'a':'s':'e':[]) = Just Base
 parseExtensions _ = Nothing
 
