@@ -117,7 +117,9 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
     result <- try $ parseAndDoImportsAndFreshenDefs input
     case result of
       Left (e :: SomeException) -> return . Left . ParseError $ show e
-      Right ast -> do
+      Right (ast, extensions) ->
+        -- update globals with extensions
+        let ?globals = ?globals { globalsExtensions = extensions } in do
         -- Print to terminal when in debugging mode:
         debugM "Pretty-printed AST:" $ pretty ast
         debugM "Raw AST:" $ show ast
@@ -167,7 +169,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
       noImportResult <- try $ parseAndFreshenDefs input
       case noImportResult of
         Left (e :: SomeException) -> return . Left . ParseError . show $ e
-        Right noImportAst -> do
+        Right (noImportAst, _) -> do
           let position = globalsHolePosition ?globals
           let relevantHoles = maybe holes (\ pos -> filter (holeInPosition pos) holes) position
           -- Associate the span with each generate cases
@@ -450,6 +452,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
+              , globalsExtensions = []
               }
             }
           )

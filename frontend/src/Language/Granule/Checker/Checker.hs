@@ -72,9 +72,9 @@ check ast@(AST _ _ _ hidden _) = do
       _    <- checkNameClashes ast
       _    <- runAll checkTyCon (Primitives.dataTypes ++ dataDecls)
       _    <- runAll checkDataCons (Primitives.dataTypes ++ dataDecls)
+      debugM "extensions" (show $ globalsExtensions ?globals)
       debugM "check" "kindCheckDef"
       defs <- runAll kindCheckDef defs
-      debugM "check" "kindCheckDef done"
       let defCtxt = map (\(Def _ name _ _ tys) -> (name, tys)) defs
       defs <- runAll (checkDef defCtxt) defs
       -- Add on any definitions computed by the type checker (derived)

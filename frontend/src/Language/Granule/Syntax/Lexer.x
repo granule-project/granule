@@ -38,6 +38,7 @@ tokens :-
   "--".*                        ;
   "{-" (\\.|[^\{\-]|\n)* "-}"   ;
   import$white+@importFilePath  { \p s -> TokenImport p s }
+  language$white+               { \p s -> TokenPragma p s }
   @constr                       { \p s -> TokenConstr p s }
   forall                        { \p s -> TokenForall p }
   ∀                             { \p s -> TokenForall p }
@@ -175,6 +176,7 @@ data Token
   | TokenMeet AlexPosn
   | TokenRing AlexPosn
   | TokenImport AlexPosn String
+  | TokenPragma AlexPosn String
   | TokenEmptyHole AlexPosn
   | TokenHoleStart AlexPosn
   | TokenHoleEnd AlexPosn
