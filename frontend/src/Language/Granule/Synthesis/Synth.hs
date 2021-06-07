@@ -347,20 +347,22 @@ varHelper :: (?globals :: Globals)
 varHelper left [] _ _ _ = none
 varHelper left (var@(x, a) : right) resourceScheme grade goalTy@(Forall _ binders constraints goalTy') =
  varHelper (var:left) right resourceScheme grade goalTy `try`
-   do
-      debugM "variable equality on: " (pretty x <> " with types: " <> pretty (getAssumptionType  a) <> " and " <> pretty goalTy')
-
+   (do
+      conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
       (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
-
-      -- If the goal type is a GADT then run the solver 
-      isGADT <- conv $ isIndexedType goalTy'
-      res <- if isGADT then solve else return True
-
-      if res then do
-          (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme grade
-          boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
-      else none
-
+      if success then do
+          -- see if any constraints were added
+          st <- conv $ get
+          solved <- if addedConstraints st
+                      then solve
+                      else return True
+          -- now to do check we can actually use it
+          if solved then do
+              (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme grade
+              boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
+            else
+              none
+      else none)
 
 
 {--
@@ -1351,7 +1353,7 @@ freshIdentifier = do
         then return $ mkId $ mappo !! n'
         else return $ mkId $ base <> show n'
 
-elapsedTime :: TimeSpec -> TimeSpec -> Integer 
+elapsedTime :: TimeSpec -> TimeSpec -> Integer
 elapsedTime start end = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
 
 -- Calculate theorem sizes

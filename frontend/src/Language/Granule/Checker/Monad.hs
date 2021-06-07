@@ -183,6 +183,9 @@ data CheckerState = CS
             , derivedDefinitions :: [((Id, Type), (TypeScheme, Def () ()))]
             -- Warning accumulator
             -- , warnings :: [Warning]
+
+            -- flag to find out if constraints got added
+            , addedConstraints :: Bool
             }
   deriving (Eq, Show) -- for debugging
 
@@ -203,6 +206,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
                , equationTy = Nothing
                , equationName = Nothing
                , derivedDefinitions = []
+               , addedConstraints = False
                }
 
 -- *** Various helpers for manipulating the context
@@ -406,9 +410,12 @@ addConstraint c = do
   checkerState <- get
   case predicateStack checkerState of
     (p : stack) ->
-      put (checkerState { predicateStack = appendPred (Con c) p : stack })
+      put (checkerState { predicateStack = appendPred (Con c) p : stack, addedConstraints = True })
     stack ->
-      put (checkerState { predicateStack = Conj [Con c] : stack })
+      put (checkerState { predicateStack = Conj [Con c] : stack, addedConstraints = True })
+
+resetAddedConstraintsFlag :: Checker ()
+resetAddedConstraintsFlag = modify (\st -> st { addedConstraints = False })
 
 -- | A helper for adding a constraint to the previous frame (i.e.)
 -- | if I am in a local context, push it to the global
@@ -417,11 +424,11 @@ addConstraintToPreviousFrame c = do
         checkerState <- get
         case predicateStack checkerState of
           (ps : ps' : stack) ->
-            put (checkerState { predicateStack = ps : (appendPred (Con c) ps') : stack })
+            put (checkerState { predicateStack = ps : (appendPred (Con c) ps') : stack, addedConstraints = True })
           (ps : stack) ->
-            put (checkerState { predicateStack = ps : Conj [Con c] : stack })
+            put (checkerState { predicateStack = ps : Conj [Con c] : stack, addedConstraints = True })
           stack ->
-            put (checkerState { predicateStack = Conj [Con c] : stack })
+            put (checkerState { predicateStack = Conj [Con c] : stack, addedConstraints = True })
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
