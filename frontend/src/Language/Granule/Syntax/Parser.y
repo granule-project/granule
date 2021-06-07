@@ -129,7 +129,7 @@ TopLevel :: { AST () () }
             { let modName = mkId $ constrString $2
               in $9 { moduleName = Just modName, hiddenNames = $5 modName } }
 
-  | language VAR NL TopLevel                     {% case parseExtensions (symString $2) of
+  | language CONSTR NL TopLevel                     {% case parseExtensions (constrString $2) of
                                                     Just ext -> do
                                                        -- modify (\st -> st { globalsExtensions = ext : globalsExtensions st })
                                                        modify (\st -> ext : st)

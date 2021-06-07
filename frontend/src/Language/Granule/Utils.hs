@@ -57,8 +57,10 @@ data Extension = Base
 
 -- | Parse valid extension names
 parseExtensions :: String -> Maybe Extension
-parseExtensions ('b':'a':'s':'e':[]) = Just Base
-parseExtensions _ = Nothing
+parseExtensions xs =
+  case readsPrec 0 xs of
+    ((x, ""):_) -> Just x
+    _           -> Nothing
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
