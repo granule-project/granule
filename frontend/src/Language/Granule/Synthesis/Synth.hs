@@ -297,10 +297,20 @@ varHelper left [] _ _ = none
 varHelper left (var@(x, a) : right) resourceScheme goalTy@(Forall _ binders constraints goalTy') =
  (varHelper (var:left) right resourceScheme goalTy) `try`
    (do
+      conv $ resetAddedConstraintsFlag -- reset the flag that says if any constraints were added
       (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
       if success then do
-          (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
-          boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
+          -- see if any constraints were added
+          st <- conv $ get
+          solved <- if addedConstraints st
+                      then solve
+                      else return True
+          -- now to do check we can actually use it
+          if solved then do
+              (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme
+              boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
+            else
+              none
       else none)
 
 
