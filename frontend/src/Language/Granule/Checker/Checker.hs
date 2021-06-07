@@ -1309,8 +1309,12 @@ solveConstraints predicate s name = do
   constructors <- allDataConstructorNames
   (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
   case result of
-    QED -> return ()
+    QED -> do
+      debugM "Solver result" "QED."
+      return ()
     NotValid msg -> do
+      debugM "Solver result" ("False: " <> msg)
+
       msg' <- rewriteMessage msg
       simplPred <- simplifyPred predicate
 
@@ -1326,9 +1330,11 @@ solveConstraints predicate s name = do
               { errLoc = s, errDefId = name, errPred = simplPred }
     NotValidTrivial unsats ->
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
-    Timeout ->
+    Timeout -> do
+        debugM "Solver result" "Timeout"
         throw SolverTimeout{ errLoc = s, errSolverTimeoutMillis = solverTimeoutMillis, errDefId = name, errContext = "grading", errPred = predicate }
     OtherSolverError msg -> do
+      debugM "Solver result" ("Other error: " <> msg)
       simplPred <- simplifyPred predicate
       msg' <- rewriteMessage msg
       throw SolverError{ errLoc = s, errMsg = msg', errPred = simplPred }
