@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/hsup/pushOneMany.gr:2:1:
 The following theorem associated with `pushOneMany` is falsifiable:
-	∀ a0.0 : Type,b0.0 : Type,t0.0 : Type,t1.0 : Type . ((One ⨱ One) -> (prom_[2:30]0 ≤ One) ∧ (prom_[2:25]0 ≤ One) ∧ (One ≤ prom_[2:30]0) ∧ (Many ≤ prom_[2:25]0))
+	∀ a0.0 : Type,b0.0 : Type,t0.0 : Type,t1.0 : Type . (((One ⨱ One)) -> (prom_[2:30]0 ≤ One) ∧ (prom_[2:25]0 ≤ One) ∧ (One ≤ prom_[2:30]0) ∧ (Many ≤ prom_[2:25]0))

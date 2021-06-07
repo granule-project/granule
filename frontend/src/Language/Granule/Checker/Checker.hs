@@ -351,7 +351,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   -- Build the binding context for the branch pattern
   st <- get
   (patternGam, tau, localVars, subst, elaborated_pats, consumptions) <-
-     ctxtFromTypedPatterns s ty pats (patternConsumption st)
+     ctxtFromTypedPatterns s InFunctionEquation ty pats (patternConsumption st)
 
   -- Update the consumption information
   modify (\st -> st { patternConsumption =
@@ -387,7 +387,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     [] -> do
       localGam <- substitute subst localGam
 
-      -- Check that our consumption context approximations the binding
+      -- Check that our consumption context matches the binding
       ctxtApprox s localGam patternGam
 
       -- Conclude the implication
@@ -537,7 +537,7 @@ checkExpr defs gam pol _ ty@(FunTy _ sig tau) (Val s _ rf (Abs _ p t e)) = do
 
   newConjunct
 
-  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, subst, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
   debugM "binding from lam" $ pretty bindings
 
   pIrrefutable <- isIrrefutable s sig p
@@ -663,7 +663,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
 
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pat_i NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s InCase guardTy pat_i NotFull
       newConjunct
 
       -- Checking the case body
@@ -837,7 +837,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
     forM cases $ \(pati, ei) -> do
       -- Build the binding context for the branch pattern
       newConjunct
-      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s guardTy pati NotFull
+      (patternGam, eVars, subst, elaborated_pat_i, _) <- ctxtFromTypedPattern s InCase guardTy pati NotFull
       newConjunct
 
       -- Synth the case body
@@ -914,7 +914,7 @@ synthExpr defs gam pol (LetDiamond s _ rf p optionalTySig e1 e2) = do
 
   -- Type body of the let...
   -- ...in the context of the binders from the pattern
-  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s ty1 p NotFull
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s InCase ty1 p NotFull
   pIrrefutable <- isIrrefutable s ty1 p
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
   (tau, gam2, subst2, elaborated2) <- synthExpr defs (binders <> gam) pol e2
@@ -962,7 +962,7 @@ synthExpr defs gam pol (TryCatch s _ rf e1 p mty e2 e3) = do
   addConstraint (ApproximatedBy s (TyGrade (Just t) 0) opt t)
 
   -- Type clauses in the context of the binders from the pattern
-  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s (Box opt ty1) (PBox s () False p) NotFull
+  (binders, _, substP, elaboratedP, _)  <- ctxtFromTypedPattern s InCase (Box opt ty1) (PBox s () False p) NotFull
   pIrrefutable <- isIrrefutable s ty1 p
   unless pIrrefutable $ throw RefutablePatternError{ errLoc = s, errPat = p }
 
@@ -1147,7 +1147,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p (Just sig) e)) = do
 
   newConjunct
 
-  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
 
   newConjunct
 
@@ -1180,7 +1180,7 @@ synthExpr defs gam pol (Val s _ rf (Abs _ p Nothing e)) = do
   tyVar <- freshTyVarInContext (mkId "t") (Type 0)
   let sig = (TyVar tyVar)
 
-  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s sig p NotFull
+  (bindings, localVars, substP, elaboratedP, _) <- ctxtFromTypedPattern s InCase sig p NotFull
 
   newConjunct
 

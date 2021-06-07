@@ -167,7 +167,7 @@ validateCase span ty pats = do
   -- Get local vars for the patterns and generate the relevant predicate
   -- (stored in the stack).
   (binders, _, localVars, _, _, _) <-
-    ctxtFromTypedPatterns span (expandGrades ty) pats (map (const NotFull) pats)
+    ctxtFromTypedPatterns span InCase (expandGrades ty) pats (map (const NotFull) pats)
   pred <- popFromPredicateStack
 
   -- Build the type variable environment for proving the predicate

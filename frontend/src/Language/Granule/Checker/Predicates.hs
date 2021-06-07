@@ -351,7 +351,7 @@ instance Pretty Pred where
      (intercalate " ∨ ")
      (\ctxt p q ->
          (if null ctxt then "" else "∀ " <> pretty' ctxt <> " . ")
-      <> "(" <> p <> " -> " <> q <> ")")
+      <> "((" <> p <> ") -> " <> q <> ")")
       pretty
       (\p -> "¬(" <> p <> ")")
       (\x t p -> "∃ " <> pretty x <> " : " <> pretty t <> " . " <> p)

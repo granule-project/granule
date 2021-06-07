@@ -34,14 +34,17 @@ import Language.Granule.Utils
 --   a box pattern (or many nested box patterns)
 definiteUnification :: (?globals :: Globals)
   => Span
+  -> PatternPosition
   -> Maybe (Coeffect, Type) -- Outer coeffect
   -> Type                   -- Type of the pattern
   -> Checker ()
-definiteUnification _ Nothing _ = return ()
-definiteUnification s (Just (coeff, coeffTy)) ty = do
+definiteUnification _ _ Nothing _ = return ()
+definiteUnification s pos (Just (coeff, coeffTy)) ty = do
   isPoly <- polyShaped ty
   when isPoly $ -- Used to be: addConstraintToPreviousFrame, but paper showed this was not a good idea
-    addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
+    case pos of
+      InCase ->  addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
+      InFunctionEquation -> addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 1) coeff coeffTy
 
 -- | Predicate on whether a type has more than 1 shape (constructor)
 polyShaped :: (?globals :: Globals) => Type -> Checker Bool
@@ -65,6 +68,8 @@ polyShaped t =
       debugM "polyShaped because not a constructor" (show t)
       pure True
 
+data PatternPosition = InCase | InFunctionEquation
+
 -- | Given a pattern and its type, construct Just of the binding context
 --   for that pattern, or Nothing if the pattern is not well typed
 --   Returns also:
@@ -75,6 +80,10 @@ polyShaped t =
 --      - a consumption context explaining usage triggered by pattern matching
 ctxtFromTypedPattern :: (?globals :: Globals) =>
   Span
+  -> PatternPosition -- is this a case or a top-level equation
+  --                   -- (additional equations in a case get registered
+  --                   -- in the preceding predicate frame rather than as part of an implication
+  --                   -- as we know they need to be checked now.
   -> Type
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
@@ -86,13 +95,14 @@ ctxtFromTypedPattern = ctxtFromTypedPattern' Nothing
 ctxtFromTypedPattern' :: (?globals :: Globals) =>
      Maybe (Coeffect, Type)    -- enclosing coeffect
   -> Span
+  -> PatternPosition
   -> Type
   -> Pattern ()
   -> Consumption   -- Consumption behaviour of the patterns in this position so far
   -> Checker (Ctxt Assumption, Ctxt Kind, Substitution, Pattern Type, Consumption)
 
 -- Pattern matching on wild cards and variables (linear)
-ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
+ctxtFromTypedPattern' outerCoeff _ pos t (PWild s _ rf) cons =
     -- DESIGN DECISION: We've turned off the checks that our linearity for ints
     -- when preceded by other concrete matches. (15/02/19) - DAO
     -- But we want to think about this more in the future
@@ -114,13 +124,15 @@ ctxtFromTypedPattern' outerCoeff _ t (PWild s _ rf) cons =
 
           Just (coeff, coeffTy) -> do
               -- Must approximate zero
-              addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
+              case pos of
+                InFunctionEquation -> addConstraint $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
+                InCase -> addConstraintToPreviousFrame $ ApproximatedBy s (TyGrade (Just coeffTy) 0) coeff coeffTy
 
               return ([], [], [], PWild s t rf, NotFull)
 
   --  _ -> illLinearityMismatch s [NonLinearPattern]
 
-ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
+ctxtFromTypedPattern' outerCoeff _ _ t (PVar s _ rf v) _ = do
     let elabP = PVar s t rf v
 
     case outerCoeff of
@@ -130,24 +142,24 @@ ctxtFromTypedPattern' outerCoeff _ t (PVar s _ rf v) _ = do
          return ([(v, Discharged t coeff)], [], [], elabP, NotFull)
 
 -- Pattern matching on constarints
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PInt s' _ rf n) _
+ctxtFromTypedPattern' outerCoeff s pos ty@(TyCon c) (PInt s' _ rf n) _
   | internalName c == "Int" = do
 
-    definiteUnification s outerCoeff ty
+    definiteUnification s pos outerCoeff ty
 
     let elabP = PInt s' ty rf n
     return ([], [], [], elabP, Full)
 
-ctxtFromTypedPattern' outerCoeff s ty@(TyCon c) (PFloat s' _ rf n) _
+ctxtFromTypedPattern' outerCoeff s pos ty@(TyCon c) (PFloat s' _ rf n) _
   | internalName c == "Float" = do
 
-    definiteUnification s outerCoeff ty
+    definiteUnification s pos outerCoeff ty
 
     let elabP = PFloat s' ty rf n
     return ([], [], [], elabP, Full)
 
 -- Pattern match on a modal box
-ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
+ctxtFromTypedPattern' outerBoxTy s pos t@(Box coeff ty) (PBox sp _ rf p) _ = do
     (innerBoxTy, subst0, _) <- synthKind s coeff
     (coeff, subst1, coeffTy) <- case outerBoxTy of
         -- Case: no enclosing [ ] pattern
@@ -162,13 +174,13 @@ ctxtFromTypedPattern' outerBoxTy s t@(Box coeff ty) (PBox sp _ rf p) _ = do
               { errLoc = s, errTyOuter = outerBoxTy, errTyInner = innerBoxTy }
 
 
-    (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s ty p Full
+    (ctxt, eVars, subst, elabPinner, consumption) <- ctxtFromTypedPattern' (Just (coeff, coeffTy)) s pos ty p Full
 
     let elabP = PBox sp t rf elabPinner
     substU <- combineManySubstitutions s [subst0, subst1, subst]
     return (ctxt, eVars, substU, elabP, NotFull)
 
-ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
+ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   debugM "Patterns.ctxtFromTypedPattern" $ "ty: " <> show ty <> "\t" <> pretty ty <> "\nPConstr: " <> pretty dataC
 
   st <- get
@@ -177,7 +189,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
     Just (tySch, coercions) -> do
 
-      case outerBoxTy of 
+      case outerBoxTy of
         Just (coeff, coeffTy) -> do
           addConstraint (Hsup s coeff coeff coeffTy)
         Nothing -> return ()
@@ -226,7 +238,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
 
           (as, _, bs, us, elabPs, consumptionsOut) <-
-            ctxtFromTypedPatterns' outerBoxTy s dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
+            ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
           -- Combine the substitutions
@@ -235,7 +247,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
           ty <- substitute subst ty
-          definiteUnification s outerBoxTy ty
+          definiteUnification s pos outerBoxTy ty
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
           let elabP = PConstr s ty rf dataC elabPs
@@ -252,7 +264,7 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
               , tyActual = ty
               }
 
-ctxtFromTypedPattern' _ s t p _ = do
+ctxtFromTypedPattern' _ s _ t p _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
@@ -260,6 +272,7 @@ ctxtFromTypedPattern' _ s t p _ = do
 
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
+  -> PatternPosition
   -> Type
   -> [Pattern ()]
   -> [Consumption]
@@ -269,30 +282,31 @@ ctxtFromTypedPatterns = ctxtFromTypedPatterns' Nothing
 ctxtFromTypedPatterns' :: (?globals :: Globals)
   => Maybe (Coeffect, Type)
   -> Span
+  -> PatternPosition
   -> Type
   -> [Pattern ()]
   -> [Consumption]
   -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
-ctxtFromTypedPatterns' _ sp ty [] _ = do
+ctxtFromTypedPatterns' _ sp _ ty [] _ = do
   return ([], ty, [], [], [], [])
 
-ctxtFromTypedPatterns' outerCoeff s (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
+ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
 
   -- Match a pattern
-  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s t1 pat cons
+  (localGam, eVars, subst, elabP, consumption) <- ctxtFromTypedPattern' outerCoeff s pos t1 pat cons
 
   -- Apply substitutions
   t2' <- substitute subst t2
 
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
-      ctxtFromTypedPatterns' outerCoeff s t2' pats consumptionsIn
+      ctxtFromTypedPatterns' outerCoeff s pos t2' pats consumptionsIn
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs
   return (localGam <> localGam', ty, eVars ++ eVars', substs', elabP : elabPs, consumption : consumptions)
 
-ctxtFromTypedPatterns' _ s ty (p:ps) _ = do
+ctxtFromTypedPatterns' _ s _ ty (p:ps) _ = do
   -- This means we have patterns left over, but the type is not a
   -- function type, so we need to throw a type error
 
