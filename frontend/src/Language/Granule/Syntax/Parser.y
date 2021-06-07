@@ -301,6 +301,9 @@ TypeScheme :: { TypeScheme }
  | Forall Type
        {% (mkSpan (fst $ fst $1)) >>= \sp -> return $ Forall sp (snd $ fst $1) (snd $1) $2 }
 
+ | '{' Constraints '}' '=>' Type
+       {% mkSpan (getPos $1, getPos $4) >>= \sp -> return $ Forall sp [] $2 $5 }
+
 VarSigs :: { [(Id, Kind)] }
   : VarSig ',' VarSigs        { $1 <> $3 }
   | VarSig                    { $1 }
