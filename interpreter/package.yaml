@@ -18,6 +18,7 @@ dependencies:
 - text
 - logict == 0.7.0.2
 - clock
+- array
 
 default-extensions:
 - LambdaCase

@@ -33,6 +33,7 @@ import qualified Control.Concurrent.Chan as CC (newChan, writeChan, readChan, Ch
 -- import Foreign.Marshal.Alloc (free, malloc)
 -- import Foreign.Ptr (castPtr)
 -- import Foreign.Storable (peek, poke)
+import qualified Data.Array.IO as MA
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
@@ -58,6 +59,9 @@ data Runtime a =
   -- | Delayed side effects wrapper
   | PureWrapper (IO (Expr (Runtime a) ()))
 
+  -- | Mutable arrays
+  | FloatArray (MA.IOArray Int Double)
+
 
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
 diamondConstr = Ext () . PureWrapper
@@ -73,6 +77,7 @@ instance Show (Runtime a) where
   show (PrimitiveClosure _) = "Some primitive closure"
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
+  show (FloatArray arr) = "<array>"
 
 instance Pretty (Runtime a) where
   pretty = show
@@ -199,7 +204,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
          -- (cf. TRY_BETA_2)
         (\(e :: IOException) -> evalIn ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
-          
+
 {-
 -- Hard-coded 'scale', removed for now
 evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
@@ -293,9 +298,14 @@ builtIns =
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
   , (mkId "use", Ext () $ Primitive $ \v -> Promote () (Val nullSpan () False v))
-  , (mkId "dropInt", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "dropChar", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "dropString", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
+  , (mkId "drop@Int", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
+  , (mkId "drop@Char", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
+  , (mkId "drop@Float", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
+  , (mkId "drop@String", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
+  , (mkId "copyShape@Int", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
+  , (mkId "copyShape@Char", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
+  , (mkId "copyShape@Float", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
+  , (mkId "copyShape@String", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
   , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () False v))
   , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) ->  v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
@@ -367,6 +377,7 @@ builtIns =
                False -> Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
+  , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
   , (mkId "fork",    Ext () $ PrimitiveClosure forkRep)
   , (mkId "recv",    Ext () $ Primitive recv)
   , (mkId "send",    Ext () $ Primitive send)
@@ -378,6 +389,12 @@ builtIns =
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
+  , (mkId "uniqueReturn",  Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (Val nullSpan () False v))
+  , (mkId "uniqueBind",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False f)) -> Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
+  , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
+  , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
+  , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
+  , (mkId "writeFloatArray",  Ext () $ Primitive writeFloatArray)
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
@@ -387,6 +404,16 @@ builtIns =
          evalIn ctxt (App nullSpan () False (valExpr e) (valExpr $ Ext () $ Chan c)) >> return ()
       return $ Chan c)
     forkLinear ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
+    forkLinear' :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
+    forkLinear' ctxt e@Abs{} = Ext () (unsafePerformIO $ do
+      c <- CC.newChan
+      _ <- C.forkIO $
+         evalIn ctxt (App nullSpan () False
+                        (valExpr e)
+                        (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
+      return $ Chan c)
+    forkLinear' ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
     forkRep :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
     forkRep ctxt e@Abs{} = diamondConstr $ do
@@ -474,6 +501,28 @@ builtIns =
          SIO.hClose h
          return $ valExpr (Constr () (mkId "()") [])
     closeHandle _ = error $ "Runtime exception: trying to close a non handle value"
+
+    {-# NOINLINE newFloatArray #-}
+    newFloatArray :: RValue -> RValue
+    newFloatArray = \(NumInt i) -> Promote () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+
+    {-# NOINLINE readFloatArray #-}
+    readFloatArray :: RValue -> RValue
+    readFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      unsafePerformIO $ do e <- MA.readArray arr i
+                           return (Constr () (mkId ",") [NumFloat e, Promote () (Val nullSpan () False $ Ext () (FloatArray arr))])
+
+    lengthFloatArray :: RValue -> RValue
+    lengthFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      unsafePerformIO $ do (_,end) <- MA.getBounds arr
+                           return (Constr () (mkId ",") [NumInt end, Promote () (Val nullSpan () False $ Ext () $ FloatArray arr)])
+
+    {-# NOINLINE writeFloatArray #-}
+    writeFloatArray :: RValue -> RValue
+    writeFloatArray = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+      Ext () $ Primitive $ \(NumInt i) ->
+      Ext () $ Primitive $ \(NumFloat v) ->
+      Promote () (Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO (do _ <- MA.writeArray arr i v; return arr))
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt

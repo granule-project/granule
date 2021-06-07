@@ -9,6 +9,7 @@ module Language.Granule.Syntax.Parser where
 import Control.Arrow (second)
 import Control.Monad (forM, when, unless)
 import Control.Monad.Trans.Reader
+import Control.Monad.Trans.State
 import Control.Monad.Trans.Class (lift)
 import Data.Char (isSpace)
 import Data.Foldable (toList)
@@ -39,7 +40,7 @@ import Language.Granule.Utils hiding (mkSpan)
 %name tscheme TypeScheme
 %tokentype { Token }
 %error { parseError }
-%monad { ReaderT String (Either String) }
+%monad { StateT [Extension] (ReaderT String (Either String)) }
 
 %token
     nl    { TokenNL _ }
@@ -58,6 +59,7 @@ import Language.Granule.Utils hiding (mkSpan)
     as    { TokenAs _ }
     catch    { TokenCatch _ }
     import { TokenImport _ _ }
+    language { TokenPragma _ _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -104,6 +106,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '{!'  { TokenHoleStart _ }
     '!}'  { TokenHoleEnd _ }
     '@'   { TokenAt _ }
+    '!'   { TokenBang _ }
 
 %right '∘'
 %right in
@@ -125,6 +128,14 @@ TopLevel :: { AST () () }
   | module CONSTR hiding '(' Ids ')' where  NL Defs
             { let modName = mkId $ constrString $2
               in $9 { moduleName = Just modName, hiddenNames = $5 modName } }
+
+  | language VAR NL TopLevel                     {% case parseExtensions (symString $2) of
+                                                    Just ext -> do
+                                                       -- modify (\st -> st { globalsExtensions = ext : globalsExtensions st })
+                                                       modify (\st -> ext : st)
+                                                       return $4
+                                                    Nothing -> error ("Unknown language extension " ++ symString $2)
+                                                }
 
   | Defs                                        { $1 }
 
@@ -319,6 +330,7 @@ Kind :: { Kind }
 Type :: { Type }
   : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) $4 $7 }
   | TyJuxt                         { $1 }
+  | '!' TyAtom                     { Box (TyCon $ mkId "NonLin") $2 }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }
@@ -575,58 +587,58 @@ Atom :: { Expr () () }
 
 {
 
-mkSpan :: (Pos, Pos) -> ReaderT String (Either String) Span
+mkSpan :: (Pos, Pos) -> StateT [Extension] (ReaderT String (Either String)) Span
 mkSpan (start, end) = do
-  filename <- ask
+  filename <- lift $ ask
   return $ Span start end filename
 
-parseError :: [Token] -> ReaderT String (Either String) a
-parseError [] = lift $ Left "Premature end of file"
-parseError t  =  do
-    file <- ask
-    lift . Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
+parseError :: [Token] -> StateT [Extension] (ReaderT String (Either String)) a
+parseError [] = lift $ lift $ Left "Premature end of file"
+parseError t = do
+    file <- lift $ ask
+    lift $ lift $ Left $ file <> ":" <> show l <> ":" <> show c <> ": parse error"
   where (l, c) = getPos (head t)
 
-parseDefs :: FilePath -> String -> Either String (AST () ())
-parseDefs file input = runReaderT (topLevel $ scanTokens input) file
+parseDefs :: FilePath -> String -> Either String (AST () (), [Extension])
+parseDefs file input = runReaderT (runStateT (topLevel $ scanTokens input) []) file
 
-parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
+parseAndDoImportsAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 parseAndDoImportsAndFreshenDefs input = do
-    ast <- parseDefsAndDoImports input
-    return $ freshenAST ast
+    (ast, extensions) <- parseDefsAndDoImports input
+    return (freshenAST ast, extensions)
 
-parseAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () ())
+parseAndFreshenDefs :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 parseAndFreshenDefs input = do
-  ast <- either failWithMsg return $ parseDefs sourceFilePath input
-  return $ freshenAST ast
+  (ast, extensions) <- either failWithMsg return $ parseDefs sourceFilePath input
+  return (freshenAST ast, extensions)
 
-parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () ())
+parseDefsAndDoImports :: (?globals :: Globals) => String -> IO (AST () (), [Extension])
 parseDefsAndDoImports input = do
-    ast <- either failWithMsg return $ parseDefs sourceFilePath input
+    (ast, extensions) <- either failWithMsg return $ parseDefs sourceFilePath input
     case moduleName ast of
-      Nothing -> doImportsRecursively (imports ast) (ast { imports = empty })
+      Nothing -> doImportsRecursively (imports ast) (ast { imports = empty }, extensions)
       Just (Id name _) ->
         if name == takeBaseName sourceFilePath
-          then doImportsRecursively (imports ast) (ast { imports = empty })
+          then doImportsRecursively (imports ast) (ast { imports = empty }, extensions)
           else do
             failWithMsg $ "Module name `" <> name <> "` does not match filename `" <> takeBaseName sourceFilePath <> "`"
 
   where
     -- Get all (transitive) dependencies. TODO: blows up when the file imports itself
-    doImportsRecursively :: Set Import -> AST () () -> IO (AST () ())
-    doImportsRecursively todo ast@(AST dds defs done hidden name) = do
+    doImportsRecursively :: Set Import -> (AST () (), [Extension]) -> IO (AST () (), [Extension])
+    doImportsRecursively todo (ast@(AST dds defs done hidden name), extensions) = do
       case toList (todo \\ done) of
-        [] -> return ast
+        [] -> return (ast, extensions)
         (i:todo) -> do
           fileLocal <- doesFileExist i
           let path = if fileLocal then i else includePath </> i
           let ?globals = ?globals { globalsSourceFilePath = Just path } in do
 
             src <- readFile path
-            AST dds' defs' imports' hidden' _ <- either failWithMsg return $ parseDefs path src
+            (AST dds' defs' imports' hidden' _, extensions') <- either failWithMsg return $ parseDefs path src
             doImportsRecursively
               (fromList todo <> imports')
-              (AST (dds' <> dds) (defs' <> defs) (insert i done) (hidden `M.union` hidden') name)
+              (AST (dds' <> dds) (defs' <> defs) (insert i done) (hidden `M.union` hidden') name, extensions ++ extensions')
 
 failWithMsg :: String -> IO a
 failWithMsg msg = putStrLn msg >> exitFailure

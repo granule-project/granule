@@ -212,8 +212,9 @@ freshSolverVarScoped quant name (TyCon (internalName -> "Q")) q k =
 freshSolverVarScoped quant name (TyCon (internalName -> "Sec")) q k =
     quant q name (\solverVar -> k (sTrue, SSec solverVar))
 
-freshSolverVarScoped quant name (TyCon (internalName -> "LNL")) q k =
-    quant q name (\solverVar -> k (sTrue, SLNL solverVar))
+freshSolverVarScoped (quant :: Quantifier -> String -> (SBV Integer -> Symbolic SBool) -> Symbolic SBool) 
+                      name (TyCon (internalName -> "Uniqueness")) q k =
+    quant q name (\solverVar -> k (sTrue, SUnique))
 
 freshSolverVarScoped quant name (TyCon conName) q k =
     -- Integer based
@@ -224,6 +225,14 @@ freshSolverVarScoped quant name (TyCon conName) q k =
                   .|| solverVar .== literal publicRepresentation
                   .|| solverVar .== literal unusedRepresentation
                     , SLevel solverVar)
+        "LNL"    -> k (solverVar .== literal zeroRep
+                  .|| solverVar .== literal oneRep
+                  .|| solverVar .== literal manyRep
+                    , SLNL solverVar)
+        "Borrowing" -> k (solverVar .== literal oneRepresentation
+                     .|| solverVar .== literal betaRepresentation
+                     .|| solverVar .== literal omegaRepresentation
+                       , SBorrow solverVar)
         "OOZ"    -> k (solverVar .== 0 .|| solverVar .== 1, SOOZ (ite (solverVar .== 0) sFalse sTrue))
         k -> solverError $ "I don't know how to make a fresh solver variable of type " <> show conName)
 
@@ -280,6 +289,9 @@ compile vars (Eq _ c1 c2 t) =
 
 compile vars (Neq _ c1 c2 t) =
   bindM2And' (\c1' c2' -> fmap sNot (eqConstraint c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
+
+compile vars (Hsup _ c1 c2 t) =
+  bindM2And' (\c1' c2' -> (symGradeHsup c1' c2')) (compileCoeffect (normalise c1) t vars) (compileCoeffect (normalise c2) t vars)
 
 -- Assumes that c3 is already existentially bound
 compile vars (Lub _ c1 c2 c3@(TyVar v) t) =
@@ -350,16 +362,31 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
   return (SLevel . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
-  case internalName name of
-    "Lin"    -> return (SLNL sFalse, sTrue)
-    "NonLin" -> return (SLNL sTrue, sTrue)
-    c -> error $ "Cannot compile " <> show c <> " as a LNL semiring"
+  let n = case internalName name of
+            "Zero"    -> zeroRep
+            "One"     -> oneRep
+            "Many"    -> manyRep
+            c         -> error $ "Cannot compile " <> show c <> " as an LNL semiring"
+          
+  return (SLNL . fromInteger . toInteger $ n, sTrue)
+
+compileCoeffect (TyCon name) (TyCon (internalName -> "Borrowing")) _ = do
+  let n = case internalName name of
+            "One"   -> oneRepresentation
+            "Beta"  -> betaRepresentation
+            "Omega" -> omegaRepresentation
+            c       -> error $ "Cannot compile " <> show c <> " as a Borrowing semiring"
+
+  return (SBorrow . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "Sec")) _ = do
   case internalName name of
     "Hi" -> return (SSec hiRepresentation, sTrue)
     "Lo" -> return (SSec loRepresentation, sTrue)
     c    -> error $ "Cannot compile " <> show c <> " as a Sec semiring"
+
+compileCoeffect (TyCon name) (TyCon (internalName -> "Uniqueness")) _ = do
+  return (SUnique, sTrue)
 
 -- TODO: I think the following two cases are deprecatd: (DAO 12/08/2019)
 compileCoeffect (TyApp (TyCon (internalName -> "Level")) (TyInt n)) (isProduct -> Just (TyCon (internalName -> "Level"), t2)) vars = do
@@ -450,7 +477,8 @@ compileCoeffect (TyGrade k' 0) k vars = do
         "Nat"       -> return (SNat 0, sTrue)
         "Q"         -> return (SFloat (fromRational 0), sTrue)
         "OOZ"       -> return (SOOZ sFalse, sTrue)
-        "LNL"       -> return (SLNL sTrue, sTrue)
+        "LNL"       -> return (SLNL (literal zeroRep), sTrue)
+        "Borrowing" -> return (SBorrow (literal omegaRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 0 for " <> pretty k
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
@@ -484,7 +512,8 @@ compileCoeffect (TyGrade k' 1) k vars = do
         "Nat"       -> return (SNat 1, sTrue)
         "Q"         -> return (SFloat (fromRational 1), sTrue)
         "OOZ"       -> return (SOOZ sTrue, sTrue)
-        "LNL"       -> return (SLNL sFalse, sTrue)
+        "LNL"       -> return (SLNL (literal oneRep), sTrue)
+        "Borrowing" -> return (SBorrow (literal oneRepresentation), sTrue)
         _           -> solverError $ "I don't know how to compile a 1 for " <> pretty k
 
     otherK | otherK == extendedNat ->
@@ -578,10 +607,14 @@ approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- So this is flipped implication
   return (b .=> a)
 
-approximatedByOrEqualConstraint (SLNL a) (SLNL b) =
-  -- Lin (F) <= NonLin (T)
-  -- but not (NonLin (T) <= Lin (F))
-  return (a .=> b)
+approximatedByOrEqualConstraint (SLNL a) (SLNL b) = 
+  return
+    $ ite (a .== literal zeroRep .&& b .== literal oneRep) sFalse
+      $ ite (a .<= b) sTrue sFalse
+
+approximatedByOrEqualConstraint (SBorrow a) (SBorrow b) = return $ a .<= b
+
+approximatedByOrEqualConstraint SUnique SUnique = return $ sTrue
 
 approximatedByOrEqualConstraint s t | isSProduct s && isSProduct t =
   either solverError id (applyToProducts approximatedByOrEqualConstraint (.&&) (const sTrue) s t)
@@ -639,6 +672,7 @@ trivialUnsatisfiableConstraints
     unsat (Gt _ c1 c2) = []
     unsat (LtEq _ c1 c2) = []
     unsat (GtEq _ c1 c2) = []
+    unsat (Hsup _ c1 c2 _) = []
 
     -- TODO: unify this with eqConstraint and approximatedByOrEqualConstraint
     -- Attempt to see if one coeffect is trivially greater than the other

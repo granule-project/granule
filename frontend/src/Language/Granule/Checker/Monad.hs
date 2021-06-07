@@ -344,6 +344,8 @@ concludeImplication s localCtxt = do
                   else (Impl (localCtxt <> freshPrevGuardCxt)
                                  (Conj [p, freshPrevGuardPred]) p')
 
+           -- Build the guard theorem to also include all of the 'context' of things
+           -- which also need to hold (held in `stack`)
            let guardTheorem = Conj (implAntecedent : stack)
            let knowledge = ((implCtxt, guardTheorem), s) : previousGuards
 
@@ -356,9 +358,13 @@ concludeImplication s localCtxt = do
 
     _ -> error "Predicate: not enough conjunctions on the stack"
 
+-- Create an existential scope at the top level (i.e., not locally scopped)
+existentialTopLevel :: Id -> Kind -> Checker ()
+existentialTopLevel var k = do
+  st <- get
+  put $ st { tyVarContext = (var, (k, InstanceQ)) : tyVarContext st }
 
 -- Create a local existential scope
--- NOTE: leaving this here, but this approach is not used
 existential :: Id -> Kind -> Checker ()
 existential var k = do
   case k of

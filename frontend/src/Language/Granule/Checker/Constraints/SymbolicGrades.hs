@@ -39,7 +39,11 @@ data SGrade =
      -- | Grade '0' denotes even usage, and grade '1' denotes odd usage.
      | SOOZ SBool
      -- LNL
-     | SLNL SBool -- True = NonLin, False = Lin
+     | SLNL SInteger -- 0 = Zero, 1 = One, 2 = Many
+     -- Borrowing
+     | SBorrow SInteger
+     -- Uniqueness
+     | SUnique
 
      -- A kind of embedded uninterpreted sort which can accept some equations
      -- Used for doing some limited solving over poly coeffect grades
@@ -61,6 +65,17 @@ unusedRepresentation  = 0
 hiRepresentation, loRepresentation :: SBool
 hiRepresentation = sTrue
 loRepresentation = sFalse
+
+-- Representation for `Borrowing`
+oneRepresentation, betaRepresentation, omegaRepresentation :: Integer
+oneRepresentation   = 1
+betaRepresentation  = 2
+omegaRepresentation = 3
+
+zeroRep, oneRep, manyRep :: Integer
+zeroRep = 0
+oneRep  = 1
+manyRep = 2
 
 -- Representation of semiring terms as a `SynTree`
 data SynTree =
@@ -138,6 +153,8 @@ match (SUnknown _) (SUnknown _) = True
 match (SOOZ _) (SOOZ _) = True
 match (SSec _) (SSec _) = True
 match (SLNL _) (SLNL _) = True
+match (SBorrow _) (SBorrow _) = True
+match SUnique SUnique = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -197,6 +214,8 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SUnknown a) (SUnknown b) = SUnknown (SynMerge sb a b)
   symbolicMerge s sb (SSec a) (SSec b) = SSec (symbolicMerge s sb a b)
   symbolicMerge s sb (SLNL a) (SLNL b) = SLNL (symbolicMerge s sb a b)
+  symbolicMerge s sb (SBorrow a) (SBorrow b) = SBorrow (symbolicMerge s sb a b)
+  symbolicMerge s sb SUnique SUnique = SUnique
 
   symbolicMerge _ _ s t = error $ cannotDo "symbolicMerge" s t
 
@@ -210,6 +229,7 @@ symGradeLess (SLevel n) (SLevel n') = return $ n .< n'
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
+symGradeLess (SBorrow n) (SBorrow n') = return $ n .< n'
 symGradeLess (SUnknown s) (SUnknown t) = sLtTree s t
 
 symGradeLess s t | isSProduct s || isSProduct t =
@@ -251,6 +271,8 @@ symGradeEq s t | isSProduct s || isSProduct t =
 symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
 symGradeEq (SSec n) (SSec n') = return $ n .== n'
 symGradeEq (SLNL n) (SLNL m) = return $ n .== m
+symGradeEq (SBorrow n) (SBorrow m) = return $ n .== m
+symGradeEq SUnique SUnique = return $ sTrue
 symGradeEq s t = solverError $ cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -326,7 +348,10 @@ symGradePlus (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynPlus um un)
 
 symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
-symGradePlus (SLNL a) (SLNL b) = return $ SLNL sTrue
+symGradePlus (SLNL a) (SLNL b) = return $ ite (a .== (literal zeroRep)) (SLNL b)
+                                            (ite (b .== (literal zeroRep)) (SLNL a) (SLNL (literal manyRep)))
+
+symGradePlus (SBorrow a) (SBorrow b) = return $ SBorrow (a `smax` b `smax` literal betaRepresentation)
 
 symGradePlus s t = solverError $ cannotDo "plus" s t
 
@@ -386,7 +411,9 @@ symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)
 
 symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
-symGradeTimes (SLNL a) (SLNL b) = return $ SLNL $ a .&& b
+symGradeTimes (SLNL a) (SLNL b) = return $ ite (a .== (literal zeroRep)) (SLNL (literal zeroRep))
+                                            (ite (b .== (literal zeroRep)) (SLNL (literal zeroRep)) (SLNL $ a `smax` b))
+symGradeTimes (SBorrow a) (SBorrow b) = return $ SBorrow $ a `smax` b
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
 
@@ -402,6 +429,13 @@ symGradeMinus SPoint SPoint = return $ SPoint
 symGradeMinus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMinus SProduct id s t)
 symGradeMinus s t = solverError $ cannotDo "minus" s t
+
+
+symGradeHsup :: SGrade -> SGrade -> Symbolic SBool
+-- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed
+symGradeHsup (SLNL n) (SLNL m) = return (n .== (literal oneRep) .&& m .== (literal oneRep))
+-- | For all other grades, allow pushing 
+symGradeHsup s1 s2 = return sTrue
 
 cannotDo :: String -> SGrade -> SGrade -> String
 cannotDo op (SUnknown s) (SUnknown t) =

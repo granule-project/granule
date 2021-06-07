@@ -182,6 +182,11 @@ ctxtFromTypedPattern' outerBoxTy _ ty p@(PConstr s _ rf dataC ps) cons = do
       debugM "patterns : constructorName: " $ show dataC
       debugM "patterns : indices: " $ show indices
 
+      case outerBoxTy of 
+        Just (coeff, coeffTy) -> do
+          addConstraint (Hsup s coeff coeff coeffTy)
+        Nothing -> return ()
+
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance InstanceQ True tySch coercions indices
 

@@ -19,11 +19,12 @@ import Language.Granule.Syntax.Expr (Operator(..))
 nullSpanBuiltin :: Span
 nullSpanBuiltin = Span (0, 0) (0, 0) "Builtin"
 
--- A list of type alias as Id -> Type pairs
-typeAliases :: [(Id, Type)]
+-- A list of type alias as Id -> ([Tyvar], Type) pairs
+typeAliases :: [(Id, ([Id], Type))]
 typeAliases =
     -- IO = {p | p in IOElem}
-    [(mkId "IO", TySet Normal (map tyCon ioElems))]
+    [(mkId "IO", ([], TySet Normal (map tyCon ioElems)))
+    ,(mkId "Inverse", ([mkId "a"], FunTy Nothing (TyVar $ mkId "a") (TyCon $ mkId "()")))]
   where
     ioElems = ["Stdout", "Stdin", "Stderr", "Open", "Read", "Write", "IOExcept", "Close"]
 
@@ -43,14 +44,21 @@ typeConstructors =
     , (mkId "Char",   (Type 0, [], False))
     , (mkId "String", (Type 0, [], False))
     , (mkId "Protocol", (Type 0, [], False))
+    , (mkId "Inverse", ((funTy (Type 0) (Type 0)), [], False))
     -- # Coeffect types
     , (mkId "Nat",      (kcoeffect, [], False))
     , (mkId "Q",        (kcoeffect, [], False)) -- Rationals
     , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
     , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
     -- LNL members
-    , (mkId "Lin",        (tyCon "LNL", [], False))
-    , (mkId "NonLin",     (tyCon "LNL", [], False))
+    , (mkId "Zero",        (tyCon "LNL", [], False))
+    , (mkId "One",     (tyCon "LNL", [], False))
+    , (mkId "Many",     (tyCon "LNL", [], False))
+    -- Borrowing
+    , (mkId "Borrowing", (kcoeffect, [], False))
+    , (mkId "One",       (tyCon "Borrowing", [], False))
+    , (mkId "Beta",      (tyCon "Borrowing", [], False))
+    , (mkId "Omega",     (tyCon "Borrowing", [], False))
     -- Security levels
     , (mkId "Level",    (kcoeffect, [], False)) -- Security level
     , (mkId "Private",  (tyCon "Level", [], False))
@@ -60,6 +68,9 @@ typeConstructors =
     , (mkId "Sec",  (kcoeffect, [], False))
     , (mkId "Hi",    (tyCon "Sec", [], False))
     , (mkId "Lo",    (tyCon "Sec", [], False))
+    -- Uniqueness
+    , (mkId "Uniqueness", (kcoeffect, [], False))
+    , (mkId "Unique", (tyCon "Uniqueness", [], False))
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
@@ -83,6 +94,9 @@ typeConstructors =
     , (mkId "Exception", (keffect, [], False))
     , (mkId "Success", (tyCon "Exception", [], False))
     , (mkId "MayFail", (tyCon "Exception", [], False))
+
+    -- Arrays
+    , (mkId "FloatArray", (Type 0, [], False))
     ]
 
 -- Various predicates and functions on type operators
@@ -280,6 +294,11 @@ forkLinear
   . (LChan s -> ()) -> LChan (Dual s)
 forkLinear = BUILTIN
 
+forkLinear'
+  : forall {p : Protocol, s : Semiring}
+  . ((LChan p) [1 : s] -> ()) -> LChan (Dual p)
+forkLinear' = BUILTIN
+
 send
   : forall {a : Type, s : Protocol}
   . LChan (Send a s) -> a -> LChan s
@@ -475,7 +494,35 @@ tick = BUILTIN
 --   . Ptr id -> Cap a id -> a
 -- freePtr = BUILTIN
 
+--------------------------------------------------------------------------------
+-- Uniqueness monadic operations
+--------------------------------------------------------------------------------
 
+uniqueReturn
+  : forall {a : Type}
+  . a [Unique] -> a []
+uniqueReturn = BUILTIN
+
+uniqueBind
+  : forall {a b : Type, k : Coeffect, c : k}
+  . (a [Unique] -> b [c]) -> a [c] -> b [c]
+uniqueBind = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Mutable arrays
+--------------------------------------------------------------------------------
+
+newFloatArray : Int -> FloatArray [Unique]
+newFloatArray = BUILTIN
+
+readFloatArray : FloatArray [Unique] -> Int -> (Float, FloatArray [Unique])
+readFloatArray = BUILTIN
+
+writeFloatArray : FloatArray [Unique] -> Int -> Float -> FloatArray [Unique]
+writeFloatArray = BUILTIN
+
+lengthFloatArray : FloatArray [Unique] -> (Int, FloatArray [Unique])
+lengthFloatArray = BUILTIN
 |]
 
 
@@ -485,7 +532,7 @@ builtins :: [(Id, TypeScheme)]
   (types, map unDef defs)
     where
       AST types defs _ _ _ = case parseDefs "builtins" builtinSrc of
-        Right ast -> ast
+        Right (ast, _) -> ast
         Left err -> error err
 
       unDef :: Def () () -> (Id, TypeScheme)

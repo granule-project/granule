@@ -146,12 +146,12 @@ handleCMD s =
       liftIO $ print $ dumpStateAux (defns st)
 
     handleLine (RunParser str) = do
-      pexp <- liftIO' $ try $ either die return $ runReaderT (expr $ scanTokens str) "interactive"
+      pexp <- liftIO' $ try $ either die return $ runReaderT (evalStateT (expr $ scanTokens str) []) "interactive"
       case pexp of
         Right ast -> liftIO $ print ast
         Left e -> do
           liftIO $ putStrLn "Input not an expression, checking for TypeScheme"
-          pts <- liftIO' $ try $ either die return $ runReaderT (tscheme $ scanTokens str) "interactive"
+          pts <- liftIO' $ try $ either die return $ runReaderT (evalStateT (tscheme $ scanTokens str) []) "interactive"
           case pts of
             Right ts -> liftIO $ print ts
             Left err -> do
@@ -236,7 +236,7 @@ handleCMD s =
 parseExpression :: (?globals::Globals) => String -> REPLStateIO (Expr () ())
 parseExpression exprString = do
   -- Check that the expression is well-typed first
-  case runReaderT (expr $ scanTokens exprString) "interactive" of
+  case runReaderT (evalStateT (expr $ scanTokens exprString) []) "interactive" of
     -- Not a syntactically well-formed term
     Left err -> Ex.throwError (ParseError' err)
     Right exprAst -> return exprAst
@@ -288,7 +288,8 @@ readToQueue path = let ?globals = ?globals{ globalsSourceFilePath = Just path } 
     pf <- liftIO' $ try $ parseAndDoImportsAndFreshenDefs =<< readFile path
 
     case pf of
-      Right ast -> do
+      Right (ast, extensions) ->
+            let ?globals = ?globals { globalsExtensions = extensions } in do
             debugM "AST" (show ast)
             debugM "Pretty-printed AST:" $ pretty ast
             checked <- liftIO' $ check ast

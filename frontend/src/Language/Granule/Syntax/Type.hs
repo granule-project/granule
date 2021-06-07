@@ -157,6 +157,9 @@ level = tyCon "Level"
 infinity :: Type
 infinity = tyCon "Infinity"
 
+uniqueness :: Type
+uniqueness = tyCon "Uniqueness"
+
 isInterval :: Type -> Maybe Type
 isInterval (TyApp (TyCon c) t) | internalName c == "Interval" = Just t
 isInterval _ = Nothing
@@ -378,6 +381,13 @@ instance Term Type where
     isLexicallyAtomic TyCon{} = True
     isLexicallyAtomic (TyApp (TyApp (TyCon (sourceName -> ",")) _) _) = True
     isLexicallyAtomic _ = False
+
+substType :: Type -> Id -> Type -> Type
+substType t x t' = runIdentity $ typeFoldM (baseTypeFold { tfTyVar = varCase }) t'
+  where
+    varCase x'
+      | internalName x == internalName x' = return t
+      | otherwise                         = return $ TyVar x'
 
 ----------------------------------------------------------------------
 -- Freshenable instances
