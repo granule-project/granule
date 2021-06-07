@@ -319,16 +319,7 @@ Vars1 :: { [String] }
   | VAR Vars1                 { symString $1 : $2 }
 
 Kind :: { Kind }
-  : Kind '->' Kind            { FunTy Nothing $1 $3 }
-  | VAR                       { TyVar (mkId $ symString $1) }
-  | CONSTR                    { case constrString $1 of
-                                  "Type"      -> Type 0
-                                  "Semiring"  -> kcoeffect
-                                  s          -> tyCon s }
-  | '(' TyJuxt TyAtom ')'     { TyApp $2 $3 }
-
-  | TyJuxt TyAtom             { TyApp $1 $2 }
-
+  : Type                           { $1 }
 
 Type :: { Type }
   : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) $4 $7 }
@@ -378,7 +369,10 @@ Constraint :: { Type }
 
 
 TyAtom :: { Type }
-  : CONSTR                    { TyCon $ mkId $ constrString $1 }
+  : CONSTR                    { case constrString $1 of
+                                  "Type"      -> Type 0
+                                  "Semiring"  -> kcoeffect
+                                  s          -> tyCon s }
   | '(' ',' ')'               { TyCon $ mkId "," }
   | VAR                       { TyVar (mkId $ symString $1) }
   | INT                       { let TokenInt _ x = $1 in TyGrade Nothing x }
