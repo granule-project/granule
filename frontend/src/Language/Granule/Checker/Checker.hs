@@ -388,7 +388,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
       localGam <- substitute subst localGam
 
       -- Check that our consumption context matches the binding
-      ctxtApprox s localGam patternGam
+      if (NoTopLevelApprox `elem` globalsExtensions ?globals)
+        then ctxtEquals s localGam patternGam
+        else ctxtApprox s localGam patternGam
 
       -- Conclude the implication
       concludeImplication s localVars
@@ -721,7 +723,7 @@ checkExpr defs gam pol topLevel tau e = do
 
   -- Now to do a type equality on check type `tau` and synth type `tau'`
   (tyEq, _, subst) <-
-        if topLevel
+        if topLevel && (not (NoTopLevelApprox `elem` globalsExtensions ?globals))
           -- If we are checking a top-level, then allow overapproximation
           then do
             debugM "** Compare for approximation " $ pretty tau' <> " <: " <> pretty tau
