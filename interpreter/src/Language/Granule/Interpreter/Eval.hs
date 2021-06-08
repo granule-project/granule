@@ -138,13 +138,24 @@ evalIn ctxt (App s _ _ e1 e2) = do
         return $ k v2
 
       Abs _ p _ e3 -> do
-        -- (cf. APP_R)
-        v2 <- evalIn ctxt e2
-        -- (cf. P_BETA)
-        pResult <- pmatch ctxt [(p, e3)] v2
-        case pResult of
-          Just e3' -> evalIn ctxt e3'
-          _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+        -- CallByName extension
+        if CBN `elem` globalsExtensions ?globals
+          then do
+            -- (cf. P_BETA CBN)
+            pResult <- pmatch ctxt [(p, e3)] e2
+            case pResult of
+              Just e3' -> evalIn ctxt e3'
+              _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
+
+          -- CallByValue default
+          else do
+            -- (cf. APP_R)
+            v2 <- evalIn ctxt e2
+            -- (cf. P_BETA)
+            pResult <- pmatch ctxt [(p, e3)] (valExpr v2)
+            case pResult of
+              Just e3' -> evalIn ctxt e3'
+              _ -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in application at " <> pretty s
 
       Constr _ c vs -> do
         -- (cf. APP_R)
@@ -178,7 +189,7 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
         -- (cf. LET_2)
         v1' <- evalIn ctxt eInner
         -- (cf. LET_BETA)
-        pResult  <- pmatch ctxt [(p, e2)] v1'
+        pResult  <- pmatch ctxt [(p, e2)] (valExpr v1')
         case pResult of
           Just e2' -> do
               evalIn ctxt e2'
@@ -195,7 +206,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
       catch ( do
           eInner <- e
           e1' <- evalIn ctxt eInner
-          pmatch ctxt [(PBox s () False p, e2)] e1' >>=
+          pmatch ctxt [(PBox s () False p, e2)] (valExpr e1') >>=
             \v ->
               case v of
                 Just e2' -> evalIn ctxt e2'
@@ -203,7 +214,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
         )
          -- (cf. TRY_BETA_2)
         (\(e :: IOException) -> evalIn ctxt e3)
-    other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other 
+    other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other
 
 {-
 -- Hard-coded 'scale', removed for now
@@ -223,15 +234,20 @@ evalIn ctxt (Val _ _ _ (Var _ x)) = do
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
 evalIn ctxt (Val s _ _ (Promote _ e)) = do
-  -- (cf. Box)
-  v <- evalIn ctxt e
-  return $ Promote () (Val s () False v)
+  -- CallByName extension
+  if CBN `elem` (globalsExtensions ?globals)
+    then do
+      return $ Promote () e
+    else do
+      -- (cf. Box)
+      v <- evalIn ctxt e
+      return $ Promote () (Val s () False v)
 
 evalIn _ (Val _ _ _ v) = return v
 
-evalIn ctxt (Case _ _ _ guardExpr cases) = do
+evalIn ctxt (Case s a b guardExpr cases) = do
     v <- evalIn ctxt guardExpr
-    p <- pmatch ctxt cases v
+    p <- pmatch ctxt cases (Val s a b v)
     case p of
       Just ei -> evalIn ctxt ei
       Nothing             ->
@@ -253,7 +269,7 @@ pmatch ::
   (?globals :: Globals)
   => Ctxt RValue
   -> [(Pattern (), RExpr)]
-  -> RValue
+  -> RExpr
   -> IO (Maybe RExpr)
 pmatch _ [] _ =
   return Nothing
@@ -261,31 +277,43 @@ pmatch _ [] _ =
 pmatch _ ((PWild _ _ _, e):_)  _ =
   return $ Just e
 
-pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Constr _ id' vs)
+pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
  | id == id' && length innerPs == length vs = do
 
   -- Fold over the inner patterns
+  let vs' = map valExpr vs
   tLastM <- foldM (\tiM (pi, vi) -> case tiM of
                                       Nothing -> return Nothing
-                                      Just ti -> pmatch ctxt [(pi, ti)] vi) (Just t0) (zip innerPs vs)
+                                      Just ti -> pmatch ctxt [(pi, ti)] vi) (Just t0) (zip innerPs vs')
 
   case tLastM of
     Just tLast -> return $ Just tLast
     -- There was a failure somewhere
     Nothing  -> pmatch ctxt ps v
 
-pmatch _ ((PVar _ _ _ var, e):_) v =
-  return $ Just $ subst (Val nullSpan () False v) var e
+pmatch ctxt ((PConstr s a b id innerPs, t0):ps) e =
+  -- Can only happen in CBN case
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      -- Force evaluation of term
+      v <- evalIn ctxt e
+      pmatch ctxt ((PConstr s a b id innerPs, t0):ps) (valExpr v)
+    else
+      -- In CBV mode this just meands we failed to pattern match
+      pmatch ctxt ps e
 
-pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Promote _ (Val _ _ _ v')) = do
+pmatch _ ((PVar _ _ _ var, e):_) v =
+  return $ Just $ subst v var e
+
+pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Val _ _ _ (Promote _ v')) = do
   match <- pmatch ctxt [(p, e)] v'
   case match of
     Just e -> return $ Just e
     Nothing -> pmatch ctxt ps v
 
-pmatch ctxt ((PInt _ _ _ n, e):ps) (NumInt m) | n == m = return $ Just e
+pmatch ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) | n == m = return $ Just e
 
-pmatch ctxt ((PFloat _ _ _ n, e):ps) (NumFloat m )| n == m = return $ Just e
+pmatch ctxt ((PFloat _ _ _ n, e):ps) (Val _ _ _ (NumFloat m)) | n == m = return $ Just e
 
 pmatch ctxt (_:ps) v = pmatch ctxt ps v
 

@@ -52,7 +52,7 @@ data Globals = Globals
   } deriving (Read, Show)
 
 -- | Allowed extensions
-data Extension = Base
+data Extension = Base | CBN
  deriving (Eq, Read, Show)
 
 -- | Parse valid extension names
