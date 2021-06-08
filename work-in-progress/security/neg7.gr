@@ -2,6 +2,14 @@ data Bool where
   True : Bool;
   False : Bool
 
+-- Ghost : Private |- True : Bool
+--------------------------------------------- pr
+-- Ghost : Public |- [True] : [] Public Bool
+
+-- Ghost : Dunno |- [True] : [] Public Bool
+
+--  not (Public <= topLevel)
+
 strue : Bool [Public]
 strue = [True]
 
@@ -11,5 +19,8 @@ sfalse = [False]
 leak' : Bool [Private] → Bool [Public]
 leak' x =
       case x of
+         -- Ghost : Private
+
+         -- strue :1 (Bool [Public]) |- strue : Bool [Public]
         [True]  →  strue;
         [False] →  sfalse

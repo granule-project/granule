@@ -4,3 +4,6 @@ data Bool where
 
 notALeak : (Bool [Private]) [0] → Bool [Public]
 notALeak [x] = [True]
+
+notALeak' : Bool [Private] → Bool [Public]
+notALeak' [x] = [True]
