@@ -151,7 +151,7 @@ equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Typ
 
 equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
-  debugM "equalTypesRelatedCoeffectsInner (show)" $ "[ " <> show c <> " , " <> show c' <> "]"
+  debugM "equalTypesRelatedCoeffectsInner (box)" $ "grades " <> show c <> " and " <> show c' <> ""
 
   -- Unify the coeffect kinds of the two coeffects
   (kind, subst, (inj1, inj2)) <- mguCoeffectTypesFromCoeffects s c c'
@@ -162,14 +162,18 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   kind <- substitute subst kind
   addConstraint (rel s (inj2 c') (inj1 c) kind)
 
-  -- Create a substitution if we can (i.e., if one grade is a variable)
+  -- Create a substitution if we can (i.e., if this is an equality and one grade is a variable)
   -- as this typically greatly improves error messages and repl interaction
   let substExtra =
-        case c of
-          TyVar v -> [(v, SubstT c')]
-          _ -> case c' of
-                TyVar v -> [(v, SubstT c)]
-                _       -> []
+       if isEq (rel s undefined undefined undefined)
+          then
+            case c of
+              TyVar v -> [(v, SubstT c')]
+              _ -> case c' of
+                    TyVar v -> [(v, SubstT c)]
+                    _       -> []
+          else
+            []
 
   (eq, subst') <- equalTypesRelatedCoeffects s rel t t' sp Types
 

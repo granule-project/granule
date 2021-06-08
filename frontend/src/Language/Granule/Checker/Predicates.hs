@@ -62,6 +62,10 @@ data Constraint =
 
   deriving (Show, Eq, Generic)
 
+isEq :: Constraint -> Bool
+isEq (Eq _ _ _ _) = True
+isEq _ = False
+
 instance FirstParameter Constraint Span
 
 normaliseConstraint :: Constraint -> Constraint
