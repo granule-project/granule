@@ -500,7 +500,7 @@ tick = BUILTIN
 
 uniqueReturn
   : forall {a : Type}
-  . a [Unique] -> a []
+  . a [Unique] -> a [Many]
 uniqueReturn = BUILTIN
 
 uniqueBind
