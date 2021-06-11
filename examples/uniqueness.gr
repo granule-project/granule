@@ -25,9 +25,12 @@ fst : forall {p q : Type} . (p, q [Unique]) -> p
 fst (a, b) = let [u] = uniqueReturn b in a
 
 -- If we start with a unique cake, we can't have it and eat it too...
-badDesire : Cake [Unique] -> (Happy, Cake [Unique])
+badDesire : ∗Cake -> (Happy, ∗Cake)
 badDesire uniqueCake = ?
 
 -- ...unless we are willing to accept that our cake won't be unique any more :)
-goodDesire : Cake [Unique] -> (Happy, Cake)
+goodDesire : ∗Cake -> (Happy, Cake)
 goodDesire uniqueCake = let [cake] = uniqueReturn uniqueCake in (eat cake, have cake)
+
+--  Note that the alias for uniqueness is the Unicode asterisk operator ∗,
+--  and not the standard asterisk * (used for multiplication etc)!
