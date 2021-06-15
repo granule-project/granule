@@ -20,7 +20,6 @@ freshGhostVariableContext =
 -- | (Singleton) ghost variable context where the ghost is used
 usedGhostVariableContext :: Ctxt Assumption
 usedGhostVariableContext =
-  -- [(mkId ghostName, Ghost (tyCon "Public"))]
   [(mkId ghostName, Ghost (TyGrade (Just $ tyCon "Level") 1))]
 
 -- | (Singleton) ghost variable context where the ghost is unused
@@ -40,8 +39,7 @@ isGhost (_, Ghost _) = True
 isGhost _ = False
 
 defaultGhost :: Coeffect
--- defaultGhost = tyCon "Dunno"
-defaultGhost = tyCon "Public"
+defaultGhost = tyCon "Dunno"
 
 ghostOp :: TypeOperator
 ghostOp = TyOpConverge
