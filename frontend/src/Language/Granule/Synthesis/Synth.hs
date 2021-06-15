@@ -1201,7 +1201,7 @@ constrElimHelper startTime left (var@(x, a):right) gamma mode goalTySch@(Forall 
             Subtractive{} -> do
               let omega'' = deleteVar x omega'
               (patterns, delta, subst, bindings') <- synthCases t mode gamma omega'' cases goalTySch
-              return (makeBoxCase t grade x patterns goalTy, delta, subst, bindings')
+              return (makeBoxCase t grade x patterns goalTy, omega' ++ delta, subst, bindings')
             Additive{} -> do
               (patterns, delta, subst, bindings') <- synthCases t mode gamma omega cases goalTySch
               return (makeBoxCase t grade x patterns goalTy, delta, subst, bindings')
