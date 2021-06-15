@@ -47,10 +47,13 @@ bubbleUpPatterns gradedVars (App s a b (Val s' a' b' (Abs s'' p mt e)) (Val s3 a
   in
     (pats', App s a b (Val s' a' b' (Abs s'' p mt e')) (Val s3 a3 b3 (Var a4 x)))
 
+
 bubbleUpPatterns _ e pats = (pats, e)
 
 refactorCase :: Eq a => [Pattern a] -> Expr v a -> [([Pattern a], Expr v a)]
 refactorCase pats (Case _ _ _ (Val _ _ _ (Var _ name)) casePats) =
+  concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
+refactorCase pats (Case _ _ _ (Val _ _ _ (Promote _ (Val _ _ _ (Var _ name)))) casePats) =
   concatMap (\(pat, body) -> refactorCase (replaceInPats pats name pat) body) casePats
 refactorCase pats e = [(pats, e)]
 
@@ -69,10 +72,12 @@ refactorPattern p@(PVar _ _ _ id) id' subpat
   | id == id' = subpat
   | otherwise = p
 refactorPattern p@PWild {} _ _ = p
+refactorPattern (PBox sp a b p) id' (PBox sp' a' b' p') =
+   let p'' = refactorPattern p id' p'
+   in PBox sp a (patRefactored p') p''
 refactorPattern (PBox sp a b p) id' subpat =
-  PBox sp a b p
---   let p' = refactorPattern p id' subpat
---   in PBox sp a (patRefactored p') p'
+   let p' = refactorPattern p id' subpat
+   in PBox sp a (patRefactored p') p'
 refactorPattern p@PInt {} _ _ = p
 refactorPattern p@PFloat {} _ _ = p
 refactorPattern (PConstr sp a _ id ps) id' subpat =
