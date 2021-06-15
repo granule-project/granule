@@ -250,6 +250,7 @@ instance Term (Value ev a) where
 
     isLexicallyAtomic Abs{} = False
     isLexicallyAtomic (Constr _ _ xs) = null xs
+    isLexicallyAtomic (Constr _ name xs) | internalName name == "," = False
     isLexicallyAtomic _     = True
 
 instance Substitutable Value where
