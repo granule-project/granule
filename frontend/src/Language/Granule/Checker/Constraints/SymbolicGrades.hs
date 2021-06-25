@@ -283,8 +283,10 @@ symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
 symGradeJoin (SSet Normal s) (SSet Normal t)   = return $ SSet Normal $ S.intersection s t
 symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeJoin (SLevel s) (SLevel t) =
-  return $ SLevel $ ite (s .== literal dunnoRepresentation) t
-                  $ ite (t .== literal dunnoRepresentation) s
+  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- 0 + t = t
+                  $ ite (t .== literal unusedRepresentation) s -- s + 0 = s
+                  $ ite (s .== literal dunnoRepresentation)  t
+                  $ ite (t .== literal dunnoRepresentation)  s
                   $ s `smax` t
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $
@@ -358,15 +360,13 @@ symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2
 symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
 symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeTimes (SLevel lev1) (SLevel lev2) =
-  return $ ite (lev1 .== literal unusedRepresentation)
-               (SLevel $ literal unusedRepresentation)
-         $ ite (lev2 .== literal unusedRepresentation)
-               (SLevel $ literal unusedRepresentation)
-         $ ite (lev1 .== literal dunnoRepresentation)
-               (SLevel lev2)
-         $ ite (lev2 .== literal dunnoRepresentation)
-               (SLevel lev1)
-               (SLevel $ lev1 `smax` lev2)
+  return $ SLevel $ ite (lev1 .== literal unusedRepresentation)  (literal unusedRepresentation) -- 0 * r = 0
+                  $ ite (lev2 .== literal unusedRepresentation)  (literal unusedRepresentation) -- r * 0 = 0
+                  $ ite (lev1 .== literal privateRepresentation) lev2 -- 1 * r = r
+                  $ ite (lev2 .== literal privateRepresentation) lev1 -- r * 1 = r
+                  $ ite (lev1 .== literal dunnoRepresentation)   lev2
+                  $ ite (lev2 .== literal dunnoRepresentation)   lev1
+                  $ lev1 `smax` lev2
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
 symGradeTimes (SOOZ s) (SOOZ r) = pure . SOOZ $ s .&& r
