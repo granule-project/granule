@@ -434,6 +434,8 @@ symGradeMinus s t = solverError $ cannotDo "minus" s t
 symGradeHsup :: SGrade -> SGrade -> Symbolic SBool
 -- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed
 symGradeHsup (SLNL n) (SLNL m) = return (n .== (literal oneRep) .&& m .== (literal oneRep))
+-- | Disallow hsup for polymorphic grades
+symGradeHsup (SUnknown s1) (SUnknown s2) = return sFalse
 -- | For all other grades, allow pushing 
 symGradeHsup s1 s2 = return sTrue
 
