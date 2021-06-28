@@ -310,7 +310,13 @@ symGradePlus (SNat n1) (SNat n2) = return $ SNat (n1 + n2)
 symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
 symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
 symGradePlus (SLevel lev1) (SLevel lev2) =
-  return $ SLevel $ ite (lev1 .== literal dunnoRepresentation) lev2
+  return $ SLevel $ ite (lev1 .== literal unusedRepresentation) lev2
+                  $ ite (lev2 .== literal unusedRepresentation) lev1
+                  $ ite ((lev1 .== literal dunnoRepresentation)
+                         .&& (lev2 .== literal privateRepresentation)) (literal dunnoRepresentation)
+                  $ ite ((lev2 .== literal dunnoRepresentation)
+                         .&& (lev1 .== literal privateRepresentation)) (literal dunnoRepresentation)
+                  $ ite (lev1 .== literal dunnoRepresentation) lev2
                   $ ite (lev2 .== literal dunnoRepresentation) lev1
                   $ lev1 `smax` lev2
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
