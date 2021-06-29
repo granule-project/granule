@@ -397,6 +397,9 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   -- on a hole.
   modify (\st -> st { equationTy = Just equationTy'' })
 
+
+  modify (\st -> st { equationName = Just name })
+
   patternGam <- substitute subst patternGam
 
   -- Check the body
@@ -484,13 +487,14 @@ checkExpr :: (?globals :: Globals)
           -> Checker (Ctxt Assumption, Substitution, Expr () Type)
 
 -- Hit an unfilled hole
-checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
+checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
   debugM "checkExpr[Hole]" (pretty s <> " : " <> pretty t)
   st <- get
 
   let getIdName (Id n _) = n
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
+
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
@@ -517,7 +521,7 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then  programSynthesise ctxt vars t cases
+                    then programSynthesise ctxt vars t cases
                     -- This is not a hole we want to synth on
                     else  return casesWithHoles
            -- Otherwise synthesise empty holes for each case
@@ -1761,16 +1765,21 @@ programSynthesise :: (?globals :: Globals) =>
   Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
 programSynthesise ctxt vars ty patternss = do
   currentState <- get
+  debugM "equation Nameeee" (show $ equationName currentState)
   forM patternss $ \(pattern, patternCtxt) -> do
     -- Build a context which has the pattern context
     let ctxt' = patternCtxt
           -- ... plus anything from the original context not being cased upon
             ++ filter (\(id, a) -> not (id `elem` vars)) ctxt
 
+    let defs = case (equationName currentState, equationTy currentState) of
+          (Just name, Just ty') -> [(name, ty')]
+          _ -> []
+
     -- Run the synthesiser in this context
     let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
     synRes <-
-       liftIO $ Syn.synthesiseProgram
+       liftIO $ Syn.synthesiseProgram defs
                     (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                     ctxt' [] (Forall nullSpan [] [] ty) currentState
 

@@ -160,7 +160,7 @@ makeNullaryConstructor id =
     (Constr (TyCon id) id [])
 
 makeConstr :: [((Expr () Type), Type)] -> Id -> Type -> Expr () Type
-makeConstr terms name goal = buildTerm terms
+makeConstr terms name goal = buildTerm (reverse terms)
   where s = nullSpanNoFile
         buildTerm [] = Val s goal False (Constr goal name [])
         buildTerm ((e, ty):es) =
