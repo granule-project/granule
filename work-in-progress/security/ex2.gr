@@ -1,0 +1,47 @@
+-- ex2.gr
+-- An attempt at encoding the "check password in public list of common passwords"
+-- example, roughly based on the MAC paper. I haven't figured out how to make it
+-- interesting, since it never involves learning information from pattern matching.
+
+data Bool where
+  True : Bool;
+  False : Bool
+
+data List a where
+  Nil : List a;
+  Cons : a → List a → List a
+
+-- check if a password is contained in a common list of passwords.
+-- the list itself is public, but the password and the result are private.
+-- does this make sense? it's not really all that interesting, but it's
+-- similar to the example from the MAC paper.
+checkCommonPassword : LChan (Recv (List (String [Public]))
+                               (Recv (String [Private])
+                                  (Send (Bool [Private])
+                                    End)))
+                   -> ()
+checkCommonPassword c =
+  let (lst, c) = recv c;
+      (pass, c) = recv c;
+      isCommon = checkIfCommon pass lst;
+      c = send c isCommon;
+      _ = close c
+  in ()
+
+checkIfCommon : String [Private] -> List (String [Public]) -> Bool [Private]
+checkIfCommon [str] lst =
+  case lst of
+    Nil -> [False];
+    Cons [x] xs ->
+      case strEq x str of
+        True -> or' [True] (checkIfCommon [str] xs);
+        False -> checkIfCommon [str] xs
+
+strEq : String -> String -> Bool
+strEq = ?  -- can you even compare strings in this language, don't make me write this
+
+or' : forall { l : Level } . Bool [l] -> Bool [l] -> Bool [l]
+or' [False] [False] = [False];
+or' [False] [True] = [True];
+or' [True] [False] = [True];
+or' [True] [True] = [True]
