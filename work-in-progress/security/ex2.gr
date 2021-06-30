@@ -3,9 +3,7 @@
 -- example, roughly based on the MAC paper. I haven't figured out how to make it
 -- interesting, since it never involves learning information from pattern matching.
 
-data Bool where
-  True : Bool;
-  False : Bool
+import Maybe -- also imports Bool
 
 data List a where
   Nil : List a;
@@ -34,14 +32,20 @@ checkIfCommon [str] lst =
     Nil -> [False];
     Cons [x] xs ->
       case strEq x str of
-        True -> or' [True] (checkIfCommon [str] xs);
+        True -> or'' [True] (checkIfCommon [str] xs);
         False -> checkIfCommon [str] xs
 
 strEq : String -> String -> Bool
-strEq = ?  -- can you even compare strings in this language, don't make me write this
+strEq xs ys =
+  case (stringUncons xs, stringUncons ys) of
+    (None, None) -> True;
+    (None, Some xs) -> let () = drop @(Char, String) xs in False;
+    (Some xs, None) -> let () = drop @(Char, String) xs in False;
+    (Some (x', xs'), Some (y', ys')) ->
+      and' (charToInt x' == charToInt y') (strEq xs' ys')
 
-or' : forall { l : Level } . Bool [l] -> Bool [l] -> Bool [l]
-or' [False] [False] = [False];
-or' [False] [True] = [True];
-or' [True] [False] = [True];
-or' [True] [True] = [True]
+or'' : forall { l : Level } . Bool [l] -> Bool [l] -> Bool [l]
+or'' [False] [False] = [False];
+or'' [False] [True] = [True];
+or'' [True] [False] = [True];
+or'' [True] [True] = [True]
