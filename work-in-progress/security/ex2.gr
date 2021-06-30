@@ -39,8 +39,8 @@ strEq : String -> String -> Bool
 strEq xs ys =
   case (stringUncons xs, stringUncons ys) of
     (None, None) -> True;
-    (None, Some xs) -> let () = drop @(Char, String) xs in False;
-    (Some xs, None) -> let () = drop @(Char, String) xs in False;
+    (None, Some xs) -> let ((), ()) = drop @(Char, String) xs in False;
+    (Some xs, None) -> let ((), ()) = drop @(Char, String) xs in False;
     (Some (x', xs'), Some (y', ys')) ->
       and' (charToInt x' == charToInt y') (strEq xs' ys')
 
