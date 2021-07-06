@@ -669,8 +669,10 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       innerGam <- ghostVariableContextMeet $ patternGam <> gam
       (localGam, subst', elaborated_i) <- checkExpr defs innerGam pol False tau' e_i
 
+      -- Converge with the outer ghost variable
+      patternGam' <- ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam)
+      ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
 
       -- Conclude the implication
       concludeImplication (getSpan pat_i) eVars
@@ -859,8 +861,10 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       innerGam <- ghostVariableContextMeet (patternGam <> gam)
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs innerGam pol ei
 
+ -- Converge with the outer ghost variable
+      patternGam' <- ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
       -- Check that the use of locally bound variables matches their bound type
-      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam
+      ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
 
       -- Conclude
       concludeImplication (getSpan pati) eVars
