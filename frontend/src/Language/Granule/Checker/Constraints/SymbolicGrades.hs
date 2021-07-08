@@ -209,6 +209,8 @@ symGradeLess (SNat n) (SNat n')     = return $ n .< n'
 symGradeLess (SFloat n) (SFloat n') = return $ n .< n'
 symGradeLess (SLevel n) (SLevel n') = -- return $ n .< n'
   return $ ite ((n .== literal dunnoRepresentation) .&& (n' .== literal publicRepresentation)) sTrue
+         $ ite ((n .== literal privateRepresentation) .&& (n' .== literal dunnoRepresentation)) sTrue
+         $ ite ((n .== literal unusedRepresentation) .&& (n' .== literal dunnoRepresentation)) sTrue
          $ ite ((n .== literal dunnoRepresentation) .|| (n' .== literal dunnoRepresentation)) sFalse
          $ n .< n'
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
