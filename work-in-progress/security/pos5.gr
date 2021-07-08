@@ -11,3 +11,6 @@ pubNot x =
 --   case x of
 --    True -> [True];
 --    False -> [False]
+
+id : Bool -> Bool
+id x = x

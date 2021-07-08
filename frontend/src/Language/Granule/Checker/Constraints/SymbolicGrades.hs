@@ -54,9 +54,9 @@ type SSetElem = [Char]
 -- Specialised representation for `Level`
 publicRepresentation, privateRepresentation, unusedRepresentation, dunnoRepresentation :: Integer
 privateRepresentation = 1
-publicRepresentation  = 2
+publicRepresentation  = 3
 unusedRepresentation  = 0
-dunnoRepresentation   = 3
+dunnoRepresentation   = 2
 
 -- Representation for `Sec`
 hiRepresentation, loRepresentation :: SBool
@@ -286,10 +286,10 @@ symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
 symGradeJoin (SSet Normal s) (SSet Normal t)   = return $ SSet Normal $ S.intersection s t
 symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeJoin (SLevel s) (SLevel t) =
-  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- 0 + t = t
-                  $ ite (t .== literal unusedRepresentation) s -- s + 0 = s
-                  $ ite (s .== literal dunnoRepresentation)  t
-                  $ ite (t .== literal dunnoRepresentation)  s
+  return $ SLevel -- $ ite (s .== literal unusedRepresentation) t -- 0 + t = t
+                  -- $ ite (t .== literal unusedRepresentation) s -- s + 0 = s
+                  -- $ ite (s .== literal dunnoRepresentation)  t
+                  -- $ ite (t .== literal dunnoRepresentation)  s
                   $ s `smax` t
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $

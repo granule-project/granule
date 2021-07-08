@@ -41,6 +41,13 @@ isGhost _ = False
 defaultGhost :: Coeffect
 defaultGhost = tyCon "Dunno"
 
+unprotectedGhost :: Coeffect
+unprotectedGhost = tyCon "Private"
+
+unprotectedGhostVariableContext :: Ctxt Assumption
+unprotectedGhostVariableContext =
+  [(mkId ghostName, Ghost unprotectedGhost)]
+
 ghostOp :: TypeOperator
 ghostOp = TyOpConverge
 

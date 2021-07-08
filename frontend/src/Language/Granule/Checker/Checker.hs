@@ -1041,7 +1041,7 @@ synthExpr defs gam _ (Val s _ rf (Var _ x)) = do
          Just tyScheme  -> do
            (ty, ctxt, subst, elab) <- freshenTySchemeForVar s rf x tyScheme
            -- Mark ghost variable as used.
-           return (ty, usedGhostVariableContext <> ctxt, subst, elab)
+           return (ty, unprotectedGhostVariableContext <> ctxt, subst, elab)
 
          -- Couldn't find it
          Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
@@ -1709,12 +1709,7 @@ extCtxt s ctxt var (Linear t) = do
           return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
          else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Just (Ghost c) ->
-       if t == ghostType
-         then do
-          (k, subst, cElaborated) <- synthKind s c
-          debugM "extCtxt ghost" (pretty k <> ", " <> pretty c)
-          return $ replace ctxt var (Ghost (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
-         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
+       throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
     Nothing -> return $ (var, Linear t) : ctxt
 
 extCtxt s ctxt var (Discharged t c) = do
@@ -1725,9 +1720,7 @@ extCtxt s ctxt var (Discharged t c) = do
         then return $ replace ctxt var (Discharged t' (TyInfix TyOpPlus c c'))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Just (Ghost c') ->
-        if t == ghostType
-        then return $ replace ctxt var (Ghost (TyInfix TyOpPlus c c'))
-        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
+        throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
     Just (Linear t') ->
         if t == t'
         then do
@@ -1740,19 +1733,13 @@ extCtxt s ctxt var (Ghost c) = do
   let t = ghostType
   case lookup var ctxt of
     Just (Discharged t' c') ->
-        if t == t'
-        then return $ replace ctxt var (Discharged t' (TyInfix TyOpPlus c c'))
-        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+        throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Just (Ghost c') ->
         if t == ghostType
-        then return $ replace ctxt var (Ghost (TyInfix TyOpPlus c c'))
+        then return $ replace ctxt var (Ghost (TyInfix TyOpJoin c c'))
         else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = ghostType }
     Just (Linear t') ->
-        if t == t'
-        then do
-          (k, subst, cElaborated) <- synthKind s c
-          return $ replace ctxt var (Discharged t (TyInfix TyOpPlus cElaborated (TyGrade (Just k) 1)))
-        else throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
+        throw TypeVariableMismatch{ errLoc = s, errVar = var, errTy1 = t, errTy2 = t' }
     Nothing -> return $ (var, Discharged t c) : ctxt
 
 -- Helper, foldM on a list with at least one element
