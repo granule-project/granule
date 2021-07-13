@@ -106,9 +106,13 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
-  (k, subst, _) <- synthKind s t1'
-  (subst', _) <- checkKind s t2' k
+  debugM "equaltypesrelatedcoeffects1" (show t1')
+  (k, subst, t1') <- synthKindWithConfiguration s GradeToNat t1'
+  debugM "equaltypesrelatedcoeffects2" ""
+  (subst', t2') <- checkKindWithConfiguration s GradeToNat t2' k
+  debugM "equaltypesrelatedcoeffects3" (show (t1, t2))
   (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
+  debugM "equaltypesrelatedcoeffects4" ""
   substFinal <- combineManySubstitutions s [subst,subst',subst'']
   return (eqT, substFinal)
 
@@ -191,7 +195,8 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
     -- Two universally quantified variables are unequal
-    (Just (_, ForallQ), Just (_, ForallQ)) ->
+    (Just (_, ForallQ), Just (_, ForallQ)) -> do
+        debugM "two foralls!" ""
         return (False, [])
 
     -- We can unify a universal a dependently bound universal
@@ -231,7 +236,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
               <> "\n" <> pretty m <> " : " <> show t2
   where
     tyVarConstraint (k1, n) (k2, m) = do
-      jK <- joinTypes s k1 k2
+      jK <- joinTypes s GradeToNat k1 k2
       case jK of
         Just (TyCon kc, unif, _) -> do
           (result, putChecker) <- peekChecker (checkKind s (TyCon kc) kcoeffect)
@@ -242,7 +247,8 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif, _) ->
           return (True, unif ++ [(n, SubstT $ TyVar m)])
-        Nothing ->
+        Nothing -> do
+          debugM "you made it hereee" ""
           return (False, [])
 
 -- Duality is idempotent (left)
@@ -276,7 +282,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
     -- We can unify an instance with a concrete type
     (Just (n_k, q)) | (q == BoundQ) || (q == InstanceQ) -> do --  && sp /= PatternCtxt
 
-      jK <-  joinTypes s n_k kind
+      jK <-  joinTypes s GradeToNat n_k kind
       case jK of
         Nothing -> throw UnificationKindError
           { errLoc = s, errTy1 = (TyVar n), errK1 = n_k, errTy2 = t, errK2 = kind }
@@ -295,7 +301,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
 
        -- If the kind is nat then set up an equation as there might be a
        -- plausible equation involving the quantified variable
-       jK <- joinTypes s n_k kind
+       jK <- joinTypes s GradeToNat n_k kind
        case jK of
          -- TODO: generalise to things where the jk is of kind kcoeffect or keffect
          -- or jK is nat

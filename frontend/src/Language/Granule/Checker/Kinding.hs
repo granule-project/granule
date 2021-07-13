@@ -68,62 +68,72 @@ replaceSynonyms ty =
       effTop <- effectTop tyConId
       return $ fromMaybe tyConId effTop
 
+
+
+checkKind :: (?globals :: Globals) => 
+  Span -> Type -> Kind -> Checker (Substitution, Type)
+checkKind s t =
+  checkKindWithConfiguration s (defaultResolutionBehaviour t) t
+
 ------------------------------------------------------------
 
 -- `checkKind s gam t k` checks with `gam |- t :: k` is derivable
 -- and also returns an elaborated type term `t'` in the case that
 -- some extra information is learned (e.g., resolving types of coeffect terms)
-checkKind :: (?globals :: Globals) =>
-  Span -> Type -> Kind -> Checker (Substitution, Type)
+checkKindWithConfiguration :: (?globals :: Globals) =>
+  Span -> ResolutionConfig -> Type -> Kind -> Checker (Substitution, Type)
 
 -- Avoid weird "type in type" style invocations.
-checkKind s t k | t == k = do
+checkKindWithConfiguration s c t k | t == k = do
   throw $ KindError s t k
 
 -- KChk_funk
-checkKind s (FunTy name t1 t2) k = do
-  (subst1, t1') <- checkKind s t1 k
-  (subst2, t2') <- checkKind s t2 k
+checkKindWithConfiguration s c (FunTy name t1 t2) k = do
+  (subst1, t1') <- checkKindWithConfiguration s c t1 k
+  (subst2, t2') <- checkKindWithConfiguration s c t2 k
   substFinal <- combineSubstitutions s subst1 subst2
   return (substFinal, FunTy name t1 t2)
 
 -- KChk_SetKind
-checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
+checkKindWithConfiguration s c (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (checkKindWithConfiguration s c t kcoeffect) <|> (checkKindWithConfiguration s c t ktype)
 
-checkKind s (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) =
+checkKindWithConfiguration s c (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Effect")) =
   -- Sets as effects can be themselves over an effect type or some other type
-  (checkKind s t keffect) <|> (checkKind s t ktype)
+  (checkKindWithConfiguration s c t keffect) <|> (checkKindWithConfiguration s c t ktype)
 
-checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) =
+checkKindWithConfiguration s c (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Coeffect")) =
   -- Sets as coeffects can be themselves over a coeffect type or some other type
-  (checkKind s t kcoeffect) <|> (checkKind s t ktype)
+  (checkKindWithConfiguration s c t kcoeffect) <|> (checkKindWithConfiguration s c t ktype)
 
-checkKind s (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) =
+checkKindWithConfiguration s c (TyApp (TyCon (internalName -> "SetOp")) t) (TyCon (internalName -> "Effect")) =
   -- Sets as effects can be themselves over an effect type or some other type
-  (checkKind s t keffect) <|> (checkKind s t ktype)
+  (checkKindWithConfiguration s c t keffect) <|> (checkKindWithConfiguration s c t ktype)
 
 -- KChk_app
-checkKind s (TyApp t1 t2) k2 = do
-  (k1, subst1, t2') <- synthKind s t2
-  (subst2, t1') <- checkKind s t1 (FunTy Nothing k1 k2)
+checkKindWithConfiguration s c (TyApp t1 t2) k2 = do
+  (k1, subst1, t2') <- synthKindWithConfiguration s c t2
+  (subst2, t1') <- checkKindWithConfiguration s c t1 (FunTy Nothing k1 k2)
   substFinal <- combineSubstitutions s subst1 subst2
   return (substFinal, TyApp t1' t2')
 
 -- KChk_opRing and KChk_effOp combined (i.e. closed operators)
-checkKind s t@(TyInfix op t1 t2) k | closedOperation op = do
+checkKindWithConfiguration s c t@(TyInfix op t1 t2) k | closedOperation op = do
   maybeSubst <- closedOperatorAtKind s op k
   case maybeSubst of
     Just subst3 -> do
-      (subst1, t1') <- checkKind s t1 k
-      (subst2, t2') <- checkKind s t2 k
+      --debugM "kinds not done" (show (t1))
+      (subst1, t1') <- checkKindWithConfiguration s c t1 k
+      --debugM "kind 1 done" (show (t2))
+      (subst2, t2') <- checkKindWithConfiguration s c t2 k
+ --     debugM "kind 2 done" ""
       substFinal <- combineManySubstitutions s [subst1, subst2, subst3]
       return (substFinal, TyInfix op t1' t2')
     Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
 
 -- KChk_nat
-checkKind s t@(TyInt n) k =
+checkKindWithConfiguration s c t@(TyInt n) k =
   case k of
     -- n : Nat
     TyCon (internalName -> "Nat") -> return ([], t)
@@ -133,35 +143,35 @@ checkKind s t@(TyInt n) k =
     TyApp (TyCon (internalName -> "Ext")) (TyCon (internalName -> "Nat")) -> return ([], t)
     -- n : Interval k  (then we turn this into [n..n])
     TyApp (TyCon (internalName -> "Interval")) k' -> do
-      (subst, k'') <- checkKind s t k'
+      (subst, k'') <- checkKindWithConfiguration s c t k'
       return (subst, TyInfix TyOpInterval t t)
     -- Not valid
     _ -> throw $ NaturalNumberAtWrongKind s t k
 
 -- KChk_effOne
-checkKind s t@(TyGrade mk n) k = do
+checkKindWithConfiguration s c t@(TyGrade mk n) k = do
   let k' = fromMaybe k mk
-  jK <- maybe (return (Just (k, [], Nothing))) (\k' -> joinTypes s k' k) mk
+  jK <- maybe (return (Just (k, [], Nothing))) (\k' -> joinTypes s c k' k) mk
   case jK of
     Just (k, subst, _) ->
       case n of
         0 -> do -- Can only be a semiring element
-          (subst', _) <- checkKind s k kcoeffect
+          (subst', _) <- checkKindWithConfiguration s c k kcoeffect
           substFinal <- combineSubstitutions s subst subst'
           return (substFinal, TyGrade (Just k) n)
         1 -> do -- Can be a monoid or semiring element
-          (subst', _) <- (checkKind s k kcoeffect) <|> (checkKind s k keffect)
+          (subst', _) <- (checkKindWithConfiguration s c k kcoeffect) <|> (checkKindWithConfiguration s c k keffect)
           substFinal <- combineSubstitutions s subst subst'
           return (substFinal, TyGrade (Just k) n)
         _ -> do -- Can only be a semiring element formed by repeated 1 + ...
-          (subst', _) <- checkKind s k kcoeffect
+          (subst', _) <- checkKindWithConfiguration s c k kcoeffect
           substFinal <- combineSubstitutions s subst subst'
           return (substFinal, TyGrade (Just k) n)
     Nothing ->
       throw $ UnificationError s k k'
 
 -- KChk_set
-checkKind s t@(TySet p elems) (TyApp (TyCon setConstructor) elemTy)
+checkKindWithConfiguration s c t@(TySet p elems) (TyApp (TyCon setConstructor) elemTy)
   | internalName setConstructor == "Set" || internalName setConstructor == "SetOp" = do
     case elems of
       [] -> return ([], t)
@@ -172,8 +182,8 @@ checkKind s t@(TySet p elems) (TyApp (TyCon setConstructor) elemTy)
         return (substFinal, TySet p elems')
 
 -- KChk_sig
-checkKind s (TySig t k) k' = do
-  join <- joinTypes s k k'
+checkKindWithConfiguration s c (TySig t k) k' = do
+  join <- joinTypes s c k k'
   case join of
     Just (jk, subst, inj) ->
       case inj of
@@ -184,24 +194,27 @@ checkKind s (TySig t k) k' = do
 
 -- KChck_Nat
 -- "Nat" belonds to Coeffect, Effect, and Type kinds
-checkKind s t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Coeffect")) =
+checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Coeffect")) =
   return ([], t)
-checkKind s t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Effect")) =
+checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Effect")) =
   return ([], t)
-checkKind s t@(TyCon (internalName -> "Nat")) (Type 0) =
+checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (Type 0) =
   return ([], t)
 
 -- Fall through to synthesis if checking can not be done.
-checkKind s t k = do
+checkKindWithConfiguration s c t k = do
   -- Synth
-  (k', subst1, t') <- synthKind s t
+  --debugM "falling through to synth, t: " (show t)
+  (k', subst1, t') <- synthKindWithConfiguration s c t
   -- See if we can do a join (equality+) on the synthed kind and the one coming as specification here.
-  join <- joinTypes s k k'
+  join <- joinTypes s c k k'
   case join of
     Just (_, subst2, _) -> do
       substFinal <- combineSubstitutions s subst1 subst2
       return (substFinal, t')
-    Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+    Nothing -> do
+      debugM "kind mismatch!" (show (t,k, k'))
+      throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
 ------------------------------------------------------------
 
@@ -210,7 +223,7 @@ data ResolutionConfig =
     GradeToNat              -- ^ Resolve untyped grades as Nat
    | GradeToPolyAsCoeffect  -- ^ Resolve untyped grades to a fresh unification variable which is Coeffect kinded
    | GradeToPolyAsEffect    -- ^ Resolve untyped grades to a fresh unification variable which is Effect kinded
-  deriving Eq
+  deriving (Eq, Show)
 
 defaultResolutionBehaviour :: Type -> ResolutionConfig
 defaultResolutionBehaviour t =
@@ -239,7 +252,9 @@ synthKindWithConfiguration s config t@(TyVar x) = do
   st <- get
   case lookup x (tyVarContext st) of
     Just (k, _) -> return (k, [], t)
-    Nothing     -> throw UnboundTypeVariable { errLoc = s, errId = x }
+    Nothing     -> do 
+      debugM "no type variable!" (show x)
+      throw UnboundTypeVariable { errLoc = s, errId = x }
 
 -- -- KChkS_fun
 --
@@ -249,7 +264,7 @@ synthKindWithConfiguration s config t@(TyVar x) = do
 
 synthKindWithConfiguration s config (FunTy name t1 t2) = do
   (k, subst1, t1') <- synthKindWithConfiguration s config t1
-  (subst2   , t2') <- checkKind s t2 k
+  (subst2   , t2') <- checkKindWithConfiguration s config t2 k
   subst <- combineSubstitutions s subst1 subst2
   return (k, subst, FunTy name t1' t2')
 
@@ -277,9 +292,12 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
 --
 synthKindWithConfiguration s config (TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKindWithConfiguration s config t1
+  debugM "tyapppppp" (show funK <> " config: " <> show config)
   case funK of
     (FunTy _ k1 k2) -> do
-      (subst2, t2') <- checkKind s t2 k1
+      debugM "checking kind with: " (show (t2, k1))
+      (subst2, t2') <- checkKindWithConfiguration s config t2 k1
+      debugM "checkKind2" ""
       subst <- combineSubstitutions s subst1 subst2
       return (k2, subst, TyApp t1' t2')
     _ -> throw KindError { errLoc = s, errTy = t1, errKL = funK }
@@ -323,20 +341,20 @@ synthKindWithConfiguration s config t@(TyGrade Nothing n) = do
       return (tyCon "Nat", [], TyInt n)
 
 -- KChkS_box
-synthKindWithConfiguration s _ (Box c t) = do
+synthKindWithConfiguration s config (Box c t) = do
   -- Deal with the grade term
   (coeffTy, subst0, c') <- synthKindWithConfiguration s (defaultResolutionBehaviour c) c
-  (subst1, _) <- checkKind s coeffTy kcoeffect
+  (subst1, _) <- checkKindWithConfiguration s config coeffTy kcoeffect
   -- Then the inner type
-  (subst2, t') <- checkKind s t ktype
+  (subst2, t') <- checkKindWithConfiguration s config t ktype
   subst <- combineManySubstitutions s [subst0, subst1, subst2]
   return (ktype, subst, Box c' t')
 
 -- KChkS_dia
-synthKindWithConfiguration s _ (Diamond e t) = do
-  (innerK, subst2, e') <- synthKind s e
-  (subst1, _)  <- checkKind s innerK keffect
-  (subst3, t') <- checkKind s t ktype
+synthKindWithConfiguration s config (Diamond e t) = do
+  (innerK, subst2, e') <- synthKindWithConfiguration s config e
+  (subst1, _)  <- checkKindWithConfiguration s config innerK keffect
+  (subst3, t') <- checkKindWithConfiguration s config t ktype
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (ktype, subst, Diamond e' t')
 
@@ -364,7 +382,7 @@ synthKindWithConfiguration s _ t@(TyCon id) = do
 -- KChkS_set
 synthKindWithConfiguration s config t0@(TySet p (elem:elems)) = do
   (k, subst1, elem') <- synthKindWithConfiguration s config elem
-  results <- mapM (\elem -> checkKind s elem k) elems
+  results <- mapM (\elem -> checkKindWithConfiguration s config elem k) elems
   let (substs, elems') = unzip results
   subst <- combineManySubstitutions s (subst1:substs)
   return (TyApp (setConstructor p) k, subst, TySet p (elem':elems'))
@@ -386,7 +404,7 @@ synthKindWithConfiguration s config (TyCase t branches) | length branches > 0 = 
   -- for the branches
   branchesInfo <-
     forM branches (\(tyPat, tyBranch) -> do
-      (subst_i, tyPat') <- checkKind s tyPat k
+      (subst_i, tyPat') <- checkKindWithConfiguration s config tyPat k
       (k_i, subst'_i, tyBranch') <- synthKindWithConfiguration s config tyBranch
       subst <- combineSubstitutions s subst_i subst'_i
       return ((tyPat', tyBranch'), (subst, (tyBranch', k_i))))
@@ -396,7 +414,7 @@ synthKindWithConfiguration s config (TyCase t branches) | length branches > 0 = 
   substIntermediate <- combineManySubstitutions s (subst:substs)
   -- Check that we can join all the kinds of the branches, and combine all the substitutions
   (kind, substFinal) <- foldM (\(kJoined, subst) (branchTy, k) -> do
-        joined <- joinTypes s k kJoined
+        joined <- joinTypes s config k kJoined
         case joined of
           Just (kNext, subst', _) -> do
             subst' <- combineSubstitutions s subst subst'
@@ -515,44 +533,46 @@ predicateOperation op = (\(_, _, c) -> c) (tyOps op) == kpredicate
 
 joinTypes :: (?globals :: Globals)
           => Span
+          -> ResolutionConfig
           -> Type
           -> Type
           -> Checker (Maybe (Type, Substitution, Maybe Injections))
-joinTypes s t1 t2 = runMaybeT (joinTypes' s t1 t2)
+joinTypes s c t1 t2 = runMaybeT (joinTypes' s c t1 t2)
 
 joinTypes' :: (?globals :: Globals)
           => Span
+          -> ResolutionConfig
           -> Type
           -> Type
           -> MaybeT Checker (Type, Substitution, Maybe Injections)
-joinTypes' s t t' | t == t' = return (t, [], Nothing)
+joinTypes' s _ t t' | t == t' = return (t, [], Nothing)
 
-joinTypes' s (FunTy id t1 t2) (FunTy _ t1' t2') = do
-  (t1j, subst1, _) <- joinTypes' s t1' t1 -- contravariance
-  (t2j, subst2, _) <- joinTypes' s t2 t2'
+joinTypes' s config (FunTy id t1 t2) (FunTy _ t1' t2') = do
+  (t1j, subst1, _) <- joinTypes' s config t1' t1 -- contravariance
+  (t2j, subst2, _) <- joinTypes' s config t2 t2'
   subst <- lift $ combineSubstitutions s subst1 subst2
   return (FunTy id t1j t2j, subst, Nothing)
 
-joinTypes' s (Diamond ef1 t1) (Diamond ef2 t2) = do
-  (tj, subst0, _) <- joinTypes' s t1 t2
+joinTypes' s config (Diamond ef1 t1) (Diamond ef2 t2) = do
+  (tj, subst0, _) <- joinTypes' s config t1 t2
   -- Calculate the effect type for the effects here
-  (efty1, subst1, ef1') <- lift $ synthKind s ef1
-  (efty2, subst2, ef2') <- lift $ synthKind s ef2
+  (efty1, subst1, ef1') <- lift $ synthKindWithConfiguration s config ef1
+  (efty2, subst2, ef2') <- lift $ synthKindWithConfiguration s config ef2
   -- Compute the upper bound on the types
-  (efftj, subst3, _) <- joinTypes' s efty1 efty2
+  (efftj, subst3, _) <- joinTypes' s config efty1 efty2
   -- Computes the upper bound on the effects
   ej <- lift $ effectUpperBound s efftj ef1' ef2'
   subst <- lift $ combineManySubstitutions s [subst0, subst1, subst2, subst3]
   return (Diamond ej tj, subst, Nothing)
 
-joinTypes' s (Box c t) (Box c' t') = do
+joinTypes' s config (Box c t) (Box c' t') = do
   (coeffTy, subst, (inj1, inj2)) <- lift $ mguCoeffectTypesFromCoeffects s c c'
   -- Create a fresh coeffect variable
   topVar <- lift $ freshTyVarInContext (mkId "") coeffTy
   -- Unify the two coeffects into one
   lift $ addConstraint (ApproximatedBy s (inj1 c)  (TyVar topVar) coeffTy)
   lift $ addConstraint (ApproximatedBy s (inj2 c') (TyVar topVar) coeffTy)
-  (tUpper, subst', _) <- joinTypes' s t t'
+  (tUpper, subst', _) <- joinTypes' s config t t'
   substFinal <- lift $ combineSubstitutions s subst subst'
   return (Box (TyVar topVar) tUpper, substFinal, Nothing)
 
@@ -566,7 +586,7 @@ joinTypes' s (Box c t) (Box c' t') = do
 --   addConstraint (Eq s (TyInt n) (TyVar var) ty)
 --   return $ TyInt n
 
-joinTypes' _ (TyVar v) t = do
+joinTypes' _ config (TyVar v) t = do
   st <- get
   case lookup v (tyVarContext st) of
     Just (_, q) | q == InstanceQ || q == BoundQ -> return (t, [(v, SubstT t)], Nothing)
@@ -575,18 +595,18 @@ joinTypes' _ (TyVar v) t = do
     -- Don't unify with universal variables
     _ -> fail "Cannot unify with a universal"
 
-joinTypes' s t1 t2@(TyVar _) = joinTypes' s t2 t1
+joinTypes' s config t1 t2@(TyVar _) = joinTypes' s config t2 t1
 
-joinTypes' s (TyApp t1 t2) (TyApp t1' t2') = do
-  (t1'', subst1, _) <- joinTypes' s t1 t1'
-  (t2'', subst2, _) <- joinTypes' s t2 t2'
+joinTypes' s config (TyApp t1 t2) (TyApp t1' t2') = do
+  (t1'', subst1, _) <- joinTypes' s config t1 t1'
+  (t2'', subst2, _) <- joinTypes' s config t2 t2'
   subst <- lift $ combineSubstitutions s subst1 subst2
   return (TyApp t1'' t2'', subst, Nothing)
 
-joinTypes' s t1 t2 = do
+joinTypes' s config t1 t2 = do
   st <- get
-  (isCoeffect1, putChecker1) <- lift $ attemptChecker (checkKind s t1 kcoeffect)
-  (isCoeffect2, putChecker2) <- lift $ attemptChecker (checkKind s t2 kcoeffect)
+  (isCoeffect1, putChecker1) <- lift $ attemptChecker (checkKindWithConfiguration s config t1 kcoeffect)
+  (isCoeffect2, putChecker2) <- lift $ attemptChecker (checkKindWithConfiguration s config t2 kcoeffect)
   -- Case where the two types are actually coeffect types
   if isCoeffect1 && isCoeffect2
     then lift $ do
