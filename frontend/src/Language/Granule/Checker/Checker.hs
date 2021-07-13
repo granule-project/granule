@@ -202,6 +202,8 @@ checkDataCon
         -- _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
         _ <- checkKind sp ty ktype
 
+        _ <- synthKindWithConfiguration sp GradeToNat ty
+
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
              freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) [] []
