@@ -328,6 +328,7 @@ equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
 
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
+  debugM "we're heeeeere" ""
   (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp mode
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
