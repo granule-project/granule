@@ -200,9 +200,9 @@ checkDataCon
 
         -- Check we are making something that is actually a type
         -- _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
-        _ <- checkKind sp ty ktype
+        (_, ty) <- checkKind sp ty ktype
 
-        _ <- synthKindWithConfiguration sp GradeToNat ty
+        --_ <- synthKindWithConfiguration sp GradeToNat ty
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
