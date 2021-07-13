@@ -198,7 +198,7 @@ checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (TyCon (interna
   return ([], t)
 checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Effect")) =
   return ([], t)
-checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (Type 0) =
+checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (Type 1) =
   return ([], t)
 
 -- Fall through to synthesis if checking can not be done.

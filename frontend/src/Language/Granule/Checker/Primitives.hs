@@ -34,9 +34,9 @@ typeAliases =
 --    * boolean flag on whether they are indexed types or not
 typeConstructors :: [(Id, (Type, [Id], Bool))]
 typeConstructors =
-    [ (mkId "Coeffect",  (Type 0, [], False))
-    , (mkId "Effect",    (Type 0, [], False))
-    , (mkId "Predicate", (Type 0, [], False))
+    [ (mkId "Coeffect",  (Type 1, [], False))
+    , (mkId "Effect",    (Type 1, [], False))
+    , (mkId "Predicate", (Type 1, [], False))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
     , (mkId "Int",    (Type 0, [], False))
