@@ -92,7 +92,7 @@ checkKindWithConfiguration s c (FunTy name t1 t2) k = do
   (subst1, t1') <- checkKindWithConfiguration s c t1 k
   (subst2, t2') <- checkKindWithConfiguration s c t2 k
   substFinal <- combineSubstitutions s subst1 subst2
-  return (substFinal, FunTy name t1 t2)
+  return (substFinal, FunTy name t1' t2')
 
 -- KChk_SetKind
 checkKindWithConfiguration s c (TyApp (TyCon (internalName -> "Set")) t) (TyCon (internalName -> "Coeffect")) =
