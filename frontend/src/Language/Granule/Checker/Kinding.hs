@@ -151,7 +151,7 @@ checkKindWithConfiguration s c t@(TyInt n) k =
 -- KChk_effOne
 checkKindWithConfiguration s c t@(TyGrade mk n) k = do
   let k' = fromMaybe k mk
-  jK <- maybe (return (Just (k, [], Nothing))) (\k' -> joinTypes s c k' k) mk
+  jK <- joinTypes s c k k'
   case jK of
     Just (k, subst, _) ->
       case n of
