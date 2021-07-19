@@ -35,7 +35,7 @@ instance Monoid SynthesisData where
 newtype Synthesiser a = Synthesiser
   { unSynthesiser ::
       ExceptT (NonEmpty CheckerError) (StateT CheckerState (LogicT (StateT SynthesisData IO))) a }
-  deriving (Functor, Applicative, MonadState CheckerState)
+  deriving (Functor, Applicative, MonadState CheckerState, MonadError (NonEmpty CheckerError))
 
 -- Synthesiser always uses fair bind from LogicT
 instance Monad Synthesiser where

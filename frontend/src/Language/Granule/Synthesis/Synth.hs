@@ -679,7 +679,7 @@ constrIntroHelper (allowRSync, allowDef) defs startTime gamma mode goalTy@(Foral
           return (a, sd)) pats
       let adtConstructors = concatMap snd (filter (\x -> fst x == name) constructors)
       debugM "im hreee" (show adtConstructors)
-      adtConstructors' <- conv $ filterM (\(id, (Forall _ _ _ conTy, subst, _)) -> do (success, _, _ ) <- checkConstructor conTy subst ; return success) adtConstructors
+      adtConstructors' <- filterM (\(id, (conTy, subst, _)) -> do success <- checkConstructor conTy subst ; debugM "success?: " (show success <> " id: " <> show id <> " goal: " <> show t <> " ty: " <> show conTy) ; return success) adtConstructors
       debugM "adtConstructors: " (show adtConstructors')
       synthesiseConstructors gamma (sortBy (flip compare') adtConstructors) mode goalTy
     _ -> none
@@ -690,16 +690,16 @@ constrIntroHelper (allowRSync, allowDef) defs startTime gamma mode goalTy@(Foral
 
     compare' con1@(_, (Forall _ _ _ ty1, _, _)) con2@(_, (Forall _ _ _ ty2, _, _)) = compare (arity ty1) (arity ty2)
 
-    checkConstructor :: Type -> Substitution -> Checker (Bool, Type, Substitution)
-    checkConstructor conTy subst = do
-      conTy' <- substitute subst conTy
-      case tyVarsOf conTy' of
-        Nothing -> return (False, ktype, [])
-        Just args -> do
-          debugM "args: " (show args)
-          mapM_ (\(TyVar id') -> modify (\st -> st { tyVarContext = (id', (ktype, InstanceQ )) : tyVarContext st})) args
-          debugM "conTy: " (show $ rightMostFunTy conTy')
-          equalTypes nullSpanNoFile t (rightMostFunTy conTy') `catchError` const (return (False, ktype, []))
+    checkConstructor :: TypeScheme -> Substitution -> Synthesiser Bool
+    checkConstructor (Forall _ binders _ conTy) subst = do
+      conTy' <- conv $ substitute subst conTy
+      mapM_ (\(id, kind) -> do modify (\st -> st { tyVarContext = (id, (kind, InstanceQ)) : tyVarContext st})) binders
+      debugM "con: " (show conTy)
+      debugM "conTy: " (show $ rightMostFunTy conTy')
+      debugM "equal types on: " (show (rightMostFunTy conTy') <> " and goal: " <> show t)
+      (success, spec, subst') <- conv $ equalTypes nullSpanNoFile (rightMostFunTy conTy') t 
+      res <- solve
+      return (res && success) `catchError` const (return False)
 
 
     synthesiseConstructors gamma [] mode goalTy = none
@@ -751,17 +751,6 @@ constrIntroHelper (allowRSync, allowDef) defs startTime gamma mode goalTy@(Foral
       res <- constrArgs e2
       return $ e1 : res
     constrArgs _ = Nothing
-
-    tyVarsOf (TyVar id) = Just [TyVar id]
-    tyVarsOf (TyApp t1 t2) = do
-      res1 <- tyVarsOf t1
-      res2 <- tyVarsOf t2
-      return $ res1 ++ res2
-    tyVarsOf (FunTy _ t1 t2) = do
-      res1 <- tyVarsOf t1
-      res2 <- tyVarsOf t2
-      return $ res1 ++ res2
-    tyVarsOf _ = Just []
 
 
     adtName (TyCon id) = Just id
