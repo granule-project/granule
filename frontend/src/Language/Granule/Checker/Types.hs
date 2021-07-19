@@ -106,13 +106,9 @@ equalTypesRelatedCoeffects :: (?globals :: Globals)
 equalTypesRelatedCoeffects s rel t1 t2 spec mode = do
   let (t1', t2') = if spec == FstIsSpec then (t1, t2) else (t2, t1)
   -- Infer kinds
-  debugM "equaltypesrelatedcoeffects1" (show t1')
   (k, subst, t1') <- synthKindWithConfiguration s GradeToNat t1'
-  debugM "equaltypesrelatedcoeffects2" ""
   (subst', t2') <- checkKindWithConfiguration s GradeToNat t2' k
-  debugM "equaltypesrelatedcoeffects3" (show (t1, t2))
   (eqT, subst'') <- equalTypesRelatedCoeffectsInner s rel t1 t2 k spec mode
-  debugM "equaltypesrelatedcoeffects4" ""
   substFinal <- combineManySubstitutions s [subst,subst',subst'']
   return (eqT, substFinal)
 
@@ -195,9 +191,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
   case (lookup n (tyVarContext checkerState), lookup m (tyVarContext checkerState)) of
 
     -- Two universally quantified variables are unequal
-    (Just (_, ForallQ), Just (_, ForallQ)) -> do
-        debugM "two foralls!" ""
-        return (False, [])
+    (Just (_, ForallQ), Just (_, ForallQ)) -> return (False, [])
 
     -- We can unify a universal a dependently bound universal
     (Just (k1, ForallQ), Just (k2, BoundQ)) ->
@@ -247,9 +241,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif, _) ->
           return (True, unif ++ [(n, SubstT $ TyVar m)])
-        Nothing -> do
-          debugM "you made it hereee" ""
-          return (False, [])
+        Nothing -> return (False, [])
 
 -- Duality is idempotent (left)
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp mode
@@ -328,7 +320,6 @@ equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
 
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
-  debugM "we're heeeeere" ""
   (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp mode
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'

@@ -123,11 +123,8 @@ checkKindWithConfiguration s c t@(TyInfix op t1 t2) k | closedOperation op = do
   maybeSubst <- closedOperatorAtKind s op k
   case maybeSubst of
     Just subst3 -> do
-      --debugM "kinds not done" (show (t1))
       (subst1, t1') <- checkKindWithConfiguration s c t1 k
-      --debugM "kind 1 done" (show (t2))
       (subst2, t2') <- checkKindWithConfiguration s c t2 k
- --     debugM "kind 2 done" ""
       substFinal <- combineManySubstitutions s [subst1, subst2, subst3]
       return (substFinal, TyInfix op t1' t2')
     Nothing -> throw OperatorUndefinedForKind { errLoc = s, errTyOp = op, errK = k }
@@ -204,7 +201,6 @@ checkKindWithConfiguration s c t@(TyCon (internalName -> "Nat")) (Type 1) =
 -- Fall through to synthesis if checking can not be done.
 checkKindWithConfiguration s c t k = do
   -- Synth
-  --debugM "falling through to synth, t: " (show t)
   (k', subst1, t') <- synthKindWithConfiguration s c t
   -- See if we can do a join (equality+) on the synthed kind and the one coming as specification here.
   join <- joinTypes s c k k'
@@ -212,9 +208,7 @@ checkKindWithConfiguration s c t k = do
     Just (_, subst2, _) -> do
       substFinal <- combineSubstitutions s subst1 subst2
       return (substFinal, t')
-    Nothing -> do
-      debugM "kind mismatch!" (show (t,k, k'))
-      throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
+    Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
 ------------------------------------------------------------
 
@@ -252,9 +246,7 @@ synthKindWithConfiguration s config t@(TyVar x) = do
   st <- get
   case lookup x (tyVarContext st) of
     Just (k, _) -> return (k, [], t)
-    Nothing     -> do 
-      debugM "no type variable!" (show x)
-      throw UnboundTypeVariable { errLoc = s, errId = x }
+    Nothing     -> throw UnboundTypeVariable { errLoc = s, errId = x }
 
 -- -- KChkS_fun
 --
@@ -292,12 +284,9 @@ synthKindWithConfiguration s config (TyApp (TyCon (internalName -> "Set")) t) = 
 --
 synthKindWithConfiguration s config (TyApp t1 t2) = do
   (funK, subst1, t1') <- synthKindWithConfiguration s config t1
-  debugM "tyapppppp" (show funK <> " config: " <> show config)
   case funK of
     (FunTy _ k1 k2) -> do
-      debugM "checking kind with: " (show (t2, k1))
       (subst2, t2') <- checkKindWithConfiguration s config t2 k1
-      debugM "checkKind2" ""
       subst <- combineSubstitutions s subst1 subst2
       return (k2, subst, TyApp t1' t2')
     _ -> throw KindError { errLoc = s, errTy = t1, errKL = funK }
