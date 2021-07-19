@@ -692,12 +692,12 @@ constrIntroHelper (allowRSync, allowDef) defs startTime gamma mode goalTy@(Foral
 
     checkConstructor :: TypeScheme -> Substitution -> Synthesiser Bool
     checkConstructor (Forall _ binders _ conTy) subst = do
-      conTy' <- conv $ substitute subst conTy
+      --conTy' <- conv $ substitute subst conTy
       mapM_ (\(id, kind) -> do modify (\st -> st { tyVarContext = (id, (kind, InstanceQ)) : tyVarContext st})) binders
       debugM "con: " (show conTy)
-      debugM "conTy: " (show $ rightMostFunTy conTy')
-      debugM "equal types on: " (show (rightMostFunTy conTy') <> " and goal: " <> show t)
-      (success, spec, subst') <- conv $ equalTypes nullSpanNoFile (rightMostFunTy conTy') t 
+      debugM "conTy: " (show $ rightMostFunTy conTy)
+      debugM "equal types on: " (show (rightMostFunTy conTy) <> " and goal: " <> show t)
+      (success, spec, subst') <- conv $ equalTypes nullSpanNoFile (rightMostFunTy conTy) t 
       res <- solve
       return (res && success) `catchError` const (return False)
 
