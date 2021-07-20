@@ -680,7 +680,14 @@ constrIntroHelper (True, allowDef) defs startTime gamma mode goalTy@(Forall s bi
           return (a, sd)) pats
       let adtConstructors = concatMap snd (filter (\x -> fst x == name) constructors)
       debugM "im hreee" (show adtConstructors)
-      adtConstructors' <- filterM (\(id, (conTy, subst, _)) -> do success <- checkConstructor conTy subst ; debugM "success?: " (show success <> " id: " <> show id <> " goal: " <> show t <> " ty: " <> show conTy) ; return success) adtConstructors
+      adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
+         (success, specTy, specSubst) <- checkConstructor conTy subst
+         debugM "success?: " (show success <> " id: " <> show id <> " goal: " <> show t <> " ty: " <> show conTy)
+         case (success, specTy) of
+           (True, Just specTy') -> do 
+             subst' <- conv $ combineSubstitutions s subst specSubst
+             return $ (id, (Forall s binders constraints specTy', subst', ints)) : a
+           _ -> return a ) [] adtConstructors
       debugM "adtConstructors: " (show adtConstructors')
       synthesiseConstructors gamma (sortBy (flip compare') adtConstructors') mode goalTy
     _ -> none
@@ -691,7 +698,7 @@ constrIntroHelper (True, allowDef) defs startTime gamma mode goalTy@(Forall s bi
 
     compare' con1@(_, (Forall _ _ _ ty1, _, _)) con2@(_, (Forall _ _ _ ty2, _, _)) = compare (arity ty1) (arity ty2)
 
-    checkConstructor :: TypeScheme -> Substitution -> Synthesiser Bool
+    checkConstructor :: TypeScheme -> Substitution -> Synthesiser (Bool, Maybe Type, Substitution)
     checkConstructor (Forall _ binders _ conTy) subst = do
       conTy' <- conv $ substitute subst conTy
     
@@ -702,7 +709,7 @@ constrIntroHelper (True, allowDef) defs startTime gamma mode goalTy@(Forall s bi
       (success, spec, subst') <- conv $ equalTypes nullSpanNoFile t (rightMostFunTy conTy')
       debugM "specTy: "  (show spec <> " subst': " <> show subst')
      -- res <- solve
-      return (success) `catchError` const (return False)
+      return (success, Just spec, subst') `catchError` const (return (False, Nothing, []))
 
 
     synthesiseConstructors gamma [] mode goalTy = none
