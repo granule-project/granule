@@ -16,15 +16,14 @@ import Data.Maybe (fromMaybe, mapMaybe)
 import Data.Ord
 import Data.Time.Clock (getCurrentTime)
 import Data.Time.LocalTime (getTimeZone, utc, utcToLocalTime)
-import Debug.Trace (trace, traceM)
 import System.Directory (removeFile, renameFile)
 import System.FilePath (splitFileName)
 import System.IO (hClose, hPutStr, hPutStrLn, openTempFile, stderr)
-import System.IO.Unsafe (unsafePerformIO)
 import "Glob" System.FilePath.Glob (glob)
 
 
 import Language.Granule.Syntax.Span
+import Control.Monad.IO.Class
 
 -- | Flags that change Granule's behaviour
 data Globals = Globals
@@ -174,22 +173,10 @@ nullSpan :: (?globals :: Globals) => Span
 nullSpan = Span (0, 0) (0, 0) sourceFilePath
 
 
-debugM :: (?globals :: Globals, Applicative f) => String -> String -> f ()
+debugM :: (?globals :: Globals, MonadIO f) => String -> String -> f ()
 debugM explanation message =
-    when debugging $ traceM $
-      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
-
-debugM' :: (?globals :: Globals, Applicative f) => String -> String -> f ()
-debugM' explanation message =
-    when True $ traceM $
-      ((unsafePerformIO getTimeString) <> (bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
-
--- | Print to terminal when debugging e.g.:
--- foo x y = x + y `debug` "foo" $ "given " <> show x <> " and " <> show y
-debug :: (?globals :: Globals) => a -> String -> a
-debug x message
-  | debugging = ((unsafePerformIO getTimeString) <> (bold $ magenta $ "Debug: ") <> message <> "\n") `trace` x
-  | otherwise = x
+    when debugging $ liftIO . putStrLn $
+      ((bold $ cyan $ "Debug: ") <> explanation <> " \n") <> message <> "\n"
 
 printError :: (?globals :: Globals, UserMsg msg) => msg -> IO ()
 printError message = when (not suppressErrors) $
