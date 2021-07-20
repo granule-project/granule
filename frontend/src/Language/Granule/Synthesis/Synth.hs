@@ -455,11 +455,15 @@ appHelper (allowRSync, allowDef) defs startTime left (var@(x, a) : right) add@(A
 
               gamma2 <-
                 case mode of
-                  Default     -> return (gamma' ++ omega')
+                  Default     -> return (omega)
                   Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
 
               -- Synthesise the argument
               (e2, delta2, sub2, bindings2) <- synthesiseInner defs startTime False add gamma2 [] (Forall nullSpanNoFile binders constraints tyA) (True, allowRSync, allowDef)
+              debugM "appHelper gamma2: " (pretty gamma2)
+              debugM "appHelper binding: " (pretty x2)
+              debugM "appHelper e1: " (pretty e1)
+              debugM "appHelper e2: " (pretty e2)
 
               -- Add the results
               deltaOut <- maybeToSynthesiser $ ctxtAdd useContextOut delta1'
@@ -498,6 +502,7 @@ boxHelper defs startTime gamma resourceScheme goalTy =
       case resourceScheme of
         Additive{} ->
           do
+            debugM "entered boxHelper" (show gamma)
             (e, delta, subst, bindings) <- synthesiseInner defs startTime False resourceScheme gamma [] (Forall nullSpanNoFile binders constraints t) (True, True, True)
             delta' <- ctxtMultByCoeffect g delta
             return (makeBox goalTy e, delta', subst, bindings)
@@ -992,16 +997,27 @@ defHelper left (def@(x, t) : right) startTime gamma add@(Additive mode) goalTy@(
  (case t of
     (FunTy _ tyA tyB) -> do
       x2 <- freshIdentifier
+      debugM "entered def helper t: " (pretty t ++ " \n goal: " <> pretty goalTy <> " \n gamma: " <> show gamma)
       let (gamma', omega') = bindToContext (x2, Linear tyB) gamma [] (isLAsync tyB)
       (e1, delta1, sub1, bindings1) <- synthesiseInner (def:left++right) startTime False add gamma' omega' goalTy (False, False, False)
       case lookupAndCutout x2 delta1 of
         Just (delta1', Linear _) -> do
           gamma2 <-
             case mode of
-              Default -> return (gamma' ++ omega')
+              Default -> return (gamma)
               Alternative -> ctxtSubtract (gamma' ++ omega') delta1'
 
+          debugM "defHelper gamma2: " (pretty gamma2)
+          debugM "defHelper binding: " (pretty x2)
+
+          debugM "defHelper e1: " (pretty e1)
+
           (e2, delta2, sub2, bindings2) <- synthesiseInner (def:left++right) startTime False add gamma2 [] (Forall nullSpanNoFile binders constraints tyA) (False, False, False)
+
+          debugM "defHelper gamma2: " (pretty gamma2)
+          debugM "defHelper binding: " (pretty x2)
+          debugM "defHelper e1: " (pretty e1)
+          debugM "defHelper e2: " (pretty e2)
 
               -- Add the results
           deltaOut' <- maybeToSynthesiser $ ctxtAdd delta1' delta2
