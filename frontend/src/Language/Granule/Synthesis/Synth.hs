@@ -1061,14 +1061,14 @@ synthesiseInner defs startTime inDereliction resourceScheme gamma omega goalTy@(
                       ++ ", allowLASync = " ++ show allowLAsync
                       ++ ", allowDef = " ++ show allowDef
                       ++ ", defs = " ++ show defs
-  debugM "what's going on" ""
-  let allowConstrIntro = allowRSync
   currentTime    <- liftIO $ Clock.getTime Clock.Monotonic
   let elapsedTime = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec currentTime startTime)) / (10^(6 :: Integer)::Double)
   if elapsedTime > synthTimeoutMillis && synthTimeoutMillis > 0 then Synthesiser (lift $ fail "Timeout")  else
     case (isRAsync goalTy', omega, allowLAsync) of
       (True, _, _) ->
         -- Right Async : Decompose goalTy until synchronous
+        varHelper [] (gamma ++ omega) resourceScheme goalTy
+        `try`
         absHelper defs allowRSync startTime gamma omega resourceScheme goalTy
       (False, x:xs, True) ->
         -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
@@ -1079,16 +1079,17 @@ synthesiseInner defs startTime inDereliction resourceScheme gamma omega goalTy@(
         `try` (
               varHelper [] (gamma ++ omega) resourceScheme goalTy
               `try`
-              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme goalTy
+              if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
               `try`
-              if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none)
+              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme goalTy 
+              )
 
 
         `try`
         do
         boxHelper defs startTime gamma resourceScheme goalTy
         `try`
-        (if allowConstrIntro then
+        (if allowRSync then
             -- Right Sync : Focus on goalTy when goalTy is not atomic
             constrIntroHelper (allowRSync, allowDef) defs startTime (gamma ++ omega) resourceScheme goalTy
          else none)
@@ -1097,22 +1098,18 @@ synthesiseInner defs startTime inDereliction resourceScheme gamma omega goalTy@(
       (False, _, _) ->
 -- not (isAtomic goalTy') && 
 
-        ( do
-              debugM " (2.1) allowRSync: " (show allowRSync)
+       (
               varHelper [] (gamma ++ omega) resourceScheme goalTy
               `try`
-              do
-              debugM " (2.2) allowRSync: " (show allowRSync)
-              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme goalTy
+              if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
               `try`
-              do
-              debugM " (2.3) allowRSync: " (show allowRSync)
-              if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none)
+              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme goalTy 
+              )
         `try` 
         do 
           boxHelper defs startTime gamma resourceScheme goalTy
           `try`
-          (if allowConstrIntro then
+          (if allowRSync then
             -- Right Sync : Focus on goalTy when goalTy is not atomic
             constrIntroHelper (allowRSync, allowDef) defs startTime (gamma ++ omega) resourceScheme goalTy
           else none)
