@@ -32,7 +32,7 @@ makeVarUntyped name =
 
 makeAbs :: Id -> Expr () Type -> TypeScheme -> Expr () Type
 makeAbs name e (Forall _ _ _ t@(FunTy _ t1 t2)) =
-  Val s t False (Abs t (PVar s t False name) (Just t1) e)
+  Val s t False (Abs t (PVar s t False name) Nothing e)
   where s = nullSpanNoFile
 makeAbs name e _ = error "Cannot synth here" -- TODO: better error handling
 
