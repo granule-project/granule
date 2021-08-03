@@ -353,6 +353,15 @@ parseGrConfig = info (go <**> helper) $ briefDesc
             , show solverTimeoutMillis <> "ms."
             ]
 
+        globalsSynthIndex <-
+          (optional . option (auto @Integer))
+            $ long "synth-index"
+            <> (help . unwords)
+            [ "Index of synthesised programs"
+            , "Defaults to"
+            , show synthIndex 
+            ]
+
         globalsIncludePath <-
           optional $ strOption
             $ long "include-path"
@@ -461,6 +470,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
               , globalsSynthTimeoutMillis
+              , globalsSynthIndex
               , globalsExtensions = []
               }
             }

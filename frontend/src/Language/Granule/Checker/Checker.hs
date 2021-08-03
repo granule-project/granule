@@ -1789,5 +1789,7 @@ programSynthesise ctxt vars ty patternss = do
       -- Nothing synthed, so create a blank hole instead
       []    -> do
         return (pattern, Hole nullSpan ty True [])
-      ((t, _, _):_) -> do
-        return (pattern, t)
+      ((_, _, _):_) -> 
+        case last synRes of 
+          (t, _, _) -> do
+            return (pattern, t)

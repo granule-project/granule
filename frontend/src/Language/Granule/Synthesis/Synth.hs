@@ -1186,15 +1186,18 @@ synthesiseProgram defs resourceScheme gamma omega goalTy checkerState = do
   -- %%
   end    <- liftIO $ Clock.getTime Clock.Monotonic
 
+  debugM "results no: " (pretty $ map ( \(e, _, _) -> e) results)
   debugM "synthDebug" ("Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty expr; _ -> "NO SYNTHESIS"))
   case results of
       -- Nothing synthed, so create a blank hole instead
       []    -> do
         debugM "Synthesiser" $ "No programs synthesised for " <> pretty goalTy
         printInfo "No programs synthesised"
-      ((t, _, _):_) -> do
-        debugM "Synthesiser" $ "Synthesised: " <> pretty t
-        printSuccess "Synthesised"
+      ((_, _, _):_) -> 
+        case last results of 
+          (t, _, _) -> do
+            debugM "Synthesiser" $ "Synthesised: " <> pretty t
+            printSuccess "Synthesised"
 
   -- <benchmarking-output>
   when benchmarking $

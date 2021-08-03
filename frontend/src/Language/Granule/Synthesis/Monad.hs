@@ -11,6 +11,7 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Logic
+import Language.Granule.Utils (synthIndex, Globals)
 
 -- Data structure for collecting information about synthesis
 data SynthesisData =
@@ -55,10 +56,10 @@ instance Monad Synthesiser where
 instance MonadIO Synthesiser where
   liftIO = conv . liftIO
 
-runSynthesiser :: Synthesiser a
+runSynthesiser :: (?globals :: Globals) => Synthesiser a
   -> (CheckerState -> StateT SynthesisData IO [((Either (NonEmpty CheckerError) a), CheckerState)])
 runSynthesiser m s = do
-  observeManyT 1 (runStateT (runExceptT (unSynthesiser m)) s)
+  observeManyT (fromIntegral synthIndex) (runStateT (runExceptT (unSynthesiser m)) s)
 
 conv :: Checker a -> Synthesiser a
 conv (Checker k) =

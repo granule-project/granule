@@ -48,6 +48,7 @@ data Globals = Globals
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
   , globalsSynthTimeoutMillis  :: Maybe Integer
+  , globalsSynthIndex          :: Maybe Integer
   , globalsExtensions           :: [Extension]
   } deriving (Read, Show)
 
@@ -85,6 +86,10 @@ solverTimeoutMillis = fromMaybe 10000 $ globalsSolverTimeoutMillis ?globals
 synthTimeoutMillis :: (?globals :: Globals) => Integer
 synthTimeoutMillis = fromMaybe 10000 $ globalsSynthTimeoutMillis ?globals
 
+-- | Accessor for the synthesis index with a default value
+synthIndex :: (?globals :: Globals) => Integer
+synthIndex = fromMaybe 1 $ globalsSynthIndex ?globals
+
 -- | Accessors for global file paths with default values
 includePath, sourceFilePath :: (?globals :: Globals) => FilePath
 includePath         = fromMaybe "StdLib" $ globalsIncludePath ?globals
@@ -117,6 +122,7 @@ instance Semigroup Globals where
       , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
+      , globalsSynthIndex = globalsSynthIndex g1 <|> globalsSynthIndex g2
       , globalsSynthTimeoutMillis = globalsSynthTimeoutMillis g1 <|> globalsSynthTimeoutMillis g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
       }
@@ -144,6 +150,7 @@ instance Monoid Globals where
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
     , globalsSynthTimeoutMillis  = Nothing
+    , globalsSynthIndex  = Nothing
     , globalsExtensions = [Base]
     }
 
