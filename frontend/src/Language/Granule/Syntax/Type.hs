@@ -45,7 +45,7 @@ data Polarity = Normal | Opposite
 -- | Type syntax (includes effect, coeffect, and predicate terms)
 data Type where
     Type    :: Int -> Type                          -- ^ Universe construction
-    FunTy   :: Maybe Id -> Type -> Type -> Type     -- ^ Function type
+    FunTy   :: Maybe Id -> Maybe Coeffect -> Type -> Type -> Type     -- ^ Function type
 
     TyCon   :: Id -> Type                           -- ^ Type constructor
     Box     :: Coeffect -> Type -> Type             -- ^ Graded modal necessity
