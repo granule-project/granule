@@ -69,6 +69,7 @@ generateCases span constructors ctxt toSplit funTy = do
       let validPatterns = catMaybes patternsAndMaybeBinders
       return (fst cases, validPatterns)
 
+
 -- Splits all variables in a given context into a list of patterns.
 splitAll ::
      Span

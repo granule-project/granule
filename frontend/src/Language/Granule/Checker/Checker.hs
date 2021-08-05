@@ -17,7 +17,6 @@ import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.List.Split (splitPlaces)
 import Data.List (isPrefixOf)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
@@ -153,8 +152,8 @@ checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     mapM_ (checkDataCon name kind tyVars (typeIndices d)) dataConstrs
-  where 
-  
+  where
+
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
@@ -175,7 +174,7 @@ checkDataCon
         -- Only relevant type variables get included
         let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
         let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
-        
+
         st <- get
 
         -- debugM "type indicies" (show $ typeConstructors st)
@@ -191,7 +190,7 @@ checkDataCon
         let tyVarsForall = (tyVarsT <> tyVarsD')
 
 
- 
+
         modify $ \st -> st { tyVarContext =
                [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
@@ -217,11 +216,11 @@ checkDataCon
         -- Reconstruct th e data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
-        let typeIndices = case lookup dName indices of 
-              Just inds -> inds 
+        let typeIndices = case lookup dName indices of
+              Just inds -> inds
               _ -> []
 
-        registerDataConstructor tySch coercions typeIndices 
+        registerDataConstructor tySch coercions typeIndices
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
@@ -240,7 +239,7 @@ checkDataCon
         , errTypeConstructor = tName
         , errVar = v
         }
-    
+
 checkDataCon tName kind tyVars indices d@DataConstrNonIndexed{}
   = checkDataCon tName kind tyVars indices
     $ nonIndexedToIndexedDataConstr tName tyVars d
@@ -393,14 +392,10 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst ty
-  let equationTy'' = refineEquationTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { equationTy = Just equationTy'' })
-
-
-  modify (\st -> st { equationName = Just name })
+  modify (\st -> st { equationTy = Just equationTy', equationName = Just name })
 
   patternGam <- substitute subst patternGam
 
@@ -428,40 +423,7 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
 
-  where
-    -- Given a context and a function type, refines the type by deconstructing
-    -- patterns into their constituent patterns and replacing parts of the type
-    -- by the corresponding pattern.
-    -- e.g. Given a pattern: Cons x xs
-    --      and a type:      Vec (n+1) t -> Vec n t
-    --      returns:         t -> Vec n t -> Vec n t
-    refineEquationTy :: [(Id, Assumption)] -> Type -> Type
-    refineEquationTy patternGam ty =
-      case patternGam of
-        [] -> ty
-        (_:_) ->
-          let patternArities = map patternArity pats
-              patternFunTys = map (map assumptionToType) (splitPlaces patternArities patternGam)
-          in replaceParameters patternFunTys ty
 
-    -- Computes how many arguments a pattern has.
-    -- e.g. Cons x xs --> 2
-    patternArity :: Pattern a -> Integer
-    patternArity (PBox _ _ _ p) = patternArity p
-    patternArity (PConstr _ _ _ _ ps) = sum (map patternArity ps)
-    patternArity _ = 1
-
-    replaceParameters :: [[Type]] -> Type -> Type
-    replaceParameters [] ty = ty
-    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
-    replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing t (replaceParameters (ts:tss) ty)
-    replaceParameters _ t = error $ "Expecting function type: " <> pretty t
-
-    -- Convert an id+assumption to a type.
-    assumptionToType :: (Id, Assumption) -> Type
-    assumptionToType (_, Linear t) = t
-    assumptionToType (_, Discharged t _) = t
 
 -- Polarities are used to understand when a type is
 -- `expected` vs. `actual` (i.e., for error messages)
@@ -497,40 +459,52 @@ checkExpr defs ctxt _ _ t (Hole s _ _ vars) = do
   let boundVariables = map fst $ filter (\ (id, _) -> getIdName id `elem` map getIdName vars) ctxt
   let unboundVariables = filter (\ x -> isNothing (lookup x ctxt)) vars
 
+  -- elaborated hole
+  let hexpr = Hole s t False vars
+
 
   case unboundVariables of
     (v:_) -> throw UnboundVariableError{ errLoc = s, errId = v }
     [] -> do
-      let snd3 (a, b, c) = b
-      let pats = map (second snd3) (typeConstructors st)
-      constructors <- mapM (\ (a, b) -> do
-        dc <- mapM (lookupDataConstructor s) b
-        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-        return (a, sd)) pats
-      (_, cases) <- generateCases s constructors ctxt boundVariables Nothing
 
-      -- If we are in synthesise mode, also try to synthesise a
-      -- term for each case split goal *if* this is also a hole
-      -- of interest
-      let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
-      cases' <-
-        case globalsSynthesise ?globals of
-           Just True ->
+      case globalsSynthesise ?globals of
+        Just True -> do
+          synthedExpr <- do
               -- Check to see if this hole is something we are interested in
               case globalsHolePosition ?globals of
                 -- Synth everything mode
-                Nothing -> programSynthesise ctxt vars t cases
+                Nothing -> programSynthesise ctxt vars t
                 Just pos ->
                   if spanContains pos s
                     -- This is a hole we want to synth on
-                    then programSynthesise ctxt vars t cases
+                    then programSynthesise ctxt vars t
                     -- This is not a hole we want to synth on
-                    else  return casesWithHoles
-           -- Otherwise synthesise empty holes for each case
-           -- (and throw away the binding information)
-           _ -> return casesWithHoles
-      let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
-      throw $ HoleMessage s t ctxt (tyVarContext st) holeVars cases'
+                    else  return hexpr
+
+          let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+          throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], synthedExpr)]
+
+        _ -> do
+          case globalsRewriteHoles ?globals of
+            Just True -> do
+              let snd3 (a, b, c) = b
+              let pats = map (second snd3) (typeConstructors st)
+              constructors <- mapM (\ (a, b) -> do
+                  dc <- mapM (lookupDataConstructor s) b
+                  let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+                  return (a, sd)) pats
+              (_, cases) <- generateCases s constructors ctxt boundVariables Nothing
+
+              -- If we are in synthesise mode, also try to synthesise a
+              -- term for each case split goal *if* this is also a hole
+              -- of interest
+              let casesWithHoles = zip (map fst cases) (repeat (Hole s t True []))
+
+              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars casesWithHoles
+            _ -> do
+              let holeVars = map (\id -> (id, id `elem` boundVariables)) (map fst ctxt)
+              throw $ HoleMessage s t ctxt (tyVarContext st) holeVars [([], hexpr)]
 
 -- Checking of constants
 checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
@@ -1764,32 +1738,27 @@ freshenTySchemeForVar s rf id tyScheme = do
 
 -- Hook into the synthesis engine.
 programSynthesise :: (?globals :: Globals) =>
-  Ctxt Assumption -> [Id] -> Type -> [([Pattern ()], Ctxt Assumption)] -> Checker [([Pattern ()], Expr () Type)]
-programSynthesise ctxt vars ty patternss = do
+  Ctxt Assumption -> [Id] -> Type -> Checker (Expr () Type)
+programSynthesise ctxt vars ty = do
   currentState <- get
   debugM "equation Nameeee" (show $ equationName currentState)
-  forM patternss $ \(pattern, patternCtxt) -> do
-    -- Build a context which has the pattern context
-    let ctxt' = patternCtxt
-          -- ... plus anything from the original context not being cased upon
-            ++ filter (\(id, a) -> not (id `elem` vars)) ctxt
+  debugM "equation ctxt" (show $ ctxt)
 
-    let defs = case (equationName currentState, equationTy currentState) of
-          (Just name, Just ty') -> [(name, ty')]
-          _ -> []
+  let defs = case (equationName currentState, equationTy currentState) of
+        (Just name, Just ty') -> [(name, ty')]
+        _ -> []
 
-    -- Run the synthesiser in this context
-    let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
-    synRes <-
-       liftIO $ Syn.synthesiseProgram defs
-                    (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
-                    ctxt' [] (Forall nullSpan [] [] ty) currentState
+  -- Run the synthesiser in this context
+  let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
+  synRes <-
+      liftIO $ Syn.synthesiseProgram defs
+                  (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
+                  ctxt [] (Forall nullSpan [] [] ty) currentState
 
-    case synRes of
-      -- Nothing synthed, so create a blank hole instead
-      []    -> do
-        return (pattern, Hole nullSpan ty True [])
-      ((_, _, _):_) -> 
-        case last synRes of 
-          (t, _, _) -> do
-            return (pattern, t)
+  case synRes of
+    -- Nothing synthed, so create a blank hole instead
+    []    ->
+      return (Hole nullSpan ty True [])
+    ((_, _, _):_) ->
+      case last synRes of
+        (t, _, _) -> return t

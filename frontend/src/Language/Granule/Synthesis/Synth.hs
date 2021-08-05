@@ -1017,7 +1017,7 @@ defHelper left (def@(x, t) : right) startTime gamma add@(Additive mode) goalTy@(
           debugM "defHelper gamma2: " (pretty gamma2)
           debugM "defHelper binding: " (pretty x2)
           debugM "defHelper e1: " (pretty e1)
-          debugM "defHelper e2: " (pretty e2)
+          debugM "defHelper e2: " (pretty e2 <> " for " <> pretty tyA)
 
               -- Add the results
           deltaOut' <- maybeToSynthesiser $ ctxtAdd delta1' delta2
