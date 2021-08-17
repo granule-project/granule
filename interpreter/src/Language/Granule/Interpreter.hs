@@ -144,7 +144,7 @@ run config input = let ?globals = fromMaybe mempty (grGlobals <$> getEmbeddedGrF
               return $ Right NoEval
             else do
               printSuccess "OK, evaluating..."
-              result <- try $ eval (extendASTWith derivedDefs ast)
+              result <- try $ eval (extendASTWith derivedDefs ast')
               case result of
                 Left (e :: SomeException) ->
                   return . Left . EvalError $ displayException e

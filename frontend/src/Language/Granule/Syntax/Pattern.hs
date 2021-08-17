@@ -108,14 +108,6 @@ boundVarsAndAnnotations =
           flt _ _ _ _       = []
           cstr _ _ _ _ pats = concat pats
 
-ppair :: Span
-      -> a
-      -> Pattern a
-      -> Pattern a
-      -> Pattern a
-ppair s annotation left right =
-    PConstr s annotation False (mkId "(,)") [left, right]
-
 -- >>> runFreshener (PVar ((0,0),(0,0)) (Id "x" "x"))
 -- PVar ((0,0),(0,0)) (Id "x" "x_0")
 
