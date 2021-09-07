@@ -109,12 +109,12 @@ unforall (Forall _ _ _ t) = t
 ----------------------------------------------------------------------
 -- # Smart constructors
 
--- | Smart constructors for function types
+-- | Smart constructors for function types (with no grade)
 funTy :: Type -> Type -> Type
-funTy = FunTy Nothing
+funTy = FunTy Nothing Nothing
 
 (.->) :: Type -> Type -> Type
-s .-> t = FunTy Nothing s t
+s .-> t = FunTy Nothing Nothing s t
 infixr 1 .->
 
 -- | Smart constructor for constructors and variable
@@ -216,18 +216,18 @@ containsTypeSig =
 
 -- | Compute the arity of a function type
 arity :: Type -> Int
-arity (FunTy _ _ t) = 1 + arity t
-arity _           = 0
+arity (FunTy _ _ _ t) = 1 + arity t
+arity _               = 0
 
 -- | Get the result type after the last Arrow, e.g. for @a -> b -> Pair a b@
 -- the result type is @Pair a b@
 resultType :: Type -> Type
-resultType (FunTy _ _ t) = resultType t
+resultType (FunTy _ _ _ t) = resultType t
 resultType t = t
 
 parameterTypes :: Type -> [Type]
-parameterTypes (FunTy _ t1 t2) = t1 : parameterTypes t2
-parameterTypes t               = []
+parameterTypes (FunTy _ _ t1 t2) = t1 : parameterTypes t2
+parameterTypes t                 = []
 
 -- | Get the leftmost type of an application
 -- >>> leftmostOfApplication $ TyCon (mkId ",") .@ TyCon (mkId "Bool") .@ TyCon (mkId "Bool")
@@ -249,8 +249,8 @@ freeAtomsVars t = []
 -- Trivially effectful monadic constructors
 mTy :: Monad m => Int -> m Type
 mTy          = return . Type
-mFunTy :: Monad m => Maybe Id -> Type -> Type -> m Type
-mFunTy v x y   = return (FunTy v x y)
+mFunTy :: Monad m => Maybe Id -> Maybe Coeffect -> Type -> Type -> m Type
+mFunTy v mg x y   = return (FunTy v mg x y)
 mTyCon :: Monad m => Id -> m Type
 mTyCon       = return . TyCon
 mBox :: Monad m => Coeffect -> Type -> m Type
