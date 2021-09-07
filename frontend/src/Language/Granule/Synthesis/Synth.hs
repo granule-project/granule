@@ -694,12 +694,16 @@ constrIntroHelper (True, allowDef) defs startTime gamma mode goalTy@(Forall s bi
              return $ (id, (Forall s binders constraints specTy', subst', ints)) : a
            _ -> return a ) [] adtConstructors
       debugM "adtConstructors: " (show adtConstructors')
+      debugM "adtconstructors': " (show $ sortBy (flip compare') adtConstructors')
       synthesiseConstructors gamma (sortBy (flip compare') adtConstructors') mode goalTy
     _ -> none
   where
 
-    rightMostFunTy (FunTy _ _ t) = rightMostFunTy t
-    rightMostFunTy t = t
+    rightMostFunTy (FunTy _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
+    rightMostFunTy t = (t, [])
+
+    reconstructFunTy t (x:xs) = reconstructFunTy (FunTy Nothing x t) xs
+    reconstructFunTy t [] = t
 
     compare' con1@(_, (Forall _ _ _ ty1, _, _)) con2@(_, (Forall _ _ _ ty2, _, _)) = compare (arity ty1) (arity ty2)
 
@@ -711,10 +715,16 @@ constrIntroHelper (True, allowDef) defs startTime gamma mode goalTy@(Forall s bi
       debugM "con: " (show conTy)
       debugM "conTy: " (show $ rightMostFunTy conTy')
       debugM "equal types on: " (show (rightMostFunTy conTy') <> " and goal: " <> show t)
-      (success, spec, subst') <- conv $ equalTypes nullSpanNoFile t (rightMostFunTy conTy')
+      let (conTy'', args) = rightMostFunTy conTy'
+      debugM "conTy': " (show $ conTy')
+      debugM "conTy'': " (show $ conTy'')
+      debugM "args: " (show $ args)
+      debugM "equal types on: " (show (rightMostFunTy conTy') <> " and goal: " <> show t)
+      (success, spec, subst') <- conv $ equalTypes nullSpanNoFile t (conTy'')
       debugM "specTy: "  (show spec <> " subst': " <> show subst')
+      debugM "specTyRecon: "  (show (reconstructFunTy spec args) <> " subst': " <> show subst')
      -- res <- solve
-      return (success, Just spec, subst') `catchError` const (return (False, Nothing, []))
+      return (success, Just $ reconstructFunTy spec args, subst') `catchError` const (return (False, Nothing, []))
 
 
     synthesiseConstructors gamma [] mode goalTy = none
