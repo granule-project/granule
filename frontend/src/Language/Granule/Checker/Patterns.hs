@@ -1,5 +1,5 @@
 {-# LANGUAGE ImplicitParams #-}
-{-# LANGUAGE ViewPatterns #-}
+
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
@@ -31,6 +31,7 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Utils
+import qualified Data.Functor
 
 -- | Creates a constraint when a definition unification has occured under
 --   a box pattern (or many nested box patterns)
@@ -192,7 +193,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
     Just (tySch, coercions) -> do
 
       case outerBoxTy of
-        Just (coeff, coeffTy) -> do
+        Just (coeff, coeffTy) ->
           addConstraint (Hsup s coeff coeff coeffTy)
         Nothing -> return ()
 
@@ -265,7 +266,9 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
                   Just (coeff, _) -> do
                     isLevely <- isLevelKinded s coeff
                     debugM "ctxtFromTypedPattern outerBoxTy" $ "ty: " <> pretty outerBoxTy <> "\n" <> pretty (Ghost coeff) <> "\n" <> "isLevely: " <> show isLevely
-                    return $ [(mkId ghostName, Ghost coeff) | isLevely] -- [(mkId ".var.ghost.pattern", Ghost defaultGhost)]
+                    if SecurityLevels `elem` globalsExtensions ?globals
+                    then return [(mkId ghostName, Ghost coeff) | isLevely] -- [(mkId ".var.ghost.pattern", Ghost defaultGhost)]
+                    else return []
 
 
           debugM "context in ctxtFromTypedPattern' PConstr" $ show (bindingContexts <> ghostCtxt)
@@ -309,7 +312,7 @@ ctxtFromTypedPatterns' :: (?globals :: Globals)
   -> [Pattern ()]
   -> [Consumption]
   -> Checker (Ctxt Assumption, Type, Ctxt Kind, Substitution, [Pattern Type], [Consumption])
-ctxtFromTypedPatterns' _ sp _ ty [] _ = do
+ctxtFromTypedPatterns' _ sp _ ty [] _ =
   return ([], ty, [], [], [], [])
 
 ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consumptionsIn) = do
@@ -337,7 +340,7 @@ ctxtFromTypedPatterns' _ s _ ty (p:ps) _ = do
   -- First build a representation of what the type would look like
   -- if this was well typed, i.e., if we have two patterns left we get
   -- p0 -> p1 -> ?
-  psTyVars <- mapM (\_ -> freshIdentifierBase "?" >>= return . TyVar . mkId) ps
+  psTyVars <- mapM (\_ -> freshIdentifierBase "?" Data.Functor.<&> (TyVar . mkId)) ps
   let spuriousType = foldr (FunTy Nothing) (TyVar $ mkId "?") psTyVars
   throw TooManyPatternsError
     { errLoc = s, errPats = p :| ps, tyExpected = ty, tyActual = spuriousType }

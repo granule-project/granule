@@ -1,3 +1,5 @@
+language SecurityLevels
+
 data Bool where
   True : Bool;
   False : Bool

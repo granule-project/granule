@@ -378,9 +378,11 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
   debugM "context in checkEquation 1" $ (show patternGam)
 
   -- Introduce ambient coeffect
-  combinedGam <- ghostVariableContextMeet $ patternGam <> freshGhostVariableContext
+  combinedGam <-
+    if (SecurityLevels `elem` globalsExtensions ?globals)
+    then ghostVariableContextMeet $ patternGam <> freshGhostVariableContext
+    else return patternGam
 
-  debugM "context in checkEquation 2" $ (show combinedGam)
   -- Check the body
   (localGam, subst', elaboratedExpr) <-
        checkExpr defCtxt combinedGam Positive True tau expr
@@ -667,11 +669,17 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
       patternGam <- substitute subst patternGam
       debugM "checkExpr[Case] patternGam" $ show patternGam
       -- combine ghost variables from pattern using converge/meet
-      innerGam <- ghostVariableContextMeet $ patternGam <> gam
+      innerGam <-
+        if (SecurityLevels `elem` globalsExtensions ?globals)
+        then ghostVariableContextMeet $ patternGam <> gam
+        else return $ patternGam <> gam
       (localGam, subst', elaborated_i) <- checkExpr defs innerGam pol False tau' e_i
 
       -- Converge with the outer ghost variable
-      patternGam' <- ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
+      patternGam' <-
+        if (SecurityLevels `elem` globalsExtensions ?globals)
+        then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
+        else return patternGam
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` (patternGam)) (patternGam')
 
@@ -859,11 +867,17 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
       newConjunct
 
       -- combine ghost variables from pattern using converge/meet
-      innerGam <- ghostVariableContextMeet (patternGam <> gam)
+      innerGam <-
+        if (SecurityLevels `elem` globalsExtensions ?globals)
+        then ghostVariableContextMeet $ patternGam <> gam
+        else return $ patternGam <> gam
       (tyCase, localGam, subst', elaborated_i) <- synthExpr defs innerGam pol ei
 
- -- Converge with the outer ghost variable
-      patternGam' <- ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
+      -- Converge with the outer ghost variable
+      patternGam' <-
+        if (SecurityLevels `elem` globalsExtensions ?globals)
+        then ghostVariableContextMeet $ (mkId ".var.ghost", fromJust $ lookup (mkId ".var.ghost") gam) : patternGam
+        else return patternGam
       -- Check that the use of locally bound variables matches their bound type
       ctxtApprox s (localGam `intersectCtxts` patternGam) patternGam'
 
