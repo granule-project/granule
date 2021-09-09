@@ -1,0 +1,63 @@
+-- ex1.gr
+-- Authenticate a user ID and password, logging only the ID, then returning secret
+-- data if successful.
+
+data Bool where
+  True : Bool;
+  False : Bool
+
+data Either a b where
+  Left : a -> Either a b;
+  Right : b -> Either a b
+
+-- Validation takes the public ID and confidential password and checks
+-- if the login was successful.
+validateLogin : Int [Public] -> String [Private] -> (Bool [Private])
+validateLogin = ?
+
+-- Attempt to authenticate a user with an ID and password. Logs all
+-- attempts by sending the public ID over a channel to be printed.
+attemptLogin : Int [Public] -> String [Private]
+            -> LChan (Send (Int [Public]) End) -- logging channel
+            -> () [Public] -- public capability
+            -> (Bool [Private])
+attemptLogin [uid] pass c pub =
+  -- we match on pub to enter a public context
+  case pub of
+    [()] -> let c = send c [uid]; -- types prevent leaking password
+                _ = close c
+            in validateLogin [uid] pass
+
+-- Authenticate a user and perform a query on secret data, returning
+-- the secret string if the user password is correct, and returning
+-- an error if it isn't.
+doQuery : Int [Public] -> String [Private]
+       -> (LChan (Recv (String [Private]) End)) [Private] -- secret data!
+       -> () [Public] -- public capability
+       -> (Either (String [Private]) ()) [Private]
+doQuery uid pass [secret] pub =
+  let c = forkLinear logLoginAttempt
+  in case (attemptLogin uid pass c pub) of
+      -- it would be *impossible* to log anything now, even though the
+      -- ID is still public, because we've entered a private context.
+      [True] -> [Left (getSecret [secret])];
+      [False] -> [Right ()]
+
+getSecret : (LChan (Recv (String [Private]) End)) [Private] -> (String [Private])
+getSecret [c] =
+  let (s, c) = recv c;
+      _ = close c
+  in s
+
+-- Imagine this writes a log as a side effect.
+writeLog : Int [Public] -> ()
+writeLog = ?
+
+-- Get an ID over a channel and log that a login was attempted.
+-- This is public facing, so we can't leak the password
+-- or whether or not the login was successful!
+logLoginAttempt : LChan (Recv (Int [Public]) End) -> ()
+logLoginAttempt c =
+  let (n, c) = recv c;
+      _ = close c
+  in writeLog n

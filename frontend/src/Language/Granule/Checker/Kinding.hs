@@ -455,6 +455,11 @@ closedOperatorAtKind s TyOpExpon t = do
   _ <- checkKind s t keffect
   return $ Just []
 
+-- TODO: ghost variables, do we need to worry about substitution?
+closedOperatorAtKind s TyOpConverge t = do
+  _ <- checkKind s t kcoeffect
+  return $ Just []
+
 -- * case
 closedOperatorAtKind s TyOpTimes t = do
   -- See if the type is a coeffect
@@ -622,6 +627,9 @@ universify = map (second (\k -> (k, ForallQ)))
 synthKindAssumption :: (?globals :: Globals) => Span -> Assumption -> Checker (Maybe Type, Substitution)
 synthKindAssumption _ (Linear _) = return (Nothing, [])
 synthKindAssumption s (Discharged _ c) = do
+  (t, subst, _) <- synthKind s c
+  return (Just t, subst)
+synthKindAssumption s (Ghost c) = do
   (t, subst, _) <- synthKind s c
   return (Just t, subst)
 

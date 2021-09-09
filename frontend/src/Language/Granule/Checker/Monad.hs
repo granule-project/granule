@@ -84,19 +84,26 @@ runAll f xs = do
 data Assumption
   = Linear     Type
   | Discharged Type Coeffect
+  | Ghost      Coeffect
     deriving (Eq, Show)
+
+ghostType :: Type
+ghostType = tyCon ".ghost"
 
 getAssumptionType :: Assumption -> Type
 getAssumptionType (Linear t) = t
 getAssumptionType (Discharged t _) = t
+getAssumptionType (Ghost c) = ghostType
 
 instance Term Assumption where
   freeVars (Linear t) = freeVars t
   freeVars (Discharged t c) = freeVars t ++ freeVars c
+  freeVars (Ghost c) = freeVars c
 
 instance Pretty Assumption where
     pretty (Linear ty) = pretty ty
     pretty (Discharged t c) = ".[" <> pretty t <> "]. " <> prettyNested c
+    pretty (Ghost c) = "ghost(" <> pretty c <> ")"
 
 instance {-# OVERLAPS #-} Pretty (Id, Assumption) where
    pretty (a, b) = pretty a <> " : " <> pretty b
@@ -583,6 +590,8 @@ data CheckerError
     { errLoc :: Span, errTy :: Type }
   | NaturalNumberAtWrongKind
     { errLoc :: Span, errTy :: Type, errK :: Kind }
+  | InvalidPromotionError
+    { errLoc :: Span, errTy :: Type }
   deriving (Show)
 
 instance UserMsg CheckerError where
@@ -651,6 +660,7 @@ instance UserMsg CheckerError where
   title WrongLevel{} = "Type error"
   title ImpossibleKindSynthesis{} = "Kind error"
   title NaturalNumberAtWrongKind{} = "Kind error"
+  title InvalidPromotionError{} = "Type error"
 
   msg HoleMessage{..} =
     "\n   Expected type is: `" <> pretty holeTy <> "`"
@@ -956,6 +966,9 @@ instance UserMsg CheckerError where
 
   msg NaturalNumberAtWrongKind{ errTy, errK }
     = "Natural number `" <> pretty errTy <> "` is not a member of `" <> pretty errK <> "`"
+
+  msg InvalidPromotionError{ errTy }
+    = "Invalid promotion of closed term to `" <> pretty errTy <> "`"
 
   color HoleMessage{} = Blue
   color _ = Red

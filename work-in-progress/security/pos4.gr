@@ -1,0 +1,15 @@
+data Bool where
+  True : Bool;
+  False : Bool
+
+strue : Bool [Private]
+strue = [True]
+
+sfalse : Bool [Private]
+sfalse = [False]
+
+leak' : Bool [Private] → Bool [Private]
+leak' x =
+      case x of
+        [True]  →  strue;
+        [False] →  sfalse

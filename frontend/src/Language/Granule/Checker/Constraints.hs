@@ -357,6 +357,7 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "Level")) _ = do
             "Unused"  -> unusedRepresentation
             "Private" -> privateRepresentation
             "Public"  -> publicRepresentation
+            "Dunno"   -> dunnoRepresentation
             c         -> error $ "Cannot compile " <> show c
 
   return (SLevel . fromInteger . toInteger $ n, sTrue)
@@ -447,6 +448,9 @@ compileCoeffect c@(TyInfix TyOpTimes n m) k vars =
 
 compileCoeffect c@(TyInfix TyOpMinus n m) k vars =
   bindM2And symGradeMinus (compileCoeffect n k vars) (compileCoeffect m k vars)
+
+compileCoeffect c@(TyInfix TyOpConverge n m) k vars =
+  bindM2And symGradeConverge (compileCoeffect n k vars) (compileCoeffect m k vars)
 
 compileCoeffect c@(TyInfix TyOpExpon n m) k vars = do
   (g1, p1) <- compileCoeffect n k vars
@@ -594,10 +598,13 @@ approximatedByOrEqualConstraint (SSet Opposite s) (SSet Opposite t) =
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
     -- Private <= Public
-  return
-    $ ite (l .== literal unusedRepresentation) sTrue
-      $ ite (l .== literal privateRepresentation) sTrue
-        $ ite (k .== literal publicRepresentation) sTrue sFalse
+  return $ ite (l .== literal unusedRepresentation) sTrue
+         $ ite ((l .== literal privateRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
+         $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
+         $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal publicRepresentation)) sTrue
+         $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
+         $ ite (l .== literal privateRepresentation) sTrue
+         $ ite (k .== literal publicRepresentation) sTrue sFalse
 
 approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Lo <= Lo   (False <= False)

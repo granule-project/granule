@@ -2,5 +2,14 @@ data Bool where
   True : Bool;
   False : Bool
 
-notALeak : (Bool [Private]) [0] → Bool [Public]
-notALeak [x] = [True]
+and : Bool -> Bool -> Bool
+and True True   = True;
+and False False = False;
+and False True  = False;
+and True False  = False
+
+okay : Bool [Private] → Bool [Public] -> Bool [Private]
+okay x [y] =
+      case x of
+        [True]  →  [and y True];
+        [False] →  [and y False]

@@ -1,0 +1,11 @@
+data Bool where
+  True : Bool;
+  False : Bool
+
+leak : Bool [Private] → Bool [Public]
+leak x =
+  let [strue] = [True] in
+  let [sfalse] = [False] in
+    case x of
+      [True] -> [strue];
+      [False] -> [sfalse]
