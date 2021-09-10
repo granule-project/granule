@@ -408,6 +408,10 @@ synthKindWithConfiguration s config (TyCase t branches) | length branches > 0 = 
   --
   return (kind, substFinal, TyCase t' branches')
 
+-- Type-level rationals, live in Q (rationals)
+synthKindWithConfiguration s config t@(TyRational _) = do
+  return (TyCon $ mkId "Q", [], t)
+
 synthKindWithConfiguration s _ t =
   throw ImpossibleKindSynthesis { errLoc = s, errTy = t }
 

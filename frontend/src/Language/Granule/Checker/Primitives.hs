@@ -41,6 +41,7 @@ typeConstructors =
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
     , (mkId "Int",    (Type 0, [], False))
     , (mkId "Float",  (Type 0, [], False))
+    , (mkId "DFloat",  (Type 0, [], False)) -- special floats that can be tracked for sensitivty
     , (mkId "Char",   (Type 0, [], False))
     , (mkId "String", (Type 0, [], False))
     , (mkId "Protocol", (Type 0, [], False))
@@ -51,8 +52,8 @@ typeConstructors =
     , (mkId "OOZ",      (kcoeffect, [], False)) -- 1 + 1 = 0
     , (mkId "LNL",      (kcoeffect, [], False)) -- Linear vs Non-linear semiring
     -- LNL members
-    , (mkId "Zero",        (tyCon "LNL", [], False))
-    , (mkId "One",     (tyCon "LNL", [], False))
+    , (mkId "Zero",     (tyCon "LNL", [], False))
+    , (mkId "One",      (tyCon "LNL", [], False))
     , (mkId "Many",     (tyCon "LNL", [], False))
     -- Borrowing
     , (mkId "Borrowing", (kcoeffect, [], False))

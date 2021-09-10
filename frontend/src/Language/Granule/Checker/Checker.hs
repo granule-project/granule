@@ -60,8 +60,6 @@ import qualified Language.Granule.Synthesis.Synth as Syn
 
 import Language.Granule.Utils
 
---import Debug.Trace
-
 -- Checking (top-level)
 check :: (?globals :: Globals)
   => AST () ()
@@ -509,18 +507,18 @@ checkExpr _ ctxt _ _ t (Hole s _ _ vars) = do
       throw $ HoleMessage s t ctxt (tyVarContext st) holeVars cases'
 
 -- Checking of constants
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
+checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumInt n))   | internalName c == "Int" = do
   debugM "checkExpr[NumInt]" (pretty s <> " : " <> pretty ty)
   let elaborated = Val s ty rf (NumInt n)
   return ([], [], elaborated)
 
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "Float" = do
+checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "Float" = do
   debugM "checkExpr[NumFloat]" (pretty s <> " : " <> pretty ty)
   let elaborated = Val s ty rf (NumFloat n)
   return ([], [], elaborated)
 
 -- Differentially private floats
-checkExpr _ [] _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DFloat" = do
+checkExpr _ _ _ _ ty@(TyCon c) (Val s _ rf (NumFloat n)) | internalName c == "DFloat" = do
   debugM "checkExpr[NumFloat-Dfloat]" (pretty s <> " : " <> pretty ty)
   let elaborated = Val s ty rf (NumFloat n)
   return ([], [], elaborated)
@@ -1109,15 +1107,56 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
 synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
     debugM "synthExpr[BinOp]" (pretty s)
 
+    {-
+
+      synthExpr here involves trying to do some resolution due to overload
+      The generalise idea is:
+        * First we synth the types of both subterms (e1 and e2) and see if this operator
+          is defined at that type
+        * If this fails, we can see if checking e2 against the synthed type of e1 works, and
+          then yields an operator we have at those types
+        * Otherwise we try the symmetric case of checking e1 against the synted type of e2,
+          and then seeing if we have an oeprator at that type
+        * Otherwise we cannot resolve
+
+    -}
+
     (t1, gam1, subst1, elaboratedL) <- synthExpr defs gam pol e1
     (t2, gam2, subst2, elaboratedR) <- synthExpr defs gam pol e2
     -- Look through the list of operators (of which there might be
     -- multiple matching operators)
-    returnType <-
-      selectFirstByType t1 t2
-      . NonEmpty.toList
-      . Primitives.binaryOperators
-      $ op
+    let operatorTypes = NonEmpty.toList . Primitives.binaryOperators $ op
+    mReturnType <- selectFirstByType t1 t2 operatorTypes
+
+    (returnType, gam1, gam2, subst1, subst2, elaborateL, elaborateR) <-
+      case mReturnType of
+        Just returnType -> return (returnType, gam1, gam2, subst1, subst2, elaboratedL, elaboratedR)
+        -- Nothing matched so...
+        Nothing -> do
+          -- ...alternatively see if we can check `e2` against the type of `e1`
+          -- This must be done inside a 'peekChecker' block as it might fail
+          (result, local) <- peekChecker $ do
+                (gam2, subst2, elaboratedR) <- checkExpr defs gam pol False t1 e2
+                mReturnType <- selectFirstByType t1 t1 operatorTypes
+                -- If its Nothing then thrown any error, otherwise return the type
+                maybe (throw undefined) return mReturnType
+
+          case result of
+            Right returnType -> local >> return (returnType, gam1, gam2, subst1, subst2, elaboratedL, elaboratedR)
+            -- Didn't match so see if we can resolve things symmetricall, checking `e1` against the type of `e2`
+            Left _ -> do
+              (result, local) <- peekChecker $ do
+                (gam1, subst1, elaboratedL) <- checkExpr defs gam pol False t2 e1
+                mReturnType <- selectFirstByType t2 t2 operatorTypes
+                -- If its Nothing then thow any error, otherwise return the type
+                maybe (throw undefined) return mReturnType
+
+              case result of
+                Right returnType -> local >> return (returnType, gam1, gam2, subst1, subst2, elaboratedL, elaboratedR)
+                -- Seems no way to resolve this:
+                Left _ ->
+                  throw FailedOperatorResolution { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> tyVar "..." }
+
     gamOut <- ctxtPlus s gam1 gam2
     subst <- combineSubstitutions s subst1 subst2
     let elaborated = Binop s returnType rf op elaboratedL elaboratedR
@@ -1125,8 +1164,7 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
 
   where
     -- No matching type were found (meaning there is a type error)
-    selectFirstByType t1 t2 [] = throw FailedOperatorResolution
-        { errLoc = s, errOp = op, errTy = t1 .-> t2 .-> tyVar "..." }
+    selectFirstByType t1 t2 [] = return Nothing
 
     selectFirstByType t1 t2 ((FunTy _ opt1 (FunTy _ opt2 resultTy)):ops) = do
       -- Attempt to use this typing
@@ -1136,7 +1174,7 @@ synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
          return (eq1 && eq2)
       -- If successful then return this local computation
       case result of
-        Right True -> local >> return resultTy
+        Right True -> local >> return (Just resultTy)
         _          -> selectFirstByType t1 t2 ops
 
     selectFirstByType t1 t2 (_:ops) = selectFirstByType t1 t2 ops
