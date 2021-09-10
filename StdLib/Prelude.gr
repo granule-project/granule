@@ -101,12 +101,12 @@ disject : forall {a : Type, k : Semiring, n : k, m : k} . a [m * n] -> (a [n]) [
 disject [x] = [[x]]
 
 --- Push coeffects on a pair into the left and right elements
-push : forall {a : Type, b : Type, k : Coeffect, c : k} . (a × b) [c] -> a [c] × b [c]
-push [(x, y)] = ([x], [y])
+-- pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . {(Hsup c c) == c} => (a × b) [c] -> a [c] × b [c]
+-- pushPair [(x, y)] = ([x], [y])
 
 --- Pull coeffects of pair elements up to the pair
-pull : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
-pull ([x], [y]) = [(x, y)]
+pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
+pullPair = pull @(,)
 
 --- # Coeffect-specifc combinators
 
