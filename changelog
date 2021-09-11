@@ -1,3 +1,11 @@
+  # 0.8.2.0 (in preparation)
+  - Bug fixes related to sensitivity analysis
+  - New graded modalities
+    - LNL semiring (None, One, Many) recovers linear logic via new `hsup` operation
+       to control 'push' behaviour on tensors. See: https://granule-project.github.io/papers/tlla_2021_paper11.pdf
+    - Uniqueness modality. See: paper draft?
+  - Language pragmas. See: wiki page?
+
   # 0.8.1.0
   - New semirings: `Sec` and `Set t` for some type `t` (and `SetOp t`)
   - Bug fixes related to session types
