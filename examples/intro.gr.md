@@ -347,7 +347,7 @@ fromMaybe d (Some x) = x
 
 The equivalent of `fromMaybe` would be a valid Haskell or ML program, but Granule
 rejects it and in fact this type is not inhabited in Granule. Since the `d`efault value
-doesn't get used in the `None` case of the `Maybe a` parameter, we must wrap
+doesn't get used in the `Some` case of the `Maybe a` parameter, we must wrap
 it in a modality that witnesses/enables nonlinearity. However, we don't know
 statically what it is supposed to be. For this Granule lets us declare a lower
 and upper bound with an interval:
