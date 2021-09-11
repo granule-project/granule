@@ -1,0 +1,2 @@
+bad : forall {a : Type, b : Type, n : LNL} . (a , b) [n] -> (a [n], b [n])
+bad [(x, y)] = ([x], [y])
