@@ -854,7 +854,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                       error $ "Cannot derive drop for data constructor " <> pretty dataConsName
                   (True, _, unifiers) -> do
                     -- Unify and specialise the data constructor type
-                    dataConsType <- substitute (flipSubstitution unifiers) dataConstructorTypeFresh
+                    dataConsType <- substitute unifiers dataConstructorTypeFresh
 
                     debugM "deriveDrop dataConsType: " (show dataConsType)
                     -- Create a variable for each parameter
@@ -865,16 +865,17 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
                     let consPattern =
                           PConstr s () True dataConsName (zipWith (\ty var -> PVar s () True var) consParamsTypes consParamsVars)
 
-                    -- Drop on all the parameters of a the constructor
+                    -- Drop on all the parameters of the constructor
                     retTysAndExprs <- zipWithM (\ty var -> do
+                            let (defs, def') = (map fst (derivedDefinitions st), map (fst . snd) (derivedDefinitions st))
+                            let defs'' = zip defs def'
+                            debugM "recursing " (show gamma <> " " <> show ty <> " " <> show var <> " " <> show defs'')
                             deriveDrop' s False gamma ty (makeVarUntyped var))
                               consParamsTypes consParamsVars
                     let (_, exprs, _) = unzip3 retTysAndExprs
                     x <- freshIdentifierBase "x" >>= (return . mkId)
                     let bodyExpr = mkConstructorApplication s dataConsName dataConsType  exprs dataConsType
-                    let dropExpr = makeUnitIntroUntyped
-                    let caseExpr = Case s () True bodyExpr [(PVar s () True x, dropExpr)]
-                    return (consPattern, caseExpr))
+                    return (consPattern, bodyExpr))
 
               -- Got all the branches to make the following case now
               return (TyCon $ mkId "()", Case s () True arg exprs, False)
