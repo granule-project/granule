@@ -443,12 +443,11 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
               debugM "coeffs: " (show coeffs)
               debugM "ty: " (show argTy)
               let ty = reconstructTy (concat returnTys) argTy
+              let patExprs = zip pats exprs
+              debugM "res: " (pretty (Case s () True arg patExprs))
               case coeffs of
-                c:cs -> do
-                  let patExprs = zip pats exprs
-                  debugM "res: " (pretty (Case s () True arg patExprs))
-                  return (ty, Case s () True arg patExprs, c)
-                _ -> error $ "help"
+                c:cs -> return (ty, Case s () True arg patExprs, c)
+                _ -> return (ty, Case s () True arg patExprs, Nothing)
 
       where
 
