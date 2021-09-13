@@ -84,7 +84,7 @@ check ast@(AST _ _ _ hidden _) = do
 synthExprInIsolation :: (?globals :: Globals)
   => AST () ()
   -> Expr () ()
-  -> IO (Either (NonEmpty CheckerError) (Either TypeScheme Type))
+  -> IO (Either (NonEmpty CheckerError) (Either (TypeScheme , [Def () ()]) Type))
 synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
   evalChecker (initState { allHiddenNames = hidden }) $ do
       _    <- checkNameClashes ast
@@ -99,7 +99,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         (Val s _ _ (Constr _ c [])) -> do
           mConstructor <- lookupDataConstructor s c
           case mConstructor of
-            Just (tySch, _) -> return $ Left tySch
+            Just (tySch, _) -> return $ Left (tySch, [])
             Nothing -> do
               st <- get
               -- Or see if this is a kind constructors
@@ -110,7 +110,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         -- Lookup in definitions
         (Val s _ _ (Var _ x)) -> do
           case lookup x (defCtxt <> Primitives.builtins) of
-            Just tyScheme -> return $ Left tyScheme
+            Just tyScheme -> return $ Left (tyScheme, [])
             Nothing -> throw UnboundVariableError{ errLoc = s, errId = x }
 
         -- Otherwise, do synth
@@ -124,9 +124,12 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           predicate <- substitute (removePromSubsts subst) predicate
           solveConstraints predicate (getSpan expr) (mkId "grepl")
 
+
+          let derivedDefs = map (snd . snd) (derivedDefinitions checkerState)
+
           -- Apply the outcoming substitution
           ty' <- substitute subst ty
-          return $ Left $ Forall nullSpanNoFile [] [] ty'
+          return $ Left (Forall nullSpanNoFile [] [] ty', derivedDefs)
 
 -- TODO: we are checking for name clashes again here. Where is the best place
 -- to do this check?

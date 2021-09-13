@@ -216,7 +216,7 @@ handleCMD s =
       ty <- synthTypeFromInputExpr expr
       case ty of
         -- Well-typed, with `tyScheme`
-        Left tyScheme -> do
+        Left (tyScheme, derivedDefs) -> do
           st <- get
           let ndef = buildDef (freeVarCounter st) tyScheme expr
           -- Update the free var counter
@@ -225,7 +225,7 @@ handleCMD s =
           let fv = freeVars expr
           let ast = buildRelevantASTdefinitions fv (defns st)
           let astNew = AST (currentADTs st) (ast <> [ndef]) mempty mempty Nothing
-          result <- liftIO' $ try $ replEval (freeVarCounter st) astNew
+          result <- liftIO' $ try $ replEval (freeVarCounter st) (extendASTWith derivedDefs astNew)
           case result of
               Left e -> Ex.throwError (EvalError e)
               Right Nothing -> liftIO $ print "if here fix"
@@ -241,7 +241,7 @@ parseExpression exprString = do
     Left err -> Ex.throwError (ParseError' err)
     Right exprAst -> return exprAst
 
-synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either TypeScheme Type)
+synthTypeFromInputExpr :: (?globals::Globals) => Expr () () -> REPLStateIO (Either (TypeScheme, [Def () ()]) Type)
 synthTypeFromInputExpr exprAst = do
   st <- get
   -- Build the AST and then try to synth the type
