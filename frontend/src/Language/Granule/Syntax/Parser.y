@@ -108,6 +108,7 @@ import Language.Granule.Utils hiding (mkSpan)
     '@'   { TokenAt _ }
     '!'   { TokenBang _ }
     '∗'   { TokenStar _ }
+    '&'   { TokenBorrow _ }
 
 %right '∘'
 %right in
@@ -583,6 +584,7 @@ Atom :: { Expr () () }
                                   return $ Val sp () False $
                                       case $1 of (TokenStringLiteral _ c) -> StringLiteral c }
   | Hole                      { $1 }
+  | '&' Expr                  {% (mkSpan $ getPosToSpan $1) >>= \sp -> return $ App sp () False (Val sp () False (Var () (mkId "uniqueReturn"))) $2 }
 
 {
 
