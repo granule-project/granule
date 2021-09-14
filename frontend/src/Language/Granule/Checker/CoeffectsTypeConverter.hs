@@ -27,9 +27,10 @@ justCoeffectTypes s xs = mapM convert xs >>= (return . catMaybes)
 tyVarContextExistential :: Checker (Ctxt (Type, Quantifier))
 tyVarContextExistential = do
   st <- get
-  return $ mapMaybe (\(v, (k, q)) ->
+  return $ flip mapMaybe (tyVarContext st) $ \(v, (k, q)) ->
     case q of
       -- This makes splitting work when the LHS is a pattern, but not sure if it
       -- has adverse effects...
       -- BoundQ -> Nothing
-      _      -> Just (v, (k, InstanceQ))) (tyVarContext st)
+      BoundQ -> Just (v, (k, InstanceQ))
+      _      -> Just (v, (k, q))

@@ -17,7 +17,7 @@ import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.List (isPrefixOf)
+import Data.List (isPrefixOf, sort)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -151,7 +151,8 @@ checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
                 Just (kind, _ , _) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    mapM_ (checkDataCon name kind tyVars (typeIndices d)) dataConstrs
+    let paramsAndIndices = discriminateTypeIndicesOfDataType d
+    mapM_ (checkDataCon name kind tyVars (typeIndices d) paramsAndIndices) dataConstrs
   where
 
 
@@ -160,16 +161,20 @@ checkDataCon :: (?globals :: Globals)
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
   -> [(Id, [Int])] -- ^ Type Indices of this data constructor
+  -> ([(Id, Kind)], [(Id, Kind)]) -- ^ type parameters and indices
   -> DataConstr -- ^ The data constructor to check
   -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
 checkDataCon
   tName
   kind
-  tyVarsT
+  tyVarsT'
   indices
+  (tyVarsParams, tyVarsIndices)
   d@(DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) = do
-    case map fst $ intersectCtxts tyVarsT tyVarsD of
+    case map fst $ intersectCtxts tyVarsT' tyVarsD of
       [] -> do -- no clashes
+        let tyVarsT = tyVarsParams ++ tyVarsIndices
+        when (sort tyVarsT /= sort tyVarsT') (fail "NOOOOO")
 
         -- Only relevant type variables get included
         let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
@@ -187,13 +192,14 @@ checkDataCon
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
 
 
-        let tyVarsForall = (tyVarsT <> tyVarsD')
+        let tyVarsForall = (tyVarsParams <> tyVarsD')
 
 
 
         modify $ \st -> st { tyVarContext =
                [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
+            ++ [(v, (k, BoundQ)) | (v, k) <- tyVarsIndices]
             ++ tyVarContext st }
 
 
@@ -240,8 +246,8 @@ checkDataCon
         , errVar = v
         }
 
-checkDataCon tName kind tyVars indices d@DataConstrNonIndexed{}
-  = checkDataCon tName kind tyVars indices
+checkDataCon tName kind tyVars indices info d@DataConstrNonIndexed{}
+  = checkDataCon tName kind tyVars indices info
     $ nonIndexedToIndexedDataConstr tName tyVars d
 
 
