@@ -320,7 +320,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
-    checkGuardsForImpossibility s defName
+    checkGuardsForImpossibility s defName constraints
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
@@ -697,7 +697,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
-  checkGuardsForImpossibility s $ mkId "case"
+  checkGuardsForImpossibility s (mkId "case") []
 
   -- Pop from stacks related to case
   _ <- popGuardContext
@@ -866,7 +866,7 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
-  checkGuardsForImpossibility s $ mkId "case"
+  checkGuardsForImpossibility s (mkId "case") []
 
   popCaseFrame
 
@@ -1676,8 +1676,8 @@ checkGuardsForExhaustivity s name ty eqs = do
   debugM "Guard exhaustivity" "todo"
   return ()
 
-checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> Checker ()
-checkGuardsForImpossibility s name = do
+checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> [Type] -> Checker ()
+checkGuardsForImpossibility s name refinementConstraints = do
   -- Get top of guard predicate stack
   st <- get
   let ps = head $ guardPredicates st
@@ -1689,7 +1689,9 @@ checkGuardsForImpossibility s name = do
   forM_ ps $ \((ctxt, p), s) -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
-    let thm = foldr (uncurry Exists) p ctxt
+    constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
+    let thm = 
+          foldr (Impl []) (foldr (uncurry Exists) p ctxt) constraints'
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
