@@ -1,0 +1,3 @@
+Type checking failed: 
+Type error: frontend/tests/cases/negative/uniqueFunction.gr:5:28:
+Expected `b0 [Many] -> a [Unique]` but got `a0 [Unique]`
