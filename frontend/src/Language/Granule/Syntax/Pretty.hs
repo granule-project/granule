@@ -153,6 +153,7 @@ instance Pretty TypeOperator where
    TyOpMeet            -> "∧"
    TyOpJoin            -> "∨"
    TyOpInterval        -> ".."
+   TyOpConverge        -> "#"
 
 instance Pretty v => Pretty (AST v a) where
   pretty (AST dataDecls defs imprts hidden name) =

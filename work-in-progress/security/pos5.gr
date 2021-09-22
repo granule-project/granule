@@ -1,0 +1,16 @@
+data Bool = True | False
+
+pubNot : Bool [Public] -> Bool [Public]
+pubNot x = 
+  case x of
+   [True] -> [True];
+   [False] -> [False]
+
+-- pubNot' : Bool [Public] -> Bool [Public]
+-- pubNot' [x] = 
+--   case x of
+--    True -> [True];
+--    False -> [False]
+
+id : Bool -> Bool
+id x = x
