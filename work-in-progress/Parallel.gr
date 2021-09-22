@@ -1,0 +1,20 @@
+------
+--- Module: Parallel
+--- Description: Basic parallel combinators
+------
+
+--------- Currently fails 22/09/21
+-- Checking ./work-in-progress/uniquearray.gr...
+-- OK, evaluating...
+-- Error during evaluation: ./work-in-progress/uniquearray.gr:
+-- thread blocked indefinitely in an MVar operation
+
+-- parallel combinator defined in terms of linear channels
+-- `par` expects two thunks, `f` and `g`, and returns their resulting values in a pair
+par : forall {a : Type, b : Type} . (() -> a) -> (() -> b) -> (a, b)
+par f g =  let c = forkLinear (\c' -> close (send c' (f ()))); -- compute f in new thread
+               b = g (); -- compute g in current thread
+               (a, c') = recv c; -- get result of f from other thread
+               -- (shared memory, should be constant time to share pointer!)
+               _ = close c'
+           in (a, b)
