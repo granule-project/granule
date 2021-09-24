@@ -623,48 +623,6 @@ unboxHelper defs startTime left (var@(x, a) : right) gamma add@(Additive mode) g
      _ -> none)
 
 
-unitElimHelper :: (?globals :: Globals)
-  => Ctxt Type
-  -> Clock.TimeSpec
-  -> Ctxt Assumption
-  -> Ctxt Assumption
-  -> Ctxt Assumption
-  -> ResourceScheme AltOrDefault
-  -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-unitElimHelper _ _ left [] _ _ _ = none
-{-
-Subtractive
-
-Γ ⊢ C ⇒ t ; Δ
----------------------------------- :: unit_elim
-Γ, x : 1 ⊢ C ⇒ let () = x in t ; Δ
-
--}
-unitElimHelper defs startTime left (var@(x,a):right) gamma sub@Subtractive{} goalTy =
-  unitElimHelper defs startTime (var:left) right gamma sub goalTy `try`
-  case getAssumptionType a of
-    (TyCon (internalName -> "()")) -> do
-      (e, delta, subst, bindings) <- synthesiseInner defs startTime False sub gamma (left ++ right) goalTy (True, True, True)
-      return (makeUnitElim x e goalTy, delta, subst, bindings)
-    _ -> none
-{-
-Additive
-
-Γ ⊢ C ⇒ t ; D
------------------------------------------- :: unit_elim
-Γ, x : 1 ⊢ C ⇒ let () = x in t ; Δ, x : 1
-
--}
-unitElimHelper defs startTime left (var@(x,a):right) gamma add@Additive{} goalTy =
-  unitElimHelper defs startTime (var:left) right gamma add goalTy `try`
-    case getAssumptionType a of
-      (TyCon (internalName -> "()")) -> do
-        (e, delta, subst, bindings) <- synthesiseInner defs startTime False add gamma (left ++ right) goalTy (True, True, True)
-        return (makeUnitElim x e goalTy, var:delta, subst, bindings)
-      _ -> none
-
-
 
 constrIntroHelper :: (?globals :: Globals)
   => (Bool, Bool)
