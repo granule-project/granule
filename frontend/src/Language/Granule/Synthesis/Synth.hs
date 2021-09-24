@@ -48,6 +48,7 @@ import Language.Granule.Utils
 import Data.Maybe (fromJust, catMaybes)
 import Language.Granule.Synthesis.Splitting (generateCases)
 import Control.Arrow (second)
+import System.Clock (TimeSpec)
 -- import Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToConstraint)
 -- import Control.Monad.Trans.Except (runExceptT)
 -- import Control.Monad.Error.Class
@@ -1092,15 +1093,15 @@ synthesiseInner defs startTime inDereliction resourceScheme gamma omega goalTy@(
                       ++ ", allowDef = " ++ show allowDef
                       ++ ", defs = " ++ show defs
   currentTime    <- liftIO $ Clock.getTime Clock.Monotonic
-  let elapsedTime = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec currentTime startTime)) / (10^(6 :: Integer)::Double)
-  if elapsedTime > synthTimeoutMillis && synthTimeoutMillis > 0 then Synthesiser (lift $ fail "Timeout")  else
+  -- let elapsedTime = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec currentTime startTime)) / (10^(6 :: Integer)::Double)
+  if elapsedTime startTime currentTime > synthTimeoutMillis && synthTimeoutMillis > 0 then Synthesiser (fail "Timeout")  else
     case (isRAsync goalTy', omega, allowLAsync) of
       (True, _, _) ->
         -- Right Async : Decompose goalTy until synchronous
         varHelper [] (gamma ++ omega) resourceScheme goalTy
         `try`
         absHelper defs allowRSync startTime gamma omega resourceScheme goalTy
-      (False, x:xs, True) ->
+      (False, x:xs, _) ->
         -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
         (unboxHelper defs startTime [] omega gamma resourceScheme goalTy
         `try`
@@ -1213,15 +1214,17 @@ synthesiseProgram defs resourceScheme gamma omega goalTy checkerState = do
   -- %%
   end    <- liftIO $ Clock.getTime Clock.Monotonic
 
+  let timeoutMsg = if elapsedTime start end > synthTimeoutMillis && synthTimeoutMillis > 0 then  " - Timeout after: " <> (show synthTimeoutMillis  <> "ms") else ""
+
   debugM "results no: " (pretty $ map ( \(e, _, _) -> e) results)
   debugM "synthDebug" ("Result = " ++ (case synthResults of ((Right (expr, _, _), _):_) -> pretty expr; _ -> "NO SYNTHESIS"))
   case results of
       -- Nothing synthed, so create a blank hole instead
       []    -> do
         debugM "Synthesiser" $ "No programs synthesised for " <> pretty goalTy
-        printInfo "No programs synthesised"
-      ((_, _, _):_) -> 
-        case last results of 
+        printInfo $ "No programs synthesised" <> timeoutMsg
+      _ ->
+        case last results of
           (t, _, _) -> do
             debugM "Synthesiser" $ "Synthesised: " <> pretty t
             printSuccess "Synthesised"
@@ -1273,6 +1276,9 @@ freshIdentifier = do
       if n' < length mappo
         then return $ mkId $ mappo !! n'
         else return $ mkId $ base <> show n'
+
+elapsedTime :: TimeSpec -> TimeSpec -> Integer 
+elapsedTime start end = round $ fromIntegral (Clock.toNanoSecs (Clock.diffTimeSpec end start)) / (10^(6 :: Integer)::Double)
 
 -- Calculate theorem sizes
 
