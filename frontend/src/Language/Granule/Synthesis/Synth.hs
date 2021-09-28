@@ -1045,20 +1045,6 @@ defHelper left (def@(x, t) : right) startTime gamma add@(Additive mode) grade go
     _ -> none)
 
 
-
-
-  --  (do
-      -- debugM "entered def helper with: " (show def <> " " <> show t)
-      -- debugM "goal: " (show goalTy')
--- 
-      -- (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile t goalTy'
-      -- if success then do
-          -- debugM "success!" ""
-          -- case resourceScheme of
-            -- Additive{} -> return (makeVar x goalTy, [], subst, [])
-            -- Subtractive{} -> return (makeVar x goalTy, gamma, subst, [])
-      -- else none)
-
 synthesiseInner :: (?globals :: Globals)
            => Ctxt Type
            -> Clock.TimeSpec
@@ -1085,52 +1071,38 @@ synthesiseInner defs startTime inDereliction resourceScheme gamma omega grade go
     case (isRAsync goalTy', omega, allowLAsync) of
       (True, _, _) ->
         -- Right Async : Decompose goalTy until synchronous
-        varHelper [] (gamma ++ omega) resourceScheme goalTy
+        varHelper [] (gamma ++ omega) resourceScheme grade goalTy
         `try`
-        absHelper defs allowRSync startTime gamma omega resourceScheme goalTy
+        absHelper defs allowRSync startTime gamma omega resourceScheme grade goalTy
       (False, x:xs, _) ->
         -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
-        (unboxHelper defs startTime [] omega gamma resourceScheme goalTy
-        `try`
-        constrElimHelper (allowRSync, allowDef) defs startTime [] omega gamma resourceScheme goalTy)
-
-        `try` (
-              varHelper [] (gamma ++ omega) resourceScheme goalTy
+              (
+              varHelper [] (gamma ++ omega) resourceScheme grade goalTy
               `try`
-           --   if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
-           --   `try`
-              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme goalTy
-              )
-
-
-        `try`
-        do
-        boxHelper defs startTime gamma resourceScheme goalTy
-        `try`
-        (if allowRSync then
-            -- Right Sync : Focus on goalTy when goalTy is not atomic
-            constrIntroHelper (allowRSync, allowDef) defs startTime (gamma ++ omega) resourceScheme goalTy
-         else none)
-
-
-      (False, _, _) ->
--- not (isAtomic goalTy') && 
-
-       (
-              varHelper [] (gamma ++ omega) resourceScheme goalTy
+              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme grade goalTy
               `try`
-            --  if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
-            --  `try`
-              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme goalTy
+              boxHelper defs startTime (gamma ++ omega) resourceScheme grade goalTy
+              `try`
+              constrIntroHelper (allowRSync, allowDef) defs startTime (gamma ++ omega) resourceScheme grade goalTy
+       --       `try`
+       --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
               )
         `try`
-        do
-          boxHelper defs startTime gamma resourceScheme goalTy
-          `try`
-          (if allowRSync then
-            -- Right Sync : Focus on goalTy when goalTy is not atomic
-            constrIntroHelper (allowRSync, allowDef) defs startTime (gamma ++ omega) resourceScheme goalTy
-          else none)
+        unboxHelper defs startTime [] omega gamma resourceScheme grade goalTy
+        `try`
+        constrElimHelper (allowRSync, allowDef) defs startTime [] omega gamma resourceScheme grade goalTy
+
+      (False, _, _) -> 
+              varHelper [] (gamma ++ omega) resourceScheme grade goalTy
+              `try`
+              appHelper (allowRSync, allowDef) defs startTime [] (gamma ++ omega) resourceScheme grade goalTy
+              `try`
+              boxHelper defs startTime (gamma ++ omega) resourceScheme grade goalTy
+              `try`
+              constrIntroHelper (allowRSync, allowDef) defs startTime (gamma ++ omega) resourceScheme grade goalTy
+
+       --       `try`
+       --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
 
 synthesise :: (?globals :: Globals)
            => Ctxt Type
