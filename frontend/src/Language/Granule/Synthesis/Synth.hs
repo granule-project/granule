@@ -334,12 +334,29 @@ varHelper left (var@(x, a) : right) resourceScheme grade goalTy@(Forall _ binder
    (do
       debugM "variable equality on: " (pretty x <> " with types: " <> pretty (getAssumptionType  a) <> " and " <> pretty goalTy')
       debugM "gradeee: " (show grade)
+
+
+
       (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
-      if success then do
+
+        -- Run the solver (i.e. to check constraints on type indexes hold)
+      cs <- get
+      let predicate = Conj $ predicateStack cs
+      predicate <- conv $ substitute subst predicate
+      debugM "pred: " (pretty predicate)
+      let ctxtCk  = tyVarContext cs
+      coeffectVars <- conv $justCoeffectTypes nullSpanNoFile ctxtCk
+      coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
+      constructors <- conv $ allDataConstructorNames
+      (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
+      
+      case result of
+        QED -> do -- If the solver succeeds, return the specialised type
           debugM "success" ""
           (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme grade
           boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
-      else none)
+        _ -> none)
+
 
 
 {--
