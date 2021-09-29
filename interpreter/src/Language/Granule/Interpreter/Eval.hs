@@ -2,7 +2,7 @@
 {-# LANGUAGE ImplicitParams #-}
 {-# LANGUAGE FlexibleContexts #-}
 {-# LANGUAGE UndecidableInstances #-}
-{-# LANGUAGE TypeSynonymInstances #-}
+
 {-# LANGUAGE FlexibleInstances #-}
 {-# LANGUAGE ViewPatterns #-}
 
@@ -38,6 +38,7 @@ import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
 import System.IO.Error (mkIOError)
+import Data.Bifunctor
 
 type RValue = Value (Runtime ()) ()
 type RExpr = Expr (Runtime ()) ()
@@ -45,10 +46,10 @@ type RExpr = Expr (Runtime ()) ()
 -- | Runtime values only used in the interpreter
 data Runtime a =
   -- | Primitive functions (builtins)
-    Primitive ((Value (Runtime a) a) -> Value (Runtime a) a)
+    Primitive (Value (Runtime a) a -> Value (Runtime a) a)
 
   -- | Primitive operations that also close over the context
-  | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> (Value (Runtime a) a) -> (Value (Runtime a) a))
+  | PrimitiveClosure (Ctxt (Value (Runtime a) a) -> Value (Runtime a) a -> Value (Runtime a) a)
 
   -- | File handler
   | Handle SIO.Handle
@@ -100,28 +101,28 @@ evalBinOp op v1 v2 = case op of
       (NumFloat n1, NumFloat n2) -> NumFloat (n1 - n2)
       _ -> evalFail
     OpEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 == n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 == n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 == n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 == n2) []
       _ -> evalFail
     OpNotEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 /= n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 /= n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 /= n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 /= n2) []
       _ -> evalFail
     OpLesserEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 <= n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 <= n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 <= n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 <= n2) []
       _ -> evalFail
     OpLesser -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 < n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 < n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 < n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 < n2) []
       _ -> evalFail
     OpGreaterEq -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 >= n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 >= n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 >= n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 >= n2) []
       _ -> evalFail
     OpGreater -> case (v1, v2) of
-      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ (n1 > n2)) []
-      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ (n1 > n2)) []
+      (NumInt n1, NumInt n2) -> Constr () (mkId . show $ n1 > n2) []
+      (NumFloat n1, NumFloat n2) -> Constr () (mkId . show $ n1 > n2) []
       _ -> evalFail
   where
     evalFail = error $ show [show op, show v1, show v2]
@@ -166,12 +167,11 @@ evalIn ctxt (App s _ _ e1 e2) = do
       -- _ -> error "Cannot apply value"
 
 -- Deriving applications get resolved to their names
-evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] = do
-  -- Replace with a deriving variable
+evalIn ctxt (AppTy _ _ _ (Val s a rf (Var a' n)) t) | internalName n `elem` ["push", "pull", "copyShape", "drop"] =
   evalIn ctxt (Val s a rf (Var a' (mkId $ pretty n <> "@" <> pretty t)))
 
 -- Other type applications have no run time component (currently)
-evalIn ctxt (AppTy s _ _ e t) = do
+evalIn ctxt (AppTy s _ _ e t) =
   evalIn ctxt e
 
 evalIn ctxt (Binop _ _ _ op e1 e2) = do
@@ -191,7 +191,7 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
         -- (cf. LET_BETA)
         pResult  <- pmatch ctxt [(p, e2)] (valExpr v1')
         case pResult of
-          Just e2' -> do
+          Just e2' ->
               evalIn ctxt e2'
           Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in let at " <> pretty s
 
@@ -201,19 +201,18 @@ evalIn ctxt (LetDiamond s _ _ p _ e1 e2) = do
 evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
   v1 <- evalIn ctxt e1
   case v1 of
-    (isDiaConstr -> Just e) -> do
-        -- (cf. TRY_BETA_1)
+    (isDiaConstr -> Just e) ->
       catch ( do
-          eInner <- e
-          e1' <- evalIn ctxt eInner
-          pmatch ctxt [(PBox s () False p, e2)] (valExpr e1') >>=
-            \v ->
-              case v of
-                Just e2' -> evalIn ctxt e2'
-                Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
-        )
-         -- (cf. TRY_BETA_2)
-        (\(e :: IOException) -> evalIn ctxt e3)
+        eInner <- e
+        e1' <- evalIn ctxt eInner
+        pmatch ctxt [(PBox s () False p, e2)] (valExpr e1') >>=
+          \v ->
+            case v of
+              Just e2' -> evalIn ctxt e2'
+              Nothing -> error $ "Runtime exception: Failed pattern match " <> pretty p <> " in try at " <> pretty s
+      )
+       -- (cf. TRY_BETA_2)
+      (\(e :: IOException) -> evalIn ctxt e3)
     other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other
 
 {-
@@ -227,14 +226,13 @@ evalIn _ (Val _ _ _ (Var _ v)) | internalName v == "scale" = return
            OpTimes (Val nullSpan () False (Var () (mkId " x"))) (Val nullSpan () False (Var () (mkId " ye"))))))))
 -}
 
-evalIn ctxt (Val _ _ _ (Var _ x)) = do
+evalIn ctxt (Val _ _ _ (Var _ x)) =
     case lookup x ctxt of
       Just val@(Ext _ (PrimitiveClosure f)) -> return $ Ext () $ Primitive (f ctxt)
       Just val -> return val
       Nothing  -> fail $ "Variable '" <> sourceName x <> "' is undefined in context."
 
-evalIn ctxt (Val s _ _ (Promote _ e)) = do
-  -- CallByName extension
+evalIn ctxt (Val s _ _ (Promote _ e)) =
   if CBN `elem` (globalsExtensions ?globals)
     then do
       return $ Promote () e
@@ -254,7 +252,7 @@ evalIn ctxt (Case s a b guardExpr cases) = do
         error $ "Incomplete pattern match:\n  cases: "
              <> pretty cases <> "\n  expr: " <> pretty v
 
-evalIn ctxt (Hole _ _ _ _) = do
+evalIn ctxt (Hole {}) =
   error "Trying to evaluate a hole, which should not have passed the type checker."
 
 applyBindings :: Ctxt RExpr -> RExpr -> RExpr
@@ -274,7 +272,7 @@ pmatch ::
 pmatch _ [] _ =
   return Nothing
 
-pmatch _ ((PWild _ _ _, e):_)  _ =
+pmatch _ ((PWild {}, e):_)  _ =
   return $ Just e
 
 pmatch ctxt ((PConstr _ _ _ id innerPs, t0):ps) v@(Val s a b (Constr _ id' vs))
@@ -321,6 +319,7 @@ valExpr :: ExprFix2 g ExprF ev () -> ExprFix2 ExprF g ev ()
 valExpr = Val nullSpanNoFile () False
 
 builtIns :: (?globals :: Globals) => Ctxt RValue
+{-# NOINLINE builtIns #-}
 builtIns =
   [
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
@@ -400,9 +399,7 @@ builtIns =
   , (mkId "isEOF", Ext () $ Primitive $ \(Ext _ (Handle h)) -> Ext () $ PureWrapper $ do
         b <- SIO.isEOF
         let boolflag =
-             case b of
-               True -> Constr () (mkId "True") []
-               False -> Constr () (mkId "False") []
+             if b then Constr () (mkId "True") [] else Constr () (mkId "False") []
         return . Val nullSpan () False $ Constr () (mkId ",") [Ext () $ Handle h, boolflag])
   , (mkId "forkLinear", Ext () $ PrimitiveClosure forkLinear)
   , (mkId "forkLinear'", Ext () $ PrimitiveClosure forkLinear')
@@ -423,6 +420,11 @@ builtIns =
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
   , (mkId "writeFloatArray",  Ext () $ Primitive writeFloatArray)
+  , (mkId "newFloatArray'",  Ext () $ Primitive newFloatArray)
+  , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray)
+  , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray)
+  , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
+
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
@@ -550,7 +552,20 @@ builtIns =
     writeFloatArray = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Promote () (Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO (do _ <- MA.writeArray arr i v; return arr))
+      Promote () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
+        do () <- MA.writeArray arr i v
+           return arr
+
+    {-# NOINLINE writeFloatArray' #-}
+    writeFloatArray' :: RValue -> RValue
+    writeFloatArray' = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+      Ext () $ Primitive $ \(NumInt i) ->
+      Ext () $ Primitive $ \(NumFloat v) ->
+      Promote () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
+        do arr' <- MA.mapArray id arr
+           () <- MA.writeArray arr' i v
+           return arr'
+
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
@@ -583,7 +598,7 @@ instance RuntimeRep Expr where
   toRuntimeRep (Binop s a rf o e1 e2) = Binop s a rf o (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (LetDiamond s a rf p t e1 e2) = LetDiamond s a rf p t (toRuntimeRep e1) (toRuntimeRep e2)
   toRuntimeRep (TryCatch s a rf e1 p t e2 e3) = TryCatch s a rf (toRuntimeRep e1) p t (toRuntimeRep e2) (toRuntimeRep e3)
-  toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (\(p, e) -> (p, toRuntimeRep e)) ps)
+  toRuntimeRep (Case s a rf e ps) = Case s a rf (toRuntimeRep e) (map (second toRuntimeRep) ps)
   toRuntimeRep (Hole s a rf vs) = Hole s a rf vs
 
 instance RuntimeRep Value where

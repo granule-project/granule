@@ -519,14 +519,29 @@ uniqueBind = BUILTIN
 newFloatArray : Int -> FloatArray [Unique]
 newFloatArray = BUILTIN
 
+newFloatArray' : Int -> FloatArray
+newFloatArray = BUILTIN
+
 readFloatArray : FloatArray [Unique] -> Int -> (Float, FloatArray [Unique])
 readFloatArray = BUILTIN
+
+readFloatArray' : FloatArray -> Int -> (Float, FloatArray)
+readFloatArray' = BUILTIN
 
 writeFloatArray : FloatArray [Unique] -> Int -> Float -> FloatArray [Unique]
 writeFloatArray = BUILTIN
 
+writeFloatArray' : FloatArray -> Int -> Float -> FloatArray
+writeFloatArray' = BUILTIN
+
 lengthFloatArray : FloatArray [Unique] -> (Int, FloatArray [Unique])
 lengthFloatArray = BUILTIN
+
+lengthFloatArray' : FloatArray -> (Int, FloatArray)
+lengthFloatArray' = BUILTIN
+
+deleteFloatArray : FloatArray [Unique] -> ()
+deleteFloatArray = BUILTIN
 |]
 
 
