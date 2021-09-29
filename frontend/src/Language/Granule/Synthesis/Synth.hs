@@ -49,6 +49,7 @@ import Data.Maybe (fromJust, catMaybes)
 import Language.Granule.Synthesis.Splitting (generateCases)
 import Control.Arrow (second)
 import System.Clock (TimeSpec)
+-- import Language.Granule.Syntax.Def (isIndexedDataType)
 -- import Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToConstraint)
 -- import Control.Monad.Trans.Except (runExceptT)
 -- import Control.Monad.Error.Class
@@ -331,31 +332,19 @@ varHelper :: (?globals :: Globals)
 varHelper left [] _ _ _ = none
 varHelper left (var@(x, a) : right) resourceScheme grade goalTy@(Forall _ binders constraints goalTy') =
  varHelper (var:left) right resourceScheme grade goalTy `try`
-   (do
+   do
       debugM "variable equality on: " (pretty x <> " with types: " <> pretty (getAssumptionType  a) <> " and " <> pretty goalTy')
-      debugM "gradeee: " (show grade)
-
-
 
       (success, specTy, subst) <- conv $ equalTypes nullSpanNoFile (getAssumptionType a) goalTy'
 
-        -- Run the solver (i.e. to check constraints on type indexes hold)
-      cs <- get
-      let predicate = Conj $ predicateStack cs
-      predicate <- conv $ substitute subst predicate
-      debugM "pred: " (pretty predicate)
-      let ctxtCk  = tyVarContext cs
-      coeffectVars <- conv $justCoeffectTypes nullSpanNoFile ctxtCk
-      coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
-      constructors <- conv $ allDataConstructorNames
-      (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
-      
-      case result of
-        QED -> do -- If the solver succeeds, return the specialised type
-          debugM "success" ""
+      -- If the goal type is a GADT then run the solver 
+      isGADT <- conv $ isIndexedType goalTy'
+      res <- if isGADT then solve else return True
+
+      if res then do
           (canUse, gamma, t) <- useVar var (left ++ right) resourceScheme grade
           boolToSynthesiser canUse (makeVar x goalTy, gamma, subst, [])
-        _ -> none)
+      else none
 
 
 
@@ -669,30 +658,25 @@ unboxHelper defs startTime left (var@(x, a) : right) gamma add@(Additive mode) r
 constrIntroHelper :: (?globals :: Globals)
   => (Bool, Bool)
   -> Ctxt Type
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Clock.TimeSpec
   -> Ctxt Assumption
   -> ResourceScheme AltOrDefault
   -> Maybe Type
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-constrIntroHelper (True, allowDef) defs startTime gamma mode grade goalTy@(Forall s binders constraints t) =
+constrIntroHelper (True, allowDef) defs constructors startTime gamma mode grade goalTy@(Forall s binders constraints t) =
   case (isADT t, adtName t) of
     (True, Just name) -> do
       debugM "Entered constrIntro helper with goal: " (show goalTy)
 
       -- Retrieve the data constructors for the goal data type
-      let snd3 (a, b, c) = b
-      st <- get
-      let pats = map (second snd3) (typeConstructors st)
-      constructors <- conv $  mapM (\ (a, b) -> do
-          dc <- mapM (lookupDataConstructor nullSpanNoFile) b
-          let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-          return (a, sd)) pats
       let adtConstructors = concatMap snd (filter (\x -> fst x == name) constructors)
+      isGADT <- conv $ isIndexedType t
 
       -- For each relevent data constructor, we must now check that it's type matches the goal
       adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
-         (success, specTy, specSubst) <- checkConstructor conTy subst
+         (success, specTy, specSubst) <- checkConstructor conTy subst isGADT
          case (success, specTy) of
            (True, Just specTy') -> do
              subst' <- conv $ combineSubstitutions s subst specSubst
@@ -705,20 +689,15 @@ constrIntroHelper (True, allowDef) defs startTime gamma mode grade goalTy@(Foral
     _ -> none
   where
 
-    rightMostFunTy (FunTy _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
-    rightMostFunTy t = (t, [])
-
-    reconstructFunTy t (x:xs) = reconstructFunTy (FunTy Nothing x t) xs
-    reconstructFunTy t [] = t
 
     compare' con1@(_, (Forall _ _ _ ty1, _, _)) con2@(_, (Forall _ _ _ ty2, _, _)) = compare (arity ty1) (arity ty2)
 
     -- | Given a data constructor and a substition of type indexes, check that the goal type ~ data constructor type
-    checkConstructor :: TypeScheme -> Substitution -> Synthesiser (Bool, Maybe Type, Substitution)
-    checkConstructor con@(Forall _ binders coercions conTy) subst = do
+    checkConstructor :: TypeScheme -> Substitution -> Bool -> Synthesiser (Bool, Maybe Type, Substitution)
+    checkConstructor con@(Forall _ binders coercions conTy) subst isGADT = do
       (result, local) <- conv $ peekChecker $ do
 
-        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []      
+        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
 
         -- Take the rightmost type of the function type, collecting the arguments along the way 
         let (conTy'', args) = rightMostFunTy conTyFresh
@@ -729,16 +708,20 @@ constrIntroHelper (True, allowDef) defs startTime gamma mode grade goalTy@(Foral
 
 
         -- Run the solver (i.e. to check constraints on type indexes hold)
-        cs <- get
-        let predicate = Conj $ predicateStack cs
-        predicate <- substitute subst' predicate
+        result <-
+          if isGADT then do
+            cs <- get
+            let predicate = Conj $ predicateStack cs
+            predicate <- substitute subst' predicate
 
-        debugM "pred: " (pretty predicate)
-        let ctxtCk  = tyVarContext cs
-        coeffectVars <- justCoeffectTypes s ctxtCk
-        coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
-        constructors <- allDataConstructorNames
-        (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
+            debugM "pred: " (pretty predicate)
+            let ctxtCk  = tyVarContext cs
+            coeffectVars <- justCoeffectTypes s ctxtCk
+            coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
+            constructors <- allDataConstructorNames
+            (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
+            return result
+          else return QED
 
         case result of
           QED -> do -- If the solver succeeds, return the specialised type
@@ -1130,9 +1113,19 @@ synthesise :: (?globals :: Globals)
            -> TypeScheme           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution)
 synthesise defs startTime resourceScheme gamma omega goalTy = do
-  let gradeOnRule = True
+  let gradeOnRule = False
   let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
-  result@(expr, ctxt, subst, bindings) <- synthesiseInner defs startTime False resourceScheme gamma omega initialGrade goalTy (True, True, False)
+
+  constructors <- do
+      let snd3 (a, b, c) = b
+      st <- get
+      let pats = map (second snd3) (typeConstructors st)
+      conv $  mapM (\ (a, b) -> do
+        dc <- mapM (lookupDataConstructor nullSpanNoFile) b
+        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
+        return (a, sd)) pats
+
+  result@(expr, ctxt, subst, bindings) <- synthesiseInner defs constructors startTime False resourceScheme gamma omega initialGrade goalTy (True, True, False)
   case resourceScheme of
     Subtractive{} -> do
       -- All linear variables should be gone
