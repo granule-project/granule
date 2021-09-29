@@ -248,6 +248,21 @@ isADT (TyCon _) = True
 isADT (TyApp t _) = isADT t
 isADT _ = False
 
+
+adtName :: Type -> Maybe Id
+adtName (TyCon id) = Just id
+adtName (TyApp e1 e2) = adtName e1
+adtName _ = Nothing
+
+
+rightMostFunTy :: Type -> (Type, [Type])
+rightMostFunTy (FunTy _ arg t) = let (t', args) = rightMostFunTy t in (t', arg : args)
+rightMostFunTy t = (t, [])
+
+reconstructFunTy :: Type -> [Type] -> Type
+reconstructFunTy = foldl (flip (FunTy Nothing))
+
+
 data AltOrDefault = Default | Alternative
   deriving (Show, Eq)
 
@@ -799,56 +814,140 @@ constrElimHelper :: (?globals :: Globals)
   -> Maybe Type
   -> TypeScheme
   -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-constrElimHelper (allowRSync, allowDef)  _ startTime left [] _ _ _ _ = none
-constrElimHelper (allowRSync, allowDef) defs startTime left (var@(x, a):right) gamma mode grade goalTySch@(Forall _ _ _ goalTy) =
-  constrElimHelper (allowRSync, allowDef) defs startTime (var:left) right gamma mode grade goalTySch `try` do
+constrElimHelper (allowRSync, allowDef) defs constructors startTime left [] _ _ _ _ = none
+constrElimHelper (allowRSync, allowDef) defs constructors startTime left (var@(x, a):right) gamma mode grade goalTySch@(Forall _ _ _ goalTy) =
+  constrElimHelper (allowRSync, allowDef) defs constructors startTime (var:left) right gamma mode grade goalTySch `try` do
     debugM "in constr elim" ""
     let omega = left ++ right
     (canUse, omega', _) <- useVar var omega mode grade
     case a of
       Linear t ->
-        if canUse && isADT t then do
-          constrs <- constructors
-          (_, cases) <- conv $ generateCases nullSpanNoFile constrs [var] [x] (Just $ FunTy Nothing t goalTy)
-          debugM "my cases: " (show cases)
-          case mode of
-            Subtractive{} -> do
-              (patterns, delta, subst, bindings') <- synthCases t mode gamma omega' cases goalTySch
-              debugM "constrELim: i used: " (show delta)
-              return (makeCase' t x patterns goalTy, delta, subst, bindings')
-            Additive{} -> do
-              (patterns, delta, subst, bindings') <- synthCases t mode gamma omega cases goalTySch
-              delta2 <- maybeToSynthesiser $ ctxtAdd omega' delta
-              return (makeCase' t x patterns goalTy, delta2, subst, bindings')
+        if canUse && isADT t then
+          case adtName t of
+            Just name -> do
+        --      (_, cases) <- conv $ generateCases nullSpanNoFile constructors [var] [x] (Just $ FunTy Nothing t goalTy)
+
+              let adtConstructors = concatMap snd (filter (\x -> fst x == name) constructors)
+              isGADT <- conv $ isIndexedType t
+
+
+              -- For each relevent data constructor, we must now check that it's type matches the goal
+              cases <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
+                  (success, (pat, assumptions, subst')) <- checkConstructor id conTy t subst isGADT
+                  case (success, pat) of
+                    (True, Just pat) -> do
+                      subst'' <- conv $ combineSubstitutions s subst subst'
+                      return $ (pat, assumptions, subst'') : a
+                    _ -> return a) [] adtConstructors
+
+              debugM "linear cases: " (show cases <> " assumption ty: " <> (show t))
+
+              --         cases' <- checkConstructors t cases
+
+              --_ <- error "first case"
+
+              case mode of
+                Subtractive{} -> do
+                  (patterns, delta, subst, bindings') <- synthCases t mode gamma omega' cases goalTySch
+                  debugM "constrELim: i used: " (show delta)
+                  return (makeCase' t x patterns goalTy, delta, subst, bindings')
+                Additive{} -> do
+                  (patterns, delta, subst, bindings') <- synthCases t mode gamma omega cases goalTySch
+                  delta2 <- maybeToSynthesiser $ ctxtAdd omega' delta
+                  return (makeCase' t x patterns goalTy, delta2, subst, bindings')
+            _ -> none
         else none
       Discharged t grade ->
-        if canUse && isADT t then do
-          constrs <- constructors
-          (_, cases) <- conv $ generateCases nullSpanNoFile constrs [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
-          case mode of
-            Subtractive{} -> do
-              let omega'' = deleteVar x omega'
-              (patterns, delta, subst, bindings') <- synthCases t mode gamma omega'' cases goalTySch
-              return (makeBoxCase t grade x patterns goalTy, omega' ++ delta, subst, bindings')
-            Additive{} -> do
-              (patterns, delta, subst, bindings') <- synthCases t mode gamma omega cases goalTySch
-              return (makeBoxCase t grade x patterns goalTy, delta, subst, bindings')
+        if canUse && isADT t then
+          case adtName t of
+            Just name -> do
+
+       --   constrs <- constructors
+    --          let adtConstructors = concatMap snd (filter (\x -> fst x == name) constructors)
+              isGADT <- conv $ isIndexedType t
+              (_, cases) <- conv $ generateCases nullSpanNoFile constructors [(x, Linear (Box grade t))] [x] (Just $ FunTy Nothing (Box grade t) goalTy)
+
+          -- Specialise cases to assumption type
+              debugM "graded cases: " (pretty cases <> " assumption ty: " <> (show t))
+
+              case mode of
+                Subtractive{} -> do
+                  _ <- error "panic on the streets of london"
+                  none
+   ---               let omega'' = deleteVar x omega'
+   --               (patterns, delta, subst, bindings') <- synthCases t mode gamma omega'' cases goalTySch
+   --               return (makeBoxCase t grade x patterns goalTy, omega' ++ delta, subst, bindings')
+                Additive{} -> do
+                  _ <- error "panic on the streets of london"
+                  none
+   --               (patterns, delta, subst, bindings') <- synthCases t mode gamma omega cases goalTySch
+   --               return (makeBoxCase t grade x patterns goalTy, delta, subst, bindings')
+            _ -> none
         else none
 
   where
 
-    constructors = do
-      let snd3 (a, b, c) = b
-      st <- get
-      let pats = map (second snd3) (typeConstructors st)
-      conv $  mapM (\ (a, b) -> do
-        dc <- mapM (lookupDataConstructor nullSpanNoFile) b
-        let sd = zip (fromJust $ lookup a pats) (catMaybes dc)
-        return (a, sd)) pats
+    checkConstructor :: Id -> TypeScheme -> Type -> Substitution -> Bool -> Synthesiser (Bool, (Maybe (Pattern ()), Ctxt Assumption, Substitution))
+    checkConstructor name con@(Forall  _ binders constraints conTy) ty subst isGADT = do
+      (result, local) <- conv $ peekChecker $ do
 
-    synthCases adt mode g o [([p], assmps)] goalTy = do
+        (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
+
+        -- Take the rightmost type of the function type, collecting the arguments along the way 
+        let (conTy'', args) = rightMostFunTy conTyFresh
+
+        conTy'' <- substitute coercions' conTy''
+
+        (success, spec, subst') <- equalTypes nullSpanNoFile ty conTy''
+
+
+        -- Run the solver (i.e. to check constraints on type indexes hold)
+        result <-
+          if isGADT then do
+            cs <- get
+            let predicate = Conj $ predicateStack cs
+            predicate <- substitute subst' predicate
+
+            debugM "pred: " (pretty predicate)
+            let ctxtCk  = tyVarContext cs
+            coeffectVars <- justCoeffectTypes nullSpanNoFile ctxtCk
+            coeffectVars <- return (coeffectVars `deleteVars` Language.Granule.Checker.Predicates.boundVars predicate)
+            constructors <- allDataConstructorNames
+            (_, result) <- liftIO $ provePredicate predicate coeffectVars constructors
+            return result
+          else return QED
+
+        case result of
+          QED -> do -- If the solver succeeds, return the specialised type
+            spec <- substitute substFromFreshening spec
+
+            -- Construct pattern based on constructor arguments specialised by type equality
+            assmps <- mapM (\ arg -> do
+              var <- freshIdentifierBase "x"
+              arg' <- substitute subst' arg
+              return (mkId $ removeDots var, Linear arg')) args
+
+            let (vars, _) = unzip assmps
+
+            let pat = makePattern name vars Nothing
+
+            return (success, (Just pat, assmps, subst'))
+          _ ->
+            return (False, (Nothing, [], []))
+      case result of
+        Right (True, (pat, assmps, subst)) -> conv $ local >> return (True, (pat, assmps, subst))
+        _ -> return (False, (Nothing, [], []))
+
+
+    removeDots xs =  [ x | x <- xs, x `notElem` "." ]
+
+    makePattern conId vars Nothing = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
+    makePattern conId vars (Just grade) = PConstr nullSpanNoFile () False conId (map (PVar nullSpanNoFile () False) vars)
+
+
+    synthCases adt mode g o [(p, assmps, conSubst)] goalTy = do
       let (g', o', unboxed) = bindAssumptions assmps g o []
-      (e, delta, subst, bindings) <- synthesiseInner defs startTime False mode g' o' grade goalTy (False, True, True)
+      (e, delta, subst, bindings) <- synthesiseInner defs constructors startTime False mode g' o' grade goalTy (False, True, True)
       debugM "in synth next cases - \n goal: " (show goalTy <> " \n e: " <> pretty e <> " \n delta: "  <> show delta ++ "\n g': " ++ show g' ++ "\n o': " ++ show o' ++ "\n p: " ++ show p ++ "\n asmps: " ++ show assmps)
       del' <- checkAssumptions (x, getAssumptionType a) mode delta assmps unboxed
       case transformPattern bindings adt (g' ++ o') p unboxed of
