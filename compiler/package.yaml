@@ -1,0 +1,46 @@
+name: granule-compiler
+version: '0.1.0.0'
+author: Michael Vollmer
+
+dependencies:
+- base >=4.10 && <5
+- directory
+- extra
+- filepath
+- gitrev
+- Glob
+- granule-frontend
+- mtl >=2.2.1
+- optparse-applicative
+- text
+- logict == 0.7.0.2
+- clock
+- array
+- haskell-src-exts
+
+default-extensions:
+- LambdaCase
+- RecordWildCards
+- ImplicitParams
+- ScopedTypeVariables
+- OverloadedStrings
+
+ghc-options:
+- -O0
+- -Wall
+- -Werror
+- -Wcompat
+- -Wincomplete-record-updates
+- -Wincomplete-uni-patterns
+- -Wredundant-constraints
+- -Wno-unused-matches
+- -Wno-name-shadowing
+- -Wno-type-defaults
+
+executables:
+  grc:
+    main: Language/Granule/Compiler.hs
+    source-dirs: src
+    exposed-modules:
+    - Language.Granule.Compiler.Util
+    ghc-options: -main-is Language.Granule.Compiler
