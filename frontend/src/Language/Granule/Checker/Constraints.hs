@@ -597,14 +597,25 @@ approximatedByOrEqualConstraint (SSet Opposite s) (SSet Opposite t) =
 
 
 approximatedByOrEqualConstraint (SLevel l) (SLevel k) =
+  -- Using the ordering from the Agda code (by cases)
+  return $ ltCase dunnoRepresentation   publicRepresentation  -- DunnoPub
+         $ ltCase privateRepresentation dunnoRepresentation   -- PrivDunno
+         $ ltCase unusedRepresentation  dunnoRepresentation   -- 0Dunno
+         $ ltCase unusedRepresentation  publicRepresentation  -- 0Pub
+         $ ltCase unusedRepresentation  privateRepresentation -- 0Priv
+         $ ltCase privateRepresentation publicRepresentation  -- PrivPub
+         $ ite (l .== k) sTrue                               -- Refl
+         sFalse
+  where ltCase a b = ite ((l .== literal a) .&& (k .== literal b)) sTrue
+
     -- Private <= Public
-  return $ ite (l .== literal unusedRepresentation) sTrue
-         $ ite ((l .== literal privateRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
-         $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
-         $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal publicRepresentation)) sTrue
-         $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
-         $ ite (l .== literal privateRepresentation) sTrue
-         $ ite (k .== literal publicRepresentation) sTrue sFalse
+  -- return $ ite (l .== literal unusedRepresentation) sTrue
+  --        $ ite ((l .== literal privateRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
+  --        $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal dunnoRepresentation)) sTrue
+  --        $ ite ((l .== literal dunnoRepresentation) .&& (k .== literal publicRepresentation)) sTrue
+  --        $ ite ((l .== literal dunnoRepresentation) .|| (k .== literal dunnoRepresentation)) sFalse
+  --        $ ite (l .== literal privateRepresentation) sTrue
+  --        $ ite (k .== literal publicRepresentation) sTrue sFalse
 
 approximatedByOrEqualConstraint (SSec a) (SSec b) =
   -- Lo <= Lo   (False <= False)

@@ -228,6 +228,7 @@ symGradeLess (SLevel n) (SLevel n') =
          $ ltCase unusedRepresentation  publicRepresentation  -- 0Pub
          $ ltCase unusedRepresentation  privateRepresentation -- 0Priv
          $ ltCase privateRepresentation publicRepresentation  -- PrivPub
+         $ ite (n .== n') sTrue                               -- Refl
          sFalse
   where ltCase a b = ite ((n .== literal a) .&& (n' .== literal b)) sTrue
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
@@ -285,16 +286,16 @@ symGradeMeet (SNat n1) (SNat n2)     = return $ SNat $ n1 `smin` n2
 symGradeMeet (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
 symGradeMeet (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
 symGradeMeet (SLevel s) (SLevel t) =
-  -- Using the meet from the Agda code (by cases)
-  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- meet Unused x = x
-                  $ ite (t .== literal unusedRepresentation) s -- meet x Unused = x
-                  $ ite ((t .== literal publicRepresentation) .|| -- meet Public x = Public
-                        (s .== literal publicRepresentation))     -- meet x Public = Public
-                        (literal publicRepresentation)
-                  $ ite ((t .== literal privateRepresentation) .&& -- meet Private Private = Private
-                        (s .== literal privateRepresentation))
+  -- Using the join (!) from the Agda code (by cases)
+  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- join Unused x = x
+                  $ ite (t .== literal unusedRepresentation) s -- join x Unused = x
+                  $ ite ((t .== literal privateRepresentation) .|| -- join Private x = Private
+                        (s .== literal privateRepresentation))     -- join x Private = Private
                         (literal privateRepresentation)
-                  $ literal dunnoRepresentation -- meet Dunno Private = meet Private Dunno = meet Dunno Dunno = Dunno
+                  $ ite ((t .== literal dunnoRepresentation) .|| -- join Dunno x = Dunno
+                        (s .== literal dunnoRepresentation))     -- join x Dunno = Dunno
+                        (literal dunnoRepresentation)
+                  $ literal publicRepresentation -- join Public Public = Public
 symGradeMeet (SFloat n1) (SFloat n2) = return $ SFloat $ n1 `smin` n2
 symGradeMeet (SExtNat x) (SExtNat y) = return $ SExtNat $
   ite (isInf x) y (ite (isInf y) x (SNatX (xVal x `smin` xVal y)))
@@ -316,16 +317,16 @@ symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
 symGradeJoin (SSet Normal s) (SSet Normal t)   = return $ SSet Normal $ S.intersection s t
 symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeJoin (SLevel s) (SLevel t) =
-  -- Using the join from the Agda code (by cases)
-  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- join Unused x = x
-                  $ ite (t .== literal unusedRepresentation) s -- join x Unused = x
-                  $ ite ((t .== literal privateRepresentation) .|| -- join Private x = Private
-                        (s .== literal privateRepresentation))     -- join x Private = Private
+  -- Using the meet (!) from the Agda code (by cases)
+  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- meet Unused x = x
+                  $ ite (t .== literal unusedRepresentation) s -- meet x Unused = x
+                  $ ite ((t .== literal publicRepresentation) .|| -- meet Public x = Public
+                        (s .== literal publicRepresentation))     -- meet x Public = Public
+                        (literal publicRepresentation)
+                  $ ite ((t .== literal privateRepresentation) .&& -- meet Private Private = Private
+                        (s .== literal privateRepresentation))
                         (literal privateRepresentation)
-                  $ ite ((t .== literal dunnoRepresentation) .|| -- join Dunno x = Dunno
-                        (s .== literal dunnoRepresentation))     -- join x Dunno = Dunno
-                        (literal dunnoRepresentation)
-                  $ literal publicRepresentation -- join Public = Public
+                  $ literal dunnoRepresentation -- meet Dunno Private = meet Private Dunno = meet Dunno Dunno = Dunno
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $
   ite (isInf x .|| isInf y) inf (SNatX (xVal x `smax` xVal y))
@@ -346,7 +347,7 @@ symGradePlus :: SGrade -> SGrade -> Symbolic SGrade
 symGradePlus (SNat n1) (SNat n2) = return $ SNat (n1 + n2)
 symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
 symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
-symGradePlus (SLevel lev1) (SLevel lev2) = symGradeMeet (SLevel lev1) (SLevel lev2)
+symGradePlus (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = return $ SExtNat (x + y)
 symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
@@ -381,7 +382,7 @@ symGradePlus s t = solverError $ cannotDo "plus" s t
 
 -- | Converge (#) operation
 symGradeConverge :: SGrade -> SGrade -> Symbolic SGrade
-symGradeConverge (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
+symGradeConverge (SLevel lev1) (SLevel lev2) = symGradeMeet (SLevel lev1) (SLevel lev2)
 symGradeConverge s1 s2 = symGradeTimes s1 s2
 
 -- | Times operation on symbolic grades
@@ -391,7 +392,7 @@ symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
 symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
-symGradeTimes (SLevel lev1) (SLevel lev2) = symGradeMeet (SLevel lev1) (SLevel lev2)
+symGradeTimes (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
 symGradeTimes (SOOZ s) (SOOZ r) = pure . SOOZ $ s .&& r
