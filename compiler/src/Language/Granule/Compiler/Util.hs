@@ -1,6 +1,42 @@
 -- | Utility functions for building Haskell expressions. Re-exports the
 --   Haskell Src Exts helpers, and defines a few more.
 
-module Language.Granule.Compiler.Util (module Language.Haskell.Exts.Build) where
+module Language.Granule.Compiler.Util
+  (
+    module Language.Haskell.Exts
+  , grPragmas
+  , mkEquation
+  ) where
 
-import Language.Haskell.Exts.Build
+import Language.Haskell.Exts
+
+grExts :: [Name ()]
+grExts = map name ["GADTs", "ScopedTypeVariables"]
+
+mkPragmas :: [Name ()] -> ModulePragma ()
+mkPragmas = LanguagePragma ()
+
+grPragmas :: ModulePragma ()
+grPragmas = mkPragmas grExts
+
+mkEquation :: Name () -> [([Pat ()], Exp ())] -> Decl ()
+mkEquation f bnds = FunBind () (map mkMatch bnds)
+  where mkMatch :: ([Pat ()], Exp ()) -> Match ()
+        mkMatch (pats,body) = Match () f pats (UnGuardedRhs () body) Nothing
+
+-- > parseDecl "foo (x:xs) = 1"
+-- ParseOk
+-- (FunBind
+--   [Match (Ident "foo")
+--          [PParen (PInfixApp (PVar (Ident "x")) (Special (Cons)) (PVar (Ident "xs")))]
+--          (UnGuardedRhs (Lit (Int 1 "1")))
+--          Nothing])
+
+-- > parseDecl "foo (F a) = 1\nfoo (G a) = 2"
+-- ParseOk
+--   (FunBind [Match (Ident "foo")
+--                   [PParen (PApp (UnQual (Ident "F")) [PVar (Ident "a")])]
+--                   (UnGuardedRhs (Lit (Int 1 "1"))) Nothing,
+--             Match (Ident "foo")
+--                   [PParen (PApp (UnQual (Ident "G")) [PVar (Ident "a")])]
+--                   (UnGuardedRhs (Lit (Int 2 "2"))) Nothing])
