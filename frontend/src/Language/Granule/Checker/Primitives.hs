@@ -520,7 +520,7 @@ newFloatArray : Int -> FloatArray [Unique]
 newFloatArray = BUILTIN
 
 newFloatArray' : Int -> FloatArray
-newFloatArray = BUILTIN
+newFloatArray' = BUILTIN
 
 readFloatArray : FloatArray [Unique] -> Int -> (Float, FloatArray [Unique])
 readFloatArray = BUILTIN
