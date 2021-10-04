@@ -17,6 +17,7 @@ dependencies:
 - clock
 - array
 - haskell-src-exts
+- containers
 
 default-extensions:
 - LambdaCase
@@ -24,6 +25,8 @@ default-extensions:
 - ImplicitParams
 - ScopedTypeVariables
 - OverloadedStrings
+- FlexibleContexts
+- ConstraintKinds
 
 ghc-options:
 - -O0
@@ -43,4 +46,7 @@ executables:
     source-dirs: src
     exposed-modules:
     - Language.Granule.Compiler.Util
+    - Language.Granule.Compiler.HSCodegen
+    - Language.Granule.Compiler.Gensym
+    - Language.Granule.Compiler.Context
     ghc-options: -main-is Language.Granule.Compiler

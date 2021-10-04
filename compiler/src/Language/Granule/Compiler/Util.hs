@@ -6,6 +6,7 @@ module Language.Granule.Compiler.Util
     module Language.Haskell.Exts
   , grPragmas
   , mkEquation
+  , mkUnit
   ) where
 
 import Language.Haskell.Exts
@@ -23,6 +24,9 @@ mkEquation :: Name () -> [([Pat ()], Exp ())] -> Decl ()
 mkEquation f bnds = FunBind () (map mkMatch bnds)
   where mkMatch :: ([Pat ()], Exp ()) -> Match ()
         mkMatch (pats,body) = Match () f pats (UnGuardedRhs () body) Nothing
+
+mkUnit :: Type ()
+mkUnit = TyCon () $ Special () $ UnitCon ()
 
 -- > parseDecl "foo (x:xs) = 1"
 -- ParseOk
