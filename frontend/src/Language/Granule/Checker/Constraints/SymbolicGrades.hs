@@ -53,7 +53,7 @@ data SGrade =
 
 -- Symbolic elements (TODO: generalise in the future as needed)
 -- For now only strings can be set elements
-type SSetElem = [Char]
+type SSetElem = String
 
 -- Specialised representation for `Level`
 publicRepresentation, privateRepresentation, unusedRepresentation, dunnoRepresentation :: Integer
@@ -94,7 +94,7 @@ instance Show SynTree where
   show (SynMeet s t) = "(" ++ show s ++ " /\\ " ++ show t ++ ")"
   show (SynLeaf Nothing) = "?"
   show (SynLeaf (Just n)) = T.unpack $
-    T.replace (T.pack $ " :: SInteger") (T.pack "") (T.pack $ show n)
+    T.replace (T.pack " :: SInteger") (T.pack "") (T.pack $ show n)
   show (SynMerge sb s t) = "(if " ++ show sb ++ " (" ++ show s ++ ") (" ++ show t ++ "))"
 
 sEqTree :: SynTree -> SynTree -> Symbolic SBool
@@ -123,7 +123,7 @@ sEqTree (SynMerge sb s s') (SynMerge sb' t t')  =
                   (return $ sb .== sNot sb'))
 
 
-sEqTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
+sEqTree (SynLeaf Nothing) (SynLeaf Nothing) = return sFalse
 sEqTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .=== n'
 sEqTree s t = return sFalse
 
@@ -133,10 +133,10 @@ sLtTree (SynTimes s s') (SynTimes t t') = liftM2 (.&&) (sLtTree s t) (sLtTree s'
 sLtTree (SynMeet s s') (SynMeet t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynJoin s s') (SynJoin t t')   = liftM2 (.&&) (sLtTree s t) (sLtTree s' t')
 sLtTree (SynMerge sb s s') (SynMerge sb' t t') =
-  liftM2 (.&&) (return $ sb .== sb') (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
-sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return $ sFalse
+  fmap (((.&&)) (sb .== sb')) (liftM2 (.&&) (sLtTree s t) (sLtTree s' t'))
+sLtTree (SynLeaf Nothing) (SynLeaf Nothing) = return sFalse
 sLtTree (SynLeaf (Just n)) (SynLeaf (Just n')) = return $ n .< n'
-sLtTree _ _ = return $ sFalse
+sLtTree _ _ = return sFalse
 
 ---- SGrade operations
 
@@ -167,26 +167,20 @@ applyToProducts :: Monad m => (SGrade -> SGrade -> m a)
             -> (SGrade -> a)
             -> SGrade -> SGrade -> Either String (m b)
 
-applyToProducts f g _ a@(SProduct a1 b1) b@(SProduct a2 b2) =
-  if (match a1 a2) && (match b1 b2)
-    then Right $ liftM2 g (f a1 a2) (f b1 b2)
-    else if (match a1 b2) && (match b1 a2)
-      then Right $ liftM2 g (f a1 b2) (f b1 a2)
-      else Left $ "Solver grades " <> show a <> " and " <> show b <> " are incompatible "
+applyToProducts f g _ a@(SProduct a1 b1) b@(SProduct a2 b2)
+  | (match a1 a2) && (match b1 b2) = Right $ liftM2 g (f a1 a2) (f b1 b2)
+  | (match a1 b2) && (match b1 a2) = Right $ liftM2 g (f a1 b2) (f b1 a2)
+  | otherwise = Left $ "Solver grades " <> show a <> " and " <> show b <> " are incompatible "
 
-applyToProducts f g h a@(SProduct a1 b1) c =
-  if match a1 c
-    then Right $ liftM2 g (f a1 c) (return $ h b1)
-    else if match b1 c
-         then Right $ liftM2 g (return $ h a1) (f b1 c)
-         else Left $ "Solver grades " <> show a <> " and " <> show c <> " are incompatible "
+applyToProducts f g h a@(SProduct a1 b1) c
+  | match a1 c = Right $ liftM2 g (f a1 c) (return $ h b1)
+  | match b1 c = Right $ liftM2 g (return $ h a1) (f b1 c)
+  | otherwise = Left $ "Solver grades " <> show a <> " and " <> show c <> " are incompatible "
 
-applyToProducts f g h c a@(SProduct a1 b1) =
-  if match c a1
-    then Right $ liftM2 g (f c a1) (return $ h b1)
-    else if match c b1
-         then Right $ liftM2 g (return $ h a1) (f c b1)
-         else Left $ "Solver grades " <> show a <> " and " <> show c <> " are incompatible "
+applyToProducts f g h c a@(SProduct a1 b1)
+  | match c a1 = Right $ liftM2 g (f c a1) (return $ h b1)
+  | match c b1 = Right $ liftM2 g (return $ h a1) (f c b1)
+  | otherwise = Left $ "Solver grades " <> show a <> " and " <> show c <> " are incompatible "
 
 applyToProducts _ _ _ a b =
   Left $ "Solver grades " <> show a <> " and " <> show b <> " are not products"
@@ -226,12 +220,16 @@ symGradeLess (SInterval lb1 ub1) (SInterval lb2 ub2) =
 
 symGradeLess (SNat n) (SNat n')     = return $ n .< n'
 symGradeLess (SFloat n) (SFloat n') = return $ n .< n'
-symGradeLess (SLevel n) (SLevel n') = -- return $ n .< n'
-  return $ ite ((n .== literal dunnoRepresentation) .&& (n' .== literal publicRepresentation)) sTrue
-         $ ite ((n .== literal privateRepresentation) .&& (n' .== literal dunnoRepresentation)) sTrue
-         $ ite ((n .== literal unusedRepresentation) .&& (n' .== literal dunnoRepresentation)) sTrue
-         $ ite ((n .== literal dunnoRepresentation) .|| (n' .== literal dunnoRepresentation)) sFalse
-         $ n .< n'
+symGradeLess (SLevel n) (SLevel n') =
+  -- Using the ordering from the Agda code (by cases)
+  return $ ltCase dunnoRepresentation   publicRepresentation  -- DunnoPub
+         $ ltCase privateRepresentation dunnoRepresentation   -- PrivDunno
+         $ ltCase unusedRepresentation  dunnoRepresentation   -- 0Dunno
+         $ ltCase unusedRepresentation  publicRepresentation  -- 0Pub
+         $ ltCase unusedRepresentation  privateRepresentation -- 0Priv
+         $ ltCase privateRepresentation publicRepresentation  -- PrivPub
+         sFalse
+  where ltCase a b = ite ((n .== literal a) .&& (n' .== literal b)) sTrue
 symGradeLess (SSet _ n) (SSet _ n')  = solverError "Can't do < on sets"
 symGradeLess (SExtNat n) (SExtNat n') = return $ n .< n'
 symGradeLess SPoint SPoint            = return sTrue
@@ -269,7 +267,7 @@ symGradeEq (SFloat n) (SFloat n') = return $ n .== n'
 symGradeEq (SLevel n) (SLevel n') = return $ n .== n'
 symGradeEq (SSet p n) (SSet p' n') | p == p' = return $ n .== n'
 symGradeEq (SExtNat n) (SExtNat n') = return $ n .== n'
-symGradeEq SPoint SPoint          = return $ sTrue
+symGradeEq SPoint SPoint          = return sTrue
 symGradeEq (SOOZ s) (SOOZ r)      = pure $ s .== r
 symGradeEq s t | isSProduct s || isSProduct t =
     either solverError id (applyToProducts symGradeEq (.&&) (const sTrue) s t)
@@ -278,7 +276,7 @@ symGradeEq (SUnknown t) (SUnknown t') = sEqTree t t'
 symGradeEq (SSec n) (SSec n') = return $ n .== n'
 symGradeEq (SLNL n) (SLNL m) = return $ n .== m
 symGradeEq (SBorrow n) (SBorrow m) = return $ n .== m
-symGradeEq SUnique SUnique = return $ sTrue
+symGradeEq SUnique SUnique = return sTrue
 symGradeEq s t = solverError $ cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -286,7 +284,17 @@ symGradeMeet :: SGrade -> SGrade -> Symbolic SGrade
 symGradeMeet (SNat n1) (SNat n2)     = return $ SNat $ n1 `smin` n2
 symGradeMeet (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
 symGradeMeet (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
-symGradeMeet (SLevel s) (SLevel t)   = return $ SLevel $ s `smin` t
+symGradeMeet (SLevel s) (SLevel t) =
+  -- Using the meet from the Agda code (by cases)
+  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- meet Unused x = x
+                  $ ite (t .== literal unusedRepresentation) s -- meet x Unused = x
+                  $ ite ((t .== literal publicRepresentation) .|| -- meet Public x = Public
+                        (s .== literal publicRepresentation))     -- meet x Public = Public
+                        (literal publicRepresentation)
+                  $ ite ((t .== literal privateRepresentation) .&& -- meet Private Private = Private
+                        (s .== literal privateRepresentation))
+                        (literal privateRepresentation)
+                  $ literal dunnoRepresentation -- meet Dunno Private = meet Private Dunno = meet Dunno Dunno = Dunno
 symGradeMeet (SFloat n1) (SFloat n2) = return $ SFloat $ n1 `smin` n2
 symGradeMeet (SExtNat x) (SExtNat y) = return $ SExtNat $
   ite (isInf x) y (ite (isInf y) x (SNatX (xVal x `smin` xVal y)))
@@ -308,11 +316,16 @@ symGradeJoin (SNat n1) (SNat n2) = return $ SNat (n1 `smax` n2)
 symGradeJoin (SSet Normal s) (SSet Normal t)   = return $ SSet Normal $ S.intersection s t
 symGradeJoin (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
 symGradeJoin (SLevel s) (SLevel t) =
-  return $ SLevel -- $ ite (s .== literal unusedRepresentation) t -- 0 + t = t
-                  -- $ ite (t .== literal unusedRepresentation) s -- s + 0 = s
-                  -- $ ite (s .== literal dunnoRepresentation)  t
-                  -- $ ite (t .== literal dunnoRepresentation)  s
-                  $ s `smax` t
+  -- Using the join from the Agda code (by cases)
+  return $ SLevel $ ite (s .== literal unusedRepresentation) t -- join Unused x = x
+                  $ ite (t .== literal unusedRepresentation) s -- join x Unused = x
+                  $ ite ((t .== literal privateRepresentation) .|| -- join Private x = Private
+                        (s .== literal privateRepresentation))     -- join x Private = Private
+                        (literal privateRepresentation)
+                  $ ite ((t .== literal dunnoRepresentation) .|| -- join Dunno x = Dunno
+                        (s .== literal dunnoRepresentation))     -- join x Dunno = Dunno
+                        (literal dunnoRepresentation)
+                  $ literal publicRepresentation -- join Public = Public
 symGradeJoin (SFloat n1) (SFloat n2) = return $ SFloat (n1 `smax` n2)
 symGradeJoin (SExtNat x) (SExtNat y) = return $ SExtNat $
   ite (isInf x .|| isInf y) inf (SNatX (xVal x `smax` xVal y))
@@ -333,21 +346,12 @@ symGradePlus :: SGrade -> SGrade -> Symbolic SGrade
 symGradePlus (SNat n1) (SNat n2) = return $ SNat (n1 + n2)
 symGradePlus (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.union s t
 symGradePlus (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.intersection s t
-symGradePlus (SLevel lev1) (SLevel lev2) =
-  return $ SLevel $ ite (lev1 .== literal unusedRepresentation) lev2
-                  $ ite (lev2 .== literal unusedRepresentation) lev1
-                  $ ite ((lev1 .== literal dunnoRepresentation)
-                         .&& (lev2 .== literal privateRepresentation)) (literal dunnoRepresentation)
-                  $ ite ((lev2 .== literal dunnoRepresentation)
-                         .&& (lev1 .== literal privateRepresentation)) (literal dunnoRepresentation)
-                  $ ite (lev1 .== literal dunnoRepresentation) lev2
-                  $ ite (lev2 .== literal dunnoRepresentation) lev1
-                  $ lev1 `smax` lev2
+symGradePlus (SLevel lev1) (SLevel lev2) = symGradeMeet (SLevel lev1) (SLevel lev2)
 symGradePlus (SFloat n1) (SFloat n2) = return $ SFloat $ n1 + n2
 symGradePlus (SExtNat x) (SExtNat y) = return $ SExtNat (x + y)
 symGradePlus (SInterval lb1 ub1) (SInterval lb2 ub2) =
     liftM2 SInterval (lb1 `symGradePlus` lb2) (ub1 `symGradePlus` ub2)
-symGradePlus SPoint SPoint = return $ SPoint
+symGradePlus SPoint SPoint = return SPoint
 symGradePlus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradePlus SProduct id s t)
 -- 1 + 1 = 0
@@ -368,8 +372,8 @@ symGradePlus (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynPlus um un)
 
 symGradePlus (SSec a) (SSec b) = symGradeMeet (SSec a) (SSec b)
-symGradePlus (SLNL a) (SLNL b) = return $ ite (a .== (literal zeroRep)) (SLNL b)
-                                            (ite (b .== (literal zeroRep)) (SLNL a) (SLNL (literal manyRep)))
+symGradePlus (SLNL a) (SLNL b) = return $ ite (a .== literal zeroRep) (SLNL b)
+                                            (ite (b .== literal zeroRep) (SLNL a) (SLNL (literal manyRep)))
 
 symGradePlus (SBorrow a) (SBorrow b) = return $ SBorrow (a `smax` b `smax` literal betaRepresentation)
 
@@ -377,13 +381,7 @@ symGradePlus s t = solverError $ cannotDo "plus" s t
 
 -- | Converge (#) operation
 symGradeConverge :: SGrade -> SGrade -> Symbolic SGrade
-symGradeConverge (SLevel lev1) (SLevel lev2) = do
-    v <- symGradeTimes (SLevel lev1) (SLevel lev2)
-    return $ ite (lev1 .== literal privateRepresentation)
-                 (SLevel $ literal privateRepresentation)
-                 $ ite (lev2 .== literal privateRepresentation)
-                       (SLevel $ literal privateRepresentation)
-                       v
+symGradeConverge (SLevel lev1) (SLevel lev2) = symGradeJoin (SLevel lev1) (SLevel lev2)
 symGradeConverge s1 s2 = symGradeTimes s1 s2
 
 -- | Times operation on symbolic grades
@@ -393,14 +391,7 @@ symGradeTimes (SNat n1) (SExtNat (SNatX n2)) = return $ SExtNat $ SNatX (n1 * n2
 symGradeTimes (SExtNat (SNatX n1)) (SNat n2) = return $ SExtNat $ SNatX (n1 * n2)
 symGradeTimes (SSet Normal s) (SSet Normal t) = return $ SSet Normal $ S.intersection s t
 symGradeTimes (SSet Opposite s) (SSet Opposite t) = return $ SSet Opposite $ S.union s t
-symGradeTimes (SLevel lev1) (SLevel lev2) =
-  return $ SLevel $ ite (lev1 .== literal unusedRepresentation)  (literal unusedRepresentation) -- 0 * r = 0
-                  $ ite (lev2 .== literal unusedRepresentation)  (literal unusedRepresentation) -- r * 0 = 0
-                  $ ite (lev1 .== literal privateRepresentation) lev2 -- 1 * r = r
-                  $ ite (lev2 .== literal privateRepresentation) lev1 -- r * 1 = r
-                  $ ite (lev1 .== literal dunnoRepresentation)   lev2
-                  $ ite (lev2 .== literal dunnoRepresentation)   lev1
-                  $ lev1 `smax` lev2
+symGradeTimes (SLevel lev1) (SLevel lev2) = symGradeMeet (SLevel lev1) (SLevel lev2)
 symGradeTimes (SFloat n1) (SFloat n2) = return $ SFloat $ n1 * n2
 symGradeTimes (SExtNat x) (SExtNat y) = return $ SExtNat (x * y)
 symGradeTimes (SOOZ s) (SOOZ r) = pure . SOOZ $ s .&& r
@@ -444,8 +435,8 @@ symGradeTimes (SUnknown um) (SUnknown un) =
   return $ SUnknown (SynTimes um un)
 
 symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
-symGradeTimes (SLNL a) (SLNL b) = return $ ite (a .== (literal zeroRep)) (SLNL (literal zeroRep))
-                                            (ite (b .== (literal zeroRep)) (SLNL (literal zeroRep)) (SLNL $ a `smax` b))
+symGradeTimes (SLNL a) (SLNL b) = return $ ite (a .== literal zeroRep) (SLNL (literal zeroRep))
+                                            (ite (b .== literal zeroRep) (SLNL (literal zeroRep)) (SLNL $ a `smax` b))
 symGradeTimes (SBorrow a) (SBorrow b) = return $ SBorrow $ a `smax` b
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
@@ -458,7 +449,7 @@ symGradeMinus (SSet p s) (SSet p' t) | p == p' = return $ SSet p (s S.\\ t)
 symGradeMinus (SExtNat x) (SExtNat y) = return $ SExtNat (x - y)
 symGradeMinus (SInterval lb1 ub1) (SInterval lb2 ub2) =
   liftM2 SInterval (lb1 `symGradeMinus` lb2) (ub1 `symGradeMinus` ub2)
-symGradeMinus SPoint SPoint = return $ SPoint
+symGradeMinus SPoint SPoint = return SPoint
 symGradeMinus s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeMinus SProduct id s t)
 symGradeMinus s t = solverError $ cannotDo "minus" s t
@@ -467,8 +458,8 @@ symGradeMinus s t = solverError $ cannotDo "minus" s t
 symGradeHsup :: SGrade -> SGrade -> Symbolic SBool
 -- | For LNL grades, when both grades are linear allow pushing, otherwise, pushing is disallowed. 
 -- | Check the grades are concrete to disallow hsup on grades which are polymorphic within the LNL semiring. 
-symGradeHsup (SLNL n) (SLNL m) | isConcrete m, isConcrete n =  return (n .== (literal oneRep) .&& m .== (literal oneRep))
-symGradeHsup (SLNL n) (SLNL m) = return sFalse 
+symGradeHsup (SLNL n) (SLNL m) | isConcrete m, isConcrete n =  return (n .== literal oneRep .&& m .== literal oneRep)
+symGradeHsup (SLNL n) (SLNL m) = return sFalse
 -- | Disallow hsup for polymorphic grades
 symGradeHsup (SUnknown s1) (SUnknown s2) = return sFalse
 -- | For all other grades, allow pushing 
