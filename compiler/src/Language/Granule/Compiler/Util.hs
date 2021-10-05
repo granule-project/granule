@@ -12,7 +12,7 @@ module Language.Granule.Compiler.Util
 import Language.Haskell.Exts
 
 grExts :: [Name ()]
-grExts = map name ["GADTs", "ScopedTypeVariables"]
+grExts = map name ["GADTs", "ScopedTypeVariables", "Strict"]
 
 mkPragmas :: [Name ()] -> ModulePragma ()
 mkPragmas = LanguagePragma ()
