@@ -44,9 +44,4 @@ executables:
   grc:
     main: Language/Granule/Compiler.hs
     source-dirs: src
-    exposed-modules:
-    - Language.Granule.Compiler.Util
-    - Language.Granule.Compiler.HSCodegen
-    - Language.Granule.Compiler.Gensym
-    - Language.Granule.Compiler.Context
     ghc-options: -main-is Language.Granule.Compiler

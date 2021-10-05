@@ -9,13 +9,10 @@ import Data.Functor
 newtype GensymState = GensymState { uniqueNum :: Int }
   deriving Show
 
--- | Monad for generating fresh names.
-type MonadGensym m = MonadState GensymState m
-
 -- | Generate unique symbols (gensym) by appending a
 --   unique number to the end of the symbol string.
 --   Requires `GensymState`.
-gensym :: MonadGensym m => String -> m String
+gensym :: MonadState GensymState m => String -> m String
 gensym str = do
   n <- get <&> uniqueNum
   put (GensymState $ n + 1)
