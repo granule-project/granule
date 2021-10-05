@@ -46,7 +46,7 @@ cgDefs :: Compiler m => CAst -> m [Decl ()]
 cgDefs (AST dd defs imports _ _) =
   do defs' <- mapM cgDef  defs <&> concat
      dd'   <- mapM cgData dd   <&> concat
-     return $ defs' ++ dd'
+     return $ dd' ++ defs'
 
 cgDef :: Compiler m => Def () () -> m [Decl ()]
 cgDef (Def _ id _ EquationList{equations} typeschemes) = do
@@ -61,7 +61,17 @@ cgDef (Def _ id _ EquationList{equations} typeschemes) = do
   return [sig,impl]
 
 cgData :: Compiler m => DataDecl -> m [Decl ()]
-cgData _ = return []
+cgData (GrDef.DataDecl _ id tyvars _ constrs) = do
+  conDecls <- mapM cgDataConstr constrs
+  let dhead = foldr ((\i a -> DHApp () a $ UnkindedVar () i) . (name . internalName . fst))
+                    (DHead () (name $ internalName id)) tyvars
+  return [Hs.DataDecl () (DataType ()) Nothing dhead conDecls []]
+
+cgDataConstr :: Compiler m => DataConstr -> m (QualConDecl ())
+cgDataConstr (DataConstrIndexed s i t) = unsupported "cgData: indexed data cons not supported"
+cgDataConstr (DataConstrNonIndexed _ i tys) = do
+  tys' <- mapM cgType tys
+  return $ QualConDecl () Nothing Nothing $ ConDecl () (name $ sourceName i) tys'
 
 cgTypeScheme :: Compiler m => TypeScheme -> m (Hs.Type ())
 cgTypeScheme (Forall _ binders constraints typ) = cgType typ
