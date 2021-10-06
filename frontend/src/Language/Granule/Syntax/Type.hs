@@ -435,18 +435,15 @@ instance Freshenable m Type where
 --   None of this is stricly necessary but it improves type errors
 --   and speeds up some constarint solving.
 normalise :: Type -> Type
-normalise (TyInfix TyOpPlus (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m)) = TyApp (TyCon (mkId "Level")) (n `max` m)
-normalise (TyInfix TyOpTimes (TyApp (TyCon (internalName -> "Level")) n) (TyApp (TyCon (internalName -> "Level")) m)) = TyApp (TyCon (mkId "Level")) (n `min` m)
 normalise (TyInfix TyOpPlus (TyRational n) (TyRational m)) = TyRational (n + m)
 normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)
-normalise (TyInfix TyOpPlus (TyGrade k n) (TyGrade k' m)) | k == k' = TyGrade k (n + m)
 
 -- exempt Uniquness from multiplicative unit
 normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1)) = g
 normalise g@(TyInfix TyOpTimes (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1) r) = g
 -- exempt Level from multiplicative unit
--- normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Level"))) 1)) = g
--- normalise g@(TyInfix TyOpTimes (TyGrade (Just (TyCon (internalName -> "Level"))) 1) r) = g
+normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Level"))) 1)) = g
+normalise g@(TyInfix TyOpTimes (TyGrade (Just (TyCon (internalName -> "Level"))) 1) r) = g
 -- simple units
 normalise (TyInfix TyOpTimes r (TyGrade _ 1)) = r
 normalise (TyInfix TyOpTimes (TyGrade _ 1) r) = r
