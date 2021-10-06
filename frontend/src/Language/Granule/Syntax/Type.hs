@@ -442,6 +442,8 @@ normalise (TyInfix TyOpTimes (TyRational n) (TyRational m)) = TyRational (n * m)
 normalise (TyInfix TyOpPlus (TyGrade k n) (TyGrade k' m)) | k == k' = TyGrade k (n + m)
 
 -- simple units
+normalise g@(TyInfix TyOpTimes r (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1)) = g
+normalise g@(TyInfix TyOpTimes (TyGrade (Just (TyCon (internalName -> "Uniqueness"))) 1) r) = g
 normalise (TyInfix TyOpTimes r (TyGrade _ 1)) = r
 normalise (TyInfix TyOpTimes (TyGrade _ 1) r) = r
 normalise (TyInfix TyOpPlus r (TyGrade _ 0)) = r
