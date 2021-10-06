@@ -508,9 +508,24 @@ uniqueReturn
 uniqueReturn = BUILTIN
 
 uniqueBind
-  : forall {a b : Type, k : Coeffect, c : k}
-  . (a [Unique] -> b [c]) -> a [c] -> b [c]
+  : forall {a b : Type}
+  . (a [Unique] -> b [Many]) -> a [Many] -> b [Many]
 uniqueBind = BUILTIN
+
+uniquePush 
+  : forall {a b : Type} 
+  . (a, b) [Unique] -> (a [Unique], b [Unique])
+uniquePush = BUILTIN
+
+uniquePull 
+  : forall {a b : Type} 
+  . (a [Unique], b [Unique]) -> (a, b) [Unique]
+uniquePull = BUILTIN
+
+uniqueFunctor 
+  : forall {a b : Type} 
+  . (a -> b) -> a [Unique] -> b [Unique]
+uniqueFunctor = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Mutable arrays
