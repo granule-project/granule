@@ -522,11 +522,6 @@ uniquePull
   . (a [Unique], b [Unique]) -> (a, b) [Unique]
 uniquePull = BUILTIN
 
-uniqueFunctor 
-  : forall {a b : Type} 
-  . (a -> b) -> a [Unique] -> b [Unique]
-uniqueFunctor = BUILTIN
-
 --------------------------------------------------------------------------------
 -- Mutable arrays
 --------------------------------------------------------------------------------
