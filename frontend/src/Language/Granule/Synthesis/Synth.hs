@@ -314,7 +314,7 @@ useVar (name, Discharged t grade) _ Additive{} Nothing = do
   return (True, [(name, Discharged t (TyGrade (Just kind) 1))], t)
 useVar (name, Discharged t grade) _ Additive{} (Just grade')= do
   (kind, _, _) <- conv $ synthKind nullSpan grade
-  return (True, [(name, Discharged t (TyInfix TyOpTimes (TyGrade (Just kind) 1) grade'))], t)
+  return (True, [(name, Discharged t  grade')], t)
 
 
 
