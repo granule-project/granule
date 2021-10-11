@@ -37,6 +37,11 @@ import qualified Data.Array.IO as MA
 import System.IO (hFlush, stdout, stderr)
 import qualified System.IO as SIO
 
+import Foreign.Marshal.Array
+import Foreign.Ptr
+import Foreign.Storable
+import Foreign.Marshal.Alloc
+
 import System.IO.Error (mkIOError)
 import Data.Bifunctor
 
@@ -61,7 +66,7 @@ data Runtime a =
   | PureWrapper (IO (Expr (Runtime a) ()))
 
   -- | Mutable arrays
-  | FloatArray (MA.IOArray Int Double)
+  | FloatArray { grLength :: Int, grPtr :: Ptr Double, grArr :: Maybe (MA.IOArray Int Double) }
 
 
 diamondConstr :: IO (Expr (Runtime ()) ()) -> RValue
@@ -78,7 +83,7 @@ instance Show (Runtime a) where
   show (PrimitiveClosure _) = "Some primitive closure"
   show (Handle _) = "Some handle"
   show (PureWrapper _) = "<suspended IO>"
-  show (FloatArray arr) = "<array>"
+  show (FloatArray _ _ _) = "<array>"
 
 instance Pretty (Runtime a) where
   pretty = show
@@ -386,7 +391,7 @@ builtIns =
                                 diamondConstr (do
                                   when testing (error "trying to write `toStdout` while testing")
                                   Text.putStr s
-                                  return $ (Val nullSpan () False (Constr () (mkId "()") []))))
+                                  return $ Val nullSpan () False (Constr () (mkId "()") [])))
   , (mkId "toStderr", Ext () $ Primitive $ \(StringLiteral s) ->
                                 diamondConstr (do
                                   when testing (error "trying to write `toStderr` while testing")
@@ -600,60 +605,56 @@ builtIns =
 
     {-# NOINLINE newFloatArray #-}
     newFloatArray :: RValue -> RValue
-    newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+    newFloatArray = \(NumInt i) -> Promote () $ Val nullSpan () False $ Ext () $ unsafePerformIO $ do
+      ptr <- mallocArray (i + 1)
+      return $ FloatArray (i + 1) ptr Nothing
 
     {-# NOINLINE newFloatArray' #-}
     newFloatArray' :: RValue -> RValue
-    newFloatArray' = \(NumInt i) -> Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i)))
+    newFloatArray' = \(NumInt i) -> Promote () (Val nullSpan () False $ Ext () $ FloatArray (i + 1) nullPtr (Just $ unsafePerformIO (MA.newArray_ (0,i))))
 
     {-# NOINLINE readFloatArray #-}
     readFloatArray :: RValue -> RValue
-    readFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
-      unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () (FloatArray arr))])
+    readFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray size ptr arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      unsafePerformIO $ do e <- peekElemOff ptr i
+                           return (Constr () (mkId ",") [NumFloat e, Promote () (Val nullSpan () False $ Ext () (FloatArray size ptr arr))])
 
     {-# NOINLINE readFloatArray' #-}
     readFloatArray' :: RValue -> RValue
-    readFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray' = \(Promote () (Val _ _ _ (Ext () (FloatArray size ptr (Just arr))))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Ext () $ FloatArray arr])
+                           return (Constr () (mkId ",") [NumFloat e, Promote () (Val nullSpan () False $ Ext () (FloatArray size ptr (Just arr)))])
 
     lengthFloatArray :: RValue -> RValue
-    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
-      unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray arr)])
-
-    lengthFloatArray' :: RValue -> RValue
-    lengthFloatArray' = \(Ext () (FloatArray arr)) -> Ext () $ Primitive $ \(NumInt i) ->
-      unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Ext () $ FloatArray arr])
+    lengthFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray size ptr arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      Constr () (mkId ",") [NumInt size, Promote () (Val nullSpan () False $ Ext () $ FloatArray size ptr arr)]
 
     {-# NOINLINE writeFloatArray #-}
     writeFloatArray :: RValue -> RValue
-    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray = \(Promote _ (Val _ _ _ (Ext _ (FloatArray size ptr arr)))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Nec () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
-        do () <- MA.writeArray arr i v
-           return arr
+      Promote () $ Val nullSpan () False $ Ext () $ unsafePerformIO $
+        do pokeElemOff ptr i v
+           return $ FloatArray size ptr arr
 
     {-# NOINLINE writeFloatArray' #-}
     writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Ext () (FloatArray arr)) ->
+    writeFloatArray' = \(Promote _ (Val _ _ _ (Ext _ (FloatArray size ptr (Just arr))))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-        Ext () $ FloatArray $ unsafePerformIO $
-           do arr' <- MA.mapArray id arr
-              () <- MA.writeArray arr' i v
-              return arr'
+      Promote () $ Val nullSpan () False $ Ext () $ unsafePerformIO $
+        do arr' <- MA.mapArray id arr
+           () <- MA.writeArray arr' i v
+           return $ FloatArray size ptr (Just arr')
 
     {-# NOINLINE deleteFloatArray #-}
     deleteFloatArray :: RValue -> RValue
-    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
-      case (unsafePerformIO $ do
-              arr' <- MA.mapArray (const undefined) arr
-              return ()) of
-        () -> Constr () (mkId "()") []
+    deleteFloatArray = \(Promote _ (Val _ _ _ (Ext _ (FloatArray size ptr arr)))) ->
+      Promote () $ Val nullSpan () False $ unsafePerformIO $
+      do free ptr
+         return $ Constr () (mkId "()") []
+
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
