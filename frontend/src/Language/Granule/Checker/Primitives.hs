@@ -557,6 +557,15 @@ deleteFloatArray = BUILTIN
 
 scale : (k : Float) -> DFloat [k] -> DFloat
 scale = BUILTIN
+--------------------------------------------------------------------------------
+-- Benchmarking
+--------------------------------------------------------------------------------
+
+data BenchList where BenchGroup String BenchList BenchList ; Bench Int String (Int [] -> () <{Stdout}>) BenchList; Done
+
+mkIOBenchMain : BenchList -> () <>
+mkIOBenchMain = BUILTIN
+
 |]
 
 

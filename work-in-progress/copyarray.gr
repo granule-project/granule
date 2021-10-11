@@ -17,8 +17,8 @@ cleanup (f, ([a1], [a2])) = f
 
 main : () <{Stdout}>
 main =
-  let [arr1] = [fill' (newFloatArray' 5) [5]];
-      [arr2] = [fill' (newFloatArray' 5) [5]];
-      (val,([arr1'],[arr2'])) = dotp' [arr1] [arr2] [5] 0.0;
+  let [arr1] = [fill' (newFloatArray' 50000) [50000]];
+      [arr2] = [fill' (newFloatArray' 50000) [50000]];
+      (val,([arr1'],[arr2'])) = dotp' [arr1] [arr2] [50000] 0.0;
       val' = cleanup (val,([arr1'],[arr2']))
   in toStdout (showFloat val')

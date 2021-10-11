@@ -1,6 +1,7 @@
 -- | Implementations of builtin Granule functions in Haskell
 
-{-# LANGUAGE NamedFieldPuns #-}
+{-# LANGUAGE NamedFieldPuns, Strict #-}
+{-# OPTIONS_GHC -fno-full-laziness #-}
 module Language.Granule.Runtime where
 
 import Foreign.Marshal.Array
@@ -10,6 +11,23 @@ import System.IO.Unsafe
 import Foreign.Marshal.Alloc
 import System.IO
 import qualified Data.Array.IO as MA
+import Criterion.Main
+import System.IO.Silently
+
+--------------------------------------------------------------------------------
+-- Benchmarking
+--------------------------------------------------------------------------------
+
+data BenchList =
+    BenchGroup String BenchList BenchList
+  | Bench Int String (Int -> IO ()) BenchList
+  | Done
+
+mkIOBenchMain :: BenchList -> IO ()
+mkIOBenchMain ns = defaultMain (go ns) -- map (\(n,s,f) -> bench s $ nfIO $ f n) ns
+  where go (Bench n s f next) = bench s (nfAppIO (silence . f) n) : go next
+        go (BenchGroup str benchs next) = bgroup str (go benchs) : go next
+        go Done = []
 
 --------------------------------------------------------------------------------
 -- I/O
@@ -67,7 +85,7 @@ newFloatArray size = unsafePerformIO $ do
 {-# NOINLINE newFloatArray' #-}
 newFloatArray' :: Int -> FloatArray
 newFloatArray' size = unsafePerformIO $ do
-  arr <- MA.newArray_ (0,size)
+  arr <- MA.newArray (0,size) 0.0
   let ptr = nullPtr
   return $ FloatArray (size + 1) ptr (Just arr)
 
@@ -77,9 +95,8 @@ writeFloatArray a i v =
   if i > grLength a
   then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else unsafePerformIO $ do
-    pokeElemOff (grPtr a) i v
+    () <- pokeElemOff (grPtr a) i v
     return a
-
 
 {-# NOINLINE writeFloatArray' #-}
 writeFloatArray' :: FloatArray -> Int -> Float -> FloatArray
@@ -89,8 +106,9 @@ writeFloatArray' a i v =
   else case grArr a of
     Nothing -> error "expected non-unique array"
     Just arr -> unsafePerformIO $ do
-      MA.writeArray arr i v
-      return a
+      a' <- MA.mapArray id arr
+      () <- MA.writeArray a' i v
+      return $ FloatArray (grLength a) nullPtr (Just a')
 
 {-# NOINLINE readFloatArray #-}
 readFloatArray :: FloatArray -> Int -> (Float, FloatArray)
