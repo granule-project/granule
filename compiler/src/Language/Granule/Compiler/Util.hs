@@ -4,12 +4,16 @@
 module Language.Granule.Compiler.Util
   (
     module Language.Haskell.Exts
+  , grImport
   , grPragmas
   , mkEquation
   , mkUnit
   ) where
 
 import Language.Haskell.Exts
+
+grImport :: ImportDecl ()
+grImport = ImportDecl () (ModuleName () "Language.Granule.Runtime") False False False Nothing Nothing Nothing
 
 grExts :: [Name ()]
 grExts = map name ["GADTs", "ScopedTypeVariables", "Strict"]
