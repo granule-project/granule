@@ -104,7 +104,9 @@ cgType (GrType.FunTy _ t1 t2) = do
 cgType (GrType.TyCon i) =
   return $ Hs.TyCon () $ UnQual () $ name $ sourceName i
 cgType (GrType.Box t t2) = cgType t2
-cgType (GrType.Diamond t t2) = unsupported "cgType: diamond not implemented"
+cgType (GrType.Diamond t t2) = do
+  t2' <- cgType t2
+  return $ Hs.TyApp () (Hs.TyCon () $ UnQual () $ name "IO") t2'
 cgType (GrType.TyVar i) =
   return $ Hs.TyVar () $ name $ sourceName i
 cgType (GrType.TyApp t1 t2) = do
@@ -129,7 +131,7 @@ cgExpr (GrExpr.Binop _ _ _ op e1 e2) = do
   e1' <- cgExpr e1
   e2' <- cgExpr e2
   cgBinop op e1' e2'
-cgExpr (GrExpr.LetDiamond _ _ _ p _ e1 e2) = unsupported "cgExpr: not implemented"
+cgExpr (GrExpr.LetDiamond _ _ _ p _ e1 e2) = unsupported $ "cgExpr: LetDiamond not implemented\n" ++ show (p,e1,e2)
 cgExpr (GrExpr.TryCatch _ _ _ e1 p _ e2 e3) = unsupported "cgExpr: not implemented"
 cgExpr (GrExpr.Val _ _ _ e) = cgVal e
 cgExpr (GrExpr.Case _ _ _ guardExpr cases) = unsupported "cgExpr: not implemented"

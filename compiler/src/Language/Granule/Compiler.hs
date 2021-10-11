@@ -85,7 +85,7 @@ compile config input = let ?globals = maybe mempty grGlobals (getEmbeddedGrFlags
           let ast' = extendASTWith derivedDefs ast
               result = cg ast'
           case result of
-            Left e -> error $ show e
+            Left e -> error (bold . red . show $ e)
             Right str -> return str
 
 changeFileExtension :: String -> String
