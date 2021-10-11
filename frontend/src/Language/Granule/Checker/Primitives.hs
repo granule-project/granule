@@ -545,6 +545,16 @@ lengthFloatArray' = BUILTIN
 
 deleteFloatArray : FloatArray [Unique] -> ()
 deleteFloatArray = BUILTIN
+
+--------------------------------------------------------------------------------
+-- Benchmarking
+--------------------------------------------------------------------------------
+
+data BenchList where BenchGroup String BenchList BenchList ; Bench Int String (Int [] -> () <{Stdout}>) BenchList; Done
+
+mkIOBenchMain : BenchList -> () <>
+mkIOBenchMain = BUILTIN
+
 |]
 
 

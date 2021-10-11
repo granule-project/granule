@@ -18,6 +18,8 @@ dependencies:
 - array
 - haskell-src-exts
 - containers
+- criterion
+- silently
 
 default-extensions:
 - LambdaCase

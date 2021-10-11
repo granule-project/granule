@@ -20,7 +20,7 @@ cleanup (f, (a1, a2)) =
 
 main : () <{Stdout}>
 main =
-  let arr1 = fill' (newFloatArray 5) [5];
-      arr2 = fill' (newFloatArray 5) [5];
-      val = cleanup (dotp' arr1 arr2 [5] 0.0)
+  let arr1 = fill' (newFloatArray 50000) [50000];
+      arr2 = fill' (newFloatArray 50000) [50000];
+      val = cleanup (dotp' arr1 arr2 [50000] 0.0)
   in toStdout (showFloat val)

@@ -148,7 +148,7 @@ cgExpr (GrExpr.App _ _ _ e1 e2) =
   e1' <- cgExpr e1
   e2' <- cgExpr e2
   return $ app e1' e2'
-cgExpr (GrExpr.AppTy _ _ _ e t) = unsupported "cgExpr: not implemented"
+cgExpr (GrExpr.AppTy _ _ _ e t) = unsupported "cgExpr: appty not implemented"
 cgExpr (GrExpr.Binop _ _ _ op e1 e2) = do
   e1' <- cgExpr e1
   e2' <- cgExpr e2
@@ -159,10 +159,10 @@ cgExpr (GrExpr.LetDiamond _ _ _ p _ e1 e2) = do
   e2' <- cgExpr e2
   let lam = lamE [p'] e2'
   return $ infixApp e1' (op $ sym ">>=") lam
-cgExpr (GrExpr.TryCatch _ _ _ e1 p _ e2 e3) = unsupported "cgExpr: not implemented"
+cgExpr (GrExpr.TryCatch _ _ _ e1 p _ e2 e3) = unsupported "cgExpr: trycatch not implemented"
 cgExpr (GrExpr.Val _ _ _ e) = cgVal e
-cgExpr (GrExpr.Case _ _ _ guardExpr cases) = unsupported "cgExpr: not implemented"
-cgExpr GrExpr.Hole{} = error "cgExpr: not implemented"
+cgExpr (GrExpr.Case _ _ _ guardExpr cases) = unsupported "cgExpr: case not implemented"
+cgExpr GrExpr.Hole{} = error "cgExpr: hole not implemented"
 
 isTupleExpr :: CExpr -> Bool
 isTupleExpr (GrExpr.App _ _ _ (GrExpr.Val _ _ _ (GrExpr.Constr _ i _)) _) = i == Id "," ","
