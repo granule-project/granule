@@ -29,7 +29,6 @@ default-extensions:
 - ConstraintKinds
 
 ghc-options:
-- -O0
 - -Wall
 - -Werror
 - -Wcompat
@@ -45,3 +44,10 @@ executables:
     main: Language/Granule/Compiler.hs
     source-dirs: src
     ghc-options: -main-is Language.Granule.Compiler
+
+library:
+  source-dirs: src
+  exposed-modules:
+  - Language.Granule.Compiler.Error
+  - Language.Granule.Compiler.HSCodegen
+  - Language.Granule.Compiler.Util
