@@ -266,6 +266,9 @@ PAtom :: { Pattern () }
   | '[' PAtom ']'
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
+  | '!' PAtom
+       {% (mkSpan (getPos $1, getPos $1)) >>= \sp -> return $ PBox sp () False $2 }
+
   | '[' NAryConstr ']'
        {% (mkSpan (getPos $1, getPos $3)) >>= \sp -> return $ PBox sp () False $2 }
 
