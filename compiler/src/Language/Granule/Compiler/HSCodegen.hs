@@ -25,6 +25,8 @@ import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.FirstParameter
 import Data.Text (unpack)
 
+import Debug.Trace
+
 type CExpr = GrExpr.Expr  () ()
 type CVal  = GrExpr.Value () ()
 type CPat  = GrPat.Pattern   ()
@@ -90,9 +92,13 @@ cgPat (GrPat.PInt _ _ _ n) =
   return $ PLit () (Signless ()) $ Int () (fromIntegral n) (show n)
 cgPat (GrPat.PFloat _ _ _ n) =
   return $ PLit () (Signless ()) $ Frac () (toRational n) (show n)
-cgPat (GrPat.PConstr _ _ _ i l_pt) = do
-  pts <- mapM cgPat l_pt
-  return $ PApp () (UnQual () $ name $ sourceName i) pts
+cgPat (GrPat.PConstr _ _ _ i l_pt)
+  | i == Id "," ","  = do
+      pts <- mapM cgPat l_pt
+      return $ pTuple pts
+  | otherwise = do
+      pts <- mapM cgPat l_pt
+      return $ PApp () (UnQual () $ name $ sourceName i) pts
 
 cgType :: Compiler m => GrType.Type -> m (Hs.Type ())
 cgType (GrType.Type i) = return $ TyStar ()
@@ -108,10 +114,13 @@ cgType (GrType.Diamond t t2) = do
   return $ Hs.TyApp () (Hs.TyCon () $ UnQual () $ name "IO") t2'
 cgType (GrType.TyVar i) =
   return $ Hs.TyVar () $ name $ sourceName i
-cgType (GrType.TyApp t1 t2) = do
-  t1' <- cgType t1
-  t2' <- cgType t2
-  return $ Hs.TyApp () t1' t2'
+cgType (GrType.TyApp t1 t2) =
+  if isTupleType t1
+  then cgTypeTuple t1 t2
+  else do
+    t1' <- cgType t1
+    t2' <- cgType t2
+    return $ Hs.TyApp () t1' t2'
 cgType (GrType.TyInt i) = return mkUnit
 cgType (GrType.TyRational ri) = return mkUnit
 cgType (GrType.TyGrade mt i) = return mkUnit
@@ -120,8 +129,22 @@ cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
 
+isTupleType :: GrType.Type -> Bool
+isTupleType (GrType.TyApp (GrType.TyCon id) _) = id == Id "," ","
+isTupleType _oth = False
+
+cgTypeTuple :: Compiler m => GrType.Type -> GrType.Type -> m (Hs.Type ())
+cgTypeTuple (GrType.TyApp (GrType.TyCon _id) t1) t2 = do
+  t1' <- cgType t1
+  t2' <- cgType t2
+  return $ TyTuple () Boxed [t1', t2']
+cgTypeTuple _ _ = error "expected tuple"
+
 cgExpr :: Compiler m => CExpr -> m (Exp ())
-cgExpr (GrExpr.App _ _ _ e1 e2) = do
+cgExpr (GrExpr.App _ _ _ e1 e2) =
+  if isTupleExpr e1
+  then cgExprTuple e1 e2
+  else do
   e1' <- cgExpr e1
   e2' <- cgExpr e2
   return $ app e1' e2'
@@ -141,6 +164,17 @@ cgExpr (GrExpr.Val _ _ _ e) = cgVal e
 cgExpr (GrExpr.Case _ _ _ guardExpr cases) = unsupported "cgExpr: not implemented"
 cgExpr GrExpr.Hole{} = error "cgExpr: not implemented"
 
+isTupleExpr :: CExpr -> Bool
+isTupleExpr (GrExpr.App _ _ _ (GrExpr.Val _ _ _ (GrExpr.Constr _ i _)) _) = i == Id "," ","
+isTupleExpr _ = False
+
+cgExprTuple :: Compiler m => CExpr -> CExpr -> m (Exp ())
+cgExprTuple (GrExpr.App _ _ _ (GrExpr.Val _ _ _ (GrExpr.Constr _ i _)) e1) e2 = do
+  e1' <- cgExpr e1
+  e2' <- cgExpr e2
+  return $ tuple [e1', e2']
+cgExprTuple _ _ = error "expected tuple"
+
 cgVal :: Compiler m => CVal -> m (Exp ())
 cgVal (Promote _ty ex) = cgExpr ex
 cgVal (Pure ty ex) = error "cgVal: not implemented"
@@ -158,7 +192,10 @@ cgVal (Constr _ i vals) = do
   vals' <- mapM cgVal vals
   let con = Con () (UnQual () $ name $ sourceName i)
   return $ appFun con vals'
-cgVal Abs{} = unexpected "cgVal: unexpected Abs"
+cgVal (Abs _ p _ ex) = do
+  p' <- cgPat p
+  ex' <- cgExpr ex
+  return $ lamE [p'] ex'
 cgVal Ext{} = unexpected "cgVal: unexpected Ext"
 
 

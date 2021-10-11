@@ -284,6 +284,9 @@ intToFloat = BUILTIN
 showInt : Int -> String
 showInt = BUILTIN
 
+showFloat : Float -> String
+showFloat = BUILTIN
+
 --------------------------------------------------------------------------------
 -- Thread / Sessions
 --------------------------------------------------------------------------------

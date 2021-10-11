@@ -340,6 +340,9 @@ builtIns =
   , (mkId "showInt",    Ext () $ Primitive $ \n -> case n of
                               NumInt n -> StringLiteral . pack . show $ n
                               n        -> error $ show n)
+  , (mkId "showFloat",    Ext () $ Primitive $ \n -> case n of
+                              NumFloat n -> StringLiteral . pack . show $ n
+                              n        -> error $ show n)
   , (mkId "fromStdin", diamondConstr $ do
       when testing (error "trying to read stdin while testing")
       putStr "> "
