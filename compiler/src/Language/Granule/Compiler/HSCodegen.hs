@@ -39,7 +39,7 @@ cg ast = join (runExceptT (do mod <- cgModule ast
 cgModule :: Compiler m => CAst -> m (Module ())
 cgModule ast = do
   decls <- cgDefs ast
-  return $ Module () Nothing [grPragmas] [] decls
+  return $ Module () Nothing [grPragmas] [grImport] decls
 
 cgDefs :: Compiler m => CAst -> m [Decl ()]
 cgDefs (AST dd defs imports _ _) =
@@ -130,7 +130,12 @@ cgExpr (GrExpr.Binop _ _ _ op e1 e2) = do
   e1' <- cgExpr e1
   e2' <- cgExpr e2
   cgBinop op e1' e2'
-cgExpr (GrExpr.LetDiamond _ _ _ p _ e1 e2) = unsupported $ "cgExpr: LetDiamond not implemented\n" ++ show (p,e1,e2)
+cgExpr (GrExpr.LetDiamond _ _ _ p _ e1 e2) = do
+  p' <- cgPat p
+  e1' <- cgExpr e1
+  e2' <- cgExpr e2
+  let lam = lamE [p'] e2'
+  return $ infixApp e1' (op $ sym ">>=") lam
 cgExpr (GrExpr.TryCatch _ _ _ e1 p _ e2 e3) = unsupported "cgExpr: not implemented"
 cgExpr (GrExpr.Val _ _ _ e) = cgVal e
 cgExpr (GrExpr.Case _ _ _ guardExpr cases) = unsupported "cgExpr: not implemented"

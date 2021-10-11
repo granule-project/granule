@@ -42,8 +42,10 @@ ghc-options:
 executables:
   grc:
     main: Language/Granule/Compiler.hs
-    source-dirs: src
+    source-dirs: app
     ghc-options: -main-is Language.Granule.Compiler
+    dependencies:
+    - granule-compiler
 
 library:
   source-dirs: src
@@ -51,3 +53,4 @@ library:
   - Language.Granule.Compiler.Error
   - Language.Granule.Compiler.HSCodegen
   - Language.Granule.Compiler.Util
+  - Language.Granule.Runtime
