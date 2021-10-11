@@ -1,18 +1,18 @@
-dotp' : ∗FloatArray -> ∗FloatArray -> Int [] -> Float -> (Float, (∗FloatArray, ∗FloatArray))
+dotp' : *FloatArray -> *FloatArray -> Int [] -> Float -> (Float, (*FloatArray, *FloatArray))
 dotp' arr1 arr2 [0] v = (v,(arr1,arr2));
 dotp' arr1 arr2 [i] v =
   let (e1,arr1') = (readFloatArray arr1 i);
       (e2,arr2') = (readFloatArray arr2 i)
   in dotp' arr1' arr2' [i - 1] (v + (e1 * e2))
 
-fill' : ∗FloatArray -> Int [] -> ∗FloatArray
+fill' : *FloatArray -> Int [] -> *FloatArray
 fill' arr [0] = arr;
 fill' arr [i] =
   let f = intToFloat i;
       arr' = writeFloatArray arr i f
   in fill' arr' [i - 1]
 
-fst : forall {p, q : Type} . (p, (∗q, ∗q)) -> p
+fst : forall {p, q : Type} . (p, (*q, *q)) -> p
 fst (a, (b,c)) = let [u] = &b;
                      [v] = &c
                  in a

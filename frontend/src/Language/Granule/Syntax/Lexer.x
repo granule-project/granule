@@ -111,7 +111,6 @@ tokens :-
   "{!"                          { \p _ -> TokenHoleStart p }
   "!}"                          { \p _ -> TokenHoleEnd p}
   "!"                           { \p _ -> TokenBang p}
-  "∗"                           { \p _ -> TokenStar p}
   "&"                           { \p _ -> TokenBorrow p}
 
 {
@@ -184,7 +183,6 @@ data Token
   | TokenHoleEnd AlexPosn
   | TokenAt AlexPosn
   | TokenBang AlexPosn
-  | TokenStar AlexPosn
   | TokenBorrow AlexPosn
 
   deriving (Eq, Show, Generic)

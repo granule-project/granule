@@ -107,7 +107,6 @@ import Language.Granule.Utils hiding (mkSpan)
     '!}'  { TokenHoleEnd _ }
     '@'   { TokenAt _ }
     '!'   { TokenBang _ }
-    '∗'   { TokenStar _ }
     '&'   { TokenBorrow _ }
 
 %right '∘'
@@ -327,7 +326,7 @@ Type :: { Type }
   : '(' VAR ':' Type ')' '->' Type { FunTy (Just . mkId . symString $ $2) $4 $7 }
   | TyJuxt                         { $1 }
   | '!' TyAtom                     { Box (TyCon $ mkId "Many") $2 }
-  | '∗' TyAtom                     { Box (TyCon $ mkId "Unique") $2 }
+  | '*' TyAtom                     { Box (TyCon $ mkId "Unique") $2 }
   | Type '->' Type                 { FunTy Nothing $1 $3 }
   | Type '×' Type                  { TyApp (TyApp (TyCon $ mkId ",") $1) $3 }
   | TyAtom '[' Coeffect ']'        { Box $3 $1 }

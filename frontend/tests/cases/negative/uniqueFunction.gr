@@ -1,7 +1,7 @@
-const : forall {a b : Type} . ∗a -> !b -> ∗a
+const : forall {a b : Type} . *a -> !b -> *a
 const x [y] = x
 
-sneakyDup : forall {a : Type} . ∗a -> (∗a, ∗a)
+sneakyDup : forall {a : Type} . *a -> (*a, *a)
 sneakyDup x = let [f] = & (const x) in (f (), f ())
 
 -- functions are *linear* in Granule rather than unique, so we cannot sneakily 
