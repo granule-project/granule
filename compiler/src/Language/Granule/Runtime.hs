@@ -47,6 +47,9 @@ intToFloat = fromIntegral
 showInt :: Int -> String
 showInt = show
 
+showFloat :: Float -> String
+showFloat = show
+
 --------------------------------------------------------------------------------
 -- Mutable arrays
 --------------------------------------------------------------------------------
@@ -58,14 +61,14 @@ data FloatArray = FloatArray { grLength :: Int
 {-# NOINLINE newFloatArray #-}
 newFloatArray :: Int -> FloatArray
 newFloatArray size = unsafePerformIO $ do
-  ptr <- mallocArray size
-  return $ FloatArray size ptr
+  ptr <- mallocArray (size + 1)
+  return $ FloatArray (size + 1) ptr
 
 {-# NOINLINE writeFloatArray #-}
 writeFloatArray :: FloatArray -> Int -> Float -> FloatArray
 writeFloatArray a i v =
-  if i >= grLength a
-  then error "array index out of bounds"
+  if i > grLength a
+  then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else unsafePerformIO $ do
     pokeElemOff (grPtr a) i v
     return a
@@ -73,8 +76,8 @@ writeFloatArray a i v =
 {-# NOINLINE readFloatArray #-}
 readFloatArray :: FloatArray -> Int -> (Float, FloatArray)
 readFloatArray a i =
-  if i >= grLength a
-  then error "array index out of bounds"
+  if i > grLength a
+  then error $ "array index out of bounds: " ++ show i ++ " > " ++ show (grLength a)
   else unsafePerformIO $ do
     v <- peekElemOff (grPtr a) i
     return (v,a)
@@ -86,3 +89,19 @@ lengthFloatArray a = (grLength a, a)
 deleteFloatArray :: FloatArray -> ()
 deleteFloatArray FloatArray{grPtr} =
   unsafePerformIO $ free grPtr
+
+--------------------------------------------------------------------------------
+-- Uniqueness monadic operations
+--------------------------------------------------------------------------------
+
+uniqueReturn :: a -> a
+uniqueReturn = id
+
+uniqueBind :: (a -> b) -> a -> b
+uniqueBind f = f
+
+uniquePush :: (a,b) -> (a,b)
+uniquePush = id
+
+uniquePull :: (a,b) -> (a,b)
+uniquePull = id
