@@ -12,7 +12,6 @@ import Control.Monad.State
 import Control.Monad.Except
 
 import Language.Granule.Compiler.Util as Hs
-import Language.Granule.Compiler.Gensym
 import Language.Granule.Compiler.Error
 
 import Language.Granule.Syntax.Def as GrDef
