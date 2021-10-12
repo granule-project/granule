@@ -60,6 +60,7 @@ import Language.Granule.Utils hiding (mkSpan)
     catch    { TokenCatch _ }
     import { TokenImport _ _ }
     language { TokenPragma _ _ }
+    clone { TokenCopy _ }
     INT   { TokenInt _ _ }
     FLOAT  { TokenFloat _ _}
     VAR    { TokenSym _ _ }
@@ -483,6 +484,13 @@ Expr :: { Expr () () }
                   [(PConstr span2 () False (mkId "True") [], $4),
                      (PConstr span3 () False (mkId "False") [], $6)] }
 
+  | clone Expr as CopyBind in Expr
+    {% let t1 = $2; (_, pat, mt) = $4; t2 = $6 
+      in (mkSpan (getPos $1, getEnd $6)) >>=
+        \sp -> return $ App sp () False (App sp () False 
+          (Val sp () False (Var () (mkId "uniqueBind"))) 
+          (Val sp () False (Abs () pat mt t2))) t1 }
+
   | Form
     { $1 }
 
@@ -495,6 +503,12 @@ LetBind :: { (Pos, Pattern (), Maybe Type, Expr () ()) }
       { (getStart $1, $1, Just $3, $5) }
   | NAryConstr '=' Expr
       { (getStart $1, $1, Nothing, $3) }
+
+CopyBind :: { (Pos, Pattern (), Maybe Type) }
+  : PAtom ':' Type
+    { (getStart $1, $1, Just $3) }
+  | PAtom
+    { (getStart $1, $1, Nothing) }
 
 MultiLet :: { Expr () () }
 MultiLet
