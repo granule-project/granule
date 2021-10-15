@@ -12,6 +12,10 @@ import Control.Monad.Except
 import Control.Monad.State.Strict
 import Control.Monad.Logic
 import Language.Granule.Utils (synthIndex, Globals)
+import qualified System.Clock as Clock
+import Language.Granule.Checker.SubstitutionContexts (Substitution)
+import Language.Granule.Syntax.Type (TypeScheme)
+import Language.Granule.Syntax.Identifiers (Id, mkId)
 
 -- Data structure for collecting information about synthesis
 data SynthesisData =
@@ -20,15 +24,19 @@ data SynthesisData =
   , smtTime          :: Double
   , proverTime       :: Double -- longer than smtTime as it includes compilation of predicates to SMT
   , theoremSizeTotal :: Integer
+  , pathsExplored    :: Integer
+  , startTime        :: Clock.TimeSpec
+  , constructors     :: Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
+  , topLevelDef      :: Id 
   }
   deriving Show
 
 instance Semigroup SynthesisData where
- (SynthesisData calls stime time size) <> (SynthesisData calls' stime' time' size') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size')
+ (SynthesisData calls stime time size paths startTime constructors topLevelDef) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' topLevelDef') =
+    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') topLevelDef'
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0
+  mempty  = SynthesisData 0 0 0 0 0 0 [] (mkId "")
   mappend = (<>)
 
 -- Synthesiser monad

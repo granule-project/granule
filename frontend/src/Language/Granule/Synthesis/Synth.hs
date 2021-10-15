@@ -1273,17 +1273,21 @@ synthesise defs startTime resourceScheme gamma omega goalTy = do
 -- Run from the checker
 synthesiseProgram :: (?globals :: Globals)
            => Ctxt Type -- Top level definitions to use in synthesis
+           -> Id        -- Top level definition of the current expression being synthesised 
            -> ResourceScheme AltOrDefault       -- whether the synthesis is in additive mode or not
            -> Ctxt Assumption    -- (unfocused) free variables
            -> Ctxt Assumption    -- focused variables
            -> TypeScheme           -- type from which to synthesise
            -> CheckerState
-           -> IO [(Expr () Type, Ctxt Assumption, Substitution)]
-synthesiseProgram defs resourceScheme gamma omega goalTy checkerState = do
+           -> IO [(Expr () Type, Ctxt (Assumption, Structure Id), Substitution)]
+synthesiseProgram defs topLevelDef resourceScheme gamma omega goalTy checkerState = do
   start <- liftIO $ Clock.getTime Clock.Monotonic
   -- %%
-  let synRes = synthesise defs start resourceScheme gamma omega goalTy
-  (synthResults, aggregate) <- runStateT (runSynthesiser synRes checkerState) mempty
+  let gamma' = map (\(v, a) -> (v, (a, None))) gamma
+  let omega' = map (\(v, a) -> (v, (a, None))) omega
+  let synRes = synthesise defs resourceScheme gamma' omega' goalTy
+  let initialState = SynthesisData {smtCallsCount= 0, smtTime= 0, proverTime= 0, theoremSizeTotal= 0, pathsExplored= 0, startTime=start, constructors=[], topLevelDef=topLevelDef}
+  (synthResults, aggregate) <- runStateT (runSynthesiser synRes checkerState) initialState
   let results = rights (map fst synthResults)
   -- Force eval of first result (if it exists) to avoid any laziness when benchmarking
   () <- when benchmarking $ unless (null results) (return $ seq (show $ head results) ())
