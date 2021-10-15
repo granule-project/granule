@@ -16,6 +16,7 @@ module Language.Granule.Checker.Checker where
 import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
+import Data.List (isPrefixOf)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
@@ -1405,7 +1406,9 @@ solveConstraints predicate s name = do
             then throw SolverErrorFalsifiableTheorem
               { errLoc = s, errDefId = name, errPred = simplPred }
             else throw SolverErrorCounterExample
-              { errLoc = s, errDefId = name, errPred = simplPred }
+              { errLoc = s, errDefId = name, errPred = simplPred, message = prettifyMessage msg' }
+      where
+
     NotValidTrivial unsats ->
        mapM_ (\c -> throw GradingError{ errLoc = getSpan c, errConstraint = Neg c }) unsats
     Timeout -> do
@@ -1419,7 +1422,7 @@ solveConstraints predicate s name = do
     SolverProofError msg -> error msg
 
 -- Rewrite an error message coming from the solver
-rewriteMessage :: String -> Checker String
+rewriteMessage :: (?globals :: Globals) => String -> Checker String
 rewriteMessage msg = do
     st <- get
     let tyVars = tyVarContext st
@@ -1440,10 +1443,17 @@ rewriteMessage msg = do
                     T.replace (T.pack $ show privateRepresentation) (T.pack "Private")
                       (T.replace (T.pack $ show publicRepresentation) (T.pack "Public")
                           (T.replace (T.pack "Integer") (T.pack "Level") line'))
+                 (TyVar _ ) -> T.replace (T.pack "Integer") (T.pack $ pretty k) line'
                  _ -> line'
              else line'
        in line''
 
+prettifyMessage :: String -> String
+prettifyMessage msg = filter (/= '\n') $
+  if falso `isPrefixOf` msg
+    then drop (length falso + 1) msg
+    else msg
+  where falso = "is Falsifiable."
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage

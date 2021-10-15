@@ -553,7 +553,7 @@ data CheckerError
   | NeedTypeSignature
     { errLoc :: Span, errExpr :: Expr () () }
   | SolverErrorCounterExample
-    { errLoc :: Span, errDefId :: Id, errPred :: Pred }
+    { errLoc :: Span, errDefId :: Id, errPred :: Pred, message :: String }
   | SolverErrorFalsifiableTheorem
     { errLoc :: Span, errDefId :: Id, errPred :: Pred }
   | SolverError
@@ -898,6 +898,7 @@ instance UserMsg CheckerError where
     =  "The following theorem associated with `" <> pretty errDefId
     <> "` is falsifiable:\n\t"
     <> pretty errPred
+    <> (if null message then "" else "\n\n" <> message)
 
   msg SolverErrorFalsifiableTheorem{..}
     =  "The following theorem associated with `" <> pretty errDefId
