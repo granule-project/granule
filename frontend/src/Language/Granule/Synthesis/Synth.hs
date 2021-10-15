@@ -46,10 +46,8 @@ import qualified System.Clock as Clock
 
 import Language.Granule.Utils
 import Data.Maybe (fromJust, catMaybes)
-import Language.Granule.Synthesis.Splitting (generateCases)
 import Control.Arrow (second)
 import System.Clock (TimeSpec)
--- import Language.Granule.Syntax.Def (isIndexedDataType)
 -- import Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToConstraint)
 -- import Control.Monad.Trans.Except (runExceptT)
 -- import Control.Monad.Error.Class
@@ -728,10 +726,10 @@ constrIntroHelper (True, allowDef) defs constructors startTime gamma mode grade 
         (success, spec, subst') <- equalTypes nullSpanNoFile t conTy''
 
 
+        cs <- get
         -- Run the solver (i.e. to check constraints on type indexes hold)
         result <-
-          if isGADT then do
-            cs <- get
+          if addedConstraints cs then do
             let predicate = Conj $ predicateStack cs
             predicate <- substitute subst' predicate
 
@@ -900,13 +898,13 @@ constrElimHelper (allowRSync, allowDef) defs constructors startTime left (var@(x
 
         conTy'' <- substitute coercions' conTy''
 
-        (success, spec, subst') <- equalTypes nullSpanNoFile ty conTy''
+        (success, spec, subst') <- equalTypes nullSpanNoFile assumptionTy conTy''
 
+        cs <- get
 
         -- Run the solver (i.e. to check constraints on type indexes hold)
         result <-
-          if isGADT then do
-            cs <- get
+          if addedConstraints cs then do
             let predicate = Conj $ predicateStack cs
             predicate <- substitute subst' predicate
 
