@@ -1744,14 +1744,14 @@ programSynthesise ctxt vars ty = do
   debugM "equation Nameeee" (show $ equationName currentState)
   debugM "equation ctxt" (show $ ctxt)
 
-  let defs = case (equationName currentState, equationTy currentState) of
-        (Just name, Just ty') -> [(name, ty')]
-        _ -> []
+  let (defs, currentName) = case (equationName currentState, equationTy currentState) of
+        (Just name, Just ty') -> ([(name, ty')], name)
+        _ -> ([], mkId "")
 
   -- Run the synthesiser in this context
   let mode = if alternateSynthesisMode then Syn.Alternative else Syn.Default
   synRes <-
-      liftIO $ Syn.synthesiseProgram defs
+      liftIO $ Syn.synthesiseProgram defs currentName
                   (if subtractiveSynthesisMode then (Syn.Subtractive mode) else (Syn.Additive mode))
                   ctxt [] (Forall nullSpan [] [] ty) currentState
 
