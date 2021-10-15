@@ -672,25 +672,24 @@ unboxHelper defs left (var@(x, (a, structure)) : right) gamma add@(Additive mode
 constrIntroHelper :: (?globals :: Globals)
   => (Bool, Bool)
   -> Ctxt Type
-  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
-  -> Clock.TimeSpec
-  -> Ctxt Assumption
+  -> Ctxt (Assumption, Structure Id)
   -> ResourceScheme AltOrDefault
   -> Maybe Type
   -> TypeScheme
-  -> Synthesiser (Expr () Type, Ctxt Assumption, Substitution, Bindings)
-constrIntroHelper (True, allowDef) defs constructors startTime gamma mode grade goalTy@(Forall s binders constraints t) =
+  -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution, Bindings)
+constrIntroHelper (True, allowDef) defs gamma mode grade goalTy@(Forall s binders constraints t) =
   case (isADT t, adtName t) of
     (True, Just name) -> do
       debugM "Entered constrIntro helper with goal: " (show goalTy)
 
+      state <- Synthesiser $ lift $ lift $ get
+
       -- Retrieve the data constructors for the goal data type
-      let adtConstructors = concatMap snd (filter (\x -> fst x == name) constructors)
-      isGADT <- conv $ isIndexedType t
+      let adtConstructors = concatMap snd (filter (\x -> fst x == name) (constructors state))
 
       -- For each relevent data constructor, we must now check that it's type matches the goal
       adtConstructors' <- foldM (\ a (id, (conTy@(Forall s binders constraints conTy'), subst, ints)) -> do
-         (success, specTy, specSubst) <- checkConstructor conTy subst isGADT
+         (success, specTy, specSubst) <- checkConstructor conTy subst
          case (success, specTy) of
            (True, Just specTy') -> do
              subst' <- conv $ combineSubstitutions s subst specSubst
@@ -707,8 +706,8 @@ constrIntroHelper (True, allowDef) defs constructors startTime gamma mode grade 
     compare' con1@(_, (Forall _ _ _ ty1, _, _)) con2@(_, (Forall _ _ _ ty2, _, _)) = compare (arity ty1) (arity ty2)
 
     -- | Given a data constructor and a substition of type indexes, check that the goal type ~ data constructor type
-    checkConstructor :: TypeScheme -> Substitution -> Bool -> Synthesiser (Bool, Maybe Type, Substitution)
-    checkConstructor con@(Forall _ binders coercions conTy) subst isGADT = do
+    checkConstructor :: TypeScheme -> Substitution -> Synthesiser (Bool, Maybe Type, Substitution)
+    checkConstructor con@(Forall _ binders coercions conTy) subst = do
       (result, local) <- conv $ peekChecker $ do
 
         (conTyFresh, tyVarsFreshD, substFromFreshening, constraints, coercions') <- freshPolymorphicInstance InstanceQ False con subst []
