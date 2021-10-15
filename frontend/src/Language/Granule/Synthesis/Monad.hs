@@ -78,6 +78,10 @@ conv (Checker k) =
 
 try :: Synthesiser a -> Synthesiser a -> Synthesiser a
 try m n = do
+  Synthesiser $ lift $ lift $ lift $ modify (\state ->
+    state {
+      pathsExplored = 1 + pathsExplored state
+      })
   Synthesiser $ ExceptT ((runExceptT (unSynthesiser m)) `interleave` (runExceptT (unSynthesiser n)))
 
 none :: Synthesiser a
