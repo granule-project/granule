@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/gex0.gr:4:1:
 The following theorem associated with `main` is falsifiable:
-	((2 : Nat) = 1)
+	((1 : Nat) + (1 : Nat) = 1)

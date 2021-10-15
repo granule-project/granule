@@ -1,4 +1,4 @@
 Type checking failed: 
 Falsifiable theorem: frontend/tests/cases/negative/polyGradeBad.gr:3:1:
 The following theorem associated with `cp` is falsifiable:
-	((2 : c) ≤ ((2 : c)) + ((1 : c)))
+	((1 : c) + (1 : c) ≤ (((1 : c)) + ((1 : c))) + ((1 : c)))

@@ -1449,11 +1449,12 @@ rewriteMessage msg = do
        in line''
 
 prettifyMessage :: String -> String
-prettifyMessage msg = filter (/= '\n') $
+prettifyMessage msg =
   if falso `isPrefixOf` msg
     then drop (length falso + 1) msg
     else msg
   where falso = "is Falsifiable."
+
 -- | `ctxtEquals ctxt1 ctxt2` checks if two contexts are equal
 --   and the typical pattern is that `ctxt2` represents a specification
 --   (i.e. input to checking) and `ctxt1` represents actually usage
