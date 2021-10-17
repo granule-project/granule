@@ -415,7 +415,7 @@ builtIns =
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
   , (mkId "uniqueReturn",  Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (Val nullSpan () False v))
-  , (mkId "uniqueBind",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False f)) -> Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
+  , (mkId "uniqueBind",    Ext () $ Primitive $ \f -> Ext () $ Primitive $ \v -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
   , (mkId "uniquePush",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False (Constr () (Id "," ",") [x, y]))) -> (Constr () (mkId ",") [(Promote () (Val nullSpan () False x)), (Promote () (Val nullSpan () False y))]))
   , (mkId "uniquePull",    Ext () $ Primitive $ \(Constr () (Id "," ",") [(Promote () (Val nullSpan () False x)), (Promote () (Val _ () False y))]) -> (Promote () (Val nullSpan () False (Constr () (mkId ",") [x, y]))))
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
