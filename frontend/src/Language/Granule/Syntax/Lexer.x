@@ -113,6 +113,7 @@ tokens :-
   "!}"                          { \p _ -> TokenHoleEnd p}
   "!"                           { \p _ -> TokenBang p}
   "&"                           { \p _ -> TokenBorrow p}
+  "#"                           { \p _ -> TokenHash p }
 
 {
 
@@ -186,6 +187,7 @@ data Token
   | TokenBang AlexPosn
   | TokenBorrow AlexPosn
   | TokenCopy AlexPosn
+  | TokenHash AlexPosn
 
   deriving (Eq, Show, Generic)
 

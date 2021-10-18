@@ -105,6 +105,9 @@ instance Pretty Type where
     pretty (Diamond e t) =
       prettyNested t <> " <" <> pretty e <> ">"
 
+    pretty (Star g t) =
+      prettyNested t <> " *" <> pretty g
+
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
 
@@ -220,6 +223,7 @@ instance Pretty v => Pretty (Value v a) where
                                  <> ") -> " <> pretty e
     pretty (Promote _ e) = "[" <> pretty e <> "]"
     pretty (Pure _ e)    = "<" <> pretty e <> ">"
+    pretty (Nec _ e)     = "*" <> pretty e
     pretty (Var _ x)     = pretty x
     pretty (NumInt n)    = show n
     pretty (NumFloat n)  = show n

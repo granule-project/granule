@@ -346,6 +346,13 @@ synthKindWithConfiguration s _ (Diamond e t) = do
   subst <- combineManySubstitutions s [subst1, subst2, subst3]
   return (ktype, subst, Diamond e' t')
 
+synthKindWithConfiguration s _ (Star g t) = do
+  (guaranTy, subst0, g') <- synthKindWithConfiguration s (defaultResolutionBehaviour g) g
+  (subst1, _) <- checkKind s guaranTy kguarantee
+  (subst2, t') <- checkKind s t ktype
+  subst <- combineManySubstitutions s [subst0, subst1, subst2]
+  return (ktype, subst, Star g' t')
+
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
   -- Create a fresh type variable
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
