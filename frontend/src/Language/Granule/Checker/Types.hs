@@ -149,6 +149,12 @@ equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Typ
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp Types = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
+  (eq', _, unif') <- equalTypes s g1 g2
+  u <- combineSubstitutions s unif unif'
+  return (eq && eq', u)
+
 equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   -- Debugging messages
   debugM "equalTypesRelatedCoeffectsInner (box)" $ "grades " <> show c <> " and " <> show c' <> ""
@@ -474,6 +480,7 @@ isIndexedType t = do
           return $ Const $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
       , tfBox = \_ (Const x) -> return $ Const x
       , tfDiamond = \_ (Const x) -> return $ Const x
+      , tfStar = \_ (Const x) -> return $ Const x
       , tfTyVar = \_ -> return $ Const False
       , tfTyApp = \(Const x) (Const y) -> return $ Const (x || y)
       , tfTyInt = \_ -> return $ Const False

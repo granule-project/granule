@@ -241,6 +241,14 @@ evalIn ctxt (Val s _ _ (Promote _ e)) =
       v <- evalIn ctxt e
       return $ Promote () (Val s () False v)
 
+evalIn ctxt (Val s _ _ (Nec _ e)) =
+  if CBN `elem` (globalsExtensions ?globals)
+    then do
+      return $ Nec () e
+    else do
+      v <- evalIn ctxt e
+      return $ Nec () (Val s () False v)
+
 evalIn _ (Val _ _ _ v) = return v
 
 evalIn ctxt (Case s a b guardExpr cases) = do
@@ -414,10 +422,10 @@ builtIns =
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
-  , (mkId "uniqueReturn",  Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (Val nullSpan () False v))
-  , (mkId "uniqueBind",    Ext () $ Primitive $ \f -> Ext () $ Primitive $ \v -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
-  , (mkId "uniquePush",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False (Constr () (Id "," ",") [x, y]))) -> (Constr () (mkId ",") [(Promote () (Val nullSpan () False x)), (Promote () (Val nullSpan () False y))]))
-  , (mkId "uniquePull",    Ext () $ Primitive $ \(Constr () (Id "," ",") [(Promote () (Val nullSpan () False x)), (Promote () (Val _ () False y))]) -> (Promote () (Val nullSpan () False (Constr () (mkId ",") [x, y]))))
+  , (mkId "uniqueReturn",  Ext () $ Primitive $ \e -> e)
+  , (mkId "uniqueBind",    Ext () $ PrimitiveClosure uniqueBind)
+  , (mkId "uniquePush",    Ext () $ Primitive $ \e -> e)
+  , (mkId "uniquePull",    Ext () $ Primitive $ \e -> e)
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
@@ -456,6 +464,13 @@ builtIns =
                         (valExpr $ Promote () $ valExpr $ Ext () $ Chan c)) >> return ()
       return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
     forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
+
+    uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
+    uniqueBind ctxt f = Ext () $ Primitive $ \v -> 
+      unsafePerformIO $ evalIn ctxt 
+        (App nullSpan () False 
+          (Val nullSpan () False f) 
+          (Val nullSpan () False v))
 
     recv :: (?globals :: Globals) => RValue -> RValue
     recv (Ext _ (Chan c)) = unsafePerformIO $ do
@@ -608,6 +623,7 @@ instance RuntimeRep Value where
   toRuntimeRep (Abs a p t e) = Abs a p t (toRuntimeRep e)
   toRuntimeRep (Promote a e) = Promote a (toRuntimeRep e)
   toRuntimeRep (Pure a e) = Pure a (toRuntimeRep e)
+  toRuntimeRep (Nec a e) = Nec a (toRuntimeRep e)
   toRuntimeRep (Constr a i vs) = Constr a i (map toRuntimeRep vs)
   -- identity cases
   toRuntimeRep (CharLiteral c) = CharLiteral c
@@ -627,5 +643,6 @@ eval (AST dataDecls defs _ _ _) = do
         eExpr <- e
         fmap Just (evalIn bindings eExpr)
       Just (Promote _ e) -> fmap Just (evalIn bindings e)
+      Just (Nec _ e) -> fmap Just (evalIn bindings e)
       -- ... or a regular value came out of the interpreter
       Just val           -> return $ Just val

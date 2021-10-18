@@ -36,6 +36,7 @@ typeConstructors :: [(Id, (Type, [Id], Bool))]
 typeConstructors =
     [ (mkId "Coeffect",  (Type 0, [], False))
     , (mkId "Effect",    (Type 0, [], False))
+    , (mkId "Guarantee", (Type 0, [], False))
     , (mkId "Predicate", (Type 0, [], False))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
@@ -71,7 +72,7 @@ typeConstructors =
     , (mkId "Hi",    (tyCon "Sec", [], False))
     , (mkId "Lo",    (tyCon "Sec", [], False))
     -- Uniqueness
-    , (mkId "Uniqueness", (kcoeffect, [], False))
+    , (mkId "Uniqueness", (kguarantee, [], False))
     , (mkId "Unique", (tyCon "Uniqueness", [], False))
     -- Other coeffect constructors
     , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
@@ -504,53 +505,53 @@ tick = BUILTIN
 
 uniqueReturn
   : forall {a : Type}
-  . a [Unique] -> a [Many]
+  . a *[Unique] -> a [Many]
 uniqueReturn = BUILTIN
 
 uniqueBind
   : forall {a b : Type}
-  . (a [Unique] -> b [Many]) -> a [Many] -> b [Many]
+  . (a *[Unique] -> b [Many]) -> a [Many] -> b [Many]
 uniqueBind = BUILTIN
 
 uniquePush 
   : forall {a b : Type} 
-  . (a, b) [Unique] -> (a [Unique], b [Unique])
+  . (a, b) *[Unique] -> (a *[Unique], b *[Unique])
 uniquePush = BUILTIN
 
 uniquePull 
   : forall {a b : Type} 
-  . (a [Unique], b [Unique]) -> (a, b) [Unique]
+  . (a *[Unique], b *[Unique]) -> (a, b) *[Unique]
 uniquePull = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Mutable arrays
 --------------------------------------------------------------------------------
 
-newFloatArray : Int -> FloatArray [Unique]
+newFloatArray : Int -> FloatArray *[Unique]
 newFloatArray = BUILTIN
 
 newFloatArray' : Int -> FloatArray
 newFloatArray' = BUILTIN
 
-readFloatArray : FloatArray [Unique] -> Int -> (Float, FloatArray [Unique])
+readFloatArray : FloatArray *[Unique] -> Int -> (Float, FloatArray *[Unique])
 readFloatArray = BUILTIN
 
 readFloatArray' : FloatArray -> Int -> (Float, FloatArray)
 readFloatArray' = BUILTIN
 
-writeFloatArray : FloatArray [Unique] -> Int -> Float -> FloatArray [Unique]
+writeFloatArray : FloatArray *[Unique] -> Int -> Float -> FloatArray *[Unique]
 writeFloatArray = BUILTIN
 
 writeFloatArray' : FloatArray -> Int -> Float -> FloatArray
 writeFloatArray' = BUILTIN
 
-lengthFloatArray : FloatArray [Unique] -> (Int, FloatArray [Unique])
+lengthFloatArray : FloatArray *[Unique] -> (Int, FloatArray *[Unique])
 lengthFloatArray = BUILTIN
 
 lengthFloatArray' : FloatArray -> (Int, FloatArray)
 lengthFloatArray' = BUILTIN
 
-deleteFloatArray : FloatArray [Unique] -> ()
+deleteFloatArray : FloatArray *[Unique] -> ()
 deleteFloatArray = BUILTIN
 |]
 

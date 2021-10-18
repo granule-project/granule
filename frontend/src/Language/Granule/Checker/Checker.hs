@@ -640,6 +640,14 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
     let elaborated = Val s ty rf (Promote tau elaboratedE)
     return (gam'', substFinal, elaborated)
 
+checkExpr defs gam pol _ ty@(Star demand tau) (Val s _ rf (Nec _ e)) = do
+    debugM "checkExpr[Star]" (pretty s <> " : " <> pretty ty)
+
+    -- Checker the expression being necessitated
+    (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e
+
+    let elaborated = Val s ty rf (Nec tau elaboratedE)
+    return (gam', subst, elaborated)
 
 -- Check a case expression
 checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
@@ -1141,6 +1149,32 @@ synthExpr defs gam pol (Val s _ rf (Promote _ e)) = do
    let finalTy = Box (TyVar var) t
    let elaborated = Val s finalTy rf (Promote t elaboratedE)
    return (finalTy, gam'', substFinal, elaborated)
+
+{- Necessitation 
+
+. |- e : T 
+-----------
+[G] |- *e : *T 
+
+-}
+
+synthExpr defs gam pol (Val s _ rf (Nec _ e)) = do
+  debugM "synthExpr[Nec]" (pretty s)
+
+   -- Create a fresh kind variable for this guarantee
+  vark <- freshIdentifierBase $ "knec_[" <> pretty (startPos s) <> "]"
+   -- remember this new kind variable in the kind environment
+  modify (\st -> st { tyVarContext = (mkId vark, (kguarantee, InstanceQ)) : tyVarContext st })
+
+   -- Create a fresh guarantee variable for the guarantee of the necessitated expression
+  var <- freshTyVarInContext (mkId $ "nec_[" <> pretty (startPos s) <> "]") (tyVar vark)
+
+  -- Synth type of necessitated expression
+  (t, gam', subst, elaboratedE) <- synthExpr defs gam pol e
+
+  let finalTy = Star (TyVar var) t
+  let elaborated = Val s finalTy rf (Nec t elaboratedE)
+  return (finalTy, gam', subst, elaborated)
 
 -- BinOp
 synthExpr defs gam pol (Binop s _ rf op e1 e2) = do
