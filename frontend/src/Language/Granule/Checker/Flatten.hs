@@ -2,6 +2,8 @@
 {-# LANGUAGE DataKinds #-}
 {-# LANGUAGE GADTs #-}
 
+{-# OPTIONS_GHC -fmax-pmcheck-iterations=30000000 #-}
+
 -- | Deals with interactions between coeffect resource algebras
 module Language.Granule.Checker.Flatten
           (mguCoeffectTypes, flattenable, Injections) where
@@ -46,6 +48,31 @@ mguCoeffectTypes' :: (?globals :: Globals)
 
 -- Trivial case
 mguCoeffectTypes' s t t' | t == t' = return $ Just (t, [], (id, id))
+
+-- Ext cases
+-- unify (Ext t) (Ext t') = Ext (unify t t')
+mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
+
+-- unify (Ext t) t' = Ext (unify t t')
+mguCoeffectTypes' s (isExt -> Just t) t' = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
+
+-- unify t (Ext t') = Ext (unify t t')
+mguCoeffectTypes' s t (isExt -> Just t') = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
 
 -- Both are variables
 mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
@@ -165,6 +192,7 @@ mguCoeffectTypes' s (isInterval -> Just t') t = do
             where inj1' = runIdentity . typeFoldM baseTypeFold { tfTyInfix = \op c1 c2 -> return $ case op of TyOpInterval -> TyInfix op (inj1 c1) (inj1 c2); _ -> TyInfix op c1 c2 }
 
     Nothing -> return Nothing
+
 
 -- No way to unify (outer function will take the product)
 mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
