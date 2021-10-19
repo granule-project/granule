@@ -30,6 +30,7 @@ data SGrade =
      | SSec      SBool -- Hi = True, Lo = False
      | SSet      Polarity (SSet SSetElem)
      | SExtNat   { sExtNat :: SNatX }
+     | SExt      { sGrade :: SGrade , sIsInf :: SBool }
      | SInterval { sLowerBound :: SGrade, sUpperBound :: SGrade }
      -- Single point coeffect (not exposed at the moment)
      | SPoint
@@ -156,6 +157,7 @@ match (SSec _) (SSec _) = True
 match (SLNL _) (SLNL _) = True
 match (SBorrow _) (SBorrow _) = True
 match SUnique SUnique = True
+match (SExt _ _) (SExt _ _) = True
 match _ _ = False
 
 isSProduct :: SGrade -> Bool
@@ -188,6 +190,7 @@ applyToProducts _ _ _ a b =
 natLike :: SGrade -> Bool
 natLike (SNat _) = True
 natLike (SExtNat _) = True
+natLike (SExt g _) = natLike g
 natLike _ = False
 
 instance Mergeable SGrade where
@@ -211,6 +214,8 @@ instance Mergeable SGrade where
   symbolicMerge s sb (SLNL a) (SLNL b) = SLNL (symbolicMerge s sb a b)
   symbolicMerge s sb (SBorrow a) (SBorrow b) = SBorrow (symbolicMerge s sb a b)
   symbolicMerge s sb SUnique SUnique = SUnique
+  symbolicMerge s sb (SExt r isInf) (SExt r' isInf') =
+    SExt (symbolicMerge s sb r r') (symbolicMerge s sb isInf isInf')
 
   symbolicMerge _ _ s t = error $ cannotDo "symbolicMerge" s t
 
@@ -239,6 +244,12 @@ symGradeLess (SUnknown s) (SUnknown t) = sLtTree s t
 
 symGradeLess s t | isSProduct s || isSProduct t =
   either solverError id (applyToProducts symGradeLess (.&&) (const sTrue) s t)
+
+symGradeLess (SExt r isInf) (SExt r' isInf') = do
+  less <- symGradeLess r r'
+  return $
+     ite (sNot isInf .&& isInf') sTrue
+            (ite isInf sFalse less)
 
 symGradeLess s t = solverError $ cannotDo ".<" s t
 
@@ -278,6 +289,15 @@ symGradeEq (SSec n) (SSec n') = return $ n .== n'
 symGradeEq (SLNL n) (SLNL m) = return $ n .== m
 symGradeEq (SBorrow n) (SBorrow m) = return $ n .== m
 symGradeEq SUnique SUnique = return sTrue
+symGradeEq (SExt r sInf) (SExt r' sInf') = do
+  eq <- symGradeEq r r'
+  return $
+     -- Both Inf
+     ite (sInf .&& sInf') sTrue
+      -- Both noInf so check inner grades
+        (ite (sNot sInf .&& sNot sInf') eq
+          -- this case means at least one is inf and therefore not equal
+          sFalse)
 symGradeEq s t = solverError $ cannotDo ".==" s t
 
 -- | Meet operation on symbolic grades
@@ -309,6 +329,11 @@ symGradeMeet (SUnknown (SynLeaf (Just n))) (SUnknown (SynLeaf (Just n'))) =
   return $ SUnknown (SynLeaf (Just (n `smin` n')))
 symGradeMeet (SUnknown t) (SUnknown t') = return $ SUnknown (SynMeet t t')
 symGradeMeet (SSec a) (SSec b) = return $ SSec (a .&& b)
+symGradeMeet (SExt r isInf) (SExt r' isInf') = do
+  s <- symGradeMeet r r'
+  return $ ite isInf (SExt r' isInf')
+              (ite isInf' (SExt r isInf)
+                (SExt s sFalse))
 symGradeMeet s t = solverError $ cannotDo "meet" s t
 
 -- | Join operation on symbolic grades
@@ -340,6 +365,12 @@ symGradeJoin (SUnknown (SynLeaf (Just n))) (SUnknown (SynLeaf (Just n'))) =
   return $ SUnknown (SynLeaf (Just (n `smax` n')))
 symGradeJoin (SUnknown t) (SUnknown t') = return $ SUnknown (SynJoin t t')
 symGradeJoin (SSec a) (SSec b) = return $ SSec (a .|| b)
+symGradeJoin (SExt r isInf) (SExt r' isInf') = do
+  join <- symGradeJoin r r'
+  return $
+    ite isInf (SExt r isInf)
+      (ite isInf' (SExt r' isInf')
+        (SExt join sFalse))
 symGradeJoin s t = solverError $ cannotDo "join" s t
 
 -- | Plus operation on symbolic grades
@@ -377,6 +408,13 @@ symGradePlus (SLNL a) (SLNL b) = return $ ite (a .== literal zeroRep) (SLNL b)
                                             (ite (b .== literal zeroRep) (SLNL a) (SLNL (literal manyRep)))
 
 symGradePlus (SBorrow a) (SBorrow b) = return $ SBorrow (a `smax` b `smax` literal betaRepresentation)
+
+symGradePlus (SExt r isInf) (SExt r' isInf') = do
+  s <- symGradePlus r r'
+  return $
+    ite isInf (SExt r isInf)
+     (ite isInf' (SExt r' isInf')
+       (SExt s sFalse))
 
 symGradePlus s t = solverError $ cannotDo "plus" s t
 
@@ -439,6 +477,12 @@ symGradeTimes (SSec a) (SSec b) = symGradeJoin (SSec a) (SSec b)
 symGradeTimes (SLNL a) (SLNL b) = return $ ite (a .== literal zeroRep) (SLNL (literal zeroRep))
                                             (ite (b .== literal zeroRep) (SLNL (literal zeroRep)) (SLNL $ a `smax` b))
 symGradeTimes (SBorrow a) (SBorrow b) = return $ SBorrow $ a `smax` b
+symGradeTimes (SExt r isInf) (SExt r' isInf') = do
+  s <- symGradeTimes r r'
+  return $
+    ite isInf (SExt r isInf)
+     (ite isInf' (SExt r' isInf')
+       (SExt s sFalse))
 
 symGradeTimes s t = solverError $ cannotDo "times" s t
 
@@ -464,6 +508,7 @@ symGradeHsup (SLNL n) (SLNL m) = return sFalse
 -- | Disallow hsup for polymorphic grades
 symGradeHsup (SUnknown s1) (SUnknown s2) = return sFalse
 -- | For all other grades, allow pushing 
+symGradeHsup (SExt r _) (SExt r' _) = symGradeHsup r r'
 symGradeHsup s1 s2 = return sTrue
 
 cannotDo :: String -> SGrade -> SGrade -> String

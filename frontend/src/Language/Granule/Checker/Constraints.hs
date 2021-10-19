@@ -241,6 +241,13 @@ freshSolverVarScoped quant name t q k | t == extendedNat = do
     k (SNatX.representationConstraint solverVar
      , SExtNat (SNatX.SNatX solverVar)))
 
+-- Ext
+freshSolverVarScoped quant name (isExt -> Just t) q k =
+  freshSolverVarScoped quant (name <> ".grade") t q
+    (\(predGrade, solverVarGrade) ->
+       quant q name (\solverVarInf ->
+          k (predGrade, SExt solverVarGrade solverVarInf)))
+
 freshSolverVarScoped quant name (TyVar v) q k =
   quant q name (\solverVar -> k (sTrue, SUnknown $ SynLeaf $ Just solverVar))
 
@@ -368,7 +375,7 @@ compileCoeffect (TyCon name) (TyCon (internalName -> "LNL")) _ = do
             "One"     -> oneRep
             "Many"    -> manyRep
             c         -> error $ "Cannot compile " <> show c <> " as an LNL semiring"
-          
+
   return (SLNL . fromInteger . toInteger $ n, sTrue)
 
 compileCoeffect (TyCon name) (TyCon (internalName -> "Borrowing")) _ = do
@@ -402,7 +409,13 @@ compileCoeffect (TyCon (internalName -> "Infinity")) t _ | t == extendedNat =
   return (SExtNat SNatX.inf, sTrue)
 -- Any polymorphic `Inf` gets compiled to the `Inf : [0..inf]` coeffect
 -- TODO: see if we can erase this, does it actually happen anymore?
-compileCoeffect (TyCon (internalName -> "Infinity")) _ _ = return (zeroToInfinity, sTrue)
+-- compileCoeffect (TyCon (internalName -> "Infinity")) _ _ = return (zeroToInfinity, sTrue)
+
+compileCoeffect (TyCon (internalName -> "Infinity")) t vars = do
+  -- Represent Inf, but we still need to put something for the grade
+  -- component (which is going to get ignored so just put 1 for now)
+  (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
+  return (SExt r sTrue, sTrue)
 
 -- Effect 0 : Nat
 compileCoeffect (TyCon (internalName -> "Pure")) (TyCon (internalName -> "Nat")) _ =
@@ -487,6 +500,10 @@ compileCoeffect (TyGrade k' 0) k vars = do
     otherK | otherK == extendedNat ->
       return (SExtNat 0, sTrue)
 
+    (isExt -> Just t) -> do
+      (r, pred) <- compileCoeffect (TyGrade (Just t) 0) t vars
+      return (SExt r sFalse, pred)
+
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
         (compileCoeffect (TyGrade (Just t1) 0) t1 vars)
@@ -522,6 +539,10 @@ compileCoeffect (TyGrade k' 1) k vars = do
 
     otherK | otherK == extendedNat ->
       return (SExtNat 1, sTrue)
+
+    (isExt -> Just t) -> do
+      (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
+      return (SExt r sFalse, pred)
 
     (isProduct -> Just (t1, t2)) ->
       liftM2And SProduct
@@ -658,9 +679,14 @@ approximatedByOrEqualConstraint s1@(SInterval _ _) s2 =
 approximatedByOrEqualConstraint u@(SUnknown{}) u'@(SUnknown{}) =
   lazyOrSymbolicM (symGradeEq u u') (symGradeLess u u')
 
+approximatedByOrEqualConstraint (SExt r isInf) (SExt r' isInf') = do
+  approx <- approximatedByOrEqualConstraint r r'
+  return $
+    ite (isInf .&& isInf') sTrue
+      (ite isInf' sTrue approx)
+
 approximatedByOrEqualConstraint x y =
   solverError $ "Kind error trying to generate " <> show x <> " <= " <> show y
-
 
 trivialUnsatisfiableConstraints :: Pred -> [Constraint]
 trivialUnsatisfiableConstraints
