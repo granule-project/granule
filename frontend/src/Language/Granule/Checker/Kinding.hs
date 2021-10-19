@@ -175,11 +175,14 @@ checkKind s t@(TySet p elems) (TyApp (TyCon setConstructor) elemTy)
 checkKind s (TySig t k) k' = do
   join <- joinTypes s k k'
   case join of
-    Just (jk, subst, inj) ->
+    Just (jk, subst, inj) -> do
+      -- Now actually do the check of kind on the inner part of the ty sig
+      (subst', t') <- checkKind s t jk
+      subst2 <- combineSubstitutions s subst subst'
       case inj of
-        Nothing           -> return (subst, TySig t jk)
+        Nothing           -> return (subst2, TySig t' jk)
         -- Apply the left injection
-        Just (inj1, inj2) -> return (subst, TySig (inj1 t) jk)
+        Just (inj1, inj2) -> return (subst2, TySig (inj1 t') jk)
     Nothing -> throw KindMismatch { errLoc = s, tyActualK = Just t, kExpected = k, kActual = k' }
 
 -- KChck_Nat
@@ -189,6 +192,9 @@ checkKind s t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Coeffect"
 checkKind s t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Effect")) =
   return ([], t)
 checkKind s t@(TyCon (internalName -> "Nat")) (Type 0) =
+  return ([], t)
+
+checkKind s t@(TyCon (internalName -> "Infinity")) (TyApp (TyCon (internalName -> "Ext")) _) =
   return ([], t)
 
 -- Fall through to synthesis if checking can not be done.
@@ -348,6 +354,10 @@ synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Handled")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
   return $ ((FunTy Nothing (TyVar var) (TyVar var)), [], t)
+
+synthKindWithConfiguration s _ t@(TyCon (internalName -> "Infinity")) = do
+  var <- freshTyVarInContext (mkId $ "s") kcoeffect
+  return (TyApp (TyCon $ mkId "Ext") (TyVar var), [], t)
 
 -- KChkS_con
 synthKindWithConfiguration s _ t@(TyCon id) = do
