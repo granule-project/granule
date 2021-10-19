@@ -22,7 +22,7 @@ flip f x y = f y x
 
 --- Constant combinator
 --- NB: Throws away its second argument and returns the first
-const : forall {a : Type, b : Type} . a -> b [0] -> a
+const : forall {a : Type, b : Type, s : Semiring} . a -> b [0 : s] -> a
 const x [y] = x
 
 --- linear function composition (the composition operator `g ∘ f` resolves
@@ -67,11 +67,11 @@ e = 2.718281828459045
 --- # Combinators involving products (pairs)
 
 --- Extract the left part of a pair
-fst : forall {a : Type, b : Type} . a × b [0] -> a
+fst : forall {a : Type, b : Type, s : Semiring} . a × b [0 : s] -> a
 fst (x, [_]) = x
 
 --- Extract the right part of a pair
-snd : forall {a : Type, b : Type} . a [0] × b -> b
+snd : forall {a : Type, b : Type, s : Semiring} . a [0 : s] × b -> b
 snd ([_], y) = y
 
 --- curry converts an uncurried function to a curried function
