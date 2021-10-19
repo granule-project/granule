@@ -753,10 +753,10 @@ bindM2And' k ma mb = do
 liftM2And :: Monad m => (t1 -> t2 -> b) -> m (t1, SBool) -> m (t2, SBool) -> m (b, SBool)
 liftM2And k = bindM2And (\a b -> return (k a b))
 
-matchTypes :: MonadIO m => Type -> Maybe Type -> m Type
+matchTypes :: (?globals :: Globals, MonadIO m) => Type -> Maybe Type -> m Type
 matchTypes t Nothing = return t
 matchTypes t (Just t') | t == t' = return t
-matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ show t ++ " and " ++ show t'
+matchTypes t (Just t') | otherwise = solverError $ "I have conflicting kinds of " ++ pretty t ++ " and " ++ pretty t'
 
 -- Get universe set for the parameter ttpe
 setUniverse :: (?globals :: Globals, ?constructors :: Ctxt [Id])
