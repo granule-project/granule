@@ -29,6 +29,8 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
+import Debug.Trace
+
 import qualified System.Clock as Clock
 
 data SolverResult
@@ -411,10 +413,10 @@ compileCoeffect (TyCon (internalName -> "Infinity")) t _ | t == extendedNat =
 -- TODO: see if we can erase this, does it actually happen anymore?
 -- compileCoeffect (TyCon (internalName -> "Infinity")) _ _ = return (zeroToInfinity, sTrue)
 
-compileCoeffect (TyCon (internalName -> "Infinity")) t vars = do
+compileCoeffect (TyCon (internalName -> "Infinity")) (isExt -> Just t) vars = do
   -- Represent Inf, but we still need to put something for the grade
   -- component (which is going to get ignored so just put 1 for now)
-  (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
+  (r, pred) <- ("Compiling a infinite at " <> show t) `trace` compileCoeffect (TyGrade (Just t) 1) t vars
   return (SExt r sTrue, sTrue)
 
 -- Effect 0 : Nat
@@ -541,7 +543,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
       return (SExtNat 1, sTrue)
 
     (isExt -> Just t) -> do
-      (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
+      (r, pred) <- ("compiling an ext 1 at " ++ show t) `trace` compileCoeffect (TyGrade (Just t) 1) t vars
       return (SExt r sFalse, pred)
 
     (isProduct -> Just (t1, t2)) ->
