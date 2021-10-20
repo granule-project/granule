@@ -194,9 +194,6 @@ checkKind s t@(TyCon (internalName -> "Nat")) (TyCon (internalName -> "Effect"))
 checkKind s t@(TyCon (internalName -> "Nat")) (Type 0) =
   return ([], t)
 
-checkKind s t@(TyCon (internalName -> "Infinity")) (TyApp (TyCon (internalName -> "Ext")) _) =
-  return ([], t)
-
 -- Fall through to synthesis if checking can not be done.
 checkKind s t k = do
   -- Synth
@@ -354,10 +351,6 @@ synthKindWithConfiguration s _ t@(TyCon (internalName -> "Pure")) = do
 synthKindWithConfiguration s _ t@(TyCon (internalName -> "Handled")) = do
   var <- freshTyVarInContext (mkId $ "eff[" <> pretty (startPos s) <> "]") keffect
   return $ ((FunTy Nothing (TyVar var) (TyVar var)), [], t)
-
-synthKindWithConfiguration s _ t@(TyCon (internalName -> "Infinity")) = do
-  var <- freshTyVarInContext (mkId $ "s") kcoeffect
-  return (TyApp (TyCon $ mkId "Ext") (TyVar var), [], t)
 
 -- KChkS_con
 synthKindWithConfiguration s _ t@(TyCon id) = do

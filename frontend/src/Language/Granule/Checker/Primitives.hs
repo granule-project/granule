@@ -74,6 +74,7 @@ typeConstructors =
     , (mkId "Uniqueness", (kcoeffect, [], False))
     , (mkId "Unique", (tyCon "Uniqueness", [], False))
     -- Other coeffect constructors
+    , (mkId "Infinity", ((tyCon "Ext") .@ (tyCon "Nat"), [], False))
     , (mkId "Interval", (kcoeffect .-> kcoeffect, [], False))
     -- Channels and protocol types
     , (mkId "Send", (funTy (Type 0) (funTy protocol protocol), [], False))
