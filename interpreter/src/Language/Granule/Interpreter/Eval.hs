@@ -213,7 +213,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
       )
        -- (cf. TRY_BETA_2)
       (\(e :: IOException) -> evalIn ctxt e3)
-    other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other
+    other -> fail $ "Runtime exception: Expecting a diamond value but got: " <> prettyDebug other
 
 {-
 -- Hard-coded 'scale', removed for now
@@ -465,7 +465,7 @@ builtIns =
     recv (Ext _ (Chan c)) = unsafePerformIO $ do
       x <- CC.readChan c
       return $ Constr () (mkId ",") [x, Ext () $ Chan c]
-    recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
+    recv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> RValue
     send (Ext _ (Chan c)) = Ext () $ Primitive
@@ -482,7 +482,7 @@ builtIns =
     grecv (Ext _ (Chan c)) = diamondConstr $ do
       x <- CC.readChan c
       return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
-    grecv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
+    grecv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     gsend :: (?globals :: Globals) => RValue -> RValue
     gsend (Ext _ (Chan c)) = Ext () $ Primitive
