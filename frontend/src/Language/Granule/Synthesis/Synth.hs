@@ -843,7 +843,8 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
             (Subtractive{}, Just grade') -> do
               let omega'' = deleteVar x omega'
               (patterns, delta, subst, bindings') <- synthCases assumptionTy mode gamma omega'' cases goalTySch
-              return (makeBoxCase assumptionTy grade' x patterns goalTy, omega' ++ delta, subst, bindings')
+              -- return (makeBoxCase assumptionTy grade' x patterns goalTy, omega' ++ delta, subst, bindings')
+              return (makeBoxCase assumptionTy grade' x patterns goalTy, delta, subst, bindings')
             (Additive{}, Just grade') -> do
               (patterns, delta, subst, bindings') <- synthCases assumptionTy mode gamma omega cases goalTySch
               return (makeBoxCase assumptionTy grade' x patterns goalTy, delta, subst, bindings')
