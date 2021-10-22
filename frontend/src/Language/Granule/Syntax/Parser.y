@@ -596,6 +596,7 @@ Atom :: { Expr () () }
                                  in (mkSpan $ getPosToSpan $1)
                                     >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ NumFloat $ read x) }                                                                                           
   | CONSTR                    {% (mkSpan $ getPosToSpan $1)  >>= \sp -> return $ Val sp () False $ Constr () (mkId $ constrString $1) [] }
+  | '#' CONSTR                {% (mkSpan $ getPosToSpan $2) >>= \sp -> return $ Val sp () False $ Nec () (Val sp () False $ Constr () (mkId $ constrString $2) [])}
   | '(' Expr ',' Expr ')'     {% do
                                     span1 <- (mkSpan (getPos $1, getPos $5))
                                     span2 <- (mkSpan (getPos $1, getPos $3))
