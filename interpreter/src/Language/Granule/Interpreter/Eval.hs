@@ -430,9 +430,9 @@ builtIns =
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
   , (mkId "writeFloatArray",  Ext () $ Primitive writeFloatArray)
-  , (mkId "newFloatArray'",  Ext () $ Primitive newFloatArray)
-  , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray)
-  , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray)
+  , (mkId "newFloatArray'",  Ext () $ Primitive newFloatArray')
+  , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
+  , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
   , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
 
   ]
@@ -567,16 +567,31 @@ builtIns =
     newFloatArray :: RValue -> RValue
     newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
 
+    {-# NOINLINE newFloatArray' #-}
+    newFloatArray' :: RValue -> RValue
+    newFloatArray' = \(NumInt i) -> Promote () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+
     {-# NOINLINE readFloatArray #-}
     readFloatArray :: RValue -> RValue
     readFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do e <- MA.readArray arr i
                            return (Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () (FloatArray arr))])
 
+    {-# NOINLINE readFloatArray' #-}
+    readFloatArray' :: RValue -> RValue
+    readFloatArray' = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      unsafePerformIO $ do e <- MA.readArray arr i
+                           return (Constr () (mkId ",") [NumFloat e, Promote () (Val nullSpan () False $ Ext () (FloatArray arr))])
+
     lengthFloatArray :: RValue -> RValue
     lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do (_,end) <- MA.getBounds arr
                            return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray arr)])
+
+    lengthFloatArray' :: RValue -> RValue
+    lengthFloatArray' = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+      unsafePerformIO $ do (_,end) <- MA.getBounds arr
+                           return (Constr () (mkId ",") [NumInt end, Promote () (Val nullSpan () False $ Ext () $ FloatArray arr)])
 
     {-# NOINLINE writeFloatArray #-}
     writeFloatArray :: RValue -> RValue
@@ -589,10 +604,10 @@ builtIns =
 
     {-# NOINLINE writeFloatArray' #-}
     writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray' = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Nec () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
+      Promote () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
         do arr' <- MA.mapArray id arr
            () <- MA.writeArray arr' i v
            return arr'
