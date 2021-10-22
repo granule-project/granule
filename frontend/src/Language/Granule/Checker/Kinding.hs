@@ -199,7 +199,7 @@ checkKind s t k = do
   -- Synth
   (k', subst1, t') <- synthKind s t
   -- See if we can do a join (equality+) on the synthed kind and the one coming as specification here.
-  join <- joinTypes s k k'
+  join <- joinTypesNoMGU s k k'
   case join of
     Just (_, subst2, _) -> do
       substFinal <- combineSubstitutions s subst1 subst2
@@ -626,6 +626,53 @@ joinTypes'' s t1 t2 rel = do
     else
       -- Fall through
       fail "No upper bound"
+
+-- | Compute the join of two types, if it exists
+-- | (without using most general unifier for coeffects)
+joinTypesNoMGU :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> Checker (Maybe (Type, Substitution, Maybe Injections))
+joinTypesNoMGU s t1 t2 = runMaybeT (joinTypesNoMGU' s t1 t2)
+
+
+-- Wrapper over `jointTypesNoMGU'` that uses approximation
+joinTypesNoMGU' :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> MaybeT Checker (Type, Substitution, Maybe Injections)
+joinTypesNoMGU' s t t' = joinTypesNoMGU'' s t t' ApproximatedBy
+
+joinTypesNoMGU'' :: (?globals :: Globals)
+          => Span
+          -> Type
+          -> Type
+          -> (Span -> Type -> Type -> Type -> Constraint) -- how to build a constraint for grades
+          -> MaybeT Checker (Type, Substitution, Maybe Injections)
+joinTypesNoMGU'' s t t' rel | t == t' = return (t, [], Nothing)
+
+joinTypesNoMGU'' s (FunTy id t1 t2) (FunTy x t1' t2') rel =
+  joinTypes'' s (FunTy id t1 t2) (FunTy x t1' t2') rel
+
+joinTypesNoMGU'' s (Diamond ef1 t1) (Diamond ef2 t2) rel =
+  joinTypes'' s (Diamond ef1 t1) (Diamond ef2 t2) rel
+
+joinTypesNoMGU'' s (Box c t) (Box c' t') rel =
+  joinTypes'' s (Box c t) (Box c' t') rel
+
+joinTypesNoMGU'' s (TyVar v) t rel =
+  joinTypes'' s (TyVar v) t rel
+
+joinTypesNoMGU'' s t1 t2@(TyVar _) rel =
+  joinTypes'' s t1 t2 rel
+
+joinTypesNoMGU'' s (TyApp t1 t2) (TyApp t1' t2') rel =
+  joinTypes'' s (TyApp t1 t2) (TyApp t1' t2') rel
+
+joinTypesNoMGU'' s t1 t2 rel = do
+  fail "No upper bound"
 
 -- Universally quantifies everything in a context.
 universify :: Ctxt Kind -> Ctxt (Type, Quantifier)
