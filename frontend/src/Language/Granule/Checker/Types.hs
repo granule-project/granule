@@ -149,8 +149,8 @@ equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Typ
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
 
-equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp Types = do
-  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) (Star g2 t2) _ sp mode = do
+  (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp mode
   (eq', _, unif') <- equalTypes s g1 g2
   u <- combineSubstitutions s unif unif'
   return (eq && eq', u)
@@ -317,6 +317,15 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
 
 equalTypesRelatedCoeffectsInner s rel t (TyVar n) k sp mode =
   equalTypesRelatedCoeffectsInner s rel (TyVar n) t k (flipIndicator sp) mode
+
+equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) _ sp mode
+  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t1}
+  | otherwise = do
+    (g, _, u) <- equalTypes s t1 t2
+    return (g, u)
+
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 k sp mode =
+  equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 k (flipIndicator sp) mode
 
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
