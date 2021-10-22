@@ -422,10 +422,10 @@ builtIns =
   -- , (mkId "newPtr", malloc)
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
-  , (mkId "uniqueReturn",  Ext () $ Primitive $ \e -> e)
+  , (mkId "uniqueReturn",  Ext () $ Primitive uniqueReturn)
   , (mkId "uniqueBind",    Ext () $ PrimitiveClosure uniqueBind)
-  , (mkId "uniquePush",    Ext () $ Primitive $ \e -> e)
-  , (mkId "uniquePull",    Ext () $ Primitive $ \e -> e)
+  , (mkId "uniquePush",    Ext () $ Primitive uniquePush)
+  , (mkId "uniquePull",    Ext () $ Primitive uniquePull)
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
   , (mkId "lengthFloatArray",  Ext () $ Primitive lengthFloatArray)
   , (mkId "readFloatArray",  Ext () $ Primitive readFloatArray)
@@ -465,12 +465,26 @@ builtIns =
       return $ valExpr $ Promote () $ valExpr $ Ext () $ Chan c
     forkRep ctxt e = error $ "Bug in Granule. Trying to fork: " <> prettyDebug e
 
+    uniqueReturn :: RValue -> RValue
+    uniqueReturn (Nec () v) = (Promote () v)
+    uniqueReturn v = error $ "Bug in Granule. Can't borrow a non-unique: " <> prettyDebug v
+
     uniqueBind :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
-    uniqueBind ctxt f = Ext () $ Primitive $ \v -> 
+    uniqueBind ctxt f = Ext () $ Primitive $ \(Promote () v) -> 
       unsafePerformIO $ evalIn ctxt 
         (App nullSpan () False 
           (Val nullSpan () False f) 
-          (Val nullSpan () False v))
+          (Val nullSpan () False (Nec () v)))
+
+    uniquePush :: RValue -> RValue
+    uniquePush (Nec () (Val nullSpan () False (Constr () (Id "," ",") [x, y])))
+     = (Constr () (mkId ",") [(Nec () (Val nullSpan () False x)), (Nec () (Val nullSpan () False y))])
+    uniquePush v = error $ "Bug in Granule. Can't push through a non-unique: " <> prettyDebug v
+
+    uniquePull :: RValue -> RValue
+    uniquePull (Constr () (Id "," ",") [(Nec () (Val nullSpan () False x)), (Nec () (Val _ () False y))])
+      = (Nec () (Val nullSpan () False (Constr () (mkId ",") [x, y])))
+    uniquePull v = error $ "Bug in Granule. Can't pull through a non-unique: " <> prettyDebug v
 
     recv :: (?globals :: Globals) => RValue -> RValue
     recv (Ext _ (Chan c)) = unsafePerformIO $ do
@@ -551,38 +565,37 @@ builtIns =
 
     {-# NOINLINE newFloatArray #-}
     newFloatArray :: RValue -> RValue
-    newFloatArray = \(NumInt i) -> Promote () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
+    newFloatArray = \(NumInt i) -> Nec () (Val nullSpan () False $ Ext () $ FloatArray (unsafePerformIO (MA.newArray_ (0,i))))
 
     {-# NOINLINE readFloatArray #-}
     readFloatArray :: RValue -> RValue
-    readFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    readFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do e <- MA.readArray arr i
-                           return (Constr () (mkId ",") [NumFloat e, Promote () (Val nullSpan () False $ Ext () (FloatArray arr))])
+                           return (Constr () (mkId ",") [NumFloat e, Nec () (Val nullSpan () False $ Ext () (FloatArray arr))])
 
     lengthFloatArray :: RValue -> RValue
-    lengthFloatArray = \(Promote () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
+    lengthFloatArray = \(Nec () (Val _ _ _ (Ext () (FloatArray arr)))) -> Ext () $ Primitive $ \(NumInt i) ->
       unsafePerformIO $ do (_,end) <- MA.getBounds arr
-                           return (Constr () (mkId ",") [NumInt end, Promote () (Val nullSpan () False $ Ext () $ FloatArray arr)])
+                           return (Constr () (mkId ",") [NumInt end, Nec () (Val nullSpan () False $ Ext () $ FloatArray arr)])
 
     {-# NOINLINE writeFloatArray #-}
     writeFloatArray :: RValue -> RValue
-    writeFloatArray = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Promote () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
+      Nec () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
         do () <- MA.writeArray arr i v
            return arr
 
     {-# NOINLINE writeFloatArray' #-}
     writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray' = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Promote () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
+      Nec () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
         do arr' <- MA.mapArray id arr
            () <- MA.writeArray arr' i v
            return arr'
-
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
