@@ -642,6 +642,7 @@ checkExpr defs gam pol _ ty@(Box demand tau) (Val s _ rf (Promote _ e)) = do
 
 checkExpr defs gam pol _ ty@(Star demand tau) (Val s _ rf (Nec _ e)) = do
     debugM "checkExpr[Star]" (pretty s <> " : " <> pretty ty)
+    debugM "blblblblblbl" "blblblbl"
 
     -- Checker the expression being necessitated
     (gam', subst, elaboratedE) <- checkExpr defs gam pol False tau e

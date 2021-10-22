@@ -486,6 +486,8 @@ data CheckerError
     { errLoc :: Span, errTy1 :: Type, errTy2 :: Type }
   | LinearityError
     { errLoc :: Span, linearityMismatch :: LinearityMismatch }
+  | UniquenessError
+    { errLoc :: Span, uniquenessMismatch :: UniquenessMismatch }
   | PatternTypingError
     { errLoc :: Span, errPat :: Pattern (), tyExpected :: Type }
   | PatternTypingMismatch
@@ -608,6 +610,7 @@ instance UserMsg CheckerError where
   title KindsNotEqual{} = "Kind error"
   title IntervalGradeKindError{} = "Interval kind error"
   title LinearityError{} = "Linearity error"
+  title UniquenessError{} = "Uniqueness error"
   title PatternTypingError{} = "Pattern typing error"
   title PatternTypingMismatch{} = "Pattern typing mismatch"
   title PatternArityError{} = "Pattern arity error"
@@ -747,6 +750,10 @@ instance UserMsg CheckerError where
       "Wildcard pattern `_` allowing a value to be discarded"
     HandlerLinearityMismatch ->
       "Linearity of Handler clauses does not match"
+
+  msg UniquenessError{..} = case uniquenessMismatch of
+    NonUniqueUsedUniquely t ->
+      "Cannot guarantee uniqueness of references for non-unique type `" <> pretty t <> "`."
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -982,6 +989,10 @@ data LinearityMismatch
   | LinearUsedMoreThanOnce Id
   | HandlerLinearityMismatch
   deriving (Eq, Show) -- for debugging
+
+data UniquenessMismatch
+  = NonUniqueUsedUniquely Type
+  deriving (Eq, Show)
 
 freshenPred :: Pred -> Checker Pred
 freshenPred pred = do
