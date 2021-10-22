@@ -111,6 +111,9 @@ extract [x] = x
 pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
 pullPair = pull @(,)
 
+copy : forall {a : Type, s : Semiring} . a [(1 + 1):s] -> (a, a)
+copy [x] = (x, x)
+
 --- # Coeffect-specifc combinators
 
 --- Flatten two boxes (with Nat grading)

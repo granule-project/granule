@@ -454,11 +454,11 @@ swap
   → a × ArrayStack cap (maxIndex + 1) a
 swap = BUILTIN
 
-copy
+copyArray
   : ∀ {a : Type, cap : Nat, maxIndex : Nat}
   . ArrayStack cap maxIndex (a [2])
   → ArrayStack cap maxIndex a × ArrayStack cap maxIndex a
-copy = BUILTIN
+copyArray = BUILTIN
 
 --------------------------------------------------------------------------------
 -- Cost
