@@ -29,8 +29,6 @@ import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Type
 import Language.Granule.Utils
 
-import Debug.Trace
-
 import qualified System.Clock as Clock
 
 data SolverResult

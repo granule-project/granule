@@ -18,10 +18,10 @@ trip [x] = x + x + x
 secret : Int [Private]
 secret = [4253]
 
-hash : ∀ {l : Level} . Int [l] → Int [l]
+hash : ∀ {l : Sec} . Int [l] → Int [l]
 hash [x] = [x*x]
 
-notAleak : (Int [Private]) [0] → Int [Public]
+notAleak : (Int [Hi]) [0] → Int [Lo]
 notAleak [x] = [42]
 
 -- main : Int [Private]
