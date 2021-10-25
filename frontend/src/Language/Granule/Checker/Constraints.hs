@@ -416,7 +416,7 @@ compileCoeffect (TyCon (internalName -> "Infinity")) t _ | t == extendedNat =
 compileCoeffect (TyCon (internalName -> "Infinity")) (isExt -> Just t) vars = do
   -- Represent Inf, but we still need to put something for the grade
   -- component (which is going to get ignored so just put 1 for now)
-  (r, pred) <- ("Compiling a infinite at " <> show t) `trace` compileCoeffect (TyGrade (Just t) 1) t vars
+  (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
   return (SExt r sTrue, sTrue)
 
 -- Effect 0 : Nat
@@ -543,7 +543,7 @@ compileCoeffect (TyGrade k' 1) k vars = do
       return (SExtNat 1, sTrue)
 
     (isExt -> Just t) -> do
-      (r, pred) <- ("compiling an ext 1 at " ++ show t) `trace` compileCoeffect (TyGrade (Just t) 1) t vars
+      (r, pred) <- compileCoeffect (TyGrade (Just t) 1) t vars
       return (SExt r sFalse, pred)
 
     (isProduct -> Just (t1, t2)) ->

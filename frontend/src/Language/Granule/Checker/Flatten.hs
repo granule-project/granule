@@ -14,6 +14,7 @@ import Control.Monad.State.Strict
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
+-- import Language.Granule.Syntax.Pretty
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
 import Language.Granule.Checker.SubstitutionContexts
@@ -48,31 +49,6 @@ mguCoeffectTypes' :: (?globals :: Globals)
 
 -- Trivial case
 mguCoeffectTypes' s t t' | t == t' = return $ Just (t, [], (id, id))
-
--- Ext cases
--- unify (Ext t) (Ext t') = Ext (unify t t')
-mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
-  coeffecTyUpper <- mguCoeffectTypes' s t t'
-  case coeffecTyUpper of
-    Just (upperTy, subst, (inj1, inj2)) -> do
-      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
-    Nothing -> return Nothing
-
--- unify (Ext t) t' = Ext (unify t t')
-mguCoeffectTypes' s (isExt -> Just t) t' = do
-  coeffecTyUpper <- mguCoeffectTypes' s t t'
-  case coeffecTyUpper of
-    Just (upperTy, subst, (inj1, inj2)) -> do
-      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
-    Nothing -> return Nothing
-
--- unify t (Ext t') = Ext (unify t t')
-mguCoeffectTypes' s t (isExt -> Just t') = do
-  coeffecTyUpper <- mguCoeffectTypes' s t t'
-  case coeffecTyUpper of
-    Just (upperTy, subst, (inj1, inj2)) -> do
-      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
-    Nothing -> return Nothing
 
 -- Both are variables
 mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
@@ -117,6 +93,33 @@ mguCoeffectTypes' s (TyVar kv1) coeffTy2 = do
 -- Right-hand side is a poly variable, but Linear is concrete
 mguCoeffectTypes' s coeffTy1 (TyVar kv2) = do
   mguCoeffectTypes' s (TyVar kv2) coeffTy1
+
+-- Ext cases
+-- unify (Ext t) (Ext t') = Ext (unify t t')
+mguCoeffectTypes' s (isExt -> Just t) (isExt -> Just t') = do
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
+
+-- unify (Ext t) t' = Ext (unify t t')
+mguCoeffectTypes' s (isExt -> Just t) t' = do
+  -- liftIO $ putStrLn $ "unify (Ext " <> pretty t <> ") with " <> pretty t'
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
+
+-- unify t (Ext t') = Ext (unify t t')
+mguCoeffectTypes' s t (isExt -> Just t') = do
+  -- liftIO $ putStrLn $ "unify " <> pretty t <> " with (Ext " <> pretty t' <> ")"
+  coeffecTyUpper <- mguCoeffectTypes' s t t'
+  case coeffecTyUpper of
+    Just (upperTy, subst, (inj1, inj2)) -> do
+      return $ Just (TyApp (TyCon $ mkId "Ext") upperTy, subst, (inj1, inj2))
+    Nothing -> return Nothing
 
 -- `Nat` can unify with `Q` to `Q`
 mguCoeffectTypes' s (TyCon (internalName -> "Q")) (TyCon (internalName -> "Nat")) =

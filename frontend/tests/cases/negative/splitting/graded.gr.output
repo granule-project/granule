@@ -7,6 +7,7 @@ Found a goal: frontend/tests/cases/negative/splitting/graded.gr:2:11:
      x : .[(a, b)]. ((0 : Ext Nat)..∞)
 
    Type context:
+     s0 : Coeffect
      a : Type
      b : Type
 
