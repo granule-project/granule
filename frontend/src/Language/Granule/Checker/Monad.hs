@@ -754,6 +754,8 @@ instance UserMsg CheckerError where
   msg UniquenessError{..} = case uniquenessMismatch of
     NonUniqueUsedUniquely t ->
       "Cannot guarantee uniqueness of references for non-unique type `" <> pretty t <> "`."
+    UniquePromotion t ->
+      "Cannot promote non-unique value of type `" <> pretty t <> "` to unique, since uniqueness is not a coeffect."
 
   msg PatternTypingError{..}
     = "Pattern match `"
@@ -992,6 +994,7 @@ data LinearityMismatch
 
 data UniquenessMismatch
   = NonUniqueUsedUniquely Type
+  | UniquePromotion Type
   deriving (Eq, Show)
 
 freshenPred :: Pred -> Checker Pred

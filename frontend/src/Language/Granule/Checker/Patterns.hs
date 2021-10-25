@@ -293,7 +293,9 @@ ctxtFromTypedPattern' _ s _ t p _ = do
   st <- get
   debugM "ctxtFromTypedPattern" $ "Type: " <> show t <> "\nPat: " <> show p
   debugM "dataConstructors in checker state" $ show $ dataConstructors st
-  throw PatternTypingError{ errLoc = s, errPat = p, tyExpected = t }
+  case t of
+    (Star _ t') -> throw $ UniquenessError { errLoc = s, uniquenessMismatch = UniquePromotion t'}
+    otherwise -> throw $ PatternTypingError { errLoc = s, errPat = p, tyExpected = t }
 
 ctxtFromTypedPatterns :: (?globals :: Globals)
   => Span
