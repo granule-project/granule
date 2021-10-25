@@ -99,14 +99,18 @@ instance Pretty Type where
       let pt1 = case t1 of FunTy{} -> "(" <> pretty t1 <> ")"; _ -> pretty t1
       in  "(" <> pretty id <> " : " <> pt1 <> ") -> " <> pretty t2
 
-    pretty (Box c t)      =
-      prettyNested t <> " [" <> pretty c <> "]"
+    pretty (Box c t) =
+      case c of
+        (TyCon (Id "Many" "Many")) -> "!" <> prettyNested t
+        otherwise -> prettyNested t <> " [" <> pretty c <> "]"
 
     pretty (Diamond e t) =
       prettyNested t <> " <" <> pretty e <> ">"
 
     pretty (Star g t) =
-      prettyNested t <> " *" <> pretty g
+      case g of
+        (TyCon (Id "Unique" "Unique")) -> "*" <> prettyNested t
+        otherwise -> prettyNested t <> " *" <> pretty g
 
     pretty (TyApp (TyApp (TyCon x) t1) t2) | sourceName x == "," =
       "(" <> pretty t1 <> ", " <> pretty t2 <> ")"
