@@ -325,6 +325,12 @@ builtIns =
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
   , (mkId "use", Ext () $ Primitive $ \v -> Promote () (Val nullSpan () False v))
+  , (mkId "compose", Ext () $ Primitive $ \g ->
+                                Ext () $ Primitive $ \f ->
+                                  Abs () (PVar nullSpan () False (mkId "xc")) Nothing
+                                    (App nullSpan () False (Val nullSpan () False g) (App nullSpan () False (Val nullSpan () False f)
+                                        (Val nullSpan () False (Var () (mkId "xc"))))))
+
   -- differental privacy/sensitivty tracking version of scaling
   , (mkId "scale", Ext () $ Primitive $ \(NumFloat n)
            -> Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->

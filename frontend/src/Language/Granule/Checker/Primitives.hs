@@ -213,16 +213,8 @@ use = BUILTIN
 
 compose : forall {a : Type, b : Type, c : Type}
   . (b -> c) -> (a -> b) -> (a -> c)
-compose g f = \x -> g (f x)
-
-dropInt : Int -> ()
-dropInt = BUILTIN
-
-dropChar : Char -> ()
-dropChar = BUILTIN
-
-dropString : String -> ()
-dropString = BUILTIN
+compose = BUILTIN
+-- Defined in the interpreter as \g -> \f -> \x -> g (f x)
 
 --------------------------------------------------------------------------------
 -- Arithmetic
