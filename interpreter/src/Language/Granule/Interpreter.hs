@@ -414,7 +414,7 @@ parseGrConfig = info (go <**> helper) $ briefDesc
 
         globalsAltSynthStructuring <-
           flag Nothing (Just True)
-           $ long "altSynthStructuring"
+           $ long "altsynthstructuring"
             <> help "Use alternate structuring of synthesis rules"
 
         globalsGradeOnRule <-
