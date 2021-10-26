@@ -412,6 +412,16 @@ parseGrConfig = info (go <**> helper) $ briefDesc
            $ long "alternate"
             <> help "Use alternate mode for synthesis (subtractive divisive, additive naive)"
 
+        globalsAltSynthStructuring <-
+          flag Nothing (Just True)
+           $ long "altSynthStructuring"
+            <> help "Use alternate structuring of synthesis rules"
+
+        globalsGradeOnRule <-
+          flag Nothing (Just True)
+           $ long "gradeonrule"
+            <> help "Use alternate grade-on-rule mode for synthesis"
+
         grRewriter
           <- flag'
             (Just asciiToUnicode)
@@ -469,6 +479,8 @@ parseGrConfig = info (go <**> helper) $ briefDesc
               , globalsBenchmarkRaw
               , globalsSubtractiveSynthesis
               , globalsAlternateSynthesisMode
+              , globalsAltSynthStructuring
+              , globalsGradeOnRule
               , globalsSynthTimeoutMillis
               , globalsSynthIndex
               , globalsExtensions = []

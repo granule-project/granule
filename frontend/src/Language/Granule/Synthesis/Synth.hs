@@ -45,7 +45,7 @@ import qualified Control.Monad.State.Strict as State (get)
 import qualified System.Clock as Clock
 
 import Language.Granule.Utils
-import Data.Maybe (fromJust, catMaybes)
+import Data.Maybe (fromJust, catMaybes, fromMaybe)
 import Control.Arrow (second)
 import System.Clock (TimeSpec)
 -- import Language.Granule.Checker.Constraints.Compile (compileTypeConstraintToConstraint)
@@ -1171,6 +1171,8 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
         absHelper defs allowRSync gamma omega resourceScheme grade goalTy
       (False, x:xs, _) ->
         -- Left Async : Decompose assumptions until they are synchronous (eliminators on assumptions)
+        let altSynthStructuring = fromMaybe False (globalsAltSynthStructuring ?globals) in
+        if altSynthStructuring  then
               (
               varHelper [] (gamma ++ omega) resourceScheme grade goalTy
               `try`
@@ -1182,10 +1184,15 @@ synthesiseInner defs inDereliction resourceScheme gamma omega grade goalTy@(Fora
        --       `try`
        --       if allowDef then defHelper [] defs startTime (gamma ++ omega) resourceScheme goalTy else none
               )
-        `try`
-        unboxHelper defs [] omega gamma resourceScheme grade goalTy
-        `try`
-        constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
+              `try`
+              unboxHelper defs [] omega gamma resourceScheme grade goalTy
+              `try`
+              constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
+        else 
+          unboxHelper defs [] omega gamma resourceScheme grade goalTy
+          `try`
+          constrElimHelper (allowRSync, allowDef) defs [] omega gamma resourceScheme grade goalTy
+
 
       (False, _, _) ->
               varHelper [] (gamma ++ omega) resourceScheme grade goalTy
@@ -1207,7 +1214,7 @@ synthesise :: (?globals :: Globals)
            -> TypeScheme           -- type from which to synthesise
            -> Synthesiser (Expr () Type, Ctxt (Assumption, Structure Id), Substitution)
 synthesise defs resourceScheme gamma omega goalTy = do
-  let gradeOnRule = False
+  let gradeOnRule = fromMaybe False (globalsGradeOnRule ?globals)
   let initialGrade = if gradeOnRule then Just (TyGrade Nothing 1)  else Nothing
   relevantConstructors <- do
       let snd3 (a, b, c) = b

@@ -47,6 +47,8 @@ data Globals = Globals
   , globalsBenchmarkRaw        :: Maybe Bool
   , globalsSubtractiveSynthesis   :: Maybe Bool
   , globalsAlternateSynthesisMode :: Maybe Bool
+  , globalsAltSynthStructuring :: Maybe Bool
+  , globalsGradeOnRule         :: Maybe Bool
   , globalsSynthTimeoutMillis  :: Maybe Integer
   , globalsSynthIndex          :: Maybe Integer
   , globalsExtensions           :: [Extension]
@@ -63,7 +65,7 @@ parseExtensions _ = Nothing
 
 -- | Accessors for global flags with default values
 debugging, noColors, alternativeColors, noEval, suppressInfos, suppressErrors,
-  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode :: (?globals :: Globals) => Bool
+  timestamp, testing, ignoreHoles, benchmarking, benchmarkingRawData, subtractiveSynthesisMode, alternateSynthesisMode, altSynthStructuring, gradeOnRule :: (?globals :: Globals) => Bool
 debugging         = fromMaybe False $ globalsDebugging ?globals
 noColors          = fromMaybe False $ globalsNoColors ?globals
 alternativeColors = fromMaybe False $ globalsAlternativeColors ?globals
@@ -77,6 +79,8 @@ benchmarking      = fromMaybe False $ globalsBenchmark ?globals
 benchmarkingRawData = fromMaybe False $ globalsBenchmarkRaw ?globals
 subtractiveSynthesisMode = fromMaybe False $ globalsSubtractiveSynthesis ?globals
 alternateSynthesisMode = fromMaybe False $ globalsAlternateSynthesisMode ?globals
+altSynthStructuring = fromMaybe False $ globalsAltSynthStructuring ?globals
+gradeOnRule = fromMaybe False $ globalsGradeOnRule ?globals
 
 -- | Accessor for the solver timeout with a default value
 solverTimeoutMillis :: (?globals :: Globals) => Integer
@@ -122,6 +126,8 @@ instance Semigroup Globals where
       , globalsBenchmarkRaw        = globalsBenchmarkRaw        g1 <|> globalsBenchmarkRaw        g2
       , globalsSubtractiveSynthesis   = globalsSubtractiveSynthesis   g1 <|> globalsSubtractiveSynthesis   g2
       , globalsAlternateSynthesisMode = globalsAlternateSynthesisMode g1 <|> globalsAlternateSynthesisMode g2
+      , globalsAltSynthStructuring = globalsAltSynthStructuring g1 <|> globalsAltSynthStructuring g2
+      , globalsGradeOnRule = globalsGradeOnRule g1 <|> globalsGradeOnRule g2
       , globalsSynthIndex = globalsSynthIndex g1 <|> globalsSynthIndex g2
       , globalsSynthTimeoutMillis = globalsSynthTimeoutMillis g1 <|> globalsSynthTimeoutMillis g2
       , globalsExtensions = nub (globalsExtensions g1 <> globalsExtensions g2)
@@ -149,6 +155,8 @@ instance Monoid Globals where
     , globalsBenchmarkRaw        = Nothing
     , globalsSubtractiveSynthesis   = Nothing
     , globalsAlternateSynthesisMode = Nothing
+    , globalsAltSynthStructuring = Nothing
+    , globalsGradeOnRule = Nothing
     , globalsSynthTimeoutMillis  = Nothing
     , globalsSynthIndex  = Nothing
     , globalsExtensions = [Base]
