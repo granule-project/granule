@@ -1,4 +1,4 @@
-fooa : Int [Private] → Int [Public]
-fooa [x] = [(weak__ x) + 0]
+fooa : Int [Hi] → Int [Lo]
+fooa [x] = [x]
             -- x : Private but Public * Private = Public
             -- i.e. cannot leak
