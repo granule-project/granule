@@ -175,6 +175,25 @@ typeIndices (DataDecl _ _ tyVars _ constrs) =
     -- Defaults to `true` (acutally an ill-formed case for data types)
     findIndices _ _ _ = []
 
+{-| discriminateTypeIndicesOfDataType takes a data type definition, which has 0 or more
+   type parameters, and splits those type parameters into two lists: the first being
+   those which are really parameters (in a parametric polymorphism sense), and the second
+   which are indices (in the GADT/indexed families sense) -}
+discriminateTypeIndicesOfDataType :: DataDecl -> ([(Id, Kind)], [(Id, Kind)])
+discriminateTypeIndicesOfDataType d@(DataDecl _ _ tyVars _ _) =
+   classify (zip tyVars [0..(length tyVars)])
+  where
+    -- Partition the variables into two depending on whether
+    -- their position makes them an index or not
+    classify [] = ([], [])
+    classify ((vark, pos) : is) =
+      let (params, indices) = classify is
+      in
+        if pos `elem` typeIndexPositions
+        then (params, vark : indices)
+        else (vark : params, indices)
+
+    typeIndexPositions = nub $ concatMap snd (typeIndices d)
 
 nonIndexedToIndexedDataConstr :: Id -> [(Id, Kind)] -> DataConstr -> DataConstr
 nonIndexedToIndexedDataConstr _     _      d@DataConstrIndexed{} = d
