@@ -5,16 +5,16 @@ redeem : forall {p q : Type} . (!p -> *q) -> *p -> *q
 redeem f x = f &x
 
 -- Can't implement this as we can't go from unrestricted to unique (generate a uniqueness guarantee)
-derelict : forall {p q r : Type} . (*p -> *q) -> !p -> *q
-derelict = ?
+-- derelict : forall {p q r : Type} . (*p -> *q) -> !p -> *q
+-- derelict = ?
 
 -- Fine, since we can go from unrestricted to linear (impose a linearity restriction)
 derelict' : forall {p q r : Type} . (p -> q) -> !p -> q
 derelict' f !a = f a
 
 -- Can't implement this as we can't go from linear to unrestricted (bypass a linearity restriction)
-redeem' : forall {p q : Type} . (!p -> q) -> p -> q
-redeem' = ?
+-- redeem' : forall {p q : Type} . (!p -> q) -> p -> q
+-- redeem' = ?
 
 -- Contraction is allowed for unrestricted values...
 dup : forall {p : Type} . *p -> (p, p)
@@ -25,8 +25,8 @@ fst : forall {p q : Type} . (p, *q) -> p
 fst (a, b) = let !u = &b in a
 
 -- If we start with a unique cake, we can't have it and eat it too...
-badDesire : *Cake -> (Happy, *Cake)
-badDesire uniqueCake = ?
+-- badDesire : *Cake -> (Happy, *Cake)
+-- badDesire uniqueCake = ?
 
 -- ...unless we are willing to accept that our cake won't be unique any more :)
 goodDesire : *Cake -> (Happy, Cake)
