@@ -56,22 +56,19 @@ mguCoeffectTypes' s (TyVar kv1) (TyVar kv2) | kv1 /= kv2 = do
   case (lookup kv1 (tyVarContext st), lookup kv2 (tyVarContext st))  of
     (Nothing, _) -> throw $ UnboundVariableError s kv1
     (_, Nothing) -> throw $ UnboundVariableError s kv2
-    (Just (TyCon (internalName -> "Coeffect"), _), Just (TyCon (internalName -> "Coeffect"), InstanceQ)) -> do
+    (Just (TyCon kcon1, _), Just (TyCon kcon2, InstanceQ)) | kcon1 == kcon2 -> do
       updateCoeffectType kv2 (TyVar kv1)
       return $ Just (TyVar kv1, [(kv2, SubstT $ TyVar kv1)], (id, id))
 
-    (Just (TyCon (internalName -> "Coeffect"), InstanceQ), Just (TyCon (internalName -> "Coeffect"), _)) -> do
+    (Just (TyCon kcon1, InstanceQ), Just (TyCon kcon2, _)) | kcon1 == kcon2 -> do
       updateCoeffectType kv1 (TyVar kv2)
       return $ Just (TyVar kv2, [(kv1, SubstT $ TyVar kv2)], (id, id))
 
-    (Just (TyCon (internalName -> "Coeffect"), ForallQ), Just (TyCon (internalName -> "Coeffect"), ForallQ)) ->
-      throw $ UnificationFail s kv2 (TyVar kv1) (TyCon $ mkId "Coeffect") False
+    (Just (TyCon kcon1, ForallQ), Just (TyCon kcon2, ForallQ)) | kcon1 == kcon2 ->
+      throw $ UnificationFail s kv2 (TyVar kv1) (TyCon kcon1) False
 
-    (Just (TyCon (internalName -> "Coeffect"), _), Just (k, _)) ->
-      throw $ KindMismatch s Nothing (TyCon (mkId "Coeffect")) k
-
-    (Just (k, _), Just (_, _)) ->
-      throw $ KindMismatch s Nothing (TyCon (mkId "Coeffect")) k
+    (Just (k', _), Just (k, _)) ->
+      throw $ UnificationFail s kv2 (TyVar kv1) k' False
 
 
 -- Left-hand side is a poly variable, but Just is concrete
