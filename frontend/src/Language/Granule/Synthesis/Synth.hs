@@ -894,21 +894,21 @@ constrElimHelper (allowRSync, allowDef) defs left (var@(x, (a, structure)):right
 
               --- 
 
-              (structure, local) <- peekChecker $ do
-                (success, spec, subst') <- equalTypes nullSpanNoFile arg' assumptionTy
-                if success then return $ Dec topLevelDef else return $ Arg topLevelDef
+         --     (structure, local) <- peekChecker $ do
+         --       (success, spec, subst') <- equalTypes nullSpanNoFile arg' assumptionTy
+        --        if success then return $ Dec topLevelDef else return $ Arg topLevelDef
 
-              let structure' = case structure of 
-                    Right struct -> struct
-                    Left _ -> Arg topLevelDef
+         --     let structure' = case structure of 
+         --           Right struct -> struct
+        --            Left _ -> Arg topLevelDef
               
               -- let structure' = case structure of
               --  (Right struct, _)-> struct
               --  (Left _, _) -> Arg topLevelDef
 
               let assumption = case grade of
-                    Nothing -> (Linear arg', structure')
-                    Just grade' -> (Discharged arg' grade', structure')
+                    Nothing -> (Linear arg', Arg topLevelDef)
+                    Just grade' -> (Discharged arg' grade', Arg topLevelDef)
 
               debugM "constrElim assumption: " (show assumption)
               return (mkId $ removeDots var, assumption)) args
