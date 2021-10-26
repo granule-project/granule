@@ -16,7 +16,7 @@ twice [f] [x] = f [x] + f [x]
 secret : Int [Hi]
 secret = [0309]
 
-hash : ∀ {l : Level} . Int [l] → Int [l]
+hash : ∀ {l : Sec} . Int [l] → Int [l]
 hash [x] = [x + x]
 
 hello : () <{Stdin, Stdout}>
