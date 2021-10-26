@@ -51,7 +51,7 @@ equalTypes s = equalTypesRelatedCoeffectsAndUnify s Eq SndIsSpec
 data SpecIndicator = FstIsSpec | SndIsSpec | PatternCtxt
   deriving (Eq, Show)
 
-data Mode = Types | Effects
+data Mode = Types | Effects deriving Show
 
 {- | Check whether two types are equal, and at the same time
      generate (in)equality constraints and perform unification.
@@ -130,11 +130,13 @@ equalTypesRelatedCoeffectsInner s rel t1 t2 _ _ _ | t1 == t2 =
   return (True, [])
 
 equalTypesRelatedCoeffectsInner s rel fTy1@(FunTy _ t1 t2) fTy2@(FunTy _ t1' t2') _ sp mode = do
+  debugM "equalTypesRelatedCoeffectsInner (funTy left)" ""
   -- contravariant position (always approximate)
   (eq1, u1) <- equalTypesRelatedCoeffects s ApproximatedBy t1' t1 (flipIndicator sp) mode
    -- covariant position (depends: is not always over approximated)
   t2 <- substitute u1 t2
   t2' <- substitute u1 t2'
+  debugM "equalTypesRelatedCoeffectsInner (funTy right)" (pretty t2 <> " == " <> pretty t2')
   (eq2, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
   unifiers <- combineSubstitutions s u1 u2
   return (eq1 && eq2, unifiers)
@@ -144,6 +146,7 @@ equalTypesRelatedCoeffectsInner _ _ (TyCon con1) (TyCon con2) _ _ _
   return (con1 == con2, [])
 
 equalTypesRelatedCoeffectsInner s rel (Diamond ef1 t1) (Diamond ef2 t2) _ sp Types = do
+  debugM "equalTypesRelatedCoeffectsInner (diamond)" $ "grades " <> show ef1 <> " and " <> show ef2
   (eq, unif) <- equalTypesRelatedCoeffects s rel t1 t2 sp Types
   (eq', unif') <- equalTypesRelatedCoeffects s rel (handledNormalise s (Diamond ef1 t1) ef1) (handledNormalise s (Diamond ef2 t2) ef2) sp Effects
   u <- combineSubstitutions s unif unif'
@@ -269,6 +272,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffectsInner on TyVar"
           $ "span: " <> show s
+          <> "\nkind: " <> show kind
           <> "\nTyVar: " <> show n <> " with " <> show (lookup n (tyVarContext checkerState))
           <> "\ntype: " <> show t <> "\nspec indicator: " <> show sp
 
@@ -336,9 +340,11 @@ equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d) t') _ sp mode
 
 -- Equality on type application
 equalTypesRelatedCoeffectsInner s rel (TyApp t1 t2) (TyApp t1' t2') _ sp mode = do
+  debugM "equalTypesRelatedCoeffectsInner (tyAp leftp)" (pretty t1 <> " = " <> pretty t1')
   (one, u1) <- equalTypesRelatedCoeffects s rel t1 t1' sp mode
   t2  <- substitute u1 t2
   t2' <- substitute u1 t2'
+  debugM "equalTypesRelatedCoeffectsInner (tyApp right)" (pretty t2 <> " = " <> pretty t2')
   (two, u2) <- equalTypesRelatedCoeffects s rel t2 t2' sp mode
   unifiers <- combineSubstitutions s u1 u2
   return (one && two, unifiers)
@@ -380,6 +386,8 @@ equalTypesRelatedCoeffectsInner s rel (TySet _ ts1) (TySet _ ts2) k sp Types =
   return (all (`elem` ts2) ts1 && all (`elem` ts1) ts2, [])
 
 equalTypesRelatedCoeffectsInner s rel t1 t2 k sp mode = do
+  debugM "type Equality: Drop through case "
+    ("t1 = " <> pretty t1 <> " t2 = " <> pretty t2 <> "\n k = " <> pretty k <> "\n mode = " <> show mode)
   case mode of
     Effects -> do
       (result, putChecker) <- peekChecker (checkKind s k keffect)
