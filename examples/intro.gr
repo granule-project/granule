@@ -114,13 +114,13 @@ leftPad : forall {t : Type, m n : Nat} . {m >= n} => N m -> Vec n t -> t [m - n]
 leftPad n str c = let (m, str) = length str in append (rep (sub n m) c) str
 
 -- Privacy levels
-secret : Int [Private]
+secret : Int [Hi]
 secret = [1234]
 
-hash : forall {l : Level} . Int [l] -> Int [l]
+hash : forall {l : Sec} . Int [l] -> Int [l]
 hash [x] = [x*x*x]
 
-good : Int [Private]
+good : Int [Hi]
 good = hash secret
 
 -- bad : Int [Public]

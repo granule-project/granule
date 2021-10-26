@@ -100,6 +100,9 @@ unbox [x] = x
 disject : forall {a : Type, k : Semiring, n : k, m : k} . a [m * n] -> (a [n]) [m]
 disject [x] = [[x]]
 
+extract : forall {a : Type, s : Semiring, r : s} . {(1 : s) <= r} => a [r] -> a
+extract [x] = x
+
 --- Push coeffects on a pair into the left and right elements
 -- pushPair : forall {a : Type, b : Type, k : Coeffect, c : k} . {(Hsup c c) == c} => (a × b) [c] -> a [c] × b [c]
 -- pushPair [(x, y)] = ([x], [y])
@@ -107,6 +110,9 @@ disject [x] = [[x]]
 --- Pull coeffects of pair elements up to the pair
 pullPair : ∀ {a : Type, b : Type, k : Coeffect, n : k, m : k} . (a [n], b [m]) → (a, b) [n ∧ m]
 pullPair = pull @(,)
+
+copy : forall {a : Type, s : Semiring} . a [(1 + 1):s] -> (a, a)
+copy [x] = (x, x)
 
 --- # Coeffect-specifc combinators
 

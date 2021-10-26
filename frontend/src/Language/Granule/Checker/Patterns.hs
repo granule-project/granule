@@ -23,6 +23,7 @@ import Language.Granule.Checker.Kinding
 import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Variables
+import Language.Granule.Checker.Normalise
 
 import Language.Granule.Context
 import Language.Granule.Syntax.Identifiers
@@ -325,7 +326,7 @@ ctxtFromTypedPatterns' outerCoeff s pos (FunTy _ t1 t2) (pat:pats) (cons:consump
 
   -- Match the rest
   (localGam', ty, eVars', substs, elabPs, consumptions) <-
-      ctxtFromTypedPatterns' outerCoeff s pos t2' pats consumptionsIn
+      ctxtFromTypedPatterns' outerCoeff s pos (normaliseType t2') pats consumptionsIn
 
   -- Combine the results
   substs' <- combineSubstitutions s subst substs

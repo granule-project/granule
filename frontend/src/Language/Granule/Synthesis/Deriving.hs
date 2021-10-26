@@ -242,8 +242,10 @@ mkConstructorApplication s name consType [] t =
 mkConstructorApplication s name consType (expr:exprs) (FunTy _ t1 t2) =
   App s () True (mkConstructorApplication s name consType exprs t2) expr
 
-mkConstructorApplication s name consType  _ _ =
-  error $ "In making constructor for " ++ pretty name
+mkConstructorApplication s name consType  exprs ty =
+  -- no argument can be applied
+  Val s () True (Constr () name [])
+  -- error $ "In making constructor for " ++ pretty name ++ " with exprs args " ++ pretty exprs ++ " at type " ++ pretty ty
 
 
 derivePull :: (?globals :: Globals) => Span -> Type -> Checker (TypeScheme, Def () ())
@@ -582,7 +584,12 @@ deriveCopyShape s ty = do
     then return (tyS, Nothing)
     else return (tyS, Just def)
 
+unitType :: Type
+unitType = TyCon $ mkId "()"
 
+-- TODO: this returns a pair which says if the derived opertion
+-- is actually a primitive; I don't think this is actually needed
+-- and at the moment is always false
 deriveCopyShape' :: (?globals :: Globals)
   => Span
   -> Bool
@@ -591,10 +598,10 @@ deriveCopyShape' :: (?globals :: Globals)
   -> Expr () ()
   -> Checker ((Type, Type), (Expr () ()), Bool)
 deriveCopyShape' _ _ _ argTy@(leftmostOfApplication -> TyCon (Id "()" "()")) arg = do
-  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg, False)
+  return ((unitType, argTy), makePairUntyped makeUnitIntroUntyped arg, False)
 
 deriveCopyShape' _ _ _ argTy@(TyVar name) arg = do
-  return ((TyCon $ mkId "()", argTy), makePairUntyped makeUnitIntroUntyped arg, False)
+  return ((unitType, argTy), makePairUntyped makeUnitIntroUntyped arg, False)
 
 deriveCopyShape' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
   x <- freshIdentifierBase "x" >>= (return . mkId)
@@ -620,7 +627,7 @@ deriveCopyShape' s topLevel gamma argTy@(ProdTy t1 t2) arg = do
 
 deriveCopyShape' _ _ _ argTy@(leftmostOfApplication -> TyCon (internalName -> id)) arg |
   id == "Int" || id == "Char" || id == "Float" || id == "String "= do
-  return ((argTy, argTy), (App nullSpanNoFile () False (makeVarUntyped (mkId $ "copyShape@" <> id)) arg), True)
+  return ((unitType, argTy), makePairUntyped makeUnitIntroUntyped arg, False)
 
 deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = do
   st <- get
@@ -684,6 +691,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
                     debugM "deriveCopyShape dataConsType: " (show dataConsType)
                     -- Create a variable for each parameter
                     let consParamsTypes = parameterTypes dataConsType
+                    debugM "deriveCopyShape cons param types: " (show consParamsTypes)
                     consParamsVars <- forM consParamsTypes (\_ -> freshIdentifierBase "y" >>= (return . mkId))
 
                     -- Build the pattern for this case

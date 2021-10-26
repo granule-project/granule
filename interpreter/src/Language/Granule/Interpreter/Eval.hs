@@ -213,7 +213,7 @@ evalIn ctxt (TryCatch s _ _ e1 p _ e2 e3) = do
       )
        -- (cf. TRY_BETA_2)
       (\(e :: IOException) -> evalIn ctxt e3)
-    other -> fail $ "Runtime exception: Expecting a diamonad value but got: " <> prettyDebug other
+    other -> fail $ "Runtime exception: Expecting a diamond value but got: " <> prettyDebug other
 
 {-
 -- Hard-coded 'scale', removed for now
@@ -325,14 +325,14 @@ builtIns =
     (mkId "div", Ext () $ Primitive $ \(NumInt n1)
           -> Ext () $ Primitive $ \(NumInt n2) -> NumInt (n1 `div` n2))
   , (mkId "use", Ext () $ Primitive $ \v -> Promote () (Val nullSpan () False v))
+  -- differental privacy/sensitivty tracking version of scaling
+  , (mkId "scale", Ext () $ Primitive $ \(NumFloat n)
+           -> Ext () $ Primitive $ \(Promote () (Val nullSpan () _ (NumFloat m))) ->
+               NumFloat (n * m))
   , (mkId "drop@Int", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Char", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@Float", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
   , (mkId "drop@String", Ext () $ Primitive $ \v -> (Constr () (mkId "()") []))
-  , (mkId "copyShape@Int", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
-  , (mkId "copyShape@Char", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
-  , (mkId "copyShape@Float", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
-  , (mkId "copyShape@String", Ext () $ Primitive $ \v -> Constr () (mkId ",") [v, v])
   , (mkId "pure",       Ext () $ Primitive $ \v -> Pure () (Val nullSpan () False v))
   , (mkId "fromPure",   Ext () $ Primitive $ \(Pure () (Val nullSpan () False v)) ->  v)
   , (mkId "tick",       Pure () (Val nullSpan () False (Constr () (mkId "()") [])))
@@ -415,7 +415,7 @@ builtIns =
   -- , (mkId "swapPtr", peek poke castPtr) -- hmm probably don't need to cast the Ptr
   -- , (mkId "freePtr", free)
   , (mkId "uniqueReturn",  Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (Val nullSpan () False v))
-  , (mkId "uniqueBind",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False f)) -> Ext () $ Primitive $ \(Promote () (Val nullSpan () False v)) -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
+  , (mkId "uniqueBind",    Ext () $ Primitive $ \f -> Ext () $ Primitive $ \v -> Promote () (App nullSpan () False (Val nullSpan () False f) (Val nullSpan () False v)))
   , (mkId "uniquePush",    Ext () $ Primitive $ \(Promote () (Val nullSpan () False (Constr () (Id "," ",") [x, y]))) -> (Constr () (mkId ",") [(Promote () (Val nullSpan () False x)), (Promote () (Val nullSpan () False y))]))
   , (mkId "uniquePull",    Ext () $ Primitive $ \(Constr () (Id "," ",") [(Promote () (Val nullSpan () False x)), (Promote () (Val _ () False y))]) -> (Promote () (Val nullSpan () False (Constr () (mkId ",") [x, y]))))
   , (mkId "newFloatArray",  Ext () $ Primitive newFloatArray)
@@ -461,7 +461,7 @@ builtIns =
     recv (Ext _ (Chan c)) = unsafePerformIO $ do
       x <- CC.readChan c
       return $ Constr () (mkId ",") [x, Ext () $ Chan c]
-    recv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
+    recv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     send :: (?globals :: Globals) => RValue -> RValue
     send (Ext _ (Chan c)) = Ext () $ Primitive
@@ -478,7 +478,7 @@ builtIns =
     grecv (Ext _ (Chan c)) = diamondConstr $ do
       x <- CC.readChan c
       return $ valExpr $ Constr () (mkId ",") [x, Ext () $ Chan c]
-    grecv e = error $ "Bug in Granule. Trying to recevie from: " <> prettyDebug e
+    grecv e = error $ "Bug in Granule. Trying to receive from: " <> prettyDebug e
 
     gsend :: (?globals :: Globals) => RValue -> RValue
     gsend (Ext _ (Chan c)) = Ext () $ Primitive

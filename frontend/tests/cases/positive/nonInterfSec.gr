@@ -1,0 +1,2 @@
+fooa : Int [Hi] → Int [Lo]
+fooa [_] = [42]

@@ -37,6 +37,7 @@ import Language.Granule.Syntax.Parser
 import Language.Granule.Syntax.Lexer
 import Language.Granule.Syntax.Span
 import Language.Granule.Checker.Checker
+import Language.Granule.Checker.TypeAliases
 import Language.Granule.Interpreter.Eval
 import qualified Language.Granule.Interpreter as Interpreter
 
@@ -246,7 +247,7 @@ synthTypeFromInputExpr exprAst = do
   st <- get
   -- Build the AST and then try to synth the type
   let ast = buildRelevantASTdefinitions (freeVars exprAst) (defns st)
-  let astRest = AST (currentADTs st) ast mempty mempty Nothing
+  let astRest = replaceTypeAliases $ AST (currentADTs st) ast mempty mempty Nothing
 
   checkerResult <- liftIO' $ synthExprInIsolation astRest exprAst
   case checkerResult of

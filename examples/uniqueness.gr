@@ -10,7 +10,7 @@ derelict = ?
 
 -- Fine, since we can go from unrestricted to linear (impose a linearity restriction)
 derelict' : forall {p q r : Type} . (p -> q) -> !p -> q
-derelict' f [a] = f a
+derelict' f !a = f a
 
 -- Can't implement this as we can't go from linear to unrestricted (bypass a linearity restriction)
 redeem' : forall {p q : Type} . (!p -> q) -> p -> q
@@ -18,11 +18,11 @@ redeem' = ?
 
 -- Contraction is allowed for unrestricted values...
 dup : forall {p : Type} . *p -> (p, p)
-dup a = let [u] = &a in (u, u)
+dup a = let !u = &a in (u, u)
 
 -- ...and so is weakening!
 fst : forall {p q : Type} . (p, *q) -> p
-fst (a, b) = let [u] = &b in a
+fst (a, b) = let !u = &b in a
 
 -- If we start with a unique cake, we can't have it and eat it too...
 badDesire : *Cake -> (Happy, *Cake)
@@ -30,4 +30,19 @@ badDesire uniqueCake = ?
 
 -- ...unless we are willing to accept that our cake won't be unique any more :)
 goodDesire : *Cake -> (Happy, Cake)
-goodDesire uniqueCake = let [cake] = &uniqueCake in (eat cake, have cake)
+goodDesire uniqueCake = let !cake = &uniqueCake in (eat cake, have cake)
+
+-- Copying a non-linear value as unique and then borrowing it gives you the
+-- original value
+unitR : forall {a : Type} . !a -> !a
+unitR t = clone t as x in &x
+
+-- Borrowing a unique value and copying it to apply a function is the same as
+-- just applying the function
+unitL : forall {a b : Type} . *a -> (!a -> !b) -> !b
+unitL t f = clone &t as x in f &x
+
+-- Nesting copies works as you would expect (and obeys associativity)
+assoc : forall {a b c : Type} . !a -> (*a -> !b) -> (*b -> !c) -> !c
+assoc t f g = clone t as x in 
+                clone f x as y in g y
