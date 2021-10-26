@@ -1,5 +1,7 @@
   # 0.8.2.0 (in preparation)
   - Bug fixes related to sensitivity analysis
+  - Bug fixes relating to derived operation copyShape
+  - Any semiring can now be lifted to a top-completed semiring with Ext (previously only allowed for Nat)
   - New graded modalities
     - LNL semiring (None, One, Many) recovers linear logic via new `hsup` operation
        to control 'push' behaviour on tensors. See: https://granule-project.github.io/papers/tlla_2021_paper11.pdf
