@@ -1,2 +1,0 @@
-pull : forall {a : Type, b : Type} . (a [], b []) -> (a, b) []
-pull = ?

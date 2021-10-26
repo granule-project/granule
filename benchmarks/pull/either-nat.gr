@@ -1,3 +1,0 @@
-data Either a b = Left a | Right b
-pull : forall {a : Type, b : Type, n : Nat} . Either (a [n]) (b [n]) -> (Either a b) [n]
-pull = ?

@@ -1,3 +1,0 @@
-data Either a b = Left a | Right b
-or2 : forall {a b : Type} . b -> Either a b
-or2 = ?

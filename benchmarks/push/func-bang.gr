@@ -1,2 +1,0 @@
-push : forall {a : Type, b : Type} . (a -> b) [] -> a [] -> b []
-push = ?

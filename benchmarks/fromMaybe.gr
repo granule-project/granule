@@ -1,3 +1,0 @@
-data Either a b = Left a | Right b
-fromMaybe : forall {a : Type} . a [0..1] -> Either () a -> a
-fromMaybe = ?
