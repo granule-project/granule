@@ -15,13 +15,3 @@ hash [x] = [x + x]
 -- can't be used in a Public security environment.
 main : Int [Hi]
 main = hash secret
-
--- Flattening takes the meet (∧) of both Levels (see example below).
-flatten : ∀ {k : Sec, l : Sec} . (Int [k]) [l] → Int [k ∧ l]
-flatten [[x]] = [x]
-
-xbb : (Int [Lo]) [Hi]
-xbb = [[1337]]
-
-xb : Int [Hi]
-xb = flatten xbb
