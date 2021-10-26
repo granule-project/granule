@@ -1,3 +1,5 @@
+language SecurityLevels
+
 fooa : Int [Private] → Int [Public]
 fooa [_] = [42]
             -- x : Unused but Public * Unused = Unused and Unusused <= Private
