@@ -16,7 +16,7 @@ grImport :: ImportDecl ()
 grImport = ImportDecl () (ModuleName () "Language.Granule.Runtime") False False False Nothing Nothing Nothing
 
 grExts :: [Name ()]
-grExts = map name ["GADTs", "ScopedTypeVariables", "Strict"]
+grExts = map name ["GADTs", "ScopedTypeVariables", "Strict", "NoImplicitPrelude"]
 
 mkPragmas :: [Name ()] -> ModulePragma ()
 mkPragmas = LanguagePragma ()
