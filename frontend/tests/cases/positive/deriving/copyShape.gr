@@ -1,5 +1,5 @@
--- copyShapeInt : Int -> ((), Int)
--- copyShapeInt = copyShape @Int
+copyShapeInt : Int -> ((), Int)
+copyShapeInt = copyShape @Int
 
 data Maybe a = Just a | Nothing
 
