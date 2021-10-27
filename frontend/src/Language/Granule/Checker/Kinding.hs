@@ -869,6 +869,10 @@ mguCoeffectTypes' s (isInterval -> Just t') t = do
 
     Nothing -> return Nothing
 
+<<<<<<< HEAD
+=======
+
+>>>>>>> 0c0dcbd7 (work in progress on single unified unification function)
 -- No way to unify (outer function will take the product)
 mguCoeffectTypes' s coeffTy1 coeffTy2 = return Nothing
 
