@@ -30,7 +30,6 @@ import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints
 import Language.Granule.Checker.Exhaustivity
 import Language.Granule.Checker.Effects
-import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.Ghost
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.NameClash
@@ -120,7 +119,8 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
           --
           -- Solve the generated constraints
           checkerState <- get
-
+          tyVarContext' <- substitute subst (tyVarContext checkerState)
+          put $ checkerState { tyVarContext = tyVarContext' }
           let predicate = Conj $ predicateStack checkerState
           predicate <- substitute subst predicate
           solveConstraints predicate (getSpan expr) (mkId "grepl")
@@ -314,6 +314,8 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
         -- Solve the generated constraints
         checkerState <- get
+        tyVarContext' <- substitute subst (tyVarContext checkerState)
+        put $ checkerState { tyVarContext = tyVarContext' }
 
         let predicate = Conj $ predicateStack checkerState
         debugM "elaborateEquation" "solveEq"

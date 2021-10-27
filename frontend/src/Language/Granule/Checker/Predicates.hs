@@ -27,7 +27,7 @@ data Quantifier =
     -- | Universally quantification, e.g. polymorphic
     ForallQ
 
-    -- | Instantiations of universally quantified variables
+    -- | Unification variables
     | InstanceQ
 
     -- | Univeral, but bound in a dependent pattern match
@@ -36,7 +36,7 @@ data Quantifier =
 
 instance Pretty Quantifier where
   pretty ForallQ   = "∀"
-  pretty InstanceQ = "∃"
+  pretty InstanceQ = "u"
   pretty BoundQ    = "pi"
 
 stripQuantifiers :: Ctxt (a, Quantifier) -> Ctxt a

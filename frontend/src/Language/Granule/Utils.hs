@@ -330,3 +330,11 @@ writeSrcFile file keepOldFile contents = do
       hClose tempHd
       removeFile tempFile
       throwIO e
+
+ifM :: Monad m => m Bool -> m a -> m a -> m a
+ifM condM f g = do
+  cond <- condM
+  if cond then f else g
+
+whenM :: Monad m => m Bool -> m () -> m ()
+whenM condM f = ifM condM f (return ())

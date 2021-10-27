@@ -1,0 +1,7 @@
+data Vec (n : Nat) (a : Type) where
+    Nil : Vec 0 a;
+    Cons : forall {n : Nat} . a -> Vec n a -> Vec (n+1) a
+
+head : forall {a : Type, n : Nat} . (Vec (n + 1) a) [] -> a
+head [Nil] = head Nil;
+head [Cons x xs] = x
