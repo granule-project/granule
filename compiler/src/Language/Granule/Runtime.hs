@@ -1,18 +1,37 @@
 -- | Implementations of builtin Granule functions in Haskell
 
-{-# LANGUAGE NamedFieldPuns, Strict #-}
+{-# LANGUAGE NamedFieldPuns, Strict, NoImplicitPrelude #-}
 {-# OPTIONS_GHC -fno-full-laziness #-}
-module Language.Granule.Runtime where
+module Language.Granule.Runtime
+  (
+    -- Granule runtime-specific data structures
+    FloatArray(..), BenchList(..)
 
-import Foreign.Marshal.Array
-import Foreign.Ptr
-import Foreign.Storable
-import System.IO.Unsafe
-import Foreign.Marshal.Alloc
-import System.IO
+    -- Granule runtime-specific procedures
+  , mkIOBenchMain,fromStdin,toStdout,toStderr,readInt,showChar,intToFloat
+  , showInt,showFloat
+  , newFloatArray,newFloatArray',writeFloatArray,writeFloatArray'
+  , readFloatArray,readFloatArray',lengthFloatArray,deleteFloatArray
+  , uniqueReturn,uniqueBind,uniquePush,uniquePull
+
+  -- Re-exported from Prelude
+  , String, Int, IO, Float, Maybe(..), Show(..), Char, getLine
+  , putStr, read, (<$>) , fromIntegral, Monad(..)
+  , ($), error, (>), (++), id, Num(..), (.)
+  ) where
+
+import Foreign.Marshal.Array ( mallocArray )
+import Foreign.Ptr ( Ptr, nullPtr )
+import Foreign.Storable ( Storable(peekElemOff, pokeElemOff) )
+import System.IO.Unsafe ( unsafePerformIO )
+import Foreign.Marshal.Alloc ( free )
+import System.IO ( hFlush, stderr, stdout, hPutStr )
 import qualified Data.Array.IO as MA
-import Criterion.Main
-import System.IO.Silently
+import Criterion.Main ( defaultMain, bench, bgroup, nfAppIO )
+import System.IO.Silently ( silence )
+import Prelude
+    ( String, Int, IO, Float, Maybe(..), Show(..), Char, getLine, putStr, read
+    , (<$>), fromIntegral, ($), Monad(..), error, (>), (++), id, Num (..), (.) )
 
 --------------------------------------------------------------------------------
 -- Benchmarking
@@ -24,7 +43,7 @@ data BenchList =
   | Done
 
 mkIOBenchMain :: BenchList -> IO ()
-mkIOBenchMain ns = defaultMain (go ns) -- map (\(n,s,f) -> bench s $ nfIO $ f n) ns
+mkIOBenchMain ns = defaultMain (go ns)
   where go (Bench n s f next) = bench s (nfAppIO (silence . f) n) : go next
         go (BenchGroup str benchs next) = bgroup str (go benchs) : go next
         go Done = []
