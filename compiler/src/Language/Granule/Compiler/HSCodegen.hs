@@ -57,33 +57,36 @@ cgDef (Def _ id _ EquationList{equations} typeschemes) = do
   pats'   <- mapM cgPats  pats
   bodies' <- mapM cgExpr bodies
   let cases = zip pats' bodies'
-      impl = mkEquation (name $ sourceName id) cases
-      sig  = TypeSig () [name $ sourceName id] scheme
+      impl = mkEquation (mkName id) cases
+      sig  = TypeSig () [mkName id] scheme
   return [sig,impl]
 
 cgData :: Compiler m => DataDecl -> m [Decl ()]
 cgData (GrDef.DataDecl _ id tyvars _ constrs) = do
-  conDecls <- mapM cgDataConstr constrs
-  let dhead = foldr ((\i a -> DHApp () a $ UnkindedVar () i) . (name . internalName . fst))
-                    (DHead () (name $ internalName id)) tyvars
-  return [Hs.DataDecl () (DataType ()) Nothing dhead conDecls []]
+  conDecls <- mapM (cgDataConstr tyvars) constrs
+  let dhead = foldr ((\i a -> DHApp () a $ UnkindedVar () i) . (mkName . fst))
+                    (DHead () (mkName id)) tyvars
+  return [Hs.GDataDecl () (DataType ()) Nothing dhead Nothing conDecls []]
 
-cgDataConstr :: Compiler m => DataConstr -> m (QualConDecl ())
-cgDataConstr (DataConstrIndexed s i t) = unsupported "cgData: indexed data cons not supported"
-cgDataConstr (DataConstrNonIndexed _ i tys) = do
-  tys' <- mapM cgType tys
-  return $ QualConDecl () Nothing Nothing $ ConDecl () (name $ sourceName i) tys'
+cgDataConstr :: Compiler m => [(Id,GrType.Kind)] -> DataConstr -> m (GadtDecl ())
+cgDataConstr ls (DataConstrIndexed _ i scheme) = do
+  scheme' <- cgTypeScheme scheme
+  return $ GadtDecl () (mkName i) Nothing Nothing Nothing scheme'
+cgDataConstr ls d@(DataConstrNonIndexed s i tys) =
+  cgDataConstr ls $ nonIndexedToIndexedDataConstr i ls d
 
 cgTypeScheme :: Compiler m => TypeScheme -> m (Hs.Type ())
-cgTypeScheme (Forall _ binders constraints typ) = cgType typ
-  -- unsupported "cgTypeScheme: not implemented"
+cgTypeScheme (Forall _ binders constraints typ) = do
+  typ' <- cgType typ
+  let tyVars = map (UnkindedVar () . mkName . fst) binders
+  return $ TyForall () (Just tyVars) Nothing typ'
 
 cgPats :: Compiler m => [CPat] -> m [Pat ()]
 cgPats = mapM cgPat
 
 cgPat :: Compiler m => CPat -> m (Pat ())
 cgPat (GrPat.PVar _ _ _ i) =
-  return $ Hs.PVar () $ name $ sourceName i
+  return $ Hs.PVar () $ mkName i
 cgPat GrPat.PWild{} =
   return $ PWildCard ()
 cgPat (GrPat.PBox _ _ _ pt) =
@@ -98,7 +101,7 @@ cgPat (GrPat.PConstr _ _ _ i l_pt)
       return $ pTuple pts
   | otherwise = do
       pts <- mapM cgPat l_pt
-      return $ PApp () (UnQual () $ name $ sourceName i) pts
+      return $ PApp () (UnQual () $ mkName i) pts
 
 cgType :: Compiler m => GrType.Type -> m (Hs.Type ())
 cgType (GrType.Type i) = return $ TyStar ()
@@ -107,13 +110,13 @@ cgType (GrType.FunTy _ t1 t2) = do
   t2' <- cgType t2
   return $ Hs.TyFun () t1' t2'
 cgType (GrType.TyCon i) =
-  return $ Hs.TyCon () $ UnQual () $ name $ sourceName i
+  return $ Hs.TyCon () $ UnQual () $ mkName i
 cgType (GrType.Box t t2) = cgType t2
 cgType (GrType.Diamond t t2) = do
   t2' <- cgType t2
   return $ Hs.TyApp () (Hs.TyCon () $ UnQual () $ name "IO") t2'
 cgType (GrType.TyVar i) =
-  return $ Hs.TyVar () $ name $ sourceName i
+  return $ Hs.TyVar () $ mkName i
 cgType (GrType.TyApp t1 t2) =
   if isTupleType t1
   then cgTypeTuple t1 t2
@@ -124,7 +127,7 @@ cgType (GrType.TyApp t1 t2) =
 cgType (GrType.TyInt i) = return mkUnit
 cgType (GrType.TyRational ri) = return mkUnit
 cgType (GrType.TyGrade mt i) = return mkUnit
-cgType (GrType.TyInfix t t2 t3) = unsupported "cgType: tyinfix not implemented"
+cgType (GrType.TyInfix t1 t2 t3) = return mkUnit
 cgType (GrType.TySet p l_t) = return mkUnit
 cgType (GrType.TyCase t l_p_tt) = unsupported "cgType: tycase not implemented"
 cgType (GrType.TySig t t2) = unsupported "cgType: tysig not implemented"
@@ -161,7 +164,13 @@ cgExpr (GrExpr.LetDiamond _ _ _ p _ e1 e2) = do
   return $ infixApp e1' (op $ sym ">>=") lam
 cgExpr (GrExpr.TryCatch _ _ _ e1 p _ e2 e3) = unsupported "cgExpr: trycatch not implemented"
 cgExpr (GrExpr.Val _ _ _ e) = cgVal e
-cgExpr (GrExpr.Case _ _ _ guardExpr cases) = unsupported "cgExpr: case not implemented"
+cgExpr (GrExpr.Case _ _ _ ge cases) = do
+  ge' <- cgExpr ge
+  cases' <- forM cases $ \(p,e) -> do
+    p' <- cgPat p
+    e' <- cgExpr e
+    return $ alt p' e'
+  return $ caseE ge' cases'
 cgExpr GrExpr.Hole{} = error "cgExpr: hole not implemented"
 
 isTupleExpr :: CExpr -> Bool
@@ -179,7 +188,7 @@ cgVal :: Compiler m => CVal -> m (Exp ())
 cgVal (Promote _ty ex) = cgExpr ex
 cgVal (Pure ty ex) = error "cgVal: not implemented"
 cgVal (GrExpr.Var _ty i)  =
-  return $ Hs.Var () $ UnQual () $ name $ sourceName i
+  return $ Hs.Var () $ UnQual () $ mkName i
 cgVal (NumInt n) =
   return $ Hs.Lit () $ Int () (fromIntegral n) (show n)
 cgVal (NumFloat n) =
@@ -190,7 +199,7 @@ cgVal (StringLiteral str) =
   return $ Hs.Lit () $ Hs.String () (unpack str) (unpack str)
 cgVal (Constr _ i vals) = do
   vals' <- mapM cgVal vals
-  let con = Con () (UnQual () $ name $ sourceName i)
+  let con = Con () (UnQual () $ mkName i)
   return $ appFun con vals'
 cgVal (Abs _ p _ ex) = do
   p' <- cgPat p

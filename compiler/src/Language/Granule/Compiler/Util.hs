@@ -8,9 +8,13 @@ module Language.Granule.Compiler.Util
   , grPragmas
   , mkEquation
   , mkUnit
+  , mkName
   ) where
 
 import Language.Haskell.Exts
+import Language.Granule.Syntax.Identifiers (internalName, Id)
+import Control.Monad (mfilter)
+import Data.Maybe (fromMaybe)
 
 grImport :: ImportDecl ()
 grImport = ImportDecl () (ModuleName () "Language.Granule.Runtime") False False False Nothing Nothing Nothing
@@ -31,6 +35,12 @@ mkEquation f bnds = FunBind () (map mkMatch bnds)
 
 mkUnit :: Type ()
 mkUnit = TyCon () $ Special () $ UnitCon ()
+
+mkName :: Id -> Name ()
+mkName = name . replace '`' '_' .  internalName
+
+replace :: Eq b => b -> b -> [b] -> [b]
+replace a b = map $ fromMaybe b . mfilter (/= a) . Just
 
 -- > parseDecl "foo (x:xs) = 1"
 -- ParseOk
