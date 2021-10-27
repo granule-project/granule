@@ -174,6 +174,12 @@ instance Substitutable (Ctxt Assumption) where
     -- Ensure that the resulting ctxt preserves the ordering of the input ctxt.
     return $ sortBy (\ (x, _) (y, _) -> elemIndex x ctxtIds `compare` elemIndex y ctxtIds) combined
 
+instance Substitutable (Ctxt (Type, Quantifier)) where
+
+  substitute subst ctxt = do
+    mapM (\(v, (t, q)) -> substitute subst t >>= (\t' -> return (v, (t', q)))) ctxt
+
+
 substCtxt :: (?globals :: Globals) => Substitution -> Ctxt Assumption
   -> Checker (Ctxt Assumption, Ctxt Assumption)
 substCtxt _ [] = return ([], [])

@@ -20,7 +20,6 @@ import Language.Granule.Checker.Substitution
 import Language.Granule.Checker.SubstitutionContexts
 import Language.Granule.Checker.Normalise
 
-import Language.Granule.Syntax.Helpers
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
@@ -199,6 +198,16 @@ equalTypesRelatedCoeffectsInner s rel x@(Box c t) y@(Box c' t') k sp Types = do
   substU <- combineManySubstitutions s [subst, subst', substExtra]
   return (eq, substU)
 
+equalTypesRelatedCoeffectsInner s rel (TyVar var1) ty _ _ _ = do
+  subst <- unification s var1 ty rel
+  return (True, subst)
+
+equalTypesRelatedCoeffectsInner s rel ty (TyVar var2) _ _ _ = do
+  subst <- unification s var2 ty rel
+  return (True, subst)
+
+
+{- -- TODO: DEL
 equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) _ _ mode | n == m = do
   checkerState <- get
   case lookup n (tyVarContext checkerState) of
@@ -267,6 +276,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
           return (True, unif ++ [(m, SubstT $ TyVar n)])
         Nothing ->
           return (False, [])
+-}
 
 -- Duality is idempotent (left)
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d') (TyApp (TyCon d) t)) t' k sp mode
@@ -278,6 +288,7 @@ equalTypesRelatedCoeffectsInner s rel t (TyApp (TyCon d') (TyApp (TyCon d) t')) 
   | internalName d == "Dual" && internalName d' == "Dual" =
   equalTypesRelatedCoeffectsInner s rel t t' k sp mode
 
+{- -- TODO: DEL
 equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
   checkerState <- get
   debugM "Types.equalTypesRelatedCoeffectsInner on TyVar"
@@ -335,6 +346,7 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
 
 equalTypesRelatedCoeffectsInner s rel t (TyVar n) k sp mode =
   equalTypesRelatedCoeffectsInner s rel (TyVar n) t k (flipIndicator sp) mode
+  -}
 
 equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
   | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2}

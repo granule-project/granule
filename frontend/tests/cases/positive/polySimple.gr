@@ -1,0 +1,5 @@
+id : forall {a : Type} . a -> a
+id x = x
+
+use : Int
+use = id 42

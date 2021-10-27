@@ -441,8 +441,8 @@ addConstraintToPreviousFrame c = do
 
 -- Given a coeffect type variable and a coeffect kind,
 -- replace any occurence of that variable in a context
-updateCoeffectType :: Id -> Type -> Checker ()
-updateCoeffectType tyVar k = do
+substIntoTyVarContext :: Id -> Type -> Checker ()
+substIntoTyVarContext tyVar k = do
    modify (\checkerState ->
     checkerState
      { tyVarContext = rewriteCtxt (tyVarContext checkerState) })
@@ -748,7 +748,7 @@ instance UserMsg CheckerError where
     = "Types of kind `" <> pretty errK <> "` cannot be used in a type-level set."
 
   msg KindsNotEqual{..}
-    = "Kind `" <> pretty errK1 <> "` is not equal to `" <> pretty errK2 <> "`"
+    = "Kind `" <> pretty errK1 <> "` is not equal or compatible with `" <> pretty errK2 <> "`"
 
   msg IntervalGradeKindError{..}
    = "Interval grade mismatch `" <> pretty errTy1 <> "` and `" <> pretty errTy2 <> "`"

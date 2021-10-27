@@ -183,7 +183,7 @@ derivePush' s topLevel c _sigma gamma argTy@(leftmostOfApplication -> TyCon name
 
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, _constraint, coercions') <-
-                      freshPolymorphicInstance BoundQ True tySch coercions
+                      freshPolymorphicInstance InstanceQ True tySch coercions
 
                 -- [Note: this does not register the constraints associated with the data constrcutor]
                 dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
@@ -387,7 +387,7 @@ derivePull' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
-                      freshPolymorphicInstance BoundQ True tySch coercions
+                      freshPolymorphicInstance InstanceQ True tySch coercions
 
                 debugM "deriv-pull - dataConstructorTypeFresh" (pretty dataConstructorTypeFresh)
 
@@ -674,7 +674,7 @@ deriveCopyShape' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) ar
 
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
-                      freshPolymorphicInstance BoundQ True tySch coercions
+                      freshPolymorphicInstance InstanceQ True tySch coercions
                 -- [Note: this does not register the constraints associated with the data constrcutor]
                 dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
                 debugM "deriveCopyShape dataConstructorTypeFresh: " (show dataConstructorTypeFresh)
@@ -850,7 +850,7 @@ deriveDrop' s topLevel gamma argTy@(leftmostOfApplication -> TyCon name) arg = d
 
                 -- Instantiate the data constructor
                 (dataConstructorTypeFresh, _, _, _constraint, coercions') <-
-                      freshPolymorphicInstance BoundQ True tySch coercions
+                      freshPolymorphicInstance InstanceQ True tySch coercions
                 -- [Note: this does not register the constraints associated with the data constrcutor]
                 dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
                 debugM "deriveDrop dataConstructorTypeFresh: " (show dataConstructorTypeFresh)

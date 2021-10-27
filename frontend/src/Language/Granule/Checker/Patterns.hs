@@ -15,7 +15,6 @@ import Data.List.NonEmpty (NonEmpty(..))
 import Language.Granule.Checker.Coeffects
 import Language.Granule.Checker.Constraints.Compile
 import Language.Granule.Checker.Types (equalTypesRelatedCoeffectsAndUnify, SpecIndicator(..))
-import Language.Granule.Checker.Flatten
 import Language.Granule.Checker.Ghost
 import Language.Granule.Checker.Monad
 import Language.Granule.Checker.Predicates
@@ -200,7 +199,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
         _ -> return ()
 
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
-          freshPolymorphicInstance BoundQ True tySch coercions
+          freshPolymorphicInstance InstanceQ True tySch coercions
 
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
