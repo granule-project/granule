@@ -198,11 +198,16 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           addConstraint (Hsup s coeff coeff coeffTy)
         _ -> return ()
 
+      -- get fresh instance of the data constructors type
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
           freshPolymorphicInstance InstanceQ True tySch coercions
 
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
+      -- register any constraints of the data constructor into the solver
+      mapM_ (\ty -> do
+        pred <- compileTypeConstraintToConstraint s ty
+        addPredicate pred) constraints
 
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
@@ -215,6 +220,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
                       <> "\n###\t freshTyVarSubst = " <> pretty freshTyVarSubst
                       <> "\n###\t coercions' =  " <> pretty coercions'
 
+      --
       dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
 
       st <- get
@@ -225,31 +231,41 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       debugM "Patterns.ctxtFromTypedPattern" $ pretty dataConstructorTypeFresh <> "\n" <> pretty ty
       areEq <- equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (resultType dataConstructorTypeFresh) ty
       case areEq of
-        (True, _, unifiers) -> do
+        (True, ty, unifiers) -> do
 
           -- Register coercions as equalities
-          mapM_ (\(var, SubstT ty) ->
-                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) ty) coercions'
+          mapM_ (\(var, SubstT t) ->
+                        equalTypesRelatedCoeffectsAndUnify s Eq PatternCtxt (TyVar var) t) coercions'
 
           dataConstructorIndexRewritten <- substitute unifiers dataConstructorTypeFresh
           dataConstructorIndexRewrittenAndSpecialised <- substitute coercions' dataConstructorIndexRewritten
 
           -- Debugging
           debugM "ctxt" $ "\n\t### unifiers = " <> show unifiers <> "\n"
+<<<<<<< HEAD
           debugM "ctxt" $ "### dfresh = " <> show dataConstructorTypeFresh
           debugM "ctxt" $ "### drewrit = " <> pretty dataConstructorIndexRewritten
           debugM "ctxt" $ "### drewritAndSpec = " <> pretty dataConstructorIndexRewrittenAndSpecialised <> "\n"
+=======
+                        <> "\n\t### dfresh = " <> show dataConstructorTypeFresh
+                        <> "\n\t### drewrit = " <> show dataConstructorIndexRewritten
+                        <> "\n\t### drewritAndSpec = " <> show dataConstructorIndexRewrittenAndSpecialised <> "\n"
+>>>>>>> 241dac74 (dont flip substitution)
 
+          -- Recursively apply pattern matching on the internal patterns to the constructor pattern
           (bindingContexts, _, bs, us, elabPs, consumptionsOut) <-
             ctxtFromTypedPatterns' outerBoxTy s pos dataConstructorIndexRewrittenAndSpecialised ps (replicate (length ps) cons)
           let consumptionOut = foldr meetConsumption Full consumptionsOut
 
-          -- Combine the substitutions
-          subst <- combineSubstitutions s (flipSubstitution unifiers) us
+          -- Apply the coercions to the type
+          ty <- substitute coercions' ty
+
+          -- Combine substitutions
+          -- PREVIOUSL (flipSubstitution unifiers) here.. which is bad
+          subst <- combineSubstitutions s unifiers us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
-          ty <- substitute subst ty
           definiteUnification s pos outerBoxTy ty
           -- (ctxtSubbed, ctxtUnsubbed) <- substCtxt subst as
 
