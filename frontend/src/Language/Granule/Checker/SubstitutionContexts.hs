@@ -9,9 +9,12 @@ import Language.Granule.Syntax.Type
 import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Helpers
 
-{-| Substitutions map from variables to type-level things as defined by
-    substitutors -}
+{-| Substitutions map from unification 
+    variables to type-level things as defined by substitutors -}
 type Substitution = Ctxt Substitutors
+
+{-| Instantiations map from universal variables to type-level things -}
+type Instantiation = Ctxt Substitutors
 
 {-| Substitutors are things we want to substitute in... they may be one
      of several things... -}

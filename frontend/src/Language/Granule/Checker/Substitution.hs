@@ -485,8 +485,14 @@ instance Unifiable Substitutors where
 
 instance Unifiable Type where
     unify' t t' | t == t' = return []
-    unify' (TyVar v) t    = return [(v, SubstT t)]
-    unify' t (TyVar v)    = return [(v, SubstT t)]
+    unify' (TyVar v) t    = do
+      -- Make sure we don't unify a universal
+      checkerState <- get
+      case lookup v (tyVarContext checkerState) of
+        Nothing -> lift $ throw UnboundTypeVariable { errLoc = nullSpan, errId = v }
+        Just (k, ForallQ) -> lift $ throw $ UnificationFail nullSpan v t k False
+        _ -> return [(v, SubstT t)]
+    unify' t (TyVar v)    = unify' (TyVar v) t
     unify' (FunTy _ t1 t2) (FunTy _ t1' t2') = do
         u1 <- unify' t1 t1'
         u2 <- unify' t2 t2'
@@ -548,7 +554,11 @@ instance Unifiable Type where
       lift $ combineSubstitutionsHere u u'
 
     -- No unification
-    unify' _ _ = fail ""
+    unify' t t' = do
+      -- not ideal
+      var <- lift $ freshTyVarInContext (mkId $ "ku") kcoeffect
+      lift $ addConstraint (Eq nullSpan t t' (TyVar var))
+      return []
 
 instance Unifiable t => Unifiable (Maybe t) where
     unify' Nothing _ = return []
