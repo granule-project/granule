@@ -32,7 +32,7 @@ import Language.Granule.Syntax.Expr hiding (Substitutable)
 import Language.Granule.Syntax.Helpers hiding (freshIdentifierBase)
 import Language.Granule.Syntax.Identifiers
 import Language.Granule.Syntax.Pattern
--- import Language.Granule.Syntax.Pretty
+import Language.Granule.Syntax.Pretty
 import Language.Granule.Syntax.Span
 import Language.Granule.Syntax.Type
 
@@ -111,7 +111,23 @@ combineSubstitutionsHere = combineSubstitutions nullSpan
 combineSubstitutions ::
     (?globals :: Globals)
     => Span -> Substitution -> Substitution -> Checker Substitution
-combineSubstitutions sp u1 u2 = do
+combineSubstitutions sp [] u2 = return u2
+combineSubstitutions sp u1 [] = return u1
+combineSubstitutions s subst1 subst2 = do
+  liftIO $ putStrLn $ "subst1 = " <> pretty subst1
+  liftIO $ putStrLn $ "subst2 = " <> pretty subst2
+  subst <- combineSubstitutions' s subst1 subst2
+  liftIO $ putStrLn $ "combined = " <> pretty subst
+  liftIO $ putStrLn $ "---------------------------------------------"
+  return subst
+
+combineSubstitutions' ::
+    (?globals :: Globals)
+    => Span -> Substitution -> Substitution -> Checker Substitution
+-- Unit cases
+combineSubstitutions' sp [] u2 = return u2
+combineSubstitutions' sp u1 [] = return u1
+combineSubstitutions' sp u1 u2 = do
       -- Remove any substitutions that say things like `a |-> a`. This leads to infite loops
       u1 <- return $ removeReflexivePairs u1
       u2 <- return $ removeReflexivePairs u2
