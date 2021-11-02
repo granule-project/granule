@@ -149,7 +149,7 @@ combineSubstitutions sp u1 u2 = do
                   Nothing -> return [(v, s)]
                   _       -> return []
           let uss = concat uss1 <> concat uss2
-          return $ reduceByTransitivity uss
+          reduceByTransitivity sp uss
 
 checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
 checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
@@ -164,15 +164,28 @@ checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
 checkValid vars (sub:substs) = checkValid vars substs
 checkValid _ []  = return $ Nothing
 
-reduceByTransitivity :: Substitution -> Substitution
-reduceByTransitivity ctxt = reduceByTransitivity' [] ctxt
+reduceByTransitivity :: Span -> Substitution -> Checker Substitution
+reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
  where
-   reduceByTransitivity' :: Substitution -> Substitution -> Substitution
-   reduceByTransitivity' subst [] = subst
+   reduceByTransitivity' :: Substitution -> Substitution -> Checker Substitution
+   reduceByTransitivity' subst [] = return subst
 
    reduceByTransitivity' substLeft (subst@(var, SubstT (TyVar var')):substRight) =
      case lookupAndCutout var' (substLeft ++ substRight) of
-       Just (substRest, t) -> (var, t) : reduceByTransitivity ((var', t) : substRest)
+       Just (substRest, t) ->
+         case t of
+           SubstT (TyVar var') -> do
+             st <- get
+             case (lookup var (tyVarContext st), lookup var' (tyVarContext st)) of
+               (Just (_, ForallQ), Just (_, ForallQ)) ->
+                 throw $ UnificationFailGeneric sp (SubstT (TyVar var)) (SubstT (TyVar var'))
+               _ -> do
+                 subst <- reduceByTransitivity sp ((var', t) : substRest)
+                 return ((var, t) : subst)
+           _ -> do
+              subst <- reduceByTransitivity sp ((var', t) : substRest)
+              return ((var, t) : subst)
+
        Nothing             -> reduceByTransitivity' (subst : substLeft) substRight
 
    reduceByTransitivity' substLeft (subst:substRight) =

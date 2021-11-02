@@ -253,7 +253,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
           -- Combine substitutions
           -- PREVIOUSL (flipSubstitution unifiers) here.. which is bad
-          subst <- combineSubstitutions s unifiers us
+          subst <- combineSubstitutions s (flipSubstitution unifiers) us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 
