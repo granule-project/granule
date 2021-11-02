@@ -142,40 +142,53 @@ combineSubstitutions sp u1 u2 = do
               return $ concat unifs
 
       -- Check we're not unifying two universals to the same substitutor
-      -- errs <- checkValid [] $ flipSubstitution $ concat uss1
-      -- case errs of
-      -- --  Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error
-      --   _ -> do
-      -- -- Any remaining unifiers that are in u2 but not u1
-      uss2 <- forM u2 $ \(v, s) ->
-          case lookup v u1 of
-              Nothing -> return [(v, s)]
-              _       -> return []
-      let uss = concat uss1 <> concat uss2
-      reduceByTransitivity sp uss
+      errs <- checkValid [] $ flipSubstitution $ concat uss1 
+      case errs of 
+        Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
+        Nothing -> do
+          -- Any remaining unifiers that are in u2 but not u1
+          uss2 <- forM u2 $ \(v, s) ->
+              case lookup v u1 of
+                  Nothing -> return [(v, s)]
+                  _       -> return []
+          let uss = concat uss1 <> concat uss2
+          reduceByTransitivity sp uss
 
--- checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
--- checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
---   st <- get
---   case lookup v' (tyVarContext  st) of
---     Just (_, ForallQ) ->
---       if v `elem` vars then
---         return $ Just (TyVar v, TyVar v')
---       else
---          checkValid (v : vars) substs
---     _ -> checkValid vars substs
--- checkValid vars (sub:substs) = checkValid vars substs
--- checkValid _ []  = return $ Nothing
+checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
+checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
+  st <- get
+  case lookup v' (tyVarContext  st) of
+    Just (_, ForallQ) -> 
+      if v `elem` vars then
+        return $ Just (TyVar v, TyVar v')
+      else 
+         checkValid (v : vars) substs
+    _ -> checkValid vars substs 
+checkValid vars (sub:substs) = checkValid vars substs
+checkValid _ []  = return $ Nothing
 
 reduceByTransitivity :: Span -> Substitution -> Checker Substitution
 reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
  where
-   reduceByTransitivity' :: Substitution -> Substitution -> Substitution
-   reduceByTransitivity' subst [] = subst
+   reduceByTransitivity' :: Substitution -> Substitution -> Checker Substitution
+   reduceByTransitivity' subst [] = return subst
 
    reduceByTransitivity' substLeft (subst@(var, SubstT (TyVar var')):substRight) =
      case lookupAndCutout var' (substLeft ++ substRight) of
-       Just (substRest, t) -> (var, t) : reduceByTransitivity ((var', t) : substRest)
+       Just (substRest, t) ->
+         case t of
+           SubstT (TyVar var') -> do
+             st <- get
+             case (lookup var (tyVarContext st), lookup var' (tyVarContext st)) of
+               (Just (_, ForallQ), Just (_, ForallQ)) ->
+                 throw $ UnificationFailGeneric sp (SubstT (TyVar var)) (SubstT (TyVar var'))
+               _ -> do
+                 subst <- reduceByTransitivity sp ((var', t) : substRest)
+                 return ((var, t) : subst)
+           _ -> do
+              subst <- reduceByTransitivity sp ((var', t) : substRest)
+              return ((var, t) : subst)
+
        Nothing             -> reduceByTransitivity' (subst : substLeft) substRight
 
    reduceByTransitivity' substLeft (subst:substRight) =
