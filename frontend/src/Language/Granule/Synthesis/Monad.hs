@@ -20,23 +20,24 @@ import Language.Granule.Syntax.Identifiers (Id, mkId)
 -- Data structure for collecting information about synthesis
 data SynthesisData =
   SynthesisData {
-    smtCallsCount    :: Integer
-  , smtTime          :: Double
-  , proverTime       :: Double -- longer than smtTime as it includes compilation of predicates to SMT
-  , theoremSizeTotal :: Integer
-  , pathsExplored    :: Integer
-  , startTime        :: Clock.TimeSpec
-  , constructors     :: Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
-  , topLevelDef      :: Id 
+    smtCallsCount             :: Integer
+  , smtTime                   :: Double
+  , proverTime                :: Double -- longer than smtTime as it includes compilation of predicates to SMT
+  , theoremSizeTotal          :: Integer
+  , pathsExplored             :: Integer
+  , startTime                 :: Clock.TimeSpec
+  , constructors              :: Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
+  , topLevelDef               :: Id 
+  , structurallyDecreasing    :: Bool 
   }
   deriving Show
 
 instance Semigroup SynthesisData where
- (SynthesisData calls stime time size paths startTime constructors topLevelDef) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' topLevelDef') =
-    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') topLevelDef'
+ (SynthesisData calls stime time size paths startTime constructors topLevelDef structurallyDecreasing) <> (SynthesisData calls' stime' time' size' paths' startTime' constructors' topLevelDef' structurallyDecreasing') =
+    SynthesisData (calls + calls') (stime + stime') (time + time') (size + size') (paths + paths') (startTime + startTime') (constructors ++ constructors') topLevelDef' (structurallyDecreasing || structurallyDecreasing')
 
 instance Monoid SynthesisData where
-  mempty  = SynthesisData 0 0 0 0 0 0 [] (mkId "")
+  mempty  = SynthesisData 0 0 0 0 0 0 [] (mkId "") False
   mappend = (<>)
 
 -- Synthesiser monad
