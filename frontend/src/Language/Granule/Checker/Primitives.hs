@@ -50,10 +50,10 @@ typeConstructors =
                                       , (mkId "Dunno",    (tyCon "Level", [], False))])] [])
  ++
   -- Everything else is always in scope
-    [ (mkId "Coeffect",  (Type 0, [], False))
-    , (mkId "Effect",    (Type 0, [], False))
-    , (mkId "Guarantee", (Type 0, [], False))
-    , (mkId "Predicate", (Type 0, [], False))
+    [ (mkId "Coeffect",  (Type 2, [], False))
+    , (mkId "Effect",    (Type 2, [], False))
+    , (mkId "Guarantee", (Type 2, [], False))
+    , (mkId "Predicate", (Type 2, [], False))
     , (mkId "->",     (funTy (Type 0) (funTy (Type 0) (Type 0)), [], False))
     , (mkId ",,",     (funTy kcoeffect (funTy kcoeffect kcoeffect), [mkId ",,"], False))
     , (mkId "ExactSemiring", (funTy (tyCon "Semiring") (tyCon "Predicate"), [], True))
