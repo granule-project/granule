@@ -317,11 +317,25 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
         tyVarContext' <- substitute subst (tyVarContext checkerState)
         put $ checkerState { tyVarContext = tyVarContext' }
 
+        
+        -- Apply the final substitution to the outcoming predicate
+        -- and run the solver
         let predicate = Conj $ predicateStack checkerState
-        debugM "elaborateEquation" "solveEq"
-        debugM "FINAL SUBST" (pretty subst)
+        debugM "elaborateEquation" ("solveEq with final substitution = " <> pretty subst)
         predicate <- substitute subst predicate
         solveConstraints predicate (getSpan equation) defName
+
+        -- Apply the final substitution to head of the guard predicate stack too
+        modifyM (\st ->
+          case guardPredicates st of
+            [] -> return st
+            (guardPred : rest) -> do
+                guardPred' <- mapM (\((ctxt, pred), sp) -> do
+                  ctxt' <- substitute subst ctxt
+                  pred' <- substitute subst pred
+                  return ((ctxt', pred'), sp)) guardPred
+                return (st { guardPredicates = (guardPred' : rest) }))
+
         debugM "elaborateEquation" "solveEq done"
         pure elaboratedEq
 
