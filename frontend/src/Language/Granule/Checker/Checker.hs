@@ -1427,7 +1427,7 @@ solveConstraints predicate s name = do
   -- Get the coeffect kind context and constraints
   checkerState <- get
   let ctxtCk  = tyVarContext checkerState
-  coeffectVars <- justCoeffectTypes s ctxtCk
+  coeffectVars <- includeOnlyGradeVariables s ctxtCk
   -- remove any variables bound already in the predicate
   coeffectVars <- return (coeffectVars `deleteVars` boundVars predicate)
 
@@ -1896,7 +1896,8 @@ checkGuardsForImpossibility s name = do
   let ps = head $ guardPredicates st
 
   -- Convert all universal variables to existential
-  tyVars <- tyVarContextExistential >>= justCoeffectTypes s
+  tyVars <- return (tyVarContext st)
+              >>= includeOnlyGradeVariables s --  tyVarContextExistential >>= includeOnlyGradeVariables s
 
   -- For each guard predicate
   forM_ ps $ \((ctxt, p), s) -> do

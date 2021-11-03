@@ -171,7 +171,7 @@ validateCase span ty pats = do
   pred <- popFromPredicateStack
 
   -- Build the type variable environment for proving the predicate
-  tyVars <- tyVarContextExistential >>= justCoeffectTypes span
+  tyVars <- tyVarContextExistential >>= includeOnlyGradeVariables span
 
   -- Quantify the predicate by the existence of all local variables.
   let thm = foldr (uncurry Exists) pred localVars
