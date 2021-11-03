@@ -59,7 +59,7 @@ solve = do
   cs <- conv State.get
   let pred = Conj $ predicateStack cs
   debugM "synthDebug" ("SMT on pred = " ++ pretty pred)
-  tyVars <- conv $ justCoeffectTypes nullSpanNoFile (tyVarContext cs)
+  tyVars <- conv $ includeOnlyGradeVariables nullSpanNoFile (tyVarContext cs)
   -- Prove the predicate
   start  <- liftIO $ Clock.getTime Clock.Monotonic
   constructors <- conv allDataConstructorNames
