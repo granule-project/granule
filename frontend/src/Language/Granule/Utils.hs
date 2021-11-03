@@ -386,8 +386,6 @@ ifM condM f g = do
 
 whenM :: Monad m => m Bool -> m () -> m ()
 whenM condM f = ifM condM f (return ())
-<<<<<<< HEAD
-=======
 
 mapMaybeM :: Monad m => (a -> m (Maybe b)) -> [a] -> m [b]
 mapMaybeM f [] = return []
@@ -404,4 +402,3 @@ modifyM f = do
   s <- get
   s' <- f s
   put s'
->>>>>>> fc4df810 (apply resulting substitution also to guard predicates which get used for impossibility check)
