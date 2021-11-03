@@ -1023,6 +1023,16 @@ unification s var1 typ2 rel = do
                         Nothing -> throw $ KindsNotEqual s kind1 kind2
                         Just (kind, subst, _) -> do
 
+                          -- Do an occurs check for types
+                          case kind of
+                            -- loop in type
+                            Type _ | var1 `elem` freeVars typ2 ->
+                              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+                            -- loop in higher type
+                            FunTy _ _ (Type _) | var1 `elem` freeVars typ2 ->
+                              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+                            _ -> return ()
+
                           -- Types which need solver handling (effects and coeffects)
                           -- need to have constraints registered
                           whenM (requiresSolver s kind)
@@ -1049,34 +1059,29 @@ unification s var1 typ2 rel = do
 
         -- * Unification variable
         InstanceQ -> do
-          -- Join kinds
-          (kind2, subst1, _) <- synthKind s typ2
-          joinedKindM <- joinTypes s kind1 kind2
-          case joinedKindM of
-            Nothing -> throw $ KindsNotEqual s kind1 kind2
-            Just (kind, subst2, _) -> do
+          -- Join kinds by checking that `typ2` has the same kind as the variable
+          (subst1, typ2') <- checkKind s typ2 kind1
 
-              -- Do an occurs check for types
-              case kind of
-                -- loop in type
-                Type _ | var1 `elem` freeVars typ2 ->
-                  throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
-                -- loop in higher type
-                FunTy _ _ (Type _) | var1 `elem` freeVars typ2 ->
-                  throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
-                _ -> return ()
+          -- Do an occurs check for types
+          case kind1 of
+            -- loop in type
+            Type _ | var1 `elem` freeVars typ2 ->
+              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+            -- loop in higher type
+            FunTy _ _ (Type _) | var1 `elem` freeVars typ2 ->
+              throw OccursCheckFail { errLoc = s, errVar = var1, errTy = typ2 }
+            _ -> return ()
 
-              -- Local substitution
-              let localSubst = (var1, SubstT typ2)
+          -- Types which need solver handling (effects and coeffects)
+          -- need to have constraints registered
+          whenM (requiresSolver s kind1)
+              -- Create solver constraint
+              (addConstraint (rel s (TyVar var1) typ2 kind1))
 
-              -- Types which need solver handling (effects and coeffects)
-              -- need to have constraints registered
-              whenM (requiresSolver s kind)
-                  -- Create solver constraint
-                 (addConstraint (rel s (TyVar var1) typ2 kind))
+          -- Apply thhis unification result to the type variable context
+          substIntoTyVarContext var1 typ2
 
-              -- Apply thhis unification result to the type variable context
-              substIntoTyVarContext var1 typ2
-
-              subst <- combineSubstitutions s subst1 subst2
-              return (localSubst : subst)
+          -- Local substitution
+          let localSubst = (var1, SubstT typ2)
+          --subst <- combineSubstitutions s subst1 subst2
+          return (localSubst : subst1)
