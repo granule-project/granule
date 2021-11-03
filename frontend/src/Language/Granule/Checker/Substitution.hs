@@ -258,7 +258,6 @@ freshPolymorphicInstance :: (?globals :: Globals)
        -- a correspondigly freshened version of the parameter substitution
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
 
-
     let boundTypes = typesFromIndices ty 0 indices
     debugM "freshPoly boundVars: " (show boundTypes)
 
