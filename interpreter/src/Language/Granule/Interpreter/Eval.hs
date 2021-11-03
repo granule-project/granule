@@ -451,7 +451,7 @@ builtIns =
   , (mkId "lengthFloatArray'",  Ext () $ Primitive lengthFloatArray')
   , (mkId "readFloatArray'",  Ext () $ Primitive readFloatArray')
   , (mkId "writeFloatArray'",  Ext () $ Primitive writeFloatArray')
-
+  , (mkId "deleteFloatArray", Ext () $ Primitive deleteFloatArray) 
   ]
   where
     forkLinear :: (?globals :: Globals) => Ctxt RValue -> RValue -> RValue
@@ -621,13 +621,21 @@ builtIns =
 
     {-# NOINLINE writeFloatArray' #-}
     writeFloatArray' :: RValue -> RValue
-    writeFloatArray' = \(Promote _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+    writeFloatArray' = \(Ext () (FloatArray arr)) ->
       Ext () $ Primitive $ \(NumInt i) ->
       Ext () $ Primitive $ \(NumFloat v) ->
-      Promote () $ Val nullSpan () False $ Ext () $ FloatArray $ unsafePerformIO $
-        do arr' <- MA.mapArray id arr
-           () <- MA.writeArray arr' i v
-           return arr'
+        Ext () $ FloatArray $ unsafePerformIO $
+           do arr' <- MA.mapArray id arr
+              () <- MA.writeArray arr' i v
+              return arr'
+
+    {-# NOINLINE deleteFloatArray #-}
+    deleteFloatArray :: RValue -> RValue
+    deleteFloatArray = \(Nec _ (Val _ _ _ (Ext _ (FloatArray arr)))) ->
+      case (unsafePerformIO $ do
+              arr' <- MA.mapArray (const undefined) arr
+              return ()) of
+        () -> Constr () (mkId "()") []
 
 evalDefs :: (?globals :: Globals) => Ctxt RValue -> [Def (Runtime ()) ()] -> IO (Ctxt RValue)
 evalDefs ctxt [] = return ctxt
