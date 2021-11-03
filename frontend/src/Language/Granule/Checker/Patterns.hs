@@ -190,8 +190,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just (tySch, coercions, boundVars) -> do
+    Just (tySch, coercions, indices) -> do
 
+      debugM "patterns : tySch: " $ show tySch
+      debugM "patterns : coercions: " $ show coercions
+      debugM "patterns : constructorName: " $ show dataC
+      debugM "patterns : indices: " $ show indices
 
       case outerBoxTy of
         -- Hsup if you only have more than one premise (and have an enclosing grade)
@@ -201,12 +205,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
       -- get fresh instance of the data constructors type
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
-          freshPolymorphicInstance InstanceQ True tySch coercions boundVars
+          freshPolymorphicInstance InstanceQ True tySch coercions indices
 
       -- register any constraints of the data constructor into the solver
       otherTypeConstraints <- enforceConstraints s constraints
       registerWantedTypeConstraints otherTypeConstraints
-      
+
       -- Debugging
       debugM "ctxt" $ "### DATA CONSTRUCTOR (" <> pretty dataC <> ")"
                          <> "\n###\t tySch = " <> pretty tySch
@@ -252,9 +256,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- Apply the coercions to the type
           ty <- substitute coercions' ty
 
-          -- Combine substitutions
-          -- PREVIOUSL (flipSubstitution unifiers) here.. which is bad
-          subst <- combineSubstitutions s (flipSubstitution unifiers) us
+          -- Unifiers are only those things that include index variables
+          let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers
+          debugM "ctxt" $ "unifiers': " <> show unifiers'
+
+          -- Combine the substitutions
+          subst <- combineSubstitutions s (flipSubstitution unifiers') us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 

@@ -999,7 +999,7 @@ unification s var1 typ2 rel = do
       -- Case on the quantification mode of this variable
       case quantifier1 of
         -- * BoundQ
-        BoundQ -> error $ "boundq deprecated"
+        --BoundQ -> error $ "boundq deprecated"
 
         -- * Universal quantifier
         ForallQ ->
@@ -1048,13 +1048,9 @@ unification s var1 typ2 rel = do
                 (throw $ UnificationFail s var1 typ2 kind1 False)
 
         -- * Unification variable
-        InstanceQ -> do
-          -- Join kinds
-          (kind2, subst1, _) <- synthKind s typ2
-          joinedKindM <- joinTypes s kind1 kind2
-          case joinedKindM of
-            Nothing -> throw $ KindsNotEqual s kind1 kind2
-            Just (kind, subst2, _) -> do
+        _ -> do -- InstanceQ or BoundQ
+          -- Join kinds by checking that `typ2` has the same kind as the variable
+          (subst1, typ2') <- checkKind s typ2 kind1
 
               -- Do an occurs check for types
               case kind of

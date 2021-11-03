@@ -143,30 +143,30 @@ combineSubstitutions sp u1 u2 = do
               return $ concat unifs
 
       -- Check we're not unifying two universals to the same substitutor
-      errs <- checkValid [] $ flipSubstitution $ concat uss1 
-      case errs of 
-        Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error 
-        Nothing -> do
-          -- Any remaining unifiers that are in u2 but not u1
-          uss2 <- forM u2 $ \(v, s) ->
-              case lookup v u1 of
-                  Nothing -> return [(v, s)]
-                  _       -> return []
-          let uss = concat uss1 <> concat uss2
-          reduceByTransitivity sp uss
+      -- errs <- checkValid [] $ flipSubstitution $ concat uss1
+      -- case errs of
+      -- --  Just (v, v') -> throw $ UnificationDisallowed sp  v v' -- Change error
+      --   _ -> do
+      -- -- Any remaining unifiers that are in u2 but not u1
+      uss2 <- forM u2 $ \(v, s) ->
+          case lookup v u1 of
+              Nothing -> return [(v, s)]
+              _       -> return []
+      let uss = concat uss1 <> concat uss2
+      reduceByTransitivity sp uss
 
-checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
-checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
-  st <- get
-  case lookup v' (tyVarContext  st) of
-    Just (_, ForallQ) -> 
-      if v `elem` vars then
-        return $ Just (TyVar v, TyVar v')
-      else 
-         checkValid (v : vars) substs
-    _ -> checkValid vars substs 
-checkValid vars (sub:substs) = checkValid vars substs
-checkValid _ []  = return $ Nothing
+-- checkValid :: [Id] -> Substitution -> Checker (Maybe (Type, Type))
+-- checkValid vars (sub1@(v, (SubstT (TyVar v'))):substs) = do
+--   st <- get
+--   case lookup v' (tyVarContext  st) of
+--     Just (_, ForallQ) ->
+--       if v `elem` vars then
+--         return $ Just (TyVar v, TyVar v')
+--       else
+--          checkValid (v : vars) substs
+--     _ -> checkValid vars substs
+-- checkValid vars (sub:substs) = checkValid vars substs
+-- checkValid _ []  = return $ Nothing
 
 reduceByTransitivity :: Span -> Substitution -> Checker Substitution
 reduceByTransitivity sp ctxt = reduceByTransitivity' [] ctxt
@@ -250,7 +250,7 @@ freshPolymorphicInstance :: (?globals :: Globals)
   -> TypeScheme   -- ^ Type scheme to freshen
   -> Instantiation -- ^ A substitution associated with this type scheme (e.g., for
                   --     data constructors of indexed types) that also needs freshening
-  -> [Int]
+  -> [Int]        -- ^ Type Indices if this is a data constructor for an indexed type
   -> Checker (Type, Ctxt Kind, Substitution, [Type], Substitution)
     -- Returns the type (with new instance variables)
        -- a context of all the instance variables kinds (and the ids they replaced)
@@ -258,16 +258,14 @@ freshPolymorphicInstance :: (?globals :: Globals)
        -- a list of the (freshened) constraints for this scheme
        -- a correspondigly freshened version of the parameter substitution
 freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty) ixSubstitution indices = do
-   
-   
+
+
     let boundTypes = typesFromIndices ty 0 indices
     debugM "freshPoly boundVars: " (show boundTypes)
- 
-   
+
     -- Universal becomes an existential (via freshCoeffeVar)
     -- since we are instantiating a polymorphic type
-
-    renameMap <- cumulativeMapM (instantiateVariable boundTypes) kinds 
+    renameMap <- cumulativeMapM (instantiateVariable boundTypes) kinds
 
     -- Applying the rename map to itself (one part at time), to accommodate dependency here
     renameMap <- selfRename renameMap
@@ -316,7 +314,7 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
 
          else do
 
-           if elem var boundTypes 
+           if elem var boundTypes
              then do
                var' <- freshTyVarInContextWithBinding var k BoundQ
                return (var, Left (k, var'))
@@ -344,10 +342,10 @@ freshPolymorphicInstance quantifier isDataConstructor (Forall s kinds constr ty)
     justLefts = mapMaybe conv
       where conv (v, Left a)  = Just (v,  a)
             conv (v, Right _) = Nothing
-    
+
     typesFromIndices :: Type -> Int -> [Int] -> [Id]
-    typesFromIndices (TyApp t1 (TyVar t2)) index indices = 
-      if index `elem` indices 
+    typesFromIndices (TyApp t1 (TyVar t2)) index indices =
+      if index `elem` indices
         then
           t2 : typesFromIndices t1 (index+1) indices
         else

@@ -18,7 +18,6 @@ import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
 import Data.List.NonEmpty (NonEmpty(..))
 import Data.List (isPrefixOf, sort)
-import Data.List.Split (splitPlaces)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -155,7 +154,7 @@ checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
 checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (kind, _ ,_) -> kind
+                Just (kind, _ , _) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
     let paramsAndIndices = discriminateTypeIndicesOfDataType d
@@ -202,7 +201,10 @@ checkDataCon
         let tyVarsForall = (tyVarsParams <> tyVarsD')
 
 
+<<<<<<< HEAD
 
+=======
+>>>>>>> 342a4699 (treat boundq same as intanceq when it comes to unification)
         modify $ \st -> st { tyVarContext =
                [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
@@ -327,7 +329,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
-    checkGuardsForImpossibility s defName []
+    checkGuardsForImpossibility s defName constraints
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
@@ -2027,10 +2029,16 @@ checkGuardsForImpossibility s name refinementConstraints = do
   forM_ ps $ \((ctxt, p), s) -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
+<<<<<<< HEAD
     -- TODO: Remvoe commented code
     -- constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
     let thm = foldr (uncurry Exists) p ctxt
           -- foldr (Impl []) (foldr (uncurry Exists) p ctxt) constraints'
+=======
+    constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
+    let thm =
+          foldr (Impl []) (foldr (uncurry Exists) p ctxt) constraints'
+>>>>>>> 342a4699 (treat boundq same as intanceq when it comes to unification)
 
     debugM "impossibility" $ "about to try (" <> pretty tyVars <> ") . " <> pretty thm
     -- Try to prove the theorem

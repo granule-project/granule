@@ -226,9 +226,9 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
     (Just (_, ForallQ), Just (_, ForallQ)) ->
         return (False, [])
 
-    -- We can unify two instance unification variables
-    (Just (n_k, InstanceQ), Just (m_k, InstanceQ)) ->
-        tyVarConstraint (n_k, n) (m_k, m)
+    -- We can unify a universal a dependently bound universal
+    (Just (k1, ForallQ), Just (k2, BoundQ)) ->
+      tyVarConstraint (k2, m) (k1, n)
 
     -- We can unify an instance variable `n` to a universal `m`
     -- creating a substitution `n |-> m`
