@@ -47,16 +47,16 @@ aId = mkId "a"
 trueId = mkId "True"
 falseId = mkId "False"
 
-boolDataCons :: (?globals :: Globals) => Ctxt (Ctxt (TypeScheme, Substitution))
+boolDataCons :: (?globals :: Globals) => Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
 boolDataCons =
-  [(boolId, [(falseId, (Forall nullSpan [] [] (TyCon boolId), [])), (trueId, (Forall nullSpan [] [] (TyCon boolId), []))])]
+  [(boolId, [(falseId, (Forall nullSpan [] [] (TyCon boolId), [], [])), (trueId, (Forall nullSpan [] [] (TyCon boolId), [], []))])]
 
 boolTyCons :: Ctxt (Type, [Id], Bool)
 boolTyCons = [(boolId, (Type 0, [falseId, trueId], False))]
 
 runSplitter :: (?globals :: Globals)
   => Type
-  -> Ctxt (Ctxt (TypeScheme, Substitution))
+  -> Ctxt (Ctxt (TypeScheme, Substitution, [Int]))
   -> Ctxt (Type, [Id], Bool)
   -> Ctxt (Type, Quantifier)
   -> Ctxt Assumption

@@ -190,7 +190,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
   mConstructor <- lookupDataConstructor s dataC
   case mConstructor of
     Nothing -> throw UnboundDataConstructor{ errLoc = s, errId = dataC }
-    Just (tySch, coercions) -> do
+    Just (tySch, coercions, indices) -> do
+
+      debugM "patterns : tySch: " $ show tySch
+      debugM "patterns : coercions: " $ show coercions
+      debugM "patterns : constructorName: " $ show dataC
+      debugM "patterns : indices: " $ show indices
 
       case outerBoxTy of
         Just (coeff, coeffTy) ->
@@ -199,7 +204,7 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
 
       -- get fresh instance of the data constructors type
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-
-          freshPolymorphicInstance InstanceQ True tySch coercions
+          freshPolymorphicInstance InstanceQ True tySch coercions indices
 
       -- register any constraints of the data constructor into the solver
       mapM_ (\ty -> do
@@ -212,10 +217,10 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
                          <> "\n###\t coercions =  " <> show coercions
                          <> "\n###\n"
       debugM "ctxt" $ "\n### FRESH POLY ###\n####\t dConTyFresh = "
-                      <> show dataConstructorTypeFresh
-                      <> "\n###\t ctxt = " <> show freshTyVarsCtxt
-                      <> "\n###\t freshTyVarSubst = " <> show freshTyVarSubst
-                      <> "\n###\t coercions' =  " <> show coercions'
+                      <> pretty dataConstructorTypeFresh
+                      <> "\n###\t ctxt = " <> pretty freshTyVarsCtxt
+                      <> "\n###\t freshTyVarSubst = " <> pretty freshTyVarSubst
+                      <> "\n###\t coercions' =  " <> pretty coercions'
 
       --
       dataConstructorTypeFresh <- substitute (flipSubstitution coercions') dataConstructorTypeFresh
@@ -251,9 +256,12 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
           -- Apply the coercions to the type
           ty <- substitute coercions' ty
 
-          -- Combine substitutions
-          -- PREVIOUSL (flipSubstitution unifiers) here.. which is bad
-          subst <- combineSubstitutions s (flipSubstitution unifiers) us
+          -- Unifiers are only those things that include index variables
+          let unifiers' = filter (\(id, subst) -> case lookup id (tyVarContext st) of Just (_, BoundQ) -> True; _ -> False) unifiers 
+          debugM "ctxt" $ "unifiers': " <> show unifiers' 
+
+          -- Combine the substitutions
+          subst <- combineSubstitutions s (flipSubstitution unifiers') us
           subst <- combineSubstitutions s coercions' subst
           debugM "ctxt" $ "\n\t### outSubst = " <> show subst <> "\n"
 

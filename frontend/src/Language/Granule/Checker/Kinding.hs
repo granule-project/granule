@@ -396,7 +396,7 @@ synthKindWithConfiguration s _ t@(TyCon id) = do
     Nothing -> do
       mConstructor <- lookupDataConstructor s id
       case mConstructor of
-        Just (Forall _ [] [] tDat, _) -> return (tDat, [], t)
+        Just (Forall _ [] [] tDat, _, _) -> return (tDat, [], t)
         Just _ -> error $ pretty s <> "I'm afraid I can't yet promote the polymorphic data constructor:"  <> pretty id
         Nothing -> throw UnboundTypeConstructor { errLoc = s, errId = id }
 
@@ -999,7 +999,7 @@ unification s var1 typ2 rel = do
       -- Case on the quantification mode of this variable
       case quantifier1 of
         -- * BoundQ
-        BoundQ -> error $ "boundq deprecated"
+        --BoundQ -> error $ "boundq deprecated"
 
         -- * Universal quantifier
         ForallQ ->
@@ -1058,7 +1058,7 @@ unification s var1 typ2 rel = do
                 (throw $ UnificationFail s var1 typ2 kind1 False)
 
         -- * Unification variable
-        InstanceQ -> do
+        _ -> do -- InstanceQ or BoundQ
           -- Join kinds by checking that `typ2` has the same kind as the variable
           (subst1, typ2') <- checkKind s typ2 kind1
 

@@ -168,10 +168,10 @@ data CheckerState = CS
 
             -- Data type information
             --  map of type constructor names to their the kind,
-            --  data constructors, and whether indexed (True = Indexed, False = Not-indexed)
+            --  data constructors, and whether ßindexed (True = Indexed, False = Not-indexed)
             , typeConstructors :: Ctxt (Type, [Id], Bool)
             -- map of data constructors and their types and substitutions
-            , dataConstructors :: Ctxt (TypeScheme, Substitution)
+            , dataConstructors :: Ctxt (TypeScheme, Substitution, [Int])
 
             -- LaTeX derivation
             , deriv      :: Maybe Derivation
@@ -217,7 +217,7 @@ initState = CS { uniqueVarIdCounterMap = M.empty
 
 -- Look up a data constructor, taking into account the possibility that it
 -- may be hidden to the current module
-lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution))
+lookupDataConstructor :: Span -> Id -> Checker (Maybe (TypeScheme, Substitution, [Int]))
 lookupDataConstructor sp constrName = do
   st <- get
   case M.lookup constrName (allHiddenNames st) of
@@ -241,13 +241,13 @@ allDataConstructorNames :: Checker (Ctxt [Id])
 allDataConstructorNames = do
   st <- get
   return $ ctxtMap (\(_, datas, _) -> datas) (typeConstructors st)
-
+  
 allDataConstructorNamesForType :: Type -> Checker [Id]
 allDataConstructorNamesForType ty = do
     st <- get
     return $ mapMaybe go (typeConstructors st)
   where
-    go :: (Id, (Type, a, Bool)) -> Maybe Id
+    go :: (Id, (Type, a, b)) -> Maybe Id
     go (con, (k, _, _)) = if k == ty then Just con else Nothing
 
 {- | Given a computation in the checker monad, peek the result without
@@ -1009,7 +1009,7 @@ freshenPred pred = do
     return pred'
 
 -- help to get a map from type constructor names to a map from data constructor names to their types and subst
-getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution)))
+getDataConstructors :: Id -> Checker (Maybe (Ctxt (TypeScheme, Substitution, [Int])))
 getDataConstructors tyCon = do
   st <- get
   let tyCons   = typeConstructors st

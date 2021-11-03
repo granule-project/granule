@@ -16,9 +16,8 @@ module Language.Granule.Checker.Checker where
 import Control.Arrow (second)
 import Control.Monad.State.Strict
 import Control.Monad.Except (throwError)
-import Data.List (isPrefixOf)
 import Data.List.NonEmpty (NonEmpty(..))
-import Data.List.Split (splitPlaces)
+import Data.List (isPrefixOf, sort)
 import qualified Data.List.NonEmpty as NonEmpty (toList)
 import Data.Maybe
 import qualified Data.Text as T
@@ -99,7 +98,7 @@ synthExprInIsolation ast@(AST dataDecls defs imports hidden name) expr =
         (Val s _ _ (Constr _ c [])) -> do
           mConstructor <- lookupDataConstructor s c
           case mConstructor of
-            Just (tySch, _) -> return $ Left (tySch, [])
+            Just (tySch, _, _) -> return $ Left (tySch, [])
             Nothing -> do
               st <- get
               -- Or see if this is a kind constructors
@@ -147,49 +146,72 @@ checkTyCon d@(DataDecl sp name tyVars kindAnn ds)
     mkKind (v:vs) = FunTy Nothing v (mkKind vs)
 
 checkDataCons :: (?globals :: Globals) => DataDecl -> Checker ()
-checkDataCons (DataDecl sp name tyVars k dataConstrs) = do
+checkDataCons d@(DataDecl sp name tyVars k dataConstrs) = do
     st <- get
     let kind = case lookup name (typeConstructors st) of
-                Just (kind, _ ,_) -> kind
+                Just (kind, _ , _) -> kind
                 _ -> error $ "Internal error. Trying to lookup data constructor " <> pretty name
     modify' $ \st -> st { tyVarContext = [(v, (k, ForallQ)) | (v, k) <- tyVars] }
-    mapM_ (checkDataCon name kind tyVars) dataConstrs
+    let paramsAndIndices = discriminateTypeIndicesOfDataType d
+    mapM_ (checkDataCon name kind tyVars (typeIndices d) paramsAndIndices) dataConstrs
+  where
+
 
 checkDataCon :: (?globals :: Globals)
   => Id -- ^ The type constructor and associated type to check against
   -> Kind -- ^ The kind of the type constructor
   -> Ctxt Kind -- ^ The type variables
+  -> [(Id, [Int])] -- ^ Type Indices of this data constructor
+  -> ([(Id, Kind)], [(Id, Kind)]) -- ^ type parameters and indices
   -> DataConstr -- ^ The data constructor to check
   -> Checker () -- ^ Return @Just ()@ on success, @Nothing@ on failure
 checkDataCon
   tName
   kind
-  tyVarsT
+  tyVarsT'
+  indices
+  (tyVarsParams, tyVarsIndices)
   d@(DataConstrIndexed sp dName tySch@(Forall s tyVarsD constraints ty)) = do
-    case map fst $ intersectCtxts tyVarsT tyVarsD of
+    case map fst $ intersectCtxts tyVarsT' tyVarsD of
       [] -> do -- no clashes
+        let tyVarsT = tyVarsParams ++ tyVarsIndices
+        when (sort tyVarsT /= sort tyVarsT') (fail "NOOOOO")
 
         -- Only relevant type variables get included
         let tyVars = relevantSubCtxt (freeVars ty) (tyVarsT <> tyVarsD)
         let tyVars_justD = relevantSubCtxt (freeVars ty) tyVarsD
 
+        st <- get
+
+        -- debugM "type indicies" (show $ typeConstructors st)
+
         -- Add the type variables from the data constructor into the environment
         -- The main universal context
         let tyVarsD' = relevantSubCtxt (freeVars $ resultType ty) tyVars_justD
+
         -- This subset of the context is for existentials
         let tyVarsDExists = tyVars_justD `subtractCtxt` tyVarsD'
+
+
+        let tyVarsForall = (tyVarsParams <> tyVarsD')
+
+
         modify $ \st -> st { tyVarContext =
-               [(v, (k, ForallQ)) | (v, k) <- tyVarsT <> tyVarsD']
+               [(v, (k, ForallQ)) | (v, k) <- tyVarsForall]
             ++ [(v, (k, InstanceQ)) | (v, k) <- tyVarsDExists]
+            ++ [(v, (k, BoundQ)) | (v, k) <- tyVarsIndices]
             ++ tyVarContext st }
+
 
         -- Check we are making something that is actually a type
         -- _ <- checkKind sp (map (second (\k -> (k, ForallQ))) tyVars) ty ktype
-        _ <- checkKind sp ty ktype
+        (_, ty) <- checkKind sp ty ktype
+
+        --_ <- synthKindWithConfiguration sp GradeToNat ty
 
         -- Freshen the data type constructors type
         (ty, tyVarsFreshD, substFromFreshening, constraints, []) <-
-             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) []
+             freshPolymorphicInstance ForallQ False (Forall s tyVars constraints ty) [] []
 
         -- Create a version of the data constructor that matches the data type head
         -- but with a list of coercions
@@ -197,20 +219,23 @@ checkDataCon
         ixKinds <- mapM (substitute substFromFreshening) (indexKinds kind)
         (ty', coercions, tyVarsNewAndOld) <- checkAndGenerateSubstitution sp tName ty ixKinds
 
-        -- Reconstruct the data constructor's new type scheme
+        -- Reconstruct th e data constructor's new type scheme
         let tyVarsD' = tyVarsFreshD <> tyVarsNewAndOld
         let tySch = Forall sp tyVarsD' constraints ty'
+        let typeIndices = case lookup dName indices of 
+              Just inds -> inds 
+              _ -> []
 
-        registerDataConstructor tySch coercions
+        registerDataConstructor tySch coercions typeIndices 
 
       (v:vs) -> (throwError . fmap mkTyVarNameClashErr) (v:|vs)
   where
     indexKinds (FunTy _ k1 k2) = k1 : indexKinds k2
     indexKinds k = []
 
-    registerDataConstructor dataConstrTy subst = do
+    registerDataConstructor dataConstrTy subst boundVars = do
       st <- get
-      case extend (dataConstructors st) dName (dataConstrTy, subst) of
+      case extend (dataConstructors st) dName (dataConstrTy, subst, boundVars) of
         Just ds -> put st { dataConstructors = ds, tyVarContext = [] }
         Nothing -> throw DataConstructorNameClashError{ errLoc = sp, errId = dName }
 
@@ -221,8 +246,8 @@ checkDataCon
         , errVar = v
         }
 
-checkDataCon tName kind tyVars d@DataConstrNonIndexed{}
-  = checkDataCon tName kind tyVars
+checkDataCon tName kind tyVars indices info d@DataConstrNonIndexed{}
+  = checkDataCon tName kind tyVars indices info
     $ nonIndexedToIndexedDataConstr tName tyVars d
 
 
@@ -295,7 +320,7 @@ checkDef defCtxt (Def s defName rf el@(EquationList _ _ _ equations)
 
     elaboratedEquations :: [Equation () Type] <- runAll elaborateEquation equations
 
-    checkGuardsForImpossibility s defName
+    checkGuardsForImpossibility s defName constraints
     checkGuardsForExhaustivity s defName ty equations
     let el' = el { equations = elaboratedEquations }
     pure $ Def s defName rf el' tys
@@ -386,11 +411,10 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
 
   -- The type of the equation, after substitution.
   equationTy' <- substitute subst ty
-  let equationTy'' = refineEquationTy patternGam equationTy'
 
   -- Store the equation type in the state in case it is needed when splitting
   -- on a hole.
-  modify (\st -> st { equationTy = Just equationTy'' })
+  modify (\st -> st { equationTy = Just equationTy'})
 
   patternGam <- substitute subst patternGam
   debugM "context in checkEquation 1" $ (show patternGam)
@@ -427,41 +451,6 @@ checkEquation defCtxt id (Equation s name () rf pats expr) tys@(Forall _ foralls
     -- Anything that was bound in the pattern but not used up
     (p:ps) -> illLinearityMismatch s (p:|ps)
 
-  where
-    -- Given a context and a function type, refines the type by deconstructing
-    -- patterns into their constituent patterns and replacing parts of the type
-    -- by the corresponding pattern.
-    -- e.g. Given a pattern: Cons x xs
-    --      and a type:      Vec (n+1) t -> Vec n t
-    --      returns:         t -> Vec n t -> Vec n t
-    refineEquationTy :: [(Id, Assumption)] -> Type -> Type
-    refineEquationTy patternGam ty =
-      case patternGam of
-        [] -> ty
-        (_:_) ->
-          let patternArities = map patternArity pats
-              patternFunTys = map (map assumptionToType) (splitPlaces patternArities patternGam)
-          in replaceParameters patternFunTys ty
-
-    -- Computes how many arguments a pattern has.
-    -- e.g. Cons x xs --> 2
-    patternArity :: Pattern a -> Integer
-    patternArity (PBox _ _ _ p) = patternArity p
-    patternArity (PConstr _ _ _ _ ps) = sum (map patternArity ps)
-    patternArity _ = 1
-
-    replaceParameters :: [[Type]] -> Type -> Type
-    replaceParameters [] ty = ty
-    replaceParameters ([]:tss) (FunTy id _ ty) = replaceParameters tss ty
-    replaceParameters ((t:ts):tss) ty =
-      FunTy Nothing t (replaceParameters (ts:tss) ty)
-    replaceParameters _ t = error $ "Expecting function type: " <> pretty t
-
-    -- Convert an id+assumption to a type.
-    assumptionToType :: (Id, Assumption) -> Type
-    assumptionToType (_, Linear t) = t
-    assumptionToType (_, Discharged t _) = t
-    assumptionToType (_, Ghost _) = ghostType
 
 -- Polarities are used to understand when a type is
 -- `expected` vs. `actual` (i.e., for error messages)
@@ -726,7 +715,7 @@ checkExpr defs gam pol True tau (Case s _ rf guardExpr cases) = do
         p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
-  checkGuardsForImpossibility s $ mkId "case"
+  checkGuardsForImpossibility s (mkId "case") []
 
   -- Pop from stacks related to case
   -- _ <- popGuardContext
@@ -850,11 +839,11 @@ synthExpr _ gam _ (Val s _ rf (Constr _ c [])) = do
   st <- get
   mConstructor <- lookupDataConstructor s c
   case mConstructor of
-    Just (tySch, coercions) -> do
+    Just (tySch, coercions, _) -> do
       -- Freshen the constructor
       -- (discarding any fresh type variables, info not needed here)
 
-      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions
+      (ty, _, _, constraints, coercions') <- freshPolymorphicInstance InstanceQ False tySch coercions []
 
       mapM_ (\ty -> do
         pred <- compileTypeConstraintToConstraint s ty
@@ -921,7 +910,8 @@ synthExpr defs gam pol (Case s _ rf guardExpr cases) = do
          p:ps -> illLinearityMismatch s (p:|ps)
 
   -- All branches must be possible
-  checkGuardsForImpossibility s $ mkId "case"
+  checkGuardsForImpossibility s (mkId "case") []
+
   popCaseFrame
 
   let (branchTys, branchCtxtsAndSubsts, elaboratedCases) = unzip3 branchTysAndCtxtsAndSubsts
@@ -1889,8 +1879,8 @@ checkGuardsForExhaustivity s name ty eqs = do
   debugM "Guard exhaustivity" "todo"
   return ()
 
-checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> Checker ()
-checkGuardsForImpossibility s name = do
+checkGuardsForImpossibility :: (?globals :: Globals) => Span -> Id -> [Type] -> Checker ()
+checkGuardsForImpossibility s name refinementConstraints = do
   -- Get top of guard predicate stack
   st <- get
   let ps = head $ guardPredicates st
@@ -1903,7 +1893,9 @@ checkGuardsForImpossibility s name = do
   forM_ ps $ \((ctxt, p), s) -> do
 
     -- Existentially quantify those variables occuring in the pattern in scope
-    let thm = foldr (uncurry Exists) p ctxt
+    constraints' <- mapM (compileTypeConstraintToConstraint nullSpanNoFile) refinementConstraints
+    let thm = 
+          foldr (Impl []) (foldr (uncurry Exists) p ctxt) constraints'
 
     debugM "impossibility" $ "about to try" <> pretty thm
     -- Try to prove the theorem
@@ -1946,7 +1938,7 @@ checkGuardsForImpossibility s name = do
 --
 freshenTySchemeForVar :: (?globals :: Globals) => Span -> Bool -> Id -> TypeScheme -> Checker (Type, Ctxt Assumption, Substitution, Expr () Type)
 freshenTySchemeForVar s rf id tyScheme = do
-  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] -- discard list of fresh type variables
+  (ty', _, _, constraints, []) <- freshPolymorphicInstance InstanceQ False tyScheme [] [] -- discard list of fresh type variables
 
   mapM_ (\ty -> do
     pred <- compileTypeConstraintToConstraint s ty

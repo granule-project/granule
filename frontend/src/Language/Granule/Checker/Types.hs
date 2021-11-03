@@ -218,7 +218,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
 
     -- We can unify a universal a dependently bound universal
     (Just (k1, ForallQ), Just (k2, BoundQ)) ->
-      tyVarConstraint (k1, n) (k2, m)
+      tyVarConstraint (k2, m) (k1, n)
 
     (Just (k1, BoundQ), Just (k2, ForallQ)) ->
       tyVarConstraint (k1, n) (k2, m)
@@ -246,7 +246,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
 
     -- But we can unify a forall and an instance
     (Just (k1, ForallQ), Just (k2, InstanceQ)) ->
-        tyVarConstraint (k1, n) (k2, m)
+        tyVarConstraint (k2, m) (k1 , n)
 
     (t1, t2) -> error $ pretty s <> "-" <> show sp <> "\n"
               <> pretty n <> " : " <> show t1
@@ -263,7 +263,7 @@ equalTypesRelatedCoeffectsInner s _ (TyVar n) (TyVar m) sp _ mode = do
             Right _ -> putChecker >> addConstraint (Eq s (TyVar n) (TyVar m) (TyCon kc))
           return (True, unif ++ [(n, SubstT $ TyVar m)])
         Just (_, unif, _) ->
-          return (True, unif ++ [(m, SubstT $ TyVar n)])
+          return (True, unif ++ [(n, SubstT $ TyVar m)])
         Nothing ->
           return (False, [])
 -}
@@ -299,31 +299,36 @@ equalTypesRelatedCoeffectsInner s rel (TyVar n) t kind sp mode = do
 
   case lookup n (tyVarContext checkerState) of
     -- We can unify an instance with a concrete type
-    (Just (k1, q)) | (q == BoundQ) || (q == InstanceQ) -> do --  && sp /= PatternCtxt
+    (Just (n_k, q)) | (q == BoundQ) || (q == InstanceQ) -> do --  && sp /= PatternCtxt
 
-      jK <-  joinTypes s k1 kind
+      jK <-  joinTypes s n_k kind
       case jK of
         Nothing -> throw UnificationKindError
-          { errLoc = s, errTy1 = (TyVar n), errK1 = k1, errTy2 = t, errK2 = kind }
+          { errLoc = s, errTy1 = (TyVar n), errK1 = n_k, errTy2 = t, errK2 = kind }
 
         -- If the kind is Nat, then create a solver constraint
-        Just (TyCon (internalName -> "Nat"), unif, _) -> do
+        -- TODO: generalise to things where the jk is of kind kcoeffect or keffect
+         -- or jK is nat
+        Just (TyCon (internalName -> "Nat"), subst, _) -> do
           addConstraint (Eq s (TyVar n) t (TyCon $ mkId "Nat"))
-          return (True, unif ++ [(n, SubstT t)])
+          subst' <- combineSubstitutions s subst [(n, SubstT t)]
+          return (True, subst')
 
         Just (_, unif, _) -> return (True, unif ++ [(n, SubstT t)])
 
-    (Just (k1, ForallQ)) -> do
+    (Just (n_k, ForallQ)) -> do
 
-       -- If the kind if nat then set up and equation as there might be a
-       -- pausible equation involving the quantified variable
-       jK <- joinTypes s k1 kind
+       -- If the kind is nat then set up an equation as there might be a
+       -- plausible equation involving the quantified variable
+       jK <- joinTypes s n_k kind
        case jK of
+         -- TODO: generalise to things where the jk is of kind kcoeffect or keffect
+         -- or jK is nat
          Just (TyCon (Id "Nat" "Nat"), unif, _) -> do
            addConstraint $ Eq s (TyVar n) t (TyCon $ mkId "Nat")
-           return (True, unif ++ [(n, SubstT t)])
+           return (True, [])
 
-         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = k1, errTy = t, tyIsConcrete = True }
+         _ -> throw UnificationFail{ errLoc = s, errVar = n, errKind = n_k, errTy = t, tyIsConcrete = True }
 
     (Just (_, InstanceQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
     (Just (_, BoundQ)) -> error "Please open an issue at https://github.com/granule-project/granule/issues"
@@ -506,7 +511,7 @@ isIndexedType t = do
       , tfFunTy = \_ (Const x) (Const y) -> return $ Const (x || y)
       , tfTyCon = \c -> do {
           st <- get;
-          return $ Const $ case lookup c (typeConstructors st) of Just (_,_,ixed) -> ixed; Nothing -> False }
+          return $ Const $ case lookup c (typeConstructors st) of Just (_, _, isIndexed) -> isIndexed; Nothing -> False }
       , tfBox = \_ (Const x) -> return $ Const x
       , tfDiamond = \_ (Const x) -> return $ Const x
       , tfStar = \_ (Const x) -> return $ Const x
