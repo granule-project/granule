@@ -305,7 +305,7 @@ pmatch ctxt ((PConstr s a b id innerPs, t0):ps) e =
       v <- evalIn ctxt e
       pmatch ctxt ((PConstr s a b id innerPs, t0):ps) (valExpr v)
     else
-      -- In CBV mode this just meands we failed to pattern match
+      -- In CBV mode this just means we failed to pattern match
       pmatch ctxt ps e
 
 pmatch _ ((PVar _ _ _ var, e):_) v =
@@ -316,6 +316,17 @@ pmatch ctxt ((PBox _ _ _ p, e):ps) v@(Val _ _ _ (Promote _ v')) = do
   case match of
     Just e -> return $ Just e
     Nothing -> pmatch ctxt ps v
+
+pmatch ctxt ((PBox s a b p, e):ps) e' = do
+  -- Can only happen in CBN case
+  if CBN `elem` globalsExtensions ?globals
+    then do
+      -- Force evaluation of term
+      v <- evalIn ctxt e'
+      pmatch ctxt ((PBox s a b p, e):ps) (valExpr v)
+    else
+      -- In CBV mode this just meands we failed to pattern match
+      pmatch ctxt ps e
 
 pmatch ctxt ((PInt _ _ _ n, e):ps) (Val _ _ _ (NumInt m)) | n == m = return $ Just e
 
