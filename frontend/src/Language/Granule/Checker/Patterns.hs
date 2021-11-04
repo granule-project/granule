@@ -198,9 +198,10 @@ ctxtFromTypedPattern' outerBoxTy _ pos ty p@(PConstr s _ rf dataC ps) cons = do
       debugM "patterns : indices: " $ show indices
 
       case outerBoxTy of
-        Just (coeff, coeffTy) ->
+        -- Hsup if you only have more than one premise (and have an enclosing grade)
+        Just (coeff, coeffTy) | length ps > 1 ->
           addConstraint (Hsup s coeff coeff coeffTy)
-        Nothing -> return ()
+        _ -> return ()
 
       -- get fresh instance of the data constructors type
       (dataConstructorTypeFresh, freshTyVarsCtxt, freshTyVarSubst, constraints, coercions') <-

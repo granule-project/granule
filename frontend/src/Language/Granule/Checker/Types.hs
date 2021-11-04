@@ -339,14 +339,14 @@ equalTypesRelatedCoeffectsInner s rel t (TyVar n) k sp mode =
   equalTypesRelatedCoeffectsInner s rel (TyVar n) t k (flipIndicator sp) mode
   -}
 
-equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) _ sp mode
-  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t1}
+equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 _ sp mode
+  | t1 == t2 = throw $ UniquenessError { errLoc = s, uniquenessMismatch = NonUniqueUsedUniquely t2}
   | otherwise = do
     (g, _, u) <- equalTypes s t1 t2
     return (g, u)
 
-equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 k sp mode =
-  equalTypesRelatedCoeffectsInner s rel (Star g1 t1) t2 k (flipIndicator sp) mode
+equalTypesRelatedCoeffectsInner s rel t1 (Star g2 t2) k sp mode = 
+  equalTypesRelatedCoeffectsInner s rel (Star g2 t2) t1 k (flipIndicator sp) mode
 
 -- Do duality check (left) [special case of TyApp rule]
 equalTypesRelatedCoeffectsInner s rel (TyApp (TyCon d) t) t' _ sp mode
